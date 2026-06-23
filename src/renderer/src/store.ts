@@ -54,3 +54,6 @@ export const useChat = create<ChatState>((set) => ({
     })),
   finish: () => set({ isRunning: false })
 }))
+
+// Exposed for the Playwright test harness (and handy for live debugging).
+;(window as unknown as { __dsgnStore?: typeof useChat }).__dsgnStore = useChat

@@ -20,12 +20,16 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "test:smoke": "electron-vite build && node test/smoke.mjs",
     "test:preview": "electron-vite build && node test/open-preview.mjs",
-    "test": "electron-vite build && node test/smoke.mjs && node test/open-preview.mjs"
+    "test:chat": "electron-vite build && node test/chat-render.mjs",
+    "test": "electron-vite build && node test/smoke.mjs && node test/open-preview.mjs && node test/chat-render.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.186",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
     "zustand": "^5.0.2"
   },
   "devDependencies": {

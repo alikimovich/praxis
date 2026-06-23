@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useChat } from '../store'
+import Markdown from './Markdown'
 
 /**
  * Skeleton chat panel wired to the agent IPC stream. This is the placeholder
@@ -62,7 +63,12 @@ export default function ChatPanel(): React.JSX.Element {
                 › {s}
               </div>
             ))}
-            {m.text && <div className="msg__text">{m.text}</div>}
+            {m.text &&
+              (m.role === 'assistant' ? (
+                <Markdown>{m.text}</Markdown>
+              ) : (
+                <div className="msg__text">{m.text}</div>
+              ))}
           </div>
         ))}
       </div>
