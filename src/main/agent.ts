@@ -70,10 +70,15 @@ interface Session {
 }
 
 let session: Session | null = null
+// Bumped whenever the active session changes; a session's output loop only
+// emits while its epoch is current, so a replaced/aborted session can't leak
+// stale events into the next project's chat.
+let currentEpoch = 0
 
 async function startSession(
   root: string,
   options: AgentOptions,
+  epoch: number,
   getWindow: () => BrowserWindow | null
 ): Promise<Session> {
   const { query } = await loadSdk()
@@ -81,6 +86,7 @@ async function startSession(
   const abort = new AbortController()
 
   const emit = (event: AgentEvent): void => {
+    if (epoch !== currentEpoch) return
     getWindow()?.webContents.send('agent:event', event)
   }
 
@@ -173,7 +179,8 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     session?.abort.abort()
     session?.input.close()
     session = null
-    session = await startSession(root, options, getWindow)
+    const epoch = ++currentEpoch
+    session = await startSession(root, options, epoch, getWindow)
   })
 
   ipcMain.handle('agent:set-model', async (_e, model: string) => {
@@ -199,6 +206,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
 
   // Don't leave the SDK's CLI subprocess running after dsgn quits.
   app.on('before-quit', () => {
+    currentEpoch++
     session?.abort.abort()
     session?.input.close()
   })

@@ -59,7 +59,11 @@ export default function ChatPanel(): React.JSX.Element {
   }, [slashQuery, slashCommands])
   const menuOpen = slashQuery !== null && matches.length > 0 && !menuDismissed
 
-  useEffect(() => setMenuActive(0), [slashQuery])
+  useEffect(() => {
+    // Re-arm the menu for each distinct "/" query (Escape only hides the current one).
+    setMenuActive(0)
+    setMenuDismissed(false)
+  }, [slashQuery])
 
   const onInputChange = (value: string): void => {
     setInput(value)

@@ -29,19 +29,49 @@ const PLACEHOLDER_HTML = `data:text/html;charset=utf-8,${encodeURIComponent(`
  * element selection. The renderer owns the layout and reports the rectangle
  * the preview should occupy via the `preview:set-bounds` IPC channel.
  */
+function isLocalPreviewUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1'
+    return (u.protocol === 'http:' || u.protocol === 'https:') && local
+  } catch {
+    return false
+  }
+}
+
 function ensurePreviewView(): WebContentsView {
   if (previewView) return previewView
-  previewView = new WebContentsView()
+  previewView = new WebContentsView({
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false }
+  })
   previewView.setBackgroundColor('#ffffff')
   previewView.webContents.loadURL(PLACEHOLDER_HTML)
   mainWindow?.contentView.addChildView(previewView)
 
+  const wc = previewView.webContents
+
+  // The previewed app is untrusted-ish: keep it on its own local origin.
+  wc.setWindowOpenHandler(({ url }) => {
+    if (!isLocalPreviewUrl(url)) shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  wc.on('will-navigate', (e, url) => {
+    if (url.startsWith('data:') || isLocalPreviewUrl(url)) return
+    e.preventDefault()
+    shell.openExternal(url)
+  })
+
   // Retry transient failures (dev server up but not serving yet).
-  previewView.webContents.on('did-fail-load', (_e, errorCode, _desc, validatedURL, isMainFrame) => {
+  wc.on('did-fail-load', (_e, errorCode, _desc, validatedURL, isMainFrame) => {
     if (!isMainFrame || !previewUrl || validatedURL !== previewUrl) return
     if (!TRANSIENT_LOAD_ERRORS.has(errorCode) || previewRetries >= 40) return
     previewRetries++
     setTimeout(() => previewUrl && previewView?.webContents.loadURL(previewUrl), 400)
+  })
+
+  // Once the intended URL loads, reset the budget so it's per-outage not per-session.
+  wc.on('did-finish-load', () => {
+    if (previewUrl && wc.getURL() === previewUrl) previewRetries = 0
   })
 
   return previewView
@@ -59,7 +89,7 @@ function createWindow(): void {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
-      sandbox: false
+      sandbox: true
     }
   })
 
@@ -91,6 +121,7 @@ function registerPreviewIpc(): void {
   })
 
   ipcMain.handle('preview:load', (_e, url: string) => {
+    if (!isLocalPreviewUrl(url)) return
     previewUrl = url
     previewRetries = 0
     ensurePreviewView().webContents.loadURL(url)
