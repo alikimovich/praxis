@@ -102,6 +102,11 @@ function registerPreviewIpc(): void {
     ensurePreviewView().webContents.loadURL(PLACEHOLDER_HTML)
   })
 
+  // Hide the native view during a split-drag so the renderer keeps mouse events.
+  ipcMain.on('preview:set-dragging', (_e, active: boolean) => {
+    previewView?.setVisible(!active)
+  })
+
   ipcMain.handle('project:pick', async (): Promise<string | null> => {
     if (!mainWindow) return null
     const res = await dialog.showOpenDialog(mainWindow, {

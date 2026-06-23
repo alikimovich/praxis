@@ -160,15 +160,39 @@ body {
 }
 
 .pane--chat {
-  flex: 0 0 40%;
-  border-right: 1px solid var(--border);
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
 }
 
 .pane--preview {
-  flex: 1 1 60%;
+  flex: 1 1 auto;
   background: var(--bg-subtle);
+}
+
+.divider {
+  flex: 0 0 auto;
+  width: 1px;
+  background: var(--border);
+  position: relative;
+  cursor: col-resize;
+}
+
+/* Widen the hit area without shifting layout. */
+.divider::after {
+  content: '';
+  position: absolute;
+  inset: 0 -4px;
+}
+
+.divider:hover,
+body.is-resizing .divider {
+  background: #d0d0d0;
+}
+
+body.is-resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 /* The preview slot is intentionally empty — the native WebContentsView is

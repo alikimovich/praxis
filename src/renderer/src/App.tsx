@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ChatPanel from './components/ChatPanel'
 import PreviewPane from './components/PreviewPane'
 import { toAgentOptions, useSession } from './store'
+
+const MIN_CHAT_WIDTH = 320
+const MAX_CHAT_WIDTH = 760
 
 type Status =
   | { kind: 'idle' }
@@ -12,6 +15,8 @@ type Status =
 export default function App(): React.JSX.Element {
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const [log, setLog] = useState('')
+  const [chatWidth, setChatWidth] = useState(440)
+  const dragging = useRef(false)
   // When a launch fails we remember the folder so the user can retry with a
   // custom command (monorepos, non-standard dev scripts).
   const [retry, setRetry] = useState<{ root: string; command: string } | null>(null)
@@ -26,6 +31,33 @@ export default function App(): React.JSX.Element {
       }),
     []
   )
+
+  // Drag-to-resize the split. The native preview is hidden while dragging.
+  useEffect(() => {
+    const onMove = (e: MouseEvent): void => {
+      if (!dragging.current) return
+      setChatWidth(Math.min(MAX_CHAT_WIDTH, Math.max(MIN_CHAT_WIDTH, e.clientX)))
+    }
+    const onUp = (): void => {
+      if (!dragging.current) return
+      dragging.current = false
+      document.body.classList.remove('is-resizing')
+      window.api.preview.setDragging(false)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [])
+
+  const startResize = (e: React.MouseEvent): void => {
+    e.preventDefault()
+    dragging.current = true
+    document.body.classList.add('is-resizing')
+    window.api.preview.setDragging(true)
+  }
 
   const attempt = async (root: string, commandOverride?: string): Promise<void> => {
     let attemptedCommand = commandOverride ?? ''
@@ -141,9 +173,15 @@ export default function App(): React.JSX.Element {
       )}
 
       <div className="panes">
-        <section className="pane pane--chat">
+        <section className="pane pane--chat" style={{ width: chatWidth }}>
           <ChatPanel />
         </section>
+        <div
+          className="divider"
+          onMouseDown={startResize}
+          role="separator"
+          aria-orientation="vertical"
+        />
         <section className="pane pane--preview">
           <PreviewPane />
         </section>

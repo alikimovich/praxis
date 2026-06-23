@@ -12,7 +12,8 @@ const api: DsgnApi = {
   preview: {
     setBounds: (bounds: Bounds): void => ipcRenderer.send('preview:set-bounds', bounds),
     load: (url: string): Promise<void> => ipcRenderer.invoke('preview:load', url),
-    reset: (): Promise<void> => ipcRenderer.invoke('preview:reset')
+    reset: (): Promise<void> => ipcRenderer.invoke('preview:reset'),
+    setDragging: (active: boolean): void => ipcRenderer.send('preview:set-dragging', active)
   },
   project: {
     pick: (): Promise<string | null> => ipcRenderer.invoke('project:pick'),

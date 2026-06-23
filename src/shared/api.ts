@@ -50,6 +50,8 @@ export interface DsgnApi {
     setBounds: (bounds: Bounds) => void
     load: (url: string) => Promise<void>
     reset: () => Promise<void>
+    /** Hide the native view while the user drags the split (it would otherwise eat mouse events). */
+    setDragging: (active: boolean) => void
   }
   project: {
     pick: () => Promise<string | null>
