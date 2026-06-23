@@ -7,7 +7,17 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()]
   },
   preload: {
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin()],
+    build: {
+      rollupOptions: {
+        // Two preloads: the main window bridge, and the one injected into the
+        // previewed app's WebContentsView for element selection.
+        input: {
+          index: resolve('src/preload/index.ts'),
+          preview: resolve('src/preview/preload.ts')
+        }
+      }
+    }
   },
   renderer: {
     resolve: {

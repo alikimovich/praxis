@@ -5,7 +5,8 @@ import type {
   Bounds,
   DetectedProject,
   DsgnApi,
-  RunningDevServer
+  RunningDevServer,
+  SelectedElement
 } from '../shared/api'
 
 const api: DsgnApi = {
@@ -13,7 +14,19 @@ const api: DsgnApi = {
     setBounds: (bounds: Bounds): void => ipcRenderer.send('preview:set-bounds', bounds),
     load: (url: string): Promise<void> => ipcRenderer.invoke('preview:load', url),
     reset: (): Promise<void> => ipcRenderer.invoke('preview:reset'),
-    setDragging: (active: boolean): void => ipcRenderer.send('preview:set-dragging', active)
+    setDragging: (active: boolean): void => ipcRenderer.send('preview:set-dragging', active),
+    setSelectMode: (active: boolean): Promise<void> =>
+      ipcRenderer.invoke('preview:set-select-mode', active),
+    onElementPicked: (cb: (el: SelectedElement) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, el: SelectedElement): void => cb(el)
+      ipcRenderer.on('preview:element-picked', listener)
+      return () => ipcRenderer.removeListener('preview:element-picked', listener)
+    },
+    onSelectCancelled: (cb: () => void): (() => void) => {
+      const listener = (): void => cb()
+      ipcRenderer.on('preview:select-cancelled', listener)
+      return () => ipcRenderer.removeListener('preview:select-cancelled', listener)
+    }
   },
   project: {
     pick: (): Promise<string | null> => ipcRenderer.invoke('project:pick'),
