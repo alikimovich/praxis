@@ -21,7 +21,9 @@
     "test:smoke": "electron-vite build && node test/smoke.mjs",
     "test:preview": "electron-vite build && node test/open-preview.mjs",
     "test:chat": "electron-vite build && node test/chat-render.mjs",
-    "test": "electron-vite build && node test/smoke.mjs && node test/open-preview.mjs && node test/chat-render.mjs"
+    "test:agent": "electron-vite build && node test/agent-e2e.mjs",
+    "test": "electron-vite build && node test/smoke.mjs && node test/open-preview.mjs && node test/chat-render.mjs",
+    "verify": "electron-vite build && node test/smoke.mjs && node test/open-preview.mjs && node test/chat-render.mjs && node test/agent-e2e.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.186",
