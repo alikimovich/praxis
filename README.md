@@ -4,11 +4,14 @@ An AI design & prototyping tool for your own repos. Open a project, dsgn launche
 its dev server in a live preview on the right, and a Claude-powered chat on the
 left edits the running app — respecting the repo's own `CLAUDE.md` and skills.
 
-> Status: **working v1.** Open a folder → dsgn detects the framework, runs its
-> dev server, and previews it. The chat is a real multi-turn Claude Agent SDK
-> session (markdown, tool-use status, model + thinking selectors, `/` skill
-> menu) that edits the running repo with live hot-reload in the preview.
-> Next: design-system-aware element selection / prop editing, then PR handoff.
+> Status: **working v1 + v2 first slice.** Open a folder → dsgn detects the
+> framework, runs its dev server, and previews it. The chat is a real multi-turn
+> Claude Agent SDK session (markdown, tool-use status, model + thinking selectors,
+> `/` skill menu) that edits the running repo with live hot-reload in the preview.
+> **New:** a **Select** mode lets you click an element in the live preview to pick
+> it — dsgn resolves its source location (via a `data-dsgn-source` stamp, see
+> [`docs/DESIGN.md`](docs/DESIGN.md)) and hands the chat a precise edit target.
+> Next: prop/token editor panel, then PR handoff.
 
 ## Requirements
 

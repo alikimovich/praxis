@@ -1,7 +1,7 @@
 # CONTEXT — collapsed project state
 
 > The handoff doc. Read this first to resume work (esp. on another machine).
-> Last updated: 2026-06-23.
+> Last updated: 2026-06-23 (v2 first slice: click-to-select → source → chat).
 
 ## What dsgn is
 
@@ -41,6 +41,16 @@ the SDK init message's `slash_commands`); drag-to-resize split; custom dev-comma
 escape hatch; Reload/Stop. Hardened per an adversarial review (session epoch guard,
 sandboxed windows, preview navigation pinning, etc. — see PROGRESS.md).
 
+**v2 (first slice) — click-to-select element editing.** A "Select" toggle arms an
+overlay (a sandboxed preload injected into the preview `WebContentsView`): hover
+highlights, click picks. The pick resolves a source location from the repo's
+`data-dsgn-source` stamp (nearest ancestor; CSS-selector fallback) plus key computed
+styles, and surfaces an inspector above the composer. "Ask dsgn to change this…" seeds
+the chat with the element + source reference so the agent edits the right file. The
+stamping convention + a reference Vite/Babel plugin are in `docs/DESIGN.md`. Still
+ahead: `react-docgen` prop schemas → a prop/token editor panel (edit without a full
+agent round-trip).
+
 ## Verification status
 
 - **Real agent turn: VERIFIED (2026-06-23).** `test/agent-e2e.mjs` ran a live Claude
@@ -55,16 +65,27 @@ sandboxed windows, preview navigation pinning, etc. — see PROGRESS.md).
 - `src/main/agent.ts` — Agent SDK session, `InputStream` queue, streaming → IPC,
   epoch guard, slash-commands, setModel. ESM SDK loaded via dynamic `import()`.
 - `src/main/devserver.ts` — detect + spawn + URL parse + readiness + conflict errors.
-- `src/main/index.ts` — window, native preview view, geometry sync, hardening.
-- `src/renderer/src/components/ChatPanel.tsx` — chat UI, toolbar, slash menu.
-- `src/renderer/src/store.ts` — `useChat` + `useSession` (the assistant-ui seam);
-  exposes `window.__dsgnStore/__dsgnSession` for the test harness.
-- `src/shared/api.ts` — the IPC contract (keep preload + handlers in sync).
+- `src/main/index.ts` — window, native preview view, geometry sync, hardening, **v2
+  select-mode IPC** (relays picks; re-arms overlay after preview navigation).
+- `src/preview/preload.ts` — **v2 overlay preload** injected into the preview view
+  (hover highlight + click pick + source/style capture). Own `tsconfig.preview.json`.
+- `src/renderer/src/components/ChatPanel.tsx` — chat UI, toolbar, slash menu, **inspector**.
+- `src/renderer/src/components/Inspector.tsx` — **v2** selected-element card + chat hand-off.
+- `src/renderer/src/store.ts` — `useChat` + `useSession` + **`useSelection`**; `isAuthError`;
+  exposes `window.__dsgnStore/__dsgnSession/__dsgnSelection` for the test harness.
+- `src/shared/api.ts` — the IPC contract incl. `SelectedElement` (keep preload + handlers in sync).
+- `docs/DESIGN.md` — the `data-dsgn-source` convention + reference stamping plugin.
 
 ## Gotchas
 
 - Agent SDK is ESM-only; `main` is CJS → dynamic `import()` only.
 - Native `WebContentsView` is a separate CDP target — not in renderer screenshots
-  (use `capturePage()`); it also eats mouse events (hidden during resize drag).
+  (use `capturePage()`); it also eats mouse events (hidden during resize drag). To
+  drive it from a test, reach it via the main process
+  (`webContents.executeJavaScript`), as `test/select-element.mjs` does.
+- The preview overlay preload is **sandboxed** — it only uses `ipcRenderer` (no Node,
+  no contextBridge) and shares the page DOM (overlay lives in a shadow root with
+  `pointer-events:none`). It runs fresh on every navigation, so main re-sends the
+  current select-mode on `did-finish-load`.
 - bun blocks postinstall for untrusted deps — `electron`/`esbuild` are in
   `trustedDependencies` so their binaries install.
