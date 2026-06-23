@@ -1,5 +1,6 @@
 import { app, BrowserWindow, WebContentsView, ipcMain, dialog, shell } from 'electron'
 import { join } from 'path'
+import type { SelectedElement } from '../shared/api'
 import { registerDevServerIpc } from './devserver'
 import { registerAgentIpc } from './agent'
 
@@ -7,6 +8,14 @@ let mainWindow: BrowserWindow | null = null
 let previewView: WebContentsView | null = null
 let previewUrl: string | null = null
 let previewRetries = 0
+// v2 select mode: tracked here so it survives preview navigations (the injected
+// preload re-runs fresh on each load and must be re-armed).
+let selectModeActive = false
+
+// Channels mirrored in src/preview/preload.ts (the injected preview preload).
+const PREVIEW_SET_MODE = 'dsgn:preview:set-select-mode'
+const PREVIEW_PICKED = 'dsgn:preview:element-picked'
+const PREVIEW_CANCELLED = 'dsgn:preview:select-cancelled'
 
 // Chromium error codes worth retrying — the dev server is up but not yet serving.
 const TRANSIENT_LOAD_ERRORS = new Set([-324, -102, -101, -105, -106, -109])
@@ -42,7 +51,13 @@ function isLocalPreviewUrl(url: string): boolean {
 function ensurePreviewView(): WebContentsView {
   if (previewView) return previewView
   previewView = new WebContentsView({
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false }
+    webPreferences: {
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      // Inject the select-mode overlay into the previewed app.
+      preload: join(__dirname, '../preload/preview.js')
+    }
   })
   previewView.setBackgroundColor('#ffffff')
   previewView.webContents.loadURL(PLACEHOLDER_HTML)
@@ -70,8 +85,13 @@ function ensurePreviewView(): WebContentsView {
   })
 
   // Once the intended URL loads, reset the budget so it's per-outage not per-session.
+  // The preload re-ran on this fresh page, so re-arm select mode if it was on —
+  // but only on the real preview page, never the "no project" placeholder.
   wc.on('did-finish-load', () => {
-    if (previewUrl && wc.getURL() === previewUrl) previewRetries = 0
+    if (previewUrl && wc.getURL() === previewUrl) {
+      previewRetries = 0
+      if (selectModeActive) wc.send(PREVIEW_SET_MODE, true)
+    }
   })
 
   return previewView
@@ -130,12 +150,32 @@ function registerPreviewIpc(): void {
   ipcMain.handle('preview:reset', () => {
     previewUrl = null
     previewRetries = 0
+    // No app to select in on the placeholder — keep main's flag honest so it
+    // doesn't silently re-arm the overlay on a later load. (Renderer disarms too.)
+    selectModeActive = false
     ensurePreviewView().webContents.loadURL(PLACEHOLDER_HTML)
   })
 
   // Hide the native view during a split-drag so the renderer keeps mouse events.
   ipcMain.on('preview:set-dragging', (_e, active: boolean) => {
     previewView?.setVisible(!active)
+  })
+
+  // v2 select mode: renderer → preview (arm/disarm the overlay).
+  ipcMain.handle('preview:set-select-mode', (_e, active: boolean) => {
+    selectModeActive = active
+    previewView?.webContents.send(PREVIEW_SET_MODE, active)
+  })
+
+  // preview → renderer relays. Only trust events from the preview's webContents.
+  ipcMain.on(PREVIEW_PICKED, (e, el: SelectedElement) => {
+    if (e.sender !== previewView?.webContents) return
+    mainWindow?.webContents.send('preview:element-picked', el)
+  })
+  ipcMain.on(PREVIEW_CANCELLED, (e) => {
+    if (e.sender !== previewView?.webContents) return
+    selectModeActive = false
+    mainWindow?.webContents.send('preview:select-cancelled')
   })
 
   ipcMain.handle('project:pick', async (): Promise<string | null> => {

@@ -44,6 +44,22 @@ export interface Bounds {
   height: number
 }
 
+/**
+ * An element the user picked in the live preview (v2 select mode). `source` is
+ * the repo's opt-in `data-dsgn-source` stamp ("path/File.tsx:line") when present
+ * — that's what lets the agent edit the exact component (see DESIGN.md).
+ */
+export interface SelectedElement {
+  tag: string
+  id: string | null
+  classes: string[]
+  selector: string
+  source: string | null
+  text: string | null
+  rect: Bounds
+  styles: Record<string, string>
+}
+
 /** The surface exposed on `window.api` by the preload bridge. */
 export interface DsgnApi {
   preview: {
@@ -52,6 +68,12 @@ export interface DsgnApi {
     reset: () => Promise<void>
     /** Hide the native view while the user drags the split (it would otherwise eat mouse events). */
     setDragging: (active: boolean) => void
+    /** Toggle click-to-select mode in the previewed app (v2). */
+    setSelectMode: (active: boolean) => Promise<void>
+    /** Fires when the user clicks an element in select mode. */
+    onElementPicked: (cb: (el: SelectedElement) => void) => () => void
+    /** Fires when select mode is cancelled from inside the preview (Escape). */
+    onSelectCancelled: (cb: () => void) => () => void
   }
   project: {
     pick: () => Promise<string | null>
