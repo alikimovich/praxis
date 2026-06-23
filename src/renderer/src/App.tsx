@@ -11,28 +11,55 @@ type Status =
 export default function App(): React.JSX.Element {
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const [log, setLog] = useState('')
+  // When a launch fails we remember the folder so the user can retry with a
+  // custom command (monorepos, non-standard dev scripts).
+  const [retry, setRetry] = useState<{ root: string; command: string } | null>(null)
 
-  useEffect(() => window.api.devServer.onLog((line) => setLog(line)), [])
+  useEffect(() => window.api.devServer.onLog(setLog), [])
 
-  const openProject = async (): Promise<void> => {
+  const attempt = async (root: string, commandOverride?: string): Promise<void> => {
+    let attemptedCommand = commandOverride ?? ''
     try {
-      const root = await window.api.project.pick()
-      if (!root) return
       setLog('')
-      setStatus({ kind: 'busy', label: 'Detecting project…' })
-      const project = await window.api.project.detect(root)
-      setStatus({ kind: 'busy', label: `Starting ${project.devCommand}…` })
-      const { url } = await window.api.devServer.start({
-        root: project.root,
-        command: project.devCommand
+      setRetry(null)
+      setStatus({
+        kind: 'busy',
+        label: commandOverride ? `Starting ${commandOverride}…` : 'Detecting project…'
       })
+      let command = commandOverride
+      let name = root.split('/').filter(Boolean).pop() ?? root
+      if (!command) {
+        const project = await window.api.project.detect(root)
+        command = project.devCommand
+        name = project.name
+        attemptedCommand = command
+        setStatus({ kind: 'busy', label: `Starting ${command}…` })
+      }
+      const { url } = await window.api.devServer.start({ root, command })
       await window.api.preview.load(url)
-      await window.api.agent.openProject(project.root)
-      setStatus({ kind: 'running', name: project.name, url })
+      await window.api.agent.openProject(root)
+      setStatus({ kind: 'running', name, url })
     } catch (err) {
       await window.api.preview.reset()
+      setRetry({ root, command: attemptedCommand })
       setStatus({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
     }
+  }
+
+  const openProject = async (): Promise<void> => {
+    const root = await window.api.project.pick()
+    if (root) await attempt(root)
+  }
+
+  const reload = (): void => {
+    if (status.kind === 'running') void window.api.preview.load(status.url)
+  }
+
+  const stop = async (): Promise<void> => {
+    await window.api.devServer.stop()
+    await window.api.preview.reset()
+    setRetry(null)
+    setStatus({ kind: 'idle' })
   }
 
   const hint =
@@ -50,6 +77,16 @@ export default function App(): React.JSX.Element {
         <span className="titlebar__brand">dsgn</span>
         <span className="titlebar__hint">{hint}</span>
         <div className="titlebar__actions">
+          {status.kind === 'running' && (
+            <>
+              <button className="btn btn--ghost" onClick={reload}>
+                Reload
+              </button>
+              <button className="btn btn--ghost" onClick={stop}>
+                Stop
+              </button>
+            </>
+          )}
           <button className="btn" onClick={openProject} disabled={status.kind === 'busy'}>
             {status.kind === 'running' ? 'Open another…' : 'Open project…'}
           </button>
@@ -60,7 +97,34 @@ export default function App(): React.JSX.Element {
       {status.kind === 'error' && (
         <div className="banner banner--error">
           <span className="banner__text">{status.message}</span>
-          <button className="banner__close" onClick={() => setStatus({ kind: 'idle' })}>
+          {retry && (
+            <form
+              className="banner__retry"
+              onSubmit={(e) => {
+                e.preventDefault()
+                const cmd = String(new FormData(e.currentTarget).get('cmd') ?? '').trim()
+                if (cmd) void attempt(retry.root, cmd)
+              }}
+            >
+              <input
+                name="cmd"
+                className="banner__input"
+                defaultValue={retry.command}
+                placeholder="custom command, e.g. bun run dev:web"
+                spellCheck={false}
+              />
+              <button className="btn" type="submit">
+                Run
+              </button>
+            </form>
+          )}
+          <button
+            className="banner__close"
+            onClick={() => {
+              setStatus({ kind: 'idle' })
+              setRetry(null)
+            }}
+          >
             ✕
           </button>
         </div>
