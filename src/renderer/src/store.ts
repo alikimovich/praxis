@@ -55,5 +55,39 @@ export const useChat = create<ChatState>((set) => ({
   finish: () => set({ isRunning: false })
 }))
 
+// Sentinel values mean "use the account/model default" (omit from SDK options).
+export const DEFAULT_MODEL = 'default'
+export const DEFAULT_EFFORT = 'auto'
+
+interface SessionState {
+  model: string
+  effort: string
+  slashCommands: string[]
+  setModel: (model: string) => void
+  setEffort: (effort: string) => void
+  setSlashCommands: (commands: string[]) => void
+}
+
+export const useSession = create<SessionState>((set) => ({
+  model: DEFAULT_MODEL,
+  effort: DEFAULT_EFFORT,
+  slashCommands: [],
+  setModel: (model) => set({ model }),
+  setEffort: (effort) => set({ effort }),
+  setSlashCommands: (slashCommands) => set({ slashCommands })
+}))
+
+/** Convert the UI sentinels into AgentOptions the SDK understands. */
+export const toAgentOptions = (s: { model: string; effort: string }): {
+  model?: string
+  effort?: string
+} => ({
+  model: s.model === DEFAULT_MODEL ? undefined : s.model,
+  effort: s.effort === DEFAULT_EFFORT ? undefined : s.effort
+})
+
 // Exposed for the Playwright test harness (and handy for live debugging).
-;(window as unknown as { __dsgnStore?: typeof useChat }).__dsgnStore = useChat
+;(
+  window as unknown as { __dsgnStore?: typeof useChat; __dsgnSession?: typeof useSession }
+).__dsgnStore = useChat
+;(window as unknown as { __dsgnSession?: typeof useSession }).__dsgnSession = useSession

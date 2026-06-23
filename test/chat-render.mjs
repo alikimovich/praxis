@@ -59,6 +59,17 @@ try {
 
   await win.waitForSelector('.markdown pre code', { timeout: 5000 })
   await win.screenshot({ path: join(artifacts, '04-chat-render.png') })
+
+  // Toolbar + "/" slash menu: seed commands and open the menu.
+  await win.evaluate(() => {
+    window.__dsgnSession
+      .getState()
+      .setSlashCommands(['design-review', 'accessibility-review', 'commit', 'compact', 'init'])
+  })
+  await win.fill('.composer__input', '/')
+  await win.waitForSelector('.slash__item', { timeout: 5000 })
+  await win.screenshot({ path: join(artifacts, '05-toolbar-slash.png') })
+
   console.log('CHAT-RENDER OK')
 } catch (err) {
   console.error('CHAT-RENDER FAILED:', err?.message ?? err)

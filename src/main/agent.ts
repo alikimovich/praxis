@@ -1,6 +1,6 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
 import type { Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import type { AgentEvent } from '../shared/api'
+import type { AgentEvent, AgentOptions } from '../shared/api'
 
 // The Agent SDK is ESM-only; this CJS main bundle must reach it via a dynamic
 // import() (preserved by Rollup for external deps) rather than a static require.
@@ -63,6 +63,7 @@ class InputStream implements AsyncIterable<SDKUserMessage> {
 
 interface Session {
   root: string
+  options: AgentOptions
   input: InputStream
   query: Query
   abort: AbortController
@@ -72,6 +73,7 @@ let session: Session | null = null
 
 async function startSession(
   root: string,
+  options: AgentOptions,
   getWindow: () => BrowserWindow | null
 ): Promise<Session> {
   const { query } = await loadSdk()
@@ -91,6 +93,8 @@ async function startSession(
       includePartialMessages: true,
       permissionMode: 'default',
       abortController: abort,
+      ...(options.model ? { model: options.model } : {}),
+      ...(options.effort ? { effort: options.effort as 'low' | 'medium' | 'high' } : {}),
       canUseTool: async (toolName, toolInput) => {
         emit({ type: 'status', text: describeTool(toolName, toolInput) })
         return { behavior: 'allow', updatedInput: toolInput }
@@ -104,6 +108,16 @@ async function startSession(
     try {
       for await (const msg of q) {
         switch (msg.type) {
+          case 'system': {
+            // The init message advertises the available slash commands for this
+            // cwd (repo skills/commands + built-ins) — surface them for the menu.
+            const commands = (msg as { subtype?: string; slash_commands?: string[] })
+              .slash_commands
+            if ((msg as { subtype?: string }).subtype === 'init' && Array.isArray(commands)) {
+              emit({ type: 'commands', commands })
+            }
+            break
+          }
           case 'stream_event': {
             const text = textDelta(msg)
             if (text) {
@@ -136,7 +150,7 @@ async function startSession(
     }
   })()
 
-  return { root, input, query: q, abort }
+  return { root, options, input, query: q, abort }
 }
 
 /** Pull a text delta out of a streaming partial-message event, shape-tolerant. */
@@ -155,11 +169,17 @@ function describeTool(name: string, input: unknown): string {
 }
 
 export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
-  ipcMain.handle('agent:open-project', async (_e, root: string) => {
+  ipcMain.handle('agent:open-project', async (_e, root: string, options: AgentOptions = {}) => {
     session?.abort.abort()
     session?.input.close()
     session = null
-    session = await startSession(root, getWindow)
+    session = await startSession(root, options, getWindow)
+  })
+
+  ipcMain.handle('agent:set-model', async (_e, model: string) => {
+    if (!session) return
+    session.options.model = model
+    await session.query.setModel?.(model)
   })
 
   ipcMain.handle('agent:send', async (_e, text: string) => {

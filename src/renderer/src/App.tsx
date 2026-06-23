@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import ChatPanel from './components/ChatPanel'
 import PreviewPane from './components/PreviewPane'
+import { toAgentOptions, useSession } from './store'
 
 type Status =
   | { kind: 'idle' }
@@ -16,6 +17,15 @@ export default function App(): React.JSX.Element {
   const [retry, setRetry] = useState<{ root: string; command: string } | null>(null)
 
   useEffect(() => window.api.devServer.onLog(setLog), [])
+
+  // Capture the SDK's advertised slash commands for the "/" menu.
+  useEffect(
+    () =>
+      window.api.agent.onEvent((event) => {
+        if (event.type === 'commands') useSession.getState().setSlashCommands(event.commands)
+      }),
+    []
+  )
 
   const attempt = async (root: string, commandOverride?: string): Promise<void> => {
     let attemptedCommand = commandOverride ?? ''
@@ -37,7 +47,7 @@ export default function App(): React.JSX.Element {
       }
       const { url } = await window.api.devServer.start({ root, command })
       await window.api.preview.load(url)
-      await window.api.agent.openProject(root)
+      await window.api.agent.openProject(root, toAgentOptions(useSession.getState()))
       setStatus({ kind: 'running', name, url })
     } catch (err) {
       await window.api.preview.reset()

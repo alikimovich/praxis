@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { AgentEvent, Bounds, DetectedProject, DsgnApi, RunningDevServer } from '../shared/api'
+import type {
+  AgentEvent,
+  AgentOptions,
+  Bounds,
+  DetectedProject,
+  DsgnApi,
+  RunningDevServer
+} from '../shared/api'
 
 const api: DsgnApi = {
   preview: {
@@ -22,8 +29,10 @@ const api: DsgnApi = {
     }
   },
   agent: {
-    openProject: (root: string): Promise<void> => ipcRenderer.invoke('agent:open-project', root),
+    openProject: (root: string, options?: AgentOptions): Promise<void> =>
+      ipcRenderer.invoke('agent:open-project', root, options),
     send: (text: string): Promise<void> => ipcRenderer.invoke('agent:send', text),
+    setModel: (model: string): Promise<void> => ipcRenderer.invoke('agent:set-model', model),
     interrupt: (): Promise<void> => ipcRenderer.invoke('agent:interrupt'),
     onEvent: (cb: (event: AgentEvent) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, event: AgentEvent): void => cb(event)

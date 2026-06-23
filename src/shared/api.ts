@@ -25,8 +25,17 @@ export interface RunningDevServer {
 export type AgentEvent =
   | { type: 'delta'; text: string }
   | { type: 'status'; text: string }
+  | { type: 'commands'; commands: string[] }
   | { type: 'done' }
   | { type: 'error'; message: string }
+
+/** Per-session options the user can set from the chat toolbar. */
+export interface AgentOptions {
+  /** Model alias ('opus' | 'sonnet' | 'haiku') or undefined for the account default. */
+  model?: string
+  /** Reasoning effort ('low' | 'medium' | 'high') or undefined for the model default. */
+  effort?: string
+}
 
 export interface Bounds {
   x: number
@@ -52,8 +61,9 @@ export interface DsgnApi {
     onLog: (cb: (line: string) => void) => () => void
   }
   agent: {
-    openProject: (root: string) => Promise<void>
+    openProject: (root: string, options?: AgentOptions) => Promise<void>
     send: (text: string) => Promise<void>
+    setModel: (model: string) => Promise<void>
     interrupt: () => Promise<void>
     onEvent: (cb: (event: AgentEvent) => void) => () => void
   }

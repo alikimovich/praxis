@@ -1,18 +1,30 @@
-import { useEffect, useRef, useState } from 'react'
-import { useChat } from '../store'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { DEFAULT_MODEL, useChat, useSession } from '../store'
 import Markdown from './Markdown'
 
-/**
- * Skeleton chat panel wired to the agent IPC stream. This is the placeholder
- * that the assistant-ui ExternalStoreRuntime replaces next — but the data flow
- * (send over IPC -> stream `agent:event` deltas -> mutate the store) is the
- * exact shape the real adapter will keep.
- */
+const MODELS = [
+  { value: DEFAULT_MODEL, label: 'Default model' },
+  { value: 'opus', label: 'Opus' },
+  { value: 'sonnet', label: 'Sonnet' },
+  { value: 'haiku', label: 'Haiku' }
+]
+
+const EFFORTS = [
+  { value: 'auto', label: 'Thinking: Auto' },
+  { value: 'low', label: 'Thinking: Low' },
+  { value: 'medium', label: 'Thinking: Medium' },
+  { value: 'high', label: 'Thinking: High' }
+]
+
 export default function ChatPanel(): React.JSX.Element {
   const { messages, isRunning, appendUser, startAssistant, appendDelta, appendStatus, finish } =
     useChat()
+  const { model, effort, slashCommands, setModel, setEffort } = useSession()
   const [input, setInput] = useState('')
+  const [menuActive, setMenuActive] = useState(0)
+  const [menuDismissed, setMenuDismissed] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const streamingId = useRef<string | null>(null)
 
   useEffect(() => {
@@ -38,6 +50,28 @@ export default function ChatPanel(): React.JSX.Element {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
   }, [messages])
 
+  // "/" slash-command menu state.
+  const slashQuery = input.startsWith('/') && !input.includes(' ') ? input.slice(1) : null
+  const matches = useMemo(() => {
+    if (slashQuery === null) return []
+    const q = slashQuery.toLowerCase()
+    return slashCommands.filter((c) => c.toLowerCase().includes(q)).slice(0, 8)
+  }, [slashQuery, slashCommands])
+  const menuOpen = slashQuery !== null && matches.length > 0 && !menuDismissed
+
+  useEffect(() => setMenuActive(0), [slashQuery])
+
+  const onInputChange = (value: string): void => {
+    setInput(value)
+    if (!value.startsWith('/')) setMenuDismissed(false)
+  }
+
+  const pickCommand = (cmd: string): void => {
+    setInput(`/${cmd} `)
+    setMenuDismissed(true)
+    inputRef.current?.focus()
+  }
+
   const send = (): void => {
     const text = input.trim()
     if (!text || isRunning) return
@@ -45,6 +79,40 @@ export default function ChatPanel(): React.JSX.Element {
     streamingId.current = startAssistant()
     setInput('')
     void window.api.agent.send(text)
+  }
+
+  const onModelChange = (value: string): void => {
+    setModel(value)
+    if (value !== DEFAULT_MODEL) void window.api.agent.setModel(value)
+  }
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (menuOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMenuActive((i) => (i + 1) % matches.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMenuActive((i) => (i - 1 + matches.length) % matches.length)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        pickCommand(matches[menuActive])
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setMenuDismissed(true)
+        return
+      }
+    }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      send()
+    }
   }
 
   return (
@@ -72,23 +140,64 @@ export default function ChatPanel(): React.JSX.Element {
           </div>
         ))}
       </div>
+
       <div className="composer">
-        <textarea
-          className="composer__input"
-          placeholder="Message dsgn…"
-          value={input}
-          rows={2}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              send()
-            }
-          }}
-        />
-        <button className="composer__send" onClick={send} disabled={!input.trim() || isRunning}>
-          {isRunning ? '…' : 'Send'}
-        </button>
+        <div className="composer__toolbar">
+          <select
+            className="select"
+            value={model}
+            onChange={(e) => onModelChange(e.target.value)}
+            aria-label="Model"
+          >
+            {MODELS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="select"
+            value={effort}
+            onChange={(e) => setEffort(e.target.value)}
+            aria-label="Thinking level"
+          >
+            {EFFORTS.map((eo) => (
+              <option key={eo.value} value={eo.value}>
+                {eo.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="composer__row">
+          {menuOpen && (
+            <div className="slash" role="listbox">
+              <div className="slash__hint">Skills & commands</div>
+              {matches.map((cmd, i) => (
+                <button
+                  key={cmd}
+                  className={`slash__item ${i === menuActive ? 'is-active' : ''}`}
+                  onMouseEnter={() => setMenuActive(i)}
+                  onClick={() => pickCommand(cmd)}
+                >
+                  /{cmd}
+                </button>
+              ))}
+            </div>
+          )}
+          <textarea
+            ref={inputRef}
+            className="composer__input"
+            placeholder="Message dsgn…  (/ for skills)"
+            value={input}
+            rows={2}
+            onChange={(e) => onInputChange(e.target.value)}
+            onKeyDown={onKeyDown}
+          />
+          <button className="composer__send" onClick={send} disabled={!input.trim() || isRunning}>
+            {isRunning ? '…' : 'Send'}
+          </button>
+        </div>
       </div>
     </div>
   )
