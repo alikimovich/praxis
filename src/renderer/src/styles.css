@@ -71,6 +71,18 @@ body {
   color: var(--text-muted);
 }
 
+/* Higher specificity (.btn.btn--active) so these win over the base `.btn`
+   block declared later in source order — otherwise the active state is dead. */
+.btn.btn--active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.btn.btn--active:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
 .btn {
   -webkit-app-region: no-drag;
   border: 1px solid var(--border);
@@ -114,6 +126,20 @@ body {
   background: #fff5f5;
   color: #b42318;
   border-bottom-color: #fdd;
+}
+
+.banner--auth {
+  background: #fffbeb;
+  color: #92600a;
+  border-bottom-color: #fde68a;
+}
+
+.banner--auth code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  background: #fef3c7;
+  padding: 1px 5px;
+  border-radius: 5px;
 }
 
 .banner__text {
@@ -379,6 +405,89 @@ body.is-resizing {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* v2 selection inspector — sits between the messages and the composer toolbar. */
+.inspector {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.inspector__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inspector__tag {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.inspector__close {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.inspector__source {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector__source--none {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.inspector__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.inspector__chip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector__ask {
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inspector__ask:hover {
+  opacity: 0.9;
 }
 
 .composer__toolbar {

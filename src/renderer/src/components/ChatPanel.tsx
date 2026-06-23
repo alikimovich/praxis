@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_MODEL, useChat, useSession } from '../store'
+import {
+  DEFAULT_MODEL,
+  describeSelectionForPrompt,
+  isAuthError,
+  useChat,
+  useSelection,
+  useSession
+} from '../store'
+import Inspector from './Inspector'
 import Markdown from './Markdown'
 
 const MODELS = [
@@ -20,6 +28,7 @@ export default function ChatPanel(): React.JSX.Element {
   const { messages, isRunning, appendUser, startAssistant, appendDelta, appendStatus, finish } =
     useChat()
   const { model, effort, slashCommands, setModel, setEffort } = useSession()
+  const { selected, setSelected } = useSelection()
   const [input, setInput] = useState('')
   const [menuActive, setMenuActive] = useState(0)
   const [menuDismissed, setMenuDismissed] = useState(false)
@@ -36,7 +45,11 @@ export default function ChatPanel(): React.JSX.Element {
       } else if (event.type === 'status') {
         appendStatus(id, event.text)
       } else if (event.type === 'error') {
-        appendDelta(id, `\n\n⚠️ ${event.message}`)
+        // Auth failures get a friendly banner (see App); keep the chat line short.
+        const note = isAuthError(event.message)
+          ? '⚠️ Not connected to Claude — see the notice above.'
+          : `⚠️ ${event.message}`
+        appendDelta(id, `\n\n${note}`)
         finish()
         streamingId.current = null
       } else if (event.type === 'done') {
@@ -74,6 +87,22 @@ export default function ChatPanel(): React.JSX.Element {
     setInput(`/${cmd} `)
     setMenuDismissed(true)
     inputRef.current?.focus()
+  }
+
+  // "Ask dsgn to change this…" — seed the composer with the element reference
+  // (and its source location) so the agent edits the right place, then close
+  // the inspector and drop the cursor at the end for the user to type the change.
+  const askAboutSelection = (): void => {
+    if (!selected) return
+    const prefix = describeSelectionForPrompt(selected)
+    setInput((cur) => (cur.trim() ? `${prefix}${cur}` : prefix))
+    setSelected(null)
+    requestAnimationFrame(() => {
+      const el = inputRef.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(el.value.length, el.value.length)
+    })
   }
 
   const send = (): void => {
@@ -146,6 +175,13 @@ export default function ChatPanel(): React.JSX.Element {
       </div>
 
       <div className="composer">
+        {selected && (
+          <Inspector
+            element={selected}
+            onAsk={askAboutSelection}
+            onClear={() => setSelected(null)}
+          />
+        )}
         <div className="composer__toolbar">
           <select
             className="select"

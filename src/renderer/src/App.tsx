@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import ChatPanel from './components/ChatPanel'
 import PreviewPane from './components/PreviewPane'
-import { toAgentOptions, useChat, useSession } from './store'
+import { isAuthError, toAgentOptions, useChat, useSelection, useSession } from './store'
 
 const MIN_CHAT_WIDTH = 320
 const MAX_CHAT_WIDTH = 760
@@ -21,16 +21,43 @@ export default function App(): React.JSX.Element {
   // custom command (monorepos, non-standard dev scripts).
   const [retry, setRetry] = useState<{ root: string; command: string } | null>(null)
 
+  const { selectMode, setSelectMode, setSelected } = useSelection()
+  const authNeeded = useSession((s) => s.authNeeded)
+  const setAuthNeeded = useSession((s) => s.setAuthNeeded)
+
   useEffect(() => window.api.devServer.onLog(setLog), [])
 
-  // Capture the SDK's advertised slash commands for the "/" menu.
+  // Capture the SDK's advertised slash commands for the "/" menu, and drive the
+  // first-run onboarding banner: raise it on an auth failure, and clear it the
+  // moment the agent makes progress (the user fixed auth and a turn is flowing).
   useEffect(
     () =>
       window.api.agent.onEvent((event) => {
-        if (event.type === 'commands') useSession.getState().setSlashCommands(event.commands)
+        const session = useSession.getState()
+        if (event.type === 'commands') {
+          session.setSlashCommands(event.commands)
+        } else if (event.type === 'error' && isAuthError(event.message)) {
+          session.setAuthNeeded(true)
+        } else if (event.type === 'delta' || event.type === 'done') {
+          if (session.authNeeded) session.setAuthNeeded(false)
+        }
       }),
     []
   )
+
+  // v2: receive element picks / cancellations from the preview overlay. Escape
+  // cancels the mode *and* clears the pick, matching the toggle-off behaviour.
+  useEffect(() => {
+    const offPicked = window.api.preview.onElementPicked((el) => setSelected(el))
+    const offCancel = window.api.preview.onSelectCancelled(() => {
+      setSelectMode(false)
+      setSelected(null)
+    })
+    return () => {
+      offPicked()
+      offCancel()
+    }
+  }, [setSelected, setSelectMode])
 
   // Drag-to-resize the split. The native preview is hidden while dragging.
   useEffect(() => {
@@ -66,6 +93,11 @@ export default function App(): React.JSX.Element {
 
   const attempt = async (root: string, commandOverride?: string): Promise<void> => {
     let attemptedCommand = commandOverride ?? ''
+    // Opening (or re-opening) a project starts fresh: a pick from the previous
+    // repo points at a file that may not exist in the new one. Disarm + clear.
+    setSelectMode(false)
+    setSelected(null)
+    void window.api.preview.setSelectMode(false)
     try {
       setLog('')
       setRetry(null)
@@ -100,11 +132,26 @@ export default function App(): React.JSX.Element {
     if (root) await attempt(root)
   }
 
+  const toggleSelect = (): void => {
+    const next = !selectMode
+    setSelectMode(next)
+    void window.api.preview.setSelectMode(next)
+    if (!next) setSelected(null)
+  }
+
+  // Clear selection (rects/source go stale) but leave select mode — main
+  // re-arms the overlay once the reloaded page finishes loading.
   const reload = (): void => {
-    if (status.kind === 'running') void window.api.preview.load(status.url)
+    if (status.kind === 'running') {
+      setSelected(null)
+      void window.api.preview.load(status.url)
+    }
   }
 
   const stop = async (): Promise<void> => {
+    setSelectMode(false)
+    setSelected(null)
+    void window.api.preview.setSelectMode(false)
     await window.api.devServer.stop()
     await window.api.preview.reset()
     setRetry(null)
@@ -128,6 +175,14 @@ export default function App(): React.JSX.Element {
         <div className="titlebar__actions">
           {status.kind === 'running' && (
             <>
+              <button
+                className={`btn ${selectMode ? 'btn--active' : 'btn--ghost'}`}
+                onClick={toggleSelect}
+                aria-pressed={selectMode}
+                title="Click an element in the preview to edit it"
+              >
+                {selectMode ? 'Selecting…' : 'Select'}
+              </button>
               <button className="btn btn--ghost" onClick={reload}>
                 Reload
               </button>
@@ -141,6 +196,19 @@ export default function App(): React.JSX.Element {
           </button>
         </div>
       </header>
+
+      {authNeeded && (
+        <div className="banner banner--auth">
+          <span className="banner__text">
+            dsgn couldn’t reach Claude. Each teammate authenticates with their own
+            subscription — run <code>claude setup-token</code> (or <code>claude login</code>) in a
+            terminal, then reopen the project.
+          </span>
+          <button className="banner__close" onClick={() => setAuthNeeded(false)} aria-label="Dismiss">
+            ✕
+          </button>
+        </div>
+      )}
 
       {status.kind === 'busy' && log && <div className="banner banner--info">{log}</div>}
       {status.kind === 'error' && (
