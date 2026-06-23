@@ -1,4 +1,4 @@
-import { ipcMain, type BrowserWindow } from 'electron'
+import { app, ipcMain, type BrowserWindow } from 'electron'
 import type { Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentEvent } from '../shared/api'
 
@@ -175,5 +175,11 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
 
   ipcMain.handle('agent:interrupt', async () => {
     await session?.query.interrupt?.()
+  })
+
+  // Don't leave the SDK's CLI subprocess running after dsgn quits.
+  app.on('before-quit', () => {
+    session?.abort.abort()
+    session?.input.close()
   })
 }

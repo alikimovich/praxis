@@ -1,0 +1,81 @@
+/**
+ * End-to-end test of the open-project → dev-server → preview path, without a
+ * human clicking the native folder dialog. We stub `dialog.showOpenDialog` from
+ * the main process to return a zero-dependency fixture project, click
+ * "Open project…", and assert the preview WebContentsView navigates to the
+ * fixture's dev-server URL.
+ *
+ * Run with: bun run test:preview
+ */
+import { _electron as electron } from 'playwright'
+import electronPath from 'electron'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+import { mkdirSync, writeFileSync } from 'node:fs'
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const fixture = join(root, 'test', 'fixtures', 'static-app')
+const artifacts = join(root, 'test', 'artifacts')
+mkdirSync(artifacts, { recursive: true })
+
+let app
+try {
+  app = await electron.launch({
+    executablePath: electronPath,
+    args: [join(root, 'out', 'main', 'index.js')],
+    cwd: root
+  })
+
+  const win = await app.firstWindow()
+  await win.waitForSelector('.btn', { timeout: 15000 })
+
+  // Make the native folder picker return our fixture (can't click an OS dialog).
+  await app.evaluate(async ({ dialog }, fixturePath) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [fixturePath] })
+  }, fixture)
+
+  await win.click('.btn')
+
+  // Wait until some webContents has navigated to the fixture's localhost URL.
+  const deadline = Date.now() + 60000
+  let previewUrl = null
+  while (Date.now() < deadline) {
+    const urls = await app.evaluate(({ webContents }) =>
+      webContents.getAllWebContents().map((w) => w.getURL())
+    )
+    previewUrl = urls.find((u) => /^http:\/\/localhost:\d+/.test(u)) ?? null
+    if (previewUrl) break
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  if (!previewUrl) throw new Error('preview never navigated to a localhost dev-server URL')
+
+  // Titlebar should reflect the running project.
+  await win.waitForFunction(
+    () => document.querySelector('.titlebar__hint')?.textContent?.includes('localhost'),
+    { timeout: 10000 }
+  )
+
+  await win.screenshot({ path: join(artifacts, '03-open-preview.png') })
+
+  // Capture the native preview WebContentsView itself (not in the page shot).
+  const previewPng = await app.evaluate(async ({ webContents }) => {
+    const wc = webContents
+      .getAllWebContents()
+      .find((w) => /^http:\/\/localhost:\d+/.test(w.getURL()))
+    if (!wc) return null
+    const img = await wc.capturePage()
+    return img.isEmpty() ? null : img.toPNG().toString('base64')
+  })
+  if (previewPng) {
+    writeFileSync(join(artifacts, '03b-preview-content.png'), Buffer.from(previewPng, 'base64'))
+  } else {
+    console.warn('warning: could not capture preview content')
+  }
+
+  console.log('OPEN-PREVIEW OK — previewing', previewUrl)
+} catch (err) {
+  console.error('OPEN-PREVIEW FAILED:', err?.message ?? err)
+  process.exitCode = 1
+} finally {
+  await app?.close()
+}
