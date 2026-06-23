@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { SelectedElement } from '../../shared/api'
 
 export interface ChatMessage {
   id: string
@@ -63,19 +64,34 @@ interface SessionState {
   model: string
   effort: string
   slashCommands: string[]
+  /** Set when the agent reports an auth failure — drives the onboarding banner. */
+  authNeeded: boolean
   setModel: (model: string) => void
   setEffort: (effort: string) => void
   setSlashCommands: (commands: string[]) => void
+  setAuthNeeded: (authNeeded: boolean) => void
 }
 
 export const useSession = create<SessionState>((set) => ({
   model: DEFAULT_MODEL,
   effort: DEFAULT_EFFORT,
   slashCommands: [],
+  authNeeded: false,
   setModel: (model) => set({ model }),
   setEffort: (effort) => set({ effort }),
-  setSlashCommands: (slashCommands) => set({ slashCommands })
+  setSlashCommands: (slashCommands) => set({ slashCommands }),
+  setAuthNeeded: (authNeeded) => set({ authNeeded })
 }))
+
+/**
+ * Heuristic: does this agent error look like a missing/invalid Claude login?
+ * Per-user auth means a fresh teammate hits this before they've run
+ * `claude setup-token` — we want to guide them, not show a raw 401.
+ */
+export const isAuthError = (message: string): boolean =>
+  /\b401\b|invalid authentication|unauthorized|setup-token|not logged in|no credentials|authentication_error/i.test(
+    message
+  )
 
 /** Convert the UI sentinels into AgentOptions the SDK understands. */
 export const toAgentOptions = (s: { model: string; effort: string }): {
@@ -86,8 +102,55 @@ export const toAgentOptions = (s: { model: string; effort: string }): {
   effort: s.effort === DEFAULT_EFFORT ? undefined : s.effort
 })
 
+/**
+ * v2 element selection. `selectMode` mirrors the overlay armed in the preview;
+ * `selected` is the most recently picked element. The composer reads `selected`
+ * to seed a change request that points the agent at the right source location.
+ */
+interface SelectionState {
+  selectMode: boolean
+  selected: SelectedElement | null
+  setSelectMode: (selectMode: boolean) => void
+  setSelected: (selected: SelectedElement | null) => void
+}
+
+export const useSelection = create<SelectionState>((set) => ({
+  selectMode: false,
+  selected: null,
+  setSelectMode: (selectMode) => set({ selectMode }),
+  setSelected: (selected) => set({ selected })
+}))
+
+// A picked element's fields come from the (only semi-trusted) previewed page.
+// Collapse to a single line (no control chars / newlines, so an injected value
+// can't masquerade as a new instruction paragraph) and cap by code point
+// (surrogate-safe). The source is additionally validated to a `path:line` shape.
+const oneLine = (s: string, max: number): string =>
+  Array.from(s.replace(new RegExp("[\\u0000-\\u001F\\u007F]+", "g"), " "))
+    .slice(0, max)
+    .join('')
+    .trim()
+
+const SOURCE_RE = /^[\w./@-]+:\d+(:\d+)?$/
+
+/** Build the chat prompt prefix that anchors the agent to a picked element. */
+export const describeSelectionForPrompt = (el: SelectedElement): string => {
+  const id = el.id ? oneLine(el.id, 64) : ''
+  const cls = el.classes[0] ? oneLine(el.classes[0], 64) : ''
+  const ident = id ? `#${id}` : cls ? `.${cls}` : ''
+  const source = el.source && SOURCE_RE.test(el.source) ? el.source : null
+  const where = source ? ` in ${source}` : ` (selector: ${oneLine(el.selector, 200)})`
+  const text = el.text ? ` with text “${oneLine(el.text, 40)}”` : ''
+  return `In the preview I selected the <${oneLine(el.tag, 32)}${ident}> element${where}${text}. `
+}
+
 // Exposed for the Playwright test harness (and handy for live debugging).
 ;(
-  window as unknown as { __dsgnStore?: typeof useChat; __dsgnSession?: typeof useSession }
+  window as unknown as {
+    __dsgnStore?: typeof useChat
+    __dsgnSession?: typeof useSession
+    __dsgnSelection?: typeof useSelection
+  }
 ).__dsgnStore = useChat
 ;(window as unknown as { __dsgnSession?: typeof useSession }).__dsgnSession = useSession
+;(window as unknown as { __dsgnSelection?: typeof useSelection }).__dsgnSelection = useSelection
