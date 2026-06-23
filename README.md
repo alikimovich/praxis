@@ -4,9 +4,11 @@ An AI design & prototyping tool for your own repos. Open a project, dsgn launche
 its dev server in a live preview on the right, and a Claude-powered chat on the
 left edits the running app — respecting the repo's own `CLAUDE.md` and skills.
 
-> Status: **v1 skeleton.** The Electron shell, two-pane layout, and native
-> `WebContentsView` preview are wired. The chat is a placeholder streaming an
-> echo; the Agent SDK, dev-server runner, and assistant-ui chat land next.
+> Status: **working v1.** Open a folder → dsgn detects the framework, runs its
+> dev server, and previews it. The chat is a real multi-turn Claude Agent SDK
+> session (markdown, tool-use status, model + thinking selectors, `/` skill
+> menu) that edits the running repo with live hot-reload in the preview.
+> Next: design-system-aware element selection / prop editing, then PR handoff.
 
 ## Requirements
 
@@ -22,11 +24,15 @@ cd dsgn
 bun install      # or: npm install / yarn
 
 # One-time: authorize the agent with your own Claude subscription.
-# (Lands when the Agent SDK is wired — placeholder for now.)
-claude setup-token
+claude setup-token   # or: claude login
 
 bun run dev      # or: npm run dev / yarn dev
 ```
+
+In the app, click **Open project…**, pick a repo with a `dev`/`start` script,
+and chat on the left. dsgn **owns the dev server** — don't also run `dev`
+manually for a project you open here, or you'll hit a port/lock conflict (the
+error banner offers a custom-command retry for monorepos / odd setups).
 
 ## How it's distributed
 
@@ -38,18 +44,26 @@ runs on their own Claude subscription — no shared secret.
 
 ```
 Electron
-├─ main        Agent SDK session · dev-server runner · git/PR (cwd = opened repo)
-├─ preload     typed contextBridge → window.api
+├─ main        Agent SDK session · dev-server runner · preview (cwd = opened repo)
+├─ preload     typed contextBridge → window.api   (types in src/shared/api.ts)
 └─ renderer    React UI: chat (left) + preview slot (right)
                the preview is a native WebContentsView positioned by main
 ```
 
 - **Preview** is a native `WebContentsView`, not an iframe, so a preload can be
   injected into the previewed app later (element selection → prop editing).
-- **Chat** streams over `agent:*` IPC into a store; assistant-ui's
-  ExternalStoreRuntime plugs in next.
+- **Chat** runs a persistent multi-turn Agent SDK `query()` in main; output
+  streams over `agent:*` IPC into a zustand store (the seam where assistant-ui
+  could later drop in). Respects the repo's `CLAUDE.md` + skills via
+  `settingSources` + the `claude_code` system-prompt preset.
 - **Conventions** (`CLAUDE.md`, skills, and a planned `DESIGN.md` design-system
   spec) live in the opened repo and travel with it.
+
+## Testing
+
+`bun run test` launches the built app via Playwright + Electron and saves
+screenshots to `test/artifacts/` (shell, open→preview with native-view capture,
+and chat rendering). Individual: `test:smoke`, `test:preview`, `test:chat`.
 
 ## Scripts
 
@@ -58,3 +72,4 @@ Electron
 | `bun run dev` | Launch the app with HMR |
 | `bun run build` | Build main/preload/renderer to `out/` |
 | `bun run typecheck` | Type-check main + renderer |
+| `bun run test` | Build + run the Playwright/Electron tests |
