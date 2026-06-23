@@ -70,6 +70,16 @@ try {
   await win.waitForSelector('.slash__item', { timeout: 5000 })
   await win.screenshot({ path: join(artifacts, '05-toolbar-slash.png') })
 
+  // First-run auth onboarding: flipping authNeeded shows the guidance banner.
+  await win.fill('.composer__input', '')
+  await win.evaluate(() => window.__dsgnSession.getState().setAuthNeeded(true))
+  await win.waitForSelector('.banner--auth code', { timeout: 5000 })
+  const authText = (await win.textContent('.banner--auth'))?.toLowerCase() ?? ''
+  if (!authText.includes('setup-token')) {
+    throw new Error('auth banner should mention claude setup-token')
+  }
+  await win.screenshot({ path: join(artifacts, '08-auth-onboarding.png') })
+
   console.log('CHAT-RENDER OK')
 } catch (err) {
   console.error('CHAT-RENDER FAILED:', err?.message ?? err)
