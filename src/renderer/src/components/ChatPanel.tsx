@@ -6,9 +6,11 @@ import {
   oneLine,
   useAnnotations,
   useChat,
+  useComposer,
   usePermissions,
   useSelection,
   useSession,
+  useSetup,
   useTokens
 } from '../store'
 import type { PermissionMode, Token } from '../../../shared/api'
@@ -16,6 +18,7 @@ import Inspector from './Inspector'
 import Markdown from './Markdown'
 import NotesPanel from './NotesPanel'
 import PermissionCards from './PermissionCards'
+import SetupCard from './SetupCard'
 
 const MODELS = [
   { value: DEFAULT_MODEL, label: 'Default model' },
@@ -42,9 +45,13 @@ export default function ChatPanel(): React.JSX.Element {
     useChat()
   const { model, effort, slashCommands, projectRoot, setModel, setEffort } = useSession()
   const { selected, setSelected } = useSelection()
+  const inspection = useSelection((s) => s.inspection)
+  const inspecting = useSelection((s) => s.inspecting)
   const { mode: permissionMode, pending, setMode, removeRequest } = usePermissions()
   const { list: notes, focusedId, setList: setNotes } = useAnnotations()
   const tokenSet = useTokens((s) => s.set)
+  const setup = useSetup()
+  const composerSeed = useComposer((s) => s.seed)
   const [publishing, setPublishing] = useState(false)
   const [publishMsg, setPublishMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [input, setInput] = useState('')
@@ -59,6 +66,19 @@ export default function ChatPanel(): React.JSX.Element {
     setPublishMsg(null)
     setPublishing(false)
   }, [projectRoot])
+
+  // App-level components (prop panel, setup) seed the composer via the store.
+  useEffect(() => {
+    if (composerSeed == null) return
+    setInput((cur) => (cur.trim() ? `${composerSeed} ${cur}` : composerSeed))
+    useComposer.getState().setSeed(null)
+    requestAnimationFrame(() => {
+      const el = inputRef.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(el.value.length, el.value.length)
+    })
+  }, [composerSeed])
 
   useEffect(() => {
     return window.api.agent.onEvent((event) => {
@@ -122,6 +142,40 @@ export default function ChatPanel(): React.JSX.Element {
       el.focus()
       el.setSelectionRange(el.value.length, el.value.length)
     })
+  }
+
+  // Accept the setup offer: write the stamping plugin (deterministic), then hand
+  // the wiring + component typing to the agent.
+  const acceptSetup = async (): Promise<void> => {
+    if (!projectRoot || setup.busy) return
+    setup.setBusy(true)
+    setup.setStatus('Adding the source-stamping plugin…')
+    try {
+      const res = await window.api.setup.scaffold(projectRoot)
+      if (!res.ok) {
+        setup.setStatus(`Setup failed: ${res.error ?? 'unknown error'}`)
+        return
+      }
+      const where =
+        res.framework === 'vite'
+          ? 'the React Babel plugins in vite.config'
+          : res.framework === 'next'
+            ? 'the Babel/SWC config'
+            : 'the dev build config'
+      void window.api.agent.send(
+        `dsgn added a dev-only Babel plugin "${res.pluginFile}" that stamps data-dsgn-source ` +
+          `on JSX elements. Please (1) wire ${res.pluginFile} into ${where} for development only ` +
+          `(never production), and (2) add explicit TypeScript prop types/interfaces to the ` +
+          `components so their props become editable. Then I'll reload the preview.`
+      )
+      setup.setStatus(
+        'Asked dsgn to wire it in and type your components — reload the preview when it finishes.'
+      )
+    } catch {
+      setup.setStatus('Setup could not be started.')
+    } finally {
+      setup.setBusy(false)
+    }
   }
 
   // Apply a design token to the selected element via the agent. Page-derived
@@ -244,7 +298,18 @@ export default function ChatPanel(): React.JSX.Element {
   return (
     <div className="chat">
       <div className="chat__messages" ref={listRef}>
-        {messages.length === 0 && (
+        {setup.needed && !setup.dismissed && (
+          <SetupCard
+            busy={setup.busy}
+            status={setup.status}
+            onAccept={() => void acceptSetup()}
+            onDismiss={() => {
+              setup.setDismissed(true)
+              setup.setNeeded(false)
+            }}
+          />
+        )}
+        {messages.length === 0 && !setup.needed && (
           <div className="chat__empty">
             Ask for a change, or open a project to preview it on the right.
           </div>
@@ -272,10 +337,14 @@ export default function ChatPanel(): React.JSX.Element {
         {selected && (
           <Inspector
             element={selected}
-            root={projectRoot}
+            propsReady={!!inspection?.hasSchema}
+            inspecting={inspecting}
+            onSetup={() => {
+              useSetup.getState().setDismissed(false)
+              useSetup.getState().setNeeded(true)
+            }}
             onAsk={askAboutSelection}
             onClear={() => setSelected(null)}
-            onSeedPrompt={seedPrompt}
             onAddNote={addNote}
             tokens={tokenSet}
             onPickToken={pickToken}

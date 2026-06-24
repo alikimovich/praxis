@@ -52,10 +52,9 @@ try {
     },
     { fixture, src: SRC }
   )
-  await win.waitForSelector('.inspector__toggle', { timeout: 5000 })
-  await win.click('.inspector__toggle') // Edit props
-  await win.waitForSelector('.propedit__row', { timeout: 5000 })
-  const enumOptions = await win.$$eval('.propedit__row select option', (os) =>
+  // A schema-backed component auto-opens the floating prop panel (no toggle).
+  await win.waitForSelector('.proppanel__row', { timeout: 5000 })
+  const enumOptions = await win.$$eval('.proppanel__row select option', (os) =>
     os.map((o) => o.value).filter(Boolean)
   )
   for (const v of ['ok', 'warn', 'error']) {

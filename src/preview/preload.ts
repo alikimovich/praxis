@@ -22,6 +22,7 @@ const PICKED = 'dsgn:preview:element-picked'
 const CANCELLED = 'dsgn:preview:select-cancelled'
 const SET_PINS = 'dsgn:preview:set-annotations'
 const PIN_CLICK = 'dsgn:preview:pin-click'
+const READINESS = 'dsgn:preview:readiness'
 
 /** Computed styles worth surfacing in the inspector (curated, not the whole CSSOM). */
 const TRACKED_STYLES = [
@@ -276,6 +277,27 @@ window.addEventListener('resize', () => pinDots.size && positionPins())
 // Pins track layout changes (hot-reload, async content) on a light cadence.
 const pinTimer = setInterval(() => pinDots.size && positionPins(), 600)
 window.addEventListener('pagehide', () => clearInterval(pinTimer))
+
+// Report whether the previewed app is "dsgn-ready" — i.e. its elements carry
+// data-dsgn-source stamps — so the app can offer to set up an unprepared project.
+// Re-sampled a few times so a slow-rendering SPA (stamps appear after `load`)
+// isn't falsely flagged; the renderer retracts the offer on any stamps>0 report.
+function reportReadiness(): number {
+  if (!location.protocol.startsWith('http')) return -1 // skip the placeholder
+  const stamps = document.querySelectorAll('[data-dsgn-source]').length
+  ipcRenderer.send(READINESS, { stamps })
+  return stamps
+}
+window.addEventListener('load', () => {
+  const delays = [600, 1500, 3000]
+  const tick = (i: number): void => {
+    if (i >= delays.length) return
+    setTimeout(() => {
+      if (reportReadiness() <= 0) tick(i + 1) // keep checking until stamps appear
+    }, delays[i])
+  }
+  tick(0)
+})
 
 ipcRenderer.on(SET_MODE, (_e, next: boolean) => setActive(next))
 ipcRenderer.on(SET_PINS, (_e, pins: { id: string; selector: string }[]) => {

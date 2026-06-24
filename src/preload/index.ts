@@ -14,6 +14,7 @@ import type {
   PublishResult,
   RunningDevServer,
   SelectedElement,
+  SetupResult,
   TokenSet
 } from '../shared/api'
 
@@ -36,7 +37,15 @@ const api: DsgnApi = {
       return () => ipcRenderer.removeListener('preview:select-cancelled', listener)
     },
     setAnnotations: (pins: { id: string; selector: string }[]): void =>
-      ipcRenderer.send('preview:set-annotations', pins)
+      ipcRenderer.send('preview:set-annotations', pins),
+    /** Reserve a right-edge strip (px) for the floating prop panel. */
+    setPanelInset: (inset: number): void => ipcRenderer.send('preview:set-panel-inset', inset),
+    /** Fires after the previewed app loads, with whether it's source-stamped. */
+    onReadiness: (cb: (info: { stamps: number }) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, info: { stamps: number }): void => cb(info)
+      ipcRenderer.on('preview:readiness', listener)
+      return () => ipcRenderer.removeListener('preview:readiness', listener)
+    }
   },
   project: {
     pick: (): Promise<string | null> => ipcRenderer.invoke('project:pick'),
@@ -76,6 +85,9 @@ const api: DsgnApi = {
   publish: {
     toPr: (root: string, opts: { title: string }): Promise<PublishResult> =>
       ipcRenderer.invoke('publish:to-pr', root, opts)
+  },
+  setup: {
+    scaffold: (root: string): Promise<SetupResult> => ipcRenderer.invoke('setup:scaffold', root)
   },
   agent: {
     openProject: (root: string, options?: AgentOptions): Promise<void> =>

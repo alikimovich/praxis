@@ -373,15 +373,16 @@ export async function inspectSvelteProps(
   }
 
   const fields = mergeFields(schema, current)
+  const hasSchema = schema.length > 0
   const note = isComponent
-    ? schema.length
+    ? hasSchema
       ? crossFile
         ? `Schema resolved from the imported ${component} component.`
         : undefined
       : 'No Svelte prop schema resolved — showing the props currently set.'
     : 'Host element — editing its literal attributes (no component schema).'
 
-  return { component, source, fields, ...(note ? { note } : {}) }
+  return { component, source, fields, hasSchema, ...(note ? { note } : {}) }
 }
 
 /** Render a Svelte attribute literal: name="x" / name={3} / name={true}. */

@@ -101,6 +101,10 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
 - `src/renderer/src/components/PropEditor.tsx` — typed prop controls rendered from the inspection.
 - `src/main/tokens.ts` — **design-token detection**: probes `.dsgn/tokens.json` → tailwind
   config (static parse) → CSS custom properties; `tokens:detect`. Palette in `TokenPalette.tsx`.
+- `src/main/setup.ts` — **project setup scaffold**: writes the dev-only source-stamping plugin
+  (`setup:scaffold`); the agent wires it in + types components. `SetupCard.tsx` is the offer.
+- `src/renderer/src/components/PropPanel.tsx` — **floating prop panel** (gated on a resolved
+  schema; reserves the preview's right edge via `preview.setPanelInset`).
 - `src/main/annotations.ts` — **v3** annotation sidecar CRUD + Publish→PR (git/gh via execFile).
 - `src/renderer/src/components/NotesPanel.tsx` — **v3** notes list + Publish; `useAnnotations` store.
 - `src/renderer/src/store.ts` — `useChat` + `useSession` + **`useSelection`**; `isAuthError`;
@@ -115,6 +119,11 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
   (use `capturePage()`); it also eats mouse events (hidden during resize drag). To
   drive it from a test, reach it via the main process
   (`webContents.executeJavaScript`), as `test/select-element.mjs` does.
+- A renderer DOM panel can't float **above** the native preview view (native views
+  render over the page). The floating prop panel instead reserves a right-edge strip
+  via `preview.setPanelInset`, shrinking the native bounds while it's open.
+- Prop editing is **gated** on `PropInspection.hasSchema` (a resolved react-docgen
+  schema). Unready components are prompt-only; the on-open setup offer fixes them.
 - The preview overlay preload is **sandboxed** — it only uses `ipcRenderer` (no Node,
   no contextBridge) and shares the page DOM (overlay lives in a shadow root with
   `pointer-events:none`). It runs fresh on every navigation, so main re-sends the

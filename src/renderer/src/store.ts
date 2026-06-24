@@ -3,6 +3,7 @@ import type {
   Annotation,
   PermissionMode,
   PermissionRequest,
+  PropInspection,
   SelectedElement,
   TokenSet
 } from '../../shared/api'
@@ -121,15 +122,25 @@ export const toAgentOptions = (s: { model: string; effort: string }): {
 interface SelectionState {
   selectMode: boolean
   selected: SelectedElement | null
+  /** Prop inspection for the selected element (null while loading / no source). */
+  inspection: PropInspection | null
+  inspecting: boolean
   setSelectMode: (selectMode: boolean) => void
+  /** Selecting a new element clears the previous inspection. */
   setSelected: (selected: SelectedElement | null) => void
+  setInspection: (inspection: PropInspection | null) => void
+  setInspecting: (inspecting: boolean) => void
 }
 
 export const useSelection = create<SelectionState>((set) => ({
   selectMode: false,
   selected: null,
+  inspection: null,
+  inspecting: false,
   setSelectMode: (selectMode) => set({ selectMode }),
-  setSelected: (selected) => set({ selected })
+  setSelected: (selected) => set({ selected, inspection: null, inspecting: false }),
+  setInspection: (inspection) => set({ inspection }),
+  setInspecting: (inspecting) => set({ inspecting })
 }))
 
 /**
@@ -171,6 +182,43 @@ export const oneLine = (s: string, max: number): string =>
     .trim()
 
 const SOURCE_RE = /^[\w./@-]+:\d+(:\d+)?$/
+
+/** A one-shot composer seed, so App-level components can prefill the chat input. */
+interface ComposerState {
+  seed: string | null
+  setSeed: (seed: string | null) => void
+}
+
+export const useComposer = create<ComposerState>((set) => ({
+  seed: null,
+  setSeed: (seed) => set({ seed })
+}))
+
+/** The on-open "set this project up for editing" offer. */
+interface SetupState {
+  /** The previewed app isn't source-stamped — offer to set it up. */
+  needed: boolean
+  dismissed: boolean
+  busy: boolean
+  status: string | null
+  setNeeded: (needed: boolean) => void
+  setDismissed: (dismissed: boolean) => void
+  setBusy: (busy: boolean) => void
+  setStatus: (status: string | null) => void
+  reset: () => void
+}
+
+export const useSetup = create<SetupState>((set) => ({
+  needed: false,
+  dismissed: false,
+  busy: false,
+  status: null,
+  setNeeded: (needed) => set({ needed }),
+  setDismissed: (dismissed) => set({ dismissed }),
+  setBusy: (busy) => set({ busy }),
+  setStatus: (status) => set({ status }),
+  reset: () => set({ needed: false, dismissed: false, busy: false, status: null })
+}))
 
 /** Design tokens detected for the open project (one source wins). */
 interface TokenState {
@@ -218,6 +266,7 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
     __dsgnPermissions?: typeof usePermissions
     __dsgnAnnotations?: typeof useAnnotations
     __dsgnTokens?: typeof useTokens
+    __dsgnSetup?: typeof useSetup
   }
 ).__dsgnStore = useChat
 ;(window as unknown as { __dsgnSession?: typeof useSession }).__dsgnSession = useSession
@@ -227,3 +276,4 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
 ;(window as unknown as { __dsgnAnnotations?: typeof useAnnotations }).__dsgnAnnotations =
   useAnnotations
 ;(window as unknown as { __dsgnTokens?: typeof useTokens }).__dsgnTokens = useTokens
+;(window as unknown as { __dsgnSetup?: typeof useSetup }).__dsgnSetup = useSetup

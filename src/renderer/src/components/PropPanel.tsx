@@ -1,41 +1,44 @@
 import { useEffect, useState } from 'react'
 import type { PropField, PropInspection } from '../../../shared/api'
 
+/** Kept in sync with the .proppanel width in styles.css and the reserved inset. */
+const PANEL_WIDTH = 320
+
 interface Props {
   root: string
-  source: string
+  inspection: PropInspection
+  /** Update the canonical inspection (optimistic apply / reload). */
+  onChange: (next: PropInspection) => void
   /** Seed a chat prompt for changes that can't be applied as a literal. */
   onSeedPrompt: (text: string) => void
+  onClose: () => void
 }
 
 /**
- * Inspects the selected element's props (via react-docgen + the source AST) and
- * renders typed controls. Simple literal edits are written straight to source
- * (instant hot-reload); anything non-literal is handed to the chat agent.
+ * The floating prop panel — shown over the preview's right edge when a
+ * dsgn-ready component (one with a resolved react-docgen schema) is selected.
+ * It reserves a strip of the native preview (setPanelInset) so it isn't covered.
+ * Simple literal edits write straight to source; non-literal ones go to chat.
  */
-export default function PropEditor({ root, source, onSeedPrompt }: Props): React.JSX.Element {
-  const [inspection, setInspection] = useState<PropInspection | null>(null)
-  const [loading, setLoading] = useState(true)
+export default function PropPanel({
+  root,
+  inspection,
+  onChange,
+  onSeedPrompt,
+  onClose
+}: Props): React.JSX.Element {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const source = inspection.source
 
+  // Reserve the right-edge strip while the panel is open.
   useEffect(() => {
-    let live = true
-    setLoading(true)
-    setInspection(null)
-    setError(null)
-    window.api.props
-      .inspect(root, source)
-      .then((res) => live && setInspection(res))
-      .finally(() => live && setLoading(false))
-    return () => {
-      live = false
-    }
-  }, [root, source])
+    window.api.preview.setPanelInset(PANEL_WIDTH)
+    return () => window.api.preview.setPanelInset(0)
+  }, [])
 
-  // Re-read from disk — used to reset the controls when an edit didn't land.
   const reload = (): void => {
-    window.api.props.inspect(root, source).then((res) => res && setInspection(res))
+    window.api.props.inspect(root, source).then((res) => res && onChange(res))
   }
 
   const apply = async (field: PropField, value: string | number | boolean): Promise<void> => {
@@ -49,21 +52,15 @@ export default function PropEditor({ root, source, onSeedPrompt }: Props): React
         value
       })
       if (res.applied) {
-        // Reflect the new value locally; the preview hot-reloads from the file write.
-        setInspection((cur) =>
-          cur
-            ? {
-                ...cur,
-                fields: cur.fields.map((f) =>
-                  f.name === field.name ? { ...f, value, expression: false } : f
-                )
-              }
-            : cur
-        )
+        onChange({
+          ...inspection,
+          fields: inspection.fields.map((f) =>
+            f.name === field.name ? { ...f, value, expression: false } : f
+          )
+        })
       } else if (res.needsAgent) {
         onSeedPrompt(res.agentPrompt ?? `In ${source}, change the ${field.name} prop.`)
       } else {
-        // Write/resolve failure — surface it and reset the control to the file's value.
         setError(res.error ?? 'Could not apply the change.')
         reload()
       }
@@ -75,28 +72,32 @@ export default function PropEditor({ root, source, onSeedPrompt }: Props): React
     }
   }
 
-  if (loading) return <div className="propedit propedit--empty">Reading props…</div>
-  if (!inspection) {
-    return <div className="propedit propedit--empty">No source mapping for this element.</div>
-  }
-
   return (
-    <div className="propedit">
-      {error && <div className="propedit__error">{error}</div>}
-      {inspection.note && <div className="propedit__note">{inspection.note}</div>}
-      {inspection.fields.length === 0 && (
-        <div className="propedit__note">No editable props found.</div>
-      )}
-      {inspection.fields.map((f) => (
-        <PropRow
-          key={f.name}
-          field={f}
-          busy={busy === f.name}
-          onApply={(v) => apply(f, v)}
-          onAskAgent={() => onSeedPrompt(`In ${source}, change the \`${f.name}\` prop.`)}
-        />
-      ))}
-    </div>
+    <aside className="proppanel" aria-label={`Props for ${inspection.component}`}>
+      <header className="proppanel__head">
+        <div className="proppanel__id">
+          <div className="proppanel__title">{inspection.component}</div>
+          <div className="proppanel__source">{source}</div>
+        </div>
+        <button className="proppanel__close" onClick={onClose} aria-label="Close panel">
+          ✕
+        </button>
+      </header>
+      {error && <div className="proppanel__error">{error}</div>}
+      {inspection.note && <div className="proppanel__note">{inspection.note}</div>}
+      <div className="proppanel__rows">
+        {inspection.fields.length === 0 && <div className="proppanel__note">No editable props.</div>}
+        {inspection.fields.map((f) => (
+          <PropRow
+            key={f.name}
+            field={f}
+            busy={busy === f.name}
+            onApply={(v) => apply(f, v)}
+            onAskAgent={() => onSeedPrompt(`In ${source}, change the \`${f.name}\` prop.`)}
+          />
+        ))}
+      </div>
+    </aside>
   )
 }
 
@@ -114,17 +115,10 @@ function PropRow({
   const [draft, setDraft] = useState(field.value ?? '')
   useEffect(() => setDraft(field.value ?? ''), [field.value])
 
-  const label = (
-    <span className="propedit__name" title={field.description}>
-      {field.name}
-      {field.required && <span className="propedit__req">*</span>}
-    </span>
-  )
-
   let control: React.JSX.Element
   if (field.expression || field.kind === 'other') {
     control = (
-      <button className="propedit__agent" onClick={onAskAgent} disabled={busy}>
+      <button className="proppanel__agent" onClick={onAskAgent} disabled={busy}>
         edit via chat
       </button>
     )
@@ -159,7 +153,7 @@ function PropRow({
     const isNumber = field.kind === 'number'
     control = (
       <input
-        className="propedit__input"
+        className="proppanel__input"
         type={isNumber ? 'number' : 'text'}
         value={String(draft)}
         disabled={busy}
@@ -184,9 +178,13 @@ function PropRow({
   }
 
   return (
-    <div className="propedit__row">
-      {label}
+    <div className="proppanel__row">
+      <span className="proppanel__name" title={field.description}>
+        {field.name}
+        {field.required && <span className="proppanel__req">*</span>}
+      </span>
       {control}
+      {field.description && <span className="proppanel__desc">{field.description}</span>}
     </div>
   )
 }

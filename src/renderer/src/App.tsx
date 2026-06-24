@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import ChatPanel from './components/ChatPanel'
 import PreviewPane from './components/PreviewPane'
+import PropPanel from './components/PropPanel'
 import {
   isAuthError,
   toAgentOptions,
   useAnnotations,
   useChat,
+  useComposer,
   usePermissions,
   useSelection,
   useSession,
+  useSetup,
   useTokens
 } from './store'
 
@@ -31,6 +34,9 @@ export default function App(): React.JSX.Element {
   const [retry, setRetry] = useState<{ root: string; command: string } | null>(null)
 
   const { selectMode, setSelectMode, setSelected } = useSelection()
+  const selected = useSelection((s) => s.selected)
+  const inspection = useSelection((s) => s.inspection)
+  const projectRoot = useSession((s) => s.projectRoot)
   const authNeeded = useSession((s) => s.authNeeded)
   const setAuthNeeded = useSession((s) => s.setAuthNeeded)
 
@@ -71,6 +77,40 @@ export default function App(): React.JSX.Element {
       offCancel()
     }
   }, [setSelected, setSelectMode])
+
+  // Inspect the selected element's props (decides panel vs prompt-only). Guarded
+  // against a fast re-select racing a slow inspect.
+  useEffect(() => {
+    const sel = useSelection.getState()
+    if (!selected?.source || !projectRoot) {
+      sel.setInspection(null)
+      return
+    }
+    let live = true
+    sel.setInspecting(true)
+    const src = selected.source
+    window.api.props
+      .inspect(projectRoot, src)
+      .then((res) => {
+        // Only apply if this is still the selected element.
+        if (live && useSelection.getState().selected?.source === src) sel.setInspection(res)
+      })
+      .finally(() => live && useSelection.getState().setInspecting(false))
+    return () => {
+      live = false
+    }
+  }, [selected, projectRoot])
+
+  // On-open readiness: if the previewed app has no source stamps, offer setup.
+  useEffect(
+    () =>
+      window.api.preview.onReadiness(({ stamps }) => {
+        const s = useSetup.getState()
+        if (stamps === 0 && !s.dismissed && !s.busy) s.setNeeded(true)
+        else if (stamps > 0) s.setNeeded(false)
+      }),
+    []
+  )
 
   // v3: clicking an annotation pin in the preview focuses its note.
   useEffect(
@@ -128,7 +168,9 @@ export default function App(): React.JSX.Element {
     useAnnotations.getState().setList([])
     useAnnotations.getState().setFocused(null)
     useTokens.getState().setSet(null)
+    useSetup.getState().reset()
     void window.api.preview.setSelectMode(false)
+    window.api.preview.setPanelInset(0)
     try {
       setLog('')
       setRetry(null)
@@ -198,7 +240,9 @@ export default function App(): React.JSX.Element {
     useAnnotations.getState().setList([])
     useAnnotations.getState().setFocused(null)
     useTokens.getState().setSet(null)
+    useSetup.getState().reset()
     void window.api.preview.setSelectMode(false)
+    window.api.preview.setPanelInset(0)
     await window.api.devServer.stop()
     await window.api.preview.reset()
     setRetry(null)
@@ -308,6 +352,17 @@ export default function App(): React.JSX.Element {
           <PreviewPane />
         </section>
       </div>
+
+      {/* Floating prop panel — only for dsgn-ready components (schema resolved). */}
+      {selected && projectRoot && inspection?.hasSchema && (
+        <PropPanel
+          root={projectRoot}
+          inspection={inspection}
+          onChange={(next) => useSelection.getState().setInspection(next)}
+          onSeedPrompt={(t) => useComposer.getState().setSeed(t)}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   )
 }

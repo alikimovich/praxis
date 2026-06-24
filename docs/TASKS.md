@@ -42,6 +42,17 @@ Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
       commits, pushes, and `gh pr create`s with a generated body (notes + changed files).
       Covered by `test/annotations.mjs` (storage + UI); the live `gh` path is user-triggered.
 
+## Editing readiness (built)
+
+- [x] **Gate prop editing on dsgn-readiness.** ✅ 2026-06-23 — only schema-backed components
+      are editable (`hasSchema`); unready ones are prompt-only.
+- [x] **Floating prop panel** on the preview's right edge (reserves a strip; native view can't
+      be floated over). ✅ 2026-06-23.
+- [x] **On-open setup offer** — detects unstamped projects and offers to scaffold the stamping
+      plugin + agent-type the components. ✅ 2026-06-23.
+- [ ] Next: have the agent auto-restart the preview after setup so stamps apply without a
+      manual reload; first-run onboarding could also offer `.dsgn/tokens.json`.
+
 ## Polish (anytime)
 
 - [x] First-run auth onboarding panel — auth-error detection (`isAuthError`) → amber
