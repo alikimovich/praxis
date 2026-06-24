@@ -50,10 +50,12 @@ module.exports = function dsgnSource({ types: t }) {
         if (already) return
         const root = state.file.opts.root || process.cwd()
         const file = (state.file.opts.filename || '').replace(root + '/', '')
+        // Include the column so dsgn can disambiguate multiple elements written
+        // on the same source line (e.g. a <Badge/> inside an <li> on one line).
         path.node.attributes.push(
           t.jsxAttribute(
             t.jsxIdentifier('data-dsgn-source'),
-            t.stringLiteral(`${file}:${loc.start.line}`)
+            t.stringLiteral(`${file}:${loc.start.line}:${loc.start.column}`)
           )
         )
       }
@@ -97,17 +99,24 @@ On click, the overlay sends the chat panel a `SelectedElement`
 The inspector surfaces this, and "Ask dsgn to change this…" seeds the composer
 with a reference the agent can act on — anchored to `source` when present.
 
-## 4. Roadmap — prop/token manifests (not yet built)
+## 4. Prop editing (built)
 
-The next layer turns "edit the file" into "edit the component's props/tokens":
+Selecting an element and choosing **Edit props** turns "edit the file" into
+"edit the prop":
 
-- A per-repo `DESIGN.md` describing components and their editable props/tokens
-  (forking open-design's 9-section schema; extending the components section with
-  prop/token manifests). This defines *what* is editable.
-- `react-docgen` to derive prop schemas; design tokens surfaced from the repo's
-  token source.
-- A prop/token editor panel rendered from that manifest, so simple changes skip
-  the round-trip through the agent entirely.
+- dsgn parses the source file at the `data-dsgn-source` line and runs
+  **`react-docgen`** on it to derive the component's prop schema (types, enums,
+  required, descriptions), merged with the element's current attribute values.
+- The inspector renders typed controls. Edits apply the **hybrid** way: a simple
+  literal (string / number / boolean / enum) is written straight into the source
+  (instant hot-reload); anything non-literal is handed to the chat agent.
 
-Until then, selection → source → chat is the supported path, and it works for
-any repo that adopts the stamp above.
+Current limitation: the schema resolves when the component is **defined in the
+same file** as the usage. Cross-file component resolution (follow the import to
+the definition) and design-token manifests are the next steps.
+
+### Future — token manifests
+
+A per-repo manifest (forking open-design's 9-section schema, extended with
+prop/token tables) would let the editor surface design tokens and richer prop
+metadata beyond what `react-docgen` infers.
