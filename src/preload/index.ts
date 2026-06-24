@@ -7,6 +7,7 @@ import type {
   Bounds,
   DetectedProject,
   DsgnApi,
+  Framework,
   PermissionMode,
   PropEdit,
   PropEditResult,
@@ -52,8 +53,11 @@ const api: DsgnApi = {
     detect: (root: string): Promise<DetectedProject> => ipcRenderer.invoke('project:detect', root)
   },
   devServer: {
-    start: (opts: { root: string; command: string }): Promise<RunningDevServer> =>
-      ipcRenderer.invoke('devserver:start', opts),
+    start: (opts: {
+      root: string
+      command: string
+      framework?: Framework
+    }): Promise<RunningDevServer> => ipcRenderer.invoke('devserver:start', opts),
     stop: (): Promise<void> => ipcRenderer.invoke('devserver:stop'),
     onLog: (cb: (line: string) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, line: string): void => cb(line)

@@ -20,6 +20,9 @@ export default defineConfig({
     }
   },
   renderer: {
+    // Off 5173 on purpose: that's the Vite/SvelteKit default, so sharing it
+    // collides with (and gets confused for) the previewed project's dev server.
+    server: { port: 5180, strictPort: false },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src')

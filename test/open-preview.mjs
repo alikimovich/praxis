@@ -43,7 +43,7 @@ try {
     const urls = await app.evaluate(({ webContents }) =>
       webContents.getAllWebContents().map((w) => w.getURL())
     )
-    previewUrl = urls.find((u) => /^http:\/\/localhost:\d+/.test(u)) ?? null
+    previewUrl = urls.find((u) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(u)) ?? null
     if (previewUrl) break
     await new Promise((r) => setTimeout(r, 1000))
   }
@@ -51,7 +51,10 @@ try {
 
   // Titlebar should reflect the running project.
   await win.waitForFunction(
-    () => document.querySelector('.titlebar__hint')?.textContent?.includes('localhost'),
+    () =>
+      /http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(
+        document.querySelector('.titlebar__hint')?.textContent ?? ''
+      ),
     { timeout: 10000 }
   )
 
@@ -61,7 +64,7 @@ try {
   const previewPng = await app.evaluate(async ({ webContents }) => {
     const wc = webContents
       .getAllWebContents()
-      .find((w) => /^http:\/\/localhost:\d+/.test(w.getURL()))
+      .find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
     if (!wc) return null
     const img = await wc.capturePage()
     return img.isEmpty() ? null : img.toPNG().toString('base64')

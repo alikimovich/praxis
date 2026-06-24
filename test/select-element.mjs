@@ -54,9 +54,12 @@ try {
 
   await win.click('.btn')
 
-  // Wait until the project is running (titlebar shows the localhost URL).
+  // Wait until the project is running (titlebar shows the dev-server URL).
   await win.waitForFunction(
-    () => document.querySelector('.titlebar__hint')?.textContent?.includes('localhost'),
+    () =>
+      /http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(
+        document.querySelector('.titlebar__hint')?.textContent ?? ''
+      ),
     { timeout: 60000 }
   )
 
@@ -88,7 +91,7 @@ try {
     const result = await app.evaluate(async ({ webContents }, code) => {
       const wc = webContents
         .getAllWebContents()
-        .find((w) => /^http:\/\/localhost:\d+/.test(w.getURL()))
+        .find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
       if (!wc) return 'no-preview'
       const c = await wc.executeJavaScript(code, true)
       if (!c) return 'no-element'

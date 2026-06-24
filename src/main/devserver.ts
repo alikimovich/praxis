@@ -3,6 +3,13 @@ import { spawn, type ChildProcess } from 'child_process'
 import { access, readFile } from 'fs/promises'
 import { basename, join } from 'path'
 import type { DetectedProject, Framework, PackageManager, RunningDevServer } from '../shared/api'
+import {
+  URL_RE,
+  findRunningServer,
+  hostVariants,
+  normalizeUrl,
+  waitForReachable
+} from './devserver-net'
 
 /**
  * Dev-server runner.
@@ -61,33 +68,6 @@ async function detect(root: string): Promise<DetectedProject> {
 
 let current: ChildProcess | null = null
 
-const URL_RE = /(https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0)(?::\d+)?[^\s)]*)/i
-
-function normalizeUrl(raw: string): string {
-  return raw.replace('0.0.0.0', 'localhost').replace(/[.,)]*$/, '').replace(/\/$/, '')
-}
-
-const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
-
-/**
- * Poll the URL until it actually serves a response. Dev servers (notably
- * Next.js) print their URL before they're ready to answer requests, which the
- * preview sees as ERR_EMPTY_RESPONSE. fetch() resolves on any HTTP status and
- * only throws on a real connection failure, so a successful fetch == ready.
- */
-async function waitForReady(url: string, isSettled: () => boolean): Promise<boolean> {
-  for (let i = 0; i < 120; i++) {
-    if (isSettled()) return false
-    try {
-      await fetch(url, { redirect: 'manual' })
-      return true
-    } catch {
-      await delay(500)
-    }
-  }
-  return false
-}
-
 const CONFLICT_RE =
   /port \d+ is in use|unable to acquire lock|another instance|EADDRINUSE|address already in use/i
 
@@ -115,12 +95,25 @@ function stop(): void {
   current = null
 }
 
-function start(
+async function start(
+  opts: { root: string; command: string; framework?: Framework },
+  onLog: (line: string) => void
+): Promise<RunningDevServer> {
+  stop() // drop any server we previously spawned
+
+  // Attach to an already-running server for this project rather than duplicating.
+  const existing = await findRunningServer(opts.framework)
+  if (existing) {
+    onLog(`A dev server is already running at ${existing} — attaching to it.`)
+    return { url: existing, pid: 0, attached: true }
+  }
+  return spawnDevServer(opts, onLog)
+}
+
+function spawnDevServer(
   opts: { root: string; command: string },
   onLog: (line: string) => void
 ): Promise<RunningDevServer> {
-  stop() // only one preview server at a time
-
   return new Promise<RunningDevServer>((resolve, reject) => {
     const child = spawn(opts.command, {
       cwd: opts.root,
@@ -145,13 +138,15 @@ function start(
       if (match) {
         urlFound = normalizeUrl(match[1])
         onLog(`Found ${urlFound} — waiting for it to respond…`)
-        void waitForReady(urlFound, () => settled).then((ready) => {
+        void (async () => {
+          const reachable = await waitForReachable(hostVariants(urlFound), () => settled)
           if (settled) return
           settled = true
           clearTimeout(timer)
-          resolve({ url: urlFound!, pid: child.pid! })
-          if (!ready) onLog('Server did not respond yet; loading anyway.')
-        })
+          if (reachable && reachable !== urlFound) onLog(`Serving at ${reachable}.`)
+          else if (!reachable) onLog('Server did not respond yet; loading anyway.')
+          resolve({ url: reachable ?? urlFound!, pid: child.pid!, attached: false })
+        })()
       }
     }
 
@@ -184,8 +179,10 @@ function start(
 export function registerDevServerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('project:detect', (_e, root: string) => detect(root))
 
-  ipcMain.handle('devserver:start', (_e, opts: { root: string; command: string }) =>
-    start(opts, (line) => getWindow()?.webContents.send('devserver:log', line))
+  ipcMain.handle(
+    'devserver:start',
+    (_e, opts: { root: string; command: string; framework?: Framework }) =>
+      start(opts, (line) => getWindow()?.webContents.send('devserver:log', line))
   )
 
   ipcMain.handle('devserver:stop', async () => stop())

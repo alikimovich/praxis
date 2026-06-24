@@ -14,6 +14,7 @@ import {
   useSetup,
   useTokens
 } from './store'
+import type { Framework } from '../../shared/api'
 
 const MIN_CHAT_WIDTH = 320
 const MAX_CHAT_WIDTH = 760
@@ -180,14 +181,16 @@ export default function App(): React.JSX.Element {
       })
       let command = commandOverride
       let name = root.split('/').filter(Boolean).pop() ?? root
+      let framework: Framework | undefined
       if (!command) {
         const project = await window.api.project.detect(root)
         command = project.devCommand
         name = project.name
+        framework = project.framework
         attemptedCommand = command
         setStatus({ kind: 'busy', label: `Starting ${command}…` })
       }
-      const { url } = await window.api.devServer.start({ root, command })
+      const { url } = await window.api.devServer.start({ root, command, framework })
       await window.api.preview.load(url)
       await window.api.agent.openProject(root, {
         ...toAgentOptions(useSession.getState()),

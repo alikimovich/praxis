@@ -51,7 +51,10 @@ try {
 
   await win.click('.btn')
   await win.waitForFunction(
-    () => document.querySelector('.titlebar__hint')?.textContent?.includes('localhost'),
+    () =>
+      /http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(
+        document.querySelector('.titlebar__hint')?.textContent ?? ''
+      ),
     { timeout: 60000 }
   )
 

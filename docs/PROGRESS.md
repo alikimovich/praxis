@@ -27,6 +27,28 @@ A project that isn't dsgn-ready no longer pretends to be editable — and dsgn o
   SPA isn't falsely flagged; `acceptSetup` is try/finally so busy can't stick; the gating test
   now also asserts the positive panel case. No safety issues in the scaffold or preview-bounds.
 
+## 2026-06-23 — Dev-server: attach-to-running + IPv4/IPv6-safe preview
+
+Fixes "opening a project I already run doesn't work" (hit on lkmv.ch):
+
+- **Attach instead of duplicate.** If the project's dev server is already serving
+  (probe the known framework's default port — Vite/SvelteKit 5173, Next/CRA 3000 —
+  on both 127.0.0.1 and [::1], require status < 400), dsgn previews THAT instead of
+  spawning a competitor. Two dev servers on one project clash (e.g. SvelteKit's
+  `.svelte-kit/`) and the duplicate 500s. Only known frameworks attach; 'unknown'
+  always spawns (so it never grabs an unrelated app on 5173/3000). Attached servers
+  aren't owned, so Stop/quit won't kill them.
+- **IPv4/IPv6-safe URLs.** A spawned `vite dev` often binds IPv6-only (`[::1]`) while
+  the preview resolves `localhost` to IPv4 (`127.0.0.1`) → blank preview. The runner
+  now resolves the printed URL to whichever concrete loopback actually answers and
+  loads that.
+- **Moved dsgn's own renderer off 5173** (→ 5180) so it stops colliding with every
+  Vite/SvelteKit project's default port.
+- Extracted pure helpers to `src/main/devserver-net.ts` with a unit test
+  (`test/devserver-net.mjs`): host variants, attach policy (unknown → no probe,
+  500 → don't attach, IPv6 fallback). `bun run verify` green (11 tests; open-preview
+  now serves over 127.0.0.1). Updated tests that hardcoded `localhost`.
+
 ## 2026-06-23 — Svelte / SvelteKit support (prop editing → framework-agnostic)
 
 - Prop editing is now **framework-agnostic by dispatch**: `props.ts` routes by

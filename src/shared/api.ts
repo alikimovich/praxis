@@ -20,6 +20,8 @@ export interface DetectedProject {
 export interface RunningDevServer {
   url: string
   pid: number
+  /** True when we attached to a server the user was already running (we don't own it). */
+  attached?: boolean
 }
 
 /**
@@ -221,7 +223,11 @@ export interface DsgnApi {
     detect: (root: string) => Promise<DetectedProject>
   }
   devServer: {
-    start: (opts: { root: string; command: string }) => Promise<RunningDevServer>
+    start: (opts: {
+      root: string
+      command: string
+      framework?: Framework
+    }) => Promise<RunningDevServer>
     stop: () => Promise<void>
     onLog: (cb: (line: string) => void) => () => void
   }
