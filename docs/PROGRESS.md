@@ -2,6 +2,32 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-23 — Permission approve/deny cards + Auto mode (SDK)
+
+- `canUseTool` (main) now drives a real approval flow: for any tool the SDK gates, it emits
+  a `permission-request` and awaits the user's decision via a per-session pending map,
+  resolving the SDK callback on allow/deny — and denying cleanly on abort / epoch change /
+  session replace / quit so a torn-down turn never leaves the SDK blocked. Read-only tools
+  (Read/Glob/Grep/LS/NotebookRead) are auto-allowed so "Ask" mode stays usable.
+- **Permission-mode selector** in the toolbar → `query.setPermissionMode` live, mode also
+  passed at project-open so it sticks: **Ask** (`default`), **Auto-accept edits**
+  (`acceptEdits`), **Auto: approve all** (`bypassPermissions`). "Auto" is genuine SDK
+  bypass — under it the SDK never calls `canUseTool`, so no cards appear.
+- Renderer: `usePermissions` store (mode + pending queue, deduped by id); `PermissionCards`
+  renders approve/deny cards above the composer; App routes `permission-request`/`-resolved`
+  events. `chat-render` test seeds a card, approves it, and asserts the three modes incl.
+  `bypassPermissions`. ✅ `bun run verify` green.
+- **Adversarial review (8 verified findings, all fixed):**
+  - **`bypassPermissions` needs `allowDangerouslySkipPermissions: true`** in the query options
+    or the CLI refuses to bypass — so "Auto" silently still prompted. Added the ack flag
+    (only takes effect when the user picks Auto; default stays Ask). `agent-e2e` now opens in
+    Auto, which both unblocks the unattended edit and live-verifies real bypass.
+  - Switching to a more-permissive mode now **releases prompts already on screen** (drains
+    `pending` as allow + emits `permission-resolved`); opening another project clears stale
+    cards; `set-permission-mode` awaits the SDK before committing, and the toolbar reverts if
+    the SDK refuses. `interrupt` drains pending so cards can't orphan. Status line emits only
+    after the abort/epoch gate. Each pending now tracks its tool name (for acceptEdits).
+
 ## 2026-06-23 — v2 adversarial review + hardening
 
 - Ran a multi-agent review workflow over the v2 diff (security/IPC, lifecycle, renderer/UX,

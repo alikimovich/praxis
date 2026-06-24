@@ -41,6 +41,12 @@ the SDK init message's `slash_commands`); drag-to-resize split; custom dev-comma
 escape hatch; Reload/Stop. Hardened per an adversarial review (session epoch guard,
 sandboxed windows, preview navigation pinning, etc. — see PROGRESS.md).
 
+**Tool permissions.** `canUseTool` surfaces approve/deny cards for gated tools and awaits
+the user (read-only tools auto-allowed). A toolbar selector sets the SDK permission mode —
+Ask (`default`) / Auto-accept edits (`acceptEdits`) / **Auto: approve all**
+(`bypassPermissions`) — live via `query.setPermissionMode` and persisted at project-open.
+Auto = genuine SDK bypass (no `canUseTool`, no cards).
+
 **v2 (first slice) — click-to-select element editing.** A "Select" toggle arms an
 overlay (a sandboxed preload injected into the preview `WebContentsView`): hover
 highlights, click picks. The pick resolves a source location from the repo's
@@ -63,7 +69,10 @@ agent round-trip).
 ## Key files
 
 - `src/main/agent.ts` — Agent SDK session, `InputStream` queue, streaming → IPC,
-  epoch guard, slash-commands, setModel. ESM SDK loaded via dynamic `import()`.
+  epoch guard, slash-commands, setModel, **permission gating** (`canUseTool` ↔ approve/deny
+  cards, `setPermissionMode`). ESM SDK loaded via dynamic `import()`.
+- `src/renderer/src/components/PermissionCards.tsx` — approve/deny cards; `usePermissions`
+  store holds the mode + pending queue.
 - `src/main/devserver.ts` — detect + spawn + URL parse + readiness + conflict errors.
 - `src/main/index.ts` — window, native preview view, geometry sync, hardening, **v2
   select-mode IPC** (relays picks; re-arms overlay after preview navigation).
