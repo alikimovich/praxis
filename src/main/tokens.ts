@@ -86,35 +86,54 @@ function keyName(key: Node): string | null {
   return null
 }
 
-/** Find every ObjectExpression assigned to `theme` (handles theme + theme.extend). */
-function collectThemeObjects(ast: unknown, out: Node[]): void {
-  if (!ast || typeof ast !== 'object') return
-  const n = ast as Node
-  if (
-    (n.type === 'ObjectProperty' || n.type === 'Property') &&
-    keyName(n.key as Node) === 'theme' &&
-    (n.value as Node)?.type === 'ObjectExpression'
+/** Peel TS `as`/`satisfies`/parens off an expression. */
+function unwrapExpr(node: Node | undefined): Node | undefined {
+  let n = node
+  while (
+    n &&
+    (n.type === 'TSAsExpression' ||
+      n.type === 'TSSatisfiesExpression' ||
+      n.type === 'ParenthesizedExpression')
   ) {
-    out.push(n.value as Node)
+    n = n.expression as Node
   }
-  for (const key of Object.keys(n)) {
-    if (key === 'loc') continue
-    const v = (n as Record<string, unknown>)[key]
-    if (Array.isArray(v)) v.forEach((c) => collectThemeObjects(c, out))
-    else if (v && typeof v === 'object') collectThemeObjects(v, out)
-  }
+  return n
 }
 
-function categoryObject(themeObj: Node, category: string): Node | null {
-  for (const prop of (themeObj.properties as Node[] | undefined) ?? []) {
-    if (prop.type !== 'ObjectProperty' && prop.type !== 'Property') continue
-    if (keyName(prop.key as Node) === category && (prop.value as Node)?.type === 'ObjectExpression') {
-      return prop.value as Node
+function isModuleExports(node: Node | undefined): boolean {
+  return (
+    node?.type === 'MemberExpression' &&
+    (node.object as Node)?.type === 'Identifier' &&
+    (node.object as { name?: string }).name === 'module' &&
+    (node.property as Node)?.type === 'Identifier' &&
+    (node.property as { name?: string }).name === 'exports'
+  )
+}
+
+/** The config object literal: `export default {…}` or `module.exports = {…}`. */
+function findConfigObject(ast: Node): Node | null {
+  const body = ((ast.program as Node | undefined)?.body as Node[] | undefined) ?? []
+  for (const stmt of body) {
+    if (stmt.type === 'ExportDefaultDeclaration') {
+      const d = unwrapExpr(stmt.declaration as Node)
+      if (d?.type === 'ObjectExpression') return d
+    } else if (stmt.type === 'ExpressionStatement') {
+      const e = stmt.expression as Node
+      if (e?.type === 'AssignmentExpression' && isModuleExports(e.left as Node)) {
+        const r = unwrapExpr(e.right as Node)
+        if (r?.type === 'ObjectExpression') return r
+      }
     }
-    // theme.extend is itself an object — recurse into it.
-    if (keyName(prop.key as Node) === 'extend' && (prop.value as Node)?.type === 'ObjectExpression') {
-      const inner = categoryObject(prop.value as Node, category)
-      if (inner) return inner
+  }
+  return null
+}
+
+/** The ObjectExpression value of `obj.<key>`, if any. */
+function objectProp(obj: Node, key: string): Node | null {
+  for (const prop of (obj.properties as Node[] | undefined) ?? []) {
+    if (prop.type !== 'ObjectProperty' && prop.type !== 'Property') continue
+    if (keyName(prop.key as Node) === key && (prop.value as Node)?.type === 'ObjectExpression') {
+      return prop.value as Node
     }
   }
   return null
@@ -135,16 +154,21 @@ async function fromTailwind(root: string): Promise<TokenSet | null> {
   if (code == null) return null
   try {
     const { parse } = await loadBabel()
-    const ast = parse(code, { sourceType: 'module', plugins: ['jsx', 'typescript'] })
-    const themes: Node[] = []
-    collectThemeObjects(ast, themes)
+    const ast = parse(code, { sourceType: 'module', plugins: ['jsx', 'typescript'] }) as unknown as Node
+    // Scope to the config's own `theme` (not any nested `theme:` in a plugin/preset).
+    const config = findConfigObject(ast)
+    const theme = config && objectProp(config, 'theme')
+    if (!theme) return null
+    const extend = objectProp(theme, 'extend')
     const groups: TokenGroup[] = []
     for (const category of TW_CATEGORIES) {
       const tokens: Token[] = []
-      for (const theme of themes) {
-        const obj = categoryObject(theme, category)
-        if (obj) flattenObject(obj, '', tokens)
-      }
+      // `theme.extend.<cat>` is merged on top of `theme.<cat>` — emit extend
+      // first so dedupe (keeps first) lets it win on a name collision.
+      const ext = extend && objectProp(extend, category)
+      const base = objectProp(theme, category)
+      if (ext) flattenObject(ext, '', tokens)
+      if (base) flattenObject(base, '', tokens)
       if (tokens.length) groups.push({ name: category, tokens: dedupe(tokens) })
     }
     return groups.length ? { source: 'tailwind', origin, groups } : null

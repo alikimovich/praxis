@@ -16,6 +16,18 @@ Newest first. Append a dated entry when you finish a chunk of work.
 - `test/tokens.mjs` proves the priority (manifest wins over a present Tailwind config) and
   each parser (nested Tailwind colors flatten, CSS `var()` aliases skipped) through real IPC,
   plus the palette UI. ✅ `bun run verify` green (8 tests).
+- **Adversarial review (7 verified findings, all fixed):**
+  - **Tailwind parser correctness** (the two that justified gating the merge): `theme.extend`
+    tokens were dropped whenever a base category also existed (the most common Tailwind
+    pattern), and the theme search matched *any* nested `theme:` (a plugin/preset could leak
+    bogus tokens). Now scoped to the config's actual export and merges base + extend (extend
+    wins). Both locked with fixture regression tests.
+  - **Prompt-injection regression**: the token-apply path interpolated raw page-derived
+    element fields, bypassing the `oneLine` sanitizer used everywhere else — now routed
+    through it (+ bounded token name/value); tested with an injected-newline id.
+  - Token detect is guarded against a project-switch race; `isColor` covers named colors /
+    gradients (via `CSS.supports`); the palette caps tokens per group; tests cover the
+    `source: 'none'` state and the seeded-prompt contract.
 
 ## 2026-06-23 — Cross-file prop-schema resolution
 

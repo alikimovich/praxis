@@ -164,7 +164,7 @@ export const usePermissions = create<PermissionState>((set) => ({
 // Collapse to a single line (no control chars / newlines, so an injected value
 // can't masquerade as a new instruction paragraph) and cap by code point
 // (surrogate-safe). The source is additionally validated to a `path:line` shape.
-const oneLine = (s: string, max: number): string =>
+export const oneLine = (s: string, max: number): string =>
   Array.from(s.replace(new RegExp("[\\u0000-\\u001F\\u007F]+", "g"), " "))
     .slice(0, max)
     .join('')

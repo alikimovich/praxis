@@ -3,6 +3,7 @@ import {
   DEFAULT_MODEL,
   describeSelectionForPrompt,
   isAuthError,
+  oneLine,
   useAnnotations,
   useChat,
   usePermissions,
@@ -123,13 +124,19 @@ export default function ChatPanel(): React.JSX.Element {
     })
   }
 
-  // Apply a design token to the selected element via the agent.
+  // Apply a design token to the selected element via the agent. Page-derived
+  // element fields (and the repo-derived token) are sanitized + bounded so an
+  // injected value can't masquerade as a new instruction in the prompt.
   const pickToken = (group: string, token: Token): void => {
     if (!selected) return
-    const ident = selected.id ? `#${selected.id}` : selected.classes[0] ? `.${selected.classes[0]}` : ''
+    const id = selected.id ? oneLine(selected.id, 64) : ''
+    const cls = selected.classes[0] ? oneLine(selected.classes[0], 64) : ''
+    const ident = id ? `#${id}` : cls ? `.${cls}` : ''
+    const name = oneLine(token.name, 80)
+    const value = oneLine(token.value, 120)
     seedPrompt(
-      `Apply the ${group} token \`${token.name}\` (${token.value}) to the selected ` +
-        `<${selected.tag}${ident}> element. `
+      `Apply the ${oneLine(group, 32)} token “${name}” (${value}) to the selected ` +
+        `<${oneLine(selected.tag, 32)}${ident}> element. `
     )
   }
 

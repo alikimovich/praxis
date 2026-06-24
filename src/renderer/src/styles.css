@@ -666,6 +666,12 @@ body.is-resizing {
   max-width: 130px;
 }
 
+.tokens__more {
+  align-self: center;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
 /* Inspector note composer */
 .inspector__note {
   display: flex;
