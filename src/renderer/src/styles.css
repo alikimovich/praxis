@@ -490,6 +490,74 @@ body.is-resizing {
   opacity: 0.9;
 }
 
+/* Permission approve/deny cards (above the composer while the agent waits). */
+.perms {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.perm {
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  border-radius: var(--radius);
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.perm__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.perm__detail {
+  margin-top: 2px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.perm__actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.perm__deny,
+.perm__allow {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.perm__deny {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.perm__deny:hover {
+  background: var(--bg-subtle);
+}
+
+.perm__allow {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.perm__allow:hover {
+  opacity: 0.9;
+}
+
 .composer__toolbar {
   display: flex;
   gap: 6px;

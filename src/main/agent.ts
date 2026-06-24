@@ -1,6 +1,6 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
 import type { Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import type { AgentEvent, AgentOptions } from '../shared/api'
+import type { AgentEvent, AgentOptions, PermissionMode, PermissionRequest } from '../shared/api'
 
 // The Agent SDK is ESM-only; this CJS main bundle must reach it via a dynamic
 // import() (preserved by Rollup for external deps) rather than a static require.
@@ -61,15 +61,41 @@ class InputStream implements AsyncIterable<SDKUserMessage> {
   }
 }
 
+interface PendingPrompt {
+  toolName: string
+  settle: (behavior: 'allow' | 'deny') => void
+}
+
 interface Session {
   root: string
   options: AgentOptions
   input: InputStream
   query: Query
   abort: AbortController
+  /** In-flight approve/deny prompts, keyed by request id. */
+  pending: Map<string, PendingPrompt>
+  /** Emit an agent event to the renderer (epoch-guarded). */
+  emit: (event: AgentEvent) => void
 }
 
 let session: Session | null = null
+// Fallback request id when the SDK doesn't supply a toolUseID.
+let permCounter = 0
+
+// Read-only tools are auto-approved even in "Ask" mode — they can't mutate the
+// repo, and prompting for every file read would make the agent unusable. The
+// cards are reserved for writes / Bash / anything that can change or exfiltrate.
+const AUTO_ALLOW_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'NotebookRead'])
+// Tools that 'acceptEdits' auto-approves (mirrors the SDK's edit semantics).
+const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
+
+/** Settle a pending prompt and tell the renderer to drop its card. */
+function resolvePending(s: Session, id: string, behavior: 'allow' | 'deny'): void {
+  const p = s.pending.get(id)
+  if (!p) return
+  p.settle(behavior)
+  s.emit({ type: 'permission-resolved', id })
+}
 // Bumped whenever the active session changes; a session's output loop only
 // emits while its epoch is current, so a replaced/aborted session can't leak
 // stale events into the next project's chat.
@@ -84,6 +110,7 @@ async function startSession(
   const { query } = await loadSdk()
   const input = new InputStream()
   const abort = new AbortController()
+  const pending = new Map<string, PendingPrompt>()
 
   const emit = (event: AgentEvent): void => {
     if (epoch !== currentEpoch) return
@@ -97,13 +124,59 @@ async function startSession(
       settingSources: ['user', 'project', 'local'],
       systemPrompt: { type: 'preset', preset: 'claude_code' },
       includePartialMessages: true,
-      permissionMode: 'default',
+      permissionMode: options.permissionMode ?? 'default',
+      // Ack required by the SDK so that the "Auto: approve all" mode
+      // (permissionMode 'bypassPermissions') is actually honored — without this
+      // the CLI refuses to bypass and cards would still appear. Bypass only takes
+      // effect when the user explicitly selects it; default stays 'ask'.
+      allowDangerouslySkipPermissions: true,
       abortController: abort,
       ...(options.model ? { model: options.model } : {}),
       ...(options.effort ? { effort: options.effort as 'low' | 'medium' | 'high' } : {}),
-      canUseTool: async (toolName, toolInput) => {
+      // Tools the SDK decides need confirming reach here (under bypassPermissions
+      // they don't — that's the "Auto" mode). We surface an approve/deny card and
+      // await the user's decision, denying cleanly if the session/turn is torn down.
+      canUseTool: async (toolName, toolInput, opts) => {
+        if (AUTO_ALLOW_TOOLS.has(toolName)) {
+          emit({ type: 'status', text: describeTool(toolName, toolInput) })
+          return { behavior: 'allow', updatedInput: toolInput }
+        }
+        if (epoch !== currentEpoch || abort.signal.aborted || opts.signal.aborted) {
+          return { behavior: 'deny', message: 'Session no longer active.' }
+        }
         emit({ type: 'status', text: describeTool(toolName, toolInput) })
-        return { behavior: 'allow', updatedInput: toolInput }
+        const id = opts.toolUseID || `perm${++permCounter}`
+        const request: PermissionRequest = {
+          id,
+          toolName,
+          title: opts.title || `Allow ${toolName}?`,
+          ...(opts.displayName ? { displayName: opts.displayName } : {}),
+          ...(toolDetail(toolName, toolInput) ? { detail: toolDetail(toolName, toolInput)! } : {})
+        }
+        return await new Promise((resolve) => {
+          const cleanup = (): void => {
+            pending.delete(id)
+            opts.signal.removeEventListener('abort', onAbort)
+          }
+          const onAbort = (): void => {
+            cleanup()
+            emit({ type: 'permission-resolved', id })
+            resolve({ behavior: 'deny', message: 'Interrupted.' })
+          }
+          pending.set(id, {
+            toolName,
+            settle: (behavior) => {
+              cleanup()
+              resolve(
+                behavior === 'allow'
+                  ? { behavior: 'allow', updatedInput: toolInput }
+                  : { behavior: 'deny', message: 'Denied by the user in dsgn.' }
+              )
+            }
+          })
+          opts.signal.addEventListener('abort', onAbort, { once: true })
+          emit({ type: 'permission-request', request })
+        })
       }
     }
   })
@@ -156,7 +229,7 @@ async function startSession(
     }
   })()
 
-  return { root, options, input, query: q, abort }
+  return { root, options, input, query: q, abort, pending, emit }
 }
 
 /** Pull a text delta out of a streaming partial-message event, shape-tolerant. */
@@ -169,15 +242,28 @@ function textDelta(msg: unknown): string | null {
 }
 
 function describeTool(name: string, input: unknown): string {
+  const detail = toolDetail(name, input)
+  return detail ? `${name} · ${detail}` : name
+}
+
+/** The single most relevant input field for a tool, trimmed to one short line. */
+function toolDetail(_name: string, input: unknown): string | undefined {
   const i = input as Record<string, unknown>
-  const path = i?.file_path ?? i?.path ?? i?.pattern ?? i?.command
-  return path ? `${name} · ${String(path)}` : name
+  const raw = i?.file_path ?? i?.path ?? i?.pattern ?? i?.command
+  if (raw == null) return undefined
+  const s = String(raw).replace(/\s+/g, ' ').trim()
+  return s ? s.slice(0, 160) : undefined
 }
 
 export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('agent:open-project', async (_e, root: string, options: AgentOptions = {}) => {
-    session?.abort.abort()
-    session?.input.close()
+    if (session) {
+      session.abort.abort()
+      session.input.close()
+      // Settle + dismiss any open prompts so the previous SDK callback unblocks
+      // and stale cards don't linger over the next project.
+      ;[...session.pending.keys()].forEach((id) => resolvePending(session!, id, 'deny'))
+    }
     session = null
     const epoch = ++currentEpoch
     session = await startSession(root, options, epoch, getWindow)
@@ -185,8 +271,29 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
 
   ipcMain.handle('agent:set-model', async (_e, model: string) => {
     if (!session) return
-    session.options.model = model
     await session.query.setModel?.(model)
+    session.options.model = model
+  })
+
+  ipcMain.handle('agent:set-permission-mode', async (_e, mode: PermissionMode) => {
+    if (!session) return
+    // Apply to the SDK first; only commit our copy if it took (keeps the toolbar
+    // and the live agent in agreement).
+    await session.query.setPermissionMode?.(mode)
+    session.options.permissionMode = mode
+    // Switching to a more permissive posture should also release prompts already
+    // on screen — otherwise the user picks "Auto" but the pending card stays.
+    if (mode === 'bypassPermissions' || mode === 'acceptEdits') {
+      for (const [id, p] of [...session.pending.entries()]) {
+        if (mode === 'bypassPermissions' || EDIT_TOOLS.has(p.toolName)) {
+          resolvePending(session, id, 'allow')
+        }
+      }
+    }
+  })
+
+  ipcMain.handle('agent:respond-permission', async (_e, id: string, behavior: 'allow' | 'deny') => {
+    if (session) resolvePending(session, id, behavior)
   })
 
   ipcMain.handle('agent:send', async (_e, text: string) => {
@@ -201,11 +308,16 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   })
 
   ipcMain.handle('agent:interrupt', async () => {
-    await session?.query.interrupt?.()
+    if (!session) return
+    // Release any open prompts (interrupt() may not abort their per-call signal),
+    // so cards don't orphan and the SDK callbacks unblock.
+    ;[...session.pending.keys()].forEach((id) => resolvePending(session!, id, 'deny'))
+    await session.query.interrupt?.()
   })
 
   // Don't leave the SDK's CLI subprocess running after dsgn quits.
   app.on('before-quit', () => {
+    if (session) [...session.pending.keys()].forEach((id) => resolvePending(session!, id, 'deny'))
     currentEpoch++
     session?.abort.abort()
     session?.input.close()

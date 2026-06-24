@@ -5,6 +5,7 @@ import type {
   Bounds,
   DetectedProject,
   DsgnApi,
+  PermissionMode,
   RunningDevServer,
   SelectedElement
 } from '../shared/api'
@@ -47,6 +48,10 @@ const api: DsgnApi = {
       ipcRenderer.invoke('agent:open-project', root, options),
     send: (text: string): Promise<void> => ipcRenderer.invoke('agent:send', text),
     setModel: (model: string): Promise<void> => ipcRenderer.invoke('agent:set-model', model),
+    setPermissionMode: (mode: PermissionMode): Promise<void> =>
+      ipcRenderer.invoke('agent:set-permission-mode', mode),
+    respondPermission: (id: string, behavior: 'allow' | 'deny'): Promise<void> =>
+      ipcRenderer.invoke('agent:respond-permission', id, behavior),
     interrupt: (): Promise<void> => ipcRenderer.invoke('agent:interrupt'),
     onEvent: (cb: (event: AgentEvent) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, event: AgentEvent): void => cb(event)

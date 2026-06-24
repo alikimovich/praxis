@@ -4,11 +4,14 @@ import {
   describeSelectionForPrompt,
   isAuthError,
   useChat,
+  usePermissions,
   useSelection,
   useSession
 } from '../store'
+import type { PermissionMode } from '../../../shared/api'
 import Inspector from './Inspector'
 import Markdown from './Markdown'
+import PermissionCards from './PermissionCards'
 
 const MODELS = [
   { value: DEFAULT_MODEL, label: 'Default model' },
@@ -24,11 +27,18 @@ const EFFORTS = [
   { value: 'high', label: 'Thinking: High' }
 ]
 
+const PERMISSION_MODES: { value: PermissionMode; label: string }[] = [
+  { value: 'default', label: 'Permissions: Ask' },
+  { value: 'acceptEdits', label: 'Auto-accept edits' },
+  { value: 'bypassPermissions', label: 'Auto: approve all' }
+]
+
 export default function ChatPanel(): React.JSX.Element {
   const { messages, isRunning, appendUser, startAssistant, appendDelta, appendStatus, finish } =
     useChat()
   const { model, effort, slashCommands, setModel, setEffort } = useSession()
   const { selected, setSelected } = useSelection()
+  const { mode: permissionMode, pending, setMode, removeRequest } = usePermissions()
   const [input, setInput] = useState('')
   const [menuActive, setMenuActive] = useState(0)
   const [menuDismissed, setMenuDismissed] = useState(false)
@@ -119,6 +129,16 @@ export default function ChatPanel(): React.JSX.Element {
     if (value !== DEFAULT_MODEL) void window.api.agent.setModel(value)
   }
 
+  const onPermissionModeChange = (value: PermissionMode): void => {
+    setMode(value)
+    void window.api.agent.setPermissionMode(value)
+  }
+
+  const respondPermission = (id: string, behavior: 'allow' | 'deny'): void => {
+    removeRequest(id)
+    void window.api.agent.respondPermission(id, behavior)
+  }
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     if (menuOpen) {
       if (e.key === 'ArrowDown') {
@@ -175,6 +195,7 @@ export default function ChatPanel(): React.JSX.Element {
       </div>
 
       <div className="composer">
+        <PermissionCards requests={pending} onRespond={respondPermission} />
         {selected && (
           <Inspector
             element={selected}
@@ -204,6 +225,18 @@ export default function ChatPanel(): React.JSX.Element {
             {EFFORTS.map((eo) => (
               <option key={eo.value} value={eo.value}>
                 {eo.label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="select"
+            value={permissionMode}
+            onChange={(e) => onPermissionModeChange(e.target.value as PermissionMode)}
+            aria-label="Permission mode"
+          >
+            {PERMISSION_MODES.map((pm) => (
+              <option key={pm.value} value={pm.value}>
+                {pm.label}
               </option>
             ))}
           </select>

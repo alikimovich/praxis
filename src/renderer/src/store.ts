@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { SelectedElement } from '../../shared/api'
+import type { PermissionMode, PermissionRequest, SelectedElement } from '../../shared/api'
 
 export interface ChatMessage {
   id: string
@@ -121,6 +121,32 @@ export const useSelection = create<SelectionState>((set) => ({
   setSelected: (selected) => set({ selected })
 }))
 
+/**
+ * Tool-permission posture + the queue of pending approve/deny prompts. `mode`
+ * is the SDK's PermissionMode: 'default' asks (cards), 'acceptEdits' auto-accepts
+ * edits, 'bypassPermissions' is Auto (no prompts — approve-all via the SDK).
+ */
+interface PermissionState {
+  mode: PermissionMode
+  pending: PermissionRequest[]
+  setMode: (mode: PermissionMode) => void
+  addRequest: (request: PermissionRequest) => void
+  removeRequest: (id: string) => void
+}
+
+export const usePermissions = create<PermissionState>((set) => ({
+  mode: 'default',
+  pending: [],
+  setMode: (mode) => set({ mode }),
+  addRequest: (request) =>
+    set((s) =>
+      s.pending.some((p) => p.id === request.id)
+        ? s
+        : { pending: [...s.pending, request] }
+    ),
+  removeRequest: (id) => set((s) => ({ pending: s.pending.filter((p) => p.id !== id) }))
+}))
+
 // A picked element's fields come from the (only semi-trusted) previewed page.
 // Collapse to a single line (no control chars / newlines, so an injected value
 // can't masquerade as a new instruction paragraph) and cap by code point
@@ -150,7 +176,10 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
     __dsgnStore?: typeof useChat
     __dsgnSession?: typeof useSession
     __dsgnSelection?: typeof useSelection
+    __dsgnPermissions?: typeof usePermissions
   }
 ).__dsgnStore = useChat
 ;(window as unknown as { __dsgnSession?: typeof useSession }).__dsgnSession = useSession
 ;(window as unknown as { __dsgnSelection?: typeof useSelection }).__dsgnSelection = useSelection
+;(window as unknown as { __dsgnPermissions?: typeof usePermissions }).__dsgnPermissions =
+  usePermissions
