@@ -132,6 +132,7 @@ interface PermissionState {
   setMode: (mode: PermissionMode) => void
   addRequest: (request: PermissionRequest) => void
   removeRequest: (id: string) => void
+  clearPending: () => void
 }
 
 export const usePermissions = create<PermissionState>((set) => ({
@@ -144,7 +145,8 @@ export const usePermissions = create<PermissionState>((set) => ({
         ? s
         : { pending: [...s.pending, request] }
     ),
-  removeRequest: (id) => set((s) => ({ pending: s.pending.filter((p) => p.id !== id) }))
+  removeRequest: (id) => set((s) => ({ pending: s.pending.filter((p) => p.id !== id) })),
+  clearPending: () => set({ pending: [] })
 }))
 
 // A picked element's fields come from the (only semi-trusted) previewed page.

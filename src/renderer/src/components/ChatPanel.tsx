@@ -130,8 +130,10 @@ export default function ChatPanel(): React.JSX.Element {
   }
 
   const onPermissionModeChange = (value: PermissionMode): void => {
+    const prev = usePermissions.getState().mode
     setMode(value)
-    void window.api.agent.setPermissionMode(value)
+    // Keep the toolbar honest: if the SDK refuses the change, revert the control.
+    window.api.agent.setPermissionMode(value).catch(() => setMode(prev))
   }
 
   const respondPermission = (id: string, behavior: 'allow' | 'deny'): void => {
