@@ -10,8 +10,9 @@ left edits the running app — respecting the repo's own `CLAUDE.md` and skills.
 > `/` skill menu) that edits the running repo with live hot-reload in the preview.
 > **New:** a **Select** mode lets you click an element in the live preview to pick
 > it — dsgn resolves its source location (via a `data-dsgn-source` stamp, see
-> [`docs/DESIGN.md`](docs/DESIGN.md)) and hands the chat a precise edit target.
-> Next: prop/token editor panel, then PR handoff.
+> [`docs/DESIGN.md`](docs/DESIGN.md)), edit its **props** with typed controls
+> (react-docgen), pin **review notes** to it, and **Publish** a branch + GitHub PR
+> for engineer handoff. Tool calls run behind approve/deny cards (or an Auto mode).
 
 ## Requirements
 

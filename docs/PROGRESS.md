@@ -2,6 +2,41 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-23 — v3 engineer handoff: annotations + Publish→PR
+
+- **Annotations sidecar** (`src/main/annotations.ts`): reviewer notes pinned to elements,
+  stored in `<repo>/.dsgn/annotations.json` (list/add/remove via IPC). The agent is denied
+  writes anywhere under `.dsgn/` (a guard in `agent.ts` `canUseTool`), so it can't clobber
+  the handoff.
+- **Pins**: the preview preload draws numbered pins over annotated elements (located by
+  selector, repositioned on scroll/resize/HMR); clicking a pin focuses its note in the panel.
+- **Renderer**: `useAnnotations` store; an "Add note" composer in the inspector; a
+  `NotesPanel` listing notes (with delete) and a **Publish PR** button. Notes load on open,
+  pins stay in sync, both clear on project switch/stop.
+- **Publish** (`publishToPr`): creates a branch, commits the working changes + notes, pushes,
+  and `gh pr create`s with a generated body (notes as a checklist + changed files). Args go
+  through `execFile` (no shell). Common failures (no gh / no remote / nothing to publish) are
+  surfaced.
+- Test `test/annotations.mjs` drives the flow through real IPC: a note saved via the inspector
+  persists to the `.dsgn` sidecar, shows in the panel, and removes cleanly. ✅ `bun run verify`
+  green (7 tests).
+- **Adversarial review (14 verified findings, all fixed):**
+  - **Publish was unsafe** — `git add -A` swept the whole working tree (unrelated WIP /
+    untracked secrets) into the PR. Now: pre-flight gates (is-repo, not detached, has origin,
+    gh present) before any mutation; stage only tracked changes + the `.dsgn` sidecar
+    (`add -u`, no untracked sweep); roll back to the original branch on failure (and report
+    where the work landed if already committed); clean changed-file list via
+    `diff --name-only HEAD` (no porcelain rename-arrow / quoting bugs).
+  - The `.dsgn` guard now also blocks **Bash** commands touching the sidecar (was edit-tools
+    only; noted that Auto/bypass mode skips `canUseTool` entirely).
+  - Annotation writes are serialized (promise-chain mutex) + atomic (tmp + rename), so
+    concurrent add/remove can't lose a note and a crash can't truncate the file.
+  - `buildPrBody` extracted to a pure `src/shared/pr-body.ts` with a unit test (escapes
+    backticks, caps the file list, flattens newlines).
+  - Renderer: a failed note save keeps the text (no silent loss); pin-focus scrolls the note
+    into view; publish state resets on project switch; pins build once and only reposition
+    (no per-scroll churn); the pin interval is cleared on pagehide.
+
 ## 2026-06-23 — Prop/token editor (react-docgen + hybrid apply)
 
 - `src/main/props.ts`: given an element's `data-dsgn-source` ("relpath:line"), parse the
