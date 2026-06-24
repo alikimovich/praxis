@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import ChatPanel from './components/ChatPanel'
+import ConsolePanel from './components/ConsolePanel'
 import PreviewPane from './components/PreviewPane'
 import PropPanel from './components/PropPanel'
 import {
@@ -8,6 +9,7 @@ import {
   useAnnotations,
   useChat,
   useComposer,
+  useLog,
   usePermissions,
   useSelection,
   useSession,
@@ -40,8 +42,17 @@ export default function App(): React.JSX.Element {
   const projectRoot = useSession((s) => s.projectRoot)
   const authNeeded = useSession((s) => s.authNeeded)
   const setAuthNeeded = useSession((s) => s.setAuthNeeded)
+  const logOpen = useLog((s) => s.open)
+  const logCount = useLog((s) => s.lines.length)
 
-  useEffect(() => window.api.devServer.onLog(setLog), [])
+  useEffect(
+    () =>
+      window.api.devServer.onLog((line) => {
+        setLog(line)
+        useLog.getState().append(line, 'server')
+      }),
+    []
+  )
 
   // Capture the SDK's advertised slash commands for the "/" menu, and drive the
   // first-run onboarding banner: raise it on an auth failure, and clear it the
@@ -193,6 +204,9 @@ export default function App(): React.JSX.Element {
     useSetup.getState().reset()
     void window.api.preview.setSelectMode(false)
     window.api.preview.setPanelInset(0)
+    const log = useLog.getState()
+    log.clear()
+    log.append(`Opening ${root}`)
     try {
       setLog('')
       setRetry(null)
@@ -204,19 +218,30 @@ export default function App(): React.JSX.Element {
       let name = root.split('/').filter(Boolean).pop() ?? root
       let framework: Framework | undefined
       if (!command) {
+        log.append('Detecting framework + package manager…')
         const project = await window.api.project.detect(root)
         command = project.devCommand
         name = project.name
         framework = project.framework
         attemptedCommand = command
+        log.append(`Detected ${project.framework} · ${project.packageManager} · "${command}"`)
         setStatus({ kind: 'busy', label: `Starting ${command}…` })
+      } else {
+        log.append(`Using custom command "${command}"`)
       }
-      const { url } = await window.api.devServer.start({ root, command, framework })
-      await window.api.preview.load(url)
+      const server = await window.api.devServer.start({ root, command, framework })
+      log.append(
+        server.attached ? `Attached to running server at ${server.url}` : `Dev server at ${server.url}`,
+        'success'
+      )
+      await window.api.preview.load(server.url)
+      log.append('Preview loaded')
+      const url = server.url
       await window.api.agent.openProject(root, {
         ...toAgentOptions(useSession.getState()),
         permissionMode: usePermissions.getState().mode
       })
+      log.append(`Agent session started (cwd ${root})`)
       useSession.getState().setProjectRoot(root)
       // Detect this repo's design tokens (manifest → tailwind → CSS vars).
       // Guard against a project switch racing a slow scan — only apply if `root`
@@ -228,11 +253,14 @@ export default function App(): React.JSX.Element {
       useAnnotations.getState().setList(await window.api.annotations.list(root))
       // A fresh session — clear any turn left "running" from a previous project.
       useChat.getState().finish()
+      log.append(`Ready — ${name}`, 'success')
       setStatus({ kind: 'running', name, url })
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
       await window.api.preview.reset()
       setRetry({ root, command: attemptedCommand })
-      setStatus({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
+      log.append(message, 'error')
+      setStatus({ kind: 'error', message })
     }
   }
 
@@ -306,11 +334,25 @@ export default function App(): React.JSX.Element {
               </button>
             </>
           )}
-          <button className="btn" onClick={openProject} disabled={status.kind === 'busy'}>
+          <button
+            className={`btn ${logOpen ? 'btn--active' : 'btn--ghost'}`}
+            onClick={() => useLog.getState().setOpen(!logOpen)}
+            aria-pressed={logOpen}
+            title="Show what dsgn is doing"
+          >
+            Logs{logCount ? ` (${logCount})` : ''}
+          </button>
+          <button
+            className="btn btn--open"
+            onClick={openProject}
+            disabled={status.kind === 'busy'}
+          >
             {status.kind === 'running' ? 'Open another…' : 'Open project…'}
           </button>
         </div>
       </header>
+
+      {logOpen && <ConsolePanel />}
 
       {authNeeded && (
         <div className="banner banner--auth">

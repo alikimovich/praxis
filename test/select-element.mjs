@@ -52,7 +52,7 @@ try {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [fixturePath] })
   }, fixture)
 
-  await win.click('.btn')
+  await win.click('.btn--open')
 
   // Wait until the project is running (titlebar shows the dev-server URL).
   await win.waitForFunction(

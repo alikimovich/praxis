@@ -49,7 +49,7 @@ try {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] })
   }, fixture)
 
-  await win.click('.btn')
+  await win.click('.btn--open')
   await win.waitForFunction(
     () =>
       /http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(

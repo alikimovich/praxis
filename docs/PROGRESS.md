@@ -22,6 +22,20 @@ Newest first. Append a dated entry when you finish a chunk of work.
   silently dropped; surrounding whitespace is derived from the raw source (so `&nbsp;` etc. aren't
   rewritten as literal bytes) with the all-whitespace overlap zeroed.
 
+## 2026-06-24 — Activity console (visibility into the open-project flow)
+
+- A collapsible **Activity console** (titlebar "Logs" toggle) shows the whole open
+  sequence with timestamps: detect result, attach-vs-spawn decision, raw dev-server
+  output, readiness, preview load, agent session start, Ready — and any error
+  (errors auto-open it). Docked full-width above the panes; the native preview
+  reflows via its ResizeObserver. `useLog` store (capped at 500 lines) +
+  `ConsolePanel.tsx`; `App.attempt` emits the step lines, `devserver:log` feeds the
+  raw output. Also strips the ANSI codes (so the URL line reads cleanly). This is
+  the trail that would've made the lkmv.ch hang obvious at a glance.
+- Gave the "Open project" button a `btn--open` class — adding the "Logs" `btn` made
+  `.btn` ambiguous and broke the tests' open-click. open-preview now also asserts the
+  console captured Detected/Dev server/Preview loaded/Ready. `bun run verify` green (12 tests).
+
 ## 2026-06-23 — Readiness gating, floating prop panel, on-open setup
 
 A project that isn't dsgn-ready no longer pretends to be editable — and dsgn offers to fix it.

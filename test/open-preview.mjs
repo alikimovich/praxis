@@ -34,7 +34,7 @@ try {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [fixturePath] })
   }, fixture)
 
-  await win.click('.btn')
+  await win.click('.btn--open')
 
   // Wait until some webContents has navigated to the fixture's localhost URL.
   const deadline = Date.now() + 60000
@@ -74,6 +74,19 @@ try {
   } else {
     console.warn('warning: could not capture preview content')
   }
+
+  // Activity console captured the open sequence (detect → server → preview → agent).
+  await win.click('button:has-text("Logs")')
+  await win.waitForSelector('.console__line', { timeout: 5000 })
+  const logText = await win.evaluate(() =>
+    [...document.querySelectorAll('.console__text')].map((e) => e.textContent).join('\n')
+  )
+  for (const expected of ['Detected', 'Dev server at', 'Preview loaded', 'Ready']) {
+    if (!logText.includes(expected)) {
+      throw new Error(`console missing "${expected}" line; got:\n${logText}`)
+    }
+  }
+  await win.screenshot({ path: join(artifacts, '03c-console.png') })
 
   console.log('OPEN-PREVIEW OK — previewing', previewUrl)
 } catch (err) {

@@ -246,6 +246,45 @@ export const useAnnotations = create<AnnotationState>((set) => ({
   setFocused: (focusedId) => set({ focusedId })
 }))
 
+/**
+ * Activity log for the open-project flow — detect, attach/spawn decision,
+ * dev-server output, readiness, preview, agent. Surfaced in a collapsible
+ * console so "it didn't work" has a visible trail.
+ */
+export type LogKind = 'info' | 'server' | 'success' | 'error'
+export interface LogLine {
+  id: number
+  time: string
+  text: string
+  kind: LogKind
+}
+
+interface LogState {
+  lines: LogLine[]
+  open: boolean
+  append: (text: string, kind?: LogKind) => void
+  clear: () => void
+  setOpen: (open: boolean) => void
+}
+
+let logSeq = 0
+
+export const useLog = create<LogState>((set) => ({
+  lines: [],
+  open: false,
+  append: (text, kind = 'info') =>
+    set((s) => {
+      const d = new Date()
+      const time = d.toTimeString().slice(0, 8)
+      // Cap history so a chatty dev server can't grow it without bound.
+      const lines = [...s.lines, { id: ++logSeq, time, text, kind }].slice(-500)
+      // An error auto-opens the console so the failure is visible.
+      return kind === 'error' ? { lines, open: true } : { lines }
+    }),
+  clear: () => set({ lines: [] }),
+  setOpen: (open) => set({ open })
+}))
+
 /** Build the chat prompt prefix that anchors the agent to a picked element. */
 export const describeSelectionForPrompt = (el: SelectedElement): string => {
   const id = el.id ? oneLine(el.id, 64) : ''
@@ -277,3 +316,4 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
   useAnnotations
 ;(window as unknown as { __dsgnTokens?: typeof useTokens }).__dsgnTokens = useTokens
 ;(window as unknown as { __dsgnSetup?: typeof useSetup }).__dsgnSetup = useSetup
+;(window as unknown as { __dsgnLog?: typeof useLog }).__dsgnLog = useLog

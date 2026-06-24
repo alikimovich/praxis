@@ -21,21 +21,21 @@ import PermissionCards from './PermissionCards'
 import SetupCard from './SetupCard'
 
 const MODELS = [
-  { value: DEFAULT_MODEL, label: 'Default model' },
+  { value: DEFAULT_MODEL, label: 'Default' },
   { value: 'opus', label: 'Opus' },
   { value: 'sonnet', label: 'Sonnet' },
   { value: 'haiku', label: 'Haiku' }
 ]
 
 const EFFORTS = [
-  { value: 'auto', label: 'Thinking: Auto' },
-  { value: 'low', label: 'Thinking: Low' },
-  { value: 'medium', label: 'Thinking: Medium' },
-  { value: 'high', label: 'Thinking: High' }
+  { value: 'auto', label: 'Auto' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' }
 ]
 
 const PERMISSION_MODES: { value: PermissionMode; label: string }[] = [
-  { value: 'default', label: 'Permissions: Ask' },
+  { value: 'default', label: 'Ask' },
   { value: 'acceptEdits', label: 'Auto-accept edits' },
   { value: 'bypassPermissions', label: 'Auto: approve all' }
 ]
@@ -358,46 +358,7 @@ export default function ChatPanel(): React.JSX.Element {
           onRemove={(id) => void removeNote(id)}
           onPublish={() => void publish()}
         />
-        <div className="composer__toolbar">
-          <select
-            className="select"
-            value={model}
-            onChange={(e) => onModelChange(e.target.value)}
-            aria-label="Model"
-          >
-            {MODELS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-          <select
-            className="select"
-            value={effort}
-            onChange={(e) => setEffort(e.target.value)}
-            aria-label="Thinking level"
-          >
-            {EFFORTS.map((eo) => (
-              <option key={eo.value} value={eo.value}>
-                {eo.label}
-              </option>
-            ))}
-          </select>
-          <select
-            className="select"
-            value={permissionMode}
-            onChange={(e) => onPermissionModeChange(e.target.value as PermissionMode)}
-            aria-label="Permission mode"
-          >
-            {PERMISSION_MODES.map((pm) => (
-              <option key={pm.value} value={pm.value}>
-                {pm.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="composer__row">
+        <div className="composer__field">
           {menuOpen && (
             <div className="slash" role="listbox">
               <div className="slash__hint">Skills & commands</div>
@@ -422,9 +383,64 @@ export default function ChatPanel(): React.JSX.Element {
             onChange={(e) => onInputChange(e.target.value)}
             onKeyDown={onKeyDown}
           />
-          <button className="composer__send" onClick={send} disabled={!input.trim() || isRunning}>
-            {isRunning ? '…' : 'Send'}
-          </button>
+          <div className="composer__bar">
+            <select
+              className="select"
+              value={model}
+              onChange={(e) => onModelChange(e.target.value)}
+              aria-label="Model"
+            >
+              {MODELS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+            <select
+              className="select"
+              value={effort}
+              onChange={(e) => setEffort(e.target.value)}
+              aria-label="Thinking level"
+            >
+              {EFFORTS.map((eo) => (
+                <option key={eo.value} value={eo.value}>
+                  {eo.label}
+                </option>
+              ))}
+            </select>
+            <select
+              className="select"
+              value={permissionMode}
+              onChange={(e) => onPermissionModeChange(e.target.value as PermissionMode)}
+              aria-label="Permission mode"
+            >
+              {PERMISSION_MODES.map((pm) => (
+                <option key={pm.value} value={pm.value}>
+                  {pm.label}
+                </option>
+              ))}
+            </select>
+            <button
+              className="composer__send"
+              onClick={send}
+              disabled={!input.trim() || isRunning}
+              aria-label="Send message"
+            >
+              {isRunning ? (
+                <span className="composer__spinner" />
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path
+                    d="M8 13V3M8 3L3.5 7.5M8 3l4.5 4.5"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
