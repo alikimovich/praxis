@@ -23,6 +23,7 @@ const CANCELLED = 'dsgn:preview:select-cancelled'
 const SET_PINS = 'dsgn:preview:set-annotations'
 const PIN_CLICK = 'dsgn:preview:pin-click'
 const READINESS = 'dsgn:preview:readiness'
+const TEXT_EDIT = 'dsgn:preview:text-edit'
 
 /** Computed styles worth surfacing in the inspector (curated, not the whole CSSOM). */
 const TRACKED_STYLES = [
@@ -227,14 +228,17 @@ function describe(el: Element): SelectedElement {
 }
 
 function onMove(e: MouseEvent): void {
-  if (!active) return
+  // Self-heal: if the edited node was swapped out (HMR) without a blur, clear it
+  // so select mode isn't stranded.
+  if (editing && !editing.isConnected) endEdit()
+  if (!active || editing) return
   const el = e.target as Element | null
   if (!el || isOverlay(el)) return
   drawOverlay(el)
 }
 
 function onClick(e: MouseEvent): void {
-  if (!active) return
+  if (!active || editing) return
   // Only genuine user input picks — a hostile page can dispatch synthetic click
   // events while select mode is armed; isTrusted is false for those.
   if (!e.isTrusted) return
@@ -246,8 +250,71 @@ function onClick(e: MouseEvent): void {
   ipcRenderer.send(PICKED, describe(el))
 }
 
+// ---- Inline text editing: double-click a stamped, text-only element ---------
+let editing: HTMLElement | null = null
+let editOriginal = ''
+
+function onDblClick(e: MouseEvent): void {
+  if (!active || editing || !e.isTrusted) return
+  const el = e.target as HTMLElement | null
+  // Only a directly-stamped element with plain text (no child elements) — so the
+  // source maps to exactly this element's text child.
+  if (!el || isOverlay(el) || el.childElementCount > 0 || !el.hasAttribute('data-dsgn-source')) {
+    return
+  }
+  e.preventDefault()
+  e.stopPropagation()
+  editing = el
+  editOriginal = el.textContent ?? ''
+  hideOverlay()
+  el.setAttribute('contenteditable', 'plaintext-only')
+  el.style.outline = '2px solid #2563eb'
+  el.focus()
+  const range = document.createRange()
+  range.selectNodeContents(el)
+  const sel = window.getSelection()
+  sel?.removeAllRanges()
+  sel?.addRange(range)
+  el.addEventListener('blur', commitEdit, { once: true })
+  el.addEventListener('keydown', onEditKey, true)
+}
+
+function endEdit(): HTMLElement | null {
+  const el = editing
+  if (!el) return null
+  el.removeEventListener('keydown', onEditKey, true)
+  el.removeAttribute('contenteditable')
+  el.style.outline = ''
+  editing = null
+  return el
+}
+
+function commitEdit(): void {
+  const el = endEdit()
+  if (!el) return
+  const text = el.textContent ?? ''
+  const source = el.getAttribute('data-dsgn-source')
+  if (source && text.trim() !== editOriginal.trim()) {
+    ipcRenderer.send(TEXT_EDIT, { source: source.slice(0, 256), text: text.slice(0, 2000) })
+  }
+}
+
+function onEditKey(e: KeyboardEvent): void {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    ;(editing as HTMLElement | null)?.blur() // triggers commitEdit (once)
+  } else if (e.key === 'Escape') {
+    e.preventDefault()
+    const el = endEdit()
+    if (el) {
+      el.textContent = editOriginal // restore
+      el.blur()
+    }
+  }
+}
+
 function onKey(e: KeyboardEvent): void {
-  if (active && e.isTrusted && e.key === 'Escape') {
+  if (active && !editing && e.isTrusted && e.key === 'Escape') {
     e.preventDefault()
     setActive(false)
     ipcRenderer.send(CANCELLED)
@@ -260,6 +327,9 @@ function setActive(next: boolean): void {
     ensureOverlay()
     document.documentElement.style.cursor = 'crosshair'
   } else {
+    // Disarming mid-edit (toolbar toggle / project re-open): discard the edit so
+    // it can't strand the element or commit against a stale source.
+    if (editing) endEdit()
     hideOverlay()
     document.documentElement.style.cursor = ''
   }
@@ -268,6 +338,7 @@ function setActive(next: boolean): void {
 // Capture-phase so we see events before the page and can suppress the click.
 window.addEventListener('mousemove', onMove, true)
 window.addEventListener('click', onClick, true)
+window.addEventListener('dblclick', onDblClick, true)
 window.addEventListener('keydown', onKey, true)
 window.addEventListener('scroll', () => {
   if (active) hideOverlay()
@@ -276,7 +347,10 @@ window.addEventListener('scroll', () => {
 window.addEventListener('resize', () => pinDots.size && positionPins())
 // Pins track layout changes (hot-reload, async content) on a light cadence.
 const pinTimer = setInterval(() => pinDots.size && positionPins(), 600)
-window.addEventListener('pagehide', () => clearInterval(pinTimer))
+window.addEventListener('pagehide', () => {
+  clearInterval(pinTimer)
+  if (editing) endEdit()
+})
 
 // Report whether the previewed app is "dsgn-ready" — i.e. its elements carry
 // data-dsgn-source stamps — so the app can offer to set up an unprepared project.

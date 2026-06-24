@@ -23,6 +23,7 @@ const PREVIEW_CANCELLED = 'dsgn:preview:select-cancelled'
 const PREVIEW_SET_PINS = 'dsgn:preview:set-annotations'
 const PREVIEW_PIN_CLICK = 'dsgn:preview:pin-click'
 const PREVIEW_READINESS = 'dsgn:preview:readiness'
+const PREVIEW_TEXT_EDIT = 'dsgn:preview:text-edit'
 
 // Latest annotation pins, re-pushed to the preview after each navigation.
 let annotationPins: { id: string; selector: string }[] = []
@@ -218,6 +219,12 @@ function registerPreviewIpc(): void {
   ipcMain.on(PREVIEW_READINESS, (e, info: { stamps: number }) => {
     if (e.sender !== previewView?.webContents) return
     mainWindow?.webContents.send('preview:readiness', info)
+  })
+
+  // Inline text edit committed in the preview → renderer (which applies it).
+  ipcMain.on(PREVIEW_TEXT_EDIT, (e, edit: { source: string; text: string }) => {
+    if (e.sender !== previewView?.webContents) return
+    mainWindow?.webContents.send('preview:text-edit', edit)
   })
 
   ipcMain.handle('project:pick', async (): Promise<string | null> => {

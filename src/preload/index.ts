@@ -46,6 +46,12 @@ const api: DsgnApi = {
       const listener = (_e: IpcRendererEvent, info: { stamps: number }): void => cb(info)
       ipcRenderer.on('preview:readiness', listener)
       return () => ipcRenderer.removeListener('preview:readiness', listener)
+    },
+    onTextEdit: (cb: (edit: { source: string; text: string }) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, edit: { source: string; text: string }): void =>
+        cb(edit)
+      ipcRenderer.on('preview:text-edit', listener)
+      return () => ipcRenderer.removeListener('preview:text-edit', listener)
     }
   },
   project: {
@@ -70,6 +76,10 @@ const api: DsgnApi = {
       ipcRenderer.invoke('props:inspect', root, source),
     apply: (root: string, edit: PropEdit): Promise<PropEditResult> =>
       ipcRenderer.invoke('props:apply', root, edit)
+  },
+  text: {
+    apply: (root: string, edit: { source: string; text: string }): Promise<PropEditResult> =>
+      ipcRenderer.invoke('text:apply', root, edit)
   },
   tokens: {
     detect: (root: string): Promise<TokenSet> => ipcRenderer.invoke('tokens:detect', root)

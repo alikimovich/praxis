@@ -2,6 +2,26 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-24 — Inline text editing
+
+- **Double-click a stamped, text-only element in the preview** (in Select mode) to edit its
+  text in place; Enter/blur writes the new text straight to source, Escape cancels.
+- Engine (`applyTextEdit` in `props.ts`): finds the JSX element at the stamp, and when its
+  children are plain text (a single JSXText, or empty) and the new text is splice-safe
+  (`/^[^<>{}]*$/`), rewrites the text child in source preserving leading/trailing whitespace.
+  Expression/mixed content (`{title}`, nested elements), self-closing elements, or `.svelte`
+  files fall back to the agent (`needsAgent`).
+- Wiring: the preview preload drives the inline `contentEditable` edit and emits the commit;
+  main relays it (sender-checked) to the renderer, which applies via `text:apply` with the
+  current project root (agent-seeds on `needsAgent`).
+- `test/text-edit.mjs`: a plain-text `<h1>` is rewritten in source; an expression child
+  (`{props.label}`) → agent. ✅ `bun run verify` green.
+- **Adversarial review (5 findings, all fixed):** the `editing` flag could strand select mode —
+  now `setActive(false)` and `pagehide` end the edit, and a detached node self-heals on the next
+  mouse move (HMR mid-edit); a write failure now routes the edit to the agent instead of being
+  silently dropped; surrounding whitespace is derived from the raw source (so `&nbsp;` etc. aren't
+  rewritten as literal bytes) with the all-whitespace overlap zeroed.
+
 ## 2026-06-23 — Readiness gating, floating prop panel, on-open setup
 
 A project that isn't dsgn-ready no longer pretends to be editable — and dsgn offers to fix it.
