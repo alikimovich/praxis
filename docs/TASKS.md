@@ -25,8 +25,9 @@ Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
       (string/number/boolean/enum); **hybrid apply**: simple literals are spliced straight
       into source (instant hot-reload), complex values fall back to the agent. Covered by
       `test/prop-edit.mjs`.
-  - [ ] Still ahead: cross-file component resolution (schema currently resolves when the
-        component is defined in the same file as the usage); design-token manifests.
+  - [x] Cross-file component resolution. ✅ 2026-06-23 — follows the component's relative
+        import to its definition file and runs react-docgen there (matches the exported name;
+        barrel re-exports can't mis-attach). Still ahead: design-token manifests.
 
 ## v3 — engineer handoff
 

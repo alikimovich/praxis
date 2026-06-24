@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-23 — Cross-file prop-schema resolution
+
+- The prop editor now resolves a component's schema even when it's imported from another
+  file: if there's no same-file react-docgen match, `props.ts` finds the component's relative
+  import in the usage file, resolves the module path (tries `.tsx/.ts/.jsx/.js` + `/index`,
+  refusing anything outside the project root), and runs react-docgen on the definition file.
+- Matches on the **exported** name from the import (`{ Button as B }` → `Button`), so a
+  re-export barrel that also defines another component can't mis-attach its schema
+  (flagged + fixed in review). Edits still target the usage site, never the definition.
+- `test/prop-edit.mjs` extended: `<Button>` used in `Card.tsx` but defined in `Button.tsx`
+  resolves Button's enum/string schema with the live usage value. ✅ `bun run verify` green.
+
 ## 2026-06-23 — v3 engineer handoff: annotations + Publish→PR
 
 - **Annotations sidecar** (`src/main/annotations.ts`): reviewer notes pinned to elements,
