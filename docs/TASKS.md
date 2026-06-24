@@ -9,7 +9,7 @@ Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 - [x] **v2 first slice: click-to-select → source → chat.** ✅ 2026-06-23 — overlay
       preload, inspector, `data-dsgn-source` resolution, composer hand-off; covered by
       `test/select-element.mjs`.
-- [ ] **Next:** v3 — engineer handoff (annotations sidecar + Publish→PR, below).
+- [ ] **Next:** polish / cross-file prop resolution / design-token manifests (see below).
 
 ## v2 — design-system-aware select & edit (the differentiator)
 
@@ -30,9 +30,12 @@ Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 
 ## v3 — engineer handoff
 
-- [ ] Annotations stored in a repo sidecar (`.dsgn/annotations.json`) the agent must
-      NOT edit; render as pins in the UI.
-- [ ] Publish → create a branch + GitHub PR with a generated summary + the annotations.
+- [x] Annotations stored in a repo sidecar (`.dsgn/annotations.json`). ✅ 2026-06-23 —
+      `src/main/annotations.ts`; the agent is denied writes under `.dsgn/` (agent.ts guard).
+      Rendered as numbered pins over the preview (`src/preview/preload.ts`) + a notes panel.
+- [x] **Publish → branch + GitHub PR.** ✅ 2026-06-23 — `publishToPr` creates a branch,
+      commits, pushes, and `gh pr create`s with a generated body (notes + changed files).
+      Covered by `test/annotations.mjs` (storage + UI); the live `gh` path is user-triggered.
 
 ## Polish (anytime)
 

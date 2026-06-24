@@ -62,6 +62,12 @@ apply the **hybrid** way: simple literals are spliced straight into source (inst
 hot-reload), complex values fall back to the agent. (`src/main/props.ts`.) Still ahead:
 cross-file component schema resolution and design-token manifests.
 
+**v3 engineer handoff.** Reviewer notes are pinned to elements and stored in
+`<repo>/.dsgn/annotations.json` (the agent is denied writes under `.dsgn/`). Notes render as
+numbered pins over the preview + a notes panel; **Publish PR** creates a branch, commits the
+working changes + notes, and opens a GitHub PR via `gh` with a generated body.
+(`src/main/annotations.ts`.)
+
 ## Verification status
 
 - **Real agent turn: VERIFIED (2026-06-23).** `test/agent-e2e.mjs` ran a live Claude
@@ -89,6 +95,8 @@ cross-file component schema resolution and design-token manifests.
 - `src/main/props.ts` — **prop editor engine**: babel-parse the source at the stamp line,
   react-docgen schema, hybrid literal-splice / agent-fallback apply (`props:inspect/apply`).
 - `src/renderer/src/components/PropEditor.tsx` — typed prop controls rendered from the inspection.
+- `src/main/annotations.ts` — **v3** annotation sidecar CRUD + Publish→PR (git/gh via execFile).
+- `src/renderer/src/components/NotesPanel.tsx` — **v3** notes list + Publish; `useAnnotations` store.
 - `src/renderer/src/store.ts` — `useChat` + `useSession` + **`useSelection`**; `isAuthError`;
   exposes `window.__dsgnStore/__dsgnSession/__dsgnSelection` for the test harness.
 - `src/shared/api.ts` — the IPC contract incl. `SelectedElement` (keep preload + handlers in sync).
