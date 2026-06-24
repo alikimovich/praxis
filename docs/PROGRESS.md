@@ -2,6 +2,38 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-23 — Prop/token editor (react-docgen + hybrid apply)
+
+- `src/main/props.ts`: given an element's `data-dsgn-source` ("relpath:line"), parse the
+  source file with `@babel/parser`, find the JSX element on that line, read its current
+  literal attributes, and run **react-docgen** (FindAllDefinitions resolver) for the
+  component's prop schema (types, enums, required, descriptions). Both deps are ESM-only,
+  so they're dynamic-`import()`ed like the Agent SDK.
+- **Hybrid apply**: simple literal props (string/number/boolean/enum) are written straight
+  to source via a targeted string splice (formatting-preserving, no codegen dep) → the dev
+  server hot-reloads; non-literal/`other` values return `needsAgent` and the renderer seeds
+  the agent instead. Path is hardened: `resolveSource` rejects absolute paths and anything
+  resolving outside the project root.
+- Renderer: an "Edit props" toggle in the inspector reveals `PropEditor`, which renders
+  typed controls (text/number/checkbox/enum-select) from the inspection and applies on
+  change/blur; `useSession.projectRoot` carries the root needed to resolve sources.
+- Test `test/prop-edit.mjs` drives the engine through real IPC (no dev server/auth):
+  inspect resolves the schema + live values, apply writes `variant="warn"` to the fixture,
+  and the UI renders the typed rows. ✅ `bun run verify` green; also hardened the
+  select-element test's retry budget against load-induced flake.
+- **Adversarial review (5 verified findings, all fixed):**
+  - **Same-line elements** (`<Badge>` inline in an `<li>`/`<p>`) resolved to the *wrong*
+    element — the exact-line match returned the first/outermost. Now column-aware (the stamp
+    plugin emits `line:col`) and, without a column, picks the innermost element on the line.
+    Regression-tested.
+  - **Prop-name injection**: an unvalidated name was spliced raw into source. Names are now
+    validated against an attribute-name allowlist at every layer (schema, current attrs, and
+    the apply IPC boundary).
+  - **Wrong schema** attached to imported child components (the `docs[0]` fallback) — now only
+    falls back for an anonymous single component, else shows the "no schema" note.
+  - Failed applies are **surfaced** in the editor (and the control resets to the file value)
+    instead of silently dropping. `projectRoot` is cleared on project (re)open.
+
 ## 2026-06-23 — Permission approve/deny cards + Auto mode (SDK)
 
 - `canUseTool` (main) now drives a real approval flow: for any tool the SDK gates, it emits

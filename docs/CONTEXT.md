@@ -53,9 +53,14 @@ highlights, click picks. The pick resolves a source location from the repo's
 `data-dsgn-source` stamp (nearest ancestor; CSS-selector fallback) plus key computed
 styles, and surfaces an inspector above the composer. "Ask dsgn to change this…" seeds
 the chat with the element + source reference so the agent edits the right file. The
-stamping convention + a reference Vite/Babel plugin are in `docs/DESIGN.md`. Still
-ahead: `react-docgen` prop schemas → a prop/token editor panel (edit without a full
-agent round-trip).
+stamping convention + a reference Vite/Babel plugin are in `docs/DESIGN.md`.
+
+**v2 prop editor.** The inspector's "Edit props" toggle reveals typed controls
+(string/number/boolean/enum) built from the component's **react-docgen** schema + the
+element's live attribute values (parsed from the source file at the stamp line). Edits
+apply the **hybrid** way: simple literals are spliced straight into source (instant
+hot-reload), complex values fall back to the agent. (`src/main/props.ts`.) Still ahead:
+cross-file component schema resolution and design-token manifests.
 
 ## Verification status
 
@@ -79,7 +84,11 @@ agent round-trip).
 - `src/preview/preload.ts` — **v2 overlay preload** injected into the preview view
   (hover highlight + click pick + source/style capture). Own `tsconfig.preview.json`.
 - `src/renderer/src/components/ChatPanel.tsx` — chat UI, toolbar, slash menu, **inspector**.
-- `src/renderer/src/components/Inspector.tsx` — **v2** selected-element card + chat hand-off.
+- `src/renderer/src/components/Inspector.tsx` — **v2** selected-element card + chat hand-off
+  + the "Edit props" toggle.
+- `src/main/props.ts` — **prop editor engine**: babel-parse the source at the stamp line,
+  react-docgen schema, hybrid literal-splice / agent-fallback apply (`props:inspect/apply`).
+- `src/renderer/src/components/PropEditor.tsx` — typed prop controls rendered from the inspection.
 - `src/renderer/src/store.ts` — `useChat` + `useSession` + **`useSelection`**; `isAuthError`;
   exposes `window.__dsgnStore/__dsgnSession/__dsgnSelection` for the test harness.
 - `src/shared/api.ts` — the IPC contract incl. `SelectedElement` (keep preload + handlers in sync).

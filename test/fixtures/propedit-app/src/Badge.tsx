@@ -16,3 +16,7 @@ export function Badge(props: BadgeProps): JSX.Element {
 export function Demo(): JSX.Element {
   return <Badge variant="ok" label="Ready" count={3} rounded />
 }
+
+export function Inline(): JSX.Element {
+  return <p className="row">Status <Badge variant="warn" label="Hi" /></p>
+}

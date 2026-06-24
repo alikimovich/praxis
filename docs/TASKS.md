@@ -9,8 +9,7 @@ Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 - [x] **v2 first slice: click-to-select → source → chat.** ✅ 2026-06-23 — overlay
       preload, inspector, `data-dsgn-source` resolution, composer hand-off; covered by
       `test/select-element.mjs`.
-- [ ] **Next:** prop/token editor panel (below) — turn "edit the file" into
-      "edit the prop/token" without a full agent round-trip.
+- [ ] **Next:** v3 — engineer handoff (annotations sidecar + Publish→PR, below).
 
 ## v2 — design-system-aware select & edit (the differentiator)
 
@@ -18,11 +17,16 @@ Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
       (`src/preview/preload.ts` — shadow-DOM highlight + pick.)
 - [x] Map selected DOM → source location via the `data-dsgn-source` stamp
       (nearest-ancestor resolution; CSS-selector fallback). See `docs/DESIGN.md`.
-  - [ ] Still TODO: `react-docgen` prop schemas (needed for the editor panel below).
+- [x] `react-docgen` prop schemas. ✅ 2026-06-23 — `src/main/props.ts` parses the source
+      file at the stamp line and runs react-docgen for the component's prop types/enums.
 - [x] `DESIGN.md` convention started — `data-dsgn-source` stamping + a reference Vite/Babel
       plugin documented. (Full open-design 9-section schema is still future work.)
-- [ ] Prop/token editor panel rendered from a manifest; element comments + edits
-      spawn a subagent to make the change.
+- [x] **Prop/token editor panel.** ✅ 2026-06-23 — typed controls in the inspector
+      (string/number/boolean/enum); **hybrid apply**: simple literals are spliced straight
+      into source (instant hot-reload), complex values fall back to the agent. Covered by
+      `test/prop-edit.mjs`.
+  - [ ] Still ahead: cross-file component resolution (schema currently resolves when the
+        component is defined in the same file as the usage); design-token manifests.
 
 ## v3 — engineer handoff
 

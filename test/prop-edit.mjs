@@ -95,6 +95,16 @@ try {
   if (!after.includes('variant="warn"')) throw new Error('source file was not edited to warn')
   if (after.includes('variant="ok"')) throw new Error('old value still present')
 
+  // Same-line disambiguation: <Badge> inline in a <p> must resolve to Badge
+  // (the innermost element on the line), not the parent <p>.
+  const inline = await win.evaluate((args) => window.api.props.inspect(args.fixture, args.src), {
+    fixture,
+    src: 'src/Badge.tsx:21'
+  })
+  if (inline?.component !== 'Badge') {
+    throw new Error(`same-line element resolved to "${inline?.component}", expected Badge`)
+  }
+
   console.log('PROP-EDIT OK — schema resolved + literal edit written to source')
 } catch (err) {
   console.error('PROP-EDIT FAILED:', err?.message ?? err)
