@@ -416,15 +416,16 @@ async function inspectProps(root: string, source: string): Promise<PropInspectio
 
   const fields = mergeFields(schema, current)
 
+  const hasSchema = schema.length > 0
   const note = isComponent
-    ? schema.length
+    ? hasSchema
       ? crossFile
         ? `Schema resolved from the imported ${found.name} definition.`
         : undefined
       : 'No react-docgen schema resolved — showing the props currently set.'
     : 'Host element — editing its literal attributes (no component schema).'
 
-  return { component: found.name, source, fields, ...(note ? { note } : {}) }
+  return { component: found.name, source, fields, hasSchema, ...(note ? { note } : {}) }
 }
 
 /** Render a JSX attribute literal, e.g. variant="primary" / count={3} / ok={true}. */

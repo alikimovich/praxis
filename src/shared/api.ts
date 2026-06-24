@@ -112,6 +112,11 @@ export interface PropInspection {
   /** The `path:line` we edit at (from the element's data-dsgn-source). */
   source: string
   fields: PropField[]
+  /**
+   * True when a real prop schema resolved (react-docgen). This is the gate: only
+   * schema-backed components get the prop panel; otherwise it's prompt-only.
+   */
+  hasSchema: boolean
   /** Why the schema is limited (e.g. no react-docgen match), if applicable. */
   note?: string
 }
@@ -159,6 +164,17 @@ export interface PublishResult {
   error?: string
 }
 
+/** Result of scaffolding source-stamping into an unprepared project. */
+export interface SetupResult {
+  ok: boolean
+  framework?: 'vite' | 'next' | 'unknown'
+  /** The plugin file dsgn wrote (repo-relative). */
+  pluginFile?: string
+  /** False if the plugin file already existed. */
+  written?: boolean
+  error?: string
+}
+
 export type TokenSource = 'manifest' | 'tailwind' | 'css' | 'none'
 
 export interface Token {
@@ -195,6 +211,10 @@ export interface DsgnApi {
     onSelectCancelled: (cb: () => void) => () => void
     /** Render annotation pins in the preview, located by CSS selector. */
     setAnnotations: (pins: { id: string; selector: string }[]) => void
+    /** Reserve a right-edge strip (px) so the floating prop panel isn't covered. */
+    setPanelInset: (inset: number) => void
+    /** Fires after the previewed app loads, reporting source-stamp coverage. */
+    onReadiness: (cb: (info: { stamps: number }) => void) => () => void
   }
   project: {
     pick: () => Promise<string | null>
@@ -225,6 +245,10 @@ export interface DsgnApi {
   publish: {
     /** Create a branch + GitHub PR with the annotations; returns the PR URL. */
     toPr: (root: string, opts: { title: string }) => Promise<PublishResult>
+  }
+  setup: {
+    /** Write the dev-only source-stamping plugin into the repo (deterministic). */
+    scaffold: (root: string) => Promise<SetupResult>
   }
   agent: {
     openProject: (root: string, options?: AgentOptions) => Promise<void>

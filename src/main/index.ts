@@ -6,6 +6,7 @@ import { registerAgentIpc } from './agent'
 import { registerPropsIpc } from './props'
 import { registerAnnotationsIpc } from './annotations'
 import { registerTokensIpc } from './tokens'
+import { registerSetupIpc } from './setup'
 
 let mainWindow: BrowserWindow | null = null
 let previewView: WebContentsView | null = null
@@ -21,9 +22,12 @@ const PREVIEW_PICKED = 'dsgn:preview:element-picked'
 const PREVIEW_CANCELLED = 'dsgn:preview:select-cancelled'
 const PREVIEW_SET_PINS = 'dsgn:preview:set-annotations'
 const PREVIEW_PIN_CLICK = 'dsgn:preview:pin-click'
+const PREVIEW_READINESS = 'dsgn:preview:readiness'
 
 // Latest annotation pins, re-pushed to the preview after each navigation.
 let annotationPins: { id: string; selector: string }[] = []
+// Right-edge inset reserved for the floating prop panel (renderer-reported).
+let panelInset = 0
 
 // Chromium error codes worth retrying — the dev server is up but not yet serving.
 const TRANSIENT_LOAD_ERRORS = new Set([-324, -102, -101, -105, -106, -109])
@@ -138,15 +142,28 @@ function createWindow(): void {
 }
 
 function registerPreviewIpc(): void {
+  let lastBounds = { x: 0, y: 0, width: 0, height: 0 }
+  // Apply the renderer's slot rect minus the right-edge panel inset, so the
+  // floating prop panel sits in renderer DOM not covered by the native view.
+  const applyBounds = (): void => {
+    ensurePreviewView().setBounds({
+      x: Math.round(lastBounds.x),
+      y: Math.round(lastBounds.y),
+      width: Math.max(0, Math.round(lastBounds.width - panelInset)),
+      height: Math.round(lastBounds.height)
+    })
+  }
+
   // Renderer reports where the preview rectangle is, in CSS pixels (== DIP).
   ipcMain.on('preview:set-bounds', (_e, bounds: { x: number; y: number; width: number; height: number }) => {
-    const view = ensurePreviewView()
-    view.setBounds({
-      x: Math.round(bounds.x),
-      y: Math.round(bounds.y),
-      width: Math.round(bounds.width),
-      height: Math.round(bounds.height)
-    })
+    lastBounds = bounds
+    applyBounds()
+  })
+
+  // The floating prop panel reserves a strip on the preview's right edge.
+  ipcMain.on('preview:set-panel-inset', (_e, inset: number) => {
+    panelInset = Math.max(0, inset || 0)
+    applyBounds()
   })
 
   ipcMain.handle('preview:load', (_e, url: string) => {
@@ -197,6 +214,12 @@ function registerPreviewIpc(): void {
     mainWindow?.webContents.send('annotations:pin-click', id)
   })
 
+  // Readiness probe (stamp count) → renderer, to drive the setup offer.
+  ipcMain.on(PREVIEW_READINESS, (e, info: { stamps: number }) => {
+    if (e.sender !== previewView?.webContents) return
+    mainWindow?.webContents.send('preview:readiness', info)
+  })
+
   ipcMain.handle('project:pick', async (): Promise<string | null> => {
     if (!mainWindow) return null
     const res = await dialog.showOpenDialog(mainWindow, {
@@ -215,6 +238,7 @@ app.whenReady().then(() => {
   registerPropsIpc()
   registerAnnotationsIpc()
   registerTokensIpc()
+  registerSetupIpc()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

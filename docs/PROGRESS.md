@@ -2,6 +2,31 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-23 — Readiness gating, floating prop panel, on-open setup
+
+A project that isn't dsgn-ready no longer pretends to be editable — and dsgn offers to fix it.
+
+- **Gating**: prop editing is now gated on a resolved react-docgen schema (`PropInspection.hasSchema`).
+  Selecting an element auto-inspects (App effect, race-guarded by source); a schema-backed
+  component opens the editor, an unready one (host element / untyped / unstamped) shows a
+  prompt-only hint with a "set up the project" link.
+- **Floating prop panel** (`PropPanel.tsx`): the editor moved out of the chat to a panel on the
+  preview's right edge — component name, source, and every prop with a typed control + its
+  description. Because the preview is a *native* view (DOM can't float above it), the panel
+  reserves a right-edge strip via `preview.setPanelInset` and the native bounds shrink while
+  it's open.
+- **On-open setup** (`SetupCard` + `src/main/setup.ts`): the preview preload reports whether
+  the app is source-stamped; if not, dsgn posts a chat offer to set it up. Accept → dsgn writes
+  the dev-only stamping Babel plugin deterministically, then asks the agent to wire it in and
+  type the components (the hybrid).
+- New `test/ready-gating.mjs`: scaffold writes the plugin (idempotent), a no-schema element is
+  prompt-only (no panel), a schema-backed one opens the panel, and the offer renders.
+  ✅ `bun run verify` green (10 tests).
+- **Adversarial review (4 findings, all fixed):** dismissing the offer no longer blanks the
+  chat (dismiss clears `needed`); the readiness probe re-samples (600/1500/3000ms) so a slow
+  SPA isn't falsely flagged; `acceptSetup` is try/finally so busy can't stick; the gating test
+  now also asserts the positive panel case. No safety issues in the scaffold or preview-bounds.
+
 ## 2026-06-23 — Svelte / SvelteKit support (prop editing → framework-agnostic)
 
 - Prop editing is now **framework-agnostic by dispatch**: `props.ts` routes by
@@ -9,22 +34,15 @@ Newest first. Append a dated entry when you finish a chunk of work.
   the unchanged React/JSX engine. Both share helpers (resolveSource, mergeFields,
   withinRoot, isValidAttrName) and return identical PropInspection/PropEditResult.
 - `props-svelte.ts` parses with `svelte/compiler` (ESM, dynamic-imported): finds
-  the element at line:col (same innermost/column rules as React), reads literal
-  attributes (handles both `name="x"` array-of-Text and `name={x}` bare-ExpressionTag
-  value shapes), resolves a component schema cross-file from `export let` (Svelte 4)
-  or `$props()` destructuring + `interface Props` (Svelte 5 → TS unions become enums),
-  and applies literal edits by splicing the `.svelte` source (hot-reload).
-- Selection / tokens / "ask-agent" were already framework-agnostic (they only need
-  the `data-dsgn-source` stamp); added a **Svelte stamping recipe** (a
-  `svelte/compiler` + magic-string markup preprocessor) to `docs/DESIGN.md`.
-- Test `test/prop-edit-svelte.mjs` (svelte-app fixture): cross-file `$props` schema
-  (variant enum/label/count/rounded) + live values, literal apply to `.svelte`, host
-  element attrs, and same-line + column disambiguation. ✅ `bun run verify` green
-  (10 tests).
+  the element at line:col, reads literal attributes, resolves a component schema
+  cross-file from `export let` (Svelte 4) or `$props()` + `interface Props` (Svelte 5),
+  and applies literal edits by splicing the `.svelte` source.
+- Added a **Svelte stamping recipe** to `docs/DESIGN.md`. Test
+  `test/prop-edit-svelte.mjs` (svelte-app fixture) covers the cross-file `$props` schema,
+  literal apply, host attrs, and same-line/column disambiguation.
 - **Adversarial review (1 real bug, fixed):** `resolveSource`'s greedy regex parsed
-  `"path:line:col"` as `file="path:line", line=col` — a latent bug on the shared
-  (React too) path, never hit because tests used line-only stamps. Now non-greedy.
-  Also added a defense-in-depth attr-name re-validation in `applySvelteEdit`.
+  `"path:line:col"` as `file="path:line", line=col` — a latent bug on the shared path.
+  Now non-greedy; plus a defense-in-depth attr-name re-validation in `applySvelteEdit`.
 
 ## 2026-06-23 — Design-token detection + palette
 
