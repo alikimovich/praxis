@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import type { SelectedElement } from '../../../shared/api'
+import PropEditor from './PropEditor'
 
 /** A couple of the captured computed styles, shown as quick chips. */
 const STYLE_CHIPS: { key: string; label: string }[] = [
@@ -10,22 +12,34 @@ const STYLE_CHIPS: { key: string; label: string }[] = [
 
 interface Props {
   element: SelectedElement
+  /** Absolute project root — enables prop editing when present. */
+  root: string | null
   /** Seed a change request for this element into the composer. */
   onAsk: () => void
   onClear: () => void
+  /** Seed an arbitrary prompt (used by the prop editor's agent fallback). */
+  onSeedPrompt: (text: string) => void
 }
 
 /**
  * The selection inspector — appears above the composer once the user clicks an
- * element in the live preview. It shows what was picked (and, crucially, whether
- * we resolved a source location), then hands off to the chat with one click.
+ * element in the live preview. It shows what was picked (and whether we resolved
+ * a source location), offers a prop editor, then hands off to the chat.
  */
-export default function Inspector({ element, onAsk, onClear }: Props): React.JSX.Element {
+export default function Inspector({
+  element,
+  root,
+  onAsk,
+  onClear,
+  onSeedPrompt
+}: Props): React.JSX.Element {
+  const [editing, setEditing] = useState(false)
   const ident = element.id
     ? `#${element.id}`
     : element.classes[0]
       ? `.${element.classes[0]}`
       : ''
+  const canEditProps = !!root && !!element.source
 
   return (
     <div className="inspector">
@@ -43,19 +57,35 @@ export default function Inspector({ element, onAsk, onClear }: Props): React.JSX
         {element.source ?? 'no data-dsgn-source stamp — agent will locate by selector'}
       </div>
 
-      <div className="inspector__chips">
-        {STYLE_CHIPS.map(({ key, label }) =>
-          element.styles[key] ? (
-            <span key={key} className="inspector__chip" title={`${key}: ${element.styles[key]}`}>
-              {label}: {element.styles[key]}
-            </span>
-          ) : null
-        )}
-      </div>
+      {!editing && (
+        <div className="inspector__chips">
+          {STYLE_CHIPS.map(({ key, label }) =>
+            element.styles[key] ? (
+              <span key={key} className="inspector__chip" title={`${key}: ${element.styles[key]}`}>
+                {label}: {element.styles[key]}
+              </span>
+            ) : null
+          )}
+        </div>
+      )}
 
-      <button className="inspector__ask" onClick={onAsk}>
-        Ask dsgn to change this…
-      </button>
+      {editing && root && element.source && (
+        <PropEditor root={root} source={element.source} onSeedPrompt={onSeedPrompt} />
+      )}
+
+      <div className="inspector__actions">
+        {canEditProps && (
+          <button
+            className={`inspector__toggle ${editing ? 'is-active' : ''}`}
+            onClick={() => setEditing((e) => !e)}
+          >
+            {editing ? 'Done' : 'Edit props'}
+          </button>
+        )}
+        <button className="inspector__ask" onClick={onAsk}>
+          Ask dsgn to change this…
+        </button>
+      </div>
     </div>
   )
 }

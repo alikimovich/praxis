@@ -133,6 +133,7 @@ export default function App(): React.JSX.Element {
         ...toAgentOptions(useSession.getState()),
         permissionMode: usePermissions.getState().mode
       })
+      useSession.getState().setProjectRoot(root)
       // A fresh session — clear any turn left "running" from a previous project.
       useChat.getState().finish()
       setStatus({ kind: 'running', name, url })
@@ -167,6 +168,7 @@ export default function App(): React.JSX.Element {
   const stop = async (): Promise<void> => {
     setSelectMode(false)
     setSelected(null)
+    useSession.getState().setProjectRoot(null)
     void window.api.preview.setSelectMode(false)
     await window.api.devServer.stop()
     await window.api.preview.reset()
