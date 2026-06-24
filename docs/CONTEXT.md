@@ -95,6 +95,8 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
 - `src/main/props.ts` — **prop editor engine**: babel-parse the source at the stamp line,
   react-docgen schema, hybrid literal-splice / agent-fallback apply (`props:inspect/apply`).
 - `src/renderer/src/components/PropEditor.tsx` — typed prop controls rendered from the inspection.
+- `src/main/tokens.ts` — **design-token detection**: probes `.dsgn/tokens.json` → tailwind
+  config (static parse) → CSS custom properties; `tokens:detect`. Palette in `TokenPalette.tsx`.
 - `src/main/annotations.ts` — **v3** annotation sidecar CRUD + Publish→PR (git/gh via execFile).
 - `src/renderer/src/components/NotesPanel.tsx` — **v3** notes list + Publish; `useAnnotations` store.
 - `src/renderer/src/store.ts` — `useChat` + `useSession` + **`useSelection`**; `isAuthError`;

@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-23 — Design-token detection + palette
+
+- `src/main/tokens.ts` auto-detects a project's design tokens, probing three sources in
+  priority order so the right one is chosen per repo: **`.dsgn/tokens.json`** manifest →
+  **`tailwind.config.*`** (parsed *statically* with babel — literal theme values only, the
+  config is never executed) → **CSS custom properties** (a depth/file-bounded scan of the
+  repo's CSS, grouped by name prefix). First source with tokens wins.
+- Renderer: tokens load on project open into `useTokens`; the inspector gains a "Tokens"
+  toggle showing the detected palette (swatches for colors, the source labeled). Clicking a
+  token seeds the chat to apply it to the selected element — reusing the agent path rather
+  than a fragile per-framework style editor.
+- `test/tokens.mjs` proves the priority (manifest wins over a present Tailwind config) and
+  each parser (nested Tailwind colors flatten, CSS `var()` aliases skipped) through real IPC,
+  plus the palette UI. ✅ `bun run verify` green (8 tests).
+
 ## 2026-06-23 — Cross-file prop-schema resolution
 
 - The prop editor now resolves a component's schema even when it's imported from another

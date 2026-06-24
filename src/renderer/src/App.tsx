@@ -8,7 +8,8 @@ import {
   useChat,
   usePermissions,
   useSelection,
-  useSession
+  useSession,
+  useTokens
 } from './store'
 
 const MIN_CHAT_WIDTH = 320
@@ -126,6 +127,7 @@ export default function App(): React.JSX.Element {
     useSession.getState().setProjectRoot(null)
     useAnnotations.getState().setList([])
     useAnnotations.getState().setFocused(null)
+    useTokens.getState().setSet(null)
     void window.api.preview.setSelectMode(false)
     try {
       setLog('')
@@ -150,6 +152,8 @@ export default function App(): React.JSX.Element {
         permissionMode: usePermissions.getState().mode
       })
       useSession.getState().setProjectRoot(root)
+      // Detect this repo's design tokens (manifest → tailwind → CSS vars).
+      void window.api.tokens.detect(root).then((t) => useTokens.getState().setSet(t))
       // Load this repo's existing handoff notes (renders pins via the effect above).
       useAnnotations.getState().setList(await window.api.annotations.list(root))
       // A fresh session — clear any turn left "running" from a previous project.
@@ -189,6 +193,7 @@ export default function App(): React.JSX.Element {
     useSession.getState().setProjectRoot(null)
     useAnnotations.getState().setList([])
     useAnnotations.getState().setFocused(null)
+    useTokens.getState().setSet(null)
     void window.api.preview.setSelectMode(false)
     await window.api.devServer.stop()
     await window.api.preview.reset()

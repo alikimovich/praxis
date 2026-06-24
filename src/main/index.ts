@@ -5,6 +5,7 @@ import { registerDevServerIpc } from './devserver'
 import { registerAgentIpc } from './agent'
 import { registerPropsIpc } from './props'
 import { registerAnnotationsIpc } from './annotations'
+import { registerTokensIpc } from './tokens'
 
 let mainWindow: BrowserWindow | null = null
 let previewView: WebContentsView | null = null
@@ -213,6 +214,7 @@ app.whenReady().then(() => {
   registerAgentIpc(() => mainWindow)
   registerPropsIpc()
   registerAnnotationsIpc()
+  registerTokensIpc()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

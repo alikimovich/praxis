@@ -27,7 +27,11 @@ Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
       `test/prop-edit.mjs`.
   - [x] Cross-file component resolution. ✅ 2026-06-23 — follows the component's relative
         import to its definition file and runs react-docgen there (matches the exported name;
-        barrel re-exports can't mis-attach). Still ahead: design-token manifests.
+        barrel re-exports can't mis-attach).
+  - [x] **Design tokens.** ✅ 2026-06-23 — `src/main/tokens.ts` auto-detects the source per
+        project (`.dsgn/tokens.json` manifest → `tailwind.config.*` static parse → CSS custom
+        properties) and the inspector shows a token palette; clicking a token applies it via
+        the agent.
 
 ## v3 — engineer handoff
 

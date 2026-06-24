@@ -115,8 +115,18 @@ The schema resolves whether the component is defined in the same file or
 **imported** from another (dsgn follows the relative import to the definition).
 Still ahead: design-token manifests (below).
 
-### Future — token manifests
+### Design tokens (built)
 
-A per-repo manifest (forking open-design's 9-section schema, extended with
-prop/token tables) would let the editor surface design tokens and richer prop
-metadata beyond what `react-docgen` infers.
+dsgn auto-detects a project's design tokens and shows them as a palette in the
+inspector; clicking a token applies it to the selected element (via the agent).
+The source is chosen per project, probed in priority order:
+
+1. **`.dsgn/tokens.json`** — a curated manifest: `{ "<group>": { "<name>": "<value>" } }`
+   (e.g. `{ "colors": { "primary": "#2563eb" }, "spacing": { "sm": "4px" } }`).
+2. **`tailwind.config.*`** — the theme scale, parsed *statically* (literal
+   values only; the config is never executed).
+3. **CSS custom properties** — `--name: value` declarations scanned from the
+   repo's CSS, grouped by name prefix.
+
+The first source that yields tokens wins. A `.dsgn/tokens.json` is the way to
+get a precise, curated palette regardless of framework.
