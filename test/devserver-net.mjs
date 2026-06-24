@@ -8,8 +8,16 @@ import {
   defaultPorts,
   findRunningServer,
   hostVariants,
-  normalizeUrl
+  normalizeUrl,
+  stripAnsi
 } from '../src/main/devserver-net.ts'
+
+// ANSI color codes around the port (Vite prints a bold port) must be stripped,
+// or the parsed URL is garbage and readiness waits forever.
+assert.equal(stripAnsi('  ➜  Local: http://localhost:\x1b[1m5173\x1b[22m/'), '  ➜  Local: http://localhost:5173/')
+assert.equal(stripAnsi('plain http://127.0.0.1:3000/'), 'plain http://127.0.0.1:3000/')
+// Don't eat legitimate brackets (e.g. Next.js [id] routes) — needs the ESC.
+assert.equal(stripAnsi('/blog/[slug]/page'), '/blog/[slug]/page')
 
 // hostVariants: localhost-ish URLs expand to concrete hosts, IPv4 first.
 assert.deepEqual(hostVariants('http://localhost:5174/'), [

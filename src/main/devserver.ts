@@ -8,6 +8,7 @@ import {
   findRunningServer,
   hostVariants,
   normalizeUrl,
+  stripAnsi,
   waitForReachable
 } from './devserver-net'
 
@@ -128,7 +129,7 @@ function spawnDevServer(
     let tail = ''
 
     const onData = (buf: Buffer): void => {
-      const text = buf.toString()
+      const text = stripAnsi(buf.toString())
       tail = (tail + text).slice(-4000)
       for (const line of text.split('\n')) {
         if (line.trim()) onLog(line.trimEnd())
