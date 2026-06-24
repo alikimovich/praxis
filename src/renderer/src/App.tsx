@@ -110,6 +110,7 @@ export default function App(): React.JSX.Element {
     setSelectMode(false)
     setSelected(null)
     usePermissions.getState().clearPending()
+    useSession.getState().setProjectRoot(null)
     void window.api.preview.setSelectMode(false)
     try {
       setLog('')
