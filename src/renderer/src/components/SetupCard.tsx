@@ -2,6 +2,7 @@ interface Props {
   busy: boolean
   status: string | null
   onAccept: () => void
+  onStop: () => void
   onDismiss: () => void
 }
 
@@ -11,7 +12,13 @@ interface Props {
  * and prop editing is unavailable. Accepting writes the dev-only stamping plugin
  * (deterministic) and asks the agent to wire it in + type the components.
  */
-export default function SetupCard({ busy, status, onAccept, onDismiss }: Props): React.JSX.Element {
+export default function SetupCard({
+  busy,
+  status,
+  onAccept,
+  onStop,
+  onDismiss
+}: Props): React.JSX.Element {
   return (
     <div className="setup" role="region" aria-label="Project setup">
       <div className="setup__title">Set this project up for visual editing?</div>
@@ -25,9 +32,16 @@ export default function SetupCard({ busy, status, onAccept, onDismiss }: Props):
         <button className="setup__no" onClick={onDismiss} disabled={busy}>
           Not now
         </button>
-        <button className="setup__yes" onClick={onAccept} disabled={busy}>
-          {busy ? 'Setting up…' : 'Set it up'}
-        </button>
+        {busy ? (
+          <button className="setup__yes setup__yes--stop" onClick={onStop}>
+            <span className="setup__spinner" aria-hidden="true" />
+            Stop
+          </button>
+        ) : (
+          <button className="setup__yes" onClick={onAccept}>
+            Set it up
+          </button>
+        )}
       </div>
     </div>
   )

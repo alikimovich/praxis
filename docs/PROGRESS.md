@@ -2,6 +2,15 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-24 — Stop the in-flight agent turn + setup streams progress
+
+- A **Stop** affordance interrupts the running agent turn (`agent.interrupt()` → the
+  SDK emits `result`→`done`, clearing `isRunning` and any setup `busy`).
+- The on-open **Setup** card now streams its agent turn into the chat (so you can
+  watch and stop it) and is guarded: `busy` stays true until the turn finishes
+  (cleared by the `done`/`error` handler), a scaffold failure clears `busy`, and
+  it won't re-trigger while a turn is running. `verify` green (13 tests).
+
 ## 2026-06-24 — Inline text editing
 
 - **Double-click a stamped, text-only element in the preview** (in Select mode) to edit its

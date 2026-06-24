@@ -95,9 +95,11 @@ export default function ChatPanel(): React.JSX.Element {
           : `⚠️ ${event.message}`
         appendDelta(id, `\n\n${note}`)
         finish()
+        useSetup.getState().setBusy(false)
         streamingId.current = null
       } else if (event.type === 'done') {
         finish()
+        useSetup.getState().setBusy(false)
         streamingId.current = null
       }
     })
@@ -147,13 +149,14 @@ export default function ChatPanel(): React.JSX.Element {
   // Accept the setup offer: write the stamping plugin (deterministic), then hand
   // the wiring + component typing to the agent.
   const acceptSetup = async (): Promise<void> => {
-    if (!projectRoot || setup.busy) return
+    if (!projectRoot || setup.busy || isRunning) return
     setup.setBusy(true)
     setup.setStatus('Adding the source-stamping plugin…')
     try {
       const res = await window.api.setup.scaffold(projectRoot)
       if (!res.ok) {
         setup.setStatus(`Setup failed: ${res.error ?? 'unknown error'}`)
+        setup.setBusy(false)
         return
       }
       const where =
@@ -162,6 +165,10 @@ export default function ChatPanel(): React.JSX.Element {
           : res.framework === 'next'
             ? 'the Babel/SWC config'
             : 'the dev build config'
+      // Stream the agent turn into the chat (and flip `isRunning`) so the user can
+      // watch progress and stop it. `busy` stays true until the turn finishes —
+      // cleared by the `done`/`error` handler — so the card can't be re-triggered.
+      streamingId.current = startAssistant()
       void window.api.agent.send(
         `dsgn added a dev-only Babel plugin "${res.pluginFile}" that stamps data-dsgn-source ` +
           `on JSX elements. Please (1) wire ${res.pluginFile} into ${where} for development only ` +
@@ -173,7 +180,6 @@ export default function ChatPanel(): React.JSX.Element {
       )
     } catch {
       setup.setStatus('Setup could not be started.')
-    } finally {
       setup.setBusy(false)
     }
   }
@@ -210,6 +216,12 @@ export default function ChatPanel(): React.JSX.Element {
     streamingId.current = startAssistant()
     setInput('')
     void window.api.agent.send(text)
+  }
+
+  // Interrupt the in-flight turn. The SDK emits a `result` → `done`, which clears
+  // `isRunning` (and any setup `busy`) via the agent-event handler.
+  const stop = (): void => {
+    void window.api.agent.interrupt()
   }
 
   const onModelChange = (value: string): void => {
@@ -303,6 +315,7 @@ export default function ChatPanel(): React.JSX.Element {
             busy={setup.busy}
             status={setup.status}
             onAccept={() => void acceptSetup()}
+            onStop={stop}
             onDismiss={() => {
               setup.setDismissed(true)
               setup.setNeeded(false)
@@ -420,15 +433,23 @@ export default function ChatPanel(): React.JSX.Element {
                 </option>
               ))}
             </select>
-            <button
-              className="composer__send"
-              onClick={send}
-              disabled={!input.trim() || isRunning}
-              aria-label="Send message"
-            >
-              {isRunning ? (
-                <span className="composer__spinner" />
-              ) : (
+            {isRunning ? (
+              <button
+                className="composer__send composer__send--stop"
+                onClick={stop}
+                aria-label="Stop"
+                title="Stop"
+              >
+                <span className="composer__spinner" aria-hidden="true" />
+                <span className="composer__stop-icon" aria-hidden="true" />
+              </button>
+            ) : (
+              <button
+                className="composer__send"
+                onClick={send}
+                disabled={!input.trim()}
+                aria-label="Send message"
+              >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <path
                     d="M8 13V3M8 3L3.5 7.5M8 3l4.5 4.5"
@@ -438,8 +459,8 @@ export default function ChatPanel(): React.JSX.Element {
                     strokeLinejoin="round"
                   />
                 </svg>
-              )}
-            </button>
+              </button>
+            )}
           </div>
         </div>
       </div>

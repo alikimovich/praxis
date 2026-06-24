@@ -812,6 +812,25 @@ body.is-resizing {
   cursor: default;
 }
 
+/* While the setup turn runs, the primary button becomes a Stop button. */
+.setup__yes--stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.setup__spinner {
+  width: 11px;
+  height: 11px;
+  border: 2px solid rgba(37, 99, 235, 0.25);
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: composer-spin 0.7s linear infinite;
+}
+
 /* Design-token palette */
 .tokens {
   display: flex;
@@ -1221,6 +1240,7 @@ body.is-resizing {
 
 /* Circular send button, pinned to the right of the control bar. */
 .composer__send {
+  position: relative;
   flex: 0 0 auto;
   margin-left: auto;
   display: inline-flex;
@@ -1245,6 +1265,7 @@ body.is-resizing {
   cursor: default;
 }
 
+/* Running: a spinning ring around a stop square — reads as "working, click to stop". */
 .composer__spinner {
   width: 13px;
   height: 13px;
@@ -1252,6 +1273,19 @@ body.is-resizing {
   border-top-color: #fff;
   border-radius: 50%;
   animation: composer-spin 0.7s linear infinite;
+}
+
+.composer__send--stop .composer__spinner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+}
+
+.composer__stop-icon {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: #fff;
 }
 
 @keyframes composer-spin {
