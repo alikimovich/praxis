@@ -79,6 +79,33 @@ try {
     throw new Error('auth banner should mention claude setup-token')
   }
   await win.screenshot({ path: join(artifacts, '08-auth-onboarding.png') })
+  await win.evaluate(() => window.__dsgnSession.getState().setAuthNeeded(false))
+
+  // Permission cards: seed a pending tool prompt, confirm it renders, approve it.
+  await win.evaluate(() => {
+    window.__dsgnPermissions.getState().addRequest({
+      id: 'tu_test',
+      toolName: 'Bash',
+      title: 'Allow Bash?',
+      displayName: 'Run command',
+      detail: 'npm run build'
+    })
+  })
+  await win.waitForSelector('.perm', { timeout: 5000 })
+  const permTitle = (await win.textContent('.perm__title'))?.trim()
+  if (permTitle !== 'Allow Bash?') throw new Error(`unexpected permission title: ${permTitle}`)
+  await win.screenshot({ path: join(artifacts, '09-permission-card.png') })
+  await win.click('.perm__allow')
+  await win.waitForFunction(() => !document.querySelector('.perm'), { timeout: 5000 })
+
+  // The permission-mode selector exposes Auto (bypassPermissions) via the SDK.
+  const modes = await win.$$eval('select[aria-label="Permission mode"] option', (os) =>
+    os.map((o) => o.value)
+  )
+  const expected = ['default', 'acceptEdits', 'bypassPermissions']
+  if (JSON.stringify(modes) !== JSON.stringify(expected)) {
+    throw new Error(`unexpected permission modes: ${JSON.stringify(modes)}`)
+  }
 
   console.log('CHAT-RENDER OK')
 } catch (err) {

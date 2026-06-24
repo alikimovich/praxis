@@ -22,10 +22,35 @@ export interface RunningDevServer {
   pid: number
 }
 
+/**
+ * The agent's permission posture, mirroring the SDK's `PermissionMode`. The
+ * toolbar exposes the three that matter for this app:
+ * - `default` — ask (the approve/deny cards) for tools the SDK gates.
+ * - `acceptEdits` — auto-accept file edits, still ask for the rest (e.g. Bash).
+ * - `bypassPermissions` — **Auto**: approve everything via the SDK, no prompts.
+ */
+export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions'
+
+/** A pending tool-permission prompt surfaced to the user as an approve/deny card. */
+export interface PermissionRequest {
+  /** Correlates the renderer's decision back to the awaiting SDK callback. */
+  id: string
+  toolName: string
+  /** Full prompt sentence from the SDK when available (else built from tool + input). */
+  title: string
+  /** Short noun phrase, e.g. "Edit file" — good for compact labels. */
+  displayName?: string
+  /** A single-line summary of the most relevant input (path / command / pattern). */
+  detail?: string
+}
+
 export type AgentEvent =
   | { type: 'delta'; text: string }
   | { type: 'status'; text: string }
   | { type: 'commands'; commands: string[] }
+  | { type: 'permission-request'; request: PermissionRequest }
+  /** A pending request was resolved without the user (abort/session change) — dismiss its card. */
+  | { type: 'permission-resolved'; id: string }
   | { type: 'done' }
   | { type: 'error'; message: string }
 
@@ -35,6 +60,8 @@ export interface AgentOptions {
   model?: string
   /** Reasoning effort ('low' | 'medium' | 'high') or undefined for the model default. */
   effort?: string
+  /** Permission posture; defaults to 'default' (ask). */
+  permissionMode?: PermissionMode
 }
 
 export interface Bounds {
@@ -88,6 +115,10 @@ export interface DsgnApi {
     openProject: (root: string, options?: AgentOptions) => Promise<void>
     send: (text: string) => Promise<void>
     setModel: (model: string) => Promise<void>
+    /** Change the permission posture live (drives the SDK's setPermissionMode). */
+    setPermissionMode: (mode: PermissionMode) => Promise<void>
+    /** Answer a pending approve/deny card. */
+    respondPermission: (id: string, behavior: 'allow' | 'deny') => Promise<void>
     interrupt: () => Promise<void>
     onEvent: (cb: (event: AgentEvent) => void) => () => void
   }

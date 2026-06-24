@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import ChatPanel from './components/ChatPanel'
 import PreviewPane from './components/PreviewPane'
-import { isAuthError, toAgentOptions, useChat, useSelection, useSession } from './store'
+import {
+  isAuthError,
+  toAgentOptions,
+  useChat,
+  usePermissions,
+  useSelection,
+  useSession
+} from './store'
 
 const MIN_CHAT_WIDTH = 320
 const MAX_CHAT_WIDTH = 760
@@ -40,6 +47,10 @@ export default function App(): React.JSX.Element {
           session.setAuthNeeded(true)
         } else if (event.type === 'delta' || event.type === 'done') {
           if (session.authNeeded) session.setAuthNeeded(false)
+        } else if (event.type === 'permission-request') {
+          usePermissions.getState().addRequest(event.request)
+        } else if (event.type === 'permission-resolved') {
+          usePermissions.getState().removeRequest(event.id)
         }
       }),
     []
@@ -116,7 +127,10 @@ export default function App(): React.JSX.Element {
       }
       const { url } = await window.api.devServer.start({ root, command })
       await window.api.preview.load(url)
-      await window.api.agent.openProject(root, toAgentOptions(useSession.getState()))
+      await window.api.agent.openProject(root, {
+        ...toAgentOptions(useSession.getState()),
+        permissionMode: usePermissions.getState().mode
+      })
       // A fresh session — clear any turn left "running" from a previous project.
       useChat.getState().finish()
       setStatus({ kind: 'running', name, url })
