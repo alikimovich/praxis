@@ -484,7 +484,83 @@ export function agentPromptFor(edit: PropEdit): string {
   return `In ${edit.source}, set the \`${edit.name}\` prop of the selected element to ${val}.`
 }
 
+export function textAgentPrompt(source: string, text: string): string {
+  return `In ${source}, change the selected element's text content to “${text.slice(0, 200)}”.`
+}
+
+/**
+ * Inline text edit: rewrite a stamped element's text content in source. Only
+ * elements whose children are plain text (a single JSXText, or empty) and whose
+ * new text is splice-safe are applied directly — mixed/expression content,
+ * self-closing elements, or `<{}>`-bearing text fall back to the agent.
+ */
+async function applyTextEdit(
+  root: string,
+  edit: { source: string; text: string }
+): Promise<PropEditResult> {
+  const loc = resolveSource(root, edit.source)
+  if (!loc) return { applied: false, error: 'Could not resolve the source location.' }
+  const newText = edit.text.replace(/\s+/g, ' ').trim()
+  // Svelte text-splicing isn't implemented yet — let the agent do it.
+  if (loc.file.endsWith('.svelte')) {
+    return { applied: false, needsAgent: true, agentPrompt: textAgentPrompt(edit.source, newText) }
+  }
+  let code: string
+  try {
+    code = await readFile(loc.file, 'utf8')
+  } catch {
+    return { applied: false, error: 'Could not read the source file.' }
+  }
+  const found = await findElementAtLine(code, loc.line, loc.column)
+  const agentFallback = (): PropEditResult => ({
+    applied: false,
+    needsAgent: true,
+    agentPrompt: textAgentPrompt(edit.source, newText)
+  })
+  if (!found) return agentFallback()
+
+  const elements: BabelNode[] = []
+  collectNodes(found.ast, 'JSXElement', elements)
+  const element = elements.find(
+    (e) => (e.openingElement as BabelNode | undefined)?.start === found.opening.start
+  )
+  if (!element || (found.opening as { selfClosing?: boolean }).selfClosing) return agentFallback()
+
+  const children = (element.children as BabelNode[] | undefined) ?? []
+  // Editable only when there are no element/expression children, and the new
+  // text can't break out of a JSXText node.
+  if (!children.every((c) => c.type === 'JSXText') || !/^[^<>{}]*$/.test(newText)) {
+    return agentFallback()
+  }
+
+  let next: string
+  if (children.length === 0) {
+    const insertAt = (found.opening as BabelNode).end
+    next = code.slice(0, insertAt) + newText + code.slice(insertAt)
+  } else {
+    const start = children[0].start
+    const end = children[children.length - 1].end
+    // Derive surrounding whitespace from the RAW source (not the entity-decoded
+    // value, which would rewrite `&nbsp;` etc. as literal bytes). For an
+    // all-whitespace child, lead and trail would overlap — zero them.
+    const raw = code.slice(start, end)
+    const allWs = /^\s*$/.test(raw)
+    const lead = allWs ? '' : (raw.match(/^\s*/)?.[0] ?? '')
+    const trail = allWs ? '' : (raw.match(/\s*$/)?.[0] ?? '')
+    next = code.slice(0, start) + lead + newText + trail + code.slice(end)
+  }
+  try {
+    await writeFile(loc.file, next, 'utf8')
+  } catch {
+    return { applied: false, error: 'Could not write the source file.' }
+  }
+  return { applied: true }
+}
+
 export function registerPropsIpc(): void {
   ipcMain.handle('props:inspect', (_e, root: string, source: string) => inspectProps(root, source))
   ipcMain.handle('props:apply', (_e, root: string, edit: PropEdit) => applyPropEdit(root, edit))
+  ipcMain.handle('text:apply', (_e, root: string, edit: { source: string; text: string }) =>
+    applyTextEdit(root, edit)
+  )
 }

@@ -28,11 +28,12 @@
     "test:annotations": "electron-vite build && node test/annotations.mjs",
     "test:tokens": "electron-vite build && node test/tokens.mjs",
     "test:gating": "electron-vite build && node test/ready-gating.mjs",
+    "test:text": "electron-vite build && node test/text-edit.mjs",
     "test:prbody": "bun test/pr-body.mjs",
     "test:devnet": "bun test/devserver-net.mjs",
     "test:agent": "electron-vite build && node test/agent-e2e.mjs",
-    "test": "bun test/pr-body.mjs && bun test/devserver-net.mjs && electron-vite build && node test/smoke.mjs && node test/open-preview.mjs && node test/chat-render.mjs && node test/select-element.mjs && node test/prop-edit.mjs && node test/prop-edit-svelte.mjs && node test/annotations.mjs && node test/tokens.mjs && node test/ready-gating.mjs",
-    "verify": "bun test/pr-body.mjs && bun test/devserver-net.mjs && electron-vite build && node test/smoke.mjs && node test/open-preview.mjs && node test/chat-render.mjs && node test/select-element.mjs && node test/prop-edit.mjs && node test/prop-edit-svelte.mjs && node test/annotations.mjs && node test/tokens.mjs && node test/ready-gating.mjs && node test/agent-e2e.mjs"
+    "test": "bun test/pr-body.mjs && bun test/devserver-net.mjs && electron-vite build && node test/smoke.mjs && node test/open-preview.mjs && node test/chat-render.mjs && node test/select-element.mjs && node test/prop-edit.mjs && node test/prop-edit-svelte.mjs && node test/annotations.mjs && node test/tokens.mjs && node test/ready-gating.mjs && node test/text-edit.mjs",
+    "verify": "bun test/pr-body.mjs && bun test/devserver-net.mjs && electron-vite build && node test/smoke.mjs && node test/open-preview.mjs && node test/chat-render.mjs && node test/select-element.mjs && node test/prop-edit.mjs && node test/prop-edit-svelte.mjs && node test/annotations.mjs && node test/tokens.mjs && node test/ready-gating.mjs && node test/text-edit.mjs && node test/agent-e2e.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.186",

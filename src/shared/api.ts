@@ -217,6 +217,8 @@ export interface DsgnApi {
     setPanelInset: (inset: number) => void
     /** Fires after the previewed app loads, reporting source-stamp coverage. */
     onReadiness: (cb: (info: { stamps: number }) => void) => () => void
+    /** Fires when the user commits an inline text edit in the preview. */
+    onTextEdit: (cb: (edit: { source: string; text: string }) => void) => () => void
   }
   project: {
     pick: () => Promise<string | null>
@@ -236,6 +238,10 @@ export interface DsgnApi {
     inspect: (root: string, source: string) => Promise<PropInspection | null>
     /** Apply a prop edit; may report it needs the agent for a complex change. */
     apply: (root: string, edit: PropEdit) => Promise<PropEditResult>
+  }
+  text: {
+    /** Rewrite the element's text content in source; agent-fallback for complex content. */
+    apply: (root: string, edit: { source: string; text: string }) => Promise<PropEditResult>
   }
   tokens: {
     /** Detect design tokens in the repo (manifest → tailwind → CSS vars). */

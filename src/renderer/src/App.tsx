@@ -113,6 +113,27 @@ export default function App(): React.JSX.Element {
     []
   )
 
+  // Inline text edits committed in the preview → write to source (or hand
+  // expression/mixed content to the agent).
+  useEffect(
+    () =>
+      window.api.preview.onTextEdit((edit) => {
+        const root = useSession.getState().projectRoot
+        if (!root) return
+        const toAgent = (): void =>
+          useComposer.getState().setSeed(`In ${edit.source}, set the element's text to “${edit.text}”.`)
+        // A non-literal change (needsAgent) OR a write failure both route to the
+        // agent so the user's edit is never silently dropped.
+        void window.api.text
+          .apply(root, edit)
+          .then((res) => {
+            if (!res.applied) toAgent()
+          })
+          .catch(toAgent)
+      }),
+    []
+  )
+
   // v3: clicking an annotation pin in the preview focuses its note.
   useEffect(
     () => window.api.annotations.onPinClick((id) => useAnnotations.getState().setFocused(id)),

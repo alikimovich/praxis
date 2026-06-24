@@ -20,3 +20,7 @@ export function Demo(): JSX.Element {
 export function Inline(): JSX.Element {
   return <p className="row">Status <Badge variant="warn" label="Hi" /></p>
 }
+
+export function Heading(): JSX.Element {
+  return <h1 className="title">Welcome</h1>
+}
