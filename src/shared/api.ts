@@ -132,6 +132,33 @@ export interface PropEditResult {
   error?: string
 }
 
+/** A reviewer note pinned to an element, stored in the repo's .dsgn sidecar. */
+export interface Annotation {
+  id: string
+  /** The element's data-dsgn-source, if any. */
+  source: string | null
+  selector: string
+  tag: string
+  /** The reviewer's note. */
+  text: string
+  createdAt: string
+}
+
+/** What the renderer supplies to create an annotation (id/createdAt assigned in main). */
+export interface AnnotationInput {
+  source: string | null
+  selector: string
+  tag: string
+  text: string
+}
+
+export interface PublishResult {
+  ok: boolean
+  /** The created PR URL on success. */
+  url?: string
+  error?: string
+}
+
 /** The surface exposed on `window.api` by the preload bridge. */
 export interface DsgnApi {
   preview: {
@@ -146,6 +173,8 @@ export interface DsgnApi {
     onElementPicked: (cb: (el: SelectedElement) => void) => () => void
     /** Fires when select mode is cancelled from inside the preview (Escape). */
     onSelectCancelled: (cb: () => void) => () => void
+    /** Render annotation pins in the preview, located by CSS selector. */
+    setAnnotations: (pins: { id: string; selector: string }[]) => void
   }
   project: {
     pick: () => Promise<string | null>
@@ -161,6 +190,17 @@ export interface DsgnApi {
     inspect: (root: string, source: string) => Promise<PropInspection | null>
     /** Apply a prop edit; may report it needs the agent for a complex change. */
     apply: (root: string, edit: PropEdit) => Promise<PropEditResult>
+  }
+  annotations: {
+    list: (root: string) => Promise<Annotation[]>
+    add: (root: string, input: AnnotationInput) => Promise<Annotation[]>
+    remove: (root: string, id: string) => Promise<Annotation[]>
+    /** Fires when the user clicks an annotation pin in the preview. */
+    onPinClick: (cb: (id: string) => void) => () => void
+  }
+  publish: {
+    /** Create a branch + GitHub PR with the annotations; returns the PR URL. */
+    toPr: (root: string, opts: { title: string }) => Promise<PublishResult>
   }
   agent: {
     openProject: (root: string, options?: AgentOptions) => Promise<void>

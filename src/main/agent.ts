@@ -137,6 +137,13 @@ async function startSession(
       // they don't — that's the "Auto" mode). We surface an approve/deny card and
       // await the user's decision, denying cleanly if the session/turn is torn down.
       canUseTool: async (toolName, toolInput, opts) => {
+        // The .dsgn/ sidecar (annotations) is owned by the reviewer UI — never
+        // let the agent write it via an edit tool OR a Bash command. (Note: under
+        // 'Auto'/bypassPermissions the SDK skips canUseTool entirely, so this only
+        // protects the Ask/acceptEdits modes.)
+        if (touchesSidecar(toolName, toolInput)) {
+          return { behavior: 'deny', message: 'The .dsgn/ sidecar is managed by dsgn, not the agent.' }
+        }
         if (AUTO_ALLOW_TOOLS.has(toolName)) {
           emit({ type: 'status', text: describeTool(toolName, toolInput) })
           return { behavior: 'allow', updatedInput: toolInput }
@@ -244,6 +251,21 @@ function textDelta(msg: unknown): string | null {
 function describeTool(name: string, input: unknown): string {
   const detail = toolDetail(name, input)
   return detail ? `${name} · ${detail}` : name
+}
+
+const SIDECAR_RE = /(^|[\s/\\"'])\.dsgn([/\\]|$)/
+
+/** Does this tool target the .dsgn/ sidecar (edit-tool path or a Bash command)? */
+function touchesSidecar(toolName: string, input: unknown): boolean {
+  const i = input as Record<string, unknown>
+  if (EDIT_TOOLS.has(toolName)) {
+    const path = i?.file_path ?? i?.path
+    if (typeof path === 'string' && SIDECAR_RE.test(path)) return true
+  }
+  if (toolName === 'Bash' && typeof i?.command === 'string' && SIDECAR_RE.test(i.command)) {
+    return true
+  }
+  return false
 }
 
 /** The single most relevant input field for a tool, trimmed to one short line. */

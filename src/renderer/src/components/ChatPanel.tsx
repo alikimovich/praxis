@@ -3,6 +3,7 @@ import {
   DEFAULT_MODEL,
   describeSelectionForPrompt,
   isAuthError,
+  useAnnotations,
   useChat,
   usePermissions,
   useSelection,
@@ -11,6 +12,7 @@ import {
 import type { PermissionMode } from '../../../shared/api'
 import Inspector from './Inspector'
 import Markdown from './Markdown'
+import NotesPanel from './NotesPanel'
 import PermissionCards from './PermissionCards'
 
 const MODELS = [
@@ -39,6 +41,9 @@ export default function ChatPanel(): React.JSX.Element {
   const { model, effort, slashCommands, projectRoot, setModel, setEffort } = useSession()
   const { selected, setSelected } = useSelection()
   const { mode: permissionMode, pending, setMode, removeRequest } = usePermissions()
+  const { list: notes, focusedId, setList: setNotes } = useAnnotations()
+  const [publishing, setPublishing] = useState(false)
+  const [publishMsg, setPublishMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [input, setInput] = useState('')
   const [menuActive, setMenuActive] = useState(0)
   const [menuDismissed, setMenuDismissed] = useState(false)
@@ -145,6 +150,38 @@ export default function ChatPanel(): React.JSX.Element {
     void window.api.agent.respondPermission(id, behavior)
   }
 
+  const addNote = async (text: string): Promise<void> => {
+    if (!projectRoot || !selected) return
+    const list = await window.api.annotations.add(projectRoot, {
+      source: selected.source,
+      selector: selected.selector,
+      tag: selected.tag,
+      text
+    })
+    setNotes(list)
+  }
+
+  const removeNote = async (id: string): Promise<void> => {
+    if (!projectRoot) return
+    setNotes(await window.api.annotations.remove(projectRoot, id))
+  }
+
+  const publish = async (): Promise<void> => {
+    if (!projectRoot || publishing) return
+    setPublishing(true)
+    setPublishMsg(null)
+    try {
+      const res = await window.api.publish.toPr(projectRoot, { title: 'dsgn: design handoff' })
+      setPublishMsg(
+        res.ok
+          ? { ok: true, text: res.url ? `Opened ${res.url}` : 'PR opened.' }
+          : { ok: false, text: res.error ?? 'Publish failed.' }
+      )
+    } finally {
+      setPublishing(false)
+    }
+  }
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     if (menuOpen) {
       if (e.key === 'ArrowDown') {
@@ -209,8 +246,17 @@ export default function ChatPanel(): React.JSX.Element {
             onAsk={askAboutSelection}
             onClear={() => setSelected(null)}
             onSeedPrompt={seedPrompt}
+            onAddNote={(text) => void addNote(text)}
           />
         )}
+        <NotesPanel
+          notes={notes}
+          focusedId={focusedId}
+          publishing={publishing}
+          publishMsg={publishMsg}
+          onRemove={(id) => void removeNote(id)}
+          onPublish={() => void publish()}
+        />
         <div className="composer__toolbar">
           <select
             className="select"

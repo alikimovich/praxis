@@ -595,6 +595,165 @@ body.is-resizing {
   color: var(--text);
 }
 
+/* Inspector note composer */
+.inspector__note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inspector__noteinput {
+  resize: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.inspector__noteinput:focus {
+  border-color: #d0d0d0;
+}
+
+.inspector__notesave {
+  align-self: flex-end;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inspector__notesave:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Handoff notes panel */
+.notes {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  padding: 8px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.notes__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notes__title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.notes__publish {
+  margin-left: auto;
+  border: 1px solid #16a34a;
+  background: #16a34a;
+  color: #fff;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.notes__publish:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.notes__msg {
+  font-size: 11.5px;
+  word-break: break-all;
+}
+
+.notes__msg--ok {
+  color: #15803d;
+}
+
+.notes__msg--err {
+  color: #b42318;
+  white-space: pre-wrap;
+}
+
+.notes__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.notes__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 5px 6px;
+  border-radius: 7px;
+}
+
+.notes__item.is-focused {
+  background: #fef3c7;
+}
+
+.notes__num {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #f59e0b;
+  color: #fff;
+  font: 700 9px/1 ui-monospace, Menlo, monospace;
+}
+
+.notes__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.notes__where {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notes__text {
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.notes__remove {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+}
+
 /* Permission approve/deny cards (above the composer while the agent waits). */
 .perms {
   display: flex;

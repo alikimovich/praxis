@@ -20,6 +20,8 @@ import type { SelectedElement } from '../shared/api'
 const SET_MODE = 'dsgn:preview:set-select-mode'
 const PICKED = 'dsgn:preview:element-picked'
 const CANCELLED = 'dsgn:preview:select-cancelled'
+const SET_PINS = 'dsgn:preview:set-annotations'
+const PIN_CLICK = 'dsgn:preview:pin-click'
 
 /** Computed styles worth surfacing in the inspector (curated, not the whole CSSOM). */
 const TRACKED_STYLES = [
@@ -39,8 +41,10 @@ let active = false
 let overlayHost: HTMLDivElement | null = null
 let overlayBox: HTMLDivElement | null = null
 let overlayLabel: HTMLDivElement | null = null
+let pinsLayer: HTMLDivElement | null = null
+let annotationPins: { id: string; selector: string }[] = []
 
-/** Lazily build the shadow-DOM overlay (a single highlight box + a label chip). */
+/** Lazily build the shadow-DOM overlay (highlight box + label chip + pins layer). */
 function ensureOverlay(): void {
   if (overlayHost) return
   const host = document.createElement('div')
@@ -61,11 +65,64 @@ function ensureOverlay(): void {
     'color:#fff;background:#2563eb;padding:2px 6px;border-radius:4px;white-space:nowrap;' +
     'transform:translateY(-100%);display:none;'
 
-  shadow.append(box, label)
+  const pins = document.createElement('div')
+  pins.style.cssText = 'position:fixed;inset:0;pointer-events:none;'
+
+  shadow.append(box, label, pins)
   document.documentElement.appendChild(host)
   overlayHost = host
   overlayBox = box
   overlayLabel = label
+  pinsLayer = pins
+}
+
+// Dot nodes are built once per pin (on SET_PINS) and only repositioned on
+// scroll/resize/tick — no per-frame teardown or listener churn.
+const pinDots = new Map<string, { selector: string; dot: HTMLDivElement }>()
+
+/** Rebuild the pin nodes from the current annotation list. */
+function buildPins(): void {
+  ensureOverlay()
+  if (!pinsLayer) return
+  pinsLayer.textContent = ''
+  pinDots.clear()
+  annotationPins.forEach((pin, i) => {
+    const dot = document.createElement('div')
+    dot.style.cssText =
+      'position:fixed;pointer-events:auto;cursor:pointer;width:18px;height:18px;' +
+      'display:none;align-items:center;justify-content:center;border-radius:50%;' +
+      'background:#f59e0b;color:#fff;font:700 10px/1 ui-monospace,Menlo,sans-serif;' +
+      'box-shadow:0 1px 3px rgba(0,0,0,0.3);transform:translate(-50%,-50%);'
+    dot.textContent = String(i + 1)
+    dot.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      ipcRenderer.send(PIN_CLICK, pin.id)
+    })
+    pinsLayer!.appendChild(dot)
+    pinDots.set(pin.id, { selector: pin.selector, dot })
+  })
+  positionPins()
+}
+
+/** Move each existing pin dot to its element's current position (or hide it). */
+function positionPins(): void {
+  for (const { selector, dot } of pinDots.values()) {
+    let el: Element | null = null
+    try {
+      el = document.querySelector(selector)
+    } catch {
+      el = null
+    }
+    if (!el || isOverlay(el)) {
+      dot.style.display = 'none'
+      continue
+    }
+    const r = el.getBoundingClientRect()
+    dot.style.display = 'flex'
+    dot.style.left = `${Math.max(r.right, 10)}px`
+    dot.style.top = `${Math.max(r.top, 10)}px`
+  }
 }
 
 function hideOverlay(): void {
@@ -211,6 +268,17 @@ function setActive(next: boolean): void {
 window.addEventListener('mousemove', onMove, true)
 window.addEventListener('click', onClick, true)
 window.addEventListener('keydown', onKey, true)
-window.addEventListener('scroll', () => active && hideOverlay(), true)
+window.addEventListener('scroll', () => {
+  if (active) hideOverlay()
+  if (pinDots.size) positionPins()
+}, true)
+window.addEventListener('resize', () => pinDots.size && positionPins())
+// Pins track layout changes (hot-reload, async content) on a light cadence.
+const pinTimer = setInterval(() => pinDots.size && positionPins(), 600)
+window.addEventListener('pagehide', () => clearInterval(pinTimer))
 
 ipcRenderer.on(SET_MODE, (_e, next: boolean) => setActive(next))
+ipcRenderer.on(SET_PINS, (_e, pins: { id: string; selector: string }[]) => {
+  annotationPins = Array.isArray(pins) ? pins : []
+  buildPins()
+})
