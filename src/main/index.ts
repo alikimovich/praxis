@@ -4,6 +4,7 @@ import type { SelectedElement } from '../shared/api'
 import { registerDevServerIpc } from './devserver'
 import { registerAgentIpc } from './agent'
 import { registerPropsIpc } from './props'
+import { registerAnnotationsIpc } from './annotations'
 
 let mainWindow: BrowserWindow | null = null
 let previewView: WebContentsView | null = null
@@ -17,6 +18,11 @@ let selectModeActive = false
 const PREVIEW_SET_MODE = 'dsgn:preview:set-select-mode'
 const PREVIEW_PICKED = 'dsgn:preview:element-picked'
 const PREVIEW_CANCELLED = 'dsgn:preview:select-cancelled'
+const PREVIEW_SET_PINS = 'dsgn:preview:set-annotations'
+const PREVIEW_PIN_CLICK = 'dsgn:preview:pin-click'
+
+// Latest annotation pins, re-pushed to the preview after each navigation.
+let annotationPins: { id: string; selector: string }[] = []
 
 // Chromium error codes worth retrying — the dev server is up but not yet serving.
 const TRANSIENT_LOAD_ERRORS = new Set([-324, -102, -101, -105, -106, -109])
@@ -92,6 +98,7 @@ function ensurePreviewView(): WebContentsView {
     if (previewUrl && wc.getURL() === previewUrl) {
       previewRetries = 0
       if (selectModeActive) wc.send(PREVIEW_SET_MODE, true)
+      wc.send(PREVIEW_SET_PINS, annotationPins)
     }
   })
 
@@ -179,6 +186,16 @@ function registerPreviewIpc(): void {
     mainWindow?.webContents.send('preview:select-cancelled')
   })
 
+  // v3 annotation pins: renderer pushes the list → preview; clicks come back.
+  ipcMain.on('preview:set-annotations', (_e, pins: { id: string; selector: string }[]) => {
+    annotationPins = Array.isArray(pins) ? pins : []
+    previewView?.webContents.send(PREVIEW_SET_PINS, annotationPins)
+  })
+  ipcMain.on(PREVIEW_PIN_CLICK, (e, id: string) => {
+    if (e.sender !== previewView?.webContents) return
+    mainWindow?.webContents.send('annotations:pin-click', id)
+  })
+
   ipcMain.handle('project:pick', async (): Promise<string | null> => {
     if (!mainWindow) return null
     const res = await dialog.showOpenDialog(mainWindow, {
@@ -195,6 +212,7 @@ app.whenReady().then(() => {
   registerDevServerIpc(() => mainWindow)
   registerAgentIpc(() => mainWindow)
   registerPropsIpc()
+  registerAnnotationsIpc()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

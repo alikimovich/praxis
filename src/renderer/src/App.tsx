@@ -4,6 +4,7 @@ import PreviewPane from './components/PreviewPane'
 import {
   isAuthError,
   toAgentOptions,
+  useAnnotations,
   useChat,
   usePermissions,
   useSelection,
@@ -70,6 +71,18 @@ export default function App(): React.JSX.Element {
     }
   }, [setSelected, setSelectMode])
 
+  // v3: clicking an annotation pin in the preview focuses its note.
+  useEffect(
+    () => window.api.annotations.onPinClick((id) => useAnnotations.getState().setFocused(id)),
+    []
+  )
+
+  // Keep the preview's pins in sync with the notes.
+  const notes = useAnnotations((s) => s.list)
+  useEffect(() => {
+    window.api.preview.setAnnotations(notes.map((n) => ({ id: n.id, selector: n.selector })))
+  }, [notes])
+
   // Drag-to-resize the split. The native preview is hidden while dragging.
   useEffect(() => {
     const onMove = (e: MouseEvent): void => {
@@ -111,6 +124,8 @@ export default function App(): React.JSX.Element {
     setSelected(null)
     usePermissions.getState().clearPending()
     useSession.getState().setProjectRoot(null)
+    useAnnotations.getState().setList([])
+    useAnnotations.getState().setFocused(null)
     void window.api.preview.setSelectMode(false)
     try {
       setLog('')
@@ -135,6 +150,8 @@ export default function App(): React.JSX.Element {
         permissionMode: usePermissions.getState().mode
       })
       useSession.getState().setProjectRoot(root)
+      // Load this repo's existing handoff notes (renders pins via the effect above).
+      useAnnotations.getState().setList(await window.api.annotations.list(root))
       // A fresh session — clear any turn left "running" from a previous project.
       useChat.getState().finish()
       setStatus({ kind: 'running', name, url })
@@ -170,6 +187,8 @@ export default function App(): React.JSX.Element {
     setSelectMode(false)
     setSelected(null)
     useSession.getState().setProjectRoot(null)
+    useAnnotations.getState().setList([])
+    useAnnotations.getState().setFocused(null)
     void window.api.preview.setSelectMode(false)
     await window.api.devServer.stop()
     await window.api.preview.reset()

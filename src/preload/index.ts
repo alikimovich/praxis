@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type {
   AgentEvent,
   AgentOptions,
+  Annotation,
+  AnnotationInput,
   Bounds,
   DetectedProject,
   DsgnApi,
@@ -9,6 +11,7 @@ import type {
   PropEdit,
   PropEditResult,
   PropInspection,
+  PublishResult,
   RunningDevServer,
   SelectedElement
 } from '../shared/api'
@@ -30,7 +33,9 @@ const api: DsgnApi = {
       const listener = (): void => cb()
       ipcRenderer.on('preview:select-cancelled', listener)
       return () => ipcRenderer.removeListener('preview:select-cancelled', listener)
-    }
+    },
+    setAnnotations: (pins: { id: string; selector: string }[]): void =>
+      ipcRenderer.send('preview:set-annotations', pins)
   },
   project: {
     pick: (): Promise<string | null> => ipcRenderer.invoke('project:pick'),
@@ -51,6 +56,22 @@ const api: DsgnApi = {
       ipcRenderer.invoke('props:inspect', root, source),
     apply: (root: string, edit: PropEdit): Promise<PropEditResult> =>
       ipcRenderer.invoke('props:apply', root, edit)
+  },
+  annotations: {
+    list: (root: string): Promise<Annotation[]> => ipcRenderer.invoke('annotations:list', root),
+    add: (root: string, input: AnnotationInput): Promise<Annotation[]> =>
+      ipcRenderer.invoke('annotations:add', root, input),
+    remove: (root: string, id: string): Promise<Annotation[]> =>
+      ipcRenderer.invoke('annotations:remove', root, id),
+    onPinClick: (cb: (id: string) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, id: string): void => cb(id)
+      ipcRenderer.on('annotations:pin-click', listener)
+      return () => ipcRenderer.removeListener('annotations:pin-click', listener)
+    }
+  },
+  publish: {
+    toPr: (root: string, opts: { title: string }): Promise<PublishResult> =>
+      ipcRenderer.invoke('publish:to-pr', root, opts)
   },
   agent: {
     openProject: (root: string, options?: AgentOptions): Promise<void> =>

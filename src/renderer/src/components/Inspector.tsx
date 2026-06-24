@@ -19,6 +19,8 @@ interface Props {
   onClear: () => void
   /** Seed an arbitrary prompt (used by the prop editor's agent fallback). */
   onSeedPrompt: (text: string) => void
+  /** Save a reviewer note pinned to this element. */
+  onAddNote: (text: string) => void
 }
 
 /**
@@ -31,9 +33,20 @@ export default function Inspector({
   root,
   onAsk,
   onClear,
-  onSeedPrompt
+  onSeedPrompt,
+  onAddNote
 }: Props): React.JSX.Element {
   const [editing, setEditing] = useState(false)
+  const [noting, setNoting] = useState(false)
+  const [note, setNote] = useState('')
+
+  const saveNote = (): void => {
+    const text = note.trim()
+    if (!text) return
+    onAddNote(text)
+    setNote('')
+    setNoting(false)
+  }
   const ident = element.id
     ? `#${element.id}`
     : element.classes[0]
@@ -73,6 +86,28 @@ export default function Inspector({
         <PropEditor root={root} source={element.source} onSeedPrompt={onSeedPrompt} />
       )}
 
+      {noting && (
+        <div className="inspector__note">
+          <textarea
+            className="inspector__noteinput"
+            placeholder="Note for the engineer…"
+            value={note}
+            rows={2}
+            autoFocus
+            onChange={(e) => setNote(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault()
+                saveNote()
+              }
+            }}
+          />
+          <button className="inspector__notesave" onClick={saveNote} disabled={!note.trim()}>
+            Save note
+          </button>
+        </div>
+      )}
+
       <div className="inspector__actions">
         {canEditProps && (
           <button
@@ -82,8 +117,16 @@ export default function Inspector({
             {editing ? 'Done' : 'Edit props'}
           </button>
         )}
+        {root && (
+          <button
+            className={`inspector__toggle ${noting ? 'is-active' : ''}`}
+            onClick={() => setNoting((n) => !n)}
+          >
+            Note
+          </button>
+        )}
         <button className="inspector__ask" onClick={onAsk}>
-          Ask dsgn to change this…
+          Ask dsgn…
         </button>
       </div>
     </div>

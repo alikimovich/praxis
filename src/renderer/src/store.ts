@@ -1,5 +1,10 @@
 import { create } from 'zustand'
-import type { PermissionMode, PermissionRequest, SelectedElement } from '../../shared/api'
+import type {
+  Annotation,
+  PermissionMode,
+  PermissionRequest,
+  SelectedElement
+} from '../../shared/api'
 
 export interface ChatMessage {
   id: string
@@ -166,6 +171,21 @@ const oneLine = (s: string, max: number): string =>
 
 const SOURCE_RE = /^[\w./@-]+:\d+(:\d+)?$/
 
+/** v3 handoff: reviewer notes pinned to elements + which one is focused. */
+interface AnnotationState {
+  list: Annotation[]
+  focusedId: string | null
+  setList: (list: Annotation[]) => void
+  setFocused: (focusedId: string | null) => void
+}
+
+export const useAnnotations = create<AnnotationState>((set) => ({
+  list: [],
+  focusedId: null,
+  setList: (list) => set({ list }),
+  setFocused: (focusedId) => set({ focusedId })
+}))
+
 /** Build the chat prompt prefix that anchors the agent to a picked element. */
 export const describeSelectionForPrompt = (el: SelectedElement): string => {
   const id = el.id ? oneLine(el.id, 64) : ''
@@ -184,9 +204,12 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
     __dsgnSession?: typeof useSession
     __dsgnSelection?: typeof useSelection
     __dsgnPermissions?: typeof usePermissions
+    __dsgnAnnotations?: typeof useAnnotations
   }
 ).__dsgnStore = useChat
 ;(window as unknown as { __dsgnSession?: typeof useSession }).__dsgnSession = useSession
 ;(window as unknown as { __dsgnSelection?: typeof useSelection }).__dsgnSelection = useSelection
 ;(window as unknown as { __dsgnPermissions?: typeof usePermissions }).__dsgnPermissions =
   usePermissions
+;(window as unknown as { __dsgnAnnotations?: typeof useAnnotations }).__dsgnAnnotations =
+  useAnnotations
