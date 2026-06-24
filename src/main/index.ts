@@ -3,6 +3,7 @@ import { join } from 'path'
 import type { SelectedElement } from '../shared/api'
 import { registerDevServerIpc } from './devserver'
 import { registerAgentIpc } from './agent'
+import { registerPropsIpc } from './props'
 
 let mainWindow: BrowserWindow | null = null
 let previewView: WebContentsView | null = null
@@ -193,6 +194,7 @@ app.whenReady().then(() => {
   registerPreviewIpc()
   registerDevServerIpc(() => mainWindow)
   registerAgentIpc(() => mainWindow)
+  registerPropsIpc()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

@@ -36,7 +36,7 @@ const PERMISSION_MODES: { value: PermissionMode; label: string }[] = [
 export default function ChatPanel(): React.JSX.Element {
   const { messages, isRunning, appendUser, startAssistant, appendDelta, appendStatus, finish } =
     useChat()
-  const { model, effort, slashCommands, setModel, setEffort } = useSession()
+  const { model, effort, slashCommands, projectRoot, setModel, setEffort } = useSession()
   const { selected, setSelected } = useSelection()
   const { mode: permissionMode, pending, setMode, removeRequest } = usePermissions()
   const [input, setInput] = useState('')
@@ -99,20 +99,24 @@ export default function ChatPanel(): React.JSX.Element {
     inputRef.current?.focus()
   }
 
-  // "Ask dsgn to change this…" — seed the composer with the element reference
-  // (and its source location) so the agent edits the right place, then close
-  // the inspector and drop the cursor at the end for the user to type the change.
-  const askAboutSelection = (): void => {
-    if (!selected) return
-    const prefix = describeSelectionForPrompt(selected)
-    setInput((cur) => (cur.trim() ? `${prefix}${cur}` : prefix))
-    setSelected(null)
+  // Seed the composer with `text` and drop the cursor at the end.
+  const seedPrompt = (text: string): void => {
+    setInput((cur) => (cur.trim() ? `${text} ${cur}` : text))
     requestAnimationFrame(() => {
       const el = inputRef.current
       if (!el) return
       el.focus()
       el.setSelectionRange(el.value.length, el.value.length)
     })
+  }
+
+  // "Ask dsgn to change this…" — seed the composer with the element reference
+  // (and its source location) so the agent edits the right place, then close
+  // the inspector and drop the cursor at the end for the user to type the change.
+  const askAboutSelection = (): void => {
+    if (!selected) return
+    seedPrompt(describeSelectionForPrompt(selected))
+    setSelected(null)
   }
 
   const send = (): void => {
@@ -201,8 +205,10 @@ export default function ChatPanel(): React.JSX.Element {
         {selected && (
           <Inspector
             element={selected}
+            root={projectRoot}
             onAsk={askAboutSelection}
             onClear={() => setSelected(null)}
+            onSeedPrompt={seedPrompt}
           />
         )}
         <div className="composer__toolbar">

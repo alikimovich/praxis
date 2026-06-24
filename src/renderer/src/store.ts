@@ -66,10 +66,13 @@ interface SessionState {
   slashCommands: string[]
   /** Set when the agent reports an auth failure — drives the onboarding banner. */
   authNeeded: boolean
+  /** Absolute path of the open project (needed to resolve prop-edit sources). */
+  projectRoot: string | null
   setModel: (model: string) => void
   setEffort: (effort: string) => void
   setSlashCommands: (commands: string[]) => void
   setAuthNeeded: (authNeeded: boolean) => void
+  setProjectRoot: (projectRoot: string | null) => void
 }
 
 export const useSession = create<SessionState>((set) => ({
@@ -77,10 +80,12 @@ export const useSession = create<SessionState>((set) => ({
   effort: DEFAULT_EFFORT,
   slashCommands: [],
   authNeeded: false,
+  projectRoot: null,
   setModel: (model) => set({ model }),
   setEffort: (effort) => set({ effort }),
   setSlashCommands: (slashCommands) => set({ slashCommands }),
-  setAuthNeeded: (authNeeded) => set({ authNeeded })
+  setAuthNeeded: (authNeeded) => set({ authNeeded }),
+  setProjectRoot: (projectRoot) => set({ projectRoot })
 }))
 
 /**

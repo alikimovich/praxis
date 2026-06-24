@@ -87,6 +87,51 @@ export interface SelectedElement {
   styles: Record<string, string>
 }
 
+export type PropKind = 'string' | 'number' | 'boolean' | 'enum' | 'other'
+
+/** One editable prop/attribute of a selected element. */
+export interface PropField {
+  name: string
+  kind: PropKind
+  /** Allowed values for `kind: 'enum'`. */
+  options?: string[]
+  /** Current literal value at the usage site, if set and literal. */
+  value?: string | number | boolean
+  /** Currently set with a non-literal expression — editing it routes to the agent. */
+  expression?: boolean
+  /** From react-docgen, when a schema was resolved. */
+  description?: string
+  required?: boolean
+  /** This prop isn't currently on the element (offered from the schema to add). */
+  fromSchema?: boolean
+}
+
+/** Result of inspecting a selected element's editable props. */
+export interface PropInspection {
+  component: string
+  /** The `path:line` we edit at (from the element's data-dsgn-source). */
+  source: string
+  fields: PropField[]
+  /** Why the schema is limited (e.g. no react-docgen match), if applicable. */
+  note?: string
+}
+
+export interface PropEdit {
+  source: string
+  name: string
+  kind: PropKind
+  value: string | number | boolean
+}
+
+export interface PropEditResult {
+  applied: boolean
+  /** When not applied directly: the change needs the agent (complex / non-literal). */
+  needsAgent?: boolean
+  /** A ready-to-send prompt describing the change, when `needsAgent`. */
+  agentPrompt?: string
+  error?: string
+}
+
 /** The surface exposed on `window.api` by the preload bridge. */
 export interface DsgnApi {
   preview: {
@@ -110,6 +155,12 @@ export interface DsgnApi {
     start: (opts: { root: string; command: string }) => Promise<RunningDevServer>
     stop: () => Promise<void>
     onLog: (cb: (line: string) => void) => () => void
+  }
+  props: {
+    /** Inspect the editable props of the element at `source` ("path:line"). */
+    inspect: (root: string, source: string) => Promise<PropInspection | null>
+    /** Apply a prop edit; may report it needs the agent for a complex change. */
+    apply: (root: string, edit: PropEdit) => Promise<PropEditResult>
   }
   agent: {
     openProject: (root: string, options?: AgentOptions) => Promise<void>

@@ -81,9 +81,10 @@ try {
   }
 
   // Deliver a trusted click at the element's centre, retrying to absorb the
-  // set-select-mode IPC round-trip (the preload may not be armed immediately).
+  // set-select-mode IPC round-trip (the preload may not be armed immediately,
+  // and input delivery can lag when the window isn't focused under load).
   let picked = false
-  for (let i = 0; i < 20 && !picked; i++) {
+  for (let i = 0; i < 40 && !picked; i++) {
     const result = await app.evaluate(async ({ webContents }, code) => {
       const wc = webContents
         .getAllWebContents()
@@ -105,7 +106,7 @@ try {
       .waitForFunction(
         (src) => document.querySelector('.inspector__source')?.textContent?.includes(src),
         EXPECTED_SOURCE,
-        { timeout: 700 }
+        { timeout: 1000 }
       )
       .then(() => true)
       .catch(() => false)

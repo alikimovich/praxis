@@ -6,6 +6,9 @@ import type {
   DetectedProject,
   DsgnApi,
   PermissionMode,
+  PropEdit,
+  PropEditResult,
+  PropInspection,
   RunningDevServer,
   SelectedElement
 } from '../shared/api'
@@ -42,6 +45,12 @@ const api: DsgnApi = {
       ipcRenderer.on('devserver:log', listener)
       return () => ipcRenderer.removeListener('devserver:log', listener)
     }
+  },
+  props: {
+    inspect: (root: string, source: string): Promise<PropInspection | null> =>
+      ipcRenderer.invoke('props:inspect', root, source),
+    apply: (root: string, edit: PropEdit): Promise<PropEditResult> =>
+      ipcRenderer.invoke('props:apply', root, edit)
   },
   agent: {
     openProject: (root: string, options?: AgentOptions): Promise<void> =>
