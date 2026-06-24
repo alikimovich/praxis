@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import type { SelectedElement } from '../../../shared/api'
+import type { SelectedElement, Token, TokenSet } from '../../../shared/api'
 import PropEditor from './PropEditor'
+import TokenPalette from './TokenPalette'
 
 /** A couple of the captured computed styles, shown as quick chips. */
 const STYLE_CHIPS: { key: string; label: string }[] = [
@@ -21,6 +22,10 @@ interface Props {
   onSeedPrompt: (text: string) => void
   /** Save a reviewer note pinned to this element; resolves false if it failed. */
   onAddNote: (text: string) => Promise<boolean>
+  /** Detected design tokens for the project (null until loaded). */
+  tokens: TokenSet | null
+  /** Apply a token to this element (seeds the chat). */
+  onPickToken: (group: string, token: Token) => void
 }
 
 /**
@@ -34,12 +39,16 @@ export default function Inspector({
   onAsk,
   onClear,
   onSeedPrompt,
-  onAddNote
+  onAddNote,
+  tokens,
+  onPickToken
 }: Props): React.JSX.Element {
   const [editing, setEditing] = useState(false)
+  const [showTokens, setShowTokens] = useState(false)
   const [noting, setNoting] = useState(false)
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
+  const hasTokens = !!tokens && tokens.groups.length > 0
 
   const saveNote = async (): Promise<void> => {
     const text = note.trim()
@@ -92,6 +101,8 @@ export default function Inspector({
         <PropEditor root={root} source={element.source} onSeedPrompt={onSeedPrompt} />
       )}
 
+      {showTokens && tokens && <TokenPalette tokenSet={tokens} onPick={onPickToken} />}
+
       {noting && (
         <div className="inspector__note">
           <textarea
@@ -125,6 +136,14 @@ export default function Inspector({
             onClick={() => setEditing((e) => !e)}
           >
             {editing ? 'Done' : 'Edit props'}
+          </button>
+        )}
+        {hasTokens && (
+          <button
+            className={`inspector__toggle ${showTokens ? 'is-active' : ''}`}
+            onClick={() => setShowTokens((s) => !s)}
+          >
+            Tokens
           </button>
         )}
         {root && (

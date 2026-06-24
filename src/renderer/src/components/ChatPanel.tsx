@@ -7,9 +7,10 @@ import {
   useChat,
   usePermissions,
   useSelection,
-  useSession
+  useSession,
+  useTokens
 } from '../store'
-import type { PermissionMode } from '../../../shared/api'
+import type { PermissionMode, Token } from '../../../shared/api'
 import Inspector from './Inspector'
 import Markdown from './Markdown'
 import NotesPanel from './NotesPanel'
@@ -42,6 +43,7 @@ export default function ChatPanel(): React.JSX.Element {
   const { selected, setSelected } = useSelection()
   const { mode: permissionMode, pending, setMode, removeRequest } = usePermissions()
   const { list: notes, focusedId, setList: setNotes } = useAnnotations()
+  const tokenSet = useTokens((s) => s.set)
   const [publishing, setPublishing] = useState(false)
   const [publishMsg, setPublishMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [input, setInput] = useState('')
@@ -119,6 +121,16 @@ export default function ChatPanel(): React.JSX.Element {
       el.focus()
       el.setSelectionRange(el.value.length, el.value.length)
     })
+  }
+
+  // Apply a design token to the selected element via the agent.
+  const pickToken = (group: string, token: Token): void => {
+    if (!selected) return
+    const ident = selected.id ? `#${selected.id}` : selected.classes[0] ? `.${selected.classes[0]}` : ''
+    seedPrompt(
+      `Apply the ${group} token \`${token.name}\` (${token.value}) to the selected ` +
+        `<${selected.tag}${ident}> element. `
+    )
   }
 
   // "Ask dsgn to change this…" — seed the composer with the element reference
@@ -258,6 +270,8 @@ export default function ChatPanel(): React.JSX.Element {
             onClear={() => setSelected(null)}
             onSeedPrompt={seedPrompt}
             onAddNote={addNote}
+            tokens={tokenSet}
+            onPickToken={pickToken}
           />
         )}
         <NotesPanel

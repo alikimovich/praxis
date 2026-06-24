@@ -595,6 +595,77 @@ body.is-resizing {
   color: var(--text);
 }
 
+/* Design-token palette */
+.tokens {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 2px 0;
+}
+
+.tokens__source {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.tokens__gname {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.tokens__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.tokens__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  padding: 3px 7px 3px 4px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  max-width: 100%;
+}
+
+.tokens__item:hover {
+  background: var(--bg-subtle);
+}
+
+.tokens__swatch {
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  flex: 0 0 auto;
+}
+
+.tokens__val {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 0 2px;
+}
+
+.tokens__tname {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 130px;
+}
+
 /* Inspector note composer */
 .inspector__note {
   display: flex;

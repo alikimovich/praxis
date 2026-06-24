@@ -159,6 +159,26 @@ export interface PublishResult {
   error?: string
 }
 
+export type TokenSource = 'manifest' | 'tailwind' | 'css' | 'none'
+
+export interface Token {
+  name: string
+  value: string
+}
+
+export interface TokenGroup {
+  name: string
+  tokens: Token[]
+}
+
+/** Design tokens detected in the opened repo (one source wins per project). */
+export interface TokenSet {
+  source: TokenSource
+  /** Human label for where they came from, e.g. ".dsgn/tokens.json". */
+  origin?: string
+  groups: TokenGroup[]
+}
+
 /** The surface exposed on `window.api` by the preload bridge. */
 export interface DsgnApi {
   preview: {
@@ -190,6 +210,10 @@ export interface DsgnApi {
     inspect: (root: string, source: string) => Promise<PropInspection | null>
     /** Apply a prop edit; may report it needs the agent for a complex change. */
     apply: (root: string, edit: PropEdit) => Promise<PropEditResult>
+  }
+  tokens: {
+    /** Detect design tokens in the repo (manifest → tailwind → CSS vars). */
+    detect: (root: string) => Promise<TokenSet>
   }
   annotations: {
     list: (root: string) => Promise<Annotation[]>

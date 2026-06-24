@@ -13,7 +13,8 @@ import type {
   PropInspection,
   PublishResult,
   RunningDevServer,
-  SelectedElement
+  SelectedElement,
+  TokenSet
 } from '../shared/api'
 
 const api: DsgnApi = {
@@ -56,6 +57,9 @@ const api: DsgnApi = {
       ipcRenderer.invoke('props:inspect', root, source),
     apply: (root: string, edit: PropEdit): Promise<PropEditResult> =>
       ipcRenderer.invoke('props:apply', root, edit)
+  },
+  tokens: {
+    detect: (root: string): Promise<TokenSet> => ipcRenderer.invoke('tokens:detect', root)
   },
   annotations: {
     list: (root: string): Promise<Annotation[]> => ipcRenderer.invoke('annotations:list', root),

@@ -3,7 +3,8 @@ import type {
   Annotation,
   PermissionMode,
   PermissionRequest,
-  SelectedElement
+  SelectedElement,
+  TokenSet
 } from '../../shared/api'
 
 export interface ChatMessage {
@@ -171,6 +172,17 @@ const oneLine = (s: string, max: number): string =>
 
 const SOURCE_RE = /^[\w./@-]+:\d+(:\d+)?$/
 
+/** Design tokens detected for the open project (one source wins). */
+interface TokenState {
+  set: TokenSet | null
+  setSet: (set: TokenSet | null) => void
+}
+
+export const useTokens = create<TokenState>((set) => ({
+  set: null,
+  setSet: (tokenSet) => set({ set: tokenSet })
+}))
+
 /** v3 handoff: reviewer notes pinned to elements + which one is focused. */
 interface AnnotationState {
   list: Annotation[]
@@ -205,6 +217,7 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
     __dsgnSelection?: typeof useSelection
     __dsgnPermissions?: typeof usePermissions
     __dsgnAnnotations?: typeof useAnnotations
+    __dsgnTokens?: typeof useTokens
   }
 ).__dsgnStore = useChat
 ;(window as unknown as { __dsgnSession?: typeof useSession }).__dsgnSession = useSession
@@ -213,3 +226,4 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
   usePermissions
 ;(window as unknown as { __dsgnAnnotations?: typeof useAnnotations }).__dsgnAnnotations =
   useAnnotations
+;(window as unknown as { __dsgnTokens?: typeof useTokens }).__dsgnTokens = useTokens

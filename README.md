@@ -11,8 +11,10 @@ left edits the running app — respecting the repo's own `CLAUDE.md` and skills.
 > **New:** a **Select** mode lets you click an element in the live preview to pick
 > it — dsgn resolves its source location (via a `data-dsgn-source` stamp, see
 > [`docs/DESIGN.md`](docs/DESIGN.md)), edit its **props** with typed controls
-> (react-docgen), pin **review notes** to it, and **Publish** a branch + GitHub PR
-> for engineer handoff. Tool calls run behind approve/deny cards (or an Auto mode).
+> (react-docgen, cross-file aware), apply the repo's **design tokens** (auto-detected
+> from a manifest, Tailwind, or CSS vars), pin **review notes** to it, and **Publish** a
+> branch + GitHub PR for engineer handoff. Tool calls run behind approve/deny cards (or
+> an Auto mode).
 
 ## Requirements
 
