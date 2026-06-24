@@ -153,7 +153,11 @@ export default function App(): React.JSX.Element {
       })
       useSession.getState().setProjectRoot(root)
       // Detect this repo's design tokens (manifest → tailwind → CSS vars).
-      void window.api.tokens.detect(root).then((t) => useTokens.getState().setSet(t))
+      // Guard against a project switch racing a slow scan — only apply if `root`
+      // is still the open project when it resolves.
+      void window.api.tokens.detect(root).then((t) => {
+        if (useSession.getState().projectRoot === root) useTokens.getState().setSet(t)
+      })
       // Load this repo's existing handoff notes (renders pins via the effect above).
       useAnnotations.getState().setList(await window.api.annotations.list(root))
       // A fresh session — clear any turn left "running" from a previous project.

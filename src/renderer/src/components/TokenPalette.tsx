@@ -12,7 +12,20 @@ const SOURCE_LABEL: Record<string, string> = {
   css: 'CSS variables'
 }
 
-const isColor = (v: string): boolean => /^(#|rgb|hsl|oklch|color\()/i.test(v.trim())
+// Render a swatch for anything the browser accepts as a color (covers named
+// colors, hsl/oklch, etc.) or a gradient; everything else shows as a text chip.
+const isColor = (v: string): boolean => {
+  const s = v.trim()
+  if (/gradient\(/i.test(s)) return true
+  try {
+    return CSS.supports('color', s)
+  } catch {
+    return /^(#|rgb|hsl|oklch|color\()/i.test(s)
+  }
+}
+
+// Cap how many tokens we render per group (large themes re-declare full scales).
+const MAX_PER_GROUP = 60
 
 /**
  * The detected design-token palette (read-only). Tokens are project-level —
@@ -30,7 +43,7 @@ export default function TokenPalette({ tokenSet, onPick }: Props): React.JSX.Ele
         <div key={g.name} className="tokens__group">
           <div className="tokens__gname">{g.name}</div>
           <div className="tokens__items">
-            {g.tokens.map((t) => (
+            {g.tokens.slice(0, MAX_PER_GROUP).map((t) => (
               <button
                 key={t.name}
                 className="tokens__item"
@@ -45,6 +58,9 @@ export default function TokenPalette({ tokenSet, onPick }: Props): React.JSX.Ele
                 <span className="tokens__tname">{t.name}</span>
               </button>
             ))}
+            {g.tokens.length > MAX_PER_GROUP && (
+              <span className="tokens__more">+{g.tokens.length - MAX_PER_GROUP} more</span>
+            )}
           </div>
         </div>
       ))}
