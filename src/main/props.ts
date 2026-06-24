@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { readFile, writeFile } from 'fs/promises'
-import { isAbsolute, join, normalize, relative } from 'path'
+import { dirname, isAbsolute, join, normalize, relative } from 'path'
 import type { PropEdit, PropEditResult, PropField, PropInspection, PropKind } from '../shared/api'
 
 /**
@@ -19,6 +19,8 @@ interface FoundElement {
   name: string
   /** The opening element AST node (with babel ranges). */
   opening: BabelNode
+  /** The parsed file AST (reused to resolve imports without re-parsing). */
+  ast: BabelNode
 }
 
 interface BabelNode {
@@ -79,16 +81,16 @@ function jsxName(node: BabelNode | { type: string; name?: string } | undefined):
   return ''
 }
 
-/** Recursively collect every JSXOpeningElement in the tree. */
-function collectOpenings(node: unknown, out: BabelNode[]): void {
+/** Recursively collect every node of a given `.type` in the tree. */
+function collectNodes(node: unknown, type: string, out: BabelNode[]): void {
   if (!node || typeof node !== 'object') return
   const n = node as BabelNode
-  if (typeof n.type === 'string' && n.type === 'JSXOpeningElement') out.push(n)
+  if (n.type === type) out.push(n)
   for (const key of Object.keys(n)) {
     if (key === 'loc' || key === 'leadingComments' || key === 'trailingComments') continue
     const v = (n as Record<string, unknown>)[key]
-    if (Array.isArray(v)) v.forEach((c) => collectOpenings(c, out))
-    else if (v && typeof v === 'object') collectOpenings(v, out)
+    if (Array.isArray(v)) v.forEach((c) => collectNodes(c, type, out))
+    else if (v && typeof v === 'object') collectNodes(v, type, out)
   }
 }
 
@@ -115,8 +117,12 @@ async function findElementAtLine(
 ): Promise<FoundElement | null> {
   const ast = await parseFile(code)
   const openings: BabelNode[] = []
-  collectOpenings(ast, openings)
-  const wrap = (o: BabelNode): FoundElement => ({ name: jsxName(o.name as BabelNode), opening: o })
+  collectNodes(ast, 'JSXOpeningElement', openings)
+  const wrap = (o: BabelNode): FoundElement => ({
+    name: jsxName(o.name as BabelNode),
+    opening: o,
+    ast
+  })
 
   const sameLine = openings.filter((o) => o.loc?.start.line === line)
   if (sameLine.length) {
@@ -196,8 +202,14 @@ function literalFromExpression(
   return null
 }
 
-/** Run react-docgen on the file and return the prop schema for `component`. */
-async function schemaFor(code: string, component: string): Promise<PropField[]> {
+/**
+ * Run react-docgen and return the prop schema for the component named `name`.
+ * We only accept an exact displayName match (or a sole anonymous default
+ * export) — never a *different* component's schema. For the cross-file case,
+ * `name` is the *exported* name resolved from the import, so a re-export barrel
+ * that also defines an unrelated component can't be mis-attached.
+ */
+async function schemaFor(code: string, name: string): Promise<PropField[]> {
   try {
     const { parse, builtinResolvers } = await loadDocgen()
     // FindAll (not the default exported-definitions resolver, which throws when a
@@ -207,19 +219,83 @@ async function schemaFor(code: string, component: string): Promise<PropField[]> 
       filename: 'component.tsx',
       resolver: new builtinResolvers.FindAllDefinitionsResolver()
     }) as Array<{ displayName?: string; props?: Record<string, DocgenProp> }>
-    // Match by name. Only fall back to a sole doc when it has no displayName (an
-    // anonymous default export) — never attach a *different* component's schema
-    // (e.g. the parent file's component to an imported child used inside it).
     const doc =
-      docs.find((d) => d.displayName === component) ??
+      docs.find((d) => d.displayName === name) ??
       (docs.length === 1 && !docs[0].displayName ? docs[0] : undefined)
     if (!doc?.props) return []
     return Object.entries(doc.props)
-      .filter(([name]) => isValidAttrName(name))
-      .map(([name, p]) => docgenPropToField(name, p))
+      .filter(([n]) => isValidAttrName(n))
+      .map(([n, p]) => docgenPropToField(n, p))
   } catch {
     return []
   }
+}
+
+const MODULE_EXTS = ['.tsx', '.ts', '.jsx', '.js']
+
+/** Is `file` inside the project root (refuse imports that escape it)? */
+function withinRoot(root: string, file: string): boolean {
+  const rel = relative(root, file)
+  return !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+/** Resolve a relative import spec to an on-disk file (trying extensions + /index). */
+async function resolveModulePath(
+  root: string,
+  fromDir: string,
+  spec: string
+): Promise<string | null> {
+  const base = normalize(join(fromDir, spec))
+  if (!withinRoot(root, base)) return null // never read outside the project
+  const candidates = [
+    base,
+    ...MODULE_EXTS.map((e) => base + e),
+    ...MODULE_EXTS.map((e) => join(base, 'index' + e))
+  ]
+  for (const c of candidates) {
+    if (/\.[a-z]+$/.test(c)) {
+      try {
+        await readFile(c)
+        return c
+      } catch {
+        /* try next */
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * Find where `component` (the local JSX name) is imported from, resolve the
+ * file, and return the *exported* name to match in that file. For a named
+ * import we use the original export name (so `{ Button as B }` matches `Button`,
+ * and a barrel re-export can't mis-attach); for a default import we fall back to
+ * the local name (best effort — default exports' displayName usually agrees).
+ */
+async function resolveComponentFile(
+  root: string,
+  usageFile: string,
+  ast: BabelNode,
+  component: string
+): Promise<{ file: string; exportName: string } | null> {
+  const imports: BabelNode[] = []
+  collectNodes(ast, 'ImportDeclaration', imports)
+  for (const imp of imports) {
+    const src = (imp.source as { value?: string } | undefined)?.value
+    if (typeof src !== 'string' || !src.startsWith('.')) continue // relative only
+    for (const s of (imp.specifiers as BabelNode[] | undefined) ?? []) {
+      const local = (s.local as { name?: string } | undefined)?.name
+      if (local !== component) continue
+      if (s.type !== 'ImportSpecifier' && s.type !== 'ImportDefaultSpecifier') continue
+      const exportName =
+        s.type === 'ImportSpecifier'
+          ? ((s.imported as { name?: string } | undefined)?.name ?? component)
+          : component
+      const file = await resolveModulePath(root, dirname(usageFile), src)
+      return file ? { file, exportName } : null
+    }
+  }
+  return null
 }
 
 interface DocgenProp {
@@ -278,7 +354,20 @@ async function inspectProps(root: string, source: string): Promise<PropInspectio
 
   // Schema only resolves for capitalized components (host tags like <h1> have none).
   const isComponent = /^[A-Z]/.test(found.name)
-  const schema = isComponent ? await schemaFor(code, found.name) : []
+  let schema = isComponent ? await schemaFor(code, found.name) : []
+  let crossFile = false
+  // Not defined in this file? Follow the component's import to its definition.
+  if (isComponent && schema.length === 0) {
+    const def = await resolveComponentFile(root, loc.file, found.ast, found.name)
+    if (def) {
+      try {
+        schema = await schemaFor(await readFile(def.file, 'utf8'), def.exportName)
+        crossFile = schema.length > 0
+      } catch {
+        /* unreadable — fall back to current attributes */
+      }
+    }
+  }
 
   const fields: PropField[] = []
   const seen = new Set<string>()
@@ -306,7 +395,9 @@ async function inspectProps(root: string, source: string): Promise<PropInspectio
 
   const note = isComponent
     ? schema.length
-      ? undefined
+      ? crossFile
+        ? `Schema resolved from the imported ${found.name} definition.`
+        : undefined
       : 'No react-docgen schema resolved — showing the props currently set.'
     : 'Host element — editing its literal attributes (no component schema).'
 

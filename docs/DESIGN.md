@@ -111,9 +111,9 @@ Selecting an element and choosing **Edit props** turns "edit the file" into
   literal (string / number / boolean / enum) is written straight into the source
   (instant hot-reload); anything non-literal is handed to the chat agent.
 
-Current limitation: the schema resolves when the component is **defined in the
-same file** as the usage. Cross-file component resolution (follow the import to
-the definition) and design-token manifests are the next steps.
+The schema resolves whether the component is defined in the same file or
+**imported** from another (dsgn follows the relative import to the definition).
+Still ahead: design-token manifests (below).
 
 ### Future — token manifests
 

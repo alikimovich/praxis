@@ -105,7 +105,20 @@ try {
     throw new Error(`same-line element resolved to "${inline?.component}", expected Badge`)
   }
 
-  console.log('PROP-EDIT OK — schema resolved + literal edit written to source')
+  // Cross-file: <Button> used in Card.tsx but defined in Button.tsx — the schema
+  // is resolved by following the import.
+  const cross = await win.evaluate((args) => window.api.props.inspect(args.fixture, args.src), {
+    fixture,
+    src: 'src/Card.tsx:4'
+  })
+  if (cross?.component !== 'Button') throw new Error(`cross-file component: ${cross?.component}`)
+  const kind = field(cross, 'kind')
+  if (kind?.kind !== 'enum' || !kind.options?.includes('ghost')) {
+    throw new Error('cross-file enum schema (kind) not resolved from Button.tsx')
+  }
+  if (field(cross, 'label')?.value !== 'Go') throw new Error('cross-file live value (label) wrong')
+
+  console.log('PROP-EDIT OK — same-file + cross-file schema + literal edit to source')
 } catch (err) {
   console.error('PROP-EDIT FAILED:', err?.message ?? err)
   process.exitCode = 1
