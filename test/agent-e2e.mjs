@@ -38,8 +38,13 @@ try {
   const win = await app.firstWindow()
   await win.waitForSelector('.btn', { timeout: 15000 })
 
-  // Cheap/fast model for the test turn; stub the folder dialog to the fixture.
-  await win.evaluate(() => window.__dsgnSession.getState().setModel('haiku'))
+  // Cheap/fast model for the test turn, and Auto (bypassPermissions) so the edit
+  // tool isn't gated by an approve/deny card no one is here to click — this also
+  // exercises that "Auto" genuinely bypasses via the SDK. Stub the folder dialog.
+  await win.evaluate(() => {
+    window.__dsgnSession.getState().setModel('haiku')
+    window.__dsgnPermissions.getState().setMode('bypassPermissions')
+  })
   await app.evaluate(async ({ dialog }, p) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] })
   }, fixture)

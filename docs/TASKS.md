@@ -34,11 +34,13 @@ Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 
 - [x] First-run auth onboarding panel — auth-error detection (`isAuthError`) → amber
       guidance banner pointing at `claude setup-token`. (`08-auth-onboarding.png`.)
-- [ ] Permission approve/deny cards (tools are auto-approved today). **Now also a
-      security priority:** v2 lets the semi-trusted previewed page seed prompt text, so an
-      auto-approving Bash/edit agent widens the injection surface. Renderer-side input is
-      sanitized (control-char stripping, source validation, length caps), but real
-      approve/deny UI is the proper backstop before the select→prompt path is trusted further.
+- [x] **Permission approve/deny cards.** ✅ 2026-06-23 — `canUseTool` now surfaces an
+      approve/deny card per gated tool and awaits the user (read-only tools auto-allowed so
+      Ask mode stays usable). A toolbar selector sets the SDK permission mode:
+      **Ask (`default`) · Auto-accept edits (`acceptEdits`) · Auto: approve all
+      (`bypassPermissions`)** — "Auto" is real SDK bypass via `query.setPermissionMode`, and
+      the mode is also passed at project-open so it persists. This is the backstop for the
+      v2 select→prompt injection surface.
 - [ ] Live thinking-level changes — **blocked**: the SDK `Query` has `setModel` but no
       live effort setter, so changing it mid-session would require restarting the
       session (losing history). Applied at project-open for now.

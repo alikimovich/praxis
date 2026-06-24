@@ -82,6 +82,10 @@ try {
   await win.evaluate(() => window.__dsgnSession.getState().setAuthNeeded(false))
 
   // Permission cards: seed a pending tool prompt, confirm it renders, approve it.
+  // NOTE: no project is open here, so clicking Allow only exercises the renderer's
+  // optimistic card removal — the main-side respond IPC is a no-op without a
+  // session. The full canUseTool round-trip is covered by the live agent-e2e
+  // (which needs Claude credentials), not this store-driven visual test.
   await win.evaluate(() => {
     window.__dsgnPermissions.getState().addRequest({
       id: 'tu_test',
