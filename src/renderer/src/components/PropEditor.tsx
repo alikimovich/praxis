@@ -17,11 +17,13 @@ export default function PropEditor({ root, source, onSeedPrompt }: Props): React
   const [inspection, setInspection] = useState<PropInspection | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let live = true
     setLoading(true)
     setInspection(null)
+    setError(null)
     window.api.props
       .inspect(root, source)
       .then((res) => live && setInspection(res))
@@ -31,11 +33,14 @@ export default function PropEditor({ root, source, onSeedPrompt }: Props): React
     }
   }, [root, source])
 
-  const apply = async (
-    field: PropField,
-    value: string | number | boolean
-  ): Promise<void> => {
+  // Re-read from disk — used to reset the controls when an edit didn't land.
+  const reload = (): void => {
+    window.api.props.inspect(root, source).then((res) => res && setInspection(res))
+  }
+
+  const apply = async (field: PropField, value: string | number | boolean): Promise<void> => {
     setBusy(field.name)
+    setError(null)
     try {
       const res = await window.api.props.apply(root, {
         source,
@@ -57,7 +62,14 @@ export default function PropEditor({ root, source, onSeedPrompt }: Props): React
         )
       } else if (res.needsAgent) {
         onSeedPrompt(res.agentPrompt ?? `In ${source}, change the ${field.name} prop.`)
+      } else {
+        // Write/resolve failure — surface it and reset the control to the file's value.
+        setError(res.error ?? 'Could not apply the change.')
+        reload()
       }
+    } catch {
+      setError('The edit could not be sent.')
+      reload()
     } finally {
       setBusy(null)
     }
@@ -70,6 +82,7 @@ export default function PropEditor({ root, source, onSeedPrompt }: Props): React
 
   return (
     <div className="propedit">
+      {error && <div className="propedit__error">{error}</div>}
       {inspection.note && <div className="propedit__note">{inspection.note}</div>}
       {inspection.fields.length === 0 && (
         <div className="propedit__note">No editable props found.</div>
