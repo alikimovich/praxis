@@ -19,8 +19,8 @@ interface Props {
   onClear: () => void
   /** Seed an arbitrary prompt (used by the prop editor's agent fallback). */
   onSeedPrompt: (text: string) => void
-  /** Save a reviewer note pinned to this element. */
-  onAddNote: (text: string) => void
+  /** Save a reviewer note pinned to this element; resolves false if it failed. */
+  onAddNote: (text: string) => Promise<boolean>
 }
 
 /**
@@ -39,13 +39,19 @@ export default function Inspector({
   const [editing, setEditing] = useState(false)
   const [noting, setNoting] = useState(false)
   const [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  const saveNote = (): void => {
+  const saveNote = async (): Promise<void> => {
     const text = note.trim()
-    if (!text) return
-    onAddNote(text)
-    setNote('')
-    setNoting(false)
+    if (!text || saving) return
+    setSaving(true)
+    // Keep the text if the save fails — don't silently lose the reviewer's note.
+    const ok = await onAddNote(text)
+    setSaving(false)
+    if (ok) {
+      setNote('')
+      setNoting(false)
+    }
   }
   const ident = element.id
     ? `#${element.id}`
@@ -98,12 +104,16 @@ export default function Inspector({
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault()
-                saveNote()
+                void saveNote()
               }
             }}
           />
-          <button className="inspector__notesave" onClick={saveNote} disabled={!note.trim()}>
-            Save note
+          <button
+            className="inspector__notesave"
+            onClick={() => void saveNote()}
+            disabled={!note.trim() || saving}
+          >
+            {saving ? 'Saving…' : 'Save note'}
           </button>
         </div>
       )}
