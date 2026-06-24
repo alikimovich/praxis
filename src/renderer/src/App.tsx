@@ -105,9 +105,11 @@ export default function App(): React.JSX.Element {
   const attempt = async (root: string, commandOverride?: string): Promise<void> => {
     let attemptedCommand = commandOverride ?? ''
     // Opening (or re-opening) a project starts fresh: a pick from the previous
-    // repo points at a file that may not exist in the new one. Disarm + clear.
+    // repo points at a file that may not exist in the new one. Disarm + clear,
+    // and drop any permission cards left over from the previous session.
     setSelectMode(false)
     setSelected(null)
+    usePermissions.getState().clearPending()
     void window.api.preview.setSelectMode(false)
     try {
       setLog('')
