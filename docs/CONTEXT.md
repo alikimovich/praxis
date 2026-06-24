@@ -26,7 +26,9 @@ subscription auth. Repo: `alikimovich/dsgn` (private).
 - **Plain CSS**, no Tailwind / no UI kit (user preference). assistant-ui was
   evaluated and **deferred**: its styled UI now needs shadcn/Tailwind scaffolding =
   risk; the zustand store is kept as the seam so it can drop in later.
-- **React-first** for the eventual element/prop inspection.
+- **Multi-framework prop editing** (React + Svelte) via per-extension adapters
+  (`props.ts` dispatches `.svelte` → `props-svelte.ts`). Selection/tokens/ask-agent
+  are framework-agnostic (they only need the `data-dsgn-source` stamp).
 - **dsgn owns the dev-server lifecycle** (spawns + stops it; user must not also run
   `dev` manually for an opened project — port/lock clash). Killed on app quit.
 - **Distribution: clone-and-run from source.** No signing/installer/auto-update.
@@ -92,8 +94,10 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
 - `src/renderer/src/components/ChatPanel.tsx` — chat UI, toolbar, slash menu, **inspector**.
 - `src/renderer/src/components/Inspector.tsx` — **v2** selected-element card + chat hand-off
   + the "Edit props" toggle.
-- `src/main/props.ts` — **prop editor engine**: babel-parse the source at the stamp line,
+- `src/main/props.ts` — **prop editor engine** (React/JSX): babel-parse at the stamp line,
   react-docgen schema, hybrid literal-splice / agent-fallback apply (`props:inspect/apply`).
+  Dispatches `.svelte` sources to `src/main/props-svelte.ts` (svelte/compiler — `export let` /
+  `$props()` schema, same splice/apply contract).
 - `src/renderer/src/components/PropEditor.tsx` — typed prop controls rendered from the inspection.
 - `src/main/tokens.ts` — **design-token detection**: probes `.dsgn/tokens.json` → tailwind
   config (static parse) → CSS custom properties; `tokens:detect`. Palette in `TokenPalette.tsx`.

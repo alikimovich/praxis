@@ -78,9 +78,66 @@ export default defineConfig({
 })
 ```
 
-(Other frameworks: any transform that can see JSX/template source locations
-works — the only contract dsgn cares about is the `data-dsgn-source` attribute
-on the rendered DOM.)
+Any transform that can see template source locations works — the only contract
+dsgn cares about is the `data-dsgn-source` attribute on the rendered DOM.
+
+### Svelte / SvelteKit
+
+For Svelte, stamp host elements with a markup preprocessor (uses
+`svelte/compiler` + `magic-string`; dev only). Drop this at
+`dsgn-svelte-source.js`:
+
+```js
+import { parse } from 'svelte/compiler'
+import MagicString from 'magic-string'
+
+const locate = (code, offset) => {
+  let line = 1, col = 0
+  for (let i = 0; i < offset; i++) (code[i] === '\n' ? (line++, (col = 0)) : col++)
+  return { line, col }
+}
+
+export function dsgnSource() {
+  const dev = process.env.NODE_ENV !== 'production'
+  return {
+    name: 'dsgn-source',
+    markup({ content, filename }) {
+      if (!dev) return
+      let ast
+      try { ast = parse(content, { modern: true, filename }) } catch { return }
+      const s = new MagicString(content)
+      const rel = (filename || '').replace(process.cwd() + '/', '')
+      const visit = (n) => {
+        if (!n || typeof n !== 'object') return
+        // Stamp host elements (components don't reliably forward attrs to the DOM).
+        if (n.type === 'RegularElement' && typeof n.start === 'number') {
+          const { line, col } = locate(content, n.start)
+          s.appendLeft(n.start + 1 + n.name.length, ` data-dsgn-source="${rel}:${line}:${col}"`)
+        }
+        for (const k in n) {
+          const v = n[k]
+          if (Array.isArray(v)) v.forEach(visit)
+          else if (v && typeof v === 'object') visit(v)
+        }
+      }
+      visit(ast.fragment)
+      return { code: s.toString(), map: s.generateMap({ hires: true }).toString() }
+    }
+  }
+}
+```
+
+Wire it into `svelte.config.js` ahead of `vitePreprocess`:
+
+```js
+import { dsgnSource } from './dsgn-svelte-source.js'
+export default { preprocess: [dsgnSource(), vitePreprocess()] }
+```
+
+Same `path:line:col` contract, same 0-based column. (As with React, a
+*component* usage only carries the stamp to the DOM if the component forwards
+`$$restProps`/attributes — host elements always do, and the selector fallback
+covers the rest.)
 
 ## 3. What dsgn captures on select
 
@@ -102,11 +159,16 @@ with a reference the agent can act on — anchored to `source` when present.
 ## 4. Prop editing (built)
 
 Selecting an element and choosing **Edit props** turns "edit the file" into
-"edit the prop":
+"edit the prop". Prop editing is **framework-agnostic by dispatch** — the source
+file's extension picks an adapter (`src/main/props.ts` → React/JSX;
+`src/main/props-svelte.ts` → `.svelte`), and both return the same shapes:
 
-- dsgn parses the source file at the `data-dsgn-source` line and runs
-  **`react-docgen`** on it to derive the component's prop schema (types, enums,
+- **React** (`.tsx/.jsx/.ts/.js`): parse the file at the stamp's line, find the
+  JSX element, and run **`react-docgen`** for the prop schema (types, enums,
   required, descriptions), merged with the element's current attribute values.
+- **Svelte** (`.svelte`): parse with **`svelte/compiler`**, find the element, and
+  derive the schema from `export let` (Svelte 4) or `$props()` destructuring +
+  an `interface Props` (Svelte 5, with TS unions → enums).
 - The inspector renders typed controls. Edits apply the **hybrid** way: a simple
   literal (string / number / boolean / enum) is written straight into the source
   (instant hot-reload); anything non-literal is handed to the chat agent.

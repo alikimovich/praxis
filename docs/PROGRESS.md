@@ -2,6 +2,30 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-23 — Svelte / SvelteKit support (prop editing → framework-agnostic)
+
+- Prop editing is now **framework-agnostic by dispatch**: `props.ts` routes by
+  source extension — `.svelte` → new `src/main/props-svelte.ts`, everything else →
+  the unchanged React/JSX engine. Both share helpers (resolveSource, mergeFields,
+  withinRoot, isValidAttrName) and return identical PropInspection/PropEditResult.
+- `props-svelte.ts` parses with `svelte/compiler` (ESM, dynamic-imported): finds
+  the element at line:col (same innermost/column rules as React), reads literal
+  attributes (handles both `name="x"` array-of-Text and `name={x}` bare-ExpressionTag
+  value shapes), resolves a component schema cross-file from `export let` (Svelte 4)
+  or `$props()` destructuring + `interface Props` (Svelte 5 → TS unions become enums),
+  and applies literal edits by splicing the `.svelte` source (hot-reload).
+- Selection / tokens / "ask-agent" were already framework-agnostic (they only need
+  the `data-dsgn-source` stamp); added a **Svelte stamping recipe** (a
+  `svelte/compiler` + magic-string markup preprocessor) to `docs/DESIGN.md`.
+- Test `test/prop-edit-svelte.mjs` (svelte-app fixture): cross-file `$props` schema
+  (variant enum/label/count/rounded) + live values, literal apply to `.svelte`, host
+  element attrs, and same-line + column disambiguation. ✅ `bun run verify` green
+  (10 tests).
+- **Adversarial review (1 real bug, fixed):** `resolveSource`'s greedy regex parsed
+  `"path:line:col"` as `file="path:line", line=col` — a latent bug on the shared
+  (React too) path, never hit because tests used line-only stamps. Now non-greedy.
+  Also added a defense-in-depth attr-name re-validation in `applySvelteEdit`.
+
 ## 2026-06-23 — Design-token detection + palette
 
 - `src/main/tokens.ts` auto-detects a project's design tokens, probing three sources in

@@ -1,0 +1,436 @@
+import { readFile, writeFile } from 'fs/promises'
+import { dirname, isAbsolute, join, normalize, relative } from 'path'
+import type { PropEdit, PropEditResult, PropField, PropInspection, PropKind } from '../shared/api'
+import {
+  agentPromptFor,
+  isValidAttrName,
+  mergeFields,
+  withinRoot,
+  type CurrentAttr,
+  type ResolvedSource
+} from './props'
+
+/**
+ * Svelte adapter for the prop editor — the `.svelte` counterpart of the
+ * React/JSX engine in props.ts. Same contract: given a `data-dsgn-source` stamp,
+ * find the element on that line/column, read its literal attributes, resolve a
+ * component prop schema (`export let` for Svelte 4, `$props()` destructuring for
+ * Svelte 5, with TS types → enums when present), and apply simple literal edits
+ * by splicing source (the dev server hot-reloads). Non-literal values go to the
+ * agent, exactly like the React path.
+ *
+ * svelte/compiler is ESM-only, so it's loaded via dynamic import() like the
+ * other ESM engines (Agent SDK, babel, react-docgen).
+ */
+
+type SvelteCompiler = typeof import('svelte/compiler')
+let sveltePromise: Promise<SvelteCompiler> | null = null
+const loadSvelte = (): Promise<SvelteCompiler> => (sveltePromise ??= import('svelte/compiler'))
+
+interface Node {
+  type?: string
+  start?: number
+  end?: number
+  name?: string
+  attributes?: Node[]
+  value?: unknown
+  [k: string]: unknown
+}
+
+const ELEMENT_TYPES = new Set([
+  'RegularElement',
+  'Component',
+  'SvelteComponent',
+  'SvelteElement',
+  'SvelteSelf'
+])
+
+/** Offset → 1-based line / 0-based column (column matches babel's convention). */
+function makeLocator(code: string): (offset: number) => { line: number; column: number } {
+  const starts = [0]
+  for (let i = 0; i < code.length; i++) if (code[i] === '\n') starts.push(i + 1)
+  return (offset) => {
+    let lo = 0
+    let hi = starts.length - 1
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1
+      if (starts[mid] <= offset) lo = mid
+      else hi = mid - 1
+    }
+    return { line: lo + 1, column: offset - starts[lo] }
+  }
+}
+
+function collectElements(node: unknown, out: Node[]): void {
+  if (!node || typeof node !== 'object') return
+  const n = node as Node
+  if (typeof n.type === 'string' && ELEMENT_TYPES.has(n.type) && typeof n.start === 'number') {
+    out.push(n)
+  }
+  for (const key of Object.keys(n)) {
+    if (key === 'parent') continue
+    const v = (n as Record<string, unknown>)[key]
+    if (Array.isArray(v)) v.forEach((c) => collectElements(c, out))
+    else if (v && typeof v === 'object') collectElements(v, out)
+  }
+}
+
+/** The element the stamp points at (mirrors the React findElementAtLine logic). */
+function findElement(
+  root: Node,
+  code: string,
+  line: number,
+  column?: number
+): Node | null {
+  const els: Node[] = []
+  collectElements((root as { fragment?: unknown }).fragment ?? root, els)
+  const at = makeLocator(code)
+  const lc = (n: Node) => at(n.start ?? 0)
+
+  const sameLine = els.filter((e) => lc(e).line === line)
+  if (sameLine.length) {
+    if (column != null) {
+      const exact = sameLine.find((e) => lc(e).column === column)
+      if (exact) return exact
+      const atOrBefore = sameLine
+        .filter((e) => lc(e).column <= column)
+        .sort((a, b) => lc(b).column - lc(a).column)[0]
+      return atOrBefore ?? [...sameLine].sort((a, b) => (a.start ?? 0) - (b.start ?? 0))[0]
+    }
+    // Innermost element starting on the line (highest start offset).
+    return [...sameLine].sort((a, b) => (b.start ?? 0) - (a.start ?? 0))[0]
+  }
+  const enclosing = els
+    .filter((e) => at(e.start ?? 0).line <= line && at(e.end ?? 0).line >= line)
+    .sort((a, b) => (b.start ?? 0) - (a.start ?? 0))[0]
+  return enclosing ?? null
+}
+
+function literalFrom(expr: Node | undefined): { kind: PropKind; value: string | number | boolean } | null {
+  if (!expr) return null
+  if (expr.type === 'Literal') {
+    const v = (expr as { value?: unknown }).value
+    if (typeof v === 'string') return { kind: 'string', value: v }
+    if (typeof v === 'number') return { kind: 'number', value: v }
+    if (typeof v === 'boolean') return { kind: 'boolean', value: v }
+  }
+  if (
+    expr.type === 'UnaryExpression' &&
+    (expr as { operator?: string }).operator === '-' &&
+    (expr.argument as Node)?.type === 'Literal' &&
+    typeof (expr.argument as { value?: unknown }).value === 'number'
+  ) {
+    return { kind: 'number', value: -Number((expr.argument as { value: number }).value) }
+  }
+  return null
+}
+
+/** Read literal attributes off a Svelte element (skips spreads, directives, bindings). */
+function readAttributes(el: Node): CurrentAttr[] {
+  const out: CurrentAttr[] = []
+  for (const attr of el.attributes ?? []) {
+    if (attr.type !== 'Attribute') continue
+    const name = attr.name
+    if (typeof name !== 'string' || !isValidAttrName(name)) continue
+    const start = attr.start ?? 0
+    const end = attr.end ?? 0
+    const value = attr.value
+    if (value === true) {
+      out.push({ name, kind: 'boolean', value: true, start, end })
+      continue
+    }
+    // `name="x"` → value is an array of Text/ExpressionTag; `name={x}` → value is
+    // a single ExpressionTag object. A single literal node is editable; a
+    // concatenation (array length > 1) is not.
+    let v: Node | null = null
+    if (Array.isArray(value)) {
+      if (value.length === 1) v = value[0] as Node
+    } else if (value && typeof value === 'object') {
+      v = value as Node
+    }
+    if (v?.type === 'Text') {
+      out.push({ name, kind: 'string', value: String((v as { data?: string }).data ?? ''), start, end })
+    } else if (v && (v.type === 'ExpressionTag' || v.type === 'MustacheTag')) {
+      const lit = literalFrom(v.expression as Node)
+      if (lit) out.push({ name, ...lit, start, end })
+      else out.push({ name, kind: 'other', expression: true, start, end })
+    } else {
+      out.push({ name, kind: 'other', expression: true, start, end })
+    }
+  }
+  return out
+}
+
+// --- schema extraction (best-effort) ----------------------------------------
+
+function kindFromTsType(typeNode: Node | undefined): { kind: PropKind; options?: string[] } | null {
+  if (!typeNode) return null
+  if (typeNode.type === 'TSStringKeyword') return { kind: 'string' }
+  if (typeNode.type === 'TSNumberKeyword') return { kind: 'number' }
+  if (typeNode.type === 'TSBooleanKeyword') return { kind: 'boolean' }
+  if (typeNode.type === 'TSUnionType' && Array.isArray((typeNode as { types?: Node[] }).types)) {
+    const types = (typeNode as { types: Node[] }).types
+    const lits = types
+      .map((t) =>
+        t.type === 'TSLiteralType' && (t.literal as Node)?.type === 'Literal'
+          ? (t.literal as { value?: unknown }).value
+          : undefined
+      )
+      .filter((v): v is string => typeof v === 'string')
+    if (lits.length && lits.length === types.length) return { kind: 'enum', options: lits }
+  }
+  return null
+}
+
+const annotationType = (typeAnnotation: Node | undefined): Node | undefined =>
+  (typeAnnotation as { typeAnnotation?: Node } | undefined)?.typeAnnotation
+
+/** name → its TS type node, from an `interface Props {}` / `type Props = {}`. */
+function collectTypeMembers(body: Node[], typeName: string): Map<string, Node> {
+  const members = new Map<string, Node>()
+  const readSignatures = (sigs: Node[] | undefined): void => {
+    for (const m of sigs ?? []) {
+      if (m.type !== 'TSPropertySignature') continue
+      const key = (m.key as { name?: string } | undefined)?.name
+      const t = annotationType(m.typeAnnotation as Node)
+      if (key && t) members.set(key, t)
+    }
+  }
+  for (const stmt of body) {
+    if (stmt.type === 'TSInterfaceDeclaration' && (stmt.id as { name?: string })?.name === typeName) {
+      readSignatures((stmt.body as { body?: Node[] } | undefined)?.body)
+    } else if (
+      stmt.type === 'TSTypeAliasDeclaration' &&
+      (stmt.id as { name?: string })?.name === typeName &&
+      (stmt.typeAnnotation as Node)?.type === 'TSTypeLiteral'
+    ) {
+      readSignatures((stmt.typeAnnotation as { members?: Node[] }).members)
+    }
+  }
+  return members
+}
+
+function fieldFrom(name: string, tsType: Node | undefined, defInit: Node | undefined): PropField {
+  let kind: PropKind = 'other'
+  let options: string[] | undefined
+  const fromType = kindFromTsType(tsType)
+  if (fromType) {
+    kind = fromType.kind
+    options = fromType.options
+  } else {
+    const lit = literalFrom(defInit)
+    if (lit) kind = lit.kind
+  }
+  return { name, kind, ...(options ? { options } : {}), fromSchema: true }
+}
+
+/** Extract a component's props from its instance-script Program (Svelte 4 + 5). */
+function extractProps(program: Node | undefined): PropField[] {
+  const body = ((program as { body?: Node[] } | undefined)?.body ?? []) as Node[]
+  const fields: PropField[] = []
+  const seen = new Set<string>()
+  const add = (f: PropField): void => {
+    if (!isValidAttrName(f.name) || seen.has(f.name)) return
+    seen.add(f.name)
+    fields.push(f)
+  }
+
+  // Svelte 4: `export let name (: Type) (= default)`
+  for (const stmt of body) {
+    if (
+      stmt.type === 'ExportNamedDeclaration' &&
+      (stmt.declaration as Node)?.type === 'VariableDeclaration' &&
+      (stmt.declaration as { kind?: string }).kind === 'let'
+    ) {
+      for (const d of ((stmt.declaration as { declarations?: Node[] }).declarations ?? []) as Node[]) {
+        const id = d.id as Node
+        if (id?.type !== 'Identifier' || typeof id.name !== 'string') continue
+        add(fieldFrom(id.name, annotationType(id.typeAnnotation as Node), d.init as Node))
+      }
+    }
+  }
+
+  // Svelte 5: `let { a = 1, b }: Props = $props()`
+  for (const stmt of body) {
+    if (stmt.type !== 'VariableDeclaration') continue
+    for (const d of ((stmt as { declarations?: Node[] }).declarations ?? []) as Node[]) {
+      const init = d.init as Node
+      const isProps =
+        init?.type === 'CallExpression' &&
+        ((init.callee as { name?: string } | undefined)?.name === '$props')
+      const id = d.id as Node
+      if (!isProps || id?.type !== 'ObjectPattern') continue
+      // Resolve a Props type from `: Props` or `$props<Props>()`, else just "Props".
+      const annoRef = (
+        annotationType(id.typeAnnotation as Node) as { typeName?: { name?: string } } | undefined
+      )?.typeName?.name
+      const targ = (
+        (init.typeArguments ?? init.typeParameters) as { params?: Node[] } | undefined
+      )?.params?.[0] as { typeName?: { name?: string } } | undefined
+      const members = collectTypeMembers(body, annoRef ?? targ?.typeName?.name ?? 'Props')
+      for (const p of (id.properties as Node[] | undefined) ?? []) {
+        if (p.type !== 'Property') continue
+        const key = (p.key as { name?: string } | undefined)?.name
+        if (!key) continue
+        const val = p.value as Node
+        const def = val?.type === 'AssignmentPattern' ? (val.right as Node) : undefined
+        add(fieldFrom(key, members.get(key), def))
+      }
+    }
+  }
+
+  return fields
+}
+
+// --- module resolution (Svelte default imports) ------------------------------
+
+const SVELTE_EXTS = ['.svelte', '.svelte.ts', '.svelte.js']
+
+async function resolveSvelteImport(
+  root: string,
+  fromDir: string,
+  spec: string
+): Promise<string | null> {
+  const base = normalize(join(fromDir, spec))
+  if (!withinRoot(root, base)) return null
+  const candidates = spec.endsWith('.svelte') ? [base] : [base, ...SVELTE_EXTS.map((e) => base + e)]
+  for (const c of candidates) {
+    try {
+      await readFile(c)
+      return c
+    } catch {
+      /* try next */
+    }
+  }
+  return null
+}
+
+/** Follow `import Name from './X.svelte'` in the usage script to its file. */
+function findComponentImport(program: Node | undefined, name: string): string | null {
+  const body = ((program as { body?: Node[] } | undefined)?.body ?? []) as Node[]
+  for (const stmt of body) {
+    if (stmt.type !== 'ImportDeclaration') continue
+    const src = (stmt.source as { value?: string } | undefined)?.value
+    if (typeof src !== 'string' || !src.startsWith('.')) continue
+    for (const s of ((stmt as { specifiers?: Node[] }).specifiers ?? []) as Node[]) {
+      const local = (s.local as { name?: string } | undefined)?.name
+      if (local === name && s.type === 'ImportDefaultSpecifier') return src
+    }
+  }
+  return null
+}
+
+// --- public adapter API ------------------------------------------------------
+
+async function parseSvelte(code: string): Promise<Node | null> {
+  try {
+    const { parse } = await loadSvelte()
+    return parse(code, { modern: true }) as unknown as Node
+  } catch {
+    return null
+  }
+}
+
+export async function inspectSvelteProps(
+  root: string,
+  source: string,
+  loc: ResolvedSource
+): Promise<PropInspection | null> {
+  let code: string
+  try {
+    code = await readFile(loc.file, 'utf8')
+  } catch {
+    return null
+  }
+  const ast = await parseSvelte(code)
+  if (!ast) return null
+  const el = findElement(ast, code, loc.line, loc.column)
+  if (!el || typeof el.name !== 'string') return null
+
+  const component = el.name
+  const isComponent =
+    el.type === 'Component' || el.type === 'SvelteComponent' || /^[A-Z]/.test(component)
+  const current = readAttributes(el)
+
+  let schema: PropField[] = []
+  let crossFile = false
+  if (isComponent) {
+    const instance = (ast as { instance?: { content?: Node } }).instance?.content
+    const spec = findComponentImport(instance, component)
+    if (spec) {
+      const file = await resolveSvelteImport(root, dirname(loc.file), spec)
+      if (file) {
+        try {
+          const defAst = await parseSvelte(await readFile(file, 'utf8'))
+          const defInstance = (defAst as { instance?: { content?: Node } } | null)?.instance?.content
+          schema = extractProps(defInstance)
+          crossFile = schema.length > 0
+        } catch {
+          /* unreadable — fall back to current attributes */
+        }
+      }
+    }
+  }
+
+  const fields = mergeFields(schema, current)
+  const note = isComponent
+    ? schema.length
+      ? crossFile
+        ? `Schema resolved from the imported ${component} component.`
+        : undefined
+      : 'No Svelte prop schema resolved — showing the props currently set.'
+    : 'Host element — editing its literal attributes (no component schema).'
+
+  return { component, source, fields, ...(note ? { note } : {}) }
+}
+
+/** Render a Svelte attribute literal: name="x" / name={3} / name={true}. */
+function renderAttr(name: string, kind: PropKind, value: string | number | boolean): string {
+  if (kind === 'number') return `${name}={${Number(value)}}`
+  if (kind === 'boolean') return `${name}={${value ? 'true' : 'false'}}`
+  const s = String(value)
+  return /^[^"\\\n<>{}]*$/.test(s) ? `${name}="${s}"` : `${name}={${JSON.stringify(s)}}`
+}
+
+export async function applySvelteEdit(
+  root: string,
+  edit: PropEdit,
+  loc: ResolvedSource
+): Promise<PropEditResult> {
+  // Defense in depth — never splice an unvalidated name (the dispatching caller
+  // checks too, but don't depend on that for the security boundary).
+  if (!isValidAttrName(edit.name)) return { applied: false, error: 'Invalid prop name.' }
+  let code: string
+  try {
+    code = await readFile(loc.file, 'utf8')
+  } catch {
+    return { applied: false, error: 'Could not read the source file.' }
+  }
+  const ast = await parseSvelte(code)
+  if (!ast) return { applied: false, needsAgent: true, agentPrompt: agentPromptFor(edit) }
+  const el = findElement(ast, code, loc.line, loc.column)
+  if (!el || typeof el.name !== 'string' || typeof el.start !== 'number') {
+    return { applied: false, needsAgent: true, agentPrompt: agentPromptFor(edit) }
+  }
+
+  const attrText = renderAttr(edit.name, edit.kind, edit.value)
+  const existing = readAttributes(el).find((a) => a.name === edit.name)
+
+  let next: string
+  if (existing) {
+    next = code.slice(0, existing.start) + attrText + code.slice(existing.end)
+  } else {
+    // Insert right after the tag name (`<Button` → after "Button").
+    const insertAt = el.start + 1 + el.name.length
+    if (code.slice(el.start + 1, insertAt) !== el.name) {
+      return { applied: false, needsAgent: true, agentPrompt: agentPromptFor(edit) }
+    }
+    next = code.slice(0, insertAt) + ' ' + attrText + code.slice(insertAt)
+  }
+  try {
+    await writeFile(loc.file, next, 'utf8')
+  } catch {
+    return { applied: false, error: 'Could not write the source file.' }
+  }
+  return { applied: true }
+}

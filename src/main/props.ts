@@ -2,6 +2,15 @@ import { ipcMain } from 'electron'
 import { readFile, writeFile } from 'fs/promises'
 import { dirname, isAbsolute, join, normalize, relative } from 'path'
 import type { PropEdit, PropEditResult, PropField, PropInspection, PropKind } from '../shared/api'
+import { applySvelteEdit, inspectSvelteProps } from './props-svelte'
+
+/**
+ * Prop editing is framework-agnostic by dispatch: the source file's extension
+ * picks an adapter. `.svelte` → props-svelte.ts; everything else (.tsx/.jsx/.ts/
+ * .js) → the React/JSX engine below. Both speak the same `data-dsgn-source`
+ * stamp, the same shared helpers (resolveSource, mergeFields, …), and return the
+ * same PropInspection / PropEditResult shapes.
+ */
 
 /**
  * Prop/token editing for the v2 inspector. Given an element's `data-dsgn-source`
@@ -48,12 +57,17 @@ type ReactDocgen = typeof import('react-docgen')
 let docgenPromise: Promise<ReactDocgen> | null = null
 const loadDocgen = (): Promise<ReactDocgen> => (docgenPromise ??= import('react-docgen'))
 
+export interface ResolvedSource {
+  file: string
+  line: number
+  column?: number
+}
+
 /** Resolve "relpath:line[:col]" against the project root, refusing escapes. */
-function resolveSource(
-  root: string,
-  source: string
-): { file: string; line: number; column?: number } | null {
-  const m = /^(.*):(\d+)(?::(\d+))?$/.exec(source)
+export function resolveSource(root: string, source: string): ResolvedSource | null {
+  // Non-greedy path so "a/b.tsx:7:41" parses as file="a/b.tsx", line=7, col=41
+  // (a greedy `.*` would swallow the line into the path and treat col as line).
+  const m = /^(.+?):(\d+)(?::(\d+))?$/.exec(source)
   if (!m) return null
   const rel = m[1]
   if (isAbsolute(rel)) return null
@@ -68,7 +82,7 @@ function resolveSource(
 // Anything else (from a hostile prop schema or a spoofed edit) must never be
 // spliced into source.
 const ATTR_NAME_RE = /^[A-Za-z_][\w-]*$/
-const isValidAttrName = (name: string): boolean => ATTR_NAME_RE.test(name)
+export const isValidAttrName = (name: string): boolean => ATTR_NAME_RE.test(name)
 
 function jsxName(node: BabelNode | { type: string; name?: string } | undefined): string {
   if (!node) return ''
@@ -145,7 +159,7 @@ async function findElementAtLine(
   return enclosing ? wrap(enclosing) : null
 }
 
-interface CurrentAttr {
+export interface CurrentAttr {
   name: string
   kind: PropKind
   value?: string | number | boolean
@@ -234,7 +248,7 @@ async function schemaFor(code: string, name: string): Promise<PropField[]> {
 const MODULE_EXTS = ['.tsx', '.ts', '.jsx', '.js']
 
 /** Is `file` inside the project root (refuse imports that escape it)? */
-function withinRoot(root: string, file: string): boolean {
+export function withinRoot(root: string, file: string): boolean {
   const rel = relative(root, file)
   return !rel.startsWith('..') && !isAbsolute(rel)
 }
@@ -337,9 +351,41 @@ function docgenPropToField(name: string, p: DocgenProp): PropField {
   }
 }
 
+/**
+ * Merge a component's prop schema with the values actually set on the element:
+ * schema-defined props first (richer — types, enums, descriptions) with any
+ * current value overlaid, then attributes present on the element but not in the
+ * schema. Shared by the React and Svelte adapters.
+ */
+export function mergeFields(schema: PropField[], current: CurrentAttr[]): PropField[] {
+  const currentByName = new Map(current.map((c) => [c.name, c]))
+  const fields: PropField[] = []
+  const seen = new Set<string>()
+  for (const f of schema) {
+    seen.add(f.name)
+    const cur = currentByName.get(f.name)
+    fields.push({
+      ...f,
+      ...(cur && !cur.expression ? { value: cur.value, fromSchema: false } : {}),
+      ...(cur?.expression ? { expression: true } : {})
+    })
+  }
+  for (const c of current) {
+    if (seen.has(c.name)) continue
+    fields.push({
+      name: c.name,
+      kind: c.kind,
+      ...(c.value !== undefined ? { value: c.value } : {}),
+      ...(c.expression ? { expression: true } : {})
+    })
+  }
+  return fields
+}
+
 async function inspectProps(root: string, source: string): Promise<PropInspection | null> {
   const loc = resolveSource(root, source)
   if (!loc) return null
+  if (loc.file.endsWith('.svelte')) return inspectSvelteProps(root, source, loc)
   let code: string
   try {
     code = await readFile(loc.file, 'utf8')
@@ -350,7 +396,6 @@ async function inspectProps(root: string, source: string): Promise<PropInspectio
   if (!found) return null
 
   const current = readAttributes(found.opening)
-  const currentByName = new Map(current.map((c) => [c.name, c]))
 
   // Schema only resolves for capitalized components (host tags like <h1> have none).
   const isComponent = /^[A-Z]/.test(found.name)
@@ -369,29 +414,7 @@ async function inspectProps(root: string, source: string): Promise<PropInspectio
     }
   }
 
-  const fields: PropField[] = []
-  const seen = new Set<string>()
-  // Schema-defined props first (richer: types, enums, descriptions), with any
-  // current value overlaid.
-  for (const f of schema) {
-    seen.add(f.name)
-    const cur = currentByName.get(f.name)
-    fields.push({
-      ...f,
-      ...(cur && !cur.expression ? { value: cur.value, fromSchema: false } : {}),
-      ...(cur?.expression ? { expression: true } : {})
-    })
-  }
-  // Then attributes present on the element but not in the schema.
-  for (const c of current) {
-    if (seen.has(c.name)) continue
-    fields.push({
-      name: c.name,
-      kind: c.kind,
-      ...(c.value !== undefined ? { value: c.value } : {}),
-      ...(c.expression ? { expression: true } : {})
-    })
-  }
+  const fields = mergeFields(schema, current)
 
   const note = isComponent
     ? schema.length
@@ -425,6 +448,7 @@ async function applyPropEdit(root: string, edit: PropEdit): Promise<PropEditResu
   }
   const loc = resolveSource(root, edit.source)
   if (!loc) return { applied: false, error: 'Could not resolve the source location.' }
+  if (loc.file.endsWith('.svelte')) return applySvelteEdit(root, edit, loc)
   let code: string
   try {
     code = await readFile(loc.file, 'utf8')
@@ -454,7 +478,7 @@ async function applyPropEdit(root: string, edit: PropEdit): Promise<PropEditResu
   return { applied: true }
 }
 
-function agentPromptFor(edit: PropEdit): string {
+export function agentPromptFor(edit: PropEdit): string {
   const val = typeof edit.value === 'string' ? `"${edit.value}"` : String(edit.value)
   return `In ${edit.source}, set the \`${edit.name}\` prop of the selected element to ${val}.`
 }
