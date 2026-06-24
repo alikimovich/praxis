@@ -51,6 +51,12 @@ export default function ChatPanel(): React.JSX.Element {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const streamingId = useRef<string | null>(null)
 
+  // Don't carry a publish result across projects (it'd show under the new repo).
+  useEffect(() => {
+    setPublishMsg(null)
+    setPublishing(false)
+  }, [projectRoot])
+
   useEffect(() => {
     return window.api.agent.onEvent((event) => {
       const id = streamingId.current
@@ -150,15 +156,20 @@ export default function ChatPanel(): React.JSX.Element {
     void window.api.agent.respondPermission(id, behavior)
   }
 
-  const addNote = async (text: string): Promise<void> => {
-    if (!projectRoot || !selected) return
-    const list = await window.api.annotations.add(projectRoot, {
-      source: selected.source,
-      selector: selected.selector,
-      tag: selected.tag,
-      text
-    })
-    setNotes(list)
+  const addNote = async (text: string): Promise<boolean> => {
+    if (!projectRoot || !selected) return false
+    try {
+      const list = await window.api.annotations.add(projectRoot, {
+        source: selected.source,
+        selector: selected.selector,
+        tag: selected.tag,
+        text
+      })
+      setNotes(list)
+      return true
+    } catch {
+      return false
+    }
   }
 
   const removeNote = async (id: string): Promise<void> => {
@@ -246,7 +257,7 @@ export default function ChatPanel(): React.JSX.Element {
             onAsk={askAboutSelection}
             onClear={() => setSelected(null)}
             onSeedPrompt={seedPrompt}
-            onAddNote={(text) => void addNote(text)}
+            onAddNote={addNote}
           />
         )}
         <NotesPanel

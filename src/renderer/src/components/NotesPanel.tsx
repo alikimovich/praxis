@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { Annotation } from '../../../shared/api'
 
 interface Props {
@@ -21,6 +22,12 @@ export default function NotesPanel({
   onRemove,
   onPublish
 }: Props): React.JSX.Element | null {
+  const focusedRef = useRef<HTMLLIElement>(null)
+  // Scroll a pin-focused note into view (the list scrolls past ~5 notes).
+  useEffect(() => {
+    if (focusedId) focusedRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [focusedId])
+
   if (notes.length === 0) return null
   return (
     <div className="notes">
@@ -37,7 +44,11 @@ export default function NotesPanel({
       )}
       <ul className="notes__list">
         {notes.map((n, i) => (
-          <li key={n.id} className={`notes__item ${n.id === focusedId ? 'is-focused' : ''}`}>
+          <li
+            key={n.id}
+            ref={n.id === focusedId ? focusedRef : undefined}
+            className={`notes__item ${n.id === focusedId ? 'is-focused' : ''}`}
+          >
             <span className="notes__num">{i + 1}</span>
             <div className="notes__body">
               <div className="notes__where">{n.source ?? n.selector}</div>
