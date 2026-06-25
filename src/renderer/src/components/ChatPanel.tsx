@@ -13,7 +13,7 @@ import {
   useSetup,
   useTokens
 } from '../store'
-import type { PermissionMode, Token } from '../../../shared/api'
+import type { PermissionMode, SetupResult, Token } from '../../../shared/api'
 import Inspector from './Inspector'
 import Markdown from './Markdown'
 import NotesPanel from './NotesPanel'
@@ -39,6 +39,53 @@ const PERMISSION_MODES: { value: PermissionMode; label: string }[] = [
   { value: 'acceptEdits', label: 'Auto-accept edits' },
   { value: 'bypassPermissions', label: 'Auto: approve all' }
 ]
+
+/**
+ * Framework-correct setup instructions for the agent. Returns null when the
+ * framework isn't one dsgn can instrument — never hand React instructions to a
+ * non-React repo.
+ */
+function setupPrompt(res: SetupResult): string | null {
+  const file = res.files?.[0]
+  switch (res.framework) {
+    case 'react':
+      return (
+        `dsgn detected a React project and added a dev-only Babel plugin at \`${file}\`. Please: ` +
+        `(1) read the actual vite.config and wire ${file} into the React plugin's Babel config ` +
+        `(\`react({ babel: { plugins: [...] } })\`) FOR DEVELOPMENT ONLY — gate it on the serve/dev ` +
+        `command; if the config shape differs, adapt to the real file or tell me what's blocking ` +
+        `rather than guessing. (2) Add an explicit \`interface Props\` to the components so their ` +
+        `props are editable. Then I'll reload the preview.`
+      )
+    case 'solid':
+      return (
+        `dsgn detected a Solid project and added a dev-only Babel JSX plugin at \`${file}\`. Please ` +
+        `wire ${file} into the Solid Vite plugin's Babel config for development only (adapt to the ` +
+        `real config), and type each component's props with an explicit \`Props\` type. Then I'll ` +
+        `reload the preview.`
+      )
+    case 'svelte': {
+      const typing =
+        res.svelteMajor && res.svelteMajor < 5
+          ? 'Type props with typed `export let` declarations (Svelte 4)'
+          : 'Type props with `interface Props` + `let { ... }: Props = $props()` (Svelte 5)'
+      return (
+        `dsgn detected a Svelte project and added a dev-only markup preprocessor at \`${file}\`. ` +
+        `Please: (1) read svelte.config.* and add ${file}'s default export to the \`preprocess\` ` +
+        `array FOR DEVELOPMENT ONLY (gate on dev; adapt to the real config, don't guess its shape). ` +
+        `(2) ${typing} so props are editable. Then I'll reload the preview.`
+      )
+    }
+    case 'vue':
+      return (
+        `dsgn detected a Vue project. Please add a DEV-ONLY way to map elements to their source as a ` +
+        `\`data-dsgn-source="path:line:col"\` attribute (e.g. vite-plugin-vue-inspector, or a small ` +
+        `template transform), and type props with \`defineProps<Props>()\`. Then I'll reload the preview.`
+      )
+    default:
+      return null
+  }
+}
 
 export default function ChatPanel(): React.JSX.Element {
   const { messages, isRunning, appendUser, startAssistant, appendDelta, appendStatus, finish } =
@@ -95,7 +142,10 @@ export default function ChatPanel(): React.JSX.Element {
           : `⚠️ ${event.message}`
         appendDelta(id, `\n\n${note}`)
         finish()
+        // The setup turn failed before wiring — disarm verification so the next
+        // unrelated readiness report isn't mistaken for a verdict.
         useSetup.getState().setBusy(false)
+        useSetup.getState().setVerifying(false)
         streamingId.current = null
       } else if (event.type === 'done') {
         finish()
@@ -151,7 +201,7 @@ export default function ChatPanel(): React.JSX.Element {
   const acceptSetup = async (): Promise<void> => {
     if (!projectRoot || setup.busy || isRunning) return
     setup.setBusy(true)
-    setup.setStatus('Adding the source-stamping plugin…')
+    setup.setStatus('Detecting framework + adding source-mapping…')
     try {
       const res = await window.api.setup.scaffold(projectRoot)
       if (!res.ok) {
@@ -159,24 +209,27 @@ export default function ChatPanel(): React.JSX.Element {
         setup.setBusy(false)
         return
       }
-      const where =
-        res.framework === 'vite'
-          ? 'the React Babel plugins in vite.config'
-          : res.framework === 'next'
-            ? 'the Babel/SWC config'
-            : 'the dev build config'
+      const prompt = setupPrompt(res)
+      if (!prompt) {
+        // Unsupported / undetected framework — stop and say so, never send a
+        // React prompt into a repo we couldn't classify.
+        setup.setStatus(
+          res.framework && res.framework !== 'unknown'
+            ? `Detected ${res.framework}, which dsgn can't auto-instrument yet. Ask me directly to add element→source mapping.`
+            : `Couldn't detect a supported framework (React/Svelte/Vue/Solid). Open one of those, or ask me directly.`
+        )
+        setup.setBusy(false)
+        return
+      }
       // Stream the agent turn into the chat (and flip `isRunning`) so the user can
       // watch progress and stop it. `busy` stays true until the turn finishes —
       // cleared by the `done`/`error` handler — so the card can't be re-triggered.
+      // `verifying` arms the next readiness report to confirm stamps actually fired.
       streamingId.current = startAssistant()
-      void window.api.agent.send(
-        `dsgn added a dev-only Babel plugin "${res.pluginFile}" that stamps data-dsgn-source ` +
-          `on JSX elements. Please (1) wire ${res.pluginFile} into ${where} for development only ` +
-          `(never production), and (2) add explicit TypeScript prop types/interfaces to the ` +
-          `components so their props become editable. Then I'll reload the preview.`
-      )
+      void window.api.agent.send(prompt)
+      setup.setVerifying(true)
       setup.setStatus(
-        'Asked dsgn to wire it in and type your components — reload the preview when it finishes.'
+        `Detected ${res.framework}. Asked dsgn to wire it in and type your components — reload the preview when it finishes.`
       )
     } catch {
       setup.setStatus('Setup could not be started.')

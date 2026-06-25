@@ -200,10 +200,13 @@ interface SetupState {
   needed: boolean
   dismissed: boolean
   busy: boolean
+  /** A setup was applied; the next readiness report verifies stamps actually fired. */
+  verifying: boolean
   status: string | null
   setNeeded: (needed: boolean) => void
   setDismissed: (dismissed: boolean) => void
   setBusy: (busy: boolean) => void
+  setVerifying: (verifying: boolean) => void
   setStatus: (status: string | null) => void
   reset: () => void
 }
@@ -212,12 +215,14 @@ export const useSetup = create<SetupState>((set) => ({
   needed: false,
   dismissed: false,
   busy: false,
+  verifying: false,
   status: null,
   setNeeded: (needed) => set({ needed }),
   setDismissed: (dismissed) => set({ dismissed }),
   setBusy: (busy) => set({ busy }),
+  setVerifying: (verifying) => set({ verifying }),
   setStatus: (status) => set({ status }),
-  reset: () => set({ needed: false, dismissed: false, busy: false, status: null })
+  reset: () => set({ needed: false, dismissed: false, busy: false, verifying: false, status: null })
 }))
 
 /** Design tokens detected for the open project (one source wins). */

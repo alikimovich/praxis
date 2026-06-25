@@ -167,12 +167,21 @@ export interface PublishResult {
 }
 
 /** Result of scaffolding source-stamping into an unprepared project. */
+export type Frontend = 'react' | 'svelte' | 'vue' | 'solid' | 'unknown'
+/** How dsgn instruments source mapping for the detected framework. */
+export type SetupStrategy = 'babel-plugin' | 'svelte-preprocess' | 'inspector' | 'none'
+
 export interface SetupResult {
   ok: boolean
-  framework?: 'vite' | 'next' | 'unknown'
-  /** The plugin file dsgn wrote (repo-relative). */
-  pluginFile?: string
-  /** False if the plugin file already existed. */
+  /** The detected UI framework (NOT the build tool) — drives everything. */
+  framework?: Frontend
+  /** The instrumentation approach chosen for that framework. */
+  strategy?: SetupStrategy
+  /** Svelte major version (4 or 5), so the prop-typing idiom is right. */
+  svelteMajor?: number
+  /** Repo-relative files dsgn wrote (under `.dsgn/`). */
+  files?: string[]
+  /** False if the helper already existed (idempotent). */
   written?: boolean
   error?: string
 }
@@ -261,6 +270,8 @@ export interface DsgnApi {
   setup: {
     /** Write the dev-only source-stamping plugin into the repo (deterministic). */
     scaffold: (root: string) => Promise<SetupResult>
+    /** Remove dsgn's scaffold files from the repo (the .dsgn helpers + legacy root plugin). */
+    uninstall: (root: string) => Promise<SetupResult>
   }
   agent: {
     openProject: (root: string, options?: AgentOptions) => Promise<void>
