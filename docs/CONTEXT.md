@@ -113,6 +113,8 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
 - `src/renderer/src/components/PropEditor.tsx` — typed prop controls rendered from the inspection.
 - `src/main/tokens.ts` — **design-token detection**: probes `.dsgn/tokens.json` → tailwind
   config (static parse) → CSS custom properties; `tokens:detect`. Palette in `TokenPalette.tsx`.
+  `tokens:scaffold` writes a starter `.dsgn/tokens.json` for token-less projects (offered on open
+  via `TokenOfferCard`; never shadows a live source or clobbers a manifest).
 - `src/main/setup.ts` — **framework-aware project setup**: `detect()` reads `package.json` deps
   FIRST, then `setup:scaffold` writes the right dev-only instrumentation into `.dsgn/` — a Babel
   JSX plugin (`dsgn-source.cjs`, React/Solid) or a `svelte/compiler` markup preprocessor

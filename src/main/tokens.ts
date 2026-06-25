@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
-import { readFile, readdir } from 'fs/promises'
+import { mkdir, readFile, readdir, writeFile } from 'fs/promises'
 import { join } from 'path'
-import type { Token, TokenGroup, TokenSet } from '../shared/api'
+import type { Token, TokenGroup, TokenScaffoldResult, TokenSet } from '../shared/api'
 
 /**
  * Design-token detection (the differentiator's last piece). A repo can expose
@@ -248,6 +248,48 @@ async function detectTokens(root: string): Promise<TokenSet> {
   )
 }
 
+// A small, framework-neutral starter palette for projects that have no tokens
+// yet — something to edit, and enough to make the palette useful from day one.
+const STARTER_MANIFEST = {
+  colors: {
+    primary: '#2563eb',
+    secondary: '#7c3aed',
+    text: '#111827',
+    muted: '#6b7280',
+    background: '#ffffff',
+    border: '#e5e7eb'
+  },
+  spacing: { xs: '4px', sm: '8px', md: '16px', lg: '24px', xl: '32px' },
+  radius: { sm: '4px', md: '8px', lg: '16px', full: '9999px' },
+  fontSize: { sm: '14px', base: '16px', lg: '20px', xl: '28px' }
+} as const
+
+/**
+ * Write a starter `.dsgn/tokens.json` so a token-less project gets an editable,
+ * canonical token source (which then wins detection). Idempotent: if a manifest
+ * already exists we leave it untouched and report `written: false`.
+ */
+async function scaffoldManifest(root: string): Promise<TokenScaffoldResult> {
+  try {
+    // Only scaffold when the project has NO tokens at all — never shadow a live
+    // source (Tailwind / CSS vars) or clobber an existing manifest with a starter.
+    const current = await detectTokens(root)
+    if (current.source !== 'none') {
+      return { ok: true, written: false, set: current }
+    }
+    await mkdir(join(root, '.dsgn'), { recursive: true })
+    await writeFile(
+      join(root, '.dsgn', 'tokens.json'),
+      JSON.stringify(STARTER_MANIFEST, null, 2) + '\n',
+      'utf8'
+    )
+    return { ok: true, written: true, set: await detectTokens(root) }
+  } catch (err) {
+    return { ok: false, written: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
 export function registerTokensIpc(): void {
   ipcMain.handle('tokens:detect', (_e, root: string) => detectTokens(root))
+  ipcMain.handle('tokens:scaffold', (_e, root: string) => scaffoldManifest(root))
 }

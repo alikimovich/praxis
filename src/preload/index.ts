@@ -18,6 +18,7 @@ import type {
   SelectedElement,
   SetupResult,
   SimPreflight,
+  TokenScaffoldResult,
   TokenSet
 } from '../shared/api'
 
@@ -95,7 +96,9 @@ const api: DsgnApi = {
       ipcRenderer.invoke('text:apply', root, edit)
   },
   tokens: {
-    detect: (root: string): Promise<TokenSet> => ipcRenderer.invoke('tokens:detect', root)
+    detect: (root: string): Promise<TokenSet> => ipcRenderer.invoke('tokens:detect', root),
+    scaffold: (root: string): Promise<TokenScaffoldResult> =>
+      ipcRenderer.invoke('tokens:scaffold', root)
   },
   annotations: {
     list: (root: string): Promise<Annotation[]> => ipcRenderer.invoke('annotations:list', root),

@@ -268,6 +268,16 @@ export interface TokenSet {
   groups: TokenGroup[]
 }
 
+/** Result of scaffolding a starter `.dsgn/tokens.json` manifest. */
+export interface TokenScaffoldResult {
+  ok: boolean
+  /** False if a manifest already existed (idempotent — nothing written). */
+  written: boolean
+  /** The token set after scaffolding (now sourced from the manifest). */
+  set?: TokenSet
+  error?: string
+}
+
 /** The surface exposed on `window.api` by the preload bridge. */
 export interface DsgnApi {
   preview: {
@@ -325,6 +335,8 @@ export interface DsgnApi {
   tokens: {
     /** Detect design tokens in the repo (manifest → tailwind → CSS vars). */
     detect: (root: string) => Promise<TokenSet>
+    /** Write a starter `.dsgn/tokens.json` (idempotent — skips if one exists). */
+    scaffold: (root: string) => Promise<TokenScaffoldResult>
   }
   annotations: {
     list: (root: string) => Promise<Annotation[]>
