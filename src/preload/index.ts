@@ -7,6 +7,7 @@ import type {
   Bounds,
   BranchResult,
   CommentMode,
+  Diagnosis,
   DetectedProject,
   DsgnApi,
   Framework,
@@ -93,6 +94,12 @@ const api: DsgnApi = {
     ensure: (root: string): Promise<BranchResult> => ipcRenderer.invoke('git:ensure', root),
     set: (root: string, name: string): Promise<BranchResult> =>
       ipcRenderer.invoke('git:set', root, name)
+  },
+  diagnose: {
+    run: (root: string, error: string, context?: string): Promise<Diagnosis | null> =>
+      ipcRenderer.invoke('diagnose:run', root, error, context),
+    record: (root: string, signature: string, status: 'applied' | 'dismissed'): Promise<void> =>
+      ipcRenderer.invoke('diagnose:record', root, signature, status)
   },
   simulator: {
     preflight: (): Promise<SimPreflight> => ipcRenderer.invoke('simulator:preflight'),

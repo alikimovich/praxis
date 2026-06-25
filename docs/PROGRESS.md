@@ -27,6 +27,28 @@ Newest first. Append a dated entry when you finish a chunk of work.
   stale re-arm on project switch); and an annotation submitted before the session
   is ready logs feedback instead of dropping silently.
 
+## 2026-06-25 — AI diagnose-on-failure → propose-first fix card + per-machine memory
+
+- When opening/launching a project fails (web or simulator — both throw into the
+  one `attempt` catch), dsgn now asks the agent to **diagnose** it and shows a
+  **propose-first** card: a one-line root cause + numbered steps, each tagged
+  **repo** (a fix dsgn can apply) or **host** (sudo / global / download — the user
+  runs it), with the exact shell command + a Copy button. Nothing runs
+  automatically (user-chosen). "Apply repo fix" seeds the chat with the repo steps
+  for the agent to execute (reviewed + sent); host steps are copy-only.
+- **Per-machine memory** (user-chosen scope): `src/main/diag-cache.ts` (pure, fs)
+  caches each diagnosis in the app's userData (NOT the repo), keyed by project path
+  + a normalized error **signature** (paths/ids/numbers stripped, so the same error
+  class recalls instantly across runs). A repeat error is recalled with "seen before"
+  — no model call. `diagnose:record` stores applied/dismissed.
+- **One-shot, tool-less SDK turn** (`src/main/diagnose.ts`): cwd=repo, no tools, no
+  settings, asks for a strict JSON plan; degrades to null without auth (the raw
+  error still shows). Recall happens before any model call.
+- Tests: `test/diag-cache.mjs` (signature normalization incl. the module-name-vs-path
+  fix, recall/remember, per-project, status) + `test/diagnose-card.mjs` (renders
+  repo/host steps, Apply seeds the composer + clears, Dismiss clears). `bun run
+  verify` green (25 checks).
+
 ## 2026-06-25 — Svelte component prop schema reachable via selection (option D)
 
 - Bug: selecting a rendered Svelte component never showed its prop schema. A

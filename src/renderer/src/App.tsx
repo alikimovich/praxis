@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import ChatPanel from './components/ChatPanel'
 import ConsolePanel from './components/ConsolePanel'
+import DiagnoseCard from './components/DiagnoseCard'
 import PreviewPane from './components/PreviewPane'
 import PropPanel from './components/PropPanel'
 import {
@@ -11,6 +12,7 @@ import {
   useAnnotations,
   useChat,
   useComposer,
+  useDiagnosis,
   useLog,
   usePermissions,
   useSelection,
@@ -34,6 +36,8 @@ export default function App(): React.JSX.Element {
   const [log, setLog] = useState('')
   const [chatWidth, setChatWidth] = useState(440)
   const dragging = useRef(false)
+  // The project a pending diagnosis belongs to (projectRoot is cleared on failure).
+  const diagRoot = useRef<string | null>(null)
   // When a launch fails we remember the folder so the user can retry with a
   // custom command (monorepos, non-standard dev scripts).
   const [retry, setRetry] = useState<{ root: string; command: string } | null>(null)
@@ -321,6 +325,45 @@ export default function App(): React.JSX.Element {
     window.api.preview.setDragging(true)
   }
 
+  // Propose-first: on a failure, recall a cached fix or ask the AI, then show a card.
+  const proposeFix = (root: string, error: string, context: string): void => {
+    diagRoot.current = root
+    const d = useDiagnosis.getState()
+    d.setCurrent(null)
+    d.setBusy(true)
+    void window.api.diagnose
+      .run(root, error, context)
+      .then((res) => d.setCurrent(res))
+      .catch(() => d.setCurrent(null))
+      .finally(() => d.setBusy(false))
+  }
+
+  // "Apply repo fix" hands the repo-scoped steps to the chat agent (the user
+  // reviews + sends), and records the choice in the per-machine memory.
+  const applyFix = (): void => {
+    const diag = useDiagnosis.getState().current
+    if (!diag) return
+    const repo = diag.steps.filter((s) => s.scope === 'repo')
+    if (repo.length) {
+      useComposer
+        .getState()
+        .setSeed(
+          `Fix this so the project runs: ${diag.summary}\n` +
+            repo.map((s) => `- ${s.text}${s.command ? ` (e.g. \`${s.command}\`)` : ''}`).join('\n')
+        )
+    }
+    if (diagRoot.current)
+      void window.api.diagnose.record(diagRoot.current, diag.signature, 'applied')
+    useDiagnosis.getState().setCurrent(null)
+  }
+
+  const dismissFix = (): void => {
+    const diag = useDiagnosis.getState().current
+    if (diag && diagRoot.current)
+      void window.api.diagnose.record(diagRoot.current, diag.signature, 'dismissed')
+    useDiagnosis.getState().setCurrent(null)
+  }
+
   const attempt = async (root: string, commandOverride?: string): Promise<void> => {
     let attemptedCommand = commandOverride ?? ''
     // Opening (or re-opening) a project starts fresh: a pick from the previous
@@ -331,6 +374,7 @@ export default function App(): React.JSX.Element {
     usePermissions.getState().clearPending()
     useSession.getState().setProjectRoot(null)
     useSession.getState().setBranch(null)
+    useDiagnosis.getState().setCurrent(null)
     useAnnotations.getState().setList([])
     useAnnotations.getState().setFocused(null)
     useTokens.getState().reset()
@@ -448,6 +492,7 @@ export default function App(): React.JSX.Element {
       setRetry({ root, command: attemptedCommand })
       log.append(message, 'error')
       setStatus({ kind: 'error', message })
+      proposeFix(root, message, `previewKind=${previewKind}; command=${attemptedCommand}`)
     }
   }
 
@@ -708,6 +753,8 @@ export default function App(): React.JSX.Element {
           </button>
         </div>
       )}
+
+      <DiagnoseCard onApply={applyFix} onDismiss={dismissFix} />
 
       <div className="panes">
         <section className="pane pane--chat" style={{ width: chatWidth }}>

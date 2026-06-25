@@ -23,6 +23,31 @@ export type Framework =
  */
 export type PreviewKind = 'web' | 'simulator'
 
+/**
+ * AI-assisted diagnosis of an open/launch failure. dsgn *proposes* a fix (never
+ * auto-runs): repo-scoped steps it can apply, host-scoped steps (sudo / global /
+ * downloads) the user runs. Cached per-machine by `signature` so a repeat error
+ * recalls the plan instead of re-diagnosing.
+ */
+export interface DiagStep {
+  text: string
+  /** Optional exact shell command (shown with a copy button). */
+  command?: string
+  /** 'repo' = dsgn can apply it; 'host' = machine-level, the user must run it. */
+  scope: 'repo' | 'host'
+}
+export interface Diagnosis {
+  /** Stable cache key derived from the error. */
+  signature: string
+  summary: string
+  detail?: string
+  steps: DiagStep[]
+  /** True when recalled from the per-machine cache rather than freshly diagnosed. */
+  seenBefore: boolean
+  /** Last recorded outcome for this signature on this machine. */
+  status?: 'proposed' | 'applied' | 'dismissed'
+}
+
 /** Result of ensuring/switching the opened project's `dsgn/*` working branch. */
 export interface BranchResult {
   isRepo: boolean
@@ -346,6 +371,12 @@ export interface DsgnApi {
     ensure: (root: string) => Promise<BranchResult>
     /** Switch to / create a specific branch (name is coerced to `dsgn/<…>`). */
     set: (root: string, name: string) => Promise<BranchResult>
+  }
+  diagnose: {
+    /** Recall a cached fix for this error, else ask the AI; caches the result. Null without auth. */
+    run: (root: string, error: string, context?: string) => Promise<Diagnosis | null>
+    /** Record the user's decision for a signature (per-machine memory). */
+    record: (root: string, signature: string, status: 'applied' | 'dismissed') => Promise<void>
   }
   simulator: {
     /** Probe the host for macOS + Xcode + a bootable simulator (read-only, never throws). */
