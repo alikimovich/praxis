@@ -149,7 +149,16 @@ export default function ChatPanel(): React.JSX.Element {
         streamingId.current = null
       } else if (event.type === 'done') {
         finish()
-        useSetup.getState().setBusy(false)
+        const s = useSetup.getState()
+        // `busy` set ⟺ this was the setup turn: it edited the build config, which
+        // the dev server only picks up on a full restart. Arm verification and ask
+        // App to restart + reload the preview (the post-restart readiness is the
+        // verdict). Normal chat turns leave the preview alone.
+        if (s.busy) {
+          s.setVerifying(true)
+          s.setRestartRequested(true)
+        }
+        s.setBusy(false)
         streamingId.current = null
       }
     })
@@ -224,12 +233,13 @@ export default function ChatPanel(): React.JSX.Element {
       // Stream the agent turn into the chat (and flip `isRunning`) so the user can
       // watch progress and stop it. `busy` stays true until the turn finishes —
       // cleared by the `done`/`error` handler — so the card can't be re-triggered.
-      // `verifying` arms the next readiness report to confirm stamps actually fired.
+      // `busy` also marks "this is the setup turn"; verification is armed only when
+      // it finishes (see the `done` handler), so a mid-turn dev-server auto-restart
+      // can't be mistaken for the verdict.
       streamingId.current = startAssistant()
       void window.api.agent.send(prompt)
-      setup.setVerifying(true)
       setup.setStatus(
-        `Detected ${res.framework}. Asked dsgn to wire it in and type your components — reload the preview when it finishes.`
+        `Detected ${res.framework}. Asked dsgn to wire it in and type your components — I'll restart the preview and verify automatically when it finishes.`
       )
     } catch {
       setup.setStatus('Setup could not be started.')
@@ -272,8 +282,17 @@ export default function ChatPanel(): React.JSX.Element {
   }
 
   // Interrupt the in-flight turn. The SDK emits a `result` → `done`, which clears
-  // `isRunning` (and any setup `busy`) via the agent-event handler.
+  // `isRunning` via the agent-event handler. An interrupt is indistinguishable
+  // from a clean completion at the `done` handler, so if this is a *setup* turn
+  // being cancelled, drop `busy` now: that's what marks "the setup turn finished
+  // successfully", so clearing it stops the incoming `done` from restarting the
+  // dev server + arming a (bogus) verdict against half-written config.
   const stop = (): void => {
+    const s = useSetup.getState()
+    if (s.busy) {
+      s.setBusy(false)
+      s.setStatus('Setup cancelled.')
+    }
     void window.api.agent.interrupt()
   }
 

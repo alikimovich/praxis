@@ -58,9 +58,11 @@ Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 - [x] **Inline text editing.** ✅ 2026-06-24 — double-click a stamped text-only element in the
       preview to edit its text in place; writes straight to source (`applyTextEdit`), agent
       fallback for expression/mixed/Svelte content. (`test/text-edit.mjs`.)
-- [ ] Next: have the agent auto-restart the preview after setup so stamps apply without a
-      manual reload; first-run onboarding could also offer `.dsgn/tokens.json`. Svelte inline
-      text-splice (currently agent-fallback).
+- [x] **Auto-restart the preview after setup** so the wired-in config applies without a manual
+      reload; the post-restart readiness report is the verdict. ✅ 2026-06-24 — `App.restartPreview`,
+      `test/setup-restart.mjs`.
+- [ ] Next: first-run onboarding could offer `.dsgn/tokens.json`. Svelte inline text-splice
+      (currently agent-fallback).
 
 ## Polish (anytime)
 

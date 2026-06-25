@@ -35,6 +35,9 @@ export default function App(): React.JSX.Element {
   // When a launch fails we remember the folder so the user can retry with a
   // custom command (monorepos, non-standard dev scripts).
   const [retry, setRetry] = useState<{ root: string; command: string } | null>(null)
+  // How to relaunch the current preview (root + resolved dev command + framework),
+  // so we can restart the dev server after a setup turn edits the build config.
+  const launchSpec = useRef<{ root: string; command: string; framework?: Framework } | null>(null)
 
   const { selectMode, setSelectMode, setSelected } = useSelection()
   const selected = useSelection((s) => s.selected)
@@ -139,6 +142,16 @@ export default function App(): React.JSX.Element {
       }),
     []
   )
+
+  // The setup turn finished → restart the dev server + reload the preview so the
+  // freshly-wired config applies (one-shot: consume the signal, then restart).
+  const restartRequested = useSetup((s) => s.restartRequested)
+  useEffect(() => {
+    if (!restartRequested) return
+    useSetup.getState().setRestartRequested(false)
+    void restartPreview()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restartRequested])
 
   // Inline text edits committed in the preview → write to source (or hand
   // expression/mixed content to the agent).
@@ -245,7 +258,10 @@ export default function App(): React.JSX.Element {
       } else {
         log.append(`Using custom command "${command}"`)
       }
+      // Remember how to relaunch so a post-setup restart can reuse it. Only when
+      // we own the server (a fresh spawn) — never tear down a user-run one.
       const server = await window.api.devServer.start({ root, command, framework })
+      launchSpec.current = server.attached ? null : { root, command, framework }
       log.append(
         server.attached ? `Attached to running server at ${server.url}` : `Dev server at ${server.url}`,
         'success'
@@ -273,6 +289,7 @@ export default function App(): React.JSX.Element {
       setStatus({ kind: 'running', name, url })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
+      launchSpec.current = null
       await window.api.preview.reset()
       setRetry({ root, command: attemptedCommand })
       log.append(message, 'error')
@@ -301,6 +318,54 @@ export default function App(): React.JSX.Element {
     }
   }
 
+  // Restart the dev server and reload the preview — used after a setup turn edits
+  // the build config (Vite/SvelteKit read it only at boot, so a page reload alone
+  // won't apply the new source-stamping plugin). The post-restart readiness report
+  // is what verifies the stamps actually fired (see the readiness effect).
+  const restartPreview = async (): Promise<void> => {
+    const spec = launchSpec.current
+    if (!spec) {
+      // We don't own this server (attached to one the user already had running) —
+      // we can't restart it, and a page reload won't apply a config change. Be
+      // honest rather than emitting a false "no stamps" verdict.
+      useSetup.getState().setVerifying(false)
+      useSetup
+        .getState()
+        .setStatus(
+          'Setup wired the config, but dsgn is attached to your own dev server — restart it to apply the change.'
+        )
+      return
+    }
+    const root = spec.root
+    const name = root.split('/').filter(Boolean).pop() ?? root
+    // If the user opened a different project, that flow owns the server + status now.
+    const switched = (): boolean => useSession.getState().projectRoot !== root
+    const log = useLog.getState()
+    if (switched()) return
+    setSelected(null)
+    setStatus({ kind: 'busy', label: 'Restarting preview…' })
+    log.append('Restarting dev server to apply the new config…')
+    try {
+      await window.api.devServer.stop()
+      if (switched()) return
+      const server = await window.api.devServer.start(spec)
+      if (switched()) return
+      await window.api.preview.load(server.url)
+      log.append(`Preview restarted at ${server.url}`, 'success')
+      setStatus({ kind: 'running', name, url: server.url })
+    } catch (err) {
+      if (switched()) return
+      // A broken config edit can fail the relaunch — surface it and disarm the
+      // verification so it doesn't hang waiting for a readiness that won't come.
+      const message = err instanceof Error ? err.message : String(err)
+      useSetup.getState().setVerifying(false)
+      useSetup.getState().setStatus(`Couldn't restart the preview after setup: ${message}`)
+      log.append(message, 'error')
+      await window.api.preview.reset()
+      setStatus({ kind: 'error', message })
+    }
+  }
+
   const stop = async (): Promise<void> => {
     setSelectMode(false)
     setSelected(null)
@@ -311,6 +376,7 @@ export default function App(): React.JSX.Element {
     useSetup.getState().reset()
     void window.api.preview.setSelectMode(false)
     window.api.preview.setPanelInset(0)
+    launchSpec.current = null
     await window.api.devServer.stop()
     await window.api.preview.reset()
     setRetry(null)

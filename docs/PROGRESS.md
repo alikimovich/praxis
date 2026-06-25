@@ -2,6 +2,31 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-24 — Auto-restart the preview after setup
+
+- A setup turn edits the build config (vite.config / svelte.config), which
+  Vite/SvelteKit only read at boot — a page reload alone never applied the new
+  source-stamping plugin, so the user had to manually restart. Now dsgn does it.
+- `useSetup.busy` already uniquely marks "the setup turn is in progress" (only
+  `acceptSetup` sets it), so verification is now armed when that turn **finishes**
+  (the `done` handler), not when it's dispatched — closing a race where a
+  mid-turn dev-server auto-restart could be mistaken for the verdict.
+- On setup `done`: arm `verifying` + raise a one-shot `restartRequested`. App
+  consumes it and `restartPreview()` does `devServer.stop()` → `start()` (reusing
+  the captured launch spec: root + resolved dev command + framework) →
+  `preview.load(newUrl)`. The post-restart readiness report is the verdict. Only
+  restarts servers dsgn owns (skips attached). On relaunch failure (a broken
+  config edit) it disarms verification and surfaces the error instead of hanging.
+- New `test/setup-restart.mjs`: opens a fixture, drives the finished-setup signal,
+  asserts the server relaunches, the preview reloads, and the zero-stamp verdict
+  fires (no silent success). Also backfilled `verify` to run the setup tests.
+- Adversarial review (3 dimensions, independently verified) caught and fixed:
+  cancelling a setup turn no longer restarts (an interrupt arrives as `done` with
+  `busy` still set — `stop()` now clears it); a project switch mid-restart is
+  guarded (re-checks `projectRoot` after each await so it won't relaunch the old
+  project over the new one); and an attached (user-owned) server now reports
+  "restart it yourself" instead of a false zero-stamp verdict.
+
 ## 2026-06-24 — Framework-aware setup (detect before generating)
 
 - Fixed the core setup bug: dsgn assumed React and wrote a Babel JSX plugin
