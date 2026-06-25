@@ -85,6 +85,11 @@ web browser. Phased: mirror → interact → element-select. See
 - [x] **First-run `.dsgn/tokens.json` offer** — when a project has no tokens at all, offer a
       starter manifest (deterministic write; never shadows Tailwind/CSS or clobbers a manifest).
       ✅ 2026-06-24 — `scaffoldManifest` in tokens.ts, `TokenOfferCard`, `test/tokens-scaffold.mjs`.
+- [x] **Svelte component prop schema reachable (option D).** A host element inside a component
+      definition surfaces that file's own props (no DOM node carries the usage stamp); edits route
+      to the agent as a default change. ✅ 2026-06-25 — `inspectSvelteProps`, `test/prop-svelte-self.mjs`.
+- [ ] **Svelte per-instance prop editing (option C).** Map a clicked DOM node → its owning Svelte 5
+      component instance → the usage location, for true per-instance edits across all component shapes.
 
 ## Polish (anytime)
 
