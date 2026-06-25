@@ -29,6 +29,36 @@ web browser. Phased: mirror → interact → element-select. See
       analog, `setup.ts` strategy `babel-plugin-rn`) + `idb` view-hierarchy hit-test → reuse the
       existing Inspector/`props.inspect` flow.
 
+## v5 — multi-project workspace + agent sessions (Cursor/Conductor-style)
+
+Today dsgn is single-everything: one open project, one preview `WebContentsView`,
+one dev server, one persistent agent `query()` session. This milestone makes it a
+**workspace**: open several repos at once, switch between them, and see each
+project's agents — the ones working now and the ones that ran before — in a left
+rail, like Cursor/Conductor. A bigger architectural lift (most single-instance
+state in `main/index.ts` + `main/agent.ts` becomes per-project / per-session
+maps), so phase it.
+
+- [ ] **Open multiple projects.** A workspace tracks N open repos; a left-rail
+      project switcher (the screenshot's "Repositories" list). Switching swaps the
+      active preview view + chat + toolbar; each project keeps its own
+      `projectRoot`, dev server, preview URL, annotations, tokens, and setup state.
+      Decide lifecycle: keep inactive projects' dev servers warm vs suspend on
+      switch (bound concurrent servers/previews for memory — reuse the free-port +
+      ownership model).
+- [ ] **Multiple agent sessions per project.** Run more than one agent at a time
+      (parallel tasks / branches), each its own `query()` session + chat thread +
+      `dsgn/*` branch. A per-project session list with live status (working /
+      waiting-on-permission / idle / done), a "New agent" action, and switching
+      between threads. Requires `agent.ts` to hold a map of sessions, not one.
+- [ ] **Previous + working agents (history).** Persist finished sessions
+      (transcript, the branch/PR they produced, files touched) so "previous agents"
+      are reopenable to review or resume — not just the live ones. Surface them
+      under each project in the rail with status dots.
+- [ ] **Rail UI.** Left sidebar: repos → sessions, status indicators, new-agent,
+      and a way to jump to a session's preview + chat. Mirrors the attached
+      Cursor-style layout.
+
 ## v2 — design-system-aware select & edit (the differentiator)
 
 - [x] Inject a preload into the preview `WebContentsView` with a click-to-select overlay.
