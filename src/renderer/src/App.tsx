@@ -16,7 +16,7 @@ import {
   useSetup,
   useTokens
 } from './store'
-import type { Framework } from '../../shared/api'
+import type { Framework, PreviewKind } from '../../shared/api'
 
 const MIN_CHAT_WIDTH = 320
 const MAX_CHAT_WIDTH = 760
@@ -35,9 +35,16 @@ export default function App(): React.JSX.Element {
   // When a launch fails we remember the folder so the user can retry with a
   // custom command (monorepos, non-standard dev scripts).
   const [retry, setRetry] = useState<{ root: string; command: string } | null>(null)
-  // How to relaunch the current preview (root + resolved dev command + framework),
-  // so we can restart the dev server after a setup turn edits the build config.
-  const launchSpec = useRef<{ root: string; command: string; framework?: Framework } | null>(null)
+  // How to relaunch the current preview (root + resolved dev command + framework
+  // + previewKind), so we can restart the right backend after a setup/config turn.
+  const launchSpec = useRef<{
+    root: string
+    command: string
+    framework?: Framework
+    previewKind: PreviewKind
+  } | null>(null)
+  // Web dev server vs iOS Simulator — drives which affordances show (e.g. Select).
+  const [previewKind, setPreviewKind] = useState<PreviewKind>('web')
 
   const { selectMode, setSelectMode, setSelected } = useSelection()
   const selected = useSelection((s) => s.selected)
@@ -51,6 +58,16 @@ export default function App(): React.JSX.Element {
   useEffect(
     () =>
       window.api.devServer.onLog((line) => {
+        setLog(line)
+        useLog.getState().append(line, 'server')
+      }),
+    []
+  )
+
+  // Simulator lifecycle logs (boot / Metro / app launch) → same activity console.
+  useEffect(
+    () =>
+      window.api.simulator.onLog((line) => {
         setLog(line)
         useLog.getState().append(line, 'server')
       }),
@@ -246,29 +263,60 @@ export default function App(): React.JSX.Element {
       let command = commandOverride
       let name = root.split('/').filter(Boolean).pop() ?? root
       let framework: Framework | undefined
+      // A custom command is assumed to be a web dev command; only auto-detection
+      // can route a project to the simulator path.
+      let kind: PreviewKind = 'web'
       if (!command) {
         log.append('Detecting framework + package manager…')
         const project = await window.api.project.detect(root)
         command = project.devCommand
         name = project.name
         framework = project.framework
+        kind = project.previewKind
         attemptedCommand = command
-        log.append(`Detected ${project.framework} · ${project.packageManager} · "${command}"`)
+        log.append(
+          `Detected ${project.framework} · ${project.packageManager} · ${project.previewKind} · "${command}"`
+        )
         setStatus({ kind: 'busy', label: `Starting ${command}…` })
       } else {
         log.append(`Using custom command "${command}"`)
       }
-      // Remember how to relaunch so a post-setup restart can reuse it. Only when
-      // we own the server (a fresh spawn) — never tear down a user-run one.
-      const server = await window.api.devServer.start({ root, command, framework })
-      launchSpec.current = server.attached ? null : { root, command, framework }
-      log.append(
-        server.attached ? `Attached to running server at ${server.url}` : `Dev server at ${server.url}`,
-        'success'
-      )
-      await window.api.preview.load(server.url)
+      setPreviewKind(kind)
+
+      let url: string
+      if (kind === 'simulator') {
+        // iOS Simulator path (React Native / Expo). Preflight first so a non-Mac
+        // or missing-Xcode host gets a clear card, not a crash.
+        log.append('Checking simulator prerequisites…')
+        const pf = await window.api.simulator.preflight()
+        if (!pf.ok) throw new Error(pf.reason ?? 'Simulator preview is unavailable on this machine.')
+        log.append(`Simulator available — ${pf.devices.length} device(s)`, 'success')
+        setStatus({ kind: 'busy', label: 'Booting simulator…' })
+        await window.api.devServer.stop() // tear down any web server from a prior project
+        // Ignore the detected `expo start` for the auto path — `simulator.start`
+        // defaults to `expo run:ios` (build + install + launch + serve).
+        const sim = await window.api.simulator.start({ root, command: commandOverride })
+        launchSpec.current = { root, command: commandOverride ?? '', framework, previewKind: kind }
+        log.append(`Simulator preview at ${sim.url}`, 'success')
+        url = sim.url
+      } else {
+        await window.api.simulator.stop() // tear down any simulator from a prior project
+        // Remember how to relaunch so a post-setup restart can reuse it. Only when
+        // we own the server (a fresh spawn) — never tear down a user-run one.
+        const server = await window.api.devServer.start({ root, command, framework })
+        launchSpec.current = server.attached
+          ? null
+          : { root, command, framework, previewKind: kind }
+        log.append(
+          server.attached
+            ? `Attached to running server at ${server.url}`
+            : `Dev server at ${server.url}`,
+          'success'
+        )
+        url = server.url
+      }
+      await window.api.preview.load(url)
       log.append('Preview loaded')
-      const url = server.url
       await window.api.agent.openProject(root, {
         ...toAgentOptions(useSession.getState()),
         permissionMode: usePermissions.getState().mode
@@ -344,15 +392,28 @@ export default function App(): React.JSX.Element {
     if (switched()) return
     setSelected(null)
     setStatus({ kind: 'busy', label: 'Restarting preview…' })
-    log.append('Restarting dev server to apply the new config…')
     try {
-      await window.api.devServer.stop()
+      let url: string
+      if (spec.previewKind === 'simulator') {
+        log.append('Restarting the simulator to apply the new config…')
+        await window.api.simulator.stop()
+        if (switched()) return
+        const sim = await window.api.simulator.start({
+          root: spec.root,
+          command: spec.command || undefined
+        })
+        url = sim.url
+      } else {
+        log.append('Restarting dev server to apply the new config…')
+        await window.api.devServer.stop()
+        if (switched()) return
+        const server = await window.api.devServer.start(spec)
+        url = server.url
+      }
       if (switched()) return
-      const server = await window.api.devServer.start(spec)
-      if (switched()) return
-      await window.api.preview.load(server.url)
-      log.append(`Preview restarted at ${server.url}`, 'success')
-      setStatus({ kind: 'running', name, url: server.url })
+      await window.api.preview.load(url)
+      log.append(`Preview restarted at ${url}`, 'success')
+      setStatus({ kind: 'running', name, url })
     } catch (err) {
       if (switched()) return
       // A broken config edit can fail the relaunch — surface it and disarm the
@@ -376,10 +437,13 @@ export default function App(): React.JSX.Element {
     useSetup.getState().reset()
     void window.api.preview.setSelectMode(false)
     window.api.preview.setPanelInset(0)
+    const spec = launchSpec.current
     launchSpec.current = null
-    await window.api.devServer.stop()
+    if (spec?.previewKind === 'simulator') await window.api.simulator.stop()
+    else await window.api.devServer.stop()
     await window.api.preview.reset()
     setRetry(null)
+    setPreviewKind('web')
     setStatus({ kind: 'idle' })
   }
 
@@ -400,14 +464,18 @@ export default function App(): React.JSX.Element {
         <div className="titlebar__actions">
           {status.kind === 'running' && (
             <>
-              <button
-                className={`btn ${selectMode ? 'btn--active' : 'btn--ghost'}`}
-                onClick={toggleSelect}
-                aria-pressed={selectMode}
-                title="Click an element in the preview to edit it"
-              >
-                {selectMode ? 'Selecting…' : 'Select'}
-              </button>
+              {/* Element-select maps clicks → DOM source; not yet wired for the
+                  simulator's streamed frame (Phase 3). Hidden in sim mode. */}
+              {previewKind !== 'simulator' && (
+                <button
+                  className={`btn ${selectMode ? 'btn--active' : 'btn--ghost'}`}
+                  onClick={toggleSelect}
+                  aria-pressed={selectMode}
+                  title="Click an element in the preview to edit it"
+                >
+                  {selectMode ? 'Selecting…' : 'Select'}
+                </button>
+              )}
               <button className="btn btn--ghost" onClick={reload}>
                 Reload
               </button>

@@ -25,6 +25,15 @@ const PIN_CLICK = 'dsgn:preview:pin-click'
 const READINESS = 'dsgn:preview:readiness'
 const TEXT_EDIT = 'dsgn:preview:text-edit'
 
+// The simulator preview loads dsgn's own sim-bridge page (an MJPEG <img> of the
+// booted device), flagged with `?dsgnSim=1`. There's no previewed-app DOM there
+// to highlight/stamp/inspect, so the entire web overlay below is skipped. The
+// query param (not a page global) is the signal because the preload runs in an
+// isolated world and can't see the page's `window`, but `location` is shared.
+// Phase 2/3 add the simulator-specific overlay separately.
+const IS_SIM_BRIDGE =
+  typeof location !== 'undefined' && /[?&]dsgnSim=1\b/.test(location.search)
+
 /** Computed styles worth surfacing in the inspector (curated, not the whole CSSOM). */
 const TRACKED_STYLES = [
   'color',
@@ -336,7 +345,8 @@ function setActive(next: boolean): void {
 }
 
 // Capture-phase so we see events before the page and can suppress the click.
-window.addEventListener('mousemove', onMove, true)
+if (!IS_SIM_BRIDGE) {
+  window.addEventListener('mousemove', onMove, true)
 window.addEventListener('click', onClick, true)
 window.addEventListener('dblclick', onDblClick, true)
 window.addEventListener('keydown', onKey, true)
@@ -373,8 +383,9 @@ window.addEventListener('load', () => {
   tick(0)
 })
 
-ipcRenderer.on(SET_MODE, (_e, next: boolean) => setActive(next))
-ipcRenderer.on(SET_PINS, (_e, pins: { id: string; selector: string }[]) => {
-  annotationPins = Array.isArray(pins) ? pins : []
-  buildPins()
-})
+  ipcRenderer.on(SET_MODE, (_e, next: boolean) => setActive(next))
+  ipcRenderer.on(SET_PINS, (_e, pins: { id: string; selector: string }[]) => {
+    annotationPins = Array.isArray(pins) ? pins : []
+    buildPins()
+  })
+}

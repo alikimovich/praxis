@@ -2,7 +2,13 @@ import { app, ipcMain, type BrowserWindow } from 'electron'
 import { spawn, type ChildProcess } from 'child_process'
 import { access, readFile } from 'fs/promises'
 import { basename, join } from 'path'
-import type { DetectedProject, Framework, PackageManager, RunningDevServer } from '../shared/api'
+import type {
+  DetectedProject,
+  Framework,
+  PackageManager,
+  PreviewKind,
+  RunningDevServer
+} from '../shared/api'
 import {
   URL_RE,
   findFreePort,
@@ -57,11 +63,20 @@ async function detectPackageManager(root: string): Promise<PackageManager> {
 }
 
 function detectFramework(deps: Record<string, string>): Framework {
+  // React Native targets are checked first: an Expo repo also lists `react-native`,
+  // and either one means "preview in a simulator", not a web dev server.
+  if (deps['expo']) return 'expo'
+  if (deps['react-native']) return 'react-native'
   if (deps['next']) return 'next'
   if (deps['@sveltejs/kit']) return 'sveltekit'
   if (deps['react-scripts']) return 'cra'
   if (deps['vite']) return 'vite'
   return 'unknown'
+}
+
+/** RN/Expo projects preview in the iOS Simulator; everything else is a web URL. */
+function previewKindFor(framework: Framework): PreviewKind {
+  return framework === 'expo' || framework === 'react-native' ? 'simulator' : 'web'
 }
 
 async function detect(root: string): Promise<DetectedProject> {
@@ -71,19 +86,29 @@ async function detect(root: string): Promise<DetectedProject> {
   }
   const pkg = JSON.parse(await readFile(pkgPath, 'utf8'))
   const scripts: Record<string, string> = pkg.scripts ?? {}
-  const scriptName = scripts.dev ? 'dev' : scripts.start ? 'start' : ''
-  if (!scriptName) {
-    throw new Error('No "dev" or "start" script in package.json. Use a custom command.')
-  }
   const packageManager = await detectPackageManager(root)
   const framework = detectFramework({ ...pkg.dependencies, ...pkg.devDependencies })
+  const previewKind = previewKindFor(framework)
+
+  const scriptName = scripts.dev ? 'dev' : scripts.start ? 'start' : ''
+  if (!scriptName && previewKind === 'web') {
+    throw new Error('No "dev" or "start" script in package.json. Use a custom command.')
+  }
+  // RN/Expo: prefer the repo's start script (usually `expo start`), but fall back
+  // to `expo start` directly so a repo without one still launches the simulator.
+  const devCommand =
+    scriptName !== ''
+      ? `${packageManager} run ${scriptName}`
+      : `${packageManager === 'npm' ? 'npx' : packageManager} expo start`
+
   return {
     root,
     name: pkg.name ?? basename(root),
     framework,
     packageManager,
     scriptName,
-    devCommand: `${packageManager} run ${scriptName}`
+    devCommand,
+    previewKind
   }
 }
 
