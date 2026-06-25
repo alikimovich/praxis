@@ -422,6 +422,8 @@ export interface DsgnApi {
   }
   agent: {
     openProject: (root: string, options?: AgentOptions) => Promise<void>
+    /** Close a project's agent session (single-active teardown / rail close). */
+    closeProject: (root: string) => Promise<void>
     send: (text: string) => Promise<void>
     setModel: (model: string) => Promise<void>
     /** Change the permission posture live (drives the SDK's setPermissionMode). */

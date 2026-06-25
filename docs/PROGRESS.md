@@ -2,6 +2,30 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-25 — v5-B: one agent session per project (S8)
+
+- `src/main/agent.ts`: replaced the single `session` + monotonic `currentEpoch`
+  with a `Map<projectKey, Session>` plus an `activeKey`. Each open project keeps
+  its own persistent `query()` session (cwd = its repo); only the **active**
+  project's session streams to the renderer (`emit` guards on
+  `!disposed && key === activeKey`), so a backgrounded session kept warm for a
+  fast switch can't leak into the visible chat. `permCounter` moved per-session and
+  its fallback ids are namespaced by project key (no cross-session collisions).
+- `agent:open-project` creates/replaces+activates a session for its key;
+  `send`/`setModel`/`setPermissionMode`/`respond-permission`/`interrupt` route to
+  the active session; `before-quit` closes all. New `agent:close-project` (+
+  `DsgnApi.agent.closeProject`) tears a project's session down; the renderer calls
+  it in the single-active teardown (switching), the failed-open cleanup, and stop.
+- New `test/agent-multi.mjs` proves the lifecycle without Claude creds — it probes
+  the synchronous "no active session" error to verify per-project sessions, active
+  routing, and close semantics (open A,B → active; close the active → cleared, NOT
+  auto-promoted; reopen re-activates; close last → none). Full verify green;
+  single-project agent path unchanged.
+- Review fix: closing the active project clears `activeKey` (it never auto-promotes
+  a backgrounded session — which would start emitting into a chat the renderer
+  isn't showing once the rail keeps sessions warm); the renderer re-activates
+  explicitly via open-project.
+
 ## 2026-06-25 — v5-A: multi-instance dev servers (S7)
 
 - `src/main/devserver.ts`: replaced the single `current` ChildProcess with a

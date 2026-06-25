@@ -1,6 +1,7 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
 import type { Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentEvent, AgentOptions, PermissionMode, PermissionRequest } from '../shared/api'
+import { projectKey } from '../shared/projectKey'
 
 // The Agent SDK is ESM-only; this CJS main bundle must reach it via a dynamic
 // import() (preserved by Rollup for external deps) rather than a static require.
@@ -67,6 +68,8 @@ interface PendingPrompt {
 }
 
 interface Session {
+  /** projectKey(root) — the map identity. */
+  key: string
   root: string
   options: AgentOptions
   input: InputStream
@@ -74,13 +77,28 @@ interface Session {
   abort: AbortController
   /** In-flight approve/deny prompts, keyed by request id. */
   pending: Map<string, PendingPrompt>
-  /** Emit an agent event to the renderer (epoch-guarded). */
+  /** Emit an agent event to the renderer (active-session-guarded). */
   emit: (event: AgentEvent) => void
+  /** Stop this session emitting (replaced / closed). */
+  dispose: () => void
 }
 
-let session: Session | null = null
-// Fallback request id when the SDK doesn't supply a toolUseID.
-let permCounter = 0
+// v5: one persistent session per open project (keyed by projectKey). Only the
+// ACTIVE project's session streams to the renderer; the guard is forward-looking
+// for the rail (which will keep backgrounded sessions warm). Today the renderer
+// is single-active — it closes a project's session when switching away — so no
+// backgrounded-but-live session exists yet.
+const sessions = new Map<string, Session>()
+let activeKey: string | null = null
+const activeSession = (): Session | null => (activeKey ? (sessions.get(activeKey) ?? null) : null)
+
+/** Tear down a session: stop it emitting, deny its prompts, abort, close input. */
+function closeSession(s: Session): void {
+  s.dispose()
+  ;[...s.pending.keys()].forEach((id) => resolvePending(s, id, 'deny'))
+  s.abort.abort()
+  s.input.close()
+}
 
 // Read-only tools are auto-approved even in "Ask" mode — they can't mutate the
 // repo, and prompting for every file read would make the agent unusable. The
@@ -96,24 +114,26 @@ function resolvePending(s: Session, id: string, behavior: 'allow' | 'deny'): voi
   p.settle(behavior)
   s.emit({ type: 'permission-resolved', id })
 }
-// Bumped whenever the active session changes; a session's output loop only
-// emits while its epoch is current, so a replaced/aborted session can't leak
-// stale events into the next project's chat.
-let currentEpoch = 0
 
 async function startSession(
   root: string,
   options: AgentOptions,
-  epoch: number,
   getWindow: () => BrowserWindow | null
 ): Promise<Session> {
+  const key = projectKey(root)
   const { query } = await loadSdk()
   const input = new InputStream()
   const abort = new AbortController()
   const pending = new Map<string, PendingPrompt>()
+  // Per-session: disposed when replaced/closed; namespaces fallback permission ids.
+  let disposed = false
+  let permCounter = 0
 
+  // Only the active, non-disposed session reaches the renderer — a replaced
+  // session (e.g. reopening the same project) can't leak stale events into the
+  // visible chat, and the active-key guard is ready for warm rail sessions.
   const emit = (event: AgentEvent): void => {
-    if (epoch !== currentEpoch) return
+    if (disposed || key !== activeKey) return
     getWindow()?.webContents.send('agent:event', event)
   }
 
@@ -148,11 +168,11 @@ async function startSession(
           emit({ type: 'status', text: describeTool(toolName, toolInput) })
           return { behavior: 'allow', updatedInput: toolInput }
         }
-        if (epoch !== currentEpoch || abort.signal.aborted || opts.signal.aborted) {
+        if (disposed || abort.signal.aborted || opts.signal.aborted) {
           return { behavior: 'deny', message: 'Session no longer active.' }
         }
         emit({ type: 'status', text: describeTool(toolName, toolInput) })
-        const id = opts.toolUseID || `perm${++permCounter}`
+        const id = opts.toolUseID || `${key}:perm${++permCounter}`
         const request: PermissionRequest = {
           id,
           toolName,
@@ -236,7 +256,19 @@ async function startSession(
     }
   })()
 
-  return { root, options, input, query: q, abort, pending, emit }
+  return {
+    key,
+    root,
+    options,
+    input,
+    query: q,
+    abort,
+    pending,
+    emit,
+    dispose: () => {
+      disposed = true
+    }
+  }
 }
 
 /** Pull a text delta out of a streaming partial-message event, shape-tolerant. */
@@ -279,25 +311,43 @@ function toolDetail(_name: string, input: unknown): string | undefined {
 
 export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('agent:open-project', async (_e, root: string, options: AgentOptions = {}) => {
-    if (session) {
-      session.abort.abort()
-      session.input.close()
-      // Settle + dismiss any open prompts so the previous SDK callback unblocks
-      // and stale cards don't linger over the next project.
-      ;[...session.pending.keys()].forEach((id) => resolvePending(session!, id, 'deny'))
+    const key = projectKey(root)
+    // Reopening the same project starts a fresh session — close the old one.
+    const existing = sessions.get(key)
+    if (existing) {
+      closeSession(existing)
+      sessions.delete(key)
     }
-    session = null
-    const epoch = ++currentEpoch
-    session = await startSession(root, options, epoch, getWindow)
+    const s = await startSession(root, options, getWindow)
+    sessions.set(key, s)
+    activeKey = key
+  })
+
+  // Close a project's session (renderer single-active teardown; the rail uses
+  // this when a project is closed, not merely switched away from).
+  ipcMain.handle('agent:close-project', async (_e, root: string) => {
+    const key = projectKey(root)
+    const s = sessions.get(key)
+    if (s) {
+      closeSession(s)
+      sessions.delete(key)
+    }
+    // Closing the active project clears `active` — never auto-promote an arbitrary
+    // backgrounded session (it would start emitting into a chat the renderer isn't
+    // showing). The renderer re-activates explicitly via open-project (and, once
+    // the rail keeps sessions warm, a future activate path).
+    if (activeKey === key) activeKey = null
   })
 
   ipcMain.handle('agent:set-model', async (_e, model: string) => {
+    const session = activeSession()
     if (!session) return
     await session.query.setModel?.(model)
     session.options.model = model
   })
 
   ipcMain.handle('agent:set-permission-mode', async (_e, mode: PermissionMode) => {
+    const session = activeSession()
     if (!session) return
     // Apply to the SDK first; only commit our copy if it took (keeps the toolbar
     // and the live agent in agreement).
@@ -315,10 +365,12 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   })
 
   ipcMain.handle('agent:respond-permission', async (_e, id: string, behavior: 'allow' | 'deny') => {
+    const session = activeSession()
     if (session) resolvePending(session, id, behavior)
   })
 
   ipcMain.handle('agent:send', async (_e, text: string) => {
+    const session = activeSession()
     if (!session) {
       getWindow()?.webContents.send('agent:event', {
         type: 'error',
@@ -330,18 +382,18 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   })
 
   ipcMain.handle('agent:interrupt', async () => {
+    const session = activeSession()
     if (!session) return
     // Release any open prompts (interrupt() may not abort their per-call signal),
     // so cards don't orphan and the SDK callbacks unblock.
-    ;[...session.pending.keys()].forEach((id) => resolvePending(session!, id, 'deny'))
+    ;[...session.pending.keys()].forEach((id) => resolvePending(session, id, 'deny'))
     await session.query.interrupt?.()
   })
 
-  // Don't leave the SDK's CLI subprocess running after dsgn quits.
+  // Don't leave any SDK CLI subprocess running after dsgn quits.
   app.on('before-quit', () => {
-    if (session) [...session.pending.keys()].forEach((id) => resolvePending(session!, id, 'deny'))
-    currentEpoch++
-    session?.abort.abort()
-    session?.input.close()
+    for (const s of sessions.values()) closeSession(s)
+    sessions.clear()
+    activeKey = null
   })
 }
