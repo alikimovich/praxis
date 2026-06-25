@@ -5,12 +5,24 @@
  */
 import assert from 'node:assert'
 import {
+  BLOCKED_PORTS,
   defaultPorts,
+  findFreePort,
   findRunningServer,
   hostVariants,
+  isPortFree,
   normalizeUrl,
   stripAnsi
 } from '../src/main/devserver-net.ts'
+
+// findFreePort returns a bindable port at or above the base (the preview port).
+const free = await findFreePort(7777)
+assert.ok(free >= 7777 && free <= 65535, `free port ${free} should be >= 7777`)
+assert.equal(await isPortFree(free), true, 'reported port is actually free')
+// It skips browser-blocked ports (6666 etc.) — starting in the IRC range must
+// never return a blocked port.
+const fromIrc = await findFreePort(6665)
+assert.equal(BLOCKED_PORTS.has(fromIrc), false, `findFreePort returned blocked port ${fromIrc}`)
 
 // ANSI color codes around the port (Vite prints a bold port) must be stripped,
 // or the parsed URL is garbage and readiness waits forever.

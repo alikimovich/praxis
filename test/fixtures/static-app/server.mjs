@@ -12,7 +12,10 @@ const server = createServer((_req, res) => {
   )
 })
 
-server.listen(0, () => {
-  const { port } = server.address()
-  console.log(`  ➜  Local:   http://localhost:${port}/`)
+// Honor PORT/HOST (the runner forces a free port ≥ 6666 bound to 127.0.0.1).
+const port = Number(process.env.PORT) || 0
+const host = process.env.HOST || undefined
+server.listen(port, host, () => {
+  const actual = server.address().port
+  console.log(`  ➜  Local:   http://localhost:${actual}/`)
 })

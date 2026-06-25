@@ -5,12 +5,34 @@ import { basename, join } from 'path'
 import type { DetectedProject, Framework, PackageManager, RunningDevServer } from '../shared/api'
 import {
   URL_RE,
-  findRunningServer,
+  findFreePort,
   hostVariants,
   normalizeUrl,
   stripAnsi,
   waitForReachable
 } from './devserver-net'
+
+// The preview always runs on a free port we pick (from this base) bound to IPv4
+// loopback — so it never collides with the framework default (5173/3000), never
+// hits the IPv4/IPv6 localhost mismatch, and never attaches to a stale server.
+// 7777, not 6666: the IRC ports (6665-6669) are on the browser/fetch
+// blocked-ports list, so a preview on 6666 can't be loaded or probed.
+const PREVIEW_PORT_BASE = 7777
+const PREVIEW_HOST = '127.0.0.1'
+
+/** Append the framework's port/host flags so the dev server binds where we want. */
+function withPort(command: string, framework: Framework | undefined, port: number): string {
+  switch (framework) {
+    case 'vite':
+    case 'sveltekit':
+      return `${command} -- --port ${port} --host ${PREVIEW_HOST}`
+    case 'next':
+      return `${command} -- --port ${port} -H ${PREVIEW_HOST}`
+    default:
+      // CRA + unknown/custom commands read PORT/HOST from the env we set instead.
+      return command
+  }
+}
 
 /**
  * Dev-server runner.
@@ -102,17 +124,23 @@ async function start(
 ): Promise<RunningDevServer> {
   stop() // drop any server we previously spawned
 
-  // Attach to an already-running server for this project rather than duplicating.
-  const existing = await findRunningServer(opts.framework)
-  if (existing) {
-    onLog(`A dev server is already running at ${existing} — attaching to it.`)
-    return { url: existing, pid: 0, attached: true }
+  // Give the preview its own free port (no collisions, no stale attaches).
+  const port = await findFreePort(PREVIEW_PORT_BASE)
+  onLog(`Assigned free port ${port} (binding ${PREVIEW_HOST}).`)
+  const command = withPort(opts.command, opts.framework, port)
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    FORCE_COLOR: '0',
+    BROWSER: 'none',
+    PORT: String(port),
+    HOST: PREVIEW_HOST,
+    HOSTNAME: PREVIEW_HOST
   }
-  return spawnDevServer(opts, onLog)
+  return spawnDevServer({ root: opts.root, command, env, port }, onLog)
 }
 
 function spawnDevServer(
-  opts: { root: string; command: string },
+  opts: { root: string; command: string; env: NodeJS.ProcessEnv; port: number },
   onLog: (line: string) => void
 ): Promise<RunningDevServer> {
   return new Promise<RunningDevServer>((resolve, reject) => {
@@ -120,7 +148,7 @@ function spawnDevServer(
       cwd: opts.root,
       shell: true,
       detached: true, // new process group so we can kill the whole tree
-      env: { ...process.env, FORCE_COLOR: '0', BROWSER: 'none' }
+      env: opts.env
     })
     current = child
 
@@ -128,25 +156,34 @@ function spawnDevServer(
     let urlFound: string | null = null
     let tail = ''
 
+    const settleWith = (url: string, note?: string): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      if (note) onLog(note)
+      resolve({ url, pid: child.pid!, attached: false })
+    }
+
+    // Primary: the server should come up on the exact port we assigned.
+    const forcedUrl = `http://${PREVIEW_HOST}:${opts.port}`
+    void (async () => {
+      if (await waitForReachable([forcedUrl], () => settled)) settleWith(forcedUrl, `Serving at ${forcedUrl}.`)
+    })()
+
     const onData = (buf: Buffer): void => {
       const text = stripAnsi(buf.toString())
       tail = (tail + text).slice(-4000)
       for (const line of text.split('\n')) {
         if (line.trim()) onLog(line.trimEnd())
       }
+      // Fallback: a framework that ignored our --port/PORT printed its own URL.
       if (settled || urlFound) return
       const match = text.match(URL_RE)
       if (match) {
         urlFound = normalizeUrl(match[1])
-        onLog(`Found ${urlFound} — waiting for it to respond…`)
         void (async () => {
           const reachable = await waitForReachable(hostVariants(urlFound), () => settled)
-          if (settled) return
-          settled = true
-          clearTimeout(timer)
-          if (reachable && reachable !== urlFound) onLog(`Serving at ${reachable}.`)
-          else if (!reachable) onLog('Server did not respond yet; loading anyway.')
-          resolve({ url: reachable ?? urlFound!, pid: child.pid!, attached: false })
+          if (reachable) settleWith(reachable, reachable !== forcedUrl ? `Serving at ${reachable}.` : undefined)
         })()
       }
     }

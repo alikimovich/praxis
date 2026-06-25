@@ -1,10 +1,45 @@
+import { createServer } from 'node:net'
 import type { Framework } from '../shared/api'
 
 /**
  * Pure networking helpers for the dev-server runner (no electron/child_process —
- * so they're unit-testable). Cover URL parsing, IPv4/IPv6 reachability, and
- * detecting an already-running dev server to attach to.
+ * so they're unit-testable). Cover URL parsing, IPv4/IPv6 reachability, finding
+ * a free port, and detecting an already-running dev server.
  */
+
+/** Can we bind `port` on `host`? (Used to pick a free preview port.) */
+export function isPortFree(port: number, host = '127.0.0.1'): Promise<boolean> {
+  return new Promise((resolve) => {
+    const srv = createServer()
+    srv.once('error', () => resolve(false))
+    srv.once('listening', () => srv.close(() => resolve(true)))
+    srv.listen(port, host)
+  })
+}
+
+// Ports browsers (Chromium) and the WHATWG fetch spec refuse to connect to — so
+// the preview and the readiness probe both reject them (e.g. 6666 is IRC). The
+// dev server could bind one, but nothing could load it. Skip them.
+// https://fetch.spec.whatwg.org/#port-blocking
+export const BLOCKED_PORTS = new Set([
+  1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79, 87, 95, 101, 102,
+  103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137, 139, 143, 161, 179, 389, 427, 465,
+  512, 513, 514, 515, 526, 530, 531, 532, 540, 548, 554, 556, 563, 587, 601, 636, 989, 990, 993,
+  995, 1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668,
+  6669, 6679, 6697, 10080
+])
+
+/**
+ * First free, browser-loadable port at or above `base` (a predictable,
+ * conflict-free preview port that isn't on the blocked list).
+ */
+export async function findFreePort(base: number, attempts = 200): Promise<number> {
+  for (let p = base; p < base + attempts && p <= 65535; p++) {
+    if (BLOCKED_PORTS.has(p)) continue
+    if (await isPortFree(p)) return p
+  }
+  throw new Error(`No free port found from ${base}.`)
+}
 
 export const URL_RE = /(https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0)(?::\d+)?[^\s)]*)/i
 

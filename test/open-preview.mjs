@@ -48,6 +48,9 @@ try {
     await new Promise((r) => setTimeout(r, 1000))
   }
   if (!previewUrl) throw new Error('preview never navigated to a localhost dev-server URL')
+  // The runner assigns a free, browser-loadable port at or above 7777.
+  const port = Number(new URL(previewUrl).port)
+  if (port < 7777) throw new Error(`preview port ${port} should be >= 7777 (forced free port)`)
 
   // Titlebar should reflect the running project.
   await win.waitForFunction(

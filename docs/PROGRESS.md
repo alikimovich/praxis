@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-24 — Preview runs on its own free port (7777+), bound to 127.0.0.1
+
+- dsgn now **always spawns the dev server on a free port it picks** (first free at/above
+  7777) **bound to 127.0.0.1**, via `--port/--host` flags (vite/sveltekit/next) or
+  `PORT`/`HOST` env (CRA/unknown). This kills the framework-default collisions
+  (5173/3000), the IPv4/IPv6 `localhost` mismatch, and the attach-to-a-stale-server
+  confusion in one move — the attach-on-open probe is dropped (always a fresh,
+  isolated server).
+- **Not 6666:** the IRC ports (6665-6669, 6679, 6697) are on the browser/WHATWG-fetch
+  blocked-ports list, so Chromium AND the Node `fetch` readiness probe refuse them —
+  a preview there can't load even though the server binds (curl works, which masked it).
+  `findFreePort` skips the whole blocked-ports list; base is 7777.
+- Readiness now probes the assigned port directly (primary) with the printed-URL parse
+  as fallback. `findFreePort`/`isPortFree`/`BLOCKED_PORTS` unit-tested; open-preview
+  asserts the preview lands on a port ≥ 7777. `bun run verify` green (13 tests).
+
 ## 2026-06-24 — Stop the in-flight agent turn + setup streams progress
 
 - A **Stop** affordance interrupts the running agent turn (`agent.interrupt()` → the
