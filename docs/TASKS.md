@@ -39,18 +39,34 @@ rail, like Cursor/Conductor. A bigger architectural lift (most single-instance
 state in `main/index.ts` + `main/agent.ts` becomes per-project / per-session
 maps), so phase it.
 
-- [ ] **Open multiple projects.** A workspace tracks N open repos; a left-rail
-      project switcher (the screenshot's "Repositories" list). Switching swaps the
-      active preview view + chat + toolbar; each project keeps its own
-      `projectRoot`, dev server, preview URL, annotations, tokens, and setup state.
-      Decide lifecycle: keep inactive projects' dev servers warm vs suspend on
-      switch (bound concurrent servers/previews for memory — reuse the free-port +
-      ownership model).
-- [ ] **Multiple agent sessions per project.** Run more than one agent at a time
-      (parallel tasks / branches), each its own `query()` session + chat thread +
-      `dsgn/*` branch. A per-project session list with live status (working /
-      waiting-on-permission / idle / done), a "New agent" action, and switching
-      between threads. Requires `agent.ts` to hold a map of sessions, not one.
+**Decisions (2026-06-25):**
+- **Sequencing:** the multi-instance *main-process* slices (dev servers, agent
+  sessions, preview state) overlap the files a parallel session is actively
+  editing — do them **after** that work lands, not concurrently, to avoid merge
+  churn. Renderer-side foundation is safe to do anytime.
+- **Dev-server lifecycle:** keep inactive projects' servers **warm up to a cap N,
+  then LRU-suspend** the least-recently-used (instant switch for recent projects,
+  bounded memory; reload on return for evicted ones).
+- **Agent sessions:** **one session per project** (not multiple-per-project) —
+  each open repo gets its own agent thread + `dsgn/*` branch; the rail lists
+  projects' sessions, not parallel threads within one project.
+- **Svelte option C** stays deferred — option D (component-level) is the shipped
+  baseline; revisit per-instance editing only with a stable Svelte API / real need.
+
+**Foundation shipped (2026-06-25):** `projectKey` (S0) + `useWorkspace` store (S2).
+See the PROGRESS entry.
+
+- [x] **Workspace store + project identity (S0/S2).** ✅ 2026-06-25 —
+      `src/shared/projectKey.ts`, `useWorkspace` in `store.ts`, live for the single
+      open project. `test/project-key.mjs`, `test/chat-render.mjs`.
+- [ ] **Open multiple projects (backend, after parallel work lands).** Per-root
+      Map for dev servers + the single preview view swapping to the active project's
+      URL (warm-to-N / LRU-suspend); each project keeps its own `projectRoot`, dev
+      server, preview URL, annotations, tokens, setup state. **Blocked on sequencing.**
+- [ ] **One agent session per project.** `agent.ts` holds a `Map<projectKey,
+      session>` (not one global session); send/interrupt/setModel route to the
+      active project's session; events stamped with the project so the renderer
+      routes them. **Blocked on sequencing** (shares `agent.ts` with parallel work).
 - [ ] **Previous + working agents (history).** Persist finished sessions
       (transcript, the branch/PR they produced, files touched) so "previous agents"
       are reopenable to review or resume — not just the live ones. Surface them
@@ -123,6 +139,8 @@ maps), so phase it.
       2026-06-25 — `src/preview/preload.ts`, `App.tsx`, `test/comment-mode.mjs`.
 - [ ] **Svelte per-instance prop editing (option C).** Map a clicked DOM node → its owning Svelte 5
       component instance → the usage location, for true per-instance edits across all component shapes.
+      **Deferred (2026-06-25):** needs Svelte-5 dev internals with no stable public API (fragile);
+      option D (component-level) is the baseline. Revisit only with a stable API / concrete need.
 
 ## Polish (anytime)
 
