@@ -426,7 +426,10 @@ export default function App(): React.JSX.Element {
 
       // Single-active: stop the previously-open project's dev server before
       // starting this one (multi-instance backend; the rail will keep them warm).
-      if (switching) await window.api.devServer.stop(prevRoot)
+      if (switching) {
+        await window.api.devServer.stop(prevRoot)
+        void window.api.agent.closeProject(prevRoot)
+      }
 
       // Do dsgn's work on a dsgn/* branch so the user's main branch stays clean.
       try {
@@ -509,6 +512,7 @@ export default function App(): React.JSX.Element {
       // already started — stop it so it isn't orphaned (the renderer would lose
       // its root once projectRoot/launchSpec are cleared).
       void window.api.devServer.stop(root)
+      void window.api.agent.closeProject(root)
       await window.api.preview.reset()
       setRetry({ root, command: attemptedCommand })
       log.append(message, 'error')
@@ -624,6 +628,7 @@ export default function App(): React.JSX.Element {
     launchSpec.current = null
     if (spec?.previewKind === 'simulator') await window.api.simulator.stop()
     else if (closing) await window.api.devServer.stop(closing)
+    if (closing) void window.api.agent.closeProject(closing)
     await window.api.preview.reset()
     setRetry(null)
     setPreviewKind('web')
