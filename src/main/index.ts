@@ -8,6 +8,7 @@ import { registerPropsIpc } from './props'
 import { registerAnnotationsIpc } from './annotations'
 import { registerTokensIpc } from './tokens'
 import { registerSetupIpc } from './setup'
+import { ensureBranch, switchBranch } from './git'
 
 let mainWindow: BrowserWindow | null = null
 let previewView: WebContentsView | null = null
@@ -248,6 +249,8 @@ app.whenReady().then(() => {
   registerAnnotationsIpc()
   registerTokensIpc()
   registerSetupIpc()
+  ipcMain.handle('git:ensure', (_e, root: string) => ensureBranch(root))
+  ipcMain.handle('git:set', (_e, root: string, name: string) => switchBranch(root, name))
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

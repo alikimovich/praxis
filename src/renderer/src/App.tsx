@@ -50,10 +50,27 @@ export default function App(): React.JSX.Element {
   const selected = useSelection((s) => s.selected)
   const inspection = useSelection((s) => s.inspection)
   const projectRoot = useSession((s) => s.projectRoot)
+  const branch = useSession((s) => s.branch)
+  const [editingBranch, setEditingBranch] = useState(false)
   const authNeeded = useSession((s) => s.authNeeded)
   const setAuthNeeded = useSession((s) => s.setAuthNeeded)
   const logOpen = useLog((s) => s.open)
   const logCount = useLog((s) => s.lines.length)
+
+  // Rename / switch the working branch (name is coerced to dsgn/<…> in main).
+  const changeBranch = async (name: string): Promise<void> => {
+    setEditingBranch(false)
+    const root = useSession.getState().projectRoot
+    if (!root || !name.trim() || name.trim() === branch) return
+    const res = await window.api.git.set(root, name.trim())
+    useSession.getState().setBranch(res.branch)
+    if (res.branch) {
+      useLog
+        .getState()
+        .append(`Switched to branch ${res.branch}${res.created ? ' (created)' : ''}`, 'success')
+    }
+    if (res.error) useLog.getState().append(`Couldn't switch branch: ${res.error}`, 'error')
+  }
 
   useEffect(
     () =>
@@ -244,6 +261,7 @@ export default function App(): React.JSX.Element {
     setSelected(null)
     usePermissions.getState().clearPending()
     useSession.getState().setProjectRoot(null)
+    useSession.getState().setBranch(null)
     useAnnotations.getState().setList([])
     useAnnotations.getState().setFocused(null)
     useTokens.getState().reset()
@@ -281,6 +299,21 @@ export default function App(): React.JSX.Element {
       } else {
         log.append(`Using custom command "${command}"`)
       }
+
+      // Do dsgn's work on a dsgn/* branch so the user's main branch stays clean.
+      try {
+        const b = await window.api.git.ensure(root)
+        useSession.getState().setBranch(b.branch)
+        if (b.isRepo && b.branch) {
+          log.append(`Working on branch ${b.branch}${b.created ? ' (created)' : ''}`, 'success')
+        } else if (!b.isRepo) {
+          log.append('Not a git repo — branch management off.')
+        }
+        if (b.error) log.append(`Couldn't switch branch: ${b.error}`, 'error')
+      } catch {
+        /* non-fatal — keep opening */
+      }
+
       setPreviewKind(kind)
 
       let url: string
@@ -465,6 +498,28 @@ export default function App(): React.JSX.Element {
       <header className="titlebar">
         <span className="titlebar__brand">dsgn</span>
         <span className="titlebar__hint">{hint}</span>
+        {branch &&
+          (editingBranch ? (
+            <input
+              className="branch__input"
+              defaultValue={branch}
+              autoFocus
+              spellCheck={false}
+              onBlur={(e) => void changeBranch(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void changeBranch(e.currentTarget.value)
+                else if (e.key === 'Escape') setEditingBranch(false)
+              }}
+            />
+          ) : (
+            <button
+              className="branch"
+              onClick={() => setEditingBranch(true)}
+              title="dsgn works on this branch — click to rename / switch"
+            >
+              ⎇ {branch}
+            </button>
+          ))}
         <div className="titlebar__actions">
           {status.kind === 'running' && (
             <>

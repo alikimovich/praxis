@@ -23,6 +23,17 @@ export type Framework =
  */
 export type PreviewKind = 'web' | 'simulator'
 
+/** Result of ensuring/switching the opened project's `dsgn/*` working branch. */
+export interface BranchResult {
+  isRepo: boolean
+  /** The branch now checked out (null if not a git repo or the switch failed). */
+  branch: string | null
+  /** True if this call created the branch. */
+  created: boolean
+  /** Set when a switch failed (e.g. conflicting uncommitted changes). */
+  error?: string
+}
+
 export interface DetectedProject {
   root: string
   name: string
@@ -313,6 +324,12 @@ export interface DsgnApi {
     }) => Promise<RunningDevServer>
     stop: () => Promise<void>
     onLog: (cb: (line: string) => void) => () => void
+  }
+  git: {
+    /** Ensure work happens on a `dsgn/*` branch (creates one off HEAD if needed). */
+    ensure: (root: string) => Promise<BranchResult>
+    /** Switch to / create a specific branch (name is coerced to `dsgn/<…>`). */
+    set: (root: string, name: string) => Promise<BranchResult>
   }
   simulator: {
     /** Probe the host for macOS + Xcode + a bootable simulator (read-only, never throws). */

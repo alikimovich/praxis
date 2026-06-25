@@ -5,6 +5,7 @@ import type {
   Annotation,
   AnnotationInput,
   Bounds,
+  BranchResult,
   DetectedProject,
   DsgnApi,
   Framework,
@@ -73,6 +74,11 @@ const api: DsgnApi = {
       ipcRenderer.on('devserver:log', listener)
       return () => ipcRenderer.removeListener('devserver:log', listener)
     }
+  },
+  git: {
+    ensure: (root: string): Promise<BranchResult> => ipcRenderer.invoke('git:ensure', root),
+    set: (root: string, name: string): Promise<BranchResult> =>
+      ipcRenderer.invoke('git:set', root, name)
   },
   simulator: {
     preflight: (): Promise<SimPreflight> => ipcRenderer.invoke('simulator:preflight'),

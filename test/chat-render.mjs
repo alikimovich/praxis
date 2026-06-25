@@ -111,6 +111,14 @@ try {
     throw new Error(`unexpected permission modes: ${JSON.stringify(modes)}`)
   }
 
+  // Working-branch pill: shows the branch and opens an inline editor on click.
+  await win.evaluate(() => window.__dsgnSession.getState().setBranch('dsgn/main'))
+  await win.waitForSelector('.branch', { timeout: 5000 })
+  const pill = (await win.textContent('.branch'))?.trim()
+  if (!pill?.includes('dsgn/main')) throw new Error(`branch pill: ${pill}`)
+  await win.click('.branch')
+  await win.waitForSelector('.branch__input', { timeout: 5000 })
+
   console.log('CHAT-RENDER OK')
 } catch (err) {
   console.error('CHAT-RENDER FAILED:', err?.message ?? err)

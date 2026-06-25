@@ -2,6 +2,25 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-25 — Work on a `dsgn/*` branch per project
+
+- Opening a project now puts dsgn's work on a **`dsgn/*` branch** so the user's main
+  branch stays clean. `src/main/git.ts` (pure, child_process only): `ensureBranch`
+  keeps an existing `dsgn/*` branch or creates `dsgn/<current-branch>` off HEAD
+  (`dsgn/work` when detached); `switchBranch` switches/creates a named one
+  (coerced to a git-ref-safe `dsgn/<…>`). `checkout -b` carries uncommitted changes
+  (nothing lost); a conflicting switch surfaces the error instead of forcing.
+- **Only manages the repo TOP LEVEL** (`isRepoRoot`, realpath-compared) — opening a
+  subdirectory of a larger repo (a monorepo package, or a fixture inside this repo)
+  is a no-op, so the test suite never switches dsgn's own branch.
+- The branch shows as a **clickable pill in the titlebar** (`⎇ dsgn/main`); clicking
+  opens an inline editor to rename/switch (Enter applies, Esc cancels). The open flow
+  logs `Working on branch … (created)` to the activity console.
+- `git:ensure`/`git:set` IPC; `useSession.branch`; `BranchResult` contract. Unit test
+  `test/git.mjs` (real temp repo: normalize, non-repo no-op, ensure create/keep,
+  switch create/existing); chat-render covers the pill + inline editor. `bun run
+  verify` green (22 checks); confirmed the suite leaves dsgn on `main`.
+
 ## 2026-06-25 — React Native / iOS-Simulator preview (Phase 1: live mirror)
 
 - New preview mode: a booted **iOS Simulator** running an Expo/React Native app

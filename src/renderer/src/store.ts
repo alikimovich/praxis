@@ -75,11 +75,14 @@ interface SessionState {
   authNeeded: boolean
   /** Absolute path of the open project (needed to resolve prop-edit sources). */
   projectRoot: string | null
+  /** The `dsgn/*` branch dsgn is working on (null if not a git repo). */
+  branch: string | null
   setModel: (model: string) => void
   setEffort: (effort: string) => void
   setSlashCommands: (commands: string[]) => void
   setAuthNeeded: (authNeeded: boolean) => void
   setProjectRoot: (projectRoot: string | null) => void
+  setBranch: (branch: string | null) => void
 }
 
 export const useSession = create<SessionState>((set) => ({
@@ -88,11 +91,13 @@ export const useSession = create<SessionState>((set) => ({
   slashCommands: [],
   authNeeded: false,
   projectRoot: null,
+  branch: null,
   setModel: (model) => set({ model }),
   setEffort: (effort) => set({ effort }),
   setSlashCommands: (slashCommands) => set({ slashCommands }),
   setAuthNeeded: (authNeeded) => set({ authNeeded }),
-  setProjectRoot: (projectRoot) => set({ projectRoot })
+  setProjectRoot: (projectRoot) => set({ projectRoot }),
+  setBranch: (branch) => set({ branch })
 }))
 
 /**
