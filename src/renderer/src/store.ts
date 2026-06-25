@@ -202,11 +202,18 @@ interface SetupState {
   busy: boolean
   /** A setup was applied; the next readiness report verifies stamps actually fired. */
   verifying: boolean
+  /**
+   * One-shot signal: the setup turn finished, so App should restart the dev
+   * server + reload the preview (a config edit only applies on a full restart).
+   * App consumes it and clears it.
+   */
+  restartRequested: boolean
   status: string | null
   setNeeded: (needed: boolean) => void
   setDismissed: (dismissed: boolean) => void
   setBusy: (busy: boolean) => void
   setVerifying: (verifying: boolean) => void
+  setRestartRequested: (restartRequested: boolean) => void
   setStatus: (status: string | null) => void
   reset: () => void
 }
@@ -216,13 +223,23 @@ export const useSetup = create<SetupState>((set) => ({
   dismissed: false,
   busy: false,
   verifying: false,
+  restartRequested: false,
   status: null,
   setNeeded: (needed) => set({ needed }),
   setDismissed: (dismissed) => set({ dismissed }),
   setBusy: (busy) => set({ busy }),
   setVerifying: (verifying) => set({ verifying }),
+  setRestartRequested: (restartRequested) => set({ restartRequested }),
   setStatus: (status) => set({ status }),
-  reset: () => set({ needed: false, dismissed: false, busy: false, verifying: false, status: null })
+  reset: () =>
+    set({
+      needed: false,
+      dismissed: false,
+      busy: false,
+      verifying: false,
+      restartRequested: false,
+      status: null
+    })
 }))
 
 /** Design tokens detected for the open project (one source wins). */
