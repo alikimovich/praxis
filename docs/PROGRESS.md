@@ -2,6 +2,28 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-25 — v5 foundation: projectKey + workspace store (S0/S2)
+
+- First, non-collision slices of the v5 multi-project roadmap (a planning workflow
+  mapped the single-instance machinery and ordered the slices to avoid the parallel
+  session's main-process edits — see `docs/TASKS.md` v5).
+- **S0** — `src/shared/projectKey.ts`: a pure, string-only canonical key for an open
+  project (separator/trailing-slash normalized, idempotent). Every later
+  `Map<root,*>` (dev servers, agent sessions, preview state, the renderer
+  workspace) keys on this so main and renderer dedupe the same repo. Pure bun test
+  `test/project-key.mjs`.
+- **S2** — `useWorkspace` store (renderer): the future source of truth for
+  multi-project — `projects[]` + `activeKey`, with `openOrActivate/activate/close`
+  keyed by `projectKey`. Wired live for the single open project (App populates it on
+  open, clears on stop) but otherwise additive/dormant until the rail + multi-instance
+  backends land. Exercised in `test/chat-render.mjs` (`__dsgnWorkspace`).
+- Deferred + why: the multi-instance **main** refactors (dev servers S7, agent
+  sessions S8, preview state S9) are HIGH-collision with the parallel session's
+  active `main/index.ts`/`agent.ts`/`devserver.ts` work and gated on lifecycle
+  decisions (warm vs suspend, caps) — left for coordination. The per-project store
+  fan-out (S3–S6) is a large dormant renderer refactor better done with the user in
+  the loop. See the session's blocking questions.
+
 ## 2026-06-25 — Figma-style inline comment (C) + annotation (Y) modes
 
 - Press **C** → comment mode, **Y** → annotation mode (also toolbar buttons). Click
