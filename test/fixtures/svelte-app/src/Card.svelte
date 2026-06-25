@@ -7,3 +7,5 @@
   <Button variant="ok" label="Go" count={3} rounded={true} />
   <p class="row">Label <Badge label="hi" /></p>
 </div>
+
+<h2 class="sub">  spaced  </h2>

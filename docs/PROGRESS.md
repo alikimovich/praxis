@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-24 — Svelte inline text-splice in source
+
+- Inline text editing rewrote JSX text directly but punted `.svelte` to the agent.
+  Now `applySvelteTextEdit` (props-svelte.ts) splices Svelte text content via
+  svelte/compiler — the `.svelte` counterpart of the JSX path, same contract:
+  plain-`Text` children + splice-safe new text apply directly; empty / expression
+  (`{...}`) / mixed / element children fall back to the agent.
+- Mirrors the JSX engine's whitespace handling (lead/trail from the raw source,
+  zeroed for all-whitespace) and splice-safety regex (`^[^<>{}]*$`, so the new
+  text can't open a tag or mustache). Reuses the shared `findElement` /
+  `makeLocator` so line/col match the stamps.
+- `props.ts` dispatches `.svelte` to it (was a hard agent-fallback). New
+  `test/text-edit-svelte.mjs`: plain `<h1>` text rewritten to `.svelte` source;
+  a mixed `<p>Label <Badge/></p>` correctly needs the agent.
+
 ## 2026-06-24 — Auto-restart the preview after setup
 
 - A setup turn edits the build config (vite.config / svelte.config), which

@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import { readFile, writeFile } from 'fs/promises'
 import { dirname, isAbsolute, join, normalize, relative } from 'path'
 import type { PropEdit, PropEditResult, PropField, PropInspection, PropKind } from '../shared/api'
-import { applySvelteEdit, inspectSvelteProps } from './props-svelte'
+import { applySvelteEdit, applySvelteTextEdit, inspectSvelteProps } from './props-svelte'
 
 /**
  * Prop editing is framework-agnostic by dispatch: the source file's extension
@@ -501,9 +501,10 @@ async function applyTextEdit(
   const loc = resolveSource(root, edit.source)
   if (!loc) return { applied: false, error: 'Could not resolve the source location.' }
   const newText = edit.text.replace(/\s+/g, ' ').trim()
-  // Svelte text-splicing isn't implemented yet — let the agent do it.
+  // `.svelte` → the Svelte adapter splices via svelte/compiler (agent-fallback for
+  // expression/mixed content), mirroring the JSX path below.
   if (loc.file.endsWith('.svelte')) {
-    return { applied: false, needsAgent: true, agentPrompt: textAgentPrompt(edit.source, newText) }
+    return applySvelteTextEdit(root, { source: edit.source, text: newText }, loc)
   }
   let code: string
   try {
