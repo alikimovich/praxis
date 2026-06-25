@@ -97,7 +97,9 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
 - `src/main/props.ts` — **prop editor engine** (React/JSX): babel-parse at the stamp line,
   react-docgen schema, hybrid literal-splice / agent-fallback apply (`props:inspect/apply`).
   Dispatches `.svelte` sources to `src/main/props-svelte.ts` (svelte/compiler — `export let` /
-  `$props()` schema, same splice/apply contract).
+  `$props()` schema, same splice/apply contract). Inline text edits (`text:apply`) splice the
+  element's text content for both JSX and `.svelte` (`applySvelteTextEdit`), agent-fallback for
+  expression/mixed content.
 - `src/renderer/src/components/PropEditor.tsx` — typed prop controls rendered from the inspection.
 - `src/main/tokens.ts` — **design-token detection**: probes `.dsgn/tokens.json` → tailwind
   config (static parse) → CSS custom properties; `tokens:detect`. Palette in `TokenPalette.tsx`.

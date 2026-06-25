@@ -5,6 +5,7 @@ import {
   agentPromptFor,
   isValidAttrName,
   mergeFields,
+  textAgentPrompt,
   withinRoot,
   type CurrentAttr,
   type ResolvedSource
@@ -428,6 +429,59 @@ export async function applySvelteEdit(
     }
     next = code.slice(0, insertAt) + ' ' + attrText + code.slice(insertAt)
   }
+  try {
+    await writeFile(loc.file, next, 'utf8')
+  } catch {
+    return { applied: false, error: 'Could not write the source file.' }
+  }
+  return { applied: true }
+}
+
+/**
+ * Inline text edit for `.svelte` — the counterpart of the JSX text-splice in
+ * props.ts. Rewrites a stamped element's text content in source when its children
+ * are plain text (svelte/compiler `Text` nodes) and the new text is splice-safe.
+ * Expression (`{...}`) / element / mixed children fall back to the agent. Empty
+ * elements also fall back here (the JSX path inserts at the opening-tag end, but
+ * svelte/compiler doesn't expose that offset the way babel does, so we stay
+ * conservative — and the inline editor only fires on text-bearing elements anyway).
+ */
+export async function applySvelteTextEdit(
+  root: string,
+  edit: { source: string; text: string },
+  loc: ResolvedSource
+): Promise<PropEditResult> {
+  const fallback = (): PropEditResult => ({
+    applied: false,
+    needsAgent: true,
+    agentPrompt: textAgentPrompt(edit.source, edit.text)
+  })
+  let code: string
+  try {
+    code = await readFile(loc.file, 'utf8')
+  } catch {
+    return { applied: false, error: 'Could not read the source file.' }
+  }
+  const ast = await parseSvelte(code)
+  if (!ast) return fallback()
+  const el = findElement(ast, code, loc.line, loc.column)
+  if (!el || typeof el.start !== 'number') return fallback()
+
+  // Only splice when every child is plain text and the new text can't break out
+  // into a tag (`<`/`>`) or a mustache (`{`/`}`). Anything else → agent.
+  const kids = ((el.fragment as { nodes?: Node[] } | undefined)?.nodes ?? []) as Node[]
+  if (kids.length === 0 || !kids.every((c) => c.type === 'Text') || !/^[^<>{}]*$/.test(edit.text)) {
+    return fallback()
+  }
+  const start = kids[0].start ?? 0
+  const end = kids[kids.length - 1].end ?? 0
+  // Preserve surrounding whitespace from the RAW source. An all-whitespace child
+  // would have lead/trail overlap — zero them (mirrors the JSX path).
+  const raw = code.slice(start, end)
+  const allWs = /^\s*$/.test(raw)
+  const lead = allWs ? '' : (raw.match(/^\s*/)?.[0] ?? '')
+  const trail = allWs ? '' : (raw.match(/\s*$/)?.[0] ?? '')
+  const next = code.slice(0, start) + lead + edit.text + trail + code.slice(end)
   try {
     await writeFile(loc.file, next, 'utf8')
   } catch {

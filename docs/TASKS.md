@@ -61,8 +61,10 @@ Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 - [x] **Auto-restart the preview after setup** so the wired-in config applies without a manual
       reload; the post-restart readiness report is the verdict. ✅ 2026-06-24 — `App.restartPreview`,
       `test/setup-restart.mjs`.
-- [ ] Next: first-run onboarding could offer `.dsgn/tokens.json`. Svelte inline text-splice
-      (currently agent-fallback).
+- [x] **Svelte inline text-splice** — rewrite a plain-text `.svelte` element's content directly in
+      source (svelte/compiler), agent-fallback for expression/mixed. ✅ 2026-06-24 —
+      `applySvelteTextEdit` in props-svelte.ts, `test/text-edit-svelte.mjs`.
+- [ ] Next: first-run onboarding could offer `.dsgn/tokens.json`.
 
 ## Polish (anytime)
 
