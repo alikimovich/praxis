@@ -4,6 +4,7 @@ import { createServer, type Server, type ServerResponse } from 'http'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { promisify } from 'util'
+import { xcodeFailureReason } from './xcode'
 import { findFreePort, stripAnsi } from './devserver-net'
 import type { RunningSimulator, SimDevice, SimPreflight } from '../shared/api'
 
@@ -249,12 +250,8 @@ export async function preflight(): Promise<SimPreflight> {
   try {
     await xcrun(['simctl', 'help'])
     base.hasXcode = true
-  } catch {
-    return {
-      ...base,
-      reason:
-        'Xcode command-line tools not found. Install Xcode, then run `xcode-select --install`.'
-    }
+  } catch (err) {
+    return { ...base, reason: xcodeFailureReason(err) }
   }
   // idb is optional (enables Phase-2 tap/scroll); mirroring works without it.
   try {
