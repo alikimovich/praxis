@@ -76,10 +76,19 @@ See the PROGRESS entry.
       - The single `WebContentsView` navigates to the active project's URL on switch.
       - **Left rail** (the Cursor-style "Repositories" list): open projects, click to
         switch, close button, active indicator; "+ New project" opens-keeping-warm.
-      Open design qs for the user: rail layout/placement, and what happens to a
-      project's in-flight agent turn when you switch away (suppress + drop late
-      deltas, vs queue/badge it). Warm-to-N + LRU-suspend (the lifecycle decision)
-      lands here too.
+      **Decisions (2026-06-25):** rail = **left sidebar (Cursor-style)**: open repos
+      list, active highlight, close (×), "+ New project" (opens keeping the current
+      one warm). Backgrounded agents **keep running with a status dot** and their
+      result is there on return — so the agent must emit for ALL live sessions
+      (tagged with `projectKey`, not just the active one), and the renderer routes
+      events to per-project chat buffers (active = displayed; background = accumulates
+      + sets a "working" dot). This implies the bigger renderer work: per-project
+      chat (the `__dsgnStore`/useChat slice the chat tests assert on must become
+      per-project) + event routing by project (`agent:set-active` to switch warm
+      sessions without recreating; emit tags + drops the active-key suppression).
+      Warm-to-N + LRU-suspend (dev servers) lands here too. Sized as its own focused
+      build (touches the chat store + every chat test; benefits from visual rail
+      verification).
 - [ ] **Previous + working agents (history).** Persist finished sessions
       (transcript, the branch/PR they produced, files touched) so "previous agents"
       are reopenable to review or resume — not just the live ones. Surface them
