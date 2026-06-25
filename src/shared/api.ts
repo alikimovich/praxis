@@ -363,7 +363,8 @@ export interface DsgnApi {
       command: string
       framework?: Framework
     }) => Promise<RunningDevServer>
-    stop: () => Promise<void>
+    /** Stop the dev server for one project (others keep running). */
+    stop: (root: string) => Promise<void>
     onLog: (cb: (line: string) => void) => () => void
   }
   git: {
