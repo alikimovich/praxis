@@ -59,14 +59,27 @@ See the PROGRESS entry.
 - [x] **Workspace store + project identity (S0/S2).** ✅ 2026-06-25 —
       `src/shared/projectKey.ts`, `useWorkspace` in `store.ts`, live for the single
       open project. `test/project-key.mjs`, `test/chat-render.mjs`.
-- [ ] **Open multiple projects (backend, after parallel work lands).** Per-root
-      Map for dev servers + the single preview view swapping to the active project's
-      URL (warm-to-N / LRU-suspend); each project keeps its own `projectRoot`, dev
-      server, preview URL, annotations, tokens, setup state. **Blocked on sequencing.**
-- [ ] **One agent session per project.** `agent.ts` holds a `Map<projectKey,
-      session>` (not one global session); send/interrupt/setModel route to the
-      active project's session; events stamped with the project so the renderer
-      routes them. **Blocked on sequencing** (shares `agent.ts` with parallel work).
+- [x] **Multi-instance dev servers (S7 / v5-A).** ✅ 2026-06-25 — `Map<projectKey,
+      ChildProcess>` in `devserver.ts`; per-root `stop`, serialized free-port
+      allocator, `stopAll` on quit. `test/devserver-multi.mjs`. (PR #19)
+- [x] **One agent session per project (S8 / v5-B).** ✅ 2026-06-25 — `Map<projectKey,
+      Session>` + `activeKey` in `agent.ts`; only the active session streams; new
+      `agent:close-project`; closing the active clears active (no auto-promote).
+      `test/agent-multi.mjs`. (PR #20)
+- [ ] **v5-C — make multi-project visible (renderer-only, NOT collision-blocked).**
+      The integration on top of the v5-A/B backends:
+      - `agent:set-active(root)` to switch the active warm session without recreating it.
+      - Per-project renderer state: snapshot/restore each project's chat, status,
+        preview URL, launchSpec, branch, tokens, annotations, setup on switch (so
+        switching shows the right conversation + preview), keeping dev servers + agent
+        sessions warm (stop closing the previous on "open another").
+      - The single `WebContentsView` navigates to the active project's URL on switch.
+      - **Left rail** (the Cursor-style "Repositories" list): open projects, click to
+        switch, close button, active indicator; "+ New project" opens-keeping-warm.
+      Open design qs for the user: rail layout/placement, and what happens to a
+      project's in-flight agent turn when you switch away (suppress + drop late
+      deltas, vs queue/badge it). Warm-to-N + LRU-suspend (the lifecycle decision)
+      lands here too.
 - [ ] **Previous + working agents (history).** Persist finished sessions
       (transcript, the branch/PR they produced, files touched) so "previous agents"
       are reopenable to review or resume — not just the live ones. Surface them
