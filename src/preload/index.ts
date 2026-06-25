@@ -101,7 +101,8 @@ const api: DsgnApi = {
       ipcRenderer.invoke('publish:to-pr', root, opts)
   },
   setup: {
-    scaffold: (root: string): Promise<SetupResult> => ipcRenderer.invoke('setup:scaffold', root)
+    scaffold: (root: string): Promise<SetupResult> => ipcRenderer.invoke('setup:scaffold', root),
+    uninstall: (root: string): Promise<SetupResult> => ipcRenderer.invoke('setup:uninstall', root)
   },
   agent: {
     openProject: (root: string, options?: AgentOptions): Promise<void> =>

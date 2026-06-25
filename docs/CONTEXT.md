@@ -101,8 +101,13 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
 - `src/renderer/src/components/PropEditor.tsx` — typed prop controls rendered from the inspection.
 - `src/main/tokens.ts` — **design-token detection**: probes `.dsgn/tokens.json` → tailwind
   config (static parse) → CSS custom properties; `tokens:detect`. Palette in `TokenPalette.tsx`.
-- `src/main/setup.ts` — **project setup scaffold**: writes the dev-only source-stamping plugin
-  (`setup:scaffold`); the agent wires it in + types components. `SetupCard.tsx` is the offer.
+- `src/main/setup.ts` — **framework-aware project setup**: `detect()` reads `package.json` deps
+  FIRST, then `setup:scaffold` writes the right dev-only instrumentation into `.dsgn/` — a Babel
+  JSX plugin (`dsgn-source.cjs`, React/Solid) or a `svelte/compiler` markup preprocessor
+  (`dsgn-svelte-stamp.mjs`, Svelte); Vue uses its own inspector (no file), unknown writes nothing.
+  Helpers are dev-gated + idempotent; `setup:uninstall` removes them (+ the legacy root plugin).
+  `acceptSetup` (ChatPanel) sends framework-correct wiring/prop-typing instructions, then verifies
+  stamps actually fired via the next readiness report. `SetupCard.tsx` is the offer.
 - `src/renderer/src/components/PropPanel.tsx` — **floating prop panel** (gated on a resolved
   schema; reserves the preview's right edge via `preview.setPanelInset`).
 - `src/main/annotations.ts` — **v3** annotation sidecar CRUD + Publish→PR (git/gh via execFile).

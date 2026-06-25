@@ -50,6 +50,11 @@ Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
       be floated over). ✅ 2026-06-23.
 - [x] **On-open setup offer** — detects unstamped projects and offers to scaffold the stamping
       plugin + agent-type the components. ✅ 2026-06-23.
+- [x] **Framework-aware setup** — detect the UI framework from `package.json` deps BEFORE
+      generating anything, emit the right instrumentation into `.dsgn/` (React/Solid Babel plugin,
+      Svelte markup preprocessor; Vue→inspector, unknown→nothing), send framework-correct agent
+      instructions, verify stamps actually fired, and offer `setup:uninstall`. ✅ 2026-06-24 —
+      `src/main/setup.ts`, `test/setup-detect.mjs`.
 - [x] **Inline text editing.** ✅ 2026-06-24 — double-click a stamped text-only element in the
       preview to edit its text in place; writes straight to source (`applyTextEdit`), agent
       fallback for expression/mixed/Svelte content. (`test/text-edit.mjs`.)

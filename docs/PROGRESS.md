@@ -2,6 +2,35 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-24 — Framework-aware setup (detect before generating)
+
+- Fixed the core setup bug: dsgn assumed React and wrote a Babel JSX plugin
+  (`dsgn-source-plugin.cjs`) to the repo **root** of any project — useless in a
+  SvelteKit repo (no Babel pass, no JSX) and it would have reported success
+  anyway. Setup is now **framework-first**.
+- `src/main/setup.ts` `detect()` reads `package.json` deps **first** and branches:
+  `@sveltejs/kit`/`svelte` → Svelte (markup-preprocessor strategy, with
+  `svelteMajor`), `react`/`@vitejs/plugin-react(-swc)`/`next` → React (Babel
+  plugin), `solid-js` → Solid (Babel — also JSX), `vue` → Vue (inspector
+  strategy, **no bespoke file** — reuse its ecosystem), else `unknown` → none.
+- Artifacts are **scoped to `.dsgn/`** (not the repo root): `.dsgn/dsgn-source.cjs`
+  (React/Solid) or `.dsgn/dsgn-svelte-stamp.mjs` (Svelte preprocessor using
+  `svelte/compiler`, 1-based line / 0-based col to match `props-svelte.ts`). Both
+  are **structurally dev-gated** (`NODE_ENV === 'production'` → empty visitor /
+  no-op), idempotent, and removable via a new `setup:uninstall` (also sweeps the
+  legacy root plugin).
+- `acceptSetup` now builds **framework-correct** agent instructions (React
+  `interface Props`, Svelte 5 `$props()` vs Svelte 4 `export let`, Vue
+  `defineProps<Props>()`) and **stops with a clear message** for unknown/Vue
+  rather than handing React steps to a non-React repo.
+- **Verification (no silent success):** `acceptSetup` arms `verifying`; the next
+  readiness report confirms stamps fired — `>0` → "Setup verified", `0` → a hard
+  warning that the instrumentation didn't fire.
+- New `test/setup-detect.mjs`: per-framework detect/scaffold/uninstall, idempotency,
+  dev-gating, legacy-cleanup — through real IPC. `ready-gating.mjs` updated to the
+  `.dsgn/` path. `SetupResult` reshaped (`framework: Frontend`, `strategy`,
+  `svelteMajor`, `files[]`; dropped `pluginFile`).
+
 ## 2026-06-24 — Preview runs on its own free port (7777+), bound to 127.0.0.1
 
 - dsgn now **always spawns the dev server on a free port it picks** (first free at/above

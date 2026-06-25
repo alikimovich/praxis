@@ -11,7 +11,7 @@ import { _electron as electron } from 'playwright'
 import electronPath from 'electron'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -19,6 +19,12 @@ const fixtures = join(root, 'test', 'fixtures')
 const artifacts = join(root, 'test', 'artifacts')
 mkdirSync(artifacts, { recursive: true })
 const scaffoldDir = mkdtempSync(join(tmpdir(), 'dsgn-setup-'))
+// Setup is framework-first now: give it a React package.json so detect() branches
+// to the Babel-plugin strategy (full per-framework coverage is in setup-detect.mjs).
+writeFileSync(
+  join(scaffoldDir, 'package.json'),
+  JSON.stringify({ name: 'gating-fixture', dependencies: { react: '^18.2.0' } })
+)
 
 let app
 try {
@@ -33,7 +39,8 @@ try {
   // --- setup.scaffold writes the stamping plugin (and is idempotent). ---
   const first = await win.evaluate((d) => window.api.setup.scaffold(d), scaffoldDir)
   if (!first.ok || !first.written) throw new Error(`scaffold: ${JSON.stringify(first)}`)
-  const pluginPath = join(scaffoldDir, 'dsgn-source-plugin.cjs')
+  if (first.framework !== 'react') throw new Error(`expected react detect: ${JSON.stringify(first)}`)
+  const pluginPath = join(scaffoldDir, '.dsgn', 'dsgn-source.cjs')
   if (!existsSync(pluginPath)) throw new Error('plugin file not written')
   if (!readFileSync(pluginPath, 'utf8').includes('data-dsgn-source')) {
     throw new Error('plugin missing the stamping logic')

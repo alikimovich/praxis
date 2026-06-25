@@ -114,10 +114,26 @@ export default function App(): React.JSX.Element {
   }, [selected, projectRoot])
 
   // On-open readiness: if the previewed app has no source stamps, offer setup.
+  // When `verifying` is armed (a setup was just applied + the preview reloaded),
+  // this report is the proof the instrumentation actually fired — don't report
+  // silent success: zero stamps after a setup is a hard warning (fix #4).
   useEffect(
     () =>
       window.api.preview.onReadiness(({ stamps }) => {
         const s = useSetup.getState()
+        if (s.verifying) {
+          if (stamps > 0) {
+            s.setStatus(`Setup verified — ${stamps} element(s) now mapped to source. You're ready.`)
+            s.setNeeded(false)
+          } else {
+            s.setStatus(
+              'Setup ran but no elements got stamped — the instrumentation did not fire. ' +
+                'Check that the config wiring landed (and the dev server restarted), or ask me to look.'
+            )
+          }
+          s.setVerifying(false)
+          return
+        }
         if (stamps === 0 && !s.dismissed && !s.busy) s.setNeeded(true)
         else if (stamps > 0) s.setNeeded(false)
       }),
