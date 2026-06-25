@@ -5,7 +5,23 @@
  */
 
 export type PackageManager = 'bun' | 'pnpm' | 'yarn' | 'npm'
-export type Framework = 'vite' | 'next' | 'cra' | 'sveltekit' | 'unknown'
+export type Framework =
+  | 'vite'
+  | 'next'
+  | 'cra'
+  | 'sveltekit'
+  | 'expo'
+  | 'react-native'
+  | 'unknown'
+
+/**
+ * What the right pane previews: a web dev server in the native WebContentsView
+ * ('web'), or a booted iOS Simulator streamed through the local sim bridge
+ * ('simulator'). Threads through detection so the renderer drives the right
+ * lifecycle (devServer.* vs simulator.*) while everything downstream of the URL
+ * — bounds, load, retry — stays identical.
+ */
+export type PreviewKind = 'web' | 'simulator'
 
 export interface DetectedProject {
   root: string
@@ -15,6 +31,8 @@ export interface DetectedProject {
   scriptName: string
   /** Full command we'll run, e.g. "bun run dev". User may override this. */
   devCommand: string
+  /** Web dev server vs iOS Simulator (React Native / Expo → 'simulator'). */
+  previewKind: PreviewKind
 }
 
 export interface RunningDevServer {
@@ -22,6 +40,45 @@ export interface RunningDevServer {
   pid: number
   /** True when we attached to a server the user was already running (we don't own it). */
   attached?: boolean
+}
+
+/**
+ * A booted simulator served through the local sim bridge. `url` is that bridge's
+ * HTTP URL (an MJPEG device page) so `preview.load(url)` is unchanged at the call
+ * site — the simulator preview is "just another local URL".
+ */
+export interface RunningSimulator {
+  url: string
+  /** PID of the Metro/Expo dev-server process group (for teardown). */
+  pid: number
+  /** The booted device's UDID. */
+  udid: string
+  /** The launched app's bundle id (so subsequent runs relaunch without rebuilding). */
+  bundleId: string
+  previewKind: 'simulator'
+}
+
+/** One bootable iOS simulator device. */
+export interface SimDevice {
+  udid: string
+  name: string
+  runtime: string
+}
+
+/**
+ * Result of probing the host for iOS-Simulator capability — all read-only. The
+ * renderer surfaces `reason` (a human message) when `ok` is false, instead of
+ * crashing on a non-macOS host or one without Xcode.
+ */
+export interface SimPreflight {
+  ok: boolean
+  reason?: string
+  isMac: boolean
+  hasXcode: boolean
+  /** `idb` present (enables Phase-2 interaction); mirroring works without it. */
+  hasIdb: boolean
+  runtimes: string[]
+  devices: SimDevice[]
 }
 
 /**
@@ -169,7 +226,12 @@ export interface PublishResult {
 /** Result of scaffolding source-stamping into an unprepared project. */
 export type Frontend = 'react' | 'svelte' | 'vue' | 'solid' | 'unknown'
 /** How dsgn instruments source mapping for the detected framework. */
-export type SetupStrategy = 'babel-plugin' | 'svelte-preprocess' | 'inspector' | 'none'
+export type SetupStrategy =
+  | 'babel-plugin'
+  | 'babel-plugin-rn'
+  | 'svelte-preprocess'
+  | 'inspector'
+  | 'none'
 
 export interface SetupResult {
   ok: boolean
@@ -239,6 +301,14 @@ export interface DsgnApi {
       command: string
       framework?: Framework
     }) => Promise<RunningDevServer>
+    stop: () => Promise<void>
+    onLog: (cb: (line: string) => void) => () => void
+  }
+  simulator: {
+    /** Probe the host for macOS + Xcode + a bootable simulator (read-only, never throws). */
+    preflight: () => Promise<SimPreflight>
+    /** Boot a sim, start Metro/Expo, launch the app, stand up the frame bridge. */
+    start: (opts: { root: string; command?: string; udid?: string }) => Promise<RunningSimulator>
     stop: () => Promise<void>
     onLog: (cb: (line: string) => void) => () => void
   }

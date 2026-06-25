@@ -2,6 +2,7 @@ import { app, BrowserWindow, WebContentsView, ipcMain, dialog, shell } from 'ele
 import { join } from 'path'
 import type { SelectedElement } from '../shared/api'
 import { registerDevServerIpc } from './devserver'
+import { registerSimulatorIpc } from './simulator'
 import { registerAgentIpc } from './agent'
 import { registerPropsIpc } from './props'
 import { registerAnnotationsIpc } from './annotations'
@@ -241,6 +242,7 @@ app.whenReady().then(() => {
   createWindow()
   registerPreviewIpc()
   registerDevServerIpc(() => mainWindow)
+  registerSimulatorIpc(() => mainWindow)
   registerAgentIpc(() => mainWindow)
   registerPropsIpc()
   registerAnnotationsIpc()

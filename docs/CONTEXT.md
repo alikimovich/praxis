@@ -87,6 +87,16 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
 - `src/renderer/src/components/PermissionCards.tsx` — approve/deny cards; `usePermissions`
   store holds the mode + pending queue.
 - `src/main/devserver.ts` — detect + spawn + URL parse + readiness + conflict errors.
+  Detection also recognizes `expo`/`react-native` and tags `DetectedProject.previewKind`
+  (`'web' | 'simulator'`), which routes the renderer to the dev-server vs simulator backend.
+- `src/main/simulator.ts` — **iOS-Simulator preview (Phase 1, macOS-only)**, the RN/Expo
+  counterpart to `devserver.ts`. `preflight()` (read-only, never throws) gates macOS+Xcode;
+  `start()` boots a sim, starts Metro/launches the app (`expo run:ios`), and runs a local
+  **"sim bridge"** HTTP server that captures the device via `xcrun simctl io screenshot` and
+  serves it as **MJPEG** behind a one-`<img>` page flagged `?dsgnSim=1`. The existing preview
+  `WebContentsView` loads that URL like any dev-server URL (all geometry/load/retry reused).
+  `simulator:{preflight,start,stop}` IPC. Phases 2 (interaction via `idb`) + 3 (element-select
+  via a `testID` Babel stamp + view-hierarchy hit-test → existing Inspector) are future work.
 - `src/main/index.ts` — window, native preview view, geometry sync, hardening, **v2
   select-mode IPC** (relays picks; re-arms overlay after preview navigation).
 - `src/preview/preload.ts` — **v2 overlay preload** injected into the preview view

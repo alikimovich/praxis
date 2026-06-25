@@ -2,6 +2,54 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-25 — React Native / iOS-Simulator preview (Phase 1: live mirror)
+
+- New preview mode: a booted **iOS Simulator** running an Expo/React Native app
+  shown in the right pane instead of a web browser (macOS-only). Phase 1 of a
+  phased plan (mirror → interact → element-select); user-chosen scope: RN/Expo
+  first, macOS-only, start with a view-only mirror.
+- **Frame transport — reuse over reinvention.** Rather than a new renderer canvas
+  fed frames over IPC, `src/main/simulator.ts` stands up a tiny local **"sim
+  bridge"**: an HTTP server that captures the booted device (`xcrun simctl io …
+  screenshot`, JPEG) and serves it as an **MJPEG** behind a one-`<img>` page. The
+  renderer points the **existing** preview `WebContentsView` at that URL — so the
+  simulator is "just another local URL" and every geometry/load/retry seam
+  (`preview:set-bounds`, `preview:load`, the `did-fail-load` retry loop) is reused
+  unchanged. Modeled on `serve-sim` (Evan Bacon) and Maestro Studio.
+- **Detection** (`devserver.ts`): `detectFramework` recognizes `expo` /
+  `react-native` (checked first — Expo repos also list `react-native`); `detect()`
+  sets `previewKind: 'web' | 'simulator'` on `DetectedProject`. Frame capture uses
+  only `xcrun simctl` (ships with Xcode, zero extra install); `idb` is detected for
+  the Phase-2 interaction path but not required.
+- **Preflight** (`simulator.preflight()`): all read-only `execFile` probes, never
+  throws; returns a human `reason` per failure class (not-macOS / no-Xcode /
+  no-runtime / no-device). `App.attempt()` branches on `previewKind`, preflights
+  first, and surfaces a clean banner+console card off the happy path instead of
+  crashing. Backend teardown is cross-routed (opening a web project stops any
+  simulator and vice-versa); `stop()`/`restartPreview()` route by `previewKind`.
+- **Lifecycle** (`simulator.start`): boot a device (prefer already-booted, else
+  newest iPhone) → `bootstatus` wait → spawn the dev command (default `expo
+  run:ios`: build+install+launch+serve) in its own process group → stand up the
+  bridge → readiness = first captured frame. `stop()` SIGTERMs the Metro group and
+  closes the bridge (sim left booted for fast re-open); `before-quit` cleanup.
+- **Preload routing**: the bridge page is flagged `?dsgnSim=1`; `src/preview/
+  preload.ts` early-returns its whole web overlay there (no previewed-app DOM to
+  stamp/inspect). The "Select" toggle is hidden in sim mode until Phase 3.
+- **Contract** (`src/shared/api.ts`): `Framework` += `expo`/`react-native`;
+  `PreviewKind`; `DetectedProject.previewKind`; `RunningSimulator`; `SimPreflight`;
+  `SetupStrategy` += `babel-plugin-rn` (Phase 3); `DsgnApi.simulator.{preflight,
+  start,stop,onLog}` mirrored in the preload.
+- **Tests (degrade off-macOS, like agent-e2e):** `sim-detect` (expo/RN→simulator,
+  vite→web), `sim-preflight` (non-mac → ok:false + reason), `sim-frame` (exercises
+  the whole bridge→MJPEG→WebContentsView transport with a stub frame source via a
+  main-process test hook — **no simulator needed**), `sim-e2e` (boots a real sim;
+  SKIPs unless macOS + `DSGN_SIM_E2E=1` + `DSGN_SIM_FIXTURE`). `bun run verify`
+  green (19 checks; agent-e2e + sim-e2e SKIP here).
+- **Not yet verified on-device:** the simctl/expo orchestration in `start()` is
+  macOS-only and could not run in this Linux CI env — it needs a Mac with Xcode to
+  confirm boot/build/launch end-to-end (the bridge/transport itself IS verified by
+  `sim-frame`).
+
 ## 2026-06-24 — Svelte inline text-splice in source
 
 - Inline text editing rewrote JSX text directly but punted `.svelte` to the agent.

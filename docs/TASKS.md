@@ -11,6 +11,24 @@ Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
       `test/select-element.mjs`.
 - [ ] **Next:** polish / cross-file prop resolution / design-token manifests (see below).
 
+## v4 — React Native / iOS-Simulator preview (macOS-only)
+
+Show a booted iOS Simulator running an Expo/RN app in the right pane instead of a
+web browser. Phased: mirror → interact → element-select. See
+`docs/CONTEXT.md` and the 2026-06-25 PROGRESS entry.
+
+- [x] **Phase 1 — view-only live mirror.** ✅ 2026-06-25 — detect `expo`/`react-native`
+      (`previewKind: 'simulator'`), `simulator.preflight()` gates macOS+Xcode (clean card
+      otherwise), `src/main/simulator.ts` boots a sim + starts Metro/launches the app + serves
+      an MJPEG "sim bridge" that the existing `WebContentsView` loads as just-another-URL.
+      Tests: `sim-detect`, `sim-preflight`, `sim-frame` (transport, off-macOS), `sim-e2e`
+      (macOS-gated SKIP).
+- [ ] **Phase 2 — interaction.** Forward tap/scroll/type from the bridge page → `idb`
+      (optional dep) over a `/control` WebSocket; degrade to view-only without idb.
+- [ ] **Phase 3 — element-select → RN source.** Babel `testID` stamp (the `data-dsgn-source`
+      analog, `setup.ts` strategy `babel-plugin-rn`) + `idb` view-hierarchy hit-test → reuse the
+      existing Inspector/`props.inspect` flow.
+
 ## v2 — design-system-aware select & edit (the differentiator)
 
 - [x] Inject a preload into the preview `WebContentsView` with a click-to-select overlay.

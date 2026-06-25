@@ -14,8 +14,10 @@ import type {
   PropInspection,
   PublishResult,
   RunningDevServer,
+  RunningSimulator,
   SelectedElement,
   SetupResult,
+  SimPreflight,
   TokenSet
 } from '../shared/api'
 
@@ -69,6 +71,17 @@ const api: DsgnApi = {
       const listener = (_e: IpcRendererEvent, line: string): void => cb(line)
       ipcRenderer.on('devserver:log', listener)
       return () => ipcRenderer.removeListener('devserver:log', listener)
+    }
+  },
+  simulator: {
+    preflight: (): Promise<SimPreflight> => ipcRenderer.invoke('simulator:preflight'),
+    start: (opts: { root: string; command?: string; udid?: string }): Promise<RunningSimulator> =>
+      ipcRenderer.invoke('simulator:start', opts),
+    stop: (): Promise<void> => ipcRenderer.invoke('simulator:stop'),
+    onLog: (cb: (line: string) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, line: string): void => cb(line)
+      ipcRenderer.on('simulator:log', listener)
+      return () => ipcRenderer.removeListener('simulator:log', listener)
     }
   },
   props: {
