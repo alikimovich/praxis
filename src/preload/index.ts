@@ -83,7 +83,7 @@ const api: DsgnApi = {
       command: string
       framework?: Framework
     }): Promise<RunningDevServer> => ipcRenderer.invoke('devserver:start', opts),
-    stop: (): Promise<void> => ipcRenderer.invoke('devserver:stop'),
+    stop: (root: string): Promise<void> => ipcRenderer.invoke('devserver:stop', root),
     onLog: (cb: (line: string) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, line: string): void => cb(line)
       ipcRenderer.on('devserver:log', listener)

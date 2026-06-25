@@ -368,6 +368,12 @@ export default function App(): React.JSX.Element {
 
   const attempt = async (root: string, commandOverride?: string): Promise<void> => {
     let attemptedCommand = commandOverride ?? ''
+    // The previously-open project (if any) — captured before the reset clears it.
+    // The dev-server backend is multi-capable now, but until the workspace rail
+    // manages several projects we stay single-active: opening another stops the
+    // previous one. Reopening the SAME project (retry) is handled by start().
+    const prevRoot = useSession.getState().projectRoot
+    const switching = !!prevRoot && projectKey(prevRoot) !== projectKey(root)
     // Opening (or re-opening) a project starts fresh: a pick from the previous
     // repo points at a file that may not exist in the new one. Disarm + clear,
     // and drop any permission cards left over from the previous session.
@@ -381,6 +387,9 @@ export default function App(): React.JSX.Element {
     useAnnotations.getState().setFocused(null)
     useTokens.getState().reset()
     useSetup.getState().reset()
+    // Single-active: drop the previous project from the workspace (its dev server
+    // is stopped below). The rail will skip this to keep projects open.
+    if (switching) useWorkspace.getState().close(projectKey(prevRoot))
     void window.api.preview.setSelectMode(false)
     window.api.preview.setPanelInset(0)
     const log = useLog.getState()
@@ -415,6 +424,10 @@ export default function App(): React.JSX.Element {
         log.append(`Using custom command "${command}"`)
       }
 
+      // Single-active: stop the previously-open project's dev server before
+      // starting this one (multi-instance backend; the rail will keep them warm).
+      if (switching) await window.api.devServer.stop(prevRoot)
+
       // Do dsgn's work on a dsgn/* branch so the user's main branch stays clean.
       try {
         const b = await window.api.git.ensure(root)
@@ -440,7 +453,6 @@ export default function App(): React.JSX.Element {
         if (!pf.ok) throw new Error(pf.reason ?? 'Simulator preview is unavailable on this machine.')
         log.append(`Simulator available — ${pf.devices.length} device(s)`, 'success')
         setStatus({ kind: 'busy', label: 'Booting simulator…' })
-        await window.api.devServer.stop() // tear down any web server from a prior project
         // Ignore the detected `expo start` for the auto path — `simulator.start`
         // defaults to `expo run:ios` (build + install + launch + serve).
         const sim = await window.api.simulator.start({ root, command: commandOverride })
@@ -493,6 +505,10 @@ export default function App(): React.JSX.Element {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       launchSpec.current = null
+      // A later step (agent open, annotations…) can throw after the dev server
+      // already started — stop it so it isn't orphaned (the renderer would lose
+      // its root once projectRoot/launchSpec are cleared).
+      void window.api.devServer.stop(root)
       await window.api.preview.reset()
       setRetry({ root, command: attemptedCommand })
       log.append(message, 'error')
@@ -570,7 +586,7 @@ export default function App(): React.JSX.Element {
         url = sim.url
       } else {
         log.append('Restarting dev server to apply the new config…')
-        await window.api.devServer.stop()
+        await window.api.devServer.stop(spec.root)
         if (switched()) return
         const server = await window.api.devServer.start(spec)
         url = server.url
@@ -607,7 +623,7 @@ export default function App(): React.JSX.Element {
     const spec = launchSpec.current
     launchSpec.current = null
     if (spec?.previewKind === 'simulator') await window.api.simulator.stop()
-    else await window.api.devServer.stop()
+    else if (closing) await window.api.devServer.stop(closing)
     await window.api.preview.reset()
     setRetry(null)
     setPreviewKind('web')

@@ -20,6 +20,8 @@ const server = createServer(async (_req, res) => {
   }
 })
 
-server.listen(0, () => {
+// Honor the PORT the runner assigns (like a real dev server) so its free-port
+// allocator is what gets exercised — and a port collision would be a real bug.
+server.listen(Number(process.env.PORT) || 0, () => {
   console.log(`  ➜  Local:   http://localhost:${server.address().port}/`)
 })

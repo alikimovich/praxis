@@ -17,6 +17,7 @@ import {
   stripAnsi,
   waitForReachable
 } from './devserver-net'
+import { projectKey } from '../shared/projectKey'
 
 // The preview always runs on a free port we pick (from this base) bound to IPv4
 // loopback — so it never collides with the framework default (5173/3000), never
@@ -112,9 +113,60 @@ async function detect(root: string): Promise<DetectedProject> {
   }
 }
 
-// --- running process -------------------------------------------------------
+// --- running processes (one per open project) ------------------------------
 
-let current: ChildProcess | null = null
+// v5: keyed by projectKey(root) so several projects' dev servers run at once.
+// Single-active behavior is preserved by the renderer stopping the previous
+// project before opening another (until the workspace rail manages many).
+const servers = new Map<string, ChildProcess>()
+
+// Ports handed out but not necessarily bound yet. Concurrent starts (e.g. the
+// rail opening several projects at once) would otherwise all probe the same free
+// base and collide, since findFreePort only checks bindability at that instant.
+const reserved = new Set<number>()
+// Serialize allocation so the reserve is atomic across findFreePort's await.
+let portChain: Promise<unknown> = Promise.resolve()
+
+function allocatePort(): Promise<number> {
+  const next = portChain.then(async () => {
+    let from = PREVIEW_PORT_BASE
+    for (;;) {
+      const free = await findFreePort(from)
+      if (!reserved.has(free)) {
+        reserved.add(free)
+        return free
+      }
+      from = free + 1 // a concurrent start already claimed this one — skip it
+    }
+  })
+  portChain = next.catch(() => undefined)
+  return next
+}
+
+function killChild(child: ChildProcess): void {
+  if (!child.pid) return
+  try {
+    // Negative pid kills the whole process group (shell + dev server).
+    process.kill(-child.pid, 'SIGTERM')
+  } catch {
+    child.kill('SIGTERM')
+  }
+}
+
+/** Stop the dev server for one project (no-op if it isn't running). */
+function stop(root: string): void {
+  const key = projectKey(root)
+  const child = servers.get(key)
+  if (!child) return
+  servers.delete(key)
+  killChild(child)
+}
+
+/** Stop every running dev server (app quit). */
+function stopAll(): void {
+  for (const child of servers.values()) killChild(child)
+  servers.clear()
+}
 
 const CONFLICT_RE =
   /port \d+ is in use|unable to acquire lock|another instance|EADDRINUSE|address already in use/i
@@ -129,28 +181,15 @@ function interpretFailure(code: number | null, tail: string): string {
   return `Dev server exited (code ${code}) before printing a URL.\n${tail.slice(-600)}`
 }
 
-function stop(): void {
-  if (!current?.pid) {
-    current = null
-    return
-  }
-  try {
-    // Negative pid kills the whole process group (shell + dev server).
-    process.kill(-current.pid, 'SIGTERM')
-  } catch {
-    current.kill('SIGTERM')
-  }
-  current = null
-}
-
 async function start(
   opts: { root: string; command: string; framework?: Framework },
   onLog: (line: string) => void
 ): Promise<RunningDevServer> {
-  stop() // drop any server we previously spawned
+  stop(opts.root) // drop a prior server for THIS project (restart); leave others
 
   // Give the preview its own free port (no collisions, no stale attaches).
-  const port = await findFreePort(PREVIEW_PORT_BASE)
+  // allocatePort reserves it so concurrent starts can't pick the same one.
+  const port = await allocatePort()
   onLog(`Assigned free port ${port} (binding ${PREVIEW_HOST}).`)
   const command = withPort(opts.command, opts.framework, port)
   const env: NodeJS.ProcessEnv = {
@@ -175,7 +214,13 @@ function spawnDevServer(
       detached: true, // new process group so we can kill the whole tree
       env: opts.env
     })
-    current = child
+    const key = projectKey(opts.root)
+    servers.set(key, child)
+    // Keep the map + reserved ports honest if the server dies on its own.
+    child.on('exit', () => {
+      reserved.delete(opts.port)
+      if (servers.get(key) === child) servers.delete(key)
+    })
 
     let settled = false
     let urlFound: string | null = null
@@ -233,7 +278,11 @@ function spawnDevServer(
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
-      stop()
+      // Kill THIS child, not whatever's in the map for this key — a restart may
+      // have replaced it, and stop(root) would kill the newer server instead.
+      killChild(child)
+      reserved.delete(opts.port)
+      if (servers.get(key) === child) servers.delete(key)
       reject(new Error(`Timed out waiting for a localhost URL.\n${tail.slice(-600)}`))
     }, 90_000)
   })
@@ -248,8 +297,8 @@ export function registerDevServerIpc(getWindow: () => BrowserWindow | null): voi
       start(opts, (line) => getWindow()?.webContents.send('devserver:log', line))
   )
 
-  ipcMain.handle('devserver:stop', async () => stop())
+  ipcMain.handle('devserver:stop', async (_e, root: string) => stop(root))
 
   // Never leave a spawned dev server orphaned when dsgn quits.
-  app.on('before-quit', stop)
+  app.on('before-quit', stopAll)
 }

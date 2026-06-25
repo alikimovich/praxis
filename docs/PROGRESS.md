@@ -2,6 +2,31 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-25 — v5-A: multi-instance dev servers (S7)
+
+- `src/main/devserver.ts`: replaced the single `current` ChildProcess with a
+  `Map<projectKey, ChildProcess>` — several projects' dev servers run at once.
+  `start(opts.root)` pre-empts only that project's prior server (restart) and
+  leaves others; `stop(root)` kills one process group + deletes its entry;
+  `stopAll()` on `before-quit`; the spawn registers an `exit` handler that prunes
+  the map if a server dies on its own. The timeout targets only the timed-out root.
+- Contract: `devserver:stop` + `DsgnApi.devServer.stop` gain a `root`; preload +
+  the three App callers thread it. Single-active behavior is preserved at the
+  renderer (opening another project stops the previous one and drops it from the
+  workspace; the rail will skip that to keep projects warm). Running servers hold
+  their ports, so `findFreePort` hands out distinct ones naturally.
+- New `test/devserver-multi.mjs`: two fixtures' servers run concurrently on
+  distinct ports, both reachable, and `stop(rootA)` leaves B running. Full verify
+  green (open-preview / setup-restart single-project paths unchanged).
+- Adversarial review caught a real **free-port race** (concurrent starts both
+  probed 7777 → same port): added a serialized `allocatePort` + reserved-port set
+  so concurrent starts get distinct ports (released on exit). Also: the 90s
+  timeout now kills the *captured* child (identity-guarded), not whatever's in the
+  map for that key (a restart could otherwise kill the newer server); a failed
+  `attempt` stops the dev server it started (no orphan); the test was strengthened
+  (both fixtures honor `PORT` so the allocator is actually under test) and polls
+  until-down instead of a fixed sleep.
+
 ## 2026-06-25 — iOS simulator build-destination preflight (the 26.5 gap)
 
 - Root cause of "iOS 26.5 is not installed" after a multi-minute build: modern
