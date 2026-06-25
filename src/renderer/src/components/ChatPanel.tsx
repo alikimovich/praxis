@@ -101,6 +101,7 @@ export default function ChatPanel(): React.JSX.Element {
   const tokens = useTokens()
   const setup = useSetup()
   const composerSeed = useComposer((s) => s.seed)
+  const composerSubmit = useComposer((s) => s.submit)
   const [publishing, setPublishing] = useState(false)
   const [publishMsg, setPublishMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [input, setInput] = useState('')
@@ -128,6 +129,16 @@ export default function ChatPanel(): React.JSX.Element {
       el.setSelectionRange(el.value.length, el.value.length)
     })
   }, [composerSeed])
+
+  // Inline comment-mode (C) sends straight to the agent. If a turn is already
+  // running, prefill instead so the comment is never dropped.
+  useEffect(() => {
+    if (composerSubmit == null) return
+    useComposer.getState().setSubmit(null)
+    if (isRunning) seedPrompt(composerSubmit)
+    else send(composerSubmit)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [composerSubmit])
 
   useEffect(() => {
     return window.api.agent.onEvent((event) => {
@@ -296,8 +307,8 @@ export default function ChatPanel(): React.JSX.Element {
     setSelected(null)
   }
 
-  const send = (): void => {
-    const text = input.trim()
+  const send = (raw: string = input): void => {
+    const text = raw.trim()
     if (!text || isRunning) return
     appendUser(text)
     streamingId.current = startAssistant()
@@ -554,7 +565,7 @@ export default function ChatPanel(): React.JSX.Element {
             ) : (
               <button
                 className="composer__send"
-                onClick={send}
+                onClick={() => send()}
                 disabled={!input.trim()}
                 aria-label="Send message"
               >

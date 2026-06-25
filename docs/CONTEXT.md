@@ -101,6 +101,8 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
   select-mode IPC** (relays picks; re-arms overlay after preview navigation).
 - `src/preview/preload.ts` — **v2 overlay preload** injected into the preview view
   (hover highlight + click pick + source/style capture). Own `tsconfig.preview.json`.
+  Also hosts the Figma-style inline modes: **C** comment-to-agent / **Y** annotation —
+  a shadow-DOM composer anchored to the clicked element (comment → agent, annotation → pin).
 - `src/renderer/src/components/ChatPanel.tsx` — chat UI, toolbar, slash menu, **inspector**.
 - `src/renderer/src/components/Inspector.tsx` — **v2** selected-element card + chat hand-off
   + the "Edit props" toggle.

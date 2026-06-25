@@ -88,6 +88,9 @@ web browser. Phased: mirror → interact → element-select. See
 - [x] **Svelte component prop schema reachable (option D).** A host element inside a component
       definition surfaces that file's own props (no DOM node carries the usage stamp); edits route
       to the agent as a default change. ✅ 2026-06-25 — `inspectSvelteProps`, `test/prop-svelte-self.mjs`.
+- [x] **Figma-style inline modes** — C: comment-to-agent, Y: annotation. Inline composer in the
+      preview overlay anchored to the clicked element; comment → agent, annotation → pin. ✅
+      2026-06-25 — `src/preview/preload.ts`, `App.tsx`, `test/comment-mode.mjs`.
 - [ ] **Svelte per-instance prop editing (option C).** Map a clicked DOM node → its owning Svelte 5
       component instance → the usage location, for true per-instance edits across all component shapes.
 

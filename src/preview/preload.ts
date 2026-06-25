@@ -24,6 +24,12 @@ const SET_PINS = 'dsgn:preview:set-annotations'
 const PIN_CLICK = 'dsgn:preview:pin-click'
 const READINESS = 'dsgn:preview:readiness'
 const TEXT_EDIT = 'dsgn:preview:text-edit'
+// Figma-style inline commenting: comment-to-agent (C) and annotation (Y).
+const SET_COMMENT_MODE = 'dsgn:preview:set-comment-mode' // renderer → preload
+const COMMENT_MODE = 'dsgn:preview:comment-mode' // preload → renderer (keyboard-initiated)
+const COMMENT = 'dsgn:preview:comment' // preload → renderer (submitted)
+
+type CommentMode = 'comment' | 'annotate' | null
 
 // The simulator preview loads dsgn's own sim-bridge page (an MJPEG <img> of the
 // booted device), flagged with `?dsgnSim=1`. There's no previewed-app DOM there
@@ -55,6 +61,14 @@ let overlayLabel: HTMLDivElement | null = null
 let pinsLayer: HTMLDivElement | null = null
 let annotationPins: { id: string; selector: string }[] = []
 
+// Inline-comment state. `commentMode` is the armed mode (C/Y); `commenting` is the
+// element a composer is currently anchored to (the click froze it).
+let commentMode: CommentMode = null
+let commenting: Element | null = null
+let composerEl: HTMLDivElement | null = null
+let composerInput: HTMLTextAreaElement | null = null
+let composerHint: HTMLDivElement | null = null
+
 /** Lazily build the shadow-DOM overlay (highlight box + label chip + pins layer). */
 function ensureOverlay(): void {
   if (overlayHost) return
@@ -79,12 +93,62 @@ function ensureOverlay(): void {
   const pins = document.createElement('div')
   pins.style.cssText = 'position:fixed;inset:0;pointer-events:none;'
 
-  shadow.append(box, label, pins)
+  // Inline composer — a floating pill anchored to the clicked element. It's the
+  // only interactive part of the overlay (pointer-events:auto), so a hostile page
+  // can't reach it and our own clicks on it are ignored via isOverlay().
+  const composer = document.createElement('div')
+  composer.setAttribute('data-dsgn-composer', '')
+  composer.style.cssText =
+    'position:fixed;pointer-events:auto;display:none;align-items:flex-end;gap:6px;' +
+    'box-sizing:border-box;width:300px;max-width:80vw;padding:8px 8px 8px 14px;' +
+    'background:#fff;border-radius:22px;box-shadow:0 6px 24px rgba(0,0,0,0.16);' +
+    'font:400 14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif;' +
+    'z-index:1;border:1px solid rgba(0,0,0,0.06);'
+
+  const input = document.createElement('textarea')
+  input.rows = 1
+  input.style.cssText =
+    'flex:1;border:none;outline:none;resize:none;background:transparent;color:#111;' +
+    'font:inherit;max-height:120px;padding:5px 0;'
+
+  const send = document.createElement('button')
+  send.type = 'button'
+  send.setAttribute('aria-label', 'Submit')
+  send.textContent = '↑'
+  send.style.cssText =
+    'flex:0 0 auto;width:28px;height:28px;border:none;border-radius:50%;cursor:pointer;' +
+    'background:#2563eb;color:#fff;font:600 15px/1 system-ui;display:flex;' +
+    'align-items:center;justify-content:center;'
+
+  const hint = document.createElement('div')
+  hint.style.cssText =
+    'position:fixed;pointer-events:none;font:600 11px/1.4 system-ui,sans-serif;color:#fff;' +
+    'background:#111;opacity:0.82;padding:3px 8px;border-radius:5px;white-space:nowrap;display:none;'
+
+  // Keep composer mouse events from bubbling out to the previewed page. Bubble
+  // phase (not capture) so the send button's own click handler still fires first;
+  // the overlay's window-level capture handlers already ignore overlay targets.
+  const swallow = (e: Event): void => e.stopPropagation()
+  composer.addEventListener('mousedown', swallow)
+  composer.addEventListener('click', swallow)
+  input.addEventListener('keydown', onComposerKey, true)
+  input.addEventListener('input', autoGrow)
+  send.addEventListener('click', (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    submitComposer()
+  })
+  composer.append(input, send)
+
+  shadow.append(box, label, pins, composer, hint)
   document.documentElement.appendChild(host)
   overlayHost = host
   overlayBox = box
   overlayLabel = label
   pinsLayer = pins
+  composerEl = composer
+  composerInput = input
+  composerHint = hint
 }
 
 // Dot nodes are built once per pin (on SET_PINS) and only repositioned on
@@ -237,26 +301,37 @@ function describe(el: Element): SelectedElement {
 }
 
 function onMove(e: MouseEvent): void {
-  // Self-heal: if the edited node was swapped out (HMR) without a blur, clear it
-  // so select mode isn't stranded.
+  // Self-heal: if the frozen node was swapped out (HMR) without a blur, clear it
+  // so a mode isn't stranded anchored to a detached element.
   if (editing && !editing.isConnected) endEdit()
-  if (!active || editing) return
+  if (commenting && !commenting.isConnected) {
+    closeComposer()
+    setCommentMode(null)
+  }
+  if (editing || commenting) return // frozen while editing / composing
+  if (!active && !commentMode) return
   const el = e.target as Element | null
   if (!el || isOverlay(el)) return
   drawOverlay(el)
 }
 
 function onClick(e: MouseEvent): void {
-  if (!active || editing) return
-  // Only genuine user input picks — a hostile page can dispatch synthetic click
-  // events while select mode is armed; isTrusted is false for those.
+  if (editing) return
+  // Only genuine user input acts — a hostile page can dispatch synthetic clicks
+  // while a mode is armed; isTrusted is false for those.
   if (!e.isTrusted) return
   const el = e.target as Element | null
   if (!el || isOverlay(el)) return
-  // Swallow the click so the previewed app doesn't also act on it.
-  e.preventDefault()
-  e.stopPropagation()
-  ipcRenderer.send(PICKED, describe(el))
+  if (active) {
+    // Swallow the click so the previewed app doesn't also act on it.
+    e.preventDefault()
+    e.stopPropagation()
+    ipcRenderer.send(PICKED, describe(el))
+  } else if (commentMode) {
+    e.preventDefault()
+    e.stopPropagation()
+    openComposer(el) // freeze this element and anchor the composer to it
+  }
 }
 
 // ---- Inline text editing: double-click a stamped, text-only element ---------
@@ -322,11 +397,141 @@ function onEditKey(e: KeyboardEvent): void {
   }
 }
 
-function onKey(e: KeyboardEvent): void {
-  if (active && !editing && e.isTrusted && e.key === 'Escape') {
+// ---- Inline commenting: C → comment-to-agent, Y → annotation ----------------
+
+function autoGrow(): void {
+  const t = composerInput
+  if (!t) return
+  t.style.height = 'auto'
+  t.style.height = `${Math.min(t.scrollHeight, 120)}px`
+}
+
+/** Anchor the composer just above the frozen element (clamped to the viewport). */
+function positionComposer(): void {
+  if (!composerEl || !commenting) return
+  const r = commenting.getBoundingClientRect()
+  const w = composerEl.offsetWidth || 300
+  const h = composerEl.offsetHeight || 44
+  const left = Math.min(Math.max(r.left, 8), window.innerWidth - w - 8)
+  let top = r.top - h - 8
+  if (top < 8) top = Math.min(r.bottom + 8, window.innerHeight - h - 8)
+  composerEl.style.left = `${left}px`
+  composerEl.style.top = `${Math.max(top, 8)}px`
+}
+
+function openComposer(el: Element): void {
+  ensureOverlay()
+  if (!composerEl || !composerInput) return
+  commenting = el
+  drawOverlay(el)
+  if (composerHint) composerHint.style.display = 'none'
+  composerInput.value = ''
+  composerInput.placeholder = commentMode === 'annotate' ? 'Add a note…' : 'Add a comment…'
+  const send = composerEl.querySelector('button')
+  if (send) send.style.background = commentMode === 'annotate' ? '#f59e0b' : '#2563eb'
+  composerEl.style.display = 'flex'
+  positionComposer()
+  autoGrow()
+  composerInput.focus()
+}
+
+function closeComposer(): void {
+  commenting = null
+  if (composerEl) composerEl.style.display = 'none'
+  if (composerInput) composerInput.value = ''
+}
+
+function submitComposer(): void {
+  const text = (composerInput?.value ?? '').replace(/\s+/g, ' ').trim()
+  const el = commenting
+  const kind = commentMode
+  if (el && kind && text) {
+    ipcRenderer.send(COMMENT, { kind, el: describe(el), text: text.slice(0, 2000) })
+  }
+  closeComposer()
+  setCommentMode(null) // one comment per arming, like Figma
+}
+
+function onComposerKey(e: KeyboardEvent): void {
+  e.stopPropagation()
+  if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
+    submitComposer()
+  } else if (e.key === 'Escape') {
+    e.preventDefault()
+    closeComposer()
+    setCommentMode(null)
+  }
+}
+
+function showModeHint(): void {
+  if (!composerHint) return
+  if (!commentMode) {
+    composerHint.style.display = 'none'
+    return
+  }
+  composerHint.textContent =
+    commentMode === 'annotate'
+      ? 'Annotate: click an element to pin a note'
+      : 'Comment: click an element to ask the agent'
+  composerHint.style.display = 'block'
+  composerHint.style.left = '50%'
+  composerHint.style.top = '12px'
+  composerHint.style.transform = 'translateX(-50%)'
+}
+
+/** True for the previewed app's own editable fields — don't hijack their keys. */
+function isTypingTarget(t: EventTarget | null): boolean {
+  const el = t as HTMLElement | null
+  if (!el || typeof el.tagName !== 'string') return false
+  const tag = el.tagName.toLowerCase()
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable
+}
+
+function setCommentMode(next: CommentMode, fromRenderer = false): void {
+  if (commentMode === next) return // idempotent — don't disturb an open composer
+  // Comment/annotate and select are mutually exclusive.
+  if (next && active) {
     setActive(false)
-    ipcRenderer.send(CANCELLED)
+    ipcRenderer.send(CANCELLED) // clear the renderer's select toggle
+  }
+  closeComposer()
+  commentMode = next
+  if (commentMode) {
+    ensureOverlay()
+    document.documentElement.style.cursor = 'crosshair'
+    showModeHint()
+  } else {
+    if (!active) document.documentElement.style.cursor = ''
+    hideOverlay()
+    if (composerHint) composerHint.style.display = 'none'
+  }
+  // Echo keyboard/internal changes so the renderer toolbar can mirror them
+  // (renderer-initiated changes already know their own state — avoid a loop).
+  if (!fromRenderer) ipcRenderer.send(COMMENT_MODE, commentMode)
+}
+
+function onKey(e: KeyboardEvent): void {
+  if (!e.isTrusted || editing) return
+  if (commenting) return // the open composer owns keys (its handler manages them)
+  if (e.key === 'Escape') {
+    if (active) {
+      e.preventDefault()
+      setActive(false)
+      ipcRenderer.send(CANCELLED)
+    } else if (commentMode) {
+      e.preventDefault()
+      setCommentMode(null)
+    }
+    return
+  }
+  if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || isTypingTarget(e.target)) return
+  if (e.key === 'c' || e.key === 'C') {
+    e.preventDefault()
+    setCommentMode(commentMode === 'comment' ? null : 'comment')
+  } else if (e.key === 'y' || e.key === 'Y') {
+    e.preventDefault()
+    setCommentMode(commentMode === 'annotate' ? null : 'annotate')
   }
 }
 
@@ -351,10 +556,21 @@ window.addEventListener('click', onClick, true)
 window.addEventListener('dblclick', onDblClick, true)
 window.addEventListener('keydown', onKey, true)
 window.addEventListener('scroll', () => {
-  if (active) hideOverlay()
+  if (commenting) {
+    drawOverlay(commenting) // keep the highlight + composer tracking the frozen el
+    positionComposer()
+  } else if (active || commentMode) {
+    hideOverlay()
+  }
   if (pinDots.size) positionPins()
 }, true)
-window.addEventListener('resize', () => pinDots.size && positionPins())
+window.addEventListener('resize', () => {
+  if (commenting) {
+    drawOverlay(commenting)
+    positionComposer()
+  }
+  if (pinDots.size) positionPins()
+})
 // Pins track layout changes (hot-reload, async content) on a light cadence.
 const pinTimer = setInterval(() => pinDots.size && positionPins(), 600)
 window.addEventListener('pagehide', () => {
@@ -383,7 +599,11 @@ window.addEventListener('load', () => {
   tick(0)
 })
 
-  ipcRenderer.on(SET_MODE, (_e, next: boolean) => setActive(next))
+  ipcRenderer.on(SET_MODE, (_e, next: boolean) => {
+    if (next && commentMode) setCommentMode(null) // exclusivity
+    setActive(next)
+  })
+  ipcRenderer.on(SET_COMMENT_MODE, (_e, m: CommentMode) => setCommentMode(m, true))
   ipcRenderer.on(SET_PINS, (_e, pins: { id: string; selector: string }[]) => {
     annotationPins = Array.isArray(pins) ? pins : []
     buildPins()
