@@ -2,6 +2,29 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-25 — Svelte component prop schema reachable via selection (option D)
+
+- Bug: selecting a rendered Svelte component never showed its prop schema. A
+  Svelte component instance compiles to **no DOM node**, so the usage-site
+  `data-dsgn-source` stamp on `<Accordion>` is dropped (no `...rest` forwarding) —
+  the only stamps reaching the page are the plain host elements *inside each
+  component's definition*, which took the host-element (no-schema) path.
+- Fix (**option D — same-file definition schema**): when a clicked host element
+  resolves into a `.svelte` file that declares props, `inspectSvelteProps` now
+  surfaces **that file's own** props (`extractProps` on the same instance script).
+  Works for **every component shape** (block-`{#if}`-root, multi-root, etc.) with
+  **zero source mutation** — chosen over rest-forwarding (A/B), which can't reach
+  the ~46% of a real library that has no single host root. Per-instance editing
+  (option C, runtime instance→usage mapping) is the planned follow-up.
+- Edits to a definition-scoped prop route to the agent as a prop-default change
+  (the instance has no node to splice). The panel surfaces the schema only — no
+  misleading live value — and the note is honest ("no per-instance value; editing
+  changes the default, affecting only instances that don't set it"). SvelteKit
+  route files (`+page`/`+layout`) are excluded (their `data`/`form`/`params` are
+  framework-injected, not props). New `test/prop-svelte-self.mjs` (the brief's
+  smoke check): definition host → `hasSchema:true` with the right fields, edit →
+  agent, plus propless-host and route-file negatives; cross-file path intact.
+
 ## 2026-06-25 — Work on a `dsgn/*` branch per project
 
 - Opening a project now puts dsgn's work on a **`dsgn/*` branch** so the user's main

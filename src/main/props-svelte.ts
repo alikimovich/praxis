@@ -1,5 +1,5 @@
 import { readFile, writeFile } from 'fs/promises'
-import { dirname, isAbsolute, join, normalize, relative } from 'path'
+import { basename, dirname, isAbsolute, join, normalize, relative } from 'path'
 import type { PropEdit, PropEditResult, PropField, PropInspection, PropKind } from '../shared/api'
 import {
   agentPromptFor,
@@ -323,6 +323,13 @@ function findComponentImport(program: Node | undefined, name: string): string | 
 
 // --- public adapter API ------------------------------------------------------
 
+// SvelteKit route files (`+page.svelte`, `+layout.svelte`, `+error.svelte`) declare
+// framework-injected props (`data`/`form`/`params`), not editable component props —
+// the same-file schema path must skip them.
+function isRouteFile(file: string): boolean {
+  return basename(file).startsWith('+')
+}
+
 async function parseSvelte(code: string): Promise<Node | null> {
   try {
     const { parse } = await loadSvelte()
@@ -353,11 +360,12 @@ export async function inspectSvelteProps(
     el.type === 'Component' || el.type === 'SvelteComponent' || /^[A-Z]/.test(component)
   const current = readAttributes(el)
 
+  const selfInstance = (ast as { instance?: { content?: Node } }).instance?.content
   let schema: PropField[] = []
   let crossFile = false
+  let selfSchema = false
   if (isComponent) {
-    const instance = (ast as { instance?: { content?: Node } }).instance?.content
-    const spec = findComponentImport(instance, component)
+    const spec = findComponentImport(selfInstance, component)
     if (spec) {
       const file = await resolveSvelteImport(root, dirname(loc.file), spec)
       if (file) {
@@ -371,19 +379,43 @@ export async function inspectSvelteProps(
         }
       }
     }
+  } else if (!isRouteFile(loc.file)) {
+    // Option D — a host element inside a component *definition* carries the stamp
+    // (a Svelte component instance has no DOM node to carry the usage-site stamp).
+    // Surface THIS file's own props so the schema is reachable for every component
+    // shape (block-root, multi-root, etc.) without mutating source. Edits route to
+    // the agent as a prop-default change (see applySvelteEdit). Skip SvelteKit
+    // route files, whose `data`/`form`/`params` are framework-injected, not props.
+    const own = extractProps(selfInstance)
+    if (own.length) {
+      schema = own
+      selfSchema = true
+    }
   }
 
-  const fields = mergeFields(schema, current)
+  // Same-file schema is the component's own props (not the clicked host element's
+  // attributes), so don't fold the host attrs in.
+  const fields = selfSchema ? schema : mergeFields(schema, current)
   const hasSchema = schema.length > 0
+  const selfName = basename(loc.file).replace(/\.svelte$/, '')
   const note = isComponent
     ? hasSchema
       ? crossFile
         ? `Schema resolved from the imported ${component} component.`
         : undefined
       : 'No Svelte prop schema resolved — showing the props currently set.'
-    : 'Host element — editing its literal attributes (no component schema).'
+    : selfSchema
+      ? `${selfName}'s props (from its definition) — there's no per-instance value here; ` +
+        `editing changes the prop's default, which only affects instances that don't set it.`
+      : 'Host element — editing its literal attributes (no component schema).'
 
-  return { component, source, fields, hasSchema, ...(note ? { note } : {}) }
+  return {
+    component: selfSchema ? selfName : component,
+    source,
+    fields,
+    hasSchema,
+    ...(note ? { note } : {})
+  }
 }
 
 /** Render a Svelte attribute literal: name="x" / name={3} / name={true}. */
@@ -413,6 +445,23 @@ export async function applySvelteEdit(
   const el = findElement(ast, code, loc.line, loc.column)
   if (!el || typeof el.name !== 'string' || typeof el.start !== 'number') {
     return { applied: false, needsAgent: true, agentPrompt: agentPromptFor(edit) }
+  }
+
+  // Option D: editing a prop surfaced from a host element inside a component
+  // *definition* is a change to that component's prop DEFAULT (the instance has no
+  // DOM node to splice). Route it to the agent rather than mis-splicing it as a
+  // literal attribute on the host element.
+  const isComp =
+    el.type === 'Component' || el.type === 'SvelteComponent' || /^[A-Z]/.test(el.name)
+  if (!isComp && !isRouteFile(loc.file)) {
+    const selfInstance = (ast as { instance?: { content?: Node } }).instance?.content
+    if (extractProps(selfInstance).some((p) => p.name === edit.name)) {
+      return {
+        applied: false,
+        needsAgent: true,
+        agentPrompt: `In ${basename(loc.file)}, change the default value of the \`${edit.name}\` prop to ${JSON.stringify(edit.value)}.`
+      }
+    }
   }
 
   const attrText = renderAttr(edit.name, edit.kind, edit.value)

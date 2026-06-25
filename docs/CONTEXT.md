@@ -107,7 +107,9 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
 - `src/main/props.ts` — **prop editor engine** (React/JSX): babel-parse at the stamp line,
   react-docgen schema, hybrid literal-splice / agent-fallback apply (`props:inspect/apply`).
   Dispatches `.svelte` sources to `src/main/props-svelte.ts` (svelte/compiler — `export let` /
-  `$props()` schema, same splice/apply contract). Inline text edits (`text:apply`) splice the
+  `$props()` schema, same splice/apply contract). Svelte components have no DOM node, so a host
+  element clicked inside a component *definition* surfaces that file's own props (option D); such
+  prop edits route to the agent as a default change. Per-instance mapping (option C) is a follow-up. Inline text edits (`text:apply`) splice the
   element's text content for both JSX and `.svelte` (`applySvelteTextEdit`), agent-fallback for
   expression/mixed content.
 - `src/renderer/src/components/PropEditor.tsx` — typed prop controls rendered from the inspection.
