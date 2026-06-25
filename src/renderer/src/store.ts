@@ -9,6 +9,7 @@ import type {
   SelectedElement,
   TokenSet
 } from '../../shared/api'
+import { projectKey } from '../../shared/projectKey'
 
 export interface ChatMessage {
   id: string
@@ -100,6 +101,60 @@ export const useSession = create<SessionState>((set) => ({
   setAuthNeeded: (authNeeded) => set({ authNeeded }),
   setProjectRoot: (projectRoot) => set({ projectRoot }),
   setBranch: (branch) => set({ branch })
+}))
+
+/**
+ * v5 workspace — the set of open projects and which one is active. This is the
+ * future source of truth for multi-project: per-project state (preview, dev
+ * server, agent session, annotations, tokens…) will hang off `activeKey`. It's
+ * additive and dormant for now — App still drives a single project via
+ * `useSession.projectRoot`; this store mirrors it and grows as the rail/backends
+ * land (see docs/TASKS.md "v5"). Projects are identified by `projectKey(root)`.
+ */
+export interface ProjectEntry {
+  /** Absolute repo root as opened. */
+  root: string
+  /** Canonical key (`projectKey(root)`) — the dedupe + map identity. */
+  key: string
+  /** Display name (folder basename, overridable). */
+  name: string
+}
+
+interface WorkspaceState {
+  projects: ProjectEntry[]
+  activeKey: string | null
+  /** Open a project (or re-activate it if already open). Returns its key. */
+  openOrActivate: (root: string, meta?: { name?: string }) => string
+  activate: (key: string) => void
+  close: (key: string) => void
+  reset: () => void
+}
+
+const basename = (p: string): string => p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() || p
+
+export const useWorkspace = create<WorkspaceState>((set, get) => ({
+  projects: [],
+  activeKey: null,
+  openOrActivate: (root, meta) => {
+    const key = projectKey(root)
+    const exists = get().projects.some((p) => p.key === key)
+    set((s) => ({
+      projects: exists
+        ? s.projects
+        : [...s.projects, { root, key, name: meta?.name ?? basename(root) }],
+      activeKey: key
+    }))
+    return key
+  },
+  activate: (key) => set((s) => (s.projects.some((p) => p.key === key) ? { activeKey: key } : s)),
+  close: (key) =>
+    set((s) => {
+      const projects = s.projects.filter((p) => p.key !== key)
+      const activeKey =
+        s.activeKey === key ? (projects.at(-1)?.key ?? null) : s.activeKey
+      return { projects, activeKey }
+    }),
+  reset: () => set({ projects: [], activeKey: null })
 }))
 
 /**
@@ -393,3 +448,4 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
 ;(window as unknown as { __dsgnSetup?: typeof useSetup }).__dsgnSetup = useSetup
 ;(window as unknown as { __dsgnLog?: typeof useLog }).__dsgnLog = useLog
 ;(window as unknown as { __dsgnDiagnosis?: typeof useDiagnosis }).__dsgnDiagnosis = useDiagnosis
+;(window as unknown as { __dsgnWorkspace?: typeof useWorkspace }).__dsgnWorkspace = useWorkspace

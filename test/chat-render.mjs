@@ -119,7 +119,37 @@ try {
   await win.click('.branch')
   await win.waitForSelector('.branch__input', { timeout: 5000 })
 
-  console.log('CHAT-RENDER OK')
+  // v5 workspace store: open/activate/close transitions, keyed by projectKey.
+  const ws = await win.evaluate(() => {
+    const w = window.__dsgnWorkspace.getState()
+    w.reset()
+    const a = w.openOrActivate('/tmp/proj-a/')
+    const b = w.openOrActivate('/tmp/proj-b')
+    w.openOrActivate('/tmp/proj-a') // dedupe: same key, no new entry
+    const afterOpen = window.__dsgnWorkspace.getState()
+    window.__dsgnWorkspace.getState().activate(a)
+    const afterActivate = window.__dsgnWorkspace.getState().activeKey
+    window.__dsgnWorkspace.getState().close(a)
+    const afterClose = window.__dsgnWorkspace.getState()
+    return {
+      a,
+      b,
+      count: afterOpen.projects.length,
+      activeAfterOpen: afterOpen.activeKey,
+      afterActivate,
+      remaining: afterClose.projects.map((p) => p.key),
+      activeAfterClose: afterClose.activeKey
+    }
+  })
+  if (ws.count !== 2) throw new Error(`workspace should dedupe to 2 projects, got ${ws.count}`)
+  if (ws.activeAfterOpen !== ws.a) throw new Error('re-opening A should make A active')
+  if (ws.afterActivate !== ws.a) throw new Error('activate(A) failed')
+  if (ws.remaining.length !== 1 || ws.remaining[0] !== ws.b) {
+    throw new Error(`close(A) should leave only B, got ${JSON.stringify(ws.remaining)}`)
+  }
+  if (ws.activeAfterClose !== ws.b) throw new Error('closing the active project should fall back to B')
+
+  console.log('CHAT-RENDER OK — markdown, toolbar, auth banner, branch pill, workspace store')
 } catch (err) {
   console.error('CHAT-RENDER FAILED:', err?.message ?? err)
   process.exitCode = 1

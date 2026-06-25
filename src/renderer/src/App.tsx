@@ -18,8 +18,10 @@ import {
   useSelection,
   useSession,
   useSetup,
-  useTokens
+  useTokens,
+  useWorkspace
 } from './store'
+import { projectKey } from '../../shared/projectKey'
 import type { CommentMode, Framework, PreviewComment, PreviewKind } from '../../shared/api'
 
 const MIN_CHAT_WIDTH = 320
@@ -469,6 +471,9 @@ export default function App(): React.JSX.Element {
       })
       log.append(`Agent session started (cwd ${root})`)
       useSession.getState().setProjectRoot(root)
+      // v5: track the open project in the workspace (single-active today; the rail
+      // + multi-project switching build on this).
+      useWorkspace.getState().openOrActivate(root, { name })
       // Detect this repo's design tokens (manifest → tailwind → CSS vars).
       // Guard against a project switch racing a slow scan — only apply if `root`
       // is still the open project when it resolves. When the repo exposes no
@@ -590,6 +595,8 @@ export default function App(): React.JSX.Element {
   const stop = async (): Promise<void> => {
     setSelectMode(false)
     setSelected(null)
+    const closing = useSession.getState().projectRoot
+    if (closing) useWorkspace.getState().close(projectKey(closing))
     useSession.getState().setProjectRoot(null)
     useAnnotations.getState().setList([])
     useAnnotations.getState().setFocused(null)
