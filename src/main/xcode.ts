@@ -26,3 +26,57 @@ export function xcodeFailureReason(err: unknown): string {
   }
   return `Could not run the iOS simulator tools: ${e.message ?? String(err)}`
 }
+
+/** Parse "26.5" / "18.4.1" → [26,5] / [18,4,1]; null if it isn't a version. */
+export function parseVersion(v: string | null | undefined): number[] | null {
+  if (!v) return null
+  const m = v.trim().match(/\d+(?:\.\d+)*/)
+  if (!m) return null
+  return m[0].split('.').map(Number)
+}
+
+/** Numeric segment-wise compare. Returns >0 if a>b, <0 if a<b, 0 if equal. */
+export function cmpVersion(a: number[], b: number[]): number {
+  const n = Math.max(a.length, b.length)
+  for (let i = 0; i < n; i++) {
+    const d = (a[i] ?? 0) - (b[i] ?? 0)
+    if (d !== 0) return d
+  }
+  return 0
+}
+
+/**
+ * Modern Xcode couples simulator *builds* to its active iOS SDK: building for a
+ * simulator needs an installed runtime whose version is >= the SDK's iOS version.
+ * (Observed first-hand: Xcode 26.5's SDK refuses installed 26.0/26.1 runtimes —
+ * `xcodebuild -showdestinations` then lists ZERO simulator destinations and the
+ * build dies with "iOS 26.5 is not installed".) The catch: `simctl list devices
+ * available` still shows those older devices, so a device-count preflight passes
+ * while the build is already doomed. This detects the gap up front and hands back
+ * the one-line fix instead of waiting for a multi-minute build to fail.
+ *
+ * Pure: feed it the SDK version (from `xcrun --sdk iphonesimulator
+ * --show-sdk-version`) and the installed iOS runtime versions. `null`/unknown SDK
+ * never blocks — we only fail when we're sure no runtime can satisfy the SDK.
+ */
+export function simBuildDestination(
+  sdkVersion: string | null | undefined,
+  runtimeVersions: string[]
+): { ok: boolean; reason?: string } {
+  const sdk = parseVersion(sdkVersion)
+  if (!sdk) return { ok: true }
+  const parsed = runtimeVersions.map(parseVersion).filter((v): v is number[] => v !== null)
+  if (parsed.some((v) => cmpVersion(v, sdk) >= 0)) return { ok: true }
+  const sdkStr = sdk.join('.')
+  const newest = parsed.length
+    ? [...parsed].sort(cmpVersion).pop()!.join('.')
+    : null
+  const have = newest ? ` (newest installed is iOS ${newest})` : ' (none installed)'
+  return {
+    ok: false,
+    reason:
+      `Xcode's iOS SDK is ${sdkStr}, but no matching simulator runtime is installed${have}. ` +
+      'Builds need a runtime ≥ the SDK version. Download it with `xcodebuild -downloadPlatform iOS` ' +
+      '(or Xcode → Settings → Components → Get the iOS simulator), then reopen the project.'
+  }
+}

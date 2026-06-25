@@ -4,7 +4,7 @@ import { createServer, type Server, type ServerResponse } from 'http'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { promisify } from 'util'
-import { xcodeFailureReason } from './xcode'
+import { xcodeFailureReason, simBuildDestination } from './xcode'
 import { findFreePort, stripAnsi } from './devserver-net'
 import type { RunningSimulator, SimDevice, SimPreflight } from '../shared/api'
 
@@ -221,6 +221,7 @@ async function xcrun(args: string[], timeout = 8000): Promise<string> {
 interface SimctlRuntime {
   name: string
   identifier: string
+  version?: string
   isAvailable?: boolean
 }
 interface SimctlDevice {
@@ -260,10 +261,13 @@ export async function preflight(): Promise<SimPreflight> {
   } catch {
     base.hasIdb = false
   }
+  const runtimeVersions: string[] = []
   try {
     const runtimes = (JSON.parse(await xcrun(['simctl', 'list', 'runtimes', '-j'])).runtimes ??
       []) as SimctlRuntime[]
-    base.runtimes = runtimes.filter((r) => r.isAvailable !== false && /iOS/i.test(r.name)).map((r) => r.name)
+    const ios = runtimes.filter((r) => r.isAvailable !== false && /iOS/i.test(r.name))
+    base.runtimes = ios.map((r) => r.name)
+    for (const r of ios) if (r.version) runtimeVersions.push(r.version)
 
     const devicesByRuntime = (JSON.parse(await xcrun(['simctl', 'list', 'devices', 'available', '-j']))
       .devices ?? {}) as Record<string, SimctlDevice[]>
@@ -288,6 +292,20 @@ export async function preflight(): Promise<SimPreflight> {
       ...base,
       reason: 'No iPhone/iPad simulators found. Create one in Xcode → Settings → Platforms.'
     }
+  }
+  // Devices exist, but a modern Xcode SDK may still refuse them as build
+  // destinations if no runtime matches its iOS version — catch that here, before
+  // booting + a doomed multi-minute build. The SDK probe is best-effort: if it
+  // can't be read, we don't block (simBuildDestination treats null SDK as ok).
+  let sdkVersion: string | null = null
+  try {
+    sdkVersion = (await xcrun(['--sdk', 'iphonesimulator', '--show-sdk-version'])).trim()
+  } catch {
+    sdkVersion = null
+  }
+  const buildable = simBuildDestination(sdkVersion, runtimeVersions)
+  if (!buildable.ok) {
+    return { ...base, reason: buildable.reason }
   }
   return { ...base, ok: true }
 }

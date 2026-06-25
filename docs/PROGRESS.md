@@ -2,6 +2,24 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-25 — iOS simulator build-destination preflight (the 26.5 gap)
+
+- Root cause of "iOS 26.5 is not installed" after a multi-minute build: modern
+  Xcode couples a simulator *build* to a runtime ≥ its active SDK version. The old
+  preflight only counted `simctl` devices, which still listed 26.0/26.1 devices,
+  so it went green while the build was already doomed.
+- **`simBuildDestination(sdkVersion, runtimeVersions)`** in `src/main/xcode.ts`
+  (pure, with `parseVersion`/`cmpVersion`): fails when no installed runtime ≥ the
+  SDK, handing back the one-line fix (`xcodebuild -downloadPlatform iOS`). Unknown/
+  unparseable SDK never blocks (degrade safe). Unit-tested in `test/xcode.mjs`.
+- `preflight()` now probes `xcrun --sdk iphonesimulator --show-sdk-version` and the
+  runtime versions, and returns this reason *before* booting + building.
+- Kicked off the 8.52 GB `xcodebuild -downloadPlatform iOS` for this machine's
+  missing 26.5 runtime (consented).
+- **`docs/PLAN-proactive-checks.md`** — the layered "preflight rules" design this
+  generalizes into: proactive checks → rule-based failure matching → AI diagnose
+  fallback, all feeding the existing propose-first card + per-machine memory.
+
 ## 2026-06-25 — v5 foundation: projectKey + workspace store (S0/S2)
 
 - First, non-collision slices of the v5 multi-project roadmap (a planning workflow
