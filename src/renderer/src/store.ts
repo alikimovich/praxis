@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type {
   Annotation,
+  CommentMode,
   PermissionMode,
   PermissionRequest,
   PropInspection,
@@ -126,11 +127,14 @@ export const toAgentOptions = (s: { model: string; effort: string }): {
  */
 interface SelectionState {
   selectMode: boolean
+  /** The armed inline-overlay comment mode (Figma-style C/Y), mirrored from the preview. */
+  commentMode: CommentMode
   selected: SelectedElement | null
   /** Prop inspection for the selected element (null while loading / no source). */
   inspection: PropInspection | null
   inspecting: boolean
   setSelectMode: (selectMode: boolean) => void
+  setCommentMode: (commentMode: CommentMode) => void
   /** Selecting a new element clears the previous inspection. */
   setSelected: (selected: SelectedElement | null) => void
   setInspection: (inspection: PropInspection | null) => void
@@ -139,10 +143,13 @@ interface SelectionState {
 
 export const useSelection = create<SelectionState>((set) => ({
   selectMode: false,
+  commentMode: null,
   selected: null,
   inspection: null,
   inspecting: false,
-  setSelectMode: (selectMode) => set({ selectMode }),
+  // Select and comment/annotate are mutually exclusive overlay modes.
+  setSelectMode: (selectMode) => set({ selectMode, ...(selectMode ? { commentMode: null } : {}) }),
+  setCommentMode: (commentMode) => set({ commentMode, ...(commentMode ? { selectMode: false } : {}) }),
   setSelected: (selected) => set({ selected, inspection: null, inspecting: false }),
   setInspection: (inspection) => set({ inspection }),
   setInspecting: (inspecting) => set({ inspecting })
@@ -188,15 +195,24 @@ export const oneLine = (s: string, max: number): string =>
 
 const SOURCE_RE = /^[\w./@-]+:\d+(:\d+)?$/
 
-/** A one-shot composer seed, so App-level components can prefill the chat input. */
+/**
+ * One-shot composer signals from App-level surfaces:
+ * - `seed` prefills the chat input (user still presses Enter).
+ * - `submit` sends straight to the agent (inline comment mode), or prefills if a
+ *   turn is already running so the comment is never dropped.
+ */
 interface ComposerState {
   seed: string | null
+  submit: string | null
   setSeed: (seed: string | null) => void
+  setSubmit: (submit: string | null) => void
 }
 
 export const useComposer = create<ComposerState>((set) => ({
   seed: null,
-  setSeed: (seed) => set({ seed })
+  submit: null,
+  setSeed: (seed) => set({ seed }),
+  setSubmit: (submit) => set({ submit })
 }))
 
 /** The on-open "set this project up for editing" offer. */

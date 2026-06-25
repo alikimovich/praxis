@@ -2,6 +2,31 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-25 — Figma-style inline comment (C) + annotation (Y) modes
+
+- Press **C** → comment mode, **Y** → annotation mode (also toolbar buttons). Click
+  an element in the preview and an inline composer (a pill in the overlay's shadow
+  root) anchors to it. Submitting a **comment** sends it straight to the agent
+  (element ref + your text); an **annotation** pins a note (no agent), reusing the
+  existing `.dsgn/annotations.json` engine + pins.
+- Layered onto the existing select overlay in `src/preview/preload.ts` (select
+  stays byte-identical): a `commentMode` state, the shadow-DOM composer, capture-
+  phase C/Y/Esc keys (guarded against the page's own text fields + modifiers), and
+  click→`openComposer`→submit. Modes are mutually exclusive with select. New
+  channels: `set-comment-mode` (renderer→preload), `comment-mode` (keyboard echo),
+  `comment` (submit) — all sender-gated in main and cached across preview reloads.
+- Renderer: `useSelection.commentMode` mirrors the preview (toolbar reflects
+  keyboard arming); a submitted comment routes via a new one-shot `useComposer.submit`
+  (auto-sends, or prefills if a turn is running so it's never dropped); an
+  annotation calls `annotations.add`. Comment text is capped/sanitized into the
+  prompt. New `test/comment-mode.mjs` drives the full path end to end (arm → click
+  → shadow composer → send → agent turn / annotation pin) through real IPC.
+- Adversarial review fixes: the composer self-heals if its frozen element is
+  removed by HMR (`isConnected` guard in `onMove`, mirroring the text-edit path);
+  `preview:reset` clears `commentModeActive` for parity with `selectModeActive` (no
+  stale re-arm on project switch); and an annotation submitted before the session
+  is ready logs feedback instead of dropping silently.
+
 ## 2026-06-25 — Svelte component prop schema reachable via selection (option D)
 
 - Bug: selecting a rendered Svelte component never showed its prop schema. A

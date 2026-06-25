@@ -6,10 +6,12 @@ import type {
   AnnotationInput,
   Bounds,
   BranchResult,
+  CommentMode,
   DetectedProject,
   DsgnApi,
   Framework,
   PermissionMode,
+  PreviewComment,
   PropEdit,
   PropEditResult,
   PropInspection,
@@ -56,6 +58,18 @@ const api: DsgnApi = {
         cb(edit)
       ipcRenderer.on('preview:text-edit', listener)
       return () => ipcRenderer.removeListener('preview:text-edit', listener)
+    },
+    setCommentMode: (mode: CommentMode): Promise<void> =>
+      ipcRenderer.invoke('preview:set-comment-mode', mode),
+    onCommentMode: (cb: (mode: CommentMode) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, mode: CommentMode): void => cb(mode)
+      ipcRenderer.on('preview:comment-mode', listener)
+      return () => ipcRenderer.removeListener('preview:comment-mode', listener)
+    },
+    onComment: (cb: (c: PreviewComment) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, c: PreviewComment): void => cb(c)
+      ipcRenderer.on('preview:comment', listener)
+      return () => ipcRenderer.removeListener('preview:comment', listener)
     }
   },
   project: {

@@ -4,7 +4,9 @@ import ConsolePanel from './components/ConsolePanel'
 import PreviewPane from './components/PreviewPane'
 import PropPanel from './components/PropPanel'
 import {
+  describeSelectionForPrompt,
   isAuthError,
+  oneLine,
   toAgentOptions,
   useAnnotations,
   useChat,
@@ -16,7 +18,7 @@ import {
   useSetup,
   useTokens
 } from './store'
-import type { Framework, PreviewKind } from '../../shared/api'
+import type { CommentMode, Framework, PreviewComment, PreviewKind } from '../../shared/api'
 
 const MIN_CHAT_WIDTH = 320
 const MAX_CHAT_WIDTH = 760
@@ -46,7 +48,8 @@ export default function App(): React.JSX.Element {
   // Web dev server vs iOS Simulator — drives which affordances show (e.g. Select).
   const [previewKind, setPreviewKind] = useState<PreviewKind>('web')
 
-  const { selectMode, setSelectMode, setSelected } = useSelection()
+  const { selectMode, setSelectMode, setSelected, setCommentMode } = useSelection()
+  const commentMode = useSelection((s) => s.commentMode)
   const selected = useSelection((s) => s.selected)
   const inspection = useSelection((s) => s.inspection)
   const projectRoot = useSession((s) => s.projectRoot)
@@ -126,6 +129,72 @@ export default function App(): React.JSX.Element {
       offCancel()
     }
   }, [setSelected, setSelectMode])
+
+  // Inline comment (C) / annotation (Y) modes. Mirror keyboard-initiated mode
+  // changes from the preview into the toolbar, and route a submitted comment to
+  // the agent (C) or to an annotation pin (Y).
+  useEffect(() => {
+    const offMode = window.api.preview.onCommentMode((m) =>
+      useSelection.getState().setCommentMode(m)
+    )
+    const offComment = window.api.preview.onComment((c: PreviewComment) => {
+      if (c.kind === 'comment') {
+        // The element ref is page-derived (sanitized in describeSelectionForPrompt);
+        // the comment is the user's own text — cap it so it can't bloat the prompt.
+        const prompt = describeSelectionForPrompt(c.el) + oneLine(c.text, 2000)
+        useComposer.getState().setSubmit(prompt)
+      } else {
+        const root = useSession.getState().projectRoot
+        if (!root) {
+          // Near-unreachable (the preview only exists with a project), but don't
+          // drop the note silently if the click lands before the session is ready.
+          useLog.getState().append(`Open a project before annotating — "${oneLine(c.text, 80)}"`, 'error')
+          return
+        }
+        void window.api.annotations
+          .add(root, {
+            source: c.el.source,
+            selector: c.el.selector,
+            tag: c.el.tag,
+            text: c.text
+          })
+          .then((list) => useAnnotations.getState().setList(list))
+      }
+    })
+    return () => {
+      offMode()
+      offComment()
+    }
+  }, [])
+
+  // Global C/Y/Escape shortcuts when focus is on the app side (the preview's own
+  // preload handles them when the preview is focused). Ignored while typing.
+  useEffect(() => {
+    const arm = (mode: 'comment' | 'annotate' | null): void => {
+      useSelection.getState().setCommentMode(mode)
+      if (mode) useSelection.getState().setSelected(null)
+      void window.api.preview.setCommentMode(mode)
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
+      const t = e.target as HTMLElement | null
+      const tag = t?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return
+      const cur = useSelection.getState().commentMode
+      if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault()
+        arm(cur === 'comment' ? null : 'comment')
+      } else if (e.key === 'y' || e.key === 'Y') {
+        e.preventDefault()
+        arm(cur === 'annotate' ? null : 'annotate')
+      } else if (e.key === 'Escape' && cur) {
+        e.preventDefault()
+        arm(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // Inspect the selected element's props (decides panel vs prompt-only). Guarded
   // against a fast re-select racing a slow inspect.
@@ -394,6 +463,15 @@ export default function App(): React.JSX.Element {
     if (!next) setSelected(null)
   }
 
+  // Arm/disarm an inline-comment mode (toggles off if already active). Clears any
+  // lingering selection so the left inspector doesn't compete with the composer.
+  const armComment = (mode: 'comment' | 'annotate'): void => {
+    const next: CommentMode = useSelection.getState().commentMode === mode ? null : mode
+    setCommentMode(next)
+    if (next) setSelected(null)
+    void window.api.preview.setCommentMode(next)
+  }
+
   // Clear selection (rects/source go stale) but leave select mode — main
   // re-arms the overlay once the reloaded page finishes loading.
   const reload = (): void => {
@@ -526,14 +604,32 @@ export default function App(): React.JSX.Element {
               {/* Element-select maps clicks → DOM source; not yet wired for the
                   simulator's streamed frame (Phase 3). Hidden in sim mode. */}
               {previewKind !== 'simulator' && (
-                <button
-                  className={`btn ${selectMode ? 'btn--active' : 'btn--ghost'}`}
-                  onClick={toggleSelect}
-                  aria-pressed={selectMode}
-                  title="Click an element in the preview to edit it"
-                >
-                  {selectMode ? 'Selecting…' : 'Select'}
-                </button>
+                <>
+                  <button
+                    className={`btn ${selectMode ? 'btn--active' : 'btn--ghost'}`}
+                    onClick={toggleSelect}
+                    aria-pressed={selectMode}
+                    title="Click an element in the preview to edit it"
+                  >
+                    {selectMode ? 'Selecting…' : 'Select'}
+                  </button>
+                  <button
+                    className={`btn ${commentMode === 'comment' ? 'btn--active' : 'btn--ghost'}`}
+                    onClick={() => armComment('comment')}
+                    aria-pressed={commentMode === 'comment'}
+                    title="Comment to the agent on an element (C)"
+                  >
+                    {commentMode === 'comment' ? 'Commenting…' : 'Comment'}
+                  </button>
+                  <button
+                    className={`btn ${commentMode === 'annotate' ? 'btn--active' : 'btn--ghost'}`}
+                    onClick={() => armComment('annotate')}
+                    aria-pressed={commentMode === 'annotate'}
+                    title="Pin a note on an element, no agent (Y)"
+                  >
+                    {commentMode === 'annotate' ? 'Annotating…' : 'Annotate'}
+                  </button>
+                </>
               )}
               <button className="btn btn--ghost" onClick={reload}>
                 Reload

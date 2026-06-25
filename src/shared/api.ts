@@ -157,6 +157,16 @@ export interface SelectedElement {
   styles: Record<string, string>
 }
 
+/** Figma-style inline overlay modes: comment-to-agent (C) or annotation (Y). */
+export type CommentMode = 'comment' | 'annotate' | null
+
+/** A comment/annotation submitted from the preview's inline composer. */
+export interface PreviewComment {
+  kind: 'comment' | 'annotate'
+  el: SelectedElement
+  text: string
+}
+
 export type PropKind = 'string' | 'number' | 'boolean' | 'enum' | 'other'
 
 /** One editable prop/attribute of a selected element. */
@@ -311,6 +321,12 @@ export interface DsgnApi {
     onReadiness: (cb: (info: { stamps: number }) => void) => () => void
     /** Fires when the user commits an inline text edit in the preview. */
     onTextEdit: (cb: (edit: { source: string; text: string }) => void) => () => void
+    /** Arm/disarm the inline comment (C) or annotation (Y) overlay mode. */
+    setCommentMode: (mode: CommentMode) => Promise<void>
+    /** Fires when the preview's mode changes from a keyboard shortcut (C/Y/Esc). */
+    onCommentMode: (cb: (mode: CommentMode) => void) => () => void
+    /** Fires when the user submits an inline comment/annotation in the preview. */
+    onComment: (cb: (c: PreviewComment) => void) => () => void
   }
   project: {
     pick: () => Promise<string | null>

@@ -17,6 +17,7 @@ let previewRetries = 0
 // v2 select mode: tracked here so it survives preview navigations (the injected
 // preload re-runs fresh on each load and must be re-armed).
 let selectModeActive = false
+let commentModeActive: 'comment' | 'annotate' | null = null
 
 // Channels mirrored in src/preview/preload.ts (the injected preview preload).
 const PREVIEW_SET_MODE = 'dsgn:preview:set-select-mode'
@@ -26,6 +27,9 @@ const PREVIEW_SET_PINS = 'dsgn:preview:set-annotations'
 const PREVIEW_PIN_CLICK = 'dsgn:preview:pin-click'
 const PREVIEW_READINESS = 'dsgn:preview:readiness'
 const PREVIEW_TEXT_EDIT = 'dsgn:preview:text-edit'
+const PREVIEW_SET_COMMENT_MODE = 'dsgn:preview:set-comment-mode'
+const PREVIEW_COMMENT_MODE = 'dsgn:preview:comment-mode'
+const PREVIEW_COMMENT = 'dsgn:preview:comment'
 
 // Latest annotation pins, re-pushed to the preview after each navigation.
 let annotationPins: { id: string; selector: string }[] = []
@@ -106,6 +110,7 @@ function ensurePreviewView(): WebContentsView {
     if (previewUrl && wc.getURL() === previewUrl) {
       previewRetries = 0
       if (selectModeActive) wc.send(PREVIEW_SET_MODE, true)
+      if (commentModeActive) wc.send(PREVIEW_SET_COMMENT_MODE, commentModeActive)
       wc.send(PREVIEW_SET_PINS, annotationPins)
     }
   })
@@ -179,9 +184,10 @@ function registerPreviewIpc(): void {
   ipcMain.handle('preview:reset', () => {
     previewUrl = null
     previewRetries = 0
-    // No app to select in on the placeholder — keep main's flag honest so it
-    // doesn't silently re-arm the overlay on a later load. (Renderer disarms too.)
+    // No app to select in on the placeholder — keep main's flags honest so they
+    // don't silently re-arm the overlay on a later load. (Renderer disarms too.)
     selectModeActive = false
+    commentModeActive = null
     ensurePreviewView().webContents.loadURL(PLACEHOLDER_HTML)
   })
 
@@ -193,6 +199,7 @@ function registerPreviewIpc(): void {
   // v2 select mode: renderer → preview (arm/disarm the overlay).
   ipcMain.handle('preview:set-select-mode', (_e, active: boolean) => {
     selectModeActive = active
+    if (active) commentModeActive = null // mutually exclusive with comment/annotate
     previewView?.webContents.send(PREVIEW_SET_MODE, active)
   })
 
@@ -228,6 +235,27 @@ function registerPreviewIpc(): void {
     if (e.sender !== previewView?.webContents) return
     mainWindow?.webContents.send('preview:text-edit', edit)
   })
+
+  // Inline commenting (C/Y): renderer arms the mode → preview.
+  ipcMain.handle('preview:set-comment-mode', (_e, mode: 'comment' | 'annotate' | null) => {
+    commentModeActive = mode
+    if (mode) selectModeActive = false // mutually exclusive with select
+    previewView?.webContents.send(PREVIEW_SET_COMMENT_MODE, mode)
+  })
+  // Preview echoes keyboard-initiated mode changes → renderer (toolbar mirror).
+  ipcMain.on(PREVIEW_COMMENT_MODE, (e, mode: 'comment' | 'annotate' | null) => {
+    if (e.sender !== previewView?.webContents) return
+    commentModeActive = mode
+    mainWindow?.webContents.send('preview:comment-mode', mode)
+  })
+  // A submitted comment/annotation (element + text) → renderer (agent vs pin).
+  ipcMain.on(
+    PREVIEW_COMMENT,
+    (e, payload: { kind: 'comment' | 'annotate'; el: SelectedElement; text: string }) => {
+      if (e.sender !== previewView?.webContents) return
+      mainWindow?.webContents.send('preview:comment', payload)
+    }
+  )
 
   ipcMain.handle('project:pick', async (): Promise<string | null> => {
     if (!mainWindow) return null
