@@ -245,12 +245,28 @@ export const useSetup = create<SetupState>((set) => ({
 /** Design tokens detected for the open project (one source wins). */
 interface TokenState {
   set: TokenSet | null
+  /** First-run offer to scaffold `.dsgn/tokens.json` when no tokens were found. */
+  offerNeeded: boolean
+  offerDismissed: boolean
+  scaffolding: boolean
   setSet: (set: TokenSet | null) => void
+  setOfferNeeded: (offerNeeded: boolean) => void
+  setOfferDismissed: (offerDismissed: boolean) => void
+  setScaffolding: (scaffolding: boolean) => void
+  /** Clear everything on project switch. */
+  reset: () => void
 }
 
 export const useTokens = create<TokenState>((set) => ({
   set: null,
-  setSet: (tokenSet) => set({ set: tokenSet })
+  offerNeeded: false,
+  offerDismissed: false,
+  scaffolding: false,
+  setSet: (tokenSet) => set({ set: tokenSet }),
+  setOfferNeeded: (offerNeeded) => set({ offerNeeded }),
+  setOfferDismissed: (offerDismissed) => set({ offerDismissed }),
+  setScaffolding: (scaffolding) => set({ scaffolding }),
+  reset: () => set({ set: null, offerNeeded: false, offerDismissed: false, scaffolding: false })
 }))
 
 /** v3 handoff: reviewer notes pinned to elements + which one is focused. */

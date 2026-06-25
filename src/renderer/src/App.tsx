@@ -246,7 +246,7 @@ export default function App(): React.JSX.Element {
     useSession.getState().setProjectRoot(null)
     useAnnotations.getState().setList([])
     useAnnotations.getState().setFocused(null)
-    useTokens.getState().setSet(null)
+    useTokens.getState().reset()
     useSetup.getState().reset()
     void window.api.preview.setSelectMode(false)
     window.api.preview.setPanelInset(0)
@@ -325,9 +325,13 @@ export default function App(): React.JSX.Element {
       useSession.getState().setProjectRoot(root)
       // Detect this repo's design tokens (manifest → tailwind → CSS vars).
       // Guard against a project switch racing a slow scan — only apply if `root`
-      // is still the open project when it resolves.
+      // is still the open project when it resolves. When the repo exposes no
+      // tokens at all, offer to scaffold a starter `.dsgn/tokens.json`.
       void window.api.tokens.detect(root).then((t) => {
-        if (useSession.getState().projectRoot === root) useTokens.getState().setSet(t)
+        if (useSession.getState().projectRoot !== root) return
+        const tk = useTokens.getState()
+        tk.setSet(t)
+        if (t.source === 'none' && !tk.offerDismissed) tk.setOfferNeeded(true)
       })
       // Load this repo's existing handoff notes (renders pins via the effect above).
       useAnnotations.getState().setList(await window.api.annotations.list(root))
@@ -433,7 +437,7 @@ export default function App(): React.JSX.Element {
     useSession.getState().setProjectRoot(null)
     useAnnotations.getState().setList([])
     useAnnotations.getState().setFocused(null)
-    useTokens.getState().setSet(null)
+    useTokens.getState().reset()
     useSetup.getState().reset()
     void window.api.preview.setSelectMode(false)
     window.api.preview.setPanelInset(0)

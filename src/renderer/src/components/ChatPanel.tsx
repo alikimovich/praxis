@@ -19,6 +19,7 @@ import Markdown from './Markdown'
 import NotesPanel from './NotesPanel'
 import PermissionCards from './PermissionCards'
 import SetupCard from './SetupCard'
+import TokenOfferCard from './TokenOfferCard'
 
 const MODELS = [
   { value: DEFAULT_MODEL, label: 'Default' },
@@ -97,6 +98,7 @@ export default function ChatPanel(): React.JSX.Element {
   const { mode: permissionMode, pending, setMode, removeRequest } = usePermissions()
   const { list: notes, focusedId, setList: setNotes } = useAnnotations()
   const tokenSet = useTokens((s) => s.set)
+  const tokens = useTokens()
   const setup = useSetup()
   const composerSeed = useComposer((s) => s.seed)
   const [publishing, setPublishing] = useState(false)
@@ -247,6 +249,28 @@ export default function ChatPanel(): React.JSX.Element {
     }
   }
 
+  // Write a starter `.dsgn/tokens.json` (deterministic — no agent turn) and show
+  // the new tokens in the palette. Idempotent on the main side.
+  const acceptTokenScaffold = async (): Promise<void> => {
+    if (!projectRoot || tokens.scaffolding) return
+    const root = projectRoot
+    tokens.setScaffolding(true)
+    try {
+      const res = await window.api.tokens.scaffold(root)
+      // If the user switched projects while the write was in flight, the new
+      // project owns the token state now — don't stamp this project's tokens over
+      // it (mirrors the detect handler's guard in App).
+      if (useSession.getState().projectRoot !== root) return
+      if (!res.ok) return
+      if (res.set) tokens.setSet(res.set)
+      tokens.setOfferNeeded(false)
+    } catch {
+      /* leave the offer up so the user can retry */
+    } finally {
+      if (useSession.getState().projectRoot === root) tokens.setScaffolding(false)
+    }
+  }
+
   // Apply a design token to the selected element via the agent. Page-derived
   // element fields (and the repo-derived token) are sanitized + bounded so an
   // injected value can't masquerade as a new instruction in the prompt.
@@ -394,7 +418,19 @@ export default function ChatPanel(): React.JSX.Element {
             }}
           />
         )}
-        {messages.length === 0 && !setup.needed && (
+        {/* Token offer yields to the setup offer — only one card at a time. */}
+        {!setup.needed && tokens.offerNeeded && !tokens.offerDismissed && (
+          <TokenOfferCard
+            scaffolding={tokens.scaffolding}
+            status={null}
+            onAccept={() => void acceptTokenScaffold()}
+            onDismiss={() => {
+              tokens.setOfferDismissed(true)
+              tokens.setOfferNeeded(false)
+            }}
+          />
+        )}
+        {messages.length === 0 && !setup.needed && !tokens.offerNeeded && (
           <div className="chat__empty">
             Ask for a change, or open a project to preview it on the right.
           </div>

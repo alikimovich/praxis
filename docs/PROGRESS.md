@@ -50,6 +50,24 @@ Newest first. Append a dated entry when you finish a chunk of work.
   confirm boot/build/launch end-to-end (the bridge/transport itself IS verified by
   `sim-frame`).
 
+## 2026-06-24 — First-run offer to scaffold `.dsgn/tokens.json`
+
+- When a project opens with **no** design tokens (`tokens.detect` → `source:'none'`
+  — no manifest, Tailwind theme, or CSS custom properties), dsgn now offers a
+  starter `.dsgn/tokens.json` (colors/spacing/radius/fontSize). Accepting is a
+  deterministic file write (no agent turn); the manifest then becomes the
+  editable, canonical source the palette reads.
+- `scaffoldManifest` (tokens.ts, `tokens:scaffold`) only writes when the project
+  has **zero** tokens — it never shadows a live Tailwind/CSS source or clobbers an
+  existing manifest (guarded on `detectTokens(...).source === 'none'`, idempotent).
+- New `TokenOfferCard`; the offer yields to the setup offer (one card at a time).
+  Offer state lives on `useTokens` (`offerNeeded`/`offerDismissed`/`scaffolding`,
+  cleared on project switch via `reset()`). New `test/tokens-scaffold.mjs` covers
+  the write, idempotency, no-shadow/no-clobber, and the card's accept + dismiss.
+- Adversarial review fix: `acceptTokenScaffold` re-checks `projectRoot` after the
+  async write resolves (mirrors the detect handler) so switching projects mid-write
+  can't stamp the old project's starter palette into the new project's state.
+
 ## 2026-06-24 — Svelte inline text-splice in source
 
 - Inline text editing rewrote JSX text directly but punted `.svelte` to the agent.

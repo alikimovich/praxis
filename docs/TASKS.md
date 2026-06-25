@@ -82,7 +82,9 @@ web browser. Phased: mirror → interact → element-select. See
 - [x] **Svelte inline text-splice** — rewrite a plain-text `.svelte` element's content directly in
       source (svelte/compiler), agent-fallback for expression/mixed. ✅ 2026-06-24 —
       `applySvelteTextEdit` in props-svelte.ts, `test/text-edit-svelte.mjs`.
-- [ ] Next: first-run onboarding could offer `.dsgn/tokens.json`.
+- [x] **First-run `.dsgn/tokens.json` offer** — when a project has no tokens at all, offer a
+      starter manifest (deterministic write; never shadows Tailwind/CSS or clobbers a manifest).
+      ✅ 2026-06-24 — `scaffoldManifest` in tokens.ts, `TokenOfferCard`, `test/tokens-scaffold.mjs`.
 
 ## Polish (anytime)
 
