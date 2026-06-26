@@ -25,7 +25,9 @@
   --destructive-foreground: oklch(0.985 0 0);
   --border-shadcn: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* Darkened from shadcn's default oklch(0.708) (#a1a1a1, ~2.6:1 on white) to
+     clear the 3:1 non-text focus-indicator threshold (v6 a11y review). */
+  --ring: oklch(0.55 0 0);
 }
 
 @theme inline {
@@ -1174,43 +1176,9 @@ body.is-resizing {
   outline: none;
 }
 
-/* The unified composer field: textarea on top, inline control bar below,
-   all wrapped in one rounded box (Claude-style). */
-.composer__field {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 10px 10px 8px;
-  background: var(--bg);
-  transition: border-color 0.15s ease;
-}
-
-.composer__field:focus-within {
-  border-color: #d0d0d0;
-}
-
-.composer__bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* Inline controls inside the field read as quiet text, not pills — no native
-   chevron, just the label. */
-.composer__bar .select {
-  appearance: none;
-  -webkit-appearance: none;
-  background: transparent;
-  border-color: transparent;
-  padding: 4px 6px;
-}
-
-.composer__bar .select:hover {
-  background: var(--bg-subtle);
-}
+/* The composer frame is now shadcn <InputGroup>; the inline pickers style via
+   Tailwind in ChatPanel (selectCls). The old .composer__field/.composer__bar
+   rules were removed here (v6) — nothing references them. */
 
 .slash {
   position: absolute;

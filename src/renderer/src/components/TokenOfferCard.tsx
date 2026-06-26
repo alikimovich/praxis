@@ -45,7 +45,12 @@ export default function TokenOfferCard({
         >
           Not now
         </Button>
-        <Button size="sm" className="setup__yes" onClick={onAccept} disabled={scaffolding}>
+        <Button
+          size="sm"
+          className="setup__yes bg-blue-600 text-white hover:bg-blue-700"
+          onClick={onAccept}
+          disabled={scaffolding}
+        >
           {scaffolding ? 'Adding…' : 'Add tokens'}
         </Button>
       </div>

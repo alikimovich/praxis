@@ -426,7 +426,7 @@ export default function ChatPanel(): React.JSX.Element {
   // shadcn Select) on purpose: tiny controls, and the permission-mode test reads
   // native <option> values via $$eval — a Radix portal would break it.
   const selectCls =
-    'cursor-pointer appearance-none rounded-md border-0 bg-transparent px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none'
+    'cursor-pointer appearance-none rounded-md border-0 bg-transparent px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
   return (
     <div className="chat flex h-full flex-col">
@@ -478,14 +478,14 @@ export default function ChatPanel(): React.JSX.Element {
                 (m.role === 'assistant' ? (
                   <Markdown>{m.text}</Markdown>
                 ) : (
-                  <div className="msg__text w-fit rounded-lg bg-muted px-3 py-2 text-sm">
+                  <div className="msg__text w-fit rounded-lg border border-border bg-muted px-3 py-2 text-sm">
                     {m.text}
                   </div>
                 ))}
             </div>
           ))}
         </ConversationContent>
-        <ConversationScrollButton />
+        <ConversationScrollButton aria-label="Scroll to bottom" />
       </Conversation>
 
       <div className="composer">

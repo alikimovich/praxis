@@ -24,9 +24,9 @@ export default function PermissionCards({ requests, onRespond }: Props): React.J
           aria-label={req.title}
         >
           <div className="perm__body">
-            <div className="perm__title text-[13px] font-semibold text-foreground">{req.title}</div>
+            <div className="perm__title text-[13px] font-semibold text-amber-950">{req.title}</div>
             {req.detail && (
-              <div className="perm__detail mt-0.5 truncate font-mono text-[11.5px] text-muted-foreground">
+              <div className="perm__detail mt-0.5 truncate font-mono text-[11.5px] text-amber-700">
                 {req.detail}
               </div>
             )}

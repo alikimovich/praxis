@@ -48,7 +48,11 @@ export default function SetupCard({
             Stop
           </Button>
         ) : (
-          <Button size="sm" className="setup__yes" onClick={onAccept}>
+          <Button
+            size="sm"
+            className="setup__yes bg-blue-600 text-white hover:bg-blue-700"
+            onClick={onAccept}
+          >
             Set it up
           </Button>
         )}
