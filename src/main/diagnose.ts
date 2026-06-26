@@ -1,6 +1,7 @@
 import { app, ipcMain } from 'electron'
 import type { Diagnosis, DiagStep } from '../shared/api'
 import { recall, remember, setStatus, signatureFor } from './diag-cache'
+import { matchKnownError } from './diag-rules'
 
 /**
  * AI-assisted diagnosis of an open/launch failure. Recall a per-machine cached
@@ -101,6 +102,21 @@ export function registerDiagnoseIpc(): void {
       const dir = app.getPath('userData')
       const cached = await recall(dir, root, error)
       if (cached) return cached
+      // Layer 2: a known error signature → known fix, instant + offline, before
+      // spending a model call. Falls through to the AI when nothing matches.
+      const ruled = matchKnownError(error)
+      if (ruled) {
+        const diag: Diagnosis = {
+          signature: signatureFor(error),
+          summary: ruled.summary,
+          detail: ruled.detail,
+          steps: ruled.steps,
+          seenBefore: false,
+          status: 'proposed'
+        }
+        await remember(dir, root, diag)
+        return diag
+      }
       const diag = await aiDiagnose(root, error, context)
       if (diag) await remember(dir, root, diag)
       return diag

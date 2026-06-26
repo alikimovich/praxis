@@ -27,6 +27,45 @@ export function xcodeFailureReason(err: unknown): string {
   return `Could not run the iOS simulator tools: ${e.message ?? String(err)}`
 }
 
+/**
+ * Pull the *meaningful* failure out of an xcodebuild / Metro log. xcodebuild
+ * prints a large "Explicit dependency on target …" graph both before and after
+ * the real error, so naively tailing the log surfaces that graph instead of the
+ * cause (which is exactly what dsgn showed for the broken-node build). Prefer
+ * high-signal lines — script-phase aborts, dyld load failures, compiler/linker
+ * errors — and carry a couple of trailing lines for context. Falls back to the
+ * raw tail when nothing high-signal is present. Pure / unit-testable.
+ */
+const BUILD_SIGNAL_RE =
+  /(dyld\[|Library not loaded|Reason: tried:|Abort trap|PhaseScriptExecution failed|Node found at:|fatal error:|\berror:|^ld: |Undefined symbol|The following build commands failed|Command .* failed with|No such file or directory|EADDRINUSE|command not found)/im
+
+/** Lines that are pure dependency-graph noise — never the root cause. */
+const BUILD_NOISE_RE = /(Explicit dependency on target|Target dependency graph|Prepare packages)/i
+
+export function extractBuildError(log: string, max = 1400): string {
+  if (!log) return ''
+  const lines = log.split('\n')
+  const keep = new Set<number>()
+  for (let i = 0; i < lines.length; i++) {
+    if (BUILD_NOISE_RE.test(lines[i])) continue
+    if (BUILD_SIGNAL_RE.test(lines[i])) {
+      keep.add(i)
+      for (let j = i + 1; j <= Math.min(i + 2, lines.length - 1); j++) {
+        if (!BUILD_NOISE_RE.test(lines[j])) keep.add(j)
+      }
+    }
+  }
+  if (keep.size === 0) return log.slice(-max).trim()
+  let out = [...keep]
+    .sort((a, b) => a - b)
+    .map((i) => lines[i].trimEnd())
+    .filter((l) => l.trim())
+    .join('\n')
+    .trim()
+  if (out.length > max) out = `…\n${out.slice(-max).trim()}` // keep the lines closest to the failure
+  return out
+}
+
 /** Parse "26.5" / "18.4.1" → [26,5] / [18,4,1]; null if it isn't a version. */
 export function parseVersion(v: string | null | undefined): number[] | null {
   if (!v) return null

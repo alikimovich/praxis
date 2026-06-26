@@ -4,7 +4,7 @@ import { createServer, type Server, type ServerResponse } from 'http'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { promisify } from 'util'
-import { xcodeFailureReason, simBuildDestination } from './xcode'
+import { xcodeFailureReason, simBuildDestination, extractBuildError } from './xcode'
 import { findFreePort, stripAnsi } from './devserver-net'
 import type { RunningSimulator, SimDevice, SimPreflight } from '../shared/api'
 
@@ -403,14 +403,14 @@ function spawnMetro(
 
     const onData = (buf: Buffer): void => {
       const text = stripAnsi(buf.toString())
-      tail = (tail + text).slice(-4000)
+      tail = (tail + text).slice(-8000)
       for (const line of text.split('\n')) if (line.trim()) onLog(line.trimEnd())
       if (settled) return
       if (METRO_READY_RE.test(text)) settle()
       else if (BUILD_FAIL_RE.test(text)) {
         settled = true
         clearTimeout(timer)
-        reject(new Error(`The app failed to build/launch.\n${tail.slice(-800)}`))
+        reject(new Error(`The app failed to build/launch.\n${extractBuildError(tail)}`))
       }
     }
     child.stdout?.on('data', onData)
@@ -425,7 +425,9 @@ function spawnMetro(
       if (settled) return
       settled = true
       clearTimeout(timer)
-      reject(new Error(`Dev process exited (code ${code}) before launching.\n${tail.slice(-800)}`))
+      reject(
+        new Error(`Dev process exited (code ${code}) before launching.\n${extractBuildError(tail)}`)
+      )
     })
 
     // Native builds can be slow; if we never see a marker, proceed anyway so the

@@ -2,6 +2,26 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-26 — proactive checks C1/C3: error extraction + rule-based diagnosis
+
+- Real-world driver: an Expo build failed and dsgn surfaced the xcodebuild
+  *dependency-graph* dump, not the actual cause — a stale Homebrew node keg pinned
+  in `ios/.xcode.env.local` (`dyld: Library not loaded … Abort trap: 6`). Fixed the
+  project (repoint NODE_BINARY) and hardened dsgn so it catches this class itself.
+- **`extractBuildError(log)`** in `src/main/xcode.ts` (pure): pulls high-signal
+  lines (dyld / Abort trap / PhaseScriptExecution / `error:` / linker) out of a
+  build log and drops the "Explicit dependency on target …" graph noise. Wired into
+  both `spawnMetro` reject paths (build-fail + early-exit); tail buffer 4k→8k.
+- **`src/main/diag-rules.ts`** — layer 2 of the proactive-checks plan: pure
+  `matchKnownError(text)` maps known signatures → known fixes (instant, offline)
+  *before* the AI. First rule: broken NODE_BINARY → repo-scoped fix (rewrite
+  `.xcode.env.local`) + optional host `brew cleanup node`. Wired into `diagnose:run`
+  between the recall-cache and `aiDiagnose`; renders through the same DiagnoseCard.
+- Tests: `extractBuildError` cases in `test/xcode.mjs`; new bun `test/diag-rules.mjs`
+  (matches the node failure, no false positives on unrelated dyld/unknown errors).
+  Added to the test/verify chains. Full verify green; `SIM-PREFLIGHT ok=true` now
+  that the 26.5 runtime is installed.
+
 ## 2026-06-26 — v5-C core: per-project chat + event routing (keep-running)
 
 - The machinery behind the chosen "backgrounded agents keep running, badge on

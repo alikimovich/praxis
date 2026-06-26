@@ -7,7 +7,8 @@ import {
   xcodeFailureReason,
   parseVersion,
   cmpVersion,
-  simBuildDestination
+  simBuildDestination,
+  extractBuildError
 } from '../src/main/xcode.ts'
 
 // The real bug: Xcode IS installed, but the license wasn't accepted (exit 69).
@@ -76,4 +77,33 @@ assert.match(
   'no runtimes at all → reason says none installed'
 )
 
-console.log('XCODE OK — classification, version compare, build-destination gap')
+// --- build-error extraction (the dependency-graph red herring) -------------
+// A realistic log: the real cause (dyld/Abort) is buried, with the noisy
+// "Explicit dependency on target" graph dumped both around and after it.
+const NOISY_LOG = [
+  '    ➜ Explicit dependency on target React-domnativemodule in project Pods',
+  '    ➜ Explicit dependency on target React-featureflags in project Pods',
+  'Node found at: /opt/homebrew/Cellar/node/24.5.0/bin/node',
+  'dyld[24703]: Library not loaded: /opt/homebrew/opt/simdjson/lib/libsimdjson.26.dylib',
+  '  Reason: tried: ... (no such file)',
+  'Script-46EB2E0001D490.sh: line 9: 24703 Abort trap: 6',
+  'Command PhaseScriptExecution failed with a nonzero exit code',
+  '    ➜ Explicit dependency on target React-graphics in project Pods',
+  '    ➜ Explicit dependency on target React-hermes in project Pods',
+  'The following build commands failed:'
+].join('\n')
+
+const extracted = extractBuildError(NOISY_LOG)
+assert.match(extracted, /Library not loaded/, 'surfaces the real dyld error')
+assert.match(extracted, /Abort trap/, 'surfaces the abort')
+assert.match(extracted, /Node found at/, 'keeps the node-path context line')
+assert.ok(
+  !/Explicit dependency on target/.test(extracted),
+  'drops the dependency-graph noise'
+)
+
+// No high-signal lines → fall back to the tail (never empty on non-empty input).
+assert.ok(extractBuildError('just some\nplain output').length > 0, 'falls back to tail')
+assert.equal(extractBuildError(''), '', 'empty in → empty out')
+
+console.log('XCODE OK — classification, version compare, build-destination gap, error extraction')
