@@ -77,7 +77,8 @@ interface Session {
   abort: AbortController
   /** In-flight approve/deny prompts, keyed by request id. */
   pending: Map<string, PendingPrompt>
-  /** Emit an agent event to the renderer (active-session-guarded). */
+  /** Emit an agent event to the renderer, tagged with this project's key (the
+   * renderer routes it; emits while the session is live, not just when active). */
   emit: (event: AgentEvent) => void
   /** Stop this session emitting (replaced / closed). */
   dispose: () => void
@@ -129,12 +130,13 @@ async function startSession(
   let disposed = false
   let permCounter = 0
 
-  // Only the active, non-disposed session reaches the renderer — a replaced
-  // session (e.g. reopening the same project) can't leak stale events into the
-  // visible chat, and the active-key guard is ready for warm rail sessions.
+  // Every live (non-disposed) session emits, TAGGED with its project key — the
+  // renderer routes the active project to the live chat and backgrounded projects
+  // to their own buffer (a "working" dot in the rail). A replaced session is
+  // disposed, so reopening a project can't leak stale events.
   const emit = (event: AgentEvent): void => {
-    if (disposed || key !== activeKey) return
-    getWindow()?.webContents.send('agent:event', event)
+    if (disposed) return
+    getWindow()?.webContents.send('agent:event', { ...event, projectKey: key })
   }
 
   const q = query({
@@ -337,6 +339,13 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     // showing). The renderer re-activates explicitly via open-project (and, once
     // the rail keeps sessions warm, a future activate path).
     if (activeKey === key) activeKey = null
+  })
+
+  // Switch the active project to an already-open (warm) session, without
+  // recreating it — used by the rail when switching between open projects.
+  ipcMain.handle('agent:set-active', async (_e, root: string) => {
+    const key = projectKey(root)
+    if (sessions.has(key)) activeKey = key
   })
 
   ipcMain.handle('agent:set-model', async (_e, model: string) => {

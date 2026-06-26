@@ -19,52 +19,112 @@ export interface ChatMessage {
   statuses: string[]
 }
 
-interface ChatState {
+/** One project's chat. `streamingId` is the assistant message currently being
+ * streamed (so a backgrounded project's turn keeps appending to the right one). */
+interface ChatSlice {
   messages: ChatMessage[]
   isRunning: boolean
-  appendUser: (text: string) => void
-  startAssistant: () => string
-  appendDelta: (id: string, text: string) => void
-  appendStatus: (id: string, text: string) => void
-  finish: () => void
+  streamingId: string | null
+}
+const emptySlice = (): ChatSlice => ({ messages: [], isRunning: false, streamingId: null })
+
+interface ChatState {
+  /** Per-project chat, keyed by projectKey ('' is the default / no-project slice). */
+  byKey: Record<string, ChatSlice>
+  activeKey: string
+  // Mirrors of the active slice — what ChatPanel and the tests read.
+  messages: ChatMessage[]
+  isRunning: boolean
+  /** Show a project's chat (preserves each project's history across switches). */
+  setActiveChat: (key: string) => void
+  /** Drop a project's chat buffer (on close). */
+  clearChat: (key: string) => void
+  // Actions default to the active project; pass a key to target a backgrounded one.
+  appendUser: (text: string, key?: string) => void
+  startAssistant: (key?: string) => void
+  appendDelta: (text: string, key?: string) => void
+  appendStatus: (text: string, key?: string) => void
+  finish: (key?: string) => void
+  /** Is the given project's turn in flight (for the rail's working dot)? */
+  isRunningFor: (key: string) => boolean
 }
 
 let counter = 0
 const nextId = (): string => `m${++counter}`
 
 /**
- * Plain message store for the skeleton. This is the seam the assistant-ui
- * ExternalStoreRuntime will plug into next: `messages` feeds `convertMessage`,
- * `isRunning` drives the composer, and the append/finish actions are mutated
- * by the `agent:event` stream coming from the main process.
+ * Per-project chat store. The active project's slice is mirrored into the
+ * top-level `messages`/`isRunning` so ChatPanel and the Playwright store harness
+ * read it unchanged; backgrounded projects' turns keep streaming into their own
+ * slice (the rail shows a "working" dot, and the output is there on switch-back).
+ * The `agent:event` stream (tagged with `projectKey` by main) routes here.
  */
-export const useChat = create<ChatState>((set) => ({
-  messages: [],
-  isRunning: false,
-  appendUser: (text) =>
-    set((s) => ({
-      messages: [...s.messages, { id: nextId(), role: 'user', text, statuses: [] }]
-    })),
-  startAssistant: () => {
-    const id = nextId()
-    set((s) => ({
-      messages: [...s.messages, { id, role: 'assistant', text: '', statuses: [] }],
-      isRunning: true
-    }))
-    return id
-  },
-  appendDelta: (id, text) =>
-    set((s) => ({
-      messages: s.messages.map((m) => (m.id === id ? { ...m, text: m.text + text } : m))
-    })),
-  appendStatus: (id, text) =>
-    set((s) => ({
-      messages: s.messages.map((m) =>
-        m.id === id ? { ...m, statuses: [...m.statuses, text] } : m
-      )
-    })),
-  finish: () => set({ isRunning: false })
-}))
+export const useChat = create<ChatState>((set, get) => {
+  // Transform one project's slice, re-syncing the active mirror when it's active.
+  const patch = (key: string | undefined, fn: (s: ChatSlice) => ChatSlice): void =>
+    set((state) => {
+      // `undefined` → the active project; an explicit '' is its own (no-project)
+      // slice (don't collapse it into the active project with `||`).
+      const k = key ?? state.activeKey
+      const slice = fn(state.byKey[k] ?? emptySlice())
+      const byKey = { ...state.byKey, [k]: slice }
+      return k === state.activeKey
+        ? { byKey, messages: slice.messages, isRunning: slice.isRunning }
+        : { byKey }
+    })
+  return {
+    byKey: {},
+    activeKey: '',
+    messages: [],
+    isRunning: false,
+    setActiveChat: (key) =>
+      set((s) => {
+        const slice = s.byKey[key] ?? emptySlice()
+        return {
+          activeKey: key,
+          byKey: { ...s.byKey, [key]: slice },
+          messages: slice.messages,
+          isRunning: slice.isRunning
+        }
+      }),
+    clearChat: (key) =>
+      set((s) => {
+        const byKey = { ...s.byKey }
+        delete byKey[key]
+        return { byKey }
+      }),
+    appendUser: (text, key) =>
+      patch(key, (sl) => ({
+        ...sl,
+        messages: [...sl.messages, { id: nextId(), role: 'user', text, statuses: [] }]
+      })),
+    startAssistant: (key) =>
+      patch(key, (sl) => {
+        const id = nextId()
+        return {
+          messages: [...sl.messages, { id, role: 'assistant', text: '', statuses: [] }],
+          isRunning: true,
+          streamingId: id
+        }
+      }),
+    appendDelta: (text, key) =>
+      patch(key, (sl) => ({
+        ...sl,
+        messages: sl.messages.map((m) =>
+          m.id === sl.streamingId ? { ...m, text: m.text + text } : m
+        )
+      })),
+    appendStatus: (text, key) =>
+      patch(key, (sl) => ({
+        ...sl,
+        messages: sl.messages.map((m) =>
+          m.id === sl.streamingId ? { ...m, statuses: [...m.statuses, text] } : m
+        )
+      })),
+    finish: (key) => patch(key, (sl) => ({ ...sl, isRunning: false, streamingId: null })),
+    isRunningFor: (key) => !!get().byKey[key]?.isRunning
+  }
+})
 
 // Sentinel values mean "use the account/model default" (omit from SDK options).
 export const DEFAULT_MODEL = 'default'

@@ -139,7 +139,7 @@ export interface PermissionRequest {
   detail?: string
 }
 
-export type AgentEvent =
+export type AgentEvent = (
   | { type: 'delta'; text: string }
   | { type: 'status'; text: string }
   | { type: 'commands'; commands: string[] }
@@ -148,6 +148,11 @@ export type AgentEvent =
   | { type: 'permission-resolved'; id: string }
   | { type: 'done' }
   | { type: 'error'; message: string }
+) & {
+  /** Which project's session emitted this — set by main so the renderer routes it
+   * to the right chat (active project shows live; others accumulate in the rail). */
+  projectKey?: string
+}
 
 /** Per-session options the user can set from the chat toolbar. */
 export interface AgentOptions {
@@ -424,6 +429,8 @@ export interface DsgnApi {
     openProject: (root: string, options?: AgentOptions) => Promise<void>
     /** Close a project's agent session (single-active teardown / rail close). */
     closeProject: (root: string) => Promise<void>
+    /** Make an already-open project's session the active one (rail switch). */
+    setActive: (root: string) => Promise<void>
     send: (text: string) => Promise<void>
     setModel: (model: string) => Promise<void>
     /** Change the permission posture live (drives the SDK's setPermissionMode). */
