@@ -152,6 +152,7 @@ const api: DsgnApi = {
       ipcRenderer.invoke('agent:open-project', root, options),
     closeProject: (root: string): Promise<void> =>
       ipcRenderer.invoke('agent:close-project', root),
+    setActive: (root: string): Promise<void> => ipcRenderer.invoke('agent:set-active', root),
     send: (text: string): Promise<void> => ipcRenderer.invoke('agent:send', text),
     setModel: (model: string): Promise<void> => ipcRenderer.invoke('agent:set-model', model),
     setPermissionMode: (mode: PermissionMode): Promise<void> =>

@@ -429,6 +429,7 @@ export default function App(): React.JSX.Element {
       if (switching) {
         await window.api.devServer.stop(prevRoot)
         void window.api.agent.closeProject(prevRoot)
+        useChat.getState().clearChat(projectKey(prevRoot))
       }
 
       // Do dsgn's work on a dsgn/* branch so the user's main branch stays clean.
@@ -486,9 +487,13 @@ export default function App(): React.JSX.Element {
       })
       log.append(`Agent session started (cwd ${root})`)
       useSession.getState().setProjectRoot(root)
-      // v5: track the open project in the workspace (single-active today; the rail
-      // + multi-project switching build on this).
+      // v5: track the open project in the workspace + show its (per-project) chat,
+      // so agent events tagged with this project route to the visible chat.
       useWorkspace.getState().openOrActivate(root, { name })
+      // Start this project's chat fresh — clear any slice a trailing event from a
+      // prior session may have resurrected, then show it.
+      useChat.getState().clearChat(projectKey(root))
+      useChat.getState().setActiveChat(projectKey(root))
       // Detect this repo's design tokens (manifest → tailwind → CSS vars).
       // Guard against a project switch racing a slow scan — only apply if `root`
       // is still the open project when it resolves. When the repo exposes no
@@ -628,7 +633,13 @@ export default function App(): React.JSX.Element {
     launchSpec.current = null
     if (spec?.previewKind === 'simulator') await window.api.simulator.stop()
     else if (closing) await window.api.devServer.stop(closing)
-    if (closing) void window.api.agent.closeProject(closing)
+    if (closing) {
+      // Await the close so main has disposed the session before we clear its
+      // chat (a trailing emit can't then resurrect the cleared slice).
+      await window.api.agent.closeProject(closing)
+      useChat.getState().clearChat(projectKey(closing))
+    }
+    useChat.getState().setActiveChat('')
     await window.api.preview.reset()
     setRetry(null)
     setPreviewKind('web')

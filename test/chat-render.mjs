@@ -47,12 +47,12 @@ try {
     const store = window.__dsgnStore
     const s = store.getState()
     s.appendUser('Make the hero heading teal and tighten the spacing')
-    const id = s.startAssistant()
-    s.appendStatus(id, 'Read · src/components/Hero.tsx')
-    s.appendStatus(id, 'Edit · src/components/Hero.tsx')
+    s.startAssistant()
+    s.appendStatus('Read · src/components/Hero.tsx')
+    s.appendStatus('Edit · src/components/Hero.tsx')
     // Stream the markdown in chunks to mimic real deltas.
     for (let i = 0; i < sample.length; i += 12) {
-      store.getState().appendDelta(id, sample.slice(i, i + 12))
+      store.getState().appendDelta(sample.slice(i, i + 12))
     }
     store.getState().finish()
   }, SAMPLE)

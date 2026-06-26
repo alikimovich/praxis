@@ -2,6 +2,28 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-26 — v5-C core: per-project chat + event routing (keep-running)
+
+- The machinery behind the chosen "backgrounded agents keep running, badge on
+  return" behavior. `agent.ts` `emit` now tags every event with its session's
+  `projectKey` and emits for ALL live sessions (dropped the active-only guard);
+  new `agent:set-active(root)` switches a warm session without recreating it.
+- `useChat` is now per-project: `byKey[projectKey]` slices (messages + isRunning +
+  the streaming message id moved into the slice), with the active slice mirrored
+  into the top-level `messages`/`isRunning` so ChatPanel + the Playwright store
+  harness read it **unchanged**. Chat actions take an optional key (default =
+  active); ChatPanel's `agent:event` handler routes by `event.projectKey` — the
+  active project streams live, a backgrounded project accumulates into its own
+  slice (the rail's "working" dot) and its output is there on switch-back.
+- App sets the active chat to the open project, clears a project's slice on
+  close/switch-away. New `test/chat-route.mjs` injects `agent:event`s from main
+  (no creds) and proves routing + background accumulation + switch-reveal. Full
+  verify green; `chat-render`/`comment-mode`/`agent-multi` unchanged. Rail UI next.
+- Review fixes: `patch` uses `?? activeKey` (an explicit `''` is its own slice, not
+  collapsed into the active project); open clears the project's chat slice first
+  (so a trailing event from a disposed session can't surface stale content on
+  reopen) and `stop` awaits `closeProject` before clearing.
+
 ## 2026-06-25 — v5-B: one agent session per project (S8)
 
 - `src/main/agent.ts`: replaced the single `session` + monotonic `currentEpoch`

@@ -109,7 +109,6 @@ export default function ChatPanel(): React.JSX.Element {
   const [menuDismissed, setMenuDismissed] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const streamingId = useRef<string | null>(null)
 
   // Don't carry a publish result across projects (it'd show under the new repo).
   useEffect(() => {
@@ -142,37 +141,42 @@ export default function ChatPanel(): React.JSX.Element {
 
   useEffect(() => {
     return window.api.agent.onEvent((event) => {
-      const id = streamingId.current
-      if (!id) return
+      // Route to the emitting project's chat slice (main tags every event). The
+      // active project's slice is what's shown; a backgrounded project keeps
+      // streaming into its own (a "working" dot in the rail).
+      const key = event.projectKey ?? ''
+      const isActive = key === useChat.getState().activeKey
       if (event.type === 'delta') {
-        appendDelta(id, event.text)
+        appendDelta(event.text, key)
       } else if (event.type === 'status') {
-        appendStatus(id, event.text)
+        appendStatus(event.text, key)
       } else if (event.type === 'error') {
         // Auth failures get a friendly banner (see App); keep the chat line short.
         const note = isAuthError(event.message)
           ? '⚠️ Not connected to Claude — see the notice above.'
           : `⚠️ ${event.message}`
-        appendDelta(id, `\n\n${note}`)
-        finish()
+        appendDelta(`\n\n${note}`, key)
+        finish(key)
         // The setup turn failed before wiring — disarm verification so the next
-        // unrelated readiness report isn't mistaken for a verdict.
-        useSetup.getState().setBusy(false)
-        useSetup.getState().setVerifying(false)
-        streamingId.current = null
-      } else if (event.type === 'done') {
-        finish()
-        const s = useSetup.getState()
-        // `busy` set ⟺ this was the setup turn: it edited the build config, which
-        // the dev server only picks up on a full restart. Arm verification and ask
-        // App to restart + reload the preview (the post-restart readiness is the
-        // verdict). Normal chat turns leave the preview alone.
-        if (s.busy) {
-          s.setVerifying(true)
-          s.setRestartRequested(true)
+        // unrelated readiness report isn't mistaken for a verdict. Setup state is
+        // the active project's, so only its failed turn touches it.
+        if (isActive) {
+          useSetup.getState().setBusy(false)
+          useSetup.getState().setVerifying(false)
         }
-        s.setBusy(false)
-        streamingId.current = null
+      } else if (event.type === 'done') {
+        finish(key)
+        if (isActive) {
+          const s = useSetup.getState()
+          // `busy` set ⟺ this was the setup turn: it edited the build config, which
+          // the dev server only picks up on a full restart. Arm verification and ask
+          // App to restart + reload the preview. Normal chat turns leave it alone.
+          if (s.busy) {
+            s.setVerifying(true)
+            s.setRestartRequested(true)
+          }
+          s.setBusy(false)
+        }
       }
     })
   }, [appendDelta, appendStatus, finish])
@@ -249,7 +253,7 @@ export default function ChatPanel(): React.JSX.Element {
       // `busy` also marks "this is the setup turn"; verification is armed only when
       // it finishes (see the `done` handler), so a mid-turn dev-server auto-restart
       // can't be mistaken for the verdict.
-      streamingId.current = startAssistant()
+      startAssistant()
       void window.api.agent.send(prompt)
       setup.setStatus(
         `Detected ${res.framework}. Asked dsgn to wire it in and type your components — I'll restart the preview and verify automatically when it finishes.`
@@ -311,7 +315,7 @@ export default function ChatPanel(): React.JSX.Element {
     const text = raw.trim()
     if (!text || isRunning) return
     appendUser(text)
-    streamingId.current = startAssistant()
+    startAssistant()
     setInput('')
     void window.api.agent.send(text)
   }
