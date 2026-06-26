@@ -1,0 +1,45 @@
+/**
+ * Tool-name policy + status helpers shared by the model-provider backends
+ * (`claude.ts`, `codex.ts`, …) and by the generic permission machinery in
+ * `agent.ts`. Lives in its own module so providers and `agent.ts` can both import
+ * it without an import cycle.
+ *
+ * The tool NAMES here are Claude-Agent-SDK-flavored (Read/Edit/Bash/…). Other
+ * providers reuse `describeTool`/`touchesSidecar` for their own equivalents where
+ * the names line up; where they differ, a provider maps its names before calling.
+ */
+
+// Read-only tools are auto-approved even in "Ask" mode — they can't mutate the
+// repo, and prompting for every file read would make the agent unusable.
+export const AUTO_ALLOW_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'NotebookRead'])
+// Tools that 'acceptEdits' auto-approves (mirrors the SDK's edit semantics).
+export const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
+
+const SIDECAR_RE = /(^|[\s/\\"'])\.dsgn([/\\]|$)/
+
+/** Does this tool target the .dsgn/ sidecar (edit-tool path or a Bash command)? */
+export function touchesSidecar(toolName: string, input: unknown): boolean {
+  const i = input as Record<string, unknown>
+  if (EDIT_TOOLS.has(toolName)) {
+    const path = i?.file_path ?? i?.path
+    if (typeof path === 'string' && SIDECAR_RE.test(path)) return true
+  }
+  if (toolName === 'Bash' && typeof i?.command === 'string' && SIDECAR_RE.test(i.command)) {
+    return true
+  }
+  return false
+}
+
+/** The single most relevant input field for a tool, trimmed to one short line. */
+export function toolDetail(_name: string, input: unknown): string | undefined {
+  const i = input as Record<string, unknown>
+  const raw = i?.file_path ?? i?.path ?? i?.pattern ?? i?.command
+  if (raw == null) return undefined
+  const s = String(raw).replace(/\s+/g, ' ').trim()
+  return s ? s.slice(0, 160) : undefined
+}
+
+export function describeTool(name: string, input: unknown): string {
+  const detail = toolDetail(name, input)
+  return detail ? `${name} · ${detail}` : name
+}
