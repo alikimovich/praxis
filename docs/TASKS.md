@@ -87,6 +87,36 @@ See the PROGRESS entry.
       and a way to jump to a session's preview + chat. Mirrors the attached
       Cursor-style layout.
 
+## v6 — Tailwind + shadcn chat UI (AI Elements)  ⭐ (2026-06-26, user-requested)
+
+Migrate the **chat panel** fully to **Tailwind + shadcn/ui**, using **AI Elements**
+(`elements.ai-sdk.dev`) and shadcn's chat primitives. **Priority rule per feature:**
+first-party shadcn **primitive** if one fits → else **AI Elements** component → else
+**custom** with shadcn+Tailwind. Components are driven by the existing `useChat` zustand
+store + `agent:*` IPC (NOT the Vercel AI SDK runtime).
+
+**Decision reversal:** overturns the locked "Plain CSS, no Tailwind / no UI kit"
+(`docs/CONTEXT.md`) — the exact scaffolding that got assistant-ui deferred. Accepted by
+the user (2026-06-26). Tailwind coexists with the existing plain CSS (chat first).
+
+**Hard constraint:** preserve test-facing hooks so the ~30-test verify suite stays green —
+`.composer__input` (readiness selector across ~20 tests), `.markdown`, `.slash__item`,
+`.perm*`, and the `aria-label` selects (Model / Thinking level / Permission mode). Scope =
+`ChatPanel.tsx` + in-panel components (Inspector, PermissionCards, NotesPanel, SetupCard,
+TokenOfferCard, Markdown). App-header branch pill + auth banner are separate chrome.
+
+- [ ] **Scaffold Tailwind + shadcn** in the electron-vite renderer (coexist with
+      `styles.css`; `components.json`, `cn()`, `@/*` alias, bun CLI). Confirm AI Elements
+      runs without the Vercel AI SDK (driven by our store) — build + typecheck green.
+- [ ] **Rebuild ChatPanel** on shadcn primitives / AI Elements per the priority rule,
+      preserving every feature (streaming, tool-status, slash menu, model/effort/permission
+      pickers, auth banner, permission cards, inspector hand-off, per-project routing) and
+      the test hooks above.
+- [ ] **Re-verify** `chat-render` / `chat-route` (+ smoke and the rest), screenshot the new
+      panel into `test/artifacts/`.
+- [ ] **Stretch:** evaluate other AI Elements (Sources, Task, Chain-of-Thought, Web
+      Preview, Reasoning) for dsgn's flows.
+
 ## v2 — design-system-aware select & edit (the differentiator)
 
 - [x] Inject a preload into the preview `WebContentsView` with a click-to-select overlay.
@@ -108,6 +138,15 @@ See the PROGRESS entry.
         project (`.dsgn/tokens.json` manifest → `tailwind.config.*` static parse → CSS custom
         properties) and the inspector shows a token palette; clicking a token applies it via
         the agent.
+  - [ ] **Direct (agent-free) prop editing — make it the default & broaden it.** ⭐ NEW
+        (2026-06-26, user-requested; backlog). React first, then other frameworks. *Current
+        state:* `props.apply` already splices **literal** string/number/boolean/enum edits
+        straight into source (instant hot-reload, **no agent, no chat message**); only
+        non-literal/complex values fall back to a seeded chat prompt (`needsAgent`). *Goal:*
+        shrink the agent fallback — (a) **token clicks apply directly** when the target maps
+        to a literal class/style/prop, (b) widen literal coverage, (c) make "applied directly"
+        the visible default with a rare, clear "needs agent" path, (d) confirm hot-reload
+        fires after a splice. Extend `test/prop-edit.mjs`; then carry to Svelte/others.
 
 ## v3 — engineer handoff
 
