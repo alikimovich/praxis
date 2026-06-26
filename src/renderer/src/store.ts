@@ -3,8 +3,10 @@ import type {
   Annotation,
   CommentMode,
   Diagnosis,
+  Framework,
   PermissionMode,
   PermissionRequest,
+  PreviewKind,
   PropInspection,
   SelectedElement,
   TokenSet
@@ -171,6 +173,14 @@ export const useSession = create<SessionState>((set) => ({
  * `useSession.projectRoot`; this store mirrors it and grows as the rail/backends
  * land (see docs/TASKS.md "v5"). Projects are identified by `projectKey(root)`.
  */
+/** How to relaunch a project's preview (used to restart it after a config edit). */
+export interface LaunchSpec {
+  root: string
+  command: string
+  framework?: Framework
+  previewKind: PreviewKind
+}
+
 export interface ProjectEntry {
   /** Absolute repo root as opened. */
   root: string
@@ -178,6 +188,12 @@ export interface ProjectEntry {
   key: string
   /** Display name (folder basename, overridable). */
   name: string
+  // Per-project display snapshot, restored on switch (chat lives in useChat byKey;
+  // tokens/annotations are re-detected on switch).
+  url: string | null
+  previewKind: PreviewKind
+  branch: string | null
+  launchSpec: LaunchSpec | null
 }
 
 interface WorkspaceState {
@@ -186,6 +202,8 @@ interface WorkspaceState {
   /** Open a project (or re-activate it if already open). Returns its key. */
   openOrActivate: (root: string, meta?: { name?: string }) => string
   activate: (key: string) => void
+  /** Update one project's snapshot fields. */
+  patchEntry: (key: string, partial: Partial<ProjectEntry>) => void
   close: (key: string) => void
   reset: () => void
 }
@@ -201,12 +219,27 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     set((s) => ({
       projects: exists
         ? s.projects
-        : [...s.projects, { root, key, name: meta?.name ?? basename(root) }],
+        : [
+            ...s.projects,
+            {
+              root,
+              key,
+              name: meta?.name ?? basename(root),
+              url: null,
+              previewKind: 'web',
+              branch: null,
+              launchSpec: null
+            }
+          ],
       activeKey: key
     }))
     return key
   },
   activate: (key) => set((s) => (s.projects.some((p) => p.key === key) ? { activeKey: key } : s)),
+  patchEntry: (key, partial) =>
+    set((s) => ({
+      projects: s.projects.map((p) => (p.key === key ? { ...p, ...partial } : p))
+    })),
   close: (key) =>
     set((s) => {
       const projects = s.projects.filter((p) => p.key !== key)

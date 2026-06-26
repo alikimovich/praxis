@@ -19,9 +19,11 @@ import {
   useSession,
   useSetup,
   useTokens,
-  useWorkspace
+  useWorkspace,
+  type ProjectEntry
 } from './store'
 import { projectKey } from '../../shared/projectKey'
+import Rail from './components/Rail'
 import type { CommentMode, Framework, PreviewComment, PreviewKind } from '../../shared/api'
 
 const MIN_CHAT_WIDTH = 320
@@ -366,14 +368,29 @@ export default function App(): React.JSX.Element {
     useDiagnosis.getState().setCurrent(null)
   }
 
-  const attempt = async (root: string, commandOverride?: string): Promise<void> => {
+  const attempt = async (
+    root: string,
+    commandOverride?: string,
+    keepWarm = false
+  ): Promise<void> => {
     let attemptedCommand = commandOverride ?? ''
     // The previously-open project (if any) — captured before the reset clears it.
-    // The dev-server backend is multi-capable now, but until the workspace rail
-    // manages several projects we stay single-active: opening another stops the
-    // previous one. Reopening the SAME project (retry) is handled by start().
+    // Opening another project tears the previous down UNLESS keepWarm (the rail's
+    // "+", which keeps it running for a fast switch). Reopening the SAME project
+    // (retry) is handled by start(). The backend is multi-capable (v5-A/B).
     const prevRoot = useSession.getState().projectRoot
     const switching = !!prevRoot && projectKey(prevRoot) !== projectKey(root)
+    const tearDownPrev = switching && !keepWarm
+    // Keeping the previous project warm — snapshot its live display state so a
+    // switch back restores it.
+    if (switching && keepWarm && status.kind === 'running') {
+      useWorkspace.getState().patchEntry(projectKey(prevRoot), {
+        url: status.url,
+        previewKind,
+        branch: useSession.getState().branch,
+        launchSpec: launchSpec.current
+      })
+    }
     // Opening (or re-opening) a project starts fresh: a pick from the previous
     // repo points at a file that may not exist in the new one. Disarm + clear,
     // and drop any permission cards left over from the previous session.
@@ -387,9 +404,8 @@ export default function App(): React.JSX.Element {
     useAnnotations.getState().setFocused(null)
     useTokens.getState().reset()
     useSetup.getState().reset()
-    // Single-active: drop the previous project from the workspace (its dev server
-    // is stopped below). The rail will skip this to keep projects open.
-    if (switching) useWorkspace.getState().close(projectKey(prevRoot))
+    // Drop the previous project from the workspace unless we're keeping it warm.
+    if (tearDownPrev) useWorkspace.getState().close(projectKey(prevRoot))
     void window.api.preview.setSelectMode(false)
     window.api.preview.setPanelInset(0)
     const log = useLog.getState()
@@ -426,7 +442,7 @@ export default function App(): React.JSX.Element {
 
       // Single-active: stop the previously-open project's dev server before
       // starting this one (multi-instance backend; the rail will keep them warm).
-      if (switching) {
+      if (tearDownPrev) {
         await window.api.devServer.stop(prevRoot)
         void window.api.agent.closeProject(prevRoot)
         useChat.getState().clearChat(projectKey(prevRoot))
@@ -510,6 +526,14 @@ export default function App(): React.JSX.Element {
       useChat.getState().finish()
       log.append(`Ready — ${name}`, 'success')
       setStatus({ kind: 'running', name, url })
+      // Snapshot this project so the rail can switch back to it without a restart.
+      useWorkspace.getState().patchEntry(projectKey(root), {
+        name,
+        url,
+        previewKind: kind,
+        branch: useSession.getState().branch,
+        launchSpec: launchSpec.current
+      })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       launchSpec.current = null
@@ -529,6 +553,75 @@ export default function App(): React.JSX.Element {
   const openProject = async (): Promise<void> => {
     const root = await window.api.project.pick()
     if (root) await attempt(root)
+  }
+
+  // Rail "+": open another project while keeping the current one warm (its dev
+  // server + agent session keep running so switching back is instant).
+  const openAnother = async (): Promise<void> => {
+    const root = await window.api.project.pick()
+    if (root) await attempt(root, undefined, true)
+  }
+
+  // Make `target` the active project everywhere (preview, chat, agent, toolbar) —
+  // no restart, the dev server + session are already warm.
+  const applyProject = async (target: ProjectEntry): Promise<void> => {
+    setSelectMode(false)
+    setSelected(null)
+    void window.api.preview.setSelectMode(false)
+    useSetup.getState().reset()
+    useWorkspace.getState().activate(target.key)
+    useChat.getState().setActiveChat(target.key)
+    useSession.getState().setProjectRoot(target.root)
+    useSession.getState().setBranch(target.branch)
+    setPreviewKind(target.previewKind)
+    launchSpec.current = target.launchSpec
+    void window.api.agent.setActive(target.root)
+    if (target.url) {
+      setStatus({ kind: 'running', name: target.name, url: target.url })
+      await window.api.preview.load(target.url)
+    }
+    // Re-derive this project's tokens + annotations (guard against a fast re-switch).
+    void window.api.tokens.detect(target.root).then((t) => {
+      if (useSession.getState().projectRoot === target.root) useTokens.getState().setSet(t)
+    })
+    useAnnotations.getState().setList(await window.api.annotations.list(target.root))
+  }
+
+  // Rail: switch to an already-open (warm) project.
+  const switchTo = async (key: string): Promise<void> => {
+    const ws = useWorkspace.getState()
+    if (key === ws.activeKey) return
+    const target = ws.projects.find((p) => p.key === key)
+    if (!target) return
+    // Snapshot the project we're leaving (its live status may have changed).
+    if (ws.activeKey && status.kind === 'running') {
+      ws.patchEntry(ws.activeKey, {
+        url: status.url,
+        previewKind,
+        branch: useSession.getState().branch,
+        launchSpec: launchSpec.current
+      })
+    }
+    await applyProject(target)
+  }
+
+  // Rail ×: fully close a project (stop its server + agent, drop it). If it was
+  // active, fall through to another open project or go idle.
+  const closeProjectFromRail = async (key: string): Promise<void> => {
+    const ws = useWorkspace.getState()
+    const entry = ws.projects.find((p) => p.key === key)
+    if (!entry) return
+    const wasActive = ws.activeKey === key
+    // Pick the fallback BEFORE close() (which would auto-pick its own activeKey).
+    const next = wasActive ? (ws.projects.filter((p) => p.key !== key).at(-1) ?? null) : null
+    void window.api.devServer.stop(entry.root)
+    void window.api.agent.closeProject(entry.root)
+    useChat.getState().clearChat(key)
+    ws.close(key)
+    if (wasActive) {
+      if (next) await applyProject(next)
+      else await stop()
+    }
   }
 
   const toggleSelect = (): void => {
@@ -796,6 +889,11 @@ export default function App(): React.JSX.Element {
       <DiagnoseCard onApply={applyFix} onDismiss={dismissFix} />
 
       <div className="panes">
+        <Rail
+          onSwitch={(key) => void switchTo(key)}
+          onClose={(key) => void closeProjectFromRail(key)}
+          onOpen={() => void openAnother()}
+        />
         <section className="pane pane--chat" style={{ width: chatWidth }}>
           <ChatPanel />
         </section>
