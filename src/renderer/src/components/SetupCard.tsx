@@ -1,3 +1,6 @@
+import { Button } from '@/components/ui/button'
+import { Loader2 } from 'lucide-react'
+
 interface Props {
   busy: boolean
   status: string | null
@@ -11,6 +14,7 @@ interface Props {
  * app has no `data-dsgn-source` stamps — so dsgn can't map elements to source
  * and prop editing is unavailable. Accepting writes the dev-only stamping plugin
  * (deterministic) and asks the agent to wire it in + type the components.
+ * shadcn Buttons; Tailwind blue info surface. `.setup*` hooks preserved.
  */
 export default function SetupCard({
   busy,
@@ -20,27 +24,33 @@ export default function SetupCard({
   onDismiss
 }: Props): React.JSX.Element {
   return (
-    <div className="setup" role="region" aria-label="Project setup">
-      <div className="setup__title">Set this project up for visual editing?</div>
-      <div className="setup__body">
-        Its elements aren’t source-mapped yet, so dsgn can only suggest changes via chat. I can
-        add a dev-only source-stamping plugin and have the agent type your components so you can
-        edit props directly.
+    <div
+      className="setup flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3.5"
+      role="region"
+      aria-label="Project setup"
+    >
+      <div className="setup__title text-sm font-semibold text-blue-900">
+        Set this project up for visual editing?
       </div>
-      {status && <div className="setup__status">{status}</div>}
-      <div className="setup__actions">
-        <button className="setup__no" onClick={onDismiss} disabled={busy}>
+      <div className="setup__body text-[12.5px] leading-snug text-blue-800">
+        Its elements aren’t source-mapped yet, so dsgn can only suggest changes via chat. I can add
+        a dev-only source-stamping plugin and have the agent type your components so you can edit
+        props directly.
+      </div>
+      {status && <div className="setup__status text-[11.5px] text-muted-foreground">{status}</div>}
+      <div className="setup__actions flex justify-end gap-2">
+        <Button variant="outline" size="sm" className="setup__no" onClick={onDismiss} disabled={busy}>
           Not now
-        </button>
+        </Button>
         {busy ? (
-          <button className="setup__yes setup__yes--stop" onClick={onStop}>
-            <span className="setup__spinner" aria-hidden="true" />
+          <Button variant="outline" size="sm" className="setup__yes setup__yes--stop" onClick={onStop}>
+            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
             Stop
-          </button>
+          </Button>
         ) : (
-          <button className="setup__yes" onClick={onAccept}>
+          <Button size="sm" className="setup__yes" onClick={onAccept}>
             Set it up
-          </button>
+          </Button>
         )}
       </div>
     </div>

@@ -920,84 +920,8 @@ body.is-resizing {
 }
 
 /* On-open setup dialogue */
-.setup {
-  border: 1px solid #bfdbfe;
-  background: #eff6ff;
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.setup__title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e3a8a;
-}
-
-.setup__body {
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: #1e40af;
-}
-
-.setup__status {
-  font-size: 11.5px;
-  color: var(--text-muted);
-}
-
-.setup__actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.setup__no,
-.setup__yes {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 14px;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.setup__no {
-  background: var(--bg);
-  color: var(--text);
-}
-
-.setup__yes {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
-}
-
-.setup__yes:disabled,
-.setup__no:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-/* While the setup turn runs, the primary button becomes a Stop button. */
-.setup__yes--stop {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--bg);
-  border-color: var(--border);
-  color: var(--text);
-}
-
-.setup__spinner {
-  width: 11px;
-  height: 11px;
-  border: 2px solid rgba(37, 99, 235, 0.25);
-  border-top-color: #2563eb;
-  border-radius: 50%;
-  animation: composer-spin 0.7s linear infinite;
-}
+/* Setup + token-offer cards now style with Tailwind + shadcn Button in
+   SetupCard.tsx / TokenOfferCard.tsx; `.setup*` remain only as test hooks. */
 
 /* Design-token palette */
 .tokens {
@@ -1235,73 +1159,8 @@ body.is-resizing {
   font-size: 11px;
 }
 
-/* Permission approve/deny cards (above the composer while the agent waits). */
-.perms {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.perm {
-  border: 1px solid #fde68a;
-  background: #fffbeb;
-  border-radius: var(--radius);
-  padding: 9px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.perm__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-.perm__detail {
-  margin-top: 2px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11.5px;
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.perm__actions {
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-}
-
-.perm__deny,
-.perm__allow {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 14px;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.perm__deny {
-  background: var(--bg);
-  color: var(--text);
-}
-
-.perm__deny:hover {
-  background: var(--bg-subtle);
-}
-
-.perm__allow {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-.perm__allow:hover {
-  opacity: 0.9;
-}
+/* Permission approve/deny cards now style with Tailwind + shadcn Button in
+   PermissionCards.tsx; `.perm*` remain only as test hooks. */
 
 .select {
   font: inherit;

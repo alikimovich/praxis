@@ -114,8 +114,18 @@ TokenOfferCard, Markdown). App-header branch pill + auth banner are separate chr
       the test hooks above.
 - [ ] **Re-verify** `chat-render` / `chat-route` (+ smoke and the rest), screenshot the new
       panel into `test/artifacts/`.
+- [ ] **Element-inspector surfaces → shadcn (follow-up pass).** Inspector.tsx,
+      NotesPanel.tsx, TokenPalette.tsx are dense element-editing UIs (appear only on
+      element-select, distinct from the chat conversation) with many test hooks
+      (`.inspector__ask/__link/__source/__tag/__noteinput/__notesave/__ready--no`,
+      `.notes__item/__remove/__text`, `.tokens/__item/__swatch`). Convert to shadcn
+      Card/Collapsible/Badge/Button in a focused pass, preserving every hook
+      (annotations, ready-gating, select-element, prop-edit, tokens tests).
 - [ ] **Stretch:** evaluate other AI Elements (Sources, Task, Chain-of-Thought, Web
       Preview, Reasoning) for dsgn's flows.
+- [ ] **Optional: test modernization.** Add `data-testid`s and migrate smoke/
+      chat-render off volatile BEM classes; then the three pickers can become shadcn
+      `Select` (currently native, locked by the `$$eval('option')` permission-mode assertion).
 
 ## v2 — design-system-aware select & edit (the differentiator)
 
