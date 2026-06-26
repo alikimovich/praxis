@@ -348,6 +348,10 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     if (sessions.has(key)) activeKey = key
   })
 
+  // Does this project still have a live session? (LRU eviction can suspend a
+  // backgrounded project's session; the renderer reopens it on switch-back.)
+  ipcMain.handle('agent:is-open', (_e, root: string) => sessions.has(projectKey(root)))
+
   ipcMain.handle('agent:set-model', async (_e, model: string) => {
     const session = activeSession()
     if (!session) return

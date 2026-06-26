@@ -2,6 +2,31 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-26 — v5-C2: LRU-cap warm agent sessions
+
+- Closes the resource gap left after v5-C: the dev-server LRU cap (N=3) was in,
+  but each open project still held a live agent SDK CLI subprocess unbounded. Now
+  the same eviction bounds **both**.
+- **`agent.ts`** — new `agent:is-open` IPC (`sessions.has(projectKey(root))`) so the
+  renderer can tell a suspended session from a live one.
+- **`App.tsx` `evictWarm`** (was `evictWarmServers`) — beyond the N most-recent
+  projects, suspend the LRU ones by stopping the dev server **and** closing the
+  agent session. Never reaps the active project, a simulator, or a project whose
+  agent is mid-turn (`useChat.isRunningFor` — sticky from submit until `done`, so it
+  protects backgrounded in-flight turns too). Re-reads live `activeKey`/running
+  right before the destructive stops to dodge a switch-back TOCTOU.
+- **`App.tsx` `applyProject`** — on switch-back, if `agent.isOpen` is false the
+  session was LRU-suspended, so it's reopened via `agent.openProject` (awaited +
+  try/catch, with a clear "prior context cleared" log note — the reopened session
+  starts fresh; the visible transcript is kept for reference). Otherwise just
+  `setActive`. Mirrors the dead/suspended dev-server relaunch path.
+- Tradeoff (documented): suspending closes the SDK subprocess, so an evicted
+  project's *agent context* is lost (its chat transcript is preserved for display).
+  Real resume lands with v5-D (session persistence).
+- Test: `test/agent-cap.mjs` — is-open liveness, LRU suspend leaves peers open,
+  reopen re-activates. Full `bun run verify` green (31 OK, agent-e2e/sim-e2e SKIP
+  without creds/Xcode).
+
 ## 2026-06-26 — proactive checks C1/C3: error extraction + rule-based diagnosis
 
 - Real-world driver: an Expo build failed and dsgn surfaced the xcodebuild

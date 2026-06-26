@@ -72,11 +72,13 @@ See the PROGRESS entry.
       working dots, "+ New project" (keep-warm), switching that swaps preview + chat +
       agent + tokens/annotations; warm-to-N **dev-server** LRU-suspend; dead-server
       relaunch-on-switch. `test/chat-route.mjs`, `test/rail.mjs`. (PRs #23, #24)
-- [ ] **v5-C follow-up: cap warm AGENT sessions too.** The dev-server LRU cap (N=3)
-      is in; agent SDK sessions still stay warm unbounded (one CLI subprocess per open
-      project). Add an LRU/idle cap for sessions (suspend = close-session, reopen on
-      switch-back like dev servers), or fold into the same eviction. Bound the
-      subprocess footprint for users who open many projects.
+- [x] **v5-C2 — cap warm AGENT sessions too.** ✅ 2026-06-26 — folded into the same
+      eviction: `evictWarm` (was `evictWarmServers`) now suspends the LRU projects'
+      dev server **and** agent session beyond N=3, skipping the active project,
+      simulators, and any mid-turn agent (`isRunningFor`). `agent:is-open` IPC +
+      `applyProject` reopen-on-switch-back (awaited, "context cleared" note) mirror
+      the dev-server relaunch path. TOCTOU-guarded against concurrent switch-backs.
+      `test/agent-cap.mjs`. Context resume itself is v5-D.
 - [ ] **Previous + working agents (history).** Persist finished sessions
       (transcript, the branch/PR they produced, files touched) so "previous agents"
       are reopenable to review or resume — not just the live ones. Surface them
