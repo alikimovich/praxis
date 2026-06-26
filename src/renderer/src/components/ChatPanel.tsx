@@ -20,6 +20,15 @@ import NotesPanel from './NotesPanel'
 import PermissionCards from './PermissionCards'
 import SetupCard from './SetupCard'
 import TokenOfferCard from './TokenOfferCard'
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton
+} from '@/components/ai-elements/conversation'
+import { InputGroup, InputGroupAddon } from '@/components/ui/input-group'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { ArrowUp } from 'lucide-react'
 
 const MODELS = [
   { value: DEFAULT_MODEL, label: 'Default' },
@@ -107,7 +116,6 @@ export default function ChatPanel(): React.JSX.Element {
   const [input, setInput] = useState('')
   const [menuActive, setMenuActive] = useState(0)
   const [menuDismissed, setMenuDismissed] = useState(false)
-  const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   // Don't carry a publish result across projects (it'd show under the new repo).
@@ -180,10 +188,6 @@ export default function ChatPanel(): React.JSX.Element {
       }
     })
   }, [appendDelta, appendStatus, finish])
-
-  useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
-  }, [messages])
 
   // "/" slash-command menu state.
   const slashQuery = input.startsWith('/') && !input.includes(' ') ? input.slice(1) : null
@@ -418,55 +422,71 @@ export default function ChatPanel(): React.JSX.Element {
     }
   }
 
+  // Reusable Tailwind for the three quiet inline picker <select>s. Native (not
+  // shadcn Select) on purpose: tiny controls, and the permission-mode test reads
+  // native <option> values via $$eval — a Radix portal would break it.
+  const selectCls =
+    'cursor-pointer appearance-none rounded-md border-0 bg-transparent px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none'
+
   return (
-    <div className="chat">
-      <div className="chat__messages" ref={listRef}>
-        {setup.needed && !setup.dismissed && (
-          <SetupCard
-            busy={setup.busy}
-            status={setup.status}
-            onAccept={() => void acceptSetup()}
-            onStop={stop}
-            onDismiss={() => {
-              setup.setDismissed(true)
-              setup.setNeeded(false)
-            }}
-          />
-        )}
-        {/* Token offer yields to the setup offer — only one card at a time. */}
-        {!setup.needed && tokens.offerNeeded && !tokens.offerDismissed && (
-          <TokenOfferCard
-            scaffolding={tokens.scaffolding}
-            status={null}
-            onAccept={() => void acceptTokenScaffold()}
-            onDismiss={() => {
-              tokens.setOfferDismissed(true)
-              tokens.setOfferNeeded(false)
-            }}
-          />
-        )}
-        {messages.length === 0 && !setup.needed && !tokens.offerNeeded && (
-          <div className="chat__empty">
-            Ask for a change, or open a project to preview it on the right.
-          </div>
-        )}
-        {messages.map((m) => (
-          <div key={m.id} className={`msg msg--${m.role}`}>
-            <div className="msg__role">{m.role}</div>
-            {m.statuses.map((s, i) => (
-              <div key={i} className="msg__status">
-                › {s}
+    <div className="chat flex h-full flex-col">
+      {/* AI Elements Conversation = stick-to-bottom scroller (auto-follows the
+          stream, with a scroll-to-bottom affordance). Replaces the old manual
+          listRef scroll effect. */}
+      <Conversation className="chat__messages min-h-0 flex-1">
+        <ConversationContent className="gap-3.5 p-4">
+          {setup.needed && !setup.dismissed && (
+            <SetupCard
+              busy={setup.busy}
+              status={setup.status}
+              onAccept={() => void acceptSetup()}
+              onStop={stop}
+              onDismiss={() => {
+                setup.setDismissed(true)
+                setup.setNeeded(false)
+              }}
+            />
+          )}
+          {/* Token offer yields to the setup offer — only one card at a time. */}
+          {!setup.needed && tokens.offerNeeded && !tokens.offerDismissed && (
+            <TokenOfferCard
+              scaffolding={tokens.scaffolding}
+              status={null}
+              onAccept={() => void acceptTokenScaffold()}
+              onDismiss={() => {
+                tokens.setOfferDismissed(true)
+                tokens.setOfferNeeded(false)
+              }}
+            />
+          )}
+          {messages.length === 0 && !setup.needed && !tokens.offerNeeded && (
+            <div className="chat__empty">
+              Ask for a change, or open a project to preview it on the right.
+            </div>
+          )}
+          {messages.map((m) => (
+            <div key={m.id} className={cn('msg flex flex-col gap-1', `msg--${m.role}`)}>
+              <div className="msg__role text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                {m.role}
               </div>
-            ))}
-            {m.text &&
-              (m.role === 'assistant' ? (
-                <Markdown>{m.text}</Markdown>
-              ) : (
-                <div className="msg__text">{m.text}</div>
+              {m.statuses.map((s, i) => (
+                <div key={i} className="msg__status font-mono text-xs text-muted-foreground">
+                  › {s}
+                </div>
               ))}
-          </div>
-        ))}
-      </div>
+              {m.text &&
+                (m.role === 'assistant' ? (
+                  <Markdown>{m.text}</Markdown>
+                ) : (
+                  <div className="msg__text w-fit rounded-lg bg-muted px-3 py-2 text-sm">
+                    {m.text}
+                  </div>
+                ))}
+            </div>
+          ))}
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
 
       <div className="composer">
         <PermissionCards requests={pending} onRespond={respondPermission} />
@@ -494,7 +514,11 @@ export default function ChatPanel(): React.JSX.Element {
           onRemove={(id) => void removeNote(id)}
           onPublish={() => void publish()}
         />
-        <div className="composer__field">
+        {/* shadcn InputGroup = the rounded, focus-ringed composer frame. The
+            textarea carries data-slot="input-group-control" so the group lights
+            up on focus. Native textarea (not InputGroupTextarea) to keep the ref
+            for seeding/cursor control on React 18. */}
+        <InputGroup className="relative rounded-2xl">
           {menuOpen && (
             <div className="slash" role="listbox">
               <div className="slash__hint">Skills & commands</div>
@@ -512,6 +536,7 @@ export default function ChatPanel(): React.JSX.Element {
           )}
           <textarea
             ref={inputRef}
+            data-slot="input-group-control"
             className="composer__input"
             placeholder="Message dsgn…  (/ for skills)"
             value={input}
@@ -519,9 +544,9 @@ export default function ChatPanel(): React.JSX.Element {
             onChange={(e) => onInputChange(e.target.value)}
             onKeyDown={onKeyDown}
           />
-          <div className="composer__bar">
+          <InputGroupAddon align="block-end" className="gap-1">
             <select
-              className="select"
+              className={selectCls}
               value={model}
               onChange={(e) => onModelChange(e.target.value)}
               aria-label="Model"
@@ -533,7 +558,7 @@ export default function ChatPanel(): React.JSX.Element {
               ))}
             </select>
             <select
-              className="select"
+              className={selectCls}
               value={effort}
               onChange={(e) => setEffort(e.target.value)}
               aria-label="Thinking level"
@@ -545,7 +570,7 @@ export default function ChatPanel(): React.JSX.Element {
               ))}
             </select>
             <select
-              className="select"
+              className={selectCls}
               value={permissionMode}
               onChange={(e) => onPermissionModeChange(e.target.value as PermissionMode)}
               aria-label="Permission mode"
@@ -557,35 +582,31 @@ export default function ChatPanel(): React.JSX.Element {
               ))}
             </select>
             {isRunning ? (
-              <button
-                className="composer__send composer__send--stop"
+              <Button
+                type="button"
+                size="icon"
+                className="composer__send composer__send--stop ml-auto"
                 onClick={stop}
                 aria-label="Stop"
                 title="Stop"
               >
                 <span className="composer__spinner" aria-hidden="true" />
                 <span className="composer__stop-icon" aria-hidden="true" />
-              </button>
+              </Button>
             ) : (
-              <button
-                className="composer__send"
+              <Button
+                type="button"
+                size="icon"
+                className="composer__send ml-auto"
                 onClick={() => send()}
                 disabled={!input.trim()}
                 aria-label="Send message"
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path
-                    d="M8 13V3M8 3L3.5 7.5M8 3l4.5 4.5"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
+                <ArrowUp className="size-4" aria-hidden="true" />
+              </Button>
             )}
-          </div>
-        </div>
+          </InputGroupAddon>
+        </InputGroup>
       </div>
     </div>
   )

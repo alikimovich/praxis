@@ -405,13 +405,11 @@ body.is-resizing {
   height: 100%;
 }
 
+/* Layout is now owned by AI Elements <Conversation>/<ConversationContent>
+   (stick-to-bottom). The class remains only as a stable DOM hook — don't re-add
+   overflow/flex here or it fights the scroller. */
 .chat__messages {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  min-height: 0;
 }
 
 .chat__empty {
@@ -1397,11 +1395,11 @@ body.is-resizing {
 }
 
 .composer__input {
-  flex: 1 1 auto;
+  width: 100%;
   resize: none;
   border: none;
   background: transparent;
-  padding: 4px 4px 0;
+  padding: 12px 14px 4px;
   font: inherit;
   font-size: 14px;
   line-height: 1.45;
