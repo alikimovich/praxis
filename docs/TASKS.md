@@ -66,29 +66,17 @@ See the PROGRESS entry.
       Session>` + `activeKey` in `agent.ts`; only the active session streams; new
       `agent:close-project`; closing the active clears active (no auto-promote).
       `test/agent-multi.mjs`. (PR #20)
-- [ ] **v5-C — make multi-project visible (renderer-only, NOT collision-blocked).**
-      The integration on top of the v5-A/B backends:
-      - `agent:set-active(root)` to switch the active warm session without recreating it.
-      - Per-project renderer state: snapshot/restore each project's chat, status,
-        preview URL, launchSpec, branch, tokens, annotations, setup on switch (so
-        switching shows the right conversation + preview), keeping dev servers + agent
-        sessions warm (stop closing the previous on "open another").
-      - The single `WebContentsView` navigates to the active project's URL on switch.
-      - **Left rail** (the Cursor-style "Repositories" list): open projects, click to
-        switch, close button, active indicator; "+ New project" opens-keeping-warm.
-      **Decisions (2026-06-25):** rail = **left sidebar (Cursor-style)**: open repos
-      list, active highlight, close (×), "+ New project" (opens keeping the current
-      one warm). Backgrounded agents **keep running with a status dot** and their
-      result is there on return — so the agent must emit for ALL live sessions
-      (tagged with `projectKey`, not just the active one), and the renderer routes
-      events to per-project chat buffers (active = displayed; background = accumulates
-      + sets a "working" dot). This implies the bigger renderer work: per-project
-      chat (the `__dsgnStore`/useChat slice the chat tests assert on must become
-      per-project) + event routing by project (`agent:set-active` to switch warm
-      sessions without recreating; emit tags + drops the active-key suppression).
-      Warm-to-N + LRU-suspend (dev servers) lands here too. Sized as its own focused
-      build (touches the chat store + every chat test; benefits from visual rail
-      verification).
+- [x] **v5-C — multi-project visible: per-project chat + left rail.** ✅ 2026-06-26 —
+      `agent:set-active` + project-tagged events (PR #23, core); per-project `useChat`
+      slices with the active mirrored for back-compat; `Rail.tsx` left sidebar with
+      working dots, "+ New project" (keep-warm), switching that swaps preview + chat +
+      agent + tokens/annotations; warm-to-N **dev-server** LRU-suspend; dead-server
+      relaunch-on-switch. `test/chat-route.mjs`, `test/rail.mjs`. (PRs #23, #24)
+- [ ] **v5-C follow-up: cap warm AGENT sessions too.** The dev-server LRU cap (N=3)
+      is in; agent SDK sessions still stay warm unbounded (one CLI subprocess per open
+      project). Add an LRU/idle cap for sessions (suspend = close-session, reopen on
+      switch-back like dev servers), or fold into the same eviction. Bound the
+      subprocess footprint for users who open many projects.
 - [ ] **Previous + working agents (history).** Persist finished sessions
       (transcript, the branch/PR they produced, files touched) so "previous agents"
       are reopenable to review or resume — not just the live ones. Surface them
