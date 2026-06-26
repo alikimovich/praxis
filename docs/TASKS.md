@@ -112,17 +112,25 @@ the file-edit/permission/skill tooling the Claude Agent SDK gives for free.
       **BYO per-provider API key** (safeStorage) + per-token billing; (2) non-Claude backends
       **lose skills + CLAUDE.md auto-apply + slash-commands** (Claude-Agent-SDK-only) and must
       re-implement the hardened tool suite + permission loop (~6–8 days, security-sensitive).
-- [ ] **DECISIONS NEEDED (user) before building the loop:** (a) accept the auth-mode shift
-      (BYO API key + billing) for non-Claude? (b) accept the skills/CLAUDE.md/slash-command
-      regression on non-Claude backends? (c) which provider ships first (spike recommends
-      **Gemini** — lowest friction)? (d) build the v0 `/generate` action at all?
-- [ ] **Buildable now (additive, gated, Claude path byte-identical) — on go-ahead:**
+- [x] **AUTH DECISION (user, 2026-06-26): subscription login, NOT BYO API key.** This
+      flips the architecture — see the REVISED section in `docs/v7-multi-provider-design.md`.
+      Wrap each vendor's **subscription-auth coding-agent SDK/CLI** (Codex SDK, Gemini CLI,
+      Grok Build CLI), NOT the Vercel AI SDK. All three have subscription OAuth + headless
+      event streams in 2026, and **bring their own tools** — so the ~6–8 day tool-suite
+      rebuild drops to a per-provider adapter. No keys, no billing, no `safeStorage` UI.
+- [ ] **Buildable on go-ahead (additive, gated, Claude path byte-identical):**
       (1) `ModelProvider`/`ProviderSession` interface in `src/main/backends/types.ts`;
       (2) extract today's `startSession` into `backends/claude.ts` (pure move; `verify` +
       `agent-e2e` gate it); (3) `provider?` on `AgentOptions` + `pickProvider` (defaults to
-      claude); (4) `aisdkProvider` behind a `DSGN_AISDK=1` flag with a stub Read/Edit toolset
-      (unreachable by default); (5) `safeStorage` key plumbing. NOT done autonomously — touches
-      the load-bearing `agent.ts` ahead of the product decisions above.
+      claude); (4) **Codex provider** (`backends/codex.ts`) via `@openai/codex-sdk`
+      (`startThread/run` → map its event stream to `AgentEvent`), behind a flag until the user
+      has run `codex login`; a per-provider "login needed" banner reusing `isAuthError`.
+- [ ] **Then:** Gemini CLI provider (subprocess, `--output-format stream-json` JSONL →
+      `AgentEvent`), then Grok Build CLI; surface a provider/model picker spanning backends;
+      map each agent's tool-approval events to the existing permission cards.
+- [ ] **Minor open calls:** which provider after Codex (rec: Gemini); each agent uses its own
+      conventions file (Codex `AGENTS.md`, Gemini `GEMINI.md`) — skills stay Claude-only;
+      v0 `/generate` action (separate workstream) — build only if wanted.
 
 ## v6 — Tailwind + shadcn chat UI (AI Elements)  ⭐ (2026-06-26, user-requested)
 
