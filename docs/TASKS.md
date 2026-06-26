@@ -103,15 +103,26 @@ unifier is the **Vercel AI SDK** (`generateText`/`streamText` + tools across
 with the AI Elements UI we just adopted. Trade-off: an AI-SDK agent loop must re-implement
 the file-edit/permission/skill tooling the Claude Agent SDK gives for free.
 
-- [ ] **Spike (explore):** map each provider to a capability — (a) which can do tool-calling
-      agent loops that edit the repo, (b) auth model per provider (API keys vs subscription),
-      (c) what v0's API actually offers (generation vs editing), (d) whether a Vercel-AI-SDK
-      agent backend can sit behind the same `agent:*` IPC + `useChat` store as a selectable
-      alternative to the Claude Agent SDK, preserving permission cards + tool-status. Write a
-      design doc; decide build scope.
-- [ ] **Build what's possible** from the spike (likely: a `ModelProvider` seam in `main/`,
-      one non-Claude provider behind it via the AI SDK as proof, model picker spanning
-      providers). Capture the rest in the backlog.
+- [x] **Spike (explore).** ✅ 2026-06-26 — `docs/v7-multi-provider-design.md`. Conclusions:
+      **OpenAI / Gemini / Grok** are all viable as ONE uniform agent loop via the **Vercel AI
+      SDK** (`streamText`+`stopWhen`), behind a `ModelProvider` seam that emits the same
+      `AgentEvent`s as today (the existing `Session` interface is ~90% of it). **v0 is
+      generation-only — NOT a chat backend** (wire later as a discrete `/generate` action).
+      Two big strings attached: (1) **auth shifts** from Claude OAuth-subscription to
+      **BYO per-provider API key** (safeStorage) + per-token billing; (2) non-Claude backends
+      **lose skills + CLAUDE.md auto-apply + slash-commands** (Claude-Agent-SDK-only) and must
+      re-implement the hardened tool suite + permission loop (~6–8 days, security-sensitive).
+- [ ] **DECISIONS NEEDED (user) before building the loop:** (a) accept the auth-mode shift
+      (BYO API key + billing) for non-Claude? (b) accept the skills/CLAUDE.md/slash-command
+      regression on non-Claude backends? (c) which provider ships first (spike recommends
+      **Gemini** — lowest friction)? (d) build the v0 `/generate` action at all?
+- [ ] **Buildable now (additive, gated, Claude path byte-identical) — on go-ahead:**
+      (1) `ModelProvider`/`ProviderSession` interface in `src/main/backends/types.ts`;
+      (2) extract today's `startSession` into `backends/claude.ts` (pure move; `verify` +
+      `agent-e2e` gate it); (3) `provider?` on `AgentOptions` + `pickProvider` (defaults to
+      claude); (4) `aisdkProvider` behind a `DSGN_AISDK=1` flag with a stub Read/Edit toolset
+      (unreachable by default); (5) `safeStorage` key plumbing. NOT done autonomously — touches
+      the load-bearing `agent.ts` ahead of the product decisions above.
 
 ## v6 — Tailwind + shadcn chat UI (AI Elements)  ⭐ (2026-06-26, user-requested)
 
