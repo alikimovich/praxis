@@ -370,6 +370,8 @@ export interface DsgnApi {
     }) => Promise<RunningDevServer>
     /** Stop the dev server for one project (others keep running). */
     stop: (root: string) => Promise<void>
+    /** Is this project's dev server still running? (warm servers can die) */
+    isRunning: (root: string) => Promise<boolean>
     onLog: (cb: (line: string) => void) => () => void
   }
   git: {

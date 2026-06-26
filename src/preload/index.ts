@@ -84,6 +84,7 @@ const api: DsgnApi = {
       framework?: Framework
     }): Promise<RunningDevServer> => ipcRenderer.invoke('devserver:start', opts),
     stop: (root: string): Promise<void> => ipcRenderer.invoke('devserver:stop', root),
+    isRunning: (root: string): Promise<boolean> => ipcRenderer.invoke('devserver:running', root),
     onLog: (cb: (line: string) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, line: string): void => cb(line)
       ipcRenderer.on('devserver:log', listener)

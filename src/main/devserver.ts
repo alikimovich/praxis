@@ -299,6 +299,10 @@ export function registerDevServerIpc(getWindow: () => BrowserWindow | null): voi
 
   ipcMain.handle('devserver:stop', async (_e, root: string) => stop(root))
 
+  // Is this project's dev server still running? (A warm/backgrounded server can
+  // die; the renderer probes before navigating the preview to its stale URL.)
+  ipcMain.handle('devserver:running', (_e, root: string) => servers.has(projectKey(root)))
+
   // Never leave a spawned dev server orphaned when dsgn quits.
   app.on('before-quit', stopAll)
 }

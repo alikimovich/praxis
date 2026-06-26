@@ -180,6 +180,112 @@ body {
   min-height: 0;
 }
 
+/* v5 left rail — open projects (Cursor-style). */
+.rail {
+  flex: 0 0 auto;
+  width: 168px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 6px;
+  background: var(--bg-subtle);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+.rail__head {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  padding: 2px 8px 6px;
+}
+.rail__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.rail__item {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+}
+.rail__item--active {
+  background: var(--border);
+}
+.rail__open {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 6px 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+.rail__dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid var(--text-muted);
+}
+.rail__dot--on {
+  background: #22c55e;
+  border-color: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+}
+.rail__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rail__close {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin-right: 4px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  opacity: 0;
+}
+.rail__item:hover .rail__close,
+.rail__item--active .rail__close {
+  opacity: 1;
+}
+.rail__close:hover {
+  background: var(--border);
+  color: var(--text);
+}
+.rail__add {
+  margin-top: 6px;
+  padding: 7px 8px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.rail__add:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
 .pane {
   min-width: 0;
   height: 100%;

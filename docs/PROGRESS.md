@@ -22,6 +22,36 @@ Newest first. Append a dated entry when you finish a chunk of work.
   Added to the test/verify chains. Full verify green; `SIM-PREFLIGHT ok=true` now
   that the 26.5 runtime is installed.
 
+## 2026-06-26 — v5-C rail: multiple open projects + switching (the payoff)
+
+- **dsgn is now multi-project.** A left sidebar (`Rail.tsx`, Cursor-style) lists
+  the open repos with an active highlight, a per-project "working" dot (green when
+  that project's agent turn is in flight — incl. backgrounded ones), an × to close,
+  and "+ New project" which opens another **keeping the current one warm** (its dev
+  server + agent session keep running for an instant switch). The rail only shows
+  once a project is open (single-project keeps the old layout).
+- `ProjectEntry` now carries a per-project display snapshot (url / previewKind /
+  branch / launchSpec); `patchEntry` updates it. `attempt(root, cmd?, keepWarm)`
+  skips the single-active teardown when keeping warm and snapshots the project it
+  leaves. `switchTo`/`applyProject` swap the preview (navigate the one
+  WebContentsView to the target URL), the active agent session (`agent:setActive`),
+  the per-project chat (`useChat.setActiveChat`), tokens, annotations, branch,
+  status — no restart. `closeProjectFromRail` stops the server + session and falls
+  through to another open project (or idle).
+- New `test/rail.mjs`: open two fixtures (second keeps the first warm), assert both
+  servers stay reachable, switching swaps the preview port + the per-project chat
+  slice. Screenshot `10-rail.png`. Full verify green.
+- Adversarial review (10 findings) hardened it: switching a warm project whose dev
+  server **died/was suspended** now probes (`devServer.isRunning`) and relaunches it
+  before navigating (no dead frame); `applyProject` clears the outgoing tokens/pins
+  up front and guards the annotations write against a rapid re-switch (+ a
+  `stillActive` re-check after every await); **LRU-suspend** caps warm dev servers at
+  3 (the decided behavior — beyond that the least-recently-used are stopped and
+  relaunch on return); project entries are kept current (open/restart/branch-rename
+  patch them) so switching needs no stale-closure snapshot; `closeProjectFromRail`
+  awaits the session close before clearing chat and avoids a double-stop on the last
+  project; test isolation assertion strengthened (content, not counts).
+
 ## 2026-06-26 — v5-C core: per-project chat + event routing (keep-running)
 
 - The machinery behind the chosen "backgrounded agents keep running, badge on

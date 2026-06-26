@@ -3,8 +3,10 @@ import type {
   Annotation,
   CommentMode,
   Diagnosis,
+  Framework,
   PermissionMode,
   PermissionRequest,
+  PreviewKind,
   PropInspection,
   SelectedElement,
   TokenSet
@@ -171,6 +173,14 @@ export const useSession = create<SessionState>((set) => ({
  * `useSession.projectRoot`; this store mirrors it and grows as the rail/backends
  * land (see docs/TASKS.md "v5"). Projects are identified by `projectKey(root)`.
  */
+/** How to relaunch a project's preview (used to restart it after a config edit). */
+export interface LaunchSpec {
+  root: string
+  command: string
+  framework?: Framework
+  previewKind: PreviewKind
+}
+
 export interface ProjectEntry {
   /** Absolute repo root as opened. */
   root: string
@@ -178,6 +188,14 @@ export interface ProjectEntry {
   key: string
   /** Display name (folder basename, overridable). */
   name: string
+  // Per-project display snapshot, restored on switch (chat lives in useChat byKey;
+  // tokens/annotations are re-detected on switch).
+  url: string | null
+  previewKind: PreviewKind
+  branch: string | null
+  launchSpec: LaunchSpec | null
+  /** Monotonic recency stamp (bumped on activate) — drives LRU warm-server eviction. */
+  touchedAt: number
 }
 
 interface WorkspaceState {
@@ -186,11 +204,18 @@ interface WorkspaceState {
   /** Open a project (or re-activate it if already open). Returns its key. */
   openOrActivate: (root: string, meta?: { name?: string }) => string
   activate: (key: string) => void
+  /** Update one project's snapshot fields. */
+  patchEntry: (key: string, partial: Partial<ProjectEntry>) => void
   close: (key: string) => void
   reset: () => void
 }
 
 const basename = (p: string): string => p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() || p
+// Monotonic recency counter for LRU warm-server eviction (process-lifetime; fine
+// to reset to 0 on a fresh launch since the workspace starts empty).
+let touchSeq = 0
+const bumpTouched = (projects: ProjectEntry[], key: string): ProjectEntry[] =>
+  projects.map((p) => (p.key === key ? { ...p, touchedAt: ++touchSeq } : p))
 
 export const useWorkspace = create<WorkspaceState>((set, get) => ({
   projects: [],
@@ -199,14 +224,38 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     const key = projectKey(root)
     const exists = get().projects.some((p) => p.key === key)
     set((s) => ({
-      projects: exists
-        ? s.projects
-        : [...s.projects, { root, key, name: meta?.name ?? basename(root) }],
+      projects: bumpTouched(
+        exists
+          ? s.projects
+          : [
+              ...s.projects,
+              {
+                root,
+                key,
+                name: meta?.name ?? basename(root),
+                url: null,
+                previewKind: 'web',
+                branch: null,
+                launchSpec: null,
+                touchedAt: 0
+              }
+            ],
+        key
+      ),
       activeKey: key
     }))
     return key
   },
-  activate: (key) => set((s) => (s.projects.some((p) => p.key === key) ? { activeKey: key } : s)),
+  activate: (key) =>
+    set((s) =>
+      s.projects.some((p) => p.key === key)
+        ? { activeKey: key, projects: bumpTouched(s.projects, key) }
+        : s
+    ),
+  patchEntry: (key, partial) =>
+    set((s) => ({
+      projects: s.projects.map((p) => (p.key === key ? { ...p, ...partial } : p))
+    })),
   close: (key) =>
     set((s) => {
       const projects = s.projects.filter((p) => p.key !== key)
