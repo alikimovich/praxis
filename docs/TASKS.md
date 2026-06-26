@@ -87,6 +87,32 @@ See the PROGRESS entry.
       and a way to jump to a session's preview + chat. Mirrors the attached
       Cursor-style layout.
 
+## v7 — multi-provider model backends  ⭐ NEW (2026-06-26, user-requested; explore-then-build)
+
+Add support for non-Claude backends: **OpenAI / ChatGPT SDK, Vercel v0, Google Gemini,
+xAI Grok**. Explore feasibility first, then build what's possible.
+
+**Architectural tension to resolve in the spike:** dsgn's agent core is the **Claude Agent
+SDK** (locked decision) precisely because it provides *in-process tools* wired to the
+renderer (select→edit props→annotate→PR) plus repo `CLAUDE.md`/skills — the product
+differentiator. Generic LLM APIs (OpenAI/Gemini/Grok) don't ship an equivalent agent loop
+with file-editing tools; **v0** is a code-generation API, not a tool-using chat agent. So
+"support" likely means a **provider abstraction with an agent loop we own**. The natural
+unifier is the **Vercel AI SDK** (`generateText`/`streamText` + tools across
+`@ai-sdk/openai`, `@ai-sdk/google`, `@ai-sdk/xai`, `@ai-sdk/anthropic`) — which also pairs
+with the AI Elements UI we just adopted. Trade-off: an AI-SDK agent loop must re-implement
+the file-edit/permission/skill tooling the Claude Agent SDK gives for free.
+
+- [ ] **Spike (explore):** map each provider to a capability — (a) which can do tool-calling
+      agent loops that edit the repo, (b) auth model per provider (API keys vs subscription),
+      (c) what v0's API actually offers (generation vs editing), (d) whether a Vercel-AI-SDK
+      agent backend can sit behind the same `agent:*` IPC + `useChat` store as a selectable
+      alternative to the Claude Agent SDK, preserving permission cards + tool-status. Write a
+      design doc; decide build scope.
+- [ ] **Build what's possible** from the spike (likely: a `ModelProvider` seam in `main/`,
+      one non-Claude provider behind it via the AI SDK as proof, model picker spanning
+      providers). Capture the rest in the backlog.
+
 ## v6 — Tailwind + shadcn chat UI (AI Elements)  ⭐ (2026-06-26, user-requested)
 
 Migrate the **chat panel** fully to **Tailwind + shadcn/ui**, using **AI Elements**
