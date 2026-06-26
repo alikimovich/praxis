@@ -75,6 +75,8 @@ export default function App(): React.JSX.Element {
     if (!root || !name.trim() || name.trim() === branch) return
     const res = await window.api.git.set(root, name.trim())
     useSession.getState().setBranch(res.branch)
+    // Keep the workspace entry's branch current for rail switch-back.
+    useWorkspace.getState().patchEntry(projectKey(root), { branch: res.branch })
     if (res.branch) {
       useLog
         .getState()
@@ -381,16 +383,8 @@ export default function App(): React.JSX.Element {
     const prevRoot = useSession.getState().projectRoot
     const switching = !!prevRoot && projectKey(prevRoot) !== projectKey(root)
     const tearDownPrev = switching && !keepWarm
-    // Keeping the previous project warm — snapshot its live display state so a
-    // switch back restores it.
-    if (switching && keepWarm && status.kind === 'running') {
-      useWorkspace.getState().patchEntry(projectKey(prevRoot), {
-        url: status.url,
-        previewKind,
-        branch: useSession.getState().branch,
-        launchSpec: launchSpec.current
-      })
-    }
+    // (Keeping the previous project warm needs no snapshot here — its entry is kept
+    // current as its url/branch change: open, restart, and branch-rename all patch it.)
     // Opening (or re-opening) a project starts fresh: a pick from the previous
     // repo points at a file that may not exist in the new one. Disarm + clear,
     // and drop any permission cards left over from the previous session.
@@ -534,6 +528,8 @@ export default function App(): React.JSX.Element {
         branch: useSession.getState().branch,
         launchSpec: launchSpec.current
       })
+      // Bound warm dev servers (LRU-suspend beyond the cap).
+      void evictWarmServers()
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       launchSpec.current = null
@@ -564,11 +560,20 @@ export default function App(): React.JSX.Element {
 
   // Make `target` the active project everywhere (preview, chat, agent, toolbar) —
   // no restart, the dev server + session are already warm.
+  // Guard: a re-switch (the user clicking another rail item) changed the active
+  // project mid-await — stop applying the stale one.
+  const stillActive = (root: string): boolean => useSession.getState().projectRoot === root
+
   const applyProject = async (target: ProjectEntry): Promise<void> => {
     setSelectMode(false)
     setSelected(null)
     void window.api.preview.setSelectMode(false)
     useSetup.getState().reset()
+    // Clear the outgoing project's tokens + pins NOW so they don't linger over the
+    // new project's preview while we re-derive.
+    useTokens.getState().reset()
+    useAnnotations.getState().setList([])
+    useAnnotations.getState().setFocused(null)
     useWorkspace.getState().activate(target.key)
     useChat.getState().setActiveChat(target.key)
     useSession.getState().setProjectRoot(target.root)
@@ -576,33 +581,59 @@ export default function App(): React.JSX.Element {
     setPreviewKind(target.previewKind)
     launchSpec.current = target.launchSpec
     void window.api.agent.setActive(target.root)
-    if (target.url) {
-      setStatus({ kind: 'running', name: target.name, url: target.url })
-      await window.api.preview.load(target.url)
+
+    let url = target.url
+    // A warm web server can die (crash) or be LRU-suspended — relaunch it before
+    // navigating the preview to its now-stale URL (else: dead/blank frame).
+    if (target.previewKind !== 'simulator' && target.launchSpec) {
+      const alive = await window.api.devServer.isRunning(target.root)
+      if (!stillActive(target.root)) return
+      if (!alive) {
+        setStatus({ kind: 'busy', label: `Restarting ${target.name}…` })
+        try {
+          const server = await window.api.devServer.start({
+            root: target.launchSpec.root,
+            command: target.launchSpec.command,
+            framework: target.launchSpec.framework
+          })
+          if (!stillActive(target.root)) return
+          url = server.url
+          useWorkspace.getState().patchEntry(target.key, { url })
+        } catch (err) {
+          if (!stillActive(target.root)) return
+          setStatus({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
+          return
+        }
+      }
+    }
+    if (!stillActive(target.root)) return
+    if (url) {
+      setStatus({ kind: 'running', name: target.name, url })
+      await window.api.preview.load(url)
     }
     // Re-derive this project's tokens + annotations (guard against a fast re-switch).
     void window.api.tokens.detect(target.root).then((t) => {
-      if (useSession.getState().projectRoot === target.root) useTokens.getState().setSet(t)
+      if (!stillActive(target.root)) return
+      useTokens.getState().setSet(t)
+      if (t.source === 'none' && !useTokens.getState().offerDismissed) {
+        useTokens.getState().setOfferNeeded(true)
+      }
     })
-    useAnnotations.getState().setList(await window.api.annotations.list(target.root))
+    const notes = await window.api.annotations.list(target.root)
+    if (stillActive(target.root)) useAnnotations.getState().setList(notes)
   }
 
-  // Rail: switch to an already-open (warm) project.
+  // Rail: switch to an already-open (warm) project. Each project's display state
+  // (url / previewKind / branch / launchSpec) is kept current in its entry as it
+  // changes (open / restart / branch rename), so no snapshot is needed here.
   const switchTo = async (key: string): Promise<void> => {
     const ws = useWorkspace.getState()
     if (key === ws.activeKey) return
     const target = ws.projects.find((p) => p.key === key)
-    if (!target) return
-    // Snapshot the project we're leaving (its live status may have changed).
-    if (ws.activeKey && status.kind === 'running') {
-      ws.patchEntry(ws.activeKey, {
-        url: status.url,
-        previewKind,
-        branch: useSession.getState().branch,
-        launchSpec: launchSpec.current
-      })
+    if (target) {
+      await applyProject(target)
+      void evictWarmServers()
     }
-    await applyProject(target)
   }
 
   // Rail ×: fully close a project (stop its server + agent, drop it). If it was
@@ -614,13 +645,33 @@ export default function App(): React.JSX.Element {
     const wasActive = ws.activeKey === key
     // Pick the fallback BEFORE close() (which would auto-pick its own activeKey).
     const next = wasActive ? (ws.projects.filter((p) => p.key !== key).at(-1) ?? null) : null
-    void window.api.devServer.stop(entry.root)
-    void window.api.agent.closeProject(entry.root)
-    useChat.getState().clearChat(key)
     ws.close(key)
-    if (wasActive) {
-      if (next) await applyProject(next)
-      else await stop()
+    if (wasActive && !next) {
+      // Last project — stop() fully tears it down (server + agent + chat + preview).
+      await stop()
+      return
+    }
+    void window.api.devServer.stop(entry.root)
+    // Await the close so main disposes the session before we clear its chat — a
+    // trailing emit then can't resurrect the cleared slice.
+    await window.api.agent.closeProject(entry.root)
+    useChat.getState().clearChat(key)
+    if (next) await applyProject(next)
+  }
+
+  // Bound memory: keep at most N projects' dev servers warm; LRU-suspend the rest
+  // (their entry/chat/agent stay — switching back relaunches the server, see
+  // applyProject). Decided behavior: warm-to-N + LRU-suspend.
+  const MAX_WARM_SERVERS = 3
+  const evictWarmServers = async (): Promise<void> => {
+    const ws = useWorkspace.getState()
+    const byRecency = [...ws.projects].sort((a, b) => b.touchedAt - a.touchedAt)
+    for (const p of byRecency.slice(MAX_WARM_SERVERS)) {
+      if (p.key === ws.activeKey || p.previewKind === 'simulator') continue
+      if (await window.api.devServer.isRunning(p.root)) {
+        void window.api.devServer.stop(p.root)
+        useLog.getState().append(`Suspended ${p.name} to bound memory (LRU); reloads on return.`)
+      }
     }
   }
 
@@ -697,6 +748,8 @@ export default function App(): React.JSX.Element {
       await window.api.preview.load(url)
       log.append(`Preview restarted at ${url}`, 'success')
       setStatus({ kind: 'running', name, url })
+      // Keep the workspace entry's URL current so a rail switch-back loads the new one.
+      useWorkspace.getState().patchEntry(projectKey(spec.root), { url })
     } catch (err) {
       if (switched()) return
       // A broken config edit can fail the relaunch — surface it and disarm the

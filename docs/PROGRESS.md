@@ -41,6 +41,16 @@ Newest first. Append a dated entry when you finish a chunk of work.
 - New `test/rail.mjs`: open two fixtures (second keeps the first warm), assert both
   servers stay reachable, switching swaps the preview port + the per-project chat
   slice. Screenshot `10-rail.png`. Full verify green.
+- Adversarial review (10 findings) hardened it: switching a warm project whose dev
+  server **died/was suspended** now probes (`devServer.isRunning`) and relaunches it
+  before navigating (no dead frame); `applyProject` clears the outgoing tokens/pins
+  up front and guards the annotations write against a rapid re-switch (+ a
+  `stillActive` re-check after every await); **LRU-suspend** caps warm dev servers at
+  3 (the decided behavior — beyond that the least-recently-used are stopped and
+  relaunch on return); project entries are kept current (open/restart/branch-rename
+  patch them) so switching needs no stale-closure snapshot; `closeProjectFromRail`
+  awaits the session close before clearing chat and avoids a double-stop on the last
+  project; test isolation assertion strengthened (content, not counts).
 
 ## 2026-06-26 — v5-C core: per-project chat + event routing (keep-running)
 

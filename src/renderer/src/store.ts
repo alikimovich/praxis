@@ -194,6 +194,8 @@ export interface ProjectEntry {
   previewKind: PreviewKind
   branch: string | null
   launchSpec: LaunchSpec | null
+  /** Monotonic recency stamp (bumped on activate) — drives LRU warm-server eviction. */
+  touchedAt: number
 }
 
 interface WorkspaceState {
@@ -209,6 +211,11 @@ interface WorkspaceState {
 }
 
 const basename = (p: string): string => p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() || p
+// Monotonic recency counter for LRU warm-server eviction (process-lifetime; fine
+// to reset to 0 on a fresh launch since the workspace starts empty).
+let touchSeq = 0
+const bumpTouched = (projects: ProjectEntry[], key: string): ProjectEntry[] =>
+  projects.map((p) => (p.key === key ? { ...p, touchedAt: ++touchSeq } : p))
 
 export const useWorkspace = create<WorkspaceState>((set, get) => ({
   projects: [],
@@ -217,25 +224,34 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     const key = projectKey(root)
     const exists = get().projects.some((p) => p.key === key)
     set((s) => ({
-      projects: exists
-        ? s.projects
-        : [
-            ...s.projects,
-            {
-              root,
-              key,
-              name: meta?.name ?? basename(root),
-              url: null,
-              previewKind: 'web',
-              branch: null,
-              launchSpec: null
-            }
-          ],
+      projects: bumpTouched(
+        exists
+          ? s.projects
+          : [
+              ...s.projects,
+              {
+                root,
+                key,
+                name: meta?.name ?? basename(root),
+                url: null,
+                previewKind: 'web',
+                branch: null,
+                launchSpec: null,
+                touchedAt: 0
+              }
+            ],
+        key
+      ),
       activeKey: key
     }))
     return key
   },
-  activate: (key) => set((s) => (s.projects.some((p) => p.key === key) ? { activeKey: key } : s)),
+  activate: (key) =>
+    set((s) =>
+      s.projects.some((p) => p.key === key)
+        ? { activeKey: key, projects: bumpTouched(s.projects, key) }
+        : s
+    ),
   patchEntry: (key, partial) =>
     set((s) => ({
       projects: s.projects.map((p) => (p.key === key ? { ...p, ...partial } : p))

@@ -49,6 +49,15 @@ const previewUrl = (app) =>
       .find((u) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(u))
   )
 
+// Poll until the preview navigates to the expected port (navigation is async).
+const waitPreviewPort = async (app, expected) => {
+  for (let i = 0; i < 40; i++) {
+    if (port(await previewUrl(app)) === expected) return true
+    await new Promise((r) => setTimeout(r, 200))
+  }
+  return false
+}
+
 let app
 try {
   app = await electron.launch({
@@ -102,29 +111,29 @@ try {
   if (!(await reachable(app, urlA))) throw new Error('project A server should stay warm')
   if (!(await reachable(app, urlB))) throw new Error('project B server should be running')
 
-  // Active is B; give B's chat a message so we can prove the slice swaps.
-  await win.evaluate(() => {
-    const c = window.__dsgnStore.getState()
-    c.appendUser('hello from B')
-  })
-  const bMsgs = await win.evaluate(() => window.__dsgnStore.getState().messages.length)
+  // Active is B; give B's chat a distinctive message so we can prove the slice swaps.
+  await win.evaluate(() => window.__dsgnStore.getState().appendUser('hello from B'))
+  const bText = await win.evaluate(
+    () => window.__dsgnStore.getState().messages.at(-1)?.text
+  )
+  if (bText !== 'hello from B') throw new Error(`B chat should hold its message, got "${bText}"`)
 
   // Preview is showing B.
-  if (port(await previewUrl(app)) !== port(urlB)) throw new Error('preview should show B after opening it')
+  if (!(await waitPreviewPort(app, port(urlB)))) throw new Error("preview should show B after opening it")
 
   // Switch to A via the rail.
   await win.click('.rail__item:has-text("dsgn-fixture-static") .rail__open')
   await win.waitForFunction(
-    (u) =>
-      window.__dsgnSession &&
-      document.querySelector('.titlebar__hint')?.textContent?.includes(u),
+    (u) => document.querySelector('.titlebar__hint')?.textContent?.includes(u),
     new URL(urlA).host,
     { timeout: 10000 }
   )
-  if (port(await previewUrl(app)) !== port(urlA)) throw new Error('switching should load A in the preview')
-  // A's chat is its own (empty), not B's.
-  const aMsgs = await win.evaluate(() => window.__dsgnStore.getState().messages.length)
-  if (aMsgs === bMsgs && bMsgs > 0) throw new Error("A's chat should differ from B's (per-project)")
+  if (!(await waitPreviewPort(app, port(urlA)))) throw new Error("switching should load A in the preview")
+  // A's chat is its OWN slice — it must NOT contain B's message (per-project isolation).
+  const aHasBText = await win.evaluate(() =>
+    window.__dsgnStore.getState().messages.some((m) => m.text.includes('hello from B'))
+  )
+  if (aHasBText) throw new Error("A's chat leaked B's message — per-project isolation broken")
 
   await win.screenshot({ path: join(artifacts, '10-rail.png') })
   console.log('RAIL OK — two projects warm, switch swaps preview + per-project chat')

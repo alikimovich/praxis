@@ -12,8 +12,8 @@ interface Props {
 /**
  * v5 left rail (Cursor-style) — the open projects, with an active highlight and a
  * "working" dot for any project whose agent turn is in flight (incl. backgrounded
- * ones). Clicking switches; × closes; + opens another keeping the rest warm. The
- * rail only appears once a project is open (single-project keeps the old layout).
+ * ones). Clicking switches; × closes; + opens another keeping the rest warm.
+ * Appears once at least one project is open (renders for a single project too).
  */
 export default function Rail({ onSwitch, onClose, onOpen }: Props): React.JSX.Element | null {
   const projects = useWorkspace((s) => s.projects)
