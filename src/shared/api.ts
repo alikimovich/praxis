@@ -433,6 +433,8 @@ export interface DsgnApi {
     closeProject: (root: string) => Promise<void>
     /** Make an already-open project's session the active one (rail switch). */
     setActive: (root: string) => Promise<void>
+    /** Does this project still have a live session? (LRU may have suspended it) */
+    isOpen: (root: string) => Promise<boolean>
     send: (text: string) => Promise<void>
     setModel: (model: string) => Promise<void>
     /** Change the permission posture live (drives the SDK's setPermissionMode). */

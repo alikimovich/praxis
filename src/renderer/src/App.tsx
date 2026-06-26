@@ -529,7 +529,7 @@ export default function App(): React.JSX.Element {
         launchSpec: launchSpec.current
       })
       // Bound warm dev servers (LRU-suspend beyond the cap).
-      void evictWarmServers()
+      void evictWarm()
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       launchSpec.current = null
@@ -580,7 +580,28 @@ export default function App(): React.JSX.Element {
     useSession.getState().setBranch(target.branch)
     setPreviewKind(target.previewKind)
     launchSpec.current = target.launchSpec
-    void window.api.agent.setActive(target.root)
+    // Reopen the agent session if it was LRU-suspended; else just re-activate it.
+    // The reopened session starts fresh — suspending closes the SDK subprocess, so
+    // its conversation context is gone (the visible transcript is kept for
+    // reference). Await the reopen so a follow-up send can't race a half-created
+    // session, and surface a clear note instead of failing silently.
+    if (await window.api.agent.isOpen(target.root)) {
+      void window.api.agent.setActive(target.root)
+    } else {
+      try {
+        await window.api.agent.openProject(target.root, {
+          ...toAgentOptions(useSession.getState()),
+          permissionMode: usePermissions.getState().mode
+        })
+        useLog
+          .getState()
+          .append(`Reopened ${target.name}'s agent (was suspended — prior context cleared).`)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        useLog.getState().append(`Couldn't reopen ${target.name}'s agent: ${message}`, 'error')
+      }
+    }
+    if (!stillActive(target.root)) return
 
     let url = target.url
     // A warm web server can die (crash) or be LRU-suspended — relaunch it before
@@ -632,7 +653,7 @@ export default function App(): React.JSX.Element {
     const target = ws.projects.find((p) => p.key === key)
     if (target) {
       await applyProject(target)
-      void evictWarmServers()
+      void evictWarm()
     }
   }
 
@@ -662,16 +683,33 @@ export default function App(): React.JSX.Element {
   // Bound memory: keep at most N projects' dev servers warm; LRU-suspend the rest
   // (their entry/chat/agent stay — switching back relaunches the server, see
   // applyProject). Decided behavior: warm-to-N + LRU-suspend.
-  const MAX_WARM_SERVERS = 3
-  const evictWarmServers = async (): Promise<void> => {
+  const MAX_WARM = 3
+  // Bound the warm footprint: beyond the N most-recent projects, suspend the
+  // least-recently-used ones — stop their dev server AND close their agent
+  // session (each open project otherwise holds a live CLI subprocess). Switching
+  // back relaunches both (applyProject probes isRunning/isOpen and reopens). We
+  // never suspend a project whose agent is mid-turn: backgrounded agents keep
+  // working ("keep running, badge on return"), so the cap only reaps idle ones.
+  const evictWarm = async (): Promise<void> => {
     const ws = useWorkspace.getState()
+    const running = useChat.getState().isRunningFor
     const byRecency = [...ws.projects].sort((a, b) => b.touchedAt - a.touchedAt)
-    for (const p of byRecency.slice(MAX_WARM_SERVERS)) {
+    for (const p of byRecency.slice(MAX_WARM)) {
       if (p.key === ws.activeKey || p.previewKind === 'simulator') continue
-      if (await window.api.devServer.isRunning(p.root)) {
-        void window.api.devServer.stop(p.root)
-        useLog.getState().append(`Suspended ${p.name} to bound memory (LRU); reloads on return.`)
-      }
+      if (running(p.key)) continue
+      const serverUp = await window.api.devServer.isRunning(p.root)
+      const sessionUp = await window.api.agent.isOpen(p.root)
+      if (!serverUp && !sessionUp) continue
+      // Final guard before the destructive stops: a concurrent switch-back may have
+      // re-activated or reopened p while we awaited the probes above (the user
+      // clicked it in the rail). Re-read live state so we never reap the project
+      // that's now active or mid-turn. The stop+close below don't await between
+      // them, so there's no further interleaving window.
+      const live = useWorkspace.getState()
+      if (p.key === live.activeKey || running(p.key)) continue
+      if (serverUp) void window.api.devServer.stop(p.root)
+      if (sessionUp) void window.api.agent.closeProject(p.root)
+      useLog.getState().append(`Suspended ${p.name} to bound memory (LRU); reloads on return.`)
     }
   }
 
