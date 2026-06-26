@@ -2,6 +2,42 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-26 — v7: ModelProvider seam + Codex backend scaffold
+
+Started multi-provider backends. **User decision: subscription login, not BYO API
+key** — so we wrap each vendor's subscription-auth coding-agent SDK/CLI (Codex SDK,
+Gemini CLI, Grok Build CLI), not the Vercel AI SDK. Each brings its own tools, so
+the spike's ~6–8 day tool-suite rebuild evaporates. See `docs/v7-multi-provider-design.md`.
+
+**Shipped (commit 8f2bd71):** the seam under `src/main/backends/` —
+- `types.ts` — `ModelProvider`/`ProviderSession`/`PendingPrompt`. `agent.ts` is now
+  backend-agnostic (session map / activeKey / teardown / permission settle-loop /
+  `agent:*` IPC, all in terms of `ProviderSession` + `AgentEvent`).
+- `claude.ts` — the incumbent Claude Agent SDK session extracted **verbatim** behind
+  the seam (`InputStream`, `canUseTool`, streaming loop). `tools.ts` holds the shared
+  tool policy (moved out of `agent.ts` to avoid an import cycle).
+- `codex.ts` — EXPERIMENTAL OpenAI Codex via `@openai/codex-sdk` (sign-in-with-ChatGPT).
+- `index.ts` — `pickProvider(options.provider)`, default Claude.
+- `AgentOptions.provider`; `test/provider-seam.mjs`.
+
+**The big safety property:** the Claude path is **byte-identical** — full `verify`
+incl. the real AGENT-E2E turn passes through the new indirection. Non-Claude is
+reachable only when the renderer sets `provider`, so default runtime is unchanged.
+
+**Learnings:**
+- Extracting the load-bearing `agent.ts` was a clean "pure move" precisely because
+  the IPC layer already optional-chained the live controls (`query.setModel?.` etc.)
+  — those became `ProviderSession.setModel?` with zero handler changes.
+- **Lazy non-literal dynamic import** (`const PKG: string = '@openai/codex-sdk';
+  await import(PKG)`) lets an optional backend compile + ship WITHOUT its package
+  installed (TS types it `any`, no module resolution) — it fails soft at runtime
+  (error + done) so a missing SDK / not-logged-in routes to the login banner instead
+  of crashing. Same trick the Claude SDK uses for ESM-in-CJS, applied to optionality.
+- Codex/Gemini/Grok each **bring their own hardened toolset** — we don't define one;
+  the provider just maps their event stream to dsgn's `delta`/`status`/`done`/`error`.
+- Still gated on a real `codex login` to verify the live event mapping (can't be
+  tested without the user's subscription session).
+
 ## 2026-06-26 — v6: chat panel → Tailwind v4 + shadcn/ui + AI Elements
 
 Migrated the chat panel off plain CSS onto Tailwind + shadcn (branch

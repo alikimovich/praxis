@@ -118,16 +118,21 @@ the file-edit/permission/skill tooling the Claude Agent SDK gives for free.
       Grok Build CLI), NOT the Vercel AI SDK. All three have subscription OAuth + headless
       event streams in 2026, and **bring their own tools** — so the ~6–8 day tool-suite
       rebuild drops to a per-provider adapter. No keys, no billing, no `safeStorage` UI.
-- [ ] **Buildable on go-ahead (additive, gated, Claude path byte-identical):**
-      (1) `ModelProvider`/`ProviderSession` interface in `src/main/backends/types.ts`;
-      (2) extract today's `startSession` into `backends/claude.ts` (pure move; `verify` +
-      `agent-e2e` gate it); (3) `provider?` on `AgentOptions` + `pickProvider` (defaults to
-      claude); (4) **Codex provider** (`backends/codex.ts`) via `@openai/codex-sdk`
-      (`startThread/run` → map its event stream to `AgentEvent`), behind a flag until the user
-      has run `codex login`; a per-provider "login needed" banner reusing `isAuthError`.
+- [x] **Seam + Codex scaffold (items 1–4).** ✅ 2026-06-26 — `src/main/backends/`:
+      `types.ts` (`ModelProvider`/`ProviderSession`/`PendingPrompt`), `tools.ts` (shared tool
+      policy, no cycle), `claude.ts` (incumbent extracted verbatim behind the seam),
+      `codex.ts` (EXPERIMENTAL `@openai/codex-sdk`, lazy non-literal import, fails soft),
+      `index.ts` (`pickProvider`). `agent.ts` slimmed to backend-agnostic session mgmt;
+      `AgentOptions.provider`. **Claude path byte-identical — full `verify` + AGENT-E2E green
+      through the indirection.** `test/provider-seam.mjs` (creds-free). (commit 8f2bd71)
+- [ ] **Make Codex real:** `bun add @openai/codex-sdk`, the user runs `codex login`, then
+      verify a live Codex turn edits a fixture; confirm/fix the `codex.ts` event mapping
+      against the real streamed events; map Codex tool approvals → permission cards.
+- [ ] **UI:** a provider picker in the composer toolbar (alongside model/effort), passing
+      `provider` through `toAgentOptions`/`openProject`; a per-provider "login needed" banner
+      reusing `isAuthError`.
 - [ ] **Then:** Gemini CLI provider (subprocess, `--output-format stream-json` JSONL →
-      `AgentEvent`), then Grok Build CLI; surface a provider/model picker spanning backends;
-      map each agent's tool-approval events to the existing permission cards.
+      `AgentEvent`), then Grok Build CLI.
 - [ ] **Minor open calls:** which provider after Codex (rec: Gemini); each agent uses its own
       conventions file (Codex `AGENTS.md`, Gemini `GEMINI.md`) — skills stay Claude-only;
       v0 `/generate` action (separate workstream) — build only if wanted.
