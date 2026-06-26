@@ -2,6 +2,56 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-26 — v6: chat panel → Tailwind v4 + shadcn/ui + AI Elements
+
+Migrated the chat panel off plain CSS onto Tailwind + shadcn (branch
+`dsgn/v6-chat-shadcn`). Decision rule applied per feature: shadcn primitive →
+AI Elements → custom. Full `verify` green (all ~30 tests incl. AGENT-E2E).
+
+**Shipped (3 commits):**
+- **Scaffold** — Tailwind v4 via `@tailwindcss/vite`, `@` alias, hand-written
+  `components.json`, shadcn neutral/new-york tokens in `styles.css` (renamed
+  `--accent/--border/--radius` → `--*-shadcn`/`--shadcn-radius` to avoid colliding
+  with our legacy vars), `@layer base` border default, `lib/utils.ts` (cn). shadcn
+  primitives under `components/ui/*`; AI Elements `conversation` under
+  `components/ai-elements/`. Additive — existing plain-CSS UI visually unchanged.
+- **Chat core** — message list → AI Elements `<Conversation>` (stick-to-bottom,
+  replaces the manual scroll effect); user messages → shadcn muted bubble;
+  assistant kept on our `react-markdown`. Composer → shadcn `<InputGroup>` +
+  `<InputGroupAddon block-end>` + native textarea (`data-slot=input-group-control`
+  for the focus ring); send/stop → shadcn `<Button>` (lucide ArrowUp). Pickers stay
+  native `<select>`; slash menu stays custom (textarea-driven).
+- **Cards** — PermissionCards / SetupCard / TokenOfferCard → shadcn `<Button>` +
+  Tailwind alert surfaces; legacy `.perm*/.setup*` CSS removed (classes kept as
+  test hooks). Dense element-inspector surfaces backlogged.
+
+**Learnings (the non-obvious bits):**
+- **shadcn CLI alias resolution reads the ROOT `tsconfig.json`, not per-project
+  tsconfigs.** With our project-references root (no `paths`), `shadcn add` couldn't
+  resolve `@` and wrote to a literal `@/` dir + `src/components/`. Fix: add
+  `baseUrl`+`paths @/*` to the root tsconfig; for the already-scattered run we
+  relocated files under `src/renderer/src/` + hand-wrote `lib/utils.ts` (the CLI
+  skipped it) + appended the CSS tokens manually.
+- **The new "shadcn chat primitives" (message/bubble/marker/message-scroller) are
+  NOT in the public registry** under those names (`new-york-v4/message.json` 404).
+  The research over-trusted a docs-page scrape. Reality: use `input-group` (real) +
+  AI Elements `conversation` (real, lightweight — only `use-stick-to-bottom`, no
+  `ai`/streamdown). AI Elements `message` pulls `ai`+`streamdown`, so the message
+  row is custom + our Markdown. **Always validate registry names by running the CLI.**
+- **Tailwind v4 preflight is safe next to legacy CSS** because v4 emits into
+  `@layer` and our legacy rules are unlayered (always win). The flip side: a
+  migrated element's Tailwind utilities LOSE to any leftover unlayered legacy rule,
+  so each migrated block needs its conflicting *properties* stripped (we kept the
+  class as a bare hook). Did this for `.chat__messages`, `.composer__input`,
+  `.perm*`, `.setup*`.
+- **React 18 + shadcn new-york:** components are React-19-style (no `forwardRef`).
+  Don't pass a ref into a shadcn leaf (Textarea/Input/Button) — it won't attach.
+  The composer keeps a NATIVE textarea for its `inputRef` (seeding/cursor). Radix
+  (`radix-ui@1.6`) works on React 18.
+- **Test contract held with ZERO test edits** by preserving every selector
+  (`.composer__input` is the readiness gate for ~20 tests) + keeping pickers native
+  (the permission-mode test reads `<option>`s via `$$eval`).
+
 ## 2026-06-26 — v5-C2: LRU-cap warm agent sessions
 
 - Closes the resource gap left after v5-C: the dev-server LRU cap (N=3) was in,

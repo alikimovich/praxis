@@ -23,9 +23,13 @@ subscription auth. Repo: `alikimovich/dsgn` (private).
   both run on the Claude subscription.
 - **Preview = native `WebContentsView`** (not iframe), positioned by main via IPC
   geometry sync — so a preload can be injected into the previewed app for v2.
-- **Plain CSS**, no Tailwind / no UI kit (user preference). assistant-ui was
-  evaluated and **deferred**: its styled UI now needs shadcn/Tailwind scaffolding =
-  risk; the zustand store is kept as the seam so it can drop in later.
+- **Styling: Tailwind v4 + shadcn/ui for the chat; plain CSS for the rest** (decision
+  **reversed 2026-06-26**, was "plain CSS, no Tailwind/no UI kit"). The chat panel was
+  migrated to Tailwind + shadcn/ui + AI Elements (v6); Tailwind coexists with the legacy
+  `styles.css` (v4 layers utilities/preflight, legacy rules are unlayered and win). The
+  app shell + element-inspector surfaces are still plain CSS (migrating incrementally).
+  The zustand store stayed the seam — components are driven by `useChat`, **not** the
+  Vercel AI SDK runtime.
 - **Multi-framework prop editing** (React + Svelte) via per-extension adapters
   (`props.ts` dispatches `.svelte` → `props-svelte.ts`). Selection/tokens/ask-agent
   are framework-agnostic (they only need the `data-dsgn-source` stamp).
@@ -34,6 +38,12 @@ subscription auth. Repo: `alikimovich/dsgn` (private).
 - **Distribution: clone-and-run from source.** No signing/installer/auto-update.
 
 ## Current state (all building green)
+
+**Chat UI (v6, 2026-06-26):** the chat panel runs on **Tailwind v4 + shadcn/ui +
+AI Elements** (`<Conversation>` scroll, `<InputGroup>` composer, shadcn `<Button>`/cards),
+driven by the same `useChat` store. Scaffold + components live under
+`src/renderer/src/{lib,components/ui,components/ai-elements}`. See the v6 PROGRESS entry
+for the shadcn-CLI / Tailwind-v4 / React-18 learnings.
 
 Works: open folder → detect → spawn dev server (readiness-polled) → native preview;
 multi-turn Agent SDK chat (cwd=repo, `settingSources` + `claude_code` preset so the
