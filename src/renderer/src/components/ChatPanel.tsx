@@ -32,7 +32,8 @@ import {
 import { InputGroup, InputGroupAddon } from '@/components/ui/input-group'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { ArrowUp } from 'lucide-react'
+import { ArrowUp, ChevronRight } from 'lucide-react'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 
 const MODELS = [
   { value: DEFAULT_MODEL, label: 'Default' },
@@ -78,6 +79,50 @@ const PROVIDERS: { value: string; label: string; login: string | null; blurb: st
  * framework isn't one dsgn can instrument — never hand React instructions to a
  * non-React repo.
  */
+/**
+ * A collapsible disclosure for an assistant turn's tool-use steps (v6 — the AI
+ * Elements Task/Reasoning pattern, built on the already-vendored shadcn Collapsible,
+ * no new deps). A long tool run used to bury the answer under a flat status list;
+ * now the steps collapse to a one-line summary (latest step + count) the user can
+ * expand. Auto-opens while the turn is live (watch progress), auto-collapses when it
+ * finishes; a manual toggle in between is respected.
+ */
+function StepDisclosure({
+  statuses,
+  active
+}: {
+  statuses: string[]
+  active: boolean
+}): React.JSX.Element {
+  const [open, setOpen] = useState(active)
+  const wasActive = useRef(active)
+  useEffect(() => {
+    if (wasActive.current !== active) {
+      setOpen(active) // live → open; finished → collapse
+      wasActive.current = active
+    }
+  }, [active])
+  const last = statuses[statuses.length - 1] ?? ''
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="msg__steps">
+      <CollapsibleTrigger className="msg__steps-trigger group flex w-fit max-w-full items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+        <ChevronRight className="size-3 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
+        <span className="min-w-0 max-w-[240px] truncate font-mono">{open ? 'Steps' : last}</span>
+        <span className="shrink-0 opacity-60">
+          · {statuses.length} step{statuses.length === 1 ? '' : 's'}
+        </span>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-1 flex flex-col gap-0.5 border-l border-border pl-2.5">
+        {statuses.map((s, i) => (
+          <div key={i} className="msg__status font-mono text-xs text-muted-foreground">
+            › {s}
+          </div>
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
 function setupPrompt(res: SetupResult): string | null {
   const file = res.files?.[0]
   switch (res.framework) {
@@ -557,16 +602,17 @@ export default function ChatPanel(): React.JSX.Element {
               Ask for a change, or open a project to preview it on the right.
             </div>
           )}
-          {messages.map((m) => (
+          {messages.map((m, idx) => (
             <div key={m.id} className={cn('msg flex flex-col gap-1', `msg--${m.role}`)}>
               <div className="msg__role text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 {m.role}
               </div>
-              {m.statuses.map((s, i) => (
-                <div key={i} className="msg__status font-mono text-xs text-muted-foreground">
-                  › {s}
-                </div>
-              ))}
+              {m.statuses.length > 0 && (
+                <StepDisclosure
+                  statuses={m.statuses}
+                  active={isRunning && idx === messages.length - 1 && m.role === 'assistant'}
+                />
+              )}
               {m.text &&
                 (m.role === 'assistant' ? (
                   <Markdown>{m.text}</Markdown>

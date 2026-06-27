@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-27 — v6 stretch: collapsible tool-step disclosure (AI Elements Task pattern)
+
+A long agent turn used to render its tool-use statuses as a flat list that pushed the
+actual answer down the panel. Now each assistant message's steps collapse into a
+`StepDisclosure` — the AI-Elements Task/Reasoning pattern, built on the **already-vendored
+shadcn `Collapsible`** (no new Radix dep): collapsed shows the latest step + a count
+(`› Edit · src/components/Hero.tsx · 2 steps`), expandable to the full list. It auto-opens
+while the turn is live (watch progress), auto-collapses when it finishes, and respects a
+manual toggle in between. Tests only read `statuses` from the store (not the status DOM),
+so the restructure was safe; `chat-render.mjs` gains a collapse→expand assertion. Picked
+this over the shadcn-Select picker conversion (which would need a new Radix dep + flaky
+portal-based test interaction for modest polish). Full verify green.
+
 ## 2026-06-27 — v8 F1 Phase 3: per-repo cap + FIFO queue + interrupt (F1 complete)
 
 The "N parallel agents never wedge or leak" hardening — completes F1 and v8.

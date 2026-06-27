@@ -60,6 +60,22 @@ try {
   await win.waitForSelector('.markdown pre code', { timeout: 5000 })
   await win.screenshot({ path: join(artifacts, '04-chat-render.png') })
 
+  // v6: the agent's tool steps collapse into a disclosure (latest step + count);
+  // expanding reveals the full list. (It starts collapsed once the turn finished —
+  // so clicking is what reveals the step lines; if it were open, the click would
+  // close it and the wait below would fail.)
+  await win.waitForSelector('.msg__steps-trigger', { timeout: 5000 })
+  const stepsTrigger = (await win.textContent('.msg__steps-trigger')) ?? ''
+  if (!/2 steps/.test(stepsTrigger)) {
+    throw new Error(`steps disclosure should summarize the count: ${stepsTrigger}`)
+  }
+  await win.click('.msg__steps-trigger') // expand
+  await win.waitForSelector('.msg__status', { timeout: 3000 })
+  const steps = await win.$$eval('.msg__status', (els) => els.map((e) => e.textContent?.trim() ?? ''))
+  if (steps.length !== 2 || !steps.some((s) => /Hero\.tsx/.test(s))) {
+    throw new Error(`expanded steps wrong: ${JSON.stringify(steps)}`)
+  }
+
   // Toolbar + "/" slash menu: seed commands and open the menu.
   await win.evaluate(() => {
     window.__dsgnSession

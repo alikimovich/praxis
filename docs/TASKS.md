@@ -261,8 +261,13 @@ TokenOfferCard, Markdown). App-header branch pill + auth banner are separate chr
       NotesPanel, TokenPalette, PropPanel migrated to shadcn Card/Badge/Button/Input/
       Textarea + Tailwind, every test hook preserved; dead `.inspector*/.notes*/.tokens*/
       .proppanel*/.propedit*` CSS removed. The whole chat panel is now Tailwind+shadcn.
-- [ ] **Stretch:** evaluate other AI Elements (Sources, Task, Chain-of-Thought, Web
-      Preview, Reasoning) for dsgn's flows.
+- [~] **Stretch:** evaluate other AI Elements (Sources, Task, Chain-of-Thought, Web
+      Preview, Reasoning) for dsgn's flows. **Task/Reasoning shipped** ✅ 2026-06-27 — an
+      assistant turn's tool-use steps now collapse into a `StepDisclosure` (the AI-Elements
+      Task pattern, built on the already-vendored shadcn `Collapsible` — no new deps):
+      collapsed shows the latest step + count, expandable to the full list; auto-opens while
+      the turn is live, auto-collapses when it finishes. Long tool runs no longer bury the
+      answer. (`chat-render.mjs` covers it.) Sources/Web-Preview not adopted (no current fit).
 - [ ] **Optional: test modernization.** Add `data-testid`s and migrate smoke/
       chat-render off volatile BEM classes; then the three pickers can become shadcn
       `Select` (currently native, locked by the `$$eval('option')` permission-mode assertion).
