@@ -240,6 +240,49 @@ export default function App(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // v8 F3b: Cmd+Z / Cmd+Shift+Z (or Cmd+Y) undo/redo over ALL direct dsgn source
+  // edits (props, text, token swaps). Skipped while typing in the composer or any
+  // field — there the OS/browser native undo for that input should win. After a
+  // revert we re-inspect the selected element so the panel reflects the new source,
+  // and surface a conflict (the file changed under us) instead of silently failing.
+  useEffect(() => {
+    const reinspect = (): void => {
+      const sel = useSelection.getState()
+      const src = sel.selected?.source
+      const root = useSession.getState().projectRoot
+      if (!src || !root) return
+      void window.api.props.inspect(root, src).then((res) => {
+        if (useSelection.getState().selected?.source === src) sel.setInspection(res)
+      })
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return
+      const k = e.key.toLowerCase()
+      const isUndo = k === 'z' && !e.shiftKey
+      const isRedo = (k === 'z' && e.shiftKey) || k === 'y'
+      if (!isUndo && !isRedo) return
+      const t = e.target as HTMLElement | null
+      const tag = t?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return
+      const root = useSession.getState().projectRoot
+      if (!root) return
+      e.preventDefault()
+      void (isUndo ? window.api.edits.undo(root) : window.api.edits.redo(root)).then((r) => {
+        if (r.empty) return
+        if (r.conflict) {
+          setStatus({
+            kind: 'error',
+            message: `Couldn't ${isUndo ? 'undo' : 'redo'} — ${r.file ?? 'the file'} changed on disk. Open it to reconcile.`
+          })
+          return
+        }
+        reinspect()
+      })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   // Inspect the selected element's props (decides panel vs prompt-only). Guarded
   // against a fast re-select racing a slow inspect.
   useEffect(() => {

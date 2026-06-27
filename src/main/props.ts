@@ -16,6 +16,30 @@ import {
   inspectSvelteProps
 } from './props-svelte'
 import { swapTailwindClass } from './tw-classes'
+import { recordEdit, undo, redo, canUndo, canRedo } from './edit-history'
+
+/**
+ * Write a source edit and record it for undo/redo (v8 F3b). A no-op (after ===
+ * before) reports success without writing. `key` coalesces rapid edits of the same
+ * target (e.g. retyping a prop) into one undo step. Shared by the React + Svelte
+ * adapters so EVERY dsgn source edit is reversible.
+ */
+export async function commitEdit(
+  root: string,
+  file: string,
+  before: string,
+  after: string,
+  key: string
+): Promise<PropEditResult> {
+  if (after === before) return { applied: true }
+  try {
+    await writeFile(file, after, 'utf8')
+  } catch {
+    return { applied: false, error: 'Could not write the source file.' }
+  }
+  recordEdit(root, file, before, after, key)
+  return { applied: true }
+}
 
 /**
  * Prop editing is framework-agnostic by dispatch: the source file's extension
@@ -505,15 +529,8 @@ async function applyPropEdit(root: string, edit: PropEdit): Promise<PropEditResu
     const insertAt = nameNode.end
     next = code.slice(0, insertAt) + ' ' + attrText + code.slice(insertAt)
   }
-  // No-op: the value is already what's on disk — skip the write (and the redundant
-  // HMR round-trip). Still report success so the UI confirms.
-  if (next === code) return { applied: true }
-  try {
-    await writeFile(loc.file, next, 'utf8')
-  } catch {
-    return { applied: false, error: 'Could not write the source file.' }
-  }
-  return { applied: true }
+  // commitEdit skips a no-op write and records the edit for undo/redo.
+  return commitEdit(root, loc.file, code, next, `${edit.source}:${edit.name}`)
 }
 
 export function agentPromptFor(edit: PropEdit): string {
@@ -587,13 +604,7 @@ async function applyTextEdit(
     const trail = allWs ? '' : (raw.match(/\s*$/)?.[0] ?? '')
     next = code.slice(0, start) + lead + newText + trail + code.slice(end)
   }
-  if (next === code) return { applied: true } // no-op: text unchanged, skip the write
-  try {
-    await writeFile(loc.file, next, 'utf8')
-  } catch {
-    return { applied: false, error: 'Could not write the source file.' }
-  }
-  return { applied: true }
+  return commitEdit(root, loc.file, code, next, `${edit.source}:text`)
 }
 
 // --- v6: direct (agent-free) token application -----------------------------
@@ -754,13 +765,7 @@ async function applyTokenEdit(root: string, edit: TokenEdit): Promise<PropEditRe
       if (swapped != null) {
         const next =
           code.slice(0, strNode.start) + JSON.stringify(swapped) + code.slice(strNode.end)
-        if (next === code) return { applied: true }
-        try {
-          await writeFile(loc.file, next, 'utf8')
-        } catch {
-          return { applied: false, error: 'Could not write the source file.' }
-        }
-        return { applied: true }
+        return commitEdit(root, loc.file, code, next, `${edit.source}:token`)
       }
     }
   }
@@ -789,13 +794,7 @@ async function applyTokenEdit(root: string, edit: TokenEdit): Promise<PropEditRe
     if (matches.length === 1) {
       const valNode = matches[0].value as BabelNode
       const next = code.slice(0, valNode.start) + JSON.stringify(tokenRef(edit)) + code.slice(valNode.end)
-      if (next === code) return { applied: true }
-      try {
-        await writeFile(loc.file, next, 'utf8')
-      } catch {
-        return { applied: false, error: 'Could not write the source file.' }
-      }
-      return { applied: true }
+      return commitEdit(root, loc.file, code, next, `${edit.source}:token`)
     }
   }
 
@@ -811,4 +810,9 @@ export function registerPropsIpc(): void {
   ipcMain.handle('text:apply', (_e, root: string, edit: { source: string; text: string }) =>
     applyTextEdit(root, edit)
   )
+  // v8 F3b: undo/redo over ALL dsgn source edits (props, text, token swaps),
+  // scoped to the active project root (the rail keeps several projects open).
+  ipcMain.handle('edit:undo', (_e, root: string) => undo(root))
+  ipcMain.handle('edit:redo', (_e, root: string) => redo(root))
+  ipcMain.handle('edit:can', (_e, root: string) => ({ undo: canUndo(root), redo: canRedo(root) }))
 }

@@ -262,8 +262,40 @@ try {
     throw new Error('radius token did not swap rounded-lg → rounded-card (or touched p-4)')
   }
 
+  // --- v8 F3b: undo/redo round-trip through real IPC. A direct prop apply is
+  // reversible — undo restores the exact prior source; redo re-applies; and a
+  // divergent on-disk edit makes undo report a conflict instead of clobbering. ---
+  const beforeApply = readFileSync(badge, 'utf8')
+  const u1 = await win.evaluate(
+    (a) =>
+      window.api.props.apply(a.fixture, { source: a.src, name: 'variant', kind: 'enum', value: 'error' }),
+    { fixture, src: SRC }
+  )
+  if (!u1.applied) throw new Error(`F3b apply failed: ${JSON.stringify(u1)}`)
+  const afterApply = readFileSync(badge, 'utf8')
+  if (afterApply === beforeApply) throw new Error('F3b apply did not change the file')
+  const canAfter = await win.evaluate((a) => window.api.edits.can(a.fixture), { fixture })
+  if (!canAfter.undo) throw new Error(`edits.can should report undo available: ${JSON.stringify(canAfter)}`)
+
+  const undid = await win.evaluate((a) => window.api.edits.undo(a.fixture), { fixture })
+  if (!undid.ok) throw new Error(`undo not ok: ${JSON.stringify(undid)}`)
+  if (readFileSync(badge, 'utf8') !== beforeApply) throw new Error('undo did not restore the prior source')
+
+  const redid = await win.evaluate((a) => window.api.edits.redo(a.fixture), { fixture })
+  if (!redid.ok) throw new Error(`redo not ok: ${JSON.stringify(redid)}`)
+  if (readFileSync(badge, 'utf8') !== afterApply) throw new Error('redo did not re-apply the edit')
+
+  // Conflict: the user edits the file in their own editor, then hits undo. dsgn
+  // must refuse to clobber that and report a conflict (the file is left intact).
+  writeFileSync(badge, afterApply + '\n// edited elsewhere\n')
+  const conflict = await win.evaluate((a) => window.api.edits.undo(a.fixture), { fixture })
+  if (conflict.ok || !conflict.conflict) throw new Error(`undo should conflict: ${JSON.stringify(conflict)}`)
+  if (!readFileSync(badge, 'utf8').includes('// edited elsewhere')) {
+    throw new Error('conflicting undo clobbered the user edit')
+  }
+
   console.log(
-    'PROP-EDIT OK — schema, broadened literals, direct token apply (T1/T2/T3), agent fallback'
+    'PROP-EDIT OK — schema, broadened literals, direct token apply (T1/T2/T3), agent fallback, F3b undo/redo'
   )
 } catch (err) {
   console.error('PROP-EDIT FAILED:', err?.message ?? err)

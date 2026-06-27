@@ -35,9 +35,16 @@ run comment-work in parallel; and give the agent a versioned set of operating
       remove-a-prop-on-reset write-back (rides F2/F3b).
 - [ ] **F2 — broaden direct editing** (fewer "edit via chat"): widen literal cases in
       `applyPropEdit`; most of the win rides F3a (per-instance values become real edits).
-- [ ] **F3b — undo/redo for ALL dsgn source edits** (Cmd+Z / Cmd+Shift+Z / Cmd+Y):
-      reversible edit stack, interaction-level coalescing, selection/panel restore,
-      on-disk conflict detection. Wraps props/text/token edits, not just the new panel.
+- [x] **F3b — undo/redo for ALL dsgn source edits** (Cmd+Z / Cmd+Shift+Z / Cmd+Y).
+      ✅ 2026-06-27 — `src/main/edit-history.ts` engine: every direct apply path (React
+      + Svelte props/text/token swaps) routes through `commitEdit`, which writes then
+      records before/after. Interaction-level coalescing (same target within 500ms = one
+      step), on-disk conflict detection (refuse to clobber a file the user changed under
+      us), per-project-root stacks (the rail keeps several projects open — Cmd+Z in B
+      never reverts A; cleared on project close). `edit:undo/redo/can` IPC + renderer
+      keyboard handler (skips when typing in a field) re-inspects the selection after a
+      revert and surfaces conflicts as a status error. Tests: `test/edit-history.mjs`
+      (unit) + apply→undo→redo→conflict round-trip in `test/prop-edit.mjs`.
 - [ ] **F1 — comment → parallel agent session** (`claude -p`-style one-shot per
       comment), surfaced in the rail via the existing sessions/record seam; non-blocking.
       Decide working-tree contention first (worktree-per-spawn vs write lock vs advisory).

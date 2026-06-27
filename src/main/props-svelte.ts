@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'fs/promises'
+import { readFile } from 'fs/promises'
 import { basename, dirname, isAbsolute, join, normalize, relative } from 'path'
 import type {
   PropEdit,
@@ -11,6 +11,7 @@ import type {
 import { swapTailwindClass } from './tw-classes'
 import {
   agentPromptFor,
+  commitEdit,
   isValidAttrName,
   mergeFields,
   textAgentPrompt,
@@ -486,12 +487,7 @@ export async function applySvelteEdit(
     }
     next = code.slice(0, insertAt) + ' ' + attrText + code.slice(insertAt)
   }
-  try {
-    await writeFile(loc.file, next, 'utf8')
-  } catch {
-    return { applied: false, error: 'Could not write the source file.' }
-  }
-  return { applied: true }
+  return commitEdit(root, loc.file, code, next, `${edit.source}:${edit.name}`)
 }
 
 /**
@@ -539,12 +535,7 @@ export async function applySvelteTextEdit(
   const lead = allWs ? '' : (raw.match(/^\s*/)?.[0] ?? '')
   const trail = allWs ? '' : (raw.match(/\s*$/)?.[0] ?? '')
   const next = code.slice(0, start) + lead + edit.text + trail + code.slice(end)
-  try {
-    await writeFile(loc.file, next, 'utf8')
-  } catch {
-    return { applied: false, error: 'Could not write the source file.' }
-  }
-  return { applied: true }
+  return commitEdit(root, loc.file, code, next, `${edit.source}:text`)
 }
 
 /**
@@ -582,11 +573,5 @@ export async function applySvelteTokenEdit(
   if (swapped == null) return toAgent()
   // readAttributes gives the WHOLE attribute span (`class="…"`); rewrite it.
   const next = `${code.slice(0, classAttr.start)}class="${swapped}"${code.slice(classAttr.end)}`
-  if (next === code) return { applied: true }
-  try {
-    await writeFile(loc.file, next, 'utf8')
-  } catch {
-    return { applied: false, error: 'Could not write the source file.' }
-  }
-  return { applied: true }
+  return commitEdit(root, loc.file, code, next, `${edit.source}:token`)
 }

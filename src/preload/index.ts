@@ -25,7 +25,8 @@ import type {
   SetupResult,
   SimPreflight,
   TokenScaffoldResult,
-  TokenSet
+  TokenSet,
+  UndoResult
 } from '../shared/api'
 
 const api: DsgnApi = {
@@ -135,6 +136,12 @@ const api: DsgnApi = {
   text: {
     apply: (root: string, edit: { source: string; text: string }): Promise<PropEditResult> =>
       ipcRenderer.invoke('text:apply', root, edit)
+  },
+  edits: {
+    undo: (root: string): Promise<UndoResult> => ipcRenderer.invoke('edit:undo', root),
+    redo: (root: string): Promise<UndoResult> => ipcRenderer.invoke('edit:redo', root),
+    can: (root: string): Promise<{ undo: boolean; redo: boolean }> =>
+      ipcRenderer.invoke('edit:can', root)
   },
   tokens: {
     detect: (root: string): Promise<TokenSet> => ipcRenderer.invoke('tokens:detect', root),
