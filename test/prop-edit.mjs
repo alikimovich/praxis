@@ -117,7 +117,100 @@ try {
   }
   if (field(cross, 'label')?.value !== 'Go') throw new Error('cross-file live value (label) wrong')
 
-  console.log('PROP-EDIT OK — same-file + cross-file schema + literal edit to source')
+  // --- Broadened literals: TS-cast (`as const`) + no-substitution template
+  // literal read as plain literals, not `expression:true`. (Badge.tsx:31) ---
+  const B2 = 'src/Badge.tsx:31'
+  const lit = await win.evaluate((a) => window.api.props.inspect(a.fixture, a.b2), { fixture, b2: B2 })
+  if (field(lit, 'variant')?.value !== 'ok' || field(lit, 'variant')?.expression) {
+    throw new Error(`TS-cast literal not read as enum 'ok': ${JSON.stringify(field(lit, 'variant'))}`)
+  }
+  if (field(lit, 'label')?.value !== 'Go' || field(lit, 'label')?.expression) {
+    throw new Error(`template literal not read as string 'Go': ${JSON.stringify(field(lit, 'label'))}`)
+  }
+  const litApply = await win.evaluate(
+    (a) => window.api.props.apply(a.fixture, { source: a.b2, name: 'label', kind: 'string', value: 'Hey' }),
+    { fixture, b2: B2 }
+  )
+  if (!litApply.applied) throw new Error(`broadened-literal apply failed: ${JSON.stringify(litApply)}`)
+  if (!readFileSync(badge, 'utf8').includes('label="Hey"')) {
+    throw new Error('template-literal label was not spliced to label="Hey"')
+  }
+
+  // --- Token direct apply (T1): a color token whose name is a valid `variant`
+  // enum option splices variant="warn" — no agent. (Badge.tsx:31) ---
+  const t1 = await win.evaluate(
+    (a) =>
+      window.api.props.applyToken(a.fixture, {
+        source: a.b2,
+        token: { name: 'warn', value: '#f59e0b' },
+        group: 'colors',
+        tokenSource: 'manifest',
+        classes: ['badge']
+      }),
+    { fixture, b2: B2 }
+  )
+  if (!t1.applied) throw new Error(`token T1 (schema enum) not applied: ${JSON.stringify(t1)}`)
+  if (!readFileSync(badge, 'utf8').includes('variant="warn"')) {
+    throw new Error('token T1 did not splice variant="warn"')
+  }
+
+  // --- Token direct apply (T3): a color token onto a single literal inline-style
+  // color property swaps the value directly. (Swatch, Badge.tsx:37) ---
+  const t3 = await win.evaluate(
+    (a) =>
+      window.api.props.applyToken(a.fixture, {
+        source: 'src/Badge.tsx:37',
+        token: { name: 'brand', value: '#f59e0b' },
+        group: 'colors',
+        tokenSource: 'manifest',
+        classes: ['sw']
+      }),
+    { fixture }
+  )
+  if (!t3.applied) throw new Error(`token T3 (inline style) not applied: ${JSON.stringify(t3)}`)
+  if (!readFileSync(badge, 'utf8').includes('#f59e0b')) {
+    throw new Error('token T3 did not swap the inline-style color value')
+  }
+
+  // --- Agent fallback (rare path): a token onto a host element with no schema
+  // match and no inline style → needsAgent. (h1, Badge.tsx:25) ---
+  const fb = await win.evaluate(
+    (a) =>
+      window.api.props.applyToken(a.fixture, {
+        source: 'src/Badge.tsx:25',
+        token: { name: 'brand', value: '#f59e0b' },
+        group: 'colors',
+        tokenSource: 'manifest',
+        classes: ['title']
+      }),
+    { fixture }
+  )
+  if (fb.applied || !fb.needsAgent) throw new Error(`ambiguous token should need the agent: ${JSON.stringify(fb)}`)
+
+  // --- Cross-family guard: a colors token must NOT swap a non-color style
+  // property (fontWeight). Property-name gating → agent, not a wrong splice.
+  // (Weighted, Badge.tsx:43) ---
+  const xfam = await win.evaluate(
+    (a) =>
+      window.api.props.applyToken(a.fixture, {
+        source: 'src/Badge.tsx:43',
+        token: { name: 'brand', value: '#f59e0b' },
+        group: 'colors',
+        tokenSource: 'manifest',
+        classes: ['wt']
+      }),
+    { fixture }
+  )
+  if (xfam.applied || !xfam.needsAgent) {
+    throw new Error(`colors token must not swap fontWeight: ${JSON.stringify(xfam)}`)
+  }
+  if (readFileSync(badge, 'utf8').includes("fontWeight: '#f59e0b'")) {
+    throw new Error('colors token wrongly written into fontWeight')
+  }
+
+  console.log(
+    'PROP-EDIT OK — schema, broadened literals, direct token apply (T1+T3), agent fallback'
+  )
 } catch (err) {
   console.error('PROP-EDIT FAILED:', err?.message ?? err)
   process.exitCode = 1

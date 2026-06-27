@@ -15,6 +15,7 @@ import type {
   PreviewComment,
   PropEdit,
   PropEditResult,
+  TokenEdit,
   PropInspection,
   PublishResult,
   RunningDevServer,
@@ -118,7 +119,9 @@ const api: DsgnApi = {
     inspect: (root: string, source: string): Promise<PropInspection | null> =>
       ipcRenderer.invoke('props:inspect', root, source),
     apply: (root: string, edit: PropEdit): Promise<PropEditResult> =>
-      ipcRenderer.invoke('props:apply', root, edit)
+      ipcRenderer.invoke('props:apply', root, edit),
+    applyToken: (root: string, edit: TokenEdit): Promise<PropEditResult> =>
+      ipcRenderer.invoke('props:applyToken', root, edit)
   },
   text: {
     apply: (root: string, edit: { source: string; text: string }): Promise<PropEditResult> =>

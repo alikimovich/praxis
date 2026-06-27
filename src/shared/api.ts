@@ -282,6 +282,24 @@ export interface PropEditResult {
   error?: string
 }
 
+/**
+ * Apply a design token to the selected element directly (agent-free) when it maps
+ * to an existing literal — a schema enum/string prop, or a single inline-style
+ * property of the same family. Ambiguous cases (add-new, no stamp, className
+ * expression, multiple candidates) fall back to the agent (`needsAgent`).
+ */
+export interface TokenEdit {
+  /** The element's `data-dsgn-source` stamp (null → agent). */
+  source: string | null
+  token: Token
+  /** The token's group name (e.g. 'colors' | 'spacing' | 'radius' | 'fontSize'). */
+  group: string
+  /** How the token source renders a reference (css → var(--name); else the value). */
+  tokenSource: TokenSource
+  /** The element's current class list (for the future Tailwind-class-swap path). */
+  classes: string[]
+}
+
 /** A reviewer note pinned to an element, stored in the repo's .dsgn sidecar. */
 export interface Annotation {
   id: string
@@ -434,6 +452,8 @@ export interface DsgnApi {
     inspect: (root: string, source: string) => Promise<PropInspection | null>
     /** Apply a prop edit; may report it needs the agent for a complex change. */
     apply: (root: string, edit: PropEdit) => Promise<PropEditResult>
+    /** Apply a design token directly when it maps to a literal; agent-fallback otherwise. */
+    applyToken: (root: string, edit: TokenEdit) => Promise<PropEditResult>
   }
   text: {
     /** Rewrite the element's text content in source; agent-fallback for complex content. */

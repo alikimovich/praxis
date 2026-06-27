@@ -1,7 +1,14 @@
 import { ipcMain } from 'electron'
 import { readFile, writeFile } from 'fs/promises'
 import { dirname, isAbsolute, join, normalize, relative } from 'path'
-import type { PropEdit, PropEditResult, PropField, PropInspection, PropKind } from '../shared/api'
+import type {
+  PropEdit,
+  PropEditResult,
+  PropField,
+  PropInspection,
+  PropKind,
+  TokenEdit
+} from '../shared/api'
 import { applySvelteEdit, applySvelteTextEdit, inspectSvelteProps } from './props-svelte'
 
 /**
@@ -198,14 +205,35 @@ function readAttributes(opening: BabelNode): CurrentAttr[] {
   return attrs
 }
 
+/** Peel TS-cast / `satisfies` wrappers off a literal value, so
+ * `variant={'ok' as Variant}` or `size={4 satisfies number}` read as plain
+ * literals. (@babel/parser doesn't emit ParenthesizedExpression by default, so
+ * `count={(3)}` already arrives as a bare NumericLiteral — no unwrap needed.) */
+function unwrapExpr(e: BabelNode | undefined): BabelNode | undefined {
+  let cur = e
+  while (cur && (cur.type === 'TSAsExpression' || cur.type === 'TSSatisfiesExpression')) {
+    cur = cur.expression as BabelNode | undefined
+  }
+  return cur
+}
+
 function literalFromExpression(
-  expr: BabelNode | undefined
+  raw: BabelNode | undefined
 ): { kind: PropKind; value: string | number | boolean } | null {
+  const expr = unwrapExpr(raw)
   if (!expr) return null
   const lit = expr as unknown as { value: string | number | boolean }
   if (expr.type === 'StringLiteral') return { kind: 'string', value: lit.value }
   if (expr.type === 'NumericLiteral') return { kind: 'number', value: lit.value }
   if (expr.type === 'BooleanLiteral') return { kind: 'boolean', value: lit.value }
+  // A template literal with no ${} interpolations is just a string literal.
+  if (expr.type === 'TemplateLiteral') {
+    const quasis = (expr as { quasis?: Array<{ value?: { cooked?: string } }> }).quasis ?? []
+    const exprs = (expr as { expressions?: unknown[] }).expressions ?? []
+    if (exprs.length === 0 && quasis.length === 1) {
+      return { kind: 'string', value: quasis[0]?.value?.cooked ?? '' }
+    }
+  }
   if (
     expr.type === 'UnaryExpression' &&
     (expr as { operator?: string }).operator === '-' &&
@@ -471,6 +499,9 @@ async function applyPropEdit(root: string, edit: PropEdit): Promise<PropEditResu
     const insertAt = nameNode.end
     next = code.slice(0, insertAt) + ' ' + attrText + code.slice(insertAt)
   }
+  // No-op: the value is already what's on disk — skip the write (and the redundant
+  // HMR round-trip). Still report success so the UI confirms.
+  if (next === code) return { applied: true }
   try {
     await writeFile(loc.file, next, 'utf8')
   } catch {
@@ -550,6 +581,7 @@ async function applyTextEdit(
     const trail = allWs ? '' : (raw.match(/\s*$/)?.[0] ?? '')
     next = code.slice(0, start) + lead + newText + trail + code.slice(end)
   }
+  if (next === code) return { applied: true } // no-op: text unchanged, skip the write
   try {
     await writeFile(loc.file, next, 'utf8')
   } catch {
@@ -558,9 +590,175 @@ async function applyTextEdit(
   return { applied: true }
 }
 
+// --- v6: direct (agent-free) token application -----------------------------
+
+// Main runs in Node (no CSS.supports), so family checks are regex-based.
+const NAMED_COLORS = new Set([
+  'red', 'blue', 'green', 'black', 'white', 'gray', 'grey', 'orange', 'purple', 'pink',
+  'yellow', 'teal', 'cyan', 'magenta', 'transparent', 'currentcolor', 'inherit'
+])
+function isColorValue(v: string): boolean {
+  const s = v.trim().toLowerCase()
+  if (/gradient\(/.test(s)) return true
+  if (/^(#|rgb|rgba|hsl|hsla|oklch|oklab|lab|lch|color\(|var\()/.test(s)) return true
+  return NAMED_COLORS.has(s)
+}
+function isLengthValue(v: string): boolean {
+  const s = v.trim()
+  // Require a unit/% (a bare number is fontWeight/lineHeight/opacity/zIndex, not a
+  // length). var(...) is allowed but T3 also gates on the property name.
+  return /^-?\d*\.?\d+(px|rem|em|%|vh|vw|vmin|vmax|pt|ch|ex)$/.test(s) || /^var\(/.test(s)
+}
+
+// T3 only swaps a style property when BOTH the property NAME and the VALUE belong
+// to the token's family — otherwise a color token could land in fontSize, etc.
+const COLOR_STYLE_PROPS = new Set([
+  'color', 'background', 'backgroundColor', 'borderColor', 'borderTopColor',
+  'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'outlineColor', 'fill',
+  'stroke', 'caretColor', 'textDecorationColor', 'columnRuleColor'
+])
+const LENGTH_STYLE_PROPS = new Set([
+  'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'padding',
+  'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'margin', 'marginTop',
+  'marginRight', 'marginBottom', 'marginLeft', 'gap', 'rowGap', 'columnGap', 'fontSize',
+  'lineHeight', 'borderRadius', 'top', 'right', 'bottom', 'left', 'letterSpacing',
+  'borderWidth'
+])
+
+/** The static key name of a style ObjectProperty (null for computed/spread). */
+function stylePropKey(p: BabelNode): string | null {
+  if (p.type !== 'ObjectProperty' || (p as { computed?: boolean }).computed) return null
+  const k = p.key as BabelNode | undefined
+  if (k?.type === 'Identifier') return (k as { name?: string }).name ?? null
+  if (k?.type === 'StringLiteral') return (k as unknown as { value?: string }).value ?? null
+  return null
+}
+
+/** How to write a token reference into source: css vars stay var(--name); other
+ * sources splice the resolved value (a manifest hex, a Tailwind scale value, …). */
+function tokenRef(edit: TokenEdit): string {
+  if (edit.tokenSource === 'css') {
+    if (/^var\(/.test(edit.token.value)) return edit.token.value
+    const n = edit.token.name
+    return `var(${n.startsWith('--') ? n : `--${n}`})`
+  }
+  return edit.token.value
+}
+
+function tokenAgentPrompt(edit: TokenEdit): string {
+  return `Apply the ${edit.group} token "${edit.token.name}" (${edit.token.value}) to the selected element${edit.source ? ` in ${edit.source}` : ''}.`
+}
+
+/** Resolve a component's prop schema (same-file → cross-file import), for T1. */
+async function resolveSchema(
+  root: string,
+  file: string,
+  code: string,
+  found: FoundElement
+): Promise<PropField[]> {
+  if (!/^[A-Z]/.test(found.name)) return []
+  let schema = await schemaFor(code, found.name)
+  if (schema.length === 0) {
+    const def = await resolveComponentFile(root, file, found.ast, found.name)
+    if (def) {
+      try {
+        schema = await schemaFor(await readFile(def.file, 'utf8'), def.exportName)
+      } catch {
+        /* unreadable — no schema */
+      }
+    }
+  }
+  return schema
+}
+
+/**
+ * Apply a design token directly when it maps to an *existing literal*, else hand
+ * to the agent. Two unambiguous direct paths (first match wins):
+ *  - T1 schema-enum swap: the component has an enum prop whose options include the
+ *    token name → set that prop to the token name.
+ *  - T3 inline-style swap: the element has a literal `style={{…}}` with exactly one
+ *    property whose value is a string literal in the token's family → replace it.
+ * Anything ambiguous (no stamp, add-new, multiple candidates) → needsAgent.
+ */
+async function applyTokenEdit(root: string, edit: TokenEdit): Promise<PropEditResult> {
+  const toAgent = (): PropEditResult => ({
+    applied: false,
+    needsAgent: true,
+    agentPrompt: tokenAgentPrompt(edit)
+  })
+  if (!edit.source) return toAgent()
+  const loc = resolveSource(root, edit.source)
+  if (!loc) return { applied: false, error: 'Could not resolve the source location.' }
+  // Svelte token-splice is a follow-up; route to the agent for now.
+  if (loc.file.endsWith('.svelte')) return toAgent()
+  let code: string
+  try {
+    code = await readFile(loc.file, 'utf8')
+  } catch {
+    return { applied: false, error: 'Could not read the source file.' }
+  }
+  const found = await findElementAtLine(code, loc.line, loc.column)
+  if (!found) return toAgent()
+
+  // T1 — schema enum swap (the token name IS a valid enum option). If more than
+  // one enum prop lists it, it's ambiguous → let the agent decide.
+  const schema = await resolveSchema(root, loc.file, code, found)
+  const enumFields = schema.filter(
+    (f) => f.kind === 'enum' && f.options?.includes(edit.token.name)
+  )
+  if (enumFields.length === 1) {
+    return applyPropEdit(root, {
+      source: edit.source,
+      name: enumFields[0].name,
+      kind: 'enum',
+      value: edit.token.name
+    })
+  }
+
+  // T3 — inline-style single-property swap, gated on BOTH the property name and
+  // the value family (so a color token can't land in fontSize, etc.).
+  const isColorGroup = /colou?r/i.test(edit.group)
+  const propSet = isColorGroup ? COLOR_STYLE_PROPS : LENGTH_STYLE_PROPS
+  const valueInFamily = (v: string): boolean => (isColorGroup ? isColorValue(v) : isLengthValue(v))
+  const styleAttr = (found.opening.attributes ?? []).find(
+    (a) => a.type === 'JSXAttribute' && (a.name as { name?: string })?.name === 'style'
+  )
+  const styleExpr = unwrapExpr(
+    (styleAttr?.value as BabelNode | undefined)?.expression as BabelNode | undefined
+  )
+  if (styleExpr?.type === 'ObjectExpression') {
+    const matches = ((styleExpr as { properties?: BabelNode[] }).properties ?? []).filter((p) => {
+      const key = stylePropKey(p)
+      const val = p.value as BabelNode | undefined
+      return (
+        key != null &&
+        propSet.has(key) &&
+        val?.type === 'StringLiteral' &&
+        valueInFamily(String((val as unknown as { value: string }).value))
+      )
+    })
+    if (matches.length === 1) {
+      const valNode = matches[0].value as BabelNode
+      const next = code.slice(0, valNode.start) + JSON.stringify(tokenRef(edit)) + code.slice(valNode.end)
+      if (next === code) return { applied: true }
+      try {
+        await writeFile(loc.file, next, 'utf8')
+      } catch {
+        return { applied: false, error: 'Could not write the source file.' }
+      }
+      return { applied: true }
+    }
+  }
+
+  // Ambiguous (add-new property/class, className expression, multiple candidates,
+  // host element with no schema + no inline style) → the agent decides.
+  return toAgent()
+}
+
 export function registerPropsIpc(): void {
   ipcMain.handle('props:inspect', (_e, root: string, source: string) => inspectProps(root, source))
   ipcMain.handle('props:apply', (_e, root: string, edit: PropEdit) => applyPropEdit(root, edit))
+  ipcMain.handle('props:applyToken', (_e, root: string, edit: TokenEdit) => applyTokenEdit(root, edit))
   ipcMain.handle('text:apply', (_e, root: string, edit: { source: string; text: string }) =>
     applyTextEdit(root, edit)
   )

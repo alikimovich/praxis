@@ -3,7 +3,8 @@ import type { PropField, PropInspection } from '../../../shared/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
-/** Kept in sync with the .proppanel width in styles.css and the reserved inset. */
+/** Kept in sync with the `w-80` (320px) width on the .proppanel <aside> and the
+ * reserved native-preview inset (setPanelInset below). */
 const PANEL_WIDTH = 320
 
 interface Props {
@@ -98,6 +99,9 @@ export default function PropPanel({
           ✕
         </Button>
       </header>
+      <div className="proppanel__hint mx-3.5 mt-1.5 text-[11px] text-muted-foreground">
+        Literal edits apply instantly to source — others go to chat.
+      </div>
       {error && <div className="proppanel__error mx-3.5 mt-2 text-[11.5px] text-red-700">{error}</div>}
       {inspection.note && (
         <div className="proppanel__note mx-3.5 mt-2 text-[11.5px] text-muted-foreground">
