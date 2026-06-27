@@ -129,11 +129,14 @@ the file-edit/permission/skill tooling the Claude Agent SDK gives for free.
 - [ ] **Make Codex real:** `bun add @openai/codex-sdk`, the user runs `codex login`, then
       verify a live Codex turn edits a fixture; confirm/fix the `codex.ts` event mapping
       against the real streamed events; map Codex tool approvals → permission cards.
-- [ ] **UI:** a provider picker in the composer toolbar (alongside model/effort), passing
-      `provider` through `toAgentOptions`/`openProject`; a per-provider "login needed" banner
-      reusing `isAuthError`.
+- [x] **UI: backend picker + login hint.** ✅ 2026-06-27 (PR #33) — a `Backend`
+      `<select>` in the composer (Claude / Codex — the implemented backends), `provider`
+      on `useSession` + threaded through `toAgentOptions`/`openProject`; switching reopens
+      the active session on the new backend; a per-provider subscription-login hint
+      (`provider-hint`) when non-Claude is selected. `chat-render.mjs` extended.
+      Gemini/Grok join the picker when their adapters land.
 - [ ] **Then:** Gemini CLI provider (subprocess, `--output-format stream-json` JSONL →
-      `AgentEvent`), then Grok Build CLI.
+      `AgentEvent`), then Grok Build CLI — each adds itself to the PROVIDERS picker list.
 - [ ] **Minor open calls:** which provider after Codex (rec: Gemini); each agent uses its own
       conventions file (Codex `AGENTS.md`, Gemini `GEMINI.md`) — skills stay Claude-only;
       v0 `/generate` action (separate workstream) — build only if wanted.
@@ -165,7 +168,7 @@ TokenOfferCard, Markdown). App-header branch pill + auth banner are separate chr
       the test hooks above.
 - [ ] **Re-verify** `chat-render` / `chat-route` (+ smoke and the rest), screenshot the new
       panel into `test/artifacts/`.
-- [x] **Element-inspector surfaces → shadcn.** ✅ 2026-06-27 (PR #29) — Inspector,
+- [x] **Element-inspector surfaces → shadcn.** ✅ 2026-06-27 (PR #31) — Inspector,
       NotesPanel, TokenPalette, PropPanel migrated to shadcn Card/Badge/Button/Input/
       Textarea + Tailwind, every test hook preserved; dead `.inspector*/.notes*/.tokens*/
       .proppanel*/.propedit*` CSS removed. The whole chat panel is now Tailwind+shadcn.
@@ -204,7 +207,7 @@ TokenOfferCard, Markdown). App-header branch pill + auth banner are separate chr
         properties) and the inspector shows a token palette; clicking a token applies it via
         the agent.
   - [x] **Direct (agent-free) prop + token editing — the default; broadened.** ✅ 2026-06-27
-        (PR #30). React. (a) **token clicks apply directly** — `applyToken` IPC: T1 schema-enum
+        (PR #32). React. (a) **token clicks apply directly** — `applyToken` IPC: T1 schema-enum
         swap + T3 inline-style swap (property-name + value-family gated), agent fallback
         otherwise; (b) broadened literals — TS casts + no-substitution template literals read
         as literals; (c) PropPanel shows "Literal edits apply instantly"; (d) hot-reload no-op

@@ -111,6 +111,21 @@ try {
     throw new Error(`unexpected permission modes: ${JSON.stringify(modes)}`)
   }
 
+  // v7 backend picker: native <select> spanning the implemented backends; selecting
+  // a non-Claude one surfaces its subscription-login hint.
+  const backends = await win.$$eval('select[aria-label="Backend"] option', (os) =>
+    os.map((o) => o.value)
+  )
+  if (JSON.stringify(backends) !== JSON.stringify(['claude', 'codex'])) {
+    throw new Error(`unexpected backends: ${JSON.stringify(backends)}`)
+  }
+  await win.selectOption('select[aria-label="Backend"]', 'codex')
+  await win.waitForSelector('.provider-hint', { timeout: 5000 })
+  const hint = (await win.textContent('.provider-hint'))?.toLowerCase() ?? ''
+  if (!hint.includes('codex login')) throw new Error(`provider hint should mention codex login: ${hint}`)
+  await win.selectOption('select[aria-label="Backend"]', 'claude') // reset
+  if ((await win.$('.provider-hint')) !== null) throw new Error('hint should hide for Claude')
+
   // Working-branch pill: shows the branch and opens an inline editor on click.
   await win.evaluate(() => window.__dsgnSession.getState().setBranch('dsgn/main'))
   await win.waitForSelector('.branch', { timeout: 5000 })

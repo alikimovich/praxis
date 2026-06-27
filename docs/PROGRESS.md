@@ -4,7 +4,7 @@ Newest first. Append a dated entry when you finish a chunk of work.
 
 ## 2026-06-27 — three stacked features: v5-D history UI, inspector→shadcn, direct prop/token edit
 
-Built as stacked PRs off main (#28 → #29 → #30); each its own full `verify` + a
+Built as stacked PRs off main (#28 → #31 → #32); each its own full `verify` + a
 multi-agent adversarial review with fixes applied. Designed via a parallel design
 workflow; reviewed via per-PR review workflows.
 
@@ -14,9 +14,9 @@ workflow; reviewed via per-PR review workflows.
   rail previous-sessions sub-list, and the `SessionReview` modal. Review caught two real
   HIGH bugs (rail sub-list clipped horizontally → stack vertically; the modal was occluded
   by the native preview → hide it while open).
-- **PR #29 — inspector surfaces → shadcn**: Inspector/Notes/Tokens/PropPanel migrated,
+- **PR #31 — inspector surfaces → shadcn**: Inspector/Notes/Tokens/PropPanel migrated,
   every test hook preserved, dead CSS removed. The whole chat panel is now Tailwind+shadcn.
-- **PR #30 — direct (agent-free) prop+token editing**: broadened literals (TS casts +
+- **PR #32 — direct (agent-free) prop+token editing**: broadened literals (TS casts +
   no-sub template literals) and a new `applyToken` IPC (T1 schema-enum swap + T3 inline-
   style swap), agent fallback otherwise. Review caught a real correctness bug — T3 matched
   on value-family only, so a color token could land in `fontWeight`; fixed by gating on the

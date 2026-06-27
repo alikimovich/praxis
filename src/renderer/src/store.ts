@@ -132,10 +132,14 @@ export const useChat = create<ChatState>((set, get) => {
 // Sentinel values mean "use the account/model default" (omit from SDK options).
 export const DEFAULT_MODEL = 'default'
 export const DEFAULT_EFFORT = 'auto'
+/** The default backend (the Claude Agent SDK). */
+export const DEFAULT_PROVIDER = 'claude'
 
 interface SessionState {
   model: string
   effort: string
+  /** Which backend runs the agent ('claude' | 'codex' | …) — v7. */
+  provider: string
   slashCommands: string[]
   /** Set when the agent reports an auth failure — drives the onboarding banner. */
   authNeeded: boolean
@@ -145,6 +149,7 @@ interface SessionState {
   branch: string | null
   setModel: (model: string) => void
   setEffort: (effort: string) => void
+  setProvider: (provider: string) => void
   setSlashCommands: (commands: string[]) => void
   setAuthNeeded: (authNeeded: boolean) => void
   setProjectRoot: (projectRoot: string | null) => void
@@ -154,12 +159,14 @@ interface SessionState {
 export const useSession = create<SessionState>((set) => ({
   model: DEFAULT_MODEL,
   effort: DEFAULT_EFFORT,
+  provider: DEFAULT_PROVIDER,
   slashCommands: [],
   authNeeded: false,
   projectRoot: null,
   branch: null,
   setModel: (model) => set({ model }),
   setEffort: (effort) => set({ effort }),
+  setProvider: (provider) => set({ provider }),
   setSlashCommands: (slashCommands) => set({ slashCommands }),
   setAuthNeeded: (authNeeded) => set({ authNeeded }),
   setProjectRoot: (projectRoot) => set({ projectRoot }),
@@ -332,12 +339,15 @@ export const isAuthError = (message: string): boolean =>
   )
 
 /** Convert the UI sentinels into AgentOptions the SDK understands. */
-export const toAgentOptions = (s: { model: string; effort: string }): {
+export const toAgentOptions = (s: { model: string; effort: string; provider?: string }): {
   model?: string
   effort?: string
+  provider?: string
 } => ({
   model: s.model === DEFAULT_MODEL ? undefined : s.model,
-  effort: s.effort === DEFAULT_EFFORT ? undefined : s.effort
+  effort: s.effort === DEFAULT_EFFORT ? undefined : s.effort,
+  // Default Claude is implied — only send a non-default backend.
+  ...(s.provider && s.provider !== DEFAULT_PROVIDER ? { provider: s.provider } : {})
 })
 
 /**
