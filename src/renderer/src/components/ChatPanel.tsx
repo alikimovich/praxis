@@ -87,6 +87,16 @@ function setupPrompt(res: SetupResult): string | null {
         `rather than guessing. (2) Add an explicit \`interface Props\` to the components so their ` +
         `props are editable. Then I'll reload the preview.`
       )
+    case 'react-native':
+      return (
+        `dsgn detected a React Native / Expo project and added a dev-only Babel plugin at ` +
+        `\`${file}\` that stamps \`testID="dsgn:path:line:col"\` on elements (the RN analog of ` +
+        `data-dsgn-source — iOS surfaces testID as the accessibility id, which dsgn reads from ` +
+        `the simulator's view hierarchy). Please: (1) read babel.config.js (or .babelrc) and add ` +
+        `${file} to the \`plugins\` array FOR DEVELOPMENT ONLY (gate on a dev env check; adapt to ` +
+        `the real config, don't guess its shape). (2) Add an explicit \`interface Props\` to your ` +
+        `components so their props are editable. Then I'll reload the preview.`
+      )
     case 'solid':
       return (
         `dsgn detected a Solid project and added a dev-only Babel JSX plugin at \`${file}\`. Please ` +

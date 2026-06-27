@@ -113,7 +113,47 @@ try {
   const flag2 = await previewExec(viewOnly.url, `(typeof INTERACTIVE !== 'undefined' && INTERACTIVE)`)
   assert(flag2 === false, 'view-only page should flag INTERACTIVE=false')
 
-  console.log('SIM-CONTROL OK — mapping/validation, /control transport, capture script, degrade')
+  // --- Phase 3: testID parse + accessibility-tree stamp search (pure) ---
+  const sel = await app.evaluate(() => {
+    const s = globalThis.__dsgnSimMap
+    return {
+      good: s.parseTestId('dsgn:src/App.tsx:10:4'),
+      noPrefix: s.parseTestId('my-button'),
+      malformed: s.parseTestId('dsgn:not a source'),
+      found: s.findDsgnStamp({ type: 'View', AXLabel: 'x', children: [{ AXUniqueId: 'dsgn:src/A.tsx:3:1' }] }),
+      none: s.findDsgnStamp({ type: 'View', AXLabel: 'plain' })
+    }
+  })
+  assert(sel.good && sel.good.source === 'src/App.tsx:10:4', `parseTestId: ${JSON.stringify(sel.good)}`)
+  assert(sel.noPrefix === null && sel.malformed === null, 'parseTestId must reject non-stamps')
+  assert(sel.found === 'dsgn:src/A.tsx:3:1', `findDsgnStamp (nested): ${sel.found}`)
+  assert(sel.none === null, 'findDsgnStamp returns null with no stamp')
+
+  // --- Phase 3: a tap in SELECT mode becomes a pick (hit-test), not a tap-through.
+  // The renderer receives the pick via simulator.onElementPicked. ---
+  const sel3 = await app.evaluate(() => globalThis.__dsgnStartTestBridge(true))
+  await loadPreview(sel3.url)
+  // Capture element-picked events in the renderer, then arm select mode.
+  await win.evaluate(() => {
+    window.__simPicks = []
+    window.api.simulator.onElementPicked((p) => window.__simPicks.push(p))
+  })
+  await win.evaluate(() => window.api.simulator.setSelectMode(true))
+  const selBody = await postCtl(sel3.url, { type: 'tap', x: 0.5, y: 0.5 })
+  assert(selBody && selBody.selected === true, `select-mode tap → selected: ${JSON.stringify(selBody)}`)
+  const picksMain = await app.evaluate(() => globalThis.__dsgnTestPicks())
+  assert(picksMain.length === 1 && picksMain[0].source === 'src/App.tsx:10:4', `pick recorded: ${JSON.stringify(picksMain)}`)
+  const tapsInSelect = await app.evaluate(() => globalThis.__dsgnTestControl())
+  assert(tapsInSelect.length === 0, 'a select-mode tap must NOT be forwarded as a tap')
+  // The renderer got the pick.
+  await win.waitForFunction(() => (window.__simPicks?.length ?? 0) > 0, { timeout: 5000 })
+  const rendererPick = await win.evaluate(() => window.__simPicks[0])
+  assert(rendererPick.source === 'src/App.tsx:10:4', `renderer pick: ${JSON.stringify(rendererPick)}`)
+  await win.evaluate(() => window.api.simulator.setSelectMode(false))
+
+  console.log(
+    'SIM-CONTROL OK — control transport, degrade, testID parse/search, select-mode pick → renderer'
+  )
 } catch (err) {
   console.error('SIM-CONTROL FAILED:', err?.message ?? err)
   process.exitCode = 1

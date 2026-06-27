@@ -28,6 +28,7 @@ function project(name, deps) {
 }
 
 const reactDir = project('react', { react: '^18.2.0', '@vitejs/plugin-react': '^4.0.0' })
+const rnDir = project('rn', { react: '^18.2.0', 'react-native': '^0.74.0', expo: '^51.0.0' })
 const svelte5Dir = project('svelte5', { '@sveltejs/kit': '^2.0.0', svelte: '^5.0.0' })
 const svelte4Dir = project('svelte4', { svelte: '^4.2.0' })
 const solidDir = project('solid', { 'solid-js': '^1.8.0' })
@@ -57,6 +58,21 @@ try {
   assert(react.files?.[0] === '.dsgn/dsgn-source.cjs', `react file: ${JSON.stringify(react.files)}`)
   assert(react.written === true, 'react should have written the helper')
   assert(existsSync(join(reactDir, '.dsgn/dsgn-source.cjs')), 'react helper not on disk')
+
+  // React Native / Expo → testID-stamping Babel plugin (detected BEFORE plain react).
+  const rn = await scaffold(rnDir)
+  assert(
+    rn.ok && rn.framework === 'react-native' && rn.strategy === 'babel-plugin-rn',
+    `rn detect: ${JSON.stringify(rn)}`
+  )
+  assert(rn.files?.[0] === '.dsgn/dsgn-rn-source.cjs', `rn file: ${JSON.stringify(rn.files)}`)
+  const rnSrc = readFileSync(join(rnDir, '.dsgn/dsgn-rn-source.cjs'), 'utf8')
+  assert(/testID/.test(rnSrc) && /dsgn:/.test(rnSrc), 'rn helper should stamp a dsgn: testID')
+  assert(/NODE_ENV === 'production'/.test(rnSrc), 'rn helper must dev-gate structurally')
+  const rn2 = await scaffold(rnDir)
+  assert(rn2.written === false, `rn scaffold should be idempotent: ${JSON.stringify(rn2)}`)
+  await uninstall(rnDir)
+  assert(!existsSync(join(rnDir, '.dsgn/dsgn-rn-source.cjs')), 'rn helper should uninstall')
   // The production dev-gate must be structural (an early return), not a comment.
   const reactSrc = readFileSync(join(reactDir, '.dsgn/dsgn-source.cjs'), 'utf8')
   assert(/process\.env\.NODE_ENV === 'production'\) return/.test(reactSrc), 'react helper missing production dev-gate')

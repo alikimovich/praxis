@@ -14,6 +14,7 @@ import type { Frontend, SetupResult, SetupStrategy } from '../shared/api'
 
 const DSGN_DIR = '.dsgn'
 const REACT_HELPER = '.dsgn/dsgn-source.cjs'
+const RN_HELPER = '.dsgn/dsgn-rn-source.cjs'
 // `.mjs` pins ESM regardless of the repo's package.json `type` (plain Svelte+Vite
 // repos are often `type: commonjs`, where a bare `.js` ESM file fails to import) —
 // mirrors the React helper pinning CommonJS via `.cjs`.
@@ -41,6 +42,39 @@ module.exports = function dsgnSource({ types: t }) {
           t.jsxAttribute(
             t.jsxIdentifier('data-dsgn-source'),
             t.stringLiteral(file + ':' + loc.start.line + ':' + loc.start.column)
+          )
+        )
+      }
+    }
+  }
+}
+`
+
+// React Native: the data-dsgn-source analog. RN host elements have no DOM, so we
+// stamp `testID="dsgn:path:line:col"` — which iOS surfaces as the view's
+// accessibilityIdentifier, letting dsgn map an idb view-hierarchy hit back to
+// source. Dev-gated; only stamps elements without an existing testID.
+const RN_HELPER_CONTENT = `// Added by dsgn (.dsgn/). Stamps testID="dsgn:path:line:col" on JSX elements so
+// dsgn can map a tapped simulator element to its source via idb's accessibility
+// hierarchy. Wire into the React Native Babel plugins for DEVELOPMENT ONLY; it
+// also self-disables in production builds.
+module.exports = function dsgnRnSource({ types: t }) {
+  if (process.env.NODE_ENV === 'production') return { name: 'dsgn-rn-source', visitor: {} }
+  const path = require('path')
+  return {
+    name: 'dsgn-rn-source',
+    visitor: {
+      JSXOpeningElement(p, state) {
+        const loc = p.node.loc
+        if (!loc) return
+        // Don't clobber an existing testID (the app may rely on it for tests).
+        if (p.node.attributes.some((a) => a.name && a.name.name === 'testID')) return
+        const root = state.file.opts.root || process.cwd()
+        const file = path.relative(root, state.file.opts.filename || '')
+        p.node.attributes.push(
+          t.jsxAttribute(
+            t.jsxIdentifier('testID'),
+            t.stringLiteral('dsgn:' + file + ':' + loc.start.line + ':' + loc.start.column)
           )
         )
       }
@@ -154,6 +188,11 @@ async function detect(root: string): Promise<Detected> {
   if (has('@sveltejs/kit') || has('svelte')) {
     return { framework: 'svelte', strategy: 'svelte-preprocess', svelteMajor: await svelteMajorOf(root) }
   }
+  // React Native / Expo FIRST (they also depend on react) — stamp testID, not
+  // data-dsgn-source, since RN host elements have no DOM.
+  if (has('react-native') || has('expo')) {
+    return { framework: 'react-native', strategy: 'babel-plugin-rn' }
+  }
   // React (incl. the React Vite plugins)
   if (has('react') || has('@vitejs/plugin-react') || has('@vitejs/plugin-react-swc') || has('next')) {
     return { framework: 'react', strategy: 'babel-plugin' }
@@ -172,8 +211,18 @@ async function scaffold(root: string): Promise<SetupResult> {
     if (d.strategy === 'inspector' || d.strategy === 'none') {
       return { ok: true, framework: d.framework, strategy: d.strategy, files: [], written: false }
     }
-    const helper = d.strategy === 'svelte-preprocess' ? SVELTE_HELPER : REACT_HELPER
-    const content = d.strategy === 'svelte-preprocess' ? SVELTE_HELPER_CONTENT : REACT_HELPER_CONTENT
+    const helper =
+      d.strategy === 'svelte-preprocess'
+        ? SVELTE_HELPER
+        : d.strategy === 'babel-plugin-rn'
+          ? RN_HELPER
+          : REACT_HELPER
+    const content =
+      d.strategy === 'svelte-preprocess'
+        ? SVELTE_HELPER_CONTENT
+        : d.strategy === 'babel-plugin-rn'
+          ? RN_HELPER_CONTENT
+          : REACT_HELPER_CONTENT
     await mkdir(join(root, DSGN_DIR), { recursive: true })
     const abs = join(root, helper)
     let written = false
@@ -197,7 +246,7 @@ async function scaffold(root: string): Promise<SetupResult> {
 async function uninstall(root: string): Promise<SetupResult> {
   try {
     const removed: string[] = []
-    for (const f of [REACT_HELPER, SVELTE_HELPER, LEGACY_ROOT_PLUGIN]) {
+    for (const f of [REACT_HELPER, RN_HELPER, SVELTE_HELPER, LEGACY_ROOT_PLUGIN]) {
       const abs = join(root, f)
       if (await exists(abs)) {
         await rm(abs)

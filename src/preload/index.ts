@@ -109,10 +109,19 @@ const api: DsgnApi = {
     start: (opts: { root: string; command?: string; udid?: string }): Promise<RunningSimulator> =>
       ipcRenderer.invoke('simulator:start', opts),
     stop: (): Promise<void> => ipcRenderer.invoke('simulator:stop'),
+    // Phase 3: arm/disarm element-select (a tap then becomes a source pick).
+    setSelectMode: (active: boolean): Promise<void> =>
+      ipcRenderer.invoke('simulator:set-select-mode', active),
     onLog: (cb: (line: string) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, line: string): void => cb(line)
       ipcRenderer.on('simulator:log', listener)
       return () => ipcRenderer.removeListener('simulator:log', listener)
+    },
+    onElementPicked: (cb: (pick: { source: string; tag: string }) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, pick: { source: string; tag: string }): void =>
+        cb(pick)
+      ipcRenderer.on('simulator:element-picked', listener)
+      return () => ipcRenderer.removeListener('simulator:element-picked', listener)
     }
   },
   props: {

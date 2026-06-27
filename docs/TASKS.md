@@ -31,9 +31,16 @@ web browser. Phased: mirror → interact → element-select. See
       (`Controller`/`idbController`/`fractionToPoints`/`parseControlCommand`); `test/sim-control.mjs`
       covers mapping/validation, the transport, the capture script, and degrade (off-macOS via
       the test bridge). A live tap on a booted device stays macOS+idb-gated (like sim-e2e).
-- [ ] **Phase 3 — element-select → RN source.** Babel `testID` stamp (the `data-dsgn-source`
-      analog, `setup.ts` strategy `babel-plugin-rn`) + `idb` view-hierarchy hit-test → reuse the
-      existing Inspector/`props.inspect` flow.
+- [x] **Phase 3 — element-select → RN source.** ✅ 2026-06-27 (PR #39) — `setup.ts`
+      `babel-plugin-rn` strategy stamps `testID="dsgn:path:line:col"` (the data-dsgn-source
+      analog; iOS surfaces it as the accessibility id); `react-native` framework detection
+      (before plain react) + agent wiring prompt. In the sim, a tap while select-mode is armed
+      (`simulator:set-select-mode`) routes server-side to an `idb describe-point` hit-test
+      (`idbHitTest` → `findDsgnStamp`/`parseTestId`) → emits `simulator:element-picked` → the
+      SAME `SelectedElement` seam → Inspector + `props.inspect` (RN files are .tsx, so the JSX
+      engine just works). `test/sim-control.mjs` (select routing, testID parse/search via the
+      test bridge) + `setup-detect.mjs` (RN strategy). The live `idb describe-point` is the only
+      device-gated piece.
 
 ## v5 — multi-project workspace + agent sessions (Cursor/Conductor-style)
 
