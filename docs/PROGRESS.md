@@ -2,6 +2,34 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-27 — v7: Codex backend made real (solo prep; live verify gated on `codex login`)
+
+Took `backends/codex.ts` from a speculative stub (shape-guessing against docs, non-literal
+import so it built without the package) to a real adapter against the installed SDK.
+
+- **`@openai/codex-sdk@0.142.3`** added as a real dependency. ESM-only, so loaded via a
+  dynamic `import()` and externalized by electron-vite (verified `import("@openai/codex-sdk")`
+  survives in the CJS main bundle) — same pattern as the Claude SDK.
+- **Rewrote against the REAL typed API** (read `dist/index.d.ts`): `new Codex().startThread(
+  ThreadOptions)` → `Thread.runStreamed(input, { signal }) → { events: AsyncGenerator<ThreadEvent> }`.
+  Mapping: `item.{started,updated,completed}` with `agent_message` → streaming deltas (per-item
+  suffix diff); `file_change` → status + `cap.noteTool('Edit', {file_path})` (→ filesTouched);
+  `command_execution`/`web_search`/`mcp_tool_call`/`reasoning` → status lines; `turn.failed`/
+  `error` → error. `interrupt` wired via a per-turn AbortController; `shutdown` aborts + flags.
+  `model`/`effort` honored via ThreadOptions; headless `approvalPolicy:'never'` + `sandboxMode:
+  'workspace-write'`.
+- **Fast preflight**: `codex --version` up front → a missing/unauthed CLI fails soft instantly
+  with an "install + `codex login`" message, instead of a slow mid-turn spawn ENOENT.
+- **Fixed a real multi-provider UX bug**: a non-Claude auth error used to render "⚠️ Not connected
+  to Claude" and raise the Claude-specific onboarding banner (setup-token). Now the Claude note +
+  banner are gated to `provider === 'claude'`; Codex/Gemini show their own descriptive error.
+- **Tests**: `test/codex-e2e.mjs` (mirrors agent-e2e on the codex backend; SKIPs cleanly until
+  the user runs `codex login`, then proves the live event mapping). `provider-seam.mjs` hardened
+  to poll for `done` (the preflight subprocess made the old fixed-sleep flaky under load). Full
+  verify green: 43 OK, codex-e2e + sim-e2e SKIP (gated).
+- **Remaining (needs the user):** `codex login`, then codex-e2e verifies live; Codex tool-approval
+  → permission-card mapping (deferred — no approval-request event in the SDK stream).
+
 ## 2026-06-27 — v6 stretch: collapsible tool-step disclosure (AI Elements Task pattern)
 
 A long agent turn used to render its tool-use statuses as a flat list that pushed the

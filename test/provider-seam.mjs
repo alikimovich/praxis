@@ -40,11 +40,18 @@ try {
     window.api.agent.onEvent((e) => window.__ev.push(e))
   })
 
-  // Select the Codex backend and send a turn. @openai/codex-sdk isn't installed,
+  // Poll the captured stream until the turn's `done` lands (robust under load —
+  // the codex preflight spawns a subprocess, so a fixed sleep can be too tight).
+  const waitForDone = () =>
+    win
+      .waitForFunction(() => window.__ev.some((e) => e.type === 'done'), { timeout: 20000 })
+      .catch(() => {})
+
+  // Select the Codex backend and send a turn. The `codex` CLI isn't installed in CI,
   // so the provider must emit an error + done rather than throwing.
   await win.evaluate((p) => window.api.agent.openProject(p, { provider: 'codex' }), A)
   await win.evaluate(() => window.api.agent.send('hello from the seam test'))
-  await new Promise((r) => setTimeout(r, 1200))
+  await waitForDone()
 
   const ev = await win.evaluate(() => window.__ev)
   const err = ev.find((e) => e.type === 'error')
@@ -62,7 +69,7 @@ try {
   })
   await win.evaluate((p) => window.api.agent.openProject(p, { provider: 'gemini' }), A)
   await win.evaluate(() => window.api.agent.send('hello gemini'))
-  await new Promise((r) => setTimeout(r, 1500))
+  await waitForDone()
   const gev = await win.evaluate(() => window.__ev)
   assert(
     gev.find((e) => e.type === 'error') && gev.find((e) => e.type === 'done'),

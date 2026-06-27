@@ -139,7 +139,9 @@ export default function App(): React.JSX.Element {
         if (event.type === 'commands') {
           session.setSlashCommands(event.commands)
         } else if (event.type === 'error' && isAuthError(event.message)) {
-          session.setAuthNeeded(true)
+          // The onboarding banner is Claude-specific (setup-token / claude login);
+          // don't raise it for a non-Claude backend's auth error. (v7)
+          if ((session.provider ?? 'claude') === 'claude') session.setAuthNeeded(true)
         } else if (event.type === 'delta' || event.type === 'done') {
           if (session.authNeeded) session.setAuthNeeded(false)
         } else if (event.type === 'permission-request') {

@@ -253,10 +253,15 @@ export default function ChatPanel(): React.JSX.Element {
       } else if (event.type === 'status') {
         appendStatus(event.text, key)
       } else if (event.type === 'error') {
-        // Auth failures get a friendly banner (see App); keep the chat line short.
-        const note = isAuthError(event.message)
-          ? '⚠️ Not connected to Claude — see the notice above.'
-          : `⚠️ ${event.message}`
+        // A Claude auth failure gets a short line pointing at the (Claude-specific)
+        // onboarding banner. Non-Claude backends (Codex/Gemini) have no such banner
+        // and emit a descriptive "install the CLI + log in" message — show that as-is
+        // rather than a misleading "not connected to Claude". (v7)
+        const isClaude = (useSession.getState().provider ?? 'claude') === 'claude'
+        const note =
+          isAuthError(event.message) && isClaude
+            ? '⚠️ Not connected to Claude — see the notice above.'
+            : `⚠️ ${event.message}`
         appendDelta(`\n\n${note}`, key)
         finish(key)
         // The setup turn failed before wiring — disarm verification so the next

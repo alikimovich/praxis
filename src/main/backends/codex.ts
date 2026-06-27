@@ -1,81 +1,62 @@
 import type { BrowserWindow } from 'electron'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import type { AgentEvent, AgentOptions } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
 import type { ModelProvider, PendingPrompt, ProviderSession } from './types'
 import { describeTool } from './tools'
 import { createRecordCapture } from './record'
 import { dsgnRules } from '../rules'
+import type {
+  ModelReasoningEffort,
+  Thread,
+  ThreadItem,
+  ThreadOptions
+} from '@openai/codex-sdk'
 
 /**
- * EXPERIMENTAL (v7) — OpenAI Codex backend via the `@openai/codex-sdk` (TypeScript).
- * Auth is the user's **ChatGPT subscription** ("sign in with ChatGPT": `codex login`,
- * or `codex login --device-auth` on headless) — NO API key. Codex edits the repo
- * with its OWN tools, so dsgn doesn't define a toolset here; we map Codex's thread
- * output to dsgn's `AgentEvent` stream.
+ * OpenAI Codex backend (v7) via `@openai/codex-sdk`. Auth is the user's **ChatGPT
+ * subscription** ("sign in with ChatGPT": `codex login`) — NO API key. The SDK shells
+ * out to the `codex` CLI, which edits the repo with its OWN sandboxed tools, so dsgn
+ * doesn't define a toolset here — it maps Codex's streamed `ThreadEvent`s onto dsgn's
+ * `AgentEvent` stream.
  *
- * Reachable only when `AgentOptions.provider === 'codex'` (the UI doesn't set that
- * yet) — so the default runtime is unaffected. The package is loaded lazily via a
- * NON-LITERAL specifier so typecheck/build stay green without it installed; if it's
- * missing or the user isn't logged in, we emit an `error` the renderer maps to the
- * login banner.
+ * Reachable only when `AgentOptions.provider === 'codex'`. ESM-only, so loaded via a
+ * dynamic `import()` (like the Claude SDK) in this CJS main bundle. If the `codex` CLI
+ * is missing or the user isn't logged in, the turn fails soft (`error` + `done`) and the
+ * renderer maps it to the "sign in with ChatGPT" banner.
  *
- * ⚠️ The event/result mapping below is written against the documented
- * `new Codex().startThread().run(prompt)` shape + an optional streamed API; the
- * exact streamed event names should be verified against the installed SDK once a
- * real `codex login` turn can be observed. Baseline (non-streamed `run`) is safe.
+ * Tool approvals run headless (`approvalPolicy: 'never'`, `sandboxMode: 'workspace-write'`)
+ * — mapping Codex approvals → dsgn permission cards is a follow-up (the SDK event stream
+ * has no approval-request event to bridge).
  */
 
-// `string`-typed (not a literal) specifier: TS treats this import as `any` (no
-// module resolution), so the build doesn't require @openai/codex-sdk installed.
-const CODEX_PKG: string = '@openai/codex-sdk'
+type CodexModule = typeof import('@openai/codex-sdk')
+let codexPromise: Promise<CodexModule> | null = null
+const loadCodex = (): Promise<CodexModule> => (codexPromise ??= import('@openai/codex-sdk'))
 
-interface CodexThread {
-  // Documented: `const result = await thread.run("...")`.
-  run?: (prompt: string) => Promise<unknown>
-  // Optional streamed API (verify name against the SDK): async-iterable of events.
-  runStreamed?: (prompt: string) => AsyncIterable<unknown> | { events: AsyncIterable<unknown> }
-}
-interface CodexClient {
-  startThread: (opts?: Record<string, unknown>) => CodexThread
-}
-
-async function loadCodex(): Promise<new (opts?: Record<string, unknown>) => CodexClient> {
-  const mod = (await import(CODEX_PKG)) as { Codex: new (o?: Record<string, unknown>) => CodexClient }
-  if (!mod?.Codex) throw new Error('codex-sdk: no Codex export')
-  return mod.Codex
-}
-
-/** Pull a text chunk out of an unknown streamed Codex event, shape-tolerant. */
-function eventText(ev: unknown): string | null {
-  const e = ev as Record<string, unknown>
-  const t = (e?.type ?? e?.kind) as string | undefined
-  if (t && /delta|text|message|assistant|output/i.test(t)) {
-    const text = (e?.text ?? e?.delta ?? e?.content ?? e?.message) as unknown
-    if (typeof text === 'string') return text
+const execFileP = promisify(execFile)
+/** The SDK shells out to the `codex` CLI; probe it up front so a missing/unauthed CLI
+ *  fails soft FAST + clearly, instead of surfacing a slow spawn ENOENT mid-turn. */
+async function codexCliPresent(): Promise<boolean> {
+  try {
+    await execFileP('codex', ['--version'], { timeout: 4000 })
+    return true
+  } catch {
+    return false
   }
-  return null
 }
 
-/** Resolve a tool-call NAME out of an unknown streamed Codex event (null if not
- * a tool event). Returning the name (not a pre-described label) lets the recorded
- * transcript reuse the SAME describeTool label as the live status line. */
-function eventToolName(ev: unknown): string | null {
-  const e = ev as Record<string, unknown>
-  const t = (e?.type ?? e?.kind) as string | undefined
-  if (t && /tool|command|exec|patch|apply/i.test(t)) {
-    return String(e?.name ?? e?.tool ?? e?.command ?? t ?? 'tool')
-  }
-  return null
-}
-
-/** Best-effort final text from a non-streamed `thread.run` result. */
-function resultText(result: unknown): string {
-  const r = result as Record<string, unknown>
-  const candidate = r?.finalResponse ?? r?.text ?? r?.output ?? r?.message ?? r?.content
-  if (typeof candidate === 'string') return candidate
-  if (typeof result === 'string') return result
-  return ''
-}
+const REASONING_EFFORTS = new Set<ModelReasoningEffort>([
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh'
+])
+const isEffort = (e: string | undefined): e is ModelReasoningEffort =>
+  !!e && REASONING_EFFORTS.has(e as ModelReasoningEffort)
+const oneLine = (s: string, n = 120): string => s.replace(/\s+/g, ' ').trim().slice(0, n)
 
 async function startSession(
   root: string,
@@ -86,7 +67,8 @@ async function startSession(
   const cap = createRecordCapture(root, key)
   const pending = new Map<string, PendingPrompt>()
   let disposed = false
-  let aborted = false
+  let aborted = false // session teardown (permanent)
+  let turnAbort: AbortController | null = null // cancels the in-flight turn only
   // dsgn rules (v8 R): no system-prompt arg here, so prepend them to the first turn.
   let firstTurn = true
 
@@ -94,16 +76,100 @@ async function startSession(
     if (disposed) return
     getWindow()?.webContents.send('agent:event', { ...event, projectKey: key })
   }
+  // Always attribute errors to the Codex backend (so the user knows which provider
+  // failed, and the renderer's login-banner heuristic can key on it).
+  const emitError = (m: string): void =>
+    emit({ type: 'error', message: /codex/i.test(m) ? m : `Codex: ${m}` })
 
-  let thread: CodexThread | null = null
+  // Build the thread up front (the SDK spawns the `codex` CLI; auth = `codex login`).
+  let thread: Thread | null = null
   let initErr: Error | null = null
   try {
-    const Codex = await loadCodex()
-    const client = new Codex()
-    // Codex edits the working directory with its own sandboxed tools.
-    thread = client.startThread({ workingDirectory: root, cwd: root })
+    if (!(await codexCliPresent())) {
+      throw new Error(
+        'the `codex` CLI was not found. Install it (`npm i -g @openai/codex` or Homebrew) and run `codex login` (sign in with ChatGPT).'
+      )
+    }
+    const { Codex } = await loadCodex()
+    const threadOptions: ThreadOptions = {
+      workingDirectory: root,
+      skipGitRepoCheck: true,
+      sandboxMode: 'workspace-write',
+      approvalPolicy: 'never',
+      ...(options.model ? { model: options.model } : {}),
+      ...(isEffort(options.effort) ? { modelReasoningEffort: options.effort } : {})
+    }
+    thread = new Codex().startThread(threadOptions)
   } catch (err) {
     initErr = err instanceof Error ? err : new Error(String(err))
+  }
+
+  // Codex streams whole `ThreadItem`s (often started→updated→completed), not raw deltas.
+  // Track per-item: how much agent_message text we've emitted (so updates stream as a
+  // suffix), and which tool items we've already surfaced (so we emit each step once).
+  const emittedLen = new Map<string, number>()
+  const statused = new Set<string>()
+
+  const handleItem = (item: ThreadItem, terminal: boolean): void => {
+    switch (item.type) {
+      case 'agent_message': {
+        const prev = emittedLen.get(item.id) ?? 0
+        const full = item.text ?? ''
+        if (full.length > prev) {
+          const delta = full.slice(prev)
+          emittedLen.set(item.id, full.length)
+          cap.appendAssistant(delta)
+          emit({ type: 'delta', text: delta })
+        }
+        break
+      }
+      case 'reasoning': {
+        if (terminal && item.text?.trim() && !statused.has(item.id)) {
+          statused.add(item.id)
+          emit({ type: 'status', text: `Thinking · ${oneLine(item.text)}` })
+        }
+        break
+      }
+      case 'command_execution': {
+        if (!statused.has(item.id)) {
+          statused.add(item.id)
+          emit({ type: 'status', text: `$ ${oneLine(item.command, 100)}` })
+          cap.noteTool('Bash', { command: item.command })
+        }
+        break
+      }
+      case 'file_change': {
+        // "Emitted once the patch succeeds or fails" → handle on the terminal event.
+        if (terminal && !statused.has(item.id)) {
+          statused.add(item.id)
+          for (const ch of item.changes ?? []) {
+            emit({ type: 'status', text: describeTool('Edit', { file_path: ch.path }) })
+            cap.noteTool('Edit', { file_path: ch.path }) // → filesTouched in the record
+          }
+        }
+        break
+      }
+      case 'web_search': {
+        if (!statused.has(item.id)) {
+          statused.add(item.id)
+          emit({ type: 'status', text: `Search · ${oneLine(item.query, 80)}` })
+        }
+        break
+      }
+      case 'mcp_tool_call': {
+        if (!statused.has(item.id)) {
+          statused.add(item.id)
+          emit({ type: 'status', text: `${item.server} · ${item.tool}` })
+          cap.noteTool(item.tool, item.arguments)
+        }
+        break
+      }
+      case 'error': {
+        // A non-fatal item-level error — surface it as a status, not a turn failure.
+        emit({ type: 'status', text: `⚠ ${oneLine(item.message)}` })
+        break
+      }
+    }
   }
 
   // Serialize turns: each send() runs to completion before the next starts.
@@ -111,50 +177,47 @@ async function startSession(
   const runTurn = async (text: string): Promise<void> => {
     if (aborted || disposed) return
     if (!thread) {
-      // Missing package / not logged in → an auth-shaped error so the renderer
-      // shows the "sign in with ChatGPT" banner (isAuthError matches it).
-      emit({
-        type: 'error',
-        message: `Codex backend unavailable: ${initErr?.message ?? 'unknown'}. Install @openai/codex-sdk and run \`codex login\` (sign in with ChatGPT).`
-      })
+      // Missing CLI / not logged in → an auth-shaped error (isAuthError matches the
+      // "codex login" / "sign in" phrasing → the renderer shows the login banner).
+      emitError(initErr?.message ?? 'Codex backend unavailable. Run `codex login`.')
       emit({ type: 'done' })
       return
     }
+    turnAbort = new AbortController()
     try {
-      // Prefer a streamed API if the SDK exposes one; else fall back to run().
-      const streamed = thread.runStreamed?.(text)
-      if (streamed) {
-        const iterable = (streamed as { events?: AsyncIterable<unknown> }).events ?? streamed
-        for await (const ev of iterable as AsyncIterable<unknown>) {
-          if (disposed || aborted) break
-          const toolName = eventToolName(ev)
-          if (toolName) {
-            cap.noteTool(toolName, ev)
-            emit({ type: 'status', text: describeTool(toolName, ev) })
-            continue
-          }
-          const delta = eventText(ev)
-          if (delta) {
-            cap.appendAssistant(delta)
-            emit({ type: 'delta', text: delta })
-          }
-        }
-      } else if (thread.run) {
-        const result = await thread.run(text)
-        if (!disposed && !aborted) {
-          const out = resultText(result)
-          if (out) {
-            cap.appendAssistant(out)
-            emit({ type: 'delta', text: out })
-          }
+      const { events } = await thread.runStreamed(text, { signal: turnAbort.signal })
+      for await (const ev of events) {
+        if (disposed || aborted || turnAbort.signal.aborted) break
+        switch (ev.type) {
+          case 'item.started':
+          case 'item.updated':
+            handleItem(ev.item, false)
+            break
+          case 'item.completed':
+            handleItem(ev.item, true)
+            break
+          case 'turn.failed':
+            emitError(ev.error.message)
+            break
+          case 'error':
+            emitError(ev.message)
+            break
+          // thread.started / turn.started / turn.completed need no extra handling.
         }
       }
-      cap.finalize()
-      emit({ type: 'done' })
     } catch (err) {
-      if (!aborted) emit({ type: 'error', message: err instanceof Error ? err.message : String(err) })
-      emit({ type: 'done' })
+      if (!aborted && !turnAbort.signal.aborted) {
+        const m = err instanceof Error ? err.message : String(err)
+        // A missing/unauthenticated `codex` CLI surfaces here (e.g. spawn ENOENT).
+        emitError(
+          /codex/i.test(m)
+            ? m
+            : `turn failed: ${m}. Is the \`codex\` CLI installed and \`codex login\` done?`
+        )
+      }
     }
+    cap.finalize()
+    emit({ type: 'done' })
   }
 
   return {
@@ -175,9 +238,13 @@ async function startSession(
     },
     shutdown: () => {
       aborted = true
+      turnAbort?.abort()
+    },
+    interrupt: async () => {
+      turnAbort?.abort() // cancel the current turn; the session can still take more
     }
-    // setModel/setPermissionMode/interrupt: Codex equivalents are a follow-up
-    // (model via startThread opts; interrupt via the SDK's abort once confirmed).
+    // setModel/setPermissionMode: Codex sets these per-thread at startThread, so a live
+    // change would mean re-threading — a follow-up. Model/effort are honored on open.
   }
 }
 
