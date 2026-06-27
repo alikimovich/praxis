@@ -42,3 +42,13 @@ export function Swatch(): JSX.Element {
 export function Weighted(): JSX.Element {
   return <span style={{ fontWeight: '400' }} className="wt">x</span>
 }
+
+// T2: exactly one color utility (text-gray-500) → a tailwind color token swaps it.
+export function TwColor(): JSX.Element {
+  return <span className="text-gray-500 font-bold">tw</span>
+}
+
+// T2 guard: two color utilities → ambiguous → agent, no silent swap.
+export function TwTwo(): JSX.Element {
+  return <span className="text-gray-500 bg-blue-100">tw</span>
+}

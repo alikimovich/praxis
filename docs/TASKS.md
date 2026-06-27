@@ -222,7 +222,11 @@ TokenOfferCard, Markdown). App-header branch pill + auth banner are separate chr
         otherwise; (b) broadened literals — TS casts + no-substitution template literals read
         as literals; (c) PropPanel shows "Literal edits apply instantly"; (d) hot-reload no-op
         guard. `test/prop-edit.mjs` extended (T1/T3, agent fallback, cross-family guard).
-        **Next:** Tailwind class swap (T2), carry direct token apply to Svelte.
+  - [x] **T2 — Tailwind color-class swap.** ✅ 2026-06-27 (PR #35) — a tailwind color token
+        swaps the single color utility in a literal `className` (`text-gray-500` → `text-primary`);
+        exactly-one-match guard (two color utilities → agent), `text-<size>` excluded, variants/
+        arbitrary values skipped. `prop-edit.mjs` covers the swap + ambiguity guard.
+        **Remaining:** Tailwind spacing/radius families; carry direct token apply to Svelte.
 
 ## v3 — engineer handoff
 

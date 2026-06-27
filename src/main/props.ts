@@ -634,6 +634,43 @@ function stylePropKey(p: BabelNode): string | null {
   return null
 }
 
+// T2 — Tailwind color-utility class swap. The color utility families; `text-` is
+// shared with font-size, so a `text-<size>` is excluded from the color match.
+const COLOR_CLASS_FAMILIES = [
+  'bg', 'text', 'border', 'ring', 'fill', 'stroke', 'decoration', 'outline', 'accent',
+  'caret', 'divide', 'from', 'via', 'to', 'placeholder', 'shadow'
+]
+const TW_TEXT_SIZES = new Set([
+  'xs', 'sm', 'base', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl', '6xl', '7xl', '8xl', '9xl'
+])
+
+/** If `cls` is a plain color utility, return its family prefix (e.g. 'text' for
+ * `text-gray-500`); null otherwise. Skips variants (`hover:…`) and arbitrary
+ * values (`[…]`) — too ambiguous to rewrite safely. */
+function colorClassFamily(cls: string): string | null {
+  if (cls.includes(':') || cls.includes('[')) return null
+  for (const f of COLOR_CLASS_FAMILIES) {
+    if (cls.startsWith(`${f}-`)) {
+      const suffix = cls.slice(f.length + 1)
+      if (f === 'text' && TW_TEXT_SIZES.has(suffix)) return null // text-sm is a font size
+      return f
+    }
+  }
+  return null
+}
+
+/** The literal-string AST node behind a className attr value (`"…"` or `{'…'}`),
+ * or null for an expression/dynamic className we must not rewrite. */
+function classNameStringNode(v: BabelNode | null | undefined): BabelNode | null {
+  if (!v) return null
+  if (v.type === 'StringLiteral') return v
+  if (v.type === 'JSXExpressionContainer') {
+    const inner = unwrapExpr(v.expression as BabelNode)
+    if (inner?.type === 'StringLiteral') return inner
+  }
+  return null
+}
+
 /** How to write a token reference into source: css vars stay var(--name); other
  * sources splice the resolved value (a manifest hex, a Tailwind scale value, …). */
 function tokenRef(edit: TokenEdit): string {
@@ -715,9 +752,45 @@ async function applyTokenEdit(root: string, edit: TokenEdit): Promise<PropEditRe
     })
   }
 
+  const isColorGroup = /colou?r/i.test(edit.group)
+
+  // T2 — Tailwind color-utility class swap: for a tailwind color token on an
+  // element with a literal className that has EXACTLY ONE color utility, swap that
+  // utility's scale to the token (e.g. `text-gray-500` + token 'primary' →
+  // `text-primary`). Zero/multiple matches, or a dynamic className → fall through.
+  if (edit.tokenSource === 'tailwind' && isColorGroup) {
+    const classAttr = (found.opening.attributes ?? []).find(
+      (a) => a.type === 'JSXAttribute' && (a.name as { name?: string })?.name === 'className'
+    )
+    const strNode = classNameStringNode(classAttr?.value as BabelNode | null | undefined)
+    if (strNode) {
+      const raw = String((strNode as unknown as { value: string }).value)
+      const classes = raw.split(/\s+/).filter(Boolean)
+      const colorClasses = classes.filter((c) => colorClassFamily(c) != null)
+      // The token name becomes a class suffix — require a single safe utility
+      // token (no spaces/quotes), so we can't accidentally inject extra classes.
+      if (colorClasses.length === 1 && /^[\w/.-]+$/.test(edit.token.name)) {
+        const fam = colorClassFamily(colorClasses[0])!
+        const swapped = classes
+          .map((c) => (c === colorClasses[0] ? `${fam}-${edit.token.name}` : c))
+          .join(' ')
+        {
+          const next =
+            code.slice(0, strNode.start) + JSON.stringify(swapped) + code.slice(strNode.end)
+          if (next === code) return { applied: true }
+          try {
+            await writeFile(loc.file, next, 'utf8')
+          } catch {
+            return { applied: false, error: 'Could not write the source file.' }
+          }
+          return { applied: true }
+        }
+      }
+    }
+  }
+
   // T3 — inline-style single-property swap, gated on BOTH the property name and
   // the value family (so a color token can't land in fontSize, etc.).
-  const isColorGroup = /colou?r/i.test(edit.group)
   const propSet = isColorGroup ? COLOR_STYLE_PROPS : LENGTH_STYLE_PROPS
   const valueInFamily = (v: string): boolean => (isColorGroup ? isColorValue(v) : isLengthValue(v))
   const styleAttr = (found.opening.attributes ?? []).find(
