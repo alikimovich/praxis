@@ -165,7 +165,7 @@ TokenOfferCard, Markdown). App-header branch pill + auth banner are separate chr
       the test hooks above.
 - [ ] **Re-verify** `chat-render` / `chat-route` (+ smoke and the rest), screenshot the new
       panel into `test/artifacts/`.
-- [x] **Element-inspector surfaces → shadcn.** ✅ 2026-06-27 (PR #29) — Inspector,
+- [x] **Element-inspector surfaces → shadcn.** ✅ 2026-06-27 (PR #31) — Inspector,
       NotesPanel, TokenPalette, PropPanel migrated to shadcn Card/Badge/Button/Input/
       Textarea + Tailwind, every test hook preserved; dead `.inspector*/.notes*/.tokens*/
       .proppanel*/.propedit*` CSS removed. The whole chat panel is now Tailwind+shadcn.
@@ -204,7 +204,7 @@ TokenOfferCard, Markdown). App-header branch pill + auth banner are separate chr
         properties) and the inspector shows a token palette; clicking a token applies it via
         the agent.
   - [x] **Direct (agent-free) prop + token editing — the default; broadened.** ✅ 2026-06-27
-        (PR #30). React. (a) **token clicks apply directly** — `applyToken` IPC: T1 schema-enum
+        (PR #32). React. (a) **token clicks apply directly** — `applyToken` IPC: T1 schema-enum
         swap + T3 inline-style swap (property-name + value-family gated), agent fallback
         otherwise; (b) broadened literals — TS casts + no-substitution template literals read
         as literals; (c) PropPanel shows "Literal edits apply instantly"; (d) hot-reload no-op
