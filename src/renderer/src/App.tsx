@@ -326,11 +326,23 @@ export default function App(): React.JSX.Element {
     let live = true
     sel.setInspecting(true)
     const src = selected.source
+    // Pass the clicked text so the Svelte path can content-match the click to the
+    // concrete component instance (v8 F3a-svelte) rather than a definition default.
     window.api.props
-      .inspect(projectRoot, src)
+      .inspect(projectRoot, src, selected.text)
       .then((res) => {
         // Only apply if this is still the selected element.
-        if (live && useSelection.getState().selected?.source === src) sel.setInspection(res)
+        if (!live || useSelection.getState().selected?.source !== src) return
+        // If the inspection redirected to a concrete instance (Svelte content-match),
+        // adopt that source — the effect re-runs and inspects the instance directly
+        // (stable: an instance returns its own source), keeping undo/redo + token
+        // refresh on the instance. Otherwise show the inspection as-is.
+        if (res && res.source !== src) {
+          const cur = useSelection.getState().selected
+          if (cur) useSelection.getState().setSelected({ ...cur, source: res.source })
+          return
+        }
+        sel.setInspection(res)
       })
       .finally(() => live && useSelection.getState().setInspecting(false))
     return () => {

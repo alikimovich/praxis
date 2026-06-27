@@ -471,10 +471,14 @@ export function mergeFields(schema: PropField[], current: CurrentAttr[]): PropFi
   return fields
 }
 
-async function inspectProps(root: string, source: string): Promise<PropInspection | null> {
+async function inspectProps(
+  root: string,
+  source: string,
+  text?: string | null
+): Promise<PropInspection | null> {
   const loc = resolveSource(root, source)
   if (!loc) return null
-  if (loc.file.endsWith('.svelte')) return inspectSvelteProps(root, source, loc)
+  if (loc.file.endsWith('.svelte')) return inspectSvelteProps(root, source, loc, text)
   let code: string
   try {
     code = await readFile(loc.file, 'utf8')
@@ -864,7 +868,9 @@ async function applyTokenEdit(root: string, edit: TokenEdit): Promise<PropEditRe
 }
 
 export function registerPropsIpc(): void {
-  ipcMain.handle('props:inspect', (_e, root: string, source: string) => inspectProps(root, source))
+  ipcMain.handle('props:inspect', (_e, root: string, source: string, text?: string | null) =>
+    inspectProps(root, source, text)
+  )
   ipcMain.handle('props:apply', (_e, root: string, edit: PropEdit) => applyPropEdit(root, edit))
   ipcMain.handle('props:applyToken', (_e, root: string, edit: TokenEdit) => applyTokenEdit(root, edit))
   ipcMain.handle('props:remove', (_e, root: string, source: string, name: string) =>

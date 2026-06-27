@@ -126,8 +126,8 @@ const api: DsgnApi = {
     }
   },
   props: {
-    inspect: (root: string, source: string): Promise<PropInspection | null> =>
-      ipcRenderer.invoke('props:inspect', root, source),
+    inspect: (root: string, source: string, text?: string | null): Promise<PropInspection | null> =>
+      ipcRenderer.invoke('props:inspect', root, source, text),
     apply: (root: string, edit: PropEdit): Promise<PropEditResult> =>
       ipcRenderer.invoke('props:apply', root, edit),
     applyToken: (root: string, edit: TokenEdit): Promise<PropEditResult> =>

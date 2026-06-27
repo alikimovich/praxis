@@ -89,7 +89,42 @@ try {
   const route = await inspect('src/+page.svelte:6')
   assert(route && !route.hasSchema, `route file should be excluded from self-schema: ${JSON.stringify(route)}`)
 
-  console.log('PROP-SVELTE-SELF OK — definition host → schema, edits → agent, routes/propless excluded')
+  // v8 F3a-svelte: clicking a host element inside Button's definition, with the
+  // rendered text, content-matches to the concrete <Button label="Go" …/> instance
+  // in Card.svelte and REDIRECTS the inspection there — so edits hit that call site
+  // directly, not the component default. ("Go" uniquely matches the label literal.)
+  const redirected = await win.evaluate(
+    (a) => window.api.props.inspect(a.fixture, 'src/Button.svelte:11', 'Go'),
+    { fixture }
+  )
+  assert(redirected, 'instance redirect returned nothing')
+  assert(
+    redirected.source.startsWith('src/Card.svelte:7'),
+    `should redirect to the Card.svelte:7 instance, got ${redirected.source}`
+  )
+  assert(redirected.component === 'Button', `redirected component should be Button: ${redirected.component}`)
+  const label = redirected.fields.find((f) => f.name === 'label')
+  assert(label?.value === 'Go', `instance label value should be "Go": ${JSON.stringify(label)}`)
+
+  // Without the clicked text (or with non-matching text) it must NOT redirect —
+  // it stays the safe option-D default view on the definition.
+  const noText = await inspect('src/Button.svelte:11')
+  assert(
+    noText.source === 'src/Button.svelte:11' && /per-instance/i.test(noText.note ?? ''),
+    `no-text inspect must stay option-D on the definition: ${JSON.stringify(noText)}`
+  )
+  const noMatch = await win.evaluate(
+    (a) => window.api.props.inspect(a.fixture, 'src/Button.svelte:11', 'totally unrelated text'),
+    { fixture }
+  )
+  assert(
+    noMatch.source === 'src/Button.svelte:11',
+    `non-matching text must not redirect: ${noMatch.source}`
+  )
+
+  console.log(
+    'PROP-SVELTE-SELF OK — definition host → schema, edits → agent, routes/propless excluded, instance redirect (F3a-svelte)'
+  )
 } catch (err) {
   console.error('PROP-SVELTE-SELF FAILED:', err?.message ?? err)
   process.exitCode = 1

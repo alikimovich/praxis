@@ -485,8 +485,13 @@ export interface DsgnApi {
     onElementPicked: (cb: (pick: { source: string; tag: string }) => void) => () => void
   }
   props: {
-    /** Inspect the editable props of the element at `source` ("path:line"). */
-    inspect: (root: string, source: string) => Promise<PropInspection | null>
+    /**
+     * Inspect the editable props of the element at `source` ("path:line").
+     * `text` is the clicked element's rendered text — for Svelte it lets dsgn
+     * content-match the click to the concrete component INSTANCE (v8 F3a-svelte)
+     * instead of falling back to a definition-default edit.
+     */
+    inspect: (root: string, source: string, text?: string | null) => Promise<PropInspection | null>
     /** Apply a prop edit; may report it needs the agent for a complex change. */
     apply: (root: string, edit: PropEdit) => Promise<PropEditResult>
     /** Apply a design token directly when it maps to a literal; agent-fallback otherwise. */

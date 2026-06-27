@@ -1,4 +1,4 @@
-import { readFile } from 'fs/promises'
+import { readFile, readdir } from 'fs/promises'
 import { basename, dirname, isAbsolute, join, normalize, relative } from 'path'
 import type {
   PropEdit,
@@ -9,6 +9,7 @@ import type {
   TokenEdit
 } from '../shared/api'
 import { swapTailwindClass } from './tw-classes'
+import { pickInstance, type SvelteUsage } from './svelte-instance'
 import {
   agentPromptFor,
   commitEdit,
@@ -348,10 +349,88 @@ async function parseSvelte(code: string): Promise<Node | null> {
   }
 }
 
+// Dirs that never hold authored usage sites — skip them while scanning so a big
+// repo doesn't read its build output / deps on every inspect.
+const SCAN_SKIP = new Set(['node_modules', '.git', '.svelte-kit', '.dsgn', 'dist', 'build', 'out'])
+
+/** `.svelte` files under `root` whose text mentions `<Component` (cheap pre-filter). */
+async function svelteFilesUsing(root: string, component: string, limit = 4000): Promise<string[]> {
+  const needle = `<${component}`
+  const found: string[] = []
+  const walk = async (dir: string): Promise<void> => {
+    if (found.length >= limit) return
+    let entries: import('fs').Dirent[]
+    try {
+      entries = await readdir(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      if (found.length >= limit) return
+      const p = join(dir, e.name)
+      if (e.isDirectory()) {
+        if (!SCAN_SKIP.has(e.name) && !e.name.startsWith('.')) await walk(p)
+      } else if (e.isFile() && e.name.endsWith('.svelte')) {
+        try {
+          if ((await readFile(p, 'utf8')).includes(needle)) found.push(p)
+        } catch {
+          /* unreadable — skip */
+        }
+      }
+    }
+  }
+  await walk(root)
+  return found
+}
+
+/**
+ * Find the single `<Component …/>` instance that rendered the clicked element, by
+ * content-matching the clicked text against each usage's literal string props
+ * (see svelte-instance.ts). Returns the usage's source + resolved loc, or null
+ * when nothing matches uniquely (caller falls back to option D).
+ */
+async function resolveSvelteInstance(
+  root: string,
+  component: string,
+  clickedText: string | null
+): Promise<{ source: string; loc: ResolvedSource } | null> {
+  if (!clickedText || !/^[A-Z]/.test(component)) return null
+  const usages: SvelteUsage[] = []
+  const locOf = new Map<string, ResolvedSource>()
+  for (const file of await svelteFilesUsing(root, component)) {
+    let code: string
+    try {
+      code = await readFile(file, 'utf8')
+    } catch {
+      continue
+    }
+    const ast = await parseSvelte(code)
+    if (!ast) continue
+    const els: Node[] = []
+    collectElements((ast as { fragment?: unknown }).fragment ?? ast, els)
+    const at = makeLocator(code)
+    const rel = relative(root, file)
+    for (const el of els) {
+      const isComp = el.type === 'Component' || el.type === 'SvelteComponent'
+      if (!isComp || el.name !== component || typeof el.start !== 'number') continue
+      const { line, column } = at(el.start)
+      const source = `${rel}:${line}:${column}`
+      const literals = readAttributes(el)
+        .filter((a) => a.kind === 'string' && typeof a.value === 'string')
+        .map((a) => String(a.value))
+      usages.push({ source, literals })
+      locOf.set(source, { file, line, column })
+    }
+  }
+  const source = pickInstance(usages, clickedText)
+  return source ? { source, loc: locOf.get(source)! } : null
+}
+
 export async function inspectSvelteProps(
   root: string,
   source: string,
-  loc: ResolvedSource
+  loc: ResolvedSource,
+  clickedText?: string | null
 ): Promise<PropInspection | null> {
   let code: string
   try {
@@ -389,6 +468,19 @@ export async function inspectSvelteProps(
       }
     }
   } else if (!isRouteFile(loc.file)) {
+    // First try to resolve to the concrete INSTANCE that rendered this element, by
+    // content-matching the clicked text against the component's `<Self …/>` usages
+    // (svelte-instance.ts). A unique match redirects the whole inspection to that
+    // call site — so the panel shows the instance's real values and edits splice
+    // THAT usage directly (the `<Component>` node path in applySvelteEdit), instead
+    // of the option-D default change below. Only a confident unique match wins.
+    const selfComponent = basename(loc.file).replace(/\.svelte$/, '')
+    const inst = await resolveSvelteInstance(root, selfComponent, clickedText ?? null)
+    if (inst && inst.source !== source) {
+      const redirected = await inspectSvelteProps(root, inst.source, inst.loc)
+      if (redirected) return redirected
+    }
+
     // Option D — a host element inside a component *definition* carries the stamp
     // (a Svelte component instance has no DOM node to carry the usage-site stamp).
     // Surface THIS file's own props so the schema is reachable for every component
