@@ -8,12 +8,15 @@ import {
   useAnnotations,
   useChat,
   useComposer,
+  useHistory,
   usePermissions,
   useSelection,
   useSession,
   useSetup,
+  useSpawns,
   useTokens
 } from '../store'
+import { projectKey } from '../../../shared/projectKey'
 import type { PermissionMode, SetupResult, Token } from '../../../shared/api'
 import Inspector from './Inspector'
 import Markdown from './Markdown'
@@ -180,6 +183,19 @@ export default function ChatPanel(): React.JSX.Element {
 
   useEffect(() => {
     return window.api.agent.onEvent((event) => {
+      // v8 F1: a detached comment spawn's events carry a `sessionId` — they NEVER
+      // enter the main chat stream. We only react to the terminal `spawn-finished`
+      // (drop the working rail row; the finished run reappears in history). This
+      // guard is what guarantees the active chat stays byte-clean under parallel spawns.
+      if (event.sessionId) {
+        if (event.type === 'spawn-finished') {
+          const pkey = event.projectKey ?? ''
+          useSpawns.getState().remove(pkey, event.sessionId)
+          const root = useSession.getState().projectRoot
+          if (root && projectKey(root) === pkey) void useHistory.getState().load(root)
+        }
+        return
+      }
       // Route to the emitting project's chat slice (main tags every event). The
       // active project's slice is what's shown; a backgrounded project keeps
       // streaming into its own (a "working" dot in the rail).

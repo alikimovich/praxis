@@ -52,9 +52,25 @@ run comment-work in parallel; and give the agent a versioned set of operating
       keyboard handler (skips when typing in a field) re-inspects the selection after a
       revert and surfaces conflicts as a status error. Tests: `test/edit-history.mjs`
       (unit) + apply→undo→redo→conflict round-trip in `test/prop-edit.mjs`.
-- [ ] **F1 — comment → parallel agent session** (`claude -p`-style one-shot per
-      comment), surfaced in the rail via the existing sessions/record seam; non-blocking.
-      Decide working-tree contention first (worktree-per-spawn vs write lock vs advisory).
+- [~] **F1 — comment → parallel agent session.** Contention decided via a design
+      judge-panel: **worktree-per-spawn** (7.33 vs advisory 7.0 vs write-lock 5.33) —
+      each comment runs a detached agent in its own `git worktree` on a `dsgn/comment-<id>`
+      branch, zero cross-writes, the branch as durable record; accept patches the diff
+      onto the live tree (NOT `git merge`, which fails on WIP). Full spec inline in the
+      2026-06-27 PROGRESS entry.
+      - [x] **Phase 0 — worktree engine.** ✅ `src/main/worktrees.ts` (pure git) +
+            `test/worktrees.mjs`: WIP-preserving fork, isolation, commit file-list,
+            apply-onto-dirty-tree, branch-as-record, orphan reclaim.
+      - [x] **Phase 1 — spawn slice.** ✅ `SpawnContext` seam (claude.ts threads it),
+            `agent:spawn-comment` + `finalizeSpawn`, `useSpawns` store, App.onComment
+            dispatches a spawn (falls back to chat for non-repos), ChatPanel keeps
+            `sessionId` events out of the main chat, rail shows a live working row →
+            previous-agents on finish. `test/spawn-comment.mjs` (deterministic routing +
+            a LIVE worktree spawn).
+      - [ ] **Phase 2 — Apply / PR / Discard** on a finished comment row (git apply
+            --3way onto the live tree + a ConflictPanel).
+      - [ ] **Phase 3 — scale + safety**: per-repo cap + queue, startup orphan prune,
+            before-quit finalize, interrupt, concurrent-spawn e2e.
 
 ## v4 — React Native / iOS-Simulator preview (macOS-only)
 

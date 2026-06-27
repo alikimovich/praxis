@@ -1,5 +1,5 @@
 import type { SessionRecord } from '../../../shared/api'
-import { relativeTime, useChat, useHistory, useWorkspace } from '../store'
+import { relativeTime, useChat, useHistory, useSpawns, useWorkspace } from '../store'
 
 interface Props {
   /** Switch to an already-open project. */
@@ -26,6 +26,8 @@ export default function Rail({ onSwitch, onClose, onOpen, onReview }: Props): Re
   const byKey = useChat((s) => s.byKey)
   // Past sessions per project (loaded by App on open/switch/close).
   const history = useHistory((s) => s.byKey)
+  // v8 F1: comment-spawned background agents currently running, per project.
+  const spawns = useSpawns((s) => s.byKey)
 
   if (projects.length === 0) return null
 
@@ -37,6 +39,7 @@ export default function Rail({ onSwitch, onClose, onOpen, onReview }: Props): Re
           const active = p.key === activeKey
           const running = !!byKey[p.key]?.isRunning
           const past = active ? (history[p.key] ?? []) : []
+          const working = active ? (spawns[p.key] ?? []) : []
           return (
             <li key={p.key} className={`rail__item ${active ? 'rail__item--active' : ''}`}>
               <div className="rail__row">
@@ -61,6 +64,17 @@ export default function Rail({ onSwitch, onClose, onOpen, onReview }: Props): Re
                   ×
                 </button>
               </div>
+              {/* v8 F1: comment-spawned background agents currently working. */}
+              {working.length > 0 && (
+                <ul className="rail__spawns">
+                  {working.map((sp) => (
+                    <li key={sp.id} className="rail__spawn" title={sp.label}>
+                      <span className="rail__sdot rail__sdot--working" aria-hidden="true" />
+                      <span className="rail__session-label">{sp.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
               {/* Previous agents for the active project (newest first). */}
               {past.length > 0 && (
                 <ul className="rail__sessions">

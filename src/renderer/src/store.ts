@@ -316,6 +316,31 @@ export const useHistory = create<HistoryState>((set) => ({
   }
 }))
 
+/**
+ * v8 F1: detached comment spawns currently running, keyed by `projectKey`. A row
+ * appears the moment a comment is dispatched and is removed on `spawn-finished` (the
+ * finished run reappears in `useHistory` as a "previous agent" carrying its branch).
+ * These never enter `useChat` — the main chat stream stays byte-clean.
+ */
+export interface SpawnRow {
+  id: string
+  branch: string | null
+  label: string
+  status: 'running'
+}
+interface SpawnsState {
+  byKey: Record<string, SpawnRow[]>
+  add: (key: string, row: SpawnRow) => void
+  remove: (key: string, id: string) => void
+}
+export const useSpawns = create<SpawnsState>((set) => ({
+  byKey: {},
+  add: (key, row) =>
+    set((s) => ({ byKey: { ...s.byKey, [key]: [row, ...(s.byKey[key] ?? [])] } })),
+  remove: (key, id) =>
+    set((s) => ({ byKey: { ...s.byKey, [key]: (s.byKey[key] ?? []).filter((r) => r.id !== id) } }))
+}))
+
 /** Compact "time ago" for history timestamps (e.g. "3m ago", "2h ago", "5d ago"). */
 export const relativeTime = (ms: number, now = Date.now()): string => {
   const s = Math.max(0, Math.round((now - ms) / 1000))
@@ -624,3 +649,4 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
 ;(window as unknown as { __dsgnDiagnosis?: typeof useDiagnosis }).__dsgnDiagnosis = useDiagnosis
 ;(window as unknown as { __dsgnWorkspace?: typeof useWorkspace }).__dsgnWorkspace = useWorkspace
 ;(window as unknown as { __dsgnHistory?: typeof useHistory }).__dsgnHistory = useHistory
+;(window as unknown as { __dsgnSpawns?: typeof useSpawns }).__dsgnSpawns = useSpawns

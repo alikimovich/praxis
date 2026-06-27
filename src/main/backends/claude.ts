@@ -2,7 +2,7 @@ import type { BrowserWindow } from 'electron'
 import type { Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentEvent, AgentOptions, PermissionRequest } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
-import type { ModelProvider, PendingPrompt, ProviderSession } from './types'
+import type { ModelProvider, PendingPrompt, ProviderSession, SpawnContext } from './types'
 import { AUTO_ALLOW_TOOLS, describeTool, toolDetail, touchesSidecar } from './tools'
 import { createRecordCapture } from './record'
 import { dsgnRules } from '../rules'
@@ -67,10 +67,15 @@ function textDelta(msg: unknown): string | null {
 async function startSession(
   root: string,
   options: AgentOptions,
-  getWindow: () => BrowserWindow | null
+  getWindow: () => BrowserWindow | null,
+  ctx?: SpawnContext
 ): Promise<ProviderSession> {
   const key = projectKey(root)
-  const cap = createRecordCapture(root, key)
+  // A detached comment spawn (v8 F1) files its events + history under the PARENT
+  // project's key (so the rail/history surface it), and stamps `sessionId` so the
+  // renderer keeps it out of the main chat stream.
+  const emitKey = ctx?.emitKey ?? key
+  const cap = createRecordCapture(root, emitKey)
   const { query } = await loadSdk()
   const input = new InputStream()
   const abort = new AbortController()
@@ -81,7 +86,14 @@ async function startSession(
 
   const emit = (event: AgentEvent): void => {
     if (disposed) return
-    getWindow()?.webContents.send('agent:event', { ...event, projectKey: key })
+    const tagged = {
+      ...event,
+      projectKey: emitKey,
+      ...(ctx?.sessionId ? { sessionId: ctx.sessionId } : {})
+    }
+    // agent.ts watches this in-process hook for the spawn's terminal done/error.
+    ctx?.onEvent?.(tagged)
+    getWindow()?.webContents.send('agent:event', tagged)
   }
 
   const q: Query = query({
