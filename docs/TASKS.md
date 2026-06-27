@@ -210,9 +210,20 @@ the file-edit/permission/skill tooling the Claude Agent SDK gives for free.
       `index.ts` (`pickProvider`). `agent.ts` slimmed to backend-agnostic session mgmt;
       `AgentOptions.provider`. **Claude path byte-identical — full `verify` + AGENT-E2E green
       through the indirection.** `test/provider-seam.mjs` (creds-free). (commit 8f2bd71)
-- [ ] **Make Codex real:** `bun add @openai/codex-sdk`, the user runs `codex login`, then
-      verify a live Codex turn edits a fixture; confirm/fix the `codex.ts` event mapping
-      against the real streamed events; map Codex tool approvals → permission cards.
+- [~] **Make Codex real.** Solo prep done 2026-06-27 — `@openai/codex-sdk@0.142.3` added as a
+      real dependency (ESM, externalized + dynamic-imported like the Claude SDK); `codex.ts`
+      rewritten against the **real** typed API (`Codex().startThread(ThreadOptions)` →
+      `Thread.runStreamed → { events: AsyncGenerator<ThreadEvent> }`), replacing the speculative
+      shape-guessing: maps `item.{started,updated,completed}` → streaming `agent_message` deltas,
+      `file_change` → status + `filesTouched`, `command_execution`/`web_search`/`mcp_tool_call`/
+      `reasoning` → status lines, `turn.failed`/`error` → error; `interrupt` wired via the turn's
+      AbortSignal. A fast `codex --version` preflight fails soft + clearly when the CLI is absent.
+      Fixed a real multi-provider UX bug: a non-Claude auth error no longer shows "Not connected
+      to Claude" / raises the Claude onboarding banner — it shows the backend's own "install +
+      `codex login`" message. `test/codex-e2e.mjs` (gated, SKIPs without the CLI) + provider-seam
+      poll-hardened. **Remaining (needs the user):** run `codex login`, then codex-e2e verifies a
+      live turn end-to-end; map Codex tool approvals → permission cards (the SDK stream has no
+      approval-request event, so it runs headless `approvalPolicy:'never'` for now).
 - [x] **UI: backend picker + login hint.** ✅ 2026-06-27 (PR #33) — a `Backend`
       `<select>` in the composer (Claude / Codex — the implemented backends), `provider`
       on `useSession` + threaded through `toAgentOptions`/`openProject`; switching reopens
