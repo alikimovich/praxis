@@ -79,13 +79,14 @@ See the PROGRESS entry.
       `applyProject` reopen-on-switch-back (awaited, "context cleared" note) mirror
       the dev-server relaunch path. TOCTOU-guarded against concurrent switch-backs.
       `test/agent-cap.mjs`. Context resume itself is v5-D.
-- [ ] **Previous + working agents (history).** Persist finished sessions
-      (transcript, the branch/PR they produced, files touched) so "previous agents"
-      are reopenable to review or resume — not just the live ones. Surface them
-      under each project in the rail with status dots.
-- [ ] **Rail UI.** Left sidebar: repos → sessions, status indicators, new-agent,
-      and a way to jump to a session's preview + chat. Mirrors the attached
-      Cursor-style layout.
+- [x] **Previous + working agents (history) + Rail UI.** ✅ 2026-06-27 (PR #28) —
+      re-homed onto the v7 seam: `backends/record.ts` capture (transcript +
+      filesTouched) reused by claude/codex, persisted on teardown in `agent.ts`;
+      `sessions-store.ts` + `sessions:*` IPC + branch/PR tagging. Renderer: `useHistory`,
+      `Rail.tsx` previous-sessions sub-list (status dots, PR accent, click→review,
+      delete), `SessionReview` modal (hides the native preview while open). Tests:
+      `sessions-store`, `agent-history` (capture through the seam), `history-ui`.
+      Context-resume of a past session is still future.
 
 ## v7 — multi-provider model backends  ⭐ NEW (2026-06-26, user-requested; explore-then-build)
 
@@ -164,7 +165,11 @@ TokenOfferCard, Markdown). App-header branch pill + auth banner are separate chr
       the test hooks above.
 - [ ] **Re-verify** `chat-render` / `chat-route` (+ smoke and the rest), screenshot the new
       panel into `test/artifacts/`.
-- [ ] **Element-inspector surfaces → shadcn (follow-up pass).** Inspector.tsx,
+- [x] **Element-inspector surfaces → shadcn.** ✅ 2026-06-27 (PR #29) — Inspector,
+      NotesPanel, TokenPalette, PropPanel migrated to shadcn Card/Badge/Button/Input/
+      Textarea + Tailwind, every test hook preserved; dead `.inspector*/.notes*/.tokens*/
+      .proppanel*/.propedit*` CSS removed. The whole chat panel is now Tailwind+shadcn.
+- [ ] ~~Element-inspector surfaces → shadcn (follow-up pass).~~ Inspector.tsx,
       NotesPanel.tsx, TokenPalette.tsx are dense element-editing UIs (appear only on
       element-select, distinct from the chat conversation) with many test hooks
       (`.inspector__ask/__link/__source/__tag/__noteinput/__notesave/__ready--no`,
@@ -198,15 +203,13 @@ TokenOfferCard, Markdown). App-header branch pill + auth banner are separate chr
         project (`.dsgn/tokens.json` manifest → `tailwind.config.*` static parse → CSS custom
         properties) and the inspector shows a token palette; clicking a token applies it via
         the agent.
-  - [ ] **Direct (agent-free) prop editing — make it the default & broaden it.** ⭐ NEW
-        (2026-06-26, user-requested; backlog). React first, then other frameworks. *Current
-        state:* `props.apply` already splices **literal** string/number/boolean/enum edits
-        straight into source (instant hot-reload, **no agent, no chat message**); only
-        non-literal/complex values fall back to a seeded chat prompt (`needsAgent`). *Goal:*
-        shrink the agent fallback — (a) **token clicks apply directly** when the target maps
-        to a literal class/style/prop, (b) widen literal coverage, (c) make "applied directly"
-        the visible default with a rare, clear "needs agent" path, (d) confirm hot-reload
-        fires after a splice. Extend `test/prop-edit.mjs`; then carry to Svelte/others.
+  - [x] **Direct (agent-free) prop + token editing — the default; broadened.** ✅ 2026-06-27
+        (PR #30). React. (a) **token clicks apply directly** — `applyToken` IPC: T1 schema-enum
+        swap + T3 inline-style swap (property-name + value-family gated), agent fallback
+        otherwise; (b) broadened literals — TS casts + no-substitution template literals read
+        as literals; (c) PropPanel shows "Literal edits apply instantly"; (d) hot-reload no-op
+        guard. `test/prop-edit.mjs` extended (T1/T3, agent fallback, cross-family guard).
+        **Next:** Tailwind class swap (T2), carry direct token apply to Svelte.
 
 ## v3 — engineer handoff
 
