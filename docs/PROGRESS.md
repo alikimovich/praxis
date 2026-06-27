@@ -2,6 +2,42 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-27 — three stacked features: v5-D history UI, inspector→shadcn, direct prop/token edit
+
+Built as stacked PRs off main (#28 → #29 → #30); each its own full `verify` + a
+multi-agent adversarial review with fixes applied. Designed via a parallel design
+workflow; reviewed via per-PR review workflows.
+
+- **PR #28 — v5-D previous-agents history**, re-homed onto the v7 seam. Capture moved
+  into a shared `backends/record.ts` (reused by claude + codex; `ProviderSession` gained
+  `record`+`finalize`); persist on teardown in `agent.ts`. Renderer: `useHistory`, the
+  rail previous-sessions sub-list, and the `SessionReview` modal. Review caught two real
+  HIGH bugs (rail sub-list clipped horizontally → stack vertically; the modal was occluded
+  by the native preview → hide it while open).
+- **PR #29 — inspector surfaces → shadcn**: Inspector/Notes/Tokens/PropPanel migrated,
+  every test hook preserved, dead CSS removed. The whole chat panel is now Tailwind+shadcn.
+- **PR #30 — direct (agent-free) prop+token editing**: broadened literals (TS casts +
+  no-sub template literals) and a new `applyToken` IPC (T1 schema-enum swap + T3 inline-
+  style swap), agent fallback otherwise. Review caught a real correctness bug — T3 matched
+  on value-family only, so a color token could land in `fontWeight`; fixed by gating on the
+  CSS property name (+ a re-inspect race guard).
+
+**Learnings:**
+- **Stacked PRs** are the clean way to ship interdependent work when you can't auto-merge:
+  #2 and #3 both touch `Inspector.tsx`; branching #3 off #2 (off #1) means each PR's diff
+  is just its own change and there are zero conflicts — merge bottom-up, GitHub retargets.
+- **Re-homing across a refactor** (v5-D capture built against the pre-v7 monolith) is a
+  *manual* re-apply, never a cherry-pick — the old `agent.ts` would clobber the seam. A
+  shared helper (`record.ts`) kept each provider's change to ~4 lines.
+- **Tailwind v4's CSS parser chokes on an apostrophe even inside a `/* */` comment**
+  ("Unterminated string") — keep comments apostrophe-free.
+- **Renderer-DOM modals are occluded by the native `WebContentsView` preview** — hide the
+  preview (reuse the drag `setVisible` path) while any centered overlay is open. The
+  PropPanel inset-strip pattern only works for edge-docked panels.
+- **Direct edits from semi-trusted token files** are injection-safe via `JSON.stringify`
+  into the JS string literal, but **family checks must gate on the CSS property name**, not
+  just the value shape, or you write a valid-but-wrong value silently.
+
 ## 2026-06-26 — v7: ModelProvider seam + Codex backend scaffold
 
 Started multi-provider backends. **User decision: subscription login, not BYO API

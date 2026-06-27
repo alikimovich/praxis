@@ -24,3 +24,21 @@ export function Inline(): JSX.Element {
 export function Heading(): JSX.Element {
   return <h1 className="title">Welcome</h1>
 }
+
+// v6 direct-edit fixtures: a TS-cast literal (`as const`) + a no-substitution
+// template literal should read as plain literals, not `expression:true`.
+export function Demo2(): JSX.Element {
+  return <Badge variant={'ok' as const} label={`Go`} />
+}
+
+// A host element with a single literal inline-style color property — the T3
+// token-style-swap target.
+export function Swatch(): JSX.Element {
+  return <span style={{ color: '#111827' }} className="sw">x</span>
+}
+
+// A non-color style property — a colors token must NOT swap this (property-name
+// gating), even though '400' is a value; it must fall back to the agent.
+export function Weighted(): JSX.Element {
+  return <span style={{ fontWeight: '400' }} className="wt">x</span>
+}

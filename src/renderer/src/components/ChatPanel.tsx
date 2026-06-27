@@ -290,20 +290,48 @@ export default function ChatPanel(): React.JSX.Element {
     }
   }
 
-  // Apply a design token to the selected element via the agent. Page-derived
-  // element fields (and the repo-derived token) are sanitized + bounded so an
-  // injected value can't masquerade as a new instruction in the prompt.
+  // Apply a design token to the selected element. Direct-first: when the token
+  // maps to an existing literal (a schema enum prop, a single inline-style
+  // property), it's spliced straight to source (instant hot-reload, no agent);
+  // ambiguous cases fall back to a sanitized agent prompt. Page/repo-derived
+  // strings are bounded via oneLine so an injected value can't masquerade as a new
+  // instruction in that fallback.
   const pickToken = (group: string, token: Token): void => {
-    if (!selected) return
+    if (!selected || !projectRoot) return
     const id = selected.id ? oneLine(selected.id, 64) : ''
     const cls = selected.classes[0] ? oneLine(selected.classes[0], 64) : ''
     const ident = id ? `#${id}` : cls ? `.${cls}` : ''
-    const name = oneLine(token.name, 80)
-    const value = oneLine(token.value, 120)
-    seedPrompt(
-      `Apply the ${oneLine(group, 32)} token “${name}” (${value}) to the selected ` +
-        `<${oneLine(selected.tag, 32)}${ident}> element. `
-    )
+    const seedFallback = (): void =>
+      seedPrompt(
+        `Apply the ${oneLine(group, 32)} token “${oneLine(token.name, 80)}” (${oneLine(token.value, 120)}) to the selected ` +
+          `<${oneLine(selected.tag, 32)}${ident}> element. `
+      )
+    // Snapshot the target so a mid-flight selection/project switch can't have a
+    // stale re-inspect stamp this element's props over the new selection.
+    const root = projectRoot
+    const src = selected.source
+    void window.api.props
+      .applyToken(root, { source: src, token, group, tokenSource: tokenSet?.source ?? 'none', classes: selected.classes })
+      .then((res) => {
+        if (!res.applied) {
+          seedFallback() // needsAgent or error → let the agent handle it
+          return
+        }
+        // Refresh the panel from the now-edited source — only if still current.
+        if (src)
+          void window.api.props
+            .inspect(root, src)
+            .then((r) => {
+              if (
+                r &&
+                useSession.getState().projectRoot === root &&
+                useSelection.getState().selected?.source === src
+              )
+                useSelection.getState().setInspection(r)
+            })
+            .catch(() => {})
+      })
+      .catch(seedFallback)
   }
 
   // "Ask dsgn to change this…" — seed the composer with the element reference
