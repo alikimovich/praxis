@@ -79,7 +79,43 @@ try {
     throw new Error(`column-stamped resolved to "${byCol?.component}", expected p`)
   }
 
-  console.log('PROP-EDIT-SVELTE OK — cross-file $props schema + literal edit to .svelte')
+  // --- Direct token apply (T2) for .svelte: a tailwind color token swaps the
+  // single color utility in a host element's class. (<span>, Card.svelte:13) ---
+  const tok = await win.evaluate(
+    (a) =>
+      window.api.props.applyToken(a.fixture, {
+        source: 'src/Card.svelte:13',
+        token: { name: 'primary', value: 'oklch(0.5 0.2 270)' },
+        group: 'colors',
+        tokenSource: 'tailwind',
+        classes: ['text-gray-500', 'font-bold']
+      }),
+    { fixture }
+  )
+  if (!tok.applied) throw new Error(`svelte token apply not applied: ${JSON.stringify(tok)}`)
+  if (!readFileSync(card, 'utf8').includes('class="text-primary font-bold"')) {
+    throw new Error('svelte token did not swap text-gray-500 → text-primary')
+  }
+
+  // Non-tailwind token source on the same element → agent (no class swap).
+  const tokAgent = await win.evaluate(
+    (a) =>
+      window.api.props.applyToken(a.fixture, {
+        source: 'src/Card.svelte:6',
+        token: { name: 'primary', value: '#fff' },
+        group: 'colors',
+        tokenSource: 'manifest',
+        classes: ['title']
+      }),
+    { fixture }
+  )
+  if (tokAgent.applied || !tokAgent.needsAgent) {
+    throw new Error(`non-tailwind svelte token should need the agent: ${JSON.stringify(tokAgent)}`)
+  }
+
+  console.log(
+    'PROP-EDIT-SVELTE OK — cross-file $props schema + literal edit + direct tailwind token swap'
+  )
 } catch (err) {
   console.error('PROP-EDIT-SVELTE FAILED:', err?.message ?? err)
   process.exitCode = 1

@@ -9,7 +9,13 @@ import type {
   PropKind,
   TokenEdit
 } from '../shared/api'
-import { applySvelteEdit, applySvelteTextEdit, inspectSvelteProps } from './props-svelte'
+import {
+  applySvelteEdit,
+  applySvelteTextEdit,
+  applySvelteTokenEdit,
+  inspectSvelteProps
+} from './props-svelte'
+import { swapColorClass } from './tw-classes'
 
 /**
  * Prop editing is framework-agnostic by dispatch: the source file's extension
@@ -634,31 +640,6 @@ function stylePropKey(p: BabelNode): string | null {
   return null
 }
 
-// T2 — Tailwind color-utility class swap. The color utility families; `text-` is
-// shared with font-size, so a `text-<size>` is excluded from the color match.
-const COLOR_CLASS_FAMILIES = [
-  'bg', 'text', 'border', 'ring', 'fill', 'stroke', 'decoration', 'outline', 'accent',
-  'caret', 'divide', 'from', 'via', 'to', 'placeholder', 'shadow'
-]
-const TW_TEXT_SIZES = new Set([
-  'xs', 'sm', 'base', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl', '6xl', '7xl', '8xl', '9xl'
-])
-
-/** If `cls` is a plain color utility, return its family prefix (e.g. 'text' for
- * `text-gray-500`); null otherwise. Skips variants (`hover:…`) and arbitrary
- * values (`[…]`) — too ambiguous to rewrite safely. */
-function colorClassFamily(cls: string): string | null {
-  if (cls.includes(':') || cls.includes('[')) return null
-  for (const f of COLOR_CLASS_FAMILIES) {
-    if (cls.startsWith(`${f}-`)) {
-      const suffix = cls.slice(f.length + 1)
-      if (f === 'text' && TW_TEXT_SIZES.has(suffix)) return null // text-sm is a font size
-      return f
-    }
-  }
-  return null
-}
-
 /** The literal-string AST node behind a className attr value (`"…"` or `{'…'}`),
  * or null for an expression/dynamic className we must not rewrite. */
 function classNameStringNode(v: BabelNode | null | undefined): BabelNode | null {
@@ -726,8 +707,8 @@ async function applyTokenEdit(root: string, edit: TokenEdit): Promise<PropEditRe
   if (!edit.source) return toAgent()
   const loc = resolveSource(root, edit.source)
   if (!loc) return { applied: false, error: 'Could not resolve the source location.' }
-  // Svelte token-splice is a follow-up; route to the agent for now.
-  if (loc.file.endsWith('.svelte')) return toAgent()
+  // `.svelte` → the Svelte adapter (Tailwind class swap; other cases → agent).
+  if (loc.file.endsWith('.svelte')) return applySvelteTokenEdit(root, edit, loc)
   let code: string
   try {
     code = await readFile(loc.file, 'utf8')
@@ -764,27 +745,20 @@ async function applyTokenEdit(root: string, edit: TokenEdit): Promise<PropEditRe
     )
     const strNode = classNameStringNode(classAttr?.value as BabelNode | null | undefined)
     if (strNode) {
-      const raw = String((strNode as unknown as { value: string }).value)
-      const classes = raw.split(/\s+/).filter(Boolean)
-      const colorClasses = classes.filter((c) => colorClassFamily(c) != null)
-      // The token name becomes a class suffix — require a single safe utility
-      // token (no spaces/quotes), so we can't accidentally inject extra classes.
-      if (colorClasses.length === 1 && /^[\w/.-]+$/.test(edit.token.name)) {
-        const fam = colorClassFamily(colorClasses[0])!
-        const swapped = classes
-          .map((c) => (c === colorClasses[0] ? `${fam}-${edit.token.name}` : c))
-          .join(' ')
-        {
-          const next =
-            code.slice(0, strNode.start) + JSON.stringify(swapped) + code.slice(strNode.end)
-          if (next === code) return { applied: true }
-          try {
-            await writeFile(loc.file, next, 'utf8')
-          } catch {
-            return { applied: false, error: 'Could not write the source file.' }
-          }
-          return { applied: true }
+      const swapped = swapColorClass(
+        String((strNode as unknown as { value: string }).value),
+        edit.token.name
+      )
+      if (swapped != null) {
+        const next =
+          code.slice(0, strNode.start) + JSON.stringify(swapped) + code.slice(strNode.end)
+        if (next === code) return { applied: true }
+        try {
+          await writeFile(loc.file, next, 'utf8')
+        } catch {
+          return { applied: false, error: 'Could not write the source file.' }
         }
+        return { applied: true }
       }
     }
   }

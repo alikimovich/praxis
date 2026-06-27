@@ -1,6 +1,14 @@
 import { readFile, writeFile } from 'fs/promises'
 import { basename, dirname, isAbsolute, join, normalize, relative } from 'path'
-import type { PropEdit, PropEditResult, PropField, PropInspection, PropKind } from '../shared/api'
+import type {
+  PropEdit,
+  PropEditResult,
+  PropField,
+  PropInspection,
+  PropKind,
+  TokenEdit
+} from '../shared/api'
+import { swapColorClass } from './tw-classes'
 import {
   agentPromptFor,
   isValidAttrName,
@@ -531,6 +539,51 @@ export async function applySvelteTextEdit(
   const lead = allWs ? '' : (raw.match(/^\s*/)?.[0] ?? '')
   const trail = allWs ? '' : (raw.match(/\s*$/)?.[0] ?? '')
   const next = code.slice(0, start) + lead + edit.text + trail + code.slice(end)
+  try {
+    await writeFile(loc.file, next, 'utf8')
+  } catch {
+    return { applied: false, error: 'Could not write the source file.' }
+  }
+  return { applied: true }
+}
+
+/**
+ * Direct token application for `.svelte` — currently the Tailwind color-class swap
+ * (the JSX T2 counterpart): a tailwind color token, an element with a literal
+ * `class="…"` whose single color utility is swapped to the token. Inline-style
+ * (`style="…"`) and component-prop (enum) token cases route to the agent for now.
+ */
+export async function applySvelteTokenEdit(
+  root: string,
+  edit: TokenEdit,
+  loc: ResolvedSource
+): Promise<PropEditResult> {
+  const toAgent = (): PropEditResult => ({
+    applied: false,
+    needsAgent: true,
+    agentPrompt: `Apply the ${edit.group} token "${edit.token.name}" (${edit.token.value}) to the selected element${edit.source ? ` in ${edit.source}` : ''}.`
+  })
+  const isColorGroup = /colou?r/i.test(edit.group)
+  if (edit.tokenSource !== 'tailwind' || !isColorGroup) return toAgent()
+  let code: string
+  try {
+    code = await readFile(loc.file, 'utf8')
+  } catch {
+    return { applied: false, error: 'Could not read the source file.' }
+  }
+  const ast = await parseSvelte(code)
+  if (!ast) return toAgent()
+  const el = findElement(ast, code, loc.line, loc.column)
+  if (!el) return toAgent()
+
+  // The `class` attribute, read as a single literal string (`class="…"`).
+  const classAttr = readAttributes(el).find((a) => a.name === 'class')
+  if (!classAttr || classAttr.kind !== 'string' || classAttr.expression) return toAgent()
+  const swapped = swapColorClass(String(classAttr.value ?? ''), edit.token.name)
+  if (swapped == null) return toAgent()
+  // readAttributes gives the WHOLE attribute span (`class="…"`); rewrite it.
+  const next = `${code.slice(0, classAttr.start)}class="${swapped}"${code.slice(classAttr.end)}`
+  if (next === code) return { applied: true }
   try {
     await writeFile(loc.file, next, 'utf8')
   } catch {
