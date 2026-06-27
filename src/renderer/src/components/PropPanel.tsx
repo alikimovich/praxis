@@ -75,6 +75,22 @@ export default function PropPanel({
     }
   }
 
+  // Reset-to-default: remove the attribute from source so the value falls back to
+  // the component's declared default. Reversible via Cmd+Z (F3b). (v8 F2)
+  const reset = async (field: PropField): Promise<void> => {
+    setBusy(field.name)
+    setError(null)
+    try {
+      const res = await window.api.props.remove(root, source, field.name)
+      if (!res.applied) setError(res.error ?? 'Could not reset the prop.')
+    } catch {
+      setError('The reset could not be sent.')
+    } finally {
+      setBusy(null)
+      reload() // re-inspect: the attribute is gone, the schema default shows
+    }
+  }
+
   return (
     <aside
       className="proppanel fixed bottom-0 right-0 top-[var(--titlebar-h)] z-50 flex w-80 flex-col border-l bg-background shadow-[-4px_0_18px_rgba(0,0,0,0.08)]"
@@ -120,6 +136,7 @@ export default function PropPanel({
             field={f}
             busy={busy === f.name}
             onApply={(v) => apply(f, v)}
+            onReset={() => reset(f)}
             onAskAgent={() => onSeedPrompt(`In ${source}, change the \`${f.name}\` prop.`)}
           />
         ))}
@@ -132,15 +149,22 @@ function PropRow({
   field,
   busy,
   onApply,
+  onReset,
   onAskAgent
 }: {
   field: PropField
   busy: boolean
   onApply: (v: string | number | boolean) => void
+  onReset: () => void
   onAskAgent: () => void
 }): React.JSX.Element {
   const [draft, setDraft] = useState(field.value ?? '')
   useEffect(() => setDraft(field.value ?? ''), [field.value])
+
+  // The attribute is present on the element (not a pure schema offering) → it can
+  // be reset/removed. Never offer it for a required prop (would break the component).
+  const isPresent = !field.fromSchema || field.value !== undefined || field.expression === true
+  const canReset = isPresent && !field.required
 
   let control: React.JSX.Element
   if (field.expression || field.kind === 'other') {
@@ -213,14 +237,36 @@ function PropRow({
 
   return (
     <div className="proppanel__row grid grid-cols-[1fr_auto] items-center gap-x-2.5 gap-y-2">
-      <span
-        className="proppanel__name overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[12.5px]"
-        title={field.description}
-      >
-        {field.name}
-        {field.required && <span className="proppanel__req ml-0.5 text-red-700">*</span>}
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span
+          className="proppanel__name overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[12.5px]"
+          title={field.description}
+        >
+          {field.name}
+          {field.required && <span className="proppanel__req ml-0.5 text-red-700">*</span>}
+        </span>
+        {canReset && (
+          <button
+            type="button"
+            className="proppanel__reset shrink-0 text-[10.5px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+            onClick={onReset}
+            disabled={busy}
+            title={
+              field.default !== undefined
+                ? `Reset to default (${String(field.default)})`
+                : 'Remove this prop from source'
+            }
+          >
+            reset
+          </button>
+        )}
       </span>
       {control}
+      {field.default !== undefined && (
+        <span className="proppanel__default col-span-full text-[10.5px] text-muted-foreground">
+          default: <code className="font-mono">{String(field.default)}</code>
+        </span>
+      )}
       {field.description && (
         <span className="proppanel__desc col-span-full text-[11px] leading-snug text-muted-foreground">
           {field.description}

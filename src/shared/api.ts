@@ -256,6 +256,10 @@ export interface PropField {
   required?: boolean
   /** This prop isn't currently on the element (offered from the schema to add). */
   fromSchema?: boolean
+  /** The component's declared default (react-docgen), when one was resolved.
+   *  Drives the "reset to default" affordance — resetting removes the attribute
+   *  so the value falls back to this. (v8 F2) */
+  default?: string | number | boolean
 }
 
 /** Result of inspecting a selected element's editable props. */
@@ -476,6 +480,9 @@ export interface DsgnApi {
     apply: (root: string, edit: PropEdit) => Promise<PropEditResult>
     /** Apply a design token directly when it maps to a literal; agent-fallback otherwise. */
     applyToken: (root: string, edit: TokenEdit) => Promise<PropEditResult>
+    /** Remove a prop attribute from the element's source (reset-to-default). Reversible
+     *  via the F3b edit history. A no-op (already absent) reports applied. (v8 F2) */
+    remove: (root: string, source: string, name: string) => Promise<PropEditResult>
   }
   text: {
     /** Rewrite the element's text content in source; agent-fallback for complex content. */

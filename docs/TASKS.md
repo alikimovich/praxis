@@ -33,8 +33,15 @@ run comment-work in parallel; and give the agent a versioned set of operating
       `select-element.mjs` (capture + owner re-select) + `setup-detect.mjs` (plugin stamp).
       **Remaining:** multi-level owner-walk (one level now); RN component-source (web-only now);
       remove-a-prop-on-reset write-back (rides F2/F3b).
-- [ ] **F2 — broaden direct editing** (fewer "edit via chat"): widen literal cases in
-      `applyPropEdit`; most of the win rides F3a (per-instance values become real edits).
+- [x] **F2 — broaden direct editing** (fewer "edit via chat"). ✅ 2026-06-27 — the
+      literal set was already broad (expression-container literals, TS casts, template
+      literals, unary minus all read as clean literals; genuine handlers/member/array
+      expressions correctly stay chat-only), so the win was **schema defaults + reset-to-
+      default**: `docgenPropToField` parses react-docgen `defaultValue` → `PropField.default`
+      (shown in the panel); a new `props.remove` IPC (`removeProp` / `removeSvelteProp`)
+      deletes an attribute from source so the value falls back to its default — reversible
+      via F3b, offered only for present, non-required props. Per-instance values ride F3a.
+      Tests extend `prop-edit.mjs` (Chip destructuring-default fixture) + `prop-edit-svelte.mjs`.
 - [x] **F3b — undo/redo for ALL dsgn source edits** (Cmd+Z / Cmd+Shift+Z / Cmd+Y).
       ✅ 2026-06-27 — `src/main/edit-history.ts` engine: every direct apply path (React
       + Svelte props/text/token swaps) routes through `commitEdit`, which writes then

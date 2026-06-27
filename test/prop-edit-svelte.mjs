@@ -113,8 +113,27 @@ try {
     throw new Error(`non-tailwind svelte token should need the agent: ${JSON.stringify(tokAgent)}`)
   }
 
+  // --- v8 F2: reset-to-default removes an attribute from .svelte source, and it's
+  // reversible via the F3b history. Remove `count={3}` from the <Button> usage. ---
+  const beforeRm = readFileSync(card, 'utf8')
+  if (!beforeRm.includes('count={3}')) throw new Error('precondition: Button should have count={3}')
+  const svRm = await win.evaluate(
+    (a) => window.api.props.remove(a.fixture, 'src/Card.svelte:7', 'count'),
+    { fixture }
+  )
+  if (!svRm.applied) throw new Error(`svelte reset failed: ${JSON.stringify(svRm)}`)
+  const afterRm = readFileSync(card, 'utf8')
+  if (afterRm.includes('count={3}')) throw new Error('svelte reset did not remove count={3}')
+  if (!/<Button variant="warn" label="Go" rounded=\{true\} \/>/.test(afterRm)) {
+    throw new Error(`svelte reset left a malformed usage: ${afterRm.match(/<Button[^>]*\/>/)?.[0]}`)
+  }
+  const svUndo = await win.evaluate((a) => window.api.edits.undo(a.fixture), { fixture })
+  if (!svUndo.ok || readFileSync(card, 'utf8') !== beforeRm) {
+    throw new Error('undo did not restore the svelte reset-removed prop')
+  }
+
   console.log(
-    'PROP-EDIT-SVELTE OK — cross-file $props schema + literal edit + direct tailwind token swap'
+    'PROP-EDIT-SVELTE OK — cross-file $props schema + literal edit + tailwind token swap + F2 reset/undo'
   )
 } catch (err) {
   console.error('PROP-EDIT-SVELTE FAILED:', err?.message ?? err)

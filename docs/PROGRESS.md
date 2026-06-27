@@ -2,6 +2,28 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-27 — v8 F2: broaden direct editing (schema defaults + reset-to-default)
+
+- **Scoped first** (Explore agent): the literal-recognition set in `props.ts` is already
+  broad — expression-container literals (`count={3}`, `active={true}`), TS casts, no-sub
+  template literals, unary minus all read as clean literals; genuine expressions (handlers,
+  member/array/object) correctly route to chat. So F2 wasn't "recognize more literals" —
+  the gaps were **no schema defaults** and **no removal/reset**.
+- **Schema defaults**: `docgenPropToField` now parses react-docgen's `defaultValue` source
+  string into a typed `PropField.default` (handles `'brand'` / `3` / `false`, drops
+  computed/ill-typed). The panel shows `default: X` per field. (react-docgen does extract
+  destructuring defaults like `{ tone = 'brand' }` for function components — confirmed live.)
+- **Reset-to-default**: new `props.remove(root, source, name)` IPC → `removeProp` (React) /
+  `removeSvelteProp` (Svelte) deletes the attribute from source, collapsing one run of
+  adjacent whitespace so nothing dangles. Routes through `commitEdit`, so a reset is
+  reversible with Cmd+Z (F3b). An already-absent prop is a no-op success.
+- **UI**: PropPanel shows a `reset` link only for props actually present on the element and
+  **not required** (removing a required prop would break the component) — verified in the
+  10-prop-editor.png artifact (variant*/label* have no reset; count/rounded do).
+- Tests: `prop-edit.mjs` gains a `Chip` destructuring-default fixture (default extraction +
+  reset→remove→undo + absent-prop no-op); `prop-edit-svelte.mjs` gains a `.svelte`
+  reset→remove→undo. Full `verify` green (live AGENT-E2E passed).
+
 ## 2026-06-27 — v8 F3b: undo/redo for ALL direct dsgn source edits
 
 - New `src/main/edit-history.ts` — the reversible-edit engine. Every direct apply path

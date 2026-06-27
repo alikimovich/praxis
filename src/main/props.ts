@@ -13,7 +13,8 @@ import {
   applySvelteEdit,
   applySvelteTextEdit,
   applySvelteTokenEdit,
-  inspectSvelteProps
+  inspectSvelteProps,
+  removeSvelteProp
 } from './props-svelte'
 import { swapTailwindClass } from './tw-classes'
 import { recordEdit, undo, redo, canUndo, canRedo } from './edit-history'
@@ -375,6 +376,34 @@ interface DocgenProp {
   description?: string
   tsType?: { name?: string; elements?: Array<{ name?: string; value?: string }> }
   type?: { name?: string; value?: unknown }
+  /** react-docgen's source for the prop's default (e.g. `"'brand'"`, `"3"`, `"false"`). */
+  defaultValue?: { value?: string; computed?: boolean }
+}
+
+/**
+ * Parse react-docgen's default-value *source string* into a typed literal, matching
+ * the field's kind. Computed defaults (a non-literal expression) and values that
+ * don't fit the kind are dropped — we only surface a default we can faithfully
+ * round-trip into the "reset to default" affordance. (v8 F2)
+ */
+function parseDefaultValue(
+  kind: PropKind,
+  raw: { value?: string; computed?: boolean } | undefined,
+  options?: string[]
+): string | number | boolean | undefined {
+  if (!raw || raw.computed || raw.value == null) return undefined
+  const v = raw.value.trim()
+  if (kind === 'boolean') return v === 'true' ? true : v === 'false' ? false : undefined
+  if (kind === 'number') {
+    const n = Number(v)
+    return Number.isFinite(n) ? n : undefined
+  }
+  // string / enum — strip a single/double-quote or template-backtick wrapper.
+  const m = v.match(/^(['"`])([\s\S]*)\1$/)
+  if (!m) return undefined
+  const s = m[2]
+  if (kind === 'enum' && options && !options.includes(s)) return undefined
+  return s
 }
 
 function docgenPropToField(name: string, p: DocgenProp): PropField {
@@ -399,12 +428,14 @@ function docgenPropToField(name: string, p: DocgenProp): PropField {
       options = vals.map((v) => v.replace(/^['"]|['"]$/g, ''))
     }
   }
+  const def = parseDefaultValue(kind, p.defaultValue, options)
   return {
     name,
     kind,
     ...(options ? { options } : {}),
     ...(p.required ? { required: true } : {}),
     ...(p.description ? { description: p.description } : {}),
+    ...(def !== undefined ? { default: def } : {}),
     fromSchema: true
   }
 }
@@ -531,6 +562,35 @@ async function applyPropEdit(root: string, edit: PropEdit): Promise<PropEditResu
   }
   // commitEdit skips a no-op write and records the edit for undo/redo.
   return commitEdit(root, loc.file, code, next, `${edit.source}:${edit.name}`)
+}
+
+/**
+ * Remove a prop attribute from the element's source — the "reset to default"
+ * action (the value falls back to the component's declared default). Works for any
+ * attribute, including expression-valued ones. Reversible via the F3b edit history;
+ * an already-absent prop is a successful no-op. (v8 F2)
+ */
+async function removeProp(root: string, source: string, name: string): Promise<PropEditResult> {
+  if (!isValidAttrName(name)) return { applied: false, error: 'Invalid prop name.' }
+  const loc = resolveSource(root, source)
+  if (!loc) return { applied: false, error: 'Could not resolve the source location.' }
+  if (loc.file.endsWith('.svelte')) return removeSvelteProp(root, source, name, loc)
+  let code: string
+  try {
+    code = await readFile(loc.file, 'utf8')
+  } catch {
+    return { applied: false, error: 'Could not read the source file.' }
+  }
+  const found = await findElementAtLine(code, loc.line, loc.column)
+  if (!found) return { applied: false, error: 'Could not find the element.' }
+  const attr = readAttributes(found.opening).find((a) => a.name === name)
+  if (!attr) return { applied: true } // already absent — nothing to remove
+  // Delete the attribute and one run of preceding whitespace, so we don't leave a
+  // double space or a dangling indented blank where it sat.
+  let start = attr.start
+  while (start > 0 && /\s/.test(code[start - 1])) start--
+  const next = code.slice(0, start) + code.slice(attr.end)
+  return commitEdit(root, loc.file, code, next, `${source}:${name}`)
 }
 
 export function agentPromptFor(edit: PropEdit): string {
@@ -807,6 +867,9 @@ export function registerPropsIpc(): void {
   ipcMain.handle('props:inspect', (_e, root: string, source: string) => inspectProps(root, source))
   ipcMain.handle('props:apply', (_e, root: string, edit: PropEdit) => applyPropEdit(root, edit))
   ipcMain.handle('props:applyToken', (_e, root: string, edit: TokenEdit) => applyTokenEdit(root, edit))
+  ipcMain.handle('props:remove', (_e, root: string, source: string, name: string) =>
+    removeProp(root, source, name)
+  )
   ipcMain.handle('text:apply', (_e, root: string, edit: { source: string; text: string }) =>
     applyTextEdit(root, edit)
   )
