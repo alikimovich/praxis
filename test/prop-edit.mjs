@@ -208,8 +208,43 @@ try {
     throw new Error('colors token wrongly written into fontWeight')
   }
 
+  // --- Token direct apply (T2): a tailwind color token swaps the single color
+  // utility in a literal className. (TwColor, Badge.tsx:48) ---
+  const t2 = await win.evaluate(
+    (a) =>
+      window.api.props.applyToken(a.fixture, {
+        source: 'src/Badge.tsx:48',
+        token: { name: 'primary', value: 'oklch(0.5 0.2 270)' },
+        group: 'colors',
+        tokenSource: 'tailwind',
+        classes: ['text-gray-500', 'font-bold']
+      }),
+    { fixture }
+  )
+  if (!t2.applied) throw new Error(`token T2 (tailwind class) not applied: ${JSON.stringify(t2)}`)
+  if (!readFileSync(badge, 'utf8').includes('text-primary font-bold')) {
+    throw new Error('token T2 did not swap text-gray-500 → text-primary')
+  }
+
+  // --- T2 guard: two color utilities is ambiguous → agent, no silent swap.
+  // (TwTwo, Badge.tsx:53) ---
+  const t2amb = await win.evaluate(
+    (a) =>
+      window.api.props.applyToken(a.fixture, {
+        source: 'src/Badge.tsx:53',
+        token: { name: 'primary', value: 'oklch(0.5 0.2 270)' },
+        group: 'colors',
+        tokenSource: 'tailwind',
+        classes: ['text-gray-500', 'bg-blue-100']
+      }),
+    { fixture }
+  )
+  if (t2amb.applied || !t2amb.needsAgent) {
+    throw new Error(`two color utilities should be ambiguous → agent: ${JSON.stringify(t2amb)}`)
+  }
+
   console.log(
-    'PROP-EDIT OK — schema, broadened literals, direct token apply (T1+T3), agent fallback'
+    'PROP-EDIT OK — schema, broadened literals, direct token apply (T1/T2/T3), agent fallback'
   )
 } catch (err) {
   console.error('PROP-EDIT FAILED:', err?.message ?? err)
