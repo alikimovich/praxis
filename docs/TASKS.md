@@ -135,8 +135,18 @@ the file-edit/permission/skill tooling the Claude Agent SDK gives for free.
       the active session on the new backend; a per-provider subscription-login hint
       (`provider-hint`) when non-Claude is selected. `chat-render.mjs` extended.
       Gemini/Grok join the picker when their adapters land.
-- [ ] **Then:** Gemini CLI provider (subprocess, `--output-format stream-json` JSONL →
-      `AgentEvent`), then Grok Build CLI — each adds itself to the PROVIDERS picker list.
+- [x] **Gemini CLI provider.** ✅ 2026-06-27 (PR #34) — `backends/gemini.ts`: per-turn
+      `gemini -p … --output-format stream-json` subprocess, JSONL (init/message/tool_use/
+      tool_result/error/result) → `AgentEvent`; Google-account login; fails soft if the CLI
+      is absent / not signed in. In `pickProvider` + the PROVIDERS picker. `provider-seam.mjs`
+      covers the soft-fail. **Known limit:** headless `-p` is one turn per process, so context
+      doesn't carry across turns yet (follow-up: CLI session/checkpoint or ACP).
+- [ ] **Then:** Grok Build CLI provider (`@xai-official/grok`, `grok login`) — same
+      subprocess-adapter pattern; adds itself to the PROVIDERS picker.
+- [ ] **Make a non-Claude backend real** (needs the user): install the CLI/SDK + log in
+      (`codex login` / `gemini` / `grok login`), then verify a live turn + confirm/fix the
+      event mapping against real output; map each agent's tool approvals → permission cards;
+      consider persistent-context mode for Gemini/Grok.
 - [ ] **Minor open calls:** which provider after Codex (rec: Gemini); each agent uses its own
       conventions file (Codex `AGENTS.md`, Gemini `GEMINI.md`) — skills stay Claude-only;
       v0 `/generate` action (separate workstream) — build only if wanted.

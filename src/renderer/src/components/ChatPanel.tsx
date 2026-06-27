@@ -61,6 +61,12 @@ const PROVIDERS: { value: string; label: string; login: string | null; blurb: st
     label: 'Codex (GPT)',
     login: 'codex login',
     blurb: 'OpenAI Codex runs on your ChatGPT subscription'
+  },
+  {
+    value: 'gemini',
+    label: 'Gemini',
+    login: 'gemini',
+    blurb: 'Google Gemini CLI runs on your Google account'
   }
 ]
 
