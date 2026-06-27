@@ -5,6 +5,7 @@ import { projectKey } from '../../shared/projectKey'
 import type { ModelProvider, PendingPrompt, ProviderSession } from './types'
 import { describeTool } from './tools'
 import { createRecordCapture } from './record'
+import { dsgnRules } from '../rules'
 
 /**
  * EXPERIMENTAL (v7) — Google Gemini backend via the **Gemini CLI** (`gemini`).
@@ -65,6 +66,8 @@ async function startSession(
   let disposed = false
   let aborted = false
   let child: ChildProcessWithoutNullStreams | null = null
+  // dsgn rules (v8 R): no system-prompt arg here, so prepend them to the first turn.
+  let firstTurn = true
 
   const emit = (event: AgentEvent): void => {
     if (disposed) return
@@ -143,7 +146,9 @@ async function startSession(
     root,
     options,
     send: (text) => {
-      chain = chain.then(() => runTurn(text))
+      const prompt = firstTurn ? `${dsgnRules()}\n\n---\n\n${text}` : text
+      firstTurn = false
+      chain = chain.then(() => runTurn(prompt))
     },
     pending,
     emit,

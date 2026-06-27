@@ -18,10 +18,11 @@ Push edits onto the canvas (direct, instant, reversible) instead of through chat
 run comment-work in parallel; and give the agent a versioned set of operating
 **rules**. Full design + grounding + sequencing in `docs/PLAN-direct-editing.md`.
 
-- [ ] **R1 — "scope of an element edit" rule** (local vs project-wide; grep + update
-      shared terms; report what else changed). First entry in a versioned `dsgn rules`
-      set injected via the Claude preset `append` (`backends/claude.ts:91`); subprocess
-      backends prepend / use their conventions file. Pure `rules.ts` builder + test.
+- [x] **R1 — "scope of an element edit" rule.** ✅ 2026-06-27 (PR #41) — `src/main/rules.ts`
+      (pure, versioned `dsgnRules()` builder; `DSGN_RULES_VERSION`). Injected via the Claude
+      preset `append` (verified `systemPrompt.preset.append?: string` in the SDK types);
+      Codex + Gemini prepend it to the first turn. `test/rules.mjs` (pure) + AGENT-E2E confirms
+      the appended rules don't break a real Claude turn. The rules module is the home for R2+.
 - [ ] **F3a — resolve selection to the component INSTANCE, not the innermost host.**
       Stamp `data-dsgn-component-source` on component-tag JSX (not overwritten by
       children) **or** an instance source-index + owner-walk; "select owner component"

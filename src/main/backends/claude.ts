@@ -5,6 +5,7 @@ import { projectKey } from '../../shared/projectKey'
 import type { ModelProvider, PendingPrompt, ProviderSession } from './types'
 import { AUTO_ALLOW_TOOLS, describeTool, toolDetail, touchesSidecar } from './tools'
 import { createRecordCapture } from './record'
+import { dsgnRules } from '../rules'
 
 // The Agent SDK is ESM-only; this CJS main bundle must reach it via a dynamic
 // import() (preserved by Rollup for external deps) rather than a static require.
@@ -88,7 +89,9 @@ async function startSession(
     options: {
       cwd: root,
       settingSources: ['user', 'project', 'local'],
-      systemPrompt: { type: 'preset', preset: 'claude_code' },
+      // The repo's CLAUDE.md + skills load via settingSources; dsgn's own operating
+      // rules (v8 R) are appended to the Claude Code preset.
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: dsgnRules() },
       includePartialMessages: true,
       permissionMode: options.permissionMode ?? 'default',
       allowDangerouslySkipPermissions: true,
