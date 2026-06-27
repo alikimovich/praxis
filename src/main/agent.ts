@@ -7,13 +7,23 @@ import { EDIT_TOOLS } from './backends/tools'
 import { createSessionStore, type SessionStore } from './sessions-store'
 import { clearHistory } from './edit-history'
 import { isRepoRoot } from './git'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import {
   createWorktree,
   commitWorktree,
   removeWorktree,
   pruneOrphans,
+  branchPatch,
+  branchExists,
+  deleteBranch,
+  applyToWorkingTree,
   type Worktree
 } from './worktrees'
+
+const execFileP = promisify(execFile)
+const git = (root: string, args: string[]): Promise<{ stdout: string }> =>
+  execFileP('git', args, { cwd: root, timeout: 20000 }) as Promise<{ stdout: string }>
 
 // On-disk agent-session history (v5-D). Lazy so it resolves userData after the
 // app is ready; under the app's userData dir, out of any user repo.
@@ -264,6 +274,71 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
         // never registered, so reclaim it here or it orphans with no recovery path.
         await removeWorktree(root, wt, { keepBranch: false })
         return { ok: false, reason: err instanceof Error ? err.message : String(err) }
+      }
+    }
+  )
+
+  // v8 F1 Phase 2 — close the loop from a finished comment spawn to a visible result.
+  // APPLY: patch the spawn's branch diff onto the LIVE working tree (the dev server
+  // HMRs it). Not `git merge` — patch-apply tolerates the main agent's WIP; on textual
+  // overlap it surfaces conflict markers for the user to resolve.
+  ipcMain.handle('agent:spawn-apply', async (_e, root: string, branch: string) => {
+    if (!(await isRepoRoot(root))) return { ok: false, error: 'Not a git repository.' }
+    if (!(await branchExists(root, branch))) return { ok: false, error: 'That branch no longer exists.' }
+    const patch = await branchPatch(root, branch)
+    if (!patch.trim()) return { ok: false, error: 'That run made no changes to apply.' }
+    const res = await applyToWorkingTree(root, patch, worktreesDir())
+    if (res.ok) return { ok: true }
+    return {
+      ok: false,
+      conflict: res.conflict,
+      error: res.conflict
+        ? 'Applied with conflicts — resolve the markers in your editor, then keep going.'
+        : (res.error ?? 'Could not apply the changes.')
+    }
+  })
+
+  // DISCARD: drop the spawn's branch (the renderer also removes the history record).
+  ipcMain.handle('agent:spawn-discard', async (_e, root: string, branch: string) => {
+    if (branch) await deleteBranch(root, branch)
+    return { ok: true }
+  })
+
+  // PR: push the spawn's branch + open a PR from it (no checkout — the work is already
+  // committed on the branch). Persists prUrl back onto the history record.
+  ipcMain.handle(
+    'agent:spawn-pr',
+    async (_e, root: string, branch: string, title: string, recordId: string) => {
+      if (!(await isRepoRoot(root))) return { ok: false, error: 'Not a git repository.' }
+      if (!(await branchExists(root, branch))) return { ok: false, error: 'That branch no longer exists.' }
+      try {
+        await git(root, ['remote', 'get-url', 'origin'])
+      } catch {
+        return { ok: false, error: 'No “origin” remote — add one, then open a PR.' }
+      }
+      try {
+        await execFileP('gh', ['--version'])
+      } catch {
+        return { ok: false, error: 'GitHub CLI (gh) not found — install it to open a PR.' }
+      }
+      try {
+        await git(root, ['push', '-u', 'origin', branch])
+        const body = `Edited by a dsgn comment agent.\n\n🤖 Generated with [dsgn](https://github.com/alikimovich/dsgn)`
+        const { stdout } = await execFileP(
+          'gh',
+          ['pr', 'create', '--head', branch, '--title', title || 'dsgn comment edit', '--body', body],
+          { cwd: root }
+        )
+        const prUrl = stdout.trim().split('\n').find((l) => /^https?:\/\//.test(l)) ?? stdout.trim()
+        // Persist prUrl onto the history record (overwrite by id).
+        const rec = store().get(recordId)
+        if (rec) {
+          rec.prUrl = prUrl
+          store().save(rec)
+        }
+        return { ok: true, prUrl }
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) }
       }
     }
   )

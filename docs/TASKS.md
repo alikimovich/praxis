@@ -67,8 +67,13 @@ run comment-work in parallel; and give the agent a versioned set of operating
             `sessionId` events out of the main chat, rail shows a live working row →
             previous-agents on finish. `test/spawn-comment.mjs` (deterministic routing +
             a LIVE worktree spawn).
-      - [ ] **Phase 2 — Apply / PR / Discard** on a finished comment row (git apply
-            --3way onto the live tree + a ConflictPanel).
+      - [x] **Phase 2 — Apply / PR / Discard** on a finished comment row. ✅ 2026-06-27 —
+            `branchPatch` (the spawn's one commit, `<branch>^..<branch>`) + `agent:spawn-apply`
+            (patch onto the live tree via `applyToWorkingTree`, conflict surfaced), `agent:
+            spawn-discard` (delete branch + drop record), `agent:spawn-pr` (push + `gh pr
+            create --head`, persists prUrl). SessionReview gains the action bar for comment
+            records. `spawn-comment.mjs` adds a deterministic Apply/Discard round-trip.
+            (Rich ConflictPanel deferred — conflicts surface as a status note for now.)
       - [ ] **Phase 3 — scale + safety**: per-repo cap + queue, startup orphan prune,
             before-quit finalize, interrupt, concurrent-spawn e2e.
 

@@ -551,6 +551,18 @@ export interface DsgnApi {
       text: string,
       options?: AgentOptions
     ) => Promise<{ ok: boolean; spawnId?: string; branch?: string; reason?: string }>
+    /** F1 Phase 2 — apply a finished spawn's branch diff onto the live working tree
+     *  (the dev server HMRs it). `conflict` when the patch overlapped local edits. */
+    spawnApply: (root: string, branch: string) => Promise<{ ok: boolean; conflict?: boolean; error?: string }>
+    /** F1 Phase 2 — delete a finished spawn's branch (Discard). */
+    spawnDiscard: (root: string, branch: string) => Promise<{ ok: boolean }>
+    /** F1 Phase 2 — push a finished spawn's branch + open a PR from it. */
+    spawnPr: (
+      root: string,
+      branch: string,
+      title: string,
+      recordId: string
+    ) => Promise<{ ok: boolean; prUrl?: string; error?: string }>
     onEvent: (cb: (event: AgentEvent) => void) => () => void
   }
   /** Persisted agent-session history ("previous agents") — v5-D. */

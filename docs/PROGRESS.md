@@ -2,6 +2,23 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-27 — v8 F1 Phase 2: Apply / PR / Discard a finished comment spawn
+
+Closes the loop — a spawn's work, previously stranded on its `dsgn/comment-<id>` branch,
+now reaches the preview.
+
+- `worktrees.ts`: `branchPatch(repoRoot, branch)` = `<branch>^..<branch>` (the spawn's
+  single commit — exactly its edits, not the WIP base), plus `deleteBranch` / `branchExists`.
+- `agent.ts`: `agent:spawn-apply` (patch the branch diff onto the LIVE tree via the same
+  `applyToWorkingTree` — plain apply, `--3way` fallback, conflict reported), `agent:
+  spawn-discard` (delete the branch), `agent:spawn-pr` (push + `gh pr create --head <branch>`
+  with origin/gh preflight; persists prUrl onto the history record).
+- `SessionReview` gains an action bar for `kind:'comment'` records: **Apply** (preview HMRs
+  the change), **Open PR**, **Discard** (deletes branch + drops the record). Conflicts/errors
+  surface as a colored note. (Rich ConflictPanel deferred — a status note for now.)
+- `spawn-comment.mjs` adds a deterministic Apply/Discard round-trip (hand-built branch, no
+  model): apply lands the edit on the live tree, discard deletes the branch. Full verify green.
+
 ## 2026-06-27 — v8 F1 (phases 0+1): comment → parallel agent in its own git worktree
 
 **Contention decided by a design judge-panel** (3 models architected against the real

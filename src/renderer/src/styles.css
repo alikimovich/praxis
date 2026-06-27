@@ -549,6 +549,56 @@ body {
   font-size: 11.5px;
   color: var(--text-muted);
 }
+/* v8 F1 Phase 2: Apply / PR / Discard a finished comment spawn. */
+.review__actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  padding: 4px 16px 10px;
+}
+.review__action {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.review__action:hover:not(:disabled) {
+  background: var(--border);
+}
+.review__action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.review__action--primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+.review__action--primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+.review__action--danger {
+  color: #b91c1c;
+}
+.review__note {
+  flex: 0 0 auto;
+  margin: 0 16px 10px;
+  font-size: 11.5px;
+}
+.review__note--ok {
+  color: #15803d;
+}
+.review__note--warn {
+  color: #b45309;
+}
+.review__note--err {
+  color: #b91c1c;
+}
 .review__transcript {
   flex: 1 1 auto;
   overflow-y: auto;
