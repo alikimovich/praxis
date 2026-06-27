@@ -188,8 +188,10 @@ export default function ChatPanel(): React.JSX.Element {
       // (drop the working rail row; the finished run reappears in history). This
       // guard is what guarantees the active chat stays byte-clean under parallel spawns.
       if (event.sessionId) {
-        if (event.type === 'spawn-finished') {
-          const pkey = event.projectKey ?? ''
+        const pkey = event.projectKey ?? ''
+        if (event.type === 'spawn-started') {
+          useSpawns.getState().start(pkey, event.sessionId, event.branch)
+        } else if (event.type === 'spawn-finished') {
           useSpawns.getState().remove(pkey, event.sessionId)
           const root = useSession.getState().projectRoot
           if (root && projectKey(root) === pkey) void useHistory.getState().load(root)

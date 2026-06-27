@@ -424,10 +424,18 @@ body {
   color: var(--text-muted);
   font-size: 11.5px;
 }
+.rail__spawn .rail__session-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .rail__sdot--working {
   background: #f59e0b;
   opacity: 1;
   animation: rail-pulse 1.1s ease-in-out infinite;
+}
+.rail__sdot--queued {
+  background: var(--text-muted);
+  opacity: 0.55;
 }
 @keyframes rail-pulse {
   0%,

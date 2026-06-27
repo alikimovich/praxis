@@ -190,8 +190,10 @@ const api: DsgnApi = {
       root: string,
       text: string,
       options?: AgentOptions
-    ): Promise<{ ok: boolean; spawnId?: string; branch?: string; reason?: string }> =>
+    ): Promise<{ ok: boolean; spawnId?: string; branch?: string; queued?: boolean; reason?: string }> =>
       ipcRenderer.invoke('agent:spawn-comment', root, text, options),
+    spawnInterrupt: (spawnId: string): Promise<void> =>
+      ipcRenderer.invoke('agent:spawn-interrupt', spawnId),
     spawnApply: (
       root: string,
       branch: string

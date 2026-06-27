@@ -2,6 +2,28 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-27 — v8 F1 Phase 3: per-repo cap + FIFO queue + interrupt (F1 complete)
+
+The "N parallel agents never wedge or leak" hardening — completes F1 and v8.
+
+- **Cap + queue** (`agent.ts`): `MAX_SPAWNS_PER_REPO = 3`. A spawn over the cap is pushed
+  to a FIFO `spawnQueue` (returns `{queued:true}`); `pumpQueue(parentKey)` runs on each
+  `finalizeSpawn` and starts the next queued spawn as a slot frees. The spawn id is
+  assigned UP FRONT so the rail row is stable across the queued→running flip; a
+  `spawn-started` event carries the branch when a queued spawn actually starts.
+  `startSpawn` is the shared create-worktree-+-start path (immediate and dequeued),
+  reclaiming the worktree + pumping the queue on any failure.
+- **Interrupt** (`agent:spawn-interrupt`): cancels a running spawn (`session.interrupt()` →
+  done → finalize commits whatever it did) or drops a still-queued one. Surfaced as a ×
+  on each rail working/queued row.
+- **Already landed in the F1 review fixes:** startup orphan-prune (open-project) and
+  before-quit-leave-for-prune (no work lost), so Phase 3's leak/recovery items were done.
+- Renderer: `useSpawns` gains `queued` status + a `start()` transition; ChatPanel handles
+  `spawn-started`; App sets the initial status from `queued`; Rail shows a grey queued dot
+  + the interrupt ×. `spawn-comment.mjs` covers the queued→running→removed lifecycle.
+- **v8 is now complete:** R1, F3a, F3b, F2, F1 (all 4 phases) shipped. Deferred niceties:
+  per-spawn Bash allowlist, a rich ConflictPanel, non-Claude spawn backends.
+
 ## 2026-06-27 — v8 F1 Phase 2: Apply / PR / Discard a finished comment spawn
 
 Closes the loop — a spawn's work, previously stranded on its `dsgn/comment-<id>` branch,

@@ -52,7 +52,7 @@ run comment-work in parallel; and give the agent a versioned set of operating
       keyboard handler (skips when typing in a field) re-inspects the selection after a
       revert and surfaces conflicts as a status error. Tests: `test/edit-history.mjs`
       (unit) + apply→undo→redo→conflict round-trip in `test/prop-edit.mjs`.
-- [~] **F1 — comment → parallel agent session.** Contention decided via a design
+- [x] **F1 — comment → parallel agent session.** ✅ 2026-06-27 (all 4 phases). Contention decided via a design
       judge-panel: **worktree-per-spawn** (7.33 vs advisory 7.0 vs write-lock 5.33) —
       each comment runs a detached agent in its own `git worktree` on a `dsgn/comment-<id>`
       branch, zero cross-writes, the branch as durable record; accept patches the diff
@@ -74,8 +74,13 @@ run comment-work in parallel; and give the agent a versioned set of operating
             create --head`, persists prUrl). SessionReview gains the action bar for comment
             records. `spawn-comment.mjs` adds a deterministic Apply/Discard round-trip.
             (Rich ConflictPanel deferred — conflicts surface as a status note for now.)
-      - [ ] **Phase 3 — scale + safety**: per-repo cap + queue, startup orphan prune,
-            before-quit finalize, interrupt, concurrent-spawn e2e.
+      - [x] **Phase 3 — scale + safety.** ✅ 2026-06-27 — per-repo cap (`MAX_SPAWNS_PER_REPO`)
+            + FIFO queue (over-cap comments queue, start as slots free via `pumpQueue` on each
+            finalize; stable up-front id so the rail row survives the queued→running flip via
+            a `spawn-started` event); `agent:spawn-interrupt` cancels a running or queued spawn
+            (rail × button); startup orphan-prune + before-quit-leave-for-prune already landed
+            in the F1 review fixes. `spawn-comment.mjs` covers the queue-flip lifecycle.
+            (Deferred: per-spawn Bash allowlist, rich ConflictPanel, non-Claude spawn backends.)
 
 ## v4 — React Native / iOS-Simulator preview (macOS-only)
 

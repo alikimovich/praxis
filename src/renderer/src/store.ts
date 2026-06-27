@@ -326,17 +326,29 @@ export interface SpawnRow {
   id: string
   branch: string | null
   label: string
-  status: 'running'
+  /** 'queued' until a per-repo slot frees (Phase 3), then 'running'. */
+  status: 'running' | 'queued'
 }
 interface SpawnsState {
   byKey: Record<string, SpawnRow[]>
   add: (key: string, row: SpawnRow) => void
+  /** Flip a queued row to running + attach its branch (on `spawn-started`). */
+  start: (key: string, id: string, branch: string) => void
   remove: (key: string, id: string) => void
 }
 export const useSpawns = create<SpawnsState>((set) => ({
   byKey: {},
   add: (key, row) =>
     set((s) => ({ byKey: { ...s.byKey, [key]: [row, ...(s.byKey[key] ?? [])] } })),
+  start: (key, id, branch) =>
+    set((s) => ({
+      byKey: {
+        ...s.byKey,
+        [key]: (s.byKey[key] ?? []).map((r) =>
+          r.id === id ? { ...r, status: 'running', branch } : r
+        )
+      }
+    })),
   remove: (key, id) =>
     set((s) => ({ byKey: { ...s.byKey, [key]: (s.byKey[key] ?? []).filter((r) => r.id !== id) } }))
 }))
