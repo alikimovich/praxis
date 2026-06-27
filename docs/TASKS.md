@@ -129,11 +129,14 @@ the file-edit/permission/skill tooling the Claude Agent SDK gives for free.
 - [ ] **Make Codex real:** `bun add @openai/codex-sdk`, the user runs `codex login`, then
       verify a live Codex turn edits a fixture; confirm/fix the `codex.ts` event mapping
       against the real streamed events; map Codex tool approvals → permission cards.
-- [ ] **UI:** a provider picker in the composer toolbar (alongside model/effort), passing
-      `provider` through `toAgentOptions`/`openProject`; a per-provider "login needed" banner
-      reusing `isAuthError`.
+- [x] **UI: backend picker + login hint.** ✅ 2026-06-27 (PR #33) — a `Backend`
+      `<select>` in the composer (Claude / Codex — the implemented backends), `provider`
+      on `useSession` + threaded through `toAgentOptions`/`openProject`; switching reopens
+      the active session on the new backend; a per-provider subscription-login hint
+      (`provider-hint`) when non-Claude is selected. `chat-render.mjs` extended.
+      Gemini/Grok join the picker when their adapters land.
 - [ ] **Then:** Gemini CLI provider (subprocess, `--output-format stream-json` JSONL →
-      `AgentEvent`), then Grok Build CLI.
+      `AgentEvent`), then Grok Build CLI — each adds itself to the PROVIDERS picker list.
 - [ ] **Minor open calls:** which provider after Codex (rec: Gemini); each agent uses its own
       conventions file (Codex `AGENTS.md`, Gemini `GEMINI.md`) — skills stay Claude-only;
       v0 `/generate` action (separate workstream) — build only if wanted.

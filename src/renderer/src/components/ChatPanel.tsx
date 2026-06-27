@@ -4,6 +4,7 @@ import {
   describeSelectionForPrompt,
   isAuthError,
   oneLine,
+  toAgentOptions,
   useAnnotations,
   useChat,
   useComposer,
@@ -48,6 +49,19 @@ const PERMISSION_MODES: { value: PermissionMode; label: string }[] = [
   { value: 'default', label: 'Ask' },
   { value: 'acceptEdits', label: 'Auto-accept edits' },
   { value: 'bypassPermissions', label: 'Auto: approve all' }
+]
+
+// Selectable backends (v7). Each authenticates with the user's own subscription
+// login — no API keys. Only backends that exist in main's pickProvider are listed
+// (Gemini/Grok land when their adapters do). `login` is the one-time CLI step.
+const PROVIDERS: { value: string; label: string; login: string | null; blurb: string | null }[] = [
+  { value: 'claude', label: 'Claude', login: null, blurb: null },
+  {
+    value: 'codex',
+    label: 'Codex (GPT)',
+    login: 'codex login',
+    blurb: 'OpenAI Codex runs on your ChatGPT subscription'
+  }
 ]
 
 /**
@@ -100,7 +114,8 @@ function setupPrompt(res: SetupResult): string | null {
 export default function ChatPanel(): React.JSX.Element {
   const { messages, isRunning, appendUser, startAssistant, appendDelta, appendStatus, finish } =
     useChat()
-  const { model, effort, slashCommands, projectRoot, setModel, setEffort } = useSession()
+  const { model, effort, provider, slashCommands, projectRoot, setModel, setEffort, setProvider } =
+    useSession()
   const { selected, setSelected } = useSelection()
   const inspection = useSelection((s) => s.inspection)
   const inspecting = useSelection((s) => s.inspecting)
@@ -379,6 +394,20 @@ export default function ChatPanel(): React.JSX.Element {
     window.api.agent.setPermissionMode(value).catch(() => setMode(prev))
   }
 
+  // Switching the backend means a different agent session entirely — the model
+  // can't change live across providers. Reopen the active project's session on the
+  // new backend (the visible transcript stays; context resets, like an LRU reopen).
+  const onProviderChange = (value: string): void => {
+    setProvider(value)
+    if (!projectRoot) return
+    void window.api.agent.openProject(projectRoot, {
+      ...toAgentOptions({ ...useSession.getState(), provider: value }),
+      permissionMode: usePermissions.getState().mode
+    })
+    // The reopened session starts idle — clear any turn left "running" on the slice.
+    useChat.getState().finish()
+  }
+
   const respondPermission = (id: string, behavior: 'allow' | 'deny'): void => {
     removeRequest(id)
     void window.api.agent.respondPermission(id, behavior)
@@ -544,6 +573,22 @@ export default function ChatPanel(): React.JSX.Element {
           onRemove={(id) => void removeNote(id)}
           onPublish={() => void publish()}
         />
+        {/* v7: when a non-Claude backend is selected, point the user at its
+            one-time subscription login (no API keys). */}
+        {(() => {
+          const p = PROVIDERS.find((x) => x.value === provider)
+          if (!p?.login) return null
+          return (
+            <div
+              className="provider-hint rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11.5px] text-blue-900"
+              role="note"
+            >
+              {p.blurb} — run{' '}
+              <code className="rounded bg-blue-100 px-1 font-mono text-[11px]">{p.login}</code> once
+              if a turn says it’s not connected.
+            </div>
+          )
+        })()}
         {/* shadcn InputGroup = the rounded, focus-ringed composer frame. The
             textarea carries data-slot="input-group-control" so the group lights
             up on focus. Native textarea (not InputGroupTextarea) to keep the ref
@@ -575,6 +620,18 @@ export default function ChatPanel(): React.JSX.Element {
             onKeyDown={onKeyDown}
           />
           <InputGroupAddon align="block-end" className="gap-1">
+            <select
+              className={selectCls}
+              value={provider}
+              onChange={(e) => onProviderChange(e.target.value)}
+              aria-label="Backend"
+            >
+              {PROVIDERS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
             <select
               className={selectCls}
               value={model}
