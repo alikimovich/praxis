@@ -226,7 +226,10 @@ TokenOfferCard, Markdown). App-header branch pill + auth banner are separate chr
         swaps the single color utility in a literal `className` (`text-gray-500` → `text-primary`);
         exactly-one-match guard (two color utilities → agent), `text-<size>` excluded, variants/
         arbitrary values skipped. `prop-edit.mjs` covers the swap + ambiguity guard.
-        **Remaining:** Tailwind spacing/radius families.
+  - [x] **T2 families — radius + spacing/sizing.** ✅ 2026-06-27 (PR #37) — generalized the
+        class swap (`swapTailwindClass` in `tw-classes.ts`) beyond colors to radius
+        (`rounded-lg` → `rounded-card`) and spacing/sizing (p/m/gap/w/h…); the exactly-one-match
+        guard keeps it safe. Shared by the JSX + Svelte paths. `prop-edit.mjs` covers radius.
   - [x] **Direct token apply → Svelte.** ✅ 2026-06-27 (PR #36) — `applySvelteTokenEdit`:
         the Tailwind color-class swap (T2) for `.svelte` host elements (`class="text-gray-500"`
         → `text-primary`), sharing `swapColorClass` (new `src/main/tw-classes.ts`) with the JSX
