@@ -87,6 +87,96 @@ See the PROGRESS entry.
       and a way to jump to a session's preview + chat. Mirrors the attached
       Cursor-style layout.
 
+## v7 — multi-provider model backends  ⭐ NEW (2026-06-26, user-requested; explore-then-build)
+
+Add support for non-Claude backends: **OpenAI / ChatGPT SDK, Vercel v0, Google Gemini,
+xAI Grok**. Explore feasibility first, then build what's possible.
+
+**Architectural tension to resolve in the spike:** dsgn's agent core is the **Claude Agent
+SDK** (locked decision) precisely because it provides *in-process tools* wired to the
+renderer (select→edit props→annotate→PR) plus repo `CLAUDE.md`/skills — the product
+differentiator. Generic LLM APIs (OpenAI/Gemini/Grok) don't ship an equivalent agent loop
+with file-editing tools; **v0** is a code-generation API, not a tool-using chat agent. So
+"support" likely means a **provider abstraction with an agent loop we own**. The natural
+unifier is the **Vercel AI SDK** (`generateText`/`streamText` + tools across
+`@ai-sdk/openai`, `@ai-sdk/google`, `@ai-sdk/xai`, `@ai-sdk/anthropic`) — which also pairs
+with the AI Elements UI we just adopted. Trade-off: an AI-SDK agent loop must re-implement
+the file-edit/permission/skill tooling the Claude Agent SDK gives for free.
+
+- [x] **Spike (explore).** ✅ 2026-06-26 — `docs/v7-multi-provider-design.md`. Conclusions:
+      **OpenAI / Gemini / Grok** are all viable as ONE uniform agent loop via the **Vercel AI
+      SDK** (`streamText`+`stopWhen`), behind a `ModelProvider` seam that emits the same
+      `AgentEvent`s as today (the existing `Session` interface is ~90% of it). **v0 is
+      generation-only — NOT a chat backend** (wire later as a discrete `/generate` action).
+      Two big strings attached: (1) **auth shifts** from Claude OAuth-subscription to
+      **BYO per-provider API key** (safeStorage) + per-token billing; (2) non-Claude backends
+      **lose skills + CLAUDE.md auto-apply + slash-commands** (Claude-Agent-SDK-only) and must
+      re-implement the hardened tool suite + permission loop (~6–8 days, security-sensitive).
+- [x] **AUTH DECISION (user, 2026-06-26): subscription login, NOT BYO API key.** This
+      flips the architecture — see the REVISED section in `docs/v7-multi-provider-design.md`.
+      Wrap each vendor's **subscription-auth coding-agent SDK/CLI** (Codex SDK, Gemini CLI,
+      Grok Build CLI), NOT the Vercel AI SDK. All three have subscription OAuth + headless
+      event streams in 2026, and **bring their own tools** — so the ~6–8 day tool-suite
+      rebuild drops to a per-provider adapter. No keys, no billing, no `safeStorage` UI.
+- [x] **Seam + Codex scaffold (items 1–4).** ✅ 2026-06-26 — `src/main/backends/`:
+      `types.ts` (`ModelProvider`/`ProviderSession`/`PendingPrompt`), `tools.ts` (shared tool
+      policy, no cycle), `claude.ts` (incumbent extracted verbatim behind the seam),
+      `codex.ts` (EXPERIMENTAL `@openai/codex-sdk`, lazy non-literal import, fails soft),
+      `index.ts` (`pickProvider`). `agent.ts` slimmed to backend-agnostic session mgmt;
+      `AgentOptions.provider`. **Claude path byte-identical — full `verify` + AGENT-E2E green
+      through the indirection.** `test/provider-seam.mjs` (creds-free). (commit 8f2bd71)
+- [ ] **Make Codex real:** `bun add @openai/codex-sdk`, the user runs `codex login`, then
+      verify a live Codex turn edits a fixture; confirm/fix the `codex.ts` event mapping
+      against the real streamed events; map Codex tool approvals → permission cards.
+- [ ] **UI:** a provider picker in the composer toolbar (alongside model/effort), passing
+      `provider` through `toAgentOptions`/`openProject`; a per-provider "login needed" banner
+      reusing `isAuthError`.
+- [ ] **Then:** Gemini CLI provider (subprocess, `--output-format stream-json` JSONL →
+      `AgentEvent`), then Grok Build CLI.
+- [ ] **Minor open calls:** which provider after Codex (rec: Gemini); each agent uses its own
+      conventions file (Codex `AGENTS.md`, Gemini `GEMINI.md`) — skills stay Claude-only;
+      v0 `/generate` action (separate workstream) — build only if wanted.
+
+## v6 — Tailwind + shadcn chat UI (AI Elements)  ⭐ (2026-06-26, user-requested)
+
+Migrate the **chat panel** fully to **Tailwind + shadcn/ui**, using **AI Elements**
+(`elements.ai-sdk.dev`) and shadcn's chat primitives. **Priority rule per feature:**
+first-party shadcn **primitive** if one fits → else **AI Elements** component → else
+**custom** with shadcn+Tailwind. Components are driven by the existing `useChat` zustand
+store + `agent:*` IPC (NOT the Vercel AI SDK runtime).
+
+**Decision reversal:** overturns the locked "Plain CSS, no Tailwind / no UI kit"
+(`docs/CONTEXT.md`) — the exact scaffolding that got assistant-ui deferred. Accepted by
+the user (2026-06-26). Tailwind coexists with the existing plain CSS (chat first).
+
+**Hard constraint:** preserve test-facing hooks so the ~30-test verify suite stays green —
+`.composer__input` (readiness selector across ~20 tests), `.markdown`, `.slash__item`,
+`.perm*`, and the `aria-label` selects (Model / Thinking level / Permission mode). Scope =
+`ChatPanel.tsx` + in-panel components (Inspector, PermissionCards, NotesPanel, SetupCard,
+TokenOfferCard, Markdown). App-header branch pill + auth banner are separate chrome.
+
+- [ ] **Scaffold Tailwind + shadcn** in the electron-vite renderer (coexist with
+      `styles.css`; `components.json`, `cn()`, `@/*` alias, bun CLI). Confirm AI Elements
+      runs without the Vercel AI SDK (driven by our store) — build + typecheck green.
+- [ ] **Rebuild ChatPanel** on shadcn primitives / AI Elements per the priority rule,
+      preserving every feature (streaming, tool-status, slash menu, model/effort/permission
+      pickers, auth banner, permission cards, inspector hand-off, per-project routing) and
+      the test hooks above.
+- [ ] **Re-verify** `chat-render` / `chat-route` (+ smoke and the rest), screenshot the new
+      panel into `test/artifacts/`.
+- [ ] **Element-inspector surfaces → shadcn (follow-up pass).** Inspector.tsx,
+      NotesPanel.tsx, TokenPalette.tsx are dense element-editing UIs (appear only on
+      element-select, distinct from the chat conversation) with many test hooks
+      (`.inspector__ask/__link/__source/__tag/__noteinput/__notesave/__ready--no`,
+      `.notes__item/__remove/__text`, `.tokens/__item/__swatch`). Convert to shadcn
+      Card/Collapsible/Badge/Button in a focused pass, preserving every hook
+      (annotations, ready-gating, select-element, prop-edit, tokens tests).
+- [ ] **Stretch:** evaluate other AI Elements (Sources, Task, Chain-of-Thought, Web
+      Preview, Reasoning) for dsgn's flows.
+- [ ] **Optional: test modernization.** Add `data-testid`s and migrate smoke/
+      chat-render off volatile BEM classes; then the three pickers can become shadcn
+      `Select` (currently native, locked by the `$$eval('option')` permission-mode assertion).
+
 ## v2 — design-system-aware select & edit (the differentiator)
 
 - [x] Inject a preload into the preview `WebContentsView` with a click-to-select overlay.
@@ -108,6 +198,15 @@ See the PROGRESS entry.
         project (`.dsgn/tokens.json` manifest → `tailwind.config.*` static parse → CSS custom
         properties) and the inspector shows a token palette; clicking a token applies it via
         the agent.
+  - [ ] **Direct (agent-free) prop editing — make it the default & broaden it.** ⭐ NEW
+        (2026-06-26, user-requested; backlog). React first, then other frameworks. *Current
+        state:* `props.apply` already splices **literal** string/number/boolean/enum edits
+        straight into source (instant hot-reload, **no agent, no chat message**); only
+        non-literal/complex values fall back to a seeded chat prompt (`needsAgent`). *Goal:*
+        shrink the agent fallback — (a) **token clicks apply directly** when the target maps
+        to a literal class/style/prop, (b) widen literal coverage, (c) make "applied directly"
+        the visible default with a rare, clear "needs agent" path, (d) confirm hot-reload
+        fires after a splice. Extend `test/prop-edit.mjs`; then carry to Svelte/others.
 
 ## v3 — engineer handoff
 

@@ -162,6 +162,12 @@ export interface AgentOptions {
   effort?: string
   /** Permission posture; defaults to 'default' (ask). */
   permissionMode?: PermissionMode
+  /**
+   * Which subscription-login backend to run (v7): 'claude' (default) | 'codex' | …
+   * Undefined → Claude. Each backend authenticates with the user's own subscription
+   * (Claude setup-token / Codex sign-in-with-ChatGPT / …) — never an in-repo API key.
+   */
+  provider?: string
 }
 
 export interface Bounds {

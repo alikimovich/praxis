@@ -2,6 +2,92 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-26 — v7: ModelProvider seam + Codex backend scaffold
+
+Started multi-provider backends. **User decision: subscription login, not BYO API
+key** — so we wrap each vendor's subscription-auth coding-agent SDK/CLI (Codex SDK,
+Gemini CLI, Grok Build CLI), not the Vercel AI SDK. Each brings its own tools, so
+the spike's ~6–8 day tool-suite rebuild evaporates. See `docs/v7-multi-provider-design.md`.
+
+**Shipped (commit 8f2bd71):** the seam under `src/main/backends/` —
+- `types.ts` — `ModelProvider`/`ProviderSession`/`PendingPrompt`. `agent.ts` is now
+  backend-agnostic (session map / activeKey / teardown / permission settle-loop /
+  `agent:*` IPC, all in terms of `ProviderSession` + `AgentEvent`).
+- `claude.ts` — the incumbent Claude Agent SDK session extracted **verbatim** behind
+  the seam (`InputStream`, `canUseTool`, streaming loop). `tools.ts` holds the shared
+  tool policy (moved out of `agent.ts` to avoid an import cycle).
+- `codex.ts` — EXPERIMENTAL OpenAI Codex via `@openai/codex-sdk` (sign-in-with-ChatGPT).
+- `index.ts` — `pickProvider(options.provider)`, default Claude.
+- `AgentOptions.provider`; `test/provider-seam.mjs`.
+
+**The big safety property:** the Claude path is **byte-identical** — full `verify`
+incl. the real AGENT-E2E turn passes through the new indirection. Non-Claude is
+reachable only when the renderer sets `provider`, so default runtime is unchanged.
+
+**Learnings:**
+- Extracting the load-bearing `agent.ts` was a clean "pure move" precisely because
+  the IPC layer already optional-chained the live controls (`query.setModel?.` etc.)
+  — those became `ProviderSession.setModel?` with zero handler changes.
+- **Lazy non-literal dynamic import** (`const PKG: string = '@openai/codex-sdk';
+  await import(PKG)`) lets an optional backend compile + ship WITHOUT its package
+  installed (TS types it `any`, no module resolution) — it fails soft at runtime
+  (error + done) so a missing SDK / not-logged-in routes to the login banner instead
+  of crashing. Same trick the Claude SDK uses for ESM-in-CJS, applied to optionality.
+- Codex/Gemini/Grok each **bring their own hardened toolset** — we don't define one;
+  the provider just maps their event stream to dsgn's `delta`/`status`/`done`/`error`.
+- Still gated on a real `codex login` to verify the live event mapping (can't be
+  tested without the user's subscription session).
+
+## 2026-06-26 — v6: chat panel → Tailwind v4 + shadcn/ui + AI Elements
+
+Migrated the chat panel off plain CSS onto Tailwind + shadcn (branch
+`dsgn/v6-chat-shadcn`). Decision rule applied per feature: shadcn primitive →
+AI Elements → custom. Full `verify` green (all ~30 tests incl. AGENT-E2E).
+
+**Shipped (3 commits):**
+- **Scaffold** — Tailwind v4 via `@tailwindcss/vite`, `@` alias, hand-written
+  `components.json`, shadcn neutral/new-york tokens in `styles.css` (renamed
+  `--accent/--border/--radius` → `--*-shadcn`/`--shadcn-radius` to avoid colliding
+  with our legacy vars), `@layer base` border default, `lib/utils.ts` (cn). shadcn
+  primitives under `components/ui/*`; AI Elements `conversation` under
+  `components/ai-elements/`. Additive — existing plain-CSS UI visually unchanged.
+- **Chat core** — message list → AI Elements `<Conversation>` (stick-to-bottom,
+  replaces the manual scroll effect); user messages → shadcn muted bubble;
+  assistant kept on our `react-markdown`. Composer → shadcn `<InputGroup>` +
+  `<InputGroupAddon block-end>` + native textarea (`data-slot=input-group-control`
+  for the focus ring); send/stop → shadcn `<Button>` (lucide ArrowUp). Pickers stay
+  native `<select>`; slash menu stays custom (textarea-driven).
+- **Cards** — PermissionCards / SetupCard / TokenOfferCard → shadcn `<Button>` +
+  Tailwind alert surfaces; legacy `.perm*/.setup*` CSS removed (classes kept as
+  test hooks). Dense element-inspector surfaces backlogged.
+
+**Learnings (the non-obvious bits):**
+- **shadcn CLI alias resolution reads the ROOT `tsconfig.json`, not per-project
+  tsconfigs.** With our project-references root (no `paths`), `shadcn add` couldn't
+  resolve `@` and wrote to a literal `@/` dir + `src/components/`. Fix: add
+  `baseUrl`+`paths @/*` to the root tsconfig; for the already-scattered run we
+  relocated files under `src/renderer/src/` + hand-wrote `lib/utils.ts` (the CLI
+  skipped it) + appended the CSS tokens manually.
+- **The new "shadcn chat primitives" (message/bubble/marker/message-scroller) are
+  NOT in the public registry** under those names (`new-york-v4/message.json` 404).
+  The research over-trusted a docs-page scrape. Reality: use `input-group` (real) +
+  AI Elements `conversation` (real, lightweight — only `use-stick-to-bottom`, no
+  `ai`/streamdown). AI Elements `message` pulls `ai`+`streamdown`, so the message
+  row is custom + our Markdown. **Always validate registry names by running the CLI.**
+- **Tailwind v4 preflight is safe next to legacy CSS** because v4 emits into
+  `@layer` and our legacy rules are unlayered (always win). The flip side: a
+  migrated element's Tailwind utilities LOSE to any leftover unlayered legacy rule,
+  so each migrated block needs its conflicting *properties* stripped (we kept the
+  class as a bare hook). Did this for `.chat__messages`, `.composer__input`,
+  `.perm*`, `.setup*`.
+- **React 18 + shadcn new-york:** components are React-19-style (no `forwardRef`).
+  Don't pass a ref into a shadcn leaf (Textarea/Input/Button) — it won't attach.
+  The composer keeps a NATIVE textarea for its `inputRef` (seeding/cursor). Radix
+  (`radix-ui@1.6`) works on React 18.
+- **Test contract held with ZERO test edits** by preserving every selector
+  (`.composer__input` is the readiness gate for ~20 tests) + keeping pickers native
+  (the permission-mode test reads `<option>`s via `$$eval`).
+
 ## 2026-06-26 — v5-C2: LRU-cap warm agent sessions
 
 - Closes the resource gap left after v5-C: the dev-server LRU cap (N=3) was in,
