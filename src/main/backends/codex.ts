@@ -3,6 +3,7 @@ import type { AgentEvent, AgentOptions } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
 import type { ModelProvider, PendingPrompt, ProviderSession } from './types'
 import { describeTool } from './tools'
+import { createRecordCapture } from './record'
 
 /**
  * EXPERIMENTAL (v7) — OpenAI Codex backend via the `@openai/codex-sdk` (TypeScript).
@@ -54,13 +55,14 @@ function eventText(ev: unknown): string | null {
   return null
 }
 
-/** Pull a tool-call label out of an unknown streamed Codex event. */
-function eventTool(ev: unknown): string | null {
+/** Resolve a tool-call NAME out of an unknown streamed Codex event (null if not
+ * a tool event). Returning the name (not a pre-described label) lets the recorded
+ * transcript reuse the SAME describeTool label as the live status line. */
+function eventToolName(ev: unknown): string | null {
   const e = ev as Record<string, unknown>
   const t = (e?.type ?? e?.kind) as string | undefined
   if (t && /tool|command|exec|patch|apply/i.test(t)) {
-    const name = (e?.name ?? e?.tool ?? e?.command ?? t) as unknown
-    return describeTool(String(name ?? 'tool'), e)
+    return String(e?.name ?? e?.tool ?? e?.command ?? t ?? 'tool')
   }
   return null
 }
@@ -80,6 +82,7 @@ async function startSession(
   getWindow: () => BrowserWindow | null
 ): Promise<ProviderSession> {
   const key = projectKey(root)
+  const cap = createRecordCapture(root, key)
   const pending = new Map<string, PendingPrompt>()
   let disposed = false
   let aborted = false
@@ -121,21 +124,29 @@ async function startSession(
         const iterable = (streamed as { events?: AsyncIterable<unknown> }).events ?? streamed
         for await (const ev of iterable as AsyncIterable<unknown>) {
           if (disposed || aborted) break
-          const tool = eventTool(ev)
-          if (tool) {
-            emit({ type: 'status', text: tool })
+          const toolName = eventToolName(ev)
+          if (toolName) {
+            cap.noteTool(toolName, ev)
+            emit({ type: 'status', text: describeTool(toolName, ev) })
             continue
           }
           const delta = eventText(ev)
-          if (delta) emit({ type: 'delta', text: delta })
+          if (delta) {
+            cap.appendAssistant(delta)
+            emit({ type: 'delta', text: delta })
+          }
         }
       } else if (thread.run) {
         const result = await thread.run(text)
         if (!disposed && !aborted) {
           const out = resultText(result)
-          if (out) emit({ type: 'delta', text: out })
+          if (out) {
+            cap.appendAssistant(out)
+            emit({ type: 'delta', text: out })
+          }
         }
       }
+      cap.finalize()
       emit({ type: 'done' })
     } catch (err) {
       if (!aborted) emit({ type: 'error', message: err instanceof Error ? err.message : String(err) })
@@ -152,6 +163,8 @@ async function startSession(
     },
     pending,
     emit,
+    record: cap.record,
+    finalize: cap.finalize,
     dispose: () => {
       disposed = true
     },

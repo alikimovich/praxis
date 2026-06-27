@@ -276,7 +276,10 @@ body {
 }
 .rail__item {
   display: flex;
-  align-items: center;
+  /* Stack the project row above its previous-sessions sub-list (v5-D). The inner
+     .rail__row keeps the open/close buttons horizontal. */
+  flex-direction: column;
+  align-items: stretch;
   border-radius: 6px;
 }
 .rail__item--active {
@@ -350,6 +353,202 @@ body {
 .rail__add:hover {
   color: var(--text);
   border-color: var(--text-muted);
+}
+
+/* v5-D — "previous agents" under the active project in the rail. */
+.rail__row {
+  display: flex;
+  align-items: center;
+}
+.rail__row .rail__open {
+  flex: 1 1 auto;
+}
+.rail__sessions {
+  list-style: none;
+  margin: 2px 0 4px;
+  padding: 0 0 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.rail__session {
+  display: flex;
+  align-items: center;
+  border-radius: 5px;
+}
+.rail__session:hover {
+  background: var(--border);
+}
+.rail__session-open {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 6px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11.5px;
+  text-align: left;
+}
+.rail__sdot {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.5;
+}
+.rail__sdot--pr {
+  background: #2563eb;
+  opacity: 1;
+}
+.rail__session-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rail__session-x {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0;
+}
+.rail__session:hover .rail__session-x {
+  opacity: 1;
+}
+.rail__session-x:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* v5-D — past-session review modal (plain CSS; renders over the panes, not the
+   native preview, so a normal overlay is fine). */
+.review__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 40px;
+}
+.review {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 640px;
+  max-height: 80vh;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+}
+.review__head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.review__title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.review__name {
+  font-size: 14px;
+  font-weight: 600;
+}
+.review__when {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.review__x {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+.review__x:hover {
+  color: var(--text);
+}
+.review__meta {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px;
+}
+.review__chip {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+.review__chip--link {
+  color: #2563eb;
+  text-decoration: none;
+}
+.review__files {
+  flex: 0 0 auto;
+  list-style: none;
+  margin: 0;
+  padding: 0 16px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.review__transcript {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 8px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.review__line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.review__role {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.review__line--status .review__text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.review__text {
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.review__empty {
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
 .pane {

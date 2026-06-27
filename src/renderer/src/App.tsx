@@ -4,6 +4,7 @@ import ConsolePanel from './components/ConsolePanel'
 import DiagnoseCard from './components/DiagnoseCard'
 import PreviewPane from './components/PreviewPane'
 import PropPanel from './components/PropPanel'
+import SessionReview from './components/SessionReview'
 import {
   describeSelectionForPrompt,
   isAuthError,
@@ -13,6 +14,7 @@ import {
   useChat,
   useComposer,
   useDiagnosis,
+  useHistory,
   useLog,
   usePermissions,
   useSelection,
@@ -24,7 +26,13 @@ import {
 } from './store'
 import { projectKey } from '../../shared/projectKey'
 import Rail from './components/Rail'
-import type { CommentMode, Framework, PreviewComment, PreviewKind } from '../../shared/api'
+import type {
+  CommentMode,
+  Framework,
+  PreviewComment,
+  PreviewKind,
+  SessionRecord
+} from '../../shared/api'
 
 const MIN_CHAT_WIDTH = 320
 const MAX_CHAT_WIDTH = 760
@@ -63,6 +71,14 @@ export default function App(): React.JSX.Element {
   const projectRoot = useSession((s) => s.projectRoot)
   const branch = useSession((s) => s.branch)
   const [editingBranch, setEditingBranch] = useState(false)
+  // v5-D: the past session open for review (rendered as a modal over the panes).
+  const [reviewing, setReviewing] = useState<SessionRecord | null>(null)
+  // The review modal is renderer DOM; the native preview WebContentsView paints
+  // ABOVE it (same reason PropPanel reserves an inset strip). Hide the preview
+  // entirely while the modal is open (reuses the drag-hide path), restore on close.
+  useEffect(() => {
+    window.api.preview.setDragging(!!reviewing)
+  }, [reviewing])
   const authNeeded = useSession((s) => s.authNeeded)
   const setAuthNeeded = useSession((s) => s.setAuthNeeded)
   const logOpen = useLog((s) => s.open)
@@ -77,6 +93,8 @@ export default function App(): React.JSX.Element {
     useSession.getState().setBranch(res.branch)
     // Keep the workspace entry's branch current for rail switch-back.
     useWorkspace.getState().patchEntry(projectKey(root), { branch: res.branch })
+    // Tag the live session so its history record records the branch it worked on.
+    if (res.branch) void window.api.agent.tagSession(root, { branch: res.branch })
     if (res.branch) {
       useLog
         .getState()
@@ -446,6 +464,7 @@ export default function App(): React.JSX.Element {
       try {
         const b = await window.api.git.ensure(root)
         useSession.getState().setBranch(b.branch)
+        if (b.branch) void window.api.agent.tagSession(root, { branch: b.branch })
         if (b.isRepo && b.branch) {
           log.append(`Working on branch ${b.branch}${b.created ? ' (created)' : ''}`, 'success')
         } else if (!b.isRepo) {
@@ -516,6 +535,8 @@ export default function App(): React.JSX.Element {
       })
       // Load this repo's existing handoff notes (renders pins via the effect above).
       useAnnotations.getState().setList(await window.api.annotations.list(root))
+      // Load this project's previous agents (v5-D) for the rail's history list.
+      void useHistory.getState().load(root)
       // A fresh session — clear any turn left "running" from a previous project.
       useChat.getState().finish()
       log.append(`Ready — ${name}`, 'success')
@@ -578,6 +599,8 @@ export default function App(): React.JSX.Element {
     useChat.getState().setActiveChat(target.key)
     useSession.getState().setProjectRoot(target.root)
     useSession.getState().setBranch(target.branch)
+    // Refresh the rail's "previous agents" for the project we're switching to.
+    void useHistory.getState().load(target.root)
     setPreviewKind(target.previewKind)
     launchSpec.current = target.launchSpec
     // Reopen the agent session if it was LRU-suspended; else just re-activate it.
@@ -984,6 +1007,7 @@ export default function App(): React.JSX.Element {
           onSwitch={(key) => void switchTo(key)}
           onClose={(key) => void closeProjectFromRail(key)}
           onOpen={() => void openAnother()}
+          onReview={setReviewing}
         />
         <section className="pane pane--chat" style={{ width: chatWidth }}>
           <ChatPanel />
@@ -1009,6 +1033,9 @@ export default function App(): React.JSX.Element {
           onClose={() => setSelected(null)}
         />
       )}
+
+      {/* v5-D: review a previous agent session (transcript + branch/PR + files). */}
+      {reviewing && <SessionReview record={reviewing} onClose={() => setReviewing(null)} />}
     </div>
   )
 }

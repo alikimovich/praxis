@@ -9,6 +9,7 @@ import type {
   PreviewKind,
   PropInspection,
   SelectedElement,
+  SessionRecord,
   TokenSet
 } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
@@ -265,6 +266,60 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     }),
   reset: () => set({ projects: [], activeKey: null })
 }))
+
+/**
+ * v5-D "previous agents" — persisted agent sessions per project, surfaced under
+ * each project in the rail. Loaded lazily (on project activate / rail expand) from
+ * the on-disk store in main (`window.api.sessions`); the live session isn't here
+ * (it's persisted only on teardown), so this is strictly the *past* runs.
+ */
+interface HistoryState {
+  /** Past sessions keyed by `projectKey(root)`, newest first. */
+  byKey: Record<string, SessionRecord[]>
+  loading: Record<string, boolean>
+  /** Fetch (refresh) a project's history. */
+  load: (root: string) => Promise<void>
+  /** Delete one record and drop it from the list. */
+  remove: (root: string, id: string) => Promise<void>
+}
+
+export const useHistory = create<HistoryState>((set) => ({
+  byKey: {},
+  loading: {},
+  load: async (root) => {
+    const key = projectKey(root)
+    set((s) => ({ loading: { ...s.loading, [key]: true } }))
+    try {
+      const recs = await window.api.sessions.list(root)
+      set((s) => ({ byKey: { ...s.byKey, [key]: recs }, loading: { ...s.loading, [key]: false } }))
+    } catch {
+      set((s) => ({ loading: { ...s.loading, [key]: false } }))
+    }
+  },
+  remove: async (root, id) => {
+    const key = projectKey(root)
+    try {
+      await window.api.sessions.remove(id)
+    } catch {
+      // best-effort; still drop it from the visible list
+    }
+    set((s) => ({
+      byKey: { ...s.byKey, [key]: (s.byKey[key] ?? []).filter((r) => r.id !== id) }
+    }))
+  }
+}))
+
+/** Compact "time ago" for history timestamps (e.g. "3m ago", "2h ago", "5d ago"). */
+export const relativeTime = (ms: number, now = Date.now()): string => {
+  const s = Math.max(0, Math.round((now - ms) / 1000))
+  if (s < 60) return 'just now'
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.round(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.round(h / 24)
+  return `${d}d ago`
+}
 
 /**
  * Heuristic: does this agent error look like a missing/invalid Claude login?
@@ -558,3 +613,4 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
 ;(window as unknown as { __dsgnLog?: typeof useLog }).__dsgnLog = useLog
 ;(window as unknown as { __dsgnDiagnosis?: typeof useDiagnosis }).__dsgnDiagnosis = useDiagnosis
 ;(window as unknown as { __dsgnWorkspace?: typeof useWorkspace }).__dsgnWorkspace = useWorkspace
+;(window as unknown as { __dsgnHistory?: typeof useHistory }).__dsgnHistory = useHistory

@@ -20,6 +20,7 @@ import type {
   RunningDevServer,
   RunningSimulator,
   SelectedElement,
+  SessionRecord,
   SetupResult,
   SimPreflight,
   TokenScaffoldResult,
@@ -162,11 +163,18 @@ const api: DsgnApi = {
     respondPermission: (id: string, behavior: 'allow' | 'deny'): Promise<void> =>
       ipcRenderer.invoke('agent:respond-permission', id, behavior),
     interrupt: (): Promise<void> => ipcRenderer.invoke('agent:interrupt'),
+    tagSession: (root: string, tag: { branch?: string; prUrl?: string }): Promise<void> =>
+      ipcRenderer.invoke('agent:tag-session', root, tag),
     onEvent: (cb: (event: AgentEvent) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, event: AgentEvent): void => cb(event)
       ipcRenderer.on('agent:event', listener)
       return () => ipcRenderer.removeListener('agent:event', listener)
     }
+  },
+  sessions: {
+    list: (root: string): Promise<SessionRecord[]> => ipcRenderer.invoke('sessions:list', root),
+    get: (id: string): Promise<SessionRecord | null> => ipcRenderer.invoke('sessions:get', id),
+    remove: (id: string): Promise<void> => ipcRenderer.invoke('sessions:remove', id)
   }
 }
 

@@ -383,6 +383,8 @@ export default function ChatPanel(): React.JSX.Element {
     setPublishMsg(null)
     try {
       const res = await window.api.publish.toPr(projectRoot, { title: 'dsgn: design handoff' })
+      // Tag the session's history record with the PR it produced (v5-D).
+      if (res.ok && res.url) void window.api.agent.tagSession(projectRoot, { prUrl: res.url })
       setPublishMsg(
         res.ok
           ? { ok: true, text: res.url ? `Opened ${res.url}` : 'PR opened.' }
