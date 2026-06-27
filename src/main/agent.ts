@@ -11,6 +11,7 @@ import {
   createWorktree,
   commitWorktree,
   removeWorktree,
+  pruneOrphans,
   type Worktree
 } from './worktrees'
 
@@ -131,6 +132,13 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     const s = await pickProvider(options).startSession(root, options, getWindow)
     sessions.set(key, s)
     activeKey = key
+    // v8 F1: reclaim any comment-spawn worktrees orphaned by a prior crash/quit —
+    // pruneOrphans commits dirty leftovers to their branch (recovering the work)
+    // before removing the checkout. Skip ids of spawns live THIS session (their
+    // checkouts are under the same dir). Best-effort, fire-and-forget.
+    if (await isRepoRoot(root)) {
+      void pruneOrphans(root, worktreesDir(), new Set(spawns.keys())).catch(() => {})
+    }
   })
 
   // Close a project's session (renderer single-active teardown; the rail uses
@@ -233,23 +241,30 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
         return { ok: false, reason: err instanceof Error ? err.message : String(err) }
       }
       const opts: AgentOptions = { ...options, permissionMode: 'bypassPermissions' }
-      const s = await pickProvider(opts).startSession(wt.path, opts, getWindow, {
-        sessionId: wt.id,
-        emitKey: parentKey,
-        onEvent: (e) => {
-          if (e.type === 'done') void finalizeSpawn(wt.id, 'done')
-          else if (e.type === 'error') void finalizeSpawn(wt.id, 'error')
-        }
-      })
-      // The history record files under the parent project (not the worktree path).
-      s.record.kind = 'comment'
-      s.record.branch = wt.branch
-      s.record.projectRoot = root
-      s.record.projectName = basename(root) || root
-      s.record.transcript.push({ role: 'user', text, at: Date.now() })
-      spawns.set(wt.id, { session: s, wt, parentKey, parentRoot: root, text })
-      s.send(text)
-      return { ok: true, spawnId: wt.id, branch: wt.branch }
+      try {
+        const s = await pickProvider(opts).startSession(wt.path, opts, getWindow, {
+          sessionId: wt.id,
+          emitKey: parentKey,
+          onEvent: (e) => {
+            if (e.type === 'done') void finalizeSpawn(wt.id, 'done')
+            else if (e.type === 'error') void finalizeSpawn(wt.id, 'error')
+          }
+        })
+        // The history record files under the parent project (not the worktree path).
+        s.record.kind = 'comment'
+        s.record.branch = wt.branch
+        s.record.projectRoot = root
+        s.record.projectName = basename(root) || root
+        s.record.transcript.push({ role: 'user', text, at: Date.now() })
+        spawns.set(wt.id, { session: s, wt, parentKey, parentRoot: root, text })
+        s.send(text)
+        return { ok: true, spawnId: wt.id, branch: wt.branch }
+      } catch (err) {
+        // startSession threw (SDK load / not logged in) — the worktree is on disk but
+        // never registered, so reclaim it here or it orphans with no recovery path.
+        await removeWorktree(root, wt, { keepBranch: false })
+        return { ok: false, reason: err instanceof Error ? err.message : String(err) }
+      }
     }
   )
 
@@ -273,12 +288,11 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     for (const s of sessions.values()) closeSession(s)
     sessions.clear()
     activeKey = null
-    // v8 F1: stop any in-flight spawns + reclaim their checkouts (keep branches —
-    // a spawn's work is durable). Best-effort, fire-and-forget on the way out.
-    for (const { session, wt, parentRoot } of spawns.values()) {
-      closeSession(session)
-      void removeWorktree(parentRoot, wt, { keepBranch: true })
-    }
+    // v8 F1: stop any in-flight spawns' subprocesses, but LEAVE their checkouts on
+    // disk — committing/removing here would race the process exit (work lost, or a
+    // half-removed worktree). The next launch's pruneOrphans commits each dirty
+    // leftover to its branch (recovering the work) and reclaims the checkout.
+    for (const { session } of spawns.values()) closeSession(session)
     spawns.clear()
   })
 }

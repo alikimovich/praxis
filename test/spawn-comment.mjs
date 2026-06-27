@@ -82,6 +82,29 @@ try {
   }, KEY)
   assert(!chatText.includes('LEAK_INTO_CHAT'), 'spawn delta must NOT enter the active chat')
 
+  // A spawn's `commands` (SDK init) + auth-ish `error` must NOT touch the interactive
+  // session UI (App.tsx's listener guards on sessionId too, not just ChatPanel's).
+  await win.evaluate(() => {
+    window.__dsgnSession.getState().setSlashCommands(['/mine'])
+    window.__dsgnSession.getState().setAuthNeeded(false)
+  })
+  await app.evaluate(({ BrowserWindow }, evs) => {
+    for (const ev of evs) BrowserWindow.getAllWindows()[0].webContents.send('agent:event', ev)
+  }, [
+    { type: 'commands', commands: ['/spawn-only'], projectKey: KEY, sessionId: 's1' },
+    { type: 'error', message: 'Please run claude login', projectKey: KEY, sessionId: 's1' }
+  ])
+  await sleep(250)
+  const sess = await win.evaluate(() => ({
+    cmds: window.__dsgnSession.getState().slashCommands,
+    auth: window.__dsgnSession.getState().authNeeded
+  }))
+  assert(
+    JSON.stringify(sess.cmds) === JSON.stringify(['/mine']),
+    `spawn commands must not overwrite the active slash menu: ${JSON.stringify(sess.cmds)}`
+  )
+  assert(sess.auth === false, 'a spawn auth error must not raise the onboarding banner')
+
   // spawn-finished → working row removed.
   await app.evaluate(({ BrowserWindow }, ev) => {
     BrowserWindow.getAllWindows()[0].webContents.send('agent:event', ev)

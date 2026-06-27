@@ -35,10 +35,31 @@ tree (`git apply`/`--3way`), not `git merge`.
   spawn that had a real Claude agent edit a temp git repo in its own worktree and commit to
   a `dsgn/comment-<id>` branch with main untouched. Full `verify` green (live spawn +
   AGENT-E2E both ran).
+- **Adversarial review (4-dimension workflow, each finding verified) → 10 confirmed,
+  all fixed before merge:**
+  - `git stash create` silently drops UNTRACKED files — a spawn would fork from a base
+    missing brand-new files the interactive agent just created. Replaced with a
+    throwaway-index `captureBase` (read-tree HEAD → add -A → write-tree → commit-tree)
+    that snapshots tracked + untracked WIP.
+  - `App.tsx`'s second `onEvent` listener lacked the `sessionId` guard → a spawn's init
+    `commands` overwrote the active slash menu and its auth error raised the onboarding
+    banner. Guarded (main broadcasts to both listeners).
+  - A spawn whose `startSession` threw (SDK load / not logged in) leaked its worktree
+    (created before the `spawns.set`) → now reclaimed in a catch.
+  - `pruneOrphans` was written + tested but never CALLED → wired at open-project (skips
+    ids of spawns live this session so it can't reap an active checkout).
+  - `before-quit` did `removeWorktree` fire-and-forget → discarded uncommitted work and
+    raced exit. Now just stops the subprocess; next launch's pruneOrphans commits the
+    dirty leftover to its branch and reclaims it.
+  - bypassPermissions skips the `canUseTool` sidecar deny, and `.dsgn/` isn't gitignored
+    → a spawn could land sidecar writes on the live tree via Apply. `commitWorktree` now
+    unstages `.dsgn` so it never reaches the branch/patch. (Bash allowlist still deferred.)
+  - `git worktree add` races on shared admin state → `createWorktree` serialized behind
+    an in-process chain.
 - **Deferred to F1 phases 2–3:** Apply/PR/Discard on a finished row (+ ConflictPanel),
-  per-repo cap + queue, startup orphan prune, before-quit finalize hardening, non-Claude
-  backends. The spawn's edits currently live on the branch (reviewable via the existing
-  transcript path); reaching the live preview is Phase 2.
+  per-repo cap + queue, before-quit finalize hardening, per-spawn Bash allowlist,
+  non-Claude backends. The spawn's edits currently live on the branch (reviewable via the
+  existing transcript path); reaching the live preview is Phase 2.
 
 ## 2026-06-27 — v8 F2: broaden direct editing (schema defaults + reset-to-default)
 

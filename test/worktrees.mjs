@@ -50,6 +50,9 @@ try {
 
   // Simulate the interactive main agent having UNCOMMITTED WIP in the live tree.
   writeFileSync(appFile, 'export const App = () => <div className="root">hi</div>\n// WIP\n')
+  // ...AND an UNTRACKED new file — the dsgn agent constantly creates files; the fork
+  // base must include these (git stash create would silently drop them).
+  writeFileSync(join(repo, 'Untracked.tsx'), 'export const New = () => null\n')
   const dirtyBefore = readFileSync(appFile, 'utf8')
 
   // --- create: forks the WIP, and does NOT disturb the main tree ---
@@ -57,10 +60,15 @@ try {
   ok(wtA.branch === 'dsgn/comment-' + wtA.id, `branch name: ${wtA.branch}`)
   ok(existsSync(wtA.path), 'worktree checkout exists')
   ok(readFileSync(appFile, 'utf8') === dirtyBefore, 'create did NOT touch the main working tree')
-  // The worktree forked from the WIP state (stash create), so it sees `// WIP`.
+  // The worktree forked from the live WIP — tracked modification...
   ok(
     readFileSync(join(wtA.path, 'App.tsx'), 'utf8').includes('// WIP'),
-    'worktree forked from the live WIP, not just HEAD'
+    'worktree forked from the live WIP (tracked), not just HEAD'
+  )
+  // ...AND the untracked new file (the captureBase fix; stash-create would drop it).
+  ok(
+    existsSync(join(wtA.path, 'Untracked.tsx')),
+    'worktree base includes UNTRACKED live files (new components the agent just made)'
   )
 
   // --- two concurrent creates are isolated (distinct dirs + branches) ---
@@ -83,11 +91,19 @@ try {
     'export const App = () => <div className="root accent">hi</div>\n// WIP\n'
   )
   writeFileSync(join(wtA.path, 'New.tsx'), 'export const New = () => null\n')
+  // A stray .dsgn write (a spawn runs bypassPermissions, so the sidecar deny is off)
+  // must be excluded from the commit — the sidecar is dsgn-managed, not the agent's.
+  mkdirSync(join(wtA.path, '.dsgn'), { recursive: true })
+  writeFileSync(join(wtA.path, '.dsgn', 'annotations.json'), '[{"sneaky":true}]\n')
   const committed = await commitWorktree(wtA, 'make it blue')
   ok(committed.committed, 'commitWorktree committed')
   ok(
     committed.files.includes('App.tsx') && committed.files.includes('New.tsx'),
     `committed files: ${JSON.stringify(committed.files)}`
+  )
+  ok(
+    !committed.files.some((f) => f.startsWith('.dsgn')),
+    `.dsgn must be excluded from a spawn commit: ${JSON.stringify(committed.files)}`
   )
 
   // --- diff → apply onto the DIRTY live tree (3-way, tolerates WIP) ---
@@ -106,12 +122,19 @@ try {
   const branches = g(repo, 'branch', '--list', wtA.branch)
   ok(branches.includes(wtA.branch), 'branch kept as the durable record')
 
-  // --- pruneOrphans reclaims a leftover checkout ---
+  // --- pruneOrphans reclaims a leftover checkout, recovering its dirty work to the
+  // branch — but SKIPS a checkout named as live (an active spawn this session) ---
   const orphan = await createWorktree(repo, worktreesDir, {})
   writeFileSync(join(orphan.path, 'Scratch.tsx'), 'leftover\n')
-  const reclaimed = await pruneOrphans(repo, worktreesDir)
+  const live = await createWorktree(repo, worktreesDir, {}) // pretend this one is active
+  const reclaimed = await pruneOrphans(repo, worktreesDir, new Set([live.id]))
   ok(reclaimed.includes(orphan.id), `pruneOrphans reclaimed the orphan: ${JSON.stringify(reclaimed)}`)
   ok(!existsSync(orphan.path), 'orphan checkout removed by prune')
+  ok(existsSync(live.path), 'pruneOrphans must SKIP a live (active) spawn checkout')
+  ok(!reclaimed.includes(live.id), 'live spawn id not reclaimed')
+  // The orphan's dirty work was committed to its branch before removal (not lost).
+  ok(g(repo, 'show', `${orphan.branch}:Scratch.tsx`).includes('leftover'), 'orphan work recovered to its branch')
+  await removeWorktree(repo, live, {})
 
   // --- empty patch applies as a no-op success ---
   const noop = await applyToWorkingTree(repo, '', tmpDir)

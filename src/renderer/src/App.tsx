@@ -129,6 +129,12 @@ export default function App(): React.JSX.Element {
   useEffect(
     () =>
       window.api.agent.onEvent((event) => {
+        // v8 F1: detached comment-spawn events (tagged sessionId) must NOT touch the
+        // interactive session UI — a spawn's init `commands` would overwrite the
+        // active project's slash menu, and its auth-ish error would raise the
+        // onboarding banner over a healthy session. ChatPanel guards its own listener;
+        // this one needs the same guard since main broadcasts to both.
+        if (event.sessionId) return
         const session = useSession.getState()
         if (event.type === 'commands') {
           session.setSlashCommands(event.commands)

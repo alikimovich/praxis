@@ -22,12 +22,20 @@ const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 const git = (
   cwd: string,
   args: string[],
+  env?: NodeJS.ProcessEnv,
   timeout = 15000
 ): Promise<{ stdout: string; stderr: string }> =>
-  execFileP('git', args, { cwd, timeout, maxBuffer: 16 * 1024 * 1024 }) as Promise<{
-    stdout: string
-    stderr: string
-  }>
+  execFileP('git', args, {
+    cwd,
+    timeout,
+    maxBuffer: 16 * 1024 * 1024,
+    ...(env ? { env: { ...process.env, ...env } } : {})
+  }) as Promise<{ stdout: string; stderr: string }>
+
+// `git worktree add` mutates shared admin state under .git/worktrees and is NOT
+// concurrency-safe (firing several comment spawns at once can race). Serialize the
+// create path behind a single in-process chain — creates are fast, so this is cheap.
+let createChain: Promise<unknown> = Promise.resolve()
 
 export interface Worktree {
   /** Short unique id; also the worktree directory name and the branch suffix. */
@@ -42,32 +50,67 @@ export interface Worktree {
 }
 
 /**
- * Create a fresh worktree forked from the main tree's CURRENT state — including the
- * interactive agent's uncommitted WIP. We capture that WIP via `git stash create`
- * (which writes a dangling commit WITHOUT touching the live working tree or the
- * stash list), and fork the worktree off it; if the tree is clean, stash create is
- * empty and we fork off HEAD. node_modules / .env are gitignored (so absent in a
- * fresh checkout) — symlink them in so a spawned agent can typecheck/run.
+ * Snapshot the live tree's FULL current state — tracked modifications AND brand-new
+ * untracked files — into a dangling base commit, WITHOUT touching the live tree or
+ * its index. `git stash create` omits untracked files (no `-u`), and the dsgn
+ * interactive agent constantly creates new files, so we build the snapshot in a
+ * throwaway index instead: seed it from HEAD, `add -A` the whole working tree
+ * (`.gitignore` keeps node_modules/.env out), write a tree, commit it off HEAD.
+ * A clean tree just yields HEAD.
  */
-export async function createWorktree(
+async function captureBase(repoRoot: string, indexFile: string): Promise<string> {
+  const head = (await git(repoRoot, ['rev-parse', 'HEAD'])).stdout.trim()
+  const env: NodeJS.ProcessEnv = {
+    GIT_INDEX_FILE: indexFile,
+    GIT_AUTHOR_NAME: 'dsgn',
+    GIT_AUTHOR_EMAIL: 'dsgn@local',
+    GIT_COMMITTER_NAME: 'dsgn',
+    GIT_COMMITTER_EMAIL: 'dsgn@local'
+  }
+  try {
+    await git(repoRoot, ['read-tree', 'HEAD'], env)
+    await git(repoRoot, ['add', '-A'], env)
+    const tree = (await git(repoRoot, ['write-tree'], env)).stdout.trim()
+    if (!tree) return head
+    const commit = (
+      await git(repoRoot, ['commit-tree', tree, '-p', head, '-m', 'dsgn: spawn base (WIP snapshot)'], env)
+    ).stdout.trim()
+    return commit || head
+  } catch {
+    return head // any hiccup — fork off HEAD rather than fail the spawn
+  } finally {
+    await rm(indexFile, { force: true }).catch(() => {})
+  }
+}
+
+/**
+ * Create a fresh worktree forked from the main tree's CURRENT state — including the
+ * interactive agent's uncommitted WIP (tracked + untracked, via `captureBase`).
+ * node_modules / .env are gitignored (so absent in a fresh checkout) — symlink them
+ * in so a spawned agent can typecheck/run. Serialized (see `createChain`) because
+ * `git worktree add` races on shared admin state.
+ */
+export function createWorktree(
   repoRoot: string,
   worktreesDir: string,
   opts: { label?: string } = {}
+): Promise<Worktree> {
+  const run = createChain.then(() => doCreateWorktree(repoRoot, worktreesDir, opts))
+  createChain = run.catch(() => {}) // keep the chain alive even if one create fails
+  return run
+}
+
+async function doCreateWorktree(
+  repoRoot: string,
+  worktreesDir: string,
+  _opts: { label?: string }
 ): Promise<Worktree> {
   const id = randomUUID().slice(0, 8)
   const branch = normalizeBranchName(`comment-${id}`)
   const dir = join(worktreesDir, id)
   await mkdir(worktreesDir, { recursive: true })
 
-  // Capture the live tree's WIP into a dangling commit (no side effects on the tree).
-  let baseSha = ''
-  try {
-    baseSha = (await git(repoRoot, ['stash', 'create'])).stdout.trim()
-  } catch {
-    /* nothing to stash / not allowed — fall through to HEAD */
-  }
-  if (!baseSha) baseSha = (await git(repoRoot, ['rev-parse', 'HEAD'])).stdout.trim()
-
+  const baseSha = await captureBase(repoRoot, join(worktreesDir, `.index-${id}`))
   await git(repoRoot, ['worktree', 'add', '-b', branch, dir, baseSha])
 
   // Symlink gitignored runtime deps so the spawn can build (best-effort).
@@ -91,6 +134,11 @@ export async function commitWorktree(
   message: string
 ): Promise<{ committed: boolean; files: string[] }> {
   await git(wt.path, ['add', '-A'])
+  // The spawn runs bypassPermissions (headless — no card to approve), which skips
+  // the canUseTool sidecar deny. `.dsgn/` is dsgn-managed and NOT gitignored in
+  // target repos, so unstage it here: a spawn's accidental sidecar writes must never
+  // reach the durable branch or the apply patch. (The Bash allowlist is deferred.)
+  await git(wt.path, ['reset', '-q', '--', '.dsgn']).catch(() => {})
   const staged = (await git(wt.path, ['diff', '--cached', '--name-only'])).stdout
     .split('\n')
     .map((s) => s.trim())
@@ -184,12 +232,18 @@ export async function removeWorktree(
 }
 
 /**
- * Startup recovery: a crash can leave checkouts in worktreesDir whose admin entries
- * git no longer tracks. Prune stale entries, then remove any leftover directory.
- * Branches with committed work are kept (they're the durable artifacts); we only
- * reclaim the on-disk checkouts. Returns the ids it reclaimed. Never throws.
+ * Startup recovery: a crash/quit can leave checkouts in worktreesDir whose admin
+ * entries git no longer tracks. Prune stale entries, then for each leftover commit
+ * any dirty work to its branch (so a crashed-mid-run spawn isn't lost) and remove the
+ * checkout. `skip` names ids that are CURRENTLY ACTIVE (a live spawn this session) —
+ * never touch those. Branches are kept; we only reclaim the on-disk checkouts.
+ * Returns the ids it reclaimed. Never throws.
  */
-export async function pruneOrphans(repoRoot: string, worktreesDir: string): Promise<string[]> {
+export async function pruneOrphans(
+  repoRoot: string,
+  worktreesDir: string,
+  skip: Set<string> = new Set()
+): Promise<string[]> {
   try {
     await git(repoRoot, ['worktree', 'prune'])
   } catch {
@@ -203,6 +257,7 @@ export async function pruneOrphans(repoRoot: string, worktreesDir: string): Prom
   }
   const reclaimed: string[] = []
   for (const id of entries) {
+    if (skip.has(id)) continue // a live spawn this session — leave it alone
     const dir = join(worktreesDir, id)
     try {
       if (!(await stat(dir)).isDirectory()) continue
