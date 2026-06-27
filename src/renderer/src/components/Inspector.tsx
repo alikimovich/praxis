@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import type { SelectedElement, Token, TokenSet } from '../../../shared/api'
 import TokenPalette from './TokenPalette'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
 
 /** A couple of the captured computed styles, shown as quick chips. */
 const STYLE_CHIPS: { key: string; label: string }[] = [
@@ -70,42 +74,63 @@ export default function Inspector({
       : ''
 
   return (
-    <div className="inspector">
-      <div className="inspector__head">
-        <span className="inspector__tag">
+    <div className="inspector flex flex-col gap-[7px] rounded-lg border bg-muted/40 p-2.5">
+      <div className="inspector__head flex items-center gap-2">
+        <Badge
+          variant="outline"
+          className="inspector__tag font-mono text-[12.5px] font-semibold text-blue-600"
+        >
           {element.tag}
           {ident}
-        </span>
-        <button className="inspector__close" onClick={onClear} aria-label="Clear selection">
+        </Badge>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="inspector__close ml-auto size-5 text-muted-foreground"
+          onClick={onClear}
+          aria-label="Clear selection"
+        >
           ✕
-        </button>
+        </Button>
       </div>
 
-      <div className={`inspector__source ${element.source ? '' : 'inspector__source--none'}`}>
+      <div
+        className={cn(
+          'inspector__source overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11.5px]',
+          element.source ? '' : 'inspector__source--none italic text-muted-foreground'
+        )}
+      >
         {element.source ?? 'no data-dsgn-source stamp — agent will locate by selector'}
       </div>
 
       {/* Readiness: ready → edit in the floating panel; not ready → prompt-only. */}
       {inspecting ? (
-        <div className="inspector__ready">Reading props…</div>
+        <div className="inspector__ready text-[11.5px] text-muted-foreground">Reading props…</div>
       ) : propsReady ? (
-        <div className="inspector__ready inspector__ready--ok">Editing props in the panel →</div>
+        <div className="inspector__ready inspector__ready--ok text-[11.5px] text-green-700">
+          Editing props in the panel →
+        </div>
       ) : (
-        <div className="inspector__ready inspector__ready--no">
+        <div className="inspector__ready inspector__ready--no text-[11.5px] text-amber-700">
           Not set up for prop editing —{' '}
-          <button className="inspector__link" onClick={onSetup}>
+          <button className="inspector__link text-blue-600 underline" onClick={onSetup}>
             set up the project
           </button>{' '}
           or ask dsgn below.
         </div>
       )}
 
-      <div className="inspector__chips">
+      <div className="inspector__chips flex flex-wrap gap-[5px]">
         {STYLE_CHIPS.map(({ key, label }) =>
           element.styles[key] ? (
-            <span key={key} className="inspector__chip" title={`${key}: ${element.styles[key]}`}>
+            <Badge
+              key={key}
+              variant="outline"
+              className="inspector__chip max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[10.5px] font-normal text-muted-foreground"
+              title={`${key}: ${element.styles[key]}`}
+            >
               {label}: {element.styles[key]}
-            </span>
+            </Badge>
           ) : null
         )}
       </div>
@@ -113,9 +138,9 @@ export default function Inspector({
       {showTokens && tokens && <TokenPalette tokenSet={tokens} onPick={onPickToken} />}
 
       {noting && (
-        <div className="inspector__note">
-          <textarea
-            className="inspector__noteinput"
+        <div className="inspector__note flex flex-col gap-1.5">
+          <Textarea
+            className="inspector__noteinput resize-none text-[13px]"
             placeholder="Note for the engineer…"
             value={note}
             rows={2}
@@ -128,34 +153,39 @@ export default function Inspector({
               }
             }}
           />
-          <button
-            className="inspector__notesave"
+          <Button
+            size="sm"
+            className="inspector__notesave self-end"
             onClick={() => void saveNote()}
             disabled={!note.trim() || saving}
           >
             {saving ? 'Saving…' : 'Save note'}
-          </button>
+          </Button>
         </div>
       )}
 
-      <div className="inspector__actions">
+      <div className="inspector__actions flex gap-1.5">
         {hasTokens && (
-          <button
-            className={`inspector__toggle ${showTokens ? 'is-active' : ''}`}
+          <Button
+            variant={showTokens ? 'default' : 'outline'}
+            size="sm"
+            className="inspector__toggle"
             onClick={() => setShowTokens((s) => !s)}
           >
             Tokens
-          </button>
+          </Button>
         )}
-        <button
-          className={`inspector__toggle ${noting ? 'is-active' : ''}`}
+        <Button
+          variant={noting ? 'default' : 'outline'}
+          size="sm"
+          className="inspector__toggle"
           onClick={() => setNoting((n) => !n)}
         >
           Note
-        </button>
-        <button className="inspector__ask" onClick={onAsk}>
+        </Button>
+        <Button size="sm" className="inspector__ask flex-1" onClick={onAsk}>
           Ask dsgn…
-        </button>
+        </Button>
       </div>
     </div>
   )

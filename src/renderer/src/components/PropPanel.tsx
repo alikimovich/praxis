@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { PropField, PropInspection } from '../../../shared/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 /** Kept in sync with the .proppanel width in styles.css and the reserved inset. */
 const PANEL_WIDTH = 320
@@ -73,20 +75,41 @@ export default function PropPanel({
   }
 
   return (
-    <aside className="proppanel" aria-label={`Props for ${inspection.component}`}>
-      <header className="proppanel__head">
-        <div className="proppanel__id">
-          <div className="proppanel__title">{inspection.component}</div>
-          <div className="proppanel__source">{source}</div>
+    <aside
+      className="proppanel fixed bottom-0 right-0 top-[var(--titlebar-h)] z-50 flex w-80 flex-col border-l bg-background shadow-[-4px_0_18px_rgba(0,0,0,0.08)]"
+      aria-label={`Props for ${inspection.component}`}
+    >
+      <header className="proppanel__head flex shrink-0 items-start gap-2 border-b px-3.5 py-3">
+        <div className="proppanel__id min-w-0">
+          <div className="proppanel__title font-mono text-sm font-semibold text-blue-600">
+            {inspection.component}
+          </div>
+          <div className="proppanel__source overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11px] text-muted-foreground">
+            {source}
+          </div>
         </div>
-        <button className="proppanel__close" onClick={onClose} aria-label="Close panel">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="proppanel__close ml-auto"
+          onClick={onClose}
+          aria-label="Close panel"
+        >
           ✕
-        </button>
+        </Button>
       </header>
-      {error && <div className="proppanel__error">{error}</div>}
-      {inspection.note && <div className="proppanel__note">{inspection.note}</div>}
-      <div className="proppanel__rows">
-        {inspection.fields.length === 0 && <div className="proppanel__note">No editable props.</div>}
+      {error && <div className="proppanel__error mx-3.5 mt-2 text-[11.5px] text-red-700">{error}</div>}
+      {inspection.note && (
+        <div className="proppanel__note mx-3.5 mt-2 text-[11.5px] text-muted-foreground">
+          {inspection.note}
+        </div>
+      )}
+      <div className="proppanel__rows flex flex-1 flex-col gap-3 overflow-y-auto px-3.5 pb-3.5 pt-2.5">
+        {inspection.fields.length === 0 && (
+          <div className="proppanel__note text-[11.5px] text-muted-foreground">
+            No editable props.
+          </div>
+        )}
         {inspection.fields.map((f) => (
           <PropRow
             key={f.name}
@@ -118,14 +141,21 @@ function PropRow({
   let control: React.JSX.Element
   if (field.expression || field.kind === 'other') {
     control = (
-      <button className="proppanel__agent" onClick={onAskAgent} disabled={busy}>
+      <Button
+        variant="outline"
+        size="sm"
+        className="proppanel__agent justify-self-end"
+        onClick={onAskAgent}
+        disabled={busy}
+      >
         edit via chat
-      </button>
+      </Button>
     )
   } else if (field.kind === 'boolean') {
     control = (
       <input
         type="checkbox"
+        className="justify-self-end"
         checked={field.value === true}
         disabled={busy}
         onChange={(e) => onApply(e.target.checked)}
@@ -134,7 +164,7 @@ function PropRow({
   } else if (field.kind === 'enum' && field.options) {
     control = (
       <select
-        className="select"
+        className="select min-w-[120px] max-w-[160px] justify-self-end"
         value={String(field.value ?? '')}
         disabled={busy}
         onChange={(e) => onApply(e.target.value)}
@@ -152,8 +182,8 @@ function PropRow({
   } else {
     const isNumber = field.kind === 'number'
     control = (
-      <input
-        className="proppanel__input"
+      <Input
+        className="proppanel__input min-w-[120px] max-w-[160px] justify-self-end"
         type={isNumber ? 'number' : 'text'}
         value={String(draft)}
         disabled={busy}
@@ -178,13 +208,20 @@ function PropRow({
   }
 
   return (
-    <div className="proppanel__row">
-      <span className="proppanel__name" title={field.description}>
+    <div className="proppanel__row grid grid-cols-[1fr_auto] items-center gap-x-2.5 gap-y-2">
+      <span
+        className="proppanel__name overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[12.5px]"
+        title={field.description}
+      >
         {field.name}
-        {field.required && <span className="proppanel__req">*</span>}
+        {field.required && <span className="proppanel__req ml-0.5 text-red-700">*</span>}
       </span>
       {control}
-      {field.description && <span className="proppanel__desc">{field.description}</span>}
+      {field.description && (
+        <span className="proppanel__desc col-span-full text-[11px] leading-snug text-muted-foreground">
+          {field.description}
+        </span>
+      )}
     </div>
   )
 }
