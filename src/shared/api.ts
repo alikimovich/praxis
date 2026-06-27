@@ -217,6 +217,13 @@ export interface SelectedElement {
   classes: string[]
   selector: string
   source: string | null
+  /**
+   * The nearest COMPONENT-instance call site (v8 F3a) — `data-dsgn-component-source`,
+   * which the stamp plugin forwards so the authored `<Component …/>` (not the
+   * innermost host) wins. Lets the inspector edit per-instance props. Null when the
+   * element isn't inside a stamped component instance (or on a non-React backend).
+   */
+  componentSource: string | null
   text: string | null
   rect: Bounds
   styles: Record<string, string>

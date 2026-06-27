@@ -579,6 +579,18 @@ export default function ChatPanel(): React.JSX.Element {
             onAddNote={addNote}
             tokens={tokenSet}
             onPickToken={pickToken}
+            onSelectOwner={() => {
+              // v8 F3a: re-point the selection at the component-instance call site
+              // so the panel (props.inspect) edits this instance's props. One level
+              // up; the new selection has no further owner (it came from the DOM).
+              if (selected?.componentSource) {
+                setSelected({
+                  ...selected,
+                  source: selected.componentSource,
+                  componentSource: null
+                })
+              }
+            }}
           />
         )}
         <NotesPanel
