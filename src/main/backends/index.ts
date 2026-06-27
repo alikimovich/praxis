@@ -2,6 +2,7 @@ import type { AgentOptions } from '../../shared/api'
 import type { ModelProvider } from './types'
 import { claudeProvider } from './claude'
 import { codexProvider } from './codex'
+import { geminiProvider } from './gemini'
 
 export type { ModelProvider, ProviderSession, PendingPrompt } from './types'
 
@@ -15,6 +16,8 @@ export function pickProvider(options: AgentOptions): ModelProvider {
   switch (options.provider) {
     case 'codex':
       return codexProvider
+    case 'gemini':
+      return geminiProvider
     case 'claude':
     case undefined:
     default:

@@ -54,6 +54,21 @@ try {
   assert(done, 'codex backend should still emit done after the error (turn completes)')
   assert(err.projectKey && err.projectKey === done.projectKey, 'events tagged with the project key')
 
+  // Gemini dispatch: the `gemini` CLI isn't installed in CI, so the subprocess
+  // spawn fails — the provider must still emit error + done, not throw.
+  await win.evaluate((p) => window.api.agent.closeProject(p), A)
+  await win.evaluate(() => {
+    window.__ev = []
+  })
+  await win.evaluate((p) => window.api.agent.openProject(p, { provider: 'gemini' }), A)
+  await win.evaluate(() => window.api.agent.send('hello gemini'))
+  await new Promise((r) => setTimeout(r, 1500))
+  const gev = await win.evaluate(() => window.__ev)
+  assert(
+    gev.find((e) => e.type === 'error') && gev.find((e) => e.type === 'done'),
+    `gemini backend should fail soft (error+done) when the CLI is absent (got ${JSON.stringify(gev)})`
+  )
+
   // The default (no provider) path must still construct a session — open it and
   // confirm the session is live via the is-open IPC (Claude backend).
   await win.evaluate((p) => window.api.agent.closeProject(p), A)
@@ -61,7 +76,7 @@ try {
   const open = await win.evaluate((p) => window.api.agent.isOpen(p), A)
   assert(open === true, 'default provider (Claude) session should be open')
 
-  console.log('PROVIDER-SEAM OK — codex dispatch fails soft (error+done), default Claude path live')
+  console.log('PROVIDER-SEAM OK — codex + gemini dispatch fail soft (error+done), Claude path live')
 } catch (err) {
   console.error('PROVIDER-SEAM FAILED:', err?.message ?? err)
   process.exitCode = 1
