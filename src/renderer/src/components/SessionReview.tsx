@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { SessionRecord } from '../../../shared/api'
-import { relativeTime } from '../store'
+import { relativeTime, useHistory } from '../store'
 
 interface Props {
   /** The record to review (a header-only summary from the rail list). */
@@ -19,6 +19,8 @@ interface Props {
  */
 export default function SessionReview({ record, onClose }: Props): React.JSX.Element {
   const [full, setFull] = useState<SessionRecord>(record)
+  const [busy, setBusy] = useState<null | 'apply' | 'pr' | 'discard'>(null)
+  const [note, setNote] = useState<{ kind: 'ok' | 'warn' | 'err'; text: string } | null>(null)
 
   useEffect(() => {
     let live = true
@@ -29,6 +31,49 @@ export default function SessionReview({ record, onClose }: Props): React.JSX.Ele
       live = false
     }
   }, [record.id])
+
+  // v8 F1 Phase 2: a finished COMMENT spawn left its work on a branch. Offer to
+  // Apply it onto the live tree (preview HMRs), open a PR from it, or Discard it.
+  const isComment = full.kind === 'comment' && !!full.branch
+  const commentTitle =
+    full.transcript.find((t) => t.role === 'user')?.text?.slice(0, 70) || 'dsgn comment edit'
+
+  const apply = async (): Promise<void> => {
+    setBusy('apply')
+    setNote(null)
+    try {
+      const r = await window.api.agent.spawnApply(full.projectRoot, full.branch as string)
+      if (r.ok) setNote({ kind: 'ok', text: 'Applied to your working tree — the preview should refresh.' })
+      else setNote({ kind: r.conflict ? 'warn' : 'err', text: r.error ?? 'Could not apply.' })
+    } finally {
+      setBusy(null)
+    }
+  }
+  const openPr = async (): Promise<void> => {
+    setBusy('pr')
+    setNote(null)
+    try {
+      const r = await window.api.agent.spawnPr(full.projectRoot, full.branch as string, commentTitle, full.id)
+      if (r.ok && r.prUrl) {
+        setFull({ ...full, prUrl: r.prUrl })
+        setNote({ kind: 'ok', text: 'PR opened.' })
+      } else {
+        setNote({ kind: 'err', text: r.error ?? 'Could not open a PR.' })
+      }
+    } finally {
+      setBusy(null)
+    }
+  }
+  const discard = async (): Promise<void> => {
+    setBusy('discard')
+    try {
+      await window.api.agent.spawnDiscard(full.projectRoot, full.branch as string)
+      await useHistory.getState().remove(full.projectRoot, full.id)
+      onClose()
+    } finally {
+      setBusy(null)
+    }
+  }
 
   // Esc closes.
   useEffect(() => {
@@ -85,6 +130,36 @@ export default function SessionReview({ record, onClose }: Props): React.JSX.Ele
             ))}
           </ul>
         )}
+
+        {isComment && (
+          <div className="review__actions">
+            <button
+              className="review__action review__action--primary"
+              onClick={apply}
+              disabled={busy !== null}
+              title="Apply this run's changes onto your working tree"
+            >
+              {busy === 'apply' ? 'Applying…' : 'Apply'}
+            </button>
+            <button
+              className="review__action"
+              onClick={openPr}
+              disabled={busy !== null || !!full.prUrl}
+              title="Push the branch and open a PR"
+            >
+              {busy === 'pr' ? 'Opening…' : full.prUrl ? 'PR opened' : 'Open PR'}
+            </button>
+            <button
+              className="review__action review__action--danger"
+              onClick={discard}
+              disabled={busy !== null}
+              title="Delete this run's branch"
+            >
+              {busy === 'discard' ? 'Discarding…' : 'Discard'}
+            </button>
+          </div>
+        )}
+        {note && <div className={`review__note review__note--${note.kind}`}>{note.text}</div>}
 
         <div className="review__transcript">
           {full.transcript.length === 0 ? (

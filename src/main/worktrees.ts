@@ -167,6 +167,37 @@ export async function diffWorktree(wt: Worktree): Promise<string> {
 }
 
 /**
+ * The spawn's net change read back from its branch AFTER the worktree is gone (v8 F1
+ * Phase 2 — Apply/PR). A spawn makes exactly one commit on top of its WIP-snapshot
+ * base, so `<branch>^..<branch>` is precisely the spawn's edits (excluding the base
+ * WIP, which is already in the live tree). Empty if the branch is missing.
+ */
+export async function branchPatch(repoRoot: string, branch: string): Promise<string> {
+  try {
+    return (
+      await git(repoRoot, ['diff', '--full-index', '--binary', `${branch}^..${branch}`])
+    ).stdout
+  } catch {
+    return ''
+  }
+}
+
+/** Delete a spawn's branch (v8 F1 Phase 2 — Discard). Never throws. */
+export async function deleteBranch(repoRoot: string, branch: string): Promise<void> {
+  await git(repoRoot, ['branch', '-D', branch]).catch(() => {})
+}
+
+/** Does this branch exist locally? */
+export async function branchExists(repoRoot: string, branch: string): Promise<boolean> {
+  try {
+    await git(repoRoot, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Apply a spawn's patch onto the LIVE working tree — NOT `git merge` (which fails
  * when the interactive agent has uncommitted WIP). Strategy:
  *  1. plain `git apply` (working-tree based) — clean when the live tree still

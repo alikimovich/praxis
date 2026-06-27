@@ -17,7 +17,7 @@ import electronPath from 'electron'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -117,7 +117,38 @@ try {
   const after = await win.evaluate((key) => window.__dsgnSpawns.getState().byKey[key]?.length ?? 0, KEY)
   assert(after === 0, 'spawn-finished should remove the working row')
 
-  console.log('SPAWN-COMMENT OK (deterministic) — non-repo fallback, byte-clean chat, row lifecycle')
+  // --- A3 (Phase 2): Apply + Discard a finished spawn's branch (hand-built, no model).
+  // Simulate a spawn branch = main + one edit-commit, then apply it onto the live tree. ---
+  const P2BRANCH = 'dsgn/comment-p2test'
+  g(repo, 'checkout', '-q', '-b', P2BRANCH)
+  writeFileSync(join(repo, 'phase2.txt'), 'P2_APPLIED\n')
+  g(repo, 'add', '-A')
+  g(repo, 'commit', '-qm', 'spawn edit')
+  g(repo, 'checkout', '-q', 'main')
+  assert(!existsSync(join(repo, 'phase2.txt')), 'precondition: phase2.txt only on the branch')
+
+  const applied = await win.evaluate(
+    (args) => window.api.agent.spawnApply(args.repo, args.branch),
+    { repo, branch: P2BRANCH }
+  )
+  assert(applied.ok, `spawnApply should succeed: ${JSON.stringify(applied)}`)
+  assert(
+    existsSync(join(repo, 'phase2.txt')) && readFileSync(join(repo, 'phase2.txt'), 'utf8').includes('P2_APPLIED'),
+    'Apply must land the branch edit on the live working tree'
+  )
+
+  const discarded = await win.evaluate(
+    (args) => window.api.agent.spawnDiscard(args.repo, args.branch),
+    { repo, branch: P2BRANCH }
+  )
+  assert(discarded.ok, 'spawnDiscard should succeed')
+  assert(g(repo, 'branch', '--list', P2BRANCH) === '', 'Discard must delete the spawn branch')
+  // Clean the applied file so the live spawn below starts from a known tree.
+  rmSync(join(repo, 'phase2.txt'), { force: true })
+
+  console.log(
+    'SPAWN-COMMENT OK (deterministic) — non-repo fallback, byte-clean chat, row lifecycle, Apply/Discard'
+  )
 
   // --- B: live spawn into the temp repo (creds-gated) ---
   const prompt =

@@ -192,6 +192,20 @@ const api: DsgnApi = {
       options?: AgentOptions
     ): Promise<{ ok: boolean; spawnId?: string; branch?: string; reason?: string }> =>
       ipcRenderer.invoke('agent:spawn-comment', root, text, options),
+    spawnApply: (
+      root: string,
+      branch: string
+    ): Promise<{ ok: boolean; conflict?: boolean; error?: string }> =>
+      ipcRenderer.invoke('agent:spawn-apply', root, branch),
+    spawnDiscard: (root: string, branch: string): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke('agent:spawn-discard', root, branch),
+    spawnPr: (
+      root: string,
+      branch: string,
+      title: string,
+      recordId: string
+    ): Promise<{ ok: boolean; prUrl?: string; error?: string }> =>
+      ipcRenderer.invoke('agent:spawn-pr', root, branch, title, recordId),
     onEvent: (cb: (event: AgentEvent) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, event: AgentEvent): void => cb(event)
       ipcRenderer.on('agent:event', listener)
