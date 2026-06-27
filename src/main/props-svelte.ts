@@ -8,7 +8,7 @@ import type {
   PropKind,
   TokenEdit
 } from '../shared/api'
-import { swapColorClass } from './tw-classes'
+import { swapTailwindClass } from './tw-classes'
 import {
   agentPromptFor,
   isValidAttrName,
@@ -563,8 +563,7 @@ export async function applySvelteTokenEdit(
     needsAgent: true,
     agentPrompt: `Apply the ${edit.group} token "${edit.token.name}" (${edit.token.value}) to the selected element${edit.source ? ` in ${edit.source}` : ''}.`
   })
-  const isColorGroup = /colou?r/i.test(edit.group)
-  if (edit.tokenSource !== 'tailwind' || !isColorGroup) return toAgent()
+  if (edit.tokenSource !== 'tailwind') return toAgent()
   let code: string
   try {
     code = await readFile(loc.file, 'utf8')
@@ -579,7 +578,7 @@ export async function applySvelteTokenEdit(
   // The `class` attribute, read as a single literal string (`class="…"`).
   const classAttr = readAttributes(el).find((a) => a.name === 'class')
   if (!classAttr || classAttr.kind !== 'string' || classAttr.expression) return toAgent()
-  const swapped = swapColorClass(String(classAttr.value ?? ''), edit.token.name)
+  const swapped = swapTailwindClass(String(classAttr.value ?? ''), edit.group, edit.token.name)
   if (swapped == null) return toAgent()
   // readAttributes gives the WHOLE attribute span (`class="…"`); rewrite it.
   const next = `${code.slice(0, classAttr.start)}class="${swapped}"${code.slice(classAttr.end)}`

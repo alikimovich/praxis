@@ -243,6 +243,25 @@ try {
     throw new Error(`two color utilities should be ambiguous → agent: ${JSON.stringify(t2amb)}`)
   }
 
+  // --- T2 radius family: a radius token swaps the single rounded-* utility, and
+  // leaves the spacing utility (p-4) alone. (TwRadius, Badge.tsx:58) ---
+  const t2r = await win.evaluate(
+    (a) =>
+      window.api.props.applyToken(a.fixture, {
+        source: 'src/Badge.tsx:58',
+        token: { name: 'card', value: '0.5rem' },
+        group: 'radius',
+        tokenSource: 'tailwind',
+        classes: ['rounded-lg', 'p-4']
+      }),
+    { fixture }
+  )
+  if (!t2r.applied) throw new Error(`radius-family class swap not applied: ${JSON.stringify(t2r)}`)
+  const radTxt = readFileSync(badge, 'utf8')
+  if (!radTxt.includes('rounded-card p-4')) {
+    throw new Error('radius token did not swap rounded-lg → rounded-card (or touched p-4)')
+  }
+
   console.log(
     'PROP-EDIT OK — schema, broadened literals, direct token apply (T1/T2/T3), agent fallback'
   )

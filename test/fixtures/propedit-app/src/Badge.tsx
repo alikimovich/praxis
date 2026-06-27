@@ -52,3 +52,8 @@ export function TwColor(): JSX.Element {
 export function TwTwo(): JSX.Element {
   return <span className="text-gray-500 bg-blue-100">tw</span>
 }
+
+// T2 radius family: one rounded-* utility → a radius token swaps it (p-4 untouched).
+export function TwRadius(): JSX.Element {
+  return <div className="rounded-lg p-4">r</div>
+}

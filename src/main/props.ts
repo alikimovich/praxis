@@ -15,7 +15,7 @@ import {
   applySvelteTokenEdit,
   inspectSvelteProps
 } from './props-svelte'
-import { swapColorClass } from './tw-classes'
+import { swapTailwindClass } from './tw-classes'
 
 /**
  * Prop editing is framework-agnostic by dispatch: the source file's extension
@@ -735,18 +735,20 @@ async function applyTokenEdit(root: string, edit: TokenEdit): Promise<PropEditRe
 
   const isColorGroup = /colou?r/i.test(edit.group)
 
-  // T2 — Tailwind color-utility class swap: for a tailwind color token on an
-  // element with a literal className that has EXACTLY ONE color utility, swap that
-  // utility's scale to the token (e.g. `text-gray-500` + token 'primary' →
-  // `text-primary`). Zero/multiple matches, or a dynamic className → fall through.
-  if (edit.tokenSource === 'tailwind' && isColorGroup) {
+  // T2 — Tailwind utility class swap: for a tailwind token on an element with a
+  // literal className that has EXACTLY ONE utility of the token's family (color /
+  // radius / spacing), swap that utility's scale to the token (e.g. `text-gray-500`
+  // + 'primary' → `text-primary`). Zero/multiple matches, or a dynamic className →
+  // fall through.
+  if (edit.tokenSource === 'tailwind') {
     const classAttr = (found.opening.attributes ?? []).find(
       (a) => a.type === 'JSXAttribute' && (a.name as { name?: string })?.name === 'className'
     )
     const strNode = classNameStringNode(classAttr?.value as BabelNode | null | undefined)
     if (strNode) {
-      const swapped = swapColorClass(
+      const swapped = swapTailwindClass(
         String((strNode as unknown as { value: string }).value),
+        edit.group,
         edit.token.name
       )
       if (swapped != null) {
