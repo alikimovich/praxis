@@ -1,8 +1,9 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
 import { spawn, execFile, type ChildProcess } from 'child_process'
 import { createServer, type Server, type ServerResponse } from 'http'
-import { readFile } from 'fs/promises'
+import { readFile, unlink } from 'fs/promises'
 import { join } from 'path'
+import { tmpdir } from 'os'
 import { promisify } from 'util'
 import { xcodeFailureReason, simBuildDestination, extractBuildError } from './xcode'
 import { findFreePort, stripAnsi } from './devserver-net'
@@ -125,29 +126,39 @@ interface FrameSource {
 
 /**
  * Poll the booted device with `simctl io … screenshot` at a modest fps. Each
- * capture is a short-lived `xcrun` process writing a JPEG to stdout; we skip
- * ticks while one is in flight so a slow capture can't pile up.
+ * capture is a short-lived `xcrun` process writing a JPEG to a temp file, which
+ * we then read back; we skip ticks while one is in flight so a slow capture
+ * can't pile up.
+ *
+ * We capture to a real file rather than `screenshot -` (stdout): some `simctl`
+ * versions treat `-` as a literal *filename* and write nothing to stdout, so the
+ * stream would never receive a frame and the bridge would time out with
+ * "Simulator booted, but no frame was captured." The temp-file path is the one
+ * form that behaves the same across Xcode versions.
  */
 function simctlFrameSource(udid: string, fps = 6): FrameSource {
   let timer: NodeJS.Timeout | null = null
   let stopped = false
   let inflight = false
+  // One reused scratch file per source; `-${process.pid}` keeps concurrent dsgn
+  // instances from clobbering each other's frame.
+  const file = join(tmpdir(), `dsgn-sim-${udid}-${process.pid}.jpg`)
   return {
     start(onFrame, onError) {
+      const fail = (err: unknown): void => {
+        inflight = false
+        if (!stopped) onError(err instanceof Error ? err : new Error(String(err)))
+      }
       const tick = (): void => {
         if (stopped || inflight) return
         inflight = true
-        execFile(
-          'xcrun',
-          ['simctl', 'io', udid, 'screenshot', '--type=jpeg', '-'],
-          { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 },
-          (err, stdout) => {
+        execFile('xcrun', ['simctl', 'io', udid, 'screenshot', '--type=jpeg', file], (err) => {
+          if (err) return fail(err)
+          readFile(file).then((buf) => {
             inflight = false
-            if (stopped) return
-            if (err) onError(err instanceof Error ? err : new Error(String(err)))
-            else if (stdout && stdout.length) onFrame(stdout as Buffer)
-          }
-        )
+            if (!stopped && buf.length) onFrame(buf)
+          }, fail)
+        })
       }
       timer = setInterval(tick, Math.max(60, Math.round(1000 / fps)))
       tick()
@@ -156,6 +167,7 @@ function simctlFrameSource(udid: string, fps = 6): FrameSource {
       stopped = true
       if (timer) clearInterval(timer)
       timer = null
+      void unlink(file).catch(() => {})
     }
   }
 }

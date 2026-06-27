@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-27 — fix: simulator frame capture on `simctl` versions that don't honor `-`
+
+- **Bug:** RN/Expo preview failed with "Simulator booted, but no frame was captured."
+  even though the app built + launched fine. `simctlFrameSource` captured via
+  `simctl io <udid> screenshot --type=jpeg -`, expecting the JPEG on stdout — but
+  some Xcode/CoreSimulator versions treat `-` as a literal *filename*, write the
+  image to a file named `-` in cwd, and send nothing to stdout. No frame ever
+  reached the bridge → 30s `firstFrame` timeout.
+- **Fix:** capture to a temp file (`tmpdir()/dsgn-sim-<udid>-<pid>.jpg`) and read it
+  back each tick — the one capture form that behaves identically across Xcode
+  versions. Unlinks the scratch file on `stop()`. No more stray `-` files in the
+  user's repo either.
+
 ## 2026-06-27 — three stacked features: v5-D history UI, inspector→shadcn, direct prop/token edit
 
 Built as stacked PRs off main (#28 → #31 → #32); each its own full `verify` + a
