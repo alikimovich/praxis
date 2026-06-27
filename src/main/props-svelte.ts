@@ -491,6 +491,38 @@ export async function applySvelteEdit(
 }
 
 /**
+ * Remove a prop attribute from a `.svelte` element's source (reset-to-default) —
+ * the Svelte counterpart of `removeProp`. Reversible via the F3b edit history; an
+ * already-absent prop is a successful no-op. (v8 F2)
+ */
+export async function removeSvelteProp(
+  root: string,
+  source: string,
+  name: string,
+  loc: ResolvedSource
+): Promise<PropEditResult> {
+  if (!isValidAttrName(name)) return { applied: false, error: 'Invalid prop name.' }
+  let code: string
+  try {
+    code = await readFile(loc.file, 'utf8')
+  } catch {
+    return { applied: false, error: 'Could not read the source file.' }
+  }
+  const ast = await parseSvelte(code)
+  if (!ast) return { applied: false, error: 'Could not parse the component.' }
+  const el = findElement(ast, code, loc.line, loc.column)
+  if (!el || typeof el.start !== 'number') {
+    return { applied: false, error: 'Could not find the element.' }
+  }
+  const attr = readAttributes(el).find((a) => a.name === name)
+  if (!attr) return { applied: true } // already absent
+  let start = attr.start
+  while (start > 0 && /\s/.test(code[start - 1])) start--
+  const next = code.slice(0, start) + code.slice(attr.end)
+  return commitEdit(root, loc.file, code, next, `${source}:${name}`)
+}
+
+/**
  * Inline text edit for `.svelte` — the counterpart of the JSX text-splice in
  * props.ts. Rewrites a stamped element's text content in source when its children
  * are plain text (svelte/compiler `Text` nodes) and the new text is splice-safe.

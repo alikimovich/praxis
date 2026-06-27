@@ -131,7 +131,9 @@ const api: DsgnApi = {
     apply: (root: string, edit: PropEdit): Promise<PropEditResult> =>
       ipcRenderer.invoke('props:apply', root, edit),
     applyToken: (root: string, edit: TokenEdit): Promise<PropEditResult> =>
-      ipcRenderer.invoke('props:applyToken', root, edit)
+      ipcRenderer.invoke('props:applyToken', root, edit),
+    remove: (root: string, source: string, name: string): Promise<PropEditResult> =>
+      ipcRenderer.invoke('props:remove', root, source, name)
   },
   text: {
     apply: (root: string, edit: { source: string; text: string }): Promise<PropEditResult> =>

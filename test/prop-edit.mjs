@@ -262,6 +262,47 @@ try {
     throw new Error('radius token did not swap rounded-lg → rounded-card (or touched p-4)')
   }
 
+  // --- v8 F2: schema DEFAULTS surface in inspection, and reset-to-default removes
+  // the attribute from source (reversible). Chip has destructuring defaults that
+  // ChipDemo overrides (Badge.tsx:76). ---
+  const CHIP = 'src/Badge.tsx:76'
+  const chipInsp = await win.evaluate((a) => window.api.props.inspect(a.fixture, a.chip), {
+    fixture,
+    chip: CHIP
+  })
+  if (chipInsp?.component !== 'Chip') throw new Error(`Chip inspect: ${JSON.stringify(chipInsp)}`)
+  const tone = field(chipInsp, 'tone')
+  if (tone?.default !== 'brand') throw new Error(`tone default should be 'brand': ${JSON.stringify(tone)}`)
+  if (tone?.value !== 'neutral') throw new Error(`tone live value should be 'neutral': ${JSON.stringify(tone)}`)
+  const dot = field(chipInsp, 'dot')
+  if (dot?.default !== false) throw new Error(`dot default should be false: ${JSON.stringify(dot)}`)
+
+  // reset (remove) tone → attribute gone, value falls back to the 'brand' default.
+  const beforeReset = readFileSync(badge, 'utf8')
+  const rm = await win.evaluate((a) => window.api.props.remove(a.fixture, a.chip, 'tone'), {
+    fixture,
+    chip: CHIP
+  })
+  if (!rm.applied) throw new Error(`reset tone failed: ${JSON.stringify(rm)}`)
+  const afterReset = readFileSync(badge, 'utf8')
+  if (afterReset.includes('tone="neutral"')) throw new Error('reset did not remove tone="neutral"')
+  if (!afterReset.includes('<Chip text="Hi" dot />')) {
+    throw new Error(`reset left a malformed usage: ${afterReset.match(/<Chip[^>]*\/>/)?.[0]}`)
+  }
+
+  // reset is reversible via the F3b history — one undo restores the removed attribute.
+  const undoReset = await win.evaluate((a) => window.api.edits.undo(a.fixture), { fixture })
+  if (!undoReset.ok || readFileSync(badge, 'utf8') !== beforeReset) {
+    throw new Error('undo did not restore the reset-removed prop')
+  }
+
+  // removing an already-absent prop is a no-op success (not an error).
+  const noop = await win.evaluate((a) => window.api.props.remove(a.fixture, a.chip, 'nope'), {
+    fixture,
+    chip: CHIP
+  })
+  if (!noop.applied) throw new Error(`removing an absent prop should be a no-op: ${JSON.stringify(noop)}`)
+
   // --- v8 F3b: undo/redo round-trip through real IPC. A direct prop apply is
   // reversible — undo restores the exact prior source; redo re-applies; and a
   // divergent on-disk edit makes undo report a conflict instead of clobbering. ---
@@ -295,7 +336,8 @@ try {
   }
 
   console.log(
-    'PROP-EDIT OK — schema, broadened literals, direct token apply (T1/T2/T3), agent fallback, F3b undo/redo'
+    'PROP-EDIT OK — schema, broadened literals, direct token apply (T1/T2/T3), agent fallback, ' +
+      'F2 defaults + reset-to-default, F3b undo/redo'
   )
 } catch (err) {
   console.error('PROP-EDIT FAILED:', err?.message ?? err)

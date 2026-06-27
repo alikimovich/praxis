@@ -57,3 +57,21 @@ export function TwTwo(): JSX.Element {
 export function TwRadius(): JSX.Element {
   return <div className="rounded-lg p-4">r</div>
 }
+
+// v8 F2: a component with DESTRUCTURING DEFAULTS — react-docgen surfaces
+// `tone` default 'brand' and `dot` default false. The usage overrides both;
+// "reset to default" removes the attribute so the value falls back to the default.
+interface ChipProps {
+  /** Visual tone. */
+  tone?: 'neutral' | 'brand'
+  /** Label text. */
+  text: string
+  /** Show the status dot. */
+  dot?: boolean
+}
+export function Chip({ tone = 'brand', text, dot = false }: ChipProps): JSX.Element {
+  return <span className="chip" data-tone={tone} data-dot={dot}>{text}</span>
+}
+export function ChipDemo(): JSX.Element {
+  return <Chip tone="neutral" text="Hi" dot />
+}
