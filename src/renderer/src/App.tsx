@@ -152,9 +152,24 @@ export default function App(): React.JSX.Element {
       setSelectMode(false)
       setSelected(null)
     })
+    // Phase 3: a simulator pick (idb hit-test → RN testID → source) maps to the
+    // same SelectedElement seam, so the Inspector + props.inspect flow is reused.
+    const offSimPicked = window.api.simulator.onElementPicked((pick) =>
+      setSelected({
+        tag: pick.tag,
+        id: null,
+        classes: [],
+        selector: pick.tag,
+        source: pick.source,
+        text: null,
+        rect: { x: 0, y: 0, width: 0, height: 0 },
+        styles: {}
+      })
+    )
     return () => {
       offPicked()
       offCancel()
+      offSimPicked()
     }
   }, [setSelected, setSelectMode])
 
@@ -739,7 +754,10 @@ export default function App(): React.JSX.Element {
   const toggleSelect = (): void => {
     const next = !selectMode
     setSelectMode(next)
-    void window.api.preview.setSelectMode(next)
+    // Route to the right backend: the web overlay preload, or the simulator's
+    // server-side select mode (a tap then becomes an idb hit-test → RN source).
+    if (previewKind === 'simulator') void window.api.simulator.setSelectMode(next)
+    else void window.api.preview.setSelectMode(next)
     if (!next) setSelected(null)
   }
 

@@ -328,7 +328,7 @@ export interface PublishResult {
 }
 
 /** Result of scaffolding source-stamping into an unprepared project. */
-export type Frontend = 'react' | 'svelte' | 'vue' | 'solid' | 'unknown'
+export type Frontend = 'react' | 'react-native' | 'svelte' | 'vue' | 'solid' | 'unknown'
 /** How dsgn instruments source mapping for the detected framework. */
 export type SetupStrategy =
   | 'babel-plugin'
@@ -445,7 +445,11 @@ export interface DsgnApi {
     /** Boot a sim, start Metro/Expo, launch the app, stand up the frame bridge. */
     start: (opts: { root: string; command?: string; udid?: string }) => Promise<RunningSimulator>
     stop: () => Promise<void>
+    /** Phase 3: arm/disarm element-select (a tap becomes a source pick). */
+    setSelectMode: (active: boolean) => Promise<void>
     onLog: (cb: (line: string) => void) => () => void
+    /** A tapped simulator element resolved to its RN source (via the testID stamp). */
+    onElementPicked: (cb: (pick: { source: string; tag: string }) => void) => () => void
   }
   props: {
     /** Inspect the editable props of the element at `source` ("path:line"). */

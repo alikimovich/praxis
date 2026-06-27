@@ -264,6 +264,78 @@ export function parseControlCommand(body: unknown): ControlCommand | null {
   return null
 }
 
+// --- element select (Phase 3: tap → idb hit-test → RN source) ----------------
+
+/** A `testID` stamped by the dsgn RN Babel plugin → the source location it maps
+ * to. `dsgn:path:line:col` → `path:line:col`, else null. */
+export function parseTestId(testId: unknown): { source: string } | null {
+  if (typeof testId !== 'string' || !testId.startsWith('dsgn:')) return null
+  const source = testId.slice('dsgn:'.length)
+  // Shape-check: relpath:line[:col] — refuse anything that isn't a stamp.
+  return /^[\w./@-]+:\d+(:\d+)?$/.test(source) ? { source } : null
+}
+
+/** Find the first dsgn `testID` stamp anywhere in an idb accessibility node
+ * (idb surfaces it under varying keys — AXUniqueId / AXIdentifier / identifier). */
+export function findDsgnStamp(node: unknown, depth = 0): string | null {
+  if (depth > 6 || node == null) return null
+  if (typeof node === 'string') return node.startsWith('dsgn:') ? node : null
+  if (Array.isArray(node)) {
+    for (const v of node) {
+      const f = findDsgnStamp(v, depth + 1)
+      if (f) return f
+    }
+    return null
+  }
+  if (typeof node === 'object') {
+    for (const v of Object.values(node as Record<string, unknown>)) {
+      const f = findDsgnStamp(v, depth + 1)
+      if (f) return f
+    }
+  }
+  return null
+}
+
+/** A picked simulator element (the RN analog of a web SelectedElement pick). */
+export interface SimPick {
+  source: string
+  tag: string
+}
+
+/** idb view-hierarchy hit-test: the dsgn-stamped element at a 0..1 device point.
+ * Device-gated (needs idb + a booted app); returns null when nothing is stamped. */
+async function idbHitTest(udid: string, fx: number, fy: number): Promise<SimPick | null> {
+  const dims = await idbScreenPoints(udid)
+  const p = fractionToPoints(fx, fy, dims)
+  const { stdout } = await execFileP(
+    'idb',
+    ['ui', 'describe-point', '--udid', udid, '--json', String(p.x), String(p.y)],
+    { timeout: 8000 }
+  )
+  const node = JSON.parse(stdout.toString()) as Record<string, unknown>
+  const stamp = findDsgnStamp(node)
+  const parsed = stamp ? parseTestId(stamp) : null
+  if (!parsed) return null
+  const tag = typeof node.type === 'string' ? node.type : 'element'
+  return { source: parsed.source, tag }
+}
+
+/**
+ * The interaction surface attached to a running bridge (Phase 2 control + Phase 3
+ * select). Present iff idb is installed; otherwise the device is view-only.
+ */
+interface Interaction {
+  send: (cmd: ControlCommand) => Promise<void>
+  isSelectMode: () => boolean
+  /** Handle a tap while in select mode (hit-test + emit the pick to the renderer). */
+  onSelectTap: (fx: number, fy: number) => void
+}
+
+// Set by the renderer's Select toggle (sim path); read by the live interaction.
+let simSelectMode = false
+// The window to emit picks to, set in registerSimulatorIpc.
+let getWin: () => BrowserWindow | null = () => null
+
 // --- the bridge HTTP server -------------------------------------------------
 
 interface Bridge {
@@ -284,7 +356,7 @@ function writeFrameTo(res: ServerResponse, jpeg: Buffer): void {
 function startBridge(
   source: FrameSource,
   port: number,
-  controller: Controller | null
+  interaction: Interaction | null
 ): Promise<Bridge> {
   return new Promise<Bridge>((resolve, reject) => {
     let latest: Buffer | null = null
@@ -319,7 +391,7 @@ function startBridge(
       const path = (req.url || '/').split('?')[0]
       if (path === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
-        res.end(pageHtml(controller != null))
+        res.end(pageHtml(interaction != null))
         return
       }
       // Phase 2: replay a tap/swipe/type on the device (bounded body). Without a
@@ -336,9 +408,12 @@ function startBridge(
         })
         req.on('end', () => {
           if (tooBig) return
-          if (!controller) {
+          const ok = (extra: object): void => {
             res.writeHead(200, { 'Content-Type': 'application/json' })
-            res.end(JSON.stringify({ degraded: true }))
+            res.end(JSON.stringify(extra))
+          }
+          if (!interaction) {
+            ok({ degraded: true })
             return
           }
           let cmd: ControlCommand | null = null
@@ -352,16 +427,16 @@ function startBridge(
             res.end()
             return
           }
-          controller
+          // A tap in select mode is an element pick (hit-test), not a tap-through.
+          if (cmd.type === 'tap' && interaction.isSelectMode()) {
+            interaction.onSelectTap(cmd.x, cmd.y)
+            ok({ selected: true })
+            return
+          }
+          interaction
             .send(cmd)
-            .then(() => {
-              res.writeHead(200, { 'Content-Type': 'application/json' })
-              res.end(JSON.stringify({ ok: true }))
-            })
-            .catch((err) => {
-              res.writeHead(200, { 'Content-Type': 'application/json' })
-              res.end(JSON.stringify({ ok: false, error: msg(err) }))
-            })
+            .then(() => ok({ ok: true }))
+            .catch((err) => ok({ ok: false, error: msg(err) }))
         })
         return
       }
@@ -688,16 +763,27 @@ async function start(
 
   const port = await findFreePort(BRIDGE_PORT_BASE)
   const source = simctlFrameSource(device.udid)
-  // Phase 2: enable interaction iff idb is installed; else the preview is view-only.
-  let controller: Controller | null = null
+  // Phase 2/3: interaction (tap/scroll/type + element-select) iff idb is installed.
+  let interaction: Interaction | null = null
   try {
     await execFileP('idb', ['--help'], { timeout: 4000 })
-    controller = idbController(device.udid)
-    onLog('idb detected — tap / scroll / type enabled.')
+    const controller = idbController(device.udid)
+    interaction = {
+      send: (cmd) => controller.send(cmd),
+      isSelectMode: () => simSelectMode,
+      onSelectTap: (fx, fy) => {
+        void idbHitTest(device.udid, fx, fy)
+          .then((pick) => {
+            if (pick) getWin()?.webContents.send('simulator:element-picked', pick)
+          })
+          .catch(() => {})
+      }
+    }
+    onLog('idb detected — tap / scroll / type + element-select enabled.')
   } catch {
     onLog('idb not found — preview is view-only (install idb to interact).')
   }
-  const bridge = await startBridge(source, port, controller)
+  const bridge = await startBridge(source, port, interaction)
   current = { metroPid: pid, bridge, source, udid: device.udid }
   try {
     await bridge.firstFrame // readiness: a real frame rendered
@@ -710,30 +796,42 @@ async function start(
   return { url, pid, udid: device.udid, bundleId, previewKind: 'simulator' }
 }
 
-// Records the commands a test bridge received (for sim-control.mjs assertions).
+// What a test bridge received (for sim-control.mjs / sim-select.mjs assertions).
 let testRecorded: ControlCommand[] = []
+let testPicks: SimPick[] = []
+// A fixed pick the recording interaction emits for a select-mode tap (stands in
+// for the device-gated idb hit-test).
+const TEST_PICK: SimPick = { source: 'src/App.tsx:10:4', tag: 'View' }
 
 /** Test-only: stand up the bridge with a static stub frame (no simulator needed).
- * `interactive` attaches a recording controller (Phase-2 transport) instead of idb. */
+ * `interactive` attaches a RECORDING interaction (Phase-2 transport + Phase-3
+ * select routing) instead of the idb-backed one. */
 async function startTestBridge(interactive = false): Promise<{ url: string }> {
   stop()
   testRecorded = []
+  testPicks = []
   const port = await findFreePort(BRIDGE_PORT_BASE)
   const source = staticFrameSource(STATIC_JPEG)
-  const controller: Controller | null = interactive
+  const interaction: Interaction | null = interactive
     ? {
         send: async (cmd) => {
           testRecorded.push(cmd)
+        },
+        isSelectMode: () => simSelectMode,
+        onSelectTap: () => {
+          testPicks.push(TEST_PICK)
+          getWin()?.webContents.send('simulator:element-picked', TEST_PICK)
         }
       }
     : null
-  const bridge = await startBridge(source, port, controller)
+  const bridge = await startBridge(source, port, interaction)
   await bridge.firstFrame
   current = { bridge, source }
   return { url: `http://${HOST}:${port}/?dsgnSim=1` }
 }
 
 export function registerSimulatorIpc(getWindow: () => BrowserWindow | null): void {
+  getWin = getWindow
   const log = (line: string): void => {
     getWindow()?.webContents.send('simulator:log', line)
   }
@@ -742,20 +840,28 @@ export function registerSimulatorIpc(getWindow: () => BrowserWindow | null): voi
     start(opts, log)
   )
   ipcMain.handle('simulator:stop', async () => stop())
+  // Phase 3: arm/disarm element-select for the sim (a tap then becomes a pick).
+  ipcMain.handle('simulator:set-select-mode', (_e, active: boolean) => {
+    simSelectMode = !!active
+  })
 
-  // Test-only hooks — exercise the bridge transport + Phase-2 control off-macOS.
-  // Reached via `app.evaluate` in the harness, not exposed on the renderer API.
+  // Test-only hooks — exercise the bridge transport + Phase-2 control + Phase-3
+  // select routing off-macOS. Reached via `app.evaluate`, not the renderer API.
   const g = globalThis as {
     __dsgnStartTestBridge?: (interactive?: boolean) => Promise<{ url: string }>
     __dsgnTestControl?: () => ControlCommand[]
+    __dsgnTestPicks?: () => SimPick[]
     __dsgnSimMap?: {
       fractionToPoints: typeof fractionToPoints
       parseControlCommand: typeof parseControlCommand
+      parseTestId: typeof parseTestId
+      findDsgnStamp: typeof findDsgnStamp
     }
   }
   g.__dsgnStartTestBridge = startTestBridge
   g.__dsgnTestControl = () => testRecorded
-  g.__dsgnSimMap = { fractionToPoints, parseControlCommand }
+  g.__dsgnTestPicks = () => testPicks
+  g.__dsgnSimMap = { fractionToPoints, parseControlCommand, parseTestId, findDsgnStamp }
 
   app.on('before-quit', stop)
 }
