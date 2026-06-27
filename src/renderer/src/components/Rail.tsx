@@ -64,13 +64,29 @@ export default function Rail({ onSwitch, onClose, onOpen, onReview }: Props): Re
                   ×
                 </button>
               </div>
-              {/* v8 F1: comment-spawned background agents currently working. */}
+              {/* v8 F1: comment-spawned background agents working (or queued). */}
               {working.length > 0 && (
                 <ul className="rail__spawns">
                   {working.map((sp) => (
                     <li key={sp.id} className="rail__spawn" title={sp.label}>
-                      <span className="rail__sdot rail__sdot--working" aria-hidden="true" />
-                      <span className="rail__session-label">{sp.label}</span>
+                      <span
+                        className={`rail__sdot ${sp.status === 'queued' ? 'rail__sdot--queued' : 'rail__sdot--working'}`}
+                        aria-hidden="true"
+                      />
+                      <span className="rail__session-label">
+                        {sp.status === 'queued' ? `${sp.label} · queued` : sp.label}
+                      </span>
+                      <button
+                        className="rail__session-x"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void window.api.agent.spawnInterrupt(sp.id)
+                        }}
+                        aria-label="Cancel agent"
+                        title="Cancel this agent"
+                      >
+                        ×
+                      </button>
                     </li>
                   ))}
                 </ul>

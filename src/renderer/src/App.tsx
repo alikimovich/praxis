@@ -207,7 +207,7 @@ export default function App(): React.JSX.Element {
                   id: r.spawnId,
                   branch: r.branch ?? null,
                   label: oneLine(c.text, 60),
-                  status: 'running'
+                  status: r.queued ? 'queued' : 'running'
                 })
               } else {
                 useComposer.getState().setSubmit(prompt)

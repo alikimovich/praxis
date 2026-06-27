@@ -148,6 +148,9 @@ export type AgentEvent = (
   | { type: 'permission-resolved'; id: string }
   | { type: 'done' }
   | { type: 'error'; message: string }
+  /** A queued comment spawn (v8 F1 Phase 3) started running — flip its rail row from
+   *  queued → running and attach its branch. */
+  | { type: 'spawn-started'; branch: string }
   /** A detached comment spawn (v8 F1) finished — drop its working rail row; if it
    *  committed work, `branch` names the durable record (else null). */
   | { type: 'spawn-finished'; branch: string | null }
@@ -550,7 +553,9 @@ export interface DsgnApi {
       root: string,
       text: string,
       options?: AgentOptions
-    ) => Promise<{ ok: boolean; spawnId?: string; branch?: string; reason?: string }>
+    ) => Promise<{ ok: boolean; spawnId?: string; branch?: string; queued?: boolean; reason?: string }>
+    /** F1 Phase 3 — cancel a running or queued comment spawn (the rail row's ×). */
+    spawnInterrupt: (spawnId: string) => Promise<void>
     /** F1 Phase 2 — apply a finished spawn's branch diff onto the live working tree
      *  (the dev server HMRs it). `conflict` when the patch overlapped local edits. */
     spawnApply: (root: string, branch: string) => Promise<{ ok: boolean; conflict?: boolean; error?: string }>

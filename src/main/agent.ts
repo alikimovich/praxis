@@ -9,6 +9,7 @@ import { clearHistory } from './edit-history'
 import { isRepoRoot } from './git'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { randomUUID } from 'node:crypto'
 import {
   createWorktree,
   commitWorktree,
@@ -62,6 +63,19 @@ interface Spawn {
   text: string
 }
 const spawns = new Map<string, Spawn>()
+// v8 F1 Phase 3: bound concurrent spawns per project; the rest queue (FIFO) and start
+// as slots free, so firing many comments can't fork unbounded worktrees/subprocesses.
+const MAX_SPAWNS_PER_REPO = 3
+interface QueuedSpawn {
+  id: string
+  root: string
+  parentKey: string
+  text: string
+  options: AgentOptions
+}
+const spawnQueue: QueuedSpawn[] = []
+const runningCount = (parentKey: string): number =>
+  [...spawns.values()].filter((s) => s.parentKey === parentKey).length
 const worktreesDir = (): string => join(app.getPath('userData'), 'dsgn', 'worktrees')
 const firstLine = (t: string): string => (t.split('\n')[0] || 'dsgn comment edit').slice(0, 72)
 
@@ -115,11 +129,82 @@ async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<voi
   } catch {
     // Never let spawn teardown break the app; the worktree may linger for prune.
   }
+  void pumpQueue(parentKey) // a slot just freed — start the next queued spawn
 }
 
 // finalizeSpawn runs outside registerAgentIpc's closure, so it needs the window
 // accessor. Captured when IPC is registered.
 let getWindow_: () => BrowserWindow | null = () => null
+
+/**
+ * Create the worktree + start a detached session for one spawn. Shared by the
+ * immediate path and the queue. On a setup failure it reclaims the worktree and
+ * emits `spawn-finished` so the renderer drops the row, then pumps the queue.
+ * Returns the branch (immediate path needs it) or null on failure.
+ */
+async function startSpawn(q: QueuedSpawn): Promise<string | null> {
+  let wt: Worktree
+  try {
+    wt = await createWorktree(q.root, worktreesDir(), { label: q.text, id: q.id })
+  } catch {
+    getWindow_()?.webContents.send('agent:event', {
+      type: 'spawn-finished',
+      projectKey: q.parentKey,
+      sessionId: q.id,
+      branch: null
+    } satisfies AgentEvent)
+    void pumpQueue(q.parentKey)
+    return null
+  }
+  const opts: AgentOptions = { ...q.options, permissionMode: 'bypassPermissions' }
+  try {
+    const s = await pickProvider(opts).startSession(wt.path, opts, getWindow_, {
+      sessionId: wt.id,
+      emitKey: q.parentKey,
+      onEvent: (e) => {
+        if (e.type === 'done') void finalizeSpawn(wt.id, 'done')
+        else if (e.type === 'error') void finalizeSpawn(wt.id, 'error')
+      }
+    })
+    s.record.kind = 'comment'
+    s.record.branch = wt.branch
+    s.record.projectRoot = q.root
+    s.record.projectName = basename(q.root) || q.root
+    s.record.transcript.push({ role: 'user', text: q.text, at: Date.now() })
+    spawns.set(wt.id, { session: s, wt, parentKey: q.parentKey, parentRoot: q.root, text: q.text })
+    s.send(q.text)
+    return wt.branch
+  } catch {
+    await removeWorktree(q.root, wt, { keepBranch: false })
+    getWindow_()?.webContents.send('agent:event', {
+      type: 'spawn-finished',
+      projectKey: q.parentKey,
+      sessionId: q.id,
+      branch: null
+    } satisfies AgentEvent)
+    void pumpQueue(q.parentKey)
+    return null
+  }
+}
+
+/** Start queued spawns for a project while it has free slots (FIFO). Each dequeued
+ *  spawn emits `spawn-started` so the rail flips its row from queued → running. */
+async function pumpQueue(parentKey: string): Promise<void> {
+  while (runningCount(parentKey) < MAX_SPAWNS_PER_REPO) {
+    const idx = spawnQueue.findIndex((q) => q.parentKey === parentKey)
+    if (idx === -1) return
+    const [q] = spawnQueue.splice(idx, 1)
+    const branch = await startSpawn(q)
+    if (branch) {
+      getWindow_()?.webContents.send('agent:event', {
+        type: 'spawn-started',
+        projectKey: parentKey,
+        sessionId: q.id,
+        branch
+      } satisfies AgentEvent)
+    }
+  }
+}
 
 /** Settle a pending prompt and tell the renderer to drop its card. */
 function resolvePending(s: ProviderSession, id: string, behavior: 'allow' | 'deny'): void {
@@ -237,46 +322,44 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   // v8 F1: spawn a detached comment agent in its own git worktree. It runs in the
   // background (bypassPermissions — a headless run has no card UI), edits its private
   // checkout (zero cross-writes with the main agent or other spawns), and on finish
-  // commits to a `dsgn/comment-<id>` branch + lands in this project's history.
+  // commits to a `dsgn/comment-<id>` branch + lands in this project's history. Over the
+  // per-repo cap (Phase 3) it QUEUES and starts when a slot frees.
   ipcMain.handle(
     'agent:spawn-comment',
     async (_e, root: string, text: string, options: AgentOptions = {}) => {
       // Worktrees need a repo TOP LEVEL — a non-repo (or subdir) falls back to chat.
       if (!(await isRepoRoot(root))) return { ok: false, reason: 'not-a-repo' }
       const parentKey = projectKey(root)
-      let wt: Worktree
-      try {
-        wt = await createWorktree(root, worktreesDir(), { label: text })
-      } catch (err) {
-        return { ok: false, reason: err instanceof Error ? err.message : String(err) }
+      // Stable id assigned up front so the rail row survives a queued→running flip.
+      const id = randomUUID().slice(0, 8)
+      const q: QueuedSpawn = { id, root, parentKey, text, options }
+      if (runningCount(parentKey) >= MAX_SPAWNS_PER_REPO) {
+        spawnQueue.push(q) // a slot will free on the next finalizeSpawn → pumpQueue
+        return { ok: true, spawnId: id, queued: true }
       }
-      const opts: AgentOptions = { ...options, permissionMode: 'bypassPermissions' }
-      try {
-        const s = await pickProvider(opts).startSession(wt.path, opts, getWindow, {
-          sessionId: wt.id,
-          emitKey: parentKey,
-          onEvent: (e) => {
-            if (e.type === 'done') void finalizeSpawn(wt.id, 'done')
-            else if (e.type === 'error') void finalizeSpawn(wt.id, 'error')
-          }
-        })
-        // The history record files under the parent project (not the worktree path).
-        s.record.kind = 'comment'
-        s.record.branch = wt.branch
-        s.record.projectRoot = root
-        s.record.projectName = basename(root) || root
-        s.record.transcript.push({ role: 'user', text, at: Date.now() })
-        spawns.set(wt.id, { session: s, wt, parentKey, parentRoot: root, text })
-        s.send(text)
-        return { ok: true, spawnId: wt.id, branch: wt.branch }
-      } catch (err) {
-        // startSession threw (SDK load / not logged in) — the worktree is on disk but
-        // never registered, so reclaim it here or it orphans with no recovery path.
-        await removeWorktree(root, wt, { keepBranch: false })
-        return { ok: false, reason: err instanceof Error ? err.message : String(err) }
-      }
+      const branch = await startSpawn(q)
+      if (!branch) return { ok: false, reason: 'Could not start the agent (is it logged in?).' }
+      return { ok: true, spawnId: id, branch }
     }
   )
+
+  // v8 F1 Phase 3 — cancel a running OR queued comment spawn (the rail row's ×).
+  ipcMain.handle('agent:spawn-interrupt', async (_e, id: string) => {
+    const queuedIdx = spawnQueue.findIndex((q) => q.id === id)
+    if (queuedIdx !== -1) {
+      const [q] = spawnQueue.splice(queuedIdx, 1)
+      getWindow()?.webContents.send('agent:event', {
+        type: 'spawn-finished',
+        projectKey: q.parentKey,
+        sessionId: id,
+        branch: null
+      } satisfies AgentEvent)
+      return
+    }
+    const spawn = spawns.get(id)
+    if (!spawn) return
+    await spawn.session.interrupt?.() // → emits done → finalizeSpawn commits any work
+  })
 
   // v8 F1 Phase 2 — close the loop from a finished comment spawn to a visible result.
   // APPLY: patch the spawn's branch diff onto the LIVE working tree (the dev server

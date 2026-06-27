@@ -93,7 +93,7 @@ async function captureBase(repoRoot: string, indexFile: string): Promise<string>
 export function createWorktree(
   repoRoot: string,
   worktreesDir: string,
-  opts: { label?: string } = {}
+  opts: { label?: string; id?: string } = {}
 ): Promise<Worktree> {
   const run = createChain.then(() => doCreateWorktree(repoRoot, worktreesDir, opts))
   createChain = run.catch(() => {}) // keep the chain alive even if one create fails
@@ -103,9 +103,11 @@ export function createWorktree(
 async function doCreateWorktree(
   repoRoot: string,
   worktreesDir: string,
-  _opts: { label?: string }
+  opts: { label?: string; id?: string }
 ): Promise<Worktree> {
-  const id = randomUUID().slice(0, 8)
+  // The id may be assigned up front (so a queued spawn's rail row keeps a stable id
+  // before its worktree exists); otherwise generate one.
+  const id = opts.id ?? randomUUID().slice(0, 8)
   const branch = normalizeBranchName(`comment-${id}`)
   const dir = join(worktreesDir, id)
   await mkdir(worktreesDir, { recursive: true })

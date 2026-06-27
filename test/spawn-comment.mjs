@@ -146,8 +146,29 @@ try {
   // Clean the applied file so the live spawn below starts from a known tree.
   rmSync(join(repo, 'phase2.txt'), { force: true })
 
+  // --- A4 (Phase 3): a queued row flips to running on spawn-started, then is removed
+  // on spawn-finished (the cap/queue rail lifecycle). ---
+  await win.evaluate((key) => {
+    window.__dsgnSpawns.getState().add(key, { id: 'q1', branch: null, label: 'queued one', status: 'queued' })
+  }, KEY)
+  let q = await win.evaluate((key) => window.__dsgnSpawns.getState().byKey[key].find((r) => r.id === 'q1'), KEY)
+  assert(q.status === 'queued', 'row starts queued')
+  await app.evaluate(({ BrowserWindow }, ev) => {
+    BrowserWindow.getAllWindows()[0].webContents.send('agent:event', ev)
+  }, { type: 'spawn-started', projectKey: KEY, sessionId: 'q1', branch: 'dsgn/comment-q1' })
+  await sleep(200)
+  q = await win.evaluate((key) => window.__dsgnSpawns.getState().byKey[key].find((r) => r.id === 'q1'), KEY)
+  assert(q.status === 'running' && q.branch === 'dsgn/comment-q1', 'spawn-started flips to running + branch')
+  await app.evaluate(({ BrowserWindow }, ev) => {
+    BrowserWindow.getAllWindows()[0].webContents.send('agent:event', ev)
+  }, { type: 'spawn-finished', projectKey: KEY, sessionId: 'q1', branch: null })
+  await sleep(200)
+  const gone = await win.evaluate((key) => !window.__dsgnSpawns.getState().byKey[key].some((r) => r.id === 'q1'), KEY)
+  assert(gone, 'spawn-finished removes the row')
+
   console.log(
-    'SPAWN-COMMENT OK (deterministic) — non-repo fallback, byte-clean chat, row lifecycle, Apply/Discard'
+    'SPAWN-COMMENT OK (deterministic) — non-repo fallback, byte-clean chat, row lifecycle, ' +
+      'Apply/Discard, queue flip'
   )
 
   // --- B: live spawn into the temp repo (creds-gated) ---
