@@ -9,7 +9,8 @@ Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 - [x] **v2 first slice: click-to-select → source → chat.** ✅ 2026-06-23 — overlay
       preload, inspector, `data-dsgn-source` resolution, composer hand-off; covered by
       `test/select-element.mjs`.
-- [ ] **Next:** polish / cross-file prop resolution / design-token manifests (see below).
+- [x] **Polish: cross-file prop resolution + design-token manifests.** ✅ 2026-06-23 — both
+      shipped (see the v2 section); direct agent-free token apply followed in v6 (#32/#35–37).
 
 ## v4 — React Native / iOS-Simulator preview (macOS-only)
 
@@ -182,26 +183,14 @@ the user (2026-06-26). Tailwind coexists with the existing plain CSS (chat first
 `ChatPanel.tsx` + in-panel components (Inspector, PermissionCards, NotesPanel, SetupCard,
 TokenOfferCard, Markdown). App-header branch pill + auth banner are separate chrome.
 
-- [ ] **Scaffold Tailwind + shadcn** in the electron-vite renderer (coexist with
-      `styles.css`; `components.json`, `cn()`, `@/*` alias, bun CLI). Confirm AI Elements
-      runs without the Vercel AI SDK (driven by our store) — build + typecheck green.
-- [ ] **Rebuild ChatPanel** on shadcn primitives / AI Elements per the priority rule,
-      preserving every feature (streaming, tool-status, slash menu, model/effort/permission
-      pickers, auth banner, permission cards, inspector hand-off, per-project routing) and
-      the test hooks above.
-- [ ] **Re-verify** `chat-render` / `chat-route` (+ smoke and the rest), screenshot the new
-      panel into `test/artifacts/`.
+- [x] **Scaffold + rebuild ChatPanel + re-verify.** ✅ 2026-06-26 (PR #27) — Tailwind v4 +
+      shadcn coexisting with `styles.css`; ChatPanel rebuilt on AI Elements `Conversation` +
+      shadcn `InputGroup`/`Button` (no Vercel AI SDK runtime — driven by the store); every
+      feature + test hook preserved; chat-render/chat-route/smoke green + screenshots.
 - [x] **Element-inspector surfaces → shadcn.** ✅ 2026-06-27 (PR #31) — Inspector,
       NotesPanel, TokenPalette, PropPanel migrated to shadcn Card/Badge/Button/Input/
       Textarea + Tailwind, every test hook preserved; dead `.inspector*/.notes*/.tokens*/
       .proppanel*/.propedit*` CSS removed. The whole chat panel is now Tailwind+shadcn.
-- [ ] ~~Element-inspector surfaces → shadcn (follow-up pass).~~ Inspector.tsx,
-      NotesPanel.tsx, TokenPalette.tsx are dense element-editing UIs (appear only on
-      element-select, distinct from the chat conversation) with many test hooks
-      (`.inspector__ask/__link/__source/__tag/__noteinput/__notesave/__ready--no`,
-      `.notes__item/__remove/__text`, `.tokens/__item/__swatch`). Convert to shadcn
-      Card/Collapsible/Badge/Button in a focused pass, preserving every hook
-      (annotations, ready-gating, select-element, prop-edit, tokens tests).
 - [ ] **Stretch:** evaluate other AI Elements (Sources, Task, Chain-of-Thought, Web
       Preview, Reasoning) for dsgn's flows.
 - [ ] **Optional: test modernization.** Add `data-testid`s and migrate smoke/
