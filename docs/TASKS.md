@@ -23,8 +23,14 @@ web browser. Phased: mirror → interact → element-select. See
       an MJPEG "sim bridge" that the existing `WebContentsView` loads as just-another-URL.
       Tests: `sim-detect`, `sim-preflight`, `sim-frame` (transport, off-macOS), `sim-e2e`
       (macOS-gated SKIP).
-- [ ] **Phase 2 — interaction.** Forward tap/scroll/type from the bridge page → `idb`
-      (optional dep) over a `/control` WebSocket; degrade to view-only without idb.
+- [x] **Phase 2 — interaction.** ✅ 2026-06-27 (PR #38) — the bridge page captures
+      tap/swipe/scroll/type on the `<img>` (object-fit-aware → a 0..1 fraction of the device
+      content) and POSTs to a `/control` endpoint; the bridge translates to `idb ui tap/swipe/
+      text` (device points from `idb describe`). `idb` is optional — without it the page shows
+      a "view-only — install idb" hint and `/control` returns `{degraded:true}`. `simulator.ts`
+      (`Controller`/`idbController`/`fractionToPoints`/`parseControlCommand`); `test/sim-control.mjs`
+      covers mapping/validation, the transport, the capture script, and degrade (off-macOS via
+      the test bridge). A live tap on a booted device stays macOS+idb-gated (like sim-e2e).
 - [ ] **Phase 3 — element-select → RN source.** Babel `testID` stamp (the `data-dsgn-source`
       analog, `setup.ts` strategy `babel-plugin-rn`) + `idb` view-hierarchy hit-test → reuse the
       existing Inspector/`props.inspect` flow.

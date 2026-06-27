@@ -32,7 +32,11 @@ const MJPEG_BOUNDARY = 'dsgnframe'
 // --- the served device page -------------------------------------------------
 
 // Flagged `?dsgnSim=1` (read by src/preview/preload.ts to skip the web overlay).
-const PAGE_HTML = `<!doctype html>
+// Phase 2: when `interactive`, the page captures tap/swipe/scroll/type on the
+// <img>, converts to a 0..1 fraction of the device content (object-fit:contain
+// aware), and POSTs to /control — which idb replays on the device.
+function pageHtml(interactive: boolean): string {
+  return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
@@ -40,13 +44,67 @@ const PAGE_HTML = `<!doctype html>
     <style>
       html, body { margin: 0; height: 100%; background: #fff; }
       body { display: flex; align-items: center; justify-content: center; }
-      img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+      img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; -webkit-user-select: none; }
+      #hint { position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%);
+        font: 11px -apple-system, system-ui, sans-serif; color: #666; background: rgba(255,255,255,.85);
+        border: 1px solid #eee; border-radius: 6px; padding: 3px 8px; pointer-events: none; }
     </style>
   </head>
   <body>
-    <img id="screen" src="/stream" alt="iOS Simulator" draggable="false" />
+    <img id="screen" src="/stream" alt="iOS Simulator" draggable="false" tabindex="0" />
+    ${interactive ? '' : '<div id="hint">View-only — install <code>idb</code> for tap &amp; type</div>'}
+    <script>
+      var INTERACTIVE = ${interactive ? 'true' : 'false'};
+      var img = document.getElementById('screen');
+      function post(cmd) {
+        if (!INTERACTIVE) return;
+        fetch('/control', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cmd) }).catch(function(){});
+      }
+      // Pixel position on the displayed content → 0..1 fraction (handles the
+      // object-fit:contain letterbox), or null when the click is on the letterbox.
+      function frac(clientX, clientY) {
+        var r = img.getBoundingClientRect();
+        var natW = img.naturalWidth || r.width, natH = img.naturalHeight || r.height;
+        var scale = Math.min(r.width / natW, r.height / natH);
+        var cW = natW * scale, cH = natH * scale;
+        var ox = r.left + (r.width - cW) / 2, oy = r.top + (r.height - cH) / 2;
+        var x = (clientX - ox) / cW, y = (clientY - oy) / cH;
+        if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+        return { x: x, y: y };
+      }
+      var down = null;
+      img.addEventListener('pointerdown', function (e) {
+        down = frac(e.clientX, e.clientY); img.focus();
+      });
+      img.addEventListener('pointerup', function (e) {
+        if (!down) { down = null; return; }
+        var up = frac(e.clientX, e.clientY) || down;
+        var dx = up.x - down.x, dy = up.y - down.y;
+        if (Math.abs(dx) + Math.abs(dy) > 0.03) {
+          post({ type: 'swipe', x: down.x, y: down.y, x2: up.x, y2: up.y });
+        } else {
+          post({ type: 'tap', x: up.x, y: up.y });
+        }
+        down = null;
+      });
+      // Wheel → a short swipe in the opposite direction (natural scroll).
+      img.addEventListener('wheel', function (e) {
+        var f = frac(e.clientX, e.clientY); if (!f) return;
+        e.preventDefault();
+        var dy = Math.max(-0.4, Math.min(0.4, -e.deltaY / 600));
+        var dx = Math.max(-0.4, Math.min(0.4, -e.deltaX / 600));
+        post({ type: 'swipe', x: f.x, y: f.y, x2: f.x + dx, y2: f.y + dy, duration: 0.1 });
+      }, { passive: false });
+      // Printable keystrokes → text input on the focused field.
+      img.addEventListener('keydown', function (e) {
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        if (e.key && e.key.length === 1) { post({ type: 'text', text: e.key }); e.preventDefault(); }
+      });
+    </script>
   </body>
 </html>`
+}
 
 // A 1×1 white JPEG — the stub frame for the test bridge (exercises the whole
 // transport without a real simulator). Not used on the production path.
@@ -117,6 +175,95 @@ function staticFrameSource(jpeg: Buffer): FrameSource {
   }
 }
 
+// --- input control (Phase 2: tap / scroll / type via idb) -------------------
+
+/** A control command from the bridge page. Coords are FRACTIONS (0..1) of the
+ * device content, so the page never needs to know the device's resolution. */
+export type ControlCommand =
+  | { type: 'tap'; x: number; y: number }
+  | { type: 'swipe'; x: number; y: number; x2: number; y2: number; duration?: number }
+  | { type: 'text'; text: string }
+
+/** Forwards control commands to the device. `idbController` uses idb; when idb is
+ * absent the bridge has no controller and the device stays view-only (degraded). */
+interface Controller {
+  send(cmd: ControlCommand): Promise<void>
+}
+
+const clamp01 = (n: number): number => (n < 0 ? 0 : n > 1 ? 1 : n)
+
+/** Map a 0..1 fraction of the device content to idb point coordinates. */
+export function fractionToPoints(
+  fx: number,
+  fy: number,
+  dims: { width: number; height: number }
+): { x: number; y: number } {
+  return { x: Math.round(clamp01(fx) * dims.width), y: Math.round(clamp01(fy) * dims.height) }
+}
+
+/** Device point dimensions from `idb describe --json` (pixels ÷ density). */
+async function idbScreenPoints(udid: string): Promise<{ width: number; height: number }> {
+  const { stdout } = await execFileP('idb', ['describe', '--udid', udid, '--json'], {
+    timeout: 8000
+  })
+  const d = JSON.parse(stdout.toString()) as {
+    screen_dimensions?: { width?: number; height?: number; density?: number }
+  }
+  const s = d.screen_dimensions ?? {}
+  const density = s.density && s.density > 0 ? s.density : 1
+  const width = Math.round((s.width ?? 390 * density) / density)
+  const height = Math.round((s.height ?? 844 * density) / density)
+  return { width, height }
+}
+
+function idbController(udid: string): Controller {
+  let dims: { width: number; height: number } | null = null
+  const idb = (args: string[]): Promise<unknown> =>
+    execFileP('idb', ['--udid', udid, ...args], { timeout: 10_000 })
+  return {
+    async send(cmd) {
+      if (!dims) dims = await idbScreenPoints(udid)
+      if (cmd.type === 'tap') {
+        const p = fractionToPoints(cmd.x, cmd.y, dims)
+        await idb(['ui', 'tap', String(p.x), String(p.y)])
+      } else if (cmd.type === 'swipe') {
+        const a = fractionToPoints(cmd.x, cmd.y, dims)
+        const b = fractionToPoints(cmd.x2, cmd.y2, dims)
+        await idb([
+          'ui', 'swipe', String(a.x), String(a.y), String(b.x), String(b.y),
+          '--duration', String(cmd.duration ?? 0.25)
+        ])
+      } else if (cmd.type === 'text') {
+        // Bounded so a flood of keystrokes can't spawn a huge arg.
+        await idb(['ui', 'text', cmd.text.slice(0, 500)])
+      }
+    }
+  }
+}
+
+/** Validate + normalize an untrusted /control body into a ControlCommand. */
+export function parseControlCommand(body: unknown): ControlCommand | null {
+  const b = body as Record<string, unknown>
+  const num = (v: unknown): number | null => (typeof v === 'number' && isFinite(v) ? v : null)
+  if (b?.type === 'tap') {
+    const x = num(b.x)
+    const y = num(b.y)
+    return x != null && y != null ? { type: 'tap', x, y } : null
+  }
+  if (b?.type === 'swipe') {
+    const [x, y, x2, y2] = [b.x, b.y, b.x2, b.y2].map(num)
+    if (x != null && y != null && x2 != null && y2 != null) {
+      const d = num(b.duration)
+      return { type: 'swipe', x, y, x2, y2, ...(d != null ? { duration: d } : {}) }
+    }
+    return null
+  }
+  if (b?.type === 'text' && typeof b.text === 'string') {
+    return { type: 'text', text: b.text }
+  }
+  return null
+}
+
 // --- the bridge HTTP server -------------------------------------------------
 
 interface Bridge {
@@ -134,7 +281,11 @@ function writeFrameTo(res: ServerResponse, jpeg: Buffer): void {
   res.write('\r\n')
 }
 
-function startBridge(source: FrameSource, port: number): Promise<Bridge> {
+function startBridge(
+  source: FrameSource,
+  port: number,
+  controller: Controller | null
+): Promise<Bridge> {
   return new Promise<Bridge>((resolve, reject) => {
     let latest: Buffer | null = null
     let gotFrame = false
@@ -161,10 +312,57 @@ function startBridge(source: FrameSource, port: number): Promise<Bridge> {
     }
 
     const server = createServer((req, res) => {
+      // The bridge binds to 127.0.0.1 only; allow the renderer (a different origin)
+      // to reach /control. A text/plain body keeps the POST a "simple" request
+      // (no CORS preflight); the handler JSON-parses regardless of content type.
+      res.setHeader('Access-Control-Allow-Origin', '*')
       const path = (req.url || '/').split('?')[0]
       if (path === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
-        res.end(PAGE_HTML)
+        res.end(pageHtml(controller != null))
+        return
+      }
+      // Phase 2: replay a tap/swipe/type on the device (bounded body). Without a
+      // controller (no idb) the device is view-only → report it, don't error.
+      if (path === '/control' && req.method === 'POST') {
+        let raw = ''
+        let tooBig = false
+        req.on('data', (c) => {
+          raw += c
+          if (raw.length > 4096) {
+            tooBig = true
+            req.destroy()
+          }
+        })
+        req.on('end', () => {
+          if (tooBig) return
+          if (!controller) {
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ degraded: true }))
+            return
+          }
+          let cmd: ControlCommand | null = null
+          try {
+            cmd = parseControlCommand(JSON.parse(raw))
+          } catch {
+            cmd = null
+          }
+          if (!cmd) {
+            res.writeHead(400)
+            res.end()
+            return
+          }
+          controller
+            .send(cmd)
+            .then(() => {
+              res.writeHead(200, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ ok: true }))
+            })
+            .catch((err) => {
+              res.writeHead(200, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ ok: false, error: msg(err) }))
+            })
+        })
         return
       }
       if (path === '/stream') {
@@ -490,7 +688,16 @@ async function start(
 
   const port = await findFreePort(BRIDGE_PORT_BASE)
   const source = simctlFrameSource(device.udid)
-  const bridge = await startBridge(source, port)
+  // Phase 2: enable interaction iff idb is installed; else the preview is view-only.
+  let controller: Controller | null = null
+  try {
+    await execFileP('idb', ['--help'], { timeout: 4000 })
+    controller = idbController(device.udid)
+    onLog('idb detected — tap / scroll / type enabled.')
+  } catch {
+    onLog('idb not found — preview is view-only (install idb to interact).')
+  }
+  const bridge = await startBridge(source, port, controller)
   current = { metroPid: pid, bridge, source, udid: device.udid }
   try {
     await bridge.firstFrame // readiness: a real frame rendered
@@ -503,12 +710,24 @@ async function start(
   return { url, pid, udid: device.udid, bundleId, previewKind: 'simulator' }
 }
 
-/** Test-only: stand up the bridge with a static stub frame (no simulator needed). */
-async function startTestBridge(): Promise<{ url: string }> {
+// Records the commands a test bridge received (for sim-control.mjs assertions).
+let testRecorded: ControlCommand[] = []
+
+/** Test-only: stand up the bridge with a static stub frame (no simulator needed).
+ * `interactive` attaches a recording controller (Phase-2 transport) instead of idb. */
+async function startTestBridge(interactive = false): Promise<{ url: string }> {
   stop()
+  testRecorded = []
   const port = await findFreePort(BRIDGE_PORT_BASE)
   const source = staticFrameSource(STATIC_JPEG)
-  const bridge = await startBridge(source, port)
+  const controller: Controller | null = interactive
+    ? {
+        send: async (cmd) => {
+          testRecorded.push(cmd)
+        }
+      }
+    : null
+  const bridge = await startBridge(source, port, controller)
   await bridge.firstFrame
   current = { bridge, source }
   return { url: `http://${HOST}:${port}/?dsgnSim=1` }
@@ -524,11 +743,19 @@ export function registerSimulatorIpc(getWindow: () => BrowserWindow | null): voi
   )
   ipcMain.handle('simulator:stop', async () => stop())
 
-  // Test-only hook (sim-frame.mjs) — exercises the bridge → MJPEG → WebContentsView
-  // transport with a stub frame, off-macOS. Reached via `app.evaluate` in the test
-  // harness, not exposed on the renderer API.
-  ;(globalThis as { __dsgnStartTestBridge?: () => Promise<{ url: string }> }).__dsgnStartTestBridge =
-    startTestBridge
+  // Test-only hooks — exercise the bridge transport + Phase-2 control off-macOS.
+  // Reached via `app.evaluate` in the harness, not exposed on the renderer API.
+  const g = globalThis as {
+    __dsgnStartTestBridge?: (interactive?: boolean) => Promise<{ url: string }>
+    __dsgnTestControl?: () => ControlCommand[]
+    __dsgnSimMap?: {
+      fractionToPoints: typeof fractionToPoints
+      parseControlCommand: typeof parseControlCommand
+    }
+  }
+  g.__dsgnStartTestBridge = startTestBridge
+  g.__dsgnTestControl = () => testRecorded
+  g.__dsgnSimMap = { fractionToPoints, parseControlCommand }
 
   app.on('before-quit', stop)
 }
