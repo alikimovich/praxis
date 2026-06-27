@@ -186,6 +186,12 @@ const api: DsgnApi = {
     interrupt: (): Promise<void> => ipcRenderer.invoke('agent:interrupt'),
     tagSession: (root: string, tag: { branch?: string; prUrl?: string }): Promise<void> =>
       ipcRenderer.invoke('agent:tag-session', root, tag),
+    spawnComment: (
+      root: string,
+      text: string,
+      options?: AgentOptions
+    ): Promise<{ ok: boolean; spawnId?: string; branch?: string; reason?: string }> =>
+      ipcRenderer.invoke('agent:spawn-comment', root, text, options),
     onEvent: (cb: (event: AgentEvent) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, event: AgentEvent): void => cb(event)
       ipcRenderer.on('agent:event', listener)

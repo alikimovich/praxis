@@ -20,6 +20,7 @@ import {
   useSelection,
   useSession,
   useSetup,
+  useSpawns,
   useTokens,
   useWorkspace,
   type ProjectEntry
@@ -186,7 +187,30 @@ export default function App(): React.JSX.Element {
         // The element ref is page-derived (sanitized in describeSelectionForPrompt);
         // the comment is the user's own text — cap it so it can't bloat the prompt.
         const prompt = describeSelectionForPrompt(c.el) + oneLine(c.text, 2000)
-        useComposer.getState().setSubmit(prompt)
+        const root = useSession.getState().projectRoot
+        // v8 F1: dispatch the comment as a DETACHED parallel agent (its own git
+        // worktree) instead of hijacking the active chat — so the user can fire
+        // several and keep working. A non-repo project can't worktree → fall back
+        // to seeding the composer (the prior behavior).
+        if (root) {
+          void window.api.agent
+            .spawnComment(root, prompt, toAgentOptions(useSession.getState()))
+            .then((r) => {
+              if (r.ok && r.spawnId) {
+                useSpawns.getState().add(projectKey(root), {
+                  id: r.spawnId,
+                  branch: r.branch ?? null,
+                  label: oneLine(c.text, 60),
+                  status: 'running'
+                })
+              } else {
+                useComposer.getState().setSubmit(prompt)
+              }
+            })
+            .catch(() => useComposer.getState().setSubmit(prompt))
+        } else {
+          useComposer.getState().setSubmit(prompt)
+        }
       } else {
         const root = useSession.getState().projectRoot
         if (!root) {

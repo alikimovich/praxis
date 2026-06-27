@@ -1,11 +1,18 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type { AgentEvent, AgentOptions, PermissionMode } from '../shared/api'
 import { projectKey } from '../shared/projectKey'
 import { pickProvider, type ProviderSession } from './backends'
 import { EDIT_TOOLS } from './backends/tools'
 import { createSessionStore, type SessionStore } from './sessions-store'
 import { clearHistory } from './edit-history'
+import { isRepoRoot } from './git'
+import {
+  createWorktree,
+  commitWorktree,
+  removeWorktree,
+  type Worktree
+} from './worktrees'
 
 // On-disk agent-session history (v5-D). Lazy so it resolves userData after the
 // app is ready; under the app's userData dir, out of any user repo.
@@ -33,6 +40,20 @@ let activeKey: string | null = null
 const activeSession = (): ProviderSession | null =>
   activeKey ? (sessions.get(activeKey) ?? null) : null
 
+// v8 F1: detached comment spawns — background agents each in their OWN git worktree,
+// keyed by spawn id. Kept SEPARATE from `sessions` so they never touch `activeKey`
+// or the interactive chat stream.
+interface Spawn {
+  session: ProviderSession
+  wt: Worktree
+  parentKey: string
+  parentRoot: string
+  text: string
+}
+const spawns = new Map<string, Spawn>()
+const worktreesDir = (): string => join(app.getPath('userData'), 'dsgn', 'worktrees')
+const firstLine = (t: string): string => (t.split('\n')[0] || 'dsgn comment edit').slice(0, 72)
+
 /** Tear down a session: stop it emitting, deny its prompts, provider teardown,
  * then persist it to history (v5-D) — a torn-down session is a "previous agent". */
 function closeSession(s: ProviderSession): void {
@@ -52,6 +73,43 @@ function closeSession(s: ProviderSession): void {
   }
 }
 
+/**
+ * A detached comment spawn (v8 F1) reached its terminal event. Tear down its
+ * session (persists the record under the parent project → "previous agents"), commit
+ * its worktree to the durable branch, capture the authoritative touched-file list
+ * from git, reclaim the checkout, and tell the renderer to drop the working rail row.
+ * Best-effort throughout — a finalizer must never throw.
+ */
+async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<void> {
+  const spawn = spawns.get(id)
+  if (!spawn) return
+  spawns.delete(id)
+  const { session, wt, parentKey, parentRoot, text } = spawn
+  try {
+    closeSession(session) // finalize + persist the record under parentKey
+    const { committed, files } = await commitWorktree(wt, firstLine(text))
+    if (committed) {
+      // git's staged list is authoritative (beats the EDIT_TOOLS heuristic).
+      session.record.filesTouched = files
+      session.record.endedAt = session.record.endedAt ?? Date.now()
+      store().save(session.record)
+    }
+    await removeWorktree(parentRoot, wt, { keepBranch: committed })
+    getWindow_()?.webContents.send('agent:event', {
+      type: 'spawn-finished',
+      projectKey: parentKey,
+      sessionId: id,
+      branch: committed ? wt.branch : null
+    } satisfies AgentEvent)
+  } catch {
+    // Never let spawn teardown break the app; the worktree may linger for prune.
+  }
+}
+
+// finalizeSpawn runs outside registerAgentIpc's closure, so it needs the window
+// accessor. Captured when IPC is registered.
+let getWindow_: () => BrowserWindow | null = () => null
+
 /** Settle a pending prompt and tell the renderer to drop its card. */
 function resolvePending(s: ProviderSession, id: string, behavior: 'allow' | 'deny'): void {
   const p = s.pending.get(id)
@@ -61,6 +119,7 @@ function resolvePending(s: ProviderSession, id: string, behavior: 'allow' | 'den
 }
 
 export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
+  getWindow_ = getWindow // share with finalizeSpawn (runs outside this closure)
   ipcMain.handle('agent:open-project', async (_e, root: string, options: AgentOptions = {}) => {
     const key = projectKey(root)
     // Reopening the same project starts a fresh session — close the old one.
@@ -157,6 +216,43 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     }
   )
 
+  // v8 F1: spawn a detached comment agent in its own git worktree. It runs in the
+  // background (bypassPermissions — a headless run has no card UI), edits its private
+  // checkout (zero cross-writes with the main agent or other spawns), and on finish
+  // commits to a `dsgn/comment-<id>` branch + lands in this project's history.
+  ipcMain.handle(
+    'agent:spawn-comment',
+    async (_e, root: string, text: string, options: AgentOptions = {}) => {
+      // Worktrees need a repo TOP LEVEL — a non-repo (or subdir) falls back to chat.
+      if (!(await isRepoRoot(root))) return { ok: false, reason: 'not-a-repo' }
+      const parentKey = projectKey(root)
+      let wt: Worktree
+      try {
+        wt = await createWorktree(root, worktreesDir(), { label: text })
+      } catch (err) {
+        return { ok: false, reason: err instanceof Error ? err.message : String(err) }
+      }
+      const opts: AgentOptions = { ...options, permissionMode: 'bypassPermissions' }
+      const s = await pickProvider(opts).startSession(wt.path, opts, getWindow, {
+        sessionId: wt.id,
+        emitKey: parentKey,
+        onEvent: (e) => {
+          if (e.type === 'done') void finalizeSpawn(wt.id, 'done')
+          else if (e.type === 'error') void finalizeSpawn(wt.id, 'error')
+        }
+      })
+      // The history record files under the parent project (not the worktree path).
+      s.record.kind = 'comment'
+      s.record.branch = wt.branch
+      s.record.projectRoot = root
+      s.record.projectName = basename(root) || root
+      s.record.transcript.push({ role: 'user', text, at: Date.now() })
+      spawns.set(wt.id, { session: s, wt, parentKey, parentRoot: root, text })
+      s.send(text)
+      return { ok: true, spawnId: wt.id, branch: wt.branch }
+    }
+  )
+
   // Persisted history ("previous agents", v5-D). Lists past runs (the live session
   // is persisted only on teardown, so it isn't here).
   ipcMain.handle('sessions:list', (_e, root: string) => store().list(projectKey(root)))
@@ -177,5 +273,12 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     for (const s of sessions.values()) closeSession(s)
     sessions.clear()
     activeKey = null
+    // v8 F1: stop any in-flight spawns + reclaim their checkouts (keep branches —
+    // a spawn's work is durable). Best-effort, fire-and-forget on the way out.
+    for (const { session, wt, parentRoot } of spawns.values()) {
+      closeSession(session)
+      void removeWorktree(parentRoot, wt, { keepBranch: true })
+    }
+    spawns.clear()
   })
 }

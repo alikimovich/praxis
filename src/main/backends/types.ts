@@ -21,6 +21,24 @@ export interface PendingPrompt {
 }
 
 /**
+ * A detached comment-spawn run (v8 F1). When a session is started with a
+ * SpawnContext it is NOT the project's interactive chat — it's a one-shot agent
+ * running in its own git worktree. The context routes its events away from the main
+ * chat (stamped with `sessionId`) and gives agent.ts an in-process `onEvent` hook to
+ * watch for the terminal `done`/`error` without adding an IPC channel.
+ */
+export interface SpawnContext {
+  /** Stable id for this spawn — stamped on every event so the renderer keeps it out
+   *  of the active chat stream and into its own rail row. */
+  sessionId: string
+  /** The projectKey the spawn's events + history record file under (the PARENT
+   *  project, so `sessions:list(repoRoot)` surfaces the finished run). */
+  emitKey: string
+  /** In-process choke point agent.ts listens on for the terminal event. */
+  onEvent?: (e: AgentEvent) => void
+}
+
+/**
  * A live, multi-turn session for one open project. Providers MUST:
  * - emit exactly the `AgentEvent` contract: `delta` (assistant text), `status`
  *   (tool-use lines), `done` (exactly one per turn — clean finish AND interrupt),
@@ -61,6 +79,9 @@ export interface ModelProvider {
   startSession: (
     root: string,
     options: AgentOptions,
-    getWindow: () => BrowserWindow | null
+    getWindow: () => BrowserWindow | null,
+    /** Present only for a detached comment spawn (v8 F1); absent for the interactive
+     *  chat. A provider that doesn't support spawning can ignore it. */
+    ctx?: SpawnContext
   ) => Promise<ProviderSession>
 }

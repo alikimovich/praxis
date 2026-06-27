@@ -148,10 +148,16 @@ export type AgentEvent = (
   | { type: 'permission-resolved'; id: string }
   | { type: 'done' }
   | { type: 'error'; message: string }
+  /** A detached comment spawn (v8 F1) finished — drop its working rail row; if it
+   *  committed work, `branch` names the durable record (else null). */
+  | { type: 'spawn-finished'; branch: string | null }
 ) & {
   /** Which project's session emitted this — set by main so the renderer routes it
    * to the right chat (active project shows live; others accumulate in the rail). */
   projectKey?: string
+  /** Set for a detached comment-spawn's events (v8 F1) — the renderer keeps these
+   *  out of the main chat stream and routes them to the spawn's own rail row. */
+  sessionId?: string
 }
 
 /** Per-session options the user can set from the chat toolbar. */
@@ -197,6 +203,8 @@ export interface SessionRecord {
   /** Repo-relative (or absolute) paths the agent edited this session. */
   filesTouched: string[]
   transcript: SessionTranscriptEntry[]
+  /** A detached comment spawn (v8 F1), vs the interactive project chat. */
+  kind?: 'comment'
 }
 
 export interface Bounds {
@@ -535,6 +543,14 @@ export interface DsgnApi {
     interrupt: () => Promise<void>
     /** Tag the live session with branch / PR metadata for its history record. */
     tagSession: (root: string, tag: { branch?: string; prUrl?: string }) => Promise<void>
+    /** Spawn a detached comment agent in its own git worktree (v8 F1) — runs in the
+     *  background without touching the active chat. Returns `ok:false` (with a reason)
+     *  when the project isn't a git repo root, so the caller can fall back to chat. */
+    spawnComment: (
+      root: string,
+      text: string,
+      options?: AgentOptions
+    ) => Promise<{ ok: boolean; spawnId?: string; branch?: string; reason?: string }>
     onEvent: (cb: (event: AgentEvent) => void) => () => void
   }
   /** Persisted agent-session history ("previous agents") — v5-D. */

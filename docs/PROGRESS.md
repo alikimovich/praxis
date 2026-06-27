@@ -2,6 +2,44 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-27 — v8 F1 (phases 0+1): comment → parallel agent in its own git worktree
+
+**Contention decided by a design judge-panel** (3 models architected against the real
+seam, scored on correctness/effort/UX): **worktree-per-spawn** won (7.33) over advisory
+conflict-detection (7.0) and a serialized write-lock (5.33). Each comment-spawned agent
+runs in its OWN `git worktree` on a `dsgn/comment-<id>` branch — a private checkout
+sharing the object store — so N comments edit the repo in true parallel with zero
+cross-writes. The judges' correctness flag (merging a spawn branch back fails against the
+main agent's uncommitted WIP) is fixed by patch-applying the spawn's diff onto the live
+tree (`git apply`/`--3way`), not `git merge`.
+
+- **Phase 0 — `src/main/worktrees.ts`** (pure git, the de-risking crux): createWorktree
+  forks off the live tree's CURRENT state including WIP (via `git stash create`, no side
+  effects); commitWorktree returns git's authoritative file list; diffWorktree
+  (`--full-index --binary`); applyToWorkingTree (plain apply, `--3way` fallback, conflict
+  detection — NOT `git merge`); removeWorktree + pruneOrphans (crash recovery), never
+  throw. `test/worktrees.mjs` proves isolation, WIP-preserving fork, apply-onto-dirty-tree.
+- **Phase 1 — the spawn slice.** `SpawnContext` added to the backend seam (claude.ts
+  threads `emitKey`/`sessionId`/`onEvent`); a spawn files its events + history under the
+  PARENT project key but stamps `sessionId`. `agent.ts` gets a separate `spawns` map
+  (never touches `activeKey`), `agent:spawn-comment` (bypassPermissions — headless, no
+  card UI; creates a worktree, starts a detached session), and `finalizeSpawn` (closeSession
+  → persist under parent → commitWorktree → save git file-list → removeWorktree keeping the
+  branch → emit `spawn-finished`). Renderer: `useSpawns` store, `App.onComment` dispatches
+  a spawn (falls back to seeding chat for non-repos), `ChatPanel.onEvent` drops any
+  `sessionId` event before the chat router (the byte-clean-main-stream guarantee) and on
+  `spawn-finished` reloads history, `Rail` shows a pulsing working row that becomes a
+  previous-agent on finish.
+- **Tests:** `test/spawn-comment.mjs` — deterministic (non-repo fallback; a `sessionId`
+  delta proven NOT to enter the active chat; row add→spawn-finished→remove) PLUS a LIVE
+  spawn that had a real Claude agent edit a temp git repo in its own worktree and commit to
+  a `dsgn/comment-<id>` branch with main untouched. Full `verify` green (live spawn +
+  AGENT-E2E both ran).
+- **Deferred to F1 phases 2–3:** Apply/PR/Discard on a finished row (+ ConflictPanel),
+  per-repo cap + queue, startup orphan prune, before-quit finalize hardening, non-Claude
+  backends. The spawn's edits currently live on the branch (reviewable via the existing
+  transcript path); reaching the live preview is Phase 2.
+
 ## 2026-06-27 — v8 F2: broaden direct editing (schema defaults + reset-to-default)
 
 - **Scoped first** (Explore agent): the literal-recognition set in `props.ts` is already
