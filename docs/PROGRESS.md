@@ -2,6 +2,28 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-06-27 — v8 F3b: undo/redo for ALL direct dsgn source edits
+
+- New `src/main/edit-history.ts` — the reversible-edit engine. Every direct apply path
+  now routes through a shared `commitEdit(root, file, before, after, key)` (in props.ts,
+  imported by props-svelte.ts): it writes, then `recordEdit`s the before/after. Covers
+  React + Svelte props, inline text, and token swaps (T1/T2/T3) — not just the new panel.
+- **Coalescing**: rapid edits of the same target (`source:prop` / `:text` / `:token`)
+  within 500ms collapse to one undo step (a slider drag isn't 30 Cmd+Zs), keeping the
+  original `before` so one undo reverts the whole burst.
+- **Conflict guard**: undo/redo read the file's CURRENT content and refuse to write if it
+  diverged from what we last wrote (the user edited it in their own editor) — surfaced in
+  the renderer as a status error, never a silent clobber.
+- **Per-project-root stacks**: the v5-C rail keeps several projects open, so history is
+  keyed by root — Cmd+Z in project B never reverts a file in project A. Cleared on
+  `agent:close-project`.
+- IPC `edit:undo/redo/can` (root-scoped) → preload `window.api.edits` → renderer global
+  keydown (Cmd+Z / Cmd+Shift+Z / Cmd+Y), skipped while typing in a field; re-inspects the
+  selected element after a revert so the panel reflects the new source.
+- Tests: `test/edit-history.mjs` (unit — record/coalesce/undo/redo/conflict/root-scope) +
+  an apply→undo→redo→conflict round-trip appended to `test/prop-edit.mjs`. Full `verify`
+  green (live AGENT-E2E passed; SIM-E2E skipped, no Xcode).
+
 ## 2026-06-27 — three stacked features: v5-D history UI, inspector→shadcn, direct prop/token edit
 
 Built as stacked PRs off main (#28 → #31 → #32); each its own full `verify` + a

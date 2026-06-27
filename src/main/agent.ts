@@ -5,6 +5,7 @@ import { projectKey } from '../shared/projectKey'
 import { pickProvider, type ProviderSession } from './backends'
 import { EDIT_TOOLS } from './backends/tools'
 import { createSessionStore, type SessionStore } from './sessions-store'
+import { clearHistory } from './edit-history'
 
 // On-disk agent-session history (v5-D). Lazy so it resolves userData after the
 // app is ready; under the app's userData dir, out of any user repo.
@@ -86,6 +87,8 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     // backgrounded session (it would start emitting into a chat the renderer isn't
     // showing). The renderer re-activates explicitly via open-project.
     if (activeKey === key) activeKey = null
+    // v8 F3b: drop the project's undo/redo history — a reopened project starts fresh.
+    clearHistory(root)
   })
 
   // Switch the active project to an already-open (warm) session, without

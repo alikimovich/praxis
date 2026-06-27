@@ -289,6 +289,17 @@ export interface PropEditResult {
   error?: string
 }
 
+/** Result of an undo/redo over the dsgn source-edit history (v8 F3b). */
+export interface UndoResult {
+  ok: boolean
+  /** The file reverted/re-applied. */
+  file?: string
+  /** The history stack was empty. */
+  empty?: boolean
+  /** The file changed on disk since the edit — refused to clobber. */
+  conflict?: boolean
+}
+
 /**
  * Apply a design token to the selected element directly (agent-free) when it maps
  * to an existing literal — a schema enum/string prop, or a single inline-style
@@ -469,6 +480,13 @@ export interface DsgnApi {
   text: {
     /** Rewrite the element's text content in source; agent-fallback for complex content. */
     apply: (root: string, edit: { source: string; text: string }) => Promise<PropEditResult>
+  }
+  /** Undo/redo over ALL direct dsgn source edits — props, text, token swaps (v8 F3b).
+   *  Scoped per project root: the rail keeps several projects open at once. */
+  edits: {
+    undo: (root: string) => Promise<UndoResult>
+    redo: (root: string) => Promise<UndoResult>
+    can: (root: string) => Promise<{ undo: boolean; redo: boolean }>
   }
   tokens: {
     /** Detect design tokens in the repo (manifest → tailwind → CSS vars). */
