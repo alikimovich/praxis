@@ -4,6 +4,7 @@ import type { AgentEvent, AgentOptions, PermissionRequest } from '../../shared/a
 import { projectKey } from '../../shared/projectKey'
 import type { ModelProvider, PendingPrompt, ProviderSession } from './types'
 import { AUTO_ALLOW_TOOLS, describeTool, toolDetail, touchesSidecar } from './tools'
+import { createRecordCapture } from './record'
 
 // The Agent SDK is ESM-only; this CJS main bundle must reach it via a dynamic
 // import() (preserved by Rollup for external deps) rather than a static require.
@@ -68,6 +69,7 @@ async function startSession(
   getWindow: () => BrowserWindow | null
 ): Promise<ProviderSession> {
   const key = projectKey(root)
+  const cap = createRecordCapture(root, key)
   const { query } = await loadSdk()
   const input = new InputStream()
   const abort = new AbortController()
@@ -161,6 +163,7 @@ async function startSession(
             const text = textDelta(msg)
             if (text) {
               streamedText = true
+              cap.appendAssistant(text)
               emit({ type: 'delta', text })
             }
             break
@@ -168,14 +171,19 @@ async function startSession(
           case 'assistant': {
             for (const block of msg.message.content) {
               if (block.type === 'text' && !streamedText) {
+                cap.appendAssistant(block.text)
                 emit({ type: 'delta', text: block.text })
               } else if (block.type === 'tool_use') {
+                // Capture in the assistant stream (not canUseTool) so tools are
+                // recorded even under bypassPermissions, where canUseTool is skipped.
+                cap.noteTool(block.name, block.input)
                 emit({ type: 'status', text: describeTool(block.name, block.input) })
               }
             }
             break
           }
           case 'result': {
+            cap.finalize()
             emit({ type: 'done' })
             streamedText = false
             break
@@ -196,6 +204,8 @@ async function startSession(
     send: (text) => input.push(text),
     pending,
     emit,
+    record: cap.record,
+    finalize: cap.finalize,
     dispose: () => {
       disposed = true
     },

@@ -170,6 +170,35 @@ export interface AgentOptions {
   provider?: string
 }
 
+/** One line of a recorded agent session's transcript (v5-D history). */
+export interface SessionTranscriptEntry {
+  role: 'user' | 'assistant' | 'status'
+  text: string
+  at: number
+}
+
+/**
+ * A persisted agent session ("previous agent") — captured in main as the agent
+ * works and written to disk when the session ends (close / switch-away suspend /
+ * quit), so it's reopenable for review or resume after restart. `endedAt` is null
+ * while the session is still live.
+ */
+export interface SessionRecord {
+  id: string
+  projectKey: string
+  projectRoot: string
+  projectName: string
+  startedAt: number
+  endedAt: number | null
+  /** The dsgn/* branch it worked on, if the renderer tagged it. */
+  branch?: string
+  /** The PR it produced, if published. */
+  prUrl?: string
+  /** Repo-relative (or absolute) paths the agent edited this session. */
+  filesTouched: string[]
+  transcript: SessionTranscriptEntry[]
+}
+
 export interface Bounds {
   x: number
   y: number
@@ -448,6 +477,15 @@ export interface DsgnApi {
     /** Answer a pending approve/deny card. */
     respondPermission: (id: string, behavior: 'allow' | 'deny') => Promise<void>
     interrupt: () => Promise<void>
+    /** Tag the live session with branch / PR metadata for its history record. */
+    tagSession: (root: string, tag: { branch?: string; prUrl?: string }) => Promise<void>
     onEvent: (cb: (event: AgentEvent) => void) => () => void
+  }
+  /** Persisted agent-session history ("previous agents") — v5-D. */
+  sessions: {
+    /** Past sessions for a project, newest first (excludes the live one). */
+    list: (root: string) => Promise<SessionRecord[]>
+    get: (id: string) => Promise<SessionRecord | null>
+    remove: (id: string) => Promise<void>
   }
 }

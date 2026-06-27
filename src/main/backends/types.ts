@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import type { AgentEvent, AgentOptions, PermissionMode } from '../../shared/api'
+import type { AgentEvent, AgentOptions, PermissionMode, SessionRecord } from '../../shared/api'
 
 /**
  * The model-provider seam (v7). dsgn's chat is backend-agnostic: `agent.ts` owns
@@ -40,6 +40,10 @@ export interface ProviderSession {
   pending: Map<string, PendingPrompt>
   /** Emit an event to the renderer (tagged projectKey; no-op once disposed). */
   emit: (event: AgentEvent) => void
+  /** Growing history record for this session (v5-D), persisted by agent.ts on teardown. */
+  record: SessionRecord
+  /** Flush any in-progress assistant turn + sync filesTouched into `record`. Idempotent. */
+  finalize: () => void
   /** Stop emitting (replaced/closed) — called before teardown so nothing leaks. */
   dispose: () => void
   /** Provider-specific teardown: abort the run, close any input stream/subprocess. */

@@ -1,8 +1,16 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
+import { join } from 'node:path'
 import type { AgentEvent, AgentOptions, PermissionMode } from '../shared/api'
 import { projectKey } from '../shared/projectKey'
 import { pickProvider, type ProviderSession } from './backends'
 import { EDIT_TOOLS } from './backends/tools'
+import { createSessionStore, type SessionStore } from './sessions-store'
+
+// On-disk agent-session history (v5-D). Lazy so it resolves userData after the
+// app is ready; under the app's userData dir, out of any user repo.
+let _store: SessionStore | null = null
+const store = (): SessionStore =>
+  (_store ??= createSessionStore(join(app.getPath('userData'), 'dsgn')))
 
 /**
  * Agent sessions — one persistent multi-turn session per open project (keyed by
@@ -24,11 +32,23 @@ let activeKey: string | null = null
 const activeSession = (): ProviderSession | null =>
   activeKey ? (sessions.get(activeKey) ?? null) : null
 
-/** Tear down a session: stop it emitting, deny its prompts, then provider teardown. */
+/** Tear down a session: stop it emitting, deny its prompts, provider teardown,
+ * then persist it to history (v5-D) — a torn-down session is a "previous agent". */
 function closeSession(s: ProviderSession): void {
   s.dispose()
   ;[...s.pending.keys()].forEach((id) => resolvePending(s, id, 'deny'))
   s.shutdown()
+  // Only persist sessions the user actually engaged (≥1 prompt) — skip opened-then
+  // -closed empties. Best-effort: a disk hiccup must not break teardown.
+  try {
+    s.finalize()
+    if (s.record.transcript.some((t) => t.role === 'user')) {
+      s.record.endedAt = Date.now()
+      store().save(s.record)
+    }
+  } catch {
+    // history is non-critical; never let it interfere with session lifecycle
+  }
 }
 
 /** Settle a pending prompt and tell the renderer to drop its card. */
@@ -118,8 +138,27 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       } satisfies AgentEvent)
       return
     }
+    session.record.transcript.push({ role: 'user', text, at: Date.now() })
     session.send(text)
   })
+
+  // Tag the live session with branch / PR metadata for its history record (the
+  // renderer knows these; main captures transcript + files). No-op if no session.
+  ipcMain.handle(
+    'agent:tag-session',
+    async (_e, root: string, tag: { branch?: string; prUrl?: string }) => {
+      const s = sessions.get(projectKey(root))
+      if (!s) return
+      if (typeof tag.branch === 'string') s.record.branch = tag.branch
+      if (typeof tag.prUrl === 'string') s.record.prUrl = tag.prUrl
+    }
+  )
+
+  // Persisted history ("previous agents", v5-D). Lists past runs (the live session
+  // is persisted only on teardown, so it isn't here).
+  ipcMain.handle('sessions:list', (_e, root: string) => store().list(projectKey(root)))
+  ipcMain.handle('sessions:get', (_e, id: string) => store().get(id))
+  ipcMain.handle('sessions:remove', (_e, id: string) => store().remove(id))
 
   ipcMain.handle('agent:interrupt', async () => {
     const session = activeSession()
