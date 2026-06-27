@@ -11,6 +11,29 @@ Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
       `test/select-element.mjs`.
 - [ ] **Next:** polish / cross-file prop resolution / design-token manifests (see below).
 
+## v8 — direct manipulation & dsgn agent rules  ⭐ NEW (2026-06-27, user-requested)
+
+Push edits onto the canvas (direct, instant, reversible) instead of through chat;
+run comment-work in parallel; and give the agent a versioned set of operating
+**rules**. Full design + grounding + sequencing in `docs/PLAN-direct-editing.md`.
+
+- [ ] **R1 — "scope of an element edit" rule** (local vs project-wide; grep + update
+      shared terms; report what else changed). First entry in a versioned `dsgn rules`
+      set injected via the Claude preset `append` (`backends/claude.ts:91`); subprocess
+      backends prepend / use their conventions file. Pure `rules.ts` builder + test.
+- [ ] **F3a — resolve selection to the component INSTANCE, not the innermost host.**
+      Stamp `data-dsgn-component-source` on component-tag JSX (not overwritten by
+      children) **or** an instance source-index + owner-walk; "select owner component"
+      action. Unblocks per-instance direct edits (the screenshot's `value`/`currency`).
+- [ ] **F2 — broaden direct editing** (fewer "edit via chat"): widen literal cases in
+      `applyPropEdit`; most of the win rides F3a (per-instance values become real edits).
+- [ ] **F3b — undo/redo for ALL dsgn source edits** (Cmd+Z / Cmd+Shift+Z / Cmd+Y):
+      reversible edit stack, interaction-level coalescing, selection/panel restore,
+      on-disk conflict detection. Wraps props/text/token edits, not just the new panel.
+- [ ] **F1 — comment → parallel agent session** (`claude -p`-style one-shot per
+      comment), surfaced in the rail via the existing sessions/record seam; non-blocking.
+      Decide working-tree contention first (worktree-per-spawn vs write lock vs advisory).
+
 ## v4 — React Native / iOS-Simulator preview (macOS-only)
 
 Show a booted iOS Simulator running an Expo/RN app in the right pane instead of a
