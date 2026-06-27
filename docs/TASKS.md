@@ -23,10 +23,16 @@ run comment-work in parallel; and give the agent a versioned set of operating
       preset `append` (verified `systemPrompt.preset.append?: string` in the SDK types);
       Codex + Gemini prepend it to the first turn. `test/rules.mjs` (pure) + AGENT-E2E confirms
       the appended rules don't break a real Claude turn. The rules module is the home for R2+.
-- [ ] **F3a — resolve selection to the component INSTANCE, not the innermost host.**
-      Stamp `data-dsgn-component-source` on component-tag JSX (not overwritten by
-      children) **or** an instance source-index + owner-walk; "select owner component"
-      action. Unblocks per-instance direct edits (the screenshot's `value`/`currency`).
+- [x] **F3a — resolve selection to the component INSTANCE (core).** ✅ 2026-06-27 (PR #42) —
+      the React stamp plugin now also emits `data-dsgn-component-source` on component-tag JSX,
+      **UNSHIFTED** (before any `{...props}`) so a forwarding spread carries the OUTER authored
+      instance down — the instance call site wins over the host. `preload.findComponentSource`
+      walks up to it; `SelectedElement.componentSource`; the Inspector shows "↑ Edit the owning
+      component instance" which re-points the selection at the instance → `props.inspect`
+      surfaces per-instance props (the screenshot's `value`/`currency` become real edits).
+      `select-element.mjs` (capture + owner re-select) + `setup-detect.mjs` (plugin stamp).
+      **Remaining:** multi-level owner-walk (one level now); RN component-source (web-only now);
+      remove-a-prop-on-reset write-back (rides F2/F3b).
 - [ ] **F2 — broaden direct editing** (fewer "edit via chat"): widen literal cases in
       `applyPropEdit`; most of the win rides F3a (per-instance values become real edits).
 - [ ] **F3b — undo/redo for ALL dsgn source edits** (Cmd+Z / Cmd+Shift+Z / Cmd+Y):

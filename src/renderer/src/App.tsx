@@ -161,6 +161,7 @@ export default function App(): React.JSX.Element {
         classes: [],
         selector: pick.tag,
         source: pick.source,
+        componentSource: null, // RN component-instance resolution is a follow-up
         text: null,
         rect: { x: 0, y: 0, width: 0, height: 0 },
         styles: {}

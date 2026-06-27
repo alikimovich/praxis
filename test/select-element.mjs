@@ -136,7 +136,54 @@ try {
   }
   await win.screenshot({ path: join(artifacts, '07-select-handoff.png') })
 
-  console.log('SELECT-ELEMENT OK — picked', EXPECTED_SOURCE, '→ seeded composer')
+  // --- v8 F3a: click a host that carries a forwarded component-instance stamp.
+  // The pick resolves to the host source; the inspector offers "edit owner", which
+  // re-points the selection at the component-instance call site. ---
+  const GET_AMOUNT = `(() => { const el = document.querySelector('#amount'); if (!el) return null;
+    const b = el.getBoundingClientRect(); return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) }; })()`
+  let pickedAmount = false
+  for (let i = 0; i < 40 && !pickedAmount; i++) {
+    const r = await app.evaluate(async ({ webContents }, code) => {
+      const wc = webContents
+        .getAllWebContents()
+        .find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
+      if (!wc) return 'no-preview'
+      const c = await wc.executeJavaScript(code, true)
+      if (!c) return 'no-element'
+      wc.focus()
+      wc.sendInputEvent({ type: 'mouseMove', x: c.x, y: c.y })
+      wc.sendInputEvent({ type: 'mouseDown', x: c.x, y: c.y, button: 'left', clickCount: 1 })
+      wc.sendInputEvent({ type: 'mouseUp', x: c.x, y: c.y, button: 'left', clickCount: 1 })
+      return 'clicked'
+    }, GET_AMOUNT)
+    if (r !== 'clicked') {
+      await new Promise((res) => setTimeout(res, 300))
+      continue
+    }
+    pickedAmount = await win
+      .waitForFunction(
+        () => document.querySelector('.inspector__source')?.textContent?.includes('src/ui/Field.tsx:4'),
+        { timeout: 1000 }
+      )
+      .then(() => true)
+      .catch(() => false)
+  }
+  if (!pickedAmount) throw new Error('inspector never showed the host source for #amount')
+
+  // The store carries the forwarded component-instance source.
+  const cs = await win.evaluate(() => window.__dsgnSelection.getState().selected?.componentSource)
+  if (cs !== 'src/screens/Wallet.tsx:18') {
+    throw new Error(`componentSource should be the instance call site, got "${cs}"`)
+  }
+  // The "edit owner component" affordance is offered, and re-points the selection.
+  await win.waitForSelector('.inspector__owner', { timeout: 5000 })
+  await win.click('.inspector__owner')
+  await win.waitForFunction(
+    () => window.__dsgnSelection.getState().selected?.source === 'src/screens/Wallet.tsx:18',
+    { timeout: 5000 }
+  )
+
+  console.log('SELECT-ELEMENT OK — picked', EXPECTED_SOURCE, '→ seeded composer; F3a owner re-select')
 } catch (err) {
   console.error('SELECT-ELEMENT FAILED:', err?.message ?? err)
   process.exitCode = 1

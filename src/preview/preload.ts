@@ -273,6 +273,22 @@ function findSource(el: Element): string | null {
   return null
 }
 
+/**
+ * The nearest COMPONENT-instance call site (v8 F3a): `data-dsgn-component-source`,
+ * which the stamp plugin forwards through `{...props}` so the authored
+ * `<Component …/>` wins over the innermost host's `data-dsgn-source`. Walk up the
+ * same way so a click on a deep child still resolves to its owning instance.
+ */
+function findComponentSource(el: Element): string | null {
+  let node: Element | null = el
+  while (node) {
+    const stamp = node.getAttribute('data-dsgn-component-source')
+    if (stamp) return stamp
+    node = node.parentElement
+  }
+  return null
+}
+
 function describe(el: Element): SelectedElement {
   const cs = getComputedStyle(el)
   const styles: Record<string, string> = {}
@@ -294,6 +310,7 @@ function describe(el: Element): SelectedElement {
     classes,
     selector: cssPath(el).slice(0, 300),
     source: (findSource(el) ?? '').slice(0, 256) || null,
+    componentSource: (findComponentSource(el) ?? '').slice(0, 256) || null,
     text: rawText ? rawText.slice(0, 120) : null,
     rect: { x: r.x, y: r.y, width: r.width, height: r.height },
     styles

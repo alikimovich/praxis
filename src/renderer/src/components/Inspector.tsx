@@ -31,6 +31,8 @@ interface Props {
   tokens: TokenSet | null
   /** Apply a token to this element (seeds the chat). */
   onPickToken: (group: string, token: Token) => void
+  /** v8 F3a: re-select the owning component instance (edits per-instance props). */
+  onSelectOwner: () => void
 }
 
 /**
@@ -47,8 +49,12 @@ export default function Inspector({
   onClear,
   onAddNote,
   tokens,
-  onPickToken
+  onPickToken,
+  onSelectOwner
 }: Props): React.JSX.Element {
+  // Show the "edit owner component" affordance when the clicked host resolved to a
+  // different component-instance call site (the authored <Component …/>).
+  const hasOwner = !!element.componentSource && element.componentSource !== element.source
   const [showTokens, setShowTokens] = useState(false)
   const [noting, setNoting] = useState(false)
   const [note, setNote] = useState('')
@@ -102,6 +108,20 @@ export default function Inspector({
       >
         {element.source ?? 'no data-dsgn-source stamp — agent will locate by selector'}
       </div>
+
+      {/* v8 F3a: this host is inside a component instance — jump to that call site
+          to edit its per-instance props (value, currency, …). */}
+      {hasOwner && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="inspector__owner h-auto justify-start py-1 text-[11.5px]"
+          onClick={onSelectOwner}
+          title={element.componentSource ?? undefined}
+        >
+          ↑ Edit the owning component instance
+        </Button>
+      )}
 
       {/* Readiness: ready → edit in the floating panel; not ready → prompt-only. */}
       {inspecting ? (

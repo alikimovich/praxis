@@ -14,6 +14,7 @@ import electronPath from 'electron'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -76,6 +77,43 @@ try {
   // The production dev-gate must be structural (an early return), not a comment.
   const reactSrc = readFileSync(join(reactDir, '.dsgn/dsgn-source.cjs'), 'utf8')
   assert(/process\.env\.NODE_ENV === 'production'\) return/.test(reactSrc), 'react helper missing production dev-gate')
+  // v8 F3a: the plugin also stamps the component-instance source (unshifted so a
+  // forwarding {...props} spread carries the outer authored instance down).
+  assert(/data-dsgn-component-source/.test(reactSrc), 'react helper should stamp component-source')
+  assert(/unshift/.test(reactSrc) && /isComponent/.test(reactSrc), 'component-source must be component-gated + unshifted')
+  // v8 F3a: RUN the scaffolded plugin via @babel/core over a forwarding chain and
+  // prove the ordering — component-source UNSHIFTED before {...props} (so the outer
+  // authored instance wins), data-dsgn-source APPENDED after (innermost host wins).
+  {
+    const prevEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development' // the plugin no-ops in production
+    const req = createRequire(import.meta.url)
+    const babel = req('@babel/core')
+    const plugin = req(join(reactDir, '.dsgn/dsgn-source.cjs'))
+    const FIXTURE = [
+      'function Inner(props) { return <div {...props} className="leaf" /> }',
+      'function Outer(props) { return <Inner {...props} /> }',
+      'function App() { return <Outer title="X" /> }'
+    ].join('\n')
+    const out = babel.transformSync(FIXTURE, {
+      filename: join(reactDir, 'src/Demo.tsx'),
+      root: reactDir,
+      configFile: false,
+      babelrc: false,
+      parserOpts: { plugins: ['jsx'] },
+      plugins: [plugin]
+    }).code
+    process.env.NODE_ENV = prevEnv
+    // Component <Inner>: component-source unshifted (before {...props}); source appended (after).
+    assert(
+      /<Inner\s+data-dsgn-component-source="[^"]+"\s+\{\.\.\.props\}\s+data-dsgn-source=/.test(out),
+      `Inner ordering wrong — instance must win via unshift-before-spread:\n${out}`
+    )
+    // Host <div>: gets data-dsgn-source, but is NOT itself component-stamped (the
+    // component-source flows onto it via {...props} at React runtime, not in source).
+    assert(/<div\s+\{\.\.\.props\}[^>]*data-dsgn-source=/.test(out), `div host stamp wrong:\n${out}`)
+    assert(!/<div[^>]*data-dsgn-component-source/.test(out), `host div must not be component-stamped:\n${out}`)
+  }
   // Idempotent: second run doesn't rewrite.
   const react2 = await scaffold(reactDir)
   assert(react2.written === false, `react scaffold should be idempotent: ${JSON.stringify(react2)}`)
