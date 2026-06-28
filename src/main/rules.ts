@@ -12,7 +12,7 @@
  *
  * Bump DSGN_RULES_VERSION whenever the rule text changes (so logs/tests can pin it).
  */
-export const DSGN_RULES_VERSION = 1
+export const DSGN_RULES_VERSION = 2
 
 export function dsgnRules(): string {
   return [
@@ -31,6 +31,18 @@ export function dsgnRules(): string {
     `  the same string or concept and update them too, so terminology and UI stay`,
     `  consistent.`,
     `When in doubt, search first. Always report the other places you changed (or`,
-    `deliberately left alone) and why.`
+    `deliberately left alone) and why.`,
+    ``,
+    `## Inspecting the running app in a browser`,
+    `When you need to inspect or interact with the running web preview — read the DOM,`,
+    `check the console, click around, verify a change visually, grab a screenshot — use`,
+    `the \`agent-browser\` CLI (it drives a headless browser made for agents). Useful`,
+    `commands: \`agent-browser open <url>\`, \`snapshot\` (accessibility tree with refs),`,
+    `\`get text|html|styles|value <sel>\`, \`get console\`, \`eval <js>\`, \`click <sel>\`,`,
+    `\`type <sel> <text>\`, \`screenshot <path>\`. The URL is the dev server shown in the`,
+    `preview.`,
+    `Do NOT launch Chrome DevTools, a headed/visible browser, \`chrome://inspect\`, or a`,
+    `one-off Playwright/Puppeteer script to do this — UNLESS the user explicitly asks you`,
+    `to open DevTools or a real browser. Default to \`agent-browser\`.`
   ].join('\n')
 }

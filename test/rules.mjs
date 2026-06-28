@@ -23,6 +23,9 @@ assert(/scope of an element edit/i.test(r), 'R1: scope-of-edit heading present')
 assert(/\blocal\b/i.test(r) && /project-wide/i.test(r), 'R1: local vs project-wide distinction')
 assert(/search first|grep/i.test(r), 'R1: search-first guidance')
 assert(/report/i.test(r), 'R1: report-what-changed guidance')
+// R2: browser inspection → agent-browser, never Chrome DevTools unless asked.
+assert(/agent-browser/i.test(r), 'R2: directs the agent to agent-browser')
+assert(/devtools/i.test(r) && /unless the user explicitly asks/i.test(r), 'R2: no DevTools unless asked')
 // Deterministic (same output every call — safe to inject per turn).
 assert(dsgnRules() === r, 'dsgnRules is deterministic')
 
