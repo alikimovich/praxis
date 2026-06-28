@@ -19,6 +19,12 @@ interface EditEntry {
   after: string
   /** Coalesce key (e.g. "source:prop") — rapid edits of the same target merge. */
   key?: string
+  /**
+   * Atomic group (e.g. "comment:<id>"). Entries sharing a group at the top of the
+   * stack undo/redo together in ONE step — so a multi-file comment spawn is a
+   * single Cmd+Z, not one per file.
+   */
+  group?: string
   at: number
 }
 
@@ -46,7 +52,8 @@ export function recordEdit(
   file: string,
   before: string,
   after: string,
-  key?: string
+  key?: string,
+  group?: string
 ): void {
   if (before === after) return
   const { undo: undoStack, redo: redoStack } = stacksFor(root)
@@ -59,7 +66,7 @@ export function recordEdit(
     last.at = Date.now()
     return
   }
-  undoStack.push({ file, before, after, key, at: Date.now() })
+  undoStack.push({ file, before, after, key, group, at: Date.now() })
   if (undoStack.length > MAX_HISTORY) undoStack.shift()
 }
 
@@ -74,26 +81,39 @@ export interface UndoResult {
 }
 
 async function move(from: EditEntry[], to: EditEntry[], expect: 'after' | 'before'): Promise<UndoResult> {
-  const entry = from[from.length - 1]
-  if (!entry) return { ok: false, empty: true }
-  let current: string
-  try {
-    current = await readFile(entry.file, 'utf8')
-  } catch {
-    return { ok: false, conflict: true, file: entry.file }
+  const top = from[from.length - 1]
+  if (!top) return { ok: false, empty: true }
+  // The batch reverted/re-applied in this one step: the contiguous run of top
+  // entries sharing `top.group` (a single entry when there's no group). This makes
+  // a multi-file comment spawn one atomic Cmd+Z.
+  const batch: EditEntry[] = []
+  for (let i = from.length - 1; i >= 0; i--) {
+    if (top.group ? from[i].group === top.group : i === from.length - 1) batch.push(from[i])
+    else break
   }
-  // The file must still hold the text we last wrote; otherwise the user edited it
-  // in their own editor and we must not clobber that.
-  if (current !== entry[expect]) return { ok: false, conflict: true, file: entry.file }
-  const write = expect === 'after' ? entry.before : entry.after
-  try {
-    await writeFile(entry.file, write, 'utf8')
-  } catch {
-    return { ok: false, conflict: true, file: entry.file }
+  // Validate the WHOLE batch first — every file must still hold the text we last
+  // wrote (else the user edited it in their own editor). All-or-nothing: refuse
+  // without writing anything if any file drifted.
+  const writes: { entry: EditEntry; text: string }[] = []
+  for (const entry of batch) {
+    let current: string
+    try {
+      current = await readFile(entry.file, 'utf8')
+    } catch {
+      return { ok: false, conflict: true, file: entry.file }
+    }
+    if (current !== entry[expect]) return { ok: false, conflict: true, file: entry.file }
+    writes.push({ entry, text: expect === 'after' ? entry.before : entry.after })
   }
-  from.pop()
-  to.push(entry)
-  return { ok: true, file: entry.file }
+  for (const w of writes) {
+    try {
+      await writeFile(w.entry.file, w.text, 'utf8')
+    } catch {
+      return { ok: false, conflict: true, file: w.entry.file }
+    }
+  }
+  for (let k = 0; k < batch.length; k++) to.push(from.pop()!)
+  return { ok: true, file: top.file }
 }
 
 /** Revert the last edit in `root` (writes its `before`), unless it changed on disk. */

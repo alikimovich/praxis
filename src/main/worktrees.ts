@@ -1,5 +1,5 @@
 import { execFile } from 'child_process'
-import { mkdir, symlink, writeFile, rm, readdir, stat } from 'fs/promises'
+import { mkdir, symlink, writeFile, readFile, rm, readdir, stat } from 'fs/promises'
 import { randomUUID } from 'crypto'
 import { join } from 'path'
 import { promisify } from 'util'
@@ -237,6 +237,59 @@ export async function applyToWorkingTree(
   } finally {
     await rm(patchFile, { force: true }).catch(() => {})
   }
+}
+
+/**
+ * Auto-apply a finished spawn's change straight onto the LIVE working tree as plain
+ * file writes (v8 F1 redesign) — so a comment lands on the branch the user works in,
+ * with no separate branch / PR / manual Apply, and is undoable via Cmd+Z. Reads each
+ * changed file's FINAL content from the worktree and writes it onto the live tree,
+ * but only when SAFE: the live file must be unchanged since the spawn forked
+ * (== the base blob) or already at the target. If it drifted (the user edited it
+ * concurrently), we refuse the WHOLE batch so nothing is clobbered, and the caller
+ * keeps the branch for the manual review fallback. Text only; a binary/deleted
+ * change → refuse. Returns the before/after pairs for the undo history.
+ */
+export async function autoApplyWorktree(
+  parentRoot: string,
+  wt: Worktree,
+  files: string[]
+): Promise<{ applied: boolean; edits: { file: string; before: string; after: string }[] }> {
+  const fail = { applied: false, edits: [] as { file: string; before: string; after: string }[] }
+  const edits: { file: string; before: string; after: string }[] = []
+  for (const rel of files) {
+    let after: string
+    try {
+      after = await readFile(join(wt.path, rel), 'utf8') // committed change is in the checkout
+    } catch {
+      return fail // deleted / renamed / unreadable — let the manual path handle it
+    }
+    if (after.includes('\0')) return fail // binary — don't round-trip through utf8
+    let base = ''
+    try {
+      base = (await git(parentRoot, ['show', `${wt.baseSha}:${rel}`])).stdout
+    } catch {
+      base = '' // not in the fork point → a new file the spawn created
+    }
+    let before = ''
+    try {
+      before = await readFile(join(parentRoot, rel), 'utf8')
+    } catch {
+      before = '' // not on disk yet → new file
+    }
+    // Refuse if the live file changed under us to something other than the target.
+    if (before !== base && before !== after) return fail
+    edits.push({ file: join(parentRoot, rel), before, after })
+  }
+  for (const e of edits) {
+    if (e.before === e.after) continue
+    try {
+      await writeFile(e.file, e.after, 'utf8')
+    } catch {
+      return fail
+    }
+  }
+  return { applied: edits.some((e) => e.before !== e.after), edits }
 }
 
 /**

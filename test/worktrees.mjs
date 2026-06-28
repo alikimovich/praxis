@@ -16,6 +16,7 @@ import {
   commitWorktree,
   diffWorktree,
   applyToWorkingTree,
+  autoApplyWorktree,
   removeWorktree,
   pruneOrphans
 } from '../src/main/worktrees.ts'
@@ -140,7 +141,46 @@ try {
   const noop = await applyToWorkingTree(repo, '', tmpDir)
   ok(noop.ok && !noop.conflict, 'empty patch is a no-op success')
 
-  if (failed === 0) console.log('WORKTREES OK — isolated create/commit/diff/apply-to-dirty/remove/prune')
+  // --- autoApplyWorktree: land a spawn's change straight on the live tree (v8 F1) ---
+  // Fresh repo so the live README is unchanged since the worktree forked.
+  const repo2 = join(base, 'repo2')
+  mkdirSync(repo2, { recursive: true })
+  const g2 = (...a) => execFileSync('git', a, { cwd: repo2, encoding: 'utf8' }).trim()
+  g2('init', '-q')
+  g2('config', 'user.email', 't@t.t')
+  g2('config', 'user.name', 'T')
+  // Real projects gitignore node_modules/.env, so the worktree's symlinks to them
+  // never enter a spawn's commit (and thus never reach autoApply).
+  writeFileSync(join(repo2, '.gitignore'), 'node_modules\n.env\n')
+  writeFileSync(join(repo2, 'README.md'), 'hello world\n')
+  g2('add', '-A')
+  g2('commit', '-qm', 'init')
+  const wt2 = await createWorktree(repo2, worktreesDir, { label: 'edit readme' })
+  writeFileSync(join(wt2.path, 'README.md'), 'hello DSGN\n') // the "agent" edits in the worktree
+  const c2 = await commitWorktree(wt2, 'edit readme')
+  const auto = await autoApplyWorktree(repo2, wt2, c2.files)
+  ok(auto.applied, `autoApply should apply onto an unchanged live tree: ${JSON.stringify(auto)}`)
+  ok(readFileSync(join(repo2, 'README.md'), 'utf8') === 'hello DSGN\n', 'autoApply wrote the live file')
+  ok(
+    auto.edits.length === 1 && auto.edits[0].before === 'hello world\n' && auto.edits[0].after === 'hello DSGN\n',
+    `autoApply returns before/after for the undo history: ${JSON.stringify(auto.edits)}`
+  )
+
+  // --- autoApply REFUSES when the live file drifted (concurrent user edit) ---
+  const wt3 = await createWorktree(repo2, worktreesDir, { label: 'edit again' })
+  writeFileSync(join(wt3.path, 'README.md'), 'from spawn\n')
+  const c3 = await commitWorktree(wt3, 'edit again')
+  writeFileSync(join(repo2, 'README.md'), 'user typed this themselves\n') // drift under us
+  const refused = await autoApplyWorktree(repo2, wt3, c3.files)
+  ok(!refused.applied, 'autoApply must refuse when the live file changed concurrently')
+  ok(
+    readFileSync(join(repo2, 'README.md'), 'utf8') === 'user typed this themselves\n',
+    'refused autoApply must NOT clobber the user edit'
+  )
+  await removeWorktree(repo2, wt2, {})
+  await removeWorktree(repo2, wt3, {})
+
+  if (failed === 0) console.log('WORKTREES OK — create/commit/diff/apply/auto-apply/remove/prune')
   else console.error(`WORKTREES: ${failed} assertion(s) failed`)
   process.exitCode = failed === 0 ? 0 : 1
 } catch (err) {

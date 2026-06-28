@@ -5,7 +5,7 @@ import { projectKey } from '../shared/projectKey'
 import { pickProvider, type ProviderSession } from './backends'
 import { EDIT_TOOLS } from './backends/tools'
 import { createSessionStore, type SessionStore } from './sessions-store'
-import { clearHistory } from './edit-history'
+import { clearHistory, recordEdit } from './edit-history'
 import { isRepoRoot } from './git'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -19,6 +19,7 @@ import {
   branchExists,
   deleteBranch,
   applyToWorkingTree,
+  autoApplyWorktree,
   type Worktree
 } from './worktrees'
 
@@ -99,10 +100,17 @@ function closeSession(s: ProviderSession): void {
 }
 
 /**
- * A detached comment spawn (v8 F1) reached its terminal event. Tear down its
- * session (persists the record under the parent project → "previous agents"), commit
- * its worktree to the durable branch, capture the authoritative touched-file list
- * from git, reclaim the checkout, and tell the renderer to drop the working rail row.
+ * A detached comment spawn (v8 F1) reached its terminal event. By default we now
+ * AUTO-APPLY its change straight onto the working branch the user is on — no
+ * separate `dsgn/comment-*` branch, no PR, no manual Apply (that was "too many
+ * approvals") — and record it in the undo history so Cmd+Z reverts the whole
+ * comment atomically. The branch + checkout are deleted and the record is NOT
+ * persisted, so the finished spawn vanishes from the rail instead of lingering as
+ * a "previous agent".
+ *
+ * Only when auto-apply is UNSAFE (the user edited a touched file concurrently,
+ * or a binary/delete change) do we fall back to the old behaviour: keep the
+ * branch + persist the record so the user can resolve it via the review modal.
  * Best-effort throughout — a finalizer must never throw.
  */
 async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<void> {
@@ -111,21 +119,51 @@ async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<voi
   spawns.delete(id)
   const { session, wt, parentKey, parentRoot, text } = spawn
   try {
-    closeSession(session) // finalize + persist the record under parentKey
+    closeSession(session) // finalize + persist the record (removed below if we auto-apply)
     const { committed, files } = await commitWorktree(wt, firstLine(text))
-    if (committed) {
-      // git's staged list is authoritative (beats the EDIT_TOOLS heuristic).
-      session.record.filesTouched = files
-      session.record.endedAt = session.record.endedAt ?? Date.now()
-      store().save(session.record)
+    let auto: { applied: boolean; edits: { file: string; before: string; after: string }[] } = {
+      applied: false,
+      edits: []
     }
-    await removeWorktree(parentRoot, wt, { keepBranch: committed })
-    getWindow_()?.webContents.send('agent:event', {
-      type: 'spawn-finished',
-      projectKey: parentKey,
-      sessionId: id,
-      branch: committed ? wt.branch : null
-    } satisfies AgentEvent)
+    if (committed && files.length) {
+      try {
+        auto = await autoApplyWorktree(parentRoot, wt, files)
+      } catch {
+        auto = { applied: false, edits: [] }
+      }
+    }
+    if (auto.applied) {
+      // Land it on the working branch + make the whole comment ONE Cmd+Z (shared
+      // group). Then drop the branch and un-persist the record so the rail clears.
+      const group = `comment:${id}`
+      for (const e of auto.edits) recordEdit(parentRoot, e.file, e.before, e.after, undefined, group)
+      await removeWorktree(parentRoot, wt, { keepBranch: false })
+      try {
+        store().remove(session.record.id)
+      } catch {
+        /* history is non-critical */
+      }
+      getWindow_()?.webContents.send('agent:event', {
+        type: 'spawn-finished',
+        projectKey: parentKey,
+        sessionId: id,
+        branch: null
+      } satisfies AgentEvent)
+    } else {
+      // Fallback: keep the branch + record for the manual review modal.
+      if (committed) {
+        session.record.filesTouched = files // git's staged list beats the heuristic
+        session.record.endedAt = session.record.endedAt ?? Date.now()
+        store().save(session.record)
+      }
+      await removeWorktree(parentRoot, wt, { keepBranch: committed })
+      getWindow_()?.webContents.send('agent:event', {
+        type: 'spawn-finished',
+        projectKey: parentKey,
+        sessionId: id,
+        branch: committed ? wt.branch : null
+      } satisfies AgentEvent)
+    }
   } catch {
     // Never let spawn teardown break the app; the worktree may linger for prune.
   }

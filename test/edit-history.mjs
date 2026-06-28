@@ -124,7 +124,32 @@ try {
   recordEdit(ROOT, file('noop.tsx'), 'same', 'same', 'src:prop')
   ok(!canUndo(ROOT), 'no-op edit was not recorded')
 
-  if (failed === 0) console.log('EDIT-HISTORY OK — record/coalesce/undo/redo/conflict/root-scope')
+  // --- atomic group: a multi-file comment spawn is ONE undo/redo step ---
+  clearHistory(ROOT)
+  const gA = file('group-a.tsx')
+  const gB = file('group-b.tsx')
+  write(gA, 'A-new')
+  write(gB, 'B-new')
+  recordEdit(ROOT, gA, 'A-old', 'A-new', undefined, 'comment:x1')
+  recordEdit(ROOT, gB, 'B-old', 'B-new', undefined, 'comment:x1')
+  r = await undo(ROOT)
+  ok(r.ok && read(gA) === 'A-old' && read(gB) === 'B-old', 'one undo reverts BOTH files in the group')
+  ok(!canUndo(ROOT) && canRedo(ROOT), 'the whole group was a single undo step')
+  r = await redo(ROOT)
+  ok(r.ok && read(gA) === 'A-new' && read(gB) === 'B-new', 'one redo re-applies the whole group')
+
+  // --- group undo is all-or-nothing: a drifted file in the group refuses the batch ---
+  clearHistory(ROOT)
+  write(gA, 'A2')
+  write(gB, 'B2')
+  recordEdit(ROOT, gA, 'A1', 'A2', undefined, 'comment:x2')
+  recordEdit(ROOT, gB, 'B1', 'B2', undefined, 'comment:x2')
+  write(gB, 'USER-TOUCHED') // one file in the group drifted
+  r = await undo(ROOT)
+  ok(!r.ok && r.conflict, `group undo refuses when any file drifted: ${JSON.stringify(r)}`)
+  ok(read(gA) === 'A2', 'all-or-nothing: the un-drifted file was NOT reverted')
+
+  if (failed === 0) console.log('EDIT-HISTORY OK — record/coalesce/undo/redo/conflict/group/root-scope')
   else console.error(`EDIT-HISTORY: ${failed} assertion(s) failed`)
   process.exitCode = failed === 0 ? 0 : 1
 } catch (err) {

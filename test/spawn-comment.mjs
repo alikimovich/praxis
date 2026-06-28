@@ -37,6 +37,9 @@ g(repo, 'init', '-q', '-b', 'main')
 g(repo, 'config', 'user.name', 'Test')
 g(repo, 'config', 'user.email', 't@t')
 const MARKER = 'SPAWN_VERIFIED'
+// Like a real project: gitignore node_modules/.env so the worktree's symlinks to
+// them never enter a spawn commit (and thus never block the direct auto-apply).
+writeFileSync(join(repo, '.gitignore'), 'node_modules\n.env\n')
 writeFileSync(join(repo, 'app.txt'), 'the heading is PLACEHOLDER\n')
 g(repo, 'add', '-A')
 g(repo, 'commit', '-qm', 'init')
@@ -181,26 +184,29 @@ try {
   )
   assert(res.ok && res.spawnId && res.branch, `spawn should start: ${JSON.stringify(res)}`)
 
-  // Poll the durable branch for the committed edit. The worktree is removed on
-  // finalize, but the branch persists with the spawn's commit.
+  // v8 F1 redesign: the spawn AUTO-APPLIES onto the live working tree on finalize
+  // (no manual Apply, no lingering branch). Poll the live file for the edit.
+  const liveFile = join(repo, 'app.txt')
   let landed = false
   for (let i = 0; i < 90 && !landed; i++) {
     await sleep(2000)
     try {
-      const fileOnBranch = g(repo, 'show', `${res.branch}:app.txt`)
-      if (fileOnBranch.includes(MARKER)) landed = true
+      if (readFileSync(liveFile, 'utf8').includes(MARKER)) landed = true
     } catch {
-      /* branch has no commit yet */
+      /* not written yet */
     }
   }
 
   if (landed) {
-    // The edit lives ON THE BRANCH, and the main tree was never touched (isolation).
-    const mainTree = g(repo, 'show', 'main:app.txt')
-    assert(!mainTree.includes(MARKER), 'isolation: the spawn must NOT have touched main')
-    console.log('SPAWN-COMMENT OK (live) — comment spawn edited the repo in its own worktree →', res.branch)
+    // The edit landed on the working branch directly, and the comment branch was
+    // deleted (auto-applied, not kept for a manual Apply).
+    assert(
+      g(repo, 'branch', '--list', res.branch) === '',
+      'auto-apply must delete the comment branch (no lingering dsgn/comment-* branch)'
+    )
+    console.log('SPAWN-COMMENT OK (live) — comment spawn auto-applied onto the working tree, branch gone')
   } else {
-    console.log('SPAWN-COMMENT SKIP (live) — the spawn never committed (likely no Claude creds).')
+    console.log('SPAWN-COMMENT SKIP (live) — the spawn never applied (likely no Claude creds).')
     console.log('  Deterministic checks passed; live wiring needs `claude login`.')
   }
 } catch (err) {
