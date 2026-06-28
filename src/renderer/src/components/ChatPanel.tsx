@@ -202,6 +202,20 @@ export default function ChatPanel(): React.JSX.Element {
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
+  // Auto-grow the composer with the text — from 2 lines up to 6, then scroll.
+  useEffect(() => {
+    const ta = inputRef.current
+    if (!ta) return
+    const cs = getComputedStyle(ta)
+    const lh = parseFloat(cs.lineHeight) || 20
+    const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+    const min = lh * 2 + padY
+    const max = lh * 6 + padY
+    ta.style.height = 'auto'
+    ta.style.height = `${Math.max(min, Math.min(ta.scrollHeight, max))}px`
+    ta.style.overflowY = ta.scrollHeight > max ? 'auto' : 'hidden'
+  }, [input])
+
   // Don't carry a publish result across projects (it'd show under the new repo).
   useEffect(() => {
     setPublishMsg(null)
@@ -794,6 +808,9 @@ export default function ChatPanel(): React.JSX.Element {
             onPaste={onPaste}
           />
           <InputGroupAddon align="block-end" className="gap-1">
+            {/* The selectors shrink + wrap when the chat pane is narrow so the send
+                button (shrink-0, below) is never pushed off the edge. */}
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
             <select
               className={selectCls}
               value={provider}
@@ -842,11 +859,12 @@ export default function ChatPanel(): React.JSX.Element {
                 </option>
               ))}
             </select>
+            </div>
             {isRunning ? (
               <Button
                 type="button"
                 size="icon"
-                className="composer__send composer__send--stop ml-auto"
+                className="composer__send composer__send--stop shrink-0"
                 onClick={stop}
                 aria-label="Stop"
                 title="Stop"
@@ -858,9 +876,9 @@ export default function ChatPanel(): React.JSX.Element {
               <Button
                 type="button"
                 size="icon"
-                className="composer__send ml-auto"
+                className="composer__send shrink-0"
                 onClick={() => send()}
-                disabled={!input.trim()}
+                disabled={!input.trim() && attachments.length === 0}
                 aria-label="Send message"
               >
                 <ArrowUp className="size-4" aria-hidden="true" />

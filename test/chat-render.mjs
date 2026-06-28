@@ -211,8 +211,26 @@ try {
   await win.click('button[aria-label="Remove image"]')
   await win.waitForFunction(() => !document.querySelector('img[alt="attachment"]'), { timeout: 5000 })
 
+  // Composer responsiveness: at a narrow chat pane the send button stays visible
+  // (selects wrap), and the textarea auto-grows up to ~6 lines for a long prompt.
+  await win.evaluate(() => {
+    document.querySelector('.pane--chat').style.width = '320px'
+  })
+  await win.fill('.composer__input', 'a\nb\nc\nd\ne\nf\ng\nh')
+  await win.waitForFunction(
+    () => parseFloat(document.querySelector('.composer__input').style.height) > 90,
+    { timeout: 4000 }
+  )
+  const sendVisible = await win.evaluate(() => {
+    const br = document.querySelector('.composer__send').getBoundingClientRect()
+    const pr = document.querySelector('.pane--chat').getBoundingClientRect()
+    return br.width > 0 && br.right <= pr.right + 1
+  })
+  if (!sendVisible) throw new Error('send button must stay visible at a narrow chat width')
+  await win.fill('.composer__input', '') // reset
+
   console.log(
-    'CHAT-RENDER OK — markdown, toolbar, auth banner, branch pill, workspace store, rail collapse, image paste'
+    'CHAT-RENDER OK — markdown, toolbar, auth banner, branch pill, workspace store, rail collapse, image paste, composer responsive'
   )
 } catch (err) {
   console.error('CHAT-RENDER FAILED:', err?.message ?? err)
