@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   WebContentsView,
+  Menu,
   ipcMain,
   dialog,
   shell,
@@ -113,6 +114,17 @@ function ensurePreviewView(): WebContentsView {
 
   const wc = previewView.webContents
   interceptReloadKey(wc) // Cmd+R while the preview has focus → reload the preview, not the tool
+
+  // Chrome-style right-click → Inspect / Open Console on the PREVIEW's own
+  // DevTools (so the user can inspect their web app's DOM + console). Only for a
+  // real web preview, not the placeholder or the simulator's streamed frame.
+  wc.on('context-menu', (_e, params) => {
+    if (!previewUrl || !/^https?:/.test(previewUrl)) return
+    Menu.buildFromTemplate([
+      { label: 'Inspect element', click: () => wc.inspectElement(params.x, params.y) },
+      { label: 'Open DevTools console', click: () => wc.openDevTools({ mode: 'detach' }) }
+    ]).popup()
+  })
 
   // The previewed app is untrusted-ish: keep it on its own local origin.
   wc.setWindowOpenHandler(({ url }) => {
