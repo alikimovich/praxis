@@ -190,7 +190,30 @@ try {
   await win.click('.rail__toggle')
   await win.waitForFunction(() => !document.querySelector('.rail--collapsed'), { timeout: 5000 })
 
-  console.log('CHAT-RENDER OK — markdown, toolbar, auth banner, branch pill, workspace store, rail collapse')
+  // Paste an image into the composer → a thumbnail attachment chip appears.
+  await win.evaluate(() => {
+    // 1x1 transparent PNG.
+    const b64 =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+    const bin = atob(b64)
+    const bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    const file = new File([bytes], 'pixel.png', { type: 'image/png' })
+    const dt = new DataTransfer()
+    dt.items.add(file)
+    const ta = document.querySelector('.composer__input')
+    ta.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
+  })
+  await win.waitForSelector('.composer__input ~ * img, .composer img', { timeout: 5000 }).catch(() => {})
+  const thumb = await win.$('img[alt="attachment"]')
+  if (!thumb) throw new Error('pasted image should add a thumbnail attachment')
+  // Removing it clears the chip.
+  await win.click('button[aria-label="Remove image"]')
+  await win.waitForFunction(() => !document.querySelector('img[alt="attachment"]'), { timeout: 5000 })
+
+  console.log(
+    'CHAT-RENDER OK — markdown, toolbar, auth banner, branch pill, workspace store, rail collapse, image paste'
+  )
 } catch (err) {
   console.error('CHAT-RENDER FAILED:', err?.message ?? err)
   process.exitCode = 1

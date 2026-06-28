@@ -1,6 +1,6 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
 import { basename, join } from 'node:path'
-import type { AgentEvent, AgentOptions, PermissionMode } from '../shared/api'
+import type { AgentEvent, AgentOptions, ImageAttachment, PermissionMode } from '../shared/api'
 import { projectKey } from '../shared/projectKey'
 import { pickProvider, type ProviderSession } from './backends'
 import { EDIT_TOOLS } from './backends/tools'
@@ -332,7 +332,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     if (session) resolvePending(session, id, behavior)
   })
 
-  ipcMain.handle('agent:send', async (_e, text: string) => {
+  ipcMain.handle('agent:send', async (_e, text: string, images?: ImageAttachment[]) => {
     const session = activeSession()
     if (!session) {
       getWindow()?.webContents.send('agent:event', {
@@ -341,8 +341,9 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       } satisfies AgentEvent)
       return
     }
-    session.record.transcript.push({ role: 'user', text, at: Date.now() })
-    session.send(text)
+    const note = images?.length ? `${text} [${images.length} image(s) attached]`.trim() : text
+    session.record.transcript.push({ role: 'user', text: note, at: Date.now() })
+    session.send(text, images)
   })
 
   // Tag the live session with branch / PR metadata for its history record (the

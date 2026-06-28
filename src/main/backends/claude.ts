@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import type { Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import type { AgentEvent, AgentOptions, PermissionRequest } from '../../shared/api'
+import type { AgentEvent, AgentOptions, ImageAttachment, PermissionRequest } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
 import type { ModelProvider, PendingPrompt, ProviderSession, SpawnContext } from './types'
 import { AUTO_ALLOW_TOOLS, describeTool, toolDetail, touchesSidecar } from './tools'
@@ -19,10 +19,22 @@ class InputStream implements AsyncIterable<SDKUserMessage> {
   private waiting: ((r: IteratorResult<SDKUserMessage>) => void)[] = []
   private closed = false
 
-  push(text: string): void {
+  push(text: string, images?: ImageAttachment[]): void {
+    // Plain string when there are no images; otherwise a content-block array so the
+    // Claude Agent SDK sees the text + each pasted/dropped image as a vision block.
+    const content =
+      images && images.length
+        ? [
+            ...(text ? [{ type: 'text', text }] : []),
+            ...images.map((im) => ({
+              type: 'image',
+              source: { type: 'base64', media_type: im.mediaType, data: im.data }
+            }))
+          ]
+        : text
     const msg = {
       type: 'user',
-      message: { role: 'user', content: text }
+      message: { role: 'user', content }
     } as unknown as SDKUserMessage
     const next = this.waiting.shift()
     if (next) next({ value: msg, done: false })
@@ -216,7 +228,7 @@ async function startSession(
     key,
     root,
     options,
-    send: (text) => input.push(text),
+    send: (text, images) => input.push(text, images),
     pending,
     emit,
     record: cap.record,

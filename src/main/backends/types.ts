@@ -1,5 +1,11 @@
 import type { BrowserWindow } from 'electron'
-import type { AgentEvent, AgentOptions, PermissionMode, SessionRecord } from '../../shared/api'
+import type {
+  AgentEvent,
+  AgentOptions,
+  ImageAttachment,
+  PermissionMode,
+  SessionRecord
+} from '../../shared/api'
 
 /**
  * The model-provider seam (v7). dsgn's chat is backend-agnostic: `agent.ts` owns
@@ -53,7 +59,8 @@ export interface ProviderSession {
   root: string
   options: AgentOptions
   /** Enqueue a user turn (the renderer already called startAssistant()). */
-  send: (text: string) => void
+  /** Send a user turn; `images` (paste/drop) go as vision blocks where supported. */
+  send: (text: string, images?: ImageAttachment[]) => void
   /** In-flight approve/deny prompts, keyed by request id (settled by agent.ts). */
   pending: Map<string, PendingPrompt>
   /** Emit an event to the renderer (tagged projectKey; no-op once disposed). */

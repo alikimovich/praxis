@@ -145,7 +145,8 @@ async function startSession(
     key,
     root,
     options,
-    send: (text) => {
+    // Gemini CLI is text-only here; images (paste/drop) are ignored for now.
+    send: (text, _images) => {
       const prompt = firstTurn ? `${dsgnRules()}\n\n---\n\n${text}` : text
       firstTurn = false
       chain = chain.then(() => runTurn(prompt))

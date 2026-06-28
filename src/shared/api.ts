@@ -164,6 +164,16 @@ export type AgentEvent = (
 }
 
 /** Per-session options the user can set from the chat toolbar. */
+/**
+ * An image pasted or dropped into the composer, sent to the agent as a vision
+ * content block. `data` is raw base64 (no `data:` prefix); `mediaType` is the
+ * MIME type (e.g. "image/png").
+ */
+export interface ImageAttachment {
+  mediaType: string
+  data: string
+}
+
 export interface AgentOptions {
   /** Model alias ('opus' | 'sonnet' | 'haiku') or undefined for the account default. */
   model?: string
@@ -542,7 +552,7 @@ export interface DsgnApi {
     setActive: (root: string) => Promise<void>
     /** Does this project still have a live session? (LRU may have suspended it) */
     isOpen: (root: string) => Promise<boolean>
-    send: (text: string) => Promise<void>
+    send: (text: string, images?: ImageAttachment[]) => Promise<void>
     setModel: (model: string) => Promise<void>
     /** Change the permission posture live (drives the SDK's setPermissionMode). */
     setPermissionMode: (mode: PermissionMode) => Promise<void>

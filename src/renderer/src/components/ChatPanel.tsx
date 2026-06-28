@@ -195,6 +195,11 @@ export default function ChatPanel(): React.JSX.Element {
   const [input, setInput] = useState('')
   const [menuActive, setMenuActive] = useState(0)
   const [menuDismissed, setMenuDismissed] = useState(false)
+  // Images pasted/dropped into the composer, sent as vision blocks with the turn.
+  const [attachments, setAttachments] = useState<
+    { id: string; mediaType: string; data: string; url: string }[]
+  >([])
+  const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   // Don't carry a publish result across projects (it'd show under the new repo).
@@ -442,13 +447,47 @@ export default function ChatPanel(): React.JSX.Element {
     setSelected(null)
   }
 
+  // Read image files (paste/drop) into base64 attachments + a preview URL.
+  const addImageFiles = (files: File[]): void => {
+    let nextId = Date.now()
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) continue
+      const reader = new FileReader()
+      reader.onload = () => {
+        const url = String(reader.result) // data:<mime>;base64,<data>
+        const data = url.slice(url.indexOf(',') + 1)
+        setAttachments((a) => [...a, { id: `att${nextId++}`, mediaType: file.type, data, url }])
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>): void => {
+    const files = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith('image/'))
+    if (files.length) {
+      e.preventDefault() // don't also paste the image's path/text
+      addImageFiles(files)
+    }
+  }
+
+  const onDrop = (e: React.DragEvent): void => {
+    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'))
+    if (files.length) {
+      e.preventDefault()
+      addImageFiles(files)
+    }
+    setDragOver(false)
+  }
+
   const send = (raw: string = input): void => {
     const text = raw.trim()
-    if (!text || isRunning) return
-    appendUser(text)
+    if ((!text && attachments.length === 0) || isRunning) return
+    const images = attachments.map((a) => ({ mediaType: a.mediaType, data: a.data }))
+    appendUser(text || (images.length ? `🖼 ${images.length} image(s)` : ''))
     startAssistant()
     setInput('')
-    void window.api.agent.send(text)
+    setAttachments([])
+    void window.api.agent.send(text, images.length ? images : undefined)
   }
 
   // Interrupt the in-flight turn. The SDK emits a `result` → `done`, which clears
@@ -690,7 +729,34 @@ export default function ChatPanel(): React.JSX.Element {
             textarea carries data-slot="input-group-control" so the group lights
             up on focus. Native textarea (not InputGroupTextarea) to keep the ref
             for seeding/cursor control on React 18. */}
-        <InputGroup className="relative rounded-2xl">
+        <InputGroup
+          className={`relative rounded-2xl ${dragOver ? 'ring-2 ring-blue-400' : ''}`}
+          onDrop={onDrop}
+          onDragOver={(e) => {
+            if (Array.from(e.dataTransfer.types).includes('Files')) {
+              e.preventDefault()
+              setDragOver(true)
+            }
+          }}
+          onDragLeave={() => setDragOver(false)}
+        >
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 px-2 pt-2">
+              {attachments.map((a) => (
+                <div key={a.id} className="relative h-12 w-12 overflow-hidden rounded-md border border-border">
+                  <img src={a.url} alt="attachment" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setAttachments((list) => list.filter((x) => x.id !== a.id))}
+                    aria-label="Remove image"
+                    className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-[10px] leading-none text-white"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           {menuOpen && (
             <div className="slash" role="listbox">
               <div className="slash__hint">Skills & commands</div>
@@ -715,6 +781,7 @@ export default function ChatPanel(): React.JSX.Element {
             rows={2}
             onChange={(e) => onInputChange(e.target.value)}
             onKeyDown={onKeyDown}
+            onPaste={onPaste}
           />
           <InputGroupAddon align="block-end" className="gap-1">
             <select
