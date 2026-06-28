@@ -243,6 +243,16 @@ export default function ChatPanel(): React.JSX.Element {
           useSpawns.getState().start(pkey, event.sessionId, event.branch)
         } else if (event.type === 'spawn-finished') {
           useSpawns.getState().remove(pkey, event.sessionId)
+          // Notify in the parent project's chat so the user can follow up on it. A
+          // null branch means it auto-applied onto the working tree; a branch means
+          // it couldn't (conflict) and is waiting in the rail for review.
+          const files = event.files?.length ? ` · ${event.files.join(', ')}` : ''
+          const head = event.branch
+            ? `💬 Comment finished — couldn't auto-apply, review it in the sidebar${files}`
+            : `💬 Comment applied${files}`
+          useChat
+            .getState()
+            .appendNote(event.summary ? `${head}\n\n${event.summary}` : head, pkey)
           const root = useSession.getState().projectRoot
           if (root && projectKey(root) === pkey) void useHistory.getState().load(root)
         }

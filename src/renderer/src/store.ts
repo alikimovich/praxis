@@ -44,6 +44,8 @@ interface ChatState {
   clearChat: (key: string) => void
   // Actions default to the active project; pass a key to target a backgrounded one.
   appendUser: (text: string, key?: string) => void
+  /** Add a standalone assistant note (e.g. a finished comment-spawn notification). */
+  appendNote: (text: string, key?: string) => void
   startAssistant: (key?: string) => void
   appendDelta: (text: string, key?: string) => void
   appendStatus: (text: string, key?: string) => void
@@ -100,6 +102,11 @@ export const useChat = create<ChatState>((set, get) => {
       patch(key, (sl) => ({
         ...sl,
         messages: [...sl.messages, { id: nextId(), role: 'user', text, statuses: [] }]
+      })),
+    appendNote: (text, key) =>
+      patch(key, (sl) => ({
+        ...sl,
+        messages: [...sl.messages, { id: nextId(), role: 'assistant', text, statuses: [] }]
       })),
     startAssistant: (key) =>
       patch(key, (sl) => {

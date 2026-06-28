@@ -120,6 +120,8 @@ async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<voi
   const { session, wt, parentKey, parentRoot, text } = spawn
   try {
     closeSession(session) // finalize + persist the record (removed below if we auto-apply)
+    // The agent's closing message → a chat notification the user can reply to.
+    const summary = [...session.record.transcript].reverse().find((t) => t.role === 'assistant')?.text
     const { committed, files } = await commitWorktree(wt, firstLine(text))
     let auto: { applied: boolean; edits: { file: string; before: string; after: string }[] } = {
       applied: false,
@@ -147,7 +149,9 @@ async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<voi
         type: 'spawn-finished',
         projectKey: parentKey,
         sessionId: id,
-        branch: null
+        branch: null,
+        ...(summary ? { summary } : {}),
+        files: auto.edits.map((e) => basename(e.file))
       } satisfies AgentEvent)
     } else {
       // Fallback: keep the branch + record for the manual review modal.
@@ -161,7 +165,9 @@ async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<voi
         type: 'spawn-finished',
         projectKey: parentKey,
         sessionId: id,
-        branch: committed ? wt.branch : null
+        branch: committed ? wt.branch : null,
+        ...(summary ? { summary } : {}),
+        files: committed ? files.map((f) => basename(f)) : []
       } satisfies AgentEvent)
     }
   } catch {

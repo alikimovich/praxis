@@ -108,15 +108,29 @@ try {
   )
   assert(sess.auth === false, 'a spawn auth error must not raise the onboarding banner')
 
-  // spawn-finished → working row removed.
+  // spawn-finished → working row removed + a notification posted to the project's
+  // chat (auto-applied: branch null, carries the agent's summary + files).
   await app.evaluate(({ BrowserWindow }, ev) => {
     BrowserWindow.getAllWindows()[0].webContents.send('agent:event', ev)
-  }, { type: 'spawn-finished', projectKey: KEY, sessionId: 's1', branch: 'dsgn/comment-s1' })
+  }, {
+    type: 'spawn-finished',
+    projectKey: KEY,
+    sessionId: 's1',
+    branch: null,
+    summary: 'Removed the second nav block.',
+    files: ['Sidebar.svelte']
+  })
   await win
     .waitForFunction((key) => (window.__dsgnSpawns.getState().byKey[key]?.length ?? 0) === 0, KEY, {
       timeout: 4000
     })
     .catch(() => {})
+  const note = await win.evaluate((key) => {
+    const ms = window.__dsgnStore.getState().byKey[key]?.messages ?? []
+    return ms.map((m) => m.text).join('\n')
+  }, KEY)
+  assert(/Comment applied/i.test(note), `spawn-finished should post a chat notification: ${note}`)
+  assert(/Sidebar\.svelte/.test(note) && /Removed the second nav block/.test(note), 'note carries files + summary')
   const after = await win.evaluate((key) => window.__dsgnSpawns.getState().byKey[key]?.length ?? 0, KEY)
   assert(after === 0, 'spawn-finished should remove the working row')
 

@@ -151,9 +151,11 @@ export type AgentEvent = (
   /** A queued comment spawn (v8 F1 Phase 3) started running — flip its rail row from
    *  queued → running and attach its branch. */
   | { type: 'spawn-started'; branch: string }
-  /** A detached comment spawn (v8 F1) finished — drop its working rail row; if it
-   *  committed work, `branch` names the durable record (else null). */
-  | { type: 'spawn-finished'; branch: string | null }
+  /** A detached comment spawn (v8 F1) finished — drop its working rail row. `branch`
+   *  is null when it auto-applied onto the working tree, else the durable review
+   *  branch. `summary` (the agent's closing message) + `files` drive a notification
+   *  in the parent project's chat so the user can follow up on it. */
+  | { type: 'spawn-finished'; branch: string | null; summary?: string; files?: string[] }
 ) & {
   /** Which project's session emitted this — set by main so the renderer routes it
    * to the right chat (active project shows live; others accumulate in the rail). */
