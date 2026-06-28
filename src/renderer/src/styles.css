@@ -259,12 +259,91 @@ body {
   overflow-y: auto;
 }
 .rail__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
-  padding: 2px 8px 6px;
+  padding: 2px 4px 6px 8px;
+}
+/* Collapse / expand chevron — in the head when expanded, top of the strip when not. */
+.rail__toggle {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+.rail__toggle:hover {
+  background: var(--border);
+  color: var(--text);
+}
+/* Collapsed strip: just chevron + project chips + "+". */
+.rail--collapsed {
+  width: 44px;
+  align-items: center;
+  padding: 8px 4px;
+}
+.rail--collapsed .rail__list {
+  width: 100%;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+.rail__chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+.rail__chip:hover {
+  background: var(--border);
+}
+.rail__chip--active {
+  background: var(--border);
+  border-color: var(--text-muted);
+}
+.rail__initial {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+/* The "working" dot rides the chip's top-right corner when collapsed. */
+.rail__chip .rail__dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+}
+.rail__chip .rail__dot:not(.rail__dot--on) {
+  display: none;
+}
+.rail__add--mini {
+  margin-top: 6px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  text-align: center;
 }
 .rail__list {
   list-style: none;

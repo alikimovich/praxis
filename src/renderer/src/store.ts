@@ -209,13 +209,26 @@ export interface ProjectEntry {
 interface WorkspaceState {
   projects: ProjectEntry[]
   activeKey: string | null
+  /** Collapse the left projects rail to a thin strip (persisted across launches). */
+  collapsed: boolean
   /** Open a project (or re-activate it if already open). Returns its key. */
   openOrActivate: (root: string, meta?: { name?: string }) => string
   activate: (key: string) => void
   /** Update one project's snapshot fields. */
   patchEntry: (key: string, partial: Partial<ProjectEntry>) => void
   close: (key: string) => void
+  toggleCollapsed: () => void
   reset: () => void
+}
+
+// Remember the rail collapse preference across launches (renderer-only UI state).
+const RAIL_KEY = 'dsgn:rail-collapsed'
+const readCollapsed = (): boolean => {
+  try {
+    return localStorage.getItem(RAIL_KEY) === '1'
+  } catch {
+    return false
+  }
 }
 
 const basename = (p: string): string => p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() || p
@@ -228,6 +241,17 @@ const bumpTouched = (projects: ProjectEntry[], key: string): ProjectEntry[] =>
 export const useWorkspace = create<WorkspaceState>((set, get) => ({
   projects: [],
   activeKey: null,
+  collapsed: readCollapsed(),
+  toggleCollapsed: () =>
+    set((s) => {
+      const collapsed = !s.collapsed
+      try {
+        localStorage.setItem(RAIL_KEY, collapsed ? '1' : '0')
+      } catch {
+        /* private mode / no storage — keep it in memory only */
+      }
+      return { collapsed }
+    }),
   openOrActivate: (root, meta) => {
     const key = projectKey(root)
     const exists = get().projects.some((p) => p.key === key)

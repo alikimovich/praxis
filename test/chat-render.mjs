@@ -180,7 +180,17 @@ try {
   }
   if (ws.activeAfterClose !== ws.b) throw new Error('closing the active project should fall back to B')
 
-  console.log('CHAT-RENDER OK — markdown, toolbar, auth banner, branch pill, workspace store')
+  // Rail collapse: one project (B) is open, so the rail renders. The « toggle
+  // collapses it to the thin strip (chips), » expands it back.
+  await win.waitForSelector('.rail', { timeout: 5000 })
+  if (await win.$('.rail--collapsed')) throw new Error('rail should start expanded')
+  await win.click('.rail__toggle')
+  await win.waitForSelector('.rail--collapsed', { timeout: 5000 })
+  if (!(await win.$('.rail__chip'))) throw new Error('collapsed rail should show project chips')
+  await win.click('.rail__toggle')
+  await win.waitForFunction(() => !document.querySelector('.rail--collapsed'), { timeout: 5000 })
+
+  console.log('CHAT-RENDER OK — markdown, toolbar, auth banner, branch pill, workspace store, rail collapse')
 } catch (err) {
   console.error('CHAT-RENDER FAILED:', err?.message ?? err)
   process.exitCode = 1
