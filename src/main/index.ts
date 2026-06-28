@@ -1,4 +1,12 @@
-import { app, BrowserWindow, WebContentsView, ipcMain, dialog, shell } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  WebContentsView,
+  ipcMain,
+  dialog,
+  shell,
+  type WebContents
+} from 'electron'
 import { join } from 'path'
 import type { SelectedElement } from '../shared/api'
 import { registerDevServerIpc } from './devserver'
@@ -68,6 +76,26 @@ function isLocalPreviewUrl(url: string): boolean {
   }
 }
 
+/**
+ * Cmd/Ctrl+R must NOT reload the dsgn renderer: that wipes the chat + the open
+ * project (renderer-only zustand state) while the native preview WebContentsView
+ * survives, stranding the tool in a broken half-state ("no project open" but the
+ * preview still showing). Intercept it on whichever webContents has focus and
+ * reload the PREVIEW instead. `preventDefault()` in before-input-event also
+ * suppresses the menu's reload accelerator (per Electron docs), so this fully
+ * disables the keyboard reload — View → Reload (a menu click) stays as a dev
+ * escape hatch if the tool itself ever needs a hard reload.
+ */
+function interceptReloadKey(wc: WebContents): void {
+  wc.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return
+    if ((input.meta || input.control) && input.key.toLowerCase() === 'r') {
+      event.preventDefault()
+      previewView?.webContents.reload()
+    }
+  })
+}
+
 function ensurePreviewView(): WebContentsView {
   if (previewView) return previewView
   previewView = new WebContentsView({
@@ -84,6 +112,7 @@ function ensurePreviewView(): WebContentsView {
   mainWindow?.contentView.addChildView(previewView)
 
   const wc = previewView.webContents
+  interceptReloadKey(wc) // Cmd+R while the preview has focus → reload the preview, not the tool
 
   // The previewed app is untrusted-ish: keep it on its own local origin.
   wc.setWindowOpenHandler(({ url }) => {
@@ -134,6 +163,9 @@ function createWindow(): void {
       sandbox: true
     }
   })
+
+  // Cmd+R while the dsgn UI has focus → reload the preview, never the renderer.
+  interceptReloadKey(mainWindow.webContents)
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
 
