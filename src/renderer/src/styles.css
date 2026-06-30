@@ -939,13 +939,14 @@ body.is-resizing {
 .markdown code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.5px;
-  background: #f4f4f5;
+  background: var(--muted);
+  color: var(--text);
   padding: 1.5px 5px;
   border-radius: 5px;
 }
 
 .markdown pre {
-  background: #f8f8f8;
+  background: var(--muted);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px 14px;
@@ -1108,7 +1109,9 @@ body.is-resizing {
   border: none;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  /* --accent flips dark↔light with the theme; --bg is its opposite, so the arrow
+     always contrasts (was a hardcoded #fff that vanished on the light dark-mode accent). */
+  color: var(--bg);
   cursor: pointer;
   transition: opacity 0.15s ease, transform 0.05s ease;
 }
@@ -1118,7 +1121,7 @@ body.is-resizing {
 }
 
 .composer__send:disabled {
-  opacity: 0.25;
+  opacity: 0.4;
   cursor: default;
 }
 
@@ -1126,8 +1129,8 @@ body.is-resizing {
 .composer__spinner {
   width: 13px;
   height: 13px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
+  border: 2px solid color-mix(in srgb, var(--bg) 35%, transparent);
+  border-top-color: var(--bg);
   border-radius: 50%;
   animation: composer-spin 0.7s linear infinite;
 }
@@ -1142,7 +1145,7 @@ body.is-resizing {
   width: 8px;
   height: 8px;
   border-radius: 2px;
-  background: #fff;
+  background: var(--bg);
 }
 
 @keyframes composer-spin {
