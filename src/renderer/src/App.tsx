@@ -22,6 +22,7 @@ import {
   useSetup,
   useSpawns,
   useTokens,
+  useViewport,
   useWorkspace,
   type ProjectEntry
 } from './store'
@@ -64,6 +65,15 @@ export default function App(): React.JSX.Element {
   } | null>(null)
   // Web dev server vs iOS Simulator — drives which affordances show (e.g. Select).
   const [previewKind, setPreviewKind] = useState<PreviewKind>('web')
+  const viewport = useViewport((s) => s.viewport)
+  // Latest action handlers, for the global keydown + native-menu listeners (which
+  // subscribe once but must call the current closures).
+  const actionsRef = useRef<{
+    toggleSelect: () => void
+    stop: () => void
+    openProject: () => void
+    reload: () => void
+  }>({ toggleSelect: () => {}, stop: () => {}, openProject: () => {}, reload: () => {} })
 
   const { selectMode, setSelectMode, setSelected, setCommentMode } = useSelection()
   const commentMode = useSelection((s) => s.commentMode)
@@ -266,11 +276,31 @@ export default function App(): React.JSX.Element {
       } else if (e.key === 'Escape' && cur) {
         e.preventDefault()
         arm(null)
+      } else if ((e.key === 's' || e.key === 'S') && useSession.getState().projectRoot) {
+        // S toggles element-select (when a preview is open). The native menu's
+        // Cmd+Shift+S covers the case where the preview itself has focus.
+        e.preventDefault()
+        actionsRef.current.toggleSelect()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // Native "Actions" menu commands (main → renderer). Subscribed once; calls the
+  // latest handlers via actionsRef. Reload is handled in main (reloads the preview).
+  useEffect(
+    () =>
+      window.api.onMenuAction((action) => {
+        if (action === 'reload') actionsRef.current.reload()
+        else if (action === 'select') actionsRef.current.toggleSelect()
+        else if (action === 'stop') actionsRef.current.stop()
+        else if (action === 'open-project') actionsRef.current.openProject()
+        else if (action === 'viewport:desktop') useViewport.getState().setViewport('desktop')
+        else if (action === 'viewport:mobile') useViewport.getState().setViewport('mobile')
+      }),
+    []
+  )
 
   // v8 F3b: Cmd+Z / Cmd+Shift+Z (or Cmd+Y) undo/redo over ALL direct dsgn source
   // edits (props, text, token swaps). Skipped while typing in the composer or any
@@ -969,6 +999,14 @@ export default function App(): React.JSX.Element {
     setStatus({ kind: 'idle' })
   }
 
+  // Keep the keydown/menu listeners pointed at the current closures.
+  actionsRef.current = {
+    toggleSelect,
+    stop: () => void stop(),
+    openProject: () => void openProject(),
+    reload
+  }
+
   const hint =
     status.kind === 'idle'
       ? 'no project open'
@@ -1040,12 +1078,28 @@ export default function App(): React.JSX.Element {
                   </button>
                 </>
               )}
-              <button className="btn btn--ghost" onClick={reload}>
-                Reload
-              </button>
-              <button className="btn btn--ghost" onClick={stop}>
-                Stop
-              </button>
+              {/* Viewport switch (also in the Actions menu: Cmd+1 / Cmd+2). Reload
+                  + Stop moved to the native Actions menu (Cmd+R / Cmd+.). */}
+              {previewKind !== 'simulator' && (
+                <div className="viewport-toggle" role="group" aria-label="Preview viewport">
+                  <button
+                    className={`viewport-toggle__btn ${viewport === 'desktop' ? 'is-active' : ''}`}
+                    onClick={() => useViewport.getState().setViewport('desktop')}
+                    aria-pressed={viewport === 'desktop'}
+                    title="Desktop viewport (⌘1)"
+                  >
+                    Desktop
+                  </button>
+                  <button
+                    className={`viewport-toggle__btn ${viewport === 'mobile' ? 'is-active' : ''}`}
+                    onClick={() => useViewport.getState().setViewport('mobile')}
+                    aria-pressed={viewport === 'mobile'}
+                    title="Mobile viewport (⌘2)"
+                  >
+                    Mobile
+                  </button>
+                </div>
+              )}
             </>
           )}
           <button

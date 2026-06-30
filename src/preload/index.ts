@@ -31,6 +31,11 @@ import type {
 } from '../shared/api'
 
 const api: DsgnApi = {
+  onMenuAction: (cb: (action: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, action: string): void => cb(action)
+    ipcRenderer.on('menu:action', listener)
+    return () => ipcRenderer.removeListener('menu:action', listener)
+  },
   preview: {
     setBounds: (bounds: Bounds): void => ipcRenderer.send('preview:set-bounds', bounds),
     load: (url: string): Promise<void> => ipcRenderer.invoke('preview:load', url),

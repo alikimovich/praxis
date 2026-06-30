@@ -429,6 +429,9 @@ export interface TokenScaffoldResult {
 
 /** The surface exposed on `window.api` by the preload bridge. */
 export interface DsgnApi {
+  /** Subscribe to native-menu (Actions) commands: 'reload' | 'stop' | 'select' |
+   *  'open-project' | 'viewport:desktop' | 'viewport:mobile'. Returns an unsubscribe. */
+  onMenuAction: (cb: (action: string) => void) => () => void
   preview: {
     setBounds: (bounds: Bounds) => void
     load: (url: string) => Promise<void>

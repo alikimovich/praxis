@@ -171,6 +171,37 @@ body {
   font-weight: 500;
   color: var(--text-muted);
 }
+/* Segmented desktop/mobile viewport switch in the titlebar. */
+.viewport-toggle {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.viewport-toggle__btn {
+  border: none;
+  background: var(--bg);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.viewport-toggle__btn + .viewport-toggle__btn {
+  border-left: 1px solid var(--border);
+}
+.viewport-toggle__btn.is-active {
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-weight: 600;
+}
+/* Mobile viewport: the native phone-width view is centered; this backdrop frames it. */
+.preview-slot--mobile {
+  background:
+    repeating-linear-gradient(45deg, var(--bg-subtle), var(--bg-subtle) 10px, var(--bg) 10px, var(--bg) 20px);
+}
 
 /* Higher specificity (.btn.btn--active) so these win over the base `.btn`
    block declared later in source order — otherwise the active state is dead. */

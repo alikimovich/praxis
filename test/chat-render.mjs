@@ -249,8 +249,29 @@ try {
     { timeout: 5000 }
   )
 
+  // Native Actions menu is installed with the expected items.
+  const actions = await app.evaluate(({ Menu }) => {
+    const m = Menu.getApplicationMenu()
+    const a = m?.items.find((i) => i.label === 'Actions')
+    return a?.submenu?.items.map((i) => i.label || i.role || 'separator') ?? null
+  })
+  if (!actions) throw new Error('Actions menu not installed')
+  for (const label of ['Reload Preview', 'Select Element', 'Stop Project', 'Open Project…', 'Viewport']) {
+    if (!actions.some((l) => l === label)) throw new Error(`Actions menu missing "${label}": ${actions}`)
+  }
+
+  // A menu:action command from main flips the viewport store (the renderer dispatch).
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0].webContents.send('menu:action', 'viewport:mobile')
+  })
+  await win.waitForFunction(() => window.__dsgnViewport.getState().viewport === 'mobile', { timeout: 5000 })
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0].webContents.send('menu:action', 'viewport:desktop')
+  })
+  await win.waitForFunction(() => window.__dsgnViewport.getState().viewport === 'desktop', { timeout: 5000 })
+
   console.log(
-    'CHAT-RENDER OK — markdown, toolbar, auth banner, branch pill, workspace store, rail collapse, image paste, composer responsive'
+    'CHAT-RENDER OK — markdown, toolbar, auth banner, branch pill, workspace store, rail collapse, image paste, composer responsive, actions menu + viewport'
   )
 } catch (err) {
   console.error('CHAT-RENDER FAILED:', err?.message ?? err)

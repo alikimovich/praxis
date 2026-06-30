@@ -261,6 +261,18 @@ const applyTheme = (t: Theme): void => {
 }
 applyTheme(effectiveTheme()) // set the class before the first render
 
+/** Preview viewport: 'desktop' = fill the pane, 'mobile' = a centered phone width. */
+export type Viewport = 'desktop' | 'mobile'
+export const MOBILE_VIEWPORT_WIDTH = 390
+interface ViewportState {
+  viewport: Viewport
+  setViewport: (v: Viewport) => void
+}
+export const useViewport = create<ViewportState>((set) => ({
+  viewport: 'desktop',
+  setViewport: (viewport) => set({ viewport })
+}))
+
 interface ThemeState {
   theme: Theme
   toggle: () => void
@@ -756,3 +768,4 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
 ;(window as unknown as { __dsgnWorkspace?: typeof useWorkspace }).__dsgnWorkspace = useWorkspace
 ;(window as unknown as { __dsgnHistory?: typeof useHistory }).__dsgnHistory = useHistory
 ;(window as unknown as { __dsgnSpawns?: typeof useSpawns }).__dsgnSpawns = useSpawns
+;(window as unknown as { __dsgnViewport?: typeof useViewport }).__dsgnViewport = useViewport

@@ -6,7 +6,7 @@ import {
   ipcMain,
   dialog,
   shell,
-  type WebContents
+  type MenuItemConstructorOptions
 } from 'electron'
 import { join } from 'path'
 import type { SelectedElement } from '../shared/api'
@@ -87,14 +87,39 @@ function isLocalPreviewUrl(url: string): boolean {
  * disables the keyboard reload — View → Reload (a menu click) stays as a dev
  * escape hatch if the tool itself ever needs a hard reload.
  */
-function interceptReloadKey(wc: WebContents): void {
-  wc.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown') return
-    if ((input.meta || input.control) && input.key.toLowerCase() === 'r') {
-      event.preventDefault()
-      previewView?.webContents.reload()
-    }
-  })
+/**
+ * Native app menu. An "Actions" menu replaces the titlebar Reload/Stop buttons
+ * (and adds Select / Open Project / Viewport) with real accelerators. Because we
+ * set our OWN menu, the default View → Reload (which reloaded the renderer and
+ * stranded the tool) is gone; our Cmd+R reloads the PREVIEW instead. Renderer-side
+ * actions go over `menu:action`; reload is handled here directly.
+ */
+function buildAppMenu(): void {
+  const send = (action: string): void => mainWindow?.webContents.send('menu:action', action)
+  const template: MenuItemConstructorOptions[] = [
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
+    { role: 'editMenu' },
+    {
+      label: 'Actions',
+      submenu: [
+        { label: 'Reload Preview', accelerator: 'CmdOrCtrl+R', click: () => send('reload') },
+        { label: 'Select Element', accelerator: 'CmdOrCtrl+Shift+S', click: () => send('select') },
+        { label: 'Stop Project', accelerator: 'CmdOrCtrl+.', click: () => send('stop') },
+        { type: 'separator' },
+        { label: 'Open Project…', accelerator: 'CmdOrCtrl+N', click: () => send('open-project') },
+        { type: 'separator' },
+        {
+          label: 'Viewport',
+          submenu: [
+            { label: 'Desktop', accelerator: 'CmdOrCtrl+1', click: () => send('viewport:desktop') },
+            { label: 'Mobile', accelerator: 'CmdOrCtrl+2', click: () => send('viewport:mobile') }
+          ]
+        }
+      ]
+    },
+    { role: 'windowMenu' }
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
 function ensurePreviewView(): WebContentsView {
@@ -113,7 +138,6 @@ function ensurePreviewView(): WebContentsView {
   mainWindow?.contentView.addChildView(previewView)
 
   const wc = previewView.webContents
-  interceptReloadKey(wc) // Cmd+R while the preview has focus → reload the preview, not the tool
 
   // Chrome-style right-click → Inspect / Open Console on the PREVIEW's own
   // DevTools (so the user can inspect their web app's DOM + console). Only for a
@@ -175,9 +199,6 @@ function createWindow(): void {
       sandbox: true
     }
   })
-
-  // Cmd+R while the dsgn UI has focus → reload the preview, never the renderer.
-  interceptReloadKey(mainWindow.webContents)
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
 
@@ -314,6 +335,7 @@ function registerPreviewIpc(): void {
 
 app.whenReady().then(() => {
   createWindow()
+  buildAppMenu()
   registerPreviewIpc()
   registerDevServerIpc(() => mainWindow)
   registerSimulatorIpc(() => mainWindow)
