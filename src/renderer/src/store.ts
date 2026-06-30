@@ -235,13 +235,23 @@ interface WorkspaceState {
  */
 const THEME_KEY = 'dsgn:theme'
 type Theme = 'light' | 'dark'
-const readTheme = (): Theme => {
+const systemTheme = (): Theme => {
   try {
-    return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   } catch {
     return 'light'
   }
 }
+// An explicit user override (via the toggle), or null = follow the OS.
+const storedOverride = (): Theme | null => {
+  try {
+    const v = localStorage.getItem(THEME_KEY)
+    return v === 'dark' || v === 'light' ? v : null
+  } catch {
+    return null
+  }
+}
+const effectiveTheme = (): Theme => storedOverride() ?? systemTheme()
 const applyTheme = (t: Theme): void => {
   try {
     document.documentElement.classList.toggle('dark', t === 'dark')
@@ -249,25 +259,37 @@ const applyTheme = (t: Theme): void => {
     /* no DOM (tests) */
   }
 }
-applyTheme(readTheme()) // set the class before the first render
+applyTheme(effectiveTheme()) // set the class before the first render
 
 interface ThemeState {
   theme: Theme
   toggle: () => void
 }
 export const useTheme = create<ThemeState>((set, get) => ({
-  theme: readTheme(),
+  theme: effectiveTheme(),
   toggle: () => {
     const theme: Theme = get().theme === 'dark' ? 'light' : 'dark'
     applyTheme(theme)
     try {
-      localStorage.setItem(THEME_KEY, theme)
+      localStorage.setItem(THEME_KEY, theme) // an explicit override beats the OS
     } catch {
       /* private mode — in-memory only */
     }
     set({ theme })
   }
 }))
+
+// Follow the OS live while the user hasn't set an explicit override.
+try {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    if (storedOverride() !== null) return
+    const t: Theme = e.matches ? 'dark' : 'light'
+    applyTheme(t)
+    useTheme.setState({ theme: t })
+  })
+} catch {
+  /* no matchMedia (tests) */
+}
 
 // Remember the rail collapse preference across launches (renderer-only UI state).
 const RAIL_KEY = 'dsgn:rail-collapsed'

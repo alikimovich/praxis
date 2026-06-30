@@ -233,13 +233,21 @@ try {
   if (await win.$('select[aria-label="Thinking level"]'))
     throw new Error('the Thinking selector should be gone')
 
-  // Dark mode toggle (rail) flips the .dark class on <html> and back.
-  if (await win.evaluate(() => document.documentElement.classList.contains('dark')))
-    throw new Error('should start in light mode')
+  // Theme toggle (rail) flips the .dark class on <html> and back (default follows
+  // the OS, so don't assume a starting mode — just assert it toggles).
+  const startDark = await win.evaluate(() => document.documentElement.classList.contains('dark'))
   await win.click('button[aria-label="Toggle dark mode"]')
-  await win.waitForFunction(() => document.documentElement.classList.contains('dark'), { timeout: 5000 })
+  await win.waitForFunction(
+    (s) => document.documentElement.classList.contains('dark') !== s,
+    startDark,
+    { timeout: 5000 }
+  )
   await win.click('button[aria-label="Toggle dark mode"]')
-  await win.waitForFunction(() => !document.documentElement.classList.contains('dark'), { timeout: 5000 })
+  await win.waitForFunction(
+    (s) => document.documentElement.classList.contains('dark') === s,
+    startDark,
+    { timeout: 5000 }
+  )
 
   console.log(
     'CHAT-RENDER OK — markdown, toolbar, auth banner, branch pill, workspace store, rail collapse, image paste, composer responsive'
