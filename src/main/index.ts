@@ -144,9 +144,21 @@ function ensurePreviewView(): WebContentsView {
   // real web preview, not the placeholder or the simulator's streamed frame.
   wc.on('context-menu', (_e, params) => {
     if (!previewUrl || !/^https?:/.test(previewUrl)) return
+    // Always open DevTools DETACHED (its own window). The preview is a child
+    // WebContentsView, so a docked panel crams itself into the view's bounds —
+    // tiny and clipped, especially in the mobile (390px) viewport.
+    const openDetached = (): void => {
+      if (!wc.isDevToolsOpened()) wc.openDevTools({ mode: 'detach' })
+    }
     Menu.buildFromTemplate([
-      { label: 'Inspect element', click: () => wc.inspectElement(params.x, params.y) },
-      { label: 'Open DevTools console', click: () => wc.openDevTools({ mode: 'detach' }) }
+      {
+        label: 'Inspect element',
+        click: () => {
+          openDetached()
+          wc.inspectElement(params.x, params.y)
+        }
+      },
+      { label: 'Open DevTools console', click: openDetached }
     ]).popup()
   })
 
