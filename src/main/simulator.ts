@@ -1,11 +1,13 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
 import { spawn, execFile, type ChildProcess } from 'child_process'
 import { createServer, type Server, type ServerResponse } from 'http'
-import { readFile } from 'fs/promises'
+import { readFile, unlink } from 'fs/promises'
+import { tmpdir } from 'os'
 import { join } from 'path'
 import { promisify } from 'util'
 import { xcodeFailureReason, simBuildDestination, extractBuildError } from './xcode'
 import { findFreePort, stripAnsi } from './devserver-net'
+import { FRAME_DATA_URI, FRAME_INSET, FRAME_ASPECT } from './iphone-frame'
 import type { RunningSimulator, SimDevice, SimPreflight } from '../shared/api'
 
 /**
@@ -43,15 +45,57 @@ function pageHtml(interactive: boolean): string {
     <title>Simulator</title>
     <style>
       html, body { margin: 0; height: 100%; background: #fff; }
-      body { display: flex; align-items: center; justify-content: center; }
-      img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; -webkit-user-select: none; }
+      body { display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
+      /* The device box keeps the bezel's aspect ratio and fits the viewport. */
+      #device {
+        position: relative;
+        aspect-ratio: ${FRAME_ASPECT};
+        height: 100%;
+        max-width: 100%;
+        margin: 0 auto;
+        container-type: size; /* enables cqw for the screen corner radius */
+      }
+      /* The live mirror sits in the bezel's transparent screen cutout; the opaque
+         bezel (on top, pointer-events:none) masks the rounded screen corners.
+         The img is wrapped in a sized box — an absolutely-positioned <img> with
+         width:auto renders at intrinsic size (ignoring right/bottom), so the box
+         carries the cutout geometry and the img just fills it. */
+      #screen-box {
+        position: absolute;
+        left: ${FRAME_INSET.left}%;
+        top: ${FRAME_INSET.top}%;
+        right: ${FRAME_INSET.right}%;
+        bottom: ${FRAME_INSET.bottom}%;
+        overflow: hidden;
+        /* Round (circularly, via cqw) so the square corners tuck under the
+           bezel's rounded cutout instead of leaking a few px past it. */
+        border-radius: 9cqw;
+        background: #000;
+      }
+      #screen {
+        width: 100%; height: 100%;
+        object-fit: fill;
+        display: block;
+        -webkit-user-select: none;
+      }
+      #bezel {
+        position: absolute; inset: 0;
+        width: 100%; height: 100%;
+        pointer-events: none;
+        -webkit-user-select: none;
+      }
       #hint { position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%);
         font: 11px -apple-system, system-ui, sans-serif; color: #666; background: rgba(255,255,255,.85);
         border: 1px solid #eee; border-radius: 6px; padding: 3px 8px; pointer-events: none; }
     </style>
   </head>
   <body>
-    <img id="screen" src="/stream" alt="iOS Simulator" draggable="false" tabindex="0" />
+    <div id="device">
+      <div id="screen-box">
+        <img id="screen" src="/stream" alt="iOS Simulator" draggable="false" tabindex="0" />
+      </div>
+      <img id="bezel" src="${FRAME_DATA_URI}" alt="" draggable="false" />
+    </div>
     ${interactive ? '' : '<div id="hint">View-only — install <code>idb</code> for tap &amp; type</div>'}
     <script>
       var INTERACTIVE = ${interactive ? 'true' : 'false'};
@@ -61,15 +105,12 @@ function pageHtml(interactive: boolean): string {
         fetch('/control', { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(cmd) }).catch(function(){});
       }
-      // Pixel position on the displayed content → 0..1 fraction (handles the
-      // object-fit:contain letterbox), or null when the click is on the letterbox.
+      // Pixel position on the screen <img> → 0..1 fraction. The img box IS the
+      // device screen rect (positioned to the bezel cutout, object-fit:fill), so
+      // the mapping is a straight rect-relative ratio. Null when outside the box.
       function frac(clientX, clientY) {
         var r = img.getBoundingClientRect();
-        var natW = img.naturalWidth || r.width, natH = img.naturalHeight || r.height;
-        var scale = Math.min(r.width / natW, r.height / natH);
-        var cW = natW * scale, cH = natH * scale;
-        var ox = r.left + (r.width - cW) / 2, oy = r.top + (r.height - cH) / 2;
-        var x = (clientX - ox) / cW, y = (clientY - oy) / cH;
+        var x = (clientX - r.left) / r.width, y = (clientY - r.top) / r.height;
         if (x < 0 || x > 1 || y < 0 || y > 1) return null;
         return { x: x, y: y };
       }
@@ -125,13 +166,19 @@ interface FrameSource {
 
 /**
  * Poll the booted device with `simctl io … screenshot` at a modest fps. Each
- * capture is a short-lived `xcrun` process writing a JPEG to stdout; we skip
- * ticks while one is in flight so a slow capture can't pile up.
+ * capture is a short-lived `xcrun` process; we skip ticks while one is in flight
+ * so a slow capture can't pile up.
+ *
+ * NOTE: older simctl streamed a screenshot to stdout via the `-` argument, but
+ * Xcode 26 reinterprets `-` as a literal *filename* (writing a file named `-`
+ * and leaving stdout empty), which silently starved the bridge of frames. So we
+ * always capture to a per-device temp file and read it back.
  */
 function simctlFrameSource(udid: string, fps = 6): FrameSource {
   let timer: NodeJS.Timeout | null = null
   let stopped = false
   let inflight = false
+  const file = join(tmpdir(), `dsgn-sim-${udid}.jpg`)
   return {
     start(onFrame, onError) {
       const tick = (): void => {
@@ -139,13 +186,24 @@ function simctlFrameSource(udid: string, fps = 6): FrameSource {
         inflight = true
         execFile(
           'xcrun',
-          ['simctl', 'io', udid, 'screenshot', '--type=jpeg', '-'],
-          { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 },
-          (err, stdout) => {
-            inflight = false
-            if (stopped) return
-            if (err) onError(err instanceof Error ? err : new Error(String(err)))
-            else if (stdout && stdout.length) onFrame(stdout as Buffer)
+          ['simctl', 'io', udid, 'screenshot', '--type=jpeg', file],
+          { timeout: 10_000 },
+          (err) => {
+            if (err) {
+              inflight = false
+              if (!stopped) onError(err instanceof Error ? err : new Error(String(err)))
+              return
+            }
+            readFile(file)
+              .then((buf) => {
+                if (!stopped && buf.length) onFrame(buf)
+              })
+              .catch((e) => {
+                if (!stopped) onError(e instanceof Error ? e : new Error(String(e)))
+              })
+              .finally(() => {
+                inflight = false
+              })
           }
         )
       }
@@ -156,6 +214,7 @@ function simctlFrameSource(udid: string, fps = 6): FrameSource {
       stopped = true
       if (timer) clearInterval(timer)
       timer = null
+      void unlink(file).catch(() => {})
     }
   }
 }
@@ -173,6 +232,51 @@ function staticFrameSource(jpeg: Buffer): FrameSource {
       timer = null
     }
   }
+}
+
+// --- idb resolution ---------------------------------------------------------
+
+// idb (the Python client) and idb_companion install to locations that a
+// GUI-launched Electron may not have on PATH (Homebrew on Apple Silicon, a
+// miniforge env, ~/.local/bin). We resolve the `idb` binary across the usual
+// spots and run it with an augmented PATH so it can also spawn idb_companion.
+const HOME = process.env.HOME ?? ''
+const IDB_PATHS = [
+  '/opt/homebrew/bin',
+  '/opt/homebrew/Caskroom/miniforge/base/bin',
+  '/usr/local/bin',
+  HOME ? join(HOME, '.local/bin') : ''
+].filter(Boolean)
+
+function idbEnv(): NodeJS.ProcessEnv {
+  const path = [...IDB_PATHS, process.env.PATH ?? ''].filter(Boolean).join(':')
+  return { ...process.env, PATH: path }
+}
+
+let idbBin: string | null | undefined
+/** Locate a working `idb` binary (cached), or null if idb isn't installed. */
+async function resolveIdb(): Promise<string | null> {
+  if (idbBin !== undefined) return idbBin
+  const candidates = ['idb', ...IDB_PATHS.map((p) => join(p, 'idb'))]
+  for (const bin of candidates) {
+    try {
+      await execFileP(bin, ['--help'], { timeout: 4000, env: idbEnv() })
+      idbBin = bin
+      return bin
+    } catch {
+      /* try the next candidate */
+    }
+  }
+  idbBin = null
+  return null
+}
+
+/** Run an idb subcommand with the resolved binary + augmented PATH. */
+async function idbExec(args: string[], timeout = 10_000): Promise<string> {
+  const bin = await resolveIdb()
+  if (!bin) throw new Error('idb not found')
+  const { stdout } = await execFileP(bin, args, { timeout, env: idbEnv() })
+  return stdout.toString()
 }
 
 // --- input control (Phase 2: tap / scroll / type via idb) -------------------
@@ -203,10 +307,8 @@ export function fractionToPoints(
 
 /** Device point dimensions from `idb describe --json` (pixels ÷ density). */
 async function idbScreenPoints(udid: string): Promise<{ width: number; height: number }> {
-  const { stdout } = await execFileP('idb', ['describe', '--udid', udid, '--json'], {
-    timeout: 8000
-  })
-  const d = JSON.parse(stdout.toString()) as {
+  const stdout = await idbExec(['describe', '--udid', udid, '--json'], 8000)
+  const d = JSON.parse(stdout) as {
     screen_dimensions?: { width?: number; height?: number; density?: number }
   }
   const s = d.screen_dimensions ?? {}
@@ -218,8 +320,7 @@ async function idbScreenPoints(udid: string): Promise<{ width: number; height: n
 
 function idbController(udid: string): Controller {
   let dims: { width: number; height: number } | null = null
-  const idb = (args: string[]): Promise<unknown> =>
-    execFileP('idb', ['--udid', udid, ...args], { timeout: 10_000 })
+  const idb = (args: string[]): Promise<string> => idbExec(['--udid', udid, ...args])
   return {
     async send(cmd) {
       if (!dims) dims = await idbScreenPoints(udid)
@@ -307,12 +408,11 @@ export interface SimPick {
 async function idbHitTest(udid: string, fx: number, fy: number): Promise<SimPick | null> {
   const dims = await idbScreenPoints(udid)
   const p = fractionToPoints(fx, fy, dims)
-  const { stdout } = await execFileP(
-    'idb',
+  const stdout = await idbExec(
     ['ui', 'describe-point', '--udid', udid, '--json', String(p.x), String(p.y)],
-    { timeout: 8000 }
+    8000
   )
-  const node = JSON.parse(stdout.toString()) as Record<string, unknown>
+  const node = JSON.parse(stdout) as Record<string, unknown>
   const stamp = findDsgnStamp(node)
   const parsed = stamp ? parseTestId(stamp) : null
   if (!parsed) return null
@@ -528,12 +628,7 @@ export async function preflight(): Promise<SimPreflight> {
     return { ...base, reason: xcodeFailureReason(err) }
   }
   // idb is optional (enables Phase-2 tap/scroll); mirroring works without it.
-  try {
-    await execFileP('idb', ['--help'], { timeout: 4000 })
-    base.hasIdb = true
-  } catch {
-    base.hasIdb = false
-  }
+  base.hasIdb = (await resolveIdb()) != null
   const runtimeVersions: string[] = []
   try {
     const runtimes = (JSON.parse(await xcrun(['simctl', 'list', 'runtimes', '-j'])).runtimes ??
@@ -585,17 +680,21 @@ export async function preflight(): Promise<SimPreflight> {
 
 // --- boot + launch ----------------------------------------------------------
 
-async function bootedUdid(): Promise<string | null> {
+// The device dsgn boots + mirrors by default. Expo opens the app on whichever
+// simulator is booted, so we boot this one most-recently to bias toward it, then
+// follow the device the launch logs actually name (see start()).
+const PREFERRED_DEVICE = 'iPhone 16 Pro'
+
+async function bootedUdids(): Promise<Set<string>> {
+  const set = new Set<string>()
   try {
     const byRuntime = (JSON.parse(await xcrun(['simctl', 'list', 'devices', 'booted', '-j'])).devices ??
       {}) as Record<string, SimctlDevice[]>
-    for (const list of Object.values(byRuntime)) {
-      if (list.length) return list[0].udid
-    }
+    for (const list of Object.values(byRuntime)) for (const d of list) set.add(d.udid)
   } catch {
     /* ignore */
   }
-  return null
+  return set
 }
 
 async function pickDevice(preferred?: string): Promise<SimDevice> {
@@ -605,11 +704,15 @@ async function pickDevice(preferred?: string): Promise<SimDevice> {
     const exact = pf.devices.find((d) => d.udid === preferred)
     if (exact) return exact
   }
-  const booted = await bootedUdid()
-  if (booted) {
-    const found = pf.devices.find((d) => d.udid === booted)
-    if (found) return found
-  }
+  // Prefer iPhone 16 Pro on its newest available runtime.
+  const byName = pf.devices
+    .filter((d) => d.name === PREFERRED_DEVICE)
+    .sort((a, b) => a.runtime.localeCompare(b.runtime))
+  if (byName.length) return byName[byName.length - 1]
+  // Else fall back to a booted device, then the newest iPhone.
+  const booted = await bootedUdids()
+  const bootedDev = pf.devices.find((d) => booted.has(d.udid))
+  if (bootedDev) return bootedDev
   const iphones = pf.devices.filter((d) => /iPhone/i.test(d.name))
   const pool = iphones.length ? iphones : pf.devices
   // Highest runtime identifier ≈ newest iOS version.
@@ -758,21 +861,47 @@ async function start(
 
   const command = opts.command?.trim() || 'npx expo run:ios'
   onLog(`Launching app: ${command}`)
-  const { pid } = await spawnMetro({ root: opts.root, command, udid: device.udid }, onLog)
+
+  // Expo opens the app on whichever simulator is booted, which may not be the one
+  // we picked. Sniff the device the launch logs name so we mirror the device that
+  // actually runs the app (resolved to a booted udid after launch).
+  const known = (await preflight()).devices
+  let launchedName: string | null = null
+  const sniff = (line: string): void => {
+    if (launchedName) return
+    const m = line.match(/\bon (iPhone[\w .]+?)(?:\s*\(|$)/i)
+    if (m) launchedName = m[1].trim()
+  }
+  const onLaunchLog = (line: string): void => {
+    sniff(line)
+    onLog(line)
+  }
+  const { pid } = await spawnMetro({ root: opts.root, command, udid: device.udid }, onLaunchLog)
   const bundleId = await readBundleId(opts.root)
 
+  // Follow the launched device when Expo chose a different (booted) one.
+  let captureDevice = device
+  if (launchedName && launchedName !== device.name) {
+    const booted = await bootedUdids()
+    const hit = known.find((d) => d.name === launchedName && booted.has(d.udid))
+    if (hit) {
+      captureDevice = hit
+      onLog(`App launched on ${hit.name} — mirroring it instead of ${device.name}.`)
+    }
+  }
+  const udid = captureDevice.udid
+
   const port = await findFreePort(BRIDGE_PORT_BASE)
-  const source = simctlFrameSource(device.udid)
+  const source = simctlFrameSource(udid)
   // Phase 2/3: interaction (tap/scroll/type + element-select) iff idb is installed.
   let interaction: Interaction | null = null
-  try {
-    await execFileP('idb', ['--help'], { timeout: 4000 })
-    const controller = idbController(device.udid)
+  if ((await resolveIdb()) != null) {
+    const controller = idbController(udid)
     interaction = {
       send: (cmd) => controller.send(cmd),
       isSelectMode: () => simSelectMode,
       onSelectTap: (fx, fy) => {
-        void idbHitTest(device.udid, fx, fy)
+        void idbHitTest(udid, fx, fy)
           .then((pick) => {
             if (pick) getWin()?.webContents.send('simulator:element-picked', pick)
           })
@@ -780,11 +909,11 @@ async function start(
       }
     }
     onLog('idb detected — tap / scroll / type + element-select enabled.')
-  } catch {
+  } else {
     onLog('idb not found — preview is view-only (install idb to interact).')
   }
   const bridge = await startBridge(source, port, interaction)
-  current = { metroPid: pid, bridge, source, udid: device.udid }
+  current = { metroPid: pid, bridge, source, udid }
   try {
     await bridge.firstFrame // readiness: a real frame rendered
   } catch (err) {
@@ -793,7 +922,7 @@ async function start(
   }
   const url = `http://${HOST}:${port}/?dsgnSim=1`
   onLog(`Simulator preview ready at ${url}`)
-  return { url, pid, udid: device.udid, bundleId, previewKind: 'simulator' }
+  return { url, pid, udid, bundleId, previewKind: 'simulator' }
 }
 
 // What a test bridge received (for sim-control.mjs / sim-select.mjs assertions).

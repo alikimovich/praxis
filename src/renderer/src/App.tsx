@@ -1008,18 +1008,20 @@ export default function App(): React.JSX.Element {
         <div className="titlebar__actions">
           {status.kind === 'running' && (
             <>
-              {/* Element-select maps clicks → DOM source; not yet wired for the
-                  simulator's streamed frame (Phase 3). Hidden in sim mode. */}
+              {/* Element-select works for both web (DOM source) and the simulator
+                  (idb hit-test → RN testID → source); see toggleSelect. */}
+              <button
+                className={`btn ${selectMode ? 'btn--active' : 'btn--ghost'}`}
+                onClick={toggleSelect}
+                aria-pressed={selectMode}
+                title="Click an element in the preview to edit it"
+              >
+                {selectMode ? 'Selecting…' : 'Select'}
+              </button>
+              {/* Comment/Annotate use the web preview's injected overlay, which
+                  the simulator's streamed frame has no equivalent for yet. */}
               {previewKind !== 'simulator' && (
                 <>
-                  <button
-                    className={`btn ${selectMode ? 'btn--active' : 'btn--ghost'}`}
-                    onClick={toggleSelect}
-                    aria-pressed={selectMode}
-                    title="Click an element in the preview to edit it"
-                  >
-                    {selectMode ? 'Selecting…' : 'Select'}
-                  </button>
                   <button
                     className={`btn ${commentMode === 'comment' ? 'btn--active' : 'btn--ghost'}`}
                     onClick={() => armComment('comment')}
