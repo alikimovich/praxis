@@ -165,7 +165,7 @@ interface SessionState {
 
 export const useSession = create<SessionState>((set) => ({
   model: DEFAULT_MODEL,
-  effort: DEFAULT_EFFORT,
+  effort: 'high',
   provider: DEFAULT_PROVIDER,
   slashCommands: [],
   authNeeded: false,
@@ -227,6 +227,47 @@ interface WorkspaceState {
   toggleCollapsed: () => void
   reset: () => void
 }
+
+/**
+ * Light/dark theme (renderer-only UI state). Toggling adds/removes `.dark` on
+ * <html>, which flips every CSS token (shadcn + app-shell). Applied on module load
+ * so the class is set before first paint; persisted across launches.
+ */
+const THEME_KEY = 'dsgn:theme'
+type Theme = 'light' | 'dark'
+const readTheme = (): Theme => {
+  try {
+    return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'
+  } catch {
+    return 'light'
+  }
+}
+const applyTheme = (t: Theme): void => {
+  try {
+    document.documentElement.classList.toggle('dark', t === 'dark')
+  } catch {
+    /* no DOM (tests) */
+  }
+}
+applyTheme(readTheme()) // set the class before the first render
+
+interface ThemeState {
+  theme: Theme
+  toggle: () => void
+}
+export const useTheme = create<ThemeState>((set, get) => ({
+  theme: readTheme(),
+  toggle: () => {
+    const theme: Theme = get().theme === 'dark' ? 'light' : 'dark'
+    applyTheme(theme)
+    try {
+      localStorage.setItem(THEME_KEY, theme)
+    } catch {
+      /* private mode — in-memory only */
+    }
+    set({ theme })
+  }
+}))
 
 // Remember the rail collapse preference across launches (renderer-only UI state).
 const RAIL_KEY = 'dsgn:rail-collapsed'

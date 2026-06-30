@@ -1,5 +1,5 @@
 import type { SessionRecord } from '../../../shared/api'
-import { relativeTime, useChat, useHistory, useSpawns, useWorkspace } from '../store'
+import { relativeTime, useChat, useHistory, useSpawns, useTheme, useWorkspace } from '../store'
 
 interface Props {
   /** Switch to an already-open project. */
@@ -24,6 +24,18 @@ export default function Rail({ onSwitch, onClose, onOpen, onReview }: Props): Re
   const activeKey = useWorkspace((s) => s.activeKey)
   const collapsed = useWorkspace((s) => s.collapsed)
   const toggleCollapsed = useWorkspace((s) => s.toggleCollapsed)
+  const theme = useTheme((s) => s.theme)
+  const toggleTheme = useTheme((s) => s.toggle)
+  const themeBtn = (
+    <button
+      className="rail__toggle"
+      onClick={toggleTheme}
+      aria-label="Toggle dark mode"
+      title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
+    >
+      {theme === 'dark' ? '☀' : '☾'}
+    </button>
+  )
   // Re-render on any chat change so the per-project "working" dots stay live.
   const byKey = useChat((s) => s.byKey)
   // Past sessions per project (loaded by App on open/switch/close).
@@ -38,6 +50,7 @@ export default function Rail({ onSwitch, onClose, onOpen, onReview }: Props): Re
   if (collapsed) {
     return (
       <nav className="rail rail--collapsed" aria-label="Open projects">
+        {themeBtn}
         <button
           className="rail__toggle"
           onClick={toggleCollapsed}
@@ -84,14 +97,17 @@ export default function Rail({ onSwitch, onClose, onOpen, onReview }: Props): Re
     <nav className="rail" aria-label="Open projects">
       <div className="rail__head">
         <span>Projects</span>
-        <button
-          className="rail__toggle"
-          onClick={toggleCollapsed}
-          aria-label="Collapse projects sidebar"
-          title="Collapse sidebar"
-        >
-          «
-        </button>
+        <span className="rail__head-actions">
+          {themeBtn}
+          <button
+            className="rail__toggle"
+            onClick={toggleCollapsed}
+            aria-label="Collapse projects sidebar"
+            title="Collapse sidebar"
+          >
+            «
+          </button>
+        </span>
       </div>
       <ul className="rail__list">
         {projects.map((p) => {

@@ -42,13 +42,6 @@ const MODELS = [
   { value: 'haiku', label: 'Haiku' }
 ]
 
-const EFFORTS = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' }
-]
-
 const PERMISSION_MODES: { value: PermissionMode; label: string }[] = [
   { value: 'default', label: 'Ask' },
   { value: 'acceptEdits', label: 'Auto-accept edits' },
@@ -178,7 +171,7 @@ function setupPrompt(res: SetupResult): string | null {
 export default function ChatPanel(): React.JSX.Element {
   const { messages, isRunning, appendUser, startAssistant, appendDelta, appendStatus, finish } =
     useChat()
-  const { model, effort, provider, slashCommands, projectRoot, setModel, setEffort, setProvider } =
+  const { model, provider, slashCommands, projectRoot, setModel, setProvider } =
     useSession()
   const { selected, setSelected } = useSelection()
   const inspection = useSelection((s) => s.inspection)
@@ -832,18 +825,6 @@ export default function ChatPanel(): React.JSX.Element {
               {MODELS.map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label}
-                </option>
-              ))}
-            </select>
-            <select
-              className={selectCls}
-              value={effort}
-              onChange={(e) => setEffort(e.target.value)}
-              aria-label="Thinking level"
-            >
-              {EFFORTS.map((eo) => (
-                <option key={eo.value} value={eo.value}>
-                  {eo.label}
                 </option>
               ))}
             </select>

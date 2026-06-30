@@ -73,6 +73,41 @@
   --accent: #1a1a1a;
   --radius: 10px;
   --titlebar-h: 38px;
+  color-scheme: light;
+}
+
+/* Dark theme — toggled by adding `.dark` to <html> (useTheme). Overrides both the
+   shadcn tokens (consumed via @theme inline → bg-background/text-foreground/…) and
+   the app-shell --bg/--text/… vars, so every surface adapts from one switch. */
+.dark {
+  color-scheme: dark;
+  /* shadcn tokens */
+  --background: oklch(0.165 0 0);
+  --foreground: oklch(0.95 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.95 0 0);
+  --primary: oklch(0.92 0 0);
+  --primary-foreground: oklch(0.18 0 0);
+  --secondary: oklch(0.27 0 0);
+  --secondary-foreground: oklch(0.95 0 0);
+  --muted: oklch(0.27 0 0);
+  --muted-foreground: oklch(0.68 0 0);
+  --accent-shadcn: oklch(0.3 0 0);
+  --accent-foreground: oklch(0.97 0 0);
+  --destructive: oklch(0.62 0.21 27);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border-shadcn: oklch(0.3 0 0);
+  --input: oklch(0.32 0 0);
+  --ring: oklch(0.6 0 0);
+  /* app-shell tokens */
+  --bg: #111113;
+  --bg-subtle: #18181b;
+  --border: #2a2a2e;
+  --text: #ededed;
+  --text-muted: #8d8d94;
+  --accent: #ededed;
 }
 
 * {
@@ -270,6 +305,11 @@ body {
   color: var(--text-muted);
   padding: 2px 4px 6px 8px;
 }
+.rail__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
 /* Collapse / expand chevron — in the head when expanded, top of the strip when not. */
 .rail__toggle {
   flex: 0 0 auto;
@@ -395,6 +435,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13px;
 }
 .rail__close {
   flex: 0 0 auto;

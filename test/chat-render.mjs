@@ -184,10 +184,10 @@ try {
   // collapses it to the thin strip (chips), » expands it back.
   await win.waitForSelector('.rail', { timeout: 5000 })
   if (await win.$('.rail--collapsed')) throw new Error('rail should start expanded')
-  await win.click('.rail__toggle')
+  await win.click('button[aria-label="Collapse projects sidebar"]')
   await win.waitForSelector('.rail--collapsed', { timeout: 5000 })
   if (!(await win.$('.rail__chip'))) throw new Error('collapsed rail should show project chips')
-  await win.click('.rail__toggle')
+  await win.click('button[aria-label="Expand projects sidebar"]')
   await win.waitForFunction(() => !document.querySelector('.rail--collapsed'), { timeout: 5000 })
 
   // Paste an image into the composer → a thumbnail attachment chip appears.
@@ -228,6 +228,18 @@ try {
   })
   if (!sendVisible) throw new Error('send button must stay visible at a narrow chat width')
   await win.fill('.composer__input', '') // reset
+
+  // Thinking-level selector is removed (effort is pinned to high).
+  if (await win.$('select[aria-label="Thinking level"]'))
+    throw new Error('the Thinking selector should be gone')
+
+  // Dark mode toggle (rail) flips the .dark class on <html> and back.
+  if (await win.evaluate(() => document.documentElement.classList.contains('dark')))
+    throw new Error('should start in light mode')
+  await win.click('button[aria-label="Toggle dark mode"]')
+  await win.waitForFunction(() => document.documentElement.classList.contains('dark'), { timeout: 5000 })
+  await win.click('button[aria-label="Toggle dark mode"]')
+  await win.waitForFunction(() => !document.documentElement.classList.contains('dark'), { timeout: 5000 })
 
   console.log(
     'CHAT-RENDER OK — markdown, toolbar, auth banner, branch pill, workspace store, rail collapse, image paste, composer responsive'
