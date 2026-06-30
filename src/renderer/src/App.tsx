@@ -934,6 +934,16 @@ export default function App(): React.JSX.Element {
     setSelectMode(false)
     setSelected(null)
     const closing = useSession.getState().projectRoot
+    // If other projects are open, closing the active one should FOCUS another
+    // (not drop to the idle "no project" screen). closeProjectFromRail does the
+    // switch and only falls back to a full teardown when this is the last one.
+    if (closing) {
+      const key = projectKey(closing)
+      if (useWorkspace.getState().projects.some((p) => p.key !== key)) {
+        await closeProjectFromRail(key)
+        return
+      }
+    }
     if (closing) useWorkspace.getState().close(projectKey(closing))
     useSession.getState().setProjectRoot(null)
     useAnnotations.getState().setList([])
