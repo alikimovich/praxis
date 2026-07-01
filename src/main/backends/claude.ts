@@ -240,12 +240,43 @@ async function startSession(
         if (disposed || abort.signal.aborted || opts.signal.aborted) {
           return { behavior: 'deny', message: 'Session no longer active.' }
         }
-        // Auto mode (dsgn's default): approve every remaining tool — no approval
-        // prompts. The .dsgn/ sidecar is denied and AskUserQuestion is carded above,
-        // so this is "auto, but less risky than bypassPermissions": canUseTool still
-        // runs, keeping those two guards in force (bypassPermissions would skip it).
+        // In `auto` mode the SDK's classifier auto-approves routine tools without
+        // calling this hook; a call reaching here is one the classifier flagged as
+        // risky (the 'ask' path). Surface an approve/deny card so the user decides —
+        // this is the only prompt in auto mode, for genuinely dangerous ops.
         emit({ type: 'status', text: describeTool(toolName, toolInput) })
-        return { behavior: 'allow', updatedInput: toolInput }
+        const id = opts.toolUseID || `${key}:perm${++permCounter}`
+        const request: PermissionRequest = {
+          id,
+          toolName,
+          title: opts.title || `Allow ${toolName}?`,
+          ...(opts.displayName ? { displayName: opts.displayName } : {}),
+          ...(toolDetail(toolName, toolInput) ? { detail: toolDetail(toolName, toolInput)! } : {})
+        }
+        return await new Promise((resolve) => {
+          const cleanup = (): void => {
+            pending.delete(id)
+            opts.signal.removeEventListener('abort', onAbort)
+          }
+          const onAbort = (): void => {
+            cleanup()
+            emit({ type: 'permission-resolved', id })
+            resolve({ behavior: 'deny', message: 'Interrupted.' })
+          }
+          pending.set(id, {
+            toolName,
+            settle: (behavior) => {
+              cleanup()
+              resolve(
+                behavior === 'allow'
+                  ? { behavior: 'allow', updatedInput: toolInput }
+                  : { behavior: 'deny', message: 'Denied by the user in dsgn.' }
+              )
+            }
+          })
+          opts.signal.addEventListener('abort', onAbort, { once: true })
+          emit({ type: 'permission-request', request })
+        })
       }
     }
   })

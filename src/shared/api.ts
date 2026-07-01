@@ -118,13 +118,16 @@ export interface SimPreflight {
 }
 
 /**
- * The agent's permission posture, mirroring the SDK's `PermissionMode`. The
- * toolbar exposes the three that matter for this app:
- * - `default` — ask (the approve/deny cards) for tools the SDK gates.
+ * The agent's permission posture, mirroring the SDK's `PermissionMode`:
+ * - `auto` — **dsgn's default**: a model classifier approves/denies each tool
+ *   call; only the ones it flags as risky fall through to dsgn's canUseTool
+ *   (approve/deny card). No prompts for routine work, but genuinely dangerous
+ *   ops still surface.
+ * - `default` — ask (cards) for every tool the SDK gates.
  * - `acceptEdits` — auto-accept file edits, still ask for the rest (e.g. Bash).
- * - `bypassPermissions` — **Auto**: approve everything via the SDK, no prompts.
+ * - `bypassPermissions` — skip all checks (and dsgn's canUseTool guards); unused.
  */
-export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions'
+export type PermissionMode = 'auto' | 'default' | 'acceptEdits' | 'bypassPermissions'
 
 /** One selectable choice in an agent question (the SDK's AskUserQuestion tool). */
 export interface QuestionOption {

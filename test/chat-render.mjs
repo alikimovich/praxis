@@ -122,8 +122,8 @@ try {
   if (await win.$('select[aria-label="Permission mode"]'))
     throw new Error('permission-mode selector should be removed (Auto is the default)')
   const defaultMode = await win.evaluate(() => window.__dsgnPermissions.getState().mode)
-  if (defaultMode !== 'acceptEdits')
-    throw new Error(`default permission mode should be acceptEdits, got ${defaultMode}`)
+  if (defaultMode !== 'auto')
+    throw new Error(`default permission mode should be auto, got ${defaultMode}`)
 
   // v7 backend picker: native <select> spanning the implemented backends; selecting
   // a non-Claude one surfaces its subscription-login hint.

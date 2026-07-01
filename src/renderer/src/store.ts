@@ -512,10 +512,11 @@ interface PermissionState {
 }
 
 export const usePermissions = create<PermissionState>((set) => ({
-  // Auto (acceptEdits) by default — auto-accepts file edits but is LESS risky than
-  // bypassPermissions, which skips canUseTool entirely (disabling dsgn's .dsgn/
-  // sidecar guard + the AskUserQuestion card). The composer selector was removed.
-  mode: 'acceptEdits',
+  // Auto mode by default — the SDK's model classifier approves/denies each tool
+  // call; only the ones it flags as risky fall through to dsgn's canUseTool card.
+  // No prompts for routine work, dangerous ops still surface, and canUseTool still
+  // runs (so the .dsgn/ sidecar guard + AskUserQuestion card stay in force).
+  mode: 'auto',
   pending: [],
   setMode: (mode) => set({ mode }),
   addRequest: (request) =>
