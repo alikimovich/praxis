@@ -15,6 +15,7 @@
  */
 import { ipcRenderer } from 'electron'
 import type { SelectedElement } from '../shared/api'
+import { FRAME_DATA_URI, FRAME_INSET } from '../shared/iphone-frame'
 
 // Channels (preview ⇄ main). Kept local — main mirrors these strings.
 const SET_MODE = 'dsgn:preview:set-select-mode'
@@ -28,6 +29,7 @@ const TEXT_EDIT = 'dsgn:preview:text-edit'
 const SET_COMMENT_MODE = 'dsgn:preview:set-comment-mode' // renderer → preload
 const COMMENT_MODE = 'dsgn:preview:comment-mode' // preload → renderer (keyboard-initiated)
 const COMMENT = 'dsgn:preview:comment' // preload → renderer (submitted)
+const SET_FRAME = 'dsgn:preview:set-frame' // renderer → preload (mobile bezel overlay)
 
 type CommentMode = 'comment' | 'annotate' | null
 
@@ -566,6 +568,53 @@ function setActive(next: boolean): void {
   }
 }
 
+// ── Mobile bezel overlay ────────────────────────────────────────────────────
+// Draw the iPhone frame INSIDE the previewed page so its opaque inner edge masks
+// the app's screen corners, sitting visually *over* the content. It's a fixed,
+// pointer-events:none image, so every click and element-selection passes straight
+// through to the app beneath it. The viewport here equals the native view = the
+// frame's screen cutout, so we upscale the frame image and offset it by the
+// cutout insets to line the screen hole up with the viewport edges.
+let frameHost: HTMLDivElement | null = null
+
+function positionFrame(): void {
+  if (!frameHost) return
+  const img = frameHost.firstElementChild as HTMLImageElement | null
+  if (!img) return
+  const wv = window.innerWidth
+  const hv = window.innerHeight
+  const wf = wv / (1 - (FRAME_INSET.left + FRAME_INSET.right) / 100)
+  const hf = hv / (1 - (FRAME_INSET.top + FRAME_INSET.bottom) / 100)
+  img.style.width = `${wf}px`
+  img.style.height = `${hf}px`
+  img.style.left = `${-(wf * FRAME_INSET.left) / 100}px`
+  img.style.top = `${-(hf * FRAME_INSET.top) / 100}px`
+}
+
+function setFrame(on: boolean): void {
+  if (!on) {
+    frameHost?.remove()
+    frameHost = null
+    return
+  }
+  if (frameHost) {
+    positionFrame()
+    return
+  }
+  const host = document.createElement('div')
+  host.setAttribute('data-dsgn-frame', '')
+  host.style.cssText =
+    'position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:2147483646'
+  const img = document.createElement('img')
+  img.src = FRAME_DATA_URI
+  img.draggable = false
+  img.style.cssText = 'position:absolute;pointer-events:none;user-select:none'
+  host.appendChild(img)
+  document.documentElement.appendChild(host)
+  frameHost = host
+  positionFrame()
+}
+
 // Capture-phase so we see events before the page and can suppress the click.
 if (!IS_SIM_BRIDGE) {
   window.addEventListener('mousemove', onMove, true)
@@ -587,6 +636,7 @@ window.addEventListener('resize', () => {
     positionComposer()
   }
   if (pinDots.size) positionPins()
+  positionFrame()
 })
 // Pins track layout changes (hot-reload, async content) on a light cadence.
 const pinTimer = setInterval(() => pinDots.size && positionPins(), 600)
@@ -625,4 +675,5 @@ window.addEventListener('load', () => {
     annotationPins = Array.isArray(pins) ? pins : []
     buildPins()
   })
+  ipcRenderer.on(SET_FRAME, (_e, on: boolean) => setFrame(on))
 }

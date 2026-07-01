@@ -28,6 +28,9 @@ let previewRetries = 0
 // preload re-runs fresh on each load and must be re-armed).
 let selectModeActive = false
 let commentModeActive: 'comment' | 'annotate' | null = null
+// Mobile viewport: draw the iPhone bezel INSIDE the preview page (pointer-events
+// none) so it overlays the app's screen corners yet passes clicks/selection through.
+let frameModeActive = false
 
 // Channels mirrored in src/preview/preload.ts (the injected preview preload).
 const PREVIEW_SET_MODE = 'dsgn:preview:set-select-mode'
@@ -40,6 +43,7 @@ const PREVIEW_TEXT_EDIT = 'dsgn:preview:text-edit'
 const PREVIEW_SET_COMMENT_MODE = 'dsgn:preview:set-comment-mode'
 const PREVIEW_COMMENT_MODE = 'dsgn:preview:comment-mode'
 const PREVIEW_COMMENT = 'dsgn:preview:comment'
+const PREVIEW_SET_FRAME = 'dsgn:preview:set-frame'
 
 // Latest annotation pins, re-pushed to the preview after each navigation.
 let annotationPins: { id: string; selector: string }[] = []
@@ -223,6 +227,7 @@ function ensurePreviewView(): WebContentsView {
       previewRetries = 0
       if (selectModeActive) wc.send(PREVIEW_SET_MODE, true)
       if (commentModeActive) wc.send(PREVIEW_SET_COMMENT_MODE, commentModeActive)
+      if (frameModeActive) wc.send(PREVIEW_SET_FRAME, true)
       wc.send(PREVIEW_SET_PINS, annotationPins)
     }
   })
@@ -289,6 +294,12 @@ function registerPreviewIpc(): void {
   ipcMain.on('preview:set-panel-inset', (_e, inset: number) => {
     panelInset = Math.max(0, inset || 0)
     applyBounds()
+  })
+
+  // Mobile viewport toggles the in-page iPhone bezel overlay (click pass-through).
+  ipcMain.on('preview:set-frame', (_e, active: boolean) => {
+    frameModeActive = !!active
+    previewView?.webContents.send(PREVIEW_SET_FRAME, frameModeActive)
   })
 
   ipcMain.handle('preview:load', (_e, url: string) => {

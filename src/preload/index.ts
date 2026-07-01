@@ -58,6 +58,8 @@ const api: DsgnApi = {
       ipcRenderer.send('preview:set-annotations', pins),
     /** Reserve a right-edge strip (px) for the floating prop panel. */
     setPanelInset: (inset: number): void => ipcRenderer.send('preview:set-panel-inset', inset),
+    /** Toggle the in-page iPhone bezel overlay (mobile viewport). */
+    setFrame: (active: boolean): void => ipcRenderer.send('preview:set-frame', active),
     /** Fires after the previewed app loads, with whether it's source-stamped. */
     onReadiness: (cb: (info: { stamps: number }) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, info: { stamps: number }): void => cb(info)

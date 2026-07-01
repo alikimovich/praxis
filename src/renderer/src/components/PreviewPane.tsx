@@ -55,6 +55,9 @@ export default function PreviewPane(): React.JSX.Element {
     }
 
     report()
+    // Draw the iPhone bezel INSIDE the preview page (over the app, click-through)
+    // in mobile; the DOM <img> below only supplies the device body around it.
+    window.api.preview.setFrame(viewport === 'mobile')
     const ro = new ResizeObserver(report)
     ro.observe(el)
     window.addEventListener('resize', report)

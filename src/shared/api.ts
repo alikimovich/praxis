@@ -495,6 +495,8 @@ export interface DsgnApi {
     setAnnotations: (pins: { id: string; selector: string }[]) => void
     /** Reserve a right-edge strip (px) so the floating prop panel isn't covered. */
     setPanelInset: (inset: number) => void
+    /** Toggle the in-page iPhone bezel overlay (mobile viewport); passes clicks through. */
+    setFrame: (active: boolean) => void
     /** Fires after the previewed app loads, reporting source-stamp coverage. */
     onReadiness: (cb: (info: { stamps: number }) => void) => () => void
     /** Fires when the user commits an inline text edit in the preview. */
