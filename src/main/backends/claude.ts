@@ -277,6 +277,19 @@ async function startSession(
     }
   })
 
+  // Populate the "/" menu immediately: with a streaming input, the SDK's `init`
+  // system message (which carries slash_commands) only arrives after the FIRST
+  // user message — so a freshly-opened project's "/" menu would be empty until you
+  // chat once. supportedCommands() (captured at initialize) fetches them eagerly.
+  void q
+    .supportedCommands()
+    .then((cmds) => {
+      if (!disposed && cmds.length) emit({ type: 'commands', commands: cmds.map((c) => c.name) })
+    })
+    .catch(() => {
+      /* older SDK / not ready — the init message will still populate on first turn */
+    })
+
   // Drive the output stream for the life of the session.
   void (async () => {
     let streamedText = false
