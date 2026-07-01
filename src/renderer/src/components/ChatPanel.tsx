@@ -36,6 +36,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ArrowUp, ChevronRight } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import CatLoader from './CatLoader'
 
 const MODELS = [
   { value: DEFAULT_MODEL, label: 'Default' },
@@ -74,8 +75,8 @@ const PROVIDERS: { value: string; label: string; login: string | null; blurb: st
  * Elements Task/Reasoning pattern, built on the already-vendored shadcn Collapsible,
  * no new deps). A long tool run used to bury the answer under a flat status list;
  * now the steps collapse to a one-line summary (latest step + count) the user can
- * expand. Auto-opens while the turn is live (watch progress), auto-collapses when it
- * finishes; a manual toggle in between is respected.
+ * expand. Collapsed by default (the cat loader signals progress); a manual toggle
+ * is respected, and it re-collapses once the turn finishes.
  */
 function StepDisclosure({
   statuses,
@@ -84,13 +85,12 @@ function StepDisclosure({
   statuses: string[]
   active: boolean
 }): React.JSX.Element {
-  const [open, setOpen] = useState(active)
+  const [open, setOpen] = useState(false)
   const wasActive = useRef(active)
   useEffect(() => {
-    if (wasActive.current !== active) {
-      setOpen(active) // live → open; finished → collapse
-      wasActive.current = active
-    }
+    // Tidy up if the user expanded a live turn: collapse when it finishes.
+    if (wasActive.current && !active) setOpen(false)
+    wasActive.current = active
   }, [active])
   const last = statuses[statuses.length - 1] ?? ''
   return (
@@ -800,6 +800,8 @@ export default function ChatPanel(): React.JSX.Element {
             onPaste={onPaste}
           />
           <InputGroupAddon align="block-end" className="gap-1">
+            {/* Bottom-left cat: runs while a turn is live, idles waiting for input. */}
+            <CatLoader running={isRunning} />
             {/* The selectors shrink + wrap when the chat pane is narrow so the send
                 button (shrink-0, below) is never pushed off the edge. */}
             <div className="mr-auto flex min-w-0 flex-wrap items-center gap-1">
