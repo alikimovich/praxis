@@ -29,6 +29,7 @@ import {
 } from './store'
 import { projectKey } from '../../shared/projectKey'
 import { MousePointer2, MessageSquare, FileText } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import Rail from './components/Rail'
 import type {
   CommentMode,
@@ -1139,30 +1140,27 @@ export default function App(): React.JSX.Element {
                   </button>
                 </>
               )}
-              {/* Viewport switch (also in the Actions menu: ⌘1 / ⌘2). */}
+              {/* Viewport switch (shadcn Tabs; also Actions menu ⌘1 / ⌘2). */}
               {previewKind !== 'simulator' && (
-                <div className="viewport-toggle" role="group" aria-label="Preview viewport">
-                  <button
-                    className={`viewport-toggle__btn ${viewport === 'desktop' ? 'is-active' : ''}`}
-                    onClick={() => useViewport.getState().setViewport('desktop')}
-                    aria-pressed={viewport === 'desktop'}
-                    title="Desktop viewport (⌘1)"
-                  >
-                    Desktop
-                  </button>
-                  <button
-                    className={`viewport-toggle__btn ${viewport === 'mobile' ? 'is-active' : ''}`}
-                    onClick={() => useViewport.getState().setViewport('mobile')}
-                    aria-pressed={viewport === 'mobile'}
-                    title="Mobile viewport (⌘2)"
-                  >
-                    Mobile
-                  </button>
-                </div>
+                <Tabs
+                  value={viewport}
+                  onValueChange={(v) =>
+                    useViewport.getState().setViewport(v as 'desktop' | 'mobile')
+                  }
+                >
+                  <TabsList>
+                    <TabsTrigger value="desktop" title="Desktop viewport (⌘1)">
+                      Desktop
+                    </TabsTrigger>
+                    <TabsTrigger value="mobile" title="Mobile viewport (⌘2)">
+                      Mobile
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
               )}
               {/* Publish: commit → push → PR → merge to main → fresh dsgn/* branch. */}
               <button
-                className="btn btn--open"
+                className="btn btn--primary"
                 onClick={() => void publish()}
                 disabled={publishing}
                 title="Commit & push everything, open a PR, merge to main, and start a fresh branch"

@@ -23,7 +23,7 @@ try {
     cwd: root
   })
   const win = await app.firstWindow()
-  await win.waitForSelector('.btn', { timeout: 15000 })
+  await win.waitForSelector('.composer__input', { timeout: 15000 })
 
   // GET a URL from the MAIN process (Node global fetch — no renderer CORS games).
   const reachable = (url) =>

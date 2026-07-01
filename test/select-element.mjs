@@ -45,14 +45,14 @@ try {
   })
 
   const win = await app.firstWindow()
-  await win.waitForSelector('.btn', { timeout: 15000 })
+  await win.waitForSelector('.composer__input', { timeout: 15000 })
 
   // Make the native folder picker return our fixture.
   await app.evaluate(async ({ dialog }, fixturePath) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [fixturePath] })
   }, fixture)
 
-  await win.click('.btn--open')
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('menu:action', 'open-project'))
 
   // Wait until the project is running (titlebar shows the dev-server URL).
   await win.waitForFunction(
@@ -63,24 +63,18 @@ try {
     { timeout: 60000 }
   )
 
-  // Turn on Select mode (exact text, not the "Selecting…" active label).
-  await win.click('text="Select"')
-  await win.waitForFunction(
-    () => document.querySelector('[aria-pressed="true"]')?.textContent?.includes('Selecting'),
-    { timeout: 5000 }
-  )
+  // Turn on Select mode (the icon button; aria-pressed flips on).
+  await win.click('button[aria-label="Select"]')
+  await win.waitForSelector('button[aria-label="Select"][aria-pressed="true"]', { timeout: 5000 })
 
-  // The active toggle must actually render its blue affordance (guards against
-  // the modifier rule being shadowed by the base .btn rule via source order).
-  // Either active shade counts — #2563eb base or #1d4ed8 hover (cursor may rest
-  // on the button after the click); the dead-CSS bug would give white/grey.
-  const ACTIVE_BLUES = ['rgb(37, 99, 235)', 'rgb(29, 78, 216)']
+  // The active toggle must render a filled affordance (guards against the
+  // .iconbtn.is-active rule being dead/shadowed) — not the transparent base.
   const activeBg = await win.evaluate(() => {
-    const btn = document.querySelector('[aria-pressed="true"]')
+    const btn = document.querySelector('button[aria-label="Select"][aria-pressed="true"]')
     return btn ? getComputedStyle(btn).backgroundColor : null
   })
-  if (!ACTIVE_BLUES.includes(activeBg)) {
-    throw new Error(`active Select button should render blue (#2563eb/#1d4ed8), got ${activeBg}`)
+  if (!activeBg || activeBg === 'rgba(0, 0, 0, 0)' || activeBg === 'transparent') {
+    throw new Error(`active Select button should render a filled background, got ${activeBg}`)
   }
 
   // Deliver a trusted click at the element's centre, retrying to absorb the

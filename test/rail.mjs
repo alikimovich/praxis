@@ -66,7 +66,7 @@ try {
     cwd: root
   })
   const win = await app.firstWindow()
-  await win.waitForSelector('.btn', { timeout: 15000 })
+  await win.waitForSelector('.composer__input', { timeout: 15000 })
 
   const stubDialog = (fixture) =>
     app.evaluate(async ({ dialog }, f) => {
@@ -84,7 +84,7 @@ try {
 
   // Open A.
   await stubDialog(fixtureA)
-  await win.click('.btn--open')
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('menu:action', 'open-project'))
   await waitRunning()
   await win.waitForSelector('.rail', { timeout: 5000 })
   let names = await win.evaluate(() =>

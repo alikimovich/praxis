@@ -7,7 +7,7 @@ import { join } from 'path'
 import { promisify } from 'util'
 import { xcodeFailureReason, simBuildDestination, extractBuildError } from './xcode'
 import { findFreePort, stripAnsi } from './devserver-net'
-import { FRAME_DATA_URI, FRAME_INSET, FRAME_ASPECT } from './iphone-frame'
+import { FRAME_DATA_URI, FRAME_INSET, FRAME_ASPECT } from '../shared/iphone-frame'
 import type { RunningSimulator, SimDevice, SimPreflight } from '../shared/api'
 
 /**

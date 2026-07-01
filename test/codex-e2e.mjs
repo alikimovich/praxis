@@ -40,7 +40,7 @@ try {
   })
 
   const win = await app.firstWindow()
-  await win.waitForSelector('.btn', { timeout: 15000 })
+  await win.waitForSelector('.composer__input', { timeout: 15000 })
 
   // Route this session to the Codex backend (default model/effort), then open the
   // fixture — `.btn--open` calls openProject with the session's provider.
@@ -49,7 +49,7 @@ try {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] })
   }, fixture)
 
-  await win.click('.btn--open')
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('menu:action', 'open-project'))
   await win.waitForFunction(
     () =>
       /http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(

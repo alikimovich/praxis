@@ -27,14 +27,14 @@ try {
   })
 
   const win = await app.firstWindow()
-  await win.waitForSelector('.btn', { timeout: 15000 })
+  await win.waitForSelector('.composer__input', { timeout: 15000 })
 
   // Make the native folder picker return our fixture (can't click an OS dialog).
   await app.evaluate(async ({ dialog }, fixturePath) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [fixturePath] })
   }, fixture)
 
-  await win.click('.btn--open')
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('menu:action', 'open-project'))
 
   // Wait until some webContents has navigated to the fixture's localhost URL.
   const deadline = Date.now() + 60000
@@ -79,7 +79,7 @@ try {
   }
 
   // Activity console captured the open sequence (detect → server → preview → agent).
-  await win.click('button:has-text("Logs")')
+  await win.evaluate(() => window.__dsgnLog.getState().setOpen(true))
   await win.waitForSelector('.console__line', { timeout: 5000 })
   const logText = await win.evaluate(() =>
     [...document.querySelectorAll('.console__text')].map((e) => e.textContent).join('\n')

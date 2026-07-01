@@ -270,6 +270,8 @@ export interface Bounds {
   y: number
   width: number
   height: number
+  /** Corner radius for the native view (mobile iPhone frame); 0/omitted = square. */
+  radius?: number
 }
 
 /**

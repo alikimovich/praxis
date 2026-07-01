@@ -36,7 +36,7 @@ try {
   })
 
   const win = await app.firstWindow()
-  await win.waitForSelector('.btn', { timeout: 15000 })
+  await win.waitForSelector('.composer__input', { timeout: 15000 })
 
   // Cheap/fast model for the test turn, and Auto (bypassPermissions) so the edit
   // tool isn't gated by an approve/deny card no one is here to click — this also
@@ -49,7 +49,7 @@ try {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] })
   }, fixture)
 
-  await win.click('.btn--open')
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('menu:action', 'open-project'))
   await win.waitForFunction(
     () =>
       /http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(

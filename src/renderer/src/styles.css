@@ -140,7 +140,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 14px 0 86px; /* leave room for the macOS traffic lights */
+  padding: 0 10px 0 86px; /* leave room for the macOS traffic lights */
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
   user-select: none;
@@ -158,6 +158,10 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Let the user select + copy the preview URL out of the titlebar. */
+  -webkit-app-region: no-drag;
+  user-select: text;
+  cursor: text;
 }
 
 .titlebar__actions {
@@ -167,9 +171,20 @@ body {
   -webkit-app-region: no-drag;
 }
 
-.btn--ghost {
+/* `.btn.` prefix: these modifiers are defined before the base `.btn`, so match
+   its specificity + win by being more specific rather than relying on order. */
+.btn.btn--ghost {
   font-weight: 500;
   color: var(--text-muted);
+}
+/* Primary action (Publish) — filled accent, contrasts in both themes. */
+.btn.btn--primary {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: transparent;
+}
+.btn.btn--primary:hover:not(:disabled) {
+  opacity: 0.9;
 }
 /* Icon-only titlebar buttons (Select / Comment / Annotate). Shortcuts: S / C / Y. */
 .iconbtn {
@@ -240,13 +255,17 @@ body {
 
 .btn {
   -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
   border-radius: 8px;
-  padding: 5px 12px;
+  padding: 0 12px;
   font-size: 12px;
   font-weight: 600;
+  line-height: 1;
   cursor: pointer;
 }
 
@@ -522,6 +541,7 @@ body {
   color: var(--text-muted);
   cursor: pointer;
   font: inherit;
+  font-size: 13px;
   text-align: left;
 }
 .rail__add:hover {
@@ -861,6 +881,14 @@ body.is-resizing {
 .preview-slot {
   width: 100%;
   height: 100%;
+  position: relative;
+}
+/* iPhone bezel in mobile viewport — sits behind the native preview view, whose
+   bounds fill the screen cutout, so the frame shows around the live page. */
+.preview-bezel {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
 }
 
 /* Chat */

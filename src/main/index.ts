@@ -230,22 +230,27 @@ function createWindow(): void {
 }
 
 function registerPreviewIpc(): void {
-  let lastBounds = { x: 0, y: 0, width: 0, height: 0 }
+  let lastBounds = { x: 0, y: 0, width: 0, height: 0, radius: 0 }
   // Apply the renderer's slot rect minus the right-edge panel inset, so the
   // floating prop panel sits in renderer DOM not covered by the native view.
   const applyBounds = (): void => {
-    ensurePreviewView().setBounds({
+    const view = ensurePreviewView()
+    view.setBounds({
       x: Math.round(lastBounds.x),
       y: Math.round(lastBounds.y),
       width: Math.max(0, Math.round(lastBounds.width - panelInset)),
       height: Math.round(lastBounds.height)
     })
+    // Round the native view's corners to fit the iPhone screen in mobile viewport.
+    view.setBorderRadius(Math.round(lastBounds.radius || 0))
   }
 
   // Renderer reports where the preview rectangle is, in CSS pixels (== DIP).
-  ipcMain.on('preview:set-bounds', (_e, bounds: { x: number; y: number; width: number; height: number }) => {
-    lastBounds = bounds
-    applyBounds()
+  ipcMain.on(
+    'preview:set-bounds',
+    (_e, bounds: { x: number; y: number; width: number; height: number; radius?: number }) => {
+      lastBounds = { ...bounds, radius: bounds.radius ?? 0 }
+      applyBounds()
   })
 
   // The floating prop panel reserves a strip on the preview's right edge.

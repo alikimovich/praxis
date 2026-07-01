@@ -35,12 +35,12 @@ try {
     cwd: root
   })
   const win = await app.firstWindow()
-  await win.waitForSelector('.btn', { timeout: 15000 })
+  await win.waitForSelector('.composer__input', { timeout: 15000 })
 
   await app.evaluate(async ({ dialog }, f) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] })
   }, fixture)
-  await win.click('.btn--open')
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('menu:action', 'open-project'))
   await win.waitForFunction(
     () =>
       /http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(
@@ -100,7 +100,7 @@ try {
   // set-comment-mode IPC round-trip and input-delivery lag under load. We re-issue
   // the arm via the API each iteration so a dropped arm self-heals.
   async function armAndOpen(buttonText, mode) {
-    await win.click(`text="${buttonText}"`)
+    await win.click(`button[aria-label="${buttonText}"]`)
     for (let i = 0; i < 60; i++) {
       // Re-ensure the preload is armed (idempotent) — guards against a missed IPC
       // or a preview reload disarming mid-test.
