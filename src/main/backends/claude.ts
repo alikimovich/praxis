@@ -1,8 +1,22 @@
 import type { BrowserWindow } from 'electron'
 import type { Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import type { AgentEvent, AgentOptions, ImageAttachment, PermissionRequest } from '../../shared/api'
+import type {
+  AgentEvent,
+  AgentOptions,
+  ImageAttachment,
+  PermissionRequest,
+  QuestionAnswers,
+  QuestionRequest,
+  QuestionSpec
+} from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
-import type { ModelProvider, PendingPrompt, ProviderSession, SpawnContext } from './types'
+import type {
+  ModelProvider,
+  PendingPrompt,
+  PendingQuestion,
+  ProviderSession,
+  SpawnContext
+} from './types'
 import { AUTO_ALLOW_TOOLS, describeTool, toolDetail, touchesSidecar } from './tools'
 import { createRecordCapture } from './record'
 import { dsgnRules } from '../rules'
@@ -70,6 +84,56 @@ function textDelta(msg: unknown): string | null {
 }
 
 /**
+ * Coerce the AskUserQuestion tool input into our `QuestionSpec[]`, tolerating the
+ * SDK's loosely-typed payload. Returns [] when nothing usable is present (the
+ * caller then lets the tool fall through rather than showing an empty card).
+ */
+function parseQuestions(input: unknown): QuestionSpec[] {
+  const raw = (input as { questions?: unknown })?.questions
+  if (!Array.isArray(raw)) return []
+  const out: QuestionSpec[] = []
+  for (const q of raw) {
+    const question = typeof (q as { question?: unknown })?.question === 'string' ? (q as { question: string }).question : ''
+    const options = Array.isArray((q as { options?: unknown })?.options)
+      ? (q as { options: unknown[] }).options
+          .map((o) => ({
+            label: typeof (o as { label?: unknown })?.label === 'string' ? (o as { label: string }).label : '',
+            ...(typeof (o as { description?: unknown })?.description === 'string'
+              ? { description: (o as { description: string }).description }
+              : {})
+          }))
+          .filter((o) => o.label)
+      : []
+    if (!question || options.length === 0) continue
+    out.push({
+      question,
+      header:
+        typeof (q as { header?: unknown })?.header === 'string' && (q as { header: string }).header
+          ? (q as { header: string }).header
+          : 'Question',
+      options,
+      multiSelect: (q as { multiSelect?: unknown })?.multiSelect === true
+    })
+  }
+  return out
+}
+
+/**
+ * Feed the user's picks back to the model as the AskUserQuestion tool result. We
+ * DENY the tool with the answer as its message: in headless SDK mode there is no
+ * built-in interactive prompt to run, so intercepting `canUseTool` and returning
+ * the answer here keeps the whole exchange under dsgn's control. The message is
+ * phrased as an answer so the model continues with the user's choice in hand.
+ */
+function formatAnswers(questions: QuestionSpec[], answers: QuestionAnswers): string {
+  const lines = questions.map((q) => {
+    const a = (answers[q.question] ?? '').trim()
+    return `- ${q.question}\n  → ${a || '(no answer)'}`
+  })
+  return `The user answered your question(s):\n${lines.join('\n')}`
+}
+
+/**
  * The incumbent backend: a persistent multi-turn Claude Agent SDK `query()` with
  * `cwd` = the opened repo, so the repo's CLAUDE.md + .claude/skills are discovered
  * (`settingSources`). Auth = the user's Claude subscription (`claude login` /
@@ -92,6 +156,7 @@ async function startSession(
   const input = new InputStream()
   const abort = new AbortController()
   const pending = new Map<string, PendingPrompt>()
+  const pendingQuestions = new Map<string, PendingQuestion>()
   // Per-session: disposed when replaced/closed; namespaces fallback permission ids.
   let disposed = false
   let permCounter = 0
@@ -123,6 +188,45 @@ async function startSession(
       ...(options.model ? { model: options.model } : {}),
       ...(options.effort ? { effort: options.effort as 'low' | 'medium' | 'high' } : {}),
       canUseTool: async (toolName, toolInput, opts) => {
+        // The agent asking the user a question isn't a permission decision — surface
+        // it as an interactive multiple-choice card and feed the answer back as the
+        // tool result. (Handled before the permission machinery so it never shows an
+        // approve/deny card.)
+        if (toolName === 'AskUserQuestion') {
+          const questions = parseQuestions(toolInput)
+          if (questions.length === 0) {
+            return { behavior: 'deny', message: 'The question had no answerable options.' }
+          }
+          if (disposed || abort.signal.aborted || opts.signal.aborted) {
+            return { behavior: 'deny', message: 'Session no longer active.' }
+          }
+          const id = opts.toolUseID || `${key}:q${++permCounter}`
+          const request: QuestionRequest = { id, questions }
+          return await new Promise((resolve) => {
+            const cleanup = (): void => {
+              pendingQuestions.delete(id)
+              opts.signal.removeEventListener('abort', onAbort)
+            }
+            const onAbort = (): void => {
+              cleanup()
+              emit({ type: 'question-resolved', id })
+              resolve({ behavior: 'deny', message: 'Interrupted.' })
+            }
+            pendingQuestions.set(id, {
+              settle: (answers) => {
+                cleanup()
+                resolve({
+                  behavior: 'deny',
+                  message: answers
+                    ? formatAnswers(questions, answers)
+                    : 'The user dismissed the question without answering.'
+                })
+              }
+            })
+            opts.signal.addEventListener('abort', onAbort, { once: true })
+            emit({ type: 'question-request', request })
+          })
+        }
         if (touchesSidecar(toolName, toolInput)) {
           return {
             behavior: 'deny',
@@ -230,6 +334,7 @@ async function startSession(
     options,
     send: (text, images) => input.push(text, images),
     pending,
+    pendingQuestions,
     emit,
     record: cap.record,
     finalize: cap.finalize,

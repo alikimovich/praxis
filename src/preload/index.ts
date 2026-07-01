@@ -16,6 +16,7 @@ import type {
   PreviewComment,
   PropEdit,
   PropEditResult,
+  QuestionAnswers,
   TokenEdit,
   PropInspection,
   PublishResult,
@@ -190,6 +191,8 @@ const api: DsgnApi = {
       ipcRenderer.invoke('agent:set-permission-mode', mode),
     respondPermission: (id: string, behavior: 'allow' | 'deny'): Promise<void> =>
       ipcRenderer.invoke('agent:respond-permission', id, behavior),
+    respondQuestion: (id: string, answers: QuestionAnswers | null): Promise<void> =>
+      ipcRenderer.invoke('agent:respond-question', id, answers),
     interrupt: (): Promise<void> => ipcRenderer.invoke('agent:interrupt'),
     tagSession: (root: string, tag: { branch?: string; prUrl?: string }): Promise<void> =>
       ipcRenderer.invoke('agent:tag-session', root, tag),

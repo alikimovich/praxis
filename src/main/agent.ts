@@ -1,6 +1,12 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
 import { basename, join } from 'node:path'
-import type { AgentEvent, AgentOptions, ImageAttachment, PermissionMode } from '../shared/api'
+import type {
+  AgentEvent,
+  AgentOptions,
+  ImageAttachment,
+  PermissionMode,
+  QuestionAnswers
+} from '../shared/api'
 import { projectKey } from '../shared/projectKey'
 import { pickProvider, type ProviderSession } from './backends'
 import { EDIT_TOOLS } from './backends/tools'
@@ -85,6 +91,8 @@ const firstLine = (t: string): string => (t.split('\n')[0] || 'dsgn comment edit
 function closeSession(s: ProviderSession): void {
   s.dispose()
   ;[...s.pending.keys()].forEach((id) => resolvePending(s, id, 'deny'))
+  // Release any unanswered questions so their SDK callbacks unblock (dismiss).
+  if (s.pendingQuestions) [...s.pendingQuestions.keys()].forEach((id) => resolveQuestion(s, id, null))
   s.shutdown()
   // Only persist sessions the user actually engaged (≥1 prompt) — skip opened-then
   // -closed empties. Best-effort: a disk hiccup must not break teardown.
@@ -258,6 +266,14 @@ function resolvePending(s: ProviderSession, id: string, behavior: 'allow' | 'den
   s.emit({ type: 'permission-resolved', id })
 }
 
+/** Settle a pending agent question and tell the renderer to drop its card. */
+function resolveQuestion(s: ProviderSession, id: string, answers: QuestionAnswers | null): void {
+  const q = s.pendingQuestions?.get(id)
+  if (!q) return
+  q.settle(answers)
+  s.emit({ type: 'question-resolved', id })
+}
+
 export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   getWindow_ = getWindow // share with finalizeSpawn (runs outside this closure)
   ipcMain.handle('agent:open-project', async (_e, root: string, options: AgentOptions = {}) => {
@@ -337,6 +353,16 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     const session = activeSession()
     if (session) resolvePending(session, id, behavior)
   })
+
+  // Answer a pending agent question (AskUserQuestion) — settles the awaiting
+  // canUseTool callback with the user's picks (or null = dismissed).
+  ipcMain.handle(
+    'agent:respond-question',
+    async (_e, id: string, answers: QuestionAnswers | null) => {
+      const session = activeSession()
+      if (session) resolveQuestion(session, id, answers)
+    }
+  )
 
   ipcMain.handle('agent:send', async (_e, text: string, images?: ImageAttachment[]) => {
     const session = activeSession()
@@ -483,6 +509,8 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     // Release any open prompts (interrupt may not abort their per-call signal),
     // so cards don't orphan and the backend callbacks unblock.
     ;[...session.pending.keys()].forEach((id) => resolvePending(session, id, 'deny'))
+    if (session.pendingQuestions)
+      [...session.pendingQuestions.keys()].forEach((id) => resolveQuestion(session, id, null))
     await session.interrupt?.()
   })
 
