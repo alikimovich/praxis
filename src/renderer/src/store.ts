@@ -7,6 +7,7 @@ import type {
   PermissionMode,
   PermissionRequest,
   PreviewKind,
+  QuestionRequest,
   PropInspection,
   SelectedElement,
   SessionRecord,
@@ -556,6 +557,29 @@ export const usePermissions = create<PermissionState>((set) => ({
   clearPending: () => set({ pending: [] })
 }))
 
+/**
+ * Pending agent questions (the AskUserQuestion tool) awaiting the user's picks.
+ * Distinct from permission cards: these are the agent *asking the user* (which
+ * approach, which option), not requesting a tool. The answer flows back to the
+ * agent as the tool result. Deduped by id; cleared on project switch.
+ */
+interface QuestionState {
+  pending: QuestionRequest[]
+  addRequest: (request: QuestionRequest) => void
+  removeRequest: (id: string) => void
+  clearPending: () => void
+}
+
+export const useQuestions = create<QuestionState>((set) => ({
+  pending: [],
+  addRequest: (request) =>
+    set((s) =>
+      s.pending.some((p) => p.id === request.id) ? s : { pending: [...s.pending, request] }
+    ),
+  removeRequest: (id) => set((s) => ({ pending: s.pending.filter((p) => p.id !== id) })),
+  clearPending: () => set({ pending: [] })
+}))
+
 // A picked element's fields come from the (only semi-trusted) previewed page.
 // Collapse to a single line (no control chars / newlines, so an injected value
 // can't masquerade as a new instruction paragraph) and cap by code point
@@ -750,6 +774,7 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
     __dsgnSession?: typeof useSession
     __dsgnSelection?: typeof useSelection
     __dsgnPermissions?: typeof usePermissions
+    __dsgnQuestions?: typeof useQuestions
     __dsgnAnnotations?: typeof useAnnotations
     __dsgnTokens?: typeof useTokens
     __dsgnSetup?: typeof useSetup
@@ -759,6 +784,7 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
 ;(window as unknown as { __dsgnSelection?: typeof useSelection }).__dsgnSelection = useSelection
 ;(window as unknown as { __dsgnPermissions?: typeof usePermissions }).__dsgnPermissions =
   usePermissions
+;(window as unknown as { __dsgnQuestions?: typeof useQuestions }).__dsgnQuestions = useQuestions
 ;(window as unknown as { __dsgnAnnotations?: typeof useAnnotations }).__dsgnAnnotations =
   useAnnotations
 ;(window as unknown as { __dsgnTokens?: typeof useTokens }).__dsgnTokens = useTokens

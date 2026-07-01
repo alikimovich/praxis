@@ -371,6 +371,12 @@ TokenOfferCard, Markdown). App-header branch pill + auth banner are separate chr
 
 ## Polish (anytime)
 
+- [x] **Agent question interface (AskUserQuestion).** ✅ 2026-07-01 — the agent can now
+      ask the user a multiple-choice question and get an answer back. `canUseTool` in
+      `backends/claude.ts` intercepts the SDK's `AskUserQuestion` tool → `question-request`
+      event → `QuestionCards` (header chip, options, Other…, Skip/Send) above the composer;
+      the picks flow back as the tool result. `useQuestions` store + `agent:respond-question`
+      IPC; released on interrupt/close. `test/questions.mjs`.
 - [x] First-run auth onboarding panel — auth-error detection (`isAuthError`) → amber
       guidance banner pointing at `claude setup-token`. (`08-auth-onboarding.png`.)
 - [x] **Permission approve/deny cards.** ✅ 2026-06-23 — `canUseTool` now surfaces an

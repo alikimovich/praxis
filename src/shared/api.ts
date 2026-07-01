@@ -126,6 +126,42 @@ export interface SimPreflight {
  */
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions'
 
+/** One selectable choice in an agent question (the SDK's AskUserQuestion tool). */
+export interface QuestionOption {
+  /** Short display text (1-5 words). */
+  label: string
+  /** Why this option / what it implies — shown under the label. */
+  description?: string
+}
+
+/** One question the agent posed to the user via the AskUserQuestion tool. */
+export interface QuestionSpec {
+  /** Very short chip label (≤12 chars), e.g. "Approach". */
+  header: string
+  /** The full question sentence. */
+  question: string
+  options: QuestionOption[]
+  /** Allow picking more than one option (else single-choice). */
+  multiSelect: boolean
+}
+
+/**
+ * A pending agent question surfaced to the user as an interactive multiple-choice
+ * card (distinct from a tool approve/deny). The user's picks flow back to the
+ * agent as the tool result. `id` correlates the answer to the awaiting SDK call.
+ */
+export interface QuestionRequest {
+  id: string
+  questions: QuestionSpec[]
+}
+
+/**
+ * The user's answer to a QuestionRequest: question text → chosen answer string
+ * (multi-select answers comma-joined; free text for "Other"). `null` (sent by the
+ * renderer) means the user dismissed the question without answering.
+ */
+export type QuestionAnswers = Record<string, string>
+
 /** A pending tool-permission prompt surfaced to the user as an approve/deny card. */
 export interface PermissionRequest {
   /** Correlates the renderer's decision back to the awaiting SDK callback. */
@@ -146,6 +182,10 @@ export type AgentEvent = (
   | { type: 'permission-request'; request: PermissionRequest }
   /** A pending request was resolved without the user (abort/session change) — dismiss its card. */
   | { type: 'permission-resolved'; id: string }
+  /** The agent asked the user a multiple-choice question (AskUserQuestion tool). */
+  | { type: 'question-request'; request: QuestionRequest }
+  /** A pending question was resolved (answered elsewhere / abort / session change) — dismiss its card. */
+  | { type: 'question-resolved'; id: string }
   | { type: 'done' }
   | { type: 'error'; message: string }
   /** A queued comment spawn (v8 F1 Phase 3) started running — flip its rail row from
@@ -563,6 +603,9 @@ export interface DsgnApi {
     setPermissionMode: (mode: PermissionMode) => Promise<void>
     /** Answer a pending approve/deny card. */
     respondPermission: (id: string, behavior: 'allow' | 'deny') => Promise<void>
+    /** Answer a pending agent question (AskUserQuestion). `answers` maps each
+     *  question's text to the chosen option label(s); `null` dismisses it. */
+    respondQuestion: (id: string, answers: QuestionAnswers | null) => Promise<void>
     interrupt: () => Promise<void>
     /** Tag the live session with branch / PR metadata for its history record. */
     tagSession: (root: string, tag: { branch?: string; prUrl?: string }) => Promise<void>

@@ -10,6 +10,7 @@ import {
   useComposer,
   useHistory,
   usePermissions,
+  useQuestions,
   useSelection,
   useSession,
   useSetup,
@@ -17,11 +18,12 @@ import {
   useTokens
 } from '../store'
 import { projectKey } from '../../../shared/projectKey'
-import type { PermissionMode, SetupResult, Token } from '../../../shared/api'
+import type { PermissionMode, QuestionAnswers, SetupResult, Token } from '../../../shared/api'
 import Inspector from './Inspector'
 import Markdown from './Markdown'
 import NotesPanel from './NotesPanel'
 import PermissionCards from './PermissionCards'
+import QuestionCards from './QuestionCards'
 import SetupCard from './SetupCard'
 import TokenOfferCard from './TokenOfferCard'
 import {
@@ -177,6 +179,8 @@ export default function ChatPanel(): React.JSX.Element {
   const inspection = useSelection((s) => s.inspection)
   const inspecting = useSelection((s) => s.inspecting)
   const { mode: permissionMode, pending, setMode, removeRequest } = usePermissions()
+  const questions = useQuestions((s) => s.pending)
+  const removeQuestion = useQuestions((s) => s.removeRequest)
   const { list: notes, focusedId, setList: setNotes } = useAnnotations()
   const tokenSet = useTokens((s) => s.set)
   const tokens = useTokens()
@@ -553,6 +557,11 @@ export default function ChatPanel(): React.JSX.Element {
     void window.api.agent.respondPermission(id, behavior)
   }
 
+  const respondQuestion = (id: string, answers: QuestionAnswers | null): void => {
+    removeQuestion(id)
+    void window.api.agent.respondQuestion(id, answers)
+  }
+
   const addNote = async (text: string): Promise<boolean> => {
     if (!projectRoot || !selected) return false
     try {
@@ -689,6 +698,7 @@ export default function ChatPanel(): React.JSX.Element {
       </Conversation>
 
       <div className="composer">
+        <QuestionCards requests={questions} onRespond={respondQuestion} />
         <PermissionCards requests={pending} onRespond={respondPermission} />
         {selected && (
           <Inspector

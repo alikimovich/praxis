@@ -4,6 +4,7 @@ import type {
   AgentOptions,
   ImageAttachment,
   PermissionMode,
+  QuestionAnswers,
   SessionRecord
 } from '../../shared/api'
 
@@ -24,6 +25,14 @@ import type {
 export interface PendingPrompt {
   toolName: string
   settle: (behavior: 'allow' | 'deny') => void
+}
+
+/**
+ * An in-flight agent question (the SDK's AskUserQuestion tool) awaiting the user's
+ * choice. `settle(null)` means the user dismissed it without answering.
+ */
+export interface PendingQuestion {
+  settle: (answers: QuestionAnswers | null) => void
 }
 
 /**
@@ -63,6 +72,9 @@ export interface ProviderSession {
   send: (text: string, images?: ImageAttachment[]) => void
   /** In-flight approve/deny prompts, keyed by request id (settled by agent.ts). */
   pending: Map<string, PendingPrompt>
+  /** In-flight agent questions (AskUserQuestion), keyed by request id. Only backends
+   *  that support the tool populate it; agent.ts settles it from the renderer's answer. */
+  pendingQuestions?: Map<string, PendingQuestion>
   /** Emit an event to the renderer (tagged projectKey; no-op once disposed). */
   emit: (event: AgentEvent) => void
   /** Growing history record for this session (v5-D), persisted by agent.ts on teardown. */

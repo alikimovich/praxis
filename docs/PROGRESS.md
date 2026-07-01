@@ -2,6 +2,40 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-01 — Chat: interface for agent questions (AskUserQuestion)
+
+The agent could edit and ask for tool permission, but it had no way to ask the
+*user* a clarifying question ("which layout?", "which sections?"). Wired the Claude
+Agent SDK's built-in **AskUserQuestion** tool through to an interactive
+multiple-choice card in the chat.
+
+- **New event contract** (`shared/api.ts`): `QuestionSpec`/`QuestionOption`/
+  `QuestionRequest` + `QuestionAnswers`; `AgentEvent` gains `question-request` and
+  `question-resolved` (mirroring the permission pair); `DsgnApi.agent.respondQuestion`.
+- **Backend interception** (`backends/claude.ts`): `canUseTool` catches
+  `AskUserQuestion` **before** the permission machinery (so it never shows an
+  approve/deny card), parses the loosely-typed input into `QuestionSpec[]`, emits
+  `question-request`, and awaits the user's picks in a per-session `pendingQuestions`
+  map (added to the `ProviderSession` seam, optional so non-Claude backends can skip
+  it). The answer is fed back as the tool result by **denying with the answer as the
+  message** — in headless SDK mode there's no built-in interactive prompt to run, so
+  intercepting here keeps the whole exchange under dsgn's control; the message is
+  phrased as an answer so the model continues with the choice in hand. Aborts/teardown
+  release open questions (dismiss) so the SDK callback always unblocks.
+- **IPC** (`agent.ts`): `agent:respond-question` settles the awaiting callback;
+  `interrupt` + `closeSession` release any unanswered questions.
+- **Renderer**: `useQuestions` store (pending queue, deduped by id, cleared on project
+  switch — like `usePermissions`); `QuestionCards.tsx` renders each question with a
+  header chip, the question, option buttons (label + description), an always-available
+  free-text **Other…**, and **Skip**/**Send**. Single single-select questions submit on
+  click; multi-select / multi-question requests collect picks then Send. App routes the
+  question events (alongside the permission events); ChatPanel renders the cards above
+  the composer.
+- **Test**: `test/questions.mjs` (store-driven, no creds) — single-select auto-submit,
+  multi-select + Send, Skip, and a `question-resolved` event clearing an open card. Added
+  to `verify`. Full credential-independent suite green (`10-question-card.png`). The live
+  canUseTool round-trip rides `agent-e2e` (gated on `claude login`).
+
 ## 2026-06-27 — v7: Codex backend made real (solo prep; live verify gated on `codex login`)
 
 Took `backends/codex.ts` from a speculative stub (shape-guessing against docs, non-literal

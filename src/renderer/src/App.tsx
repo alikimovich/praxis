@@ -17,6 +17,7 @@ import {
   useHistory,
   useLog,
   usePermissions,
+  useQuestions,
   useSelection,
   useSession,
   useSetup,
@@ -158,6 +159,10 @@ export default function App(): React.JSX.Element {
           usePermissions.getState().addRequest(event.request)
         } else if (event.type === 'permission-resolved') {
           usePermissions.getState().removeRequest(event.id)
+        } else if (event.type === 'question-request') {
+          useQuestions.getState().addRequest(event.request)
+        } else if (event.type === 'question-resolved') {
+          useQuestions.getState().removeRequest(event.id)
         }
       }),
     []
@@ -542,6 +547,7 @@ export default function App(): React.JSX.Element {
     setSelectMode(false)
     setSelected(null)
     usePermissions.getState().clearPending()
+    useQuestions.getState().clearPending()
     useSession.getState().setProjectRoot(null)
     useSession.getState().setBranch(null)
     useDiagnosis.getState().setCurrent(null)

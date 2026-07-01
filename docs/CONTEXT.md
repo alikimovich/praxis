@@ -96,6 +96,11 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
   cards, `setPermissionMode`). ESM SDK loaded via dynamic `import()`.
 - `src/renderer/src/components/PermissionCards.tsx` — approve/deny cards; `usePermissions`
   store holds the mode + pending queue.
+- `src/renderer/src/components/QuestionCards.tsx` — **agent-question cards** (the SDK's
+  AskUserQuestion tool): header chip + options (label/description) + free-text "Other…" +
+  Skip/Send. `useQuestions` store holds the pending queue. `claude.ts` `canUseTool`
+  intercepts `AskUserQuestion` → `question-request`/`question-resolved` events; the answer
+  is fed back as the tool result (deny-with-answer, since headless SDK has no built-in prompt).
 - `src/main/devserver.ts` — detect + spawn + URL parse + readiness + conflict errors.
   Detection also recognizes `expo`/`react-native` and tags `DetectedProject.previewKind`
   (`'web' | 'simulator'`), which routes the renderer to the dev-server vs simulator backend.
