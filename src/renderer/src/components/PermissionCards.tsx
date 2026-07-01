@@ -19,14 +19,16 @@ export default function PermissionCards({ requests, onRespond }: Props): React.J
       {requests.map((req) => (
         <div
           key={req.id}
-          className="perm flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5"
+          className="perm flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 dark:border-amber-900/50 dark:bg-amber-950/30"
           role="alertdialog"
           aria-label={req.title}
         >
           <div className="perm__body">
-            <div className="perm__title text-[13px] font-semibold text-amber-950">{req.title}</div>
+            <div className="perm__title text-[13px] font-semibold text-amber-950 dark:text-amber-100">
+              {req.title}
+            </div>
             {req.detail && (
-              <div className="perm__detail mt-0.5 truncate font-mono text-[11.5px] text-amber-700">
+              <div className="perm__detail mt-0.5 truncate font-mono text-[11.5px] text-amber-700 dark:text-amber-300/90">
                 {req.detail}
               </div>
             )}

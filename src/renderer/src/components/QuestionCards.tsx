@@ -74,15 +74,17 @@ function QuestionCard({
   }
 
   return (
-    <div className="question flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-50 p-2.5">
+    <div className="question flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-50 p-2.5 dark:border-blue-900/50 dark:bg-blue-950/30">
       {req.questions.map((q, qi) => {
         const chosen = sel[qi] ?? []
         return (
           <div key={qi} className="question__item flex flex-col gap-1.5" role="group" aria-label={q.header}>
-            <div className="question__header w-fit rounded bg-blue-100 px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-blue-800">
+            <div className="question__header w-fit rounded bg-blue-100 px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-blue-800 dark:bg-blue-900/50 dark:text-blue-200">
               {q.header}
             </div>
-            <div className="question__text text-[13px] font-medium text-blue-950">{q.question}</div>
+            <div className="question__text text-[13px] font-medium text-blue-950 dark:text-blue-100">
+              {q.question}
+            </div>
             <div className="question__options flex flex-col gap-1">
               {q.options.map((o) => {
                 const active = chosen.includes(o.label)
@@ -92,15 +94,15 @@ function QuestionCard({
                     type="button"
                     className={`question__option flex flex-col items-start rounded-md border px-2.5 py-1.5 text-left text-[12.5px] transition-colors ${
                       active
-                        ? 'border-blue-500 bg-blue-100 text-blue-950'
-                        : 'border-blue-200 bg-white text-blue-900 hover:border-blue-400 hover:bg-blue-100/60'
+                        ? 'border-blue-500 bg-blue-100 text-blue-950 dark:border-blue-500 dark:bg-blue-900/50 dark:text-blue-100'
+                        : 'border-blue-200 bg-white text-blue-900 hover:border-blue-400 hover:bg-blue-100/60 dark:border-blue-900/50 dark:bg-transparent dark:text-blue-200 dark:hover:border-blue-700 dark:hover:bg-blue-900/30'
                     } ${active ? 'is-selected' : ''}`}
                     aria-pressed={active}
                     onClick={() => choose(qi, q, o.label)}
                   >
                     <span className="question__option-label font-medium">{o.label}</span>
                     {o.description && (
-                      <span className="question__option-desc text-[11px] text-blue-700">
+                      <span className="question__option-desc text-[11px] text-blue-700 dark:text-blue-300/80">
                         {o.description}
                       </span>
                     )}
@@ -111,8 +113,8 @@ function QuestionCard({
                 type="button"
                 className={`question__option question__other-toggle flex items-start rounded-md border px-2.5 py-1.5 text-left text-[12.5px] transition-colors ${
                   chosen.includes(OTHER)
-                    ? 'border-blue-500 bg-blue-100 text-blue-950 is-selected'
-                    : 'border-dashed border-blue-300 bg-white text-blue-700 hover:bg-blue-100/60'
+                    ? 'border-blue-500 bg-blue-100 text-blue-950 is-selected dark:border-blue-500 dark:bg-blue-900/50 dark:text-blue-100'
+                    : 'border-dashed border-blue-300 bg-white text-blue-700 hover:bg-blue-100/60 dark:border-blue-800 dark:bg-transparent dark:text-blue-300 dark:hover:bg-blue-900/30'
                 }`}
                 aria-pressed={chosen.includes(OTHER)}
                 onClick={() => choose(qi, q, OTHER)}
@@ -122,7 +124,7 @@ function QuestionCard({
               {chosen.includes(OTHER) && (
                 <input
                   type="text"
-                  className="question__other w-full rounded-md border border-blue-300 bg-white px-2 py-1 text-[12.5px] text-blue-950 outline-none focus:border-blue-500"
+                  className="question__other w-full rounded-md border border-blue-300 bg-white px-2 py-1 text-[12.5px] text-blue-950 outline-none focus:border-blue-500 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100"
                   placeholder="Type your answer"
                   value={other[qi] ?? ''}
                   onChange={(e) => setOther((s) => ({ ...s, [qi]: e.target.value }))}
