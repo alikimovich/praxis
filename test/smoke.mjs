@@ -33,7 +33,9 @@ try {
   // The shell renders: brand, both panes, composer.
   const brand = (await win.textContent('.titlebar__brand'))?.trim()
   if (brand !== 'dsgn') throw new Error(`expected brand "dsgn", got "${brand}"`)
-  for (const sel of ['.pane--chat', '.pane--preview', '.composer__input', '.btn']) {
+  // Idle titlebar has no buttons now (Select/Publish show only when a project
+  // runs; Logs/Open moved to the Actions menu) — just assert the shell + composer.
+  for (const sel of ['.pane--chat', '.pane--preview', '.composer__input']) {
     await win.waitForSelector(sel, { timeout: 5000 })
   }
 

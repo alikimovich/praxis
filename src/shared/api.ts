@@ -412,6 +412,8 @@ export interface PublishResult {
   ok: boolean
   /** The created PR URL on success. */
   url?: string
+  /** The fresh dsgn/* branch created to continue on (publish.ship). */
+  branch?: string
   error?: string
 }
 
@@ -585,6 +587,9 @@ export interface DsgnApi {
   publish: {
     /** Create a branch + GitHub PR with the annotations; returns the PR URL. */
     toPr: (root: string, opts: { title: string }) => Promise<PublishResult>
+    /** Full ship: commit all → push → PR → squash-merge to the default branch →
+     *  pull it → delete the merged branch → start a fresh dsgn/* branch. */
+    ship: (root: string) => Promise<PublishResult>
   }
   setup: {
     /** Write the dev-only source-stamping plugin into the repo (deterministic). */

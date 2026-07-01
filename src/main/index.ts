@@ -104,6 +104,8 @@ function buildAppMenu(): void {
       submenu: [
         { label: 'Reload Preview', accelerator: 'CmdOrCtrl+R', click: () => send('reload') },
         { label: 'Select Element', accelerator: 'CmdOrCtrl+Shift+S', click: () => send('select') },
+        { label: 'Toggle Logs', accelerator: 'CmdOrCtrl+L', click: () => send('logs') },
+        { label: 'Publish', accelerator: 'CmdOrCtrl+Shift+P', click: () => send('publish') },
         { label: 'Stop Project', accelerator: 'CmdOrCtrl+.', click: () => send('stop') },
         { type: 'separator' },
         { label: 'Open Project…', accelerator: 'CmdOrCtrl+N', click: () => send('open-project') },

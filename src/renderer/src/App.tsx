@@ -28,6 +28,7 @@ import {
   type ProjectEntry
 } from './store'
 import { projectKey } from '../../shared/projectKey'
+import { MousePointer2, MessageSquare, FileText } from 'lucide-react'
 import Rail from './components/Rail'
 import type {
   CommentMode,
@@ -66,6 +67,7 @@ export default function App(): React.JSX.Element {
   } | null>(null)
   // Web dev server vs iOS Simulator — drives which affordances show (e.g. Select).
   const [previewKind, setPreviewKind] = useState<PreviewKind>('web')
+  const [publishing, setPublishing] = useState(false)
   const viewport = useViewport((s) => s.viewport)
   // Latest action handlers, for the global keydown + native-menu listeners (which
   // subscribe once but must call the current closures).
@@ -74,7 +76,14 @@ export default function App(): React.JSX.Element {
     stop: () => void
     openProject: () => void
     reload: () => void
-  }>({ toggleSelect: () => {}, stop: () => {}, openProject: () => {}, reload: () => {} })
+    publish: () => void
+  }>({
+    toggleSelect: () => {},
+    stop: () => {},
+    openProject: () => {},
+    reload: () => {},
+    publish: () => {}
+  })
 
   const { selectMode, setSelectMode, setSelected, setCommentMode } = useSelection()
   const commentMode = useSelection((s) => s.commentMode)
@@ -94,7 +103,6 @@ export default function App(): React.JSX.Element {
   const authNeeded = useSession((s) => s.authNeeded)
   const setAuthNeeded = useSession((s) => s.setAuthNeeded)
   const logOpen = useLog((s) => s.open)
-  const logCount = useLog((s) => s.lines.length)
 
   // Rename / switch the working branch (name is coerced to dsgn/<…> in main).
   const changeBranch = async (name: string): Promise<void> => {
@@ -307,6 +315,8 @@ export default function App(): React.JSX.Element {
         else if (action === 'select') actionsRef.current.toggleSelect()
         else if (action === 'stop') actionsRef.current.stop()
         else if (action === 'open-project') actionsRef.current.openProject()
+        else if (action === 'logs') useLog.getState().setOpen(!useLog.getState().open)
+        else if (action === 'publish') actionsRef.current.publish()
         else if (action === 'viewport:desktop') useViewport.getState().setViewport('desktop')
         else if (action === 'viewport:mobile') useViewport.getState().setViewport('mobile')
       }),
@@ -732,6 +742,36 @@ export default function App(): React.JSX.Element {
     void (useSession.getState().projectRoot ? openAnother() : openProject())
   }
 
+  // Publish: commit everything on the current dsgn/* branch, push, open a PR,
+  // squash-merge it to main, pull main, delete the merged branch, and start a
+  // fresh same-named branch to keep working on. Progress + result go to the log.
+  const publish = async (): Promise<void> => {
+    const root = useSession.getState().projectRoot
+    if (!root || publishing) return
+    setPublishing(true)
+    const log = useLog.getState()
+    log.append('Publishing — commit → push → PR → merge → new branch…', 'server')
+    try {
+      const res = await window.api.publish.ship(root)
+      if (res.ok) {
+        if (res.branch) {
+          useSession.getState().setBranch(res.branch)
+          useWorkspace.getState().patchEntry(projectKey(root), { branch: res.branch })
+          if (res.branch) void window.api.agent.tagSession(root, { branch: res.branch })
+        }
+        log.append(
+          `Published${res.url ? ` — ${res.url}` : ''}. Merged to main; now on ${res.branch}.`,
+          'success'
+        )
+      } else {
+        log.append(`Publish failed: ${res.error}`, 'error')
+        log.setOpen(true)
+      }
+    } finally {
+      setPublishing(false)
+    }
+  }
+
   // Make `target` the active project everywhere (preview, chat, agent, toolbar) —
   // no restart, the dev server + session are already warm.
   // Guard: a re-switch (the user clicking another rail item) changed the active
@@ -1024,7 +1064,8 @@ export default function App(): React.JSX.Element {
     toggleSelect,
     stop: () => void stop(),
     openProject: openProjectSmart,
-    reload
+    reload,
+    publish: () => void publish()
   }
 
   const hint =
@@ -1066,40 +1107,39 @@ export default function App(): React.JSX.Element {
         <div className="titlebar__actions">
           {status.kind === 'running' && (
             <>
-              {/* Element-select works for both web (DOM source) and the simulator
-                  (idb hit-test → RN testID → source); see toggleSelect. */}
+              {/* Icon buttons — shortcuts: S select, C comment, Y annotate. */}
               <button
-                className={`btn ${selectMode ? 'btn--active' : 'btn--ghost'}`}
+                className={`iconbtn ${selectMode ? 'is-active' : ''}`}
                 onClick={toggleSelect}
                 aria-pressed={selectMode}
-                title="Click an element in the preview to edit it"
+                title="Select an element to edit (S)"
+                aria-label="Select"
               >
-                {selectMode ? 'Selecting…' : 'Select'}
+                <MousePointer2 className="size-4" aria-hidden="true" />
               </button>
-              {/* Comment/Annotate use the web preview's injected overlay, which
-                  the simulator's streamed frame has no equivalent for yet. */}
               {previewKind !== 'simulator' && (
                 <>
                   <button
-                    className={`btn ${commentMode === 'comment' ? 'btn--active' : 'btn--ghost'}`}
+                    className={`iconbtn ${commentMode === 'comment' ? 'is-active' : ''}`}
                     onClick={() => armComment('comment')}
                     aria-pressed={commentMode === 'comment'}
                     title="Comment to the agent on an element (C)"
+                    aria-label="Comment"
                   >
-                    {commentMode === 'comment' ? 'Commenting…' : 'Comment'}
+                    <MessageSquare className="size-4" aria-hidden="true" />
                   </button>
                   <button
-                    className={`btn ${commentMode === 'annotate' ? 'btn--active' : 'btn--ghost'}`}
+                    className={`iconbtn ${commentMode === 'annotate' ? 'is-active' : ''}`}
                     onClick={() => armComment('annotate')}
                     aria-pressed={commentMode === 'annotate'}
                     title="Pin a note on an element, no agent (Y)"
+                    aria-label="Annotate"
                   >
-                    {commentMode === 'annotate' ? 'Annotating…' : 'Annotate'}
+                    <FileText className="size-4" aria-hidden="true" />
                   </button>
                 </>
               )}
-              {/* Viewport switch (also in the Actions menu: Cmd+1 / Cmd+2). Reload
-                  + Stop moved to the native Actions menu (Cmd+R / Cmd+.). */}
+              {/* Viewport switch (also in the Actions menu: ⌘1 / ⌘2). */}
               {previewKind !== 'simulator' && (
                 <div className="viewport-toggle" role="group" aria-label="Preview viewport">
                   <button
@@ -1120,23 +1160,17 @@ export default function App(): React.JSX.Element {
                   </button>
                 </div>
               )}
+              {/* Publish: commit → push → PR → merge to main → fresh dsgn/* branch. */}
+              <button
+                className="btn btn--open"
+                onClick={() => void publish()}
+                disabled={publishing}
+                title="Commit & push everything, open a PR, merge to main, and start a fresh branch"
+              >
+                {publishing ? 'Publishing…' : 'Publish'}
+              </button>
             </>
           )}
-          <button
-            className={`btn ${logOpen ? 'btn--active' : 'btn--ghost'}`}
-            onClick={() => useLog.getState().setOpen(!logOpen)}
-            aria-pressed={logOpen}
-            title="Show what dsgn is doing"
-          >
-            Logs{logCount ? ` (${logCount})` : ''}
-          </button>
-          <button
-            className="btn btn--open"
-            onClick={openProjectSmart}
-            disabled={status.kind === 'busy'}
-          >
-            {status.kind === 'running' ? 'Open another…' : 'Open project…'}
-          </button>
         </div>
       </header>
 

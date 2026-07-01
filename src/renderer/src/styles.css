@@ -171,6 +171,29 @@ body {
   font-weight: 500;
   color: var(--text-muted);
 }
+/* Icon-only titlebar buttons (Select / Comment / Annotate). Shortcuts: S / C / Y. */
+.iconbtn {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.iconbtn:hover {
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+.iconbtn.is-active {
+  background: var(--bg-subtle);
+  border-color: var(--border);
+  color: var(--text);
+}
 /* Segmented desktop/mobile viewport switch in the titlebar. */
 .viewport-toggle {
   -webkit-app-region: no-drag;

@@ -157,6 +157,90 @@ async function publishToPr(root: string, opts: { title: string }): Promise<Publi
   }
 }
 
+/**
+ * Full "Publish": commit every change on the current dsgn/* branch → push →
+ * create (or reuse) a PR → squash-merge it into the default branch (deleting the
+ * remote branch) → check out the default branch and pull → delete the merged
+ * local branch → start a fresh same-named dsgn/* branch off the updated base to
+ * keep working on. One-click ship-and-continue.
+ */
+async function shipToMain(root: string): Promise<PublishResult> {
+  let branch: string
+  try {
+    await git(root, ['rev-parse', '--is-inside-work-tree'])
+    branch = await git(root, ['rev-parse', '--abbrev-ref', 'HEAD'])
+  } catch {
+    return { ok: false, error: 'Not a git repository.' }
+  }
+  if (branch === 'HEAD') return { ok: false, error: 'Detached HEAD — check out a branch first.' }
+  // Default branch (main/master), from origin/HEAD; fall back to main.
+  let base = 'main'
+  try {
+    base = (await git(root, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'])).replace(
+      /^origin\//,
+      ''
+    ) || 'main'
+  } catch {
+    /* origin/HEAD not set — assume main */
+  }
+  if (branch === base) {
+    return { ok: false, error: `You're on ${base} — publish runs from a dsgn/* work branch.` }
+  }
+  try {
+    await git(root, ['remote', 'get-url', 'origin'])
+  } catch {
+    return { ok: false, error: 'No "origin" remote — add one, then publish.' }
+  }
+  try {
+    await execFileP('gh', ['--version'])
+  } catch {
+    return { ok: false, error: 'GitHub CLI (gh) not found — install it to publish.' }
+  }
+
+  const gh = (args: string[]): Promise<{ stdout: string }> =>
+    execFileP('gh', args, { cwd: root, maxBuffer: 10 * 1024 * 1024 })
+
+  try {
+    // 1. Commit all changes (gitignore-respected). Skip the commit if clean.
+    await git(root, ['add', '-A'])
+    const staged = await git(root, ['diff', '--cached', '--name-only'])
+    if (staged) await git(root, ['commit', '-m', `dsgn: publish ${branch}`])
+    const ahead = await git(root, ['rev-list', '--count', `${base}..${branch}`]).catch(() => '0')
+    if (!staged && ahead === '0') {
+      return { ok: false, error: `Nothing to publish — no changes since ${base}.` }
+    }
+    // 2. Push the branch.
+    await git(root, ['push', '-u', 'origin', branch])
+    // 3. Create the PR, or reuse an existing one for this branch.
+    let url = ''
+    try {
+      const { stdout } = await gh([
+        'pr', 'create', '--base', base, '--head', branch,
+        '--title', `dsgn: ${branch}`, '--body', 'Published from dsgn.'
+      ])
+      url = stdout.trim().split('\n').find((l) => /^https?:\/\//.test(l)) ?? ''
+    } catch (e) {
+      const existing = await gh(['pr', 'view', branch, '--json', 'url', '-q', '.url']).catch(
+        () => ({ stdout: '' })
+      )
+      url = existing.stdout.trim()
+      if (!url) throw e
+    }
+    // 4. Squash-merge into base + delete the remote branch.
+    await gh(['pr', 'merge', branch, '--squash', '--delete-branch'])
+    // 5. Update the local base branch.
+    await git(root, ['checkout', base])
+    await git(root, ['pull', '--ff-only', 'origin', base])
+    // 6. Delete the merged local branch, then 7. start a fresh one off the new base.
+    await git(root, ['branch', '-D', branch]).catch(() => {})
+    await git(root, ['checkout', '-b', branch])
+    return { ok: true, branch, ...(url ? { url } : {}) }
+  } catch (err) {
+    const msg = (err instanceof Error ? err.message : String(err)).split('\n').slice(0, 4).join('\n')
+    return { ok: false, error: msg }
+  }
+}
+
 export function registerAnnotationsIpc(): void {
   ipcMain.handle('annotations:list', (_e, root: string) => readAnnotations(root))
   ipcMain.handle('annotations:add', (_e, root: string, input: AnnotationInput) =>
@@ -168,4 +252,5 @@ export function registerAnnotationsIpc(): void {
   ipcMain.handle('publish:to-pr', (_e, root: string, opts: { title: string }) =>
     publishToPr(root, opts)
   )
+  ipcMain.handle('publish:ship', (_e, root: string) => shipToMain(root))
 }
