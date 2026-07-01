@@ -544,7 +544,9 @@ interface PermissionState {
 }
 
 export const usePermissions = create<PermissionState>((set) => ({
-  mode: 'default',
+  // dsgn runs in Auto (approve-all) by default — the composer selector was removed;
+  // the agent works without approval prompts.
+  mode: 'bypassPermissions',
   pending: [],
   setMode: (mode) => set({ mode }),
   addRequest: (request) =>

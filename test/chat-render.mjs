@@ -118,14 +118,12 @@ try {
   await win.click('.perm__allow')
   await win.waitForFunction(() => !document.querySelector('.perm'), { timeout: 5000 })
 
-  // The permission-mode selector exposes Auto (bypassPermissions) via the SDK.
-  const modes = await win.$$eval('select[aria-label="Permission mode"] option', (os) =>
-    os.map((o) => o.value)
-  )
-  const expected = ['default', 'acceptEdits', 'bypassPermissions']
-  if (JSON.stringify(modes) !== JSON.stringify(expected)) {
-    throw new Error(`unexpected permission modes: ${JSON.stringify(modes)}`)
-  }
+  // dsgn runs in Auto (approve-all) by default — no permission-mode selector.
+  if (await win.$('select[aria-label="Permission mode"]'))
+    throw new Error('permission-mode selector should be removed (Auto is the default)')
+  const defaultMode = await win.evaluate(() => window.__dsgnPermissions.getState().mode)
+  if (defaultMode !== 'bypassPermissions')
+    throw new Error(`default permission mode should be bypassPermissions, got ${defaultMode}`)
 
   // v7 backend picker: native <select> spanning the implemented backends; selecting
   // a non-Claude one surfaces its subscription-login hint.

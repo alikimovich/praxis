@@ -18,7 +18,7 @@ import {
   useTokens
 } from '../store'
 import { projectKey } from '../../../shared/projectKey'
-import type { PermissionMode, QuestionAnswers, SetupResult, Token } from '../../../shared/api'
+import type { QuestionAnswers, SetupResult, Token } from '../../../shared/api'
 import Inspector from './Inspector'
 import Markdown from './Markdown'
 import NotesPanel from './NotesPanel'
@@ -44,11 +44,6 @@ const MODELS = [
   { value: 'haiku', label: 'Haiku' }
 ]
 
-const PERMISSION_MODES: { value: PermissionMode; label: string }[] = [
-  { value: 'default', label: 'Ask' },
-  { value: 'acceptEdits', label: 'Auto-accept edits' },
-  { value: 'bypassPermissions', label: 'Auto: approve all' }
-]
 
 // Selectable backends (v7). Each authenticates with the user's own subscription
 // login — no API keys. Only backends that exist in main's pickProvider are listed
@@ -178,7 +173,7 @@ export default function ChatPanel(): React.JSX.Element {
   const { selected, setSelected } = useSelection()
   const inspection = useSelection((s) => s.inspection)
   const inspecting = useSelection((s) => s.inspecting)
-  const { mode: permissionMode, pending, setMode, removeRequest } = usePermissions()
+  const { pending, removeRequest } = usePermissions()
   const questions = useQuestions((s) => s.pending)
   const removeQuestion = useQuestions((s) => s.removeRequest)
   const { list: notes, focusedId, setList: setNotes } = useAnnotations()
@@ -531,12 +526,6 @@ export default function ChatPanel(): React.JSX.Element {
     if (value !== DEFAULT_MODEL) void window.api.agent.setModel(value)
   }
 
-  const onPermissionModeChange = (value: PermissionMode): void => {
-    const prev = usePermissions.getState().mode
-    setMode(value)
-    // Keep the toolbar honest: if the SDK refuses the change, revert the control.
-    window.api.agent.setPermissionMode(value).catch(() => setMode(prev))
-  }
 
   // Switching the backend means a different agent session entirely — the model
   // can't change live across providers. Reopen the active project's session on the
@@ -835,18 +824,6 @@ export default function ChatPanel(): React.JSX.Element {
               {MODELS.map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label}
-                </option>
-              ))}
-            </select>
-            <select
-              className={selectCls}
-              value={permissionMode}
-              onChange={(e) => onPermissionModeChange(e.target.value as PermissionMode)}
-              aria-label="Permission mode"
-            >
-              {PERMISSION_MODES.map((pm) => (
-                <option key={pm.value} value={pm.value}>
-                  {pm.label}
                 </option>
               ))}
             </select>
