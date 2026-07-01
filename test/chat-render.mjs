@@ -122,8 +122,8 @@ try {
   if (await win.$('select[aria-label="Permission mode"]'))
     throw new Error('permission-mode selector should be removed (Auto is the default)')
   const defaultMode = await win.evaluate(() => window.__dsgnPermissions.getState().mode)
-  if (defaultMode !== 'bypassPermissions')
-    throw new Error(`default permission mode should be bypassPermissions, got ${defaultMode}`)
+  if (defaultMode !== 'acceptEdits')
+    throw new Error(`default permission mode should be acceptEdits, got ${defaultMode}`)
 
   // v7 backend picker: native <select> spanning the implemented backends; selecting
   // a non-Claude one surfaces its subscription-login hint.
@@ -231,21 +231,9 @@ try {
   if (await win.$('select[aria-label="Thinking level"]'))
     throw new Error('the Thinking selector should be gone')
 
-  // Theme toggle (rail) flips the .dark class on <html> and back (default follows
-  // the OS, so don't assume a starting mode — just assert it toggles).
-  const startDark = await win.evaluate(() => document.documentElement.classList.contains('dark'))
-  await win.click('button[aria-label="Toggle dark mode"]')
-  await win.waitForFunction(
-    (s) => document.documentElement.classList.contains('dark') !== s,
-    startDark,
-    { timeout: 5000 }
-  )
-  await win.click('button[aria-label="Toggle dark mode"]')
-  await win.waitForFunction(
-    (s) => document.documentElement.classList.contains('dark') === s,
-    startDark,
-    { timeout: 5000 }
-  )
+  // Theme follows the OS — no in-app toggle in the rail.
+  if (await win.$('button[aria-label="Toggle dark mode"]'))
+    throw new Error('the theme toggle should be removed (theme matches the OS)')
 
   // Native Actions menu is installed with the expected items.
   const actions = await app.evaluate(({ Menu }) => {

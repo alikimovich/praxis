@@ -278,9 +278,15 @@ export default function App(): React.JSX.Element {
       } else if (e.key === 'y' || e.key === 'Y') {
         e.preventDefault()
         arm(cur === 'annotate' ? null : 'annotate')
-      } else if (e.key === 'Escape' && cur) {
-        e.preventDefault()
-        arm(null)
+      } else if (e.key === 'Escape') {
+        // Escape exits whichever mode is armed: comment/annotate, or select.
+        if (cur) {
+          e.preventDefault()
+          arm(null)
+        } else if (useSelection.getState().selectMode) {
+          e.preventDefault()
+          actionsRef.current.toggleSelect()
+        }
       } else if ((e.key === 's' || e.key === 'S') && useSession.getState().projectRoot) {
         // S toggles element-select (when a preview is open). The native menu's
         // Cmd+Shift+S covers the case where the preview itself has focus.
@@ -718,6 +724,14 @@ export default function App(): React.JSX.Element {
     if (root) await attempt(root, undefined, true)
   }
 
+  // Titlebar / Cmd+N: open a project. If one is already running, ADD it (keep the
+  // current warm) rather than replacing it — otherwise "Open another…" would tear
+  // the current project down, so you could never have more than one open (and the
+  // rail would flicker to empty during the swap).
+  const openProjectSmart = (): void => {
+    void (useSession.getState().projectRoot ? openAnother() : openProject())
+  }
+
   // Make `target` the active project everywhere (preview, chat, agent, toolbar) —
   // no restart, the dev server + session are already warm.
   // Guard: a re-switch (the user clicking another rail item) changed the active
@@ -1009,7 +1023,7 @@ export default function App(): React.JSX.Element {
   actionsRef.current = {
     toggleSelect,
     stop: () => void stop(),
-    openProject: () => void openProject(),
+    openProject: openProjectSmart,
     reload
   }
 
@@ -1118,7 +1132,7 @@ export default function App(): React.JSX.Element {
           </button>
           <button
             className="btn btn--open"
-            onClick={openProject}
+            onClick={openProjectSmart}
             disabled={status.kind === 'busy'}
           >
             {status.kind === 'running' ? 'Open another…' : 'Open project…'}

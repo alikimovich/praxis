@@ -230,11 +230,10 @@ interface WorkspaceState {
 }
 
 /**
- * Light/dark theme (renderer-only UI state). Toggling adds/removes `.dark` on
- * <html>, which flips every CSS token (shadcn + app-shell). Applied on module load
- * so the class is set before first paint; persisted across launches.
+ * Light/dark theme — the tool ALWAYS matches the OS color scheme (no in-app
+ * toggle). A `.dark` class on <html> flips every CSS token (shadcn + app-shell);
+ * it's set before first paint and updated live when the OS switches.
  */
-const THEME_KEY = 'dsgn:theme'
 type Theme = 'light' | 'dark'
 const systemTheme = (): Theme => {
   try {
@@ -243,16 +242,6 @@ const systemTheme = (): Theme => {
     return 'light'
   }
 }
-// An explicit user override (via the toggle), or null = follow the OS.
-const storedOverride = (): Theme | null => {
-  try {
-    const v = localStorage.getItem(THEME_KEY)
-    return v === 'dark' || v === 'light' ? v : null
-  } catch {
-    return null
-  }
-}
-const effectiveTheme = (): Theme => storedOverride() ?? systemTheme()
 const applyTheme = (t: Theme): void => {
   try {
     document.documentElement.classList.toggle('dark', t === 'dark')
@@ -260,7 +249,7 @@ const applyTheme = (t: Theme): void => {
     /* no DOM (tests) */
   }
 }
-applyTheme(effectiveTheme()) // set the class before the first render
+applyTheme(systemTheme()) // set the class before first paint — dsgn always matches the OS
 
 /** Preview viewport: 'desktop' = fill the pane, 'mobile' = a centered phone width. */
 export type Viewport = 'desktop' | 'mobile'
@@ -274,31 +263,10 @@ export const useViewport = create<ViewportState>((set) => ({
   setViewport: (viewport) => set({ viewport })
 }))
 
-interface ThemeState {
-  theme: Theme
-  toggle: () => void
-}
-export const useTheme = create<ThemeState>((set, get) => ({
-  theme: effectiveTheme(),
-  toggle: () => {
-    const theme: Theme = get().theme === 'dark' ? 'light' : 'dark'
-    applyTheme(theme)
-    try {
-      localStorage.setItem(THEME_KEY, theme) // an explicit override beats the OS
-    } catch {
-      /* private mode — in-memory only */
-    }
-    set({ theme })
-  }
-}))
-
-// Follow the OS live while the user hasn't set an explicit override.
+// Follow the OS live — no manual toggle; the tool's theme is always the Mac's.
 try {
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-    if (storedOverride() !== null) return
-    const t: Theme = e.matches ? 'dark' : 'light'
-    applyTheme(t)
-    useTheme.setState({ theme: t })
+    applyTheme(e.matches ? 'dark' : 'light')
   })
 } catch {
   /* no matchMedia (tests) */
@@ -544,9 +512,10 @@ interface PermissionState {
 }
 
 export const usePermissions = create<PermissionState>((set) => ({
-  // dsgn runs in Auto (approve-all) by default — the composer selector was removed;
-  // the agent works without approval prompts.
-  mode: 'bypassPermissions',
+  // Auto (acceptEdits) by default — auto-accepts file edits but is LESS risky than
+  // bypassPermissions, which skips canUseTool entirely (disabling dsgn's .dsgn/
+  // sidecar guard + the AskUserQuestion card). The composer selector was removed.
+  mode: 'acceptEdits',
   pending: [],
   setMode: (mode) => set({ mode }),
   addRequest: (request) =>
