@@ -1215,10 +1215,36 @@ body.is-resizing {
     }
 }
 
-/* Pixel-art cat loader in the composer's bottom-left corner. The sprite is a
-   solid-black SVG rendered as a mask over currentColor, so it adopts the theme's
-   muted foreground and stays crisp (nearest-neighbor) at any DPR. It idles until
-   a turn is live; CatLoader.tsx swaps the run frames while `running`. */
+/* Live status line above the composer — the agent's "Architecting…"-style
+   indicator. A pixel-art cat sits at the left, idling while it waits for input
+   and running (accent-tinted) beside the current step while a turn is live. */
+.chat__status {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+    padding: 2px 16px 0;
+}
+
+.chat__status-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--muted-foreground);
+    animation: chat-status-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes chat-status-pulse {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+}
+
+/* The sprite is a solid-black SVG drawn as a mask over currentColor, so it
+   adopts the theme's colors (and stays crisp) in both light and dark mode.
+   CatLoader.tsx swaps the two run frames while `running`. */
 .cat-loader {
     flex: 0 0 auto;
     display: inline-block;
@@ -1233,7 +1259,7 @@ body.is-resizing {
     -webkit-mask-size: contain;
     mask-size: contain;
     image-rendering: pixelated;
-    opacity: 0.55;
+    opacity: 0.5;
     transition: opacity 0.2s ease;
 }
 

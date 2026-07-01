@@ -686,6 +686,18 @@ export default function ChatPanel(): React.JSX.Element {
         <ConversationScrollButton aria-label="Scroll to bottom" />
       </Conversation>
 
+      {/* Live status line — a cat that runs (with the current step, like a
+          terminal "Architecting…" indicator) while a turn is in flight and
+          settles on the idle sprite while waiting for input. */}
+      <div className="chat__status" aria-live="polite">
+        <CatLoader running={isRunning} />
+        {isRunning && (
+          <span className="chat__status-text">
+            {messages[messages.length - 1]?.statuses.at(-1) ?? 'Working…'}
+          </span>
+        )}
+      </div>
+
       <div className="composer">
         <QuestionCards requests={questions} onRespond={respondQuestion} />
         <PermissionCards requests={pending} onRespond={respondPermission} />
@@ -800,8 +812,6 @@ export default function ChatPanel(): React.JSX.Element {
             onPaste={onPaste}
           />
           <InputGroupAddon align="block-end" className="gap-1">
-            {/* Bottom-left cat: runs while a turn is live, idles waiting for input. */}
-            <CatLoader running={isRunning} />
             {/* The selectors shrink + wrap when the chat pane is narrow so the send
                 button (shrink-0, below) is never pushed off the edge. */}
             <div className="mr-auto flex min-w-0 flex-wrap items-center gap-1">
