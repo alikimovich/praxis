@@ -17,7 +17,7 @@ import { registerPropsIpc } from './props'
 import { registerAnnotationsIpc } from './annotations'
 import { registerTokensIpc } from './tokens'
 import { registerSetupIpc } from './setup'
-import { ensureBranch, switchBranch } from './git'
+import { ensureBranch, switchBranch, listBranches, checkoutBranch } from './git'
 import { registerDiagnoseIpc } from './diagnose'
 
 let mainWindow: BrowserWindow | null = null
@@ -365,6 +365,8 @@ app.whenReady().then(() => {
   registerSetupIpc()
   ipcMain.handle('git:ensure', (_e, root: string) => ensureBranch(root))
   ipcMain.handle('git:set', (_e, root: string, name: string) => switchBranch(root, name))
+  ipcMain.handle('git:list', (_e, root: string) => listBranches(root))
+  ipcMain.handle('git:checkout', (_e, root: string, branch: string) => checkoutBranch(root, branch))
   registerDiagnoseIpc()
 
   app.on('activate', () => {

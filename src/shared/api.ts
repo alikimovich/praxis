@@ -527,6 +527,10 @@ export interface DsgnApi {
     ensure: (root: string) => Promise<BranchResult>
     /** Switch to / create a specific branch (name is coerced to `dsgn/<…>`). */
     set: (root: string, name: string) => Promise<BranchResult>
+    /** List local branches (current first) so the titlebar pill can switch. */
+    list: (root: string) => Promise<{ branches: string[]; current: string | null }>
+    /** Check out an existing branch by exact name (no dsgn/ coercion). */
+    checkout: (root: string, branch: string) => Promise<BranchResult>
   }
   diagnose: {
     /** Recall a cached fix for this error, else ask the AI; caches the result. Null without auth. */

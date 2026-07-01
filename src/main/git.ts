@@ -43,6 +43,47 @@ export async function isRepoRoot(root: string): Promise<boolean> {
   }
 }
 
+/** Check out an EXISTING branch by its exact name (no dsgn/ coercion) — for the
+ *  titlebar branch switcher. Carries uncommitted changes across like git does. */
+export async function checkoutBranch(root: string, branch: string): Promise<BranchResult> {
+  try {
+    await git(root, ['checkout', branch])
+    return { isRepo: true, branch, created: false }
+  } catch (e) {
+    return {
+      isRepo: true,
+      branch: (await getCurrentBranch(root)) ?? branch,
+      created: false,
+      error: msg(e)
+    }
+  }
+}
+
+/** Local branches (current first, then dsgn/* newest-active, then the rest). */
+export async function listBranches(
+  root: string
+): Promise<{ branches: string[]; current: string | null }> {
+  try {
+    const { stdout } = await git(root, [
+      'for-each-ref',
+      '--sort=-committerdate',
+      '--format=%(refname:short)',
+      'refs/heads'
+    ])
+    const all = stdout
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    const current = await getCurrentBranch(root)
+    // Current first, then dsgn/* (recent), then everything else.
+    const rank = (b: string): number => (b === current ? 0 : b.startsWith(DSGN_PREFIX) ? 1 : 2)
+    const branches = [...all].sort((a, b) => rank(a) - rank(b))
+    return { branches, current }
+  } catch {
+    return { branches: [], current: null }
+  }
+}
+
 export async function getCurrentBranch(root: string): Promise<string | null> {
   try {
     const { stdout } = await git(root, ['rev-parse', '--abbrev-ref', 'HEAD'])

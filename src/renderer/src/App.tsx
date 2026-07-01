@@ -30,6 +30,14 @@ import {
 import { projectKey } from '../../shared/projectKey'
 import { MousePointer2, MessageSquare, FileText } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator
+} from '@/components/ui/dropdown-menu'
+import { Check } from 'lucide-react'
 import Rail from './components/Rail'
 import type {
   CommentMode,
@@ -93,6 +101,7 @@ export default function App(): React.JSX.Element {
   const projectRoot = useSession((s) => s.projectRoot)
   const branch = useSession((s) => s.branch)
   const [editingBranch, setEditingBranch] = useState(false)
+  const [branches, setBranches] = useState<string[]>([])
   // v5-D: the past session open for review (rendered as a modal over the panes).
   const [reviewing, setReviewing] = useState<SessionRecord | null>(null)
   // The review modal is renderer DOM; the native preview WebContentsView paints
@@ -122,6 +131,27 @@ export default function App(): React.JSX.Element {
         .append(`Switched to branch ${res.branch}${res.created ? ' (created)' : ''}`, 'success')
     }
     if (res.error) useLog.getState().append(`Couldn't switch branch: ${res.error}`, 'error')
+  }
+
+  // Load the branch list for the pill's dropdown (on open).
+  const loadBranches = (): void => {
+    const root = useSession.getState().projectRoot
+    if (root) void window.api.git.list(root).then((r) => setBranches(r.branches))
+  }
+  // Check out an EXISTING branch by exact name (the dropdown) — no dsgn/ coercion.
+  const switchToBranch = async (b: string): Promise<void> => {
+    const root = useSession.getState().projectRoot
+    if (!root || b === branch) return
+    setSelected(null)
+    const res = await window.api.git.checkout(root, b)
+    if (res.error) {
+      useLog.getState().append(`Couldn't switch to ${b}: ${res.error}`, 'error')
+      return
+    }
+    useSession.getState().setBranch(res.branch)
+    useWorkspace.getState().patchEntry(projectKey(root), { branch: res.branch })
+    if (res.branch) void window.api.agent.tagSession(root, { branch: res.branch })
+    useLog.getState().append(`Switched to branch ${res.branch ?? b}`, 'success')
   }
 
   useEffect(
@@ -1097,13 +1127,25 @@ export default function App(): React.JSX.Element {
               }}
             />
           ) : (
-            <button
-              className="branch"
-              onClick={() => setEditingBranch(true)}
-              title="dsgn works on this branch — click to rename / switch"
-            >
-              ⎇ {branch}
-            </button>
+            <DropdownMenu onOpenChange={(open) => open && loadBranches()}>
+              <DropdownMenuTrigger asChild>
+                <button className="branch" title="Switch branch">
+                  ⎇ {branch}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
+                {branches.map((b) => (
+                  <DropdownMenuItem key={b} onSelect={() => void switchToBranch(b)}>
+                    <Check className={`size-3.5 ${b === branch ? 'opacity-100' : 'opacity-0'}`} />
+                    <span className="truncate">{b}</span>
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setEditingBranch(true)}>
+                  New branch…
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ))}
         <div className="titlebar__actions">
           {status.kind === 'running' && (

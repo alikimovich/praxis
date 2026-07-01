@@ -104,7 +104,11 @@ const api: DsgnApi = {
   git: {
     ensure: (root: string): Promise<BranchResult> => ipcRenderer.invoke('git:ensure', root),
     set: (root: string, name: string): Promise<BranchResult> =>
-      ipcRenderer.invoke('git:set', root, name)
+      ipcRenderer.invoke('git:set', root, name),
+    list: (root: string): Promise<{ branches: string[]; current: string | null }> =>
+      ipcRenderer.invoke('git:list', root),
+    checkout: (root: string, branch: string): Promise<BranchResult> =>
+      ipcRenderer.invoke('git:checkout', root, branch)
   },
   diagnose: {
     run: (root: string, error: string, context?: string): Promise<Diagnosis | null> =>

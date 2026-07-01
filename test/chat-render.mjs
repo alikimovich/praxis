@@ -140,12 +140,15 @@ try {
   await win.selectOption('select[aria-label="Backend"]', 'claude') // reset
   if ((await win.$('.provider-hint')) !== null) throw new Error('hint should hide for Claude')
 
-  // Working-branch pill: shows the branch and opens an inline editor on click.
+  // Working-branch pill: shows the branch and opens a switcher dropdown on click;
+  // "New branch…" reveals the inline rename editor.
   await win.evaluate(() => window.__dsgnSession.getState().setBranch('dsgn/main'))
   await win.waitForSelector('.branch', { timeout: 5000 })
   const pill = (await win.textContent('.branch'))?.trim()
   if (!pill?.includes('dsgn/main')) throw new Error(`branch pill: ${pill}`)
   await win.click('.branch')
+  await win.waitForSelector('[role="menuitem"]', { timeout: 5000 })
+  await win.click('text=New branch…')
   await win.waitForSelector('.branch__input', { timeout: 5000 })
 
   // v5 workspace store: open/activate/close transitions, keyed by projectKey.
