@@ -1117,12 +1117,10 @@ export default function App(): React.JSX.Element {
 
   return (
     <div className="app">
-      {/* Minimal titlebar (claude.ai design-mode style): brand + drag region. The
-          project's URL, branch, and controls live in the preview card's own bar. */}
-      <header className="titlebar">
-        <span className="titlebar__brand">dsgn</span>
-        {openCount === 0 && <span className="titlebar__status">{hint}</span>}
-      </header>
+      {/* No titlebar — the window is all surface (traffic lights overlay the rail's
+          top). Window dragging happens via the previewbar, the rail head, and the
+          empty state; the project's URL, branch, and controls live in the preview
+          card's own bar. */}
 
       {logOpen && <ConsolePanel />}
 

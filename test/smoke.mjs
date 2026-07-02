@@ -27,19 +27,14 @@ try {
   })
 
   const win = await app.firstWindow()
-  await win.waitForSelector('.titlebar__brand', { timeout: 15000 })
+  // With no project open the shell shows an empty-state CTA (no chat/preview,
+  // no titlebar — the window is all surface).
+  await win.waitForSelector('.empty__open', { timeout: 15000 })
   await shot(win, '01-launch.png')
 
-  // With no project open the shell shows an empty-state CTA (no chat/preview).
-  await win.waitForSelector('.empty__open', { timeout: 5000 })
   // Open a project (store-only) so the chat + preview panes render for the checks.
   await win.evaluate(() => window.__dsgnWorkspace.getState().openOrActivate('/tmp/dsgn-test-project'))
-
-  // The shell renders: brand, both panes, composer.
-  const brand = (await win.textContent('.titlebar__brand'))?.trim()
-  if (brand !== 'dsgn') throw new Error(`expected brand "dsgn", got "${brand}"`)
-  // Idle titlebar has no buttons now (Select/Publish show only when a project
-  // runs; Logs/Open moved to the Actions menu) — just assert the shell + composer.
+  // Assert the shell: both panes + composer.
   for (const sel of ['.pane--chat', '.pane--preview', '.composer__input']) {
     await win.waitForSelector(sel, { timeout: 5000 })
   }
