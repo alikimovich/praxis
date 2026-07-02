@@ -50,7 +50,9 @@ try {
   const second = await win.evaluate((d) => window.api.setup.scaffold(d), scaffoldDir)
   if (second.written) throw new Error('scaffold should not overwrite an existing plugin')
 
-  // --- Gating: a host <span> (no component schema) is prompt-only, no panel. ---
+  // --- Gating: a STAMPED host <span> (no component schema) is prompt-only, no
+  // panel — and, since it already has a source stamp, it must NOT nag to "set up
+  // the project" (the project is clearly set up). It's prompt-only → ask dsgn. ---
   await win.evaluate(
     (args) => {
       window.__dsgnSession.getState().setProjectRoot(args.fixture)
@@ -60,6 +62,7 @@ try {
         classes: ['badge'],
         selector: 'span.badge',
         source: 'src/Badge.tsx:13', // the <span> inside Badge — host element, no props schema
+        componentSource: null, // not inside a stamped component instance
         text: 'x',
         rect: { x: 0, y: 0, width: 0, height: 0 },
         styles: {}
@@ -71,10 +74,34 @@ try {
   if (await win.locator('.proppanel').count()) {
     throw new Error('a no-schema element should not open the prop panel')
   }
-  if (!(await win.locator('.inspector__link').count())) {
-    throw new Error('prompt-only hint should offer a setup link')
+  const stampedHint = (await win.textContent('.inspector__ready--no')) ?? ''
+  if (!/ask dsgn/i.test(stampedHint)) {
+    throw new Error(`stamped host element should be prompt-only (ask dsgn): ${stampedHint}`)
+  }
+  if (await win.locator('.inspector__link').count()) {
+    throw new Error('a stamped element must NOT show the "set up the project" link')
   }
   await win.screenshot({ path: join(artifacts, '13-gating.png') })
+
+  // --- A genuinely UNSTAMPED element (source: null) is what warrants the setup
+  // link — that's the only "not set up for prop editing" case. ---
+  await win.evaluate(() => {
+    window.__dsgnSelection.getState().setSelected({
+      tag: 'div',
+      id: null,
+      classes: [],
+      selector: 'div',
+      source: null, // no data-dsgn-source stamp → project isn't set up
+      componentSource: null,
+      text: null,
+      rect: { x: 0, y: 0, width: 0, height: 0 },
+      styles: {}
+    })
+  })
+  await win.waitForSelector('.inspector__ready--no', { timeout: 5000 })
+  if (!(await win.locator('.inspector__link').count())) {
+    throw new Error('an unstamped element should offer the "set up the project" link')
+  }
 
   // Positive case: a schema-backed <Badge> usage DOES open the floating panel
   // (keeps the gate honest in both directions).

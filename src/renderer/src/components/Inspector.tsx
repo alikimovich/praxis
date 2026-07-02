@@ -123,20 +123,37 @@ export default function Inspector({
         </Button>
       )}
 
-      {/* Readiness: ready → edit in the floating panel; not ready → prompt-only. */}
+      {/* Readiness. Three "not ready" cases, kept distinct so the hint is honest:
+          1. no source stamp at all → the project isn't set up (offer setup);
+          2. stamped host element that sits inside a component → point at the
+             "edit the owning component" affordance above;
+          3. stamped but no named prop schema (e.g. a bare host tag, or a component
+             whose props are just HTML attributes) → prompt-only. */}
       {inspecting ? (
         <div className="inspector__ready text-[11.5px] text-muted-foreground">Reading props…</div>
       ) : propsReady ? (
         <div className="inspector__ready inspector__ready--ok text-[11.5px] text-green-700">
           Editing props in the panel →
         </div>
-      ) : (
+      ) : !element.source ? (
         <div className="inspector__ready inspector__ready--no text-[11.5px] text-amber-700">
           Not set up for prop editing —{' '}
           <button className="inspector__link text-blue-600 underline" onClick={onSetup}>
             set up the project
           </button>{' '}
           or ask dsgn below.
+        </div>
+      ) : hasOwner ? (
+        <div className="inspector__ready inspector__ready--no text-[11.5px] text-muted-foreground">
+          {`<${element.tag}>`} is a plain element —{' '}
+          <button className="inspector__link text-blue-600 underline" onClick={onSelectOwner}>
+            edit its component
+          </button>{' '}
+          or ask dsgn below.
+        </div>
+      ) : (
+        <div className="inspector__ready inspector__ready--no text-[11.5px] text-muted-foreground">
+          No editable props on {`<${element.tag}>`} — ask dsgn below to change it.
         </div>
       )}
 
