@@ -497,6 +497,8 @@ export interface DsgnApi {
     setPanelInset: (inset: number) => void
     /** Toggle the in-page iPhone bezel overlay (mobile viewport); passes clicks through. */
     setFrame: (active: boolean) => void
+    /** Snapshot the live preview as a data URL (freeze-frame under overlay UI). */
+    capture: () => Promise<string | null>
     /** Fires after the previewed app loads, reporting source-stamp coverage. */
     onReadiness: (cb: (info: { stamps: number }) => void) => () => void
     /** Fires when the user commits an inline text edit in the preview. */

@@ -263,6 +263,21 @@ export const useViewport = create<ViewportState>((set) => ({
   setViewport: (viewport) => set({ viewport })
 }))
 
+/**
+ * Freeze the preview under overlay UI: while `frozen`, PreviewPane swaps the
+ * native view (which always paints above the DOM) for a pixel-identical
+ * snapshot <img>, so dropdowns can stack on top of a still-visible preview.
+ * Set by whoever opens the overlay (e.g. the branch switcher).
+ */
+interface PreviewFreezeState {
+  frozen: boolean
+  setFrozen: (frozen: boolean) => void
+}
+export const usePreviewFreeze = create<PreviewFreezeState>((set) => ({
+  frozen: false,
+  setFrozen: (frozen) => set({ frozen })
+}))
+
 // Follow the OS live — no manual toggle; the tool's theme is always the Mac's.
 try {
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {

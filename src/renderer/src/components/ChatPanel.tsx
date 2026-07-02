@@ -662,10 +662,9 @@ export default function ChatPanel(): React.JSX.Element {
             </div>
           )}
           {messages.map((m, idx) => (
+            // No role labels — the user's bubble vs the assistant's plain
+            // markdown is distinction enough (m.role still drives styling).
             <div key={m.id} className={cn('msg flex flex-col gap-1', `msg--${m.role}`)}>
-              <div className="msg__role text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                {m.role}
-              </div>
               {m.statuses.length > 0 && (
                 <StepDisclosure
                   statuses={m.statuses}

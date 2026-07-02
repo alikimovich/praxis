@@ -25,6 +25,7 @@ import {
   useSpawns,
   useTokens,
   useViewport,
+  usePreviewFreeze,
   useWorkspace,
   type ProjectEntry
 } from './store'
@@ -1272,9 +1273,10 @@ export default function App(): React.JSX.Element {
                     <DropdownMenu
                       onOpenChange={(open) => {
                         // The menu drops into the card body, where the native
-                        // preview paints ABOVE the DOM — hide it while open
-                        // (same mechanism as the divider drag).
-                        window.api.preview.setDragging(open)
+                        // preview paints ABOVE the DOM — freeze-frame it while
+                        // open (PreviewPane swaps in a snapshot, then hides the
+                        // live view under it) so the preview stays visible.
+                        usePreviewFreeze.getState().setFrozen(open)
                         if (open) loadBranches()
                       }}
                     >

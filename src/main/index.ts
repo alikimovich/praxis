@@ -360,6 +360,18 @@ function registerPreviewIpc(): void {
     previewView?.setVisible(!active)
   })
 
+  // Freeze-frame support: snapshot the live preview so renderer UI (e.g. the
+  // branch dropdown) can overlay a pixel-identical <img> while the native view
+  // hides beneath it — the preview appears to stay put, but the DOM wins.
+  ipcMain.handle('preview:capture', async (): Promise<string | null> => {
+    try {
+      const img = await previewView?.webContents.capturePage()
+      return img && !img.isEmpty() ? img.toDataURL() : null
+    } catch {
+      return null
+    }
+  })
+
   // v2 select mode: renderer → preview (arm/disarm the overlay).
   ipcMain.handle('preview:set-select-mode', (_e, active: boolean) => {
     selectModeActive = active

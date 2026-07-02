@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useViewport } from '../store'
+import { usePreviewFreeze, useViewport } from '../store'
 import { FRAME_ASPECT, FRAME_INSET, FRAME_DATA_URI } from '../../../shared/iphone-frame'
 
 /**
@@ -13,13 +13,27 @@ import { FRAME_ASPECT, FRAME_INSET, FRAME_DATA_URI } from '../../../shared/iphon
  * renders at a phone width, framed by the device. The bezel <img> sits in the
  * DOM (behind the native view); the native view covers the cutout on top, so the
  * opaque frame shows around it.
+ *
+ * Freeze-frame: while `usePreviewFreeze.frozen` (an overlay like the branch
+ * dropdown is open), the live view — which always paints above the DOM — is
+ * swapped for a pixel-identical snapshot <img> at the same rect, so the overlay
+ * can stack on top of a still-visible preview.
  */
 type Rect = { left: number; top: number; width: number; height: number }
+type ViewRect = Rect & { radius: number }
+
+/** Corner radius of the native view in desktop mode — fits the card's rounded
+ *  bottom (12px outer − 1px border) since the view sits flush inside it. */
+export const DESKTOP_VIEW_RADIUS = 11
 
 export default function PreviewPane(): React.JSX.Element {
   const slotRef = useRef<HTMLDivElement>(null)
   const viewport = useViewport((s) => s.viewport)
+  const frozen = usePreviewFreeze((s) => s.frozen)
   const [bezel, setBezel] = useState<Rect | null>(null)
+  // Where the native view sits, relative to the slot — the freeze <img> matches it.
+  const [viewRect, setViewRect] = useState<ViewRect | null>(null)
+  const [freezeImg, setFreezeImg] = useState<string | null>(null)
 
   useEffect(() => {
     const el = slotRef.current
@@ -40,17 +54,32 @@ export default function PreviewPane(): React.JSX.Element {
         // The native view fills the bezel's screen cutout (inset % of the frame),
         // with rounded corners to match the phone's screen so it fits the frame.
         const cutW = w * (1 - (FRAME_INSET.left + FRAME_INSET.right) / 100)
-        window.api.preview.setBounds({
+        const cut = {
           x: bx + (w * FRAME_INSET.left) / 100,
           y: by + (h * FRAME_INSET.top) / 100,
           width: cutW,
           height: h * (1 - (FRAME_INSET.top + FRAME_INSET.bottom) / 100),
           radius: Math.round(cutW * 0.1)
+        }
+        window.api.preview.setBounds(cut)
+        setViewRect({
+          left: cut.x - r.x,
+          top: cut.y - r.y,
+          width: cut.width,
+          height: cut.height,
+          radius: cut.radius
         })
         setBezel({ left: bx - r.x, top: by - r.y, width: w, height: h })
       } else {
-        // Rounded to sit inset in the preview card (the slot has padding around it).
-        window.api.preview.setBounds({ x: r.x, y: r.y, width: r.width, height: r.height, radius: 8 })
+        // Flush inside the card body; rounded to match the card's bottom corners.
+        window.api.preview.setBounds({
+          x: r.x,
+          y: r.y,
+          width: r.width,
+          height: r.height,
+          radius: DESKTOP_VIEW_RADIUS
+        })
+        setViewRect({ left: 0, top: 0, width: r.width, height: r.height, radius: DESKTOP_VIEW_RADIUS })
         setBezel(null)
       }
     }
@@ -74,6 +103,25 @@ export default function PreviewPane(): React.JSX.Element {
     }
   }, [viewport])
 
+  // Freeze under overlays: capture FIRST (identical pixels), then hide the live
+  // view; unfreeze restores the view and drops the snapshot.
+  useEffect(() => {
+    if (!frozen) {
+      window.api.preview.setDragging(false)
+      setFreezeImg(null)
+      return
+    }
+    let cancelled = false
+    void window.api.preview.capture().then((url) => {
+      if (cancelled) return
+      setFreezeImg(url)
+      window.api.preview.setDragging(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [frozen])
+
   return (
     <div ref={slotRef} className={`preview-slot ${viewport === 'mobile' ? 'preview-slot--mobile' : ''}`}>
       {bezel && (
@@ -83,6 +131,21 @@ export default function PreviewPane(): React.JSX.Element {
           draggable={false}
           className="preview-bezel"
           style={{ left: bezel.left, top: bezel.top, width: bezel.width, height: bezel.height }}
+        />
+      )}
+      {frozen && freezeImg && viewRect && (
+        <img
+          src={freezeImg}
+          alt=""
+          draggable={false}
+          className="preview-freeze"
+          style={{
+            left: viewRect.left,
+            top: viewRect.top,
+            width: viewRect.width,
+            height: viewRect.height,
+            borderRadius: viewRect.radius
+          }}
         />
       )}
     </div>

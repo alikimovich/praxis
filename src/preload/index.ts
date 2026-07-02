@@ -60,6 +60,8 @@ const api: DsgnApi = {
     setPanelInset: (inset: number): void => ipcRenderer.send('preview:set-panel-inset', inset),
     /** Toggle the in-page iPhone bezel overlay (mobile viewport). */
     setFrame: (active: boolean): void => ipcRenderer.send('preview:set-frame', active),
+    /** Snapshot the live preview (freeze-frame under overlay UI). */
+    capture: (): Promise<string | null> => ipcRenderer.invoke('preview:capture'),
     /** Fires after the previewed app loads, with whether it's source-stamped. */
     onReadiness: (cb: (info: { stamps: number }) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, info: { stamps: number }): void => cb(info)

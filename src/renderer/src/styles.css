@@ -961,10 +961,11 @@ body {
     -webkit-app-region: no-drag;
 }
 
+/* Flush — the native view fills the body edge-to-edge; its own corner radius
+   matches the card's rounded bottom (12px outer − 1px border). */
 .previewcard__body {
     flex: 1 1 auto;
     min-height: 0;
-    padding: 10px;
 }
 
 /* Invisible but grabbable resize handle between the chat and the preview card. */
@@ -1002,6 +1003,12 @@ body.is-resizing {
     pointer-events: none;
     user-select: none;
 }
+/* Snapshot stand-in shown while the native view hides under overlay UI. */
+.preview-freeze {
+    position: absolute;
+    pointer-events: none;
+    user-select: none;
+}
 
 /* Chat */
 .chat {
@@ -1029,13 +1036,6 @@ body.is-resizing {
     display: flex;
     flex-direction: column;
     gap: 4px;
-}
-
-.msg__role {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-muted);
 }
 
 .msg__text {
