@@ -1269,7 +1269,15 @@ export default function App(): React.JSX.Element {
                       }}
                     />
                   ) : (
-                    <DropdownMenu onOpenChange={(open) => open && loadBranches()}>
+                    <DropdownMenu
+                      onOpenChange={(open) => {
+                        // The menu drops into the card body, where the native
+                        // preview paints ABOVE the DOM — hide it while open
+                        // (same mechanism as the divider drag).
+                        window.api.preview.setDragging(open)
+                        if (open) loadBranches()
+                      }}
+                    >
                       <DropdownMenuTrigger asChild>
                         <button className="branch" title="Switch branch">
                           ⎇ {branch}

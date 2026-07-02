@@ -338,7 +338,11 @@ function registerPreviewIpc(): void {
     if (!isLocalPreviewUrl(url)) return
     previewUrl = url
     previewRetries = 0
-    ensurePreviewView().webContents.loadURL(url)
+    const view = ensurePreviewView()
+    // Recover from any leaked hide (set-dragging is also used by overlaying
+    // renderer UI, e.g. the branch dropdown) — a fresh load must be visible.
+    view.setVisible(true)
+    view.webContents.loadURL(url)
   })
 
   ipcMain.handle('preview:reset', () => {
