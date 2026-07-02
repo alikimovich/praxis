@@ -353,6 +353,19 @@ body {
     justify-content: center;
     gap: 12px;
 }
+.empty__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+/* Secondary CTA — the quiet bordered sibling of the accent-filled Open. */
+.empty__new {
+    -webkit-app-region: no-drag;
+    height: 34px;
+    padding: 0 18px;
+    font-size: 13px;
+    border-radius: 9px;
+}
 /* Neutral accent fill (black on light / white on dark) — the blue primary is
    reserved for Publish. */
 .empty__open {

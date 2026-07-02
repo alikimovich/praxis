@@ -87,7 +87,10 @@ const api: DsgnApi = {
   },
   project: {
     pick: (): Promise<string | null> => ipcRenderer.invoke('project:pick'),
-    detect: (root: string): Promise<DetectedProject> => ipcRenderer.invoke('project:detect', root)
+    detect: (root: string): Promise<DetectedProject> => ipcRenderer.invoke('project:detect', root),
+    pickNew: (): Promise<string | null> => ipcRenderer.invoke('project:pick-new'),
+    create: (root: string): Promise<{ ok: boolean; root?: string; error?: string }> =>
+      ipcRenderer.invoke('project:create', root)
   },
   devServer: {
     start: (opts: {

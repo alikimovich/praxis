@@ -8,6 +8,8 @@ interface Props {
   onClose: (key: string) => void
   /** Open another project, keeping the current one warm. */
   onOpen: () => void
+  /** Create a brand-new project (scaffold), keeping the current one warm. */
+  onCreate: () => void
   /** Open a past session for review (v5-D). */
   onReview: (rec: SessionRecord) => void
 }
@@ -19,7 +21,7 @@ interface Props {
  * click one to review, × to delete. Clicking a project switches; × closes; + opens
  * another keeping the rest warm.
  */
-export default function Rail({ onSwitch, onClose, onOpen, onReview }: Props): React.JSX.Element | null {
+export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: Props): React.JSX.Element | null {
   const projects = useWorkspace((s) => s.projects)
   const activeKey = useWorkspace((s) => s.activeKey)
   const collapsed = useWorkspace((s) => s.collapsed)
@@ -188,8 +190,19 @@ export default function Rail({ onSwitch, onClose, onOpen, onReview }: Props): Re
           )
         })}
       </ul>
-      <button className="rail__add" onClick={onOpen} title="Open another project">
+      <button
+        className="rail__add rail__add--new"
+        onClick={onCreate}
+        title="Create a brand-new project (⌘N)"
+      >
         + New project
+      </button>
+      <button
+        className="rail__add rail__add--open"
+        onClick={onOpen}
+        title="Open an existing folder (⌘O)"
+      >
+        Open project…
       </button>
     </nav>
   )

@@ -85,12 +85,14 @@ export default function App(): React.JSX.Element {
     toggleSelect: () => void
     stop: () => void
     openProject: () => void
+    newProject: () => void
     reload: () => void
     publish: () => void
   }>({
     toggleSelect: () => {},
     stop: () => {},
     openProject: () => {},
+    newProject: () => {},
     reload: () => {},
     publish: () => {}
   })
@@ -348,6 +350,7 @@ export default function App(): React.JSX.Element {
         else if (action === 'select') actionsRef.current.toggleSelect()
         else if (action === 'stop') actionsRef.current.stop()
         else if (action === 'open-project') actionsRef.current.openProject()
+        else if (action === 'new-project') actionsRef.current.newProject()
         else if (action === 'logs') useLog.getState().setOpen(!useLog.getState().open)
         else if (action === 'publish') actionsRef.current.publish()
         else if (action === 'viewport:desktop') useViewport.getState().setViewport('desktop')
@@ -772,12 +775,32 @@ export default function App(): React.JSX.Element {
     if (root) await attempt(root, undefined, true)
   }
 
-  // Titlebar / Cmd+N: open a project. If one is already running, ADD it (keep the
-  // current warm) rather than replacing it — otherwise "Open another…" would tear
-  // the current project down, so you could never have more than one open (and the
+  // Cmd+O: open a project. If one is already running, ADD it (keep the current
+  // warm) rather than replacing it — otherwise "Open another…" would tear the
+  // current project down, so you could never have more than one open (and the
   // rail would flicker to empty during the swap).
   const openProjectSmart = (): void => {
     void (useSession.getState().projectRoot ? openAnother() : openProject())
+  }
+
+  // Cmd+N: create a brand-new project — pick a folder, scaffold a minimal
+  // Vite+React app (git init + install), then open it like any other project,
+  // keeping whatever is already open warm.
+  const createNewProject = async (): Promise<void> => {
+    const dest = await window.api.project.pickNew()
+    if (!dest) return
+    const log = useLog.getState()
+    setStatus({ kind: 'busy', label: 'creating project…' })
+    log.append(`Creating ${dest} (scaffold + git init + install)…`, 'server')
+    const res = await window.api.project.create(dest)
+    if (!res.ok || !res.root) {
+      const message = res.error ?? 'Could not create the project.'
+      log.append(message, 'error')
+      setStatus({ kind: 'error', message })
+      return
+    }
+    log.append('Project created — starting its dev server…', 'success')
+    await attempt(res.root, undefined, !!useSession.getState().projectRoot)
   }
 
   // Publish: commit everything on the current dsgn/* branch, push, open a PR,
@@ -1105,6 +1128,7 @@ export default function App(): React.JSX.Element {
     toggleSelect,
     stop: () => void stop(),
     openProject: openProjectSmart,
+    newProject: () => void createNewProject(),
     reload,
     publish: () => void publish()
   }
@@ -1185,14 +1209,23 @@ export default function App(): React.JSX.Element {
         // project is starting up).
         <div className="empty">
           <div className="empty__center">
-            <button
-              className="btn empty__open"
-              onClick={openProjectSmart}
-              disabled={status.kind === 'busy'}
-            >
-              {status.kind === 'busy' ? 'Opening…' : 'Open project'}
-            </button>
-            <p className="empty__hint">Open a folder to preview and edit it with dsgn.</p>
+            <div className="empty__actions">
+              <button
+                className="btn empty__open"
+                onClick={openProjectSmart}
+                disabled={status.kind === 'busy'}
+              >
+                {status.kind === 'busy' ? 'Working…' : 'Open project'}
+              </button>
+              <button
+                className="btn empty__new"
+                onClick={() => void createNewProject()}
+                disabled={status.kind === 'busy'}
+              >
+                New project
+              </button>
+            </div>
+            <p className="empty__hint">Open a folder — or start a fresh app — to edit it with dsgn.</p>
           </div>
           <div className="empty__cat">
             <CatLoader running={status.kind === 'busy'} />
@@ -1204,6 +1237,7 @@ export default function App(): React.JSX.Element {
             onSwitch={(key) => void switchTo(key)}
             onClose={(key) => void closeProjectFromRail(key)}
             onOpen={() => void openAnother()}
+            onCreate={() => void createNewProject()}
             onReview={setReviewing}
           />
           <section className="pane pane--chat" style={{ width: chatWidth }}>

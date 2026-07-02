@@ -19,6 +19,7 @@ import { registerAnnotationsIpc } from './annotations'
 import { registerTokensIpc } from './tokens'
 import { registerSetupIpc } from './setup'
 import { ensureBranch, switchBranch, listBranches, checkoutBranch } from './git'
+import { createProject } from './scaffold'
 import { registerDiagnoseIpc } from './diagnose'
 
 let mainWindow: BrowserWindow | null = null
@@ -161,7 +162,8 @@ function buildAppMenu(): void {
         { label: 'Publish', accelerator: 'CmdOrCtrl+Shift+P', click: () => send('publish') },
         { label: 'Stop Project', accelerator: 'CmdOrCtrl+.', click: () => send('stop') },
         { type: 'separator' },
-        { label: 'Open Project…', accelerator: 'CmdOrCtrl+N', click: () => send('open-project') },
+        { label: 'Open Project…', accelerator: 'CmdOrCtrl+O', click: () => send('open-project') },
+        { label: 'New Project…', accelerator: 'CmdOrCtrl+N', click: () => send('new-project') },
         { type: 'separator' },
         {
           label: 'Viewport',
@@ -423,6 +425,21 @@ function registerPreviewIpc(): void {
     })
     return res.canceled ? null : (res.filePaths[0] ?? null)
   })
+
+  // New project: a save dialog picks the folder-to-create, then the scaffold
+  // writes a minimal Vite+React app, git-inits it, and installs dependencies.
+  ipcMain.handle('project:pick-new', async (): Promise<string | null> => {
+    if (!mainWindow) return null
+    const res = await dialog.showSaveDialog(mainWindow, {
+      title: 'New project',
+      buttonLabel: 'Create',
+      nameFieldLabel: 'Project name',
+      defaultPath: 'my-app',
+      properties: ['createDirectory', 'showOverwriteConfirmation']
+    })
+    return res.canceled ? null : (res.filePath ?? null)
+  })
+  ipcMain.handle('project:create', (_e, root: string) => createProject(root))
 }
 
 app.whenReady().then(() => {

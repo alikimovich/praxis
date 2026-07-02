@@ -511,6 +511,10 @@ export interface DsgnApi {
   project: {
     pick: () => Promise<string | null>
     detect: (root: string) => Promise<DetectedProject>
+    /** Save-dialog for a folder to create (New Project…). Null when cancelled. */
+    pickNew: () => Promise<string | null>
+    /** Scaffold a minimal Vite+React app there, git init, install deps. */
+    create: (root: string) => Promise<{ ok: boolean; root?: string; error?: string }>
   }
   devServer: {
     start: (opts: {
