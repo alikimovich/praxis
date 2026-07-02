@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import ChatPanel from './components/ChatPanel'
+import CatLoader from './components/CatLoader'
 import ConsolePanel from './components/ConsolePanel'
 import DiagnoseCard from './components/DiagnoseCard'
 import PreviewPane from './components/PreviewPane'
@@ -99,6 +100,7 @@ export default function App(): React.JSX.Element {
   const selected = useSelection((s) => s.selected)
   const inspection = useSelection((s) => s.inspection)
   const projectRoot = useSession((s) => s.projectRoot)
+  const openCount = useWorkspace((s) => s.projects.length)
   const branch = useSession((s) => s.branch)
   const [editingBranch, setEditingBranch] = useState(false)
   const [branches, setBranches] = useState<string[]>([])
@@ -1268,26 +1270,47 @@ export default function App(): React.JSX.Element {
 
       <DiagnoseCard onApply={applyFix} onDismiss={dismissFix} />
 
-      <div className="panes">
-        <Rail
-          onSwitch={(key) => void switchTo(key)}
-          onClose={(key) => void closeProjectFromRail(key)}
-          onOpen={() => void openAnother()}
-          onReview={setReviewing}
-        />
-        <section className="pane pane--chat" style={{ width: chatWidth }}>
-          <ChatPanel />
-        </section>
-        <div
-          className="divider"
-          onMouseDown={startResize}
-          role="separator"
-          aria-orientation="vertical"
-        />
-        <section className="pane pane--preview">
-          <PreviewPane />
-        </section>
-      </div>
+      {openCount === 0 ? (
+        // Nothing open yet: no chat/preview panes — just an Open-project call to
+        // action in the middle and the cat loafing in the corner (it runs while a
+        // project is starting up).
+        <div className="empty">
+          <div className="empty__center">
+            <button
+              className="btn btn--primary empty__open"
+              onClick={openProjectSmart}
+              disabled={status.kind === 'busy'}
+            >
+              {status.kind === 'busy' ? 'Opening…' : 'Open project'}
+            </button>
+            <p className="empty__hint">Open a folder to preview and edit it with dsgn.</p>
+          </div>
+          <div className="empty__cat">
+            <CatLoader running={status.kind === 'busy'} />
+          </div>
+        </div>
+      ) : (
+        <div className="panes">
+          <Rail
+            onSwitch={(key) => void switchTo(key)}
+            onClose={(key) => void closeProjectFromRail(key)}
+            onOpen={() => void openAnother()}
+            onReview={setReviewing}
+          />
+          <section className="pane pane--chat" style={{ width: chatWidth }}>
+            <ChatPanel />
+          </section>
+          <div
+            className="divider"
+            onMouseDown={startResize}
+            role="separator"
+            aria-orientation="vertical"
+          />
+          <section className="pane pane--preview">
+            <PreviewPane />
+          </section>
+        </div>
+      )}
 
       {/* Floating prop panel — only for dsgn-ready components (schema resolved). */}
       {selected && projectRoot && inspection?.hasSchema && (

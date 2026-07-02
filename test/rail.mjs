@@ -66,7 +66,7 @@ try {
     cwd: root
   })
   const win = await app.firstWindow()
-  await win.waitForSelector('.composer__input', { timeout: 15000 })
+  await win.waitForSelector('.empty__open', { timeout: 15000 })
 
   const stubDialog = (fixture) =>
     app.evaluate(async ({ dialog }, f) => {

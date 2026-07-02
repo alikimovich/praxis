@@ -40,7 +40,7 @@ try {
   })
 
   const win = await app.firstWindow()
-  await win.waitForSelector('.composer__input', { timeout: 15000 })
+  await win.waitForSelector('.empty__open', { timeout: 15000 })
 
   // Route this session to the Codex backend (default model/effort), then open the
   // fixture — `.btn--open` calls openProject with the session's provider.

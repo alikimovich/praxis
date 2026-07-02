@@ -30,6 +30,11 @@ try {
   await win.waitForSelector('.titlebar__brand', { timeout: 15000 })
   await shot(win, '01-launch.png')
 
+  // With no project open the shell shows an empty-state CTA (no chat/preview).
+  await win.waitForSelector('.empty__open', { timeout: 5000 })
+  // Open a project (store-only) so the chat + preview panes render for the checks.
+  await win.evaluate(() => window.__dsgnWorkspace.getState().openOrActivate('/tmp/dsgn-test-project'))
+
   // The shell renders: brand, both panes, composer.
   const brand = (await win.textContent('.titlebar__brand'))?.trim()
   if (brand !== 'dsgn') throw new Error(`expected brand "dsgn", got "${brand}"`)

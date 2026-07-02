@@ -35,6 +35,8 @@ try {
     cwd: root
   })
   const win = await app.firstWindow()
+  await win.waitForSelector('.empty__open', { timeout: 15000 })
+  await win.evaluate(() => window.__dsgnWorkspace.getState().openOrActivate('/tmp/dsgn-test-project'))
   await win.waitForSelector('.composer__input', { timeout: 15000 })
 
   await win.evaluate((d) => window.__dsgnDiagnosis.getState().setCurrent(d), DIAG)

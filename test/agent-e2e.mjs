@@ -36,7 +36,7 @@ try {
   })
 
   const win = await app.firstWindow()
-  await win.waitForSelector('.composer__input', { timeout: 15000 })
+  await win.waitForSelector('.empty__open', { timeout: 15000 })
 
   // Cheap/fast model for the test turn, and Auto (bypassPermissions) so the edit
   // tool isn't gated by an approve/deny card no one is here to click — this also

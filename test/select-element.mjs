@@ -45,7 +45,7 @@ try {
   })
 
   const win = await app.firstWindow()
-  await win.waitForSelector('.composer__input', { timeout: 15000 })
+  await win.waitForSelector('.empty__open', { timeout: 15000 })
 
   // Make the native folder picker return our fixture.
   await app.evaluate(async ({ dialog }, fixturePath) => {

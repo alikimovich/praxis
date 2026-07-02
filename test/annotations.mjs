@@ -29,6 +29,8 @@ try {
     cwd: root
   })
   const win = await app.firstWindow()
+  await win.waitForSelector('.empty__open', { timeout: 15000 })
+  await win.evaluate(() => window.__dsgnWorkspace.getState().openOrActivate('/tmp/dsgn-test-project'))
   await win.waitForSelector('.composer__input', { timeout: 15000 })
 
   // Seed a running project + a selected element (no source → only the Note path).
