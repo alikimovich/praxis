@@ -1,3 +1,4 @@
+import { PanelLeft } from 'lucide-react'
 import type { SessionRecord } from '../../../shared/api'
 import { relativeTime, useChat, useHistory, useSpawns, useWorkspace } from '../store'
 
@@ -46,7 +47,7 @@ export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: 
           aria-label="Expand projects sidebar"
           title="Expand sidebar"
         >
-          »
+          <PanelLeft className="size-4" aria-hidden="true" />
         </button>
         <ul className="rail__list">
           {projects.map((p) => {
@@ -92,7 +93,7 @@ export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: 
           aria-label="Collapse projects sidebar"
           title="Collapse sidebar"
         >
-          «
+          <PanelLeft className="size-4" aria-hidden="true" />
         </button>
       </div>
       <ul className="rail__list">

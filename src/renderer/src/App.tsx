@@ -111,6 +111,32 @@ export default function App(): React.JSX.Element {
   const branch = useSession((s) => s.branch)
   const [editingBranch, setEditingBranch] = useState(false)
   const [branches, setBranches] = useState<string[]>([])
+  // Overlay menus are CONTROLLED and wait for the preview freeze-frame to be
+  // ready before opening — otherwise they render behind the native view for the
+  // capture's ~80ms and then "pop" fully visible when it hides (read: flicker).
+  const [branchMenuOpen, setBranchMenuOpen] = useState(false)
+  const [pubMenuOpen, setPubMenuOpen] = useState(false)
+  const openWithFreeze = (setOpen: (b: boolean) => void): void => {
+    usePreviewFreeze.getState().setFrozen(true)
+    if (usePreviewFreeze.getState().ready) {
+      setOpen(true)
+      return
+    }
+    const done = (): void => {
+      unsub()
+      clearTimeout(failsafe)
+      setOpen(true)
+    }
+    const unsub = usePreviewFreeze.subscribe((s) => {
+      if (s.ready) done()
+    })
+    // Failsafe: a wedged capture must never block the menu.
+    const failsafe = setTimeout(done, 350)
+  }
+  const closeWithFreeze = (setOpen: (b: boolean) => void): void => {
+    setOpen(false)
+    usePreviewFreeze.getState().setFrozen(false)
+  }
   // v5-D: the past session open for review (rendered as a modal over the panes).
   const [reviewing, setReviewing] = useState<SessionRecord | null>(null)
   // The review modal is renderer DOM; the native preview WebContentsView paints
@@ -516,12 +542,16 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     const onMove = (e: MouseEvent): void => {
       if (!dragging.current) return
+      // Width is measured from the CHAT PANE's left edge, not the window's —
+      // the rail sits before it, so raw clientX would jump the split right by
+      // exactly the rail's width on the first move.
+      const left = document.querySelector('.pane--chat')?.getBoundingClientRect().left ?? 0
       // Also clamp against the window so the preview card keeps ~400px — its
       // header now holds the controls (Publish/tabs/icons), which must never be
       // clipped out of reach by dragging the chat wide (rail 168 + divider 6 +
       // card gutters ≈ 184 → 584 with the 400px floor).
       const maxChat = Math.max(MIN_CHAT_WIDTH, Math.min(MAX_CHAT_WIDTH, window.innerWidth - 584))
-      setChatWidth(Math.min(maxChat, Math.max(MIN_CHAT_WIDTH, e.clientX)))
+      setChatWidth(Math.min(maxChat, Math.max(MIN_CHAT_WIDTH, e.clientX - left)))
     }
     const endDrag = (): void => {
       if (!dragging.current) return
@@ -1301,13 +1331,17 @@ export default function App(): React.JSX.Element {
                     />
                   ) : (
                     <DropdownMenu
+                      open={branchMenuOpen}
                       onOpenChange={(open) => {
                         // The menu drops into the card body, where the native
-                        // preview paints ABOVE the DOM — freeze-frame it while
-                        // open (PreviewPane swaps in a snapshot, then hides the
-                        // live view under it) so the preview stays visible.
-                        usePreviewFreeze.getState().setFrozen(open)
-                        if (open) loadBranches()
+                        // preview paints ABOVE the DOM — open only once the
+                        // freeze-frame is in place so it never renders covered.
+                        if (open) {
+                          loadBranches()
+                          openWithFreeze(setBranchMenuOpen)
+                        } else {
+                          closeWithFreeze(setBranchMenuOpen)
+                        }
                       }}
                     >
                       <DropdownMenuTrigger asChild>
@@ -1407,7 +1441,10 @@ export default function App(): React.JSX.Element {
                               : 'Create PR'}
                         </button>
                         <DropdownMenu
-                          onOpenChange={(open) => usePreviewFreeze.getState().setFrozen(open)}
+                          open={pubMenuOpen}
+                          onOpenChange={(open) =>
+                            open ? openWithFreeze(setPubMenuOpen) : closeWithFreeze(setPubMenuOpen)
+                          }
                         >
                           <DropdownMenuTrigger asChild>
                             <button

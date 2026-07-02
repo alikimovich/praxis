@@ -475,7 +475,8 @@ body {
 .rail--collapsed {
     width: 44px;
     align-items: center;
-    padding: 8px 4px;
+    /* Keep the traffic-light clearance — they overlay this corner (no titlebar). */
+    padding: 40px 4px 8px;
 }
 .rail--collapsed .rail__list {
     width: 100%;

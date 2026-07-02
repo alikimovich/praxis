@@ -106,16 +106,22 @@ export default function PreviewPane(): React.JSX.Element {
   // the live view and drops the snapshot.
   useEffect(() => {
     if (!frozen) {
+      // Show the live view FIRST, and keep the snapshot up briefly — the show
+      // lands in the compositor a few frames later, and removing the img in the
+      // same tick flashed the card background on every menu close.
       window.api.preview.setDragging(false)
-      setFreezeImg(null)
-      return
+      const t = setTimeout(() => setFreezeImg(null), 120)
+      return () => clearTimeout(t)
     }
     let cancelled = false
     void window.api.preview.capture().then((url) => {
       if (cancelled) return
       setFreezeImg(url)
       // No snapshot (e.g. empty view)? Hide anyway — blank beats covering the menu.
-      if (!url) window.api.preview.setDragging(true)
+      if (!url) {
+        window.api.preview.setDragging(true)
+        usePreviewFreeze.getState().setReady(true)
+      }
     })
     return () => {
       cancelled = true
@@ -124,12 +130,16 @@ export default function PreviewPane(): React.JSX.Element {
 
   // Hide the live view only AFTER the snapshot <img> has painted (double rAF
   // past the commit) — hiding in the same tick blanked the preview for a frame,
-  // which read as a flicker every time a dropdown opened.
+  // which read as a flicker every time a dropdown opened. `ready` then unblocks
+  // the overlay (dropdowns wait for it before opening).
   useEffect(() => {
     if (!frozen || !freezeImg) return
     let raf2 = 0
     const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => window.api.preview.setDragging(true))
+      raf2 = requestAnimationFrame(() => {
+        window.api.preview.setDragging(true)
+        usePreviewFreeze.getState().setReady(true)
+      })
     })
     return () => {
       cancelAnimationFrame(raf1)

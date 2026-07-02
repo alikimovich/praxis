@@ -274,11 +274,18 @@ export const useViewport = create<ViewportState>((set) => ({
  */
 interface PreviewFreezeState {
   frozen: boolean
+  /** True once the snapshot has painted AND the live view is hidden — overlay
+   *  UI (dropdowns) waits for this before opening, so it never renders behind
+   *  the native view and then "pops" when the view finally hides. */
+  ready: boolean
   setFrozen: (frozen: boolean) => void
+  setReady: (ready: boolean) => void
 }
 export const usePreviewFreeze = create<PreviewFreezeState>((set) => ({
   frozen: false,
-  setFrozen: (frozen) => set({ frozen })
+  ready: false,
+  setFrozen: (frozen) => set(frozen ? { frozen } : { frozen, ready: false }),
+  setReady: (ready) => set({ ready })
 }))
 
 /**
