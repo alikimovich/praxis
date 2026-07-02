@@ -527,7 +527,7 @@ export default function App(): React.JSX.Element {
       if (!dragging.current) return
       dragging.current = false
       document.body.classList.remove('is-resizing')
-      window.api.preview.setDragging(false)
+      usePreviewFreeze.getState().setFrozen(false)
     }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', endDrag)
@@ -546,7 +546,10 @@ export default function App(): React.JSX.Element {
     e.preventDefault()
     dragging.current = true
     document.body.classList.add('is-resizing')
-    window.api.preview.setDragging(true)
+    // Freeze-frame rather than blank: the live view can't track the drag (its
+    // bounds lag) and would swallow mousemove once the cursor crosses into it —
+    // the snapshot stretches with the slot and passes events through.
+    usePreviewFreeze.getState().setFrozen(true)
   }
 
   // Propose-first: on a failure, recall a cached fix or ask the AI, then show a card.

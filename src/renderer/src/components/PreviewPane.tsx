@@ -102,8 +102,8 @@ export default function PreviewPane(): React.JSX.Element {
     }
   }, [viewport])
 
-  // Freeze under overlays: capture FIRST (identical pixels), then hide the live
-  // view; unfreeze restores the view and drops the snapshot.
+  // Freeze under overlays: capture FIRST (identical pixels); unfreeze restores
+  // the live view and drops the snapshot.
   useEffect(() => {
     if (!frozen) {
       window.api.preview.setDragging(false)
@@ -114,12 +114,28 @@ export default function PreviewPane(): React.JSX.Element {
     void window.api.preview.capture().then((url) => {
       if (cancelled) return
       setFreezeImg(url)
-      window.api.preview.setDragging(true)
+      // No snapshot (e.g. empty view)? Hide anyway — blank beats covering the menu.
+      if (!url) window.api.preview.setDragging(true)
     })
     return () => {
       cancelled = true
     }
   }, [frozen])
+
+  // Hide the live view only AFTER the snapshot <img> has painted (double rAF
+  // past the commit) — hiding in the same tick blanked the preview for a frame,
+  // which read as a flicker every time a dropdown opened.
+  useEffect(() => {
+    if (!frozen || !freezeImg) return
+    let raf2 = 0
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => window.api.preview.setDragging(true))
+    })
+    return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+    }
+  }, [frozen, freezeImg])
 
   return (
     <div ref={slotRef} className={`preview-slot ${viewport === 'mobile' ? 'preview-slot--mobile' : ''}`}>
