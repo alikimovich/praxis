@@ -28,6 +28,7 @@ import {
   usePreviewFreeze,
   usePublishMode,
   useRecents,
+  usePanelInset,
   useWorkspace,
   type ProjectEntry
 } from './store'
@@ -655,7 +656,7 @@ export default function App(): React.JSX.Element {
     // Drop the previous project from the workspace unless we're keeping it warm.
     if (tearDownPrev) useWorkspace.getState().close(projectKey(prevRoot))
     void window.api.preview.setSelectMode(false)
-    window.api.preview.setPanelInset(0)
+    usePanelInset.getState().setInset(0)
     const log = useLog.getState()
     log.clear()
     log.append(`Opening ${root}`)
@@ -1167,7 +1168,7 @@ export default function App(): React.JSX.Element {
     useTokens.getState().reset()
     useSetup.getState().reset()
     void window.api.preview.setSelectMode(false)
-    window.api.preview.setPanelInset(0)
+    usePanelInset.getState().setInset(0)
     // Unload the previewed page FIRST — the server/agent teardown below takes
     // seconds (and can throw); the stale app must not linger over the empty
     // state meanwhile. (PreviewPane's unmount also zeroes the view's bounds.)

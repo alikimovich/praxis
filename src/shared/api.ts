@@ -493,8 +493,6 @@ export interface DsgnApi {
     onSelectCancelled: (cb: () => void) => () => void
     /** Render annotation pins in the preview, located by CSS selector. */
     setAnnotations: (pins: { id: string; selector: string }[]) => void
-    /** Reserve a right-edge strip (px) so the floating prop panel isn't covered. */
-    setPanelInset: (inset: number) => void
     /** Toggle the in-page iPhone bezel overlay (mobile viewport); passes clicks through. */
     setFrame: (active: boolean) => void
     /** Snapshot the live preview as a data URL (freeze-frame under overlay UI). */

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { usePreviewFreeze, useViewport } from '../store'
+import { usePanelInset, usePreviewFreeze, useViewport } from '../store'
 import { FRAME_ASPECT, FRAME_INSET, FRAME_DATA_URI } from '../../../shared/iphone-frame'
 
 /**
@@ -32,6 +32,10 @@ export default function PreviewPane(): React.JSX.Element {
   const slotRef = useRef<HTMLDivElement>(null)
   const viewport = useViewport((s) => s.viewport)
   const frozen = usePreviewFreeze((s) => s.frozen)
+  // Right-edge strip reserved by the floating prop panel: desktop narrows the
+  // view; mobile re-centers the whole bezel in what's left (shrinking the
+  // ~390px cutout would collapse the phone screen to a sliver).
+  const inset = usePanelInset((s) => s.inset)
   const [bezel, setBezel] = useState<Rect | null>(null)
   // Where the native view sits, relative to the slot — the freeze <img> matches it.
   const [viewRect, setViewRect] = useState<ViewRect | null>(null)
@@ -43,15 +47,17 @@ export default function PreviewPane(): React.JSX.Element {
 
     const report = (): void => {
       const r = el.getBoundingClientRect()
+      // The area the preview may occupy (the panel strip is off-limits).
+      const availW = Math.max(120, r.width - inset)
       if (viewport === 'mobile') {
-        // Fit the bezel within the slot (contain), capped so it's not huge.
+        // Fit the bezel within the available area (contain), capped so it's not huge.
         let h = Math.min(r.height - 32, 880)
         let w = h * FRAME_ASPECT
-        if (w > r.width - 32) {
-          w = r.width - 32
+        if (w > availW - 32) {
+          w = Math.max(120, availW - 32)
           h = w / FRAME_ASPECT
         }
-        const bx = r.x + (r.width - w) / 2
+        const bx = r.x + (availW - w) / 2
         const by = r.y + (r.height - h) / 2
         // The native view fills the bezel's screen cutout (inset % of the frame),
         // with rounded corners to match the phone's screen so it fits the frame.
@@ -75,8 +81,8 @@ export default function PreviewPane(): React.JSX.Element {
       } else {
         // Flush inside the card body, SQUARE (top corners must not round under
         // the header); in-page masks below fake the bottom corners' rounding.
-        window.api.preview.setBounds({ x: r.x, y: r.y, width: r.width, height: r.height })
-        setViewRect({ left: 0, top: 0, width: r.width, height: r.height, radius: 0 })
+        window.api.preview.setBounds({ x: r.x, y: r.y, width: availW, height: r.height })
+        setViewRect({ left: 0, top: 0, width: availW, height: r.height, radius: 0 })
         setBezel(null)
       }
     }
@@ -100,7 +106,7 @@ export default function PreviewPane(): React.JSX.Element {
       // viewport switch the effect re-runs and report() restores bounds at once.
       window.api.preview.setBounds({ x: 0, y: 0, width: 0, height: 0 })
     }
-  }, [viewport])
+  }, [viewport, inset])
 
   // Freeze under overlays: capture FIRST (identical pixels); unfreeze restores
   // the live view and drops the snapshot.

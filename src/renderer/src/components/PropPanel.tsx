@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import type { PropField, PropInspection } from '../../../shared/api'
+import { usePanelInset } from '../store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
 /** Kept in sync with the `w-80` (320px) width on the .proppanel <aside> and the
- * reserved native-preview inset (setPanelInset below). */
+ * reserved native-preview inset (usePanelInset below). */
 const PANEL_WIDTH = 320
 
 interface Props {
@@ -20,7 +21,7 @@ interface Props {
 /**
  * The floating prop panel — shown over the preview's right edge when a
  * dsgn-ready component (one with a resolved react-docgen schema) is selected.
- * It reserves a strip of the native preview (setPanelInset) so it isn't covered.
+ * It reserves a strip of the native preview (usePanelInset) so it isn't covered.
  * Simple literal edits write straight to source; non-literal ones go to chat.
  */
 export default function PropPanel({
@@ -36,8 +37,8 @@ export default function PropPanel({
 
   // Reserve the right-edge strip while the panel is open.
   useEffect(() => {
-    window.api.preview.setPanelInset(PANEL_WIDTH)
-    return () => window.api.preview.setPanelInset(0)
+    usePanelInset.getState().setInset(PANEL_WIDTH)
+    return () => usePanelInset.getState().setInset(0)
   }, [])
 
   const reload = (): void => {
@@ -95,7 +96,7 @@ export default function PropPanel({
     /* Sits INSIDE the preview card's body: below the previewbar (10px card top
        gap + 1px border + 40+1px bar = 52) and inset 11px from the window's
        right/bottom (10px pane gutter + 1px card border) — flush against the
-       native view, which setPanelInset shrinks by exactly this panel's width.
+       native view, which usePanelInset shrinks by exactly this panel's width.
        Never overlaps the previewbar controls. */
     <aside
       className="proppanel fixed bottom-[11px] right-[11px] top-[52px] z-50 flex w-80 flex-col rounded-lg border bg-background shadow-[-4px_0_18px_rgba(0,0,0,0.08)]"

@@ -289,6 +289,21 @@ export const usePreviewFreeze = create<PreviewFreezeState>((set) => ({
 }))
 
 /**
+ * Right-edge strip (px) reserved by the floating prop panel. PreviewPane lays
+ * the native view out around it — desktop shrinks the view's width, mobile
+ * re-centers the whole bezel in the remaining space (naively shrinking the
+ * ~390px cutout used to collapse the phone screen to a sliver).
+ */
+interface PanelInsetState {
+  inset: number
+  setInset: (inset: number) => void
+}
+export const usePanelInset = create<PanelInsetState>((set) => ({
+  inset: 0,
+  setInset: (inset) => set({ inset: Math.max(0, inset) })
+}))
+
+/**
  * Recently opened projects — shown on the empty state for one-click reopening.
  * Persisted across launches; most recent first, deduped by projectKey.
  */
@@ -875,3 +890,4 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
 ;(window as unknown as { __dsgnHistory?: typeof useHistory }).__dsgnHistory = useHistory
 ;(window as unknown as { __dsgnSpawns?: typeof useSpawns }).__dsgnSpawns = useSpawns
 ;(window as unknown as { __dsgnViewport?: typeof useViewport }).__dsgnViewport = useViewport
+;(window as unknown as { __dsgnPanelInset?: typeof usePanelInset }).__dsgnPanelInset = usePanelInset

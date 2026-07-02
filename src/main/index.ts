@@ -55,8 +55,6 @@ const PREVIEW_SET_CORNERS = 'dsgn:preview:set-corners'
 
 // Latest annotation pins, re-pushed to the preview after each navigation.
 let annotationPins: { id: string; selector: string }[] = []
-// Right-edge inset reserved for the floating prop panel (renderer-reported).
-let panelInset = 0
 
 // Chromium error codes worth retrying — the dev server is up but not yet serving.
 const TRANSIENT_LOAD_ERRORS = new Set([-324, -102, -101, -105, -106, -109])
@@ -309,14 +307,14 @@ function createWindow(): void {
 
 function registerPreviewIpc(): void {
   let lastBounds = { x: 0, y: 0, width: 0, height: 0, radius: 0 }
-  // Apply the renderer's slot rect minus the right-edge panel inset, so the
-  // floating prop panel sits in renderer DOM not covered by the native view.
+  // Apply the renderer's slot rect (PreviewPane already lays out around the
+  // floating prop panel's strip, viewport-aware).
   const applyBounds = (): void => {
     const view = ensurePreviewView()
     view.setBounds({
       x: Math.round(lastBounds.x),
       y: Math.round(lastBounds.y),
-      width: Math.max(0, Math.round(lastBounds.width - panelInset)),
+      width: Math.max(0, Math.round(lastBounds.width)),
       height: Math.round(lastBounds.height)
     })
     // Round the native view's corners to fit the iPhone screen in mobile viewport.
@@ -331,11 +329,6 @@ function registerPreviewIpc(): void {
       applyBounds()
   })
 
-  // The floating prop panel reserves a strip on the preview's right edge.
-  ipcMain.on('preview:set-panel-inset', (_e, inset: number) => {
-    panelInset = Math.max(0, inset || 0)
-    applyBounds()
-  })
 
   // Mobile viewport toggles the in-page iPhone bezel overlay (click pass-through).
   ipcMain.on('preview:set-frame', (_e, active: boolean) => {
