@@ -49,7 +49,8 @@ export default function PreviewPane(): React.JSX.Element {
         })
         setBezel({ left: bx - r.x, top: by - r.y, width: w, height: h })
       } else {
-        window.api.preview.setBounds({ x: r.x, y: r.y, width: r.width, height: r.height })
+        // Rounded to sit inset in the preview card (the slot has padding around it).
+        window.api.preview.setBounds({ x: r.x, y: r.y, width: r.width, height: r.height, radius: 8 })
         setBezel(null)
       }
     }

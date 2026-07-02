@@ -25,14 +25,14 @@ export default function SetupCard({
 }: Props): React.JSX.Element {
   return (
     <div
-      className="setup flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3.5"
+      className="setup flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3.5 dark:border-blue-900/50 dark:bg-blue-950/30"
       role="region"
       aria-label="Project setup"
     >
-      <div className="setup__title text-sm font-semibold text-blue-900">
+      <div className="setup__title text-sm font-semibold text-blue-900 dark:text-blue-100">
         Set this project up for visual editing?
       </div>
-      <div className="setup__body text-[12.5px] leading-snug text-blue-800">
+      <div className="setup__body text-[12.5px] leading-snug text-blue-800 dark:text-blue-200/90">
         Its elements aren’t source-mapped yet, so dsgn can only suggest changes via chat. I can add
         a dev-only source-stamping plugin and have the agent type your components so you can edit
         props directly.

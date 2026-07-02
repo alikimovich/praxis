@@ -135,6 +135,8 @@ body {
     height: 100vh;
 }
 
+/* Minimal titlebar — just the brand on the main surface (no divider); the
+   project's URL + controls live in the preview card's own bar. */
 .titlebar {
     height: var(--titlebar-h);
     flex: 0 0 auto;
@@ -142,7 +144,6 @@ body {
     align-items: center;
     gap: 10px;
     padding: 0 10px 0 86px; /* leave room for the macOS traffic lights */
-    border-bottom: 1px solid var(--border);
     -webkit-app-region: drag;
     user-select: none;
 }
@@ -153,23 +154,10 @@ body {
     letter-spacing: 0.02em;
 }
 
-.titlebar__hint {
+/* Idle hint shown only in the empty state (no project open). */
+.titlebar__status {
     font-size: 12px;
     color: var(--text-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    /* Let the user select + copy the preview URL out of the titlebar. */
-    -webkit-app-region: no-drag;
-    user-select: text;
-    cursor: text;
-}
-
-.titlebar__actions {
-    margin-left: auto;
-    display: flex;
-    gap: 6px;
-    -webkit-app-region: no-drag;
 }
 
 /* `.btn.` prefix: these modifiers are defined before the base `.btn`, so match
@@ -204,12 +192,14 @@ body {
     color: var(--text-muted);
     cursor: pointer;
 }
+/* Hover/active fills mix from --text so they read on ANY surface — these
+   buttons now sit in the previewbar, whose card bg IS --bg-subtle. */
 .iconbtn:hover {
-    background: var(--bg-subtle);
+    background: color-mix(in srgb, var(--text) 8%, transparent);
     color: var(--text);
 }
 .iconbtn.is-active {
-    background: var(--bg-subtle);
+    background: color-mix(in srgb, var(--text) 10%, transparent);
     border-color: var(--border);
     color: var(--text);
 }
@@ -401,6 +391,8 @@ body {
 }
 
 /* v5 left rail — open projects (Cursor-style). */
+/* Projects sidebar — sits on the same main surface as the chat (Cursor-style),
+   no hard border; the preview card is the only elevated surface. */
 .rail {
     flex: 0 0 auto;
     width: 168px;
@@ -408,8 +400,7 @@ body {
     flex-direction: column;
     gap: 2px;
     padding: 8px 6px;
-    background: var(--bg-subtle);
-    border-right: 1px solid var(--border);
+    background: var(--bg);
     overflow-y: auto;
 }
 .rail__head {
@@ -886,6 +877,8 @@ body {
     height: 100%;
 }
 
+/* Chat sits directly on the main surface (no card, no border) — the preview
+   card next to it provides the visual separation. */
 .pane--chat {
     flex: 0 0 auto;
     display: flex;
@@ -894,13 +887,64 @@ body {
 
 .pane--preview {
     flex: 1 1 auto;
-    background: var(--bg-subtle);
+    display: flex;
+    padding: 0 10px 10px 0;
+    background: var(--bg);
 }
 
+/* The preview card — its own surface with a header bar (branch, URL, controls)
+   and the live preview inset below (Cursor / claude.ai design-mode style). */
+.previewcard {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.previewbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 5px 8px 5px 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.previewbar__url {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--text-muted);
+    /* Let the user select + copy the preview URL. */
+    user-select: text;
+    cursor: text;
+}
+
+.previewbar__actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.previewcard__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 10px;
+}
+
+/* Invisible but grabbable resize handle between the chat and the preview card. */
 .divider {
     flex: 0 0 auto;
-    width: 1px;
-    background: var(--border);
+    width: 6px;
+    background: transparent;
     position: relative;
     cursor: col-resize;
 }
@@ -909,12 +953,7 @@ body {
 .divider::after {
     content: "";
     position: absolute;
-    inset: 0 -4px;
-}
-
-.divider:hover,
-body.is-resizing .divider {
-    background: #d0d0d0;
+    inset: 0 -3px;
 }
 
 body.is-resizing {
@@ -1412,18 +1451,20 @@ body.is-resizing {
 
 .branch:hover {
     color: var(--text);
-    border-color: #d0d0d0;
+    border-color: color-mix(in srgb, var(--text) 25%, transparent);
 }
 
 .branch__input {
     -webkit-app-region: no-drag;
-    border: 1px solid #d0d0d0;
+    border: 1px solid var(--border);
     border-radius: 7px;
     padding: 3px 9px;
     font-size: 12px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     outline: none;
     width: 220px;
+    background: var(--bg);
+    color: var(--text);
 }
 
 /* AI fix proposal card (propose-first) */
@@ -1492,6 +1533,20 @@ body.is-resizing {
 .diag__scope--host {
     background: #fef3c7;
     color: #b45309;
+}
+
+/* Dark theme for the fix-proposal card (its light-blue surface is hardcoded). */
+.dark .diag {
+    border-color: #1e3a5f;
+    background: #101a28;
+}
+.dark .diag__scope--repo {
+    background: #12321f;
+    color: #4ade80;
+}
+.dark .diag__scope--host {
+    background: #3a2c10;
+    color: #fbbf24;
 }
 
 .diag__cmd {

@@ -92,8 +92,13 @@ export default function PropPanel({
   }
 
   return (
+    /* Sits INSIDE the preview card's body: below the previewbar (titlebar 38 +
+       bar 40+1px border + 10px body padding = 51) and inset 21px from the
+       window's right/bottom (10px pane gutter + 1px card border + 10px body
+       padding) — flush against the native view, which setPanelInset shrinks by
+       exactly this panel's width. Never overlaps the previewbar controls. */
     <aside
-      className="proppanel fixed bottom-0 right-0 top-[var(--titlebar-h)] z-50 flex w-80 flex-col border-l bg-background shadow-[-4px_0_18px_rgba(0,0,0,0.08)]"
+      className="proppanel fixed bottom-[21px] right-[21px] top-[calc(var(--titlebar-h)+51px)] z-50 flex w-80 flex-col rounded-lg border bg-background shadow-[-4px_0_18px_rgba(0,0,0,0.08)]"
       aria-label={`Props for ${inspection.component}`}
     >
       <header className="proppanel__head flex shrink-0 items-start gap-2 border-b px-3.5 py-3">

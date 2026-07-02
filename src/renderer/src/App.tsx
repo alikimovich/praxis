@@ -508,7 +508,12 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     const onMove = (e: MouseEvent): void => {
       if (!dragging.current) return
-      setChatWidth(Math.min(MAX_CHAT_WIDTH, Math.max(MIN_CHAT_WIDTH, e.clientX)))
+      // Also clamp against the window so the preview card keeps ~400px — its
+      // header now holds the controls (Publish/tabs/icons), which must never be
+      // clipped out of reach by dragging the chat wide (rail 168 + divider 6 +
+      // card gutters ≈ 184 → 584 with the 400px floor).
+      const maxChat = Math.max(MIN_CHAT_WIDTH, Math.min(MAX_CHAT_WIDTH, window.innerWidth - 584))
+      setChatWidth(Math.min(maxChat, Math.max(MIN_CHAT_WIDTH, e.clientX)))
     }
     const endDrag = (): void => {
       if (!dragging.current) return
@@ -1112,108 +1117,11 @@ export default function App(): React.JSX.Element {
 
   return (
     <div className="app">
+      {/* Minimal titlebar (claude.ai design-mode style): brand + drag region. The
+          project's URL, branch, and controls live in the preview card's own bar. */}
       <header className="titlebar">
         <span className="titlebar__brand">dsgn</span>
-        <span className="titlebar__hint">{hint}</span>
-        {branch &&
-          (editingBranch ? (
-            <input
-              className="branch__input"
-              defaultValue={branch}
-              autoFocus
-              spellCheck={false}
-              onBlur={(e) => void changeBranch(e.currentTarget.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void changeBranch(e.currentTarget.value)
-                else if (e.key === 'Escape') setEditingBranch(false)
-              }}
-            />
-          ) : (
-            <DropdownMenu onOpenChange={(open) => open && loadBranches()}>
-              <DropdownMenuTrigger asChild>
-                <button className="branch" title="Switch branch">
-                  ⎇ {branch}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
-                {branches.map((b) => (
-                  <DropdownMenuItem key={b} onSelect={() => void switchToBranch(b)}>
-                    <Check className={`size-3.5 ${b === branch ? 'opacity-100' : 'opacity-0'}`} />
-                    <span className="truncate">{b}</span>
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => setEditingBranch(true)}>
-                  New branch…
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ))}
-        <div className="titlebar__actions">
-          {status.kind === 'running' && (
-            <>
-              {/* Icon buttons — shortcuts: S select, C comment, Y annotate. */}
-              <button
-                className={`iconbtn ${selectMode ? 'is-active' : ''}`}
-                onClick={toggleSelect}
-                aria-pressed={selectMode}
-                title="Select an element to edit (S)"
-                aria-label="Select"
-              >
-                <MousePointer2 className="size-4" aria-hidden="true" />
-              </button>
-              {previewKind !== 'simulator' && (
-                <>
-                  <button
-                    className={`iconbtn ${commentMode === 'comment' ? 'is-active' : ''}`}
-                    onClick={() => armComment('comment')}
-                    aria-pressed={commentMode === 'comment'}
-                    title="Comment to the agent on an element (C)"
-                    aria-label="Comment"
-                  >
-                    <MessageSquare className="size-4" aria-hidden="true" />
-                  </button>
-                  <button
-                    className={`iconbtn ${commentMode === 'annotate' ? 'is-active' : ''}`}
-                    onClick={() => armComment('annotate')}
-                    aria-pressed={commentMode === 'annotate'}
-                    title="Pin a note on an element, no agent (Y)"
-                    aria-label="Annotate"
-                  >
-                    <FileText className="size-4" aria-hidden="true" />
-                  </button>
-                </>
-              )}
-              {/* Viewport switch (shadcn Tabs; also Actions menu ⌘1 / ⌘2). */}
-              {previewKind !== 'simulator' && (
-                <Tabs
-                  value={viewport}
-                  onValueChange={(v) =>
-                    useViewport.getState().setViewport(v as 'desktop' | 'mobile')
-                  }
-                >
-                  <TabsList>
-                    <TabsTrigger value="desktop" title="Desktop viewport (⌘1)">
-                      Desktop
-                    </TabsTrigger>
-                    <TabsTrigger value="mobile" title="Mobile viewport (⌘2)">
-                      Mobile
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              )}
-              {/* Publish: commit → push → PR → merge to main → fresh dsgn/* branch. */}
-              <button
-                className="btn btn--primary"
-                onClick={() => void publish()}
-                disabled={publishing}
-                title="Commit & push everything, open a PR, merge to main, and start a fresh branch"
-              >
-                {publishing ? 'Publishing…' : 'Publish'}
-              </button>
-            </>
-          )}
-        </div>
+        {openCount === 0 && <span className="titlebar__status">{hint}</span>}
       </header>
 
       {logOpen && <ConsolePanel />}
@@ -1307,7 +1215,118 @@ export default function App(): React.JSX.Element {
             aria-orientation="vertical"
           />
           <section className="pane pane--preview">
-            <PreviewPane />
+            {/* The preview lives in its own card (Cursor/claude.ai design-mode
+                style): a header bar with the branch, URL, and controls, and the
+                live preview inset below it. */}
+            <div className="previewcard">
+              <div className="previewbar">
+                {branch &&
+                  (editingBranch ? (
+                    <input
+                      className="branch__input"
+                      defaultValue={branch}
+                      autoFocus
+                      spellCheck={false}
+                      onBlur={(e) => void changeBranch(e.currentTarget.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void changeBranch(e.currentTarget.value)
+                        else if (e.key === 'Escape') setEditingBranch(false)
+                      }}
+                    />
+                  ) : (
+                    <DropdownMenu onOpenChange={(open) => open && loadBranches()}>
+                      <DropdownMenuTrigger asChild>
+                        <button className="branch" title="Switch branch">
+                          ⎇ {branch}
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
+                        {branches.map((b) => (
+                          <DropdownMenuItem key={b} onSelect={() => void switchToBranch(b)}>
+                            <Check
+                              className={`size-3.5 ${b === branch ? 'opacity-100' : 'opacity-0'}`}
+                            />
+                            <span className="truncate">{b}</span>
+                          </DropdownMenuItem>
+                        ))}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => setEditingBranch(true)}>
+                          New branch…
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ))}
+                <span className="previewbar__url">{hint}</span>
+                <div className="previewbar__actions">
+                  {status.kind === 'running' && (
+                    <>
+                      {/* Icon buttons — shortcuts: S select, C comment, Y annotate. */}
+                      <button
+                        className={`iconbtn ${selectMode ? 'is-active' : ''}`}
+                        onClick={toggleSelect}
+                        aria-pressed={selectMode}
+                        title="Select an element to edit (S)"
+                        aria-label="Select"
+                      >
+                        <MousePointer2 className="size-4" aria-hidden="true" />
+                      </button>
+                      {previewKind !== 'simulator' && (
+                        <>
+                          <button
+                            className={`iconbtn ${commentMode === 'comment' ? 'is-active' : ''}`}
+                            onClick={() => armComment('comment')}
+                            aria-pressed={commentMode === 'comment'}
+                            title="Comment to the agent on an element (C)"
+                            aria-label="Comment"
+                          >
+                            <MessageSquare className="size-4" aria-hidden="true" />
+                          </button>
+                          <button
+                            className={`iconbtn ${commentMode === 'annotate' ? 'is-active' : ''}`}
+                            onClick={() => armComment('annotate')}
+                            aria-pressed={commentMode === 'annotate'}
+                            title="Pin a note on an element, no agent (Y)"
+                            aria-label="Annotate"
+                          >
+                            <FileText className="size-4" aria-hidden="true" />
+                          </button>
+                        </>
+                      )}
+                      {/* Viewport switch (shadcn Tabs; also Actions menu ⌘1 / ⌘2). */}
+                      {previewKind !== 'simulator' && (
+                        <Tabs
+                          value={viewport}
+                          onValueChange={(v) =>
+                            useViewport.getState().setViewport(v as 'desktop' | 'mobile')
+                          }
+                        >
+                          <TabsList>
+                            <TabsTrigger value="desktop" title="Desktop viewport (⌘1)">
+                              Desktop
+                            </TabsTrigger>
+                            <TabsTrigger value="mobile" title="Mobile viewport (⌘2)">
+                              Mobile
+                            </TabsTrigger>
+                          </TabsList>
+                        </Tabs>
+                      )}
+                      {/* Publish: commit → push → PR → merge to main → fresh dsgn/* branch. */}
+                      <button
+                        className="btn btn--primary"
+                        onClick={() => void publish()}
+                        disabled={publishing}
+                        title="Commit & push everything, open a PR, merge to main, and start a fresh branch"
+                      >
+                        {publishing ? 'Publishing…' : 'Publish'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="previewcard__body">
+                <PreviewPane />
+              </div>
+            </div>
           </section>
         </div>
       )}

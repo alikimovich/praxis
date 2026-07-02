@@ -22,14 +22,14 @@ export default function TokenOfferCard({
 }: Props): React.JSX.Element {
   return (
     <div
-      className="setup flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3.5"
+      className="setup flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3.5 dark:border-blue-900/50 dark:bg-blue-950/30"
       role="region"
       aria-label="Design tokens"
     >
-      <div className="setup__title text-sm font-semibold text-blue-900">
+      <div className="setup__title text-sm font-semibold text-blue-900 dark:text-blue-100">
         Add a starter design-token palette?
       </div>
-      <div className="setup__body text-[12.5px] leading-snug text-blue-800">
+      <div className="setup__body text-[12.5px] leading-snug text-blue-800 dark:text-blue-200/90">
         This project has no design tokens yet. I can create an editable{' '}
         <code>.dsgn/tokens.json</code> with starter colors, spacing, and radii — then you can apply
         them from the inspector and tune them to your brand.

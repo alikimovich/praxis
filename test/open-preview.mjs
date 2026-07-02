@@ -56,7 +56,7 @@ try {
   await win.waitForFunction(
     () =>
       /http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(
-        document.querySelector('.titlebar__hint')?.textContent ?? ''
+        document.querySelector('.previewbar__url')?.textContent ?? ''
       ),
     { timeout: 10000 }
   )

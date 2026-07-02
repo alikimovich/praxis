@@ -77,7 +77,7 @@ try {
     win.waitForFunction(
       () =>
         /http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(
-          document.querySelector('.titlebar__hint')?.textContent ?? ''
+          document.querySelector('.previewbar__url')?.textContent ?? ''
         ),
       { timeout: 60000 }
     )
@@ -124,7 +124,7 @@ try {
   // Switch to A via the rail.
   await win.click('.rail__item:has-text("dsgn-fixture-static") .rail__open')
   await win.waitForFunction(
-    (u) => document.querySelector('.titlebar__hint')?.textContent?.includes(u),
+    (u) => document.querySelector('.previewbar__url')?.textContent?.includes(u),
     new URL(urlA).host,
     { timeout: 10000 }
   )
