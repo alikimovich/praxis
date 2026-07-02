@@ -27,6 +27,7 @@ import {
   useViewport,
   usePreviewFreeze,
   usePublishMode,
+  useRecents,
   useWorkspace,
   type ProjectEntry
 } from './store'
@@ -84,6 +85,7 @@ export default function App(): React.JSX.Element {
   const [publishing, setPublishing] = useState(false)
   const viewport = useViewport((s) => s.viewport)
   const publishMode = usePublishMode((s) => s.mode)
+  const recents = useRecents((s) => s.recents)
   // Latest action handlers, for the global keydown + native-menu listeners (which
   // subscribe once but must call the current closures).
   const actionsRef = useRef<{
@@ -753,6 +755,8 @@ export default function App(): React.JSX.Element {
       // v5: track the open project in the workspace + show its (per-project) chat,
       // so agent events tagged with this project route to the visible chat.
       useWorkspace.getState().openOrActivate(root, { name })
+      // Remember for the empty state's "Recent" list (one-click reopen).
+      useRecents.getState().addRecent(root, name)
       // Start this project's chat fresh — clear any slice a trailing event from a
       // prior session may have resurrected, then show it.
       useChat.getState().clearChat(projectKey(root))
@@ -1287,6 +1291,24 @@ export default function App(): React.JSX.Element {
               </button>
             </div>
             <p className="empty__hint">Open a folder — or start a fresh app — to edit it with dsgn.</p>
+            {recents.length > 0 && (
+              <div className="empty__recents" role="list" aria-label="Recent projects">
+                <div className="empty__recents-head">Recent</div>
+                {recents.slice(0, 5).map((r) => (
+                  <button
+                    key={r.root}
+                    className="empty__recent"
+                    role="listitem"
+                    onClick={() => void attempt(r.root)}
+                    disabled={status.kind === 'busy'}
+                    title={r.root}
+                  >
+                    <span className="empty__recent-name">{r.name}</span>
+                    <span className="empty__recent-path">{r.root}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="empty__cat">
             <CatLoader running={status.kind === 'busy'} />

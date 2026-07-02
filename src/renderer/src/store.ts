@@ -289,6 +289,58 @@ export const usePreviewFreeze = create<PreviewFreezeState>((set) => ({
 }))
 
 /**
+ * Recently opened projects — shown on the empty state for one-click reopening.
+ * Persisted across launches; most recent first, deduped by projectKey.
+ */
+export interface RecentProject {
+  root: string
+  name: string
+  at: number
+}
+const RECENTS_KEY = 'dsgn:recent-projects'
+const readRecents = (): RecentProject[] => {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENTS_KEY) ?? '[]') as RecentProject[]
+    return Array.isArray(v)
+      ? v.filter((r) => r && typeof r.root === 'string' && typeof r.name === 'string')
+      : []
+  } catch {
+    return []
+  }
+}
+const writeRecents = (recents: RecentProject[]): void => {
+  try {
+    localStorage.setItem(RECENTS_KEY, JSON.stringify(recents))
+  } catch {
+    /* private mode / no storage — keep in memory only */
+  }
+}
+interface RecentsState {
+  recents: RecentProject[]
+  addRecent: (root: string, name: string) => void
+  removeRecent: (root: string) => void
+}
+export const useRecents = create<RecentsState>((set) => ({
+  recents: readRecents(),
+  addRecent: (root, name) =>
+    set((s) => {
+      const key = projectKey(root)
+      const recents = [
+        { root, name, at: Date.now() },
+        ...s.recents.filter((r) => projectKey(r.root) !== key)
+      ].slice(0, 8)
+      writeRecents(recents)
+      return { recents }
+    }),
+  removeRecent: (root) =>
+    set((s) => {
+      const recents = s.recents.filter((r) => r.root !== root)
+      writeRecents(recents)
+      return { recents }
+    })
+}))
+
+/**
  * How Publish ends: 'merge' = create the PR and squash-merge it to the default
  * branch (the button reads "Publish"); 'pr' = stop after creating/updating the
  * PR and stay on the work branch (the button reads "Create PR"). Chosen from

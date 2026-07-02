@@ -397,6 +397,59 @@ body {
     background: var(--accent); /* out-specificity .btn:hover's light fill */
     opacity: 0.9;
 }
+/* Recent projects — one-click reopen list under the CTAs. */
+.empty__recents {
+    margin-top: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    width: min(440px, 80vw);
+}
+.empty__recents-head {
+    padding: 0 10px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+.empty__recent {
+    -webkit-app-region: no-drag;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    font: inherit;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+}
+.empty__recent:hover:not(:disabled) {
+    background: var(--bg-subtle);
+}
+.empty__recent:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.empty__recent-name {
+    flex: 0 0 auto;
+    font-weight: 500;
+}
+.empty__recent-path {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl; /* ellipsize from the LEFT — the tail of a path matters most */
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
 .empty__hint {
     margin: 0;
     font-size: 13px;
