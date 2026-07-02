@@ -62,6 +62,8 @@ const api: DsgnApi = {
     setFrame: (active: boolean): void => ipcRenderer.send('preview:set-frame', active),
     /** Snapshot the live preview (freeze-frame under overlay UI). */
     capture: (): Promise<string | null> => ipcRenderer.invoke('preview:capture'),
+    /** In-page bottom-corner masks (desktop viewport); 0 disables. */
+    setCorners: (radius: number): void => ipcRenderer.send('preview:set-corners', radius),
     /** Fires after the previewed app loads, with whether it's source-stamped. */
     onReadiness: (cb: (info: { stamps: number }) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, info: { stamps: number }): void => cb(info)

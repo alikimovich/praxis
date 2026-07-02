@@ -499,6 +499,8 @@ export interface DsgnApi {
     setFrame: (active: boolean) => void
     /** Snapshot the live preview as a data URL (freeze-frame under overlay UI). */
     capture: () => Promise<string | null>
+    /** In-page bottom-corner masks (desktop viewport); 0 disables. */
+    setCorners: (radius: number) => void
     /** Fires after the previewed app loads, reporting source-stamp coverage. */
     onReadiness: (cb: (info: { stamps: number }) => void) => () => void
     /** Fires when the user commits an inline text edit in the preview. */

@@ -22,9 +22,11 @@ import { FRAME_ASPECT, FRAME_INSET, FRAME_DATA_URI } from '../../../shared/iphon
 type Rect = { left: number; top: number; width: number; height: number }
 type ViewRect = Rect & { radius: number }
 
-/** Corner radius of the native view in desktop mode — fits the card's rounded
- *  bottom (12px outer − 1px border) since the view sits flush inside it. */
-export const DESKTOP_VIEW_RADIUS = 11
+/** The card's inner bottom-corner radius (12px outer − 1px border). The native
+ *  view itself stays SQUARE (its top must sit flush under the card header —
+ *  Electron rounds all corners or none), and in-page masks fake the bottom
+ *  rounding at this radius instead. */
+export const DESKTOP_CORNER_RADIUS = 11
 
 export default function PreviewPane(): React.JSX.Element {
   const slotRef = useRef<HTMLDivElement>(null)
@@ -71,15 +73,10 @@ export default function PreviewPane(): React.JSX.Element {
         })
         setBezel({ left: bx - r.x, top: by - r.y, width: w, height: h })
       } else {
-        // Flush inside the card body; rounded to match the card's bottom corners.
-        window.api.preview.setBounds({
-          x: r.x,
-          y: r.y,
-          width: r.width,
-          height: r.height,
-          radius: DESKTOP_VIEW_RADIUS
-        })
-        setViewRect({ left: 0, top: 0, width: r.width, height: r.height, radius: DESKTOP_VIEW_RADIUS })
+        // Flush inside the card body, SQUARE (top corners must not round under
+        // the header); in-page masks below fake the bottom corners' rounding.
+        window.api.preview.setBounds({ x: r.x, y: r.y, width: r.width, height: r.height })
+        setViewRect({ left: 0, top: 0, width: r.width, height: r.height, radius: 0 })
         setBezel(null)
       }
     }
@@ -88,6 +85,8 @@ export default function PreviewPane(): React.JSX.Element {
     // Draw the iPhone bezel INSIDE the preview page (over the app, click-through)
     // in mobile; the DOM <img> below only supplies the device body around it.
     window.api.preview.setFrame(viewport === 'mobile')
+    // Desktop: mask the bottom corners in-page (the masks bake into captures too).
+    window.api.preview.setCorners(viewport === 'desktop' ? DESKTOP_CORNER_RADIUS : 0)
     const ro = new ResizeObserver(report)
     ro.observe(el)
     window.addEventListener('resize', report)

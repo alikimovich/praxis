@@ -30,6 +30,7 @@ const SET_COMMENT_MODE = 'dsgn:preview:set-comment-mode' // renderer → preload
 const COMMENT_MODE = 'dsgn:preview:comment-mode' // preload → renderer (keyboard-initiated)
 const COMMENT = 'dsgn:preview:comment' // preload → renderer (submitted)
 const SET_FRAME = 'dsgn:preview:set-frame' // renderer → preload (mobile bezel overlay)
+const SET_CORNERS = 'dsgn:preview:set-corners' // main → preload (bottom corner masks)
 
 type CommentMode = 'comment' | 'annotate' | null
 
@@ -615,6 +616,37 @@ function setFrame(on: boolean): void {
   positionFrame()
 }
 
+// ── Bottom corner masks ─────────────────────────────────────────────────────
+// The native view sits flush in dsgn's rounded preview card. Electron can only
+// round ALL of the view's corners (setBorderRadius is uniform), which would
+// notch the top corners under the card's header — so the view stays square and
+// these two fixed, click-through overlays fake the bottom rounding instead: a
+// quarter-circle cutout over the window-gutter color, sent by main (it knows
+// the OS theme). position:fixed keeps them pinned through scrolling.
+let cornerHost: HTMLDivElement | null = null
+
+function setCorners(opts: { radius: number; color: string } | null): void {
+  cornerHost?.remove()
+  cornerHost = null
+  if (!opts || opts.radius <= 0) return
+  const { radius, color } = opts
+  const host = document.createElement('div')
+  host.setAttribute('data-dsgn-corners', '')
+  host.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483646'
+  for (const side of ['left', 'right'] as const) {
+    const c = document.createElement('div')
+    // The arc's center sits at the div's inner-top corner; pixels beyond the
+    // radius (toward the outer corner point) paint the gutter color.
+    const at = side === 'left' ? '100% 0%' : '0% 0%'
+    c.style.cssText =
+      `position:fixed;bottom:0;${side}:0;width:${radius}px;height:${radius}px;` +
+      `background:radial-gradient(circle ${radius}px at ${at}, transparent ${radius - 0.5}px, ${color} ${radius + 0.5}px);`
+    host.appendChild(c)
+  }
+  document.documentElement.appendChild(host)
+  cornerHost = host
+}
+
 // Capture-phase so we see events before the page and can suppress the click.
 if (!IS_SIM_BRIDGE) {
   window.addEventListener('mousemove', onMove, true)
@@ -676,4 +708,7 @@ window.addEventListener('load', () => {
     buildPins()
   })
   ipcRenderer.on(SET_FRAME, (_e, on: boolean) => setFrame(on))
+  ipcRenderer.on(SET_CORNERS, (_e, opts: { radius: number; color: string } | null) =>
+    setCorners(opts)
+  )
 }
