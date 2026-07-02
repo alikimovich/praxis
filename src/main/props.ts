@@ -312,26 +312,113 @@ export function withinRoot(root: string, file: string): boolean {
   return !rel.startsWith('..') && !isAbsolute(rel)
 }
 
-/** Resolve a relative import spec to an on-disk file (trying extensions + /index). */
+/** Parsed tsconfig path-mapping: `baseUrl` (absolute) + the raw `paths` map. */
+export interface TsAliases {
+  baseUrl: string
+  paths: Record<string, string[]>
+}
+
+/** Strip `//`/`/* *​/` comments and trailing commas so JSONC tsconfigs parse. */
+function parseJsonc(text: string): unknown {
+  const noComments = text
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+  const noTrailingCommas = noComments.replace(/,(\s*[}\]])/g, '$1')
+  return JSON.parse(noTrailingCommas)
+}
+
+/**
+ * Read a project's TypeScript path aliases (`compilerOptions.paths`/`baseUrl`).
+ * Modern React apps (Vite + shadcn) import via aliases like `@/components/*`
+ * rather than relative paths, so without this cross-file prop resolution never
+ * finds the component definition. Checks `tsconfig.json` first, then follows a
+ * single `extends`, then falls back to the common Vite split `tsconfig.app.json`
+ * — whichever first yields a `paths` map. Never throws (missing/invalid → null).
+ */
+export async function loadTsAliases(root: string): Promise<TsAliases | null> {
+  const tried = new Set<string>()
+  const readConfig = async (file: string): Promise<TsAliases | null> => {
+    if (tried.has(file) || tried.size > 4) return null
+    tried.add(file)
+    let cfg: { compilerOptions?: { baseUrl?: string; paths?: Record<string, string[]> }; extends?: string }
+    try {
+      cfg = parseJsonc(await readFile(file, 'utf8')) as typeof cfg
+    } catch {
+      return null
+    }
+    const co = cfg.compilerOptions ?? {}
+    if (co.paths && Object.keys(co.paths).length) {
+      // `paths` resolve against baseUrl if set, else the tsconfig's own dir.
+      const baseUrl = join(dirname(file), co.baseUrl ?? '.')
+      return { baseUrl, paths: co.paths }
+    }
+    if (typeof cfg.extends === 'string') {
+      const ext = cfg.extends.startsWith('.')
+        ? join(dirname(file), cfg.extends.endsWith('.json') ? cfg.extends : cfg.extends + '.json')
+        : null
+      if (ext) return readConfig(ext)
+    }
+    return null
+  }
+  return (
+    (await readConfig(join(root, 'tsconfig.json'))) ??
+    (await readConfig(join(root, 'tsconfig.app.json')))
+  )
+}
+
+/** Candidate on-disk bases an import spec maps to via tsconfig `paths`/`baseUrl`. */
+function aliasedBases(spec: string, aliases: TsAliases): string[] {
+  const out: string[] = []
+  for (const [pattern, targets] of Object.entries(aliases.paths)) {
+    const star = pattern.indexOf('*')
+    if (star >= 0) {
+      const pre = pattern.slice(0, star)
+      const post = pattern.slice(star + 1)
+      if (spec.startsWith(pre) && spec.endsWith(post) && spec.length >= pre.length + post.length) {
+        const matched = spec.slice(pre.length, spec.length - post.length)
+        for (const t of targets) out.push(join(aliases.baseUrl, t.replace('*', matched)))
+      }
+    } else if (spec === pattern) {
+      for (const t of targets) out.push(join(aliases.baseUrl, t))
+    }
+  }
+  return out
+}
+
+/**
+ * Resolve an import spec to an on-disk file (trying extensions + /index).
+ * Relative specs resolve from `fromDir`; bare specs resolve via tsconfig
+ * `paths` aliases and then a `baseUrl` fallback (both gated to inside the root).
+ */
 async function resolveModulePath(
   root: string,
   fromDir: string,
-  spec: string
+  spec: string,
+  aliases?: TsAliases | null
 ): Promise<string | null> {
-  const base = normalize(join(fromDir, spec))
-  if (!withinRoot(root, base)) return null // never read outside the project
-  const candidates = [
-    base,
-    ...MODULE_EXTS.map((e) => base + e),
-    ...MODULE_EXTS.map((e) => join(base, 'index' + e))
-  ]
-  for (const c of candidates) {
-    if (/\.[a-z]+$/.test(c)) {
-      try {
-        await readFile(c)
-        return c
-      } catch {
-        /* try next */
+  const bases: string[] = []
+  if (spec.startsWith('.')) {
+    bases.push(normalize(join(fromDir, spec)))
+  } else if (aliases) {
+    bases.push(...aliasedBases(spec, aliases).map((b) => normalize(b)))
+    // baseUrl fallback: `import x from "components/..."` with baseUrl "src".
+    bases.push(normalize(join(aliases.baseUrl, spec)))
+  }
+  for (const base of bases) {
+    if (!withinRoot(root, base)) continue // never read outside the project
+    const candidates = [
+      base,
+      ...MODULE_EXTS.map((e) => base + e),
+      ...MODULE_EXTS.map((e) => join(base, 'index' + e))
+    ]
+    for (const c of candidates) {
+      if (/\.[a-z]+$/.test(c)) {
+        try {
+          await readFile(c)
+          return c
+        } catch {
+          /* try next */
+        }
       }
     }
   }
@@ -353,9 +440,11 @@ async function resolveComponentFile(
 ): Promise<{ file: string; exportName: string } | null> {
   const imports: BabelNode[] = []
   collectNodes(ast, 'ImportDeclaration', imports)
+  let aliases: TsAliases | null | undefined
   for (const imp of imports) {
     const src = (imp.source as { value?: string } | undefined)?.value
-    if (typeof src !== 'string' || !src.startsWith('.')) continue // relative only
+    if (typeof src !== 'string') continue
+    const isRelative = src.startsWith('.')
     for (const s of (imp.specifiers as BabelNode[] | undefined) ?? []) {
       const local = (s.local as { name?: string } | undefined)?.name
       if (local !== component) continue
@@ -364,7 +453,9 @@ async function resolveComponentFile(
         s.type === 'ImportSpecifier'
           ? ((s.imported as { name?: string } | undefined)?.name ?? component)
           : component
-      const file = await resolveModulePath(root, dirname(usageFile), src)
+      // Load aliases lazily, once, only when a non-relative import is in play.
+      if (!isRelative && aliases === undefined) aliases = await loadTsAliases(root)
+      const file = await resolveModulePath(root, dirname(usageFile), src, aliases)
       return file ? { file, exportName } : null
     }
   }

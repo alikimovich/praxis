@@ -135,11 +135,19 @@ export async function commitWorktree(
   wt: Worktree,
   message: string
 ): Promise<{ committed: boolean; files: string[] }> {
+  // Collapse EVERYTHING the spawn produced into a single commit off the fork
+  // point — the uncommitted WIP AND any commits the agent made on its own (the
+  // spawn runs bypassPermissions and nothing forbids `git commit`). A soft reset
+  // to baseSha keeps the index+worktree but moves the branch ref back, so the one
+  // commit below captures the whole change. Without this, an agent that committed
+  // and left a clean tree would stage nothing → be reported as "no changes" and
+  // have its branch deleted (data loss); and a multi-commit branch would defeat
+  // `branchPatch`'s `branch^..branch`. The reset is a no-op when HEAD == baseSha.
+  await git(wt.path, ['reset', '--soft', wt.baseSha]).catch(() => {})
   await git(wt.path, ['add', '-A'])
-  // The spawn runs bypassPermissions (headless — no card to approve), which skips
-  // the canUseTool sidecar deny. `.dsgn/` is dsgn-managed and NOT gitignored in
-  // target repos, so unstage it here: a spawn's accidental sidecar writes must never
-  // reach the durable branch or the apply patch. (The Bash allowlist is deferred.)
+  // `.dsgn/` is dsgn-managed and NOT gitignored in target repos, so unstage it: a
+  // spawn's accidental sidecar writes must never reach the durable branch or the
+  // apply patch. (The Bash allowlist is deferred.)
   await git(wt.path, ['reset', '-q', '--', '.dsgn']).catch(() => {})
   const staged = (await git(wt.path, ['diff', '--cached', '--name-only'])).stdout
     .split('\n')
@@ -147,12 +155,16 @@ export async function commitWorktree(
     .filter(Boolean)
   if (staged.length === 0) return { committed: false, files: [] }
   // Identity is forced inline so a spawn commits even if the repo has no user.name.
+  // `--no-verify` skips the target repo's pre-commit/commit-msg hooks (husky,
+  // lint-staged) — WIP won't pass them and a failing hook would silently abort
+  // the spawn's finalization, losing the work.
   await git(wt.path, [
     '-c',
     'user.name=dsgn',
     '-c',
     'user.email=dsgn@local',
     'commit',
+    '--no-verify',
     '-m',
     message || 'dsgn comment edit'
   ])
@@ -367,6 +379,7 @@ export async function pruneOrphans(
         '-c',
         'user.email=dsgn@local',
         'commit',
+        '--no-verify',
         '-m',
         'dsgn: recovered orphaned worktree'
       ]).catch(() => {})

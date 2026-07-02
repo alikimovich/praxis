@@ -60,10 +60,12 @@ try {
     throw new Error(`preview never loaded ${base}`)
   }
   const loadPreview = (url) => win.evaluate((u) => window.api.preview.load(u), url)
+  // The page bakes in its per-bridge token as window.__DSGN_SIM_TOKEN; ride it on
+  // the same-origin /control call the way the page's own post() does.
   const postCtl = (url, cmd) =>
     previewExec(
       url,
-      `fetch('/control',{method:'POST',body:JSON.stringify(${JSON.stringify(cmd)})}).then(r=>r.json())`
+      `fetch('/control?token='+encodeURIComponent(window.__DSGN_SIM_TOKEN),{method:'POST',body:JSON.stringify(${JSON.stringify(cmd)})}).then(r=>r.json())`
     )
 
   // --- pure mapping + input validation ---
@@ -94,6 +96,18 @@ try {
   assert(
     recorded.length === 1 && recorded[0].type === 'tap' && recorded[0].x === 0.5,
     `controller should have recorded the tap: ${JSON.stringify(recorded)}`
+  )
+
+  // --- a /control POST WITHOUT the token is rejected (403) ---
+  const noTok = await previewExec(
+    interactive.url,
+    `fetch('/control',{method:'POST',body:JSON.stringify({type:'tap',x:0.5,y:0.5})}).then(r=>r.status)`
+  )
+  assert(noTok === 403, `token-less /control must be rejected: got ${noTok}`)
+  const recordedAfterNoTok = await app.evaluate(() => globalThis.__dsgnTestControl())
+  assert(
+    recordedAfterNoTok.length === 1,
+    `token-less POST must not run a command: ${JSON.stringify(recordedAfterNoTok)}`
   )
 
   // --- the bridge page carries the capture script (globals present, flag on) ---

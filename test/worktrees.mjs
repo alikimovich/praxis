@@ -18,6 +18,7 @@ import {
   applyToWorkingTree,
   autoApplyWorktree,
   removeWorktree,
+  branchPatch,
   pruneOrphans
 } from '../src/main/worktrees.ts'
 import { execFileSync } from 'node:child_process'
@@ -122,6 +123,32 @@ try {
   ok(!existsSync(wtA.path), 'worktree checkout removed')
   const branches = g(repo, 'branch', '--list', wtA.branch)
   ok(branches.includes(wtA.branch), 'branch kept as the durable record')
+
+  // --- data-loss guard: an agent that COMMITS its own work (+ leaves WIP) must
+  // still be captured as ONE commit off the fork point, not reported "no changes" ---
+  const wtC = await createWorktree(repo, worktreesDir, { label: 'self-commit' })
+  writeFileSync(join(wtC.path, 'Committed.tsx'), 'export const C = () => null\n')
+  // The spawned agent commits its own change (nothing forbids it) …
+  g(wtC.path, '-c', 'user.name=A', '-c', 'user.email=a@l', 'add', '-A')
+  g(wtC.path, '-c', 'user.name=A', '-c', 'user.email=a@l', 'commit', '-q', '-m', 'agent self-commit')
+  // … then leaves further uncommitted WIP on top.
+  writeFileSync(join(wtC.path, 'Extra.tsx'), 'export const E = () => null\n')
+  const c = await commitWorktree(wtC, 'self-commit run')
+  ok(c.committed, 'commitWorktree reports the agent-committed work (not "no changes")')
+  ok(
+    c.files.includes('Committed.tsx') && c.files.includes('Extra.tsx'),
+    `both the agent commit AND the later WIP are captured: ${JSON.stringify(c.files)}`
+  )
+  // Exactly one commit off base → branchPatch (branch^..branch) sees the WHOLE change.
+  const revs = g(wtC.path, 'rev-list', `${wtC.baseSha}..HEAD`).trim().split('\n').filter(Boolean)
+  ok(revs.length === 1, `squashed to a single commit off base: ${revs.length}`)
+  await removeWorktree(repo, wtC, { keepBranch: true })
+  const bp = await branchPatch(repo, wtC.branch)
+  ok(
+    /Committed\.tsx/.test(bp) && /Extra\.tsx/.test(bp),
+    'branchPatch carries both files (not a truncated last-commit-only patch)'
+  )
+  await removeWorktree(repo, wtC, { keepBranch: false })
 
   // --- pruneOrphans reclaims a leftover checkout, recovering its dirty work to the
   // branch — but SKIPS a checkout named as live (an active spawn this session) ---

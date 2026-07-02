@@ -1,6 +1,7 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
 import { spawn, execFile, type ChildProcess } from 'child_process'
-import { createServer, type Server, type ServerResponse } from 'http'
+import { randomBytes } from 'crypto'
+import { createServer, type Server, type ServerResponse, type IncomingMessage } from 'http'
 import { readFile, unlink } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -37,7 +38,7 @@ const MJPEG_BOUNDARY = 'dsgnframe'
 // Phase 2: when `interactive`, the page captures tap/swipe/scroll/type on the
 // <img>, converts to a 0..1 fraction of the device content (object-fit:contain
 // aware), and POSTs to /control — which idb replays on the device.
-function pageHtml(interactive: boolean): string {
+function pageHtml(interactive: boolean, token: string): string {
   return `<!doctype html>
 <html>
   <head>
@@ -92,17 +93,24 @@ function pageHtml(interactive: boolean): string {
   <body>
     <div id="device">
       <div id="screen-box">
-        <img id="screen" src="/stream" alt="iOS Simulator" draggable="false" tabindex="0" />
+        <img id="screen" src="/stream?token=${token}" alt="iOS Simulator" draggable="false" tabindex="0" />
       </div>
       <img id="bezel" src="${FRAME_DATA_URI}" alt="" draggable="false" />
     </div>
     ${interactive ? '' : '<div id="hint">View-only — install <code>idb</code> for tap &amp; type</div>'}
     <script>
       var INTERACTIVE = ${interactive ? 'true' : 'false'};
+      // Per-bridge secret, baked into this server-rendered page. Required on
+      // /control and /stream so a random webpage in the user's browser can't
+      // drive the simulator or read its screen (it can't read this HTML
+      // cross-origin, so it can't learn the token). Exposed for the test harness.
+      var TOKEN = ${JSON.stringify(token)};
+      window.__DSGN_SIM_TOKEN = TOKEN;
       var img = document.getElementById('screen');
       function post(cmd) {
         if (!INTERACTIVE) return;
-        fetch('/control', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        fetch('/control?token=' + encodeURIComponent(TOKEN), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(cmd) }).catch(function(){});
       }
       // Pixel position on the screen <img> → 0..1 fraction. The img box IS the
@@ -446,11 +454,16 @@ interface Bridge {
 }
 
 function writeFrameTo(res: ServerResponse, jpeg: Buffer): void {
-  res.write(
-    `--${MJPEG_BOUNDARY}\r\nContent-Type: image/jpeg\r\nContent-Length: ${jpeg.length}\r\n\r\n`
-  )
-  res.write(jpeg)
-  res.write('\r\n')
+  if (res.writableEnded || res.destroyed) return
+  try {
+    res.write(
+      `--${MJPEG_BOUNDARY}\r\nContent-Type: image/jpeg\r\nContent-Length: ${jpeg.length}\r\n\r\n`
+    )
+    res.write(jpeg)
+    res.write('\r\n')
+  } catch {
+    /* broken socket — the res 'error'/'close' handler will drop it */
+  }
 }
 
 function startBridge(
@@ -462,6 +475,26 @@ function startBridge(
     let latest: Buffer | null = null
     let gotFrame = false
     const clients = new Set<ServerResponse>()
+    // Per-bridge secret required on the privileged routes. See pageHtml.
+    const token = randomBytes(16).toString('hex')
+    // Cap concurrent MJPEG viewers so a misbehaving/hostile client can't open an
+    // unbounded number of streams (each gets every frame).
+    const MAX_STREAM_CLIENTS = 8
+
+    // Reject anything not coming from the local bridge origin (blunts DNS
+    // rebinding: the browser keeps the attacker's hostname in the Host header
+    // even after the name resolves to 127.0.0.1).
+    const hostOk = (req: IncomingMessage): boolean => {
+      const h = req.headers.host
+      return h === `${HOST}:${port}` || h === `localhost:${port}`
+    }
+    const tokenOk = (req: IncomingMessage): boolean => {
+      try {
+        return new URL(req.url || '/', `http://${HOST}:${port}`).searchParams.get('token') === token
+      } catch {
+        return false
+      }
+    }
 
     let resolveFirst!: () => void
     let rejectFirst!: (e: Error) => void
@@ -484,25 +517,39 @@ function startBridge(
     }
 
     const server = createServer((req, res) => {
-      // The bridge binds to 127.0.0.1 only; allow the renderer (a different origin)
-      // to reach /control. A text/plain body keeps the POST a "simple" request
-      // (no CORS preflight); the handler JSON-parses regardless of content type.
-      res.setHeader('Access-Control-Allow-Origin', '*')
+      // The bridge binds to 127.0.0.1, but the loopback port is still reachable
+      // by any local process / webpage — so gate on the Host header (rebinding)
+      // and, on the privileged routes, a per-bridge token. NO CORS headers: a
+      // cross-origin page can't read this page's HTML, so it never learns the
+      // token. The renderer loads `/` in the preview view (same origin) and the
+      // baked-in token rides its own /control + /stream calls.
+      if (!hostOk(req)) {
+        res.writeHead(403)
+        res.end()
+        return
+      }
       const path = (req.url || '/').split('?')[0]
       if (path === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
-        res.end(pageHtml(interaction != null))
+        res.end(pageHtml(interaction != null, token))
         return
       }
       // Phase 2: replay a tap/swipe/type on the device (bounded body). Without a
       // controller (no idb) the device is view-only → report it, don't error.
       if (path === '/control' && req.method === 'POST') {
+        if (!tokenOk(req)) {
+          res.writeHead(403)
+          res.end()
+          return
+        }
         let raw = ''
         let tooBig = false
         req.on('data', (c) => {
           raw += c
           if (raw.length > 4096) {
             tooBig = true
+            res.writeHead(413)
+            res.end()
             req.destroy()
           }
         })
@@ -541,6 +588,16 @@ function startBridge(
         return
       }
       if (path === '/stream') {
+        if (!tokenOk(req)) {
+          res.writeHead(403)
+          res.end()
+          return
+        }
+        if (clients.size >= MAX_STREAM_CLIENTS) {
+          res.writeHead(503)
+          res.end()
+          return
+        }
         res.writeHead(200, {
           'Content-Type': `multipart/x-mixed-replace; boundary=${MJPEG_BOUNDARY}`,
           'Cache-Control': 'no-store',
@@ -549,7 +606,15 @@ function startBridge(
         })
         clients.add(res)
         if (latest) writeFrameTo(res, latest) // paint the current frame immediately
-        req.on('close', () => clients.delete(res))
+        // Drop the client on close OR error (a half-open socket never fires
+        // 'close'); the error handler also stops an unhandled 'error' from a
+        // write to a broken socket taking down the process.
+        const drop = (): void => {
+          clients.delete(res)
+        }
+        req.on('close', drop)
+        res.on('close', drop)
+        res.on('error', drop)
         return
       }
       res.writeHead(404)
