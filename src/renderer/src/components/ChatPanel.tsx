@@ -18,7 +18,7 @@ import {
   useTokens
 } from '../store'
 import { projectKey } from '../../../shared/projectKey'
-import type { QuestionAnswers, SetupResult, Token } from '../../../shared/api'
+import type { QuestionAnswers, SetupResult } from '../../../shared/api'
 import Inspector from './Inspector'
 import Markdown from './Markdown'
 import NotesPanel from './NotesPanel'
@@ -34,7 +34,7 @@ import {
 import { InputGroup, InputGroupAddon } from '@/components/ui/input-group'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { ArrowUp, ChevronRight } from 'lucide-react'
+import { ArrowUp, Check, ChevronRight, Copy } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import CatLoader from './CatLoader'
 
@@ -113,6 +113,28 @@ function StepDisclosure({
   )
 }
 
+/** Hover action row under a finished assistant message — just Copy for now. */
+function CopyAction({ text }: { text: string }): React.JSX.Element {
+  const [copied, setCopied] = useState(false)
+  return (
+    <div className="msg__actions">
+      <button
+        className="msg__action"
+        aria-label="Copy message"
+        title="Copy"
+        onClick={() => {
+          void navigator.clipboard.writeText(text).then(() => {
+            setCopied(true)
+            setTimeout(() => setCopied(false), 1500)
+          })
+        }}
+      >
+        {copied ? <Check className="size-3.5" aria-hidden="true" /> : <Copy className="size-3.5" aria-hidden="true" />}
+      </button>
+    </div>
+  )
+}
+
 function setupPrompt(res: SetupResult): string | null {
   const file = res.files?.[0]
   switch (res.framework) {
@@ -177,7 +199,6 @@ export default function ChatPanel(): React.JSX.Element {
   const questions = useQuestions((s) => s.pending)
   const removeQuestion = useQuestions((s) => s.removeRequest)
   const { list: notes, focusedId, setList: setNotes } = useAnnotations()
-  const tokenSet = useTokens((s) => s.set)
   const tokens = useTokens()
   const setup = useSetup()
   const composerSeed = useComposer((s) => s.seed)
@@ -410,50 +431,6 @@ export default function ChatPanel(): React.JSX.Element {
     }
   }
 
-  // Apply a design token to the selected element. Direct-first: when the token
-  // maps to an existing literal (a schema enum prop, a single inline-style
-  // property), it's spliced straight to source (instant hot-reload, no agent);
-  // ambiguous cases fall back to a sanitized agent prompt. Page/repo-derived
-  // strings are bounded via oneLine so an injected value can't masquerade as a new
-  // instruction in that fallback.
-  const pickToken = (group: string, token: Token): void => {
-    if (!selected || !projectRoot) return
-    const id = selected.id ? oneLine(selected.id, 64) : ''
-    const cls = selected.classes[0] ? oneLine(selected.classes[0], 64) : ''
-    const ident = id ? `#${id}` : cls ? `.${cls}` : ''
-    const seedFallback = (): void =>
-      seedPrompt(
-        `Apply the ${oneLine(group, 32)} token “${oneLine(token.name, 80)}” (${oneLine(token.value, 120)}) to the selected ` +
-          `<${oneLine(selected.tag, 32)}${ident}> element. `
-      )
-    // Snapshot the target so a mid-flight selection/project switch can't have a
-    // stale re-inspect stamp this element's props over the new selection.
-    const root = projectRoot
-    const src = selected.source
-    void window.api.props
-      .applyToken(root, { source: src, token, group, tokenSource: tokenSet?.source ?? 'none', classes: selected.classes })
-      .then((res) => {
-        if (!res.applied) {
-          seedFallback() // needsAgent or error → let the agent handle it
-          return
-        }
-        // Refresh the panel from the now-edited source — only if still current.
-        if (src)
-          void window.api.props
-            .inspect(root, src)
-            .then((r) => {
-              if (
-                r &&
-                useSession.getState().projectRoot === root &&
-                useSelection.getState().selected?.source === src
-              )
-                useSelection.getState().setInspection(r)
-            })
-            .catch(() => {})
-      })
-      .catch(seedFallback)
-  }
-
   // "Ask dsgn to change this…" — seed the composer with the element reference
   // (and its source location) so the agent edits the right place, then close
   // the inspector and drop the cursor at the end for the user to type the change.
@@ -631,7 +608,7 @@ export default function ChatPanel(): React.JSX.Element {
           stream, with a scroll-to-bottom affordance). Replaces the old manual
           listRef scroll effect. */}
       <Conversation className="chat__messages min-h-0 flex-1">
-        <ConversationContent className="gap-3.5 p-4">
+        <ConversationContent className="gap-3.5 p-4 pt-11">
           {setup.needed && !setup.dismissed && (
             <SetupCard
               busy={setup.busy}
@@ -679,6 +656,9 @@ export default function ChatPanel(): React.JSX.Element {
                     {m.text}
                   </div>
                 ))}
+              {m.role === 'assistant' && m.text && !(isRunning && idx === messages.length - 1) && (
+                <CopyAction text={m.text} />
+              )}
             </div>
           ))}
         </ConversationContent>
@@ -712,8 +692,6 @@ export default function ChatPanel(): React.JSX.Element {
             onAsk={askAboutSelection}
             onClear={() => setSelected(null)}
             onAddNote={addNote}
-            tokens={tokenSet}
-            onPickToken={pickToken}
             onSelectOwner={() => {
               // v8 F3a: re-point the selection at the component-instance call site
               // so the panel (props.inspect) edits this instance's props. One level

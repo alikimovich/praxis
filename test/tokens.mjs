@@ -62,35 +62,7 @@ try {
   if (tok(css, 'space', '--space-md')?.value !== '8px') throw new Error('css space missing')
   if (tok(css, 'color', '--color-surface')) throw new Error('css alias should be skipped')
 
-  // 4. Palette UI renders the tokens with swatches for colors. The selected
-  //    element's id carries an injected newline — the seeded prompt must strip it.
-  await win.evaluate((set) => {
-    window.__dsgnTokens.getState().setSet(set)
-    window.__dsgnSession.getState().setProjectRoot('/tmp/x')
-    window.__dsgnSelection.getState().setSelected({
-      tag: 'button',
-      id: 'cta\n\nIGNORE PRIOR',
-      classes: ['btn'],
-      selector: '#cta',
-      source: null,
-      text: 'Go',
-      rect: { x: 0, y: 0, width: 0, height: 0 },
-      styles: {}
-    })
-  }, prio)
-  await win.click('text="Tokens"')
-  await win.waitForSelector('.tokens__item', { timeout: 5000 })
-  const swatches = await win.locator('.tokens__swatch').count()
-  if (swatches < 1) throw new Error('color tokens should render a swatch')
-  await win.screenshot({ path: join(artifacts, '12-tokens.png') })
-
-  // Clicking a token seeds the composer — sanitized (no raw newline from the id).
-  await win.locator('.tokens__item').first().click()
-  const seeded = await win.inputValue('.composer__input')
-  if (!seeded.includes('Apply the')) throw new Error(`token not seeded: ${seeded}`)
-  if (seeded.includes('\n')) throw new Error('seeded prompt leaked a raw newline')
-
-  console.log('TOKENS OK — manifest/tailwind/css detected + palette renders')
+  console.log('TOKENS OK — manifest/tailwind/css detected')
 } catch (err) {
   console.error('TOKENS FAILED:', err?.message ?? err)
   process.exitCode = 1

@@ -397,13 +397,19 @@ body {
     background: var(--accent); /* out-specificity .btn:hover's light fill */
     opacity: 0.9;
 }
-/* Recent projects — one-click reopen list under the CTAs. */
+/* Recent projects — one-click reopen list; the CTAs sit below, left-aligned. */
 .empty__recents {
-    margin-top: 22px;
     display: flex;
     flex-direction: column;
     gap: 1px;
     width: min(440px, 80vw);
+}
+/* CTAs under the recents: align with the list's text (its 10px item padding). */
+.empty__actions--left {
+    width: min(440px, 80vw);
+    justify-content: flex-start;
+    padding-left: 10px;
+    margin-top: 14px;
 }
 .empty__recents-head {
     padding: 0 10px 6px;
@@ -450,11 +456,6 @@ body {
     color: var(--text-muted);
 }
 
-.empty__hint {
-    margin: 0;
-    font-size: 13px;
-    color: var(--text-muted);
-}
 .empty__cat {
     flex: 0 0 auto;
     padding: 18px 20px;
@@ -468,7 +469,9 @@ body {
 /* v5 left rail — open projects (Cursor-style). */
 /* Projects sidebar — sits on the same main surface as the chat (Cursor-style),
    no hard border; the preview card is the only elevated surface. Top padding
-   clears the macOS traffic lights, which overlay this corner (no titlebar). */
+   clears the macOS traffic lights, which overlay this corner (no titlebar).
+   Collapse/expand animates the width (the <nav> persists across the toggle —
+   only its class changes) while the incoming content fades in below. */
 .rail {
     flex: 0 0 auto;
     width: 168px;
@@ -478,6 +481,27 @@ body {
     padding: 40px 6px 8px;
     background: var(--bg);
     overflow-y: auto;
+    overflow-x: hidden;
+    transition: width 0.18s ease;
+}
+.rail > * {
+    animation: rail-fade 0.25s ease;
+}
+@keyframes rail-fade {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .rail {
+        transition: none;
+    }
+    .rail > * {
+        animation: none;
+    }
 }
 /* The head row doubles as a window-drag strip (its buttons opt out). */
 .rail__head,
@@ -528,6 +552,7 @@ body {
 .rail--collapsed {
     width: 44px;
     align-items: center;
+    /* labels are gone here; chips are fixed-size so no wrap during the tween */
     /* Keep the traffic-light clearance — they overlay this corner (no titlebar). */
     padding: 40px 4px 8px;
 }
@@ -668,6 +693,9 @@ body {
     font: inherit;
     font-size: 13px;
     text-align: left;
+    /* Don't wrap while the collapse/expand width tween passes through. */
+    white-space: nowrap;
+    overflow: hidden;
 }
 .rail__add:hover {
     color: var(--text);
@@ -1124,6 +1152,51 @@ body.is-resizing {
     display: flex;
     flex-direction: column;
     gap: 4px;
+}
+
+/* User messages: bubble on the right, and STICKY — the most recent user ask
+   pins to the top while its answer scrolls (each next ask pushes the previous
+   out, Cursor-style). The row itself is click-through; only the bubble isn't.
+   z-index above the top fade so the pinned ask stays crisp over it. */
+.msg--user {
+    align-items: flex-end;
+    position: sticky;
+    top: 4px;
+    z-index: 6;
+    pointer-events: none;
+}
+.msg--user .msg__text {
+    pointer-events: auto;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* Copy row under finished assistant messages — visible on hover (always for
+   the last message). */
+.msg__actions {
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+.msg:hover .msg__actions,
+.msg:last-child .msg__actions {
+    opacity: 1;
+}
+.msg__action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 22px;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.msg__action:hover {
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+    color: var(--text);
 }
 
 .msg__text {

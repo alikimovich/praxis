@@ -1274,23 +1274,8 @@ export default function App(): React.JSX.Element {
         // project is starting up).
         <div className="empty">
           <div className="empty__center">
-            <div className="empty__actions">
-              <button
-                className="btn empty__open"
-                onClick={openProjectSmart}
-                disabled={status.kind === 'busy'}
-              >
-                {status.kind === 'busy' ? 'Working…' : 'Open project'}
-              </button>
-              <button
-                className="btn empty__new"
-                onClick={() => void createNewProject()}
-                disabled={status.kind === 'busy'}
-              >
-                New project
-              </button>
-            </div>
-            <p className="empty__hint">Open a folder — or start a fresh app — to edit it with dsgn.</p>
+            {/* With recents: the list leads and the CTAs sit under it, left-
+                aligned. Without: just the CTAs, centered. */}
             {recents.length > 0 && (
               <div className="empty__recents" role="list" aria-label="Recent projects">
                 <div className="empty__recents-head">Recent</div>
@@ -1309,6 +1294,22 @@ export default function App(): React.JSX.Element {
                 ))}
               </div>
             )}
+            <div className={`empty__actions ${recents.length > 0 ? 'empty__actions--left' : ''}`}>
+              <button
+                className="btn empty__open"
+                onClick={openProjectSmart}
+                disabled={status.kind === 'busy'}
+              >
+                {status.kind === 'busy' ? 'Working…' : 'Open project'}
+              </button>
+              <button
+                className="btn empty__new"
+                onClick={() => void createNewProject()}
+                disabled={status.kind === 'busy'}
+              >
+                New project
+              </button>
+            </div>
           </div>
           <div className="empty__cat">
             <CatLoader running={status.kind === 'busy'} />

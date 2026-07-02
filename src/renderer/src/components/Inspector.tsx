@@ -1,18 +1,9 @@
 import { useState } from 'react'
-import type { SelectedElement, Token, TokenSet } from '../../../shared/api'
-import TokenPalette from './TokenPalette'
+import type { SelectedElement } from '../../../shared/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-
-/** A couple of the captured computed styles, shown as quick chips. */
-const STYLE_CHIPS: { key: string; label: string }[] = [
-  { key: 'color', label: 'color' },
-  { key: 'background-color', label: 'bg' },
-  { key: 'font-size', label: 'size' },
-  { key: 'padding', label: 'pad' }
-]
 
 interface Props {
   element: SelectedElement
@@ -27,17 +18,13 @@ interface Props {
   onClear: () => void
   /** Save a reviewer note pinned to this element; resolves false if it failed. */
   onAddNote: (text: string) => Promise<boolean>
-  /** Detected design tokens for the project (null until loaded). */
-  tokens: TokenSet | null
-  /** Apply a token to this element (seeds the chat). */
-  onPickToken: (group: string, token: Token) => void
   /** v8 F3a: re-select the owning component instance (edits per-instance props). */
   onSelectOwner: () => void
 }
 
 /**
  * The selection chip in the chat — what was picked, a readiness hint, and the
- * Note / Tokens / Ask actions. When the component is dsgn-ready its props are
+ * Note / Ask actions. When the component is dsgn-ready its props are
  * edited in the floating panel (App); when it isn't, this is prompt-only.
  */
 export default function Inspector({
@@ -48,18 +35,14 @@ export default function Inspector({
   onAsk,
   onClear,
   onAddNote,
-  tokens,
-  onPickToken,
   onSelectOwner
 }: Props): React.JSX.Element {
   // Show the "edit owner component" affordance when the clicked host resolved to a
   // different component-instance call site (the authored <Component …/>).
   const hasOwner = !!element.componentSource && element.componentSource !== element.source
-  const [showTokens, setShowTokens] = useState(false)
   const [noting, setNoting] = useState(false)
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
-  const hasTokens = !!tokens && tokens.groups.length > 0
 
   const saveNote = async (): Promise<void> => {
     const text = note.trim()
@@ -157,23 +140,6 @@ export default function Inspector({
         </div>
       )}
 
-      <div className="inspector__chips flex flex-wrap gap-[5px]">
-        {STYLE_CHIPS.map(({ key, label }) =>
-          element.styles[key] ? (
-            <Badge
-              key={key}
-              variant="outline"
-              className="inspector__chip max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[10.5px] font-normal text-muted-foreground"
-              title={`${key}: ${element.styles[key]}`}
-            >
-              {label}: {element.styles[key]}
-            </Badge>
-          ) : null
-        )}
-      </div>
-
-      {showTokens && tokens && <TokenPalette tokenSet={tokens} onPick={onPickToken} />}
-
       {noting && (
         <div className="inspector__note flex flex-col gap-1.5">
           <Textarea
@@ -202,16 +168,6 @@ export default function Inspector({
       )}
 
       <div className="inspector__actions flex gap-1.5">
-        {hasTokens && (
-          <Button
-            variant={showTokens ? 'default' : 'outline'}
-            size="sm"
-            className="inspector__toggle"
-            onClick={() => setShowTokens((s) => !s)}
-          >
-            Tokens
-          </Button>
-        )}
         <Button
           variant={noting ? 'default' : 'outline'}
           size="sm"
