@@ -374,4 +374,4 @@ async function startSession(
   }
 }
 
-export const claudeProvider: ModelProvider = { id: 'claude', startSession }
+export const claudeProvider: ModelProvider = { id: 'claude', supportsSpawn: true, startSession }

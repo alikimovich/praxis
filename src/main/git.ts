@@ -47,7 +47,9 @@ export async function isRepoRoot(root: string): Promise<boolean> {
  *  titlebar branch switcher. Carries uncommitted changes across like git does. */
 export async function checkoutBranch(root: string, branch: string): Promise<BranchResult> {
   try {
-    await git(root, ['checkout', branch])
+    // `--` end-of-options so a branch name that happens to start with `-` can't
+    // be parsed as a git flag (defense-in-depth; the value comes from the IPC).
+    await git(root, ['checkout', '--end-of-options', branch])
     return { isRepo: true, branch, created: false }
   } catch (e) {
     return {

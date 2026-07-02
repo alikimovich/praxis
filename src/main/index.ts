@@ -77,6 +77,34 @@ function isLocalPreviewUrl(url: string): boolean {
   }
 }
 
+/** Open a URL in the user's browser, but only for safe web/mail schemes. */
+function openExternalSafe(url: string): void {
+  try {
+    const { protocol } = new URL(url)
+    if (protocol === 'http:' || protocol === 'https:' || protocol === 'mailto:') {
+      void shell.openExternal(url)
+    }
+  } catch {
+    /* malformed URL — ignore */
+  }
+}
+
+/**
+ * Compare two URLs by their canonical form. Chromium canonicalizes URLs it
+ * reports back (`validatedURL`, `getURL()`) — e.g. it appends a trailing slash
+ * to an origin-only URL — while the URL we're handed from the renderer is not.
+ * A raw `===` therefore never matches for root URLs, silently disabling the
+ * did-fail-load retry and the did-finish-load overlay re-arm. Canonicalize both.
+ */
+function sameUrl(a: string | null, b: string | null): boolean {
+  if (!a || !b) return false
+  try {
+    return new URL(a).toString() === new URL(b).toString()
+  } catch {
+    return a === b
+  }
+}
+
 /**
  * Cmd/Ctrl+R must NOT reload the dsgn renderer: that wipes the chat + the open
  * project (renderer-only zustand state) while the native preview WebContentsView
@@ -164,20 +192,24 @@ function ensurePreviewView(): WebContentsView {
     ]).popup()
   })
 
-  // The previewed app is untrusted-ish: keep it on its own local origin.
+  // The previewed app is untrusted-ish: keep it on its own local origin, and
+  // never hand it a URL scheme the OS could act on (file:/smb:/custom protocol
+  // handlers). Only web + mail links escape to the user's browser.
   wc.setWindowOpenHandler(({ url }) => {
-    if (!isLocalPreviewUrl(url)) shell.openExternal(url)
+    if (!isLocalPreviewUrl(url)) openExternalSafe(url)
     return { action: 'deny' }
   })
   wc.on('will-navigate', (e, url) => {
-    if (url.startsWith('data:') || isLocalPreviewUrl(url)) return
+    if (isLocalPreviewUrl(url)) return
+    // A page-initiated data:/blob: navigation would replace the preview with
+    // attacker HTML that still has our preload injected — block it outright.
     e.preventDefault()
-    shell.openExternal(url)
+    openExternalSafe(url)
   })
 
   // Retry transient failures (dev server up but not serving yet).
   wc.on('did-fail-load', (_e, errorCode, _desc, validatedURL, isMainFrame) => {
-    if (!isMainFrame || !previewUrl || validatedURL !== previewUrl) return
+    if (!isMainFrame || !previewUrl || !sameUrl(validatedURL, previewUrl)) return
     if (!TRANSIENT_LOAD_ERRORS.has(errorCode) || previewRetries >= 40) return
     previewRetries++
     setTimeout(() => previewUrl && previewView?.webContents.loadURL(previewUrl), 400)
@@ -187,7 +219,7 @@ function ensurePreviewView(): WebContentsView {
   // The preload re-ran on this fresh page, so re-arm select mode if it was on —
   // but only on the real preview page, never the "no project" placeholder.
   wc.on('did-finish-load', () => {
-    if (previewUrl && wc.getURL() === previewUrl) {
+    if (previewUrl && sameUrl(wc.getURL(), previewUrl)) {
       previewRetries = 0
       if (selectModeActive) wc.send(PREVIEW_SET_MODE, true)
       if (commentModeActive) wc.send(PREVIEW_SET_COMMENT_MODE, commentModeActive)

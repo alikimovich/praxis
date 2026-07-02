@@ -58,6 +58,16 @@ const sessions = new Map<string, ProviderSession>()
 let activeKey: string | null = null
 const activeSession = (): ProviderSession | null =>
   activeKey ? (sessions.get(activeKey) ?? null) : null
+// The project the renderer LAST asked to make active (via open-project or
+// set-active), recorded synchronously. A slow first-time open (the ESM SDK
+// `import()`) must not claim `activeKey` if the user has since switched away —
+// otherwise `agent:send` (which routes to the active session) would run the next
+// turn in the wrong repo. Every open re-checks this before taking `activeKey`.
+let intendedKey: string | null = null
+// In-flight open-project promises, keyed by projectKey, so two rapid opens of the
+// SAME project serialize (the second waits for the first, then replaces it) rather
+// than both creating a session and leaking the loser's subprocess.
+const opening = new Map<string, Promise<void>>()
 
 // v8 F1: detached comment spawns — background agents each in their OWN git worktree,
 // keyed by spawn id. Kept SEPARATE from `sessions` so they never touch `activeKey`
@@ -278,22 +288,39 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   getWindow_ = getWindow // share with finalizeSpawn (runs outside this closure)
   ipcMain.handle('agent:open-project', async (_e, root: string, options: AgentOptions = {}) => {
     const key = projectKey(root)
-    // Reopening the same project starts a fresh session — close the old one.
-    const existing = sessions.get(key)
-    if (existing) {
-      closeSession(existing)
-      sessions.delete(key)
-    }
-    const s = await pickProvider(options).startSession(root, options, getWindow)
-    sessions.set(key, s)
-    activeKey = key
-    // v8 F1: reclaim any comment-spawn worktrees orphaned by a prior crash/quit —
-    // pruneOrphans commits dirty leftovers to their branch (recovering the work)
-    // before removing the checkout. Skip ids of spawns live THIS session (their
-    // checkouts are under the same dir). Best-effort, fire-and-forget.
-    if (await isRepoRoot(root)) {
-      void pruneOrphans(root, worktreesDir(), new Set(spawns.keys())).catch(() => {})
-    }
+    // This is the renderer's latest intent — record it synchronously, before any await.
+    intendedKey = key
+    // Serialize opens of the SAME project: wait for any in-flight open to settle so
+    // we don't create two sessions and strand the first (a leaked subprocess whose
+    // events keep streaming under the same key).
+    const prior = opening.get(key)
+    const run = (async () => {
+      if (prior) await prior.catch(() => {})
+      // Reopening the same project starts a fresh session — close the old one.
+      const existing = sessions.get(key)
+      if (existing) {
+        closeSession(existing)
+        sessions.delete(key)
+      }
+      const s = await pickProvider(options).startSession(root, options, getWindow)
+      sessions.set(key, s)
+      // Only claim the active slot if the renderer still wants this project active.
+      // A later open/set-active for a different project moved `intendedKey` on, and
+      // that project's own turn is what should stream.
+      if (intendedKey === key) activeKey = key
+      // v8 F1: reclaim any comment-spawn worktrees orphaned by a prior crash/quit —
+      // pruneOrphans commits dirty leftovers to their branch (recovering the work)
+      // before removing the checkout. Skip ids of spawns live THIS session (their
+      // checkouts are under the same dir). Best-effort, fire-and-forget.
+      if (await isRepoRoot(root)) {
+        void pruneOrphans(root, worktreesDir(), new Set(spawns.keys())).catch(() => {})
+      }
+    })()
+    opening.set(key, run)
+    void run.finally(() => {
+      if (opening.get(key) === run) opening.delete(key)
+    })
+    return run
   })
 
   // Close a project's session (renderer single-active teardown; the rail uses
@@ -309,6 +336,9 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     // backgrounded session (it would start emitting into a chat the renderer isn't
     // showing). The renderer re-activates explicitly via open-project.
     if (activeKey === key) activeKey = null
+    // Clear intent too, so an open of this project still in flight can't claim the
+    // active slot for a project the user just closed.
+    if (intendedKey === key) intendedKey = null
     // v8 F3b: drop the project's undo/redo history — a reopened project starts fresh.
     clearHistory(root)
   })
@@ -317,6 +347,9 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   // recreating it — used by the rail when switching between open projects.
   ipcMain.handle('agent:set-active', async (_e, root: string) => {
     const key = projectKey(root)
+    // Record intent regardless, so a slow in-flight open of a DIFFERENT project
+    // won't steal `activeKey` back after this switch.
+    intendedKey = key
     if (sessions.has(key)) activeKey = key
   })
 
@@ -400,6 +433,12 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     async (_e, root: string, text: string, options: AgentOptions = {}) => {
       // Worktrees need a repo TOP LEVEL — a non-repo (or subdir) falls back to chat.
       if (!(await isRepoRoot(root))) return { ok: false, reason: 'not-a-repo' }
+      // Only backends that honor SpawnContext can run a detached spawn; on the
+      // others a spawn would never finalize (worktree + rail row leak forever),
+      // so refuse and let the renderer run the comment in the main chat instead.
+      if (!pickProvider(options).supportsSpawn) {
+        return { ok: false, reason: 'unsupported-backend' }
+      }
       const parentKey = projectKey(root)
       // Stable id assigned up front so the rail row survives a queued→running flip.
       const id = randomUUID().slice(0, 8)

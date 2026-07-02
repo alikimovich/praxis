@@ -117,6 +117,21 @@ try {
   }
   if (field(cross, 'label')?.value !== 'Go') throw new Error('cross-file live value (label) wrong')
 
+  // Cross-file via a tsconfig PATH ALIAS: <Button> imported as `@/Button` (the
+  // shadcn/Vite convention). Resolution must follow the alias to Button.tsx —
+  // without it, no imported component in an aliased project surfaces props.
+  const aliased = await win.evaluate((args) => window.api.props.inspect(args.fixture, args.src), {
+    fixture,
+    src: 'src/AliasCard.tsx:6'
+  })
+  if (aliased?.component !== 'Button') {
+    throw new Error(`alias cross-file component: ${aliased?.component} (expected Button)`)
+  }
+  const aliasedKind = field(aliased, 'kind')
+  if (aliasedKind?.kind !== 'enum' || !aliasedKind.options?.includes('ghost')) {
+    throw new Error('alias cross-file enum schema (kind) not resolved from Button.tsx via @/ alias')
+  }
+
   // --- Broadened literals: TS-cast (`as const`) + no-substitution template
   // literal read as plain literals, not `expression:true`. (Badge.tsx:31) ---
   const B2 = 'src/Badge.tsx:31'
