@@ -160,6 +160,20 @@ body {
 .btn.btn--primary:hover:not(:disabled) {
     background: #1d4ed8;
 }
+/* Publish split button — two joined primary segments (action + mode caret). */
+.pubgroup {
+    display: inline-flex;
+}
+.pubgroup .pubgroup__main {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+.pubgroup .pubgroup__caret {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    padding: 0 6px;
+    border-left: 1px solid rgba(255, 255, 255, 0.25);
+}
 /* Icon-only titlebar buttons (Select / Comment / Annotate). Shortcuts: S / C / Y. */
 .iconbtn {
     -webkit-app-region: no-drag;

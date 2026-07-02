@@ -605,7 +605,7 @@ export interface DsgnApi {
     toPr: (root: string, opts: { title: string }) => Promise<PublishResult>
     /** Full ship: commit all → push → PR → squash-merge to the default branch →
      *  pull it → delete the merged branch → start a fresh dsgn/* branch. */
-    ship: (root: string, summary?: string[]) => Promise<PublishResult>
+    ship: (root: string, summary?: string[], mode?: 'merge' | 'pr') => Promise<PublishResult>
   }
   setup: {
     /** Write the dev-only source-stamping plugin into the repo (deterministic). */

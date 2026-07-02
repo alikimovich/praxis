@@ -185,8 +185,8 @@ const api: DsgnApi = {
   publish: {
     toPr: (root: string, opts: { title: string }): Promise<PublishResult> =>
       ipcRenderer.invoke('publish:to-pr', root, opts),
-    ship: (root: string, summary?: string[]): Promise<PublishResult> =>
-      ipcRenderer.invoke('publish:ship', root, summary)
+    ship: (root: string, summary?: string[], mode?: 'merge' | 'pr'): Promise<PublishResult> =>
+      ipcRenderer.invoke('publish:ship', root, summary, mode)
   },
   setup: {
     scaffold: (root: string): Promise<SetupResult> => ipcRenderer.invoke('setup:scaffold', root),

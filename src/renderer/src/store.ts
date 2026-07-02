@@ -281,6 +281,37 @@ export const usePreviewFreeze = create<PreviewFreezeState>((set) => ({
   setFrozen: (frozen) => set({ frozen })
 }))
 
+/**
+ * How Publish ends: 'merge' = create the PR and squash-merge it to the default
+ * branch (the button reads "Publish"); 'pr' = stop after creating/updating the
+ * PR and stay on the work branch (the button reads "Create PR"). Chosen from
+ * the split button's settings menu; persisted across launches.
+ */
+export type PublishMode = 'merge' | 'pr'
+const PUBLISH_MODE_KEY = 'dsgn:publish-mode'
+const readPublishMode = (): PublishMode => {
+  try {
+    return localStorage.getItem(PUBLISH_MODE_KEY) === 'pr' ? 'pr' : 'merge'
+  } catch {
+    return 'merge'
+  }
+}
+interface PublishModeState {
+  mode: PublishMode
+  setMode: (mode: PublishMode) => void
+}
+export const usePublishMode = create<PublishModeState>((set) => ({
+  mode: readPublishMode(),
+  setMode: (mode) => {
+    try {
+      localStorage.setItem(PUBLISH_MODE_KEY, mode)
+    } catch {
+      /* private mode / no storage — keep it in memory only */
+    }
+    set({ mode })
+  }
+}))
+
 // Follow the OS live — no manual toggle; the tool's theme is always the Mac's.
 try {
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {

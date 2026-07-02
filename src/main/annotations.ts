@@ -165,7 +165,11 @@ async function publishToPr(root: string, opts: { title: string }): Promise<Publi
  * local branch → start a fresh same-named dsgn/* branch off the updated base to
  * keep working on. One-click ship-and-continue.
  */
-async function shipToMain(root: string, summary: string[] = []): Promise<PublishResult> {
+async function shipToMain(
+  root: string,
+  summary: string[] = [],
+  mode: 'merge' | 'pr' = 'merge'
+): Promise<PublishResult> {
   let branch: string
   try {
     await git(root, ['rev-parse', '--is-inside-work-tree'])
@@ -231,7 +235,13 @@ async function shipToMain(root: string, summary: string[] = []): Promise<Publish
       )
       url = existing.stdout.trim()
       if (!url) throw e
+      // Reused an open PR (PR-only mode publishes again onto the same branch):
+      // refresh its title/body to the cumulative summary. Best-effort.
+      await gh(['pr', 'edit', branch, '--title', msg.title, '--body', msg.body]).catch(() => {})
     }
+    // PR-only mode stops here — stay on the work branch with the PR open for
+    // review; publishing again updates the same PR.
+    if (mode === 'pr') return { ok: true, branch, ...(url ? { url } : {}) }
     // 4. Squash-merge into base + delete the remote branch. Explicit subject
     // and body so the merge commit's message never falls back to the repo's
     // "default commit message" setting; keep GitHub's "(#N)" convention.
@@ -265,7 +275,7 @@ export function registerAnnotationsIpc(): void {
   ipcMain.handle('publish:to-pr', (_e, root: string, opts: { title: string }) =>
     publishToPr(root, opts)
   )
-  ipcMain.handle('publish:ship', (_e, root: string, summary?: string[]) =>
-    shipToMain(root, summary ?? [])
+  ipcMain.handle('publish:ship', (_e, root: string, summary?: string[], mode?: 'merge' | 'pr') =>
+    shipToMain(root, summary ?? [], mode ?? 'merge')
   )
 }

@@ -26,6 +26,7 @@ import {
   useTokens,
   useViewport,
   usePreviewFreeze,
+  usePublishMode,
   useWorkspace,
   type ProjectEntry
 } from './store'
@@ -37,9 +38,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator
+  DropdownMenuSeparator,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem
 } from '@/components/ui/dropdown-menu'
-import { Check } from 'lucide-react'
+import { Check, ChevronDown } from 'lucide-react'
 import Rail from './components/Rail'
 import type {
   CommentMode,
@@ -80,6 +83,7 @@ export default function App(): React.JSX.Element {
   const [previewKind, setPreviewKind] = useState<PreviewKind>('web')
   const [publishing, setPublishing] = useState(false)
   const viewport = useViewport((s) => s.viewport)
+  const publishMode = usePublishMode((s) => s.mode)
   // Latest action handlers, for the global keydown + native-menu listeners (which
   // subscribe once but must call the current closures).
   const actionsRef = useRef<{
@@ -814,8 +818,14 @@ export default function App(): React.JSX.Element {
     const root = useSession.getState().projectRoot
     if (!root || publishing) return
     setPublishing(true)
+    const mode = usePublishMode.getState().mode
     const log = useLog.getState()
-    log.append('Publishing — commit → push → PR → merge → new branch…', 'server')
+    log.append(
+      mode === 'merge'
+        ? 'Publishing — commit → push → PR → merge → new branch…'
+        : 'Creating PR — commit → push → PR…',
+      'server'
+    )
     const key = projectKey(root)
     const msgs = useChat.getState().byKey[key]?.messages ?? []
     const since = useWorkspace.getState().projects.find((p) => p.key === key)?.publishedMsgCount ?? 0
@@ -824,16 +834,22 @@ export default function App(): React.JSX.Element {
       .filter((m) => m.role === 'user')
       .map((m) => m.text)
     try {
-      const res = await window.api.publish.ship(root, asks)
+      const res = await window.api.publish.ship(root, asks, mode)
       if (res.ok) {
-        useWorkspace.getState().patchEntry(key, { publishedMsgCount: msgs.length })
+        // PR-only keeps the branch (and its open PR) accumulating — the ask
+        // summary should stay cumulative until a merge, so don't advance the
+        // marker for it.
+        if (mode === 'merge') useWorkspace.getState().patchEntry(key, { publishedMsgCount: msgs.length })
         if (res.branch) {
           useSession.getState().setBranch(res.branch)
           useWorkspace.getState().patchEntry(projectKey(root), { branch: res.branch })
           if (res.branch) void window.api.agent.tagSession(root, { branch: res.branch })
         }
+        if (res.url) void window.api.agent.tagSession(root, { prUrl: res.url })
         log.append(
-          `Published${res.url ? ` — ${res.url}` : ''}. Merged to main; now on ${res.branch}.`,
+          mode === 'merge'
+            ? `Published${res.url ? ` — ${res.url}` : ''}. Merged to main; now on ${res.branch}.`
+            : `PR ready${res.url ? ` — ${res.url}` : ''}. Staying on ${res.branch}; publish again to update it.`,
           'success'
         )
       } else {
@@ -1366,15 +1382,55 @@ export default function App(): React.JSX.Element {
                           </TabsList>
                         </Tabs>
                       )}
-                      {/* Publish: commit → push → PR → merge to main → fresh dsgn/* branch. */}
-                      <button
-                        className="btn btn--primary"
-                        onClick={() => void publish()}
-                        disabled={publishing}
-                        title="Commit & push everything, open a PR, merge to main, and start a fresh branch"
-                      >
-                        {publishing ? 'Publishing…' : 'Publish'}
-                      </button>
+                      {/* Publish split button: the main segment runs the selected
+                          mode (full publish vs PR-only); the caret picks it. */}
+                      <div className="pubgroup">
+                        <button
+                          className="btn btn--primary pubgroup__main"
+                          onClick={() => void publish()}
+                          disabled={publishing}
+                          title={
+                            publishMode === 'merge'
+                              ? 'Commit & push everything, open a PR, merge to main, and start a fresh branch'
+                              : 'Commit & push everything and open (or update) a PR — no merge'
+                          }
+                        >
+                          {publishing
+                            ? publishMode === 'merge'
+                              ? 'Publishing…'
+                              : 'Creating PR…'
+                            : publishMode === 'merge'
+                              ? 'Publish'
+                              : 'Create PR'}
+                        </button>
+                        <DropdownMenu
+                          onOpenChange={(open) => usePreviewFreeze.getState().setFrozen(open)}
+                        >
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              className="btn btn--primary pubgroup__caret"
+                              disabled={publishing}
+                              aria-label="Publish settings"
+                              title="Choose what Publish does"
+                            >
+                              <ChevronDown className="size-3.5" aria-hidden="true" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuRadioGroup
+                              value={publishMode}
+                              onValueChange={(v) =>
+                                usePublishMode.getState().setMode(v as 'merge' | 'pr')
+                              }
+                            >
+                              <DropdownMenuRadioItem value="merge">
+                                Create PR and merge to main
+                              </DropdownMenuRadioItem>
+                              <DropdownMenuRadioItem value="pr">Create PR</DropdownMenuRadioItem>
+                            </DropdownMenuRadioGroup>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </>
                   )}
                 </div>
