@@ -212,6 +212,9 @@ export interface ProjectEntry {
   launchSpec: LaunchSpec | null
   /** Monotonic recency stamp (bumped on activate) — drives LRU warm-server eviction. */
   touchedAt: number
+  /** Chat length at the last successful Publish — the next Publish summarizes
+   *  only the user asks after this point. */
+  publishedMsgCount?: number
 }
 
 interface WorkspaceState {

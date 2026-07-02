@@ -5,6 +5,7 @@ import { join } from 'path'
 import { promisify } from 'util'
 import type { Annotation, AnnotationInput, PublishResult } from '../shared/api'
 import { buildPrBody } from '../shared/pr-body'
+import { buildPublishMessage } from '../shared/publish-message'
 
 /**
  * Annotation sidecar + engineer handoff (v3). Reviewer notes are pinned to
@@ -164,7 +165,7 @@ async function publishToPr(root: string, opts: { title: string }): Promise<Publi
  * local branch → start a fresh same-named dsgn/* branch off the updated base to
  * keep working on. One-click ship-and-continue.
  */
-async function shipToMain(root: string): Promise<PublishResult> {
+async function shipToMain(root: string, summary: string[] = []): Promise<PublishResult> {
   let branch: string
   try {
     await git(root, ['rev-parse', '--is-inside-work-tree'])
@@ -202,9 +203,14 @@ async function shipToMain(root: string): Promise<PublishResult> {
 
   try {
     // 1. Commit all changes (gitignore-respected). Skip the commit if clean.
+    // Title + body come from the session's user requests (and the diffstat vs
+    // base), so the branch commit, the PR, and the squash-merge commit all read
+    // as the actual work — not "dsgn: publish <branch>".
     await git(root, ['add', '-A'])
+    const diffstat = await git(root, ['diff', '--stat', base]).catch(() => '')
+    const msg = buildPublishMessage(branch, summary, diffstat)
     const staged = await git(root, ['diff', '--cached', '--name-only'])
-    if (staged) await git(root, ['commit', '-m', `dsgn: publish ${branch}`])
+    if (staged) await git(root, ['commit', '-m', msg.title, '-m', msg.body])
     const ahead = await git(root, ['rev-list', '--count', `${base}..${branch}`]).catch(() => '0')
     if (!staged && ahead === '0') {
       return { ok: false, error: `Nothing to publish — no changes since ${base}.` }
@@ -216,7 +222,7 @@ async function shipToMain(root: string): Promise<PublishResult> {
     try {
       const { stdout } = await gh([
         'pr', 'create', '--base', base, '--head', branch,
-        '--title', `dsgn: ${branch}`, '--body', 'Published from dsgn.'
+        '--title', msg.title, '--body', msg.body
       ])
       url = stdout.trim().split('\n').find((l) => /^https?:\/\//.test(l)) ?? ''
     } catch (e) {
@@ -226,8 +232,15 @@ async function shipToMain(root: string): Promise<PublishResult> {
       url = existing.stdout.trim()
       if (!url) throw e
     }
-    // 4. Squash-merge into base + delete the remote branch.
-    await gh(['pr', 'merge', branch, '--squash', '--delete-branch'])
+    // 4. Squash-merge into base + delete the remote branch. Explicit subject
+    // and body so the merge commit's message never falls back to the repo's
+    // "default commit message" setting; keep GitHub's "(#N)" convention.
+    const prNumber = url.match(/\/pull\/(\d+)/)?.[1]
+    await gh([
+      'pr', 'merge', branch, '--squash', '--delete-branch',
+      '--subject', prNumber ? `${msg.title} (#${prNumber})` : msg.title,
+      '--body', msg.body
+    ])
     // 5. Update the local base branch.
     await git(root, ['checkout', base])
     await git(root, ['pull', '--ff-only', 'origin', base])
@@ -252,5 +265,7 @@ export function registerAnnotationsIpc(): void {
   ipcMain.handle('publish:to-pr', (_e, root: string, opts: { title: string }) =>
     publishToPr(root, opts)
   )
-  ipcMain.handle('publish:ship', (_e, root: string) => shipToMain(root))
+  ipcMain.handle('publish:ship', (_e, root: string, summary?: string[]) =>
+    shipToMain(root, summary ?? [])
+  )
 }

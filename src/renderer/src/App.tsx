@@ -807,15 +807,26 @@ export default function App(): React.JSX.Element {
   // Publish: commit everything on the current dsgn/* branch, push, open a PR,
   // squash-merge it to main, pull main, delete the merged branch, and start a
   // fresh same-named branch to keep working on. Progress + result go to the log.
+  // The commit/PR/merge messages summarize the user asks since the LAST publish
+  // (tracked per-project via publishedMsgCount), so the GitHub history reads as
+  // the actual work.
   const publish = async (): Promise<void> => {
     const root = useSession.getState().projectRoot
     if (!root || publishing) return
     setPublishing(true)
     const log = useLog.getState()
     log.append('Publishing — commit → push → PR → merge → new branch…', 'server')
+    const key = projectKey(root)
+    const msgs = useChat.getState().byKey[key]?.messages ?? []
+    const since = useWorkspace.getState().projects.find((p) => p.key === key)?.publishedMsgCount ?? 0
+    const asks = msgs
+      .slice(since)
+      .filter((m) => m.role === 'user')
+      .map((m) => m.text)
     try {
-      const res = await window.api.publish.ship(root)
+      const res = await window.api.publish.ship(root, asks)
       if (res.ok) {
+        useWorkspace.getState().patchEntry(key, { publishedMsgCount: msgs.length })
         if (res.branch) {
           useSession.getState().setBranch(res.branch)
           useWorkspace.getState().patchEntry(projectKey(root), { branch: res.branch })
