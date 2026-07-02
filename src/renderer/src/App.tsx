@@ -1080,6 +1080,10 @@ export default function App(): React.JSX.Element {
     useSetup.getState().reset()
     void window.api.preview.setSelectMode(false)
     window.api.preview.setPanelInset(0)
+    // Unload the previewed page FIRST — the server/agent teardown below takes
+    // seconds (and can throw); the stale app must not linger over the empty
+    // state meanwhile. (PreviewPane's unmount also zeroes the view's bounds.)
+    await window.api.preview.reset()
     const spec = launchSpec.current
     launchSpec.current = null
     if (spec?.previewKind === 'simulator') await window.api.simulator.stop()
@@ -1091,7 +1095,6 @@ export default function App(): React.JSX.Element {
       useChat.getState().clearChat(projectKey(closing))
     }
     useChat.getState().setActiveChat('')
-    await window.api.preview.reset()
     setRetry(null)
     setPreviewKind('web')
     setStatus({ kind: 'idle' })

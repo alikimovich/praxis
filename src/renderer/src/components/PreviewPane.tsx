@@ -66,6 +66,11 @@ export default function PreviewPane(): React.JSX.Element {
     return () => {
       ro.disconnect()
       window.removeEventListener('resize', report)
+      // No slot → no native view. Zero the bounds so closing the last project
+      // (or any path that unmounts the panes) can't leave the preview floating
+      // over the empty state with stale bounds — visible AND click-eating. On a
+      // viewport switch the effect re-runs and report() restores bounds at once.
+      window.api.preview.setBounds({ x: 0, y: 0, width: 0, height: 0 })
     }
   }, [viewport])
 
