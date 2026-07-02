@@ -345,9 +345,6 @@ body {
     background: var(--bg);
     -webkit-app-region: drag;
 }
-.empty__open {
-    -webkit-app-region: no-drag;
-}
 .empty__center {
     flex: 1 1 auto;
     display: flex;
@@ -356,11 +353,21 @@ body {
     justify-content: center;
     gap: 12px;
 }
+/* Neutral accent fill (black on light / white on dark) — the blue primary is
+   reserved for Publish. */
 .empty__open {
+    -webkit-app-region: no-drag;
     height: 34px;
     padding: 0 18px;
     font-size: 13px;
     border-radius: 9px;
+    background: var(--accent);
+    color: var(--bg);
+    border-color: transparent;
+}
+.empty__open:hover:not(:disabled) {
+    background: var(--accent); /* out-specificity .btn:hover's light fill */
+    opacity: 0.9;
 }
 .empty__hint {
     margin: 0;

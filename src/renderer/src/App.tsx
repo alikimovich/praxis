@@ -1186,7 +1186,7 @@ export default function App(): React.JSX.Element {
         <div className="empty">
           <div className="empty__center">
             <button
-              className="btn btn--primary empty__open"
+              className="btn empty__open"
               onClick={openProjectSmart}
               disabled={status.kind === 'busy'}
             >
