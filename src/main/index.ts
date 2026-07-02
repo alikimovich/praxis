@@ -6,6 +6,7 @@ import {
   ipcMain,
   dialog,
   shell,
+  nativeTheme,
   type MenuItemConstructorOptions
 } from 'electron'
 import { join } from 'path'
@@ -53,17 +54,37 @@ let panelInset = 0
 // Chromium error codes worth retrying — the dev server is up but not yet serving.
 const TRANSIENT_LOAD_ERRORS = new Set([-324, -102, -101, -105, -106, -109])
 
+// Empty-state shown in the native preview view. Themed via prefers-color-scheme
+// so it tracks the OS (matching the renderer, which also follows the OS) — and
+// adapts live if the user flips the system appearance while it's showing.
 const PLACEHOLDER_HTML = `data:text/html;charset=utf-8,${encodeURIComponent(`
   <html>
-    <body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;
-                 font-family:-apple-system,system-ui,sans-serif;color:#8a8a8a;background:#fafafa;">
+    <head>
+      <meta name="color-scheme" content="light dark">
+      <style>
+        body { margin:0; height:100vh; display:flex; align-items:center; justify-content:center;
+               font-family:-apple-system,system-ui,sans-serif; color:#8a8a8a; background:#fafafa; }
+        .ph-title { font-size:15px; font-weight:600; color:#555; }
+        .ph-sub { font-size:13px; margin-top:6px; }
+        @media (prefers-color-scheme: dark) {
+          body { color:#8d8d94; background:#111113; }
+          .ph-title { color:#ededed; }
+        }
+      </style>
+    </head>
+    <body>
       <div style="text-align:center">
-        <div style="font-size:15px;font-weight:600;color:#555">No project open</div>
-        <div style="font-size:13px;margin-top:6px">Open a folder to launch its dev server here.</div>
+        <div class="ph-title">No project open</div>
+        <div class="ph-sub">Open a folder to launch its dev server here.</div>
       </div>
     </body>
   </html>
 `)}`
+
+/** Base color painted behind the preview view — tracks the OS appearance so the
+ *  empty state (and the flash before a project's page loads) isn't a white slab
+ *  in dark mode. */
+const previewBg = (): string => (nativeTheme.shouldUseDarkColors ? '#111113' : '#ffffff')
 
 /**
  * The preview is a native WebContentsView layered over the renderer (not an
@@ -167,7 +188,7 @@ function ensurePreviewView(): WebContentsView {
       preload: join(__dirname, '../preload/preview.js')
     }
   })
-  previewView.setBackgroundColor('#ffffff')
+  previewView.setBackgroundColor(previewBg())
   previewView.webContents.loadURL(PLACEHOLDER_HTML)
   mainWindow?.contentView.addChildView(previewView)
 
@@ -242,7 +263,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     show: false,
-    backgroundColor: '#ffffff',
+    backgroundColor: previewBg(),
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -252,6 +273,15 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
+
+  // Keep the native surfaces' base color in step with the OS appearance (the
+  // placeholder HTML re-themes itself via prefers-color-scheme; this handles the
+  // solid fill behind it and the window).
+  nativeTheme.on('updated', () => {
+    const bg = previewBg()
+    mainWindow?.setBackgroundColor(bg)
+    previewView?.setBackgroundColor(bg)
+  })
 
   // Open external links in the user's browser, never in-app.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
