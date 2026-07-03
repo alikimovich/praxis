@@ -1344,6 +1344,11 @@ export default function App(): React.JSX.Element {
             onReview={setReviewing}
           />
           <section className="pane pane--chat" style={{ width: chatWidth }}>
+            {/* Window-drag strip across the chat's top edge — the one top-of-window
+                region that isn't already a drag surface (the rail head and the
+                previewbar are). Absolute + low z-index so it adds no layout and
+                stays below the pinned ask (z 6) and the top fade (z 5). */}
+            <div className="chat-drag" aria-hidden="true" />
             <ChatPanel />
           </section>
           <div
