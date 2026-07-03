@@ -36,6 +36,22 @@ drawer under the preview with saves routed through `commitEdit` — is on TASKS.
   can't download (GitHub releases blocked) — `typecheck`, `build`, and all pure
   bun tests are green here; run `bun run verify` locally to exercise the
   Electron suite including the new test.
+## 2026-07-02 — provider-seam: don't depend on real CLIs being absent
+
+`test/provider-seam.mjs` asserted the codex/gemini backends fail soft "when the
+CLI is absent" — but on dev machines the CLIs can resolve: a user-installed
+`gemini` (~/.bun/bin), and the `codex` shim that `bun run` puts on PATH via the
+repo's `node_modules/.bin` (from `@openai/codex-sdk`). Then the probe/spawn
+succeeds, a real (unauthenticated) turn spins on 401 retries, and the test —
+and `bun run verify` — fails. (Standalone `node test/provider-seam.mjs` passed
+because plain `node` doesn't prepend `node_modules/.bin`, which made it look flaky.)
+
+- `backends/codex.ts` / `backends/gemini.ts`: CLI binary is overridable via
+  `DSGN_CODEX_BIN` / `DSGN_GEMINI_BIN` (default unchanged: `codex` / `gemini`).
+- `test/provider-seam.mjs`: launches Electron with both vars pointed at
+  nonexistent paths, so the fail-soft assertions hold regardless of what's
+  installed; codex `done` assertion now dumps the event stream on failure.
+
 ## 2026-07-02 — Viewport (Desktop/Mobile) is now per-project
 
 User report: pick Mobile on one project, open/switch to another → it's Mobile
