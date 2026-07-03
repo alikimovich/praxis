@@ -23,7 +23,9 @@ import { dsgnRules } from '../rules'
  * checkpoint mode or ACP for a persistent thread).
  */
 
-const GEMINI_BIN = 'gemini'
+// Overridable so tests can force the CLI-absent path even on machines where a
+// real `gemini` is installed (provider-seam asserts the fail-soft behavior).
+const GEMINI_BIN = process.env.DSGN_GEMINI_BIN || 'gemini'
 
 /** Map one parsed Gemini JSONL event to a dsgn AgentEvent (or null to ignore). */
 function mapEvent(ev: unknown): AgentEvent | null {
