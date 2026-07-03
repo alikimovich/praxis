@@ -79,7 +79,9 @@ try {
       tap: s.parseControlCommand({ type: 'tap', x: 0.1, y: 0.2 }),
       badX: s.parseControlCommand({ type: 'tap', x: 'nope', y: 0.2 }),
       evil: s.parseControlCommand({ type: 'rm-rf', x: 0, y: 0 }),
-      swipe: s.parseControlCommand({ type: 'swipe', x: 0, y: 0, x2: 0.5, y2: 0.9 })
+      swipe: s.parseControlCommand({ type: 'swipe', x: 0, y: 0, x2: 0.5, y2: 0.9 }),
+      tapArgs: s.idbUiArgs('U-1', { type: 'tap', x: 0.5, y: 0.5 }, { width: 390, height: 844 }),
+      textArgs: s.idbUiArgs('U-1', { type: 'text', text: 'hi' }, { width: 390, height: 844 })
     }
   })
   assert(m.mid.x === 195 && m.mid.y === 422, `fractionToPoints mid: ${JSON.stringify(m.mid)}`)
@@ -88,6 +90,17 @@ try {
   assert(m.swipe && m.swipe.type === 'swipe', 'valid swipe should parse')
   assert(m.badX === null, 'non-numeric coord must be rejected')
   assert(m.evil === null, 'unknown command type must be rejected')
+  // --udid must FOLLOW the `ui <cmd>` subcommand — as a leading global flag idb's
+  // argparse rejects the whole invocation (a usage error that exits 0-visible only
+  // on stderr, i.e. interaction dies silently). Lock the order.
+  assert(
+    m.tapArgs.join(' ') === 'ui tap --udid U-1 195 422',
+    `idbUiArgs tap order: ${JSON.stringify(m.tapArgs)}`
+  )
+  assert(
+    m.textArgs.join(' ') === 'ui text --udid U-1 hi',
+    `idbUiArgs text order: ${JSON.stringify(m.textArgs)}`
+  )
 
   // --- interactive bridge: a /control POST is replayed (recorded here) ---
   const interactive = await app.evaluate(() => globalThis.__dsgnStartTestBridge(true))

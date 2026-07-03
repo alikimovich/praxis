@@ -555,8 +555,9 @@ export interface DsgnApi {
     /** Phase 3: arm/disarm element-select (a tap becomes a source pick). */
     setSelectMode: (active: boolean) => Promise<void>
     onLog: (cb: (line: string) => void) => () => void
-    /** A tapped simulator element resolved to its RN source (via the testID stamp). */
-    onElementPicked: (cb: (pick: { source: string; tag: string }) => void) => () => void
+    /** A tapped simulator element, resolved to its RN source when the testID
+     * stamp is present (null source → project not set up for select). */
+    onElementPicked: (cb: (pick: { source: string | null; tag: string }) => void) => () => void
   }
   props: {
     /**
