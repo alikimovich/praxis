@@ -102,6 +102,10 @@ web browser. Phased: mirror → interact → element-select. See
       (`Controller`/`idbController`/`fractionToPoints`/`parseControlCommand`); `test/sim-control.mjs`
       covers mapping/validation, the transport, the capture script, and degrade (off-macOS via
       the test bridge). A live tap on a booted device stays macOS+idb-gated (like sim-e2e).
+      **Fixed 2026-07-02:** live taps had never actually worked — `--udid` was passed before
+      the subcommand (idb rejects it there) and a stale idb_companion wedged all commands
+      silently. Arg order locked by `idbUiArgs` + sim-control; stale-companion auto-recovery +
+      `idbHealthy()` gate added; failures now surface (page hint / sim log / null-source pick).
 - [x] **Phase 3 — element-select → RN source.** ✅ 2026-06-27 (PR #39) — `setup.ts`
       `babel-plugin-rn` strategy stamps `testID="dsgn:path:line:col"` (the data-dsgn-source
       analog; iOS surfaces it as the accessibility id); `react-native` framework detection

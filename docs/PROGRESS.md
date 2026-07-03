@@ -2,6 +2,47 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-02 — Fix: simulator interaction & element-select were silently dead
+
+User report: an RN/Expo project previews fine, but taps/scrolls do nothing and
+Select never picks anything. Two independent bugs, both invisible because every
+error on the interaction path was swallowed:
+
+- **`--udid` arg order (the primary bug):** `idbController` invoked
+  `idb --udid <udid> ui tap x y` — idb's argparse rejects `--udid` before the
+  root command, so **every tap/swipe/text had always failed** with a usage error
+  (which only sim-e2e-style live runs could catch; the recording test bridge
+  never exercises real idb). The flag must FOLLOW the subcommand:
+  `ui tap --udid <udid> x y` (the hit-test path already did this — that's why
+  `describe-point` worked while taps didn't). Extracted a pure exported
+  `idbUiArgs()` builder and locked the order in `sim-control.mjs`.
+- **Stale idb_companion wedges idb (env + resilience):** an `idb_companion`
+  that outlives the simulator boot it attached to fails every command with
+  "Mach port not connected" — and idb often still **exits 0**, printing the
+  error to stderr, so exit-code checks miss it. Meanwhile `simctl` screenshots
+  keep streaming → the preview looks alive but ignores input. New: stale-marker
+  detection in `idbExec` (stderr scan, `IDB_STALE_RE`), auto-recovery
+  (`recoverIdb`: pkill companions + wipe `/tmp/idb`, idb's hardcoded state dir)
+  with one retry, and an `idbHealthy()` gate at `start()` (a stale companion
+  reports `state: "Shutdown"` for a booted device) so interaction is only
+  enabled when idb can actually drive the device — with a clear view-only log
+  line when it can't.
+- **Feedback instead of silence:** a failed `/control` command now flashes a
+  hint on the bridge page (was: ignored response); a select-tap hit-test error
+  logs to the simulator log (was: `.catch(() => {})`); and an **unstamped**
+  element pick now still surfaces in the Inspector as `source: null` → the
+  "project isn't set up" note + setup offer (was: tap did nothing), so a
+  third-party Expo app without the RN Babel stamp gets a signposted path
+  instead of a dead click. `SimPick.source` is `string | null` now
+  (`shared/api.ts` updated to match).
+
+**Verified end-to-end on a real Expo app** (`expo-animations-gallery`) via a live
+boot: "idb detected" log → `/control` tap `{ok:true}` → select-mode tap routed as
+pick → renderer received `{source:null, tag:"Button"}`. Suite: typecheck + all
+sim/select/smoke tests green. Known-unrelated failure: `provider-seam.mjs` now
+fails on this machine because a real `gemini` CLI is installed (the test assumes
+it absent) — spun off as a separate task.
+
 ## 2026-07-01 — Chat: interface for agent questions (AskUserQuestion)
 
 The agent could edit and ask for tool permission, but it had no way to ask the
