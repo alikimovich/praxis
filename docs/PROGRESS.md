@@ -2,6 +2,41 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-03 — Inspector code peek + "open in editor" (user-requested)
+
+The user kept alt-tabbing to an editor just to *look at* the code of the element
+they were inspecting. Phase 1 of the in-tool code view: a read-only, syntax-
+highlighted peek of the stamped source file right in the Inspector, plus a
+one-click jump to the user's real editor. (Phase 2 — an editable CodeMirror
+drawer under the preview with saves routed through `commitEdit` — is on TASKS.)
+
+- **Engine** (`props.ts`): `source:read` IPC → `SourceView` (`shared/api.ts`):
+  the whole file (context stays visible) + the stamp line + the element's full
+  open→close **line span**, resolved by the same `findElementAtLine` +
+  enclosing-`JSXElement` walk `applyTextEdit` uses. Svelte/unparsable files fall
+  back to the stamp line alone. `resolveSource` keeps root-escape stamps out.
+- **Open in editor** (`source:open-in-editor`): tries `code -g`/`cursor -g`/
+  `zed`/`subl` with a `file:line:col` jump target (a missing CLI ENOENTs fast →
+  next), then falls back to `shell.openPath` (OS default app, no jump). Fails
+  soft with a message — never throws at the renderer.
+- **UI**: `CodePeek.tsx` — a "Code" toggle in the Inspector's action row reveals
+  the file: highlight.js (new direct dep; already in the tree via
+  rehype-highlight, and it reuses the existing `.hljs-*` theme in styles.css),
+  a line-number gutter, the element's span marked with a bar, auto-scrolled so
+  the stamp sits a third down the viewport. Header shows `path:line` + an
+  "Editor" jump button. Fixed 18px line height keeps the gutter/mark/scroll
+  math honest; the whole-file render is one `<code>` block (no per-line hljs
+  splitting, which breaks on multi-line tokens) with the span drawn as an
+  absolutely-positioned bar behind the text.
+- **Test**: `test/code-peek.mjs` — engine (file + spans incl. a new multi-line
+  fixture element, root-escape refused, openInEditor soft-fail) + UI (toggle →
+  highlighted peek, gutter, `data-stamp-line`, auto-scroll) + screenshot
+  `12-code-peek.png`. In `test`/`verify` chains as `test:codepeek`.
+- **Caveat**: developed in a sandboxed environment where the Electron binary
+  can't download (GitHub releases blocked) — `typecheck`, `build`, and all pure
+  bun tests are green here; run `bun run verify` locally to exercise the
+  Electron suite including the new test.
+
 ## 2026-07-01 — Chat: interface for agent questions (AskUserQuestion)
 
 The agent could edit and ask for tool permission, but it had no way to ask the

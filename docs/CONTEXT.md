@@ -120,7 +120,11 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
   a shadow-DOM composer anchored to the clicked element (comment → agent, annotation → pin).
 - `src/renderer/src/components/ChatPanel.tsx` — chat UI, toolbar, slash menu, **inspector**.
 - `src/renderer/src/components/Inspector.tsx` — **v2** selected-element card + chat hand-off
-  + the "Edit props" toggle.
+  + the "Edit props" toggle + the **v9 "Code" toggle** (inline code peek).
+- `src/renderer/src/components/CodePeek.tsx` — **v9** read-only code peek: the stamped
+  file (highlight.js, gutter, element line-span mark, auto-scroll to the stamp) via
+  `source:read`, + "open in editor" (`source:open-in-editor`: code/cursor/zed/subl →
+  OS default). Engine lives in `props.ts`; phase 2 (editable CodeMirror drawer) is on TASKS.
 - `src/main/props.ts` — **prop editor engine** (React/JSX): babel-parse at the stamp line,
   react-docgen schema, hybrid literal-splice / agent-fallback apply (`props:inspect/apply`).
   Dispatches `.svelte` sources to `src/main/props-svelte.ts` (svelte/compiler — `export let` /
