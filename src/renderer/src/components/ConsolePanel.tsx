@@ -3,7 +3,7 @@ import { useLog } from '../store'
 
 /**
  * Collapsible activity console — shows the open-project sequence and dev-server
- * output. Docked full-width above the panes; the native preview reflows via its
+ * output. Docked full-width below the panes; the native preview reflows via its
  * ResizeObserver when this opens/closes.
  */
 export default function ConsolePanel(): React.JSX.Element {

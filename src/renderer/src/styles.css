@@ -135,9 +135,8 @@ body {
 }
 
 /* No titlebar — the macOS traffic lights (hiddenInset) overlay the rail's top,
-   which reserves clearance for them. The console/banner strips, when they are
-   the topmost element, clear the lights with a first-child margin below. */
-.app > .console:first-child,
+   which reserves clearance for them. A banner strip, when it is the topmost
+   element, clears the lights with a first-child margin below. */
 .app > .banner:first-child {
     margin-top: 38px;
 }
@@ -1501,13 +1500,13 @@ body.is-resizing {
     opacity: 1;
 }
 
-/* Activity console — collapsible log strip above the panes */
+/* Activity console — collapsible log strip below the panes */
 .console {
     flex: 0 0 auto;
     height: 200px;
     display: flex;
     flex-direction: column;
-    border-bottom: 1px solid var(--border);
+    border-top: 1px solid var(--border);
     background: var(--bg-subtle);
 }
 
