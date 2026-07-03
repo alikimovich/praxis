@@ -2,6 +2,27 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-03 — Branding + File menu (Praxis)
+
+- Renamed the app Electron → **Praxis**: `app.setName('Praxis')` at main module
+  load (drives the macOS app-menu label + About panel), window `title`, renderer
+  `<title>`, and `productName` in package.json (for eventual packaging).
+- **App icon**: `build/icon.png` loaded via `nativeImage`; set as the dev dock
+  icon (`app.dock.setIcon`, macOS) and the `BrowserWindow` `icon` (Win/Linux),
+  both guarded on `!isEmpty()` so a missing file degrades gracefully. NOTE: the
+  committed PNG is a generated placeholder (`scripts/make-placeholder-icon.mjs`) —
+  the real artwork from the design's app-icon.zip couldn't be fetched in the
+  sandboxed runner (no network); drop it in at `build/icon.png` to replace it.
+- **File menu**: new top-level File menu with New Project (Cmd+N) / Open Project
+  (Cmd+O) — moved out of the Actions menu — plus **Open Recent**, a submenu of up
+  to 8 recents + Clear Menu. Recents live in the renderer store (localStorage); it
+  pushes them to main over `menu:set-recents`, main rebuilds the native submenu,
+  and a chosen recent comes back over `menu:open-recent` (reopens keeping the
+  current project warm). `test/menu-recents.mjs` asserts the rename + menu.
+  (Playwright's Electron launch can't complete its handshake in this worktree
+  runner — the pre-existing smoke test times out identically — but the built main
+  boots and runs without crashing; typecheck + build are green.)
+
 ## 2026-07-03 — Dev-mode Chrome DevTools (CDP endpoint)
 
 `bun run dev` now passes `--remote-debugging-port` (9222; `DSGN_DEBUG_PORT`

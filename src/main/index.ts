@@ -6,11 +6,12 @@ import {
   ipcMain,
   dialog,
   shell,
+  nativeImage,
   nativeTheme,
   type MenuItemConstructorOptions
 } from 'electron'
 import { join } from 'path'
-import type { SelectedElement } from '../shared/api'
+import type { RecentMenuEntry, SelectedElement } from '../shared/api'
 import { registerDevServerIpc } from './devserver'
 import { registerSimulatorIpc } from './simulator'
 import { registerAgentIpc } from './agent'
@@ -21,6 +22,15 @@ import { registerSetupIpc } from './setup'
 import { ensureBranch, switchBranch, listBranches, checkoutBranch } from './git'
 import { createProject } from './scaffold'
 import { registerDiagnoseIpc } from './diagnose'
+
+// Product name — drives the macOS app menu label and the About panel. Set at
+// module load (before app is ready) so the menu bar reads "Praxis", not "Electron".
+app.setName('Praxis')
+
+// App icon (dev dock icon + Win/Linux window icon). Lives at build/icon.png,
+// resolved relative to the compiled main (out/main → ../../build). Loaded up front
+// so a missing file degrades to an empty image (guarded at use) instead of throwing.
+const appIcon = nativeImage.createFromPath(join(__dirname, '../../build/icon.png'))
 
 let mainWindow: BrowserWindow | null = null
 let previewView: WebContentsView | null = null
@@ -153,17 +163,47 @@ function sameUrl(a: string | null, b: string | null): boolean {
  * disables the keyboard reload — View → Reload (a menu click) stays as a dev
  * escape hatch if the tool itself ever needs a hard reload.
  */
+// Recents shown in File → Open Recent. The renderer owns the list (localStorage)
+// and pushes it over `menu:set-recents`; we cap at 8 and rebuild the menu.
+let recentProjects: RecentMenuEntry[] = []
+
 /**
- * Native app menu. An "Actions" menu replaces the titlebar Reload/Stop buttons
- * (and adds Select / Open Project / Viewport) with real accelerators. Because we
- * set our OWN menu, the default View → Reload (which reloaded the renderer and
- * stranded the tool) is gone; our Cmd+R reloads the PREVIEW instead. Renderer-side
- * actions go over `menu:action`; reload is handled here directly.
+ * Native app menu. A "File" menu holds New/Open Project + Open Recent (a submenu
+ * of up to 8 recently opened projects); an "Actions" menu carries the preview
+ * commands (Reload/Select/Publish/Stop/Viewport) that used to be titlebar
+ * buttons. Because we set our OWN menu, the default View → Reload (which reloaded
+ * the renderer and stranded the tool) is gone; our Cmd+R reloads the PREVIEW
+ * instead. Renderer-side actions go over `menu:action`; a chosen recent goes over
+ * `menu:open-recent`; reload is handled here directly.
  */
 function buildAppMenu(): void {
   const send = (action: string): void => mainWindow?.webContents.send('menu:action', action)
+  const openRecent = (root: string): void =>
+    mainWindow?.webContents.send('menu:open-recent', root)
+
+  const recentItems: MenuItemConstructorOptions[] = recentProjects.length
+    ? [
+        ...recentProjects.slice(0, 8).map((r) => ({
+          label: r.name,
+          sublabel: r.root,
+          toolTip: r.root,
+          click: () => openRecent(r.root)
+        })),
+        { type: 'separator' as const },
+        { label: 'Clear Menu', click: () => send('clear-recents') }
+      ]
+    : [{ label: 'No Recent Projects', enabled: false }]
+
   const template: MenuItemConstructorOptions[] = [
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
+    {
+      label: 'File',
+      submenu: [
+        { label: 'New Project…', accelerator: 'CmdOrCtrl+N', click: () => send('new-project') },
+        { label: 'Open Project…', accelerator: 'CmdOrCtrl+O', click: () => send('open-project') },
+        { label: 'Open Recent', submenu: recentItems }
+      ]
+    },
     { role: 'editMenu' },
     {
       label: 'Actions',
@@ -173,9 +213,6 @@ function buildAppMenu(): void {
         { label: 'Toggle Logs', accelerator: 'CmdOrCtrl+L', click: () => send('logs') },
         { label: 'Publish', accelerator: 'CmdOrCtrl+Shift+P', click: () => send('publish') },
         { label: 'Stop Project', accelerator: 'CmdOrCtrl+.', click: () => send('stop') },
-        { type: 'separator' },
-        { label: 'Open Project…', accelerator: 'CmdOrCtrl+O', click: () => send('open-project') },
-        { label: 'New Project…', accelerator: 'CmdOrCtrl+N', click: () => send('new-project') },
         { type: 'separator' },
         {
           label: 'Viewport',
@@ -278,6 +315,10 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    title: 'Praxis',
+    // Window icon (Windows/Linux; macOS uses the dock icon set below). Omit when
+    // the PNG is missing so Electron falls back to its default rather than erroring.
+    ...(appIcon.isEmpty() ? {} : { icon: appIcon }),
     backgroundColor: previewBg(),
     titleBarStyle: 'hiddenInset',
     webPreferences: {
@@ -485,8 +526,21 @@ if (process.env['ELECTRON_RENDERER_URL']) {
 }
 
 app.whenReady().then(() => {
+  // macOS dock icon (the window `icon` option is ignored there). In a packaged
+  // app the bundle's icon wins; this makes the dev/`bun run dev` dock icon Praxis.
+  if (process.platform === 'darwin' && !appIcon.isEmpty()) app.dock?.setIcon(appIcon)
   createWindow()
   buildAppMenu()
+  // File → Open Recent is driven by the renderer's recents store: it pushes the
+  // current list, we cap at 8 and rebuild the menu.
+  ipcMain.on('menu:set-recents', (_e, recents: RecentMenuEntry[]) => {
+    recentProjects = Array.isArray(recents)
+      ? recents
+          .filter((r) => r && typeof r.root === 'string' && typeof r.name === 'string')
+          .slice(0, 8)
+      : []
+    buildAppMenu()
+  })
   registerPreviewIpc()
   registerDevServerIpc(() => mainWindow)
   registerSimulatorIpc(() => mainWindow)

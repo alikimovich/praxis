@@ -96,6 +96,7 @@ export default function App(): React.JSX.Element {
     stop: () => void
     openProject: () => void
     newProject: () => void
+    openRecent: (root: string) => void
     reload: () => void
     publish: () => void
   }>({
@@ -103,6 +104,7 @@ export default function App(): React.JSX.Element {
     stop: () => {},
     openProject: () => {},
     newProject: () => {},
+    openRecent: () => {},
     reload: () => {},
     publish: () => {}
   })
@@ -393,6 +395,7 @@ export default function App(): React.JSX.Element {
         else if (action === 'stop') actionsRef.current.stop()
         else if (action === 'open-project') actionsRef.current.openProject()
         else if (action === 'new-project') actionsRef.current.newProject()
+        else if (action === 'clear-recents') useRecents.getState().clearRecents()
         else if (action === 'logs') useLog.getState().setOpen(!useLog.getState().open)
         else if (action === 'publish') actionsRef.current.publish()
         else if (action === 'viewport:desktop') useViewport.getState().setViewport('desktop')
@@ -400,6 +403,17 @@ export default function App(): React.JSX.Element {
       }),
     []
   )
+
+  // File → Open Recent: mirror the renderer's recents into the native menu, and
+  // reopen whichever one the user picks (keeping the current project warm).
+  useEffect(
+    () =>
+      window.api.menu.onOpenRecent((root) => actionsRef.current.openRecent(root)),
+    []
+  )
+  useEffect(() => {
+    window.api.menu.setRecents(recents.slice(0, 8).map((r) => ({ root: r.root, name: r.name })))
+  }, [recents])
 
   // v8 F3b: Cmd+Z / Cmd+Shift+Z (or Cmd+Y) undo/redo over ALL direct dsgn source
   // edits (props, text, token swaps). Skipped while typing in the composer or any
@@ -841,6 +855,12 @@ export default function App(): React.JSX.Element {
     void (useSession.getState().projectRoot ? openAnother() : openProject())
   }
 
+  // File → Open Recent: reopen a known path directly (no picker). Keep the current
+  // project warm when one is already open, matching Cmd+O's "add, don't replace".
+  const openRecent = (root: string): void => {
+    void attempt(root, undefined, !!useSession.getState().projectRoot)
+  }
+
   // Cmd+N: create a brand-new project — pick a folder, scaffold a minimal
   // Vite+React app (git init + install), then open it like any other project,
   // keeping whatever is already open warm.
@@ -1213,6 +1233,7 @@ export default function App(): React.JSX.Element {
     stop: () => void stop(),
     openProject: openProjectSmart,
     newProject: () => void createNewProject(),
+    openRecent,
     reload,
     publish: () => void publish()
   }
