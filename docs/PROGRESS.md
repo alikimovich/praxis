@@ -2,7 +2,30 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
-## 2026-07-02 — Fix: simulator interaction & element-select were silently dead
+## 2026-07-02 — Fix: doubled/misaligned iPhone bezel in mobile preview
+
+User report: open a project in mobile viewport, open a NEXT project → two
+iPhone frames, misaligned. The switch was a red herring — the trigger is the
+second project's own CSS. The bezel is an `<img>` injected INTO the previewed
+page (so its opaque edge can mask the app's screen corners), which means the
+page's stylesheets apply to it: a standard reset like Tailwind preflight's
+`img { max-width: 100% }` clamped the upscaled frame (383px) back to the
+viewport width (348px), pulling the whole bezel into view as a second squeezed
+phone over the app, offset from the renderer's DOM bezel behind it. Projects
+without such a reset (like the first one opened) never showed it.
+
+- Fix in `src/preview/preload.ts`: pin the injected frame's geometry against
+  page CSS — `max/min-width/height`, `margin/padding/border/transform` locked
+  inline with `!important` (an inline `width` alone loses to a stylesheet
+  `max-width`), and `positionFrame()` now sets its metrics via
+  `setProperty(..., 'important')`. Same hardening for the desktop bottom-corner
+  masks (same injected-overlay-vs-page-CSS class of bug).
+- New regression test `test/mobile-frame.mjs` (in `verify`): serves a fixture
+  WITH the img reset, switches to mobile, and asserts the injected frame
+  overflows the viewport on all sides (verified it fails on the pre-fix build).
+- Diagnosis harness insight: renderer screenshots can't show this (the native
+  view isn't in the DOM) — measure the injected img's rect inside the preview's
+  webContents via `executeJavaScript` instead.
 
 User report: an RN/Expo project previews fine, but taps/scrolls do nothing and
 Select never picks anything. Two independent bugs, both invisible because every
