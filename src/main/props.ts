@@ -1,4 +1,6 @@
-import { ipcMain } from 'electron'
+import { ipcMain, shell } from 'electron'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
 import { readFile, writeFile } from 'fs/promises'
 import { dirname, isAbsolute, join, normalize, relative } from 'path'
 import type {
@@ -7,6 +9,7 @@ import type {
   PropField,
   PropInspection,
   PropKind,
+  SourceView,
   TokenEdit
 } from '../shared/api'
 import {
@@ -958,6 +961,78 @@ async function applyTokenEdit(root: string, edit: TokenEdit): Promise<PropEditRe
   return toAgent()
 }
 
+// --- code peek: read the stamped file / jump to it in the user's editor ------
+
+/**
+ * The stamped element's source file for the inspector's inline code peek: the
+ * whole file (surrounding context stays visible) plus the element's full line
+ * span so the renderer can highlight it. Svelte / unparsable files fall back to
+ * the stamp line alone — the peek still works, just without the span.
+ */
+async function readSourceView(root: string, source: string): Promise<SourceView | null> {
+  const loc = resolveSource(root, source)
+  if (!loc) return null
+  let code: string
+  try {
+    code = await readFile(loc.file, 'utf8')
+  } catch {
+    return null
+  }
+  const view: SourceView = { file: relative(root, loc.file), code, line: loc.line }
+  if (!loc.file.endsWith('.svelte')) {
+    try {
+      const found = await findElementAtLine(code, loc.line, loc.column)
+      if (found) {
+        // The opening element gives the start; the enclosing JSXElement (when it
+        // exists — self-closing tags included) carries the closing tag's end line.
+        const elements: BabelNode[] = []
+        collectNodes(found.ast, 'JSXElement', elements)
+        const el = elements.find(
+          (e) => (e.openingElement as BabelNode | undefined)?.start === found.opening.start
+        )
+        view.elementStart = found.opening.loc?.start.line ?? loc.line
+        view.elementEnd = (el ?? found.opening).loc?.end.line ?? view.elementStart
+      }
+    } catch {
+      /* parse failure — stamp line alone */
+    }
+  }
+  return view
+}
+
+const execFileP = promisify(execFile)
+
+// Editor CLIs tried in order for "Open in editor" — each accepts a
+// file:line[:col] jump target. A missing CLI fails fast (ENOENT) and the next
+// is tried; when none exist the file opens with the OS default app (no jump).
+const EDITOR_CLIS: Array<{ cmd: string; args: (target: string) => string[] }> = [
+  { cmd: 'code', args: (t) => ['-g', t] },
+  { cmd: 'cursor', args: (t) => ['-g', t] },
+  { cmd: 'zed', args: (t) => [t] },
+  { cmd: 'subl', args: (t) => [t] }
+]
+
+async function openInEditor(root: string, source: string): Promise<{ ok: boolean; error?: string }> {
+  const loc = resolveSource(root, source)
+  if (!loc) return { ok: false, error: 'Could not resolve the source location.' }
+  try {
+    await readFile(loc.file) // don't hand a nonexistent path to an editor
+  } catch {
+    return { ok: false, error: 'The source file does not exist.' }
+  }
+  const target = `${loc.file}:${loc.line}${loc.column != null ? `:${loc.column}` : ''}`
+  for (const editor of EDITOR_CLIS) {
+    try {
+      await execFileP(editor.cmd, editor.args(target), { timeout: 5000 })
+      return { ok: true }
+    } catch {
+      /* not installed / failed — try the next */
+    }
+  }
+  const err = await shell.openPath(loc.file) // '' on success
+  return err ? { ok: false, error: err } : { ok: true }
+}
+
 export function registerPropsIpc(): void {
   ipcMain.handle('props:inspect', (_e, root: string, source: string, text?: string | null) =>
     inspectProps(root, source, text)
@@ -969,6 +1044,11 @@ export function registerPropsIpc(): void {
   )
   ipcMain.handle('text:apply', (_e, root: string, edit: { source: string; text: string }) =>
     applyTextEdit(root, edit)
+  )
+  // v2 code peek: read the stamped file inline / jump to it in the user's editor.
+  ipcMain.handle('source:read', (_e, root: string, source: string) => readSourceView(root, source))
+  ipcMain.handle('source:open-in-editor', (_e, root: string, source: string) =>
+    openInEditor(root, source)
   )
   // v8 F3b: undo/redo over ALL dsgn source edits (props, text, token swaps),
   // scoped to the active project root (the rail keeps several projects open).
