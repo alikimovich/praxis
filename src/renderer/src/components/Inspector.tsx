@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import CodePeek from './CodePeek'
 
 interface Props {
   element: SelectedElement
@@ -40,6 +41,7 @@ export default function Inspector({
   // Show the "edit owner component" affordance when the clicked host resolved to a
   // different component-instance call site (the authored <Component …/>).
   const hasOwner = !!element.componentSource && element.componentSource !== element.source
+  const [viewingCode, setViewingCode] = useState(false)
   const [noting, setNoting] = useState(false)
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
@@ -140,6 +142,9 @@ export default function Inspector({
         </div>
       )}
 
+      {/* Read-only code peek: the stamped file, scrolled to this element. */}
+      {viewingCode && element.source && <CodePeek source={element.source} />}
+
       {noting && (
         <div className="inspector__note flex flex-col gap-1.5">
           <Textarea
@@ -176,6 +181,16 @@ export default function Inspector({
         >
           Note
         </Button>
+        {element.source && (
+          <Button
+            variant={viewingCode ? 'default' : 'outline'}
+            size="sm"
+            className="inspector__codebtn"
+            onClick={() => setViewingCode((v) => !v)}
+          >
+            Code
+          </Button>
+        )}
         <Button size="sm" className="inspector__ask flex-1" onClick={onAsk}>
           Ask dsgn…
         </Button>

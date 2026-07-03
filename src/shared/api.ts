@@ -307,6 +307,23 @@ export interface PreviewComment {
   text: string
 }
 
+/**
+ * A stamped element's source file, read for the inspector's inline code peek —
+ * the whole file (so surrounding context is visible) plus the stamp line and,
+ * when the JSX parse resolves it, the element's full line span for highlighting.
+ */
+export interface SourceView {
+  /** Repo-relative file path (from the stamp). */
+  file: string
+  /** The full file content. */
+  code: string
+  /** 1-based line the stamp points at. */
+  line: number
+  /** 1-based inclusive line span of the stamped element (open → close tag). */
+  elementStart?: number
+  elementEnd?: number
+}
+
 export type PropKind = 'string' | 'number' | 'boolean' | 'enum' | 'other'
 
 /** One editable prop/attribute of a selected element. */
@@ -578,6 +595,12 @@ export interface DsgnApi {
   text: {
     /** Rewrite the element's text content in source; agent-fallback for complex content. */
     apply: (root: string, edit: { source: string; text: string }) => Promise<PropEditResult>
+  }
+  source: {
+    /** Read the stamped element's source file for the inspector's code peek. */
+    read: (root: string, source: string) => Promise<SourceView | null>
+    /** Jump to the stamp in the user's editor (code/cursor/zed/subl CLI → OS default app). */
+    openInEditor: (root: string, source: string) => Promise<{ ok: boolean; error?: string }>
   }
   /** Undo/redo over ALL direct dsgn source edits — props, text, token swaps (v8 F3b).
    *  Scoped per project root: the rail keeps several projects open at once. */

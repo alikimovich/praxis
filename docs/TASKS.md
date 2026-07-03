@@ -373,6 +373,22 @@ TokenOfferCard, Markdown). App-header branch pill + auth banner are separate chr
       **Deferred (2026-06-25):** needs Svelte-5 dev internals with no stable public API (fragile);
       option D (component-level) is the baseline. Revisit only with a stable API / concrete need.
 
+## v9 — in-tool code view  ⭐ NEW (2026-07-03, user-requested)
+
+See the code of the inspected element without leaving dsgn (today that means
+alt-tabbing to an editor).
+
+- [x] **Phase 1 — read-only code peek + open-in-editor.** ✅ 2026-07-03 — a "Code"
+      toggle on the Inspector shows the stamped file (highlight.js, line-number
+      gutter, element line-span marked, auto-scrolled to the stamp) via a new
+      `source:read` IPC; `source:open-in-editor` jumps to `file:line:col` in
+      code/cursor/zed/subl (fallback: OS default app). `test/code-peek.mjs`.
+- [ ] **Phase 2 — editable code drawer.** CodeMirror 6 in a bottom drawer under
+      the preview (a second `setPanelInset` direction — a DOM panel can't float
+      over the native view); saves route through `commitEdit` so undo/redo +
+      conflict detection + hot-reload just work. Whole file, scrolled to the
+      component, stamp range highlighted.
+
 ## Polish (anytime)
 
 - [x] **Agent question interface (AskUserQuestion).** ✅ 2026-07-01 — the agent can now

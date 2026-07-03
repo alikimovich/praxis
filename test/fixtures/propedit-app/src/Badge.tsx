@@ -75,3 +75,13 @@ export function Chip({ tone = 'brand', text, dot = false }: ChipProps): JSX.Elem
 export function ChipDemo(): JSX.Element {
   return <Chip tone="neutral" text="Hi" dot />
 }
+
+// Code-peek fixture: a multi-line element — the peek's elementStart/elementEnd
+// must span the whole open→close range, not just the stamp line.
+export function Tall(): JSX.Element {
+  return (
+    <div className="tall">
+      <span>one</span>
+    </div>
+  )
+}

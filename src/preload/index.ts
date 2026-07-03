@@ -25,6 +25,7 @@ import type {
   SelectedElement,
   SessionRecord,
   SetupResult,
+  SourceView,
   SimPreflight,
   TokenScaffoldResult,
   TokenSet,
@@ -156,6 +157,12 @@ const api: DsgnApi = {
   text: {
     apply: (root: string, edit: { source: string; text: string }): Promise<PropEditResult> =>
       ipcRenderer.invoke('text:apply', root, edit)
+  },
+  source: {
+    read: (root: string, source: string): Promise<SourceView | null> =>
+      ipcRenderer.invoke('source:read', root, source),
+    openInEditor: (root: string, source: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('source:open-in-editor', root, source)
   },
   edits: {
     undo: (root: string): Promise<UndoResult> => ipcRenderer.invoke('edit:undo', root),
