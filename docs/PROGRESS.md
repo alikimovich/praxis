@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-02 — Viewport (Desktop/Mobile) is now per-project
+
+User report: pick Mobile on one project, open/switch to another → it's Mobile
+too. `useViewport` was a single global store, so the toggle leaked across
+projects.
+
+- `ProjectEntry.viewport` added to the workspace snapshot (like url/branch):
+  `setViewport` writes through to the ACTIVE entry; `applyProject` (rail
+  switch) restores the target's own viewport right after `activate` (ordering
+  matters — the write-back must land on the incoming entry, not the outgoing);
+  `attempt()` sets it after `openOrActivate`, so a fresh open starts at
+  desktop and a re-open keeps that project's choice.
+- New test `viewport-per-project.mjs` (in `verify`): A→mobile, open B (must be
+  desktop), switch A (mobile restored), switch B (desktop kept).
+
 ## 2026-07-02 — Fix: doubled/misaligned iPhone bezel in mobile preview
 
 User report: open a project in mobile viewport, open a NEXT project → two
