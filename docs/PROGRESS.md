@@ -36,6 +36,84 @@ drawer under the preview with saves routed through `commitEdit` — is on TASKS.
   can't download (GitHub releases blocked) — `typecheck`, `build`, and all pure
   bun tests are green here; run `bun run verify` locally to exercise the
   Electron suite including the new test.
+## 2026-07-02 — Viewport (Desktop/Mobile) is now per-project
+
+User report: pick Mobile on one project, open/switch to another → it's Mobile
+too. `useViewport` was a single global store, so the toggle leaked across
+projects.
+
+- `ProjectEntry.viewport` added to the workspace snapshot (like url/branch):
+  `setViewport` writes through to the ACTIVE entry; `applyProject` (rail
+  switch) restores the target's own viewport right after `activate` (ordering
+  matters — the write-back must land on the incoming entry, not the outgoing);
+  `attempt()` sets it after `openOrActivate`, so a fresh open starts at
+  desktop and a re-open keeps that project's choice.
+- New test `viewport-per-project.mjs` (in `verify`): A→mobile, open B (must be
+  desktop), switch A (mobile restored), switch B (desktop kept).
+
+## 2026-07-02 — Fix: doubled/misaligned iPhone bezel in mobile preview
+
+User report: open a project in mobile viewport, open a NEXT project → two
+iPhone frames, misaligned. The switch was a red herring — the trigger is the
+second project's own CSS. The bezel is an `<img>` injected INTO the previewed
+page (so its opaque edge can mask the app's screen corners), which means the
+page's stylesheets apply to it: a standard reset like Tailwind preflight's
+`img { max-width: 100% }` clamped the upscaled frame (383px) back to the
+viewport width (348px), pulling the whole bezel into view as a second squeezed
+phone over the app, offset from the renderer's DOM bezel behind it. Projects
+without such a reset (like the first one opened) never showed it.
+
+- Fix in `src/preview/preload.ts`: pin the injected frame's geometry against
+  page CSS — `max/min-width/height`, `margin/padding/border/transform` locked
+  inline with `!important` (an inline `width` alone loses to a stylesheet
+  `max-width`), and `positionFrame()` now sets its metrics via
+  `setProperty(..., 'important')`. Same hardening for the desktop bottom-corner
+  masks (same injected-overlay-vs-page-CSS class of bug).
+- New regression test `test/mobile-frame.mjs` (in `verify`): serves a fixture
+  WITH the img reset, switches to mobile, and asserts the injected frame
+  overflows the viewport on all sides (verified it fails on the pre-fix build).
+- Diagnosis harness insight: renderer screenshots can't show this (the native
+  view isn't in the DOM) — measure the injected img's rect inside the preview's
+  webContents via `executeJavaScript` instead.
+
+User report: an RN/Expo project previews fine, but taps/scrolls do nothing and
+Select never picks anything. Two independent bugs, both invisible because every
+error on the interaction path was swallowed:
+
+- **`--udid` arg order (the primary bug):** `idbController` invoked
+  `idb --udid <udid> ui tap x y` — idb's argparse rejects `--udid` before the
+  root command, so **every tap/swipe/text had always failed** with a usage error
+  (which only sim-e2e-style live runs could catch; the recording test bridge
+  never exercises real idb). The flag must FOLLOW the subcommand:
+  `ui tap --udid <udid> x y` (the hit-test path already did this — that's why
+  `describe-point` worked while taps didn't). Extracted a pure exported
+  `idbUiArgs()` builder and locked the order in `sim-control.mjs`.
+- **Stale idb_companion wedges idb (env + resilience):** an `idb_companion`
+  that outlives the simulator boot it attached to fails every command with
+  "Mach port not connected" — and idb often still **exits 0**, printing the
+  error to stderr, so exit-code checks miss it. Meanwhile `simctl` screenshots
+  keep streaming → the preview looks alive but ignores input. New: stale-marker
+  detection in `idbExec` (stderr scan, `IDB_STALE_RE`), auto-recovery
+  (`recoverIdb`: pkill companions + wipe `/tmp/idb`, idb's hardcoded state dir)
+  with one retry, and an `idbHealthy()` gate at `start()` (a stale companion
+  reports `state: "Shutdown"` for a booted device) so interaction is only
+  enabled when idb can actually drive the device — with a clear view-only log
+  line when it can't.
+- **Feedback instead of silence:** a failed `/control` command now flashes a
+  hint on the bridge page (was: ignored response); a select-tap hit-test error
+  logs to the simulator log (was: `.catch(() => {})`); and an **unstamped**
+  element pick now still surfaces in the Inspector as `source: null` → the
+  "project isn't set up" note + setup offer (was: tap did nothing), so a
+  third-party Expo app without the RN Babel stamp gets a signposted path
+  instead of a dead click. `SimPick.source` is `string | null` now
+  (`shared/api.ts` updated to match).
+
+**Verified end-to-end on a real Expo app** (`expo-animations-gallery`) via a live
+boot: "idb detected" log → `/control` tap `{ok:true}` → select-mode tap routed as
+pick → renderer received `{source:null, tag:"Button"}`. Suite: typecheck + all
+sim/select/smoke tests green. Known-unrelated failure: `provider-seam.mjs` now
+fails on this machine because a real `gemini` CLI is installed (the test assumes
+it absent) — spun off as a separate task.
 
 ## 2026-07-01 — Chat: interface for agent questions (AskUserQuestion)
 

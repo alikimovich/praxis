@@ -2,7 +2,7 @@ import { app, ipcMain, type BrowserWindow } from 'electron'
 import { spawn, execFile, type ChildProcess } from 'child_process'
 import { randomBytes } from 'crypto'
 import { createServer, type Server, type ServerResponse, type IncomingMessage } from 'http'
-import { readFile, unlink } from 'fs/promises'
+import { readFile, unlink, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { promisify } from 'util'
@@ -97,7 +97,7 @@ function pageHtml(interactive: boolean, token: string): string {
       </div>
       <img id="bezel" src="${FRAME_DATA_URI}" alt="" draggable="false" />
     </div>
-    ${interactive ? '' : '<div id="hint">View-only — install <code>idb</code> for tap &amp; type</div>'}
+    <div id="hint"${interactive ? ' hidden' : ''}>View-only — install <code>idb</code> for tap &amp; type</div>
     <script>
       var INTERACTIVE = ${interactive ? 'true' : 'false'};
       // Per-bridge secret, baked into this server-rendered page. Required on
@@ -107,11 +107,27 @@ function pageHtml(interactive: boolean, token: string): string {
       var TOKEN = ${JSON.stringify(token)};
       window.__DSGN_SIM_TOKEN = TOKEN;
       var img = document.getElementById('screen');
+      // Surface failed commands (e.g. idb lost the device) instead of a dead-
+      // feeling preview. View-only keeps its permanent hint; no flashing there.
+      var hintEl = document.getElementById('hint');
+      var hintTimer = null;
+      function flashHint(text) {
+        if (!INTERACTIVE) return;
+        hintEl.textContent = text;
+        hintEl.hidden = false;
+        clearTimeout(hintTimer);
+        hintTimer = setTimeout(function () { hintEl.hidden = true; }, 4000);
+      }
       function post(cmd) {
         if (!INTERACTIVE) return;
         fetch('/control?token=' + encodeURIComponent(TOKEN), {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(cmd) }).catch(function(){});
+          body: JSON.stringify(cmd) })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (j && j.ok === false) flashHint('Interaction failed: ' + (j.error || 'unknown error'));
+          })
+          .catch(function(){});
       }
       // Pixel position on the screen <img> → 0..1 fraction. The img box IS the
       // device screen rect (positioned to the bezel cutout, object-fit:fill), so
@@ -279,12 +295,73 @@ async function resolveIdb(): Promise<string | null> {
   return null
 }
 
-/** Run an idb subcommand with the resolved binary + augmented PATH. */
-async function idbExec(args: string[], timeout = 10_000): Promise<string> {
+// An idb_companion that outlives the simulator boot it attached to wedges EVERY
+// idb command with these messages — and idb often still exits 0, so the failure
+// is invisible to exit-code checks. (Seen after a sim reboot / Simulator.app
+// relaunch while a days-old companion kept running.)
+const IDB_STALE_RE =
+  /Mach port not connected|device may not be ready|Failed to connect to companion/i
+
+function isStaleIdbError(e: unknown): boolean {
+  const parts = [msg(e), (e as { stderr?: unknown })?.stderr, (e as { stdout?: unknown })?.stdout]
+  return parts.some((p) => typeof p === 'string' && IDB_STALE_RE.test(p))
+}
+
+/** Kill any (stale) idb_companion daemons + wipe idb's state dir so the next
+ * command spawns a fresh companion against the CURRENT simulator boot. */
+let recovery: Promise<void> | null = null
+function recoverIdb(): Promise<void> {
+  recovery ??= (async () => {
+    simLog('idb companion looks stale — restarting it…')
+    try {
+      await execFileP('pkill', ['-f', 'idb_companion'], { timeout: 4000 })
+    } catch {
+      /* pkill exits 1 when nothing matched */
+    }
+    // idb's hardcoded state dir (companion registry + domain sockets) — NOT
+    // os.tmpdir(), which is /var/folders/… on macOS.
+    await rm('/tmp/idb', { recursive: true, force: true }).catch(() => {})
+  })().finally(() => {
+    recovery = null
+  })
+  return recovery
+}
+
+/** Run an idb subcommand; failures that look like a stale companion are thrown
+ * (even on exit 0 — see IDB_STALE_RE). No recovery: callers decide. */
+async function idbExecRaw(args: string[], timeout: number): Promise<string> {
   const bin = await resolveIdb()
   if (!bin) throw new Error('idb not found')
-  const { stdout } = await execFileP(bin, args, { timeout, env: idbEnv() })
+  const { stdout, stderr } = await execFileP(bin, args, { timeout, env: idbEnv() })
+  const err = stderr.toString()
+  if (IDB_STALE_RE.test(err)) {
+    throw new Error(err.trim().split('\n').filter(Boolean).pop() ?? 'idb companion unavailable')
+  }
   return stdout.toString()
+}
+
+/** Run an idb subcommand with the resolved binary + augmented PATH; on a
+ * stale-companion failure, recover once and retry. */
+async function idbExec(args: string[], timeout = 10_000): Promise<string> {
+  try {
+    return await idbExecRaw(args, timeout)
+  } catch (e) {
+    if (!isStaleIdbError(e)) throw e
+    await recoverIdb()
+    return idbExecRaw(args, timeout)
+  }
+}
+
+/** True when idb's companion actually sees the device booted. A stale companion
+ * reports "Shutdown" (or errors) for a device simctl happily screenshots — so
+ * frames stream but every tap dies. Probed raw: start() drives recovery. */
+async function idbHealthy(udid: string): Promise<boolean> {
+  try {
+    const out = await idbExecRaw(['describe', '--udid', udid, '--json'], 8000)
+    return (JSON.parse(out) as { state?: string }).state === 'Booted'
+  } catch {
+    return false
+  }
 }
 
 // --- input control (Phase 2: tap / scroll / type via idb) -------------------
@@ -326,26 +403,37 @@ async function idbScreenPoints(udid: string): Promise<{ width: number; height: n
   return { width, height }
 }
 
+/** Pure: the idb invocation for a control command. The arg ORDER is load-
+ * bearing — `--udid` must follow the `ui <cmd>` subcommand; as a global flag
+ * before the root command idb's argparse rejects the whole invocation. */
+export function idbUiArgs(
+  udid: string,
+  cmd: ControlCommand,
+  dims: { width: number; height: number }
+): string[] {
+  if (cmd.type === 'tap') {
+    const p = fractionToPoints(cmd.x, cmd.y, dims)
+    return ['ui', 'tap', '--udid', udid, String(p.x), String(p.y)]
+  }
+  if (cmd.type === 'swipe') {
+    const a = fractionToPoints(cmd.x, cmd.y, dims)
+    const b = fractionToPoints(cmd.x2, cmd.y2, dims)
+    return [
+      'ui', 'swipe', '--udid', udid,
+      String(a.x), String(a.y), String(b.x), String(b.y),
+      '--duration', String(cmd.duration ?? 0.25)
+    ]
+  }
+  // Bounded so a flood of keystrokes can't spawn a huge arg.
+  return ['ui', 'text', '--udid', udid, cmd.text.slice(0, 500)]
+}
+
 function idbController(udid: string): Controller {
   let dims: { width: number; height: number } | null = null
-  const idb = (args: string[]): Promise<string> => idbExec(['--udid', udid, ...args])
   return {
     async send(cmd) {
       if (!dims) dims = await idbScreenPoints(udid)
-      if (cmd.type === 'tap') {
-        const p = fractionToPoints(cmd.x, cmd.y, dims)
-        await idb(['ui', 'tap', String(p.x), String(p.y)])
-      } else if (cmd.type === 'swipe') {
-        const a = fractionToPoints(cmd.x, cmd.y, dims)
-        const b = fractionToPoints(cmd.x2, cmd.y2, dims)
-        await idb([
-          'ui', 'swipe', String(a.x), String(a.y), String(b.x), String(b.y),
-          '--duration', String(cmd.duration ?? 0.25)
-        ])
-      } else if (cmd.type === 'text') {
-        // Bounded so a flood of keystrokes can't spawn a huge arg.
-        await idb(['ui', 'text', cmd.text.slice(0, 500)])
-      }
+      await idbExec(idbUiArgs(udid, cmd, dims))
     }
   }
 }
@@ -405,14 +493,15 @@ export function findDsgnStamp(node: unknown, depth = 0): string | null {
   return null
 }
 
-/** A picked simulator element (the RN analog of a web SelectedElement pick). */
+/** A picked simulator element (the RN analog of a web SelectedElement pick).
+ * `source` is null when the tapped element carries no dsgn testID stamp. */
 export interface SimPick {
-  source: string
+  source: string | null
   tag: string
 }
 
-/** idb view-hierarchy hit-test: the dsgn-stamped element at a 0..1 device point.
- * Device-gated (needs idb + a booted app); returns null when nothing is stamped. */
+/** idb view-hierarchy hit-test: the element at a 0..1 device point, with its
+ * source when dsgn-stamped. Device-gated (needs idb + a booted app). */
 async function idbHitTest(udid: string, fx: number, fy: number): Promise<SimPick | null> {
   const dims = await idbScreenPoints(udid)
   const p = fractionToPoints(fx, fy, dims)
@@ -423,9 +512,11 @@ async function idbHitTest(udid: string, fx: number, fy: number): Promise<SimPick
   const node = JSON.parse(stdout) as Record<string, unknown>
   const stamp = findDsgnStamp(node)
   const parsed = stamp ? parseTestId(stamp) : null
-  if (!parsed) return null
   const tag = typeof node.type === 'string' ? node.type : 'element'
-  return { source: parsed.source, tag }
+  // No stamp → still a pick: the Inspector then shows the tag + its "project
+  // isn't set up" note (with the setup offer) instead of the tap silently
+  // doing nothing.
+  return { source: parsed?.source ?? null, tag }
 }
 
 /**
@@ -443,6 +534,10 @@ interface Interaction {
 let simSelectMode = false
 // The window to emit picks to, set in registerSimulatorIpc.
 let getWin: () => BrowserWindow | null = () => null
+// Status line into the renderer's simulator log (safe before registration: no-op).
+const simLog = (line: string): void => {
+  getWin()?.webContents.send('simulator:log', line)
+}
 
 // --- the bridge HTTP server -------------------------------------------------
 
@@ -958,22 +1053,36 @@ async function start(
 
   const port = await findFreePort(BRIDGE_PORT_BASE)
   const source = simctlFrameSource(udid)
-  // Phase 2/3: interaction (tap/scroll/type + element-select) iff idb is installed.
+  // Phase 2/3: interaction (tap/scroll/type + element-select) iff idb is installed
+  // AND its companion can actually attach to this boot of the device. A stale
+  // companion streams nothing but errors while screenshots keep working — the
+  // preview would look alive yet ignore every tap, so recover before wiring up.
   let interaction: Interaction | null = null
   if ((await resolveIdb()) != null) {
-    const controller = idbController(udid)
-    interaction = {
-      send: (cmd) => controller.send(cmd),
-      isSelectMode: () => simSelectMode,
-      onSelectTap: (fx, fy) => {
-        void idbHitTest(udid, fx, fy)
-          .then((pick) => {
-            if (pick) getWin()?.webContents.send('simulator:element-picked', pick)
-          })
-          .catch(() => {})
-      }
+    let healthy = await idbHealthy(udid)
+    if (!healthy) {
+      await recoverIdb()
+      healthy = await idbHealthy(udid)
     }
-    onLog('idb detected — tap / scroll / type + element-select enabled.')
+    if (healthy) {
+      const controller = idbController(udid)
+      interaction = {
+        send: (cmd) => controller.send(cmd),
+        isSelectMode: () => simSelectMode,
+        onSelectTap: (fx, fy) => {
+          void idbHitTest(udid, fx, fy)
+            .then((pick) => {
+              if (pick) getWin()?.webContents.send('simulator:element-picked', pick)
+            })
+            .catch((err) => simLog(`Element select failed: ${msg(err)}`))
+        }
+      }
+      onLog('idb detected — tap / scroll / type + element-select enabled.')
+    } else {
+      onLog(
+        'idb is installed but cannot attach to this simulator — preview is view-only. Quit Simulator.app and reopen the project to retry.'
+      )
+    }
   } else {
     onLog('idb not found — preview is view-only (install idb to interact).')
   }
@@ -1026,9 +1135,7 @@ async function startTestBridge(interactive = false): Promise<{ url: string }> {
 
 export function registerSimulatorIpc(getWindow: () => BrowserWindow | null): void {
   getWin = getWindow
-  const log = (line: string): void => {
-    getWindow()?.webContents.send('simulator:log', line)
-  }
+  const log = simLog
   ipcMain.handle('simulator:preflight', () => preflight())
   ipcMain.handle('simulator:start', (_e, opts: { root: string; command?: string; udid?: string }) =>
     start(opts, log)
@@ -1050,12 +1157,13 @@ export function registerSimulatorIpc(getWindow: () => BrowserWindow | null): voi
       parseControlCommand: typeof parseControlCommand
       parseTestId: typeof parseTestId
       findDsgnStamp: typeof findDsgnStamp
+      idbUiArgs: typeof idbUiArgs
     }
   }
   g.__dsgnStartTestBridge = startTestBridge
   g.__dsgnTestControl = () => testRecorded
   g.__dsgnTestPicks = () => testPicks
-  g.__dsgnSimMap = { fractionToPoints, parseControlCommand, parseTestId, findDsgnStamp }
+  g.__dsgnSimMap = { fractionToPoints, parseControlCommand, parseTestId, findDsgnStamp, idbUiArgs }
 
   app.on('before-quit', stop)
 }

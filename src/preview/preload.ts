@@ -586,10 +586,14 @@ function positionFrame(): void {
   const hv = window.innerHeight
   const wf = wv / (1 - (FRAME_INSET.left + FRAME_INSET.right) / 100)
   const hf = hv / (1 - (FRAME_INSET.top + FRAME_INSET.bottom) / 100)
-  img.style.width = `${wf}px`
-  img.style.height = `${hf}px`
-  img.style.left = `${-(wf * FRAME_INSET.left) / 100}px`
-  img.style.top = `${-(hf * FRAME_INSET.top) / 100}px`
+  // !important: the previewed app's own stylesheets apply to these injected
+  // elements too — e.g. Tailwind preflight's `img { max-width: 100% }` clamps
+  // the upscaled bezel back into the viewport, drawing a second, misaligned
+  // phone over the app instead of just the frame's inner edges.
+  img.style.setProperty('width', `${wf}px`, 'important')
+  img.style.setProperty('height', `${hf}px`, 'important')
+  img.style.setProperty('left', `${-(wf * FRAME_INSET.left) / 100}px`, 'important')
+  img.style.setProperty('top', `${-(hf * FRAME_INSET.top) / 100}px`, 'important')
 }
 
 function setFrame(on: boolean): void {
@@ -605,11 +609,19 @@ function setFrame(on: boolean): void {
   const host = document.createElement('div')
   host.setAttribute('data-dsgn-frame', '')
   host.style.cssText =
-    'position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:2147483646'
+    'position:fixed !important;inset:0 !important;overflow:hidden !important;' +
+    'pointer-events:none !important;z-index:2147483646 !important'
   const img = document.createElement('img')
   img.src = FRAME_DATA_URI
   img.draggable = false
-  img.style.cssText = 'position:absolute;pointer-events:none;user-select:none'
+  // max/min-width/height MUST be pinned: a page reset like Tailwind preflight's
+  // `img { max-width: 100% }` otherwise clamps the bezel (see positionFrame).
+  img.style.cssText =
+    'position:absolute !important;pointer-events:none !important;user-select:none;' +
+    'max-width:none !important;max-height:none !important;' +
+    'min-width:0 !important;min-height:0 !important;' +
+    'margin:0 !important;padding:0 !important;border:0 !important;' +
+    'transform:none !important;display:block !important'
   host.appendChild(img)
   document.documentElement.appendChild(host)
   frameHost = host
@@ -632,15 +644,20 @@ function setCorners(opts: { radius: number; color: string } | null): void {
   const { radius, color } = opts
   const host = document.createElement('div')
   host.setAttribute('data-dsgn-corners', '')
-  host.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483646'
+  host.style.cssText =
+    'position:fixed !important;inset:0 !important;pointer-events:none !important;' +
+    'z-index:2147483646 !important'
   for (const side of ['left', 'right'] as const) {
     const c = document.createElement('div')
     // The arc's center sits at the div's inner-top corner; pixels beyond the
     // radius (toward the outer corner point) paint the gutter color.
+    // !important, like the bezel above — the page's own resets style these too.
     const at = side === 'left' ? '100% 0%' : '0% 0%'
     c.style.cssText =
-      `position:fixed;bottom:0;${side}:0;width:${radius}px;height:${radius}px;` +
-      `background:radial-gradient(circle ${radius}px at ${at}, transparent ${radius - 0.5}px, ${color} ${radius + 0.5}px);`
+      `position:fixed !important;bottom:0 !important;${side}:0 !important;` +
+      `width:${radius}px !important;height:${radius}px !important;` +
+      `margin:0 !important;padding:0 !important;border:0 !important;` +
+      `background:radial-gradient(circle ${radius}px at ${at}, transparent ${radius - 0.5}px, ${color} ${radius + 0.5}px) !important;`
     host.appendChild(c)
   }
   document.documentElement.appendChild(host)

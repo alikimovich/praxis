@@ -755,7 +755,14 @@ export default function App(): React.JSX.Element {
       useSession.getState().setProjectRoot(root)
       // v5: track the open project in the workspace + show its (per-project) chat,
       // so agent events tagged with this project route to the visible chat.
-      useWorkspace.getState().openOrActivate(root, { name })
+      const wsKey = useWorkspace.getState().openOrActivate(root, { name })
+      // Viewport is per-project: a fresh open starts at desktop (never inherits
+      // the previous project's Mobile); a re-open restores this project's own.
+      useViewport
+        .getState()
+        .setViewport(
+          useWorkspace.getState().projects.find((p) => p.key === wsKey)?.viewport ?? 'desktop'
+        )
       // Remember for the empty state's "Recent" list (one-click reopen).
       useRecents.getState().addRecent(root, name)
       // Start this project's chat fresh — clear any slice a trailing event from a
@@ -919,6 +926,9 @@ export default function App(): React.JSX.Element {
     useChat.getState().setActiveChat(target.key)
     useSession.getState().setProjectRoot(target.root)
     useSession.getState().setBranch(target.branch)
+    // Each project keeps its own viewport — restore it (after activate, so the
+    // write-back in setViewport lands on THIS entry, not the outgoing one).
+    useViewport.getState().setViewport(target.viewport ?? 'desktop')
     // Refresh the rail's "previous agents" for the project we're switching to.
     void useHistory.getState().load(target.root)
     setPreviewKind(target.previewKind)

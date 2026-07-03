@@ -210,6 +210,9 @@ export interface ProjectEntry {
   previewKind: PreviewKind
   branch: string | null
   launchSpec: LaunchSpec | null
+  /** Preview viewport for THIS project — each remembers its own; restored on
+   *  switch (a global viewport leaked one project's Mobile into the next). */
+  viewport?: Viewport
   /** Monotonic recency stamp (bumped on activate) — drives LRU warm-server eviction. */
   touchedAt: number
   /** Chat length at the last successful Publish — the next Publish summarizes
@@ -263,7 +266,13 @@ interface ViewportState {
 }
 export const useViewport = create<ViewportState>((set) => ({
   viewport: 'desktop',
-  setViewport: (viewport) => set({ viewport })
+  setViewport: (viewport) => {
+    set({ viewport })
+    // The viewport is a per-project choice: record it on the active project's
+    // entry so a switch can restore it (App restores via applyProject/attempt).
+    const ws = useWorkspace.getState()
+    if (ws.activeKey) ws.patchEntry(ws.activeKey, { viewport })
+  }
 }))
 
 /**
