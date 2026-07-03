@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-02 — provider-seam: don't depend on real CLIs being absent
+
+`test/provider-seam.mjs` asserted the codex/gemini backends fail soft "when the
+CLI is absent" — but on dev machines the CLIs can resolve: a user-installed
+`gemini` (~/.bun/bin), and the `codex` shim that `bun run` puts on PATH via the
+repo's `node_modules/.bin` (from `@openai/codex-sdk`). Then the probe/spawn
+succeeds, a real (unauthenticated) turn spins on 401 retries, and the test —
+and `bun run verify` — fails. (Standalone `node test/provider-seam.mjs` passed
+because plain `node` doesn't prepend `node_modules/.bin`, which made it look flaky.)
+
+- `backends/codex.ts` / `backends/gemini.ts`: CLI binary is overridable via
+  `DSGN_CODEX_BIN` / `DSGN_GEMINI_BIN` (default unchanged: `codex` / `gemini`).
+- `test/provider-seam.mjs`: launches Electron with both vars pointed at
+  nonexistent paths, so the fail-soft assertions hold regardless of what's
+  installed; codex `done` assertion now dumps the event stream on failure.
+
 ## 2026-07-01 — Chat: interface for agent questions (AskUserQuestion)
 
 The agent could edit and ask for tool permission, but it had no way to ask the

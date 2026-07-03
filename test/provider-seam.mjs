@@ -26,7 +26,16 @@ try {
   app = await electron.launch({
     executablePath: electronPath,
     args: [join(root, 'out', 'main', 'index.js')],
-    cwd: root
+    cwd: root,
+    env: {
+      ...process.env,
+      // Force both non-Claude backends down their CLI-absent paths even on
+      // machines where the real CLIs resolve (a user-installed `gemini`, or the
+      // codex shim that `bun run` puts on PATH via node_modules/.bin) — this
+      // test asserts the fail-soft behavior, not a live provider turn.
+      DSGN_CODEX_BIN: join(root, 'test', 'fixtures', 'no-such-codex-bin'),
+      DSGN_GEMINI_BIN: join(root, 'test', 'fixtures', 'no-such-gemini-bin')
+    }
   })
   const win = await app.firstWindow()
   await win.waitForSelector('.empty__open', { timeout: 15000 })
@@ -49,8 +58,9 @@ try {
       .waitForFunction(() => window.__ev.some((e) => e.type === 'done'), { timeout: 20000 })
       .catch(() => {})
 
-  // Select the Codex backend and send a turn. The `codex` CLI isn't installed in CI,
-  // so the provider must emit an error + done rather than throwing.
+  // Select the Codex backend and send a turn. DSGN_CODEX_BIN (set at launch
+  // above) makes the CLI probe fail, so the provider must emit an error + done
+  // rather than throwing.
   await win.evaluate((p) => window.api.agent.openProject(p, { provider: 'codex' }), A)
   await win.evaluate(() => window.api.agent.send('hello from the seam test'))
   await waitForDone()
@@ -60,11 +70,15 @@ try {
   const done = ev.find((e) => e.type === 'done')
   assert(err, `codex backend should emit an error when the SDK is absent (got ${JSON.stringify(ev)})`)
   assert(/codex/i.test(err.message), `error should name codex (got "${err.message}")`)
-  assert(done, 'codex backend should still emit done after the error (turn completes)')
+  assert(
+    done,
+    `codex backend should still emit done after the error (turn completes) (got ${JSON.stringify(ev)})`
+  )
   assert(err.projectKey && err.projectKey === done.projectKey, 'events tagged with the project key')
 
-  // Gemini dispatch: the `gemini` CLI isn't installed in CI, so the subprocess
-  // spawn fails — the provider must still emit error + done, not throw.
+  // Gemini dispatch: DSGN_GEMINI_BIN (set at launch above) points at a
+  // nonexistent binary, so the subprocess spawn fails regardless of whether a
+  // real `gemini` is on PATH — the provider must still emit error + done.
   await win.evaluate((p) => window.api.agent.closeProject(p), A)
   await win.evaluate(() => {
     window.__ev = []
