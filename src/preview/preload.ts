@@ -637,11 +637,14 @@ function setFrame(on: boolean): void {
 // the OS theme). position:fixed keeps them pinned through scrolling.
 let cornerHost: HTMLDivElement | null = null
 
-function setCorners(opts: { radius: number; color: string } | null): void {
+function setCorners(opts: { radius: number; color: string; border: string } | null): void {
   cornerHost?.remove()
   cornerHost = null
   if (!opts || opts.radius <= 0) return
-  const { radius, color } = opts
+  const { radius, color, border } = opts
+  // Room for the card's 1px border ring beyond the arc — without it the card's
+  // outline visibly stopped where the corner rounding began.
+  const size = radius + 2
   const host = document.createElement('div')
   host.setAttribute('data-dsgn-corners', '')
   host.style.cssText =
@@ -649,15 +652,16 @@ function setCorners(opts: { radius: number; color: string } | null): void {
     'z-index:2147483646 !important'
   for (const side of ['left', 'right'] as const) {
     const c = document.createElement('div')
-    // The arc's center sits at the div's inner-top corner; pixels beyond the
-    // radius (toward the outer corner point) paint the gutter color.
+    // The arc is centered on the card's corner circle (radius px in from the
+    // side, radius px up from the bottom); stops: the page (transparent) → the
+    // card's 1px border ring → the window-gutter fill.
     // !important, like the bezel above — the page's own resets style these too.
-    const at = side === 'left' ? '100% 0%' : '0% 0%'
+    const cx = side === 'left' ? `${radius}px` : `calc(100% - ${radius}px)`
     c.style.cssText =
       `position:fixed !important;bottom:0 !important;${side}:0 !important;` +
-      `width:${radius}px !important;height:${radius}px !important;` +
+      `width:${size}px !important;height:${size}px !important;` +
       `margin:0 !important;padding:0 !important;border:0 !important;` +
-      `background:radial-gradient(circle ${radius}px at ${at}, transparent ${radius - 0.5}px, ${color} ${radius + 0.5}px) !important;`
+      `background:radial-gradient(circle at ${cx} calc(100% - ${radius}px), transparent ${radius - 1}px, ${border} ${radius - 0.25}px ${radius + 0.75}px, ${color} ${radius + 1.25}px) !important;`
     host.appendChild(c)
   }
   document.documentElement.appendChild(host)
@@ -725,7 +729,7 @@ window.addEventListener('load', () => {
     buildPins()
   })
   ipcRenderer.on(SET_FRAME, (_e, on: boolean) => setFrame(on))
-  ipcRenderer.on(SET_CORNERS, (_e, opts: { radius: number; color: string } | null) =>
+  ipcRenderer.on(SET_CORNERS, (_e, opts: { radius: number; color: string; border: string } | null) =>
     setCorners(opts)
   )
 }

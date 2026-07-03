@@ -36,8 +36,16 @@ let frameModeActive = false
 // Desktop viewport: fake ONLY the bottom corners' rounding inside the page (the
 // native view stays square so its top sits flush under the card's header).
 let cornerRadius = 0
-const cornerOpts = (): { radius: number; color: string } | null =>
-  cornerRadius > 0 ? { radius: cornerRadius, color: previewBg() } : null
+const cornerOpts = (): { radius: number; color: string; border: string } | null =>
+  cornerRadius > 0
+    ? {
+        radius: cornerRadius,
+        color: previewBg(),
+        // The card's border color (styles.css --border) — the masks continue
+        // the card's 1px outline around the corner arc.
+        border: nativeTheme.shouldUseDarkColors ? '#2a2a2e' : '#ececec'
+      }
+    : null
 
 // Channels mirrored in src/preview/preload.ts (the injected preview preload).
 const PREVIEW_SET_MODE = 'dsgn:preview:set-select-mode'
