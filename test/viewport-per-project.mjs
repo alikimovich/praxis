@@ -58,9 +58,7 @@ try {
     }
   }
   const switchProject = () =>
-    win.click(
-      '.rail__item:not(.rail__item--active) .rail__open, .rail__chip:not(.rail__chip--active)'
-    )
+    win.click('.rail__item:not(.rail__item--active) .rail__open')
 
   await openVia(fixtureA)
   await waitUrl(7777)

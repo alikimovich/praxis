@@ -183,15 +183,13 @@ try {
   }
   if (ws.activeAfterClose !== ws.b) throw new Error('closing the active project should fall back to B')
 
-  // Rail collapse: one project (B) is open, so the rail renders. The « toggle
-  // collapses it to the thin strip (chips), » expands it back.
+  // Rail collapse: one project (B) is open, so the rail renders. The floating
+  // toggle by the traffic lights hides it entirely, then brings it back.
   await win.waitForSelector('.rail', { timeout: 5000 })
-  if (await win.$('.rail--collapsed')) throw new Error('rail should start expanded')
-  await win.click('button[aria-label="Collapse projects sidebar"]')
-  await win.waitForSelector('.rail--collapsed', { timeout: 5000 })
-  if (!(await win.$('.rail__chip'))) throw new Error('collapsed rail should show project chips')
-  await win.click('button[aria-label="Expand projects sidebar"]')
-  await win.waitForFunction(() => !document.querySelector('.rail--collapsed'), { timeout: 5000 })
+  await win.click('button[aria-label="Hide projects sidebar"]')
+  await win.waitForFunction(() => !document.querySelector('.rail'), { timeout: 5000 })
+  await win.click('button[aria-label="Show projects sidebar"]')
+  await win.waitForSelector('.rail', { timeout: 5000 })
 
   // Paste an image into the composer → a thumbnail attachment chip appears.
   await win.evaluate(() => {

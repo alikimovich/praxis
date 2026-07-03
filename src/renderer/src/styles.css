@@ -348,6 +348,34 @@ body {
     flex: 1 1 auto;
     display: flex;
     min-height: 0;
+    /* Positioning context for the floating sidebar toggle (top-left, by the
+       traffic lights) so it stays put whether the rail is shown or hidden. */
+    position: relative;
+}
+
+/* Show/hide the projects sidebar — sits in the traffic-light clearance strip,
+   to the right of the macOS window controls, and stays visible when the rail is
+   collapsed away (so it can bring it back). */
+.sidebar-toggle {
+    position: absolute;
+    top: 9px;
+    left: 78px;
+    z-index: 20;
+    -webkit-app-region: no-drag;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.sidebar-toggle:hover {
+    background: var(--border);
+    color: var(--text);
 }
 
 /* Empty state — no project open: an Open-project CTA centered, cat in the corner.
@@ -467,11 +495,10 @@ body {
 }
 
 /* v5 left rail — open projects (Cursor-style). */
-/* Projects sidebar — sits on the same main surface as the chat (Cursor-style),
-   no hard border; the preview card is the only elevated surface. Top padding
-   clears the macOS traffic lights, which overlay this corner (no titlebar).
-   Collapse/expand animates the width (the <nav> persists across the toggle —
-   only its class changes) while the incoming content fades in below. */
+/* Projects sidebar — sits on the same main surface as the chat, separated by a
+   thin vertical divider (border-right). Top padding clears the macOS traffic
+   lights, which overlay this corner (no titlebar). Collapsing hides it entirely
+   (Rail returns null); the floating toggle brings it back. */
 .rail {
     flex: 0 0 auto;
     width: 168px;
@@ -480,9 +507,9 @@ body {
     gap: 2px;
     padding: 40px 6px 8px;
     background: var(--bg);
+    border-right: 1px solid var(--border);
     overflow-y: auto;
     overflow-x: hidden;
-    transition: width 0.18s ease;
 }
 .rail > * {
     animation: rail-fade 0.25s ease;
@@ -503,21 +530,11 @@ body {
         animation: none;
     }
 }
-/* The head row doubles as a window-drag strip (its buttons opt out). */
-.rail__head,
-.rail--collapsed {
-    -webkit-app-region: drag;
-}
-.rail__head-actions,
-.rail__toggle,
-.rail--collapsed .rail__chip,
-.rail--collapsed .rail__add--mini {
-    -webkit-app-region: no-drag;
-}
+/* The head row doubles as a window-drag strip. */
 .rail__head {
+    -webkit-app-region: drag;
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 4px;
     font-size: 11px;
     font-weight: 600;
@@ -525,88 +542,6 @@ body {
     letter-spacing: 0.04em;
     color: var(--text-muted);
     padding: 2px 4px 6px 8px;
-}
-.rail__head-actions {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-}
-/* Collapse / expand chevron — in the head when expanded, top of the strip when not. */
-.rail__toggle {
-    flex: 0 0 auto;
-    width: 20px;
-    height: 20px;
-    border: none;
-    border-radius: 4px;
-    background: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    font-size: 13px;
-    line-height: 1;
-}
-.rail__toggle:hover {
-    background: var(--border);
-    color: var(--text);
-}
-/* Collapsed strip: just chevron + project chips + "+". */
-.rail--collapsed {
-    width: 44px;
-    align-items: center;
-    /* labels are gone here; chips are fixed-size so no wrap during the tween */
-    /* Keep the traffic-light clearance — they overlay this corner (no titlebar). */
-    padding: 40px 4px 8px;
-}
-.rail--collapsed .rail__list {
-    width: 100%;
-    align-items: center;
-    gap: 4px;
-    margin-top: 4px;
-}
-.rail__chip {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    border: 1px solid transparent;
-    border-radius: 7px;
-    background: none;
-    color: var(--text);
-    cursor: pointer;
-    font: inherit;
-}
-.rail__chip:hover {
-    background: var(--border);
-}
-.rail__chip--active {
-    background: var(--border);
-    border-color: var(--text-muted);
-}
-.rail__initial {
-    font-size: 13px;
-    font-weight: 600;
-    text-transform: uppercase;
-}
-/* The "working" dot rides the chip's top-right corner when collapsed. */
-.rail__chip .rail__dot {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-}
-.rail__chip .rail__dot:not(.rail__dot--on) {
-    display: none;
-}
-.rail__add--mini {
-    margin-top: 6px;
-    width: 30px;
-    height: 30px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    text-align: center;
 }
 .rail__list {
     list-style: none;
@@ -682,10 +617,14 @@ body {
     background: var(--border);
     color: var(--text);
 }
-.rail__add {
-    margin-top: 6px;
-    padding: 7px 8px;
-    border: 1px dashed var(--border);
+/* Project actions (New / Open) — quiet list items that echo the project rows
+   above them (no dashed CTA borders), each led by an icon. */
+.rail__action {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 8px;
+    border: none;
     border-radius: 6px;
     background: none;
     color: var(--text-muted);
@@ -693,13 +632,18 @@ body {
     font: inherit;
     font-size: 13px;
     text-align: left;
-    /* Don't wrap while the collapse/expand width tween passes through. */
     white-space: nowrap;
     overflow: hidden;
 }
-.rail__add:hover {
+.rail__action:first-of-type {
+    margin-top: 6px;
+}
+.rail__action svg {
+    flex: 0 0 auto;
+}
+.rail__action:hover {
+    background: var(--border);
     color: var(--text);
-    border-color: var(--text-muted);
 }
 
 /* v5-D — "previous agents" under the active project in the rail. */

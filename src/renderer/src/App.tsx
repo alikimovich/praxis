@@ -35,7 +35,7 @@ import {
   type ProjectEntry
 } from './store'
 import { projectKey } from '../../shared/projectKey'
-import { MousePointer2, MessageSquare, FileText } from 'lucide-react'
+import { MousePointer2, MessageSquare, FileText, PanelLeft } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   DropdownMenu,
@@ -114,6 +114,7 @@ export default function App(): React.JSX.Element {
   const projectRoot = useSession((s) => s.projectRoot)
   const drawerSource = useCodeDrawer((s) => s.source)
   const openCount = useWorkspace((s) => s.projects.length)
+  const railCollapsed = useWorkspace((s) => s.collapsed)
   const branch = useSession((s) => s.branch)
   const [editingBranch, setEditingBranch] = useState(false)
   const [branches, setBranches] = useState<string[]>([])
@@ -1336,6 +1337,17 @@ export default function App(): React.JSX.Element {
         </div>
       ) : (
         <div className="panes">
+          {/* Show/hide the projects sidebar — floats by the traffic lights so it
+              stays reachable once the rail is collapsed away. */}
+          <button
+            className="sidebar-toggle"
+            onClick={() => useWorkspace.getState().toggleCollapsed()}
+            aria-label={railCollapsed ? 'Show projects sidebar' : 'Hide projects sidebar'}
+            aria-pressed={!railCollapsed}
+            title={railCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+          >
+            <PanelLeft className="size-4" aria-hidden="true" />
+          </button>
           <Rail
             onSwitch={(key) => void switchTo(key)}
             onClose={(key) => void closeProjectFromRail(key)}
