@@ -94,7 +94,7 @@ try {
 
   // Open B via the rail "+", keeping A warm.
   await stubDialog(fixtureB)
-  await win.click('.rail__add--open')
+  await win.click('.rail__action[title^="Open an existing"]')
   // Wait until two projects are listed and one is running.
   await win.waitForFunction(() => document.querySelectorAll('.rail__name').length === 2, {
     timeout: 60000

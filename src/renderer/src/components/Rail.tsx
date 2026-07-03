@@ -1,4 +1,4 @@
-import { PanelLeft } from 'lucide-react'
+import { Folder, Plus } from 'lucide-react'
 import type { SessionRecord } from '../../../shared/api'
 import { relativeTime, useChat, useHistory, useSpawns, useWorkspace } from '../store'
 
@@ -19,14 +19,16 @@ interface Props {
  * v5 left rail (Cursor-style) — the open projects, with an active highlight and a
  * "working" dot for any project whose agent turn is in flight. Under the active
  * project, its **previous agents** (v5-D persisted sessions) list with status dots;
- * click one to review, × to delete. Clicking a project switches; × closes; + opens
- * another keeping the rest warm.
+ * click one to review, × to delete. Clicking a project switches; × closes.
+ *
+ * The collapse/expand toggle no longer lives here — it floats by the traffic lights
+ * (see App's `.sidebar-toggle`) so it stays reachable once the rail is gone. When
+ * collapsed the rail is hidden entirely (no thin strip).
  */
 export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: Props): React.JSX.Element | null {
   const projects = useWorkspace((s) => s.projects)
   const activeKey = useWorkspace((s) => s.activeKey)
   const collapsed = useWorkspace((s) => s.collapsed)
-  const toggleCollapsed = useWorkspace((s) => s.toggleCollapsed)
   // Re-render on any chat change so the per-project "working" dots stay live.
   const byKey = useChat((s) => s.byKey)
   // Past sessions per project (loaded by App on open/switch/close).
@@ -35,66 +37,13 @@ export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: 
   const spawns = useSpawns((s) => s.byKey)
 
   if (projects.length === 0) return null
-
-  // Collapsed: a thin strip — expand affordance, one chip per project (active
-  // highlighted, live "working" dot, click to switch), and "+" to open another.
-  if (collapsed) {
-    return (
-      <nav className="rail rail--collapsed" aria-label="Open projects">
-        <button
-          className="rail__toggle"
-          onClick={toggleCollapsed}
-          aria-label="Expand projects sidebar"
-          title="Expand sidebar"
-        >
-          <PanelLeft className="size-4" aria-hidden="true" />
-        </button>
-        <ul className="rail__list">
-          {projects.map((p) => {
-            const active = p.key === activeKey
-            const running = !!byKey[p.key]?.isRunning
-            return (
-              <li key={p.key}>
-                <button
-                  className={`rail__chip ${active ? 'rail__chip--active' : ''}`}
-                  onClick={() => onSwitch(p.key)}
-                  aria-current={active}
-                  title={p.name}
-                >
-                  <span
-                    className={`rail__dot ${running ? 'rail__dot--on' : ''}`}
-                    aria-hidden="true"
-                  />
-                  <span className="rail__initial">{p.name.slice(0, 1).toUpperCase()}</span>
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-        <button
-          className="rail__add rail__add--mini"
-          onClick={onOpen}
-          aria-label="Open another project"
-          title="Open another project"
-        >
-          +
-        </button>
-      </nav>
-    )
-  }
+  // Collapsed: hide the projects bar completely (the floating toggle brings it back).
+  if (collapsed) return null
 
   return (
     <nav className="rail" aria-label="Open projects">
       <div className="rail__head">
         <span>Projects</span>
-        <button
-          className="rail__toggle"
-          onClick={toggleCollapsed}
-          aria-label="Collapse projects sidebar"
-          title="Collapse sidebar"
-        >
-          <PanelLeft className="size-4" aria-hidden="true" />
-        </button>
       </div>
       <ul className="rail__list">
         {projects.map((p) => {
@@ -191,19 +140,22 @@ export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: 
           )
         })}
       </ul>
+      {/* Project actions — quiet list items (no dashed CTA borders). */}
       <button
-        className="rail__add rail__add--new"
+        className="rail__action"
         onClick={onCreate}
         title="Create a brand-new project (⌘N)"
       >
-        + New project
+        <Plus className="size-4" aria-hidden="true" />
+        <span>New project</span>
       </button>
       <button
-        className="rail__add rail__add--open"
+        className="rail__action"
         onClick={onOpen}
         title="Open an existing folder (⌘O)"
       >
-        Open project…
+        <Folder className="size-4" aria-hidden="true" />
+        <span>Open project</span>
       </button>
     </nav>
   )
