@@ -169,6 +169,15 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
   (use `capturePage()`); it also eats mouse events (hidden during resize drag). To
   drive it from a test, reach it via the main process
   (`webContents.executeJavaScript`), as `test/select-element.mjs` does.
+- **Dev-mode Chrome DevTools (CDP):** `bun run dev` opens `--remote-debugging-port`
+  9222 (override via `DSGN_DEBUG_PORT`; dev-only — a built/packaged app never opens
+  it). In a real Chrome browser open `chrome://inspect#devices`, make sure
+  `localhost:9222` is listed under Configure…, then "inspect" either target — the
+  chat window or the preview `WebContentsView` — for full DevTools (Elements,
+  Console, Network, Sources, Performance). This is a separate real-Chrome path;
+  Playwright's `_electron` still can't reach the preview as a page target. If
+  attach fails on Chrome 111+, add
+  `app.commandLine.appendSwitch('remote-allow-origins', 'devtools://devtools')`.
 - A renderer DOM panel can't float **above** the native preview view (native views
   render over the page). Panels reserve a strip instead, shrinking the native bounds
   while open: the floating prop panel takes a **right**-edge strip, the v9 code drawer

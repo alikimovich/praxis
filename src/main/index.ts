@@ -475,6 +475,15 @@ function registerPreviewIpc(): void {
   ipcMain.handle('project:create', (_e, root: string) => createProject(root))
 }
 
+// Dev-mode CDP endpoint: run `bun run dev`, then open chrome://inspect in a real
+// Chrome browser to attach full DevTools to the chat window and the native preview
+// WebContentsView (each shows up as its own target). Gated on the same electron-vite
+// dev signal used in createWindow (loadURL vs loadFile), so a built/packaged app
+// never opens the port.
+if (process.env['ELECTRON_RENDERER_URL']) {
+  app.commandLine.appendSwitch('remote-debugging-port', process.env['DSGN_DEBUG_PORT'] ?? '9222')
+}
+
 app.whenReady().then(() => {
   createWindow()
   buildAppMenu()

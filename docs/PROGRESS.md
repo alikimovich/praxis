@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-03 — Dev-mode Chrome DevTools (CDP endpoint)
+
+`bun run dev` now passes `--remote-debugging-port` (9222; `DSGN_DEBUG_PORT`
+overrides), gated on `ELECTRON_RENDERER_URL` so a built/packaged app never opens
+it. Real Chrome attaches full DevTools (Elements/Console/Network/Sources/
+Performance) to both the chat window and the preview `WebContentsView` via
+`chrome://inspect`. Verified live: dev app answers `:9222/json` (~5s after
+launch); built app booted and the port stayed closed across 10s of retries;
+full `bun run verify` green. Nuance: the preview target only appears after a
+project is open (`ensurePreviewView` is lazy — first `preview:set-bounds`).
+Gotcha + Chrome 111+ `remote-allow-origins` note added to CONTEXT.md.
+
 ## 2026-07-02 — v9 Phase 2: editable code drawer (user-requested)
 
 Finished the in-tool code view — Phase 1 let you *look* at the inspected element's
