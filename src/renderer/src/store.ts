@@ -304,12 +304,35 @@ export const usePreviewFreeze = create<PreviewFreezeState>((set) => ({
  * ~390px cutout used to collapse the phone screen to a sliver).
  */
 interface PanelInsetState {
+  /** Right-edge strip reserved for the floating PropPanel. */
   inset: number
+  /** Bottom strip reserved for the v9 code drawer (shrinks the native view's height). */
+  bottom: number
   setInset: (inset: number) => void
+  setBottom: (bottom: number) => void
 }
 export const usePanelInset = create<PanelInsetState>((set) => ({
   inset: 0,
-  setInset: (inset) => set({ inset: Math.max(0, inset) })
+  bottom: 0,
+  setInset: (inset) => set({ inset: Math.max(0, inset) }),
+  setBottom: (bottom) => set({ bottom: Math.max(0, bottom) })
+}))
+
+/**
+ * The v9 editable code drawer — which stamped element's file is open in it (null =
+ * closed). Opened from the Inspector's read-only code peek ("Edit" ⤢); the drawer
+ * itself mounts under the preview and reserves a bottom inset (usePanelInset).
+ */
+interface CodeDrawerState {
+  /** The `data-dsgn-source` string of the file open in the drawer, or null. */
+  source: string | null
+  open: (source: string) => void
+  close: () => void
+}
+export const useCodeDrawer = create<CodeDrawerState>((set) => ({
+  source: null,
+  open: (source) => set({ source }),
+  close: () => set({ source: null })
 }))
 
 /**

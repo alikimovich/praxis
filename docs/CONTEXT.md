@@ -121,10 +121,16 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
 - `src/renderer/src/components/ChatPanel.tsx` — chat UI, toolbar, slash menu, **inspector**.
 - `src/renderer/src/components/Inspector.tsx` — **v2** selected-element card + chat hand-off
   + the "Edit props" toggle + the **v9 "Code" toggle** (inline code peek).
-- `src/renderer/src/components/CodePeek.tsx` — **v9** read-only code peek: the stamped
-  file (highlight.js, gutter, element line-span mark, auto-scroll to the stamp) via
-  `source:read`, + "open in editor" (`source:open-in-editor`: code/cursor/zed/subl →
-  OS default). Engine lives in `props.ts`; phase 2 (editable CodeMirror drawer) is on TASKS.
+- `src/renderer/src/components/CodePeek.tsx` — **v9 phase 1** read-only code peek: the
+  stamped file (highlight.js, gutter, element line-span mark, auto-scroll to the stamp)
+  via `source:read`, + "open in editor" (`source:open-in-editor`: code/cursor/zed/subl →
+  OS default) + an "Edit" ⤢ button that opens the drawer. Engine lives in `props.ts`.
+- `src/renderer/src/components/CodeDrawer.tsx` — **v9 phase 2** editable code drawer:
+  CodeMirror 6 docked under the preview (a DOM panel can't float over the native view,
+  so `PreviewPane` shrinks the native height by `usePanelInset.bottom` and the drawer
+  fills the strip). Whole file, scrolled to the stamp with its span highlighted; ⌘S →
+  `source:write` (conflict-guarded whole-file save → `commitEdit`, so undo/redo + HMR
+  are free). `useCodeDrawer` store holds the open source. `test/code-drawer.mjs`.
 - `src/main/props.ts` — **prop editor engine** (React/JSX): babel-parse at the stamp line,
   react-docgen schema, hybrid literal-splice / agent-fallback apply (`props:inspect/apply`).
   Dispatches `.svelte` sources to `src/main/props-svelte.ts` (svelte/compiler — `export let` /
@@ -164,8 +170,9 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
   drive it from a test, reach it via the main process
   (`webContents.executeJavaScript`), as `test/select-element.mjs` does.
 - A renderer DOM panel can't float **above** the native preview view (native views
-  render over the page). The floating prop panel instead reserves a right-edge strip
-  via `preview.setPanelInset`, shrinking the native bounds while it's open.
+  render over the page). Panels reserve a strip instead, shrinking the native bounds
+  while open: the floating prop panel takes a **right**-edge strip, the v9 code drawer
+  a **bottom** strip — both via `usePanelInset` (`inset` = right, `bottom` = bottom).
 - Prop editing is **gated** on `PropInspection.hasSchema` (a resolved react-docgen
   schema). Unready components are prompt-only; the on-open setup offer fixes them.
 - The preview overlay preload is **sandboxed** — it only uses `ipcRenderer` (no Node,

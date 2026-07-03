@@ -4,9 +4,9 @@ import javascript from 'highlight.js/lib/languages/javascript'
 import typescript from 'highlight.js/lib/languages/typescript'
 import xml from 'highlight.js/lib/languages/xml'
 import css from 'highlight.js/lib/languages/css'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, PencilLine } from 'lucide-react'
 import type { SourceView } from '../../../shared/api'
-import { useSession } from '../store'
+import { useSession, useCodeDrawer } from '../store'
 import { Button } from '@/components/ui/button'
 
 hljs.registerLanguage('javascript', javascript)
@@ -115,6 +115,16 @@ export default function CodePeek({ source }: { source: string }): React.JSX.Elem
         <span className="codepeek__file min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11px] text-muted-foreground">
           {view.file}:{view.line}
         </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="codepeek__edit h-5 gap-1 px-1.5 text-[11px] text-muted-foreground"
+          onClick={() => useCodeDrawer.getState().open(source)}
+          title="Edit this file in a drawer under the preview"
+        >
+          <PencilLine className="size-3" />
+          Edit
+        </Button>
         <Button
           variant="ghost"
           size="sm"

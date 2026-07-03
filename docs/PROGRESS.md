@@ -2,6 +2,47 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-02 — v9 Phase 2: editable code drawer (user-requested)
+
+Finished the in-tool code view — Phase 1 let you *look* at the inspected element's
+source; Phase 2 lets you *edit* it without leaving dsgn. A CodeMirror 6 drawer
+docks under the preview; saving routes through the same `commitEdit` seam as every
+other direct edit, so undo/redo, on-disk conflict detection, and HMR all come free.
+
+Also **cleaned up `docs/TASKS.md`** first (user request): shipped milestones (v2–v8)
+moved to a new `docs/TASKS-archive.md`; the open v7 (multi-provider), v6 leftovers,
+deferred Svelte, and blocked polish items were **dropped** and recorded in the
+archive's "Dropped" section so they aren't silently forgotten. TASKS.md is now just v9.
+
+- **Geometry** (`PreviewPane.tsx` + `usePanelInset`): a DOM panel can't float over
+  the native `WebContentsView`, so the drawer reserves space instead. `usePanelInset`
+  gained a `bottom` value alongside the existing right-edge `inset` (PropPanel); the
+  pane now shrinks the native view's HEIGHT by `bottom` (`availH`), and the drawer —
+  absolutely positioned at the bottom of `previewcard__body` — fills the freed strip.
+  Both desktop and mobile (bezel) paths honor it.
+- **Save seam** (`props.ts`): `source:write(root, source, baseline, content)` →
+  refuses if the on-disk content drifted from the `baseline` the drawer loaded
+  (conflict, same contract as undo/redo), else `commitEdit` (write + history entry).
+  `SourceWriteResult` in `shared/api.ts`; preload + IPC wired.
+- **UI**: `CodeDrawer.tsx` — CM6 built imperatively (`basicSetup` + lang-javascript/
+  html/css, light default highlight to match the app), the stamp's line span marked
+  via a mapped `StateField` decoration (`.cm-stamp-line`), scrolled to the element,
+  `⌘S`/Save (dirty-gated) → `source:write`, conflict banner with Reload, close
+  releases the inset. Opened from a new "Edit" ⤢ button in the `CodePeek` header;
+  `useCodeDrawer` store holds the open source; closes on project switch (stale-root
+  guard).
+- **Dep**: added `codemirror` + `@codemirror/lang-{javascript,html,css}` (renderer is
+  ESM). Trialed `@codemirror/theme-one-dark` but removed it — basicSetup's light
+  default highlight fits the light app better.
+- **Test**: `test/code-drawer.mjs` — engine (conflict guard, whole-file save writes +
+  records undo, second stale save re-conflicts, `edits.undo` reverts) + UI (peek
+  "Edit" → CM mounts, stamp highlighted, bottom inset reserved, close releases it);
+  mutates the fixture then restores it. In `test`/`verify` as `test:codedrawer`;
+  screenshot `13-code-drawer.png`. Full `verify` green (one unrelated flake: a stale
+  node process holding port 7777 failed `viewport-per-project` until killed).
+- **Known limit**: with the floating PropPanel (right strip) also open, it overlaps
+  the drawer's top-right in a narrow window — the two insets are mutually unaware.
+
 ## 2026-07-03 — Inspector code peek + "open in editor" (user-requested)
 
 The user kept alt-tabbing to an editor just to *look at* the code of the element

@@ -5,6 +5,7 @@ import ConsolePanel from './components/ConsolePanel'
 import DiagnoseCard from './components/DiagnoseCard'
 import PreviewPane from './components/PreviewPane'
 import PropPanel from './components/PropPanel'
+import CodeDrawer from './components/CodeDrawer'
 import SessionReview from './components/SessionReview'
 import {
   describeSelectionForPrompt,
@@ -29,6 +30,7 @@ import {
   usePublishMode,
   useRecents,
   usePanelInset,
+  useCodeDrawer,
   useWorkspace,
   type ProjectEntry
 } from './store'
@@ -110,6 +112,7 @@ export default function App(): React.JSX.Element {
   const selected = useSelection((s) => s.selected)
   const inspection = useSelection((s) => s.inspection)
   const projectRoot = useSession((s) => s.projectRoot)
+  const drawerSource = useCodeDrawer((s) => s.source)
   const openCount = useWorkspace((s) => s.projects.length)
   const branch = useSession((s) => s.branch)
   const [editingBranch, setEditingBranch] = useState(false)
@@ -148,6 +151,11 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     window.api.preview.setDragging(!!reviewing)
   }, [reviewing])
+  // The code drawer holds one project's source stamp — close it when the active
+  // project changes so it can't read a stale path against the new root.
+  useEffect(() => {
+    useCodeDrawer.getState().close()
+  }, [projectRoot])
   const authNeeded = useSession((s) => s.authNeeded)
   const setAuthNeeded = useSession((s) => s.setAuthNeeded)
   const logOpen = useLog((s) => s.open)
@@ -1511,6 +1519,13 @@ export default function App(): React.JSX.Element {
               </div>
               <div className="previewcard__body">
                 <PreviewPane />
+                {drawerSource && projectRoot && (
+                  <CodeDrawer
+                    root={projectRoot}
+                    source={drawerSource}
+                    onClose={() => useCodeDrawer.getState().close()}
+                  />
+                )}
               </div>
             </div>
           </section>

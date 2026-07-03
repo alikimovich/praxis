@@ -324,6 +324,15 @@ export interface SourceView {
   elementEnd?: number
 }
 
+/** Result of a whole-file save from the v9 code drawer. */
+export interface SourceWriteResult {
+  ok: boolean
+  /** The file drifted on disk since the drawer loaded it — refused to clobber. */
+  conflict?: boolean
+  /** Human-readable failure (unresolved path, write error). */
+  error?: string
+}
+
 export type PropKind = 'string' | 'number' | 'boolean' | 'enum' | 'other'
 
 /** One editable prop/attribute of a selected element. */
@@ -601,6 +610,15 @@ export interface DsgnApi {
     read: (root: string, source: string) => Promise<SourceView | null>
     /** Jump to the stamp in the user's editor (code/cursor/zed/subl CLI → OS default app). */
     openInEditor: (root: string, source: string) => Promise<{ ok: boolean; error?: string }>
+    /** Save the whole file from the v9 code drawer. Refuses if disk drifted from
+     *  `baseline` (the content the drawer loaded); routes through commitEdit so
+     *  undo/redo + HMR just work. */
+    write: (
+      root: string,
+      source: string,
+      baseline: string,
+      content: string
+    ) => Promise<SourceWriteResult>
   }
   /** Undo/redo over ALL direct dsgn source edits — props, text, token swaps (v8 F3b).
    *  Scoped per project root: the rail keeps several projects open at once. */

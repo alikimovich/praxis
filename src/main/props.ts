@@ -10,6 +10,7 @@ import type {
   PropInspection,
   PropKind,
   SourceView,
+  SourceWriteResult,
   TokenEdit
 } from '../shared/api'
 import {
@@ -1000,6 +1001,32 @@ async function readSourceView(root: string, source: string): Promise<SourceView 
   return view
 }
 
+/**
+ * Save the whole file from the v9 code drawer. The drawer loaded `baseline`; if
+ * the on-disk content has drifted since (the user edited it in their own editor,
+ * or the agent wrote it), refuse rather than clobber — same contract as undo/redo.
+ * Otherwise route through `commitEdit` so the write lands in the undo/redo history
+ * and the dev server's HMR refreshes the preview, exactly like a prop/text edit.
+ */
+async function writeSourceFile(
+  root: string,
+  source: string,
+  baseline: string,
+  content: string
+): Promise<SourceWriteResult> {
+  const loc = resolveSource(root, source)
+  if (!loc) return { ok: false, error: 'Could not resolve the source location.' }
+  let current: string
+  try {
+    current = await readFile(loc.file, 'utf8')
+  } catch {
+    return { ok: false, error: 'Could not read the source file.' }
+  }
+  if (current !== baseline) return { ok: false, conflict: true }
+  const res = await commitEdit(root, loc.file, current, content, `${source}:drawer`)
+  return res.applied ? { ok: true } : { ok: false, error: res.error }
+}
+
 const execFileP = promisify(execFile)
 
 // Editor CLIs tried in order for "Open in editor" — each accepts a
@@ -1049,6 +1076,12 @@ export function registerPropsIpc(): void {
   ipcMain.handle('source:read', (_e, root: string, source: string) => readSourceView(root, source))
   ipcMain.handle('source:open-in-editor', (_e, root: string, source: string) =>
     openInEditor(root, source)
+  )
+  // v9 phase 2: save the whole file from the editable code drawer.
+  ipcMain.handle(
+    'source:write',
+    (_e, root: string, source: string, baseline: string, content: string) =>
+      writeSourceFile(root, source, baseline, content)
   )
   // v8 F3b: undo/redo over ALL dsgn source edits (props, text, token swaps),
   // scoped to the active project root (the rail keeps several projects open).

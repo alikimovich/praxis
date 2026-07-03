@@ -26,6 +26,7 @@ import type {
   SessionRecord,
   SetupResult,
   SourceView,
+  SourceWriteResult,
   SimPreflight,
   TokenScaffoldResult,
   TokenSet,
@@ -162,7 +163,14 @@ const api: DsgnApi = {
     read: (root: string, source: string): Promise<SourceView | null> =>
       ipcRenderer.invoke('source:read', root, source),
     openInEditor: (root: string, source: string): Promise<{ ok: boolean; error?: string }> =>
-      ipcRenderer.invoke('source:open-in-editor', root, source)
+      ipcRenderer.invoke('source:open-in-editor', root, source),
+    write: (
+      root: string,
+      source: string,
+      baseline: string,
+      content: string
+    ): Promise<SourceWriteResult> =>
+      ipcRenderer.invoke('source:write', root, source, baseline, content)
   },
   edits: {
     undo: (root: string): Promise<UndoResult> => ipcRenderer.invoke('edit:undo', root),

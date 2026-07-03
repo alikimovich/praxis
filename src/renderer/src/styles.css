@@ -1082,6 +1082,15 @@ body {
 .previewcard__body {
     flex: 1 1 auto;
     min-height: 0;
+    /* Positioning context for the v9 code drawer (absolute, pinned to the bottom
+       over the strip usePanelInset frees up under the shrunk native view). */
+    position: relative;
+}
+
+/* v9 code drawer: the stamped element's line span, highlighted in CodeMirror. */
+.cm-stamp-line {
+    background: rgba(59, 130, 246, 0.1);
+    box-shadow: inset 2px 0 0 #3b82f6;
 }
 
 /* Invisible but grabbable resize handle between the chat and the preview card. */
