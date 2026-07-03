@@ -947,6 +947,22 @@ body {
     position: relative;
 }
 
+/* Grab strip along the chat pane's top edge so the window is draggable there —
+   with no native titlebar, this strip is the only top-of-window drag surface over
+   the chat (the rail head and previewbar already drag). Absolute, so it reserves
+   no space and shifts nothing; z-index below the top fade (5) and the sticky
+   pinned ask (6) so those stay interactive, and the pointer-events:none fade lets
+   drag events fall through to it. */
+.chat-drag {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 38px;
+    z-index: 4;
+    -webkit-app-region: drag;
+}
+
 /* With no titlebar the chat scrolls into the window's top edge — dissolve it:
    a bg-colored gradient + progressively-masked backdrop blur, so scrolled text
    fades out instead of hard-clipping at the traffic-light strip. */
