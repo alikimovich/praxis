@@ -1233,8 +1233,6 @@ export default function App(): React.JSX.Element {
           empty state; the project's URL, branch, and controls live in the preview
           card's own bar. */}
 
-      {logOpen && <ConsolePanel />}
-
       {authNeeded && (
         <div className="banner banner--auth">
           <span className="banner__text">
@@ -1531,6 +1529,9 @@ export default function App(): React.JSX.Element {
           </section>
         </div>
       )}
+
+      {/* Activity console — docked full-width at the bottom of the window. */}
+      {logOpen && <ConsolePanel />}
 
       {/* Floating prop panel — only for dsgn-ready components (schema resolved). */}
       {selected && projectRoot && inspection?.hasSchema && (
