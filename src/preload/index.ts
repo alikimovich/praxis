@@ -20,6 +20,7 @@ import type {
   TokenEdit,
   PropInspection,
   PublishResult,
+  RecentMenuEntry,
   RunningDevServer,
   RunningSimulator,
   SelectedElement,
@@ -38,6 +39,15 @@ const api: DsgnApi = {
     const listener = (_e: IpcRendererEvent, action: string): void => cb(action)
     ipcRenderer.on('menu:action', listener)
     return () => ipcRenderer.removeListener('menu:action', listener)
+  },
+  menu: {
+    setRecents: (recents: RecentMenuEntry[]): void =>
+      ipcRenderer.send('menu:set-recents', recents),
+    onOpenRecent: (cb: (root: string) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, root: string): void => cb(root)
+      ipcRenderer.on('menu:open-recent', listener)
+      return () => ipcRenderer.removeListener('menu:open-recent', listener)
+    }
   },
   preview: {
     setBounds: (bounds: Bounds): void => ipcRenderer.send('preview:set-bounds', bounds),

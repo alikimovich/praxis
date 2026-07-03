@@ -366,6 +366,7 @@ interface RecentsState {
   recents: RecentProject[]
   addRecent: (root: string, name: string) => void
   removeRecent: (root: string) => void
+  clearRecents: () => void
 }
 export const useRecents = create<RecentsState>((set) => ({
   recents: readRecents(),
@@ -384,7 +385,11 @@ export const useRecents = create<RecentsState>((set) => ({
       const recents = s.recents.filter((r) => r.root !== root)
       writeRecents(recents)
       return { recents }
-    })
+    }),
+  clearRecents: () => {
+    writeRecents([])
+    set({ recents: [] })
+  }
 }))
 
 /**

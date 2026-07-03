@@ -500,11 +500,27 @@ export interface TokenScaffoldResult {
   error?: string
 }
 
+/** One entry in the File → Open Recent menu (pushed from the renderer's store). */
+export interface RecentMenuEntry {
+  root: string
+  name: string
+}
+
 /** The surface exposed on `window.api` by the preload bridge. */
 export interface DsgnApi {
-  /** Subscribe to native-menu (Actions) commands: 'reload' | 'stop' | 'select' |
-   *  'open-project' | 'viewport:desktop' | 'viewport:mobile'. Returns an unsubscribe. */
+  /** Subscribe to native-menu (Actions/File) commands: 'reload' | 'stop' | 'select' |
+   *  'open-project' | 'new-project' | 'clear-recents' | 'viewport:desktop' |
+   *  'viewport:mobile'. Returns an unsubscribe. */
   onMenuAction: (cb: (action: string) => void) => () => void
+  /** File menu ↔ renderer recents bridge. The renderer owns the recents list
+   *  (localStorage); it pushes the current set so main can build the native
+   *  File → Open Recent submenu, and is called back when one is chosen. */
+  menu: {
+    /** Push the current recents (most-recent-first) so main rebuilds Open Recent. */
+    setRecents: (recents: RecentMenuEntry[]) => void
+    /** Fires when a project is chosen from File → Open Recent. */
+    onOpenRecent: (cb: (root: string) => void) => () => void
+  }
   preview: {
     setBounds: (bounds: Bounds) => void
     load: (url: string) => Promise<void>
