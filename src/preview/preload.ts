@@ -160,6 +160,15 @@ const pinDots = new Map<string, { selector: string; dot: HTMLDivElement }>()
 
 /** Rebuild the pin nodes from the current annotation list. */
 function buildPins(): void {
+  // Don't materialize the overlay host just to hold an empty pins layer. An idle
+  // preview (no annotations, select/comment off) must leave the previewed app's
+  // DOM untouched — otherwise a stray, empty `data-dsgn-overlay` div is injected
+  // into every page on load, which shows up when inspecting the app.
+  if (!annotationPins.length) {
+    pinDots.clear()
+    if (pinsLayer) pinsLayer.textContent = ''
+    return
+  }
   ensureOverlay()
   if (!pinsLayer) return
   pinsLayer.textContent = ''
