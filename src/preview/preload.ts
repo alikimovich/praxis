@@ -30,7 +30,6 @@ const SET_COMMENT_MODE = 'dsgn:preview:set-comment-mode' // renderer → preload
 const COMMENT_MODE = 'dsgn:preview:comment-mode' // preload → renderer (keyboard-initiated)
 const COMMENT = 'dsgn:preview:comment' // preload → renderer (submitted)
 const SET_FRAME = 'dsgn:preview:set-frame' // renderer → preload (mobile bezel overlay)
-const SET_CORNERS = 'dsgn:preview:set-corners' // main → preload (bottom corner masks)
 
 type CommentMode = 'comment' | 'annotate' | null
 
@@ -160,6 +159,15 @@ const pinDots = new Map<string, { selector: string; dot: HTMLDivElement }>()
 
 /** Rebuild the pin nodes from the current annotation list. */
 function buildPins(): void {
+  // Don't materialize the overlay host just to hold an empty pins layer. An idle
+  // preview (no annotations, select/comment off) must leave the previewed app's
+  // DOM untouched — otherwise a stray, empty `data-dsgn-overlay` div is injected
+  // into every page on load, which shows up when inspecting the app.
+  if (!annotationPins.length) {
+    pinDots.clear()
+    if (pinsLayer) pinsLayer.textContent = ''
+    return
+  }
   ensureOverlay()
   if (!pinsLayer) return
   pinsLayer.textContent = ''
@@ -628,46 +636,6 @@ function setFrame(on: boolean): void {
   positionFrame()
 }
 
-// ── Bottom corner masks ─────────────────────────────────────────────────────
-// The native view sits flush in dsgn's rounded preview card. Electron can only
-// round ALL of the view's corners (setBorderRadius is uniform), which would
-// notch the top corners under the card's header — so the view stays square and
-// these two fixed, click-through overlays fake the bottom rounding instead: a
-// quarter-circle cutout over the window-gutter color, sent by main (it knows
-// the OS theme). position:fixed keeps them pinned through scrolling.
-let cornerHost: HTMLDivElement | null = null
-
-function setCorners(opts: { radius: number; color: string; border: string } | null): void {
-  cornerHost?.remove()
-  cornerHost = null
-  if (!opts || opts.radius <= 0) return
-  const { radius, color, border } = opts
-  // Room for the card's 1px border ring beyond the arc — without it the card's
-  // outline visibly stopped where the corner rounding began.
-  const size = radius + 2
-  const host = document.createElement('div')
-  host.setAttribute('data-dsgn-corners', '')
-  host.style.cssText =
-    'position:fixed !important;inset:0 !important;pointer-events:none !important;' +
-    'z-index:2147483646 !important'
-  for (const side of ['left', 'right'] as const) {
-    const c = document.createElement('div')
-    // The arc is centered on the card's corner circle (radius px in from the
-    // side, radius px up from the bottom); stops: the page (transparent) → the
-    // card's 1px border ring → the window-gutter fill.
-    // !important, like the bezel above — the page's own resets style these too.
-    const cx = side === 'left' ? `${radius}px` : `calc(100% - ${radius}px)`
-    c.style.cssText =
-      `position:fixed !important;bottom:0 !important;${side}:0 !important;` +
-      `width:${size}px !important;height:${size}px !important;` +
-      `margin:0 !important;padding:0 !important;border:0 !important;` +
-      `background:radial-gradient(circle at ${cx} calc(100% - ${radius}px), transparent ${radius - 1}px, ${border} ${radius - 0.25}px ${radius + 0.75}px, ${color} ${radius + 1.25}px) !important;`
-    host.appendChild(c)
-  }
-  document.documentElement.appendChild(host)
-  cornerHost = host
-}
-
 // Capture-phase so we see events before the page and can suppress the click.
 if (!IS_SIM_BRIDGE) {
   window.addEventListener('mousemove', onMove, true)
@@ -729,7 +697,4 @@ window.addEventListener('load', () => {
     buildPins()
   })
   ipcRenderer.on(SET_FRAME, (_e, on: boolean) => setFrame(on))
-  ipcRenderer.on(SET_CORNERS, (_e, opts: { radius: number; color: string; border: string } | null) =>
-    setCorners(opts)
-  )
 }

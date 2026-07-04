@@ -2,6 +2,35 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-04 — Preview corners: native setBorderRadius, corner-mask hack removed
+
+- The desktop preview's bottom corners looked DOUBLED: the in-page corner masks
+  (injected divs painting arcs over the previewed app) keyed their colors off
+  `nativeTheme` (the OS appearance), but the app UI renders light regardless —
+  on a dark-mode OS the masks painted `#111113`/`#2a2a2e` next to the card's
+  light corner, drawing a second corner. Any color/geometry disagreement in
+  that scheme doubles the corner by construction.
+- Fix: deleted the whole mask path (main's `cornerRadius`/`cornerOpts`/
+  `preview:set-corners` IPC + theme repaint, preload's `setCorners` injector,
+  `api.setCorners`) and instead pass `radius: DESKTOP_CORNER_RADIUS` through
+  `preview:set-bounds` → the existing native `view.setBorderRadius()` (the same
+  path mobile's iPhone-screen rounding already used). All four corners round;
+  the top ones show as a subtle inset under the card header — content-in-a-
+  rounded-panel look, consistent with the bottom. Captures are square content
+  now (no baked-in masks), and the freeze `<img>` radius matches.
+- PR #63 was reverted wholesale first (its corner decisions were suspect), then
+  its two still-valid fixes were re-applied on top of the new scheme: buildPins
+  skips materializing the overlay host when there are no pins, and
+  `preview:reset` zeroes frame/pins state (cornerRadius no longer exists).
+- Verified: repro harness captured the composited window (screencapture of the
+  window rect — the native view never shows in renderer screenshots) before/
+  after; before shows the dark mask arc + square corner, after a single clean
+  rounding. typecheck + smoke, open-preview, mobile-frame, viewport-per-project,
+  select-element, annotations, comment-mode, ready-gating all green.
+- Gotcha hit while testing: a leaked `vite dev --port 7777` from a previous app
+  session made viewport-per-project time out (fixture landed on 7778). Check
+  `lsof -iTCP:7777` before blaming a test.
+
 ## 2026-07-03 — Dock icon size fix: ship the layered (Assets.car) icon
 
 - The dock icon rendered ~10% larger than neighboring apps. Cause: the iOS
