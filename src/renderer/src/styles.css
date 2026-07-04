@@ -498,35 +498,47 @@ body {
    thin vertical divider (border-right). Top padding clears the macOS traffic
    lights, which overlay this corner (no titlebar). Collapsing hides it entirely
    (Rail returns null); the floating toggle brings it back. */
+/* The rail stays mounted when collapsed (see Rail.tsx) so it can animate in/out.
+   The outer element is the clip box whose width animates 168px ↔ 0; the fixed-
+   width inner slides with it (translateX + fade), so the sidebar appears from the
+   left and disappears to the left instead of popping. */
 .rail {
     flex: 0 0 auto;
     width: 168px;
+    overflow: hidden;
+    background: var(--bg);
+    border-right: 1px solid var(--border);
+    transition:
+        width 0.24s ease,
+        border-right-color 0.24s ease;
+}
+.rail--collapsed {
+    width: 0;
+    border-right-color: transparent;
+    pointer-events: none;
+}
+.rail__inner {
+    width: 168px;
+    height: 100%;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     gap: 2px;
     padding: 40px 6px 8px;
-    background: var(--bg);
-    border-right: 1px solid var(--border);
     overflow-y: auto;
     overflow-x: hidden;
+    transition:
+        transform 0.24s ease,
+        opacity 0.24s ease;
 }
-.rail > * {
-    animation: rail-fade 0.25s ease;
-}
-@keyframes rail-fade {
-    from {
-        opacity: 0;
-    }
-    to {
-        opacity: 1;
-    }
+.rail--collapsed .rail__inner {
+    transform: translateX(-100%);
+    opacity: 0;
 }
 @media (prefers-reduced-motion: reduce) {
-    .rail {
+    .rail,
+    .rail__inner {
         transition: none;
-    }
-    .rail > * {
-        animation: none;
     }
 }
 /* The head row doubles as a window-drag strip. */
