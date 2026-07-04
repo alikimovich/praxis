@@ -320,8 +320,8 @@ export const usePanelInset = create<PanelInsetState>((set) => ({
 
 /**
  * The v9 editable code drawer — which stamped element's file is open in it (null =
- * closed). Opened from the Inspector's read-only code peek ("Edit" ⤢); the drawer
- * itself mounts under the preview and reserves a bottom inset (usePanelInset).
+ * closed). Opened from the Inspector's "Code" button; the drawer mounts under the
+ * preview (right side) and reserves a bottom inset (usePanelInset).
  */
 interface CodeDrawerState {
   /** The `data-dsgn-source` string of the file open in the drawer, or null. */

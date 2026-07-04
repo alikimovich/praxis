@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import CodePeek from './CodePeek'
+import { useCodeDrawer } from '../store'
 
 interface Props {
   element: SelectedElement
@@ -41,7 +41,10 @@ export default function Inspector({
   // Show the "edit owner component" affordance when the clicked host resolved to a
   // different component-instance call site (the authored <Component …/>).
   const hasOwner = !!element.componentSource && element.componentSource !== element.source
-  const [viewingCode, setViewingCode] = useState(false)
+  // The code now opens in the editor drawer under the preview (right side), not
+  // inline in this left panel. Track whether the drawer is showing *this* element.
+  const drawerSource = useCodeDrawer((s) => s.source)
+  const codeOpen = !!element.source && drawerSource === element.source
   const [noting, setNoting] = useState(false)
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
@@ -142,9 +145,6 @@ export default function Inspector({
         </div>
       )}
 
-      {/* Read-only code peek: the stamped file, scrolled to this element. */}
-      {viewingCode && element.source && <CodePeek source={element.source} />}
-
       {noting && (
         <div className="inspector__note flex flex-col gap-1.5">
           <Textarea
@@ -183,10 +183,15 @@ export default function Inspector({
         </Button>
         {element.source && (
           <Button
-            variant={viewingCode ? 'default' : 'outline'}
+            variant={codeOpen ? 'default' : 'outline'}
             size="sm"
             className="inspector__codebtn"
-            onClick={() => setViewingCode((v) => !v)}
+            onClick={() =>
+              codeOpen
+                ? useCodeDrawer.getState().close()
+                : useCodeDrawer.getState().open(element.source!)
+            }
+            title="Open this file in the editor under the preview"
           >
             Code
           </Button>

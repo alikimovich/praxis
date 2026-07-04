@@ -69,7 +69,7 @@ try {
   if (!undo.ok) throw new Error(`undo failed: ${JSON.stringify(undo)}`)
   if (disk() !== baseline) throw new Error('undo did not restore the file')
 
-  // --- UI: select an element → Code peek → "Edit" opens the drawer. ---
+  // --- UI: select an element → the Code button opens the editor drawer. ---
   await win.evaluate(
     (args) => {
       window.__dsgnSession.getState().setProjectRoot(args.fixture)
@@ -87,13 +87,11 @@ try {
     },
     { fixture, src: SRC }
   )
+  // JS-click (not Playwright's actionability click): a schema-backed selection
+  // also opens the floating PropPanel, which can overlap the button in the small
+  // test window (they live in different panes at real sizes).
   await win.waitForSelector('.inspector__codebtn', { timeout: 5000 })
   await win.$eval('.inspector__codebtn', (el) => el.click())
-  // JS-click (not Playwright's actionability click): a schema-backed selection
-  // also opens the floating PropPanel, which overlaps the peek in the small test
-  // window (they live in different panes at real sizes).
-  await win.waitForSelector('.codepeek__edit', { timeout: 5000 })
-  await win.$eval('.codepeek__edit', (el) => el.click())
 
   // CodeMirror mounts, the stamp span is highlighted, and the bottom inset is reserved.
   await win.waitForSelector('.codedrawer .cm-editor', { timeout: 5000 })

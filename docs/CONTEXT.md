@@ -120,17 +120,21 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
   a shadow-DOM composer anchored to the clicked element (comment → agent, annotation → pin).
 - `src/renderer/src/components/ChatPanel.tsx` — chat UI, toolbar, slash menu, **inspector**.
 - `src/renderer/src/components/Inspector.tsx` — **v2** selected-element card + chat hand-off
-  + the "Edit props" toggle + the **v9 "Code" toggle** (inline code peek).
-- `src/renderer/src/components/CodePeek.tsx` — **v9 phase 1** read-only code peek: the
-  stamped file (highlight.js, gutter, element line-span mark, auto-scroll to the stamp)
-  via `source:read`, + "open in editor" (`source:open-in-editor`: code/cursor/zed/subl →
-  OS default) + an "Edit" ⤢ button that opens the drawer. Engine lives in `props.ts`.
+  + the "Edit props" toggle + the **v9 "Code" button** (opens the editor drawer on the
+  right, `useCodeDrawer.open` — no longer an inline peek in the left panel). The old
+  read-only `CodePeek.tsx` was removed (LKM-20); its `source:read`/`source:open-in-editor`
+  engine (in `props.ts`) is now used by the drawer directly.
 - `src/renderer/src/components/CodeDrawer.tsx` — **v9 phase 2** editable code drawer:
   CodeMirror 6 docked under the preview (a DOM panel can't float over the native view,
   so `PreviewPane` shrinks the native height by `usePanelInset.bottom` and the drawer
   fills the strip). Whole file, scrolled to the stamp with its span highlighted; ⌘S →
   `source:write` (conflict-guarded whole-file save → `commitEdit`, so undo/redo + HMR
-  are free). `useCodeDrawer` store holds the open source. `test/code-drawer.mjs`.
+  are free). Header has **Editor** (`source:open-in-editor`) + an **Expand** toggle
+  (grows the drawer, leaving a ~160px live-preview strip) + Save + Close. Its theme is
+  painted from the app's `--background`/`--foreground`/`--muted` tokens with a highlight
+  palette matched 1:1 to the styles.css highlight.js theme, so every code surface reads
+  the same and it flips with light/dark. `useCodeDrawer` store holds the open source.
+  `test/code-drawer.mjs`.
 - `src/main/props.ts` — **prop editor engine** (React/JSX): babel-parse at the stamp line,
   react-docgen schema, hybrid literal-splice / agent-fallback apply (`props:inspect/apply`).
   Dispatches `.svelte` sources to `src/main/props-svelte.ts` (svelte/compiler — `export let` /
