@@ -23,7 +23,9 @@ interface Props {
  *
  * The collapse/expand toggle no longer lives here — it floats by the traffic lights
  * (see App's `.sidebar-toggle`) so it stays reachable once the rail is gone. When
- * collapsed the rail is hidden entirely (no thin strip).
+ * collapsed the rail stays mounted but slides out to the left (width → 0); the
+ * floating toggle slides it back. Keeping it mounted is what lets the collapse
+ * animate instead of popping in and out.
  */
 export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: Props): React.JSX.Element | null {
   const projects = useWorkspace((s) => s.projects)
@@ -37,11 +39,14 @@ export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: 
   const spawns = useSpawns((s) => s.byKey)
 
   if (projects.length === 0) return null
-  // Collapsed: hide the projects bar completely (the floating toggle brings it back).
-  if (collapsed) return null
 
   return (
-    <nav className="rail" aria-label="Open projects">
+    <nav
+      className={`rail ${collapsed ? 'rail--collapsed' : ''}`}
+      aria-label="Open projects"
+      aria-hidden={collapsed}
+    >
+      <div className="rail__inner">
       <div className="rail__head">
         <span>Projects</span>
       </div>
@@ -157,6 +162,7 @@ export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: 
         <Folder className="size-4" aria-hidden="true" />
         <span>Open project</span>
       </button>
+      </div>
     </nav>
   )
 }

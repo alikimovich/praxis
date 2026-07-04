@@ -1356,17 +1356,6 @@ export default function App(): React.JSX.Element {
         </div>
       ) : (
         <div className="panes">
-          {/* Show/hide the projects sidebar — floats by the traffic lights so it
-              stays reachable once the rail is collapsed away. */}
-          <button
-            className="sidebar-toggle"
-            onClick={() => useWorkspace.getState().toggleCollapsed()}
-            aria-label={railCollapsed ? 'Show projects sidebar' : 'Hide projects sidebar'}
-            aria-pressed={!railCollapsed}
-            title={railCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-          >
-            <PanelLeft className="size-4" aria-hidden="true" />
-          </button>
           <Rail
             onSwitch={(key) => void switchTo(key)}
             onClose={(key) => void closeProjectFromRail(key)}
@@ -1565,6 +1554,20 @@ export default function App(): React.JSX.Element {
               </div>
             </div>
           </section>
+          {/* Show/hide the projects sidebar — floats by the traffic lights so it
+              stays reachable once the rail is collapsed away. Rendered LAST inside
+              .panes so its no-drag region is applied after the chat pane's drag
+              strip (.chat-drag); otherwise, with the rail collapsed, that strip
+              would win the overlap and swallow clicks on this button. */}
+          <button
+            className="sidebar-toggle"
+            onClick={() => useWorkspace.getState().toggleCollapsed()}
+            aria-label={railCollapsed ? 'Show projects sidebar' : 'Hide projects sidebar'}
+            aria-pressed={!railCollapsed}
+            title={railCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+          >
+            <PanelLeft className="size-4" aria-hidden="true" />
+          </button>
         </div>
       )}
 
