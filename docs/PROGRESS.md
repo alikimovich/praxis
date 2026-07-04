@@ -2,6 +2,28 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-03 — Dock icon size fix: ship the layered (Assets.car) icon
+
+- The dock icon rendered ~10% larger than neighboring apps. Cause: the iOS
+  Icon Composer export is full-bleed (opaque edge-to-edge, no margins), and a
+  legacy flat .icns is drawn at its canvas scale, while macOS 26 gives native
+  layered icons the standard sizing treatment.
+- Fix, two parts:
+  - Compiled `dsgn.icon` (Icon Composer source in ~/Downloads/app-icon) with
+    `xcrun actool --app-icon dsgn --platform macosx` → `build/Assets.car` +
+    small-size renditions. `scripts/patch-electron.mjs` now also installs
+    Assets.car into the dev Electron.app and sets `CFBundleIconName=dsgn`, so
+    Tahoe renders the true layered icon (with dark/tinted variants).
+  - Rebuilt `build/icon.png`/`icon.icns` on the macOS grid: plate scaled to
+    204/256 of the canvas + transparent margins + soft shadow (geometry measured
+    from actool's own 256px render; 512/1024 synthesized from the 1024 iOS
+    export with sharp, small sizes taken from actool's output).
+- Removed `app.dock.setIcon()` — runtime dock images skip the system icon
+  treatment; the bundle's icon (patched in by postinstall) is the right path.
+- Verified via `NSRunningApplication.icon` (what the Dock shows for a running
+  app): our plate is 206×206@(25,25) in 256 — pixel-identical geometry to
+  Music.app. Typecheck + smoke green.
+
 ## 2026-07-03 — Real app icon + dev Electron.app rebrand
 
 - **Real icon artwork**: replaced the placeholder `build/icon.png` with the
