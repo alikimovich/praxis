@@ -50,6 +50,25 @@ export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: 
       <div className="rail__head">
         <span>Projects</span>
       </div>
+      {/* Project actions — quiet list items (no dashed CTA borders) — lead the
+          rail so opening/creating is always reachable, with the open projects
+          listed beneath them. */}
+      <button
+        className="rail__action"
+        onClick={onOpen}
+        title="Open an existing folder (⌘O)"
+      >
+        <Folder className="size-4" aria-hidden="true" />
+        <span>Open project</span>
+      </button>
+      <button
+        className="rail__action"
+        onClick={onCreate}
+        title="Create a brand-new project (⌘N)"
+      >
+        <Plus className="size-4" aria-hidden="true" />
+        <span>New project</span>
+      </button>
       <ul className="rail__list">
         {projects.map((p) => {
           const active = p.key === activeKey
@@ -145,23 +164,6 @@ export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: 
           )
         })}
       </ul>
-      {/* Project actions — quiet list items (no dashed CTA borders). */}
-      <button
-        className="rail__action"
-        onClick={onCreate}
-        title="Create a brand-new project (⌘N)"
-      >
-        <Plus className="size-4" aria-hidden="true" />
-        <span>New project</span>
-      </button>
-      <button
-        className="rail__action"
-        onClick={onOpen}
-        title="Open an existing folder (⌘O)"
-      >
-        <Folder className="size-4" aria-hidden="true" />
-        <span>Open project</span>
-      </button>
       </div>
     </nav>
   )
