@@ -2,6 +2,27 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-03 — Real app icon + dev Electron.app rebrand
+
+- **Real icon artwork**: replaced the placeholder `build/icon.png` with the
+  pixel-cat icon from the design's Icon Composer exports
+  (`Icon-iOS-Default-1024x1024@1x.png`); generated `build/icon.icns` from it
+  (sips + iconutil, all sizes). Deleted `scripts/make-placeholder-icon.mjs`.
+- **Dev menu bar said "Electron"**: on macOS the app-menu title, Cmd-Tab entry,
+  and Activity Monitor name come from Electron.app's own Info.plist —
+  `app.setName()` cannot change them in dev. Since dsgn ships as source and runs
+  via `bun run dev`, added `scripts/patch-electron.mjs` (postinstall): sets
+  CFBundleName/CFBundleDisplayName to Praxis in
+  `node_modules/electron/dist/Electron.app`, swaps `electron.icns` for ours, and
+  ad-hoc re-signs the bundle (editing a signed bundle breaks its seal; unsigned
+  apps get killed on arm64). Idempotent; darwin-only; re-runs on every install
+  since `bun install` restores stock Electron. Bundle id stays
+  `com.github.Electron` on purpose — changing it would reset TCC permission
+  grants (screen recording etc.) for the dev app.
+- Verified: typecheck + smoke green after the re-sign; live launch shows
+  LSDisplayName "Praxis" and a menu-bar screenshot confirms the app menu reads
+  Praxis.
+
 ## 2026-07-03 — Branding + File menu (Praxis)
 
 - Renamed the app Electron → **Praxis**: `app.setName('Praxis')` at main module
