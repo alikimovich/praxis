@@ -301,7 +301,9 @@ function ensurePreviewView(): WebContentsView {
       if (commentModeActive) wc.send(PREVIEW_SET_COMMENT_MODE, commentModeActive)
       if (frameModeActive) wc.send(PREVIEW_SET_FRAME, true)
       if (cornerRadius > 0) wc.send(PREVIEW_SET_CORNERS, cornerOpts())
-      wc.send(PREVIEW_SET_PINS, annotationPins)
+      // Only re-send pins when there are some — an empty push would make the
+      // preload build (and inject) the overlay host for nothing.
+      if (annotationPins.length) wc.send(PREVIEW_SET_PINS, annotationPins)
     }
   })
 
@@ -406,10 +408,15 @@ function registerPreviewIpc(): void {
   ipcMain.handle('preview:reset', () => {
     previewUrl = null
     previewRetries = 0
-    // No app to select in on the placeholder — keep main's flags honest so they
-    // don't silently re-arm the overlay on a later load. (Renderer disarms too.)
+    // No app to select in on the placeholder — keep main's flags honest so none
+    // of them silently re-arm the overlay/frame/masks/pins on a later load (the
+    // did-finish-load re-arm above reads these). PreviewPane re-reports frame +
+    // corners on the next open, so zeroing them here is safe. (Renderer disarms too.)
     selectModeActive = false
     commentModeActive = null
+    frameModeActive = false
+    cornerRadius = 0
+    annotationPins = []
     ensurePreviewView().webContents.loadURL(PLACEHOLDER_HTML)
   })
 
