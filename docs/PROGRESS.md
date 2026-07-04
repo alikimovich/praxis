@@ -2,6 +2,49 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-03 — Dock icon size fix: ship the layered (Assets.car) icon
+
+- The dock icon rendered ~10% larger than neighboring apps. Cause: the iOS
+  Icon Composer export is full-bleed (opaque edge-to-edge, no margins), and a
+  legacy flat .icns is drawn at its canvas scale, while macOS 26 gives native
+  layered icons the standard sizing treatment.
+- Fix, two parts:
+  - Compiled `dsgn.icon` (Icon Composer source in ~/Downloads/app-icon) with
+    `xcrun actool --app-icon dsgn --platform macosx` → `build/Assets.car` +
+    small-size renditions. `scripts/patch-electron.mjs` now also installs
+    Assets.car into the dev Electron.app and sets `CFBundleIconName=dsgn`, so
+    Tahoe renders the true layered icon (with dark/tinted variants).
+  - Rebuilt `build/icon.png`/`icon.icns` on the macOS grid: plate scaled to
+    204/256 of the canvas + transparent margins + soft shadow (geometry measured
+    from actool's own 256px render; 512/1024 synthesized from the 1024 iOS
+    export with sharp, small sizes taken from actool's output).
+- Removed `app.dock.setIcon()` — runtime dock images skip the system icon
+  treatment; the bundle's icon (patched in by postinstall) is the right path.
+- Verified via `NSRunningApplication.icon` (what the Dock shows for a running
+  app): our plate is 206×206@(25,25) in 256 — pixel-identical geometry to
+  Music.app. Typecheck + smoke green.
+
+## 2026-07-03 — Real app icon + dev Electron.app rebrand
+
+- **Real icon artwork**: replaced the placeholder `build/icon.png` with the
+  pixel-cat icon from the design's Icon Composer exports
+  (`Icon-iOS-Default-1024x1024@1x.png`); generated `build/icon.icns` from it
+  (sips + iconutil, all sizes). Deleted `scripts/make-placeholder-icon.mjs`.
+- **Dev menu bar said "Electron"**: on macOS the app-menu title, Cmd-Tab entry,
+  and Activity Monitor name come from Electron.app's own Info.plist —
+  `app.setName()` cannot change them in dev. Since dsgn ships as source and runs
+  via `bun run dev`, added `scripts/patch-electron.mjs` (postinstall): sets
+  CFBundleName/CFBundleDisplayName to Praxis in
+  `node_modules/electron/dist/Electron.app`, swaps `electron.icns` for ours, and
+  ad-hoc re-signs the bundle (editing a signed bundle breaks its seal; unsigned
+  apps get killed on arm64). Idempotent; darwin-only; re-runs on every install
+  since `bun install` restores stock Electron. Bundle id stays
+  `com.github.Electron` on purpose — changing it would reset TCC permission
+  grants (screen recording etc.) for the dev app.
+- Verified: typecheck + smoke green after the re-sign; live launch shows
+  LSDisplayName "Praxis" and a menu-bar screenshot confirms the app menu reads
+  Praxis.
+
 ## 2026-07-03 — Branding + File menu (Praxis)
 
 - Renamed the app Electron → **Praxis**: `app.setName('Praxis')` at main module

@@ -526,9 +526,10 @@ if (process.env['ELECTRON_RENDERER_URL']) {
 }
 
 app.whenReady().then(() => {
-  // macOS dock icon (the window `icon` option is ignored there). In a packaged
-  // app the bundle's icon wins; this makes the dev/`bun run dev` dock icon Praxis.
-  if (process.platform === 'darwin' && !appIcon.isEmpty()) app.dock?.setIcon(appIcon)
+  // macOS dock icon comes from the bundle's .icns (scripts/patch-electron.mjs
+  // installs ours into the dev Electron.app). Do NOT app.dock.setIcon() here:
+  // runtime dock images skip the system's icon treatment on macOS 26, so they
+  // render oversized next to other dock icons.
   createWindow()
   buildAppMenu()
   // File → Open Recent is driven by the renderer's recents store: it pushes the
