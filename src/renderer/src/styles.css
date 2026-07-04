@@ -628,8 +628,8 @@ body {
     background: var(--border);
     color: var(--text);
 }
-/* Project actions (New / Open) — quiet list items that echo the project rows
-   above them (no dashed CTA borders), each led by an icon. */
+/* Project actions (Open / New) — quiet list items that echo the project rows
+   below them (no dashed CTA borders), each led by an icon. */
 .rail__action {
     display: flex;
     align-items: center;
@@ -646,8 +646,8 @@ body {
     white-space: nowrap;
     overflow: hidden;
 }
-.rail__action:first-of-type {
-    margin-top: 6px;
+.rail__action:last-of-type {
+    margin-bottom: 6px;
 }
 .rail__action svg {
     flex: 0 0 auto;
