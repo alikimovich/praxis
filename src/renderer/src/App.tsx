@@ -574,7 +574,7 @@ export default function App(): React.JSX.Element {
       const left = document.querySelector('.pane--chat')?.getBoundingClientRect().left ?? 0
       // Also clamp against the window so the preview card keeps ~400px — its
       // header now holds the controls (Publish/tabs/icons), which must never be
-      // clipped out of reach by dragging the chat wide (rail 168 + divider 6 +
+      // clipped out of reach by dragging the chat wide (rail 168 + divider 0 +
       // card gutters ≈ 184 → 584 with the 400px floor).
       const maxChat = Math.max(MIN_CHAT_WIDTH, Math.min(MAX_CHAT_WIDTH, window.innerWidth - 584))
       setChatWidth(Math.min(maxChat, Math.max(MIN_CHAT_WIDTH, e.clientX - left)))
