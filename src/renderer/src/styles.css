@@ -1067,7 +1067,7 @@ body {
 /* Invisible but grabbable resize handle between the chat and the preview card. */
 .divider {
     flex: 0 0 auto;
-    width: 6px;
+    width: 0;
     background: transparent;
     position: relative;
     cursor: col-resize;
