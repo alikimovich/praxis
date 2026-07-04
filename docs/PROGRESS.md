@@ -2,6 +2,24 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-04 — Preview self-heals when its dev server dies and comes back
+
+- A dev server that dies mid-session (crash, external kill) left the preview
+  permanently on Chromium's error page (black in dark mode): the HMR client
+  reloads when its websocket drops, the load fails with CONNECTION_REFUSED, and
+  the old retry budget (40 × 400ms ≈ 16s) ran out long before any restart —
+  nothing ever re-navigated the view. Discovered the hard way: a session's
+  lkmv.ch server was killed out from under a live preview (mistaken for a test
+  leak), and the pane stayed black even after the server came back.
+- Fix: `did-fail-load` no longer gives up after the budget — past 40 fast
+  retries it settles into a slow 3s poll for as long as a previewUrl is set.
+  Idle/placeholder views never poll (the handler only fires for the current
+  previewUrl). Budget still resets on successful load.
+- Verified with a live scenario: open fixture → kill its server + reload →
+  error page for 25s (budget exhausted) → start replacement server on the same
+  port → preview recovers within ~3s, no project reopen. Smoke, open-preview,
+  ready-gating green.
+
 ## 2026-07-04 — Preview corners: native setBorderRadius, corner-mask hack removed
 
 - The desktop preview's bottom corners looked DOUBLED: the in-page corner masks

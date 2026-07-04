@@ -268,12 +268,17 @@ function ensurePreviewView(): WebContentsView {
     openExternalSafe(url)
   })
 
-  // Retry transient failures (dev server up but not serving yet).
+  // Retry transient failures: fast while the dev server is coming up, then a
+  // slow indefinite poll — a server that dies mid-session (crash, manual kill)
+  // can come back minutes later, and the preview must self-heal rather than
+  // park on Chromium's error page until the project is reopened. Only fires
+  // for the current previewUrl, so an idle/placeholder view never polls.
   wc.on('did-fail-load', (_e, errorCode, _desc, validatedURL, isMainFrame) => {
     if (!isMainFrame || !previewUrl || !sameUrl(validatedURL, previewUrl)) return
-    if (!TRANSIENT_LOAD_ERRORS.has(errorCode) || previewRetries >= 40) return
+    if (!TRANSIENT_LOAD_ERRORS.has(errorCode)) return
     previewRetries++
-    setTimeout(() => previewUrl && previewView?.webContents.loadURL(previewUrl), 400)
+    const delay = previewRetries > 40 ? 3000 : 400
+    setTimeout(() => previewUrl && previewView?.webContents.loadURL(previewUrl), delay)
   })
 
   // Once the intended URL loads, reset the budget so it's per-outage not per-session.
