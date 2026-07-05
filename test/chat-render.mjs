@@ -245,7 +245,8 @@ try {
     return a?.submenu?.items.map((i) => i.label || i.role || 'separator') ?? null
   })
   if (!actions) throw new Error('Actions menu not installed')
-  for (const label of ['Reload Preview', 'Select Element', 'Stop Project', 'Open Project…', 'Viewport']) {
+  // Open/New Project moved to the File menu (see test/menu-recents.mjs).
+  for (const label of ['Reload Preview', 'Select Element', 'Stop Project', 'Viewport']) {
     if (!actions.some((l) => l === label)) throw new Error(`Actions menu missing "${label}": ${actions}`)
   }
 
