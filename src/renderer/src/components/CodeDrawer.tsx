@@ -7,6 +7,7 @@ import { basicSetup } from 'codemirror'
 import { javascript } from '@codemirror/lang-javascript'
 import { html } from '@codemirror/lang-html'
 import { css } from '@codemirror/lang-css'
+import { svelte } from '@replit/codemirror-lang-svelte'
 import { X, Save, ExternalLink, Maximize2, Minimize2 } from 'lucide-react'
 import type { SourceView } from '../../../shared/api'
 import { usePanelInset } from '../store'
@@ -23,7 +24,11 @@ function langFor(file: string): Extension[] {
   if (ext === 'ts' || ext === 'tsx') return [javascript({ typescript: true, jsx: ext === 'tsx' })]
   if (ext === 'jsx') return [javascript({ jsx: true })]
   if (ext === 'js' || ext === 'mjs' || ext === 'cjs') return [javascript()]
-  if (ext === 'svelte' || ext === 'vue' || ext === 'html') return [html()]
+  // Svelte needs its own grammar: approximating it with HTML breaks on Svelte
+  // expressions — e.g. an {@html `<script …>…<\/script>`} template literal reads
+  // as a real, never-closed script tag, and the rest of the file tokenizes as JS.
+  if (ext === 'svelte') return [svelte()]
+  if (ext === 'vue' || ext === 'html') return [html()]
   if (ext === 'css') return [css()]
   return []
 }
