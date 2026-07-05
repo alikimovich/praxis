@@ -3,8 +3,8 @@
  * real IPC (no dev server, no auth needed):
  *
  *   source.read resolves the stamped file + the element's line span (single- and
- *   multi-line, root-escape refused); the Inspector's Code toggle renders the
- *   highlighted, line-numbered peek scrolled to the stamp; openInEditor fails
+ *   multi-line, root-escape refused); the Inspector's Code button opens the editor
+ *   drawer on that file (with Editor + Expand affordances); openInEditor fails
  *   soft on a bad stamp instead of throwing.
  *
  * Run with: bun run test:codepeek
@@ -68,7 +68,7 @@ try {
   })
   if (badOpen.ok) throw new Error('openInEditor should fail on an unresolvable stamp')
 
-  // --- UI: select an element → Code toggle → highlighted peek renders. ---
+  // --- UI: select an element → the Code button opens the editor drawer. ---
   await win.evaluate(
     (args) => {
       window.__dsgnSession.getState().setProjectRoot(args.fixture)
@@ -86,34 +86,38 @@ try {
     },
     { fixture, src: SRC }
   )
+  // JS-click (not Playwright's actionability click): a schema-backed selection
+  // also opens the floating PropPanel, which can overlap the button in the small
+  // test window (they live in different panes at real sizes).
   await win.waitForSelector('.inspector__codebtn', { timeout: 5000 })
-  await win.click('.inspector__codebtn')
-  await win.waitForSelector('.codepeek__code', { timeout: 5000 })
+  await win.$eval('.inspector__codebtn', (el) => el.click())
 
-  const peekText = await win.$eval('.codepeek__code', (el) => el.textContent ?? '')
-  if (!peekText.includes('variant="ok"')) {
-    throw new Error('peek does not show the stamped line’s source')
-  }
-  const highlighted = await win.$$eval('.codepeek__code .hljs-keyword', (ns) => ns.length)
-  if (highlighted === 0) throw new Error('no syntax highlighting in the peek')
-  const gutterLast = await win.$eval(
-    '.codepeek__gutter',
-    (el) => (el.textContent ?? '').trim().split('\n').at(-1)
-  )
-  const stamp = await win.$eval('.codepeek', (el) => el.getAttribute('data-stamp-line'))
-  if (stamp !== '17') throw new Error(`data-stamp-line: ${stamp}`)
-  // Auto-scroll happened: the stamp line (17) was brought toward the viewport
-  // (the scroll effect runs a paint after the peek mounts — poll for it).
+  // The editor drawer mounts (CodeMirror) with the stamped file loaded, and the
+  // stamp span highlighted — no inline peek is rendered in the left panel.
+  await win.waitForSelector('.codedrawer .cm-editor', { timeout: 5000 })
+  if (await win.$('.codepeek')) throw new Error('inline code peek should no longer render')
   await win.waitForFunction(
-    () => (document.querySelector('.codepeek__scroll')?.scrollTop ?? 0) > 0,
+    () => document.querySelectorAll('.codedrawer .cm-stamp-line').length > 0,
+    undefined,
+    { timeout: 5000 }
+  )
+  const drawerText = await win.$eval('.codedrawer .cm-content', (el) => el.textContent ?? '')
+  if (!drawerText.includes('variant')) throw new Error('drawer does not show the stamped source')
+
+  // The drawer offers "open in your editor" and an expand toggle.
+  await win.waitForSelector('.codedrawer__open', { timeout: 5000 })
+  await win.waitForSelector('.codedrawer__expand', { timeout: 5000 })
+
+  // Expand toggles on (and, where the window is tall enough, grows the inset).
+  await win.$eval('.codedrawer__expand', (el) => el.click())
+  await win.waitForFunction(
+    () => document.querySelector('.codedrawer__expand')?.getAttribute('aria-pressed') === 'true',
     undefined,
     { timeout: 5000 }
   )
   await win.screenshot({ path: join(artifacts, '12-code-peek.png') })
 
-  console.log(
-    `CODE-PEEK OK — read + spans + escape guard, UI peek (${gutterLast} lines, scrolled to 17)`
-  )
+  console.log('CODE-PEEK OK — read + spans + escape guard, Code button opens the editor drawer')
 } catch (err) {
   console.error('CODE-PEEK FAILED:', err?.message ?? err)
   process.exitCode = 1

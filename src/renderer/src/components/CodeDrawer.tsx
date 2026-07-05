@@ -1,17 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { EditorState, StateField, type Extension } from '@codemirror/state'
 import { EditorView, Decoration, keymap, type DecorationSet } from '@codemirror/view'
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
+import { tags as t } from '@lezer/highlight'
 import { basicSetup } from 'codemirror'
 import { javascript } from '@codemirror/lang-javascript'
 import { html } from '@codemirror/lang-html'
 import { css } from '@codemirror/lang-css'
-import { X, Save } from 'lucide-react'
+import { X, Save, ExternalLink, Maximize2, Minimize2 } from 'lucide-react'
 import type { SourceView } from '../../../shared/api'
 import { usePanelInset } from '../store'
 import { Button } from '@/components/ui/button'
 
-/** Height of the drawer + the native-preview strip it reserves (kept in sync). */
+/** Collapsed height of the drawer + the native-preview strip it reserves. */
 const DRAWER_H = 300
+/** Slice of preview kept visible when the drawer is expanded (so it isn't hidden). */
+const MIN_PREVIEW = 160
 
 /** CodeMirror language extension for a file, by extension (empty = plain text). */
 function langFor(file: string): Extension[] {
@@ -23,6 +27,53 @@ function langFor(file: string): Extension[] {
   if (ext === 'css') return [css()]
   return []
 }
+
+// Editor chrome painted from the app's own design tokens (via CSS custom
+// properties), so the drawer matches the surrounding surfaces and flips with the
+// light/dark theme automatically — no separate CodeMirror dark theme to drift.
+const dsgnTheme = EditorView.theme({
+  '&': {
+    height: '100%',
+    fontSize: '12px',
+    backgroundColor: 'var(--background)',
+    color: 'var(--foreground)'
+  },
+  '.cm-scroller': {
+    overflow: 'auto',
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+    lineHeight: '1.6'
+  },
+  '.cm-gutters': {
+    backgroundColor: 'transparent',
+    color: 'var(--muted-foreground)',
+    border: 'none'
+  },
+  '.cm-activeLine': { backgroundColor: 'color-mix(in oklab, var(--muted) 55%, transparent)' },
+  '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--foreground)' },
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--foreground)' },
+  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
+    backgroundColor: 'color-mix(in oklab, var(--primary) 22%, transparent)'
+  },
+  '.cm-selectionMatch': { backgroundColor: 'color-mix(in oklab, var(--primary) 14%, transparent)' }
+})
+
+// Syntax palette matched 1:1 to the highlight.js theme in styles.css (the same
+// colors the chat's markdown code blocks use), so every code surface in the app
+// reads the same. Tags left unmapped fall back to the plain foreground color.
+const dsgnHighlight = HighlightStyle.define([
+  { tag: [t.comment, t.lineComment, t.blockComment, t.docComment], color: '#8a8a8a', fontStyle: 'italic' },
+  {
+    tag: [t.keyword, t.moduleKeyword, t.controlKeyword, t.operatorKeyword, t.definitionKeyword, t.modifier, t.self],
+    color: '#a626a4'
+  },
+  { tag: [t.string, t.special(t.string), t.regexp, t.attributeValue, t.attributeName], color: '#50a14f' },
+  { tag: [t.number, t.bool, t.atom, t.null], color: '#b76b01' },
+  {
+    tag: [t.function(t.variableName), t.function(t.propertyName), t.definition(t.function(t.variableName))],
+    color: '#4078f2'
+  },
+  { tag: [t.typeName, t.className], color: '#c18401' }
+])
 
 const stampLine = Decoration.line({ class: 'cm-stamp-line' })
 
@@ -38,10 +89,12 @@ function stampDeco(doc: EditorState['doc'], start: number, end: number): Decorat
 /**
  * v9 phase 2 — the editable code drawer. CodeMirror 6 mounted under the preview
  * (a DOM panel can't float over the native WebContentsView, so PreviewPane
- * shrinks the native view's height by DRAWER_H via usePanelInset and the drawer
- * fills the freed strip). The whole file is loaded, scrolled to the stamped
+ * shrinks the native view's height by the drawer height via usePanelInset and the
+ * drawer fills the freed strip). The whole file is loaded, scrolled to the stamped
  * element with its line span highlighted; Cmd+S saves through source.write →
  * commitEdit, so undo/redo, on-disk conflict detection, and HMR all come for free.
+ * An expand toggle grows the drawer (leaving a MIN_PREVIEW strip of live preview),
+ * and "open in editor" jumps to the file in the user's own editor.
  */
 export default function CodeDrawer({
   root,
@@ -52,6 +105,7 @@ export default function CodeDrawer({
   source: string
   onClose: () => void
 }): React.JSX.Element {
+  const rootRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   // The file content as last read from / written to disk — the save baseline and
@@ -61,12 +115,35 @@ export default function CodeDrawer({
   const [dirty, setDirty] = useState(false)
   const [status, setStatus] = useState<'idle' | 'saving' | 'conflict' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [openError, setOpenError] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState(false)
+  // Height of the drawer's positioning container (.previewcard__body), tracked so
+  // "expand" can fill it while leaving a MIN_PREVIEW strip of native preview above.
+  const [containerH, setContainerH] = useState(0)
 
-  // Reserve the bottom strip of the native preview for as long as the drawer is open.
   useEffect(() => {
-    usePanelInset.getState().setBottom(DRAWER_H)
-    return () => usePanelInset.getState().setBottom(0)
+    const el = rootRef.current?.offsetParent as HTMLElement | null
+    if (!el) return undefined
+    const update = (): void => setContainerH(el.clientHeight)
+    update()
+    let ro: ResizeObserver | undefined
+    try {
+      ro = new ResizeObserver(update)
+      ro.observe(el)
+    } catch {
+      /* no ResizeObserver (tests) — the one-shot read above still applies */
+    }
+    return () => ro?.disconnect()
   }, [])
+
+  const height = expanded && containerH > 0 ? Math.max(DRAWER_H, containerH - MIN_PREVIEW) : DRAWER_H
+
+  // Reserve the bottom strip of the native preview for as long as the drawer is
+  // open, tracking the current (expanded/collapsed) height.
+  useEffect(() => {
+    usePanelInset.getState().setBottom(height)
+    return () => usePanelInset.getState().setBottom(0)
+  }, [height])
 
   // A ref-indirected save so the CodeMirror keymap (built once) always runs the
   // current closure.
@@ -92,6 +169,12 @@ export default function CodeDrawer({
   }
   saveRef.current = () => void save()
 
+  const openEditor = async (): Promise<void> => {
+    setOpenError(null)
+    const res = await window.api.source.openInEditor(root, source)
+    if (!res.ok) setOpenError(res.error ?? 'Could not open an editor.')
+  }
+
   // Build the editor once the file is read. Re-runs when the selected source
   // changes (picking a different element while the drawer is open).
   useEffect(() => {
@@ -100,6 +183,7 @@ export default function CodeDrawer({
     setDirty(false)
     setStatus('idle')
     setErrorMsg(null)
+    setOpenError(null)
     viewRef.current?.destroy()
     viewRef.current = null
 
@@ -131,7 +215,8 @@ export default function CodeDrawer({
           EditorView.updateListener.of((u) => {
             if (u.docChanged) setDirty(u.state.doc.toString() !== baselineRef.current)
           }),
-          EditorView.theme({ '&': { height: '100%' }, '.cm-scroller': { overflow: 'auto' } })
+          dsgnTheme,
+          syntaxHighlighting(dsgnHighlight)
         ]
       })
       const editor = new EditorView({ state, parent: hostRef.current })
@@ -165,8 +250,9 @@ export default function CodeDrawer({
 
   return (
     <div
+      ref={rootRef}
       className="codedrawer absolute inset-x-0 bottom-0 z-50 flex flex-col border-t bg-background shadow-[0_-4px_18px_rgba(0,0,0,0.08)]"
-      style={{ height: DRAWER_H }}
+      style={{ height }}
       aria-label="Code editor"
     >
       <div className="codedrawer__head flex items-center gap-2 border-b px-3 py-1.5">
@@ -185,6 +271,17 @@ export default function CodeDrawer({
         {status === 'error' && errorMsg && (
           <span className="codedrawer__error text-[11px] text-red-700">{errorMsg}</span>
         )}
+        {openError && <span className="codedrawer__openerror text-[11px] text-amber-700">{openError}</span>}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="codedrawer__open h-6 gap-1 px-2 text-[11.5px] text-muted-foreground"
+          onClick={() => void openEditor()}
+          title="Open this file in your code editor"
+        >
+          <ExternalLink className="size-3.5" />
+          Editor
+        </Button>
         <Button
           variant="ghost"
           size="sm"
@@ -195,6 +292,17 @@ export default function CodeDrawer({
         >
           <Save className="size-3.5" />
           {status === 'saving' ? 'Saving…' : 'Save'}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="codedrawer__expand size-6"
+          onClick={() => setExpanded((e) => !e)}
+          aria-label={expanded ? 'Collapse code editor' : 'Expand code editor'}
+          aria-pressed={expanded}
+          title={expanded ? 'Collapse' : 'Expand'}
+        >
+          {expanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
         </Button>
         <Button
           variant="ghost"

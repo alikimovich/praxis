@@ -49,6 +49,26 @@ Newest first. Append a dated entry when you finish a chunk of work.
   session made viewport-per-project time out (fixture landed on 7778). Check
   `lsof -iTCP:7777` before blaming a test.
 
+## 2026-07-03 — LKM-20: Code opens the editor drawer; unified code colors
+
+- **"Code" now opens the editor drawer directly** (right, under the preview) instead
+  of an inline read-only peek in the left inspector. The Inspector's Code button
+  toggles `useCodeDrawer` on the selected element's source; `CodePeek.tsx` is deleted
+  (its `source:read` / `source:open-in-editor` engine in `props.ts` is unchanged and now
+  drives the drawer).
+- **Drawer gains the peek's affordances:** an **Editor** button (`source:open-in-editor`
+  → the user's own editor) and an **Expand** toggle that grows the drawer while keeping a
+  ~160px live-preview strip (measures its `.previewcard__body` container via
+  ResizeObserver; grows the `usePanelInset.bottom` it reserves).
+- **Unified colors:** the CodeMirror drawer is themed from the app's `--background`/
+  `--foreground`/`--muted` tokens (so it matches the surrounding surfaces and flips with
+  light/dark) with a `HighlightStyle` matched 1:1 to the styles.css highlight.js palette
+  the markdown code blocks use. Previously the drawer used CodeMirror's default theme,
+  which didn't match the (light) peek — the reported mismatch.
+- Tests: `test/code-peek.mjs` UI section now asserts the Code button opens the drawer
+  (no `.codepeek`) with Editor + Expand controls; `test/code-drawer.mjs` opens via the
+  Code button (dropped the peek→Edit two-step). Both green; typecheck green.
+
 ## 2026-07-03 — Dock icon size fix: ship the layered (Assets.car) icon
 
 - The dock icon rendered ~10% larger than neighboring apps. Cause: the iOS
