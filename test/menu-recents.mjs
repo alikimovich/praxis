@@ -47,10 +47,21 @@ try {
     if (!findByLabel(file.submenu, label)) throw new Error(`File menu missing "${label}"`)
   }
 
-  // 3) With no recents pushed, Open Recent shows a disabled placeholder.
-  let openRecent = findByLabel(file.submenu, 'Open Recent')
-  if (openRecent.submenu?.[0]?.label !== 'No Recent Projects')
-    throw new Error('empty Open Recent should show "No Recent Projects"')
+  // 3) With no recents, Open Recent shows a disabled placeholder. Other e2e
+  // tests share this same Electron profile and persist real fixture projects
+  // into localStorage — clear first (same 'clear-recents' menu:action the
+  // real Clear Menu item fires) so this assertion doesn't depend on suite
+  // run order.
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0].webContents.send('menu:action', 'clear-recents')
+  )
+  const clearDeadline = Date.now() + 4000
+  for (;;) {
+    const m = await readMenu(app)
+    const oc = findByLabel(findByLabel(m, 'File').submenu, 'Open Recent')
+    if (oc.submenu?.[0]?.label === 'No Recent Projects') break
+    if (Date.now() > clearDeadline) throw new Error('empty Open Recent should show "No Recent Projects"')
+  }
 
   // 4) Push 9 recents from the renderer → menu lists 8 (capped) + Clear Menu.
   await win.evaluate(() => {
@@ -64,7 +75,7 @@ try {
   const deadline = Date.now() + 4000
   for (;;) {
     menu = await readMenu(app)
-    openRecent = findByLabel(findByLabel(menu, 'File').submenu, 'Open Recent')
+    const openRecent = findByLabel(findByLabel(menu, 'File').submenu, 'Open Recent')
     const names = (openRecent.submenu ?? []).map((i) => i.label)
     if (names.includes('Project 0')) {
       const projectItems = names.filter((n) => n.startsWith('Project '))
