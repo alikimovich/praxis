@@ -928,3 +928,4 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
 ;(window as unknown as { __dsgnSpawns?: typeof useSpawns }).__dsgnSpawns = useSpawns
 ;(window as unknown as { __dsgnViewport?: typeof useViewport }).__dsgnViewport = useViewport
 ;(window as unknown as { __dsgnPanelInset?: typeof usePanelInset }).__dsgnPanelInset = usePanelInset
+;(window as unknown as { __dsgnCodeDrawer?: typeof useCodeDrawer }).__dsgnCodeDrawer = useCodeDrawer
