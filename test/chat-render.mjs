@@ -187,9 +187,22 @@ try {
   // toggle by the traffic lights hides it entirely, then brings it back.
   await win.waitForSelector('.rail', { timeout: 5000 })
   await win.click('button[aria-label="Hide projects sidebar"]')
-  await win.waitForFunction(() => !document.querySelector('.rail'), { timeout: 5000 })
+  // Since #60 the rail stays mounted when collapsed (it slides out); assert the
+  // collapsed state + hidden-from-a11y instead of unmounting.
+  await win.waitForFunction(
+    () => document.querySelector('.rail')?.classList.contains('rail--collapsed'),
+    null,
+    { timeout: 5000 }
+  )
   await win.click('button[aria-label="Show projects sidebar"]')
-  await win.waitForSelector('.rail', { timeout: 5000 })
+  await win.waitForFunction(
+    () => {
+      const r = document.querySelector('.rail')
+      return !!r && !r.classList.contains('rail--collapsed')
+    },
+    null,
+    { timeout: 5000 }
+  )
 
   // Paste an image into the composer → a thumbnail attachment chip appears.
   await win.evaluate(() => {
