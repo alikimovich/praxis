@@ -43,20 +43,6 @@ let commentModeActive: 'comment' | 'annotate' | null = null
 // Mobile viewport: draw the iPhone bezel INSIDE the preview page (pointer-events
 // none) so it overlays the app's screen corners yet passes clicks/selection through.
 let frameModeActive = false
-// Desktop viewport: fake ONLY the bottom corners' rounding inside the page (the
-// native view stays square so its top sits flush under the card's header).
-let cornerRadius = 0
-const cornerOpts = (): { radius: number; color: string; border: string } | null =>
-  cornerRadius > 0
-    ? {
-        radius: cornerRadius,
-        color: previewBg(),
-        // The card's border color (styles.css --border) — the masks continue
-        // the card's 1px outline around the corner arc.
-        border: nativeTheme.shouldUseDarkColors ? '#2a2a2e' : '#ececec'
-      }
-    : null
-
 // Channels mirrored in src/preview/preload.ts (the injected preview preload).
 const PREVIEW_SET_MODE = 'dsgn:preview:set-select-mode'
 const PREVIEW_PICKED = 'dsgn:preview:element-picked'
@@ -69,7 +55,6 @@ const PREVIEW_SET_COMMENT_MODE = 'dsgn:preview:set-comment-mode'
 const PREVIEW_COMMENT_MODE = 'dsgn:preview:comment-mode'
 const PREVIEW_COMMENT = 'dsgn:preview:comment'
 const PREVIEW_SET_FRAME = 'dsgn:preview:set-frame'
-const PREVIEW_SET_CORNERS = 'dsgn:preview:set-corners'
 
 // Latest annotation pins, re-pushed to the preview after each navigation.
 let annotationPins: { id: string; selector: string }[] = []
@@ -283,12 +268,17 @@ function ensurePreviewView(): WebContentsView {
     openExternalSafe(url)
   })
 
-  // Retry transient failures (dev server up but not serving yet).
+  // Retry transient failures: fast while the dev server is coming up, then a
+  // slow indefinite poll — a server that dies mid-session (crash, manual kill)
+  // can come back minutes later, and the preview must self-heal rather than
+  // park on Chromium's error page until the project is reopened. Only fires
+  // for the current previewUrl, so an idle/placeholder view never polls.
   wc.on('did-fail-load', (_e, errorCode, _desc, validatedURL, isMainFrame) => {
     if (!isMainFrame || !previewUrl || !sameUrl(validatedURL, previewUrl)) return
-    if (!TRANSIENT_LOAD_ERRORS.has(errorCode) || previewRetries >= 40) return
+    if (!TRANSIENT_LOAD_ERRORS.has(errorCode)) return
     previewRetries++
-    setTimeout(() => previewUrl && previewView?.webContents.loadURL(previewUrl), 400)
+    const delay = previewRetries > 40 ? 3000 : 400
+    setTimeout(() => previewUrl && previewView?.webContents.loadURL(previewUrl), delay)
   })
 
   // Once the intended URL loads, reset the budget so it's per-outage not per-session.
@@ -300,7 +290,6 @@ function ensurePreviewView(): WebContentsView {
       if (selectModeActive) wc.send(PREVIEW_SET_MODE, true)
       if (commentModeActive) wc.send(PREVIEW_SET_COMMENT_MODE, commentModeActive)
       if (frameModeActive) wc.send(PREVIEW_SET_FRAME, true)
-      if (cornerRadius > 0) wc.send(PREVIEW_SET_CORNERS, cornerOpts())
       // Only re-send pins when there are some — an empty push would make the
       // preload build (and inject) the overlay host for nothing.
       if (annotationPins.length) wc.send(PREVIEW_SET_PINS, annotationPins)
@@ -339,8 +328,6 @@ function createWindow(): void {
     const bg = previewBg()
     mainWindow?.setBackgroundColor(bg)
     previewView?.setBackgroundColor(bg)
-    // Corner masks bake the gutter color — repaint them for the new theme.
-    previewView?.webContents.send(PREVIEW_SET_CORNERS, cornerOpts())
   })
 
   // Open external links in the user's browser, never in-app.
@@ -368,7 +355,8 @@ function registerPreviewIpc(): void {
       width: Math.max(0, Math.round(lastBounds.width)),
       height: Math.round(lastBounds.height)
     })
-    // Round the native view's corners to fit the iPhone screen in mobile viewport.
+    // Round the native view's corners: the card's inner radius in desktop
+    // viewport, the iPhone screen's in mobile (both supplied by the renderer).
     view.setBorderRadius(Math.round(lastBounds.radius || 0))
   }
 
@@ -387,13 +375,6 @@ function registerPreviewIpc(): void {
     previewView?.webContents.send(PREVIEW_SET_FRAME, frameModeActive)
   })
 
-  // Desktop viewport: in-page bottom-corner masks (0 disables). Main supplies
-  // the gutter color so the masks track the OS theme.
-  ipcMain.on('preview:set-corners', (_e, radius: number) => {
-    cornerRadius = Math.max(0, Math.round(radius || 0))
-    previewView?.webContents.send(PREVIEW_SET_CORNERS, cornerOpts())
-  })
-
   ipcMain.handle('preview:load', (_e, url: string) => {
     if (!isLocalPreviewUrl(url)) return
     previewUrl = url
@@ -409,13 +390,12 @@ function registerPreviewIpc(): void {
     previewUrl = null
     previewRetries = 0
     // No app to select in on the placeholder — keep main's flags honest so none
-    // of them silently re-arm the overlay/frame/masks/pins on a later load (the
-    // did-finish-load re-arm above reads these). PreviewPane re-reports frame +
-    // corners on the next open, so zeroing them here is safe. (Renderer disarms too.)
+    // of them silently re-arm the overlay/frame/pins on a later load (the
+    // did-finish-load re-arm above reads these). PreviewPane re-reports the
+    // frame on the next open, so zeroing it here is safe. (Renderer disarms too.)
     selectModeActive = false
     commentModeActive = null
     frameModeActive = false
-    cornerRadius = 0
     annotationPins = []
     ensurePreviewView().webContents.loadURL(PLACEHOLDER_HTML)
   })
