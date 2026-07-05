@@ -1295,9 +1295,16 @@ body.is-resizing {
 .hljs-built_in {
     color: #a626a4;
 }
-.hljs-string,
-.hljs-attr {
+.hljs-string {
     color: #50a14f;
+}
+/* Tag names (<div>, <h1>) read as their own token instead of plain text. */
+.hljs-name {
+    color: #e45649;
+}
+/* Attribute names sit apart from the green of their quoted values. */
+.hljs-attr {
+    color: #986801;
 }
 .hljs-number,
 .hljs-literal {

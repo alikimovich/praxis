@@ -66,13 +66,20 @@ const dsgnHighlight = HighlightStyle.define([
     tag: [t.keyword, t.moduleKeyword, t.controlKeyword, t.operatorKeyword, t.definitionKeyword, t.modifier, t.self],
     color: '#a626a4'
   },
-  { tag: [t.string, t.special(t.string), t.regexp, t.attributeValue, t.attributeName], color: '#50a14f' },
+  // Quoted literals only — strings, regexes, and the *values* of HTML attributes.
+  { tag: [t.string, t.special(t.string), t.regexp, t.attributeValue], color: '#50a14f' },
+  // Attribute names read as their own token (atom-one-light `.hljs-attr`), not
+  // fused into the green of the value they precede.
+  { tag: [t.attributeName], color: '#986801' },
   { tag: [t.number, t.bool, t.atom, t.null], color: '#b76b01' },
   {
     tag: [t.function(t.variableName), t.function(t.propertyName), t.definition(t.function(t.variableName))],
     color: '#4078f2'
   },
-  { tag: [t.typeName, t.className], color: '#c18401' }
+  { tag: [t.typeName, t.className], color: '#c18401' },
+  // HTML/JSX/Svelte tag names — the element the user is inspecting (<div>, <h1>).
+  // Without this they fall through to the type color and read like a class name.
+  { tag: [t.tagName], color: '#e45649' }
 ])
 
 const stampLine = Decoration.line({ class: 'cm-stamp-line' })
