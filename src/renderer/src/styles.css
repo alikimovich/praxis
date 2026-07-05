@@ -552,7 +552,8 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--text-muted);
-    padding: 2px 4px 6px 8px;
+    /* Extra top padding separates the heading from the action buttons above it. */
+    padding: 12px 4px 6px 8px;
 }
 .rail__list {
     list-style: none;
@@ -588,9 +589,16 @@ body {
     text-align: left;
 }
 .rail__dot {
+    /* Center the 7px dot inside a 16px slot so it lines up with the action
+       icons (size-4) above — this keeps the project name flush with the
+       "Open project" / "New project" labels. */
     flex: 0 0 auto;
+    box-sizing: content-box;
     width: 7px;
     height: 7px;
+    /* The dot's rendered box is 9px (7px + 1px border each side); center it in
+       a 16px slot to match the 16px action icons. */
+    margin: 0 calc((16px - 9px) / 2);
     border-radius: 50%;
     background: transparent;
     border: 1px solid var(--text-muted);
@@ -645,9 +653,6 @@ body {
     text-align: left;
     white-space: nowrap;
     overflow: hidden;
-}
-.rail__action:last-of-type {
-    margin-bottom: 6px;
 }
 .rail__action svg {
     flex: 0 0 auto;

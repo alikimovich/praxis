@@ -47,12 +47,9 @@ export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: 
       aria-hidden={collapsed}
     >
       <div className="rail__inner">
-      <div className="rail__head">
-        <span>Projects</span>
-      </div>
       {/* Project actions — quiet list items (no dashed CTA borders) — lead the
-          rail so opening/creating is always reachable, with the open projects
-          listed beneath them. */}
+          rail so opening/creating is always reachable. The "Projects" heading
+          sits below them, directly labelling the open-projects list. */}
       <button
         className="rail__action"
         onClick={onOpen}
@@ -69,6 +66,9 @@ export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: 
         <Plus className="size-4" aria-hidden="true" />
         <span>New project</span>
       </button>
+      <div className="rail__head">
+        <span>Projects</span>
+      </div>
       <ul className="rail__list">
         {projects.map((p) => {
           const active = p.key === activeKey
