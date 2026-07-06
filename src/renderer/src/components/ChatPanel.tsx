@@ -815,13 +815,13 @@ export default function ChatPanel(): React.JSX.Element {
             {projectRoot && (
               <button
                 type="button"
-                className={`iconbtn ${selectMode ? 'is-active' : ''}`}
+                className={`iconbtn iconbtn--sm ${selectMode ? 'is-active' : ''}`}
                 onClick={() => useUiActions.getState().toggleSelect()}
                 aria-pressed={selectMode}
                 aria-label="Select"
                 title="Select an element to edit (S)"
               >
-                <MousePointer2 className="size-4" aria-hidden="true" />
+                <MousePointer2 className="size-3.5" aria-hidden="true" />
               </button>
             )}
             <select

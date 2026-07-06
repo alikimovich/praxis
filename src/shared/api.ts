@@ -540,6 +540,8 @@ export interface DsgnApi {
     setFrame: (active: boolean) => void
     /** Drop the in-preview selection toolbar (pill removed / message sent). */
     clearSelected: () => void
+    /** Fires when the preview navigates (link clicks, SPA routes) — full URL. */
+    onUrlChanged: (cb: (url: string) => void) => () => void
     /** Selection-toolbar actions that resolve in the renderer (code / delete). */
     onToolbarAction: (cb: (kind: 'code' | 'delete') => void) => () => void
     /** Snapshot the live preview as a data URL (freeze-frame under overlay UI). */

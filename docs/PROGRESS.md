@@ -20,6 +20,30 @@ Newest first. Append a dated entry when you finish a chunk of work.
   port → preview recovers within ~3s, no project reopen. Smoke, open-preview,
   ready-gating green.
 
+## 2026-07-06 — In-preview selection toolbar; editable URL bar; device toggle
+
+- The element actions moved from the composer strip into a floating toolbar
+  ADJACENT to the selection inside the preview (preload-drawn, in the overlay's
+  shadow tree): comment/annotate open the in-page composer directly on the
+  element (composeKind now decouples an open composer from the armed mode);
+  code/delete relay to the renderer over `dsgn:preview:toolbar-action`. The
+  toolbar tracks scroll/resize, hides on HMR-detach, mode arming, select-off,
+  and on the new `preview:clear-selected` (renderer drops selection → pill ×,
+  send, delete). The composer strip keeps pill + source + readiness hint only.
+- Preview bar: the URL is now shown in full and the part after the origin is
+  editable in place (Enter navigates via preview.load — still guarded to
+  localhost; Escape reverts). New `preview:url-changed` relay (did-navigate +
+  did-navigate-in-page) keeps it tracking SPA routes/link clicks. Desktop/Mobile
+  segmented control replaced with a single Figma-style MonitorSmartphone icon
+  toggle (⌘1/⌘2 + Actions menu unchanged).
+- Composer bottom row: select button sized to match the backend/model selects
+  (`.iconbtn--sm`).
+- Tests: select-element asserts the toolbar (all four actions) inside the
+  preview page and that it hides when the pill clears; annotations drives the
+  engine directly (UI path covered by comment-mode); code-drawer/code-peek open
+  the drawer via its store; viewport-per-project is PORT-AGNOSTIC now (a live
+  app session on 7777 must not fail the suite — reads the URL from the bar).
+
 ## 2026-07-06 — Selection UX: composer pill + element actions (Figma Make-style)
 
 - Preview bar's three mode buttons (select/comment/annotate) are gone. Element

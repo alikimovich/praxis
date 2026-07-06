@@ -72,6 +72,12 @@ const api: DsgnApi = {
     setFrame: (active: boolean): void => ipcRenderer.send('preview:set-frame', active),
     /** Drop the in-preview selection toolbar (pill removed / message sent). */
     clearSelected: (): void => ipcRenderer.send('preview:clear-selected'),
+    /** Fires when the preview navigates (link clicks, SPA routes) — full URL. */
+    onUrlChanged: (cb: (url: string) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, url: string): void => cb(url)
+      ipcRenderer.on('preview:url-changed', listener)
+      return () => ipcRenderer.removeListener('preview:url-changed', listener)
+    },
     /** Selection-toolbar actions that resolve in the renderer (code / delete). */
     onToolbarAction: (cb: (kind: 'code' | 'delete') => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, kind: 'code' | 'delete'): void => cb(kind)

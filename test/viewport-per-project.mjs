@@ -39,10 +39,31 @@ try {
       BrowserWindow.getAllWindows()[0].webContents.send('menu:action', 'open-project')
     )
   }
-  const waitUrl = (port) =>
+  // Port-agnostic: the runner takes the first FREE port ≥ 7777, so a live app
+  // session (or anything else) squatting on 7777 must not fail the test. Wait
+  // for any localhost URL in the bar (optionally different from the previous
+  // project's) and remember it for the switch-back assertions.
+  const URL_RE = /http:\/\/(?:localhost|127\.0\.0\.1|\[::1\]):\d+/
+  const waitNewUrl = async (notUrl) => {
+    await win.waitForFunction(
+      (args) => {
+        const t = document.querySelector('.previewbar__url')?.textContent ?? ''
+        const m = t.match(/http:\/\/(?:localhost|127\.0\.0\.1|\[::1\]):\d+/)
+        return !!m && (!args || m[0] !== args)
+      },
+      notUrl ?? null,
+      { timeout: 60000 }
+    )
+    return await win.evaluate(() =>
+      (document.querySelector('.previewbar__url')?.textContent ?? '').match(
+        /http:\/\/(?:localhost|127\.0\.0\.1|\[::1\]):\d+/
+      )[0]
+    )
+  }
+  const waitUrl = (url) =>
     win.waitForFunction(
-      (p) => (document.querySelector('.previewbar__url')?.textContent ?? '').includes(`:${p}`),
-      port,
+      (u) => (document.querySelector('.previewbar__url')?.textContent ?? '').includes(u),
+      url,
       { timeout: 60000 }
     )
   const expect = async (label, want) => {
@@ -61,7 +82,7 @@ try {
     win.click('.rail__item:not(.rail__item--active) .rail__open')
 
   await openVia(fixtureA)
-  await waitUrl(7777)
+  const urlA = await waitNewUrl()
   await expect('A opens at desktop', 'desktop')
 
   await app.evaluate(({ BrowserWindow }) =>
@@ -70,15 +91,15 @@ try {
   await expect('A toggles to mobile', 'mobile')
 
   await openVia(fixtureB)
-  await waitUrl(7778)
+  const urlB = await waitNewUrl(urlA)
   await expect('B opens at desktop (no leak from A)', 'desktop')
 
   await switchProject()
-  await waitUrl(7777)
+  await waitUrl(urlA)
   await expect('back on A: its mobile restored', 'mobile')
 
   await switchProject()
-  await waitUrl(7778)
+  await waitUrl(urlB)
   await expect('back on B: still desktop', 'desktop')
 
   if (failed) throw new Error('per-project viewport assertions failed')

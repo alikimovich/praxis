@@ -1763,3 +1763,38 @@ body.is-resizing {
     gap: 8px;
     margin-top: 12px;
 }
+
+/* Editable preview URL: full URL shown, everything after the origin editable
+   in place (Enter navigates, Escape reverts). Deliberately unhighlighted —
+   same muted look as the static URL text. */
+.previewbar__url--editable {
+    display: inline-flex;
+    align-items: baseline;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.previewbar__origin {
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+.previewbar__path {
+    -webkit-app-region: no-drag;
+    flex: 1 1 auto;
+    min-width: 40px;
+    border: none;
+    outline: none;
+    background: transparent;
+    font: inherit;
+    color: inherit;
+    padding: 0;
+}
+.previewbar__path:focus {
+    color: var(--text);
+}
+
+/* Compact icon button — matches the composer selects' height. */
+.iconbtn--sm {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+}

@@ -5,6 +5,7 @@ import ConsolePanel from './components/ConsolePanel'
 import DiagnoseCard from './components/DiagnoseCard'
 import PreviewPane from './components/PreviewPane'
 import PropPanel from './components/PropPanel'
+import PreviewUrl from './components/PreviewUrl'
 import CodeDrawer from './components/CodeDrawer'
 import SessionReview from './components/SessionReview'
 import {
@@ -36,8 +37,7 @@ import {
   type ProjectEntry
 } from './store'
 import { projectKey } from '../../shared/projectKey'
-import { PanelLeft } from 'lucide-react'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { MonitorSmartphone, PanelLeft } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -1439,30 +1439,36 @@ export default function App(): React.JSX.Element {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   ))}
-                <span className="previewbar__url">{hint}</span>
+                {status.kind === 'running' ? (
+                  <PreviewUrl
+                    base={status.url}
+                    onNavigate={(url) => void window.api.preview.load(url)}
+                  />
+                ) : (
+                  <span className="previewbar__url">{hint}</span>
+                )}
                 <div className="previewbar__actions">
                   {status.kind === 'running' && (
                     <>
                       {/* Element-select moved to the chat composer (Figma Make-style);
                           comment/annotate are element-scoped actions on the selection
                           pill now. Keyboard: S select, C comment, Y annotate. */}
-                      {/* Viewport switch (shadcn Tabs; also Actions menu ⌘1 / ⌘2). */}
+                      {/* Viewport toggle (Figma-style device icon; also Actions
+                          menu ⌘1 / ⌘2). Active = mobile. */}
                       {previewKind !== 'simulator' && (
-                        <Tabs
-                          value={viewport}
-                          onValueChange={(v) =>
-                            useViewport.getState().setViewport(v as 'desktop' | 'mobile')
+                        <button
+                          className={`iconbtn ${viewport === 'mobile' ? 'is-active' : ''}`}
+                          onClick={() =>
+                            useViewport
+                              .getState()
+                              .setViewport(viewport === 'mobile' ? 'desktop' : 'mobile')
                           }
+                          aria-pressed={viewport === 'mobile'}
+                          aria-label="Toggle mobile viewport"
+                          title="Toggle mobile viewport (⌘1 desktop / ⌘2 mobile)"
                         >
-                          <TabsList>
-                            <TabsTrigger value="desktop" title="Desktop viewport (⌘1)">
-                              Desktop
-                            </TabsTrigger>
-                            <TabsTrigger value="mobile" title="Mobile viewport (⌘2)">
-                              Mobile
-                            </TabsTrigger>
-                          </TabsList>
-                        </Tabs>
+                          <MonitorSmartphone className="size-4" aria-hidden="true" />
+                        </button>
                       )}
                       {/* Publish split button: the main segment runs the selected
                           mode (full publish vs PR-only); the caret picks it. */}

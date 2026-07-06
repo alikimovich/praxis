@@ -298,6 +298,16 @@ function ensurePreviewView(): WebContentsView {
     }
   })
 
+  // Keep the renderer's URL bar in sync with where the preview actually is
+  // (link clicks, SPA route changes). Only real preview pages — never the
+  // data: placeholder.
+  const reportUrl = (): void => {
+    const url = wc.getURL()
+    if (/^https?:/.test(url)) mainWindow?.webContents.send('preview:url-changed', url)
+  }
+  wc.on('did-navigate', reportUrl)
+  wc.on('did-navigate-in-page', reportUrl)
+
   return previewView
 }
 
