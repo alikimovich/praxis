@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import type { PropField, PropInspection } from '../../../shared/api'
-import { usePanelInset } from '../store'
+import type { PropField, PropInspection, SelectedElement } from '../../../shared/api'
+import { usePanelInset, usePropPanelMode } from '../store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PanelRight, PictureInPicture2 } from 'lucide-react'
 
 /** Kept in sync with the `w-80` (320px) width on the .proppanel <aside> and the
  * reserved native-preview inset (usePanelInset below). */
@@ -10,30 +11,53 @@ const PANEL_WIDTH = 320
 
 interface Props {
   root: string
-  inspection: PropInspection
+  element: SelectedElement
+  /** null → no schema (readiness messaging shows instead of fields). */
+  inspection: PropInspection | null
+  /** Inspection still in flight. */
+  inspecting: boolean
   /** Update the canonical inspection (optimistic apply / reload). */
   onChange: (next: PropInspection) => void
   /** Seed a chat prompt for changes that can't be applied as a literal. */
   onSeedPrompt: (text: string) => void
+  /** Offer to set the project up for editing (unstamped element). */
+  onSetup: () => void
+  /** v8 F3a: re-select the owning component instance. */
+  onSelectOwner: () => void
   onClose: () => void
 }
 
 /**
- * The floating prop panel — shown over the preview's right edge when a
- * dsgn-ready component (one with a resolved react-docgen schema) is selected.
- * It reserves a strip of the native preview (usePanelInset) so it isn't covered.
- * Simple literal edits write straight to source; non-literal ones go to chat.
+ * The prop panel — shown at the preview's right edge for EVERY selection.
+ * A schema-backed component gets editable fields; anything else gets the
+ * readiness message (setup offer / owner jump / prompt-only hint). Floating
+ * card at the top right by default; dockable into a full-height sidebar.
+ * Either way it reserves a strip of the native preview (usePanelInset) so it
+ * isn't covered. Simple literal edits write straight to source; non-literal
+ * ones go to chat.
  */
 export default function PropPanel({
   root,
+  element,
   inspection,
+  inspecting,
   onChange,
   onSeedPrompt,
+  onSetup,
+  onSelectOwner,
   onClose
 }: Props): React.JSX.Element {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const source = inspection.source
+  const docked = usePropPanelMode((s) => s.docked)
+  const hasSchema = !!inspection?.hasSchema
+  const source = inspection?.source ?? element.source ?? ''
+  const hasOwner = !!element.componentSource && element.componentSource !== element.source
+  const ident = element.id
+    ? `#${element.id}`
+    : element.classes[0]
+      ? `.${element.classes[0]}`
+      : ''
 
   // Reserve the right-edge strip while the panel is open.
   useEffect(() => {
@@ -42,7 +66,7 @@ export default function PropPanel({
   }, [])
 
   const reload = (): void => {
-    window.api.props.inspect(root, source).then((res) => res && onChange(res))
+    if (source) window.api.props.inspect(root, source).then((res) => res && onChange(res))
   }
 
   const apply = async (field: PropField, value: string | number | boolean): Promise<void> => {
@@ -56,12 +80,16 @@ export default function PropPanel({
         value
       })
       if (res.applied) {
-        onChange({
-          ...inspection,
-          fields: inspection.fields.map((f) =>
-            f.name === field.name ? { ...f, value, expression: false } : f
-          )
-        })
+        // Only reachable from a rendered PropRow, which implies a schema-backed
+        // inspection is present.
+        if (inspection) {
+          onChange({
+            ...inspection,
+            fields: inspection.fields.map((f) =>
+              f.name === field.name ? { ...f, value, expression: false } : f
+            )
+          })
+        }
       } else if (res.needsAgent) {
         onSeedPrompt(res.agentPrompt ?? `In ${source}, change the ${field.name} prop.`)
       } else {
@@ -97,56 +125,115 @@ export default function PropPanel({
        gap + 1px border + 40+1px bar = 52) and inset 11px from the window's
        right/bottom (10px pane gutter + 1px card border) — flush against the
        native view, which usePanelInset shrinks by exactly this panel's width.
-       Never overlaps the previewbar controls. */
+       Never overlaps the previewbar controls. Floating (default): auto-height
+       card pinned top-right; docked: full-height sidebar. */
     <aside
-      className="proppanel fixed bottom-[11px] right-[11px] top-[52px] z-50 flex w-80 flex-col rounded-lg border bg-background shadow-[-4px_0_18px_rgba(0,0,0,0.08)]"
-      aria-label={`Props for ${inspection.component}`}
+      className={`proppanel fixed right-[11px] top-[52px] z-50 flex w-80 flex-col rounded-lg border bg-background ${
+        docked
+          ? 'bottom-[11px] shadow-[-4px_0_18px_rgba(0,0,0,0.08)]'
+          : 'proppanel--floating max-h-[65vh] shadow-[0_8px_28px_rgba(0,0,0,0.14)]'
+      }`}
+      aria-label={`Props for ${inspection?.component ?? element.tag}`}
     >
-      <header className="proppanel__head flex shrink-0 items-start gap-2 border-b px-3.5 py-3">
-        <div className="proppanel__id min-w-0">
+      <header className="proppanel__head flex shrink-0 items-start gap-1 border-b px-3.5 py-3">
+        <div className="proppanel__id min-w-0 flex-1">
           <div className="proppanel__title font-mono text-sm font-semibold text-blue-600">
-            {inspection.component}
+            {inspection?.component ?? `${element.tag}${ident}`}
           </div>
-          <div className="proppanel__source overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11px] text-muted-foreground">
-            {source}
-          </div>
+          {source && (
+            <div className="proppanel__source overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11px] text-muted-foreground">
+              {source}
+            </div>
+          )}
         </div>
         <Button
           variant="ghost"
           size="icon"
-          className="proppanel__close ml-auto"
+          className="proppanel__dock size-7 text-muted-foreground"
+          onClick={() => usePropPanelMode.getState().setDocked(!docked)}
+          aria-label={docked ? 'Float panel' : 'Dock panel as sidebar'}
+          aria-pressed={docked}
+          title={docked ? 'Float at the top right' : 'Dock as a right sidebar'}
+        >
+          {docked ? (
+            <PictureInPicture2 className="size-3.5" aria-hidden="true" />
+          ) : (
+            <PanelRight className="size-3.5" aria-hidden="true" />
+          )}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="proppanel__close size-7"
           onClick={onClose}
           aria-label="Close panel"
         >
           ✕
         </Button>
       </header>
-      <div className="proppanel__hint mx-3.5 mt-1.5 text-[11px] text-muted-foreground">
-        Literal edits apply instantly to source — others go to chat.
-      </div>
-      {error && <div className="proppanel__error mx-3.5 mt-2 text-[11.5px] text-red-700">{error}</div>}
-      {inspection.note && (
-        <div className="proppanel__note mx-3.5 mt-2 text-[11.5px] text-muted-foreground">
-          {inspection.note}
+      {hasSchema && inspection ? (
+        <>
+          <div className="proppanel__hint mx-3.5 mt-1.5 text-[11px] text-muted-foreground">
+            Literal edits apply instantly to source — others go to chat.
+          </div>
+          {error && (
+            <div className="proppanel__error mx-3.5 mt-2 text-[11.5px] text-red-700">{error}</div>
+          )}
+          {inspection.note && (
+            <div className="proppanel__note mx-3.5 mt-2 text-[11.5px] text-muted-foreground">
+              {inspection.note}
+            </div>
+          )}
+          <div className="proppanel__rows flex flex-1 flex-col gap-3 overflow-y-auto px-3.5 pb-3.5 pt-2.5">
+            {inspection.fields.length === 0 && (
+              <div className="proppanel__note text-[11.5px] text-muted-foreground">
+                No editable props.
+              </div>
+            )}
+            {inspection.fields.map((f) => (
+              <PropRow
+                key={f.name}
+                field={f}
+                busy={busy === f.name}
+                onApply={(v) => apply(f, v)}
+                onReset={() => reset(f)}
+                onAskAgent={() => onSeedPrompt(`In ${source}, change the \`${f.name}\` prop.`)}
+              />
+            ))}
+          </div>
+        </>
+      ) : (
+        /* No schema (or still inspecting) — the readiness message lives here
+           now, not in the chat area. Same three honest "not ready" cases the
+           composer strip used to show. */
+        <div className="proppanel__rows flex flex-col gap-2 overflow-y-auto px-3.5 pb-3.5 pt-2.5">
+          {inspecting ? (
+            <div className="proppanel__ready text-[12px] text-muted-foreground">
+              Reading props…
+            </div>
+          ) : !element.source ? (
+            <div className="proppanel__ready proppanel__ready--no text-[12px] text-amber-700">
+              Not set up for prop editing —{' '}
+              <button className="proppanel__link text-blue-600 underline" onClick={onSetup}>
+                set up the project
+              </button>{' '}
+              or ask dsgn below.
+            </div>
+          ) : hasOwner ? (
+            <div className="proppanel__ready proppanel__ready--no text-[12px] text-muted-foreground">
+              {`<${element.tag}>`} is a plain element —{' '}
+              <button className="proppanel__owner text-blue-600 underline" onClick={onSelectOwner}>
+                edit its component
+              </button>{' '}
+              or ask dsgn below.
+            </div>
+          ) : (
+            <div className="proppanel__ready proppanel__ready--no text-[12px] text-muted-foreground">
+              No editable props on {`<${element.tag}>`} — ask dsgn below to change it.
+            </div>
+          )}
         </div>
       )}
-      <div className="proppanel__rows flex flex-1 flex-col gap-3 overflow-y-auto px-3.5 pb-3.5 pt-2.5">
-        {inspection.fields.length === 0 && (
-          <div className="proppanel__note text-[11.5px] text-muted-foreground">
-            No editable props.
-          </div>
-        )}
-        {inspection.fields.map((f) => (
-          <PropRow
-            key={f.name}
-            field={f}
-            busy={busy === f.name}
-            onApply={(v) => apply(f, v)}
-            onReset={() => reset(f)}
-            onAskAgent={() => onSeedPrompt(`In ${source}, change the \`${f.name}\` prop.`)}
-          />
-        ))}
-      </div>
     </aside>
   )
 }

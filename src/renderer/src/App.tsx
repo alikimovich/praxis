@@ -113,6 +113,7 @@ export default function App(): React.JSX.Element {
   const { selectMode, setSelectMode, setSelected } = useSelection()
   const selected = useSelection((s) => s.selected)
   const inspection = useSelection((s) => s.inspection)
+  const inspecting = useSelection((s) => s.inspecting)
   const projectRoot = useSession((s) => s.projectRoot)
   const drawerSource = useCodeDrawer((s) => s.source)
   const openCount = useWorkspace((s) => s.projects.length)
@@ -1558,13 +1559,28 @@ export default function App(): React.JSX.Element {
       {/* Activity console — docked full-width at the bottom of the window. */}
       {logOpen && <ConsolePanel />}
 
-      {/* Floating prop panel — only for dsgn-ready components (schema resolved). */}
-      {selected && projectRoot && inspection?.hasSchema && (
+      {/* Prop panel — shown for EVERY selection: editable fields when a schema
+          resolved, the readiness message (setup / owner / prompt-only) otherwise. */}
+      {selected && projectRoot && (
         <PropPanel
           root={projectRoot}
+          element={selected}
           inspection={inspection}
+          inspecting={inspecting}
           onChange={(next) => useSelection.getState().setInspection(next)}
           onSeedPrompt={(t) => useComposer.getState().setSeed(t)}
+          onSetup={() => {
+            useSetup.getState().setDismissed(false)
+            useSetup.getState().setNeeded(true)
+          }}
+          onSelectOwner={() => {
+            // v8 F3a: re-point the selection at the component-instance call site
+            // so the panel edits this instance's props. One level up; the new
+            // selection has no further owner (it came from the DOM).
+            if (selected.componentSource) {
+              setSelected({ ...selected, source: selected.componentSource, componentSource: null })
+            }
+          }}
           onClose={() => setSelected(null)}
         />
       )}

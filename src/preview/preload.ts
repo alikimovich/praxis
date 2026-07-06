@@ -715,7 +715,22 @@ function positionFrame(): void {
   img.style.setProperty('top', `${-(hf * FRAME_INSET.top) / 100}px`, 'important')
 }
 
+let frameStyle: HTMLStyleElement | null = null
+
 function setFrame(on: boolean): void {
+  // Phones don't show persistent scrollbars — hide them inside the bezel (the
+  // desktop-style bar drew right over the frame's edge otherwise).
+  if (on && !frameStyle) {
+    frameStyle = document.createElement('style')
+    frameStyle.setAttribute('data-dsgn-frame-style', '')
+    frameStyle.textContent =
+      '::-webkit-scrollbar{display:none !important;width:0 !important;height:0 !important}' +
+      'html,body{scrollbar-width:none !important}'
+    document.documentElement.appendChild(frameStyle)
+  } else if (!on && frameStyle) {
+    frameStyle.remove()
+    frameStyle = null
+  }
   if (!on) {
     frameHost?.remove()
     frameHost = null

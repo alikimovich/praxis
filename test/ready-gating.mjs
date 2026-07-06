@@ -70,15 +70,17 @@ try {
     },
     { fixture: join(fixtures, 'propedit-app') }
   )
-  await win.waitForSelector('.inspector__ready--no', { timeout: 5000 })
-  if (await win.locator('.proppanel').count()) {
-    throw new Error('a no-schema element should not open the prop panel')
+  // The panel now opens for EVERY selection; a no-schema element shows the
+  // prompt-only readiness message inside it (no editable fields).
+  await win.waitForSelector('.proppanel .proppanel__ready--no', { timeout: 5000 })
+  if (await win.locator('.proppanel__row').count()) {
+    throw new Error('a no-schema element should not render editable prop rows')
   }
-  const stampedHint = (await win.textContent('.inspector__ready--no')) ?? ''
+  const stampedHint = (await win.textContent('.proppanel__ready--no')) ?? ''
   if (!/ask dsgn/i.test(stampedHint)) {
     throw new Error(`stamped host element should be prompt-only (ask dsgn): ${stampedHint}`)
   }
-  if (await win.locator('.inspector__link').count()) {
+  if (await win.locator('.proppanel__link').count()) {
     throw new Error('a stamped element must NOT show the "set up the project" link')
   }
   await win.screenshot({ path: join(artifacts, '13-gating.png') })
@@ -98,8 +100,8 @@ try {
       styles: {}
     })
   })
-  await win.waitForSelector('.inspector__ready--no', { timeout: 5000 })
-  if (!(await win.locator('.inspector__link').count())) {
+  await win.waitForSelector('.proppanel .proppanel__ready--no', { timeout: 5000 })
+  if (!(await win.locator('.proppanel__link').count())) {
     throw new Error('an unstamped element should offer the "set up the project" link')
   }
 

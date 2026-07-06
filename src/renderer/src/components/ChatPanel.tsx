@@ -739,30 +739,7 @@ export default function ChatPanel(): React.JSX.Element {
           }}
           onDragLeave={() => setDragOver(false)}
         >
-          {selected && (
-            <Inspector
-              element={selected}
-              propsReady={!!inspection?.hasSchema}
-              inspecting={inspecting}
-              onSetup={() => {
-                useSetup.getState().setDismissed(false)
-                useSetup.getState().setNeeded(true)
-              }}
-              onClear={() => setSelected(null)}
-              onSelectOwner={() => {
-                // v8 F3a: re-point the selection at the component-instance call site
-                // so the panel (props.inspect) edits this instance's props. One level
-                // up; the new selection has no further owner (it came from the DOM).
-                if (selected?.componentSource) {
-                  setSelected({
-                    ...selected,
-                    source: selected.componentSource,
-                    componentSource: null
-                  })
-                }
-              }}
-            />
-          )}
+          {selected && <Inspector element={selected} onClear={() => setSelected(null)} />}
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-1.5 px-2 pt-2">
               {attachments.map((a) => (
@@ -799,7 +776,7 @@ export default function ChatPanel(): React.JSX.Element {
             ref={inputRef}
             data-slot="input-group-control"
             className="composer__input"
-            placeholder="Message dsgn…  (/ for skills)"
+            placeholder="Ask Praxis  (/ for skills)"
             value={input}
             rows={2}
             onChange={(e) => onInputChange(e.target.value)}

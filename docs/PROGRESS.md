@@ -20,6 +20,26 @@ Newest first. Append a dated entry when you finish a chunk of work.
   port → preview recovers within ~3s, no project reopen. Smoke, open-preview,
   ready-gating green.
 
+## 2026-07-06 — Prop panel always-on (floating ⇄ docked); strip cleanup
+
+- The PropPanel opens for EVERY selection now, not just schema-backed ones: a
+  resolved schema shows the editable fields as before; otherwise the panel
+  hosts the readiness message that used to sit in the composer strip (setup
+  link for unstamped elements — .proppanel__link; owner jump —
+  .proppanel__owner; prompt-only hint). Default layout is a FLOATING card at
+  the preview's top right (auto height, max 65vh); a header toggle docks it as
+  the full-height right sidebar. Mode persists (usePropPanelMode →
+  localStorage). Both modes reserve the same native-preview inset strip — the
+  native view always paints above DOM, floating "over" it is impossible.
+- Composer strip: now a single aligned row (pill + source), the "No editable
+  props…" hint removed (it lives in the panel).
+- Composer placeholder: "Ask Praxis  (/ for skills)".
+- Mobile viewport: scrollbars hidden inside the bezel (injected style with the
+  frame) — phones don't show persistent scrollbars.
+- Tests: ready-gating asserts the panel's readiness classes (the old "panel
+  must NOT open for no-schema" flipped by design); select-element owner jump →
+  .proppanel__owner.
+
 ## 2026-07-06 — In-preview selection toolbar; editable URL bar; device toggle
 
 - The element actions moved from the composer strip into a floating toolbar

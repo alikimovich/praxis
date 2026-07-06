@@ -206,9 +206,10 @@ try {
   if (cs !== 'src/screens/Wallet.tsx:18') {
     throw new Error(`componentSource should be the instance call site, got "${cs}"`)
   }
-  // The "edit owner component" affordance is offered, and re-points the selection.
-  await win.waitForSelector('.inspector__owner', { timeout: 5000 })
-  await win.click('.inspector__owner')
+  // The "edit owner component" affordance is offered (in the prop panel), and
+  // re-points the selection.
+  await win.waitForSelector('.proppanel__owner', { timeout: 5000 })
+  await win.click('.proppanel__owner')
   await win.waitForFunction(
     () => window.__dsgnSelection.getState().selected?.source === 'src/screens/Wallet.tsx:18',
     { timeout: 5000 }
