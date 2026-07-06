@@ -15,7 +15,8 @@ import {
   useSession,
   useSetup,
   useSpawns,
-  useTokens
+  useTokens,
+  useUiActions
 } from '../store'
 import { projectKey } from '../../../shared/projectKey'
 import type { QuestionAnswers, SetupResult } from '../../../shared/api'
@@ -34,7 +35,7 @@ import {
 import { InputGroup, InputGroupAddon } from '@/components/ui/input-group'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { ArrowUp, Check, ChevronRight, Copy } from 'lucide-react'
+import { ArrowUp, Check, ChevronRight, Copy, MousePointer2 } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import CatLoader from './CatLoader'
 
@@ -193,6 +194,7 @@ export default function ChatPanel(): React.JSX.Element {
   const { model, provider, slashCommands, projectRoot, setModel, setProvider } =
     useSession()
   const { selected, setSelected } = useSelection()
+  const selectMode = useSelection((s) => s.selectMode)
   const inspection = useSelection((s) => s.inspection)
   const inspecting = useSelection((s) => s.inspecting)
   const { pending, removeRequest } = usePermissions()
@@ -431,12 +433,49 @@ export default function ChatPanel(): React.JSX.Element {
     }
   }
 
-  // "Ask dsgn to change this…" — seed the composer with the element reference
-  // (and its source location) so the agent edits the right place, then close
-  // the inspector and drop the cursor at the end for the user to type the change.
-  const askAboutSelection = (): void => {
+  // Comment on the selected element: same detached-agent flow as the preview's
+  // inline comment mode (C) — a parallel worktree agent when possible, falling
+  // back to submitting through the main chat.
+  const commentOnSelection = (text: string): void => {
     if (!selected) return
-    seedPrompt(describeSelectionForPrompt(selected))
+    const prompt = describeSelectionForPrompt(selected) + oneLine(text, 2000)
+    const root = useSession.getState().projectRoot
+    if (root) {
+      void window.api.agent
+        .spawnComment(root, prompt, toAgentOptions(useSession.getState()))
+        .then((r) => {
+          if (r.ok && r.spawnId) {
+            useSpawns.getState().add(projectKey(root), {
+              id: r.spawnId,
+              branch: r.branch ?? null,
+              label: oneLine(text, 60),
+              status: r.queued ? 'queued' : 'running'
+            })
+          } else {
+            useComposer.getState().setSubmit(prompt)
+          }
+        })
+    } else {
+      useComposer.getState().setSubmit(prompt)
+    }
+    setSelected(null)
+  }
+
+  // Ask the agent to remove the selected element. The transcript shows a short
+  // human-readable request; the element reference travels hidden (like send()).
+  const deleteSelection = (): void => {
+    if (!selected || isRunning) return
+    const ident = selected.id
+      ? `#${selected.id}`
+      : selected.classes[0]
+        ? `.${selected.classes[0]}`
+        : ''
+    appendUser(`Delete the <${selected.tag}${ident}> element`)
+    startAssistant()
+    void window.api.agent.send(
+      describeSelectionForPrompt(selected) +
+        'Delete this element from the source. Remove it cleanly — including any wrappers, imports, or styles that exist only for it.'
+    )
     setSelected(null)
   }
 
@@ -476,11 +515,15 @@ export default function ChatPanel(): React.JSX.Element {
     const text = raw.trim()
     if ((!text && attachments.length === 0) || isRunning) return
     const images = attachments.map((a) => ({ mediaType: a.mediaType, data: a.data }))
+    // The selection pill rides along as hidden context: the transcript shows the
+    // user's own words; the model gets the element reference prepended.
+    const ctx = selected ? describeSelectionForPrompt(selected) : ''
     appendUser(text || (images.length ? `🖼 ${images.length} image(s)` : ''))
     startAssistant()
     setInput('')
     setAttachments([])
-    void window.api.agent.send(text, images.length ? images : undefined)
+    void window.api.agent.send(ctx + text, images.length ? images : undefined)
+    if (selected) setSelected(null)
   }
 
   // Interrupt the in-flight turn. The SDK emits a `result` → `done`, which clears
@@ -680,32 +723,6 @@ export default function ChatPanel(): React.JSX.Element {
       <div className="composer">
         <QuestionCards requests={questions} onRespond={respondQuestion} />
         <PermissionCards requests={pending} onRespond={respondPermission} />
-        {selected && (
-          <Inspector
-            element={selected}
-            propsReady={!!inspection?.hasSchema}
-            inspecting={inspecting}
-            onSetup={() => {
-              useSetup.getState().setDismissed(false)
-              useSetup.getState().setNeeded(true)
-            }}
-            onAsk={askAboutSelection}
-            onClear={() => setSelected(null)}
-            onAddNote={addNote}
-            onSelectOwner={() => {
-              // v8 F3a: re-point the selection at the component-instance call site
-              // so the panel (props.inspect) edits this instance's props. One level
-              // up; the new selection has no further owner (it came from the DOM).
-              if (selected?.componentSource) {
-                setSelected({
-                  ...selected,
-                  source: selected.componentSource,
-                  componentSource: null
-                })
-              }
-            }}
-          />
-        )}
         <NotesPanel
           notes={notes}
           focusedId={focusedId}
@@ -745,6 +762,33 @@ export default function ChatPanel(): React.JSX.Element {
           }}
           onDragLeave={() => setDragOver(false)}
         >
+          {selected && (
+            <Inspector
+              element={selected}
+              propsReady={!!inspection?.hasSchema}
+              inspecting={inspecting}
+              onSetup={() => {
+                useSetup.getState().setDismissed(false)
+                useSetup.getState().setNeeded(true)
+              }}
+              onClear={() => setSelected(null)}
+              onAddNote={addNote}
+              onComment={commentOnSelection}
+              onDelete={deleteSelection}
+              onSelectOwner={() => {
+                // v8 F3a: re-point the selection at the component-instance call site
+                // so the panel (props.inspect) edits this instance's props. One level
+                // up; the new selection has no further owner (it came from the DOM).
+                if (selected?.componentSource) {
+                  setSelected({
+                    ...selected,
+                    source: selected.componentSource,
+                    componentSource: null
+                  })
+                }
+              }}
+            />
+          )}
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-1.5 px-2 pt-2">
               {attachments.map((a) => (
@@ -792,6 +836,20 @@ export default function ChatPanel(): React.JSX.Element {
             {/* The selectors shrink + wrap when the chat pane is narrow so the send
                 button (shrink-0, below) is never pushed off the edge. */}
             <div className="mr-auto flex min-w-0 flex-wrap items-center gap-1">
+            {/* Element-select toggle — lives here (Figma Make-style), not in the
+                preview bar. Routing to web/simulator select mode is App's. */}
+            {projectRoot && (
+              <button
+                type="button"
+                className={`iconbtn ${selectMode ? 'is-active' : ''}`}
+                onClick={() => useUiActions.getState().toggleSelect()}
+                aria-pressed={selectMode}
+                aria-label="Select"
+                title="Select an element to edit (S)"
+              >
+                <MousePointer2 className="size-4" aria-hidden="true" />
+              </button>
+            )}
             <select
               className={selectCls}
               value={provider}

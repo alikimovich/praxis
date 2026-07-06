@@ -744,6 +744,21 @@ export const useComposer = create<ComposerState>((set) => ({
   setSubmit: (submit) => set({ submit })
 }))
 
+/**
+ * App-owned UI actions other components can invoke without prop-drilling.
+ * App registers the real handlers (they close over preview routing state like
+ * previewKind); callers use `useUiActions.getState().toggleSelect()`.
+ */
+interface UiActionsState {
+  toggleSelect: () => void
+  register: (actions: { toggleSelect: () => void }) => void
+}
+
+export const useUiActions = create<UiActionsState>((set) => ({
+  toggleSelect: () => {},
+  register: (actions) => set(actions)
+}))
+
 /** The on-open "set this project up for editing" offer. */
 interface SetupState {
   /** The previewed app isn't source-stamped — offer to set it up. */

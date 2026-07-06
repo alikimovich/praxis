@@ -25,6 +25,7 @@ import {
   useSetup,
   useSpawns,
   useTokens,
+  useUiActions,
   useViewport,
   usePreviewFreeze,
   usePublishMode,
@@ -35,7 +36,7 @@ import {
   type ProjectEntry
 } from './store'
 import { projectKey } from '../../shared/projectKey'
-import { MousePointer2, MessageSquare, FileText, PanelLeft } from 'lucide-react'
+import { PanelLeft } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   DropdownMenu,
@@ -109,8 +110,7 @@ export default function App(): React.JSX.Element {
     publish: () => {}
   })
 
-  const { selectMode, setSelectMode, setSelected, setCommentMode } = useSelection()
-  const commentMode = useSelection((s) => s.commentMode)
+  const { selectMode, setSelectMode, setSelected } = useSelection()
   const selected = useSelection((s) => s.selected)
   const inspection = useSelection((s) => s.inspection)
   const projectRoot = useSession((s) => s.projectRoot)
@@ -1105,15 +1105,6 @@ export default function App(): React.JSX.Element {
     if (!next) setSelected(null)
   }
 
-  // Arm/disarm an inline-comment mode (toggles off if already active). Clears any
-  // lingering selection so the left inspector doesn't compete with the composer.
-  const armComment = (mode: 'comment' | 'annotate'): void => {
-    const next: CommentMode = useSelection.getState().commentMode === mode ? null : mode
-    setCommentMode(next)
-    if (next) setSelected(null)
-    void window.api.preview.setCommentMode(next)
-  }
-
   // Clear selection (rects/source go stale) but leave select mode — main
   // re-arms the overlay once the reloaded page finishes loading.
   const reload = (): void => {
@@ -1238,6 +1229,12 @@ export default function App(): React.JSX.Element {
     reload,
     publish: () => void publish()
   }
+
+  // Let the composer's select button (ChatPanel) drive the same toggle — via the
+  // ref so it always hits the current closure (previewKind routing included).
+  useEffect(() => {
+    useUiActions.getState().register({ toggleSelect: () => actionsRef.current.toggleSelect() })
+  }, [])
 
   const hint =
     status.kind === 'idle'
@@ -1436,38 +1433,9 @@ export default function App(): React.JSX.Element {
                 <div className="previewbar__actions">
                   {status.kind === 'running' && (
                     <>
-                      {/* Icon buttons — shortcuts: S select, C comment, Y annotate. */}
-                      <button
-                        className={`iconbtn ${selectMode ? 'is-active' : ''}`}
-                        onClick={toggleSelect}
-                        aria-pressed={selectMode}
-                        title="Select an element to edit (S)"
-                        aria-label="Select"
-                      >
-                        <MousePointer2 className="size-4" aria-hidden="true" />
-                      </button>
-                      {previewKind !== 'simulator' && (
-                        <>
-                          <button
-                            className={`iconbtn ${commentMode === 'comment' ? 'is-active' : ''}`}
-                            onClick={() => armComment('comment')}
-                            aria-pressed={commentMode === 'comment'}
-                            title="Comment to the agent on an element (C)"
-                            aria-label="Comment"
-                          >
-                            <MessageSquare className="size-4" aria-hidden="true" />
-                          </button>
-                          <button
-                            className={`iconbtn ${commentMode === 'annotate' ? 'is-active' : ''}`}
-                            onClick={() => armComment('annotate')}
-                            aria-pressed={commentMode === 'annotate'}
-                            title="Pin a note on an element, no agent (Y)"
-                            aria-label="Annotate"
-                          >
-                            <FileText className="size-4" aria-hidden="true" />
-                          </button>
-                        </>
-                      )}
+                      {/* Element-select moved to the chat composer (Figma Make-style);
+                          comment/annotate are element-scoped actions on the selection
+                          pill now. Keyboard: S select, C comment, Y annotate. */}
                       {/* Viewport switch (shadcn Tabs; also Actions menu ⌘1 / ⌘2). */}
                       {previewKind !== 'simulator' && (
                         <Tabs

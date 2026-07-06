@@ -99,8 +99,14 @@ try {
   // Arm a mode, click the hero, wait for the composer — retrying to absorb the
   // set-comment-mode IPC round-trip and input-delivery lag under load. We re-issue
   // the arm via the API each iteration so a dropped arm self-heals.
-  async function armAndOpen(buttonText, mode) {
-    await win.click(`button[aria-label="${buttonText}"]`)
+  async function armAndOpen(_label, mode) {
+    // The preview-bar mode buttons are gone (comment/annotate are element-scoped
+    // actions on the selection pill now); arm via the store — the same path the
+    // C/Y keyboard shortcuts use.
+    await win.evaluate((m) => {
+      window.__dsgnSelection.getState().setCommentMode(m)
+      void window.api.preview.setCommentMode(m)
+    }, mode)
     for (let i = 0; i < 60; i++) {
       // Re-ensure the preload is armed (idempotent) — guards against a missed IPC
       // or a preview reload disarming mid-test.

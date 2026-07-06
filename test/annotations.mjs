@@ -51,8 +51,8 @@ try {
     { root: projectRoot }
   )
 
-  // Add a note via the inspector.
-  await win.click('text="Note"')
+  // Add a note via the selection strip's Annotate action.
+  await win.click('button[aria-label="Annotate"]')
   await win.fill('.inspector__noteinput', NOTE)
   await win.click('.inspector__notesave')
 

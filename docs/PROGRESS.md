@@ -20,6 +20,30 @@ Newest first. Append a dated entry when you finish a chunk of work.
   port → preview recovers within ~3s, no project reopen. Smoke, open-preview,
   ready-gating green.
 
+## 2026-07-06 — Selection UX: composer pill + element actions (Figma Make-style)
+
+- Preview bar's three mode buttons (select/comment/annotate) are gone. Element
+  select now lives in the composer's bottom row (like Figma Make's Edit) — the
+  button drives App's toggle through a new `useUiActions` registry store, so the
+  simulator-vs-web routing stays in one place. S/C/Y shortcuts + the native menu
+  item unchanged.
+- Selecting an element puts a removable PILL in the composer (tag + ident + ×)
+  with element-scoped actions beside it: Comment (detached parallel agent, same
+  spawn flow as preview C-mode), Annotate (pin a note, no agent), Show code
+  (editor drawer), Delete (agent turn). Comment/annotate share one inline
+  textarea in the strip.
+- The "Ask dsgn…" button and its visible "In the preview I selected the <p…>
+  element (selector: …)" seeding are REMOVED: the element reference now rides
+  along invisibly — ChatPanel's send() prepends `describeSelectionForPrompt` to
+  the prompt for the model while the transcript shows only the user's words.
+  The pill is consumed on send. Delete shows a short "Delete the <tag> element"
+  user message with the same hidden context.
+- Inspector.tsx rewritten as the strip (kept class names tests rely on:
+  inspector__tag/__source/__ready/__link/__owner/__noteinput/__notesave/
+  __codebtn). Tests updated: select-element (pill + clean composer instead of
+  seeded text), annotations (Annotate icon instead of "Note" text button),
+  comment-mode (arms via store — the same path as the C/Y shortcuts).
+
 ## 2026-07-04 — Preview corners: native setBorderRadius, corner-mask hack removed
 
 - The desktop preview's bottom corners looked DOUBLED: the in-page corner masks

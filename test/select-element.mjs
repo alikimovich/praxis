@@ -117,18 +117,32 @@ try {
 
   await win.screenshot({ path: join(artifacts, '06-select-element.png') })
 
-  // Hand off to chat: the composer is seeded with the element + source ref.
-  await win.click('.inspector__ask')
-  await win.waitForFunction(
-    (src) => window.__dsgnStore && document.querySelector('.composer__input')?.value?.includes(src),
-    EXPECTED_SOURCE,
-    { timeout: 5000 }
-  )
+  // Hand off to chat: the selection rides as a PILL in the composer (the element
+  // reference is prepended to the prompt invisibly on send) — the visible input
+  // stays clean, no selector text is seeded.
   const composed = await win.inputValue('.composer__input')
-  if (!composed.includes('h1#hero-title')) {
-    throw new Error(`composer should reference the element, got: ${composed}`)
+  if (composed.includes('selected the') || composed.includes(EXPECTED_SOURCE)) {
+    throw new Error(`composer must stay clean of selector text, got: ${composed}`)
+  }
+  // The pill's element-scoped actions are present (comment/annotate/delete; Code
+  // is covered by test/code-drawer.mjs).
+  for (const label of ['Comment', 'Annotate', 'Delete element']) {
+    if (!(await win.locator(`.inspector button[aria-label="${label}"]`).count())) {
+      throw new Error(`selection strip missing the "${label}" action`)
+    }
   }
   await win.screenshot({ path: join(artifacts, '07-select-handoff.png') })
+  // The pill is removable — × clears the selection.
+  await win.click('.inspector__close')
+  await win.waitForFunction(() => !window.__dsgnSelection.getState().selected, { timeout: 5000 })
+  // Re-select for the owner-jump flow below (the pick flow was proven above).
+  await win.evaluate((src) => {
+    window.__dsgnSelection.getState().setSelected({
+      tag: 'h1', id: 'hero-title', classes: [], selector: '#hero-title',
+      source: src, componentSource: null, text: 'Welcome',
+      rect: { x: 0, y: 0, width: 0, height: 0 }, styles: {}
+    })
+  }, EXPECTED_SOURCE)
 
   // --- v8 F3a: click a host that carries a forwarded component-instance stamp.
   // The pick resolves to the host source; the inspector offers "edit owner", which
@@ -177,7 +191,7 @@ try {
     { timeout: 5000 }
   )
 
-  console.log('SELECT-ELEMENT OK — picked', EXPECTED_SOURCE, '→ seeded composer; F3a owner re-select')
+  console.log('SELECT-ELEMENT OK — picked', EXPECTED_SOURCE, '→ selection pill (clean composer); F3a owner re-select')
 } catch (err) {
   console.error('SELECT-ELEMENT FAILED:', err?.message ?? err)
   process.exitCode = 1
