@@ -11,6 +11,7 @@ import {
   useHistory,
   usePermissions,
   useQuestions,
+  useCodeDrawer,
   useSelection,
   useSession,
   useSetup,
@@ -433,34 +434,6 @@ export default function ChatPanel(): React.JSX.Element {
     }
   }
 
-  // Comment on the selected element: same detached-agent flow as the preview's
-  // inline comment mode (C) — a parallel worktree agent when possible, falling
-  // back to submitting through the main chat.
-  const commentOnSelection = (text: string): void => {
-    if (!selected) return
-    const prompt = describeSelectionForPrompt(selected) + oneLine(text, 2000)
-    const root = useSession.getState().projectRoot
-    if (root) {
-      void window.api.agent
-        .spawnComment(root, prompt, toAgentOptions(useSession.getState()))
-        .then((r) => {
-          if (r.ok && r.spawnId) {
-            useSpawns.getState().add(projectKey(root), {
-              id: r.spawnId,
-              branch: r.branch ?? null,
-              label: oneLine(text, 60),
-              status: r.queued ? 'queued' : 'running'
-            })
-          } else {
-            useComposer.getState().setSubmit(prompt)
-          }
-        })
-    } else {
-      useComposer.getState().setSubmit(prompt)
-    }
-    setSelected(null)
-  }
-
   // Ask the agent to remove the selected element. The transcript shows a short
   // human-readable request; the element reference travels hidden (like send()).
   const deleteSelection = (): void => {
@@ -478,6 +451,26 @@ export default function ChatPanel(): React.JSX.Element {
     )
     setSelected(null)
   }
+  // The in-preview selection toolbar routes its code/delete actions here (its
+  // comment/annotate open the preview's own composer). Ref-indirected so the
+  // one-time listener always runs the current closure.
+  const deleteSelectionRef = useRef<() => void>(() => {})
+  deleteSelectionRef.current = deleteSelection
+  useEffect(
+    () =>
+      window.api.preview.onToolbarAction((kind) => {
+        const sel = useSelection.getState().selected
+        if (!sel) return
+        if (kind === 'code' && sel.source) {
+          const drawer = useCodeDrawer.getState()
+          if (drawer.source === sel.source) drawer.close()
+          else drawer.open(sel.source)
+        } else if (kind === 'delete') {
+          deleteSelectionRef.current()
+        }
+      }),
+    []
+  )
 
   // Read image files (paste/drop) into base64 attachments + a preview URL.
   const addImageFiles = (files: File[]): void => {
@@ -569,22 +562,6 @@ export default function ChatPanel(): React.JSX.Element {
   const respondQuestion = (id: string, answers: QuestionAnswers | null): void => {
     removeQuestion(id)
     void window.api.agent.respondQuestion(id, answers)
-  }
-
-  const addNote = async (text: string): Promise<boolean> => {
-    if (!projectRoot || !selected) return false
-    try {
-      const list = await window.api.annotations.add(projectRoot, {
-        source: selected.source,
-        selector: selected.selector,
-        tag: selected.tag,
-        text
-      })
-      setNotes(list)
-      return true
-    } catch {
-      return false
-    }
   }
 
   const removeNote = async (id: string): Promise<void> => {
@@ -772,9 +749,6 @@ export default function ChatPanel(): React.JSX.Element {
                 useSetup.getState().setNeeded(true)
               }}
               onClear={() => setSelected(null)}
-              onAddNote={addNote}
-              onComment={commentOnSelection}
-              onDelete={deleteSelection}
               onSelectOwner={() => {
                 // v8 F3a: re-point the selection at the component-instance call site
                 // so the panel (props.inspect) edits this instance's props. One level

@@ -124,17 +124,40 @@ try {
   if (composed.includes('selected the') || composed.includes(EXPECTED_SOURCE)) {
     throw new Error(`composer must stay clean of selector text, got: ${composed}`)
   }
-  // The pill's element-scoped actions are present (comment/annotate/delete; Code
-  // is covered by test/code-drawer.mjs).
-  for (const label of ['Comment', 'Annotate', 'Delete element']) {
-    if (!(await win.locator(`.inspector button[aria-label="${label}"]`).count())) {
-      throw new Error(`selection strip missing the "${label}" action`)
-    }
+  // The element-scoped actions appear as a floating toolbar INSIDE the preview,
+  // adjacent to the selection (comment/annotate/code/delete).
+  const toolbarShown = await app.evaluate(async ({ webContents }) => {
+    const wc = webContents
+      .getAllWebContents()
+      .find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
+    if (!wc) return 'no-preview'
+    return wc.executeJavaScript(`(() => {
+      const host = document.querySelector('[data-dsgn-overlay]')
+      const bar = host?.shadowRoot?.querySelector('[data-dsgn-toolbar]')
+      if (!bar) return 'no-toolbar'
+      if (getComputedStyle(bar).display === 'none') return 'hidden'
+      return 'visible:' + [...bar.querySelectorAll('button')].map((b) => b.dataset.kind).join(',')
+    })()`)
+  })
+  if (!/^visible:comment,annotate,code,delete$/.test(toolbarShown)) {
+    throw new Error(`in-preview selection toolbar wrong: ${toolbarShown}`)
   }
   await win.screenshot({ path: join(artifacts, '07-select-handoff.png') })
-  // The pill is removable — × clears the selection.
+  // The pill is removable — × clears the selection AND the in-preview toolbar.
   await win.click('.inspector__close')
   await win.waitForFunction(() => !window.__dsgnSelection.getState().selected, { timeout: 5000 })
+  const toolbarAfter = await app.evaluate(async ({ webContents }) => {
+    const wc = webContents
+      .getAllWebContents()
+      .find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
+    return wc?.executeJavaScript(`(() => {
+      const bar = document.querySelector('[data-dsgn-overlay]')?.shadowRoot?.querySelector('[data-dsgn-toolbar]')
+      return bar ? getComputedStyle(bar).display : 'gone'
+    })()`)
+  })
+  if (toolbarAfter !== 'none' && toolbarAfter !== 'gone') {
+    throw new Error(`toolbar should hide when the pill is cleared, got: ${toolbarAfter}`)
+  }
   // Re-select for the owner-jump flow below (the pick flow was proven above).
   await win.evaluate((src) => {
     window.__dsgnSelection.getState().setSelected({

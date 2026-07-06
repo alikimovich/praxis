@@ -538,6 +538,10 @@ export interface DsgnApi {
     setAnnotations: (pins: { id: string; selector: string }[]) => void
     /** Toggle the in-page iPhone bezel overlay (mobile viewport); passes clicks through. */
     setFrame: (active: boolean) => void
+    /** Drop the in-preview selection toolbar (pill removed / message sent). */
+    clearSelected: () => void
+    /** Selection-toolbar actions that resolve in the renderer (code / delete). */
+    onToolbarAction: (cb: (kind: 'code' | 'delete') => void) => () => void
     /** Snapshot the live preview as a data URL (freeze-frame under overlay UI). */
     capture: () => Promise<string | null>
     /** Fires after the previewed app loads, reporting source-stamp coverage. */

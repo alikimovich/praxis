@@ -90,8 +90,9 @@ try {
   // JS-click (not Playwright's actionability click): a schema-backed selection
   // also opens the floating PropPanel, which can overlap the button in the small
   // test window (they live in different panes at real sizes).
-  await win.waitForSelector('.inspector__codebtn', { timeout: 5000 })
-  await win.$eval('.inspector__codebtn', (el) => el.click())
+  // The Code action lives in the in-preview selection toolbar now; open the
+  // drawer through its store (what the toolbar's relay calls).
+  await win.evaluate((src) => window.__dsgnCodeDrawer.getState().open(src), SRC)
 
   // CodeMirror mounts, the stamp span is highlighted, and the bottom inset is reserved.
   await win.waitForSelector('.codedrawer .cm-editor', { timeout: 5000 })

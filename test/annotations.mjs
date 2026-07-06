@@ -51,10 +51,20 @@ try {
     { root: projectRoot }
   )
 
-  // Add a note via the selection strip's Annotate action.
-  await win.click('button[aria-label="Annotate"]')
-  await win.fill('.inspector__noteinput', NOTE)
-  await win.click('.inspector__notesave')
+  // Add a note through the annotations engine (the UI path — the in-preview
+  // annotate composer — is covered end-to-end by test/comment-mode.mjs).
+  await win.evaluate(
+    async (args) => {
+      const list = await window.api.annotations.add(args.root, {
+        source: null,
+        selector: '#hero',
+        tag: 'div',
+        text: args.note
+      })
+      window.__dsgnAnnotations.getState().setList(list)
+    },
+    { root: projectRoot, note: NOTE }
+  )
 
   // It shows in the notes panel...
   await win.waitForSelector('.notes__item', { timeout: 5000 })

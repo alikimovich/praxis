@@ -55,6 +55,8 @@ const PREVIEW_SET_COMMENT_MODE = 'dsgn:preview:set-comment-mode'
 const PREVIEW_COMMENT_MODE = 'dsgn:preview:comment-mode'
 const PREVIEW_COMMENT = 'dsgn:preview:comment'
 const PREVIEW_SET_FRAME = 'dsgn:preview:set-frame'
+const PREVIEW_TOOLBAR_ACTION = 'dsgn:preview:toolbar-action'
+const PREVIEW_CLEAR_SELECTED = 'dsgn:preview:clear-selected'
 
 // Latest annotation pins, re-pushed to the preview after each navigation.
 let annotationPins: { id: string; selector: string }[] = []
@@ -433,6 +435,18 @@ function registerPreviewIpc(): void {
     if (e.sender !== previewView?.webContents) return
     selectModeActive = false
     mainWindow?.webContents.send('preview:select-cancelled')
+  })
+
+  // Selection-toolbar actions that need the renderer (code drawer / delete turn);
+  // comment/annotate are handled entirely inside the preview's composer.
+  ipcMain.on(PREVIEW_TOOLBAR_ACTION, (e, kind: string) => {
+    if (e.sender !== previewView?.webContents) return
+    if (kind !== 'code' && kind !== 'delete') return
+    mainWindow?.webContents.send('preview:toolbar-action', kind)
+  })
+  // Renderer dropped the selection (pill ×, message sent) → hide the toolbar.
+  ipcMain.on('preview:clear-selected', () => {
+    previewView?.webContents.send(PREVIEW_CLEAR_SELECTED)
   })
 
   // v3 annotation pins: renderer pushes the list → preview; clicks come back.

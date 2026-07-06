@@ -1236,6 +1236,16 @@ export default function App(): React.JSX.Element {
     useUiActions.getState().register({ toggleSelect: () => actionsRef.current.toggleSelect() })
   }, [])
 
+  // Whenever the selection is dropped (pill ×, message sent, delete, mode arm),
+  // tell the preview so the in-page selection toolbar disappears with it.
+  useEffect(
+    () =>
+      useSelection.subscribe((s, prev) => {
+        if (prev.selected && !s.selected) void window.api.preview.clearSelected()
+      }),
+    []
+  )
+
   const hint =
     status.kind === 'idle'
       ? 'no project open'

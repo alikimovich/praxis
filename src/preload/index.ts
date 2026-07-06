@@ -70,6 +70,14 @@ const api: DsgnApi = {
       ipcRenderer.send('preview:set-annotations', pins),
     /** Toggle the in-page iPhone bezel overlay (mobile viewport). */
     setFrame: (active: boolean): void => ipcRenderer.send('preview:set-frame', active),
+    /** Drop the in-preview selection toolbar (pill removed / message sent). */
+    clearSelected: (): void => ipcRenderer.send('preview:clear-selected'),
+    /** Selection-toolbar actions that resolve in the renderer (code / delete). */
+    onToolbarAction: (cb: (kind: 'code' | 'delete') => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, kind: 'code' | 'delete'): void => cb(kind)
+      ipcRenderer.on('preview:toolbar-action', listener)
+      return () => ipcRenderer.removeListener('preview:toolbar-action', listener)
+    },
     /** Snapshot the live preview (freeze-frame under overlay UI). */
     capture: (): Promise<string | null> => ipcRenderer.invoke('preview:capture'),
     /** Fires after the previewed app loads, with whether it's source-stamped. */

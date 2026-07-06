@@ -30,6 +30,8 @@ const SET_COMMENT_MODE = 'dsgn:preview:set-comment-mode' // renderer → preload
 const COMMENT_MODE = 'dsgn:preview:comment-mode' // preload → renderer (keyboard-initiated)
 const COMMENT = 'dsgn:preview:comment' // preload → renderer (submitted)
 const SET_FRAME = 'dsgn:preview:set-frame' // renderer → preload (mobile bezel overlay)
+const TOOLBAR_ACTION = 'dsgn:preview:toolbar-action' // preload → renderer (code/delete)
+const CLEAR_SELECTED = 'dsgn:preview:clear-selected' // renderer → preload (pill ×, send)
 
 type CommentMode = 'comment' | 'annotate' | null
 
@@ -64,12 +66,20 @@ let pinsLayer: HTMLDivElement | null = null
 let annotationPins: { id: string; selector: string }[] = []
 
 // Inline-comment state. `commentMode` is the armed mode (C/Y); `commenting` is the
-// element a composer is currently anchored to (the click froze it).
+// element a composer is currently anchored to (the click froze it). `composeKind`
+// is what an OPEN composer submits as — it can differ from the armed mode when
+// the selection toolbar opened it directly (no mode armed).
 let commentMode: CommentMode = null
 let commenting: Element | null = null
+let composeKind: CommentMode = null
 let composerEl: HTMLDivElement | null = null
 let composerInput: HTMLTextAreaElement | null = null
 let composerHint: HTMLDivElement | null = null
+
+// Selection toolbar — the element-scoped actions (comment / annotate / code /
+// delete) floating next to the picked element, Figma-style.
+let toolbarEl: HTMLDivElement | null = null
+let selectedEl: Element | null = null
 
 /** Lazily build the shadow-DOM overlay (highlight box + label chip + pins layer). */
 function ensureOverlay(): void {
@@ -142,7 +152,63 @@ function ensureOverlay(): void {
   })
   composer.append(input, send)
 
-  shadow.append(box, label, pins, composer, hint)
+  // Selection toolbar — element-scoped actions floating next to the picked
+  // element. Interactive like the composer (pointer-events:auto + swallowed
+  // events); shown/positioned by showToolbar().
+  const toolbar = document.createElement('div')
+  toolbar.setAttribute('data-dsgn-toolbar', '')
+  toolbar.style.cssText =
+    'position:fixed;pointer-events:auto;display:none;align-items:center;gap:2px;' +
+    'padding:4px;background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:10px;' +
+    'box-shadow:0 6px 24px rgba(0,0,0,0.16);z-index:2;'
+  toolbar.addEventListener('mousedown', swallow)
+  toolbar.addEventListener('click', swallow)
+  const ICONS: Record<string, { title: string; svg: string }> = {
+    comment: {
+      title: 'Comment on this element — runs a parallel agent',
+      svg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'
+    },
+    annotate: {
+      title: 'Pin a note on this element, no agent',
+      svg: '<path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11l5-5V5a2 2 0 0 0-2-2Z"/><path d="M15 21v-4a2 2 0 0 1 2-2h4"/>'
+    },
+    code: {
+      title: 'Show the source in the editor',
+      svg: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'
+    },
+    delete: {
+      title: 'Ask dsgn to delete this element',
+      svg: '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'
+    }
+  }
+  for (const kind of ['comment', 'annotate', 'code', 'delete'] as const) {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.dataset.kind = kind
+    b.title = ICONS[kind].title
+    b.setAttribute('aria-label', kind)
+    b.style.cssText =
+      'width:26px;height:26px;border:none;border-radius:7px;background:transparent;' +
+      'display:flex;align-items:center;justify-content:center;cursor:pointer;color:#555;'
+    b.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[kind].svg}</svg>`
+    b.addEventListener('mouseenter', () => (b.style.background = 'rgba(0,0,0,0.06)'))
+    b.addEventListener('mouseleave', () => (b.style.background = 'transparent'))
+    b.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const el = selectedEl
+      if (!el) return
+      if (kind === 'comment' || kind === 'annotate') {
+        hideToolbar()
+        openComposer(el, kind)
+      } else {
+        ipcRenderer.send(TOOLBAR_ACTION, kind)
+      }
+    })
+    toolbar.appendChild(b)
+  }
+
+  shadow.append(box, label, pins, composer, hint, toolbar)
   document.documentElement.appendChild(host)
   overlayHost = host
   overlayBox = box
@@ -151,6 +217,35 @@ function ensureOverlay(): void {
   composerEl = composer
   composerInput = input
   composerHint = hint
+  toolbarEl = toolbar
+}
+
+/** Anchor the toolbar just under the selected element (above if no room). */
+function positionToolbar(): void {
+  if (!toolbarEl || !selectedEl) return
+  const r = selectedEl.getBoundingClientRect()
+  const w = toolbarEl.offsetWidth || 128
+  const h = toolbarEl.offsetHeight || 36
+  const left = Math.min(Math.max(r.left, 8), Math.max(window.innerWidth - w - 8, 8))
+  let top = r.bottom + 8
+  if (top + h > window.innerHeight - 8) top = r.top - h - 8
+  toolbarEl.style.left = `${left}px`
+  toolbarEl.style.top = `${Math.max(top, 8)}px`
+}
+
+function showToolbar(el: Element): void {
+  ensureOverlay()
+  if (!toolbarEl) return
+  selectedEl = el
+  // The code action needs a source stamp to open a file — hide it otherwise.
+  const codeBtn = toolbarEl.querySelector<HTMLButtonElement>('[data-kind="code"]')
+  if (codeBtn) codeBtn.style.display = findSource(el) ? 'flex' : 'none'
+  toolbarEl.style.display = 'flex'
+  positionToolbar()
+}
+
+function hideToolbar(): void {
+  if (toolbarEl) toolbarEl.style.display = 'none'
 }
 
 // Dot nodes are built once per pin (on SET_PINS) and only repositioned on
@@ -336,6 +431,12 @@ function onMove(e: MouseEvent): void {
     closeComposer()
     setCommentMode(null)
   }
+  // The selected element was swapped out (HMR) — the toolbar has nothing to
+  // anchor to anymore.
+  if (selectedEl && !selectedEl.isConnected) {
+    selectedEl = null
+    hideToolbar()
+  }
   if (editing || commenting) return // frozen while editing / composing
   if (!active && !commentMode) return
   const el = e.target as Element | null
@@ -355,6 +456,8 @@ function onClick(e: MouseEvent): void {
     e.preventDefault()
     e.stopPropagation()
     ipcRenderer.send(PICKED, describe(el))
+    // Element-scoped actions appear next to the selection (Figma-style).
+    showToolbar(el)
   } else if (commentMode) {
     e.preventDefault()
     e.stopPropagation()
@@ -447,16 +550,17 @@ function positionComposer(): void {
   composerEl.style.top = `${Math.max(top, 8)}px`
 }
 
-function openComposer(el: Element): void {
+function openComposer(el: Element, kind: CommentMode = commentMode): void {
   ensureOverlay()
   if (!composerEl || !composerInput) return
   commenting = el
+  composeKind = kind
   drawOverlay(el)
   if (composerHint) composerHint.style.display = 'none'
   composerInput.value = ''
-  composerInput.placeholder = commentMode === 'annotate' ? 'Add a note…' : 'Add a comment…'
+  composerInput.placeholder = composeKind === 'annotate' ? 'Add a note…' : 'Add a comment…'
   const send = composerEl.querySelector('button')
-  if (send) send.style.background = commentMode === 'annotate' ? '#f59e0b' : '#2563eb'
+  if (send) send.style.background = composeKind === 'annotate' ? '#f59e0b' : '#2563eb'
   composerEl.style.display = 'flex'
   positionComposer()
   autoGrow()
@@ -465,6 +569,7 @@ function openComposer(el: Element): void {
 
 function closeComposer(): void {
   commenting = null
+  composeKind = null
   if (composerEl) composerEl.style.display = 'none'
   if (composerInput) composerInput.value = ''
 }
@@ -472,7 +577,7 @@ function closeComposer(): void {
 function submitComposer(): void {
   const text = (composerInput?.value ?? '').replace(/\s+/g, ' ').trim()
   const el = commenting
-  const kind = commentMode
+  const kind = composeKind
   if (el && kind && text) {
     ipcRenderer.send(COMMENT, { kind, el: describe(el), text: text.slice(0, 2000) })
   }
@@ -527,6 +632,10 @@ function setCommentMode(next: CommentMode, fromRenderer = false): void {
   commentMode = next
   if (commentMode) {
     ensureOverlay()
+    // Arming a whole-page mode supersedes the element-scoped toolbar (the
+    // renderer clears its selection too).
+    hideToolbar()
+    selectedEl = null
     document.documentElement.style.cursor = 'crosshair'
     showModeHint()
   } else {
@@ -573,6 +682,8 @@ function setActive(next: boolean): void {
     // it can't strand the element or commit against a stale source.
     if (editing) endEdit()
     hideOverlay()
+    hideToolbar()
+    selectedEl = null
     document.documentElement.style.cursor = ''
   }
 }
@@ -649,6 +760,7 @@ window.addEventListener('scroll', () => {
   } else if (active || commentMode) {
     hideOverlay()
   }
+  if (selectedEl) positionToolbar()
   if (pinDots.size) positionPins()
 }, true)
 window.addEventListener('resize', () => {
@@ -656,6 +768,7 @@ window.addEventListener('resize', () => {
     drawOverlay(commenting)
     positionComposer()
   }
+  if (selectedEl) positionToolbar()
   if (pinDots.size) positionPins()
   positionFrame()
 })
@@ -697,4 +810,10 @@ window.addEventListener('load', () => {
     buildPins()
   })
   ipcRenderer.on(SET_FRAME, (_e, on: boolean) => setFrame(on))
+  // The renderer cleared the selection (pill ×, message sent, delete) — drop the
+  // element-scoped toolbar with it.
+  ipcRenderer.on(CLEAR_SELECTED, () => {
+    selectedEl = null
+    hideToolbar()
+  })
 }
