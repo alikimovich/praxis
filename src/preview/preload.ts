@@ -562,7 +562,13 @@ function onMove(e: MouseEvent): void {
   if (editing || commenting) return // frozen while editing / composing
   if (!active && !commentMode) return
   const el = e.target as Element | null
-  if (!el || isOverlay(el)) return
+  if (!el || isOverlay(el)) {
+    // Over our own UI (toolbar, composer, pins): drop the hover highlight —
+    // leaving the last-crossed element lit under the toolbar reads as if IT
+    // were selected. The persistent selection outlines are a separate layer.
+    hideOverlay()
+    return
+  }
   drawOverlay(el)
 }
 
