@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PanelRight, PictureInPicture2 } from 'lucide-react'
 
-/** Kept in sync with the `w-80` (320px) width on the .proppanel <aside> and the
- * reserved native-preview inset (usePanelInset below). */
-const PANEL_WIDTH = 320
+/** Reserved native-preview inset: the card's width (w-[268px]) + breathing room
+ * so the floating card sits over the gutter, not the live page. */
+const PANEL_WIDTH = 292
 
 interface Props {
   root: string
@@ -128,20 +128,23 @@ export default function PropPanel({
        Never overlaps the previewbar controls. Floating (default): auto-height
        card pinned top-right; docked: full-height sidebar. */
     <aside
-      className={`proppanel fixed right-[11px] top-[52px] z-50 flex w-80 flex-col rounded-lg border bg-background ${
+      className={`proppanel fixed right-4 top-[58px] z-50 flex w-[268px] flex-col rounded-xl border bg-background ${
         docked
-          ? 'bottom-[11px] shadow-[-4px_0_18px_rgba(0,0,0,0.08)]'
-          : 'proppanel--floating max-h-[65vh] shadow-[0_8px_28px_rgba(0,0,0,0.14)]'
+          ? 'bottom-4 shadow-[-4px_0_18px_rgba(0,0,0,0.08)]'
+          : 'proppanel--floating max-h-[65vh] shadow-[0_10px_32px_rgba(0,0,0,0.14)]'
       }`}
       aria-label={`Props for ${inspection?.component ?? element.tag}`}
     >
-      <header className="proppanel__head flex shrink-0 items-start gap-1 border-b px-3.5 py-3">
+      <header className="proppanel__head flex shrink-0 items-center gap-0.5 px-3 pb-1 pt-2.5">
         <div className="proppanel__id min-w-0 flex-1">
-          <div className="proppanel__title font-mono text-sm font-semibold text-blue-600">
+          <div className="proppanel__title overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-semibold leading-5">
             {inspection?.component ?? `${element.tag}${ident}`}
           </div>
           {source && (
-            <div className="proppanel__source overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11px] text-muted-foreground">
+            <div
+              className="proppanel__source overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[10.5px] leading-4 text-muted-foreground"
+              title={source}
+            >
               {source}
             </div>
           )}
@@ -149,7 +152,7 @@ export default function PropPanel({
         <Button
           variant="ghost"
           size="icon"
-          className="proppanel__dock size-7 text-muted-foreground"
+          className="proppanel__dock size-6 text-muted-foreground"
           onClick={() => usePropPanelMode.getState().setDocked(!docked)}
           aria-label={docked ? 'Float panel' : 'Dock panel as sidebar'}
           aria-pressed={docked}
@@ -164,7 +167,7 @@ export default function PropPanel({
         <Button
           variant="ghost"
           size="icon"
-          className="proppanel__close size-7"
+          className="proppanel__close size-6 text-muted-foreground"
           onClick={onClose}
           aria-label="Close panel"
         >
@@ -173,18 +176,15 @@ export default function PropPanel({
       </header>
       {hasSchema && inspection ? (
         <>
-          <div className="proppanel__hint mx-3.5 mt-1.5 text-[11px] text-muted-foreground">
-            Literal edits apply instantly to source — others go to chat.
-          </div>
           {error && (
-            <div className="proppanel__error mx-3.5 mt-2 text-[11.5px] text-red-700">{error}</div>
+            <div className="proppanel__error mx-3 mt-1 text-[11.5px] text-red-700">{error}</div>
           )}
           {inspection.note && (
-            <div className="proppanel__note mx-3.5 mt-2 text-[11.5px] text-muted-foreground">
+            <div className="proppanel__note mx-3 mt-1 text-[11.5px] text-muted-foreground">
               {inspection.note}
             </div>
           )}
-          <div className="proppanel__rows flex flex-1 flex-col gap-3 overflow-y-auto px-3.5 pb-3.5 pt-2.5">
+          <div className="proppanel__rows flex flex-1 flex-col gap-1.5 overflow-y-auto px-3 pb-3 pt-1.5">
             {inspection.fields.length === 0 && (
               <div className="proppanel__note text-[11.5px] text-muted-foreground">
                 No editable props.
@@ -206,7 +206,7 @@ export default function PropPanel({
         /* No schema (or still inspecting) — the readiness message lives here
            now, not in the chat area. Same three honest "not ready" cases the
            composer strip used to show. */
-        <div className="proppanel__rows flex flex-col gap-2 overflow-y-auto px-3.5 pb-3.5 pt-2.5">
+        <div className="proppanel__rows flex flex-col gap-2 overflow-y-auto px-3 pb-3 pt-1.5">
           {inspecting ? (
             <div className="proppanel__ready text-[12px] text-muted-foreground">
               Reading props…
@@ -265,7 +265,7 @@ function PropRow({
       <Button
         variant="outline"
         size="sm"
-        className="proppanel__agent justify-self-end"
+        className="proppanel__agent h-7 justify-self-end px-2 text-[11.5px]"
         onClick={onAskAgent}
         disabled={busy}
       >
@@ -285,7 +285,7 @@ function PropRow({
   } else if (field.kind === 'enum' && field.options) {
     control = (
       <select
-        className="select min-w-[120px] max-w-[160px] justify-self-end"
+        className="select h-7 w-[128px] justify-self-end rounded-md border bg-transparent px-1.5 text-xs"
         value={String(field.value ?? '')}
         disabled={busy}
         onChange={(e) => onApply(e.target.value)}
@@ -304,7 +304,7 @@ function PropRow({
     const isNumber = field.kind === 'number'
     control = (
       <Input
-        className="proppanel__input min-w-[120px] max-w-[160px] justify-self-end"
+        className="proppanel__input h-7 w-[128px] justify-self-end px-2 text-xs"
         type={isNumber ? 'number' : 'text'}
         value={String(draft)}
         disabled={busy}
@@ -328,12 +328,21 @@ function PropRow({
     }
   }
 
+  // The compact row keeps details out of the way: description + default live in
+  // the label's tooltip.
+  const tooltip = [
+    field.description,
+    field.default !== undefined ? `default: ${String(field.default)}` : null
+  ]
+    .filter(Boolean)
+    .join(' — ')
+
   return (
-    <div className="proppanel__row grid grid-cols-[1fr_auto] items-center gap-x-2.5 gap-y-2">
-      <span className="flex min-w-0 items-center gap-1.5">
+    <div className="proppanel__row grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
+      <span className="flex min-w-0 items-baseline gap-1.5">
         <span
-          className="proppanel__name overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[12.5px]"
-          title={field.description}
+          className="proppanel__name overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-muted-foreground"
+          title={tooltip || undefined}
         >
           {field.name}
           {field.required && <span className="proppanel__req ml-0.5 text-red-700">*</span>}
@@ -341,7 +350,7 @@ function PropRow({
         {canReset && (
           <button
             type="button"
-            className="proppanel__reset shrink-0 text-[10.5px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+            className="proppanel__reset shrink-0 text-[10px] text-muted-foreground/70 underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
             onClick={onReset}
             disabled={busy}
             title={
@@ -355,16 +364,6 @@ function PropRow({
         )}
       </span>
       {control}
-      {field.default !== undefined && (
-        <span className="proppanel__default col-span-full text-[10.5px] text-muted-foreground">
-          default: <code className="font-mono">{String(field.default)}</code>
-        </span>
-      )}
-      {field.description && (
-        <span className="proppanel__desc col-span-full text-[11px] leading-snug text-muted-foreground">
-          {field.description}
-        </span>
-      )}
     </div>
   )
 }
