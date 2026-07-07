@@ -1,8 +1,8 @@
 # Praxis
 
-> The product is **Praxis** (`package.json`); the repo, GitHub remote, and the
-> `data-dsgn-source` stamping protocol are still named **dsgn**. See
-> [`docs/REVIEW-2026-07-07.md`](docs/REVIEW-2026-07-07.md) for the rebrand plan.
+> The product and GitHub repo are **Praxis** (`github.com/alikimovich/praxis`);
+> the local clone dir and the `data-dsgn-source` stamping protocol are still
+> named **dsgn**. See `docs/TASKS.md` for the remaining rebrand decision.
 
 An AI design & prototyping tool for your own repos. Open a project, Praxis
 launches its dev server in a live preview on the right, and an AI chat on the

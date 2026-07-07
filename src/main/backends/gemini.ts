@@ -8,7 +8,14 @@ import { createRecordCapture } from './record'
 import { dsgnRules } from '../rules'
 
 /**
- * EXPERIMENTAL (v7) — Google Gemini backend via the **Gemini CLI** (`gemini`).
+ * EXPERIMENTAL / UNWIRED (v7) — Google Gemini backend via the **Gemini CLI**
+ * (`gemini`). Unlike the Claude and Codex backends, this provider has NO SDK
+ * dependency in package.json — it shells out to an external `gemini` binary that
+ * most installs won't have. Because a selectable-but-missing backend is a runtime
+ * trap, `pickProvider` (see ./index.ts) does NOT route to it by default: it is
+ * gated behind the DSGN_EXPERIMENTAL_GEMINI=1 opt-in env flag. Do not add a Gemini
+ * SDK / wire this into the default provider list without revisiting that gate.
+ *
  * Auth is the user's **Google account** ("Login with Google": run `gemini` once and
  * sign in) — NO API key. Gemini edits the repo with its own tools; we just map its
  * headless JSONL event stream to dsgn's `AgentEvent` stream.

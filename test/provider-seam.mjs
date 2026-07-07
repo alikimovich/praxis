@@ -34,7 +34,10 @@ try {
       // codex shim that `bun run` puts on PATH via node_modules/.bin) — this
       // test asserts the fail-soft behavior, not a live provider turn.
       DSGN_CODEX_BIN: join(root, 'test', 'fixtures', 'no-such-codex-bin'),
-      DSGN_GEMINI_BIN: join(root, 'test', 'fixtures', 'no-such-gemini-bin')
+      DSGN_GEMINI_BIN: join(root, 'test', 'fixtures', 'no-such-gemini-bin'),
+      // Gemini is gated off by default (no SDK dep — see backends/index.ts); opt
+      // in so `provider: 'gemini'` actually reaches the gemini backend under test.
+      DSGN_EXPERIMENTAL_GEMINI: '1'
     }
   })
   const win = await app.firstWindow()
