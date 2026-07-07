@@ -2,6 +2,15 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-07 — Docs folder pruned to the live set
+
+- Removed `TASKS-archive.md` (history git already holds), `PLAN-proactive-checks.md`
+  (shipped as diag-rules.ts; reworded the one code comment that cited it), and
+  `REVIEW-2026-07-07.md` (folded its live items into `TASKS.md`). docs/ is now
+  CONTEXT + DESIGN + PROGRESS + TASKS.
+- `TASKS.md` now carries the health/infra backlog with deferred items annotated
+  (why each isn't safely auto-completable headless).
+
 ## 2026-07-07 — Repo health review + CLAUDE.md refresh
 
 - Full review written to `docs/REVIEW-2026-07-07.md`: 9 ranked improvement

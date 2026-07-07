@@ -1,10 +1,10 @@
 import type { DiagStep } from '../shared/api'
 
 /**
- * Rule-based failure matching — layer 2 of the proactive-checks plan
- * (docs/PLAN-proactive-checks.md). Known error signatures map to known fixes
- * *before* we spend a model call: instant, offline, identical every time. The AI
- * diagnose in diagnose.ts stays the fallback for everything this doesn't match.
+ * Rule-based failure matching — the proactive-checks layer. Known error
+ * signatures map to known fixes *before* we spend a model call: instant,
+ * offline, identical every time. The AI diagnose in diagnose.ts stays the
+ * fallback for everything this doesn't match.
  *
  * Pure (no electron / no fs) so it's bun-unit-testable. A match returns just the
  * fix content; diagnose.ts attaches the cache signature + status and renders it
