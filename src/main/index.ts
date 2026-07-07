@@ -378,6 +378,14 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
 
+  // Tell the renderer when we enter/leave native fullscreen. In fullscreen the
+  // macOS traffic lights are hidden, so the floating sidebar toggle re-aligns to
+  // the window's left edge instead of clearing the (now absent) window controls.
+  const sendFullscreen = (): void =>
+    mainWindow?.webContents.send('window:fullscreen', mainWindow.isFullScreen())
+  mainWindow.on('enter-full-screen', sendFullscreen)
+  mainWindow.on('leave-full-screen', sendFullscreen)
+
   // Keep the native surfaces' base color in step with the OS appearance (the
   // placeholder HTML re-themes itself via prefers-color-scheme; this handles the
   // solid fill behind it and the window).
@@ -656,6 +664,7 @@ app.whenReady().then(() => {
   ipcMain.handle('git:set', (_e, root: string, name: string) => switchBranch(root, name))
   ipcMain.handle('git:list', (_e, root: string) => listBranches(root))
   ipcMain.handle('git:checkout', (_e, root: string, branch: string) => checkoutBranch(root, branch))
+  ipcMain.handle('window:is-fullscreen', () => mainWindow?.isFullScreen() ?? false)
   registerDiagnoseIpc()
 
   app.on('activate', () => {

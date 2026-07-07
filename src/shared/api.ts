@@ -535,6 +535,14 @@ export interface DsgnApi {
    *  'open-project' | 'new-project' | 'clear-recents' | 'viewport:desktop' |
    *  'viewport:mobile'. Returns an unsubscribe. */
   onMenuAction: (cb: (action: string) => void) => () => void
+  /** Native window-chrome state. Drives layout that depends on whether the macOS
+   *  traffic lights are present (they vanish in fullscreen). */
+  window: {
+    /** Current native-fullscreen state (traffic lights hidden when true). */
+    isFullscreen: () => Promise<boolean>
+    /** Fires on enter/leave native fullscreen with the new state. */
+    onFullscreenChange: (cb: (fullscreen: boolean) => void) => () => void
+  }
   /** File menu ↔ renderer recents bridge. The renderer owns the recents list
    *  (localStorage); it pushes the current set so main can build the native
    *  File → Open Recent submenu, and is called back when one is chosen. */
