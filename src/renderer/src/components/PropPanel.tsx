@@ -144,13 +144,14 @@ export default function PropPanel({
        Never overlaps the previewbar controls. Floating (default): auto-height
        card pinned top-right; docked: full-height sidebar. */
     <aside
-      className={`proppanel flex flex-col overflow-hidden border bg-background ${
+      className={`proppanel flex flex-col overflow-hidden ${
         docked
           ? /* Fills the reserved strip exactly: below the previewbar (52px) and
-               flush to the card's inner right/bottom edges — a sidebar column
-               beside the preview, as it was pre-island. */
-            'fixed bottom-[11px] right-[11px] top-[52px] z-50 w-80 rounded-lg shadow-[-4px_0_18px_rgba(0,0,0,0.08)]'
-          : 'proppanel--floating relative w-full rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.12)]'
+               flush to the card's inner right/bottom edges. CHROMELESS, Penguin-
+               style — no card border/shadow; the content sits directly on the
+               surface, reading as a column beside the preview. */
+            'fixed bottom-[11px] right-[11px] top-[52px] z-50 w-80 bg-transparent'
+          : 'proppanel--floating relative w-full rounded-xl border bg-background shadow-[0_8px_24px_rgba(0,0,0,0.12)]'
       }`}
       style={docked ? undefined : { maxHeight }}
       aria-label={`Props for ${inspection?.component ?? element.tag}`}
