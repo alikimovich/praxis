@@ -2,32 +2,46 @@
 //
 // In development the macOS app-menu title, Cmd-Tab entry, and Activity Monitor
 // name all come from node_modules/electron/dist/Electron.app's Info.plist —
-// `app.setName()` cannot override them. Since dsgn is distributed as source and
-// run via `bun run dev`, the dev bundle IS the product, so we patch it in place:
-// set CFBundleName/CFBundleDisplayName, install the icon, and ad-hoc re-sign
-// (editing a signed bundle breaks its seal; unsigned apps are killed on arm64).
+// `app.setName()` cannot override them. Since Praxis is distributed as source
+// and run via `bun run dev`, the dev bundle IS the product, so we patch it in
+// place and ad-hoc re-sign (editing a signed bundle breaks its seal; unsigned
+// apps are killed on arm64). What gets rebranded:
 //
-// The icon ships two ways:
-//  - build/Assets.car + CFBundleIconName "dsgn": the macOS 26 layered icon
-//    (compiled from the Icon Composer source with actool). This is what the
-//    Dock/Cmd-Tab actually render on Tahoe — native icons get the system's
-//    sizing treatment; a flat legacy .icns alone draws ~10% oversized.
-//  - electron.icns swap: fallback for pre-26 macOS and anything else that
-//    reads CFBundleIconFile.
+//  - Main bundle CFBundleName/CFBundleDisplayName → menu bar, Cmd-Tab,
+//    Activity Monitor, crash dialogs.
+//  - Icon, two ways: build/Assets.car + CFBundleIconName (the macOS 26 layered
+//    icon compiled from the Icon Composer source — native icons get the
+//    system's sizing treatment; a flat .icns alone draws ~10% oversized) and
+//    an electron.icns swap for pre-26 macOS / CFBundleIconFile readers.
+//  - The MAIN EXECUTABLE: Contents/MacOS/Electron → Praxis (CFBundleExecutable
+//    + node_modules/electron/path.txt updated to match), so `ps`, sampling,
+//    and crash reports show Praxis. Electron resolves its own path via
+//    process.execPath at runtime, so the rename is safe.
+//  - Helper apps' CFBundleName/CFBundleDisplayName ("Electron Helper
+//    (Renderer)" → "Praxis Helper (Renderer)") so child processes read as ours
+//    in Activity Monitor. Their .app folders and executables keep their names —
+//    Chromium locates helpers by path, and display names come from the plists.
+//
+// DELIBERATELY KEPT: CFBundleIdentifier stays com.github.Electron — changing it
+// would reset the user's TCC permission grants (screen recording etc.) for the
+// dev app.
 //
 // Runs from postinstall (every `bun install` restores a stock Electron), and is
 // a no-op on non-macOS or when the bundle is already patched.
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, existsSync, readFileSync } from 'node:fs'
+import { copyFileSync, existsSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const APP_NAME = 'Praxis'
 const ICON_NAME = 'dsgn' // asset name inside Assets.car
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const appBundle = join(root, 'node_modules/electron/dist/Electron.app')
+const electronDir = join(root, 'node_modules/electron')
+const appBundle = join(electronDir, 'dist/Electron.app')
 const plist = join(appBundle, 'Contents/Info.plist')
 const resources = join(appBundle, 'Contents/Resources')
+const macosDir = join(appBundle, 'Contents/MacOS')
+const frameworks = join(appBundle, 'Contents/Frameworks')
 const icns = join(resources, 'electron.icns')
 const car = join(resources, 'Assets.car')
 const ourIcns = join(root, 'build/icon.icns')
@@ -35,13 +49,13 @@ const ourCar = join(root, 'build/Assets.car')
 
 if (process.platform !== 'darwin' || !existsSync(plist)) process.exit(0)
 
-const plistBuddy = (cmd) =>
-  execFileSync('/usr/libexec/PlistBuddy', ['-c', cmd, plist]).toString().trim()
-const setOrAdd = (key, value) => {
+const buddy = (file, cmd) =>
+  execFileSync('/usr/libexec/PlistBuddy', ['-c', cmd, file]).toString().trim()
+const setOrAdd = (file, key, value) => {
   try {
-    plistBuddy(`Set :${key} ${value}`)
+    buddy(file, `Set :${key} ${value}`)
   } catch {
-    plistBuddy(`Add :${key} string ${value}`)
+    buddy(file, `Add :${key} string ${value}`)
   }
 }
 const fileMatches = (ours, theirs) =>
@@ -50,22 +64,49 @@ const fileMatches = (ours, theirs) =>
 
 let iconName = ''
 try {
-  iconName = plistBuddy('Print :CFBundleIconName')
+  iconName = buddy(plist, 'Print :CFBundleIconName')
 } catch {
   /* key absent on stock Electron */
 }
 const patched =
-  plistBuddy('Print :CFBundleName') === APP_NAME &&
+  buddy(plist, 'Print :CFBundleName') === APP_NAME &&
   iconName === ICON_NAME &&
+  buddy(plist, 'Print :CFBundleExecutable') === APP_NAME &&
   fileMatches(ourIcns, icns) &&
   fileMatches(ourCar, car)
 if (patched) process.exit(0)
 
-setOrAdd('CFBundleName', APP_NAME)
-setOrAdd('CFBundleDisplayName', APP_NAME)
-setOrAdd('CFBundleIconName', ICON_NAME)
+// Main bundle identity + icon.
+setOrAdd(plist, 'CFBundleName', APP_NAME)
+setOrAdd(plist, 'CFBundleDisplayName', APP_NAME)
+setOrAdd(plist, 'CFBundleIconName', ICON_NAME)
 if (existsSync(ourIcns)) copyFileSync(ourIcns, icns)
 if (existsSync(ourCar)) copyFileSync(ourCar, car)
+
+// Main executable: Electron → Praxis (+ path.txt so require('electron'),
+// electron-vite, and Playwright keep launching the right binary).
+const oldExe = join(macosDir, 'Electron')
+const newExe = join(macosDir, APP_NAME)
+if (existsSync(oldExe) && !existsSync(newExe)) renameSync(oldExe, newExe)
+if (existsSync(newExe)) {
+  setOrAdd(plist, 'CFBundleExecutable', APP_NAME)
+  const pathTxt = join(electronDir, 'path.txt')
+  if (existsSync(pathTxt)) {
+    writeFileSync(pathTxt, `Electron.app/Contents/MacOS/${APP_NAME}`)
+  }
+}
+
+// Helper apps: display names only (folders/executables keep their paths).
+if (existsSync(frameworks)) {
+  for (const entry of readdirSync(frameworks)) {
+    if (!/^Electron Helper.*\.app$/.test(entry)) continue
+    const helperPlist = join(frameworks, entry, 'Contents/Info.plist')
+    if (!existsSync(helperPlist)) continue
+    const suffix = entry.replace(/^Electron/, '').replace(/\.app$/, '') // " Helper (Renderer)"
+    setOrAdd(helperPlist, 'CFBundleName', `${APP_NAME}${suffix}`)
+    setOrAdd(helperPlist, 'CFBundleDisplayName', `${APP_NAME}${suffix}`)
+  }
+}
 
 execFileSync('codesign', ['--force', '--deep', '--sign', '-', appBundle], {
   stdio: 'inherit',

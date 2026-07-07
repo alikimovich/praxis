@@ -26,6 +26,8 @@ import { registerDiagnoseIpc } from './diagnose'
 // Product name — drives the macOS app menu label and the About panel. Set at
 // module load (before app is ready) so the menu bar reads "Praxis", not "Electron".
 app.setName('Praxis')
+// The About panel otherwise reports the Electron bundle's own version string.
+app.setAboutPanelOptions({ applicationName: 'Praxis', applicationVersion: app.getVersion() })
 
 // App icon (dev dock icon + Win/Linux window icon). Lives at build/icon.png,
 // resolved relative to the compiled main (out/main → ../../build). Loaded up front
