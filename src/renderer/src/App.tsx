@@ -559,6 +559,17 @@ export default function App(): React.JSX.Element {
     []
   )
 
+  // Native fullscreen hides the macOS traffic lights, so the floating sidebar
+  // toggle re-aligns to the window's left edge (see `.sidebar-toggle` +
+  // `body.is-fullscreen` in styles.css). Mirror the state onto <body>.
+  useEffect(() => {
+    const apply = (fullscreen: boolean): void => {
+      document.body.classList.toggle('is-fullscreen', fullscreen)
+    }
+    window.api.window.isFullscreen().then(apply)
+    return window.api.window.onFullscreenChange(apply)
+  }, [])
+
   // Keep the preview's pins in sync with the notes.
   const notes = useAnnotations((s) => s.list)
   useEffect(() => {

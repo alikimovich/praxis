@@ -42,6 +42,14 @@ const api: DsgnApi = {
     ipcRenderer.on('menu:action', listener)
     return () => ipcRenderer.removeListener('menu:action', listener)
   },
+  window: {
+    isFullscreen: (): Promise<boolean> => ipcRenderer.invoke('window:is-fullscreen'),
+    onFullscreenChange: (cb: (fullscreen: boolean) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, fullscreen: boolean): void => cb(fullscreen)
+      ipcRenderer.on('window:fullscreen', listener)
+      return () => ipcRenderer.removeListener('window:fullscreen', listener)
+    }
+  },
   menu: {
     setRecents: (recents: RecentMenuEntry[]): void =>
       ipcRenderer.send('menu:set-recents', recents),

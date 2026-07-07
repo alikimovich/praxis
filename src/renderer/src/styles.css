@@ -354,7 +354,8 @@ body {
 
 /* Show/hide the projects sidebar — sits in the traffic-light clearance strip,
    to the right of the macOS window controls, and stays visible when the rail is
-   collapsed away (so it can bring it back). */
+   collapsed away (so it can bring it back). In fullscreen the traffic lights are
+   gone, so it slides to the window's left edge (body.is-fullscreen below). */
 .sidebar-toggle {
     position: absolute;
     top: 9px;
@@ -375,6 +376,10 @@ body {
 .sidebar-toggle:hover {
     background: var(--border);
     color: var(--text);
+}
+/* Fullscreen: no traffic lights to clear, so align to the window's left edge. */
+body.is-fullscreen .sidebar-toggle {
+    left: 12px;
 }
 
 /* Empty state — no project open: an Open-project CTA centered, cat in the corner.
