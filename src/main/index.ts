@@ -367,12 +367,14 @@ function createWindow(): void {
     // Window icon (Windows/Linux; macOS uses the dock icon set below). Omit when
     // the PNG is missing so Electron falls back to its default rather than erroring.
     ...(appIcon.isEmpty() ? {} : { icon: appIcon }),
-    // macOS: the left rail shows the system 'sidebar' material — the window
-    // itself is the vibrant surface and the renderer keeps everything EXCEPT
-    // the rail opaque (styles.css html.mac-vibrancy rules). Other platforms
-    // keep a solid background.
+    // macOS: the whole window sits on the system 'under-window' material (the
+    // standard translucent window background — calmer/more opaque than
+    // 'sidebar'). One material per window is all Electron allows, so the rail
+    // and content share it; the renderer keeps base surfaces transparent and
+    // only elevated cards opaque (styles.css html.mac-vibrancy rules). Other
+    // platforms keep a solid background.
     ...(process.platform === 'darwin'
-      ? { vibrancy: 'sidebar' as const, backgroundColor: '#00000000' }
+      ? { vibrancy: 'under-window' as const, backgroundColor: '#00000000' }
       : { backgroundColor: previewBg() }),
     titleBarStyle: 'hiddenInset',
     webPreferences: {
