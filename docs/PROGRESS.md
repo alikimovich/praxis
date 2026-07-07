@@ -64,6 +64,24 @@ Newest first. Append a dated entry when you finish a chunk of work.
   the drawer via its store; viewport-per-project is PORT-AGNOSTIC now (a live
   app session on 7777 must not fail the suite — reads the URL from the bar).
 
+## 2026-07-06 — Floating props island above the preview; persistent selection
+
+- The floating prop panel now paints ON TOP of the live preview content. DOM
+  can't do that (the native view always wins), so the island is a second
+  WebContentsView stacked above the preview, booting the same renderer bundle
+  with ?dsgnPanel=1 (renders just PropPanel on a transparent background). The
+  main renderer (PanelHost) drives bounds/state over panel:* IPC, handles its
+  actions, resizes to reported content height, and hides it under freeze
+  overlays. Docked mode is unchanged: in-DOM sidebar + reserved preview inset.
+  PropPanel gained variant='overlay'|'docked' + onToggleDock; the mode persists
+  (usePropPanelMode). Tests asserting panel DOM dock it first
+  (__dsgnPropPanelMode).
+- Selection stays highlighted while hovering other elements: the preload keeps
+  a dedicated selection layer — outlines on every element sharing the picked
+  element's data-dsgn-source (loop/component instances) with an "h3 × 4" badge,
+  independent of the hover box. Cleared with the toolbar (pill ×, send, mode
+  arm, select-off); tracks scroll/resize/HMR relayout on the pin cadence.
+
 ## 2026-07-06 — Selection UX: composer pill + element actions (Figma Make-style)
 
 - Preview bar's three mode buttons (select/comment/annotate) are gone. Element

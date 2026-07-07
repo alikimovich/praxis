@@ -81,6 +81,13 @@ let composerHint: HTMLDivElement | null = null
 let toolbarEl: HTMLDivElement | null = null
 let selectedEl: Element | null = null
 
+// Persistent selection highlight — outlines that STAY while the mouse hovers
+// other elements (the hover box is separate). When the picked element resolves
+// to a source stamp, every element with the same stamp is outlined too (a
+// component rendered in a loop), with an "h3 × 4" count badge on the pick.
+let selLayer: HTMLDivElement | null = null
+let selEls: Element[] = []
+
 /** Lazily build the shadow-DOM overlay (highlight box + label chip + pins layer). */
 function ensureOverlay(): void {
   if (overlayHost) return
@@ -104,6 +111,10 @@ function ensureOverlay(): void {
 
   const pins = document.createElement('div')
   pins.style.cssText = 'position:fixed;inset:0;pointer-events:none;'
+
+  // Persistent selection outlines (behind the hover box + composer).
+  const sel = document.createElement('div')
+  sel.style.cssText = 'position:fixed;inset:0;pointer-events:none;'
 
   // Inline composer — a floating pill anchored to the clicked element. It's the
   // only interactive part of the overlay (pointer-events:auto), so a hostile page
@@ -208,16 +219,94 @@ function ensureOverlay(): void {
     toolbar.appendChild(b)
   }
 
-  shadow.append(box, label, pins, composer, hint, toolbar)
+  shadow.append(sel, box, label, pins, composer, hint, toolbar)
   document.documentElement.appendChild(host)
   overlayHost = host
   overlayBox = box
   overlayLabel = label
   pinsLayer = pins
+  selLayer = sel
   composerEl = composer
   composerInput = input
   composerHint = hint
   toolbarEl = toolbar
+}
+
+/**
+ * Outline the picked element persistently. Stamped elements highlight every
+ * sibling with the same data-dsgn-source (the same component/loop instance
+ * set), Figma-style; the badge on the pick reads "h3 × 4" then.
+ */
+function setSelectionHighlight(el: Element | null): void {
+  ensureOverlay()
+  if (!selLayer) return
+  selLayer.textContent = ''
+  selEls = []
+  if (!el) return
+  const src = findSource(el)
+  let els: Element[] = [el]
+  if (src) {
+    try {
+      // The stamp may live on el itself or an ancestor; the stamped elements ARE
+      // the component instances — outline those (all of them).
+      const same = Array.from(document.querySelectorAll(`[data-dsgn-source="${CSS.escape(src)}"]`))
+      if (same.length) els = same
+    } catch {
+      /* malformed stamp for a selector — outline just the pick */
+    }
+  }
+  selEls = els
+  for (let i = 0; i < els.length; i++) {
+    const b = document.createElement('div')
+    b.setAttribute('data-dsgn-selbox', '')
+    b.style.cssText =
+      'position:fixed;pointer-events:none;box-sizing:border-box;display:none;' +
+      'border:2px solid #2563eb;border-radius:3px;'
+    selLayer.appendChild(b)
+  }
+  const badge = document.createElement('div')
+  badge.setAttribute('data-dsgn-selbadge', '')
+  badge.style.cssText =
+    'position:fixed;pointer-events:none;display:none;font:600 11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;' +
+    'color:#fff;background:#2563eb;padding:2px 6px;border-radius:4px;white-space:nowrap;' +
+    'transform:translateY(-100%);'
+  const tag = (els[0] ?? el).tagName.toLowerCase()
+  badge.textContent = els.length > 1 ? `${tag} × ${els.length}` : shortLabel(el)
+  selLayer.appendChild(badge)
+  positionSelection()
+}
+
+/** Track the selection outlines to their elements' current rects. */
+function positionSelection(): void {
+  if (!selLayer || !selEls.length) return
+  const nodes = selLayer.children
+  let anchor: DOMRect | null = null
+  selEls.forEach((e, i) => {
+    const b = nodes[i] as HTMLElement | undefined
+    if (!b) return
+    if (!e.isConnected) {
+      b.style.display = 'none'
+      return
+    }
+    const r = e.getBoundingClientRect()
+    if (!anchor) anchor = r
+    b.style.display = 'block'
+    b.style.left = `${r.left}px`
+    b.style.top = `${r.top}px`
+    b.style.width = `${r.width}px`
+    b.style.height = `${r.height}px`
+  })
+  const badge = nodes[selEls.length] as HTMLElement | undefined
+  if (badge) {
+    if (anchor) {
+      const a = anchor as DOMRect
+      badge.style.display = 'block'
+      badge.style.left = `${a.left}px`
+      badge.style.top = `${Math.max(a.top - 2, 12)}px`
+    } else {
+      badge.style.display = 'none'
+    }
+  }
 }
 
 /** Anchor the toolbar just under the selected element (above if no room). */
@@ -432,7 +521,8 @@ function onMove(e: MouseEvent): void {
     setCommentMode(null)
   }
   // The selected element was swapped out (HMR) — the toolbar has nothing to
-  // anchor to anymore.
+  // anchor to anymore. (Selection outlines self-hide per-box in
+  // positionSelection, since loop siblings can re-render independently.)
   if (selectedEl && !selectedEl.isConnected) {
     selectedEl = null
     hideToolbar()
@@ -456,8 +546,10 @@ function onClick(e: MouseEvent): void {
     e.preventDefault()
     e.stopPropagation()
     ipcRenderer.send(PICKED, describe(el))
-    // Element-scoped actions appear next to the selection (Figma-style).
+    // Element-scoped actions appear next to the selection (Figma-style), and
+    // the selection stays outlined while the mouse hovers other elements.
     showToolbar(el)
+    setSelectionHighlight(el)
   } else if (commentMode) {
     e.preventDefault()
     e.stopPropagation()
@@ -635,6 +727,7 @@ function setCommentMode(next: CommentMode, fromRenderer = false): void {
     // Arming a whole-page mode supersedes the element-scoped toolbar (the
     // renderer clears its selection too).
     hideToolbar()
+    setSelectionHighlight(null)
     selectedEl = null
     document.documentElement.style.cursor = 'crosshair'
     showModeHint()
@@ -683,6 +776,7 @@ function setActive(next: boolean): void {
     if (editing) endEdit()
     hideOverlay()
     hideToolbar()
+    setSelectionHighlight(null)
     selectedEl = null
     document.documentElement.style.cursor = ''
   }
@@ -776,6 +870,7 @@ window.addEventListener('scroll', () => {
     hideOverlay()
   }
   if (selectedEl) positionToolbar()
+  if (selEls.length) positionSelection()
   if (pinDots.size) positionPins()
 }, true)
 window.addEventListener('resize', () => {
@@ -784,11 +879,16 @@ window.addEventListener('resize', () => {
     positionComposer()
   }
   if (selectedEl) positionToolbar()
+  if (selEls.length) positionSelection()
   if (pinDots.size) positionPins()
   positionFrame()
 })
 // Pins track layout changes (hot-reload, async content) on a light cadence.
-const pinTimer = setInterval(() => pinDots.size && positionPins(), 600)
+const pinTimer = setInterval(() => {
+  if (pinDots.size) positionPins()
+  // Selection outlines track layout changes (async content, HMR) the same way.
+  if (selEls.length) positionSelection()
+}, 600)
 window.addEventListener('pagehide', () => {
   clearInterval(pinTimer)
   if (editing) endEdit()
@@ -826,9 +926,10 @@ window.addEventListener('load', () => {
   })
   ipcRenderer.on(SET_FRAME, (_e, on: boolean) => setFrame(on))
   // The renderer cleared the selection (pill ×, message sent, delete) — drop the
-  // element-scoped toolbar with it.
+  // element-scoped toolbar + persistent outlines with it.
   ipcRenderer.on(CLEAR_SELECTED, () => {
     selectedEl = null
     hideToolbar()
+    setSelectionHighlight(null)
   })
 }
