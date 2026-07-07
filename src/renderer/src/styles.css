@@ -1833,3 +1833,17 @@ html.panel-host #root {
     cursor: pointer;
     color: #2563eb;
 }
+
+/* macOS sidebar material: the WINDOW is the vibrant surface (BrowserWindow
+   vibrancy:'sidebar'); only the rail lets it show through — every other
+   region paints the solid app background so content stays opaque. */
+html.mac-vibrancy body {
+    background: transparent;
+}
+html.mac-vibrancy .rail {
+    background: transparent;
+}
+html.mac-vibrancy .panes,
+html.mac-vibrancy .empty {
+    background: var(--bg);
+}
