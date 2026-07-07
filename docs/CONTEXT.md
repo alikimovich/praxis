@@ -1,7 +1,7 @@
 # CONTEXT — collapsed project state
 
 > The handoff doc. Read this first to resume work (esp. on another machine).
-> Last updated: 2026-06-23 (v2 first slice: click-to-select → source → chat).
+> Last updated: 2026-07-07 (v9 in-tool code view; Tailwind v4 + shadcn).
 
 ## What dsgn is
 
@@ -143,9 +143,9 @@ working changes + notes, and opens a GitHub PR via `gh` with a generated body.
   prop edits route to the agent as a default change. Per-instance mapping (option C) is a follow-up. Inline text edits (`text:apply`) splice the
   element's text content for both JSX and `.svelte` (`applySvelteTextEdit`), agent-fallback for
   expression/mixed content.
-- `src/renderer/src/components/PropEditor.tsx` — typed prop controls rendered from the inspection.
+- `src/renderer/src/components/PropPanel.tsx` — typed prop controls rendered from the inspection.
 - `src/main/tokens.ts` — **design-token detection**: probes `.dsgn/tokens.json` → tailwind
-  config (static parse) → CSS custom properties; `tokens:detect`. Palette in `TokenPalette.tsx`.
+  config (static parse) → CSS custom properties; `tokens:detect`. Offer UI in `TokenOfferCard.tsx`.
   `tokens:scaffold` writes a starter `.dsgn/tokens.json` for token-less projects (offered on open
   via `TokenOfferCard`; never shadows a live source or clobbers a manifest).
 - `src/main/setup.ts` — **framework-aware project setup**: `detect()` reads `package.json` deps
