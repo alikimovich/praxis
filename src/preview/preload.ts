@@ -578,8 +578,9 @@ function onClick(e: MouseEvent): void {
     e.preventDefault()
     e.stopPropagation()
     ipcRenderer.send(PICKED, describe(el))
-    // Element-scoped actions appear next to the selection (Figma-style), and
-    // the selection stays outlined while the mouse hovers other elements.
+    // A fresh pick resets element-scoped surfaces: close a composer left open
+    // on the previous selection, then show the toolbar + persistent outlines.
+    closeComposer()
     showToolbar(el)
     setSelectionHighlight(el)
   } else if (commentMode) {

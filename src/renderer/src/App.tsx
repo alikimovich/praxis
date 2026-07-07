@@ -1270,6 +1270,13 @@ export default function App(): React.JSX.Element {
           void window.api.preview.clearSelected()
           // The island belongs to a selection — no selection, no island.
           usePropsIsland.getState().setOpen(false)
+        } else if (s.selected && prev.selected && s.selected !== prev.selected) {
+          // Picking ANOTHER element resets its element-scoped surfaces: the new
+          // selection starts with just the toolbar. (The owner-jump handler
+          // re-opens the island right after — it's a continuation, not a fresh
+          // pick.)
+          usePropsIsland.getState().setOpen(false)
+          useCodeDrawer.getState().close()
         }
       }),
     []
@@ -1290,6 +1297,9 @@ export default function App(): React.JSX.Element {
           const cur = sel.selected
           if (cur?.componentSource) {
             sel.setSelected({ ...cur, source: cur.componentSource, componentSource: null })
+            // The jump came from inside the island — keep it open (the
+            // selection-change subscription just closed it).
+            usePropsIsland.getState().setOpen(true)
           }
         } else if (a.kind === 'inspection') {
           sel.setInspection(a.inspection)

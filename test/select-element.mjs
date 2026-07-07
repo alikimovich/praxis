@@ -191,6 +191,13 @@ try {
   // --- v8 F3a: click a host that carries a forwarded component-instance stamp.
   // The pick resolves to the host source; the inspector offers "edit owner", which
   // re-points the selection at the component-instance call site. ---
+  // Open the props island + the code drawer on the CURRENT selection — picking
+  // the next element must reset both (a fresh pick shows just the toolbar).
+  await win.evaluate(() => {
+    window.__dsgnPropsIsland.getState().setOpen(true)
+    window.__dsgnCodeDrawer.getState().open('src/components/Hero.tsx:7')
+  })
+
   const GET_AMOUNT = `(() => { const el = document.querySelector('#amount'); if (!el) return null;
     const b = el.getBoundingClientRect(); return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) }; })()`
   let pickedAmount = false
@@ -221,6 +228,14 @@ try {
       .catch(() => false)
   }
   if (!pickedAmount) throw new Error('inspector never showed the host source for #amount')
+
+  const resetState = await win.evaluate(() => ({
+    island: window.__dsgnPropsIsland.getState().open,
+    drawer: window.__dsgnCodeDrawer.getState().source
+  }))
+  if (resetState.island || resetState.drawer) {
+    throw new Error(`a new pick must close island + drawer: ${JSON.stringify(resetState)}`)
+  }
 
   // The store carries the forwarded component-instance source.
   const cs = await win.evaluate(() => window.__dsgnSelection.getState().selected?.componentSource)

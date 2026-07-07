@@ -124,6 +124,7 @@ try {
       styles: {}
     })
   })
+  await win.evaluate(() => window.__dsgnPropsIsland.getState().setOpen(true))
   await waitPanel("!!document.querySelector('.proppanel__link')")
 
   // Positive case: a schema-backed <Badge> usage DOES open the floating panel
@@ -143,6 +144,7 @@ try {
     },
     { fixture: join(fixtures, 'propedit-app') }
   )
+  await win.evaluate(() => window.__dsgnPropsIsland.getState().setOpen(true))
   await waitPanel("!!document.querySelector('.proppanel__row')")
 
   // --- The on-open setup dialogue renders with the action. ---
