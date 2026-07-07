@@ -485,7 +485,21 @@ body {
 
 .empty__cat {
     flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
     padding: 18px 20px;
+    min-width: 0;
+}
+/* Launch progress beside the cat (first open — no preview surface exists yet). */
+.empty__status {
+    min-width: 0;
+    max-width: 60vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: 500 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--text-muted);
 }
 .empty__cat .cat-loader {
     width: 34px;

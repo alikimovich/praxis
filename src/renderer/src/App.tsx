@@ -1237,6 +1237,13 @@ export default function App(): React.JSX.Element {
     useUiActions.getState().register({ toggleSelect: () => actionsRef.current.toggleSelect() })
   }, [])
 
+  // Launch progress lives INSIDE the preview (bottom-center pill drawn by the
+  // preview preload) instead of a window-top banner.
+  useEffect(() => {
+    if (status.kind === 'busy') window.api.preview.setStatus(log || status.label)
+    else window.api.preview.setStatus(null)
+  }, [status, log])
+
   // Whenever the selection is dropped (pill ×, message sent, delete, mode arm),
   // tell the preview so the in-page selection toolbar disappears with it.
   useEffect(
@@ -1299,7 +1306,7 @@ export default function App(): React.JSX.Element {
         </div>
       )}
 
-      {status.kind === 'busy' && log && <div className="banner banner--info">{log}</div>}
+
       {status.kind === 'error' && (
         <div className="banner banner--error">
           <span className="banner__text">{status.message}</span>
@@ -1383,6 +1390,12 @@ export default function App(): React.JSX.Element {
           </div>
           <div className="empty__cat">
             <CatLoader running={status.kind === 'busy'} />
+            {/* First open has no preview surface yet — the launch progress runs
+                alongside the cat instead of a window-top banner. Once panes
+                exist, the same text shows as a pill inside the preview. */}
+            {status.kind === 'busy' && (
+              <span className="empty__status">{log || status.label}</span>
+            )}
           </div>
         </div>
       ) : (

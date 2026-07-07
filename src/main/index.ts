@@ -57,6 +57,10 @@ const PREVIEW_COMMENT = 'dsgn:preview:comment'
 const PREVIEW_SET_FRAME = 'dsgn:preview:set-frame'
 const PREVIEW_TOOLBAR_ACTION = 'dsgn:preview:toolbar-action'
 const PREVIEW_CLEAR_SELECTED = 'dsgn:preview:clear-selected'
+const PREVIEW_SET_STATUS = 'dsgn:preview:set-status'
+
+// Launch-status pill text (shown inside the preview); re-pushed after loads.
+let previewStatusText: string | null = null
 
 // Latest annotation pins, re-pushed to the preview after each navigation.
 let annotationPins: { id: string; selector: string }[] = []
@@ -334,6 +338,8 @@ function ensurePreviewView(): WebContentsView {
       // preload build (and inject) the overlay host for nothing.
       if (annotationPins.length) wc.send(PREVIEW_SET_PINS, annotationPins)
     }
+    // The launch-status pill must survive placeholder (re)loads mid-launch.
+    if (previewStatusText) wc.send(PREVIEW_SET_STATUS, previewStatusText)
   })
 
   // Keep the renderer's URL bar in sync with where the preview actually is
@@ -495,6 +501,13 @@ function registerPreviewIpc(): void {
   // Renderer dropped the selection (pill ×, message sent) → hide the toolbar.
   ipcMain.on('preview:clear-selected', () => {
     previewView?.webContents.send(PREVIEW_CLEAR_SELECTED)
+  })
+
+  // Launch progress, drawn INSIDE the preview (bottom-center pill) instead of a
+  // window-top banner. null clears it.
+  ipcMain.on('preview:set-status', (_e, text: string | null) => {
+    previewStatusText = typeof text === 'string' && text.trim() ? text.slice(0, 300) : null
+    previewView?.webContents.send(PREVIEW_SET_STATUS, previewStatusText)
   })
 
   // ── Floating prop-panel plumbing (renderer ⇄ panel view, via main) ──────────

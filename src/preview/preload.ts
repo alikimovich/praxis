@@ -32,6 +32,7 @@ const COMMENT = 'dsgn:preview:comment' // preload → renderer (submitted)
 const SET_FRAME = 'dsgn:preview:set-frame' // renderer → preload (mobile bezel overlay)
 const TOOLBAR_ACTION = 'dsgn:preview:toolbar-action' // preload → renderer (code/delete)
 const CLEAR_SELECTED = 'dsgn:preview:clear-selected' // renderer → preload (pill ×, send)
+const SET_STATUS = 'dsgn:preview:set-status' // main → preload (launch progress pill)
 
 type CommentMode = 'comment' | 'annotate' | null
 
@@ -80,6 +81,31 @@ let composerHint: HTMLDivElement | null = null
 // delete) floating next to the picked element, Figma-style.
 let toolbarEl: HTMLDivElement | null = null
 let selectedEl: Element | null = null
+
+// Launch-status pill (bottom center) — dev-server progress while a project
+// starts, shown INSIDE the preview instead of a window-top banner.
+let statusEl: HTMLDivElement | null = null
+
+function setStatusPill(text: string | null): void {
+  if (!text) {
+    statusEl?.remove()
+    statusEl = null
+    return
+  }
+  if (!statusEl) {
+    const el = document.createElement('div')
+    el.setAttribute('data-dsgn-status', '')
+    el.style.cssText =
+      'position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:2147483646;' +
+      'max-width:82%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' +
+      'pointer-events:none;font:500 11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;' +
+      'color:#555;background:rgba(255,255,255,0.92);border:1px solid rgba(0,0,0,0.08);' +
+      'border-radius:999px;padding:4px 12px;box-shadow:0 2px 10px rgba(0,0,0,0.08);'
+    document.documentElement.appendChild(el)
+    statusEl = el
+  }
+  statusEl.textContent = text
+}
 
 // Persistent selection highlight — outlines that STAY while the mouse hovers
 // other elements (the hover box is separate). When the picked element resolves
@@ -944,4 +970,5 @@ window.addEventListener('load', () => {
     hideToolbar()
     setSelectionHighlight(null)
   })
+  ipcRenderer.on(SET_STATUS, (_e, text: string | null) => setStatusPill(text))
 }
