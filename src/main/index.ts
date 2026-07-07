@@ -504,7 +504,7 @@ function registerPreviewIpc(): void {
   // comment/annotate are handled entirely inside the preview's composer.
   ipcMain.on(PREVIEW_TOOLBAR_ACTION, (e, kind: string) => {
     if (e.sender !== previewView?.webContents) return
-    if (kind !== 'code' && kind !== 'delete') return
+    if (kind !== 'code' && kind !== 'delete' && kind !== 'props') return
     mainWindow?.webContents.send('preview:toolbar-action', kind)
   })
   // Renderer dropped the selection (pill ×, message sent) → hide the toolbar.

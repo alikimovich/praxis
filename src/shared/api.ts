@@ -577,7 +577,7 @@ export interface DsgnApi {
     /** Fires when the preview navigates (link clicks, SPA routes) — full URL. */
     onUrlChanged: (cb: (url: string) => void) => () => void
     /** Selection-toolbar actions that resolve in the renderer (code / delete). */
-    onToolbarAction: (cb: (kind: 'code' | 'delete') => void) => () => void
+    onToolbarAction: (cb: (kind: 'code' | 'delete' | 'props') => void) => () => void
     /** Snapshot the live preview as a data URL (freeze-frame under overlay UI). */
     capture: () => Promise<string | null>
     /** Fires after the previewed app loads, reporting source-stamp coverage. */

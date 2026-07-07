@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { EditorState, StateField, type Extension } from '@codemirror/state'
+import { EditorState, StateEffect, StateField, type Extension } from '@codemirror/state'
 import { EditorView, Decoration, keymap, type DecorationSet } from '@codemirror/view'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { tags as t } from '@lezer/highlight'
@@ -120,6 +120,8 @@ export default function CodeDrawer({
   const rootRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
+  // Window-level listeners installed per editor build (cmd-link affordance).
+  const cleanupRef = useRef<() => void>(() => {})
   // The file content as last read from / written to disk — the save baseline and
   // the dirty comparison. A ref so the save keybinding always sees the latest.
   const baselineRef = useRef<string>('')
@@ -199,6 +201,8 @@ export default function CodeDrawer({
     setStatus('idle')
     setErrorMsg(null)
     setOpenError(null)
+    cleanupRef.current()
+    cleanupRef.current = () => {}
     viewRef.current?.destroy()
     viewRef.current = null
 
@@ -220,28 +224,94 @@ export default function CodeDrawer({
         provide: (f) => EditorView.decorations.from(f)
       })
 
+      // Cmd+hover/click affordance: while ⌘ is held over a capitalized
+      // identifier that RESOLVES to a component file, underline it and show a
+      // pointer (VSCode-style); click jumps there. Resolutions are cached per
+      // name for this file.
+      const linkMark = Decoration.mark({ class: 'cm-cmdlink' })
+      const setLink = StateEffect.define<{ from: number; to: number } | null>()
+      const linkField = StateField.define<DecorationSet>({
+        create: () => Decoration.none,
+        update: (deco, tr) => {
+          for (const e of tr.effects) {
+            if (e.is(setLink)) {
+              return e.value ? Decoration.set([linkMark.range(e.value.from, e.value.to)]) : Decoration.none
+            }
+          }
+          return tr.docChanged ? Decoration.none : deco
+        },
+        provide: (f) => EditorView.decorations.from(f)
+      })
+      const resolveCache = new Map<string, string | null>()
+      let linkShown: { from: number; to: number } | null = null
+      const clearLink = (v: EditorView): void => {
+        if (linkShown) {
+          linkShown = null
+          v.dispatch({ effects: setLink.of(null) })
+        }
+      }
+      const resolveName = (name: string): Promise<string | null> => {
+        const hit = resolveCache.get(name)
+        if (hit !== undefined) return Promise.resolve(hit)
+        return window.api.source.resolveComponent(root, view.file, name).then((file) => {
+          resolveCache.set(name, file)
+          return file
+        })
+      }
+      const wordAtEvent = (
+        v: EditorView,
+        e: MouseEvent
+      ): { from: number; to: number; name: string } | null => {
+        const pos = v.posAtCoords({ x: e.clientX, y: e.clientY })
+        if (pos == null) return null
+        const word = v.state.wordAt(pos)
+        if (!word) return null
+        const name = v.state.doc.sliceString(word.from, word.to)
+        return /^[A-Z][A-Za-z0-9_$]*$/.test(name) ? { from: word.from, to: word.to, name } : null
+      }
+
       const state = EditorState.create({
         doc: view.code,
         extensions: [
           basicSetup,
           ...langFor(view.file),
           stampField,
+          linkField,
           // Cmd+click a capitalized tag/identifier (<Workplace …/>) → resolve it
           // through this file's imports and open that component in the drawer.
           EditorView.domEventHandlers({
             mousedown: (e, v) => {
               if (!(e.metaKey || e.ctrlKey) || e.button !== 0) return false
-              const pos = v.posAtCoords({ x: e.clientX, y: e.clientY })
-              if (pos == null) return false
-              const word = v.state.wordAt(pos)
-              if (!word) return false
-              const name = v.state.doc.sliceString(word.from, word.to)
-              if (!/^[A-Z][A-Za-z0-9_$]*$/.test(name)) return false
+              const w = wordAtEvent(v, e)
+              if (!w) return false
               e.preventDefault()
-              void window.api.source.resolveComponent(root, view.file, name).then((file) => {
+              void resolveName(w.name).then((file) => {
                 if (file) useCodeDrawer.getState().open(`${file}:1`)
               })
               return true
+            },
+            mousemove: (e, v) => {
+              if (!e.metaKey && !e.ctrlKey) {
+                clearLink(v)
+                return false
+              }
+              const w = wordAtEvent(v, e)
+              if (!w) {
+                clearLink(v)
+                return false
+              }
+              void resolveName(w.name).then((file) => {
+                // Only decorate once the name is KNOWN to resolve, and only if
+                // this is still the hovered word.
+                if (!file) {
+                  if (linkShown && linkShown.from === w.from) clearLink(v)
+                  return
+                }
+                if (linkShown?.from === w.from && linkShown?.to === w.to) return
+                linkShown = { from: w.from, to: w.to }
+                v.dispatch({ effects: setLink.of(linkShown) })
+              })
+              return false
             }
           }),
           keymap.of([{ key: 'Mod-s', preventDefault: true, run: () => (saveRef.current(), true) }]),
@@ -254,6 +324,17 @@ export default function CodeDrawer({
       })
       const editor = new EditorView({ state, parent: hostRef.current })
       viewRef.current = editor
+      const dropLink = (e?: KeyboardEvent): void => {
+        if (e && e.key !== 'Meta' && e.key !== 'Control') return
+        clearLink(editor)
+      }
+      const dropOnBlur = (): void => clearLink(editor)
+      window.addEventListener('keyup', dropLink)
+      window.addEventListener('blur', dropOnBlur)
+      cleanupRef.current = () => {
+        window.removeEventListener('keyup', dropLink)
+        window.removeEventListener('blur', dropOnBlur)
+      }
 
       // Park the stamped element a third of the way down the viewport.
       const pos = editor.state.doc.line(Math.min(start, editor.state.doc.lines)).from
@@ -263,6 +344,8 @@ export default function CodeDrawer({
 
     return () => {
       disposed = true
+      cleanupRef.current()
+      cleanupRef.current = () => {}
       viewRef.current?.destroy()
       viewRef.current = null
     }

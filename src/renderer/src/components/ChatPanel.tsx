@@ -17,7 +17,8 @@ import {
   useSetup,
   useSpawns,
   useTokens,
-  useUiActions
+  useUiActions,
+  usePropsIsland
 } from '../store'
 import { projectKey } from '../../../shared/projectKey'
 import type { QuestionAnswers, SetupResult } from '../../../shared/api'
@@ -467,6 +468,8 @@ export default function ChatPanel(): React.JSX.Element {
           else drawer.open(sel.source)
         } else if (kind === 'delete') {
           deleteSelectionRef.current()
+        } else if (kind === 'props') {
+          usePropsIsland.getState().setOpen(!usePropsIsland.getState().open)
         }
       }),
     []

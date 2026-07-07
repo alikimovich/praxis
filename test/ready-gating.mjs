@@ -91,8 +91,10 @@ try {
     },
     { fixture: join(fixtures, 'propedit-app') }
   )
-  // The island opens for EVERY selection; a no-schema element shows the
-  // prompt-only readiness message inside it (no editable fields).
+  // The island opens on demand (toolbar props action) and then follows
+  // selection changes; a no-schema element shows the prompt-only readiness
+  // message inside it (no editable fields).
+  await win.evaluate(() => window.__dsgnPropsIsland.getState().setOpen(true))
   await expandPanel()
   await waitPanel("!!document.querySelector('.proppanel .proppanel__ready--no')")
   if (await panelEval("document.querySelectorAll('.proppanel__row').length")) {

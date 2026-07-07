@@ -97,8 +97,8 @@ const api: DsgnApi = {
       return () => ipcRenderer.removeListener('preview:url-changed', listener)
     },
     /** Selection-toolbar actions that resolve in the renderer (code / delete). */
-    onToolbarAction: (cb: (kind: 'code' | 'delete') => void): (() => void) => {
-      const listener = (_e: IpcRendererEvent, kind: 'code' | 'delete'): void => cb(kind)
+    onToolbarAction: (cb: (kind: 'code' | 'delete' | 'props') => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, kind: 'code' | 'delete' | 'props'): void => cb(kind)
       ipcRenderer.on('preview:toolbar-action', listener)
       return () => ipcRenderer.removeListener('preview:toolbar-action', listener)
     },

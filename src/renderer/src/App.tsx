@@ -27,6 +27,7 @@ import {
   useSpawns,
   useTokens,
   useUiActions,
+  usePropsIsland,
   useViewport,
   usePreviewFreeze,
   usePublishMode,
@@ -114,6 +115,7 @@ export default function App(): React.JSX.Element {
   const selected = useSelection((s) => s.selected)
   const inspection = useSelection((s) => s.inspection)
   const inspecting = useSelection((s) => s.inspecting)
+  const propsIslandOpen = usePropsIsland((s) => s.open)
   const projectRoot = useSession((s) => s.projectRoot)
   const drawerSource = useCodeDrawer((s) => s.source)
   const openCount = useWorkspace((s) => s.projects.length)
@@ -1264,7 +1266,11 @@ export default function App(): React.JSX.Element {
   useEffect(
     () =>
       useSelection.subscribe((s, prev) => {
-        if (prev.selected && !s.selected) void window.api.preview.clearSelected()
+        if (prev.selected && !s.selected) {
+          void window.api.preview.clearSelected()
+          // The island belongs to a selection — no selection, no island.
+          usePropsIsland.getState().setOpen(false)
+        }
       }),
     []
   )
@@ -1275,7 +1281,7 @@ export default function App(): React.JSX.Element {
     () =>
       window.api.panel.onAction((a) => {
         const sel = useSelection.getState()
-        if (a.kind === 'close') sel.setSelected(null)
+        if (a.kind === 'close') usePropsIsland.getState().setOpen(false)
         else if (a.kind === 'seed') useComposer.getState().setSeed(a.text)
         else if (a.kind === 'setup') {
           useSetup.getState().setDismissed(false)
@@ -1614,7 +1620,7 @@ export default function App(): React.JSX.Element {
           preview (native view above it, driven by PanelHost): editable fields
           when a schema resolved, the readiness message otherwise. Collapsible
           to a chip inside the island itself. */}
-      {selected && projectRoot && (
+      {selected && projectRoot && propsIslandOpen && (
         <PanelHost
           root={projectRoot}
           element={selected}

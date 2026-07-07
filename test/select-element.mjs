@@ -160,7 +160,7 @@ try {
       return 'visible:' + [...bar.querySelectorAll('button')].map((b) => b.dataset.kind).join(',')
     })()`)
   })
-  if (!/^visible:comment,annotate,code,delete$/.test(toolbarShown)) {
+  if (!/^visible:props,comment,annotate,code,delete$/.test(toolbarShown)) {
     throw new Error(`in-preview selection toolbar wrong: ${toolbarShown}`)
   }
   await win.screenshot({ path: join(artifacts, '07-select-handoff.png') })
@@ -229,6 +229,7 @@ try {
   }
   // The "edit owner component" affordance is offered (in the props island), and
   // re-points the selection.
+  await win.evaluate(() => window.__dsgnPropsIsland.getState().setOpen(true))
   await expandPanel()
   await waitPanel("!!document.querySelector('.proppanel__owner')")
   await panelEval("document.querySelector('.proppanel__owner').click(); true")

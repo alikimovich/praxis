@@ -1825,3 +1825,11 @@ html.panel-host body,
 html.panel-host #root {
     background: transparent !important;
 }
+
+/* Cmd-hover over a resolvable component name in the code drawer — jumpable. */
+.cm-cmdlink {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    color: #2563eb;
+}

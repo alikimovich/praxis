@@ -75,7 +75,8 @@ try {
     },
     { fixture, src: SRC }
   )
-  // A schema-backed component auto-opens the floating props island (no toggle).
+  // The island opens EXPLICITLY (toolbar props action) — simulate that.
+  await win.evaluate(() => window.__dsgnPropsIsland.getState().setOpen(true))
   await expandPanel()
   await waitPanel("!!document.querySelector('.proppanel__row')")
   const enumOptions = await panelEval(

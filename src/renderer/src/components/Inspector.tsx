@@ -20,7 +20,7 @@ export default function Inspector({ element, onClear }: Props): React.JSX.Elemen
       : ''
 
   return (
-    <div className="inspector flex min-w-0 items-center gap-2 px-2 pt-2">
+    <div className="inspector flex w-full min-w-0 items-center gap-2 pl-[14px] pr-3 pt-2.5">
       {/* The pill: what's selected, removable. */}
       <span className="inspector__pill inline-flex min-w-0 max-w-[60%] items-center gap-1 rounded-md bg-indigo-50 px-1.5 py-1 text-indigo-700">
         <span className="inspector__tag truncate font-mono text-[12px] font-semibold leading-none">

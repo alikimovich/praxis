@@ -777,6 +777,21 @@ export const useUiActions = create<UiActionsState>((set) => ({
   register: (actions) => set(actions)
 }))
 
+/**
+ * Props island visibility. Opening is EXPLICIT (the selection toolbar's props
+ * action) — auto-popping a card on every pick was noisy. Cleared when the
+ * selection is dropped.
+ */
+interface PropsIslandState {
+  open: boolean
+  setOpen: (open: boolean) => void
+}
+
+export const usePropsIsland = create<PropsIslandState>((set) => ({
+  open: false,
+  setOpen: (open) => set({ open })
+}))
+
 
 /** The on-open "set this project up for editing" offer. */
 interface SetupState {
@@ -963,3 +978,4 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
 ;(window as unknown as { __dsgnViewport?: typeof useViewport }).__dsgnViewport = useViewport
 ;(window as unknown as { __dsgnPanelInset?: typeof usePanelInset }).__dsgnPanelInset = usePanelInset
 ;(window as unknown as { __dsgnCodeDrawer?: typeof useCodeDrawer }).__dsgnCodeDrawer = useCodeDrawer
+;(window as unknown as { __dsgnPropsIsland?: typeof usePropsIsland }).__dsgnPropsIsland = usePropsIsland
