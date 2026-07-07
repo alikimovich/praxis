@@ -1834,19 +1834,3 @@ html.panel-host #root {
     color: #2563eb;
 }
 
-/* macOS material: the WINDOW is one 'under-window' vibrancy surface (a real
-   system material — Electron allows exactly one per window, so no separate
-   sidebar/content materials). All BASE surfaces stay transparent to show it;
-   only elevated cards (composer, preview card, islands, drawer) paint opaque.
-   No tint mixing. The rail sits INSIDE .panes, so .panes itself must never
-   paint. */
-html.mac-vibrancy body,
-html.mac-vibrancy .rail,
-html.mac-vibrancy .pane--chat,
-html.mac-vibrancy .pane--preview,
-html.mac-vibrancy .empty {
-    background: transparent;
-}
-html.mac-vibrancy .console {
-    background: color-mix(in srgb, var(--bg-subtle) 60%, transparent);
-}
