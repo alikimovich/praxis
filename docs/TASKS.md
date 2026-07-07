@@ -21,19 +21,28 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 Ranked by leverage. Deferred items note *why* they're not auto-completable.
 
-- [ ] **Test runner to replace the package.json mega-chains.** `test` and `verify`
-      are ~50-command `&&` chains, duplicated and already drifted. Add `test/run.mjs`
-      with a tier manifest (unit / electron / live), keep-going with a pass/fail/skip
-      summary, build-once. `"test"` = unit+electron, `"verify"` = all.
-- [ ] **CI (there is none — no `.github/`).** Add `.github/workflows/ci.yml`:
-      `bun install` → `bun run typecheck` → unit tier. Electron/live tiers later.
-- [ ] **Lint/format tool.** Adopt Biome: config + `"lint"`/`"format"` scripts, wire
-      into CI. Do the repo-wide `biome check --write` as its own separate commit.
-- [ ] **Gemini backend has no SDK dep.** `backends/gemini.ts` is selectable via
-      `pickProvider` but no Gemini SDK is in `dependencies`. Gate it out of the picker
-      + mark experimental (safer), or add the dep + a self-skipping e2e test.
-- [ ] **Branch cleanup.** Delete stale local branches (`agent/lkm-23` upstream-gone,
-      `dsgn/v5-d-previous-agents` WIP).
+- [x] **Test runner to replace the package.json mega-chains.** ✅ 2026-07-07 —
+      `test/run.mjs` (`node test/run.mjs unit|electron|live|all`): keep-going,
+      exit-0=pass (incl. e2e self-SKIP), builds once before the electron tier,
+      summary table, non-zero exit on any failure. `test` = `unit electron`,
+      `verify` = `all`; the ~40 `test:*` aliases are unchanged. Verified: unit
+      tier 15/15 green.
+- [x] **CI.** ✅ 2026-07-07 — `.github/workflows/ci.yml`: checkout → setup-bun
+      1.3.x → `bun install --frozen-lockfile` → `bun run typecheck` →
+      `node test/run.mjs unit`. Electron/live tiers left for a macOS runner (noted
+      inline).
+- [x] **Lint/format tool.** ✅ 2026-07-07 — Biome 2.5.2 (dev dep) + `biome.json`
+      tuned to the existing style (2-space, single quotes, no semicolons, width
+      100); `lint`/`format` scripts. The repo-wide `biome check --write` reformat
+      is deliberately NOT done — run it as its own commit when ready.
+- [x] **Gemini backend gated.** ✅ 2026-07-07 — `pickProvider` returns Claude for
+      `provider:'gemini'` unless `DSGN_EXPERIMENTAL_GEMINI=1`; `gemini.ts` banner
+      marks it experimental/unwired; removed from the renderer picker so it can't be
+      silently selected. Add the SDK dep + a self-skipping e2e test to un-gate.
+- [ ] **Branch cleanup.** ⏸ needs your call — `agent/lkm-23`'s content shipped via
+      PR #67 (squash) but it owns a live worktree under `~/.agent-runner/`; deleting
+      that worktree could disturb the daemon. `dsgn/v5-d-previous-agents` is genuinely
+      unmerged WIP (session-history, superseded-but-not-identical). Both destructive.
 - [ ] **Shared test harness.** 55 `.mjs` tests re-derive root + Playwright/Electron
       launch (~6.2k lines, much boilerplate). Add `test/lib/harness.mjs`
       (`launchApp`, `openFixture`, `shot`) and migrate opportunistically.

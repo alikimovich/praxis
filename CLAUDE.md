@@ -24,8 +24,9 @@ authenticates with their own provider subscription (`claude setup-token` /
 | `bun run build` | Build main/preload/preview/renderer to `out/` |
 | `bun run typecheck` | Type-check all three tsconfig projects (node, web, preview). Run after every change |
 | `bun run test:<name>` | One test (see package.json for ~40 aliases) |
-| `bun run test` | Fast tier + all Electron UI tests |
+| `bun run test` | Unit + Electron UI tiers (via `test/run.mjs`) |
 | `bun run verify` | Everything incl. live-agent e2e (needs display + creds) |
+| `bun run lint` | Biome lint over `src` + `test` |
 
 Use **bun**, not npm/yarn. Node 22 (`.nvmrc`). `postinstall` runs
 `scripts/patch-electron.mjs` (macOS-only, idempotent): it rebrands the dev
@@ -33,10 +34,12 @@ Electron.app bundle to Praxis — the dev bundle IS the product.
 
 ## Verify your own work WITHOUT asking the user
 
-Tests come in three tiers — pick the cheapest that proves your change:
+Tests come in three tiers, defined by the arrays in `test/run.mjs`
+(`node test/run.mjs unit|electron|live|all`) — pick the cheapest that proves
+your change:
 
-1. **Pure-bun logic tests** (`bun test/pr-body.mjs` etc., ~15 files) — no
-   build, no display, run in seconds. Always run the relevant ones.
+1. **Pure-bun logic tests** (`bun test/pr-body.mjs` etc., ~15 files, the `unit`
+   tier) — no build, no display, run in seconds. Always run the relevant ones.
 2. **Playwright/Electron UI tests** (`node test/<name>.mjs` after
    `electron-vite build`, or `bun run test:<name>` which builds first) — drive
    the built app, screenshot to `test/artifacts/`. **Read the PNGs** to see
@@ -95,10 +98,10 @@ docs/             CONTEXT / TASKS / PROGRESS / DESIGN / plans / REVIEW-*
 - All cross-process types go in `src/shared/api.ts`; keep `DsgnApi`, the
   preload bridge, and the ipcMain handlers in sync — a change to one is a
   change to all three.
-- New test = new `.mjs` in `test/` **plus** an entry in BOTH the `test` and
-  `verify` package.json chains (they drift silently — check both; see
-  `docs/REVIEW-2026-07-07.md` item 2 for the planned runner that fixes this).
+- New test = new `.mjs` in `test/` **plus** its name in the right tier array in
+  `test/run.mjs` (`unit` / `electron` / `live`). `bun run test` and `verify`
+  dispatch through the runner — don't hand-edit `&&` chains.
 - Keep files under ~500 lines; extract instead of appending to `App.tsx`,
-  `store.ts`, or `styles.css` (already oversized — see the review doc).
+  `store.ts`, or `styles.css` (already oversized — see `docs/TASKS.md`).
 - Auth is per-user at runtime; never commit secrets. Nothing sensitive in-repo.
 - Commit in small, focused commits with the Co-Authored-By trailer.

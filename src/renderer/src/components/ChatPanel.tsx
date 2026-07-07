@@ -50,8 +50,11 @@ const MODELS = [
 
 
 // Selectable backends (v7). Each authenticates with the user's own subscription
-// login — no API keys. Only backends that exist in main's pickProvider are listed
-// (Gemini/Grok land when their adapters do). `login` is the one-time CLI step.
+// login — no API keys. Only backends wired in main's pickProvider are listed.
+// Gemini is EXPERIMENTAL/unwired (no SDK dep) and gated behind
+// DSGN_EXPERIMENTAL_GEMINI in main, so it's omitted here — listing it would let a
+// user pick a provider that silently falls back to Claude. Re-add when its
+// adapter ships. `login` is the one-time CLI step.
 const PROVIDERS: { value: string; label: string; login: string | null; blurb: string | null }[] = [
   { value: 'claude', label: 'Claude', login: null, blurb: null },
   {
@@ -59,12 +62,6 @@ const PROVIDERS: { value: string; label: string; login: string | null; blurb: st
     label: 'Codex',
     login: 'codex login',
     blurb: 'OpenAI Codex runs on your ChatGPT subscription'
-  },
-  {
-    value: 'gemini',
-    label: 'Gemini',
-    login: 'gemini',
-    blurb: 'Google Gemini CLI runs on your Google account'
   }
 ]
 

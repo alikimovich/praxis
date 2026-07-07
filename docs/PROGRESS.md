@@ -2,6 +2,28 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-07 — Health/infra tasks: test runner, CI, Biome, gemini gate
+
+Implemented the four safe/verifiable items from the review (the rest — harness
+migration, god-file splits, naming decision — stay deferred in TASKS.md with
+their reasons; branch cleanup needs a human call, see TASKS.md).
+
+- **`test/run.mjs`** replaces the ~50-command `test`/`verify` `&&` chains:
+  `node test/run.mjs unit|electron|live|all`, keep-going, exit-0=pass (incl.
+  e2e self-SKIP), one build before the electron tier, summary table, non-zero
+  on any failure. `test`=`unit electron`, `verify`=`all`; `test:*` aliases kept.
+  Verified: `node test/run.mjs unit` → 15/15 green.
+- **CI** — `.github/workflows/ci.yml` (typecheck + unit tier on push/PR; bun
+  1.3.x). Electron/live tiers deferred to a macOS runner (noted inline).
+- **Biome 2.5.2** dev dep + `biome.json` matched to the existing style; `lint`/
+  `format` scripts. Repo-wide reformat intentionally deferred to its own commit.
+- **Gemini gated** — `pickProvider` falls back to Claude unless
+  `DSGN_EXPERIMENTAL_GEMINI=1`; banner in `gemini.ts`; removed from the renderer
+  picker (was silently falling back to Claude when selected). Claude/Codex
+  paths byte-identical. typecheck green; `provider-seam` now sets the flag.
+- Docs: CLAUDE.md commands/test-convention updated to the runner + `lint`;
+  fixed README + CLAUDE.md pointers to the (now-deleted) review doc.
+
 ## 2026-07-07 — Docs folder pruned to the live set
 
 - Removed `TASKS-archive.md` (history git already holds), `PLAN-proactive-checks.md`
