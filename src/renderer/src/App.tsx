@@ -1587,7 +1587,7 @@ export default function App(): React.JSX.Element {
             aria-pressed={!railCollapsed}
             title={railCollapsed ? 'Show sidebar' : 'Hide sidebar'}
           >
-            <PanelLeft className="size-4" aria-hidden="true" />
+            <PanelLeft className="size-3.5" aria-hidden="true" />
           </button>
         </div>
       )}
