@@ -1237,6 +1237,10 @@ export default function App(): React.JSX.Element {
     useUiActions.getState().register({ toggleSelect: () => actionsRef.current.toggleSelect() })
   }, [])
 
+  // S inside the focused preview toggles select mode — same handler as the
+  // app-side shortcut/menu (via the ref, so it sees current closures).
+  useEffect(() => window.api.preview.onToggleSelect(() => actionsRef.current.toggleSelect()), [])
+
   // Launch progress lives INSIDE the preview (bottom-center pill drawn by the
   // preview preload) instead of a window-top banner.
   useEffect(() => {

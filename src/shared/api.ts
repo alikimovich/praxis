@@ -564,6 +564,8 @@ export interface DsgnApi {
     clearSelected: () => void
     /** Launch progress shown inside the preview (bottom pill); null clears. */
     setStatus: (text: string | null) => void
+    /** Fires when S is pressed inside the focused preview (toggle select). */
+    onToggleSelect: (cb: () => void) => () => void
     /** Fires when the preview navigates (link clicks, SPA routes) — full URL. */
     onUrlChanged: (cb: (url: string) => void) => () => void
     /** Selection-toolbar actions that resolve in the renderer (code / delete). */

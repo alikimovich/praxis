@@ -76,6 +76,12 @@ const api: DsgnApi = {
     clearSelected: (): void => ipcRenderer.send('preview:clear-selected'),
     /** Launch progress shown inside the preview (bottom pill); null clears. */
     setStatus: (text: string | null): void => ipcRenderer.send('preview:set-status', text),
+    /** Fires when S is pressed inside the focused preview (toggle select). */
+    onToggleSelect: (cb: () => void): (() => void) => {
+      const listener = (): void => cb()
+      ipcRenderer.on('preview:toggle-select', listener)
+      return () => ipcRenderer.removeListener('preview:toggle-select', listener)
+    },
     /** Fires when the preview navigates (link clicks, SPA routes) — full URL. */
     onUrlChanged: (cb: (url: string) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, url: string): void => cb(url)
