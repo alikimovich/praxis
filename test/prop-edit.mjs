@@ -36,6 +36,7 @@ try {
   await win.waitForSelector('.empty__open', { timeout: 15000 })
   await win.evaluate(() => window.__dsgnWorkspace.getState().openOrActivate('/tmp/dsgn-test-project'))
   await win.waitForSelector('.composer__input', { timeout: 15000 })
+  await win.evaluate(() => window.__dsgnPropPanelMode.getState().setDocked(true))
 
   // --- UI: render the prop editor for a selected element (original file). ---
   await win.evaluate(

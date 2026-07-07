@@ -1798,3 +1798,11 @@ body.is-resizing {
     height: 24px;
     border-radius: 6px;
 }
+
+/* The floating prop-panel island runs in its own transparent WebContentsView —
+   only the card paints; everything around it must stay see-through. */
+html.panel-host,
+html.panel-host body,
+html.panel-host #root {
+    background: transparent !important;
+}

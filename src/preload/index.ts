@@ -9,6 +9,8 @@ import type {
   CommentMode,
   Diagnosis,
   DetectedProject,
+  PanelAction,
+  PanelState,
   DsgnApi,
   Framework,
   ImageAttachment,
@@ -109,6 +111,29 @@ const api: DsgnApi = {
       const listener = (_e: IpcRendererEvent, c: PreviewComment): void => cb(c)
       ipcRenderer.on('preview:comment', listener)
       return () => ipcRenderer.removeListener('preview:comment', listener)
+    }
+  },
+  panel: {
+    show: (bounds: { x: number; y: number; width: number; height: number }): void =>
+      ipcRenderer.send('panel:show', bounds),
+    hide: (): void => ipcRenderer.send('panel:hide'),
+    setState: (state: PanelState): void => ipcRenderer.send('panel:state', state),
+    onState: (cb: (state: PanelState) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, state: PanelState): void => cb(state)
+      ipcRenderer.on('panel:state', listener)
+      return () => ipcRenderer.removeListener('panel:state', listener)
+    },
+    action: (action: PanelAction): void => ipcRenderer.send('panel:action', action),
+    onAction: (cb: (action: PanelAction) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, action: PanelAction): void => cb(action)
+      ipcRenderer.on('panel:action', listener)
+      return () => ipcRenderer.removeListener('panel:action', listener)
+    },
+    reportHeight: (height: number): void => ipcRenderer.send('panel:height', height),
+    onHeight: (cb: (height: number) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, height: number): void => cb(height)
+      ipcRenderer.on('panel:height', listener)
+      return () => ipcRenderer.removeListener('panel:height', listener)
     }
   },
   project: {

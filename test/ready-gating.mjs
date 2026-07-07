@@ -37,6 +37,7 @@ try {
   await win.waitForSelector('.empty__open', { timeout: 15000 })
   await win.evaluate(() => window.__dsgnWorkspace.getState().openOrActivate('/tmp/dsgn-test-project'))
   await win.waitForSelector('.composer__input', { timeout: 15000 })
+  await win.evaluate(() => window.__dsgnPropPanelMode.getState().setDocked(true))
 
   // --- setup.scaffold writes the stamping plugin (and is idempotent). ---
   const first = await win.evaluate((d) => window.api.setup.scaffold(d), scaffoldDir)

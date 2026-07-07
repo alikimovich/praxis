@@ -46,6 +46,7 @@ try {
 
   const win = await app.firstWindow()
   await win.waitForSelector('.empty__open', { timeout: 15000 })
+  await win.evaluate(() => window.__dsgnPropPanelMode.getState().setDocked(true))
 
   // Make the native folder picker return our fixture.
   await app.evaluate(async ({ dialog }, fixturePath) => {

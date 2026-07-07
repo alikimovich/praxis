@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { PropField, PropInspection, SelectedElement } from '../../../shared/api'
-import { usePanelInset, usePropPanelMode } from '../store'
+import { usePanelInset } from '../store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PanelRight, PictureInPicture2 } from 'lucide-react'
@@ -12,6 +12,12 @@ const PANEL_WIDTH = 292
 interface Props {
   root: string
   element: SelectedElement
+  /**
+   * 'overlay' → the floating island (a WebContentsView above the preview; this
+   * instance fills its view). 'docked' → the in-DOM right sidebar, which
+   * reserves a native-preview inset strip.
+   */
+  variant: 'overlay' | 'docked'
   /** null → no schema (readiness messaging shows instead of fields). */
   inspection: PropInspection | null
   /** Inspection still in flight. */
@@ -24,6 +30,8 @@ interface Props {
   onSetup: () => void
   /** v8 F3a: re-select the owning component instance. */
   onSelectOwner: () => void
+  /** Flip between the floating island and the docked sidebar. */
+  onToggleDock: () => void
   onClose: () => void
 }
 
@@ -39,17 +47,19 @@ interface Props {
 export default function PropPanel({
   root,
   element,
+  variant,
   inspection,
   inspecting,
   onChange,
   onSeedPrompt,
   onSetup,
   onSelectOwner,
+  onToggleDock,
   onClose
 }: Props): React.JSX.Element {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const docked = usePropPanelMode((s) => s.docked)
+  const docked = variant === 'docked'
   const hasSchema = !!inspection?.hasSchema
   const source = inspection?.source ?? element.source ?? ''
   const hasOwner = !!element.componentSource && element.componentSource !== element.source
@@ -59,11 +69,13 @@ export default function PropPanel({
       ? `.${element.classes[0]}`
       : ''
 
-  // Reserve the right-edge strip while the panel is open.
+  // Docked sidebar reserves the right-edge strip of the native preview; the
+  // floating island paints OVER the content (its own view) — no inset.
   useEffect(() => {
+    if (!docked) return
     usePanelInset.getState().setInset(PANEL_WIDTH)
     return () => usePanelInset.getState().setInset(0)
-  }, [])
+  }, [docked])
 
   const reload = (): void => {
     if (source) window.api.props.inspect(root, source).then((res) => res && onChange(res))
@@ -128,10 +140,10 @@ export default function PropPanel({
        Never overlaps the previewbar controls. Floating (default): auto-height
        card pinned top-right; docked: full-height sidebar. */
     <aside
-      className={`proppanel fixed right-4 top-[58px] z-50 flex w-[268px] flex-col rounded-xl border bg-background ${
+      className={`proppanel flex flex-col rounded-xl border bg-background ${
         docked
-          ? 'bottom-4 shadow-[-4px_0_18px_rgba(0,0,0,0.08)]'
-          : 'proppanel--floating max-h-[65vh] shadow-[0_10px_32px_rgba(0,0,0,0.14)]'
+          ? 'fixed bottom-4 right-4 top-[58px] z-50 w-[268px] shadow-[-4px_0_18px_rgba(0,0,0,0.08)]'
+          : 'proppanel--floating relative max-h-[calc(100vh-24px)] w-full shadow-[0_10px_32px_rgba(0,0,0,0.14)]'
       }`}
       aria-label={`Props for ${inspection?.component ?? element.tag}`}
     >
@@ -153,10 +165,10 @@ export default function PropPanel({
           variant="ghost"
           size="icon"
           className="proppanel__dock size-6 text-muted-foreground"
-          onClick={() => usePropPanelMode.getState().setDocked(!docked)}
+          onClick={onToggleDock}
           aria-label={docked ? 'Float panel' : 'Dock panel as sidebar'}
           aria-pressed={docked}
-          title={docked ? 'Float at the top right' : 'Dock as a right sidebar'}
+          title={docked ? 'Float over the preview' : 'Dock as a right sidebar'}
         >
           {docked ? (
             <PictureInPicture2 className="size-3.5" aria-hidden="true" />

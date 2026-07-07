@@ -5,6 +5,7 @@ import ConsolePanel from './components/ConsolePanel'
 import DiagnoseCard from './components/DiagnoseCard'
 import PreviewPane from './components/PreviewPane'
 import PropPanel from './components/PropPanel'
+import PanelHost from './components/PanelHost'
 import PreviewUrl from './components/PreviewUrl'
 import CodeDrawer from './components/CodeDrawer'
 import SessionReview from './components/SessionReview'
@@ -27,6 +28,7 @@ import {
   useSpawns,
   useTokens,
   useUiActions,
+  usePropPanelMode,
   useViewport,
   usePreviewFreeze,
   usePublishMode,
@@ -114,6 +116,7 @@ export default function App(): React.JSX.Element {
   const selected = useSelection((s) => s.selected)
   const inspection = useSelection((s) => s.inspection)
   const inspecting = useSelection((s) => s.inspecting)
+  const panelDocked = usePropPanelMode((s) => s.docked)
   const projectRoot = useSession((s) => s.projectRoot)
   const drawerSource = useCodeDrawer((s) => s.source)
   const openCount = useWorkspace((s) => s.projects.length)
@@ -1247,6 +1250,30 @@ export default function App(): React.JSX.Element {
     []
   )
 
+  // Actions from the floating prop-panel island (its own webContents — relayed
+  // through main). Mirrors the docked panel's inline handlers.
+  useEffect(
+    () =>
+      window.api.panel.onAction((a) => {
+        const sel = useSelection.getState()
+        if (a.kind === 'close') sel.setSelected(null)
+        else if (a.kind === 'dock') usePropPanelMode.getState().setDocked(true)
+        else if (a.kind === 'seed') useComposer.getState().setSeed(a.text)
+        else if (a.kind === 'setup') {
+          useSetup.getState().setDismissed(false)
+          useSetup.getState().setNeeded(true)
+        } else if (a.kind === 'owner') {
+          const cur = sel.selected
+          if (cur?.componentSource) {
+            sel.setSelected({ ...cur, source: cur.componentSource, componentSource: null })
+          }
+        } else if (a.kind === 'inspection') {
+          sel.setInspection(a.inspection)
+        }
+      }),
+    []
+  )
+
   const hint =
     status.kind === 'idle'
       ? 'no project open'
@@ -1560,30 +1587,47 @@ export default function App(): React.JSX.Element {
       {logOpen && <ConsolePanel />}
 
       {/* Prop panel — shown for EVERY selection: editable fields when a schema
-          resolved, the readiness message (setup / owner / prompt-only) otherwise. */}
-      {selected && projectRoot && (
-        <PropPanel
-          root={projectRoot}
-          element={selected}
-          inspection={inspection}
-          inspecting={inspecting}
-          onChange={(next) => useSelection.getState().setInspection(next)}
-          onSeedPrompt={(t) => useComposer.getState().setSeed(t)}
-          onSetup={() => {
-            useSetup.getState().setDismissed(false)
-            useSetup.getState().setNeeded(true)
-          }}
-          onSelectOwner={() => {
-            // v8 F3a: re-point the selection at the component-instance call site
-            // so the panel edits this instance's props. One level up; the new
-            // selection has no further owner (it came from the DOM).
-            if (selected.componentSource) {
-              setSelected({ ...selected, source: selected.componentSource, componentSource: null })
-            }
-          }}
-          onClose={() => setSelected(null)}
-        />
-      )}
+          resolved, the readiness message (setup / owner / prompt-only) otherwise.
+          Floating (default): a native island ABOVE the preview content, driven
+          by PanelHost. Docked: the in-DOM sidebar reserving a preview inset. */}
+      {selected &&
+        projectRoot &&
+        (panelDocked ? (
+          <PropPanel
+            root={projectRoot}
+            element={selected}
+            variant="docked"
+            inspection={inspection}
+            inspecting={inspecting}
+            onChange={(next) => useSelection.getState().setInspection(next)}
+            onSeedPrompt={(t) => useComposer.getState().setSeed(t)}
+            onSetup={() => {
+              useSetup.getState().setDismissed(false)
+              useSetup.getState().setNeeded(true)
+            }}
+            onSelectOwner={() => {
+              // v8 F3a: re-point the selection at the component-instance call site
+              // so the panel edits this instance's props. One level up; the new
+              // selection has no further owner (it came from the DOM).
+              if (selected.componentSource) {
+                setSelected({
+                  ...selected,
+                  source: selected.componentSource,
+                  componentSource: null
+                })
+              }
+            }}
+            onToggleDock={() => usePropPanelMode.getState().setDocked(false)}
+            onClose={() => setSelected(null)}
+          />
+        ) : (
+          <PanelHost
+            root={projectRoot}
+            element={selected}
+            inspection={inspection}
+            inspecting={inspecting}
+          />
+        ))}
 
       {/* v5-D: review a previous agent session (transcript + branch/PR + files). */}
       {reviewing && <SessionReview record={reviewing} onClose={() => setReviewing(null)} />}

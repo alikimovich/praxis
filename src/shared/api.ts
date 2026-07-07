@@ -372,6 +372,23 @@ export interface PropInspection {
   note?: string
 }
 
+/** What the floating prop-panel island renders from (main renderer → island). */
+export interface PanelState {
+  root: string
+  element: SelectedElement
+  inspection: PropInspection | null
+  inspecting: boolean
+}
+
+/** A user action inside the island, relayed back to the main renderer. */
+export type PanelAction =
+  | { kind: 'close' }
+  | { kind: 'dock' }
+  | { kind: 'seed'; text: string }
+  | { kind: 'setup' }
+  | { kind: 'owner' }
+  | { kind: 'inspection'; inspection: PropInspection }
+
 export interface PropEdit {
   source: string
   name: string
@@ -556,6 +573,29 @@ export interface DsgnApi {
     onCommentMode: (cb: (mode: CommentMode) => void) => () => void
     /** Fires when the user submits an inline comment/annotation in the preview. */
     onComment: (cb: (c: PreviewComment) => void) => () => void
+  }
+  /**
+   * Floating prop-panel plumbing. The floating island is a separate
+   * WebContentsView stacked above the preview (DOM can't paint over a native
+   * view); the main renderer drives its bounds/state, the panel instance
+   * renders and reports actions/height back.
+   */
+  panel: {
+    /** Main renderer → position + show the island (window coordinates). */
+    show: (bounds: { x: number; y: number; width: number; height: number }) => void
+    hide: () => void
+    /** Main renderer → push the state the island renders from. */
+    setState: (state: PanelState) => void
+    /** Island → receive state pushes. */
+    onState: (cb: (state: PanelState) => void) => () => void
+    /** Island → relay a user action to the main renderer. */
+    action: (action: PanelAction) => void
+    /** Main renderer → handle island actions. */
+    onAction: (cb: (action: PanelAction) => void) => () => void
+    /** Island → report its natural content height (px). */
+    reportHeight: (height: number) => void
+    /** Main renderer → resize the island to the reported height. */
+    onHeight: (cb: (height: number) => void) => () => void
   }
   project: {
     pick: () => Promise<string | null>

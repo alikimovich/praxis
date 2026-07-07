@@ -215,6 +215,41 @@ function buildAppMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
+// ── Floating prop-panel view ─────────────────────────────────────────────────
+// The floating props island must paint ON TOP of the live preview content, and
+// renderer DOM never can (the preview is a native WebContentsView, which always
+// draws above the page). So the island is its own WebContentsView stacked after
+// (= above) the preview, running the same renderer bundle with ?dsgnPanel=1 —
+// that entry renders just the PropPanel and syncs state/actions over panel:*.
+let panelView: WebContentsView | null = null
+let panelState: unknown = null
+
+function ensurePanelView(): WebContentsView {
+  if (panelView) return panelView
+  panelView = new WebContentsView({
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      sandbox: true
+    }
+  })
+  // Transparent — the card draws its own surface + shadow inside the view rect.
+  panelView.setBackgroundColor('#00000000')
+  if (process.env['ELECTRON_RENDERER_URL']) {
+    void panelView.webContents.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?dsgnPanel=1`)
+  } else {
+    void panelView.webContents.loadFile(join(__dirname, '../renderer/index.html'), {
+      query: { dsgnPanel: '1' }
+    })
+  }
+  // The panel page is stateless — re-push the latest state after any (re)load.
+  panelView.webContents.on('did-finish-load', () => {
+    if (panelState) panelView?.webContents.send('panel:state', panelState)
+  })
+  mainWindow?.contentView.addChildView(panelView)
+  return panelView
+}
+
 function ensurePreviewView(): WebContentsView {
   if (previewView) return previewView
   previewView = new WebContentsView({
@@ -229,6 +264,9 @@ function ensurePreviewView(): WebContentsView {
   previewView.setBackgroundColor(previewBg())
   previewView.webContents.loadURL(PLACEHOLDER_HTML)
   mainWindow?.contentView.addChildView(previewView)
+  // The floating props island must stay ABOVE the preview (addChildView with an
+  // existing child re-appends = raises it).
+  if (panelView) mainWindow?.contentView.addChildView(panelView)
 
   const wc = previewView.webContents
 
@@ -457,6 +495,39 @@ function registerPreviewIpc(): void {
   // Renderer dropped the selection (pill ×, message sent) → hide the toolbar.
   ipcMain.on('preview:clear-selected', () => {
     previewView?.webContents.send(PREVIEW_CLEAR_SELECTED)
+  })
+
+  // ── Floating prop-panel plumbing (renderer ⇄ panel view, via main) ──────────
+  const fromMainWindow = (e: Electron.IpcMainEvent): boolean =>
+    e.sender === mainWindow?.webContents
+  ipcMain.on('panel:show', (e, b: { x: number; y: number; width: number; height: number }) => {
+    if (!fromMainWindow(e)) return
+    const v = ensurePanelView()
+    v.setBounds({
+      x: Math.round(b.x),
+      y: Math.round(b.y),
+      width: Math.max(0, Math.round(b.width)),
+      height: Math.max(0, Math.round(b.height))
+    })
+    v.setVisible(true)
+  })
+  ipcMain.on('panel:hide', (e) => {
+    if (!fromMainWindow(e)) return
+    panelView?.setVisible(false)
+  })
+  ipcMain.on('panel:state', (e, state: unknown) => {
+    if (!fromMainWindow(e)) return
+    panelState = state
+    panelView?.webContents.send('panel:state', state)
+  })
+  // Panel → main renderer: user actions (close/dock/seed/…) and content height.
+  ipcMain.on('panel:action', (e, action: unknown) => {
+    if (e.sender !== panelView?.webContents) return
+    mainWindow?.webContents.send('panel:action', action)
+  })
+  ipcMain.on('panel:height', (e, height: number) => {
+    if (e.sender !== panelView?.webContents) return
+    mainWindow?.webContents.send('panel:height', height)
   })
 
   // v3 annotation pins: renderer pushes the list → preview; clicks come back.
