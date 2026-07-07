@@ -53,5 +53,5 @@ Ranked by leverage. Deferred items note *why* they're not auto-completable.
       isn't possible headless — do interactively with the app open.*
 - [ ] **Finish the Praxis/dsgn naming decision.** GitHub repo is already `praxis`;
       local dir + `data-dsgn-source` attribute still say dsgn. Decide the blast
-      radius (prose-only vs. attribute rename) and record it in CONTEXT.md.
+      radius (prose-only vs. attribute rename) and record it in CLAUDE.md.
       *Deferred: product decision, not a mechanical task.*

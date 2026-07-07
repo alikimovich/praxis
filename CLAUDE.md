@@ -9,12 +9,13 @@ authenticates with their own provider subscription (`claude setup-token` /
 
 ## Start here every session
 
-1. Read `docs/CONTEXT.md` (current state, decisions + rationale, what's verified).
-2. Read `docs/TASKS.md` (the roadmap / what to do next).
-3. When you finish a chunk, append to `docs/PROGRESS.md` (newest first) and
-   tick `docs/TASKS.md`. **If your change invalidates a claim in CONTEXT.md or
-   this file, fix that doc in the same commit** — stale docs mislead the next
-   agent more than no docs.
+1. Read the top of `docs/PROGRESS.md` (newest-first log — recent state + the
+   *why* behind decisions) and `docs/TASKS.md` (the roadmap / what's next).
+2. When you finish a chunk, append to `docs/PROGRESS.md` and tick `docs/TASKS.md`.
+3. **If your change contradicts something in this file or `README.md`, fix that
+   doc in the same commit** — this file is auto-loaded into every session, so a
+   stale claim here misleads every future agent. `test/docs-links.mjs` fails CI
+   if a `src/…` path referenced here or in the README no longer exists.
 
 ## Commands
 
@@ -79,13 +80,25 @@ src/
   renderer/src/     React 18 UI: App.tsx, components/ (ChatPanel, PreviewPane,
                     PropPanel, CodeDrawer, Rail, …), zustand store.ts, shadcn ui/
 test/             hand-rolled .mjs tests + fixtures/ + artifacts/ (PNGs, gitignored)
-docs/             CONTEXT / TASKS / PROGRESS / DESIGN / plans / REVIEW-*
+docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec)
 ```
 
 - The chat runs in `main` via provider SDKs; output streams over `agent:*` IPC
   into the zustand store. The store is the seam between transport and UI.
 - Praxis **owns** the dev-server lifecycle of the target repo (never run the
-  target's `dev` manually).
+  target's `dev` manually); it's killed on app quit.
+
+**Why it's built this way (non-obvious choices):**
+- **Agent core = SDK in-process** (not ACP/subprocess): the product's custom
+  tools (select element → edit props → annotate → PR) are wired to the renderer
+  and need in-process SDK tools.
+- **Preview = native `WebContentsView`, not an iframe**: so a preload can be
+  injected into the previewed app for element selection (a cross-origin iframe
+  couldn't).
+- **Prop editing is hybrid**: simple literals splice straight into source (instant
+  HMR); complex/expression values fall back to the agent. React and Svelte have
+  separate engines because their ASTs differ; selection/tokens are framework-
+  agnostic (they only need the `data-dsgn-source` stamp — see `docs/DESIGN.md`).
 
 ## Conventions
 
@@ -105,3 +118,32 @@ docs/             CONTEXT / TASKS / PROGRESS / DESIGN / plans / REVIEW-*
   `store.ts`, or `styles.css` (already oversized — see `docs/TASKS.md`).
 - Auth is per-user at runtime; never commit secrets. Nothing sensitive in-repo.
 - Commit in small, focused commits with the Co-Authored-By trailer.
+
+## Gotchas (hard-won — read before debugging these areas)
+
+- **ESM/CJS**: the Agent SDK is ESM-only, `main` is CJS → dynamic `import()`
+  only, never static/`require`.
+- **The preview `WebContentsView` is a separate CDP target** — not in renderer
+  page screenshots (use `capturePage()`), and it eats mouse events (hidden
+  during resize drag). Drive it from a test via the main process
+  (`webContents.executeJavaScript`), as `test/select-element.mjs` does.
+- **A renderer DOM panel can't float *above* the native preview** (native views
+  render over the page). Panels reserve a strip instead, shrinking the native
+  bounds via `usePanelInset`: the prop panel takes the **right** edge, the v9
+  code drawer the **bottom**.
+- **The preview overlay preload is sandboxed** — only `ipcRenderer` (no Node, no
+  contextBridge), shares the page DOM via a `pointer-events:none` shadow root,
+  and re-runs on every navigation, so `main` re-sends the current select-mode on
+  `did-finish-load`.
+- **Prop editing is gated** on `PropInspection.hasSchema` (a resolved
+  react-docgen/svelte schema). Unready components are prompt-only; the on-open
+  setup offer instruments them.
+- **Dev CDP**: `bun run dev` opens `--remote-debugging-port` 9222 (override
+  `DSGN_DEBUG_PORT`; dev-only). Inspect either target via Chrome
+  `chrome://inspect#devices`; Playwright's `_electron` still can't reach the
+  preview as a page target. On Chrome 111+ attach failures, add
+  `app.commandLine.appendSwitch('remote-allow-origins', 'devtools://devtools')`.
+- **bun blocks postinstall for untrusted deps** — `electron`/`esbuild` are in
+  `package.json#trustedDependencies` so their binaries install.
+- **The agent is denied writes under a target repo's `.dsgn/`** (annotations +
+  scaffolded instrumentation live there).

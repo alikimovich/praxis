@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-07 — Cut CONTEXT.md; add a docs-drift guard
+
+- Deleted `docs/CONTEXT.md`. Its three sections each duplicated something else
+  (what-it-is → README/CLAUDE; rationale → PROGRESS; module map → CLAUDE's
+  architecture block). Folded the genuinely-unique parts — the **Gotchas** and
+  the non-obvious **why-it's-built-this-way** rationale — into CLAUDE.md, and
+  retargeted the session-start ritual (was "read CONTEXT.md first") to
+  PROGRESS + TASKS. docs/ is now DESIGN + PROGRESS + TASKS.
+- **Anti-drift guard:** `test/docs-links.mjs` (new, unit tier → runs in CI)
+  parses every anchored repo path referenced in CLAUDE.md + README.md and fails
+  if any no longer exists. This is the check that would have caught the stale
+  `PropEditor.tsx`/`TokenPalette.tsx` references. A reminder-hook was considered
+  and rejected — a deterministic CI check has zero noise vs. a nag agents tune
+  out. Verified: catches a bad path, 16/16 unit green.
+
 ## 2026-07-07 — Health/infra tasks: test runner, CI, Biome, gemini gate
 
 Implemented the four safe/verifiable items from the review (the rest — harness
