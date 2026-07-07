@@ -1,9 +1,5 @@
 # Praxis
 
-> **Note:** the project's original name was **dsgn**, and it still lives on in
-> the code — the `data-dsgn-source` stamp attribute and various file and type
-> names. The product is **Praxis**.
-
 An AI design & prototyping tool for your own repos. Open a project, Praxis
 launches its dev server in a live preview on the right, and an AI chat on the
 left edits the running app — respecting the repo's own `CLAUDE.md` and skills.
