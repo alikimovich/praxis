@@ -572,6 +572,8 @@ export interface DsgnApi {
     clearSelected: () => void
     /** Launch progress shown inside the preview (bottom pill); null clears. */
     setStatus: (text: string | null) => void
+    /** Fires when S is pressed inside the focused preview (toggle select). */
+    onToggleSelect: (cb: () => void) => () => void
     /** Fires when the preview navigates (link clicks, SPA routes) — full URL. */
     onUrlChanged: (cb: (url: string) => void) => () => void
     /** Selection-toolbar actions that resolve in the renderer (code / delete). */
@@ -682,6 +684,8 @@ export interface DsgnApi {
     apply: (root: string, edit: { source: string; text: string }) => Promise<PropEditResult>
   }
   source: {
+    /** Resolve a component tag name to its defining file via imports (Cmd+click). */
+    resolveComponent: (root: string, fromFile: string, name: string) => Promise<string | null>
     /** Read the stamped element's source file for the inspector's code peek. */
     read: (root: string, source: string) => Promise<SourceView | null>
     /** Jump to the stamp in the user's editor (code/cursor/zed/subl CLI → OS default app). */

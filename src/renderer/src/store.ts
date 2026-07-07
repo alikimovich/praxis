@@ -326,13 +326,31 @@ export const usePanelInset = create<PanelInsetState>((set) => ({
 interface CodeDrawerState {
   /** The `data-dsgn-source` string of the file open in the drawer, or null. */
   source: string | null
+  /** Navigation history (Cmd+click jumps push here); index points at `source`. */
+  stack: string[]
+  index: number
   open: (source: string) => void
+  back: () => void
+  forward: () => void
   close: () => void
 }
 export const useCodeDrawer = create<CodeDrawerState>((set) => ({
   source: null,
-  open: (source) => set({ source }),
-  close: () => set({ source: null })
+  stack: [],
+  index: -1,
+  open: (source) =>
+    set((s) => {
+      if (s.source === source) return {}
+      // A new open truncates any forward history (browser semantics).
+      const stack = [...s.stack.slice(0, s.index + 1), source]
+      return { source, stack, index: stack.length - 1 }
+    }),
+  back: () => set((s) => (s.index > 0 ? { index: s.index - 1, source: s.stack[s.index - 1] } : {})),
+  forward: () =>
+    set((s) =>
+      s.index < s.stack.length - 1 ? { index: s.index + 1, source: s.stack[s.index + 1] } : {}
+    ),
+  close: () => set({ source: null, stack: [], index: -1 })
 }))
 
 /**

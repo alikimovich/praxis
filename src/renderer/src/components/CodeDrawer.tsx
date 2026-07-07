@@ -8,9 +8,9 @@ import { javascript } from '@codemirror/lang-javascript'
 import { html } from '@codemirror/lang-html'
 import { css } from '@codemirror/lang-css'
 import { svelte } from '@replit/codemirror-lang-svelte'
-import { X, Save, ExternalLink, Maximize2, Minimize2 } from 'lucide-react'
+import { X, Save, ExternalLink, Maximize2, Minimize2, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { SourceView } from '../../../shared/api'
-import { usePanelInset } from '../store'
+import { useCodeDrawer, usePanelInset } from '../store'
 import { Button } from '@/components/ui/button'
 
 /** Collapsed height of the drawer + the native-preview strip it reserves. */
@@ -129,6 +129,9 @@ export default function CodeDrawer({
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
+  // Cmd+click jump history (browser semantics) — lives in the drawer store.
+  const navIndex = useCodeDrawer((s) => s.index)
+  const navLen = useCodeDrawer((s) => s.stack.length)
   // Height of the drawer's positioning container (.previewcard__body), tracked so
   // "expand" can fill it while leaving a MIN_PREVIEW strip of native preview above.
   const [containerH, setContainerH] = useState(0)
@@ -223,6 +226,24 @@ export default function CodeDrawer({
           basicSetup,
           ...langFor(view.file),
           stampField,
+          // Cmd+click a capitalized tag/identifier (<Workplace …/>) → resolve it
+          // through this file's imports and open that component in the drawer.
+          EditorView.domEventHandlers({
+            mousedown: (e, v) => {
+              if (!(e.metaKey || e.ctrlKey) || e.button !== 0) return false
+              const pos = v.posAtCoords({ x: e.clientX, y: e.clientY })
+              if (pos == null) return false
+              const word = v.state.wordAt(pos)
+              if (!word) return false
+              const name = v.state.doc.sliceString(word.from, word.to)
+              if (!/^[A-Z][A-Za-z0-9_$]*$/.test(name)) return false
+              e.preventDefault()
+              void window.api.source.resolveComponent(root, view.file, name).then((file) => {
+                if (file) useCodeDrawer.getState().open(`${file}:1`)
+              })
+              return true
+            }
+          }),
           keymap.of([{ key: 'Mod-s', preventDefault: true, run: () => (saveRef.current(), true) }]),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) setDirty(u.state.doc.toString() !== baselineRef.current)
@@ -268,6 +289,29 @@ export default function CodeDrawer({
       aria-label="Code editor"
     >
       <div className="codedrawer__head flex items-center gap-2 border-b px-3 py-1.5">
+        {/* Cmd+click jumps build history — navigate it like a browser. */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="codedrawer__back size-6 text-muted-foreground"
+          onClick={() => useCodeDrawer.getState().back()}
+          disabled={navIndex <= 0}
+          aria-label="Back"
+          title="Back"
+        >
+          <ChevronLeft className="size-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="codedrawer__fwd -ml-1.5 size-6 text-muted-foreground"
+          onClick={() => useCodeDrawer.getState().forward()}
+          disabled={navIndex >= navLen - 1}
+          aria-label="Forward"
+          title="Forward"
+        >
+          <ChevronRight className="size-3.5" />
+        </Button>
         <span className="codedrawer__file min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11.5px] text-muted-foreground">
           {meta ? `${meta.file}:${meta.line}` : 'Loading…'}
           {dirty && <span className="codedrawer__dirty ml-1.5 text-amber-600" title="Unsaved changes">●</span>}

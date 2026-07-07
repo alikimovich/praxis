@@ -33,6 +33,7 @@ const SET_FRAME = 'dsgn:preview:set-frame' // renderer → preload (mobile bezel
 const TOOLBAR_ACTION = 'dsgn:preview:toolbar-action' // preload → renderer (code/delete)
 const CLEAR_SELECTED = 'dsgn:preview:clear-selected' // renderer → preload (pill ×, send)
 const SET_STATUS = 'dsgn:preview:set-status' // main → preload (launch progress pill)
+const TOGGLE_SELECT = 'dsgn:preview:toggle-select' // preload → renderer (S pressed in preview)
 
 type CommentMode = 'comment' | 'annotate' | null
 
@@ -789,6 +790,11 @@ function onKey(e: KeyboardEvent): void {
   } else if (e.key === 'y' || e.key === 'Y') {
     e.preventDefault()
     setCommentMode(commentMode === 'annotate' ? null : 'annotate')
+  } else if (e.key === 's' || e.key === 'S') {
+    // S must work with the preview focused too. The renderer owns the toggle
+    // (store + web/simulator routing) — relay instead of flipping locally.
+    e.preventDefault()
+    ipcRenderer.send(TOGGLE_SELECT)
   }
 }
 

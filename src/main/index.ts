@@ -58,6 +58,7 @@ const PREVIEW_SET_FRAME = 'dsgn:preview:set-frame'
 const PREVIEW_TOOLBAR_ACTION = 'dsgn:preview:toolbar-action'
 const PREVIEW_CLEAR_SELECTED = 'dsgn:preview:clear-selected'
 const PREVIEW_SET_STATUS = 'dsgn:preview:set-status'
+const PREVIEW_TOGGLE_SELECT = 'dsgn:preview:toggle-select'
 
 // Launch-status pill text (shown inside the preview); re-pushed after loads.
 let previewStatusText: string | null = null
@@ -509,6 +510,12 @@ function registerPreviewIpc(): void {
   // Renderer dropped the selection (pill ×, message sent) → hide the toolbar.
   ipcMain.on('preview:clear-selected', () => {
     previewView?.webContents.send(PREVIEW_CLEAR_SELECTED)
+  })
+
+  // S pressed while the preview has focus → the renderer runs its toggle.
+  ipcMain.on(PREVIEW_TOGGLE_SELECT, (e) => {
+    if (e.sender !== previewView?.webContents) return
+    mainWindow?.webContents.send('preview:toggle-select')
   })
 
   // Launch progress, drawn INSIDE the preview (bottom-center pill) instead of a

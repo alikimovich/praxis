@@ -113,6 +113,32 @@ try {
   if (await win.$('.codedrawer')) throw new Error('drawer did not unmount on close')
 
   if (disk() !== baseline) throw new Error('fixture left modified')
+  // --- Cmd+click resolution engine + drawer nav history. ---
+  const resolved = await win.evaluate(
+    (f) => window.api.source.resolveComponent(f, 'src/Card.tsx', 'Button'),
+    fixture
+  )
+  if (resolved !== 'src/Button.tsx') throw new Error(`resolveComponent: ${resolved}`)
+  const bare = await win.evaluate(
+    (f) => window.api.source.resolveComponent(f, 'src/Card.tsx', 'React'),
+    fixture
+  )
+  if (bare !== null) throw new Error(`bare package import must not resolve: ${bare}`)
+  const nav = await win.evaluate(() => {
+    const d = () => window.__dsgnCodeDrawer.getState()
+    d().open('src/Card.tsx:3')
+    d().open('src/Button.tsx:1')
+    d().back()
+    const afterBack = d().source
+    d().forward()
+    const afterFwd = d().source
+    d().close()
+    return { afterBack, afterFwd }
+  })
+  if (nav.afterBack !== 'src/Card.tsx:3' || nav.afterFwd !== 'src/Button.tsx:1') {
+    throw new Error(`drawer nav history wrong: ${JSON.stringify(nav)}`)
+  }
+
   console.log('CODE-DRAWER OK — conflict guard + save + undo, drawer mount/inset/close')
 } catch (err) {
   console.error('CODE-DRAWER FAILED:', err?.message ?? err)

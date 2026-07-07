@@ -2,7 +2,8 @@ import { ipcMain, shell } from 'electron'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { readFile, writeFile } from 'fs/promises'
-import { dirname, isAbsolute, join, normalize, relative } from 'path'
+import { existsSync, readFileSync, statSync } from 'fs'
+import { basename, dirname, isAbsolute, join, normalize, relative, resolve } from 'path'
 import type {
   PropEdit,
   PropEditResult,
@@ -1060,6 +1061,98 @@ async function openInEditor(root: string, source: string): Promise<{ ok: boolean
   return err ? { ok: false, error: err } : { ok: true }
 }
 
+/**
+ * Resolve a component NAME used in `fromFile` (repo-relative) to the file that
+ * defines it, by reading the import statement and resolving its specifier —
+ * relative paths, the common `src` aliases ($lib for SvelteKit, @/ and ~/), and
+ * one hop through a barrel/index re-export. Returns a repo-relative path, or
+ * null when the import is a bare package or nothing matches.
+ */
+function resolveComponentByImports(root: string, fromFile: string, name: string): string | null {
+  if (!/^[A-Za-z_][\w$]*$/.test(name)) return null
+  const abs = normalize(join(root, fromFile))
+  if (!abs.startsWith(normalize(root))) return null
+  let code: string
+  try {
+    code = readFileSync(abs, 'utf8')
+  } catch {
+    return null
+  }
+  const spec = findImportSpec(code, name)
+  if (!spec) return null
+  return resolveSpec(root, dirname(abs), spec, name, 0)
+}
+
+/** The module specifier importing `name` (default, named, or aliased). */
+function findImportSpec(code: string, name: string): string | null {
+  for (const m of code.matchAll(/import\s+([^'"]+?)\s+from\s+['"]([^'"]+)['"]/g)) {
+    const locals = m[1]
+      .replace(/[{}]/g, ',')
+      .split(',')
+      .map((part) => {
+        const bits = part.trim().split(/\s+as\s+/)
+        return (bits[1] ?? bits[0]).trim()
+      })
+    if (locals.includes(name)) return m[2]
+  }
+  return null
+}
+
+const RESOLVE_EXTS = ['', '.svelte', '.tsx', '.jsx', '.ts', '.js', '.vue', '.mjs']
+
+function resolveSpec(
+  root: string,
+  fromDir: string,
+  spec: string,
+  name: string,
+  depth: number
+): string | null {
+  let base: string | null = null
+  if (spec.startsWith('.')) base = resolve(fromDir, spec)
+  else if (spec === '$lib' || spec.startsWith('$lib/')) base = join(root, 'src/lib', spec.slice(5))
+  else if (spec.startsWith('@/')) base = join(root, 'src', spec.slice(2))
+  else if (spec.startsWith('~/')) base = join(root, 'src', spec.slice(2))
+  else return null // bare package import — nothing to open
+  if (!normalize(base).startsWith(normalize(root))) return null
+
+  const candidates: string[] = RESOLVE_EXTS.map((e) => base + e)
+  for (const e of RESOLVE_EXTS.slice(1)) candidates.push(join(base, `index${e}`))
+  const hit = candidates.find((c) => {
+    try {
+      return existsSync(c) && statSync(c).isFile()
+    } catch {
+      return false
+    }
+  })
+  if (!hit) return null
+
+  const rel = relative(root, hit)
+  const stem = basename(hit).replace(/\.[^.]+$/, '')
+  // Direct hit (file named after the component) — done. Otherwise this is
+  // likely a barrel; follow ONE re-export hop for `name`.
+  if (stem.toLowerCase() === name.toLowerCase() || depth >= 2) return rel
+  try {
+    const barrel = readFileSync(hit, 'utf8')
+    const reExport = new RegExp(
+      `export\\s+(?:\\{[^}]*\\b(?:default\\s+as\\s+)?${name}\\b[^}]*\\}|\\*)\\s*from\\s*['"]([^'"]+)['"]`,
+      'g'
+    )
+    for (const m of barrel.matchAll(reExport)) {
+      const next = resolveSpec(root, dirname(hit), m[1], name, depth + 1)
+      if (next) return next
+    }
+    // import X … ; export { X } — the two-statement barrel style.
+    const spec2 = findImportSpec(barrel, name)
+    if (spec2 && new RegExp(`export\\s*\\{[^}]*\\b${name}\\b[^}]*\\}`).test(barrel)) {
+      const next = resolveSpec(root, dirname(hit), spec2, name, depth + 1)
+      if (next) return next
+    }
+  } catch {
+    /* barrel unreadable — the barrel itself is still a useful destination */
+  }
+  return rel
+}
+
 export function registerPropsIpc(): void {
   ipcMain.handle('props:inspect', (_e, root: string, source: string, text?: string | null) =>
     inspectProps(root, source, text)
@@ -1071,6 +1164,11 @@ export function registerPropsIpc(): void {
   )
   ipcMain.handle('text:apply', (_e, root: string, edit: { source: string; text: string }) =>
     applyTextEdit(root, edit)
+  )
+  // Cmd+click in the code drawer: resolve a component tag name to its source
+  // file via the current file's imports (aliases + one barrel hop included).
+  ipcMain.handle('source:resolve-component', (_e, root: string, fromFile: string, name: string) =>
+    resolveComponentByImports(root, fromFile, name)
   )
   // v2 code peek: read the stamped file inline / jump to it in the user's editor.
   ipcMain.handle('source:read', (_e, root: string, source: string) => readSourceView(root, source))
