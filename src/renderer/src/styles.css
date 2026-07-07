@@ -1523,8 +1523,8 @@ body.is-resizing {
 .cat-loader {
     flex: 0 0 auto;
     display: inline-block;
-    width: 20px;
-    height: 20px;
+    width: 26px;
+    height: 26px;
     color: var(--muted-foreground);
     background-color: currentColor;
     -webkit-mask-repeat: no-repeat;
