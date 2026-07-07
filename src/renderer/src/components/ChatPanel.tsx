@@ -623,7 +623,7 @@ export default function ChatPanel(): React.JSX.Element {
   // shadcn Select) on purpose: tiny controls, and the permission-mode test reads
   // native <option> values via $$eval — a Radix portal would break it.
   const selectCls =
-    'cursor-pointer appearance-none rounded-md border-0 bg-transparent px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+    'h-6 cursor-pointer appearance-none rounded-md border-0 bg-transparent px-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
   return (
     <div className="chat flex h-full flex-col">
