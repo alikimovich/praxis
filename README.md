@@ -1,81 +1,109 @@
-# dsgn
+# Praxis
 
-An AI design & prototyping tool for your own repos. Open a project, dsgn launches
-its dev server in a live preview on the right, and a Claude-powered chat on the
+> The product is **Praxis** (`package.json`); the repo, GitHub remote, and the
+> `data-dsgn-source` stamping protocol are still named **dsgn**. See
+> [`docs/REVIEW-2026-07-07.md`](docs/REVIEW-2026-07-07.md) for the rebrand plan.
+
+An AI design & prototyping tool for your own repos. Open a project, Praxis
+launches its dev server in a live preview on the right, and an AI chat on the
 left edits the running app — respecting the repo's own `CLAUDE.md` and skills.
 
-> Status: **working v1 + v2 first slice.** Open a folder → dsgn detects the
-> framework, runs its dev server, and previews it. The chat is a real multi-turn
-> Claude Agent SDK session (markdown, tool-use status, model + thinking selectors,
-> `/` skill menu) that edits the running repo with live hot-reload in the preview.
-> **New:** a **Select** mode lets you click an element in the live preview to pick
-> it — dsgn resolves its source location (via a `data-dsgn-source` stamp, see
-> [`docs/DESIGN.md`](docs/DESIGN.md)), edit its **props** with typed controls
-> (react-docgen, cross-file aware), apply the repo's **design tokens** (auto-detected
-> from a manifest, Tailwind, or CSS vars), pin **review notes** to it, and **Publish** a
-> branch + GitHub PR for engineer handoff. Tool calls run behind approve/deny cards (or
-> an Auto mode).
+Unlike a sandbox (Figma Make, Claude Code's scratch dir), Praxis edits *your
+real repository* with live hot-reload, and hands the result off as a branch +
+GitHub PR.
+
+## What it does
+
+- **Live preview of your repo.** Open a folder → Praxis detects the framework
+  and package manager, boots that repo's dev server, and previews it in a
+  native `WebContentsView`. It self-heals if the dev server dies and restarts.
+- **AI chat that edits the running app.** A persistent multi-turn agent session
+  streams over IPC and edits source with hot-reload. Backends are pluggable —
+  Claude (via the Agent SDK), Codex, and Gemini behind one provider seam
+  (Gemini is experimental; see the review doc).
+- **Click-to-edit.** A **Select** mode maps a clicked element to its source
+  location (via the `data-dsgn-source` stamp — see
+  [`docs/DESIGN.md`](docs/DESIGN.md)), then edits its **props** with typed
+  controls (react-docgen for React, `svelte/compiler` for Svelte 5), applies
+  the repo's **design tokens** (auto-detected from a manifest, Tailwind, or CSS
+  vars), and edits text inline. Non-literal cases route to the chat.
+- **Review → handoff.** Pin comments/notes to elements and **Publish** a branch
+  + GitHub PR. Comments can spawn parallel background agent sessions (each in
+  its own git worktree).
+- **iOS Simulator preview** for Expo/React Native projects (Metro detect + an
+  MJPEG bridge into the preview pane).
+- Tool calls run behind approve/deny cards, or an Auto mode. Edits are
+  undoable (`Cmd+Z`) via an edit-history stack.
 
 ## Requirements
 
-- **Node ≥ 20** (a `.nvmrc` pins 22). Each teammate needs Node + a package
-  manager installed — this tool is distributed as source, run locally.
-- A **Claude Pro/Max subscription** for the agent (per-user auth, below).
+- **Node 22** (`.nvmrc`) and **Bun** (`bun@1.3.x`). Distributed as source, run
+  locally — each teammate needs Node + Bun installed.
+- A provider subscription for the agent (e.g. Claude Pro/Max), authorized
+  per-user (below). No shared secret.
+- macOS is the primary target (the postinstall step rebrands the dev Electron
+  bundle to Praxis and is macOS-only; it no-ops elsewhere).
 
 ## Setup
 
 ```bash
-git clone <repo-url>
+git clone git@github.com:alikimovich/dsgn.git
 cd dsgn
-bun install      # or: npm install / yarn
+bun install                # runs scripts/patch-electron.mjs (macOS: brands the dev app)
 
-# One-time: authorize the agent with your own Claude subscription.
-claude setup-token   # or: claude login
+claude setup-token         # one-time: authorize the agent with your own subscription
 
-bun run dev      # or: npm run dev / yarn dev
+bun run dev                # electron-vite, HMR
 ```
 
 In the app, click **Open project…**, pick a repo with a `dev`/`start` script,
-and chat on the left. dsgn **owns the dev server** — don't also run `dev`
+and chat on the left. Praxis **owns the dev server** — don't also run `dev`
 manually for a project you open here, or you'll hit a port/lock conflict (the
 error banner offers a custom-command retry for monorepos / odd setups).
 
-## How it's distributed
-
-There's no signed app or installer. Teammates **clone and run** from source;
-updates are a `git pull`. Auth is per-user via `claude setup-token`, so everyone
-runs on their own Claude subscription — no shared secret.
+Updates are a `git pull`; there is no signed app or installer.
 
 ## Architecture
 
+Four process boundaries (details in [`CLAUDE.md`](CLAUDE.md)):
+
 ```
 Electron
-├─ main        Agent SDK session · dev-server runner · preview (cwd = opened repo)
-├─ preload     typed contextBridge → window.api   (types in src/shared/api.ts)
-└─ renderer    React UI: chat (left) + preview slot (right)
-               the preview is a native WebContentsView positioned by main
+├─ main            agent session · dev-server runner · provider backends · iOS sim
+│                  · prop/text/token edit engines · annotations→PR · git/worktrees
+├─ preload         typed contextBridge → window.api      (types in src/shared/api.ts)
+├─ preview/preload injected into the PREVIEWED app: element select, comments, tokens
+└─ renderer        React 18 + Tailwind v4 + shadcn/ui: chat (left) + preview (right)
 ```
 
-- **Preview** is a native `WebContentsView`, not an iframe, so a preload can be
-  injected into the previewed app later (element selection → prop editing).
-- **Chat** runs a persistent multi-turn Agent SDK `query()` in main; output
-  streams over `agent:*` IPC into a zustand store (the seam where assistant-ui
-  could later drop in). Respects the repo's `CLAUDE.md` + skills via
+- **Preview** is a native `WebContentsView`, not an iframe, so a second preload
+  is injected into the previewed app for element selection.
+- **Chat** streams over `agent:*` IPC into a zustand store (the seam between
+  transport and UI). It respects the opened repo's `CLAUDE.md` + skills via
   `settingSources` + the `claude_code` system-prompt preset.
-- **Conventions** (`CLAUDE.md`, skills, and a planned `DESIGN.md` design-system
-  spec) live in the opened repo and travel with it.
+- **Conventions travel with the opened repo** — its `CLAUDE.md`, skills, and
+  `DESIGN.md` describe how Praxis should edit it.
 
 ## Testing
 
-`bun run test` launches the built app via Playwright + Electron and saves
-screenshots to `test/artifacts/` (shell, open→preview with native-view capture,
-and chat rendering). Individual: `test:smoke`, `test:preview`, `test:chat`.
+Tests are hand-rolled `.mjs` scripts in three tiers:
+
+- **Unit** (pure Bun, no display): `bun test/<name>.mjs` — fast, always run the
+  relevant ones.
+- **UI** (Playwright + Electron against the built app): `bun run test:<name>` —
+  drives the app and screenshots to `test/artifacts/`; **read the PNGs** to
+  confirm UI visually.
+- **Live e2e** (`test:agent`, `test:codex`, `test:sim-e2e`): run a real provider
+  turn / simulator; self-SKIP without credentials.
+
+`bun run test` runs unit + UI; `bun run verify` adds the live e2e tier.
 
 ## Scripts
 
 | Command | Description |
 | --- | --- |
 | `bun run dev` | Launch the app with HMR |
-| `bun run build` | Build main/preload/renderer to `out/` |
-| `bun run typecheck` | Type-check main + renderer |
-| `bun run test` | Build + run the Playwright/Electron tests |
+| `bun run build` | Build main/preload/preview/renderer to `out/` |
+| `bun run typecheck` | Type-check all three tsconfig projects |
+| `bun run test` | Build + run unit and Electron UI tests |
+| `bun run verify` | `test` + live-agent/simulator e2e (needs creds + display) |

@@ -2,6 +2,29 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-07 — Repo health review + CLAUDE.md refresh
+
+- Full review written to `docs/REVIEW-2026-07-07.md`: 9 ranked improvement
+  items (finish the Praxis/dsgn naming decision, replace the package.json
+  test mega-chains with a `test/run.mjs` runner, shared test harness, CI,
+  lint/format tool, god-file splits, doc staleness fixes, gemini backend has
+  no SDK dep, branch cleanup) plus a keep-doing-it list.
+- CLAUDE.md rewritten: it still claimed "Plain CSS, no Tailwind" (inverted
+  since 2026-06-26), listed 3 of ~27 main modules, and omitted the
+  `src/preview/preload.ts` process boundary and the three test tiers. Now
+  matches reality; typecheck + all 15 pure-bun tests were green at review time.
+- Docs cleanup: removed two fully-shipped, code-unreferenced docs —
+  `PLAN-direct-editing.md` (R1/F1/F3 all landed: rules.ts, worktrees.ts,
+  edit-history.ts, spawn-comment/comment-mode tests) and
+  `v7-multi-provider-design.md` (backends/ + provider-seam shipped). Kept
+  `PLAN-proactive-checks.md` (diag-rules.ts still cites it) and
+  `TASKS-archive.md` (active TASKS.md links it). Fixed CONTEXT.md staleness:
+  header date, `PropEditor.tsx`→`PropPanel.tsx`, `TokenPalette.tsx`→
+  `TokenOfferCard.tsx`.
+- README rewritten: was "dsgn / working v1 + v2 first slice / Claude-powered";
+  now Praxis, v9 state, multi-provider, four process boundaries, iOS sim,
+  Tailwind+shadcn, three test tiers.
+
 ## 2026-07-04 — Preview self-heals when its dev server dies and comes back
 
 - A dev server that dies mid-session (crash, external kill) left the preview
