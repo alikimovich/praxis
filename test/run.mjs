@@ -40,6 +40,7 @@ const UNIT = [
   'rules',
   'tw-classes',
   'svelte-instance',
+  'docs-links',
 ];
 
 // electron = the `node test/NAME.mjs` group AFTER `electron-vite build` in `test`.
