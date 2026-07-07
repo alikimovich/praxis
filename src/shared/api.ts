@@ -378,6 +378,12 @@ export interface PanelState {
   element: SelectedElement
   inspection: PropInspection | null
   inspecting: boolean
+  /**
+   * Tallest the CARD may grow (px) — derived from the preview area by the main
+   * renderer. The island must not size itself from its own viewport (the view's
+   * height follows the card's reported height; 100vh would be circular).
+   */
+  maxHeight: number
 }
 
 /** A user action inside the island, relayed back to the main renderer. */

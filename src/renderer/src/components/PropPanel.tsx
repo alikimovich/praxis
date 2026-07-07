@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PanelRight, PictureInPicture2 } from 'lucide-react'
 
-/** Reserved native-preview inset: the card's width (w-[268px]) + breathing room
- * so the floating card sits over the gutter, not the live page. */
-const PANEL_WIDTH = 292
+/** Docked sidebar: the reserved native-preview inset equals the panel width
+ * (w-80) so the panel exactly fills the freed strip — it reads as a column
+ * BESIDE the preview, not a card floating over it. */
+const PANEL_WIDTH = 320
 
 interface Props {
   root: string
@@ -18,6 +19,8 @@ interface Props {
    * reserves a native-preview inset strip.
    */
   variant: 'overlay' | 'docked'
+  /** Overlay only: tallest the card may grow (px) — supplied by PanelHost. */
+  maxHeight?: number
   /** null → no schema (readiness messaging shows instead of fields). */
   inspection: PropInspection | null
   /** Inspection still in flight. */
@@ -48,6 +51,7 @@ export default function PropPanel({
   root,
   element,
   variant,
+  maxHeight,
   inspection,
   inspecting,
   onChange,
@@ -140,11 +144,15 @@ export default function PropPanel({
        Never overlaps the previewbar controls. Floating (default): auto-height
        card pinned top-right; docked: full-height sidebar. */
     <aside
-      className={`proppanel flex flex-col rounded-xl border bg-background ${
+      className={`proppanel flex flex-col overflow-hidden border bg-background ${
         docked
-          ? 'fixed bottom-4 right-4 top-[58px] z-50 w-[268px] shadow-[-4px_0_18px_rgba(0,0,0,0.08)]'
-          : 'proppanel--floating relative max-h-[calc(100vh-24px)] w-full shadow-[0_10px_32px_rgba(0,0,0,0.14)]'
+          ? /* Fills the reserved strip exactly: below the previewbar (52px) and
+               flush to the card's inner right/bottom edges — a sidebar column
+               beside the preview, as it was pre-island. */
+            'fixed bottom-[11px] right-[11px] top-[52px] z-50 w-80 rounded-lg shadow-[-4px_0_18px_rgba(0,0,0,0.08)]'
+          : 'proppanel--floating relative w-full rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.12)]'
       }`}
+      style={docked ? undefined : { maxHeight }}
       aria-label={`Props for ${inspection?.component ?? element.tag}`}
     >
       <header className="proppanel__head flex shrink-0 items-center gap-0.5 px-3 pb-1 pt-2.5">

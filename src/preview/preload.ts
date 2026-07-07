@@ -259,9 +259,10 @@ function setSelectionHighlight(el: Element | null): void {
   for (let i = 0; i < els.length; i++) {
     const b = document.createElement('div')
     b.setAttribute('data-dsgn-selbox', '')
+    // Thinner than the 2px hover box — selected-but-not-hovered reads calmer.
     b.style.cssText =
       'position:fixed;pointer-events:none;box-sizing:border-box;display:none;' +
-      'border:2px solid #2563eb;border-radius:3px;'
+      'border:1px solid #2563eb;border-radius:3px;'
     selLayer.appendChild(b)
   }
   const badge = document.createElement('div')

@@ -28,10 +28,14 @@ export default function PanelApp(): React.JSX.Element | null {
 
   if (!state) return null
   return (
-    /* p-3 = room for the card's drop shadow inside the transparent view rect. */
-    <div ref={ref} className="panelapp p-3">
+    /* Padding = exactly the card shadow's extent per side (0 8px 24px → up 16,
+       sides 24, down 32), so the blur never clips at the view edges and the
+       transparent view stays as small as possible (it eats clicks).
+       Mirrored in PanelHost's placement math. */
+    <div ref={ref} className="panelapp" style={{ padding: '16px 24px 32px 24px' }}>
       <PropPanel
         variant="overlay"
+        maxHeight={state.maxHeight}
         root={state.root}
         element={state.element}
         inspection={state.inspection}
