@@ -213,6 +213,8 @@ const api: DsgnApi = {
   source: {
     read: (root: string, source: string): Promise<SourceView | null> =>
       ipcRenderer.invoke('source:read', root, source),
+    resolveComponent: (root: string, fromFile: string, name: string): Promise<string | null> =>
+      ipcRenderer.invoke('source:resolve-component', root, fromFile, name),
     openInEditor: (root: string, source: string): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke('source:open-in-editor', root, source),
     write: (

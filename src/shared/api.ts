@@ -674,6 +674,8 @@ export interface DsgnApi {
     apply: (root: string, edit: { source: string; text: string }) => Promise<PropEditResult>
   }
   source: {
+    /** Resolve a component tag name to its defining file via imports (Cmd+click). */
+    resolveComponent: (root: string, fromFile: string, name: string) => Promise<string | null>
     /** Read the stamped element's source file for the inspector's code peek. */
     read: (root: string, source: string) => Promise<SourceView | null>
     /** Jump to the stamp in the user's editor (code/cursor/zed/subl CLI → OS default app). */
