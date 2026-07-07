@@ -1,0 +1,9 @@
+:root {
+  --color-bg: #ffffff;
+  --color-text: #1a1a1a;
+  --space-sm: 4px;
+  --space-md: 8px;
+  --radius-card: 10px;
+  /* alias — should be skipped (references another var) */
+  --color-surface: var(--color-bg);
+}
