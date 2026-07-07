@@ -129,11 +129,13 @@ const api: DsgnApi = {
       ipcRenderer.on('panel:action', listener)
       return () => ipcRenderer.removeListener('panel:action', listener)
     },
-    reportHeight: (height: number): void => ipcRenderer.send('panel:height', height),
-    onHeight: (cb: (height: number) => void): (() => void) => {
-      const listener = (_e: IpcRendererEvent, height: number): void => cb(height)
-      ipcRenderer.on('panel:height', listener)
-      return () => ipcRenderer.removeListener('panel:height', listener)
+    reportSize: (size: { width: number; height: number }): void =>
+      ipcRenderer.send('panel:size', size),
+    onSize: (cb: (size: { width: number; height: number }) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, size: { width: number; height: number }): void =>
+        cb(size)
+      ipcRenderer.on('panel:size', listener)
+      return () => ipcRenderer.removeListener('panel:size', listener)
     }
   },
   project: {

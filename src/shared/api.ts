@@ -389,7 +389,6 @@ export interface PanelState {
 /** A user action inside the island, relayed back to the main renderer. */
 export type PanelAction =
   | { kind: 'close' }
-  | { kind: 'dock' }
   | { kind: 'seed'; text: string }
   | { kind: 'setup' }
   | { kind: 'owner' }
@@ -598,10 +597,10 @@ export interface DsgnApi {
     action: (action: PanelAction) => void
     /** Main renderer → handle island actions. */
     onAction: (cb: (action: PanelAction) => void) => () => void
-    /** Island → report its natural content height (px). */
-    reportHeight: (height: number) => void
-    /** Main renderer → resize the island to the reported height. */
-    onHeight: (cb: (height: number) => void) => () => void
+    /** Island → report its rendered size (px). */
+    reportSize: (size: { width: number; height: number }) => void
+    /** Main renderer → resize the island view to the reported size. */
+    onSize: (cb: (size: { width: number; height: number }) => void) => () => void
   }
   project: {
     pick: () => Promise<string | null>

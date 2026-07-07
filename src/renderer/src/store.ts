@@ -759,25 +759,6 @@ export const useUiActions = create<UiActionsState>((set) => ({
   register: (actions) => set(actions)
 }))
 
-/**
- * Prop panel layout: a floating card at the preview's top right (default) or
- * docked as a full-height right sidebar. Persisted — a layout choice, not a
- * per-session whim.
- */
-interface PropPanelModeState {
-  docked: boolean
-  setDocked: (docked: boolean) => void
-}
-
-const PANEL_MODE_KEY = 'dsgn.proppanel.docked'
-
-export const usePropPanelMode = create<PropPanelModeState>((set) => ({
-  docked: localStorage.getItem(PANEL_MODE_KEY) === '1',
-  setDocked: (docked) => {
-    localStorage.setItem(PANEL_MODE_KEY, docked ? '1' : '0')
-    set({ docked })
-  }
-}))
 
 /** The on-open "set this project up for editing" offer. */
 interface SetupState {
@@ -964,5 +945,3 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
 ;(window as unknown as { __dsgnViewport?: typeof useViewport }).__dsgnViewport = useViewport
 ;(window as unknown as { __dsgnPanelInset?: typeof usePanelInset }).__dsgnPanelInset = usePanelInset
 ;(window as unknown as { __dsgnCodeDrawer?: typeof useCodeDrawer }).__dsgnCodeDrawer = useCodeDrawer
-;(window as unknown as { __dsgnPropPanelMode?: typeof usePropPanelMode }).__dsgnPropPanelMode =
-  usePropPanelMode

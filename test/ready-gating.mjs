@@ -37,7 +37,27 @@ try {
   await win.waitForSelector('.empty__open', { timeout: 15000 })
   await win.evaluate(() => window.__dsgnWorkspace.getState().openOrActivate('/tmp/dsgn-test-project'))
   await win.waitForSelector('.composer__input', { timeout: 15000 })
-  await win.evaluate(() => window.__dsgnPropPanelMode.getState().setDocked(true))
+
+  // The props panel lives in the floating ISLAND (its own webContents,
+  // ?dsgnPanel=1) — query its DOM there.
+  const panelEval = (code) =>
+    app.evaluate(async ({ webContents }, c) => {
+      const wc = webContents.getAllWebContents().find((w) => w.getURL().includes('dsgnPanel'))
+      if (!wc) return '__no_panel__'
+      try { return await wc.executeJavaScript(c) } catch { return '__no_panel__' }
+    }, code)
+  const waitPanel = async (code, timeout = 10000) => {
+    const end = Date.now() + timeout
+    for (;;) {
+      const r = await panelEval(code)
+      if (r !== '__no_panel__' && r) return r
+      if (Date.now() > end) throw new Error('island condition timed out: ' + code.slice(0, 100))
+      await new Promise((res) => setTimeout(res, 250))
+    }
+  }
+  // Tests assume the expanded card (a previous run may have collapsed it).
+  const expandPanel = () =>
+    panelEval("localStorage.setItem('dsgn.proppanel.collapsed','0'); document.querySelector('.proppanel__expand')?.click(); true")
 
   // --- setup.scaffold writes the stamping plugin (and is idempotent). ---
   const first = await win.evaluate((d) => window.api.setup.scaffold(d), scaffoldDir)
@@ -71,17 +91,18 @@ try {
     },
     { fixture: join(fixtures, 'propedit-app') }
   )
-  // The panel now opens for EVERY selection; a no-schema element shows the
+  // The island opens for EVERY selection; a no-schema element shows the
   // prompt-only readiness message inside it (no editable fields).
-  await win.waitForSelector('.proppanel .proppanel__ready--no', { timeout: 5000 })
-  if (await win.locator('.proppanel__row').count()) {
+  await expandPanel()
+  await waitPanel("!!document.querySelector('.proppanel .proppanel__ready--no')")
+  if (await panelEval("document.querySelectorAll('.proppanel__row').length")) {
     throw new Error('a no-schema element should not render editable prop rows')
   }
-  const stampedHint = (await win.textContent('.proppanel__ready--no')) ?? ''
+  const stampedHint = (await panelEval("document.querySelector('.proppanel__ready--no')?.textContent ?? ''")) ?? ''
   if (!/ask dsgn/i.test(stampedHint)) {
     throw new Error(`stamped host element should be prompt-only (ask dsgn): ${stampedHint}`)
   }
-  if (await win.locator('.proppanel__link').count()) {
+  if (await panelEval("document.querySelectorAll('.proppanel__link').length")) {
     throw new Error('a stamped element must NOT show the "set up the project" link')
   }
   await win.screenshot({ path: join(artifacts, '13-gating.png') })
@@ -101,10 +122,7 @@ try {
       styles: {}
     })
   })
-  await win.waitForSelector('.proppanel .proppanel__ready--no', { timeout: 5000 })
-  if (!(await win.locator('.proppanel__link').count())) {
-    throw new Error('an unstamped element should offer the "set up the project" link')
-  }
+  await waitPanel("!!document.querySelector('.proppanel__link')")
 
   // Positive case: a schema-backed <Badge> usage DOES open the floating panel
   // (keeps the gate honest in both directions).
@@ -123,7 +141,7 @@ try {
     },
     { fixture: join(fixtures, 'propedit-app') }
   )
-  await win.waitForSelector('.proppanel__row', { timeout: 5000 })
+  await waitPanel("!!document.querySelector('.proppanel__row')")
 
   // --- The on-open setup dialogue renders with the action. ---
   await win.evaluate(() => window.__dsgnSetup.getState().setNeeded(true))

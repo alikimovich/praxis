@@ -1,25 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { PropField, PropInspection, SelectedElement } from '../../../shared/api'
-import { usePanelInset } from '../store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PanelRight, PictureInPicture2 } from 'lucide-react'
-
-/** Docked sidebar: the reserved native-preview inset equals the panel width
- * (w-80) so the panel exactly fills the freed strip — it reads as a column
- * BESIDE the preview, not a card floating over it. */
-const PANEL_WIDTH = 320
+import { Minimize2 } from 'lucide-react'
 
 interface Props {
   root: string
   element: SelectedElement
-  /**
-   * 'overlay' → the floating island (a WebContentsView above the preview; this
-   * instance fills its view). 'docked' → the in-DOM right sidebar, which
-   * reserves a native-preview inset strip.
-   */
-  variant: 'overlay' | 'docked'
-  /** Overlay only: tallest the card may grow (px) — supplied by PanelHost. */
+  /** Tallest the card may grow (px) — supplied by PanelHost. */
   maxHeight?: number
   /** null → no schema (readiness messaging shows instead of fields). */
   inspection: PropInspection | null
@@ -33,24 +21,23 @@ interface Props {
   onSetup: () => void
   /** v8 F3a: re-select the owning component instance. */
   onSelectOwner: () => void
-  /** Flip between the floating island and the docked sidebar. */
-  onToggleDock: () => void
+  /** Shrink the island to its collapsed chip. */
+  onCollapse: () => void
   onClose: () => void
 }
 
 /**
- * The prop panel — shown at the preview's right edge for EVERY selection.
- * A schema-backed component gets editable fields; anything else gets the
- * readiness message (setup offer / owner jump / prompt-only hint). Floating
- * card at the top right by default; dockable into a full-height sidebar.
- * Either way it reserves a strip of the native preview (usePanelInset) so it
- * isn't covered. Simple literal edits write straight to source; non-literal
- * ones go to chat.
+ * The floating props island — shown for EVERY selection, always as a card over
+ * the preview's top right (it renders inside the ?dsgnPanel WebContentsView; a
+ * docked-sidebar mode no longer exists — the header button collapses it to a
+ * chip instead, see PanelApp). A schema-backed component gets editable fields;
+ * anything else gets the readiness message (setup offer / owner jump /
+ * prompt-only hint). Simple literal edits write straight to source;
+ * non-literal ones go to chat.
  */
 export default function PropPanel({
   root,
   element,
-  variant,
   maxHeight,
   inspection,
   inspecting,
@@ -58,12 +45,11 @@ export default function PropPanel({
   onSeedPrompt,
   onSetup,
   onSelectOwner,
-  onToggleDock,
+  onCollapse,
   onClose
 }: Props): React.JSX.Element {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const docked = variant === 'docked'
   const hasSchema = !!inspection?.hasSchema
   const source = inspection?.source ?? element.source ?? ''
   const hasOwner = !!element.componentSource && element.componentSource !== element.source
@@ -72,14 +58,6 @@ export default function PropPanel({
     : element.classes[0]
       ? `.${element.classes[0]}`
       : ''
-
-  // Docked sidebar reserves the right-edge strip of the native preview; the
-  // floating island paints OVER the content (its own view) — no inset.
-  useEffect(() => {
-    if (!docked) return
-    usePanelInset.getState().setInset(PANEL_WIDTH)
-    return () => usePanelInset.getState().setInset(0)
-  }, [docked])
 
   const reload = (): void => {
     if (source) window.api.props.inspect(root, source).then((res) => res && onChange(res))
@@ -137,23 +115,9 @@ export default function PropPanel({
   }
 
   return (
-    /* Sits INSIDE the preview card's body: below the previewbar (10px card top
-       gap + 1px border + 40+1px bar = 52) and inset 11px from the window's
-       right/bottom (10px pane gutter + 1px card border) — flush against the
-       native view, which usePanelInset shrinks by exactly this panel's width.
-       Never overlaps the previewbar controls. Floating (default): auto-height
-       card pinned top-right; docked: full-height sidebar. */
     <aside
-      className={`proppanel flex flex-col overflow-hidden ${
-        docked
-          ? /* Fills the reserved strip exactly: below the previewbar (52px) and
-               flush to the card's inner right/bottom edges. CHROMELESS, Penguin-
-               style — no card border/shadow; the content sits directly on the
-               surface, reading as a column beside the preview. */
-            'fixed bottom-[11px] right-[11px] top-[52px] z-50 w-80 bg-transparent'
-          : 'proppanel--floating relative w-full rounded-xl border bg-background shadow-[0_8px_24px_rgba(0,0,0,0.12)]'
-      }`}
-      style={docked ? undefined : { maxHeight }}
+      className="proppanel relative flex w-full flex-col overflow-hidden rounded-xl border bg-background shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+      style={{ maxHeight }}
       aria-label={`Props for ${inspection?.component ?? element.tag}`}
     >
       <header className="proppanel__head flex shrink-0 items-center gap-0.5 px-3 pb-1 pt-2.5">
@@ -173,17 +137,12 @@ export default function PropPanel({
         <Button
           variant="ghost"
           size="icon"
-          className="proppanel__dock size-6 text-muted-foreground"
-          onClick={onToggleDock}
-          aria-label={docked ? 'Float panel' : 'Dock panel as sidebar'}
-          aria-pressed={docked}
-          title={docked ? 'Float over the preview' : 'Dock as a right sidebar'}
+          className="proppanel__collapse size-6 text-muted-foreground"
+          onClick={onCollapse}
+          aria-label="Collapse panel"
+          title="Collapse to a chip"
         >
-          {docked ? (
-            <PictureInPicture2 className="size-3.5" aria-hidden="true" />
-          ) : (
-            <PanelRight className="size-3.5" aria-hidden="true" />
-          )}
+          <Minimize2 className="size-3.5" aria-hidden="true" />
         </Button>
         <Button
           variant="ghost"

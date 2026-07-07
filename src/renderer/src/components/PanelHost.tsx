@@ -2,18 +2,17 @@ import { useEffect, useState } from 'react'
 import type { PropInspection, SelectedElement } from '../../../shared/api'
 import { usePreviewFreeze } from '../store'
 
-/** Card width + the island's shadow padding (kept in sync with PanelApp). */
-const CARD_W = 268
+/** Shadow padding inside the island view (kept in sync with PanelApp). */
 const PAD = { top: 16, right: 24, bottom: 32, left: 24 }
-const VIEW_WIDTH = CARD_W + PAD.left + PAD.right
 /** Visible gap between the CARD's right edge and the preview's. */
 const GAP = 6
 
 /**
- * Bridge for the FLOATING prop panel: renders nothing itself — it drives the
- * native panel WebContentsView (which paints above the preview) from the main
- * renderer. Pushes state, tracks the preview card's rectangle for placement,
- * resizes to the island's reported content height, and hides the island while
+ * Bridge for the floating prop-panel island: renders nothing itself — it
+ * drives the native panel WebContentsView (which paints above the preview)
+ * from the main renderer. Pushes state, tracks the preview card's rectangle
+ * for placement, follows the island's reported size (a collapsed chip shrinks
+ * the whole view — a transparent view still eats clicks), and hides it while
  * the preview is frozen (DOM overlay menus must not render under it).
  */
 export default function PanelHost({
@@ -27,11 +26,17 @@ export default function PanelHost({
   inspection: PropInspection | null
   inspecting: boolean
 }): null {
-  const [height, setHeight] = useState(160)
+  const [size, setSize] = useState({ width: 268 + PAD.left + PAD.right, height: 160 })
   const [maxHeight, setMaxHeight] = useState(480)
   const frozen = usePreviewFreeze((s) => s.frozen)
 
-  useEffect(() => window.api.panel.onHeight((h) => setHeight(Math.max(72, h))), [])
+  useEffect(
+    () =>
+      window.api.panel.onSize((s) =>
+        setSize({ width: Math.max(60, s.width), height: Math.max(60, s.height) })
+      ),
+    []
+  )
 
   useEffect(() => {
     window.api.panel.setState({ root, element, inspection, inspecting, maxHeight })
@@ -49,14 +54,15 @@ export default function PanelHost({
       const r = body.getBoundingClientRect()
       // The card may grow to the preview area's height minus its shadow padding.
       setMaxHeight(Math.max(120, Math.round(r.height) - PAD.top - PAD.bottom - GAP))
-      // The view sits flush with the body's top (card lands PAD.top below it)
-      // and bleeds its right shadow padding over the window gutter — never over
-      // the previewbar, whose controls a transparent view would block.
+      // Anchor the CARD's right edge GAP px inside the preview's right edge (the
+      // view's right shadow padding bleeds over the window gutter — dead space).
+      // The view sits flush with the body's top so its transparent padding can
+      // never cover the previewbar's controls.
       window.api.panel.show({
-        x: r.right - GAP - CARD_W - PAD.left,
+        x: r.right - GAP - size.width + PAD.right,
         y: r.top,
-        width: VIEW_WIDTH,
-        height: Math.min(height, Math.max(120, r.height))
+        width: size.width,
+        height: Math.min(size.height, Math.max(120, r.height))
       })
     }
     place()
@@ -67,7 +73,7 @@ export default function PanelHost({
       ro.disconnect()
       window.removeEventListener('resize', place)
     }
-  }, [height, frozen])
+  }, [size, frozen])
 
   // No island without a selection (unmount = hide).
   useEffect(() => () => window.api.panel.hide(), [])

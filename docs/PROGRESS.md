@@ -64,6 +64,23 @@ Newest first. Append a dated entry when you finish a chunk of work.
   the drawer via its store; viewport-per-project is PORT-AGNOSTIC now (a live
   app session on 7777 must not fail the suite — reads the URL from the bar).
 
+## 2026-07-06 — Island-only props (docked sidebar removed); hover un-sticks
+
+- The docked-sidebar mode is GONE by decision: the props island is the only
+  form. The header button now COLLAPSES it to a small chip (component name +
+  sliders icon) instead of docking; collapse state lives in the island itself
+  (it outlives selections) and persists via localStorage. The island reports
+  width+height now (panel:size) and PanelHost hugs the view to the content —
+  a transparent native view eats clicks, so a collapsed chip must shrink the
+  whole view. usePropPanelMode / PanelAction 'dock' / the inset reservation
+  are deleted; PropPanel is single-variant again.
+- Tests that asserted panel DOM in the main renderer now query the ISLAND's
+  webContents (panelEval/waitPanel helpers + expandPanel guard against a
+  persisted collapsed state).
+- Select mode: moving the cursor OUT of the preview clears the hover highlight
+  (mouseout with relatedTarget null) — it used to stick on the last hovered
+  element; selection outlines are unaffected.
+
 ## 2026-07-06 — Floating props island above the preview; persistent selection
 
 - The floating prop panel now paints ON TOP of the live preview content. DOM

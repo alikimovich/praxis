@@ -36,7 +36,27 @@ try {
   await win.waitForSelector('.empty__open', { timeout: 15000 })
   await win.evaluate(() => window.__dsgnWorkspace.getState().openOrActivate('/tmp/dsgn-test-project'))
   await win.waitForSelector('.composer__input', { timeout: 15000 })
-  await win.evaluate(() => window.__dsgnPropPanelMode.getState().setDocked(true))
+
+  // The props panel lives in the floating ISLAND (its own webContents,
+  // ?dsgnPanel=1) — query its DOM there.
+  const panelEval = (code) =>
+    app.evaluate(async ({ webContents }, c) => {
+      const wc = webContents.getAllWebContents().find((w) => w.getURL().includes('dsgnPanel'))
+      if (!wc) return '__no_panel__'
+      try { return await wc.executeJavaScript(c) } catch { return '__no_panel__' }
+    }, code)
+  const waitPanel = async (code, timeout = 10000) => {
+    const end = Date.now() + timeout
+    for (;;) {
+      const r = await panelEval(code)
+      if (r !== '__no_panel__' && r) return r
+      if (Date.now() > end) throw new Error('island condition timed out: ' + code.slice(0, 100))
+      await new Promise((res) => setTimeout(res, 250))
+    }
+  }
+  // Tests assume the expanded card (a previous run may have collapsed it).
+  const expandPanel = () =>
+    panelEval("localStorage.setItem('dsgn.proppanel.collapsed','0'); document.querySelector('.proppanel__expand')?.click(); true")
 
   // --- UI: render the prop editor for a selected element (original file). ---
   await win.evaluate(
@@ -55,10 +75,11 @@ try {
     },
     { fixture, src: SRC }
   )
-  // A schema-backed component auto-opens the floating prop panel (no toggle).
-  await win.waitForSelector('.proppanel__row', { timeout: 5000 })
-  const enumOptions = await win.$$eval('.proppanel__row select option', (os) =>
-    os.map((o) => o.value).filter(Boolean)
+  // A schema-backed component auto-opens the floating props island (no toggle).
+  await expandPanel()
+  await waitPanel("!!document.querySelector('.proppanel__row')")
+  const enumOptions = await panelEval(
+    "[...document.querySelectorAll('.proppanel__row select option')].map((o) => o.value).filter(Boolean)"
   )
   for (const v of ['ok', 'warn', 'error']) {
     if (!enumOptions.includes(v)) {

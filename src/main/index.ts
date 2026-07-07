@@ -525,9 +525,9 @@ function registerPreviewIpc(): void {
     if (e.sender !== panelView?.webContents) return
     mainWindow?.webContents.send('panel:action', action)
   })
-  ipcMain.on('panel:height', (e, height: number) => {
+  ipcMain.on('panel:size', (e, size: { width: number; height: number }) => {
     if (e.sender !== panelView?.webContents) return
-    mainWindow?.webContents.send('panel:height', height)
+    mainWindow?.webContents.send('panel:size', size)
   })
 
   // v3 annotation pins: renderer pushes the list → preview; clicks come back.

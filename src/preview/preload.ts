@@ -884,6 +884,17 @@ window.addEventListener('resize', () => {
   if (pinDots.size) positionPins()
   positionFrame()
 })
+// Cursor left the preview entirely (relatedTarget null) — drop the HOVER
+// highlight so it doesn't stick to the last element; the persistent selection
+// outlines are a separate layer and stay.
+window.addEventListener(
+  'mouseout',
+  (e: MouseEvent) => {
+    if (e.relatedTarget || commenting) return
+    hideOverlay()
+  },
+  true
+)
 // Pins track layout changes (hot-reload, async content) on a light cadence.
 const pinTimer = setInterval(() => {
   if (pinDots.size) positionPins()
