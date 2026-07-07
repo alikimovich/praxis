@@ -39,10 +39,6 @@ Ranked by leverage. Deferred items note *why* they're not auto-completable.
       `provider:'gemini'` unless `DSGN_EXPERIMENTAL_GEMINI=1`; `gemini.ts` banner
       marks it experimental/unwired; removed from the renderer picker so it can't be
       silently selected. Add the SDK dep + a self-skipping e2e test to un-gate.
-- [ ] **Branch cleanup.** ⏸ needs your call — `agent/lkm-23`'s content shipped via
-      PR #67 (squash) but it owns a live worktree under `~/.agent-runner/`; deleting
-      that worktree could disturb the daemon. `dsgn/v5-d-previous-agents` is genuinely
-      unmerged WIP (session-history, superseded-but-not-identical). Both destructive.
 - [ ] **Shared test harness.** 55 `.mjs` tests re-derive root + Playwright/Electron
       launch (~6.2k lines, much boilerplate). Add `test/lib/harness.mjs`
       (`launchApp`, `openFixture`, `shot`) and migrate opportunistically.
@@ -51,7 +47,7 @@ Ranked by leverage. Deferred items note *why* they're not auto-completable.
       (1189), `simulator.ts` (1169), `store.ts` (981). Extract, don't append.
       *Deferred: high-risk refactor; needs the Electron UI running to verify, which
       isn't possible headless — do interactively with the app open.*
-- [ ] **Finish the Praxis/dsgn naming decision.** GitHub repo is already `praxis`;
-      local dir + `data-dsgn-source` attribute still say dsgn. Decide the blast
-      radius (prose-only vs. attribute rename) and record it in CLAUDE.md.
-      *Deferred: product decision, not a mechanical task.*
+- [ ] **Optional: rename the `dsgn` internals to Praxis.** The product and repo are
+      Praxis, but the codebase still uses `dsgn` (the `data-dsgn-source` attribute,
+      `DsgnApi`, `.dsgn/`). Renaming the attribute is a breaking change for stamped
+      target repos, so it's a deliberate call, not a mechanical rename.

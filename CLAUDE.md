@@ -1,11 +1,13 @@
-# CLAUDE.md — working guide for Praxis (repo: dsgn)
+# CLAUDE.md — working guide for Praxis
 
-Praxis (package/product name; repo, remote, and the `data-dsgn-source`
-protocol still say **dsgn**) is an Electron app: an AI chat on the left that
-edits a user's repo, with that repo's dev server live-previewed on the right.
-Distributed as source (clone + `bun install` + `bun run dev`); each user
-authenticates with their own provider subscription (`claude setup-token` /
-`claude login`; Codex and Gemini backends exist behind the same seam).
+Praxis is an Electron app: an AI chat on the left that edits a user's repo, with
+that repo's dev server live-previewed on the right. Distributed as source
+(clone + `bun install` + `bun run dev`); each user authenticates with their own
+provider subscription (`claude setup-token` / `claude login`; Codex and Gemini
+backends exist behind the same seam).
+
+The project's original name was **dsgn**; it survives in the `data-dsgn-source`
+stamp attribute and various file and type names (`DsgnApi`, `.dsgn/`, etc.).
 
 ## Start here every session
 

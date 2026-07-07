@@ -1,8 +1,8 @@
 # Praxis
 
-> The product and GitHub repo are **Praxis** (`github.com/alikimovich/praxis`);
-> the local clone dir and the `data-dsgn-source` stamping protocol are still
-> named **dsgn**. See `docs/TASKS.md` for the remaining rebrand decision.
+> **Note:** the project's original name was **dsgn**, and it still lives on in
+> the code — the `data-dsgn-source` stamp attribute and various file and type
+> names. The product is **Praxis**.
 
 An AI design & prototyping tool for your own repos. Open a project, Praxis
 launches its dev server in a live preview on the right, and an AI chat on the
@@ -20,7 +20,7 @@ GitHub PR.
 - **AI chat that edits the running app.** A persistent multi-turn agent session
   streams over IPC and edits source with hot-reload. Backends are pluggable —
   Claude (via the Agent SDK), Codex, and Gemini behind one provider seam
-  (Gemini is experimental; see the review doc).
+  (Gemini is experimental, gated behind `DSGN_EXPERIMENTAL_GEMINI`).
 - **Click-to-edit.** A **Select** mode maps a clicked element to its source
   location (via the `data-dsgn-source` stamp — see
   [`docs/DESIGN.md`](docs/DESIGN.md)), then edits its **props** with typed
@@ -38,7 +38,7 @@ GitHub PR.
 ## Requirements
 
 - **Node 22** (`.nvmrc`) and **Bun** (`bun@1.3.x`). Distributed as source, run
-  locally — each teammate needs Node + Bun installed.
+  locally — you need Node + Bun installed.
 - A provider subscription for the agent (e.g. Claude Pro/Max), authorized
   per-user (below). No shared secret.
 - macOS is the primary target (the postinstall step rebrands the dev Electron
@@ -47,8 +47,8 @@ GitHub PR.
 ## Setup
 
 ```bash
-git clone git@github.com:alikimovich/dsgn.git
-cd dsgn
+git clone https://github.com/alikimovich/praxis.git
+cd praxis
 bun install                # runs scripts/patch-electron.mjs (macOS: brands the dev app)
 
 claude setup-token         # one-time: authorize the agent with your own subscription

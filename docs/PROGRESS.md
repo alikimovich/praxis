@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-07 — Public-repo doc cleanup
+
+Prepping the repo to go public: removed personal-machine details from the
+front-facing docs. README naming note no longer mentions the local clone dir
+(just that `dsgn` is the original name living on in the code); clone URL now
+points at the public `praxis` repo over https; "teammate" → "you"; fixed a
+dangling "see the review doc" reference. CLAUDE.md header dropped "(repo:
+dsgn)" and the repo/remote naming caveat. TASKS.md dropped the branch-cleanup
+item (local git housekeeping referencing `~/.agent-runner/`) and reframed the
+naming item as an optional rename. A `~/.git` setup aside in the log was
+genericized. Grep-verified no `/Users/…`, agent-runner, or personal-infra
+references remain in tracked docs (the leftover `~/.bun`/`~/.local` hits are
+generic tool paths in code).
+
 ## 2026-07-07 — Cut CONTEXT.md; add a docs-drift guard
 
 - Deleted `docs/CONTEXT.md`. Its three sections each duplicated something else
@@ -1607,4 +1621,4 @@ Fixes "opening a project I already run doesn't work" (hit on lkmv.ch):
 - electron-vite + React + TS shell; two-pane layout; native `WebContentsView`
   preview with IPC geometry sync; typed `window.api`; dev-server runner
   (detect/spawn/parse/readiness). Playwright+Electron smoke + open→preview tests.
-- Made dsgn its own git repo (was an untracked subdir of `~/.git`).
+- Made dsgn its own standalone git repo.
