@@ -22,9 +22,9 @@
 //    in Activity Monitor. Their .app folders and executables keep their names —
 //    Chromium locates helpers by path, and display names come from the plists.
 //
-// DELIBERATELY KEPT: CFBundleIdentifier stays com.github.Electron — changing it
-// would reset the user's TCC permission grants (screen recording etc.) for the
-// dev app.
+//  - CFBundleIdentifier → com.alikimovich.praxis (helpers get .helper). NOTE:
+//    macOS keys TCC permission grants (screen recording, notifications) to the
+//    bundle id, so the first run after this re-prompts for them.
 //
 // Runs from postinstall (every `bun install` restores a stock Electron), and is
 // a no-op on non-macOS or when the bundle is already patched.
@@ -34,6 +34,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const APP_NAME = 'Praxis'
+const BUNDLE_ID = 'com.alikimovich.praxis'
 const ICON_NAME = 'dsgn' // asset name inside Assets.car
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const electronDir = join(root, 'node_modules/electron')
@@ -72,6 +73,7 @@ const patched =
   buddy(plist, 'Print :CFBundleName') === APP_NAME &&
   iconName === ICON_NAME &&
   buddy(plist, 'Print :CFBundleExecutable') === APP_NAME &&
+  buddy(plist, 'Print :CFBundleIdentifier') === BUNDLE_ID &&
   fileMatches(ourIcns, icns) &&
   fileMatches(ourCar, car)
 if (patched) process.exit(0)
@@ -79,6 +81,7 @@ if (patched) process.exit(0)
 // Main bundle identity + icon.
 setOrAdd(plist, 'CFBundleName', APP_NAME)
 setOrAdd(plist, 'CFBundleDisplayName', APP_NAME)
+setOrAdd(plist, 'CFBundleIdentifier', BUNDLE_ID)
 setOrAdd(plist, 'CFBundleIconName', ICON_NAME)
 if (existsSync(ourIcns)) copyFileSync(ourIcns, icns)
 if (existsSync(ourCar)) copyFileSync(ourCar, car)
@@ -105,6 +108,7 @@ if (existsSync(frameworks)) {
     const suffix = entry.replace(/^Electron/, '').replace(/\.app$/, '') // " Helper (Renderer)"
     setOrAdd(helperPlist, 'CFBundleName', `${APP_NAME}${suffix}`)
     setOrAdd(helperPlist, 'CFBundleDisplayName', `${APP_NAME}${suffix}`)
+    setOrAdd(helperPlist, 'CFBundleIdentifier', `${BUNDLE_ID}.helper`)
   }
 }
 
