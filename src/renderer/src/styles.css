@@ -1835,15 +1835,16 @@ html.panel-host #root {
 }
 
 /* macOS sidebar material: the WINDOW is the vibrant surface (BrowserWindow
-   vibrancy:'sidebar'); only the rail lets it show through — every other
-   region paints the solid app background so content stays opaque. */
+   vibrancy:'sidebar'); only the rail lets it show through. The rail sits
+   INSIDE .panes, so .panes must stay transparent — the opaque layer is the
+   individual panes to its right (.pane--preview already paints var(--bg)). */
 html.mac-vibrancy body {
     background: transparent;
 }
 html.mac-vibrancy .rail {
     background: transparent;
 }
-html.mac-vibrancy .panes,
+html.mac-vibrancy .pane--chat,
 html.mac-vibrancy .empty {
     background: var(--bg);
 }
