@@ -1834,10 +1834,12 @@ html.panel-host #root {
     color: #2563eb;
 }
 
-/* macOS sidebar material: the WINDOW is the vibrant surface (BrowserWindow
-   vibrancy:'sidebar'); only the rail lets it show through. The rail sits
-   INSIDE .panes, so .panes must stay transparent — the opaque layer is the
-   individual panes to its right (.pane--preview already paints var(--bg)). */
+/* macOS material: the WINDOW is the vibrant surface (BrowserWindow
+   vibrancy:'sidebar'). The rail is fully transparent (most vibrant); the
+   content surfaces lay an 82% tint of the app background over the material —
+   translucent, but calm enough to read on. Elevated cards (composer, preview
+   card, islands) stay opaque. The rail sits INSIDE .panes, so .panes itself
+   must never paint. */
 html.mac-vibrancy body {
     background: transparent;
 }
@@ -1845,6 +1847,10 @@ html.mac-vibrancy .rail {
     background: transparent;
 }
 html.mac-vibrancy .pane--chat,
+html.mac-vibrancy .pane--preview,
 html.mac-vibrancy .empty {
-    background: var(--bg);
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+}
+html.mac-vibrancy .console {
+    background: color-mix(in srgb, var(--bg-subtle) 82%, transparent);
 }

@@ -64,6 +64,30 @@ Newest first. Append a dated entry when you finish a chunk of work.
   the drawer via its store; viewport-per-project is PORT-AGNOSTIC now (a live
   app session on 7777 must not fail the suite — reads the URL from the bar).
 
+## 2026-07-07 — macOS materials; drawer navigation; assorted UX
+
+- macOS vibrancy: the window is an NSVisualEffectView 'sidebar' material
+  surface (vibrancy + transparent bg, darwin only). The rail is fully
+  transparent (most vibrant); content surfaces (.pane--chat/.pane--preview/
+  .empty, console) tint at 82% of var(--bg) via color-mix so the material
+  reads subtly everywhere; elevated cards stay opaque. GOTCHA: the rail sits
+  INSIDE .panes — painting .panes covers the material under the rail. On
+  darwin the nativeTheme repaint must skip the window's background.
+- Code drawer: Cmd+click a capitalized tag resolves through the file's imports
+  ($lib/@/~ aliases + one barrel hop; works for .svelte/.vue via a text scan —
+  the AST resolver is TSX-only) and opens that component; Cmd-hover underlines
+  once a name is KNOWN to resolve (cached per file). Browser-style back/forward
+  over a history stack in useCodeDrawer.
+- Selection flow: S relays from the focused preview (preload → renderer, same
+  toggle); a new pick resets island/drawer/in-page composer to just the
+  toolbar; the toolbar gained an 'Edit props' action — the island opens
+  explicitly now, never auto (usePropsIsland; owner-jump keeps it open).
+- Launch status: window-top banner removed — a bottom-center pill INSIDE the
+  preview (preload-drawn, re-armed across placeholder loads) when panes exist,
+  or beside the corner cat on first open (no preview surface exists yet).
+- Fixed: cat loader shrunk by a blanket 26px→20px replace meant for the
+  sidebar toggle (which is now 20×20 with a 14px icon).
+
 ## 2026-07-06 — Island-only props (docked sidebar removed); hover un-sticks
 
 - The docked-sidebar mode is GONE by decision: the props island is the only
