@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-08 — Electron 43 + squircle corners; toolbar refinements
+
+- Electron 33 → 43.1.0 (Chromium 150, Node 24 main). patch-electron.mjs
+  re-runs on install (note: the binary downloads lazily, so a first `bun add`
+  may need one manual `node scripts/patch-electron.mjs`). Full UI suite green on
+  43 after fixing one stale expectation (chat-render expected a gemini backend
+  in the UI list; gemini is now a flag-gated main-only backend).
+- corner-shape: squircle app-wide: a blanket `*,*::before,*::after` rule in
+  styles.css (inert without a border-radius, so it only reshapes already-rounded
+  elements) plus a `:host *` rule in the preview overlay's injected shadow style.
+  Verified squircle renders (Chromium 150; CSS.supports true).
+- Toolbar: props/delete hidden while the inline comment/annotate input is open;
+  the divider now isolates Delete from the rest.
+
 ## 2026-07-08 — Toolbar morphs into the comment field (Figma Make-style)
 
 - The selection toolbar is now a DARK pill (Figma-like) whose content MORPHS in

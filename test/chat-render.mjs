@@ -132,7 +132,8 @@ try {
   const backends = await win.$$eval('select[aria-label="Backend"] option', (os) =>
     os.map((o) => o.value)
   )
-  if (JSON.stringify(backends) !== JSON.stringify(['claude', 'codex', 'gemini'])) {
+  // Gemini stays a flag-gated main-process backend but is off the UI list.
+  if (JSON.stringify(backends) !== JSON.stringify(['claude', 'codex'])) {
     throw new Error(`unexpected backends: ${JSON.stringify(backends)}`)
   }
   await win.selectOption('select[aria-label="Backend"]', 'codex')

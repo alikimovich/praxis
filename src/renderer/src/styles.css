@@ -113,6 +113,15 @@
     box-sizing: border-box;
 }
 
+/* Squircle every rounded corner app-wide (Chromium 139+ / Electron 43+).
+   corner-shape is inert without a border-radius, so this only reshapes elements
+   that are already rounded — buttons, cards, inputs, the composer, pills, etc. */
+*,
+*::before,
+*::after {
+    corner-shape: squircle;
+}
+
 html,
 body,
 #root {

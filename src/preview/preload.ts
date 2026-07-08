@@ -178,7 +178,10 @@ function ensureOverlay(): void {
   style.textContent =
     '[data-dsgn-toolbar] textarea::placeholder{color:#8a8a8a}' +
     '[data-dsgn-toolbar] textarea{scrollbar-width:none}' +
-    '[data-dsgn-toolbar] textarea::-webkit-scrollbar{display:none}'
+    '[data-dsgn-toolbar] textarea::-webkit-scrollbar{display:none}' +
+    // Squircle the injected overlay UI's rounded corners (toolbar pill, icon
+    // buttons, badges) to match the app — matches styles.css's global rule.
+    ':host *{corner-shape:squircle}'
 
   // Keep pill mouse events from bubbling out to the previewed page. Bubble phase
   // (not capture) so a button's own click handler still fires first; the overlay's
