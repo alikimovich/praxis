@@ -113,25 +113,21 @@
     box-sizing: border-box;
 }
 
-/* Smooth every rounded corner into an iOS-style squircle app-wide, using
-   Electron's native corner smoothing (nicer + cheaper than the CSS corner-shape
-   hack). Inert without a border-radius, so it only affects already-rounded
-   elements — cards, inputs, buttons, the composer, etc. */
+/* Squircle every rounded corner app-wide (Chromium 139+ / Electron 43+).
+   corner-shape is inert without a border-radius, so this only reshapes elements
+   that are already rounded — buttons, cards, inputs, the composer, pills, etc. */
 *,
 *::before,
 *::after {
-    -electron-corner-smoothing: system-ui;
+    corner-shape: squircle;
 }
 
-/* Circles and pills must stay perfectly round — smoothing would squircle-ify
-   them. Covers the send button, spinner, status dots, and every Tailwind
-   rounded-full (avatars, badges, chips, the remove-image ×, the props chip). */
-.rounded-full,
-.composer__send,
-.composer__spinner,
-.rail__dot,
-.rail__sdot {
-    -electron-corner-smoothing: 0%;
+/* The Ask-Praxis composer and the preview card round with a PLAIN radius (not
+   the global squircle), so they match the preview's native WebContentsView
+   corners — setBorderRadius can only render a plain round, never a squircle. */
+.previewcard,
+.composer [data-slot='input-group'] {
+    corner-shape: round;
 }
 
 html,
@@ -1069,9 +1065,7 @@ body.is-fullscreen .sidebar-toggle {
     gap: 8px;
     min-height: 40px;
     padding: 5px 8px 5px 12px;
-    /* A distinct header fill instead of a divider line: a touch grayer than the
-       card body, so the toolbar reads as separate from the preview content. */
-    background: color-mix(in srgb, var(--text) 5%, var(--bg-subtle));
+    border-bottom: 1px solid var(--border);
     -webkit-app-region: drag;
     user-select: none;
 }

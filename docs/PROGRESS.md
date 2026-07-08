@@ -2,6 +2,16 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-08 — Revert corner experiments; square the preview body
+
+Reverted the -electron-corner-smoothing + divider-removal + distinct-header
+experiments (styles.css back to the standard border-bottom divider + all-rounded
+corner-shape state). Then, per request, squared the preview's native view
+(DESKTOP_CORNER_RADIUS 15 → 0): setBorderRadius is uniform, so a rounded body
+also rounded the top under the header and revealed the card bg at the corners on
+dark pages — square keeps it flush, with the header divider + card frame as the
+container.
+
 ## 2026-07-08 — Electron corner smoothing (squircle); preview header divider
 
 - Swapped the CSS `corner-shape: squircle` app-wide rule for Electron's native
