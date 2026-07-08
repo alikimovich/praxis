@@ -22,12 +22,10 @@ import { FRAME_ASPECT, FRAME_INSET, FRAME_DATA_URI } from '../../../shared/iphon
 type Rect = { left: number; top: number; width: number; height: number }
 type ViewRect = Rect & { radius: number }
 
-/** The card's inner corner radius (16px outer − 1px border, matching the
- *  composer's rounded-2xl). The native view is rounded at this radius via
- *  setBorderRadius — all four corners; the top ones show as a subtle inset
- *  against the card header, which reads as the content sitting in a rounded
- *  panel. (setBorderRadius is a plain round, not a squircle, but at this radius
- *  it reads consistent with the card's CSS corner-shape.) */
+/** The card's inner bottom-corner radius (16px outer − 1px border, matching the
+ *  composer). The native view stays SQUARE — its TOP must sit flush under the
+ *  card header, and setBorderRadius rounds all corners or none — so two in-page
+ *  masks fake ONLY the bottom rounding at this radius instead. */
 export const DESKTOP_CORNER_RADIUS = 15
 
 export default function PreviewPane(): React.JSX.Element {
@@ -84,21 +82,10 @@ export default function PreviewPane(): React.JSX.Element {
         })
         setBezel({ left: bx - r.x, top: by - r.y, width: w, height: h })
       } else {
-        // Flush inside the card body, natively rounded to the card's inner radius.
-        window.api.preview.setBounds({
-          x: r.x,
-          y: r.y,
-          width: availW,
-          height: availH,
-          radius: DESKTOP_CORNER_RADIUS
-        })
-        setViewRect({
-          left: 0,
-          top: 0,
-          width: availW,
-          height: availH,
-          radius: DESKTOP_CORNER_RADIUS
-        })
+        // Flush inside the card body, SQUARE (top corners must not round under
+        // the header); in-page masks below fake the bottom corners' rounding.
+        window.api.preview.setBounds({ x: r.x, y: r.y, width: availW, height: availH })
+        setViewRect({ left: 0, top: 0, width: availW, height: availH, radius: 0 })
         setBezel(null)
       }
     }
@@ -107,6 +94,8 @@ export default function PreviewPane(): React.JSX.Element {
     // Draw the iPhone bezel INSIDE the preview page (over the app, click-through)
     // in mobile; the DOM <img> below only supplies the device body around it.
     window.api.preview.setFrame(viewport === 'mobile')
+    // Desktop: mask the bottom corners in-page (baked into freeze captures too).
+    window.api.preview.setCorners(viewport === 'desktop' ? DESKTOP_CORNER_RADIUS : 0)
     const ro = new ResizeObserver(report)
     ro.observe(el)
     window.addEventListener('resize', report)

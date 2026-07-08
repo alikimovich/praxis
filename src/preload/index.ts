@@ -83,6 +83,8 @@ const api: DsgnApi = {
     setFrame: (active: boolean): void => ipcRenderer.send('preview:set-frame', active),
     /** Drop the in-preview selection toolbar (pill removed / message sent). */
     clearSelected: (): void => ipcRenderer.send('preview:clear-selected'),
+    /** In-page bottom-corner masks (desktop viewport); 0 disables. */
+    setCorners: (radius: number): void => ipcRenderer.send('preview:set-corners', radius),
     /** Launch progress shown inside the preview (bottom pill); null clears. */
     setStatus: (text: string | null): void => ipcRenderer.send('preview:set-status', text),
     /** Fires when S is pressed inside the focused preview (toggle select). */

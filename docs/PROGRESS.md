@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-08 — Preview: square top / rounded bottom; steady toolbar height
+
+- The preview body's TOP corners are square (flush under the URL bar) again,
+  bottom stays rounded to match the card: the native WebContentsView is square
+  (setBorderRadius rounds all-or-none) and two in-page bottom-corner masks fake
+  the rounding — restored from the earlier 3300c3c approach (color-only radial
+  gradient, no border ring → no doubled-corner). DESKTOP_CORNER_RADIUS = 15
+  (16px card − 1px border); masks track the OS theme via main's gutter color.
+- Selection toolbar keeps a constant height (36px) when it morphs to the
+  comment/annotate input: the submit button is 26px (was 28, matching the icon
+  buttons) and the single-line input row is pinned to 18px line + 8px padding.
+
 ## 2026-07-08 — Electron 43 + squircle corners; toolbar refinements
 
 - Electron 33 → 43.1.0 (Chromium 150, Node 24 main). patch-electron.mjs

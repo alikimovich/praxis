@@ -587,6 +587,8 @@ export interface DsgnApi {
     setFrame: (active: boolean) => void
     /** Drop the in-preview selection toolbar (pill removed / message sent). */
     clearSelected: () => void
+    /** In-page bottom-corner masks (desktop viewport); 0 disables. */
+    setCorners: (radius: number) => void
     /** Launch progress shown inside the preview (bottom pill); null clears. */
     setStatus: (text: string | null) => void
     /** Fires when S is pressed inside the focused preview (toggle select). */
