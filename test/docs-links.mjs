@@ -41,14 +41,20 @@ for (const f of tracked) {
 }
 
 // A gitignored path (build output, test artifacts) is a legit reference target
-// even though it isn't tracked and may not exist in a clean checkout.
+// even though it isn't tracked and may not exist in a clean checkout. Check both
+// the bare path and the trailing-slash form: a directory-only ignore pattern
+// (e.g. `test/artifacts/`) matches `test/artifacts` only when git knows it's a
+// directory, which in a clean clone it can't unless we pass the slash.
 const isIgnored = (p) => {
-  try {
-    execFileSync('git', ['check-ignore', '-q', p], { cwd: root })
-    return true // exit 0 = ignored
-  } catch {
-    return false
+  for (const cand of [p, `${p}/`]) {
+    try {
+      execFileSync('git', ['check-ignore', '-q', cand], { cwd: root })
+      return true // exit 0 = ignored
+    } catch {
+      // not ignored under this form; try the next
+    }
   }
+  return false
 }
 
 let failed = 0
