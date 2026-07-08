@@ -122,6 +122,14 @@
     corner-shape: squircle;
 }
 
+/* The Ask-Praxis composer and the preview card round with a PLAIN radius (not
+   the global squircle), so they match the preview's native WebContentsView
+   corners — setBorderRadius can only render a plain round, never a squircle. */
+.previewcard,
+.composer [data-slot='input-group'] {
+    corner-shape: round;
+}
+
 html,
 body,
 #root {
