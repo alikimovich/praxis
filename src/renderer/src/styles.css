@@ -525,7 +525,11 @@ body.is-fullscreen .sidebar-toggle {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font: 500 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    font:
+        500 11.5px/1.5 ui-monospace,
+        SFMono-Regular,
+        Menlo,
+        monospace;
     color: var(--text-muted);
 }
 .empty__cat .cat-loader {
@@ -1070,7 +1074,6 @@ body.is-fullscreen .sidebar-toggle {
     gap: 8px;
     min-height: 40px;
     padding: 5px 8px 5px 12px;
-    border-bottom: 1px solid var(--border);
     -webkit-app-region: drag;
     user-select: none;
 }
@@ -1104,6 +1107,9 @@ body.is-fullscreen .sidebar-toggle {
     /* Positioning context for the v9 code drawer (absolute, pinned to the bottom
        over the strip usePanelInset frees up under the shrunk native view). */
     position: relative;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    margin: 0 -1px -1px -1px;
 }
 
 /* v9 code drawer: the stamped element's line span, highlighted in CodeMirror. */
@@ -1539,8 +1545,13 @@ body.is-resizing {
 }
 
 @keyframes chat-status-pulse {
-    0%, 100% { opacity: 0.55; }
-    50% { opacity: 1; }
+    0%,
+    100% {
+        opacity: 0.55;
+    }
+    50% {
+        opacity: 1;
+    }
 }
 
 /* The sprite is a solid-black SVG drawn as a mask over currentColor, so it
@@ -1859,4 +1870,3 @@ html.panel-host #root {
     cursor: pointer;
     color: #2563eb;
 }
-
