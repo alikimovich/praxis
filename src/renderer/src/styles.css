@@ -1366,7 +1366,9 @@ body.is-resizing {
 .composer {
     flex: 0 0 auto;
     border-top: 1px solid var(--border);
-    padding: 10px 12px 12px;
+    /* top right bottom left — bottom + right sit at 10px so the form floats a
+       consistent 10px from the window's bottom-right (matching the preview inset). */
+    padding: 10px 10px 10px 12px;
     display: flex;
     flex-direction: column;
     gap: 8px;
