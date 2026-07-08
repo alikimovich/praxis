@@ -2,6 +2,15 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-08 — Revert preview corners to all-rounded (drop the masks again)
+
+The square-top + in-page bottom-mask approach reintroduced the doubled-corner
+border it caused before, so it's reverted: the native view is rounded on all
+four corners via setBorderRadius (uniform, clean border, no masks) as it was.
+Electron's single-radius API means square-top/round-bottom isn't achievable
+without the mask hack, and the doubling makes that not worth it. The toolbar
+constant-height fix from the same commit is kept.
+
 ## 2026-07-08 — Preview: square top / rounded bottom; steady toolbar height
 
 - The preview body's TOP corners are square (flush under the URL bar) again,

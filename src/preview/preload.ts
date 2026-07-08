@@ -33,7 +33,6 @@ const SET_FRAME = 'dsgn:preview:set-frame' // renderer → preload (mobile bezel
 const TOOLBAR_ACTION = 'dsgn:preview:toolbar-action' // preload → renderer (code/delete)
 const CLEAR_SELECTED = 'dsgn:preview:clear-selected' // renderer → preload (pill ×, send)
 const SET_STATUS = 'dsgn:preview:set-status' // main → preload (launch progress pill)
-const SET_CORNERS = 'dsgn:preview:set-corners' // main → preload (bottom corner masks)
 const TOGGLE_SELECT = 'dsgn:preview:toggle-select' // preload → renderer (S pressed in preview)
 
 type CommentMode = 'comment' | 'annotate' | null
@@ -97,34 +96,6 @@ let widthTimer: ReturnType<typeof setTimeout> | null = null
 // Launch-status pill (bottom center) — dev-server progress while a project
 // starts, shown INSIDE the preview instead of a window-top banner.
 let statusEl: HTMLDivElement | null = null
-
-// Bottom-corner masks — the native view is square (its top sits flush under the
-// card header), so two fixed, click-through quarter-circle cutouts painted in
-// the window-gutter color (supplied by main, theme-tracked) fake the bottom
-// rounding. Injected into the previewed page so they bake into freeze captures.
-let cornerHost: HTMLDivElement | null = null
-function setCorners(opts: { radius: number; color: string } | null): void {
-  cornerHost?.remove()
-  cornerHost = null
-  if (!opts || opts.radius <= 0) return
-  const { radius, color } = opts
-  const host = document.createElement('div')
-  host.setAttribute('data-dsgn-corners', '')
-  host.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483646'
-  for (const side of ['left', 'right'] as const) {
-    const c = document.createElement('div')
-    // Arc centered at the div's inner-top corner; pixels beyond the radius
-    // (toward the outer corner point) paint the gutter color.
-    const at = side === 'left' ? '100% 0%' : '0% 0%'
-    c.style.cssText =
-      `position:fixed !important;bottom:0 !important;${side}:0 !important;` +
-      `width:${radius}px !important;height:${radius}px !important;margin:0 !important;` +
-      `background:radial-gradient(circle ${radius}px at ${at}, transparent ${radius - 0.5}px, ${color} ${radius + 0.5}px) !important;`
-    host.appendChild(c)
-  }
-  document.documentElement.appendChild(host)
-  cornerHost = host
-}
 
 function setStatusPill(text: string | null): void {
   if (!text) {
@@ -1153,7 +1124,6 @@ window.addEventListener('load', () => {
     buildPins()
   })
   ipcRenderer.on(SET_FRAME, (_e, on: boolean) => setFrame(on))
-  ipcRenderer.on(SET_CORNERS, (_e, opts: { radius: number; color: string } | null) => setCorners(opts))
   // The renderer cleared the selection (pill ×, message sent, delete) — drop the
   // element-scoped toolbar + persistent outlines with it.
   ipcRenderer.on(CLEAR_SELECTED, () => {
