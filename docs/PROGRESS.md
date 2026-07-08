@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-08 — Electron corner smoothing (squircle); preview header divider
+
+- Swapped the CSS `corner-shape: squircle` app-wide rule for Electron's native
+  `-electron-corner-smoothing: system-ui` (iOS-style smoothing, nicer + cheaper;
+  Chromium 150). Circles/pills are excluded (`-electron-corner-smoothing: 0%`)
+  so the send button, spinner, status dots, and Tailwind rounded-full elements
+  stay perfectly round. Verified: composer/card = system-ui, send button = 0%
+  (renders a true circle).
+- Preview header: dropped the previewbar's hard `border-bottom` divider. The
+  header and body share the card surface (same var(--bg-subtle)); the preview
+  content's rounded top edge is the visual separator now — no line, no notch.
+
 ## 2026-07-08 — Revert preview corners to all-rounded (drop the masks again)
 
 The square-top + in-page bottom-mask approach reintroduced the doubled-corner
