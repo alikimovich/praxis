@@ -74,6 +74,8 @@ src/
     tokens.ts       design-token detection/scaffold   annotations.ts  comments → PR
     git.ts, worktrees.ts          setup.ts, scaffold.ts, xcode.ts
     diagnose.ts, diag-cache.ts, diag-rules.ts         sessions-store.ts, edit-history.ts
+    update.ts       self-update detection (pure: fetch + rev-list behind-count)
+    update-ipc.ts   update:* IPC + relaunch; "apply" shells out to bin/praxis.mjs
   preload/index.ts  contextBridge → window.api (contextIsolation on, sandboxed)
   preview/preload.ts  SECOND preload, injected into the PREVIEWED app's
                     WebContentsView: element select/hover, comments, annotations.
@@ -81,9 +83,16 @@ src/
   shared/api.ts     the IPC contract — single source of truth for cross-process types
   renderer/src/     React 18 UI: App.tsx, components/ (ChatPanel, PreviewPane,
                     PropPanel, CodeDrawer, Rail, …), zustand store.ts, shadcn ui/
+  ../bin/praxis.mjs the `praxis` CLI (launch + `--update`); owns the update
+                    sequence (git pull + bun install + build). ../install.sh boots it.
 test/             hand-rolled .mjs tests + fixtures/ + artifacts/ (PNGs, gitignored)
 docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec)
 ```
+
+- **Lifecycle:** `install.sh` (curl one-liner) clones to `~/.praxis`, builds, and
+  puts `praxis` on PATH. `praxis` launches the built app; `praxis --update` pulls
+  + rebuilds. The app checks its git remote in the background (`update-ipc.ts`)
+  and offers an in-app "Update & Restart" that runs `praxis --update` and relaunches.
 
 - The chat runs in `main` via provider SDKs; output streams over `agent:*` IPC
   into the zustand store. The store is the seam between transport and UI.

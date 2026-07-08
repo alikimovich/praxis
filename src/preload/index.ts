@@ -33,7 +33,8 @@ import type {
   SimPreflight,
   TokenScaffoldResult,
   TokenSet,
-  UndoResult
+  UndoResult,
+  UpdateStatus
 } from '../shared/api'
 
 const api: DsgnApi = {
@@ -323,6 +324,15 @@ const api: DsgnApi = {
     list: (root: string): Promise<SessionRecord[]> => ipcRenderer.invoke('sessions:list', root),
     get: (id: string): Promise<SessionRecord | null> => ipcRenderer.invoke('sessions:get', id),
     remove: (id: string): Promise<void> => ipcRenderer.invoke('sessions:remove', id)
+  },
+  update: {
+    onStatus: (cb: (status: UpdateStatus) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, status: UpdateStatus): void => cb(status)
+      ipcRenderer.on('update:status', listener)
+      return () => ipcRenderer.removeListener('update:status', listener)
+    },
+    check: (): Promise<UpdateStatus> => ipcRenderer.invoke('update:check'),
+    apply: (): Promise<void> => ipcRenderer.invoke('update:apply')
   }
 }
 

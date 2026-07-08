@@ -11,7 +11,8 @@ import type {
   PropInspection,
   SelectedElement,
   SessionRecord,
-  TokenSet
+  TokenSet,
+  UpdateStatus
 } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
 
@@ -438,6 +439,53 @@ export const usePublishMode = create<PublishModeState>((set) => ({
       /* private mode / no storage — keep it in memory only */
     }
     set({ mode })
+  }
+}))
+
+/**
+ * Praxis self-update status, pushed from main over `update.onStatus`. A banner
+ * offers "Update & Restart" once available; dismissing it remembers the
+ * `subject` it was dismissed for (persisted) so the SAME update doesn't
+ * re-nag, but a newer one (different subject) still surfaces.
+ */
+const UPDATE_DISMISSED_KEY = 'dsgn:update-dismissed-subject'
+const readDismissed = (): string | null => {
+  try {
+    return localStorage.getItem(UPDATE_DISMISSED_KEY)
+  } catch {
+    return null
+  }
+}
+interface UpdateState {
+  status: UpdateStatus['status']
+  behind: number
+  subject?: string
+  progress?: string
+  error?: string
+  dismissedSubject: string | null
+  setStatus: (s: UpdateStatus) => void
+  dismiss: () => void
+}
+export const useUpdate = create<UpdateState>((set, get) => ({
+  status: 'idle',
+  behind: 0,
+  dismissedSubject: readDismissed(),
+  setStatus: (s) =>
+    set({
+      status: s.status,
+      behind: s.behind,
+      subject: s.subject,
+      progress: s.progress,
+      error: s.error
+    }),
+  dismiss: () => {
+    const subject = get().subject ?? ''
+    try {
+      localStorage.setItem(UPDATE_DISMISSED_KEY, subject)
+    } catch {
+      /* private mode / no storage — keep it in memory only */
+    }
+    set({ dismissedSubject: subject })
   }
 }))
 

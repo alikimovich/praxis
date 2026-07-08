@@ -5,6 +5,9 @@
   "description": "AI design & prototyping tool — chat on the left, live preview of your repo on the right",
   "main": "./out/main/index.js",
   "license": "MIT",
+  "bin": {
+    "praxis": "bin/praxis.mjs"
+  },
   "engines": {
     "node": ">=20"
   },
@@ -16,6 +19,7 @@
     "postinstall": "node scripts/patch-electron.mjs",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "link": "bun link",
     "lint": "biome check src test",
     "format": "biome format --write src test",
     "start": "electron-vite preview",
@@ -50,6 +54,7 @@
     "test:devnet": "bun test/devserver-net.mjs",
     "test:xcode": "bun test/xcode.mjs",
     "test:git": "bun test/git.mjs",
+    "test:update": "bun test/update.mjs",
     "test:diag-cache": "bun test/diag-cache.mjs",
     "test:diag-rules": "bun test/diag-rules.mjs",
     "test:diagnose-card": "electron-vite build && node test/diagnose-card.mjs",
