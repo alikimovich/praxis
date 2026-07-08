@@ -22,12 +22,12 @@ import { FRAME_ASPECT, FRAME_INSET, FRAME_DATA_URI } from '../../../shared/iphon
 type Rect = { left: number; top: number; width: number; height: number }
 type ViewRect = Rect & { radius: number }
 
-/** The native preview view is SQUARE (no corner rounding). setBorderRadius is
- *  uniform (all four corners or none), so a rounded body forced the top corners
- *  to round under the header too and revealed the card background at the corners
- *  on dark pages. Square keeps the preview flush; the card frame + header divider
- *  provide the visual container. */
-export const DESKTOP_CORNER_RADIUS = 0
+/** The native view rounds all four corners at this radius via setBorderRadius.
+ *  Its corners are genuinely transparent, so the card behind (a DOM rounded-rect
+ *  with a 1px border) shows through them — the card's border reads as a clean
+ *  rounded frame around the preview, no painting/masks. 15 = the card's inner
+ *  radius (16px outer − 1px border). */
+export const DESKTOP_CORNER_RADIUS = 15
 
 export default function PreviewPane(): React.JSX.Element {
   const slotRef = useRef<HTMLDivElement>(null)

@@ -2,6 +2,16 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-08 — Preview body back to rounded (card border shows through)
+
+Re-rounded the native preview view (DESKTOP_CORNER_RADIUS 0 → 15). Its corners
+are genuinely transparent, so the card (a DOM rounded-rect with a 1px border)
+shows through them as a clean rounded frame — the native view fills the body,
+already 1px inside the card's border, at radius 15 (16px card − 1px). One real
+DOM border, no masks/painting, so no doubling. App UI keeps its
+-electron-corner-smoothing squircle; the native preview stays plain-round (CSS
+smoothing can't reach a WebContentsView).
+
 ## 2026-07-08 — Revert corner experiments; square the preview body
 
 Reverted the -electron-corner-smoothing + divider-removal + distinct-header
