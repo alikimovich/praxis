@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-08 — Toolbar morphs into the comment field (Figma Make-style)
+
+- The selection toolbar is now a DARK pill (Figma-like) whose content MORPHS in
+  place: comment/annotate are leading toggles; activating one expands an inline
+  input + round submit inside the same pill (animated width), with
+  props/code/delete persisting as trailing icons. Escape/toggle collapses back;
+  a whole-page C/Y-mode click shows the same pill in input state at the clicked
+  element. The old floating white composer bubble is deleted. IPC and test
+  hooks unchanged (COMMENT payload, data-dsgn-composer on the pill,
+  aria-label=Submit). Built by an Opus subagent from a frame-by-frame spec of
+  the reference recording; verified independently (typecheck/build,
+  select-element, comment-mode, smoke, code-drawer, before/after captures in
+  test/artifacts/toolbar-state-{a,b}.png).
+
 ## 2026-07-07 — Public-repo doc cleanup
 
 Prepping the repo to go public: removed personal-machine details from the

@@ -89,7 +89,8 @@ try {
   const fillAndGetSend = (text) => `(() => {
     const sr = document.querySelector('[data-dsgn-overlay]')?.shadowRoot
     const ta = sr?.querySelector('[data-dsgn-composer] textarea')
-    const btn = sr?.querySelector('[data-dsgn-composer] button')
+    // The pill's first button is now the comment toggle — target Submit by label.
+    const btn = sr?.querySelector('[data-dsgn-composer] button[aria-label="Submit"]')
     if (!ta || !btn) return null
     ta.focus(); ta.value = ${JSON.stringify(text)}
     const b = btn.getBoundingClientRect()

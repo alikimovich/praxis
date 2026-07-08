@@ -157,10 +157,12 @@ try {
       const bar = host?.shadowRoot?.querySelector('[data-dsgn-toolbar]')
       if (!bar) return 'no-toolbar'
       if (getComputedStyle(bar).display === 'none') return 'hidden'
-      return 'visible:' + [...bar.querySelectorAll('button')].map((b) => b.dataset.kind).join(',')
+      // Scope to [data-kind] so the inline-input's Submit button (no data-kind)
+      // isn't counted — the pill morphs to hold it in the comment/annotate state.
+      return 'visible:' + [...bar.querySelectorAll('button[data-kind]')].map((b) => b.dataset.kind).join(',')
     })()`)
   })
-  if (!/^visible:props,comment,annotate,code,delete$/.test(toolbarShown)) {
+  if (!/^visible:comment,annotate,props,code,delete$/.test(toolbarShown)) {
     throw new Error(`in-preview selection toolbar wrong: ${toolbarShown}`)
   }
   await win.screenshot({ path: join(artifacts, '07-select-handoff.png') })
