@@ -1069,8 +1069,9 @@ body.is-fullscreen .sidebar-toggle {
     gap: 8px;
     min-height: 40px;
     padding: 5px 8px 5px 12px;
-    /* No hard divider line — the header and the body share the card surface;
-       the preview content's rounded top edge is the visual separator instead. */
+    /* A distinct header fill instead of a divider line: a touch grayer than the
+       card body, so the toolbar reads as separate from the preview content. */
+    background: color-mix(in srgb, var(--text) 5%, var(--bg-subtle));
     -webkit-app-region: drag;
     user-select: none;
 }
