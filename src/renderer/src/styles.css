@@ -1042,7 +1042,9 @@ body.is-fullscreen .sidebar-toggle {
     flex-direction: column;
     background: var(--bg-subtle);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    /* Match the composer's rounded-2xl (16px) so the Ask-Praxis form and the
+       preview card round the same way (both squircled by the global rule). */
+    border-radius: 16px;
     overflow: hidden;
 }
 
