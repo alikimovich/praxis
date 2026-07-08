@@ -87,6 +87,9 @@ let selectedEl: Element | null = null
 let inputWrapEl: HTMLDivElement | null = null
 let inputEl: HTMLTextAreaElement | null = null
 let submitEl: HTMLButtonElement | null = null
+// Trailing actions hidden while the inline input is open (props/delete + the
+// divider that isolates delete): commenting doesn't need destructive/prop UI.
+let separatorEl: HTMLDivElement | null = null
 let hintEl: HTMLDivElement | null = null
 let widthTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -262,7 +265,7 @@ function ensureOverlay(): void {
   })
   inputWrap.append(input, send)
 
-  // Thin separator between the toggle group and the trailing action icons.
+  // Thin separator isolating the destructive Delete from the rest of the actions.
   const separator = document.createElement('div')
   separator.style.cssText =
     'flex:0 0 auto;width:1px;height:16px;background:rgba(255,255,255,0.10);margin:0 2px;'
@@ -271,9 +274,10 @@ function ensureOverlay(): void {
   const codeBtn = makeIcon('code')
   const deleteBtn = makeIcon('delete')
 
-  // DOM order fixes both the visual layout and the button[data-kind] order the
-  // tests assert: comment, annotate, props, code, delete.
-  toolbar.append(commentBtn, annotateBtn, inputWrap, separator, propsBtn, codeBtn, deleteBtn)
+  // DOM order: comment, annotate, [input], props, code | delete. The divider
+  // sits before Delete only; the button[data-kind] order the tests assert stays
+  // comment, annotate, props, code, delete (the separator has no data-kind).
+  toolbar.append(commentBtn, annotateBtn, inputWrap, propsBtn, codeBtn, separator, deleteBtn)
 
   shadow.append(sel, box, label, pins, hint, toolbar, style)
   document.documentElement.appendChild(host)
@@ -287,6 +291,16 @@ function ensureOverlay(): void {
   inputWrapEl = inputWrap
   inputEl = input
   submitEl = send
+  separatorEl = separator
+}
+
+/** Show/hide the props + delete actions (and delete's divider). Hidden while the
+ *  inline comment/annotate input is open — those actions don't apply there. */
+function setTrailingActions(show: boolean): void {
+  const disp = show ? 'flex' : 'none'
+  toolbarEl?.querySelector<HTMLButtonElement>('[data-kind="props"]')?.style.setProperty('display', disp)
+  toolbarEl?.querySelector<HTMLButtonElement>('[data-kind="delete"]')?.style.setProperty('display', disp)
+  if (separatorEl) separatorEl.style.display = show ? 'block' : 'none'
 }
 
 /**
@@ -767,6 +781,7 @@ function resetInput(): void {
     inputWrapEl.style.opacity = '0'
     inputWrapEl.style.display = 'none'
   }
+  setTrailingActions(true)
   paintToggles()
 }
 
@@ -784,6 +799,7 @@ function enterInputState(kind: CommentMode, el: Element, fromMode: boolean): voi
   inputEl.placeholder = kind === 'annotate' ? 'Add a note…' : 'Ask for changes…'
   submitEl.style.background = kind === 'annotate' ? '#f59e0b' : '#2563eb'
   toolbarEl.setAttribute('data-dsgn-composer', '')
+  setTrailingActions(false)
   paintToggles()
   animatePill(() => {
     inputWrapEl!.style.display = 'flex'
