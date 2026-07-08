@@ -22,6 +22,7 @@ import { registerSetupIpc } from './setup'
 import { ensureBranch, switchBranch, listBranches, checkoutBranch } from './git'
 import { createProject } from './scaffold'
 import { registerDiagnoseIpc } from './diagnose'
+import { registerUpdateIpc } from './update-ipc'
 
 // Product name — drives the macOS app menu label and the About panel. Set at
 // module load (before app is ready) so the menu bar reads "Praxis", not "Electron".
@@ -35,6 +36,19 @@ app.setAboutPanelOptions({ applicationName: 'Praxis', applicationVersion: app.ge
 const appIcon = nativeImage.createFromPath(join(__dirname, '../../build/icon.png'))
 
 let mainWindow: BrowserWindow | null = null
+
+// Single-instance: re-running `praxis` (or relaunching after an update) focuses
+// the running window instead of spawning a second Praxis.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow) return
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  })
+}
+
 let previewView: WebContentsView | null = null
 let previewUrl: string | null = null
 let previewRetries = 0
@@ -668,6 +682,7 @@ app.whenReady().then(() => {
   ipcMain.handle('git:checkout', (_e, root: string, branch: string) => checkoutBranch(root, branch))
   ipcMain.handle('window:is-fullscreen', () => mainWindow?.isFullScreen() ?? false)
   registerDiagnoseIpc()
+  registerUpdateIpc(() => mainWindow)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

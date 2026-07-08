@@ -27,6 +27,7 @@ import {
   useSpawns,
   useTokens,
   useUiActions,
+  useUpdate,
   usePropsIsland,
   useViewport,
   usePreviewFreeze,
@@ -165,6 +166,11 @@ export default function App(): React.JSX.Element {
   const authNeeded = useSession((s) => s.authNeeded)
   const setAuthNeeded = useSession((s) => s.setAuthNeeded)
   const logOpen = useLog((s) => s.open)
+  const updateStatus = useUpdate((s) => s.status)
+  const updateSubject = useUpdate((s) => s.subject)
+  const updateProgress = useUpdate((s) => s.progress)
+  const updateError = useUpdate((s) => s.error)
+  const updateDismissedSubject = useUpdate((s) => s.dismissedSubject)
 
   // Rename / switch the working branch (name is coerced to dsgn/<…> in main).
   const changeBranch = async (name: string): Promise<void> => {
@@ -224,6 +230,10 @@ export default function App(): React.JSX.Element {
       }),
     []
   )
+
+  // Self-update status (startup check, periodic, and apply progress) → the
+  // update banner reads straight off the store; App just relays the pushes.
+  useEffect(() => window.api.update.onStatus(useUpdate.getState().setStatus), [])
 
   // Capture the SDK's advertised slash commands for the "/" menu, and drive the
   // first-run onboarding banner: raise it on an auth failure, and clear it the
@@ -1368,6 +1378,46 @@ export default function App(): React.JSX.Element {
               setStatus({ kind: 'idle' })
               setRetry(null)
             }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {updateStatus === 'available' && updateSubject !== updateDismissedSubject && (
+        <div className="banner banner--info">
+          <span className="banner__text">
+            Update available{updateSubject ? `: ${updateSubject}` : ''}
+          </span>
+          <button className="btn" onClick={() => void window.api.update.apply()}>
+            Update &amp; Restart
+          </button>
+          <button
+            className="banner__close"
+            onClick={() => useUpdate.getState().dismiss()}
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {updateStatus === 'updating' && (
+        <div className="banner banner--info">
+          <span className="banner__text">Updating… {updateProgress ?? ''}</span>
+          <button className="btn" disabled>
+            Updating…
+          </button>
+        </div>
+      )}
+
+      {updateStatus === 'error' && (
+        <div className="banner banner--info">
+          <span className="banner__text">Update failed: {updateError}</span>
+          <button
+            className="banner__close"
+            onClick={() => useUpdate.getState().dismiss()}
+            aria-label="Dismiss"
           >
             ✕
           </button>

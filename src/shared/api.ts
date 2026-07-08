@@ -529,6 +529,23 @@ export interface RecentMenuEntry {
   name: string
 }
 
+/**
+ * Self-update status pushed from main (`update:status`). Praxis is distributed
+ * as a git checkout; the updater compares HEAD to the tracked remote.
+ * - `idle`      — up to date, or not a git checkout / offline / no upstream.
+ * - `available` — `behind` commits behind the remote; `subject` is the newest.
+ * - `updating`  — an in-app "Update & Restart" is running; `progress` is the
+ *                 latest output line.
+ * - `error`     — a check or apply failed; `error` is the message.
+ */
+export interface UpdateStatus {
+  status: 'idle' | 'available' | 'updating' | 'error'
+  behind: number
+  subject?: string
+  progress?: string
+  error?: string
+}
+
 /** The surface exposed on `window.api` by the preload bridge. */
 export interface DsgnApi {
   /** Subscribe to native-menu (Actions/File) commands: 'reload' | 'stop' | 'select' |
@@ -783,5 +800,14 @@ export interface DsgnApi {
     list: (root: string) => Promise<SessionRecord[]>
     get: (id: string) => Promise<SessionRecord | null>
     remove: (id: string) => Promise<void>
+  }
+  /** Praxis self-update: check the git remote and apply an update in place. */
+  update: {
+    /** Subscribe to update-status pushes (startup check, periodic, and apply progress). */
+    onStatus: (cb: (status: UpdateStatus) => void) => () => void
+    /** Force an immediate check against the remote. */
+    check: () => Promise<UpdateStatus>
+    /** Run `praxis --update` (pull + install + build) and relaunch on success. */
+    apply: () => Promise<void>
   }
 }

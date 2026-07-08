@@ -40,16 +40,20 @@ GitHub PR.
 - macOS is the primary target (the postinstall step rebrands the dev Electron
   bundle to Praxis and is macOS-only; it no-ops elsewhere).
 
-## Setup
+## Install
+
+One line — clones to `~/.praxis` (override with `PRAXIS_HOME`), installs, builds,
+and puts a `praxis` command on your `PATH`:
 
 ```bash
-git clone https://github.com/alikimovich/praxis.git
-cd praxis
-bun install                # runs scripts/patch-electron.mjs (macOS: brands the dev app)
+curl -fsSL https://raw.githubusercontent.com/alikimovich/praxis/main/install.sh | bash
+```
 
-claude setup-token         # one-time: authorize the agent with your own subscription
+Then authorize the agent once and launch:
 
-bun run dev                # electron-vite, HMR
+```bash
+claude setup-token   # one-time: authorize the agent with your own subscription
+praxis               # launch the app (builds on first run)
 ```
 
 In the app, click **Open project…**, pick a repo with a `dev`/`start` script,
@@ -57,7 +61,28 @@ and chat on the left. Praxis **owns the dev server** — don't also run `dev`
 manually for a project you open here, or you'll hit a port/lock conflict (the
 error banner offers a custom-command retry for monorepos / odd setups).
 
-Updates are a `git pull`; there is no signed app or installer.
+## Updating
+
+```bash
+praxis --update      # git pull + bun install + rebuild
+```
+
+The app also checks its git remote in the background and shows an
+"Update available" banner with an **Update & Restart** button that runs the same
+sequence and relaunches. There's no signed app or auto-download — updates are
+always a git pull of your checkout.
+
+## Develop on Praxis itself
+
+Contributors work in the checkout directly instead of the installed copy:
+
+```bash
+git clone https://github.com/alikimovich/praxis.git
+cd praxis
+bun install          # runs scripts/patch-electron.mjs (macOS: brands the dev app)
+bun run dev          # electron-vite, HMR
+bun link             # optional: expose the `praxis` command from this checkout
+```
 
 ## Architecture
 
