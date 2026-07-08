@@ -113,22 +113,10 @@
     box-sizing: border-box;
 }
 
-/* Squircle every rounded corner app-wide (Chromium 139+ / Electron 43+).
-   corner-shape is inert without a border-radius, so this only reshapes elements
-   that are already rounded — buttons, cards, inputs, the composer, pills, etc. */
-*,
-*::before,
-*::after {
-    corner-shape: squircle;
-}
-
-/* The Ask-Praxis composer and the preview card round with a PLAIN radius (not
-   the global squircle), so they match the preview's native WebContentsView
-   corners — setBorderRadius can only render a plain round, never a squircle. */
-.previewcard,
-.composer [data-slot='input-group'] {
-    corner-shape: round;
-}
+/* No squircle / corner smoothing anywhere: the preview is a native
+   WebContentsView whose setBorderRadius can only draw a plain circular arc (CSS
+   corner-shape / -electron-corner-smoothing don't reach it), so the app UI stays
+   plain-round too for consistency. All corners use the default round shape. */
 
 html,
 body,
