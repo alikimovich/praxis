@@ -113,10 +113,27 @@
     box-sizing: border-box;
 }
 
-/* No squircle / corner smoothing anywhere: the preview is a native
-   WebContentsView whose setBorderRadius can only draw a plain circular arc (CSS
-   corner-shape / -electron-corner-smoothing don't reach it), so the app UI stays
-   plain-round too for consistency. All corners use the default round shape. */
+/* Smooth every rounded corner in the app UI into an iOS-style squircle via
+   Electron's native corner smoothing (on by default; inert without a
+   border-radius). NOTE: this is DOM-only — it can't reach the preview's native
+   WebContentsView (setBorderRadius draws a plain circular arc), so the preview
+   body stays plain/square; everything else is smoothed. */
+*,
+*::before,
+*::after {
+    -electron-corner-smoothing: system-ui;
+}
+
+/* Circles and pills must stay perfectly round — smoothing would squircle-ify
+   them (send button, spinner, status dots, and every Tailwind rounded-full:
+   avatars, badges, chips, the remove-image ×, the props chip). */
+.rounded-full,
+.composer__send,
+.composer__spinner,
+.rail__dot,
+.rail__sdot {
+    -electron-corner-smoothing: 0%;
+}
 
 html,
 body,
