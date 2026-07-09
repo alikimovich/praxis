@@ -8,8 +8,10 @@ import PanelHost from './components/PanelHost'
 import PreviewUrl from './components/PreviewUrl'
 import CodeDrawer from './components/CodeDrawer'
 import SessionReview from './components/SessionReview'
+import FeedbackDialog from './components/FeedbackDialog'
 import {
   describeSelectionForPrompt,
+  useFeedback,
   isAuthError,
   oneLine,
   toAgentOptions,
@@ -40,7 +42,7 @@ import {
   type ProjectEntry
 } from './store'
 import { projectKey } from '../../shared/projectKey'
-import { MonitorSmartphone, PanelLeft } from 'lucide-react'
+import { MessageSquarePlus, MonitorSmartphone, PanelLeft } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -1543,6 +1545,12 @@ export default function App(): React.JSX.Element {
               >
                 New project
               </button>
+              <button
+                className="btn empty__feedback"
+                onClick={() => useFeedback.getState().setOpen(true)}
+              >
+                Send feedback
+              </button>
             </div>
           </div>
           <div className="empty__cat">
@@ -1644,6 +1652,16 @@ export default function App(): React.JSX.Element {
                   <span className="previewbar__url">{hint}</span>
                 )}
                 <div className="previewbar__actions">
+                  {/* Feedback — always available; files a GitHub issue on the
+                      Praxis repo with an optional screenshot + conversation. */}
+                  <button
+                    className="iconbtn"
+                    onClick={() => useFeedback.getState().setOpen(true)}
+                    aria-label="Send feedback"
+                    title="Send feedback"
+                  >
+                    <MessageSquarePlus className="size-4" aria-hidden="true" />
+                  </button>
                   {status.kind === 'running' && (
                     <>
                       {/* Element-select moved to the chat composer (Figma Make-style);
@@ -1803,6 +1821,9 @@ export default function App(): React.JSX.Element {
           onResume={(rec) => resumeRecord(rec)}
         />
       )}
+
+      {/* LKM-27: in-app feedback → a GitHub issue on the Praxis repo. */}
+      <FeedbackDialog />
     </div>
   )
 }

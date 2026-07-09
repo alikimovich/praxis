@@ -889,6 +889,30 @@ export const useUiActions = create<UiActionsState>((set) => ({
 }))
 
 /**
+ * In-app feedback dialog (LKM-27) — a single global open flag so any surface (the
+ * previewbar button, the empty-state button) can raise the one dialog App renders.
+ */
+interface FeedbackState {
+  open: boolean
+  setOpen: (open: boolean) => void
+}
+export const useFeedback = create<FeedbackState>((set) => ({
+  open: false,
+  setOpen: (open) => set({ open })
+}))
+
+/** Render a chat slice as a plain-text transcript for a feedback attachment. */
+export const formatConversation = (messages: ChatMessage[]): string =>
+  messages
+    .map((m) => {
+      const who = m.role === 'user' ? 'You' : 'Praxis'
+      const text = m.text.trim()
+      return text ? `${who}: ${text}` : ''
+    })
+    .filter(Boolean)
+    .join('\n\n')
+
+/**
  * Props island visibility. Opening is EXPLICIT (the selection toolbar's props
  * action) — auto-popping a card on every pick was noisy. Cleared when the
  * selection is dropped.
