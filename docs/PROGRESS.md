@@ -2,6 +2,33 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-09 — Resume shows the past chat, not an empty tree — LKM-25
+
+Resuming a "previous agent" (SessionReview's Resume) handed the SDK the
+resumable session id so the model kept its context, but the renderer switched to
+a brand-new, empty chat slice and never populated it from the record's
+transcript — so the thread looked blank even though the agent "remembered."
+
+The persisted `SessionRecord` already carries the full `transcript`
+(`user`/`assistant`/`status` lines) and `resumeRecord` in `App.tsx` already has
+the record in hand, so the fix is renderer-only (no IPC change):
+
+- **store.ts:** new `messagesFromTranscript(transcript)` rebuilds `ChatMessage[]`
+  from the flat transcript, regrouping each turn's assistant text + tool
+  `status` lines into one assistant message with interleaved `segments` — the
+  same shape the live stream builds via `startAssistant`/`appendDelta`/
+  `appendStatus`. New `hydrate(key, messages)` action seeds a chat slice, but
+  **only when it's empty** so it can never clobber a live chat.
+- **App.tsx:** `resumeRecord` calls
+  `hydrate(sessionKey, messagesFromTranscript(record.transcript))` before
+  `setActiveChat`, so the resumed thread renders its history; new turns then
+  append after it as usual.
+- **Test:** `test/chat-render.mjs` gained a block that hydrates a slice from a
+  sample transcript, asserts the grouping (2 user + 1 grouped assistant turn
+  with text→tools→text segments and 2 statuses), renders it, and confirms
+  re-hydration is a no-op on a populated slice. `messagesFromTranscript` is
+  exposed as `window.__dsgnMessagesFromTranscript` for the harness.
+
 ## 2026-07-09 — In-app feedback button (files a GitHub issue) — LKM-27
 
 A "Send feedback" affordance now files a GitHub issue on Praxis's OWN repo (the

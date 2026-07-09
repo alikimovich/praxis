@@ -274,8 +274,63 @@ try {
   })
   await win.waitForFunction(() => window.__dsgnViewport.getState().viewport === 'desktop', { timeout: 5000 })
 
+  // v9 resume hydration: a persisted transcript (user / assistant / status lines)
+  // rebuilds into grouped chat messages and renders as a populated thread — the
+  // fix for "resume remembers context but shows an empty chat tree" (LKM-25).
+  const hydration = await win.evaluate(() => {
+    const key = 'resume-test#sdk-abc'
+    const transcript = [
+      { role: 'user', text: 'Make the header sticky', at: 1 },
+      { role: 'assistant', text: 'Sure, on it.', at: 2 },
+      { role: 'status', text: 'Read · src/Header.tsx', at: 3 },
+      { role: 'status', text: 'Edit · src/Header.tsx', at: 4 },
+      { role: 'assistant', text: 'Done — the header is sticky now.', at: 5 },
+      { role: 'user', text: 'Thanks', at: 6 }
+    ]
+    const msgs = window.__dsgnMessagesFromTranscript(transcript)
+    window.__dsgnStore.getState().hydrate(key, msgs)
+    window.__dsgnStore.getState().setActiveChat(key)
+    return {
+      count: msgs.length,
+      roles: msgs.map((m) => m.role),
+      assistantSegKinds: msgs[1].segments.map((s) => s.kind),
+      assistantStatuses: msgs[1].statuses,
+      assistantText: msgs[1].text
+    }
+  })
+  // 2 user + 1 grouped assistant turn (both assistant lines + both tool statuses).
+  if (JSON.stringify(hydration.roles) !== JSON.stringify(['user', 'assistant', 'user'])) {
+    throw new Error(`resume grouping wrong: ${JSON.stringify(hydration.roles)}`)
+  }
+  if (JSON.stringify(hydration.assistantSegKinds) !== JSON.stringify(['text', 'tools', 'text'])) {
+    throw new Error(`assistant segments wrong: ${JSON.stringify(hydration.assistantSegKinds)}`)
+  }
+  if (hydration.assistantStatuses.length !== 2) {
+    throw new Error(`assistant should carry 2 tool statuses: ${JSON.stringify(hydration.assistantStatuses)}`)
+  }
+  if (!hydration.assistantText.includes('Sure, on it.') || !hydration.assistantText.includes('sticky now')) {
+    throw new Error(`assistant flat text lost content: ${hydration.assistantText}`)
+  }
+  // The rebuilt thread actually renders (past turns visible, not an empty tree).
+  await win.waitForFunction(
+    () => (document.querySelectorAll('.msg').length ?? 0) >= 3,
+    null,
+    { timeout: 5000 }
+  )
+  const threadText = (await win.textContent('.pane--chat')) ?? ''
+  if (!threadText.includes('Make the header sticky') || !threadText.includes('sticky now')) {
+    throw new Error('resumed thread should show its past user + assistant turns')
+  }
+  // Re-hydrating a populated slice is a no-op (never clobbers a live chat).
+  const guarded = await win.evaluate(() => {
+    const key = 'resume-test#sdk-abc'
+    window.__dsgnStore.getState().hydrate(key, [])
+    return window.__dsgnStore.getState().byKey[key].messages.length
+  })
+  if (guarded !== 3) throw new Error(`hydrate should not clobber a populated slice, got ${guarded}`)
+
   console.log(
-    'CHAT-RENDER OK — markdown, toolbar, auth banner, branch pill, workspace store, rail collapse, image paste, composer responsive, actions menu + viewport'
+    'CHAT-RENDER OK — markdown, toolbar, auth banner, branch pill, workspace store, rail collapse, image paste, composer responsive, actions menu + viewport, resume hydration'
   )
 } catch (err) {
   console.error('CHAT-RENDER FAILED:', err?.message ?? err)
