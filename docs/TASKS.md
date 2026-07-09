@@ -3,6 +3,15 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Vanilla HTML / static sites (2026-07-09, user-requested) — SHIPPED
+
+- [x] **Open plain HTML/CSS/JS projects.** ✅ 2026-07-09 — `detect()` falls back
+      to `framework:'static'` for folders with an HTML entry and no runnable dev
+      command; a new in-process `src/main/static-server.ts` serves them (with
+      live-reload). Anything un-auto-launchable now errors with "Enter a command
+      to launch this project", which the preview error bar already turns into a
+      custom-command retry. `test/static-serve.mjs`.
+
 ## v9 — in-tool code view  ⭐ (2026-07-03, user-requested) — SHIPPED
 
 - [x] **Phase 1 — read-only code peek + open-in-editor.** ✅ 2026-07-03 — a "Code"

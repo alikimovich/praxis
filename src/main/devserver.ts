@@ -1,5 +1,6 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
 import { spawn, type ChildProcess } from 'child_process'
+import type { Server } from 'http'
 import { access, readFile } from 'fs/promises'
 import { basename, join } from 'path'
 import type {
@@ -18,6 +19,7 @@ import {
   waitForReachable
 } from './devserver-net'
 import { projectKey } from '../shared/projectKey'
+import { findStaticEntry, startStaticServer } from './static-server'
 
 // The preview always runs on a free port we pick (from this base) bound to IPv4
 // loopback — so it never collides with the framework default (5173/3000), never
@@ -80,10 +82,28 @@ function previewKindFor(framework: Framework): PreviewKind {
   return framework === 'expo' || framework === 'react-native' ? 'simulator' : 'web'
 }
 
+/** A plain HTML/JS folder we'll serve with the built-in static server. */
+function staticProject(root: string, name?: string): DetectedProject {
+  return {
+    root,
+    name: name ?? basename(root),
+    framework: 'static',
+    packageManager: 'npm', // unused — static sites are served in-process
+    scriptName: '',
+    devCommand: '', // no command to spawn; start() routes 'static' to the static server
+    previewKind: 'web'
+  }
+}
+
 async function detect(root: string): Promise<DetectedProject> {
   const pkgPath = join(root, 'package.json')
   if (!(await exists(pkgPath))) {
-    throw new Error('No package.json found in that folder.')
+    // No package.json — a vanilla HTML/CSS/JS site if there's an HTML entry to
+    // serve; otherwise there's nothing we know how to launch, so ask for a command.
+    if (await findStaticEntry(root)) return staticProject(root)
+    throw new Error(
+      'No package.json or index.html found in that folder. Enter a command to launch this project.'
+    )
   }
   const pkg = JSON.parse(await readFile(pkgPath, 'utf8'))
   const scripts: Record<string, string> = pkg.scripts ?? {}
@@ -93,7 +113,15 @@ async function detect(root: string): Promise<DetectedProject> {
 
   const scriptName = scripts.dev ? 'dev' : scripts.start ? 'start' : ''
   if (!scriptName && previewKind === 'web') {
-    throw new Error('No "dev" or "start" script in package.json. Use a custom command.')
+    // A package.json with no dev/start script: if the framework is unrecognized
+    // and it ships an HTML entry, treat it as a vanilla static site (many bundler-
+    // less repos carry a package.json with no scripts). A recognized framework
+    // (vite/next/…) with no dev script has a build-template index.html that won't
+    // serve raw, so ask for a launch command instead.
+    if (framework === 'unknown' && (await findStaticEntry(root))) return staticProject(root, pkg.name)
+    throw new Error(
+      'No "dev" or "start" script in package.json. Enter a command to launch this project.'
+    )
   }
   // RN/Expo: prefer the repo's start script (usually `expo start`), but fall back
   // to `expo start` directly so a repo without one still launches the simulator.
@@ -119,6 +147,10 @@ async function detect(root: string): Promise<DetectedProject> {
 // Single-active behavior is preserved by the renderer stopping the previous
 // project before opening another (until the workspace rail manages many).
 const servers = new Map<string, ChildProcess>()
+
+// Static sites are served in-process (see static-server.ts), so they aren't
+// child processes — track their http.Server separately, keyed the same way.
+const staticServers = new Map<string, Server>()
 
 // Ports handed out but not necessarily bound yet. Concurrent starts (e.g. the
 // rail opening several projects at once) would otherwise all probe the same free
@@ -157,15 +189,23 @@ function killChild(child: ChildProcess): void {
 function stop(root: string): void {
   const key = projectKey(root)
   const child = servers.get(key)
-  if (!child) return
-  servers.delete(key)
-  killChild(child)
+  if (child) {
+    servers.delete(key)
+    killChild(child)
+  }
+  const staticServer = staticServers.get(key)
+  if (staticServer) {
+    staticServers.delete(key)
+    staticServer.close()
+  }
 }
 
 /** Stop every running dev server (app quit). */
 function stopAll(): void {
   for (const child of servers.values()) killChild(child)
   servers.clear()
+  for (const s of staticServers.values()) s.close()
+  staticServers.clear()
 }
 
 const CONFLICT_RE =
@@ -191,6 +231,14 @@ async function start(
   // allocatePort reserves it so concurrent starts can't pick the same one.
   const port = await allocatePort()
   onLog(`Assigned free port ${port} (binding ${PREVIEW_HOST}).`)
+
+  // Static sites (vanilla HTML/JS) have no command to spawn — serve them from
+  // dsgn's built-in in-process static server. A custom command override skips
+  // this (the user gave us something explicit to run instead).
+  if (opts.framework === 'static' && !opts.command) {
+    return startStaticSite(opts.root, port, onLog)
+  }
+
   const command = withPort(opts.command, opts.framework, port)
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -201,6 +249,30 @@ async function start(
     HOSTNAME: PREVIEW_HOST
   }
   return spawnDevServer({ root: opts.root, command, env, port }, onLog)
+}
+
+/** Serve a static site in-process and register it like a spawned dev server. */
+async function startStaticSite(
+  root: string,
+  port: number,
+  onLog: (line: string) => void
+): Promise<RunningDevServer> {
+  const key = projectKey(root)
+  try {
+    const { server, running } = await startStaticServer({ root, port, host: PREVIEW_HOST }, onLog)
+    staticServers.set(key, server)
+    // Keep the map + reserved port honest if the server closes on its own.
+    server.on('close', () => {
+      reserved.delete(port)
+      if (staticServers.get(key) === server) staticServers.delete(key)
+    })
+    return running
+  } catch (err) {
+    reserved.delete(port)
+    throw new Error(
+      `Failed to start static server: ${err instanceof Error ? err.message : String(err)}`
+    )
+  }
 }
 
 function spawnDevServer(
@@ -301,7 +373,10 @@ export function registerDevServerIpc(getWindow: () => BrowserWindow | null): voi
 
   // Is this project's dev server still running? (A warm/backgrounded server can
   // die; the renderer probes before navigating the preview to its stale URL.)
-  ipcMain.handle('devserver:running', (_e, root: string) => servers.has(projectKey(root)))
+  ipcMain.handle('devserver:running', (_e, root: string) => {
+    const key = projectKey(root)
+    return servers.has(key) || staticServers.has(key)
+  })
 
   // Never leave a spawned dev server orphaned when dsgn quits.
   app.on('before-quit', stopAll)

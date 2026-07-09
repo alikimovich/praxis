@@ -70,6 +70,7 @@
     "test:spawn": "electron-vite build && node test/spawn-comment.mjs",
     "test:projkey": "bun test/project-key.mjs",
     "test:devmulti": "electron-vite build && node test/devserver-multi.mjs",
+    "test:static-serve": "electron-vite build && node test/static-serve.mjs",
     "test:agentmulti": "electron-vite build && node test/agent-multi.mjs",
     "test:agentcap": "electron-vite build && node test/agent-cap.mjs",
     "test:chatroute": "electron-vite build && node test/chat-route.mjs",
