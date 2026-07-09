@@ -2,6 +2,30 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-09 — In-app feedback button (files a GitHub issue) — LKM-27
+
+A "Send feedback" affordance now files a GitHub issue on Praxis's OWN repo (the
+app's git checkout, `app.getAppPath()` — same seam the self-updater uses), with
+an optional screenshot and conversation transcript, each behind its own toggle.
+
+- **Main:** `feedback.ts` registers `feedback:capture` (downscales a
+  `webContents.capturePage()` of the app window to a ≤900px JPEG data URI) and
+  `feedback:submit` (preflight git repo / origin / `gh`, then `gh issue create`).
+  Wired in `index.ts` via `registerFeedbackIpc(() => mainWindow)`.
+- **Body builder:** `src/shared/feedback-body.ts` (pure, unit-tested) assembles
+  the issue title + body. GitHub gives no API to *attach* an image and caps issue
+  bodies at 65536 chars, so an opted-in screenshot rides along as a base64
+  data-URI inside a collapsed `<details>` (copy into a browser to view); any
+  optional section that would blow the cap is dropped with a visible note while
+  the feedback text always survives.
+- **Renderer:** `FeedbackDialog.tsx` (shadcn Dialog) — textarea + two toggles;
+  the screenshot is captured on open and previewed. Opened from a new previewbar
+  icon button (always visible) and an empty-state "Send feedback" button via a
+  tiny `useFeedback` store. Transcript comes from `formatConversation(messages)`.
+- **Tests:** `test/feedback-body.mjs` (unit — title/body/limits) and
+  `test/feedback-dialog.mjs` (electron — opens the dialog, asserts the toggles +
+  send-button gating; never posts). Both registered in `test/run.mjs`.
+
 ## 2026-07-08 — Agent now knows the preview's current page
 
 The preview's real location (link clicks, SPA route changes, initial load)

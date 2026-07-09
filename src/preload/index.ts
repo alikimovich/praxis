@@ -12,6 +12,8 @@ import type {
   PanelAction,
   PanelState,
   DsgnApi,
+  FeedbackInput,
+  FeedbackResult,
   Framework,
   ImageAttachment,
   PermissionMode,
@@ -332,6 +334,11 @@ const api: DsgnApi = {
     list: (root: string): Promise<SessionRecord[]> => ipcRenderer.invoke('sessions:list', root),
     get: (id: string): Promise<SessionRecord | null> => ipcRenderer.invoke('sessions:get', id),
     remove: (id: string): Promise<void> => ipcRenderer.invoke('sessions:remove', id)
+  },
+  feedback: {
+    capture: (): Promise<string | null> => ipcRenderer.invoke('feedback:capture'),
+    submit: (input: FeedbackInput): Promise<FeedbackResult> =>
+      ipcRenderer.invoke('feedback:submit', input)
   },
   update: {
     onStatus: (cb: (status: UpdateStatus) => void): (() => void) => {

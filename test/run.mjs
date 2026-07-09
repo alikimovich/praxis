@@ -26,6 +26,7 @@ const ROOT = dirname(TEST_DIR);
 // unit = the `bun test/NAME.mjs` group before `electron-vite build` in `test`.
 const UNIT = [
   'pr-body',
+  'feedback-body',
   'publish-message',
   'project-key',
   'project-create',
@@ -62,6 +63,7 @@ const ELECTRON = [
   'chat-render',
   'chat-route',
   'preview-location',
+  'feedback-dialog',
   'questions',
   'diagnose-card',
   'select-element',

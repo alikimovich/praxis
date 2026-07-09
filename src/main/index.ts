@@ -23,6 +23,7 @@ import { ensureBranch, switchBranch, listBranches, checkoutBranch } from './git'
 import { createProject } from './scaffold'
 import { registerDiagnoseIpc } from './diagnose'
 import { registerUpdateIpc } from './update-ipc'
+import { registerFeedbackIpc } from './feedback'
 
 // Product name — drives the macOS app menu label and the About panel. Set at
 // module load (before app is ready) so the menu bar reads "Praxis", not "Electron".
@@ -683,6 +684,7 @@ app.whenReady().then(() => {
   ipcMain.handle('window:is-fullscreen', () => mainWindow?.isFullScreen() ?? false)
   registerDiagnoseIpc()
   registerUpdateIpc(() => mainWindow)
+  registerFeedbackIpc(() => mainWindow)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

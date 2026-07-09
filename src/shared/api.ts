@@ -475,6 +475,28 @@ export interface PublishResult {
   error?: string
 }
 
+/**
+ * In-app feedback (LKM-27) posted as a GitHub issue on Praxis's OWN repo (the
+ * app's git checkout, `app.getAppPath()`), not the opened target project. The
+ * screenshot + conversation are opt-in attachments — the renderer only sends
+ * them when the corresponding toggle is on, so a bare report carries neither.
+ */
+export interface FeedbackInput {
+  /** The user's typed feedback. */
+  body: string
+  /** A `data:image/…;base64,…` app screenshot, present only when opted in. */
+  screenshot?: string | null
+  /** The rendered chat transcript, present only when opted in. */
+  conversation?: string | null
+}
+
+export interface FeedbackResult {
+  ok: boolean
+  /** The created issue URL on success. */
+  url?: string
+  error?: string
+}
+
 /** Result of scaffolding source-stamping into an unprepared project. */
 export type Frontend = 'react' | 'react-native' | 'svelte' | 'vue' | 'solid' | 'unknown'
 /** How dsgn instruments source mapping for the detected framework. */
@@ -830,6 +852,13 @@ export interface DsgnApi {
     list: (root: string) => Promise<SessionRecord[]>
     get: (id: string) => Promise<SessionRecord | null>
     remove: (id: string) => Promise<void>
+  }
+  /** In-app feedback → a GitHub issue on Praxis's own repo (LKM-27). */
+  feedback: {
+    /** Snapshot the app window as a downscaled data URL, for the opt-in screenshot. */
+    capture: () => Promise<string | null>
+    /** Post the feedback (with any opted-in attachments) as a GitHub issue. */
+    submit: (input: FeedbackInput) => Promise<FeedbackResult>
   }
   /** Praxis self-update: check the git remote and apply an update in place. */
   update: {
