@@ -39,6 +39,15 @@ const appIcon = nativeImage.createFromPath(join(__dirname, '../../build/icon.png
 
 let mainWindow: BrowserWindow | null = null
 
+// Test isolation: the electron test tier (test/run.mjs) points each test at its
+// own throwaway userData dir so persisted state (localStorage: workspace/recents)
+// can't leak between tests — and each gets its own single-instance lock, so a
+// stale app from a killed run can't block the next launch. Never set in
+// production; must run before the lock request below.
+if (process.env.DSGN_USER_DATA) {
+  app.setPath('userData', process.env.DSGN_USER_DATA)
+}
+
 // Single-instance: re-running `praxis` (or relaunching after an update) focuses
 // the running window instead of spawning a second Praxis.
 if (!app.requestSingleInstanceLock()) {
