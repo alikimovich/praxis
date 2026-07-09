@@ -54,6 +54,7 @@ const ELECTRON = [
   'rail',
   'rail-collapse',
   'devserver-multi',
+  'static-serve',
   'agent-multi',
   'agent-cap',
   'provider-seam',

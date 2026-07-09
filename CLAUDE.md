@@ -65,6 +65,8 @@ src/
   main/           Electron main (CJS, Node)
     index.ts        window + native WebContentsView preview (IPC geometry sync)
     devserver.ts    detect framework/PM, spawn dev server, parse URL, readiness
+    static-server.ts in-process static file server for vanilla HTML/JS projects
+                    (framework 'static': no package.json/dev command; live-reload)
     agent.ts        persistent multi-turn agent session (streams over agent:* IPC)
     backends/       provider seam: claude.ts, codex.ts, gemini.ts behind pickProvider
                     (gemini currently has NO SDK dep — treat as experimental)

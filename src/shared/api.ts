@@ -12,6 +12,9 @@ export type Framework =
   | 'sveltekit'
   | 'expo'
   | 'react-native'
+  // A plain static site (vanilla HTML/CSS/JS, no package.json or build step) —
+  // served by dsgn's own built-in static file server, not a spawned dev command.
+  | 'static'
   | 'unknown'
 
 /**
