@@ -2,6 +2,56 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-09 — Survive sleep/crash: renderer recovery + full workspace/chat restore
+
+Closing the laptop could kill the main renderer (Chromium reaps it around a
+long sleep); the app either froze or — once reloaded — booted to the Welcome
+screen with the OLD project's native preview still painted on top and every
+chat apparently gone, even though main was still running the agent sessions
+and dev server. Three layers of fix, in three commits:
+
+1. **Main renderer recovery** (`main/index.ts`): reload on
+   `render-process-gone`, repaint on `powerMonitor` resume, and hide/zero the
+   preview `WebContentsView` on every main-frame `did-navigate` — PreviewPane's
+   unmount cleanup never runs across a hard reload, so main must reset the
+   stale view itself (page kept warm; `preview:load` re-claims it instantly).
+2. **Reattach APIs** (`devserver.ts`, `agent.ts`, backends): `devserver:info`
+   returns a running server's `RunningDevServer` (covers in-process static
+   servers too) so a reattaching renderer recovers the URL instead of
+   respawning on a new port; `agent:workspace-snapshot` returns every live
+   project/chat with its in-memory record (a live session has no on-disk
+   record — those are written only on close). Per-chat `isRunning` rides the
+   ProviderSession contract's own terminal `done`/`error` event via
+   `ctx.onEvent`, now wired in all three backends for every interactive session.
+3. **Renderer restore** (`renderer/src/restore.ts`, store, App): `useWorkspace`
+   `{projects, activeKey}` persists to localStorage (`dsgn:workspace`; the
+   `?dsgnPanel=1` window never writes it). On boot, `restoreWorkspace` reattaches
+   to whatever the snapshot says is live — rail rehydrated, each live chat
+   seeded via `messagesFromTranscript` + `useChat.hydrate` (extended with an
+   `isRunning` mode that opens a fresh streaming tail: the pre-reload buffered
+   text only reaches the transcript on flush, so continuing deltas can't
+   double-render), active project re-applied through `applyProject` with the
+   preview URL from `devserver:info`. When main has nothing (real relaunch),
+   the last dsgn-launched project reopens via `attempt()` and its newest
+   resumable record is resumed with history seeded. Any failure falls back to
+   Welcome.
+
+Tests: `test/restore-reload.mjs` (electron tier — real reattach across a hard
+`webContents.reload()`, seed/no-clobber/streaming-tail guards, dead-workspace
+no-wedge). Because persisted workspace state now changes BOOT behavior, the
+electron tier leaked state between tests (a prior test's project auto-reopened
+in the next test's launch): `test/run.mjs` now gives each test its own
+throwaway userData dir via the new `DSGN_USER_DATA` env override in
+`main/index.ts` (also isolates the single-instance lock, so a killed run can't
+block the next). Note: tests invoked directly (`node test/x.mjs`) still share
+the real userData; the runner is the isolation boundary.
+
+Also fixed in passing: `preview-location.mjs` was failing at HEAD~ already —
+its renderer-side `window.api.agent.send = spy` silently no-ops because the
+contextBridge freezes `window.api`; it now spies in MAIN by swapping the
+`agent:send` handler via `app.evaluate` (and asserts on the last *user*
+message, since submit opens an empty streaming-assistant placeholder).
+
 ## 2026-07-09 — Resume shows the past chat, not an empty tree — LKM-25
 
 Resuming a "previous agent" (SessionReview's Resume) handed the SDK the
