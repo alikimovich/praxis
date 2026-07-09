@@ -67,21 +67,31 @@ let overlayLabel: HTMLDivElement | null = null
 let pinsLayer: HTMLDivElement | null = null
 let annotationPins: { id: string; selector: string }[] = []
 
-// Inline-comment state. `commentMode` is the armed mode (C/Y); `commenting` is the
-// element a composer is currently anchored to (the click froze it). `composeKind`
-// is what an OPEN composer submits as — it can differ from the armed mode when
-// the selection toolbar opened it directly (no mode armed).
+// Inline-comment state. `commentMode` is the armed whole-page mode (C/Y).
+// `commenting` is the element the OPEN inline input is frozen onto (the click
+// froze it); `inputKind` is what that open input submits as (null while the pill
+// shows its icon row). `inputFromMode` marks an input opened by a whole-page C/Y
+// click with no prior pick — Escape then hides the pill entirely instead of
+// collapsing back to icons.
 let commentMode: CommentMode = null
 let commenting: Element | null = null
-let composeKind: CommentMode = null
-let composerEl: HTMLDivElement | null = null
-let composerInput: HTMLTextAreaElement | null = null
-let composerHint: HTMLDivElement | null = null
+let inputKind: CommentMode = null
+let inputFromMode = false
 
-// Selection toolbar — the element-scoped actions (comment / annotate / code /
-// delete) floating next to the picked element, Figma-style.
+// Selection toolbar — ONE dark pill anchored to the picked element that morphs in
+// place between an icon row (State A) and an inline comment/annotate input
+// (State B), Figma-Make-style. These are its interactive parts + the width-morph
+// timer.
 let toolbarEl: HTMLDivElement | null = null
 let selectedEl: Element | null = null
+let inputWrapEl: HTMLDivElement | null = null
+let inputEl: HTMLTextAreaElement | null = null
+let submitEl: HTMLButtonElement | null = null
+// Trailing actions hidden while the inline input is open (props/delete + the
+// divider that isolates delete): commenting doesn't need destructive/prop UI.
+let separatorEl: HTMLDivElement | null = null
+let hintEl: HTMLDivElement | null = null
+let widthTimer: ReturnType<typeof setTimeout> | null = null
 
 // Launch-status pill (bottom center) — dev-server progress while a project
 // starts, shown INSIDE the preview instead of a window-top banner.
@@ -143,64 +153,43 @@ function ensureOverlay(): void {
   const sel = document.createElement('div')
   sel.style.cssText = 'position:fixed;inset:0;pointer-events:none;'
 
-  // Inline composer — a floating pill anchored to the clicked element. It's the
-  // only interactive part of the overlay (pointer-events:auto), so a hostile page
-  // can't reach it and our own clicks on it are ignored via isOverlay().
-  const composer = document.createElement('div')
-  composer.setAttribute('data-dsgn-composer', '')
-  composer.style.cssText =
-    'position:fixed;pointer-events:auto;display:none;align-items:flex-end;gap:6px;' +
-    'box-sizing:border-box;width:300px;max-width:80vw;padding:8px 8px 8px 14px;' +
-    'background:#fff;border-radius:22px;box-shadow:0 6px 24px rgba(0,0,0,0.16);' +
-    'font:400 14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif;' +
-    'z-index:1;border:1px solid rgba(0,0,0,0.06);'
-
-  const input = document.createElement('textarea')
-  input.rows = 1
-  input.style.cssText =
-    'flex:1;border:none;outline:none;resize:none;background:transparent;color:#111;' +
-    'font:inherit;max-height:120px;padding:5px 0;'
-
-  const send = document.createElement('button')
-  send.type = 'button'
-  send.setAttribute('aria-label', 'Submit')
-  send.textContent = '↑'
-  send.style.cssText =
-    'flex:0 0 auto;width:28px;height:28px;border:none;border-radius:50%;cursor:pointer;' +
-    'background:#2563eb;color:#fff;font:600 15px/1 system-ui;display:flex;' +
-    'align-items:center;justify-content:center;'
-
+  // Whole-page mode hint chip (top-center) while C/Y is armed.
   const hint = document.createElement('div')
   hint.style.cssText =
     'position:fixed;pointer-events:none;font:600 11px/1.4 system-ui,sans-serif;color:#fff;' +
     'background:#111;opacity:0.82;padding:3px 8px;border-radius:5px;white-space:nowrap;display:none;'
 
-  // Keep composer mouse events from bubbling out to the previewed page. Bubble
-  // phase (not capture) so the send button's own click handler still fires first;
-  // the overlay's window-level capture handlers already ignore overlay targets.
-  const swallow = (e: Event): void => e.stopPropagation()
-  composer.addEventListener('mousedown', swallow)
-  composer.addEventListener('click', swallow)
-  input.addEventListener('keydown', onComposerKey, true)
-  input.addEventListener('input', autoGrow)
-  send.addEventListener('click', (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    submitComposer()
-  })
-  composer.append(input, send)
-
-  // Selection toolbar — element-scoped actions floating next to the picked
-  // element. Interactive like the composer (pointer-events:auto + swallowed
-  // events); shown/positioned by showToolbar().
+  // The single morphing pill — element-scoped actions anchored to the picked
+  // element. It's the only interactive part of the overlay (pointer-events:auto),
+  // so a hostile page can't reach it and our own clicks on it are ignored via
+  // isOverlay(). One DOM node hosts BOTH visual states: an icon row (State A) and
+  // an inline comment/annotate input (State B); enterInputState/collapseInput
+  // morph between them in place.
   const toolbar = document.createElement('div')
   toolbar.setAttribute('data-dsgn-toolbar', '')
   toolbar.style.cssText =
-    'position:fixed;pointer-events:auto;display:none;align-items:center;gap:2px;' +
-    'padding:4px;background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:10px;' +
-    'box-shadow:0 6px 24px rgba(0,0,0,0.16);z-index:2;'
+    'position:fixed;pointer-events:auto;display:none;box-sizing:border-box;align-items:center;gap:2px;' +
+    'padding:4px;background:#1f1f1f;border:1px solid rgba(255,255,255,0.08);border-radius:10px;' +
+    'box-shadow:0 6px 24px rgba(0,0,0,0.35);z-index:2;transition:width 160ms ease;'
+
+  // ::placeholder can't be set via inline cssText — style it (and hide the
+  // textarea's scrollbar) from a <style> scoped inside the shadow root.
+  const style = document.createElement('style')
+  style.textContent =
+    '[data-dsgn-toolbar] textarea::placeholder{color:#8a8a8a}' +
+    '[data-dsgn-toolbar] textarea{scrollbar-width:none}' +
+    '[data-dsgn-toolbar] textarea::-webkit-scrollbar{display:none}' +
+    // Squircle the injected overlay UI's rounded corners (toolbar pill, icon
+    // buttons, badges) to match the app — matches styles.css's global rule.
+    ':host *{corner-shape:squircle}'
+
+  // Keep pill mouse events from bubbling out to the previewed page. Bubble phase
+  // (not capture) so a button's own click handler still fires first; the overlay's
+  // window-level capture handlers already ignore overlay targets.
+  const swallow = (e: Event): void => e.stopPropagation()
   toolbar.addEventListener('mousedown', swallow)
   toolbar.addEventListener('click', swallow)
+
   const ICONS: Record<string, { title: string; svg: string }> = {
     props: {
       title: 'Edit props',
@@ -223,44 +212,101 @@ function ensureOverlay(): void {
       svg: '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'
     }
   }
-  for (const kind of ['props', 'comment', 'annotate', 'code', 'delete'] as const) {
+  // 26×26 icon button. comment/annotate are leading mode-toggles (track a pressed
+  // bg via data-pressed); props/code/delete are trailing action icons.
+  const makeIcon = (kind: keyof typeof ICONS): HTMLButtonElement => {
     const b = document.createElement('button')
     b.type = 'button'
     b.dataset.kind = kind
     b.title = ICONS[kind].title
     b.setAttribute('aria-label', kind)
     b.style.cssText =
-      'width:26px;height:26px;border:none;border-radius:7px;background:transparent;' +
-      'display:flex;align-items:center;justify-content:center;cursor:pointer;color:#555;'
+      'flex:0 0 auto;width:26px;height:26px;border:none;border-radius:7px;background:transparent;' +
+      'display:flex;align-items:center;justify-content:center;cursor:pointer;color:#d4d4d4;'
     b.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[kind].svg}</svg>`
-    b.addEventListener('mouseenter', () => (b.style.background = 'rgba(0,0,0,0.06)'))
-    b.addEventListener('mouseleave', () => (b.style.background = 'transparent'))
+    b.addEventListener('mouseenter', () => {
+      b.style.background = b.dataset.pressed === '1' ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.08)'
+    })
+    b.addEventListener('mouseleave', () => {
+      b.style.background = b.dataset.pressed === '1' ? 'rgba(255,255,255,0.16)' : 'transparent'
+    })
     b.addEventListener('click', (e) => {
       e.preventDefault()
       e.stopPropagation()
-      const el = selectedEl
-      if (!el) return
-      if (kind === 'comment' || kind === 'annotate') {
-        hideToolbar()
-        openComposer(el, kind)
-      } else {
-        ipcRenderer.send(TOOLBAR_ACTION, kind)
-      }
+      onToolbarButton(kind)
     })
-    toolbar.appendChild(b)
+    return b
   }
 
-  shadow.append(sel, box, label, pins, composer, hint, toolbar)
+  const commentBtn = makeIcon('comment')
+  const annotateBtn = makeIcon('annotate')
+
+  // Inline input group (State B) — hidden in the icon row, faded/grown in on morph.
+  const inputWrap = document.createElement('div')
+  inputWrap.style.cssText =
+    'display:none;align-items:center;gap:4px;flex:0 0 auto;opacity:0;transition:opacity 120ms ease;'
+  const input = document.createElement('textarea')
+  input.rows = 1
+  // Single line sits at the icon-button height (26px) so State B doesn't grow
+  // taller than State A: 18px line + 4px top + 4px bottom = 26px. It still grows
+  // (up to max-height) when the user types multiple lines.
+  input.style.cssText =
+    'box-sizing:border-box;border:none;outline:none;resize:none;background:transparent;color:#eee;' +
+    'font:400 13px/18px system-ui,-apple-system,Segoe UI,sans-serif;width:260px;max-width:60vw;' +
+    'max-height:66px;padding:4px 6px;'
+  const send = document.createElement('button')
+  send.type = 'button'
+  send.setAttribute('aria-label', 'Submit')
+  send.textContent = '↑'
+  send.style.cssText =
+    'flex:0 0 auto;width:26px;height:26px;border:none;border-radius:50%;cursor:pointer;' +
+    'background:#2563eb;color:#fff;font:600 15px/1 system-ui;display:flex;' +
+    'align-items:center;justify-content:center;'
+  input.addEventListener('keydown', onInputKey, true)
+  input.addEventListener('input', autoGrow)
+  send.addEventListener('click', (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    submitInput()
+  })
+  inputWrap.append(input, send)
+
+  // Thin separator isolating the destructive Delete from the rest of the actions.
+  const separator = document.createElement('div')
+  separator.style.cssText =
+    'flex:0 0 auto;width:1px;height:16px;background:rgba(255,255,255,0.10);margin:0 2px;'
+
+  const propsBtn = makeIcon('props')
+  const codeBtn = makeIcon('code')
+  const deleteBtn = makeIcon('delete')
+
+  // DOM order: comment, annotate, [input], props, code | delete. The divider
+  // sits before Delete only; the button[data-kind] order the tests assert stays
+  // comment, annotate, props, code, delete (the separator has no data-kind).
+  toolbar.append(commentBtn, annotateBtn, inputWrap, propsBtn, codeBtn, separator, deleteBtn)
+
+  shadow.append(sel, box, label, pins, hint, toolbar, style)
   document.documentElement.appendChild(host)
   overlayHost = host
   overlayBox = box
   overlayLabel = label
   pinsLayer = pins
   selLayer = sel
-  composerEl = composer
-  composerInput = input
-  composerHint = hint
+  hintEl = hint
   toolbarEl = toolbar
+  inputWrapEl = inputWrap
+  inputEl = input
+  submitEl = send
+  separatorEl = separator
+}
+
+/** Show/hide the props + delete actions (and delete's divider). Hidden while the
+ *  inline comment/annotate input is open — those actions don't apply there. */
+function setTrailingActions(show: boolean): void {
+  const disp = show ? 'flex' : 'none'
+  toolbarEl?.querySelector<HTMLButtonElement>('[data-kind="props"]')?.style.setProperty('display', disp)
+  toolbarEl?.querySelector<HTMLButtonElement>('[data-kind="delete"]')?.style.setProperty('display', disp)
+  if (separatorEl) separatorEl.style.display = show ? 'block' : 'none'
 }
 
 /**
@@ -366,6 +412,7 @@ function showToolbar(el: Element): void {
 }
 
 function hideToolbar(): void {
+  resetInput()
   if (toolbarEl) toolbarEl.style.display = 'none'
 }
 
@@ -549,7 +596,10 @@ function onMove(e: MouseEvent): void {
   // so a mode isn't stranded anchored to a detached element.
   if (editing && !editing.isConnected) endEdit()
   if (commenting && !commenting.isConnected) {
-    closeComposer()
+    // The frozen (input-open) element was swapped out (HMR) — tear the pill down.
+    hideToolbar()
+    selectedEl = null
+    setSelectionHighlight(null)
     setCommentMode(null)
   }
   // The selected element was swapped out (HMR) — the toolbar has nothing to
@@ -584,15 +634,18 @@ function onClick(e: MouseEvent): void {
     e.preventDefault()
     e.stopPropagation()
     ipcRenderer.send(PICKED, describe(el))
-    // A fresh pick resets element-scoped surfaces: close a composer left open
-    // on the previous selection, then show the toolbar + persistent outlines.
-    closeComposer()
+    // A fresh pick resets element-scoped surfaces: clear any open input from the
+    // previous selection, then show the toolbar (State A) + persistent outlines.
+    resetInput()
     showToolbar(el)
     setSelectionHighlight(el)
   } else if (commentMode) {
     e.preventDefault()
     e.stopPropagation()
-    openComposer(el) // freeze this element and anchor the composer to it
+    // Whole-page C/Y flow: anchor the pill to this element and morph straight to
+    // the inline input (no prior pick — Escape hides the pill entirely).
+    showToolbar(el)
+    enterInputState(commentMode, el, true)
   }
 }
 
@@ -662,86 +715,181 @@ function onEditKey(e: KeyboardEvent): void {
 // ---- Inline commenting: C → comment-to-agent, Y → annotation ----------------
 
 function autoGrow(): void {
-  const t = composerInput
+  const t = inputEl
   if (!t) return
   t.style.height = 'auto'
-  t.style.height = `${Math.min(t.scrollHeight, 120)}px`
+  t.style.height = `${Math.min(t.scrollHeight, 66)}px`
 }
 
-/** Anchor the composer just above the frozen element (clamped to the viewport). */
-function positionComposer(): void {
-  if (!composerEl || !commenting) return
-  const r = commenting.getBoundingClientRect()
-  const w = composerEl.offsetWidth || 300
-  const h = composerEl.offsetHeight || 44
-  const left = Math.min(Math.max(r.left, 8), window.innerWidth - w - 8)
-  let top = r.top - h - 8
-  if (top < 8) top = Math.min(r.bottom + 8, window.innerHeight - h - 8)
-  composerEl.style.left = `${left}px`
-  composerEl.style.top = `${Math.max(top, 8)}px`
+/** Paint the comment/annotate toggles to reflect the open input's kind. */
+function paintToggles(): void {
+  if (!toolbarEl) return
+  for (const k of ['comment', 'annotate'] as const) {
+    const b = toolbarEl.querySelector<HTMLButtonElement>(`[data-kind="${k}"]`)
+    if (!b) continue
+    const on = inputKind === k
+    b.dataset.pressed = on ? '1' : '0'
+    b.style.background = on ? 'rgba(255,255,255,0.16)' : 'transparent'
+    b.style.color = on ? '#fff' : '#d4d4d4'
+  }
 }
 
-function openComposer(el: Element, kind: CommentMode = commentMode): void {
-  ensureOverlay()
-  if (!composerEl || !composerInput) return
-  commenting = el
-  composeKind = kind
-  drawOverlay(el)
-  if (composerHint) composerHint.style.display = 'none'
-  composerInput.value = ''
-  composerInput.placeholder = composeKind === 'annotate' ? 'Add a note…' : 'Add a comment…'
-  const send = composerEl.querySelector('button')
-  if (send) send.style.background = composeKind === 'annotate' ? '#f59e0b' : '#2563eb'
-  composerEl.style.display = 'flex'
-  positionComposer()
-  autoGrow()
-  composerInput.focus()
+/**
+ * Morph the pill's width around a content change: measure the old width, mutate,
+ * measure the new (auto) width, then transition between them and clear to auto on
+ * transitionend (with a timeout fallback if it never fires). Reposition throughout
+ * so the viewport clamping in positionToolbar() stays correct.
+ */
+function animatePill(mutate: () => void): void {
+  const pill = toolbarEl
+  if (!pill) {
+    mutate()
+    return
+  }
+  const from = pill.offsetWidth
+  mutate()
+  pill.style.width = 'auto'
+  const to = pill.offsetWidth
+  if (from === to) {
+    pill.style.width = ''
+    positionToolbar()
+    return
+  }
+  pill.style.width = `${from}px`
+  void pill.offsetWidth // force reflow so the next assignment transitions
+  pill.style.width = `${to}px`
+  positionToolbar()
+  if (widthTimer) clearTimeout(widthTimer)
+  const finish = (): void => {
+    if (widthTimer) {
+      clearTimeout(widthTimer)
+      widthTimer = null
+    }
+    pill.style.width = ''
+    positionToolbar()
+    pill.removeEventListener('transitionend', onEnd)
+  }
+  const onEnd = (e: TransitionEvent): void => {
+    if (e.propertyName === 'width') finish()
+  }
+  pill.addEventListener('transitionend', onEnd)
+  widthTimer = setTimeout(finish, 260)
 }
 
-function closeComposer(): void {
+/** Instantly clear input state back to the icon row (no animation). */
+function resetInput(): void {
   commenting = null
-  composeKind = null
-  if (composerEl) composerEl.style.display = 'none'
-  if (composerInput) composerInput.value = ''
+  inputKind = null
+  inputFromMode = false
+  if (toolbarEl) toolbarEl.removeAttribute('data-dsgn-composer')
+  if (inputEl) inputEl.value = ''
+  if (inputWrapEl) {
+    inputWrapEl.style.opacity = '0'
+    inputWrapEl.style.display = 'none'
+  }
+  setTrailingActions(true)
+  paintToggles()
 }
 
-function submitComposer(): void {
-  const text = (composerInput?.value ?? '').replace(/\s+/g, ' ').trim()
+/** Morph the pill into State B — inline comment/annotate input for `el`. */
+function enterInputState(kind: CommentMode, el: Element, fromMode: boolean): void {
+  ensureOverlay()
+  if (!toolbarEl || !inputWrapEl || !inputEl || !submitEl) return
+  selectedEl = el
+  commenting = el
+  inputKind = kind
+  inputFromMode = fromMode
+  drawOverlay(el)
+  if (hintEl) hintEl.style.display = 'none'
+  inputEl.value = ''
+  inputEl.placeholder = kind === 'annotate' ? 'Add a note…' : 'Ask for changes…'
+  submitEl.style.background = kind === 'annotate' ? '#f59e0b' : '#2563eb'
+  toolbarEl.setAttribute('data-dsgn-composer', '')
+  setTrailingActions(false)
+  paintToggles()
+  animatePill(() => {
+    inputWrapEl!.style.display = 'flex'
+    requestAnimationFrame(() => {
+      if (inputWrapEl) inputWrapEl.style.opacity = '1'
+    })
+  })
+  autoGrow()
+  inputEl.focus()
+}
+
+/** Swap the open input's kind (the other toggle was clicked) without collapsing. */
+function switchInputKind(kind: CommentMode): void {
+  if (!inputEl || !submitEl) return
+  inputKind = kind
+  inputEl.placeholder = kind === 'annotate' ? 'Add a note…' : 'Ask for changes…'
+  submitEl.style.background = kind === 'annotate' ? '#f59e0b' : '#2563eb'
+  paintToggles()
+  inputEl.focus()
+}
+
+/** Morph the pill back to State A (icon row), keeping the selection + toolbar. */
+function collapseInput(): void {
+  if (!inputKind) return
+  animatePill(() => resetInput())
+}
+
+/** Leading toggles open/switch/collapse the input; trailing icons relay an action. */
+function onToolbarButton(kind: string): void {
+  const el = selectedEl
+  if (!el) return
+  if (kind === 'comment' || kind === 'annotate') {
+    if (inputKind === kind) collapseInput()
+    else if (inputKind) switchInputKind(kind)
+    else enterInputState(kind, el, false)
+  } else {
+    ipcRenderer.send(TOOLBAR_ACTION, kind)
+  }
+}
+
+function submitInput(): void {
+  const text = (inputEl?.value ?? '').replace(/\s+/g, ' ').trim()
   const el = commenting
-  const kind = composeKind
+  const kind = inputKind
   if (el && kind && text) {
     ipcRenderer.send(COMMENT, { kind, el: describe(el), text: text.slice(0, 2000) })
   }
-  closeComposer()
+  collapseInput()
   setCommentMode(null) // one comment per arming, like Figma
 }
 
-function onComposerKey(e: KeyboardEvent): void {
+function onInputKey(e: KeyboardEvent): void {
   e.stopPropagation()
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
-    submitComposer()
+    submitInput()
   } else if (e.key === 'Escape') {
     e.preventDefault()
-    closeComposer()
-    setCommentMode(null)
+    if (inputFromMode) {
+      // Opened via a whole-page C/Y click with no prior pick — hide the pill.
+      hideToolbar()
+      selectedEl = null
+      setSelectionHighlight(null)
+      setCommentMode(null)
+    } else {
+      collapseInput()
+    }
   }
 }
 
 function showModeHint(): void {
-  if (!composerHint) return
+  if (!hintEl) return
   if (!commentMode) {
-    composerHint.style.display = 'none'
+    hintEl.style.display = 'none'
     return
   }
-  composerHint.textContent =
+  hintEl.textContent =
     commentMode === 'annotate'
       ? 'Annotate: click an element to pin a note'
       : 'Comment: click an element to ask the agent'
-  composerHint.style.display = 'block'
-  composerHint.style.left = '50%'
-  composerHint.style.top = '12px'
-  composerHint.style.transform = 'translateX(-50%)'
+  hintEl.style.display = 'block'
+  hintEl.style.left = '50%'
+  hintEl.style.top = '12px'
+  hintEl.style.transform = 'translateX(-50%)'
 }
 
 /** True for the previewed app's own editable fields — don't hijack their keys. */
@@ -759,7 +907,7 @@ function setCommentMode(next: CommentMode, fromRenderer = false): void {
     setActive(false)
     ipcRenderer.send(CANCELLED) // clear the renderer's select toggle
   }
-  closeComposer()
+  resetInput()
   commentMode = next
   if (commentMode) {
     ensureOverlay()
@@ -773,7 +921,7 @@ function setCommentMode(next: CommentMode, fromRenderer = false): void {
   } else {
     if (!active) document.documentElement.style.cursor = ''
     hideOverlay()
-    if (composerHint) composerHint.style.display = 'none'
+    if (hintEl) hintEl.style.display = 'none'
   }
   // Echo keyboard/internal changes so the renderer toolbar can mirror them
   // (renderer-initiated changes already know their own state — avoid a loop).
@@ -908,20 +1056,16 @@ window.addEventListener('dblclick', onDblClick, true)
 window.addEventListener('keydown', onKey, true)
 window.addEventListener('scroll', () => {
   if (commenting) {
-    drawOverlay(commenting) // keep the highlight + composer tracking the frozen el
-    positionComposer()
+    drawOverlay(commenting) // keep the highlight tracking the frozen el
   } else if (active || commentMode) {
     hideOverlay()
   }
-  if (selectedEl) positionToolbar()
+  if (selectedEl) positionToolbar() // the pill tracks the selection in both states
   if (selEls.length) positionSelection()
   if (pinDots.size) positionPins()
 }, true)
 window.addEventListener('resize', () => {
-  if (commenting) {
-    drawOverlay(commenting)
-    positionComposer()
-  }
+  if (commenting) drawOverlay(commenting)
   if (selectedEl) positionToolbar()
   if (selEls.length) positionSelection()
   if (pinDots.size) positionPins()

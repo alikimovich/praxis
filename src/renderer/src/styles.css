@@ -113,6 +113,28 @@
     box-sizing: border-box;
 }
 
+/* Smooth every rounded corner in the app UI into an iOS-style squircle via
+   Electron's native corner smoothing (on by default; inert without a
+   border-radius). NOTE: this is DOM-only — it can't reach the preview's native
+   WebContentsView (setBorderRadius draws a plain circular arc), so the preview
+   body stays plain/square; everything else is smoothed. */
+*,
+*::before,
+*::after {
+    -electron-corner-smoothing: system-ui;
+}
+
+/* Circles and pills must stay perfectly round — smoothing would squircle-ify
+   them (send button, spinner, status dots, and every Tailwind rounded-full:
+   avatars, badges, chips, the remove-image ×, the props chip). */
+.rounded-full,
+.composer__send,
+.composer__spinner,
+.rail__dot,
+.rail__sdot {
+    -electron-corner-smoothing: 0%;
+}
+
 html,
 body,
 #root {
@@ -291,12 +313,6 @@ body {
     text-overflow: ellipsis;
 }
 
-.banner--error {
-    background: #fff5f5;
-    color: #b42318;
-    border-bottom-color: #fdd;
-}
-
 .banner--auth {
     background: #fffbeb;
     color: #92600a;
@@ -314,24 +330,6 @@ body {
 .banner__text {
     flex: 1 1 auto;
     white-space: pre-wrap;
-}
-
-.banner__retry {
-    flex: 0 0 auto;
-    display: flex;
-    gap: 6px;
-    align-items: center;
-}
-
-.banner__input {
-    border: 1px solid #f1c5c0;
-    border-radius: 7px;
-    padding: 5px 9px;
-    font: inherit;
-    font-size: 12px;
-    min-width: 240px;
-    outline: none;
-    background: #fff;
 }
 
 .banner__close {
@@ -503,7 +501,11 @@ body.is-fullscreen .sidebar-toggle {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font: 500 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    font:
+        500 11.5px/1.5 ui-monospace,
+        SFMono-Regular,
+        Menlo,
+        monospace;
     color: var(--text-muted);
 }
 .empty__cat .cat-loader {
@@ -799,6 +801,65 @@ body.is-fullscreen .sidebar-toggle {
     color: var(--text);
 }
 
+/* v9 multi-chat — "+" to start another live chat for the active project, and
+   the switcher between a project's own open chats (shown only once there's
+   more than one). Echo .rail__close / .rail__sessions' quiet, hover-revealed
+   styling so they read as part of the same family. */
+.rail__new-chat {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    margin-right: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    opacity: 0;
+}
+.rail__item:hover .rail__new-chat,
+.rail__item--active .rail__new-chat {
+    opacity: 1;
+}
+.rail__new-chat:hover {
+    background: var(--border);
+    color: var(--text);
+}
+.rail__chats {
+    list-style: none;
+    margin: 2px 0 2px;
+    padding: 0 0 0 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+.rail__chat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    padding: 4px 6px;
+    border: none;
+    border-radius: 5px;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: 11.5px;
+    text-align: left;
+}
+.rail__chat:hover {
+    background: var(--border);
+}
+.rail__chat--active {
+    color: var(--text);
+    font-weight: 500;
+}
+
 /* v5-D — past-session review modal (plain CSS; renders over the panes, not the
    native preview, so a normal overlay is fine). */
 .review__backdrop {
@@ -1033,7 +1094,9 @@ body.is-fullscreen .sidebar-toggle {
     flex-direction: column;
     background: var(--bg-subtle);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    /* Match the composer's rounded-2xl (16px) so the Ask-Praxis form and the
+       preview card round the same way (both squircled by the global rule). */
+    border-radius: 16px;
     overflow: hidden;
 }
 
@@ -1046,7 +1109,6 @@ body.is-fullscreen .sidebar-toggle {
     gap: 8px;
     min-height: 40px;
     padding: 5px 8px 5px 12px;
-    border-bottom: 1px solid var(--border);
     -webkit-app-region: drag;
     user-select: none;
 }
@@ -1080,6 +1142,57 @@ body.is-fullscreen .sidebar-toggle {
     /* Positioning context for the v9 code drawer (absolute, pinned to the bottom
        over the strip usePanelInset frees up under the shrunk native view). */
     position: relative;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    margin: 0 -1px -1px -1px;
+}
+
+/* Dev-server launch failure: the body's bottom corners flatten so the error
+   bar below it becomes the card's rounded bottom edge instead of the body. */
+.previewcard__body--errored {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+/* Error + retry command, pinned below the preview body (scoped to this
+   project's own preview card, not a full-width banner). No dismiss control —
+   closing the project from the rail is how you back out of it. */
+.previewcard__errbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 15px 15px;
+    margin: -1px;
+    background: var(--bg-subtle);
+}
+
+.previewcard__errtext {
+    min-width: 60px;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: #b42318;
+}
+
+.previewcard__errinput {
+    flex: 1 1 200px;
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 4px 8px;
+    font: inherit;
+    font-size: 12px;
+    outline: none;
+    background: var(--bg);
+    color: var(--text);
 }
 
 /* v9 code drawer: the stamped element's line span, highlighted in CodeMirror. */
@@ -1158,20 +1271,36 @@ body.is-resizing {
     gap: 4px;
 }
 
-/* User messages: bubble on the right, and STICKY — the most recent user ask
-   pins to the top while its answer scrolls (each next ask pushes the previous
-   out, Cursor-style). The row itself is click-through; only the bubble isn't.
-   z-index above the top fade so the pinned ask stays crisp over it. */
+/* User messages: bubble on the right. Every COLLAPSED ask (`.msg--user-
+   pinned`) is STICKY — it pins to the top while its answer scrolls
+   (Cursor-style). Each is wrapped in its own `.turn` container (see
+   ChatPanel), which bounds the stick: it releases once you've scrolled past
+   that turn's own content, handing off to the next turn's ask, instead of
+   every ask sticking at once with no hand-off. */
 .msg--user {
     align-items: flex-end;
-    position: sticky;
-    top: 4px;
-    z-index: 6;
-    pointer-events: none;
 }
 .msg--user .msg__text {
-    pointer-events: auto;
     box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
+}
+/* z-index above the status fade (5) so the pinned ask stays crisp over it; the
+   row itself is click-through so it never blocks the scroll-to-bottom button
+   or content underneath — only the bubble re-enables pointer events.
+   padding-bottom + the fading background give the pinned bubble its own
+   buffer: without it, whatever scrolls up from beneath butts flush against
+   the bubble the moment it's stuck (the flex `gap` between them is a one-time
+   static-flow spacing that scrolls away with the rest of the turn, not a
+   persistent buffer) — this reserves and fades that space every time. */
+.msg--user-pinned {
+    position: sticky;
+    top: 44px;
+    z-index: 6;
+    pointer-events: none;
+    padding-bottom: 20px;
+    background: linear-gradient(to bottom, var(--bg) 65%, transparent);
+}
+.msg--user-pinned .msg__text {
+    pointer-events: auto;
 }
 
 /* Copy row under finished assistant messages — visible on hover (always for
@@ -1211,6 +1340,31 @@ body.is-resizing {
 
 .msg--user .msg__text {
     font-weight: 500;
+    /* Clears the drag-strip/traffic-lights chrome (matches the sticky pin's
+       top: 44px) when `scrollIntoView({block:'start'})` expands a clamped
+       ask — otherwise it'd land flush against the pane's very top edge. */
+    scroll-margin-top: 54px;
+}
+
+/* Long user asks (item 2): collapsed to ~5 lines (14px / line-height 1.5)
+   with a bottom fade to the bubble's own bg-muted, so the pinned ask never
+   takes over the pane. `.msg__text--clamp`/`.msg__text-fade` are only
+   rendered by ChatPanel's `ClampedUserText` once it measures real overflow —
+   short messages get neither. */
+.msg__text--clamp {
+    position: relative;
+    max-height: 132px;
+    overflow: hidden;
+}
+.msg__text-fade {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 56px;
+    border-radius: 0 0 7px 7px;
+    background: linear-gradient(to bottom, transparent, var(--muted));
+    pointer-events: none;
 }
 
 .msg__status {
@@ -1347,7 +1501,9 @@ body.is-resizing {
 .composer {
     flex: 0 0 auto;
     border-top: 1px solid var(--border);
-    padding: 10px 12px 12px;
+    /* top right bottom left — bottom + right sit at 10px so the form floats a
+       consistent 10px from the window's bottom-right (matching the preview inset). */
+    padding: 10px;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -1493,13 +1649,28 @@ body.is-resizing {
 /* Live status line above the composer — the agent's "Architecting…"-style
    indicator. A pixel-art cat sits at the left, idling while it waits for input
    and running (accent-tinted) beside the current step while a turn is live. */
+/* The row itself carries the fade as its own background (rather than a
+   decorative layer sitting entirely above it) and overlaps UP into the
+   scroller by the same amount it grew via padding-top, so a scrolled-up
+   message visibly continues behind/under the cat instead of hitting a hard
+   cut. `margin-top: -56px` + `padding-top: 56px` cancel out for flex sizing
+   (the composer below doesn't shift), while the taller box now paints over
+   the scroller's last 56px. z-index above plain message content (auto/0) so
+   the overlap is actually visible, but below the pinned ask (6) and the
+   scroll-to-bottom button (20). Click-through so text/the scroll button
+   underneath stay reachable — the cat/status text don't need clicks. */
 .chat__status {
+    position: relative;
+    z-index: 5;
     flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: 8px;
     min-height: 28px;
-    padding: 2px 16px 0;
+    margin-top: -42px;
+    padding: 16px 16px 0;
+    background: linear-gradient(to bottom, transparent, var(--bg) 70%);
+    pointer-events: none;
 }
 
 .chat__status-text {
@@ -1513,8 +1684,13 @@ body.is-resizing {
 }
 
 @keyframes chat-status-pulse {
-    0%, 100% { opacity: 0.55; }
-    50% { opacity: 1; }
+    0%,
+    100% {
+        opacity: 0.55;
+    }
+    50% {
+        opacity: 1;
+    }
 }
 
 /* The sprite is a solid-black SVG drawn as a mask over currentColor, so it
@@ -1833,4 +2009,3 @@ html.panel-host #root {
     cursor: pointer;
     color: #2563eb;
 }
-

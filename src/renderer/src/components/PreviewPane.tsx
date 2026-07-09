@@ -22,13 +22,12 @@ import { FRAME_ASPECT, FRAME_INSET, FRAME_DATA_URI } from '../../../shared/iphon
 type Rect = { left: number; top: number; width: number; height: number }
 type ViewRect = Rect & { radius: number }
 
-/** The card's inner bottom-corner radius (12px outer − 1px border). The native
- *  view is rounded at this radius via setBorderRadius — all four corners; the
- *  top ones show as a subtle inset against the card header, which reads as the
- *  content sitting in a rounded panel. (The previous in-page corner-mask hack
- *  painted main-supplied theme colors over the page and doubled the corners
- *  whenever they disagreed with the card's.) */
-export const DESKTOP_CORNER_RADIUS = 11
+/** The native view rounds all four corners at this radius via setBorderRadius.
+ *  Its corners are genuinely transparent, so the card behind (a DOM rounded-rect
+ *  with a 1px border) shows through them — the card's border reads as a clean
+ *  rounded frame around the preview, no painting/masks. 15 = the card's inner
+ *  radius (16px outer − 1px border). */
+export const DESKTOP_CORNER_RADIUS = 15
 
 export default function PreviewPane(): React.JSX.Element {
   const slotRef = useRef<HTMLDivElement>(null)

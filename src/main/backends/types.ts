@@ -36,21 +36,33 @@ export interface PendingQuestion {
 }
 
 /**
- * A detached comment-spawn run (v8 F1). When a session is started with a
- * SpawnContext it is NOT the project's interactive chat — it's a one-shot agent
- * running in its own git worktree. The context routes its events away from the main
- * chat (stamped with `sessionId`) and gives agent.ts an in-process `onEvent` hook to
- * watch for the terminal `done`/`error` without adding an IPC channel.
+ * Extra context for a `startSession` call beyond the plain single-session-per-
+ * project case. Two unrelated uses share this shape:
+ * - A detached comment-spawn run (v8 F1): `sessionId` is set, which stamps every
+ *   event so the renderer routes it away from the main chat (its own rail row)
+ *   instead of into a chat slice, and `onEvent` gives agent.ts an in-process hook
+ *   for the terminal `done`/`error` without adding an IPC channel.
+ * - An additional or resumed interactive chat (v9 resume/multi-chat): `sessionId`
+ *   is left unset so events keep flowing into the normal chat pipeline, just
+ *   tagged with `emitKey` = that session's own `sessionKey` (not the bare
+ *   `projectKey`) so the renderer's `byKey` gives it its own slice. `resumeSessionId`
+ *   asks the backend to resume a past SDK session instead of starting fresh
+ *   (Claude-only; other backends accept and ignore it).
  */
 export interface SpawnContext {
-  /** Stable id for this spawn — stamped on every event so the renderer keeps it out
-   *  of the active chat stream and into its own rail row. */
-  sessionId: string
-  /** The projectKey the spawn's events + history record file under (the PARENT
-   *  project, so `sessions:list(repoRoot)` surfaces the finished run). */
+  /** Stable id for a detached comment spawn — stamped on every event so the
+   *  renderer keeps it out of the active chat stream and into its own rail row.
+   *  Absent for an additional/resumed interactive chat. */
+  sessionId?: string
+  /** The key the session's events + history record file under. For a spawn this
+   *  is the PARENT project's projectKey; for an additional/resumed chat this is
+   *  that chat's own sessionKey. */
   emitKey: string
-  /** In-process choke point agent.ts listens on for the terminal event. */
+  /** In-process choke point agent.ts listens on for the terminal event (spawns only). */
   onEvent?: (e: AgentEvent) => void
+  /** Resume a past SDK session instead of starting fresh (v9 resume). Claude-only —
+   *  other backends accept and ignore this. */
+  resumeSessionId?: string
 }
 
 /**
@@ -104,8 +116,10 @@ export interface ModelProvider {
     root: string,
     options: AgentOptions,
     getWindow: () => BrowserWindow | null,
-    /** Present only for a detached comment spawn (v8 F1); absent for the interactive
-     *  chat. A provider that doesn't support spawning can ignore it. */
+    /** Present for a detached comment spawn (v8 F1) OR an additional/resumed
+     *  interactive chat (v9 resume/multi-chat); absent for the plain default
+     *  single-session-per-project case. A provider that doesn't support these can
+     *  ignore it (Codex/Gemini accept it and no-op the resume). */
     ctx?: SpawnContext
   ) => Promise<ProviderSession>
 }

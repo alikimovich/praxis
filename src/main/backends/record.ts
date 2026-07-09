@@ -18,6 +18,9 @@ export interface RecordCapture {
   noteTool: (name: string, input: unknown) => void
   /** Flush the in-progress assistant buffer + sync filesTouched. Idempotent. */
   finalize: () => void
+  /** Stamp the SDK's own resumable session id (v9 resume) onto the record, once
+   *  it's known (off the `system`/init message). Claude-only today. */
+  setSdkSessionId: (id: string) => void
 }
 
 export function createRecordCapture(root: string, projectKey: string): RecordCapture {
@@ -58,6 +61,9 @@ export function createRecordCapture(root: string, projectKey: string): RecordCap
     finalize: () => {
       flushAssistant()
       record.filesTouched = [...touched]
+    },
+    setSdkSessionId: (id) => {
+      record.sdkSessionId = id
     }
   }
 }

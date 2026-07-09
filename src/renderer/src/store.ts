@@ -16,12 +16,23 @@ import type {
 } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
 
+/**
+ * One ordered chunk of an assistant turn — additive alongside the flat
+ * `text`/`statuses` fields (kept for back-compat: `CopyAction`, the status
+ * line, and App.tsx's export still read those). `segments` preserves the
+ * actual interleaving of prose and tool-call runs (`text → tools → text → …`)
+ * instead of collapsing a whole turn into one blob + one flat status list.
+ */
+export type MsgSegment = { kind: 'text'; text: string } | { kind: 'tools'; statuses: string[] }
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   text: string
   /** Tool-use status lines surfaced during the turn (assistant messages). */
   statuses: string[]
+  /** Ordered text/tool-run chunks — see `MsgSegment`. */
+  segments: MsgSegment[]
 }
 
 /** One project's chat. `streamingId` is the assistant message currently being
@@ -103,18 +114,39 @@ export const useChat = create<ChatState>((set, get) => {
     appendUser: (text, key) =>
       patch(key, (sl) => ({
         ...sl,
-        messages: [...sl.messages, { id: nextId(), role: 'user', text, statuses: [] }]
+        messages: [
+          ...sl.messages,
+          {
+            id: nextId(),
+            role: 'user',
+            text,
+            statuses: [],
+            segments: text ? [{ kind: 'text', text }] : []
+          }
+        ]
       })),
     appendNote: (text, key) =>
       patch(key, (sl) => ({
         ...sl,
-        messages: [...sl.messages, { id: nextId(), role: 'assistant', text, statuses: [] }]
+        messages: [
+          ...sl.messages,
+          {
+            id: nextId(),
+            role: 'assistant',
+            text,
+            statuses: [],
+            segments: text ? [{ kind: 'text', text }] : []
+          }
+        ]
       })),
     startAssistant: (key) =>
       patch(key, (sl) => {
         const id = nextId()
         return {
-          messages: [...sl.messages, { id, role: 'assistant', text: '', statuses: [] }],
+          messages: [
+            ...sl.messages,
+            { id, role: 'assistant', text: '', statuses: [], segments: [] }
+          ],
           isRunning: true,
           streamingId: id
         }
@@ -122,16 +154,34 @@ export const useChat = create<ChatState>((set, get) => {
     appendDelta: (text, key) =>
       patch(key, (sl) => ({
         ...sl,
-        messages: sl.messages.map((m) =>
-          m.id === sl.streamingId ? { ...m, text: m.text + text } : m
-        )
+        messages: sl.messages.map((m) => {
+          if (m.id !== sl.streamingId) return m
+          const last = m.segments[m.segments.length - 1]
+          const segments =
+            last?.kind === 'text'
+              ? [
+                  ...m.segments.slice(0, -1),
+                  { kind: 'text' as const, text: last.text + text }
+                ]
+              : [...m.segments, { kind: 'text' as const, text }]
+          return { ...m, text: m.text + text, segments }
+        })
       })),
     appendStatus: (text, key) =>
       patch(key, (sl) => ({
         ...sl,
-        messages: sl.messages.map((m) =>
-          m.id === sl.streamingId ? { ...m, statuses: [...m.statuses, text] } : m
-        )
+        messages: sl.messages.map((m) => {
+          if (m.id !== sl.streamingId) return m
+          const last = m.segments[m.segments.length - 1]
+          const segments =
+            last?.kind === 'tools'
+              ? [
+                  ...m.segments.slice(0, -1),
+                  { kind: 'tools' as const, statuses: [...last.statuses, text] }
+                ]
+              : [...m.segments, { kind: 'tools' as const, statuses: [text] }]
+          return { ...m, statuses: [...m.statuses, text], segments }
+        })
       })),
     finish: (key) => patch(key, (sl) => ({ ...sl, isRunning: false, streamingId: null })),
     isRunningFor: (key) => !!get().byKey[key]?.isRunning
@@ -219,6 +269,17 @@ export interface ProjectEntry {
   /** Chat length at the last successful Publish — the next Publish summarizes
    *  only the user asks after this point. */
   publishedMsgCount?: number
+  /**
+   * v9 resume/multi-chat — this project's live `sessionKey`s (mirrors `agent.ts`'s
+   * map): `key` itself for the default chat, plus `` `${key}#…` `` for any
+   * additional (`agent:new-chat`) or resumed (`agent:resume-session`) ones.
+   * Defaults to just `[key]` — untouched by projects that never open a second chat.
+   */
+  sessionKeys: string[]
+  /** Which of `sessionKeys` is the one currently shown (mirrors `agent.ts`'s
+   *  per-project `activeSessionKeyByProject`, kept in sync by whoever switches/
+   *  creates/resumes a chat while this project is active). Defaults to `key`. */
+  activeSessionKey: string
 }
 
 interface WorkspaceState {
@@ -546,7 +607,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
                 previewKind: 'web',
                 branch: null,
                 launchSpec: null,
-                touchedAt: 0
+                touchedAt: 0,
+                sessionKeys: [key],
+                activeSessionKey: key
               }
             ],
         key
@@ -996,6 +1059,39 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
   return `In the preview I selected the <${oneLine(el.tag, 32)}${ident}> element${where}${text}. `
 }
 
+/**
+ * The preview's real current location (link clicks, SPA route changes, initial
+ * load) — mirrors main's `did-navigate`/`did-navigate-in-page` reports. A single
+ * global value: only one native preview `WebContentsView` is ever live, so it
+ * always reflects whichever project is currently active. Kept in sync by a
+ * single top-level listener (see App.tsx); read by the chat composer so the
+ * agent knows what page it's looking at without the user having to say so.
+ */
+interface PreviewLocationState {
+  url: string | null
+  setUrl: (url: string | null) => void
+}
+
+export const usePreviewLocation = create<PreviewLocationState>((set) => ({
+  url: null,
+  setUrl: (url) => set({ url })
+}))
+
+/** Build the hidden chat-prompt prefix naming the page currently shown in the
+ *  preview — relative to the project's dev-server origin when it matches. */
+export const describePreviewLocationForPrompt = (base: string | null): string => {
+  const url = usePreviewLocation.getState().url
+  if (!url) return ''
+  let where = url
+  try {
+    const u = new URL(url)
+    if (base && new URL(base).origin === u.origin) where = u.pathname + u.search + u.hash
+  } catch {
+    /* keep the full URL if either side fails to parse */
+  }
+  return `The preview is currently showing ${where}. `
+}
+
 // Exposed for the Playwright test harness (and handy for live debugging).
 ;(
   window as unknown as {
@@ -1027,3 +1123,11 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
 ;(window as unknown as { __dsgnPanelInset?: typeof usePanelInset }).__dsgnPanelInset = usePanelInset
 ;(window as unknown as { __dsgnCodeDrawer?: typeof useCodeDrawer }).__dsgnCodeDrawer = useCodeDrawer
 ;(window as unknown as { __dsgnPropsIsland?: typeof usePropsIsland }).__dsgnPropsIsland = usePropsIsland
+;(
+  window as unknown as { __dsgnPreviewLocation?: typeof usePreviewLocation }
+).__dsgnPreviewLocation = usePreviewLocation
+;(
+  window as unknown as {
+    __dsgnDescribePreviewLocationForPrompt?: typeof describePreviewLocationForPrompt
+  }
+).__dsgnDescribePreviewLocationForPrompt = describePreviewLocationForPrompt

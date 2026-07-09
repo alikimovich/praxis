@@ -2,6 +2,102 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-08 — Agent now knows the preview's current page
+
+The preview's real location (link clicks, SPA route changes, initial load)
+only ever lived in `PreviewUrl.tsx`'s local component state — it drove the
+address bar but never reached the chat, so the agent had no idea what page it
+was looking at. Added a global `usePreviewLocation` store (store.ts), wired
+once in App.tsx to main's `preview:url-changed` (already emitted on every
+`did-navigate`/`did-navigate-in-page`, one native preview view live at a
+time). `ChatPanel`'s composer now prepends "The preview is currently showing
+&lt;path&gt;." as hidden context on every send — same pattern as the selected-
+element pill (`describeSelectionForPrompt`): the visible transcript still
+shows only the user's own words. New test `test/preview-location.mjs`
+(electron tier) covers the store plumbing and the composer's hidden prefix by
+spying on `window.api.agent.send` (not frozen by contextBridge).
+
+## 2026-07-08 — Preview body back to rounded (card border shows through)
+
+Re-rounded the native preview view (DESKTOP_CORNER_RADIUS 0 → 15). Its corners
+are genuinely transparent, so the card (a DOM rounded-rect with a 1px border)
+shows through them as a clean rounded frame — the native view fills the body,
+already 1px inside the card's border, at radius 15 (16px card − 1px). One real
+DOM border, no masks/painting, so no doubling. App UI keeps its
+-electron-corner-smoothing squircle; the native preview stays plain-round (CSS
+smoothing can't reach a WebContentsView).
+
+## 2026-07-08 — Revert corner experiments; square the preview body
+
+Reverted the -electron-corner-smoothing + divider-removal + distinct-header
+experiments (styles.css back to the standard border-bottom divider + all-rounded
+corner-shape state). Then, per request, squared the preview's native view
+(DESKTOP_CORNER_RADIUS 15 → 0): setBorderRadius is uniform, so a rounded body
+also rounded the top under the header and revealed the card bg at the corners on
+dark pages — square keeps it flush, with the header divider + card frame as the
+container.
+
+## 2026-07-08 — Electron corner smoothing (squircle); preview header divider
+
+- Swapped the CSS `corner-shape: squircle` app-wide rule for Electron's native
+  `-electron-corner-smoothing: system-ui` (iOS-style smoothing, nicer + cheaper;
+  Chromium 150). Circles/pills are excluded (`-electron-corner-smoothing: 0%`)
+  so the send button, spinner, status dots, and Tailwind rounded-full elements
+  stay perfectly round. Verified: composer/card = system-ui, send button = 0%
+  (renders a true circle).
+- Preview header: dropped the previewbar's hard `border-bottom` divider. The
+  header and body share the card surface (same var(--bg-subtle)); the preview
+  content's rounded top edge is the visual separator now — no line, no notch.
+
+## 2026-07-08 — Revert preview corners to all-rounded (drop the masks again)
+
+The square-top + in-page bottom-mask approach reintroduced the doubled-corner
+border it caused before, so it's reverted: the native view is rounded on all
+four corners via setBorderRadius (uniform, clean border, no masks) as it was.
+Electron's single-radius API means square-top/round-bottom isn't achievable
+without the mask hack, and the doubling makes that not worth it. The toolbar
+constant-height fix from the same commit is kept.
+
+## 2026-07-08 — Preview: square top / rounded bottom; steady toolbar height
+
+- The preview body's TOP corners are square (flush under the URL bar) again,
+  bottom stays rounded to match the card: the native WebContentsView is square
+  (setBorderRadius rounds all-or-none) and two in-page bottom-corner masks fake
+  the rounding — restored from the earlier 3300c3c approach (color-only radial
+  gradient, no border ring → no doubled-corner). DESKTOP_CORNER_RADIUS = 15
+  (16px card − 1px border); masks track the OS theme via main's gutter color.
+- Selection toolbar keeps a constant height (36px) when it morphs to the
+  comment/annotate input: the submit button is 26px (was 28, matching the icon
+  buttons) and the single-line input row is pinned to 18px line + 8px padding.
+
+## 2026-07-08 — Electron 43 + squircle corners; toolbar refinements
+
+- Electron 33 → 43.1.0 (Chromium 150, Node 24 main). patch-electron.mjs
+  re-runs on install (note: the binary downloads lazily, so a first `bun add`
+  may need one manual `node scripts/patch-electron.mjs`). Full UI suite green on
+  43 after fixing one stale expectation (chat-render expected a gemini backend
+  in the UI list; gemini is now a flag-gated main-only backend).
+- corner-shape: squircle app-wide: a blanket `*,*::before,*::after` rule in
+  styles.css (inert without a border-radius, so it only reshapes already-rounded
+  elements) plus a `:host *` rule in the preview overlay's injected shadow style.
+  Verified squircle renders (Chromium 150; CSS.supports true).
+- Toolbar: props/delete hidden while the inline comment/annotate input is open;
+  the divider now isolates Delete from the rest.
+
+## 2026-07-08 — Toolbar morphs into the comment field (Figma Make-style)
+
+- The selection toolbar is now a DARK pill (Figma-like) whose content MORPHS in
+  place: comment/annotate are leading toggles; activating one expands an inline
+  input + round submit inside the same pill (animated width), with
+  props/code/delete persisting as trailing icons. Escape/toggle collapses back;
+  a whole-page C/Y-mode click shows the same pill in input state at the clicked
+  element. The old floating white composer bubble is deleted. IPC and test
+  hooks unchanged (COMMENT payload, data-dsgn-composer on the pill,
+  aria-label=Submit). Built by an Opus subagent from a frame-by-frame spec of
+  the reference recording; verified independently (typecheck/build,
+  select-element, comment-mode, smoke, code-drawer, before/after captures in
+  test/artifacts/toolbar-state-{a,b}.png).
+
 ## 2026-07-07 — Public-repo doc cleanup
 
 Prepping the repo to go public: removed personal-machine details from the

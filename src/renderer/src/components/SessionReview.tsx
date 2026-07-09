@@ -6,6 +6,10 @@ interface Props {
   /** The record to review (a header-only summary from the rail list). */
   record: SessionRecord
   onClose: () => void
+  /** v9 resume — hand this record's SDK session back to a live query. Only
+   *  called when the Resume button is shown (gated on `sdkSessionId`); resolves
+   *  once the resume attempt settles (success closes the panel itself). */
+  onResume: (record: SessionRecord) => void | Promise<void>
 }
 
 /**
@@ -14,12 +18,14 @@ interface Props {
  * record by id on open (the rail list carries the same shape, but `get` is the
  * authoritative copy and keeps the panel honest if the list is stale).
  *
- * Resuming a session's *context* is a separate follow-up (the SDK subprocess is
- * gone once a session ends); this surfaces the run for review/handoff.
+ * v9: a session captured with a Claude `sdkSessionId` CAN be resumed — the
+ * "Resume" button hands it back to a live SDK query via `agent:resume-session`.
+ * `sdkSessionId` is Claude-only (Codex/Gemini never set it), so its presence
+ * doubles as the "this backend supports resume" check.
  */
-export default function SessionReview({ record, onClose }: Props): React.JSX.Element {
+export default function SessionReview({ record, onClose, onResume }: Props): React.JSX.Element {
   const [full, setFull] = useState<SessionRecord>(record)
-  const [busy, setBusy] = useState<null | 'apply' | 'pr' | 'discard'>(null)
+  const [busy, setBusy] = useState<null | 'apply' | 'pr' | 'discard' | 'resume'>(null)
   const [note, setNote] = useState<{ kind: 'ok' | 'warn' | 'err'; text: string } | null>(null)
 
   useEffect(() => {
@@ -70,6 +76,20 @@ export default function SessionReview({ record, onClose }: Props): React.JSX.Ele
       await window.api.agent.spawnDiscard(full.projectRoot, full.branch as string)
       await useHistory.getState().remove(full.projectRoot, full.id)
       onClose()
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  // v9 resume — only Claude sessions carry a `sdkSessionId` (Codex/Gemini never
+  // set it), so its presence is both "resumable" AND "Claude-backed" in one check.
+  const canResume = !!full.sdkSessionId
+  const resume = async (): Promise<void> => {
+    setBusy('resume')
+    try {
+      await onResume(full)
+      // On success the parent closes this panel; on failure (logged to the
+      // activity console) fall through to re-enable the button below.
     } finally {
       setBusy(null)
     }
@@ -131,32 +151,46 @@ export default function SessionReview({ record, onClose }: Props): React.JSX.Ele
           </ul>
         )}
 
-        {isComment && (
+        {(isComment || canResume) && (
           <div className="review__actions">
-            <button
-              className="review__action review__action--primary"
-              onClick={apply}
-              disabled={busy !== null}
-              title="Apply this run's changes onto your working tree"
-            >
-              {busy === 'apply' ? 'Applying…' : 'Apply'}
-            </button>
-            <button
-              className="review__action"
-              onClick={openPr}
-              disabled={busy !== null || !!full.prUrl}
-              title="Push the branch and open a PR"
-            >
-              {busy === 'pr' ? 'Opening…' : full.prUrl ? 'PR opened' : 'Open PR'}
-            </button>
-            <button
-              className="review__action review__action--danger"
-              onClick={discard}
-              disabled={busy !== null}
-              title="Delete this run's branch"
-            >
-              {busy === 'discard' ? 'Discarding…' : 'Discard'}
-            </button>
+            {isComment && (
+              <>
+                <button
+                  className="review__action review__action--primary"
+                  onClick={apply}
+                  disabled={busy !== null}
+                  title="Apply this run's changes onto your working tree"
+                >
+                  {busy === 'apply' ? 'Applying…' : 'Apply'}
+                </button>
+                <button
+                  className="review__action"
+                  onClick={openPr}
+                  disabled={busy !== null || !!full.prUrl}
+                  title="Push the branch and open a PR"
+                >
+                  {busy === 'pr' ? 'Opening…' : full.prUrl ? 'PR opened' : 'Open PR'}
+                </button>
+                <button
+                  className="review__action review__action--danger"
+                  onClick={discard}
+                  disabled={busy !== null}
+                  title="Delete this run's branch"
+                >
+                  {busy === 'discard' ? 'Discarding…' : 'Discard'}
+                </button>
+              </>
+            )}
+            {canResume && (
+              <button
+                className="review__action review__action--primary"
+                onClick={resume}
+                disabled={busy !== null}
+                title="Reload this conversation into a live chat and keep going"
+              >
+                {busy === 'resume' ? 'Resuming…' : 'Resume'}
+              </button>
+            )}
           </div>
         )}
         {note && <div className={`review__note review__note--${note.kind}`}>{note.text}</div>}
