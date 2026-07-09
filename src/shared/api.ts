@@ -81,6 +81,13 @@ export interface RunningDevServer {
   attached?: boolean
 }
 
+/** Result of `devserver:info` — lets a reattaching renderer recover an already-
+ *  running project's URL instead of blindly respawning on a fresh port. */
+export interface DevServerInfo {
+  running: boolean
+  server?: RunningDevServer
+}
+
 /**
  * A booted simulator served through the local sim bridge. `url` is that bridge's
  * HTTP URL (an MJPEG device page) so `preview.load(url)` is unchanged at the call
@@ -273,6 +280,39 @@ export interface SessionRecord {
    * affordance gates on, since it doubles as a Claude-backend marker.
    */
   sdkSessionId?: string
+}
+
+/**
+ * One live (still-open, in-memory) agent chat, as seen from main — used to
+ * reattach the renderer after a reload without tearing down the session. The
+ * full in-progress `SessionRecord` (transcript included) travels here so the
+ * renderer can repaint the chat without a round trip to disk (a live session
+ * is only persisted on teardown, so `sessions:list`/`sessions:get` can't see it).
+ */
+export interface LiveChatSnapshot {
+  sessionKey: string
+  record: SessionRecord
+  /** A turn is currently in flight for this session (best-effort — see
+   *  `agent:workspace-snapshot`'s implementation for how it's derived). */
+  isRunning: boolean
+}
+
+/** One live project (an open workspace-rail entry) and its live chat(s). */
+export interface LiveProjectSnapshot {
+  projectKey: string
+  /** Absolute project root, recovered from the session record. */
+  root: string
+  chats: LiveChatSnapshot[]
+  /** Which of `chats` was last active for this project, if any. */
+  activeSessionKey: string | null
+}
+
+/** Everything still live in main when the renderer asks — the reattach source
+ *  of truth after a hard reload (render-process-gone, hard refresh). */
+export interface WorkspaceSnapshot {
+  projects: LiveProjectSnapshot[]
+  /** The project root of the globally active sessionKey, if any. */
+  activeRoot: string | null
 }
 
 export interface Bounds {
@@ -681,6 +721,10 @@ export interface DsgnApi {
     stop: (root: string) => Promise<void>
     /** Is this project's dev server still running? (warm servers can die) */
     isRunning: (root: string) => Promise<boolean>
+    /** Like `isRunning`, but also returns the running server's URL/pid — lets a
+     *  reattaching renderer (e.g. after a reload) recover the live preview URL
+     *  instead of respawning on a fresh port. */
+    info: (root: string) => Promise<DevServerInfo>
     onLog: (cb: (line: string) => void) => () => void
   }
   git: {
@@ -848,6 +892,10 @@ export interface DsgnApi {
       recordId: string
     ) => Promise<{ ok: boolean; prUrl?: string; error?: string }>
     onEvent: (cb: (event: AgentEvent) => void) => () => void
+    /** Everything still live in main (open projects, their live chats + in-progress
+     *  transcripts) — used to reattach the renderer after a reload without tearing
+     *  down any session. Read-only: never suspends/starts/closes anything. */
+    workspaceSnapshot: () => Promise<WorkspaceSnapshot>
   }
   /** Persisted agent-session history ("previous agents") — v5-D. */
   sessions: {

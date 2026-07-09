@@ -88,7 +88,11 @@ async function startSession(
 
   const emit = (event: AgentEvent): void => {
     if (disposed) return
-    getWindow()?.webContents.send('agent:event', { ...event, projectKey: emitKey })
+    const tagged = { ...event, projectKey: emitKey }
+    // agent.ts's in-process hook — v9 workspace-snapshot isRunning tracking
+    // (set for every interactive session: default, new-chat, resumed).
+    ctx?.onEvent?.(tagged)
+    getWindow()?.webContents.send('agent:event', tagged)
   }
   // Always attribute errors to the Codex backend (so the user knows which provider
   // failed, and the renderer's login-banner heuristic can key on it).
