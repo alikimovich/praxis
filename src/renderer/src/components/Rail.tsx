@@ -13,6 +13,10 @@ interface Props {
   onCreate: () => void
   /** Open a past session for review (v5-D). */
   onReview: (rec: SessionRecord) => void
+  /** v9 multi-chat — start an ADDITIONAL live chat for this (already-open) project. */
+  onNewChat: (key: string) => void
+  /** v9 multi-chat — switch to one of this project's already-live sessionKeys. */
+  onSwitchSession: (key: string, sessionKey: string) => void
 }
 
 /**
@@ -27,7 +31,15 @@ interface Props {
  * floating toggle slides it back. Keeping it mounted is what lets the collapse
  * animate instead of popping in and out.
  */
-export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: Props): React.JSX.Element | null {
+export default function Rail({
+  onSwitch,
+  onClose,
+  onOpen,
+  onCreate,
+  onReview,
+  onNewChat,
+  onSwitchSession
+}: Props): React.JSX.Element | null {
   const projects = useWorkspace((s) => s.projects)
   const activeKey = useWorkspace((s) => s.activeKey)
   const collapsed = useWorkspace((s) => s.collapsed)
@@ -72,7 +84,10 @@ export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: 
       <ul className="rail__list">
         {projects.map((p) => {
           const active = p.key === activeKey
-          const running = !!byKey[p.key]?.isRunning
+          // A project's "working" dot lights for ANY of its live sessionKeys, not
+          // just the currently-shown one — a background chat still counts as busy.
+          const sessionKeys = p.sessionKeys ?? [p.key]
+          const running = sessionKeys.some((sk) => byKey[sk]?.isRunning)
           const past = active ? (history[p.key] ?? []) : []
           const working = active ? (spawns[p.key] ?? []) : []
           return (
@@ -90,6 +105,19 @@ export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: 
                   />
                   <span className="rail__name">{p.name}</span>
                 </button>
+                {active && (
+                  <button
+                    className="rail__new-chat"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onNewChat(p.key)
+                    }}
+                    aria-label={`Start another chat for ${p.name}`}
+                    title="Start another chat for this project"
+                  >
+                    <Plus className="size-3.5" aria-hidden="true" />
+                  </button>
+                )}
                 <button
                   className="rail__close"
                   onClick={() => onClose(p.key)}
@@ -99,6 +127,34 @@ export default function Rail({ onSwitch, onClose, onOpen, onCreate, onReview }: 
                   ×
                 </button>
               </div>
+              {/* v9 multi-chat: switcher between this project's own live chats —
+                  only worth showing once there's more than one. */}
+              {active && sessionKeys.length > 1 && (
+                <ul className="rail__chats" aria-label={`${p.name}'s open chats`}>
+                  {sessionKeys.map((sk, i) => {
+                    const isActiveChat = sk === (p.activeSessionKey ?? p.key)
+                    const chatRunning = !!byKey[sk]?.isRunning
+                    return (
+                      <li key={sk}>
+                        <button
+                          className={`rail__chat ${isActiveChat ? 'rail__chat--active' : ''}`}
+                          onClick={() => onSwitchSession(p.key, sk)}
+                          aria-current={isActiveChat}
+                          title={sk === p.key ? 'Default chat' : `Chat ${i + 1}`}
+                        >
+                          <span
+                            className={`rail__dot ${chatRunning ? 'rail__dot--on' : ''}`}
+                            aria-hidden="true"
+                          />
+                          <span className="rail__session-label">
+                            {sk === p.key ? 'Default' : `Chat ${i + 1}`}
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
               {/* v8 F1: comment-spawned background agents working (or queued). */}
               {working.length > 0 && (
                 <ul className="rail__spawns">

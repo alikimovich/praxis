@@ -51,13 +51,26 @@ const store = (): SessionStore =>
  * `login`, Codex sign-in-with-ChatGPT, …) — never API keys committed in-repo.
  */
 
-// v5: one persistent session per open project. Only the ACTIVE project's session
-// streams to the renderer; the dispose guard keeps backgrounded/replaced sessions
-// from leaking events into a chat the renderer isn't showing.
+// v5 (extended v9): one or more persistent sessions per open project, keyed by
+// `sessionKey` — `projectKey` itself for the project's default/live chat, and
+// `` `${projectKey}#${sdkSessionId or a generated id}` `` for additional chats
+// started via `agent:new-chat` or past sessions revived via `agent:resume-session`.
+// Only the ACTIVE session (across the whole app, at most one at a time — the one
+// the renderer is currently showing) streams events the renderer will actually
+// render into a visible chat; the dispose guard keeps backgrounded/replaced
+// sessions from leaking events into a chat the renderer isn't showing.
 const sessions = new Map<string, ProviderSession>()
 let activeKey: string | null = null
 const activeSession = (): ProviderSession | null =>
   activeKey ? (sessions.get(activeKey) ?? null) : null
+// Per-project memory of which of ITS OWN sessionKeys was last active — so
+// switching back to a project (agent:set-active) restores whichever chat the
+// user was last looking at instead of always resetting to the default session.
+// Untouched by projects that never open a second chat: `get(key) === key` then.
+const activeSessionKeyByProject = new Map<string, string>()
+/** All live sessionKeys belonging to a project (its default + any extra/resumed chats). */
+const sessionKeysForProject = (key: string): string[] =>
+  [...sessions.keys()].filter((k) => k === key || k.startsWith(`${key}#`))
 // The project the renderer LAST asked to make active (via open-project or
 // set-active), recorded synchronously. A slow first-time open (the ESM SDK
 // `import()`) must not claim `activeKey` if the user has since switched away —
@@ -307,7 +320,10 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       // Only claim the active slot if the renderer still wants this project active.
       // A later open/set-active for a different project moved `intendedKey` on, and
       // that project's own turn is what should stream.
-      if (intendedKey === key) activeKey = key
+      if (intendedKey === key) {
+        activeKey = key
+        activeSessionKeyByProject.set(key, key)
+      }
       // v8 F1: reclaim any comment-spawn worktrees orphaned by a prior crash/quit —
       // pruneOrphans commits dirty leftovers to their branch (recovering the work)
       // before removing the checkout. Skip ids of spawns live THIS session (their
@@ -323,19 +339,25 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     return run
   })
 
-  // Close a project's session (renderer single-active teardown; the rail uses
-  // this when a project is closed, not merely switched away from).
+  // Close a project's session(s) (renderer single-active teardown; the rail uses
+  // this when a project is closed, not merely switched away from). Tears down
+  // EVERY sessionKey belonging to this project — its default chat plus any
+  // additional/resumed ones (v9) — so closing a project never leaks a live
+  // subprocess the renderer no longer shows anywhere.
   ipcMain.handle('agent:close-project', async (_e, root: string) => {
     const key = projectKey(root)
-    const s = sessions.get(key)
-    if (s) {
-      closeSession(s)
-      sessions.delete(key)
+    for (const sk of sessionKeysForProject(key)) {
+      const s = sessions.get(sk)
+      if (s) {
+        closeSession(s)
+        sessions.delete(sk)
+      }
     }
+    activeSessionKeyByProject.delete(key)
     // Closing the active project clears `active` — never auto-promote an arbitrary
     // backgrounded session (it would start emitting into a chat the renderer isn't
     // showing). The renderer re-activates explicitly via open-project.
-    if (activeKey === key) activeKey = null
+    if (activeKey && (activeKey === key || activeKey.startsWith(`${key}#`))) activeKey = null
     // Clear intent too, so an open of this project still in flight can't claim the
     // active slot for a project the user just closed.
     if (intendedKey === key) intendedKey = null
@@ -345,13 +367,96 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
 
   // Switch the active project to an already-open (warm) session, without
   // recreating it — used by the rail when switching between open projects.
-  ipcMain.handle('agent:set-active', async (_e, root: string) => {
+  // Without `sessionKey`, restores whichever of the project's OWN sessionKeys
+  // (default, or an additional/resumed chat) was last active for it, defaulting
+  // to the plain project key the first time. With `sessionKey` (v9 multi-chat
+  // switcher), selects that SPECIFIC one of the project's already-live sessions —
+  // a no-op if it isn't actually live (e.g. it was closed elsewhere meanwhile).
+  ipcMain.handle('agent:set-active', async (_e, root: string, sessionKey?: string) => {
     const key = projectKey(root)
     // Record intent regardless, so a slow in-flight open of a DIFFERENT project
     // won't steal `activeKey` back after this switch.
     intendedKey = key
-    if (sessions.has(key)) activeKey = key
+    const remembered = activeSessionKeyByProject.get(key)
+    const target =
+      sessionKey && sessionKeysForProject(key).includes(sessionKey)
+        ? sessionKey
+        : remembered && sessions.has(remembered)
+          ? remembered
+          : key
+    if (sessions.has(target)) {
+      activeKey = target
+      activeSessionKeyByProject.set(key, target)
+    }
   })
+
+  // v9 resume/multi-chat — start an ADDITIONAL fresh session for a project that
+  // already has one open. Unlike agent:open-project, the existing session(s) are
+  // left running: this registers the new session under its own sessionKey
+  // (`${projectKey}#<id>`), so the renderer's per-key chat store gives it its own
+  // slice and the rail can list it as a second, independently-switchable chat.
+  ipcMain.handle(
+    'agent:new-chat',
+    async (_e, root: string): Promise<{ ok: boolean; sessionKey?: string; error?: string }> => {
+      const key = projectKey(root)
+      if (!sessions.has(key)) {
+        return { ok: false, error: 'Open the project before starting another chat.' }
+      }
+      intendedKey = key
+      const sessionKey = `${key}#${randomUUID()}`
+      try {
+        const s = await pickProvider({}).startSession(root, {}, getWindow, { emitKey: sessionKey })
+        sessions.set(sessionKey, s)
+        activeSessionKeyByProject.set(key, sessionKey)
+        if (intendedKey === key) activeKey = sessionKey
+        return { ok: true, sessionKey }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    }
+  )
+
+  // v9 resume — hand a past ("previous agent") SessionRecord back to a LIVE SDK
+  // query via `options.resume` (Claude-only: the record's `sdkSessionId` doubles
+  // as the "this backend supports resume" marker, since only claude.ts sets it).
+  // Registered under a sessionKey derived from the SDK's OWN session id, so a
+  // repeat resume of the same record reattaches to the same slot instead of
+  // spawning a second live query against it.
+  ipcMain.handle(
+    'agent:resume-session',
+    async (
+      _e,
+      root: string,
+      recordId: string
+    ): Promise<{ ok: boolean; sessionKey?: string; error?: string }> => {
+      const key = projectKey(root)
+      const rec = store().get(recordId)
+      if (!rec) return { ok: false, error: 'That session record no longer exists.' }
+      if (!rec.sdkSessionId) {
+        return { ok: false, error: 'This session has no resumable id and can’t be resumed.' }
+      }
+      intendedKey = key
+      const sessionKey = `${key}#${rec.sdkSessionId}`
+      if (sessions.has(sessionKey)) {
+        // Already resumed and still live — just switch to it.
+        activeSessionKeyByProject.set(key, sessionKey)
+        if (intendedKey === key) activeKey = sessionKey
+        return { ok: true, sessionKey }
+      }
+      try {
+        const s = await pickProvider({}).startSession(root, {}, getWindow, {
+          emitKey: sessionKey,
+          resumeSessionId: rec.sdkSessionId
+        })
+        sessions.set(sessionKey, s)
+        activeSessionKeyByProject.set(key, sessionKey)
+        if (intendedKey === key) activeKey = sessionKey
+        return { ok: true, sessionKey }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    }
+  )
 
   // Does this project still have a live session? (LRU eviction can suspend a
   // backgrounded project's session; the renderer reopens it on switch-back.)
@@ -416,7 +521,13 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle(
     'agent:tag-session',
     async (_e, root: string, tag: { branch?: string; prUrl?: string }) => {
-      const s = sessions.get(projectKey(root))
+      const key = projectKey(root)
+      // Prefer whichever of the project's sessions is currently active (an
+      // additional/resumed chat, if that's what's live) — falls back to the
+      // default session, matching pre-v9 behavior when there's only one.
+      const s = activeKey && sessionKeysForProject(key).includes(activeKey)
+        ? sessions.get(activeKey)
+        : sessions.get(key)
       if (!s) return
       if (typeof tag.branch === 'string') s.record.branch = tag.branch
       if (typeof tag.prUrl === 'string') s.record.prUrl = tag.prUrl

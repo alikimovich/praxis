@@ -278,8 +278,16 @@ const api: DsgnApi = {
       ipcRenderer.invoke('agent:open-project', root, options),
     closeProject: (root: string): Promise<void> =>
       ipcRenderer.invoke('agent:close-project', root),
-    setActive: (root: string): Promise<void> => ipcRenderer.invoke('agent:set-active', root),
+    setActive: (root: string, sessionKey?: string): Promise<void> =>
+      ipcRenderer.invoke('agent:set-active', root, sessionKey),
     isOpen: (root: string): Promise<boolean> => ipcRenderer.invoke('agent:is-open', root),
+    newChat: (root: string): Promise<{ ok: boolean; sessionKey?: string; error?: string }> =>
+      ipcRenderer.invoke('agent:new-chat', root),
+    resumeSession: (
+      root: string,
+      recordId: string
+    ): Promise<{ ok: boolean; sessionKey?: string; error?: string }> =>
+      ipcRenderer.invoke('agent:resume-session', root, recordId),
     send: (text: string, images?: ImageAttachment[]): Promise<void> =>
       ipcRenderer.invoke('agent:send', text, images),
     setModel: (model: string): Promise<void> => ipcRenderer.invoke('agent:set-model', model),

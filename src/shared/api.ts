@@ -263,6 +263,13 @@ export interface SessionRecord {
   transcript: SessionTranscriptEntry[]
   /** A detached comment spawn (v8 F1), vs the interactive project chat. */
   kind?: 'comment'
+  /**
+   * The Claude Agent SDK's own resumable session id (v9 resume), captured off
+   * the `system`/init message. Only the Claude backend sets this (Codex/Gemini
+   * have no equivalent primitive wired up) — its presence is what the "Resume"
+   * affordance gates on, since it doubles as a Claude-backend marker.
+   */
+  sdkSessionId?: string
 }
 
 export interface Bounds {
@@ -754,10 +761,33 @@ export interface DsgnApi {
     openProject: (root: string, options?: AgentOptions) => Promise<void>
     /** Close a project's agent session (single-active teardown / rail close). */
     closeProject: (root: string) => Promise<void>
-    /** Make an already-open project's session the active one (rail switch). */
-    setActive: (root: string) => Promise<void>
+    /**
+     * Make an already-open project's session the active one (rail switch). Without
+     * `sessionKey`, restores whichever of the project's own sessions (default, or
+     * an additional/resumed chat) was last active. Pass `sessionKey` to select a
+     * SPECIFIC one of that project's already-live sessions directly (v9 multi-chat
+     * switcher) — it's a no-op unless that session is already live.
+     */
+    setActive: (root: string, sessionKey?: string) => Promise<void>
     /** Does this project still have a live session? (LRU may have suspended it) */
     isOpen: (root: string) => Promise<boolean>
+    /**
+     * Start an ADDITIONAL fresh session for a project that already has one open
+     * (v9 resume/multi-chat) — unlike `openProject`, the existing session is left
+     * running. Returns the new session's key (`${projectKey}#…`) and makes it the
+     * project's active session.
+     */
+    newChat: (root: string) => Promise<{ ok: boolean; sessionKey?: string; error?: string }>
+    /**
+     * Resume a past ("previous agent") session by its history record id — requires
+     * the record to carry a Claude `sdkSessionId` (else `ok:false`). Starts a live
+     * session with the SDK's `resume` option, registers it under a new sessionKey,
+     * and makes it the project's active session.
+     */
+    resumeSession: (
+      root: string,
+      recordId: string
+    ) => Promise<{ ok: boolean; sessionKey?: string; error?: string }>
     send: (text: string, images?: ImageAttachment[]) => Promise<void>
     setModel: (model: string) => Promise<void>
     /** Change the permission posture live (drives the SDK's setPermissionMode). */

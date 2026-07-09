@@ -151,7 +151,11 @@ async function startSession(
   // project's key (so the rail/history surface it), and stamps `sessionId` so the
   // renderer keeps it out of the main chat stream.
   const emitKey = ctx?.emitKey ?? key
-  const cap = createRecordCapture(root, emitKey)
+  // The persisted record's `projectKey` must stay the canonical project key (not
+  // `emitKey`) — `sessions-store.ts#list` and `agent:sessions-list` always query by
+  // the plain `projectKey(root)`, so an additional/resumed chat (whose `emitKey` is
+  // `${key}#…`) would otherwise get a history record no rail lookup can ever find.
+  const cap = createRecordCapture(root, key)
   const { query } = await loadSdk()
   const input = new InputStream()
   const abort = new AbortController()
@@ -187,6 +191,9 @@ async function startSession(
       abortController: abort,
       ...(options.model ? { model: options.model } : {}),
       ...(options.effort ? { effort: options.effort as 'low' | 'medium' | 'high' } : {}),
+      // v9 resume: reload a past conversation's context (the record's captured
+      // sdkSessionId) instead of starting fresh. Absent for the default open/new-chat path.
+      ...(ctx?.resumeSessionId ? { resume: ctx.resumeSessionId } : {}),
       canUseTool: async (toolName, toolInput, opts) => {
         // The agent asking the user a question isn't a permission decision — surface
         // it as an interactive multiple-choice card and feed the answer back as the
@@ -301,9 +308,17 @@ async function startSession(
       for await (const msg of q) {
         switch (msg.type) {
           case 'system': {
-            const commands = (msg as { subtype?: string; slash_commands?: string[] }).slash_commands
-            if ((msg as { subtype?: string }).subtype === 'init' && Array.isArray(commands)) {
-              emit({ type: 'commands', commands })
+            const sys = msg as { subtype?: string; slash_commands?: string[]; session_id?: string }
+            if (sys.subtype === 'init') {
+              // v9 resume: capture the SDK's own resumable session id off the init
+              // message — this is what a later `agent:resume-session` forwards back
+              // as `options.resume`. Distinct from `ctx.sessionId` (v8 F1 spawn bookkeeping).
+              if (typeof sys.session_id === 'string' && sys.session_id) {
+                cap.setSdkSessionId(sys.session_id)
+              }
+              if (Array.isArray(sys.slash_commands)) {
+                emit({ type: 'commands', commands: sys.slash_commands })
+              }
             }
             break
           }

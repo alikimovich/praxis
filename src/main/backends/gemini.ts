@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { BrowserWindow } from 'electron'
 import type { AgentEvent, AgentOptions } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
-import type { ModelProvider, PendingPrompt, ProviderSession } from './types'
+import type { ModelProvider, PendingPrompt, ProviderSession, SpawnContext } from './types'
 import { describeTool } from './tools'
 import { createRecordCapture } from './record'
 import { dsgnRules } from '../rules'
@@ -67,9 +67,19 @@ function mapEvent(ev: unknown): AgentEvent | null {
 async function startSession(
   root: string,
   options: AgentOptions,
-  getWindow: () => BrowserWindow | null
+  getWindow: () => BrowserWindow | null,
+  // v9 resume/multi-chat: Gemini has no resume primitive here (headless `-p` runs
+  // don't carry a session id at all yet) — accept the context and no-op the resume;
+  // `emitKey` is still honored so an additional live chat routes to its own slice.
+  ctx?: SpawnContext
 ): Promise<ProviderSession> {
   const key = projectKey(root)
+  // `emitKey` tags live events (so an additional/resumed chat's `${key}#…` sessionKey
+  // routes into its own renderer chat slice) — but the PERSISTED record must keep the
+  // canonical `key`, since `sessions-store.ts#list`/`agent:sessions-list` always query
+  // by the plain projectKey(root); tagging the record with `emitKey` would orphan an
+  // additional/resumed chat's history entry (no lookup could ever find it again).
+  const emitKey = ctx?.emitKey ?? key
   const cap = createRecordCapture(root, key)
   const pending = new Map<string, PendingPrompt>()
   let disposed = false
@@ -80,7 +90,7 @@ async function startSession(
 
   const emit = (event: AgentEvent): void => {
     if (disposed) return
-    getWindow()?.webContents.send('agent:event', { ...event, projectKey: key })
+    getWindow()?.webContents.send('agent:event', { ...event, projectKey: emitKey })
   }
 
   // Serialize turns: each send() runs one `gemini -p` process to completion.

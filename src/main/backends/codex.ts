@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { AgentEvent, AgentOptions } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
-import type { ModelProvider, PendingPrompt, ProviderSession } from './types'
+import type { ModelProvider, PendingPrompt, ProviderSession, SpawnContext } from './types'
 import { describeTool } from './tools'
 import { createRecordCapture } from './record'
 import { dsgnRules } from '../rules'
@@ -64,9 +64,20 @@ const oneLine = (s: string, n = 120): string => s.replace(/\s+/g, ' ').trim().sl
 async function startSession(
   root: string,
   options: AgentOptions,
-  getWindow: () => BrowserWindow | null
+  getWindow: () => BrowserWindow | null,
+  // v9 resume/multi-chat: Codex has no confirmed resume primitive — accept the
+  // context (for the shared ModelProvider signature) and no-op it. `emitKey`
+  // (used for an additional live chat) is honored so its events still route to
+  // the right renderer chat slice; `resumeSessionId` is ignored.
+  ctx?: SpawnContext
 ): Promise<ProviderSession> {
   const key = projectKey(root)
+  // `emitKey` tags live events (so an additional/resumed chat's `${key}#…` sessionKey
+  // routes into its own renderer chat slice) — but the PERSISTED record must keep the
+  // canonical `key`, since `sessions-store.ts#list`/`agent:sessions-list` always query
+  // by the plain projectKey(root); tagging the record with `emitKey` would orphan an
+  // additional/resumed chat's history entry (no lookup could ever find it again).
+  const emitKey = ctx?.emitKey ?? key
   const cap = createRecordCapture(root, key)
   const pending = new Map<string, PendingPrompt>()
   let disposed = false
@@ -77,7 +88,7 @@ async function startSession(
 
   const emit = (event: AgentEvent): void => {
     if (disposed) return
-    getWindow()?.webContents.send('agent:event', { ...event, projectKey: key })
+    getWindow()?.webContents.send('agent:event', { ...event, projectKey: emitKey })
   }
   // Always attribute errors to the Codex backend (so the user knows which provider
   // failed, and the renderer's login-banner heuristic can key on it).

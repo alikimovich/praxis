@@ -61,6 +61,7 @@ const ELECTRON = [
   'history-ui',
   'chat-render',
   'chat-route',
+  'preview-location',
   'questions',
   'diagnose-card',
   'select-element',

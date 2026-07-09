@@ -36,6 +36,7 @@ import {
   usePanelInset,
   useCodeDrawer,
   useWorkspace,
+  usePreviewLocation,
   type ProjectEntry
 } from './store'
 import { projectKey } from '../../shared/projectKey'
@@ -684,6 +685,14 @@ export default function App(): React.JSX.Element {
     const prevRoot = useSession.getState().projectRoot
     const switching = !!prevRoot && projectKey(prevRoot) !== projectKey(root)
     const tearDownPrev = switching && !keepWarm
+    // v9 multi-chat: capture the outgoing project's live sessionKeys BEFORE its
+    // workspace entry is dropped below, so every one of its chat slices (not just
+    // the default) gets cleared further down instead of leaking.
+    const prevSessionKeys =
+      tearDownPrev && prevRoot
+        ? (useWorkspace.getState().projects.find((p) => p.key === projectKey(prevRoot))
+            ?.sessionKeys ?? [projectKey(prevRoot)])
+        : null
     // (Keeping the previous project warm needs no snapshot here — its entry is kept
     // current as its url/branch change: open, restart, and branch-rename all patch it.)
     // Opening (or re-opening) a project starts fresh: a pick from the previous
@@ -707,6 +716,16 @@ export default function App(): React.JSX.Element {
     const log = useLog.getState()
     log.clear()
     log.append(`Opening ${root}`)
+    // Claim this project's spot in the rail + chat RIGHT AWAY — before we even
+    // know whether it'll launch. Otherwise a launch failure leaves the previous
+    // project's conversation on screen (only the log/status change), which reads
+    // as if the error belonged to it. A fresh chat slice + active rail entry
+    // means any failure below renders in this project's own (empty) space.
+    const key = projectKey(root)
+    const initialName = root.split('/').filter(Boolean).pop() ?? root
+    useWorkspace.getState().openOrActivate(root, { name: initialName })
+    useChat.getState().clearChat(key)
+    useChat.getState().setActiveChat(key)
     try {
       setLog('')
       setRetry(null)
@@ -715,7 +734,7 @@ export default function App(): React.JSX.Element {
         label: commandOverride ? `Starting ${commandOverride}…` : 'Detecting project…'
       })
       let command = commandOverride
-      let name = root.split('/').filter(Boolean).pop() ?? root
+      let name = initialName
       let framework: Framework | undefined
       // A custom command is assumed to be a web dev command; only auto-detection
       // can route a project to the simulator path.
@@ -732,6 +751,8 @@ export default function App(): React.JSX.Element {
           `Detected ${project.framework} · ${project.packageManager} · ${project.previewKind} · "${command}"`
         )
         setStatus({ kind: 'busy', label: `Starting ${command}…` })
+        // The rail's initial guess was the folder name — patch in the real one.
+        if (name !== initialName) useWorkspace.getState().patchEntry(key, { name })
       } else {
         log.append(`Using custom command "${command}"`)
       }
@@ -741,7 +762,7 @@ export default function App(): React.JSX.Element {
       if (tearDownPrev) {
         await window.api.devServer.stop(prevRoot)
         void window.api.agent.closeProject(prevRoot)
-        useChat.getState().clearChat(projectKey(prevRoot))
+        for (const sk of prevSessionKeys ?? [projectKey(prevRoot)]) useChat.getState().clearChat(sk)
       }
 
       // Do dsgn's work on a dsgn/* branch so the user's main branch stays clean.
@@ -853,6 +874,9 @@ export default function App(): React.JSX.Element {
       void window.api.devServer.stop(root)
       void window.api.agent.closeProject(root)
       await window.api.preview.reset()
+      // The user switched to a different rail entry while this launch was in
+      // flight — that project now owns the screen; don't stomp its status.
+      if (useWorkspace.getState().activeKey !== key) return
       setRetry({ root, command: attemptedCommand })
       log.append(message, 'error')
       setStatus({ kind: 'error', message })
@@ -976,7 +1000,9 @@ export default function App(): React.JSX.Element {
     useAnnotations.getState().setList([])
     useAnnotations.getState().setFocused(null)
     useWorkspace.getState().activate(target.key)
-    useChat.getState().setActiveChat(target.key)
+    // v9 multi-chat: restore whichever of THIS project's own sessionKeys (default,
+    // or an additional/resumed chat) was last active, not always the plain default.
+    useChat.getState().setActiveChat(target.activeSessionKey ?? target.key)
     useSession.getState().setProjectRoot(target.root)
     useSession.getState().setBranch(target.branch)
     // Each project keeps its own viewport — restore it (after activate, so the
@@ -986,6 +1012,14 @@ export default function App(): React.JSX.Element {
     void useHistory.getState().load(target.root)
     setPreviewKind(target.previewKind)
     launchSpec.current = target.launchSpec
+    // Switching to a project that never successfully launched (e.g. its
+    // detect/start failed before we ever got a URL) — nothing to relaunch or
+    // show as running; go neutral rather than showing the outgoing project's
+    // stale status (or a leftover error/retry that belongs to a prior attempt).
+    if (!target.launchSpec && !target.url && target.previewKind !== 'simulator') {
+      setStatus({ kind: 'idle' })
+      setRetry(null)
+    }
     // Reopen the agent session if it was LRU-suspended; else just re-activate it.
     // The reopened session starts fresh — suspending closes the SDK subprocess, so
     // its conversation context is gone (the visible transcript is kept for
@@ -1063,6 +1097,66 @@ export default function App(): React.JSX.Element {
     }
   }
 
+  // v9 multi-chat — Rail's "+" on an already-open project: start an ADDITIONAL
+  // fresh session alongside the existing one(s) (agent:new-chat does NOT tear
+  // the current session down) and switch the visible chat to it.
+  const newChatForProject = async (key: string): Promise<void> => {
+    const entry = useWorkspace.getState().projects.find((p) => p.key === key)
+    if (!entry) return
+    const res = await window.api.agent.newChat(entry.root)
+    if (!res.ok || !res.sessionKey) {
+      useLog.getState().append(res.error ?? 'Could not start another chat.', 'error')
+      return
+    }
+    const sessionKey = res.sessionKey
+    useWorkspace.getState().patchEntry(key, {
+      sessionKeys: [...(entry.sessionKeys ?? [key]), sessionKey],
+      activeSessionKey: sessionKey
+    })
+    // Only flip the visible chat if this project is the one on screen — a "+"
+    // fired for a backgrounded project just adds the session, warm in the rail.
+    if (useSession.getState().projectRoot === entry.root) {
+      useChat.getState().setActiveChat(sessionKey)
+    }
+  }
+
+  // v9 multi-chat switcher (Rail): activate one of a project's already-live
+  // sessionKeys — both the renderer's chat store and main's per-project "which
+  // session is active" bookkeeping need to move together.
+  const switchSession = async (key: string, sessionKey: string): Promise<void> => {
+    const entry = useWorkspace.getState().projects.find((p) => p.key === key)
+    if (!entry || sessionKey === entry.activeSessionKey) return
+    useWorkspace.getState().patchEntry(key, { activeSessionKey: sessionKey })
+    if (useSession.getState().projectRoot === entry.root) {
+      useChat.getState().setActiveChat(sessionKey)
+      void window.api.agent.setActive(entry.root, sessionKey)
+    }
+  }
+
+  // v9 resume — hand a past ("previous agent") session back to a live SDK query
+  // (SessionReview's Resume button), then switch the active chat to it and close
+  // the review panel. Only reachable for the currently-active project (the rail's
+  // history list only shows the active project's past sessions).
+  const resumeRecord = async (record: SessionRecord): Promise<void> => {
+    const key = projectKey(record.projectRoot)
+    const res = await window.api.agent.resumeSession(record.projectRoot, record.id)
+    if (!res.ok || !res.sessionKey) {
+      useLog.getState().append(res.error ?? 'Could not resume that session.', 'error')
+      return
+    }
+    const sessionKey = res.sessionKey
+    const entry = useWorkspace.getState().projects.find((p) => p.key === key)
+    const existing = entry?.sessionKeys ?? [key]
+    useWorkspace.getState().patchEntry(key, {
+      sessionKeys: existing.includes(sessionKey) ? existing : [...existing, sessionKey],
+      activeSessionKey: sessionKey
+    })
+    if (useSession.getState().projectRoot === record.projectRoot) {
+      useChat.getState().setActiveChat(sessionKey)
+    }
+    setReviewing(null)
+  }
+
   // Rail ×: fully close a project (stop its server + agent, drop it). If it was
   // active, fall through to another open project or go idle.
   const closeProjectFromRail = async (key: string): Promise<void> => {
@@ -1082,7 +1176,9 @@ export default function App(): React.JSX.Element {
     // Await the close so main disposes the session before we clear its chat — a
     // trailing emit then can't resurrect the cleared slice.
     await window.api.agent.closeProject(entry.root)
-    useChat.getState().clearChat(key)
+    // v9 multi-chat: clear EVERY one of this project's sessionKeys' chat slices
+    // (default + any additional/resumed), not just the default, so none leak.
+    for (const sk of entry.sessionKeys ?? [key]) useChat.getState().clearChat(sk)
     if (next) await applyProject(next)
   }
 
@@ -1215,12 +1311,19 @@ export default function App(): React.JSX.Element {
         return
       }
     }
+    // v9 multi-chat: capture the closing project's sessionKeys before its entry
+    // is dropped, so every chat slice it opened gets cleared below.
+    const closingSessionKeys = closing
+      ? (useWorkspace.getState().projects.find((p) => p.key === projectKey(closing))
+          ?.sessionKeys ?? [projectKey(closing)])
+      : null
     if (closing) useWorkspace.getState().close(projectKey(closing))
     useSession.getState().setProjectRoot(null)
     useAnnotations.getState().setList([])
     useAnnotations.getState().setFocused(null)
     useTokens.getState().reset()
     useSetup.getState().reset()
+    usePreviewLocation.getState().setUrl(null)
     void window.api.preview.setSelectMode(false)
     usePanelInset.getState().setInset(0)
     // Unload the previewed page FIRST — the server/agent teardown below takes
@@ -1235,7 +1338,7 @@ export default function App(): React.JSX.Element {
       // Await the close so main has disposed the session before we clear its
       // chat (a trailing emit can't then resurrect the cleared slice).
       await window.api.agent.closeProject(closing)
-      useChat.getState().clearChat(projectKey(closing))
+      for (const sk of closingSessionKeys ?? [projectKey(closing)]) useChat.getState().clearChat(sk)
     }
     useChat.getState().setActiveChat('')
     setRetry(null)
@@ -1263,6 +1366,14 @@ export default function App(): React.JSX.Element {
   // S inside the focused preview toggles select mode — same handler as the
   // app-side shortcut/menu (via the ref, so it sees current closures).
   useEffect(() => window.api.preview.onToggleSelect(() => actionsRef.current.toggleSelect()), [])
+
+  // Mirror the preview's real location (link clicks, SPA routes, initial load)
+  // into a global store — a single native preview view is ever live, so the
+  // chat composer can always tell the agent what page it's looking at.
+  useEffect(
+    () => window.api.preview.onUrlChanged((url) => usePreviewLocation.getState().setUrl(url)),
+    []
+  )
 
   // Launch progress lives INSIDE the preview (bottom-center pill drawn by the
   // preview preload) instead of a window-top banner.
@@ -1348,41 +1459,6 @@ export default function App(): React.JSX.Element {
       )}
 
 
-      {status.kind === 'error' && (
-        <div className="banner banner--error">
-          <span className="banner__text">{status.message}</span>
-          {retry && (
-            <form
-              className="banner__retry"
-              onSubmit={(e) => {
-                e.preventDefault()
-                const cmd = String(new FormData(e.currentTarget).get('cmd') ?? '').trim()
-                if (cmd) void attempt(retry.root, cmd)
-              }}
-            >
-              <input
-                name="cmd"
-                className="banner__input"
-                defaultValue={retry.command}
-                placeholder="custom command, e.g. bun run dev:web"
-                spellCheck={false}
-              />
-              <button className="btn" type="submit">
-                Run
-              </button>
-            </form>
-          )}
-          <button
-            className="banner__close"
-            onClick={() => {
-              setStatus({ kind: 'idle' })
-              setRetry(null)
-            }}
-          >
-            ✕
-          </button>
-        </div>
-      )}
 
       {updateStatus === 'available' && updateSubject !== updateDismissedSubject && (
         <div className="banner banner--info">
@@ -1487,6 +1563,8 @@ export default function App(): React.JSX.Element {
             onOpen={() => void openAnother()}
             onCreate={() => void createNewProject()}
             onReview={setReviewing}
+            onNewChat={(key) => void newChatForProject(key)}
+            onSwitchSession={(key, sessionKey) => void switchSession(key, sessionKey)}
           />
           <section className="pane pane--chat" style={{ width: chatWidth }}>
             {/* Window-drag strip across the chat's top edge — the one top-of-window
@@ -1644,7 +1722,7 @@ export default function App(): React.JSX.Element {
                   )}
                 </div>
               </div>
-              <div className="previewcard__body">
+              <div className={`previewcard__body ${status.kind === 'error' ? 'previewcard__body--errored' : ''}`}>
                 <PreviewPane />
                 {drawerSource && projectRoot && (
                   <CodeDrawer
@@ -1654,6 +1732,34 @@ export default function App(): React.JSX.Element {
                   />
                 )}
               </div>
+              {status.kind === 'error' && (
+                <form
+                  className="previewcard__errbar"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    const cmd = String(new FormData(e.currentTarget).get('cmd') ?? '').trim()
+                    if (cmd && retry) void attempt(retry.root, cmd)
+                  }}
+                >
+                  <span className="previewcard__errtext" title={status.message}>
+                    {status.message}
+                  </span>
+                  {retry && (
+                    <>
+                      <input
+                        name="cmd"
+                        className="previewcard__errinput"
+                        defaultValue={retry.command}
+                        placeholder="custom command, e.g. bun run dev:web"
+                        spellCheck={false}
+                      />
+                      <button className="btn" type="submit">
+                        Run
+                      </button>
+                    </>
+                  )}
+                </form>
+              )}
             </div>
           </section>
           {/* Show/hide the projects sidebar — floats by the traffic lights so it
@@ -1690,7 +1796,13 @@ export default function App(): React.JSX.Element {
       )}
 
       {/* v5-D: review a previous agent session (transcript + branch/PR + files). */}
-      {reviewing && <SessionReview record={reviewing} onClose={() => setReviewing(null)} />}
+      {reviewing && (
+        <SessionReview
+          record={reviewing}
+          onClose={() => setReviewing(null)}
+          onResume={(rec) => resumeRecord(rec)}
+        />
+      )}
     </div>
   )
 }

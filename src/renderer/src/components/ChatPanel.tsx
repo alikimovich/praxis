@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   DEFAULT_MODEL,
+  describePreviewLocationForPrompt,
   describeSelectionForPrompt,
   isAuthError,
   oneLine,
@@ -18,7 +19,8 @@ import {
   useSpawns,
   useTokens,
   useUiActions,
-  usePropsIsland
+  usePropsIsland,
+  useWorkspace
 } from '../store'
 import { projectKey } from '../../../shared/projectKey'
 import type { QuestionAnswers, SetupResult } from '../../../shared/api'
@@ -34,6 +36,7 @@ import {
   ConversationContent,
   ConversationScrollButton
 } from '@/components/ai-elements/conversation'
+import { useStickToBottomContext } from 'use-stick-to-bottom'
 import { InputGroup, InputGroupAddon } from '@/components/ui/input-group'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -110,6 +113,93 @@ function StepDisclosure({
         ))}
       </CollapsibleContent>
     </Collapsible>
+  )
+}
+
+/**
+ * A user ask's text bubble, capped to a handful of lines with a bottom fade
+ * when it's long enough to overflow — clicking expands it to full height and
+ * scrolls it to the top of the conversation scroller (assistant text is
+ * unaffected; it already renders through `<Markdown>` with no cap). Clicking
+ * only ever expands: collapsing back down is scroll-driven (see the
+ * wheel/touchmove handler in ChatPanel), not another click — so once
+ * expanded, the bubble is inert (no cursor, no handlers) rather than
+ * toggling. The overflow check is measured against the DOM (`scrollHeight`
+ * vs `clientHeight`) rather than a line/character count, so it only ever
+ * kicks in when the bubble truly exceeds the cap — short messages get no
+ * fade, no pointer cursor, no click handler.
+ */
+function ClampedUserText({
+  text,
+  expanded,
+  onExpand
+}: {
+  text: string
+  expanded: boolean
+  onExpand: () => void
+}): React.JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  const [overflows, setOverflows] = useState(false)
+  const wasExpanded = useRef(expanded)
+  // ClampedUserText renders inside <Conversation>, so it can reach the
+  // stick-to-bottom context directly — no prop plumbing needed.
+  const { stopScroll } = useStickToBottomContext()
+
+  // Only measurable while collapsed (the clamp's max-height is what makes
+  // scrollHeight > clientHeight meaningful); once we've learned a bubble
+  // overflows, that fact doesn't change, so skip re-measuring once expanded.
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || expanded) return
+    const measure = (): void => setOverflows(el.scrollHeight > el.clientHeight + 1)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [text, expanded])
+
+  // Scroll the bubble to where it was actually posted only on the
+  // collapsed→expanded transition (not on every render, and not when
+  // re-collapsing). Expanding grows the content a lot, and if the
+  // conversation was scrolled to the bottom, `<Conversation>`'s own
+  // resize-triggered auto-scroll fights our scroll right back down to the
+  // bottom the moment it fires — `stopScroll()` (escapes its stick-to-bottom
+  // lock) before scrolling so ours actually wins.
+  useEffect(() => {
+    if (!wasExpanded.current && expanded) {
+      stopScroll()
+      ref.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    }
+    wasExpanded.current = expanded
+  }, [expanded, stopScroll])
+
+  const clickable = overflows && !expanded
+
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        'msg__text w-fit rounded-lg border border-border bg-muted px-3 py-2 text-sm',
+        !expanded && 'msg__text--clamp',
+        clickable && 'cursor-pointer'
+      )}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={clickable ? onExpand : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onExpand()
+              }
+            }
+          : undefined
+      }
+    >
+      {text}
+      {!expanded && overflows && <div className="msg__text-fade" aria-hidden="true" />}
+    </div>
   )
 }
 
@@ -215,6 +305,50 @@ export default function ChatPanel(): React.JSX.Element {
   >([])
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  // Long user asks are clamped by default (item 2) — ids in this set render
+  // full-height instead. Clicking only ever EXPANDS (never collapses): the
+  // user asked for scroll, not another click, to collapse it again — see the
+  // wheel/touchmove effect below.
+  const [expandedUserMsgs, setExpandedUserMsgs] = useState<Set<string>>(new Set())
+  const expandUserMsg = (id: string): void => {
+    setExpandedUserMsgs((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
+  }
+  const chatRootRef = useRef<HTMLDivElement>(null)
+  // A real DOWNWARD scroll gesture (wheel/touch — not our own programmatic
+  // scrollIntoView, which fires neither) collapses whatever's expanded, so it
+  // goes back to being a compact, sticky reminder instead of hanging around as
+  // a wall of text once the user moves on. Scrolling UP (re-reading something
+  // above) leaves it expanded — only forward progress should collapse it.
+  useEffect(() => {
+    const el = chatRootRef.current
+    if (!el) return
+    const collapseExpanded = (): void => {
+      setExpandedUserMsgs((prev) => (prev.size ? new Set() : prev))
+    }
+    const onWheel = (e: WheelEvent): void => {
+      if (e.deltaY > 0) collapseExpanded()
+    }
+    // Touch has no delta — infer direction from consecutive touch positions:
+    // the finger moving UP the screen drags content UP (i.e. scrolls down).
+    let lastTouchY: number | null = null
+    const onTouchStart = (e: TouchEvent): void => {
+      lastTouchY = e.touches[0]?.clientY ?? null
+    }
+    const onTouchMove = (e: TouchEvent): void => {
+      const y = e.touches[0]?.clientY
+      if (y == null) return
+      if (lastTouchY != null && lastTouchY - y > 0) collapseExpanded()
+      lastTouchY = y
+    }
+    el.addEventListener('wheel', onWheel, { passive: true })
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: true })
+    return () => {
+      el.removeEventListener('wheel', onWheel)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+    }
+  }, [])
 
   // Auto-grow the composer with the text — from 2 lines up to 6, then scroll.
   useEffect(() => {
@@ -508,13 +642,19 @@ export default function ChatPanel(): React.JSX.Element {
     const text = raw.trim()
     if ((!text && attachments.length === 0) || isRunning) return
     const images = attachments.map((a) => ({ mediaType: a.mediaType, data: a.data }))
-    // The selection pill rides along as hidden context: the transcript shows the
-    // user's own words; the model gets the element reference prepended.
-    const ctx = selected ? describeSelectionForPrompt(selected) : ''
+    // The selection pill AND the preview's current page ride along as hidden
+    // context: the transcript shows the user's own words; the model gets the
+    // element reference / route prepended so it knows what it's looking at.
+    const ws = useWorkspace.getState()
+    const base = ws.projects.find((p) => p.key === ws.activeKey)?.url ?? null
+    const ctx = describePreviewLocationForPrompt(base) + (selected ? describeSelectionForPrompt(selected) : '')
     appendUser(text || (images.length ? `🖼 ${images.length} image(s)` : ''))
     startAssistant()
     setInput('')
     setAttachments([])
+    // A newly-sent ask becomes the pinned message — any previously-expanded
+    // ask should collapse back to its clamp instead of hanging around full-height.
+    setExpandedUserMsgs(new Set())
     void window.api.agent.send(ctx + text, images.length ? images : undefined)
     if (selected) setSelected(null)
   }
@@ -622,13 +762,31 @@ export default function ChatPanel(): React.JSX.Element {
   const selectCls =
     'h-6 cursor-pointer appearance-none rounded-md border-0 bg-transparent px-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
+  // Group the flat message list into "turns" — a user ask plus everything
+  // that follows until the next ask — each wrapped in its own container so
+  // the ask can be `position: sticky` WITHIN just that turn (Cursor-style: a
+  // sticky element can't stick past its own containing block, so once you
+  // scroll past a turn's own content, its ask releases and the NEXT turn's
+  // ask takes over). Without this per-turn boundary every ask would stick at
+  // once with nothing to make them hand off. A message that's expanded (full
+  // height, not a compact reminder) isn't pinned — see `msg--user-pinned`
+  // below and the wheel/touchmove collapse effect above.
+  const turns: (typeof messages)[number][][] = []
+  for (const m of messages) {
+    if (m.role === 'user' || turns.length === 0) turns.push([m])
+    else turns[turns.length - 1].push(m)
+  }
+  const lastMessageId = messages[messages.length - 1]?.id
+
   return (
-    <div className="chat flex h-full flex-col">
+    <div className="chat flex h-full flex-col" ref={chatRootRef}>
       {/* AI Elements Conversation = stick-to-bottom scroller (auto-follows the
           stream, with a scroll-to-bottom affordance). Replaces the old manual
           listRef scroll effect. */}
       <Conversation className="chat__messages min-h-0 flex-1">
-        <ConversationContent className="gap-3.5 p-4 pt-11">
+        {/* pb-9 (36px, up from p-4's 16px): extra breathing room after the
+            last message, so it doesn't sit flush against the status/fade area. */}
+        <ConversationContent className="gap-3.5 p-4 pt-11 pb-9">
           {setup.needed && !setup.dismissed && (
             <SetupCard
               busy={setup.busy}
@@ -658,31 +816,53 @@ export default function ChatPanel(): React.JSX.Element {
               Ask for a change, or open a project to preview it on the right.
             </div>
           )}
-          {messages.map((m, idx) => (
-            // No role labels — the user's bubble vs the assistant's plain
-            // markdown is distinction enough (m.role still drives styling).
-            <div key={m.id} className={cn('msg flex flex-col gap-1', `msg--${m.role}`)}>
-              {m.statuses.length > 0 && (
-                <StepDisclosure
-                  statuses={m.statuses}
-                  active={isRunning && idx === messages.length - 1 && m.role === 'assistant'}
-                />
-              )}
-              {m.text &&
-                (m.role === 'assistant' ? (
-                  <Markdown>{m.text}</Markdown>
-                ) : (
-                  <div className="msg__text w-fit rounded-lg border border-border bg-muted px-3 py-2 text-sm">
-                    {m.text}
+          {turns.map((turn) => (
+            <div key={turn[0].id} className="turn flex flex-col gap-3.5">
+              {turn.map((m) => {
+                const isLast = m.id === lastMessageId
+                return (
+                  // No role labels — the user's bubble vs the assistant's plain
+                  // markdown is distinction enough (m.role still drives styling).
+                  <div
+                    key={m.id}
+                    className={cn(
+                      'msg flex flex-col gap-1',
+                      `msg--${m.role}`,
+                      m.role === 'user' && !expandedUserMsgs.has(m.id) && 'msg--user-pinned'
+                    )}
+                  >
+                    {m.segments.map((seg, segIdx) => {
+                      if (seg.kind === 'tools') {
+                        const active =
+                          isRunning &&
+                          isLast &&
+                          segIdx === m.segments.length - 1 &&
+                          m.role === 'assistant'
+                        return <StepDisclosure key={segIdx} statuses={seg.statuses} active={active} />
+                      }
+                      return m.role === 'assistant' ? (
+                        <Markdown key={segIdx}>{seg.text}</Markdown>
+                      ) : (
+                        <ClampedUserText
+                          key={segIdx}
+                          text={seg.text}
+                          expanded={expandedUserMsgs.has(m.id)}
+                          onExpand={() => expandUserMsg(m.id)}
+                        />
+                      )
+                    })}
+                    {m.role === 'assistant' && m.text && !(isRunning && isLast) && (
+                      <CopyAction text={m.text} />
+                    )}
                   </div>
-                ))}
-              {m.role === 'assistant' && m.text && !(isRunning && idx === messages.length - 1) && (
-                <CopyAction text={m.text} />
-              )}
+                )
+              })}
             </div>
           ))}
         </ConversationContent>
-        <ConversationScrollButton aria-label="Scroll to bottom" />
+        {/* z-20: above the pinned ask (z-index 6) and the status fade (z-index 5) — the
+            arrow must stay clickable even when it visually falls under the pinned bubble. */}
+        <ConversationScrollButton aria-label="Scroll to bottom" className="z-20" />
       </Conversation>
 
       {/* Live status line — a cat that runs (with the current step, like a

@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-08 — Agent now knows the preview's current page
+
+The preview's real location (link clicks, SPA route changes, initial load)
+only ever lived in `PreviewUrl.tsx`'s local component state — it drove the
+address bar but never reached the chat, so the agent had no idea what page it
+was looking at. Added a global `usePreviewLocation` store (store.ts), wired
+once in App.tsx to main's `preview:url-changed` (already emitted on every
+`did-navigate`/`did-navigate-in-page`, one native preview view live at a
+time). `ChatPanel`'s composer now prepends "The preview is currently showing
+&lt;path&gt;." as hidden context on every send — same pattern as the selected-
+element pill (`describeSelectionForPrompt`): the visible transcript still
+shows only the user's own words. New test `test/preview-location.mjs`
+(electron tier) covers the store plumbing and the composer's hidden prefix by
+spying on `window.api.agent.send` (not frozen by contextBridge).
+
 ## 2026-07-08 — Preview body back to rounded (card border shows through)
 
 Re-rounded the native preview view (DESKTOP_CORNER_RADIUS 0 → 15). Its corners
