@@ -8,6 +8,7 @@ import {
   shell,
   nativeImage,
   nativeTheme,
+  powerMonitor,
   type MenuItemConstructorOptions
 } from 'electron'
 import { join } from 'path'
@@ -82,6 +83,10 @@ let previewStatusText: string | null = null
 
 // Latest annotation pins, re-pushed to the preview after each navigation.
 let annotationPins: { id: string; selector: string }[] = []
+
+// Renderer's last-reported preview slot rect. Module-scope (not local to
+// registerPreviewIpc) so resetStalePreview can zero it too.
+let lastPreviewBounds = { x: 0, y: 0, width: 0, height: 0, radius: 0 }
 
 // Chromium error codes worth retrying — the dev server is up but not yet serving.
 const TRANSIENT_LOAD_ERRORS = new Set([-324, -102, -101, -105, -106, -109])
@@ -373,6 +378,31 @@ function ensurePreviewView(): WebContentsView {
   return previewView
 }
 
+/**
+ * Reset the native preview to an unclaimed state after the MAIN renderer reloads
+ * (crash-recovery reload, hard refresh). The preview is a separate
+ * WebContentsView that survives a main-frame reload untouched — it keeps
+ * painting its last frame at its last bounds, and PreviewPane's unmount cleanup
+ * (which normally zeros this out) never runs across a hard navigation, so a
+ * fresh renderer would otherwise boot on the Welcome screen with a stale
+ * preview floating on top of it. Deliberately does NOT load the placeholder URL
+ * or clear `previewUrl` — the page stays warm so a reattaching renderer's
+ * `preview:load` (which already does `setVisible(true)`) comes back instantly
+ * instead of a fresh navigation. Guarded with `previewView?.` so the very first
+ * window load (before the preview view exists) is a no-op.
+ */
+function resetStalePreview(): void {
+  previewView?.setVisible(false)
+  previewView?.setBounds({ x: 0, y: 0, width: 0, height: 0 })
+  lastPreviewBounds = { x: 0, y: 0, width: 0, height: 0, radius: 0 }
+  // Same flags `preview:reset` clears (index.ts ~484-496) — keeps a stale mode
+  // from silently re-arming via did-finish-load once a project reattaches.
+  selectModeActive = false
+  commentModeActive = null
+  frameModeActive = false
+  annotationPins = []
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -418,35 +448,54 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  if (process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  const loadRenderer = (): void => {
+    if (process.env['ELECTRON_RENDERER_URL']) {
+      mainWindow?.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    } else {
+      mainWindow?.loadFile(join(__dirname, '../renderer/index.html'))
+    }
   }
+
+  // Unlike previewView (which self-heals via did-fail-load), a crashed main
+  // renderer had nothing to reload it — Chromium can silently kill/reset the
+  // GPU or renderer process around a long system sleep, leaving the window
+  // frozen on its last (often blank) frame with no recovery. Reload it.
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    console.error(`Main renderer process gone (${details.reason}); reloading.`)
+    loadRenderer()
+  })
+
+  // Any full navigation of the MAIN renderer (the render-process-gone reload
+  // above, a hard refresh, a dev-server full reload) leaves the preview
+  // WebContentsView painted at its last bounds while the fresh renderer boots
+  // with no memory of it — hide it until the renderer reattaches. Covers the
+  // initial load too (previewView is still null then, so this is a no-op).
+  mainWindow.webContents.on('did-navigate', resetStalePreview)
+
+  loadRenderer()
 }
 
 function registerPreviewIpc(): void {
-  let lastBounds = { x: 0, y: 0, width: 0, height: 0, radius: 0 }
   // Apply the renderer's slot rect (PreviewPane already lays out around the
   // floating prop panel's strip, viewport-aware).
   const applyBounds = (): void => {
     const view = ensurePreviewView()
     view.setBounds({
-      x: Math.round(lastBounds.x),
-      y: Math.round(lastBounds.y),
-      width: Math.max(0, Math.round(lastBounds.width)),
-      height: Math.round(lastBounds.height)
+      x: Math.round(lastPreviewBounds.x),
+      y: Math.round(lastPreviewBounds.y),
+      width: Math.max(0, Math.round(lastPreviewBounds.width)),
+      height: Math.round(lastPreviewBounds.height)
     })
     // Round the native view's corners: the card's inner radius in desktop
     // viewport, the iPhone screen's in mobile (both supplied by the renderer).
-    view.setBorderRadius(Math.round(lastBounds.radius || 0))
+    view.setBorderRadius(Math.round(lastPreviewBounds.radius || 0))
   }
 
   // Renderer reports where the preview rectangle is, in CSS pixels (== DIP).
   ipcMain.on(
     'preview:set-bounds',
     (_e, bounds: { x: number; y: number; width: number; height: number; radius?: number }) => {
-      lastBounds = { ...bounds, radius: bounds.radius ?? 0 }
+      lastPreviewBounds = { ...bounds, radius: bounds.radius ?? 0 }
       applyBounds()
   })
 
@@ -659,6 +708,13 @@ app.whenReady().then(() => {
   // render oversized next to other dock icons.
   createWindow()
   buildAppMenu()
+
+  // A system sleep/wake cycle can reset the GPU process without the main
+  // renderer ever firing 'render-process-gone' — it just goes quietly stale.
+  // Nudge a repaint on resume; harmless no-op if the frame was already fine.
+  powerMonitor.on('resume', () => {
+    mainWindow?.webContents.invalidate()
+  })
   // File → Open Recent is driven by the renderer's recents store: it pushes the
   // current list, we cap at 8 and rebuild the menu.
   ipcMain.on('menu:set-recents', (_e, recents: RecentMenuEntry[]) => {
