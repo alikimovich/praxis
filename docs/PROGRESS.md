@@ -2,6 +2,33 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-09 — Open vanilla HTML / static-site projects
+
+Praxis previously refused any folder without a package.json (`detect()` threw
+"No package.json found") and any package.json without a `dev`/`start` script.
+Plain HTML/CSS/JS projects — the kind with no build tooling — were unopenable.
+
+`detect()` now falls back to a new `framework: 'static'` when a folder has an
+HTML entry (`index.html`, else the first `*.html`): either with no package.json
+at all, or with a package.json whose framework is unrecognized *and* has no
+dev/start script. A **recognized** framework (vite/next/…) without a dev script
+still errors — its `index.html` is a build template that won't serve raw — so
+the user is asked for a launch command. Both error messages now say "Enter a
+command to launch this project", which the preview's existing error bar already
+turns into a custom-command retry — so anything we can't auto-launch prompts for
+the command (the second half of the task, already wired via `attempt(root, cmd)`).
+
+Static sites are served by a new in-process `src/main/static-server.ts` (Node
+`http.Server`, not a spawned child) so no external tool (`serve`, `python -m
+http.server`) needs to be on PATH and we own the exact port. It resolves the
+directory index, sets content-types, blocks path traversal, and injects a tiny
+SSE live-reload snippet into served HTML + watches the tree — so agent edits
+reflect in the preview the way a real dev server's HMR would (vanilla sites have
+none). `devserver.ts` routes `framework:'static'` (with no command override) to
+it, tracks the servers in a parallel `staticServers` map, and teaches
+`stop`/`stopAll`/`isRunning` about them. New `test/static-serve.mjs` (electron
+tier) covers detect→serve→assets→live-reload→traversal-block→stop.
+
 ## 2026-07-08 — Agent now knows the preview's current page
 
 The preview's real location (link clicks, SPA route changes, initial load)
