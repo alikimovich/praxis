@@ -1545,6 +1545,10 @@ body.is-resizing {
     padding: 4px;
     max-height: 240px;
     overflow-y: auto;
+    /* The menu opens UP into the region occupied by the status row (the running
+       cat + its bottom fade), which paints at z-index 5. Sit above it so the
+       cat/gradient never cover the menu's lowest item. */
+    z-index: 30;
 }
 
 .slash__hint {
