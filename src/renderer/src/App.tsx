@@ -13,6 +13,7 @@ import {
   describeSelectionForPrompt,
   useFeedback,
   isAuthError,
+  messagesFromTranscript,
   oneLine,
   toAgentOptions,
   useAnnotations,
@@ -1153,6 +1154,11 @@ export default function App(): React.JSX.Element {
       sessionKeys: existing.includes(sessionKey) ? existing : [...existing, sessionKey],
       activeSessionKey: sessionKey
     })
+    // Seed the (fresh) chat slice with the record's past turns so the resumed
+    // thread shows its history instead of an empty tree — the agent already has
+    // the context via the SDK resume id, but the UI needs the transcript. No-op
+    // if the slice is somehow already populated (hydrate guards that).
+    useChat.getState().hydrate(sessionKey, messagesFromTranscript(record.transcript))
     if (useSession.getState().projectRoot === record.projectRoot) {
       useChat.getState().setActiveChat(sessionKey)
     }

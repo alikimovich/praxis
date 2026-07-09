@@ -11,6 +11,7 @@ import type {
   PropInspection,
   SelectedElement,
   SessionRecord,
+  SessionTranscriptEntry,
   TokenSet,
   UpdateStatus
 } from '../../shared/api'
@@ -53,6 +54,12 @@ interface ChatState {
   isRunning: boolean
   /** Show a project's chat (preserves each project's history across switches). */
   setActiveChat: (key: string) => void
+  /**
+   * Populate a chat slice from a persisted session's transcript (v9 resume) so the
+   * resumed conversation shows its past turns, not an empty thread. No-op if the
+   * slice already has messages (never clobbers a live chat).
+   */
+  hydrate: (key: string, messages: ChatMessage[]) => void
   /** Drop a project's chat buffer (on close). */
   clearChat: (key: string) => void
   // Actions default to the active project; pass a key to target a backgrounded one.
@@ -104,6 +111,16 @@ export const useChat = create<ChatState>((set, get) => {
           messages: slice.messages,
           isRunning: slice.isRunning
         }
+      }),
+    hydrate: (key, messages) =>
+      set((s) => {
+        const prev = s.byKey[key] ?? emptySlice()
+        // Only seed an empty slice — never overwrite a chat that's already live.
+        if (prev.messages.length) return {}
+        const slice = { ...prev, messages }
+        return key === s.activeKey
+          ? { byKey: { ...s.byKey, [key]: slice }, messages: slice.messages }
+          : { byKey: { ...s.byKey, [key]: slice } }
       }),
     clearChat: (key) =>
       set((s) => {
@@ -187,6 +204,51 @@ export const useChat = create<ChatState>((set, get) => {
     isRunningFor: (key) => !!get().byKey[key]?.isRunning
   }
 })
+
+/**
+ * Rebuild chat messages from a persisted session transcript (v9 resume). The
+ * on-disk transcript is a flat, chronological list of `user` / `assistant` /
+ * `status` (tool-use) lines; this regroups each turn's assistant text + tool
+ * statuses into a single assistant `ChatMessage` with interleaved `segments`,
+ * mirroring what the live stream builds (`startAssistant` → `appendDelta` /
+ * `appendStatus`). A `user` line ends the current turn and starts a fresh one.
+ */
+export const messagesFromTranscript = (
+  transcript: SessionTranscriptEntry[]
+): ChatMessage[] => {
+  const messages: ChatMessage[] = []
+  // The assistant message the current turn's text/tool lines accrue into.
+  let current: ChatMessage | null = null
+  for (const entry of transcript) {
+    if (entry.role === 'user') {
+      current = null
+      messages.push({
+        id: nextId(),
+        role: 'user',
+        text: entry.text,
+        statuses: [],
+        segments: entry.text ? [{ kind: 'text', text: entry.text }] : []
+      })
+      continue
+    }
+    if (!current) {
+      current = { id: nextId(), role: 'assistant', text: '', statuses: [], segments: [] }
+      messages.push(current)
+    }
+    const last = current.segments[current.segments.length - 1]
+    if (entry.role === 'assistant') {
+      if (last?.kind === 'text') last.text += entry.text
+      else current.segments.push({ kind: 'text', text: entry.text })
+      current.text = current.text ? `${current.text}\n\n${entry.text}` : entry.text
+    } else {
+      // A 'status' line is a tool-use run.
+      if (last?.kind === 'tools') last.statuses.push(entry.text)
+      else current.segments.push({ kind: 'tools', statuses: [entry.text] })
+      current.statuses.push(entry.text)
+    }
+  }
+  return messages
+}
 
 // Sentinel values mean "use the account/model default" (omit from SDK options).
 export const DEFAULT_MODEL = 'default'
@@ -1130,6 +1192,9 @@ export const describePreviewLocationForPrompt = (base: string | null): string =>
   }
 ).__dsgnStore = useChat
 ;(window as unknown as { __dsgnSession?: typeof useSession }).__dsgnSession = useSession
+;(
+  window as unknown as { __dsgnMessagesFromTranscript?: typeof messagesFromTranscript }
+).__dsgnMessagesFromTranscript = messagesFromTranscript
 ;(window as unknown as { __dsgnSelection?: typeof useSelection }).__dsgnSelection = useSelection
 ;(window as unknown as { __dsgnPermissions?: typeof usePermissions }).__dsgnPermissions =
   usePermissions
