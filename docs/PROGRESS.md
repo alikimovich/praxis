@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-09 — macOS: under-page vibrancy as the main window background
+
+The main window's base is now the NSVisualEffect *under-page* material instead
+of a solid white/dark fill (macOS only; Windows/Linux keep the theme color).
+`createWindow` passes `vibrancy: 'under-page'` and skips the opaque
+`backgroundColor` (which would paint over it — including the nativeTheme
+re-apply on OS theme flips); `main.tsx` stamps `html.vibrancy` (main window
+only, never the prop-panel island), and `styles.css` clears the SHELL surfaces
+(`body`, `.rail`, `.empty`, `.pane--preview`) so the material shows through.
+Component fills (cards, modals, buttons, inputs, the preview card + native
+view) stay opaque. Theme always follows the OS, so the material and the token
+palette can't disagree.
+
 ## 2026-07-09 — Rail: folder-icon projects + Cursor-style chat list (LKM-28)
 
 Reworked the left rail's per-project display to match Cursor. Each project now

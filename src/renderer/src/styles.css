@@ -149,6 +149,19 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
+/* macOS under-page vibrancy: main.tsx stamps `vibrancy` on <html> when the
+   window was created with the under-page material (main/index.ts) — the
+   full-window SHELL surfaces go transparent so it shows through. Component
+   fills (cards, buttons, modals, inputs) keep their opaque --bg; the preview
+   card and the native view paint their own surfaces. The prop-panel island
+   (panel-host) is a separate transparent window and never gets the stamp. */
+html.vibrancy body,
+html.vibrancy .rail,
+html.vibrancy .empty,
+html.vibrancy .pane--preview {
+    background: transparent;
+}
+
 .app {
     display: flex;
     flex-direction: column;
