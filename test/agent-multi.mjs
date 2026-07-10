@@ -84,12 +84,35 @@ try {
   await clear()
   assert(!(await sawNoSession('ping')), 'reopening A should re-activate its session')
 
+  // Multi-chat close: start a SECOND live chat for A, then close only that chat.
+  const newChat = await win.evaluate((p) => window.api.agent.newChat(p), projA)
+  assert(newChat.ok && newChat.sessionKey, 'newChat should start a second live session for A')
+  await clear()
+  assert(!(await sawNoSession('ping')), 'the new chat should be the active live session')
+  const closed = await win.evaluate(
+    (a) => window.api.agent.closeChat(a.root, a.sk),
+    { root: projA, sk: newChat.sessionKey }
+  )
+  assert(closed.ok, 'closeChat should report ok')
+  assert(
+    closed.activeSessionKey && closed.activeSessionKey !== newChat.sessionKey,
+    'closing the second chat should re-point A to a surviving chat'
+  )
+  assert(
+    !closed.remaining.includes(newChat.sessionKey),
+    'the closed chat should be gone from the project’s live sessions'
+  )
+  await clear()
+  assert(!(await sawNoSession('ping')), "closing one chat must leave A's other chat live")
+
   // Close A → no active session again.
   await close(projA)
   await clear()
   assert(await sawNoSession('ping'), 'closing the last project should clear the active session')
 
-  console.log('AGENT-MULTI OK — per-project sessions, active routing, close clears active, reopen re-activates')
+  console.log(
+    'AGENT-MULTI OK — per-project sessions, active routing, close clears active, reopen re-activates, per-chat close leaves the project live'
+  )
 } catch (err) {
   console.error('AGENT-MULTI FAILED:', err?.message ?? err)
   process.exitCode = 1

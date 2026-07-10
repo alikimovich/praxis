@@ -1186,6 +1186,40 @@ export default function App(): React.JSX.Element {
     if (next) await applyProject(next)
   }
 
+  // Rail chat × — close ONE of a project's live chats without closing the project.
+  // Closing the project's LAST chat closes the whole project (nothing left to show),
+  // so it falls through to closeProjectFromRail. Otherwise main tears down just that
+  // session and reports the survivor; we drop the slice + rewire the entry, switching
+  // the visible chat only when the closed one was the active chat on screen.
+  const closeChatForProject = async (key: string, sessionKey: string): Promise<void> => {
+    const entry = useWorkspace.getState().projects.find((p) => p.key === key)
+    if (!entry) return
+    const sessionKeys = entry.sessionKeys ?? [key]
+    if (sessionKeys.length <= 1) {
+      await closeProjectFromRail(key)
+      return
+    }
+    // Await so main disposes the session before we clear its slice — a trailing
+    // emit then can't resurrect the cleared chat.
+    const res = await window.api.agent.closeChat(entry.root, sessionKey)
+    const remaining = sessionKeys.filter((sk) => sk !== sessionKey)
+    const nextActive =
+      res.activeSessionKey && remaining.includes(res.activeSessionKey)
+        ? res.activeSessionKey
+        : (remaining[0] ?? key)
+    const wasActive = (entry.activeSessionKey ?? key) === sessionKey
+    useWorkspace.getState().patchEntry(key, {
+      sessionKeys: remaining,
+      activeSessionKey: wasActive ? nextActive : (entry.activeSessionKey ?? key)
+    })
+    useChat.getState().clearChat(sessionKey)
+    // Move the visible chat off the closed one only when it was on screen.
+    if (wasActive && useSession.getState().projectRoot === entry.root) {
+      useChat.getState().setActiveChat(nextActive)
+      void window.api.agent.setActive(entry.root, nextActive)
+    }
+  }
+
   // Bound memory: keep at most N projects' dev servers warm; LRU-suspend the rest
   // (their entry/chat/agent stay — switching back relaunches the server, see
   // applyProject). Decided behavior: warm-to-N + LRU-suspend.
@@ -1586,6 +1620,7 @@ export default function App(): React.JSX.Element {
             onReview={openReview}
             onNewChat={(key) => void newChatForProject(key)}
             onSwitchSession={(key, sessionKey) => void switchSession(key, sessionKey)}
+            onCloseChat={(key, sessionKey) => void closeChatForProject(key, sessionKey)}
           />
           <section className="pane pane--chat" style={{ width: chatWidth }}>
             {/* Window-drag strip across the chat's top edge — the one top-of-window

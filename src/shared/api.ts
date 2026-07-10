@@ -857,6 +857,17 @@ export interface DsgnApi {
       root: string,
       recordId: string
     ) => Promise<{ ok: boolean; sessionKey?: string; error?: string }>
+    /**
+     * Close ONE of a project's live chats (v9 multi-chat) — tears down just that
+     * `sessionKey`'s session (persisting it to history like any teardown), leaving
+     * the project and its other chats untouched. Returns the project's remaining
+     * live sessionKeys and whichever one is now active (`null` if none remain, so
+     * the caller closes the project). A no-op-safe call if the key isn't live.
+     */
+    closeChat: (
+      root: string,
+      sessionKey: string
+    ) => Promise<{ ok: boolean; remaining: string[]; activeSessionKey: string | null }>
     send: (text: string, images?: ImageAttachment[]) => Promise<void>
     setModel: (model: string) => Promise<void>
     /** Change the permission posture live (drives the SDK's setPermissionMode). */

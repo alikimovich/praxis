@@ -293,6 +293,11 @@ const api: DsgnApi = {
       recordId: string
     ): Promise<{ ok: boolean; sessionKey?: string; error?: string }> =>
       ipcRenderer.invoke('agent:resume-session', root, recordId),
+    closeChat: (
+      root: string,
+      sessionKey: string
+    ): Promise<{ ok: boolean; remaining: string[]; activeSessionKey: string | null }> =>
+      ipcRenderer.invoke('agent:close-chat', root, sessionKey),
     send: (text: string, images?: ImageAttachment[]): Promise<void> =>
       ipcRenderer.invoke('agent:send', text, images),
     setModel: (model: string): Promise<void> => ipcRenderer.invoke('agent:set-model', model),

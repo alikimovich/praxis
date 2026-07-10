@@ -483,6 +483,42 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     }
   )
 
+  // v9 multi-chat — close ONE of a project's live chats (its rail × ), leaving the
+  // project and its other chats alive. Tears down just that sessionKey's session
+  // (closeSession persists it to history, so a closed chat becomes a resumable
+  // "previous agent" like any other teardown), then re-points the project's active
+  // chat to a survivor. Returns the remaining live sessionKeys + the new active one
+  // (null when none remain, so the renderer closes the project instead).
+  ipcMain.handle(
+    'agent:close-chat',
+    async (
+      _e,
+      root: string,
+      sessionKey: string
+    ): Promise<{ ok: boolean; remaining: string[]; activeSessionKey: string | null }> => {
+      const key = projectKey(root)
+      const s = sessions.get(sessionKey)
+      if (s) {
+        closeSession(s)
+        sessions.delete(sessionKey)
+        runningKeys.delete(sessionKey)
+      }
+      const remaining = sessionKeysForProject(key)
+      // Prefer the project's default chat as the survivor, else the first remaining.
+      let nextActive = activeSessionKeyByProject.get(key) ?? null
+      if (!nextActive || nextActive === sessionKey || !sessions.has(nextActive)) {
+        nextActive = remaining.includes(key) ? key : (remaining[0] ?? null)
+        if (nextActive) activeSessionKeyByProject.set(key, nextActive)
+        else activeSessionKeyByProject.delete(key)
+      }
+      // If the closed chat was the globally active one, re-point activeKey to the
+      // survivor (only while this project is still the intended one — never resurrect
+      // a backgrounded session into a chat the renderer isn't showing).
+      if (activeKey === sessionKey) activeKey = intendedKey === key ? nextActive : null
+      return { ok: true, remaining, activeSessionKey: nextActive }
+    }
+  )
+
   // Does this project still have a live session? (LRU eviction can suspend a
   // backgrounded project's session; the renderer reopens it on switch-back.)
   ipcMain.handle('agent:is-open', (_e, root: string) => sessions.has(projectKey(root)))
