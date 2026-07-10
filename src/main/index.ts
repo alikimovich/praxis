@@ -489,6 +489,10 @@ function createWindow(): void {
     mainWindow?.webContents.send('window:fullscreen', mainWindow.isFullScreen())
   mainWindow.on('enter-full-screen', sendFullscreen)
   mainWindow.on('leave-full-screen', sendFullscreen)
+  // No material swap on these transitions: in fullscreen the renderer paints
+  // every shell surface opaque (`body.is-fullscreen` in styles.css), so no
+  // material is visible — and a main-side setVibrancy can't be ordered against
+  // that CSS flip across the process boundary without risking a flash.
 
   // Keep the native surfaces' base color in step with the OS appearance (the
   // placeholder HTML re-themes itself via prefers-color-scheme; this handles the
