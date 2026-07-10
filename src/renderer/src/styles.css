@@ -173,6 +173,19 @@ html.vibrancy .rail {
 html.vibrancy .empty {
     background: color-mix(in srgb, var(--bg) var(--vib-main), transparent);
 }
+/* Native fullscreen: nothing shows behind the window, so the material reads as
+   a flat gray slab — paint the shell opaque instead (the rail matches the chat
+   pane). `body.is-fullscreen` is mirrored from main's enter/leave-full-screen
+   events (App.tsx); back out of fullscreen and the material returns. The
+   NSVisualEffectView stays attached (main doesn't toggle it) — swapping it on
+   the transition can't be ordered against this CSS flip across the process
+   boundary, and an uncovered transparent region over NO material flashes
+   black; fully covering it costs nothing. */
+html.vibrancy body.is-fullscreen,
+html.vibrancy body.is-fullscreen .rail,
+html.vibrancy body.is-fullscreen .empty {
+    background: var(--bg);
+}
 html.vibrancy .pane--chat,
 html.vibrancy .pane--preview {
     background: var(--bg);
