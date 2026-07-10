@@ -423,7 +423,13 @@ function createWindow(): void {
     // Window icon (Windows/Linux; macOS uses the dock icon set below). Omit when
     // the PNG is missing so Electron falls back to its default rather than erroring.
     ...(appIcon.isEmpty() ? {} : { icon: appIcon }),
-    backgroundColor: previewBg(),
+    // macOS: the window base is the NSVisualEffect under-page material — the
+    // renderer stamps `html.vibrancy` (main.tsx) and clears the shell
+    // backgrounds (styles.css) so it shows through. An opaque backgroundColor
+    // would paint over it, so only the other platforms get the solid fill.
+    ...(process.platform === 'darwin'
+      ? { vibrancy: 'under-page' as const }
+      : { backgroundColor: previewBg() }),
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -447,7 +453,9 @@ function createWindow(): void {
   // solid fill behind it and the window).
   nativeTheme.on('updated', () => {
     const bg = previewBg()
-    mainWindow?.setBackgroundColor(bg)
+    // Not on macOS — an opaque window background would paint over the
+    // under-page vibrancy material (the window has none to update there).
+    if (process.platform !== 'darwin') mainWindow?.setBackgroundColor(bg)
     previewView?.setBackgroundColor(bg)
   })
 
