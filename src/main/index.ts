@@ -30,7 +30,10 @@ import { registerFeedbackIpc } from './feedback'
 // module load (before app is ready) so the menu bar reads "Praxis", not "Electron".
 app.setName('Praxis')
 // The About panel otherwise reports the Electron bundle's own version string.
-app.setAboutPanelOptions({ applicationName: 'Praxis', applicationVersion: app.getVersion() })
+app.setAboutPanelOptions({
+  applicationName: 'Praxis',
+  applicationVersion: app.getVersion()
+})
 
 // App icon (dev dock icon + Win/Linux window icon). Lives at build/icon.png,
 // resolved relative to the compiled main (out/main → ../../build). Loaded up front
@@ -201,8 +204,7 @@ let recentProjects: RecentMenuEntry[] = []
  */
 function buildAppMenu(): void {
   const send = (action: string): void => mainWindow?.webContents.send('menu:action', action)
-  const openRecent = (root: string): void =>
-    mainWindow?.webContents.send('menu:open-recent', root)
+  const openRecent = (root: string): void => mainWindow?.webContents.send('menu:open-recent', root)
 
   const recentItems: MenuItemConstructorOptions[] = recentProjects.length
     ? [
@@ -222,8 +224,16 @@ function buildAppMenu(): void {
     {
       label: 'File',
       submenu: [
-        { label: 'New Project…', accelerator: 'CmdOrCtrl+N', click: () => send('new-project') },
-        { label: 'Open Project…', accelerator: 'CmdOrCtrl+O', click: () => send('open-project') },
+        {
+          label: 'New Project…',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => send('new-project')
+        },
+        {
+          label: 'Open Project…',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => send('open-project')
+        },
         { label: 'Open Recent', submenu: recentItems }
       ]
     },
@@ -231,17 +241,45 @@ function buildAppMenu(): void {
     {
       label: 'Actions',
       submenu: [
-        { label: 'Reload Preview', accelerator: 'CmdOrCtrl+R', click: () => send('reload') },
-        { label: 'Select Element', accelerator: 'CmdOrCtrl+Shift+S', click: () => send('select') },
-        { label: 'Toggle Logs', accelerator: 'CmdOrCtrl+L', click: () => send('logs') },
-        { label: 'Publish', accelerator: 'CmdOrCtrl+Shift+P', click: () => send('publish') },
-        { label: 'Stop Project', accelerator: 'CmdOrCtrl+.', click: () => send('stop') },
+        {
+          label: 'Reload Preview',
+          accelerator: 'CmdOrCtrl+R',
+          click: () => send('reload')
+        },
+        {
+          label: 'Select Element',
+          accelerator: 'CmdOrCtrl+Shift+S',
+          click: () => send('select')
+        },
+        {
+          label: 'Toggle Logs',
+          accelerator: 'CmdOrCtrl+L',
+          click: () => send('logs')
+        },
+        {
+          label: 'Publish',
+          accelerator: 'CmdOrCtrl+Shift+P',
+          click: () => send('publish')
+        },
+        {
+          label: 'Stop Project',
+          accelerator: 'CmdOrCtrl+.',
+          click: () => send('stop')
+        },
         { type: 'separator' },
         {
           label: 'Viewport',
           submenu: [
-            { label: 'Desktop', accelerator: 'CmdOrCtrl+1', click: () => send('viewport:desktop') },
-            { label: 'Mobile', accelerator: 'CmdOrCtrl+2', click: () => send('viewport:mobile') }
+            {
+              label: 'Desktop',
+              accelerator: 'CmdOrCtrl+1',
+              click: () => send('viewport:desktop')
+            },
+            {
+              label: 'Mobile',
+              accelerator: 'CmdOrCtrl+2',
+              click: () => send('viewport:mobile')
+            }
           ]
         }
       ]
@@ -423,12 +461,16 @@ function createWindow(): void {
     // Window icon (Windows/Linux; macOS uses the dock icon set below). Omit when
     // the PNG is missing so Electron falls back to its default rather than erroring.
     ...(appIcon.isEmpty() ? {} : { icon: appIcon }),
-    // macOS: the window base is the NSVisualEffect under-page material — the
-    // renderer stamps `html.vibrancy` (main.tsx) and clears the shell
-    // backgrounds (styles.css) so it shows through. An opaque backgroundColor
-    // would paint over it, so only the other platforms get the solid fill.
+    // macOS: the window base is the NSVisualEffect SIDEBAR material. The
+    // renderer carves it up (styles.css `html.vibrancy` rules, stamped by
+    // main.tsx): the rail shows it raw (true sidebar vibrancy), the chat +
+    // preview panes paint opaque --bg over it, the Welcome screen a light
+    // wash. Electron allows ONE material per window — a true multi-material
+    // split would need a native NSVisualEffectView addon. An opaque
+    // backgroundColor would paint over the material, so only the other
+    // platforms get the solid fill.
     ...(process.platform === 'darwin'
-      ? { vibrancy: 'under-page' as const }
+      ? { vibrancy: 'sidebar' as const }
       : { backgroundColor: previewBg() }),
     titleBarStyle: 'hiddenInset',
     webPreferences: {
@@ -511,11 +553,20 @@ function registerPreviewIpc(): void {
   // Renderer reports where the preview rectangle is, in CSS pixels (== DIP).
   ipcMain.on(
     'preview:set-bounds',
-    (_e, bounds: { x: number; y: number; width: number; height: number; radius?: number }) => {
+    (
+      _e,
+      bounds: {
+        x: number
+        y: number
+        width: number
+        height: number
+        radius?: number
+      }
+    ) => {
       lastPreviewBounds = { ...bounds, radius: bounds.radius ?? 0 }
       applyBounds()
-  })
-
+    }
+  )
 
   // Mobile viewport toggles the in-page iPhone bezel overlay (click pass-through).
   ipcMain.on('preview:set-frame', (_e, active: boolean) => {
@@ -609,8 +660,7 @@ function registerPreviewIpc(): void {
   })
 
   // ── Floating prop-panel plumbing (renderer ⇄ panel view, via main) ──────────
-  const fromMainWindow = (e: Electron.IpcMainEvent): boolean =>
-    e.sender === mainWindow?.webContents
+  const fromMainWindow = (e: Electron.IpcMainEvent): boolean => e.sender === mainWindow?.webContents
   ipcMain.on('panel:show', (e, b: { x: number; y: number; width: number; height: number }) => {
     if (!fromMainWindow(e)) return
     const v = ensurePanelView()
@@ -678,7 +728,14 @@ function registerPreviewIpc(): void {
   // A submitted comment/annotation (element + text) → renderer (agent vs pin).
   ipcMain.on(
     PREVIEW_COMMENT,
-    (e, payload: { kind: 'comment' | 'annotate'; el: SelectedElement; text: string }) => {
+    (
+      e,
+      payload: {
+        kind: 'comment' | 'annotate'
+        el: SelectedElement
+        text: string
+      }
+    ) => {
       if (e.sender !== previewView?.webContents) return
       mainWindow?.webContents.send('preview:comment', payload)
     }
