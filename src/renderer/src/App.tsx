@@ -160,11 +160,18 @@ export default function App(): React.JSX.Element {
   // v5-D: the past session open for review (rendered as a modal over the panes).
   const [reviewing, setReviewing] = useState<SessionRecord | null>(null)
   // The review modal is renderer DOM; the native preview WebContentsView paints
-  // ABOVE it (same reason PropPanel reserves an inset strip). Hide the preview
-  // entirely while the modal is open (reuses the drag-hide path), restore on close.
+  // ABOVE it (same reason PropPanel reserves an inset strip). Freeze-frame the
+  // preview while the modal is open — the snapshot <img> keeps it visually in
+  // place under the modal instead of blanking the pane — and restore the live
+  // view on close. Open through `openReview` (below) so the modal, like the
+  // dropdowns, waits for the freeze before rendering (no behind-the-native flash).
   useEffect(() => {
-    window.api.preview.setDragging(!!reviewing)
+    if (!reviewing) usePreviewFreeze.getState().setFrozen(false)
   }, [reviewing])
+  const openReview = (record: SessionRecord): void =>
+    openWithFreeze((open) => {
+      if (open) setReviewing(record)
+    })
   // The code drawer holds one project's source stamp — close it when the active
   // project changes so it can't read a stale path against the new root.
   useEffect(() => {
@@ -1590,7 +1597,7 @@ export default function App(): React.JSX.Element {
             onClose={(key) => void closeProjectFromRail(key)}
             onOpen={() => void openAnother()}
             onCreate={() => void createNewProject()}
-            onReview={setReviewing}
+            onReview={openReview}
             onNewChat={(key) => void newChatForProject(key)}
             onSwitchSession={(key, sessionKey) => void switchSession(key, sessionKey)}
           />

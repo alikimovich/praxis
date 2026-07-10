@@ -97,6 +97,14 @@ let annotationPins: { id: string; selector: string }[] = []
 // registerPreviewIpc) so resetStalePreview can zero it too.
 let lastPreviewBounds = { x: 0, y: 0, width: 0, height: 0, radius: 0 }
 
+// The renderer asked the native preview hidden (split-drag, or the freeze-frame
+// path under an overlay that must paint above it — dropdowns, the session-review
+// modal). While set, a completing preview:load must NOT unhide the view: native
+// views always paint over DOM, so it would punch straight through the open
+// overlay (e.g. a project launch finishing while the user reads a past chat).
+// Visibility returns when the renderer releases the hide (set-dragging false).
+let previewHiddenByRenderer = false
+
 // Chromium error codes worth retrying — the dev server is up but not yet serving.
 const TRANSIENT_LOAD_ERRORS = new Set([-324, -102, -101, -105, -106, -109])
 
@@ -404,6 +412,9 @@ function resetStalePreview(): void {
   previewView?.setVisible(false)
   previewView?.setBounds({ x: 0, y: 0, width: 0, height: 0 })
   lastPreviewBounds = { x: 0, y: 0, width: 0, height: 0, radius: 0 }
+  // The overlay that requested a hide died with the old renderer document —
+  // don't let its stale intent block the reattaching renderer's preview:load.
+  previewHiddenByRenderer = false
   // Same flags `preview:reset` clears (index.ts ~484-496) — keeps a stale mode
   // from silently re-arming via did-finish-load once a project reattaches.
   selectModeActive = false
@@ -520,9 +531,12 @@ function registerPreviewIpc(): void {
     previewUrl = url
     previewRetries = 0
     const view = ensurePreviewView()
-    // Recover from any leaked hide (set-dragging is also used by overlaying
-    // renderer UI, e.g. the branch dropdown) — a fresh load must be visible.
-    view.setVisible(true)
+    // Recover from any LEAKED hide (a renderer bug) — a fresh load should be
+    // visible. But an ACTIVE hide (previewHiddenByRenderer: the review modal /
+    // a dropdown's freeze-frame is up) must win, or a load completing under it
+    // pops the native view over the open overlay; set-dragging(false) restores
+    // visibility when the overlay closes.
+    if (!previewHiddenByRenderer) view.setVisible(true)
     view.webContents.loadURL(url)
   })
 
@@ -540,8 +554,10 @@ function registerPreviewIpc(): void {
     ensurePreviewView().webContents.loadURL(PLACEHOLDER_HTML)
   })
 
-  // Hide the native view during a split-drag so the renderer keeps mouse events.
+  // Hide the native view during a split-drag (renderer keeps mouse events) or
+  // under a freeze-frame overlay; remember the intent so preview:load respects it.
   ipcMain.on('preview:set-dragging', (_e, active: boolean) => {
+    previewHiddenByRenderer = active
     previewView?.setVisible(!active)
   })
 

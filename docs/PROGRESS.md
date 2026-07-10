@@ -23,6 +23,28 @@ indented, dot-prefixed sub-lists (live-chat switcher + "previous agents").
 - Dropped the full active-item background (only the active chat is highlighted
   now) and the orphaned `.rail__dot` / `.rail__session*` / `.rail__spawn*` CSS.
   `test/history-ui.mjs` updated to the new `.rail__chat*` DOM.
+## 2026-07-09 — Session-review modal: freeze-frame the preview; loads can't punch through
+
+Two sightings of the same seam. (1) Opening a past chat while a project launch
+was still in flight: the modal hid the native preview (drag-hide path), then
+the launch settled and `preview:load`'s unconditional "recover from any leaked
+hide" `setVisible(true)` painted the preview straight over the open modal —
+native views always win over DOM. (2) Even without the race, reviewing a past
+chat blanked the preview pane entirely for as long as the modal was open.
+
+- Main now tracks `previewHiddenByRenderer` (set by `preview:set-dragging`):
+  `preview:load` still loads the URL but only unhides when NO renderer hide is
+  active — the leaked-hide recovery survives for actual leaks. The flag clears
+  in `resetStalePreview` (the overlay died with the old renderer document).
+- The review modal switched from the raw drag-hide to the freeze-frame path the
+  dropdowns use (`usePreviewFreeze` + `openWithFreeze`): the preview stays
+  visually in place as a snapshot `<img>` under the modal instead of
+  disappearing, and the live view returns on close.
+- `test/history-ui.mjs` now asserts the contract from the main side (native view
+  hidden under the modal, still hidden after a mid-modal `preview:load`,
+  restored on close). Standalone tip: with the app open, standalone test runs
+  need `DSGN_USER_DATA=$(mktemp -d)` — the running app holds the shared
+  single-instance lock (the runner already isolates).
 
 ## 2026-07-09 — Survive sleep/crash: renderer recovery + full workspace/chat restore
 
