@@ -1,6 +1,6 @@
-import { Folder, Plus } from 'lucide-react'
+import { Folder, FolderOpen, Plus } from 'lucide-react'
 import type { SessionRecord } from '../../../shared/api'
-import { relativeTime, useChat, useHistory, useSpawns, useWorkspace } from '../store'
+import { chatTitle, shortAgo, useChat, useHistory, useSpawns, useWorkspace } from '../store'
 
 interface Props {
   /** Switch to an already-open project. */
@@ -19,11 +19,19 @@ interface Props {
   onSwitchSession: (key: string, sessionKey: string) => void
 }
 
+/** First user-typed line of a transcript/chat — the seed for a chat's auto-name. */
+const firstUserText = (entries: { role: string; text: string }[]): string | undefined =>
+  entries.find((e) => e.role === 'user' && e.text.trim())?.text
+
 /**
- * v5 left rail (Cursor-style) — the open projects, with an active highlight and a
- * "working" dot for any project whose agent turn is in flight. Under the active
- * project, its **previous agents** (v5-D persisted sessions) list with status dots;
- * click one to review, × to delete. Clicking a project switches; × closes.
+ * v5 left rail (Cursor-style) — the open projects, each led by a folder icon
+ * (open when it's the active project, closed otherwise). The active project
+ * expands to a flat, left-aligned list of its chats: first its live/open chats
+ * (the active one highlighted), then its **previous chats** (v5-D persisted
+ * sessions, one row per chat with a trailing "time ago"). Chat names are
+ * auto-generated from each chat's opening prompt. No status dots on chat rows —
+ * the text sits flush-left, at the project name's level. Clicking a project
+ * switches; × closes; clicking a chat opens/reviews it.
  *
  * The collapse/expand toggle no longer lives here — it floats by the traffic lights
  * (see App's `.sidebar-toggle`) so it stays reachable once the rail is gone. When
@@ -84,12 +92,10 @@ export default function Rail({
       <ul className="rail__list">
         {projects.map((p) => {
           const active = p.key === activeKey
-          // A project's "working" dot lights for ANY of its live sessionKeys, not
-          // just the currently-shown one — a background chat still counts as busy.
           const sessionKeys = p.sessionKeys ?? [p.key]
-          const running = sessionKeys.some((sk) => byKey[sk]?.isRunning)
           const past = active ? (history[p.key] ?? []) : []
           const working = active ? (spawns[p.key] ?? []) : []
+          const FolderIcon = active ? FolderOpen : Folder
           return (
             <li key={p.key} className={`rail__item ${active ? 'rail__item--active' : ''}`}>
               <div className="rail__row">
@@ -99,10 +105,7 @@ export default function Rail({
                   aria-current={active}
                   title={p.root}
                 >
-                  <span
-                    className={`rail__dot ${running ? 'rail__dot--on' : ''}`}
-                    aria-hidden="true"
-                  />
+                  <FolderIcon className="rail__folder size-4" aria-hidden="true" />
                   <span className="rail__name">{p.name}</span>
                 </button>
                 {active && (
@@ -127,48 +130,42 @@ export default function Rail({
                   ×
                 </button>
               </div>
-              {/* v9 multi-chat: switcher between this project's own live chats —
-                  only worth showing once there's more than one. */}
-              {active && sessionKeys.length > 1 && (
-                <ul className="rail__chats" aria-label={`${p.name}'s open chats`}>
-                  {sessionKeys.map((sk, i) => {
+              {/* Active project: a flat, left-aligned list of its chats — live
+                  chats first (active one highlighted), then previous chats. No
+                  status dots; names are auto-generated from each chat's first
+                  prompt, mirroring Cursor's sidebar. */}
+              {active && (
+                <ul className="rail__chats" aria-label={`${p.name}'s chats`}>
+                  {sessionKeys.map((sk) => {
                     const isActiveChat = sk === (p.activeSessionKey ?? p.key)
-                    const chatRunning = !!byKey[sk]?.isRunning
+                    const name = chatTitle(firstUserText(byKey[sk]?.messages ?? []))
                     return (
-                      <li key={sk}>
+                      <li key={sk} className="rail__chat-item">
                         <button
                           className={`rail__chat ${isActiveChat ? 'rail__chat--active' : ''}`}
                           onClick={() => onSwitchSession(p.key, sk)}
                           aria-current={isActiveChat}
-                          title={sk === p.key ? 'Default chat' : `Chat ${i + 1}`}
+                          title={name}
                         >
-                          <span
-                            className={`rail__dot ${chatRunning ? 'rail__dot--on' : ''}`}
-                            aria-hidden="true"
-                          />
-                          <span className="rail__session-label">
-                            {sk === p.key ? 'Default' : `Chat ${i + 1}`}
-                          </span>
+                          <span className="rail__chat-name">{name}</span>
                         </button>
                       </li>
                     )
                   })}
-                </ul>
-              )}
-              {/* v8 F1: comment-spawned background agents working (or queued). */}
-              {working.length > 0 && (
-                <ul className="rail__spawns">
+                  {/* v8 F1: comment-spawned background agents working (or queued). */}
                   {working.map((sp) => (
-                    <li key={sp.id} className="rail__spawn" title={sp.label}>
-                      <span
-                        className={`rail__sdot ${sp.status === 'queued' ? 'rail__sdot--queued' : 'rail__sdot--working'}`}
-                        aria-hidden="true"
-                      />
-                      <span className="rail__session-label">
-                        {sp.status === 'queued' ? `${sp.label} · queued` : sp.label}
+                    <li key={sp.id} className="rail__chat-item" title={sp.label}>
+                      <span className="rail__chat rail__chat--spawn">
+                        <span
+                          className={`rail__sdot ${sp.status === 'queued' ? 'rail__sdot--queued' : 'rail__sdot--working'}`}
+                          aria-hidden="true"
+                        />
+                        <span className="rail__chat-name">
+                          {sp.status === 'queued' ? `${sp.label} · queued` : sp.label}
+                        </span>
                       </span>
                       <button
-                        className="rail__session-x"
+                        className="rail__chat-x"
                         onClick={(e) => {
                           e.stopPropagation()
                           void window.api.agent.spawnInterrupt(sp.id)
@@ -180,40 +177,33 @@ export default function Rail({
                       </button>
                     </li>
                   ))}
-                </ul>
-              )}
-              {/* Previous agents for the active project (newest first). */}
-              {past.length > 0 && (
-                <ul className="rail__sessions">
-                  {past.map((rec) => (
-                    <li key={rec.id} className="rail__session">
-                      <button
-                        className="rail__session-open"
-                        onClick={() => onReview(rec)}
-                        title={`${rec.projectName} — ${rec.filesTouched.length} file(s)`}
-                      >
-                        <span
-                          className={`rail__sdot ${rec.prUrl ? 'rail__sdot--pr' : ''}`}
-                          aria-hidden="true"
-                        />
-                        <span className="rail__session-label">
-                          {relativeTime(rec.startedAt)}
-                          {rec.filesTouched.length > 0 ? ` · ${rec.filesTouched.length}f` : ''}
-                        </span>
-                      </button>
-                      <button
-                        className="rail__session-x"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          void useHistory.getState().remove(rec.projectRoot, rec.id)
-                        }}
-                        aria-label="Delete session"
-                        title="Delete from history"
-                      >
-                        ×
-                      </button>
-                    </li>
-                  ))}
+                  {/* Previous chats for this project (newest first). */}
+                  {past.map((rec) => {
+                    const name = chatTitle(firstUserText(rec.transcript))
+                    return (
+                      <li key={rec.id} className="rail__chat-item">
+                        <button
+                          className="rail__chat"
+                          onClick={() => onReview(rec)}
+                          title={`${name} — ${rec.filesTouched.length} file(s)`}
+                        >
+                          <span className="rail__chat-name">{name}</span>
+                          <span className="rail__chat-time">{shortAgo(rec.startedAt)}</span>
+                        </button>
+                        <button
+                          className="rail__chat-x"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void useHistory.getState().remove(rec.projectRoot, rec.id)
+                          }}
+                          aria-label="Delete chat"
+                          title="Delete from history"
+                        >
+                          ×
+                        </button>
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </li>
