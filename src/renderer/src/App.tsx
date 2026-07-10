@@ -976,6 +976,15 @@ export default function App(): React.JSX.Element {
       } else {
         log.append(`Publish failed: ${res.error}`, 'error')
         log.setOpen(true)
+        // A mid-publish failure can leave git on a different branch than the
+        // titlebar shows (the merge step checks out the default branch first).
+        // Re-sync the displayed branch to reality so the two never disagree.
+        void window.api.git.list(root).then(({ current }) => {
+          if (current && current !== useSession.getState().branch) {
+            useSession.getState().setBranch(current)
+            useWorkspace.getState().patchEntry(key, { branch: current })
+          }
+        })
       }
     } finally {
       setPublishing(false)
