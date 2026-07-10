@@ -2,6 +2,27 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-10 — Drag-resize the code drawer (LKM-35)
+
+The bottom code drawer (`CodeDrawer.tsx`) can now be resized by dragging its top
+edge, not just toggled between the fixed 300px height and expanded.
+
+- **A `.codedrawer__resize` handle** straddling the top border (`absolute -top-1
+  h-2`, `cursor-ns-resize`, `role="separator"`). `onPointerDown` captures the
+  start Y + current height and installs window `pointermove`/`pointerup`
+  listeners (so the drag survives the pointer leaving the thin strip); each move
+  sets an explicit `dragHeight` from the vertical delta (up = taller). Arrow
+  Up/Down on the focused handle nudges it 24px for keyboard users.
+- **Height precedence:** `dragHeight` (if set) → `expanded` → default `DRAWER_H`.
+  All pass through `clampHeight` to `[MIN_DRAWER_H (120), maxHeight]`.
+  `maxHeight` = `min(80% of the window height, containerH − MIN_PREVIEW)`, so the
+  drawer never exceeds 80% of the viewport and never fully hides the preview. A
+  window `resize` listener tracks `viewportH` so the ceiling stays live; the
+  render-time clamp keeps a stored `dragHeight` from stranding out of range.
+  The expand toggle clears `dragHeight` so it reclaims precedence.
+- `test/code-drawer.mjs` extended: drag the handle to the top of the window and
+  assert the reserved inset grows but stays ≤ 80% of `window.innerHeight`.
+
 ## 2026-07-10 — Close individual live chats from the rail (LKM-34)
 
 Each live chat row in the rail now carries the same hover-revealed × the past
