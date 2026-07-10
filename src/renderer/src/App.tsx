@@ -34,6 +34,7 @@ import {
   usePropsIsland,
   useViewport,
   usePreviewFreeze,
+  openWithPreviewFreeze,
   usePublishMode,
   useRecents,
   usePanelInset,
@@ -136,23 +137,8 @@ export default function App(): React.JSX.Element {
   // capture's ~80ms and then "pop" fully visible when it hides (read: flicker).
   const [branchMenuOpen, setBranchMenuOpen] = useState(false)
   const [pubMenuOpen, setPubMenuOpen] = useState(false)
-  const openWithFreeze = (setOpen: (b: boolean) => void): void => {
-    usePreviewFreeze.getState().setFrozen(true)
-    if (usePreviewFreeze.getState().ready) {
-      setOpen(true)
-      return
-    }
-    const done = (): void => {
-      unsub()
-      clearTimeout(failsafe)
-      setOpen(true)
-    }
-    const unsub = usePreviewFreeze.subscribe((s) => {
-      if (s.ready) done()
-    })
-    // Failsafe: a wedged capture must never block the menu.
-    const failsafe = setTimeout(done, 350)
-  }
+  const openWithFreeze = (setOpen: (b: boolean) => void): void =>
+    openWithPreviewFreeze(() => setOpen(true))
   const closeWithFreeze = (setOpen: (b: boolean) => void): void => {
     setOpen(false)
     usePreviewFreeze.getState().setFrozen(false)

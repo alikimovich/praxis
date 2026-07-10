@@ -437,6 +437,32 @@ export const usePreviewFreeze = create<PreviewFreezeState>((set) => ({
 }))
 
 /**
+ * Open an overlay that must paint above the native preview (dropdowns, the
+ * session-review modal, the feedback dialog): freeze-frame first (PreviewPane
+ * swaps in a snapshot <img> and hides the native view), then call `show` once
+ * the freeze is ready — showing in the same tick would render the overlay
+ * behind the native view for the capture's ~80ms and then "pop" (flicker). A
+ * wedged capture never blocks the overlay (350ms failsafe). Callers restore
+ * with `usePreviewFreeze.getState().setFrozen(false)` on close.
+ */
+export const openWithPreviewFreeze = (show: () => void): void => {
+  usePreviewFreeze.getState().setFrozen(true)
+  if (usePreviewFreeze.getState().ready) {
+    show()
+    return
+  }
+  const done = (): void => {
+    unsub()
+    clearTimeout(failsafe)
+    show()
+  }
+  const unsub = usePreviewFreeze.subscribe((s) => {
+    if (s.ready) done()
+  })
+  const failsafe = setTimeout(done, 350)
+}
+
+/**
  * Right-edge strip (px) reserved by the floating prop panel. PreviewPane lays
  * the native view out around it — desktop shrinks the view's width, mobile
  * re-centers the whole bezel in the remaining space (naively shrinking the
