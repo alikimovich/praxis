@@ -605,13 +605,38 @@ body.is-fullscreen .sidebar-toggle {
     font: inherit;
     text-align: left;
 }
-/* Project glyph — a folder that opens when the project is the active one. */
-.rail__folder {
+/* Project glyph — a subdued folder (open when the project is expanded, closed
+   otherwise) that, on row hover, cross-fades to a chevron. Both icons share one
+   16px slot; stacking them absolutely lets the swap happen without reflow. */
+.rail__glyph {
+    position: relative;
     flex: 0 0 auto;
-    color: var(--text-muted);
+    width: 16px;
+    height: 16px;
 }
-.rail__item--active .rail__folder {
-    color: var(--text);
+.rail__folder,
+.rail__chevron {
+    position: absolute;
+    inset: 0;
+    /* Keep the folder deliberately quiet, even for the active project. */
+    color: var(--text-muted);
+    transition: opacity 0.12s ease;
+}
+/* Chevron hidden until the row is hovered; it rotates from pointing right
+   (collapsed) to pointing down (expanded/active). */
+.rail__chevron {
+    opacity: 0;
+    transform: rotate(0deg);
+    transition: opacity 0.12s ease, transform 0.15s ease;
+}
+.rail__chevron--open {
+    transform: rotate(90deg);
+}
+.rail__row:hover .rail__folder {
+    opacity: 0;
+}
+.rail__row:hover .rail__chevron {
+    opacity: 1;
 }
 .rail__name {
     overflow: hidden;
