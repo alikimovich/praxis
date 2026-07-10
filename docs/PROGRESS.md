@@ -24,22 +24,28 @@ indented, dot-prefixed sub-lists (live-chat switcher + "previous agents").
   now) and the orphaned `.rail__dot` / `.rail__session*` / `.rail__spawn*` CSS.
   `test/history-ui.mjs` updated to the new `.rail__chat*` DOM.
 ## 2026-07-09 — Session-review modal: freeze-frame the preview; loads can't punch through
+## 2026-07-09 — Modals freeze-frame the preview; loads can't punch through
 
-Two sightings of the same seam. (1) Opening a past chat while a project launch
-was still in flight: the modal hid the native preview (drag-hide path), then
-the launch settled and `preview:load`'s unconditional "recover from any leaked
-hide" `setVisible(true)` painted the preview straight over the open modal —
-native views always win over DOM. (2) Even without the race, reviewing a past
-chat blanked the preview pane entirely for as long as the modal was open.
+Three sightings of the same seam (session-review modal ×2, feedback dialog).
+(1) Opening a past chat while a project launch was still in flight: the modal
+hid the native preview (drag-hide path), then the launch settled and
+`preview:load`'s unconditional "recover from any leaked hide"
+`setVisible(true)` painted the preview straight over the open modal — native
+views always win over DOM. (2) Even without the race, reviewing a past chat
+blanked the preview pane for as long as the modal was open. (3) The feedback
+dialog (LKM-27) rendered partially under the preview.
 
 - Main now tracks `previewHiddenByRenderer` (set by `preview:set-dragging`):
   `preview:load` still loads the URL but only unhides when NO renderer hide is
   active — the leaked-hide recovery survives for actual leaks. The flag clears
   in `resetStalePreview` (the overlay died with the old renderer document).
-- The review modal switched from the raw drag-hide to the freeze-frame path the
-  dropdowns use (`usePreviewFreeze` + `openWithFreeze`): the preview stays
-  visually in place as a snapshot `<img>` under the modal instead of
-  disappearing, and the live view returns on close.
+- The dropdowns' open-after-freeze logic moved to `store.ts` as
+  `openWithPreviewFreeze`; the review modal AND the feedback dialog now use it:
+  the preview stays visually in place as a snapshot `<img>` under the overlay
+  instead of disappearing (or being covered), and the live view returns on
+  close. Bonus: the feedback screenshot is captured after the freeze, so it now
+  INCLUDES the preview (the native view is a separate target `capturePage`
+  never saw — screenshots used to have a hole there).
 - `test/history-ui.mjs` now asserts the contract from the main side (native view
   hidden under the modal, still hidden after a mid-modal `preview:load`,
   restored on close). Standalone tip: with the app open, standalone test runs

@@ -9,7 +9,13 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { formatConversation, useChat, useFeedback } from '../store'
+import {
+  formatConversation,
+  openWithPreviewFreeze,
+  useChat,
+  useFeedback,
+  usePreviewFreeze
+} from '../store'
 
 /**
  * In-app "Send feedback" (LKM-27). Writes a GitHub issue on Praxis's own repo via
@@ -30,9 +36,25 @@ export default function FeedbackDialog(): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; text: string; url?: string } | null>(null)
 
-  // Reset + grab a fresh screenshot each time the dialog opens.
+  // The dialog is renderer DOM and the native preview paints ABOVE all DOM —
+  // freeze-frame the preview while open (same path as the dropdowns and the
+  // session-review modal) and gate rendering on the freeze, so the dialog can't
+  // flash behind the native view or get punched through by a landing load.
+  const [shown, setShown] = useState(false)
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      setShown(false)
+      usePreviewFreeze.getState().setFrozen(false)
+      return
+    }
+    openWithPreviewFreeze(() => setShown(true))
+  }, [open])
+
+  // Reset + grab a fresh screenshot each time the dialog actually shows —
+  // after the freeze, so the capture includes the snapshot <img> (the native
+  // preview is a separate target that capturePage never sees).
+  useEffect(() => {
+    if (!shown) return
     setBody('')
     setResult(null)
     setBusy(false)
@@ -46,7 +68,7 @@ export default function FeedbackDialog(): React.JSX.Element {
     return () => {
       live = false
     }
-  }, [open])
+  }, [shown])
 
   const submit = async (): Promise<void> => {
     if (!body.trim() || busy) return
@@ -72,7 +94,7 @@ export default function FeedbackDialog(): React.JSX.Element {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open && shown} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Send feedback</DialogTitle>
