@@ -75,25 +75,41 @@ try {
   )
 
   // The composer actually sends this prefix ahead of the user's typed text —
-  // spy on window.api.agent.send (not frozen by contextBridge) rather than
-  // needing a real provider turn.
-  await win.evaluate(() => {
-    window.__sendCalls = []
-    window.api.agent.send = (text, images) => {
-      window.__sendCalls.push({ text, images })
-      return Promise.resolve()
-    }
+  // the contextBridge freezes `window.api`, so a renderer-side `agent.send = spy`
+  // silently no-ops; spy in MAIN instead by swapping the agent:send handler
+  // (no real provider turn needed).
+  await app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('agent:send')
+    ipcMain.handle('agent:send', (_e, text) => {
+      globalThis.__dsgnSentTexts = [...(globalThis.__dsgnSentTexts ?? []), text]
+    })
   })
   await win.fill('.composer__input', 'make the heading bigger')
   await win.click('.composer__send')
-  await win.waitForFunction(() => window.__sendCalls?.length > 0)
-  const sent = await win.evaluate(() => window.__sendCalls[0].text)
+  // The renderer appends the visible user message synchronously; the spied IPC
+  // lands async in main — poll for it.
+  await win.waitForFunction(() =>
+    window.__dsgnStore.getState().messages.some((m) => m.role === 'user')
+  )
+  let sent = null
+  for (let i = 0; i < 50 && !sent; i++) {
+    sent = await app.evaluate(() => globalThis.__dsgnSentTexts?.[0] ?? null)
+    if (!sent) await new Promise((r) => setTimeout(r, 100))
+  }
   assert(
     sent === 'The preview is currently showing /about?tab=team. make the heading bigger',
     `composer should prepend the page context, got "${sent}"`
   )
-  // The visible transcript must stay clean — only the user's own words.
-  const shown = await win.evaluate(() => window.__dsgnStore.getState().messages.at(-1).text)
+  // The visible transcript must stay clean — only the user's own words. (The
+  // last message may be the empty streaming-assistant placeholder; assert on
+  // the last USER message.)
+  const shown = await win.evaluate(
+    () =>
+      window.__dsgnStore
+        .getState()
+        .messages.filter((m) => m.role === 'user')
+        .at(-1).text
+  )
   assert(shown === 'make the heading bigger', `transcript should hide the prefix, got "${shown}"`)
 
   console.log('PREVIEW-LOCATION OK — store mirrors navigation; composer prepends it as hidden context')

@@ -5,6 +5,7 @@ import { access, readFile } from 'fs/promises'
 import { basename, join } from 'path'
 import type {
   DetectedProject,
+  DevServerInfo,
   Framework,
   PackageManager,
   PreviewKind,
@@ -152,6 +153,13 @@ const servers = new Map<string, ChildProcess>()
 // child processes — track their http.Server separately, keyed the same way.
 const staticServers = new Map<string, Server>()
 
+// The resolved RunningDevServer (url/pid/attached) for each live server (child
+// process OR in-process static), so a reattaching renderer (e.g. after a reload)
+// can recover the URL instead of blindly respawning on a fresh port via start().
+// Kept in lockstep with `servers`/`staticServers` — set wherever a server is
+// added, cleared wherever one is dropped.
+const running = new Map<string, RunningDevServer>()
+
 // Ports handed out but not necessarily bound yet. Concurrent starts (e.g. the
 // rail opening several projects at once) would otherwise all probe the same free
 // base and collide, since findFreePort only checks bindability at that instant.
@@ -198,6 +206,7 @@ function stop(root: string): void {
     staticServers.delete(key)
     staticServer.close()
   }
+  running.delete(key)
 }
 
 /** Stop every running dev server (app quit). */
@@ -206,6 +215,7 @@ function stopAll(): void {
   servers.clear()
   for (const s of staticServers.values()) s.close()
   staticServers.clear()
+  running.clear()
 }
 
 const CONFLICT_RE =
@@ -259,14 +269,18 @@ async function startStaticSite(
 ): Promise<RunningDevServer> {
   const key = projectKey(root)
   try {
-    const { server, running } = await startStaticServer({ root, port, host: PREVIEW_HOST }, onLog)
+    const { server, running: info } = await startStaticServer({ root, port, host: PREVIEW_HOST }, onLog)
     staticServers.set(key, server)
-    // Keep the map + reserved port honest if the server closes on its own.
+    running.set(key, info)
+    // Keep the maps + reserved port honest if the server closes on its own.
     server.on('close', () => {
       reserved.delete(port)
-      if (staticServers.get(key) === server) staticServers.delete(key)
+      if (staticServers.get(key) === server) {
+        staticServers.delete(key)
+        running.delete(key)
+      }
     })
-    return running
+    return info
   } catch (err) {
     reserved.delete(port)
     throw new Error(
@@ -291,7 +305,10 @@ function spawnDevServer(
     // Keep the map + reserved ports honest if the server dies on its own.
     child.on('exit', () => {
       reserved.delete(opts.port)
-      if (servers.get(key) === child) servers.delete(key)
+      if (servers.get(key) === child) {
+        servers.delete(key)
+        running.delete(key)
+      }
     })
 
     let settled = false
@@ -303,7 +320,9 @@ function spawnDevServer(
       settled = true
       clearTimeout(timer)
       if (note) onLog(note)
-      resolve({ url, pid: child.pid!, attached: false })
+      const info: RunningDevServer = { url, pid: child.pid!, attached: false }
+      running.set(key, info)
+      resolve(info)
     }
 
     // Primary: the server should come up on the exact port we assigned.
@@ -354,7 +373,10 @@ function spawnDevServer(
       // have replaced it, and stop(root) would kill the newer server instead.
       killChild(child)
       reserved.delete(opts.port)
-      if (servers.get(key) === child) servers.delete(key)
+      if (servers.get(key) === child) {
+        servers.delete(key)
+        running.delete(key)
+      }
       reject(new Error(`Timed out waiting for a localhost URL.\n${tail.slice(-600)}`))
     }, 90_000)
   })
@@ -376,6 +398,15 @@ export function registerDevServerIpc(getWindow: () => BrowserWindow | null): voi
   ipcMain.handle('devserver:running', (_e, root: string) => {
     const key = projectKey(root)
     return servers.has(key) || staticServers.has(key)
+  })
+
+  // Like devserver:running, but also hands back the URL/pid — lets a reattaching
+  // renderer (e.g. after a hard reload) recover the live preview URL instead of
+  // going through start() again, which always stop()s and respawns on a fresh port.
+  ipcMain.handle('devserver:info', (_e, root: string): DevServerInfo => {
+    const key = projectKey(root)
+    const server = running.get(key)
+    return server ? { running: true, server } : { running: false }
   })
 
   // Never leave a spawned dev server orphaned when dsgn quits.

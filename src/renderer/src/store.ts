@@ -55,11 +55,15 @@ interface ChatState {
   /** Show a project's chat (preserves each project's history across switches). */
   setActiveChat: (key: string) => void
   /**
-   * Populate a chat slice from a persisted session's transcript (v9 resume) so the
-   * resumed conversation shows its past turns, not an empty thread. No-op if the
-   * slice already has messages (never clobbers a live chat).
+   * Populate a chat slice from a session transcript (v9 resume, boot reattach) so
+   * the conversation shows its past turns, not an empty thread. No-op if the slice
+   * already has messages (never clobbers a live chat / a repeat restore). When
+   * `isRunning` (a reattached turn still in flight in main), opens a fresh empty
+   * streaming assistant message so the turn's continuing `agent:event` deltas keep
+   * rendering into it (the pre-reload buffered text isn't in the transcript yet —
+   * see restore.ts).
    */
-  hydrate: (key: string, messages: ChatMessage[]) => void
+  hydrate: (key: string, messages: ChatMessage[], isRunning?: boolean) => void
   /** Drop a project's chat buffer (on close). */
   clearChat: (key: string) => void
   // Actions default to the active project; pass a key to target a backgrounded one.
@@ -112,14 +116,21 @@ export const useChat = create<ChatState>((set, get) => {
           isRunning: slice.isRunning
         }
       }),
-    hydrate: (key, messages) =>
+    hydrate: (key, messages, isRunning = false) =>
       set((s) => {
         const prev = s.byKey[key] ?? emptySlice()
         // Only seed an empty slice — never overwrite a chat that's already live.
         if (prev.messages.length) return {}
-        const slice = { ...prev, messages }
+        let msgs = messages
+        let streamingId: string | null = null
+        if (isRunning) {
+          const id = nextId()
+          msgs = [...messages, { id, role: 'assistant', text: '', statuses: [], segments: [] }]
+          streamingId = id
+        }
+        const slice: ChatSlice = { messages: msgs, isRunning, streamingId }
         return key === s.activeKey
-          ? { byKey: { ...s.byKey, [key]: slice }, messages: slice.messages }
+          ? { byKey: { ...s.byKey, [key]: slice }, messages: slice.messages, isRunning }
           : { byKey: { ...s.byKey, [key]: slice } }
       }),
     clearChat: (key) =>
@@ -357,6 +368,10 @@ interface WorkspaceState {
   close: (key: string) => void
   toggleCollapsed: () => void
   reset: () => void
+  /** Replace the whole set (boot restore) — see restore.ts. Also advances the
+   *  LRU recency counter past the restored `touchedAt`s so entries opened after a
+   *  restore still sort as newer. */
+  hydrate: (projects: ProjectEntry[], activeKey: string | null) => void
 }
 
 /**
@@ -697,8 +712,70 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
         s.activeKey === key ? (projects.at(-1)?.key ?? null) : s.activeKey
       return { projects, activeKey }
     }),
-  reset: () => set({ projects: [], activeKey: null })
+  reset: () => set({ projects: [], activeKey: null }),
+  hydrate: (projects, activeKey) =>
+    set(() => {
+      // Persisted `touchedAt`s outrank a fresh launch's counter (reset to 0), which
+      // would make restored entries look newer than anything opened afterwards.
+      // Advance past them so LRU eviction ordering stays monotonic.
+      touchSeq = projects.reduce((m, p) => Math.max(m, p.touchedAt || 0), touchSeq)
+      return { projects, activeKey }
+    })
 }))
+
+/**
+ * Persist the workspace shape (open projects + which is active) so a renderer
+ * reload / app relaunch can restore it (see restore.ts). In-memory today, mirrored
+ * to localStorage here; every ProjectEntry field is plain JSON data (launchSpec /
+ * viewport included), so it round-trips. Only the MAIN renderer persists — the
+ * floating prop-panel view (`?dsgnPanel=1`) shares this origin's localStorage but
+ * has its own (empty) workspace, so it must never write over the real one.
+ */
+const WORKSPACE_KEY = 'dsgn:workspace'
+const isPanelWindow = (): boolean => {
+  try {
+    return new URLSearchParams(window.location.search).has('dsgnPanel')
+  } catch {
+    return false
+  }
+}
+
+export interface PersistedWorkspace {
+  projects: ProjectEntry[]
+  activeKey: string | null
+}
+
+export const readPersistedWorkspace = (): PersistedWorkspace | null => {
+  try {
+    const raw = localStorage.getItem(WORKSPACE_KEY)
+    if (!raw) return null
+    const v = JSON.parse(raw) as PersistedWorkspace
+    if (!v || !Array.isArray(v.projects)) return null
+    const projects = v.projects.filter(
+      (p) => p && typeof p.root === 'string' && typeof p.key === 'string'
+    )
+    return { projects, activeKey: typeof v.activeKey === 'string' ? v.activeKey : null }
+  } catch {
+    return null
+  }
+}
+
+const writePersistedWorkspace = (ws: WorkspaceState): void => {
+  try {
+    localStorage.setItem(
+      WORKSPACE_KEY,
+      JSON.stringify({ projects: ws.projects, activeKey: ws.activeKey })
+    )
+  } catch {
+    /* private mode / no storage — keep it in memory only */
+  }
+}
+
+// Write on every workspace change (open/close/switch/patch). The panel window
+// never subscribes, so it can't clobber the main renderer's saved shape.
+if (!isPanelWindow()) {
+  useWorkspace.subscribe(writePersistedWorkspace)
+}
 
 /**
  * v5-D "previous agents" — persisted agent sessions per project, surfaced under

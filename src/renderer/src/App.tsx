@@ -43,6 +43,7 @@ import {
   type ProjectEntry
 } from './store'
 import { projectKey } from '../../shared/projectKey'
+import { restoreWorkspace, type RestoreDeps } from './restore'
 import { MessageSquarePlus, MonitorSmartphone, PanelLeft } from 'lucide-react'
 import {
   DropdownMenu,
@@ -96,6 +97,8 @@ export default function App(): React.JSX.Element {
   const viewport = useViewport((s) => s.viewport)
   const publishMode = usePublishMode((s) => s.mode)
   const recents = useRecents((s) => s.recents)
+  // Boot restore deps (App closures), kept current for the once-on-mount effect.
+  const restoreDepsRef = useRef<RestoreDeps | null>(null)
   // Latest action handlers, for the global keydown + native-menu listeners (which
   // subscribe once but must call the current closures).
   const actionsRef = useRef<{
@@ -1365,6 +1368,10 @@ export default function App(): React.JSX.Element {
     publish: () => void publish()
   }
 
+  // Boot restore reuses these App closures (reattach / auto-reopen / resume). Kept
+  // on a ref so the once-on-mount effect always sees the current ones.
+  restoreDepsRef.current = { attempt, applyProject, resumeRecord }
+
   // Let the composer's select button (ChatPanel) drive the same toggle — via the
   // ref so it always hits the current closure (previewKind routing included).
   useEffect(() => {
@@ -1374,6 +1381,13 @@ export default function App(): React.JSX.Element {
   // S inside the focused preview toggles select mode — same handler as the
   // app-side shortcut/menu (via the ref, so it sees current closures).
   useEffect(() => window.api.preview.onToggleSelect(() => actionsRef.current.toggleSelect()), [])
+
+  // Boot: reattach to surviving main-process state (renderer reload) or auto-reopen
+  // the last project (real relaunch). Runs exactly once; restore.ts self-guards a
+  // StrictMode double-mount. The deps ref is populated during render (above).
+  useEffect(() => {
+    if (restoreDepsRef.current) void restoreWorkspace(restoreDepsRef.current)
+  }, [])
 
   // Mirror the preview's real location (link clicks, SPA routes, initial load)
   // into a global store — a single native preview view is ever live, so the

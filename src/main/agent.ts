@@ -4,8 +4,10 @@ import type {
   AgentEvent,
   AgentOptions,
   ImageAttachment,
+  LiveProjectSnapshot,
   PermissionMode,
-  QuestionAnswers
+  QuestionAnswers,
+  WorkspaceSnapshot
 } from '../shared/api'
 import { projectKey } from '../shared/projectKey'
 import { pickProvider, type ProviderSession } from './backends'
@@ -81,6 +83,20 @@ let intendedKey: string | null = null
 // SAME project serialize (the second waits for the first, then replaces it) rather
 // than both creating a session and leaking the loser's subprocess.
 const opening = new Map<string, Promise<void>>()
+
+// v9 workspace-snapshot: sessionKeys with a turn currently in flight. Driven by
+// the ProviderSession contract's own terminal event ("`done` — exactly one per
+// turn — clean finish AND interrupt", per backends/types.ts), observed through
+// each backend's `ctx.onEvent` hook (already wired for spawns; extended here to
+// every interactive session) — never a separately-invented busy flag. Added to on
+// `agent:send`, removed on that session's next `done`/`error`, and swept wherever
+// a sessionKey leaves the `sessions` map so it can't outlive its session.
+const runningKeys = new Set<string>()
+const trackRunning =
+  (sessionKey: string) =>
+  (e: AgentEvent): void => {
+    if (e.type === 'done' || e.type === 'error') runningKeys.delete(sessionKey)
+  }
 
 // v8 F1: detached comment spawns — background agents each in their OWN git worktree,
 // keyed by spawn id. Kept SEPARATE from `sessions` so they never touch `activeKey`
@@ -314,8 +330,12 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       if (existing) {
         closeSession(existing)
         sessions.delete(key)
+        runningKeys.delete(key)
       }
-      const s = await pickProvider(options).startSession(root, options, getWindow)
+      const s = await pickProvider(options).startSession(root, options, getWindow, {
+        emitKey: key,
+        onEvent: trackRunning(key)
+      })
       sessions.set(key, s)
       // Only claim the active slot if the renderer still wants this project active.
       // A later open/set-active for a different project moved `intendedKey` on, and
@@ -351,6 +371,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       if (s) {
         closeSession(s)
         sessions.delete(sk)
+        runningKeys.delete(sk)
       }
     }
     activeSessionKeyByProject.delete(key)
@@ -405,7 +426,10 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       intendedKey = key
       const sessionKey = `${key}#${randomUUID()}`
       try {
-        const s = await pickProvider({}).startSession(root, {}, getWindow, { emitKey: sessionKey })
+        const s = await pickProvider({}).startSession(root, {}, getWindow, {
+          emitKey: sessionKey,
+          onEvent: trackRunning(sessionKey)
+        })
         sessions.set(sessionKey, s)
         activeSessionKeyByProject.set(key, sessionKey)
         if (intendedKey === key) activeKey = sessionKey
@@ -446,7 +470,8 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       try {
         const s = await pickProvider({}).startSession(root, {}, getWindow, {
           emitKey: sessionKey,
-          resumeSessionId: rec.sdkSessionId
+          resumeSessionId: rec.sdkSessionId,
+          onEvent: trackRunning(sessionKey)
         })
         sessions.set(sessionKey, s)
         activeSessionKeyByProject.set(key, sessionKey)
@@ -513,6 +538,10 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     }
     const note = images?.length ? `${text} [${images.length} image(s) attached]`.trim() : text
     session.record.transcript.push({ role: 'user', text: note, at: Date.now() })
+    // activeKey is the sessionKey `session` was looked up under (activeSession()
+    // derives it from the same variable) — mark it running before the turn starts
+    // so a workspace-snapshot taken mid-turn sees it.
+    if (activeKey) runningKeys.add(activeKey)
     session.send(text, images)
   })
 
@@ -653,6 +682,32 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('sessions:get', (_e, id: string) => store().get(id))
   ipcMain.handle('sessions:remove', (_e, id: string) => store().remove(id))
 
+  // v9 reattach: everything still live in main, for a fresh renderer (after a
+  // reload) to repaint without tearing anything down. Groups every live
+  // sessionKey by its record's canonical projectKey (not by string-parsing the
+  // sessionKey) — `record.projectKey` is always the plain projectKey(root) even
+  // for an additional/resumed chat (see the comment on `emitKey` above), and
+  // `record.projectRoot` recovers the absolute root alongside it.
+  ipcMain.handle('agent:workspace-snapshot', (): WorkspaceSnapshot => {
+    const byProject = new Map<string, LiveProjectSnapshot>()
+    for (const [sessionKey, s] of sessions) {
+      const pKey = s.record.projectKey
+      let proj = byProject.get(pKey)
+      if (!proj) {
+        proj = {
+          projectKey: pKey,
+          root: s.record.projectRoot,
+          chats: [],
+          activeSessionKey: activeSessionKeyByProject.get(pKey) ?? null
+        }
+        byProject.set(pKey, proj)
+      }
+      proj.chats.push({ sessionKey, record: s.record, isRunning: runningKeys.has(sessionKey) })
+    }
+    const activeRoot = (activeKey && sessions.get(activeKey)?.record.projectRoot) || null
+    return { projects: [...byProject.values()], activeRoot }
+  })
+
   ipcMain.handle('agent:interrupt', async () => {
     const session = activeSession()
     if (!session) return
@@ -668,6 +723,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   app.on('before-quit', () => {
     for (const s of sessions.values()) closeSession(s)
     sessions.clear()
+    runningKeys.clear()
     activeKey = null
     // v8 F1: stop any in-flight spawns' subprocesses, but LEAVE their checkouts on
     // disk — committing/removing here would race the process exit (work lost, or a

@@ -9,6 +9,7 @@ import type {
   CommentMode,
   Diagnosis,
   DetectedProject,
+  DevServerInfo,
   PanelAction,
   PanelState,
   DsgnApi,
@@ -36,7 +37,8 @@ import type {
   TokenScaffoldResult,
   TokenSet,
   UndoResult,
-  UpdateStatus
+  UpdateStatus,
+  WorkspaceSnapshot
 } from '../shared/api'
 
 const api: DsgnApi = {
@@ -172,6 +174,7 @@ const api: DsgnApi = {
     }): Promise<RunningDevServer> => ipcRenderer.invoke('devserver:start', opts),
     stop: (root: string): Promise<void> => ipcRenderer.invoke('devserver:stop', root),
     isRunning: (root: string): Promise<boolean> => ipcRenderer.invoke('devserver:running', root),
+    info: (root: string): Promise<DevServerInfo> => ipcRenderer.invoke('devserver:info', root),
     onLog: (cb: (line: string) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, line: string): void => cb(line)
       ipcRenderer.on('devserver:log', listener)
@@ -328,7 +331,9 @@ const api: DsgnApi = {
       const listener = (_e: IpcRendererEvent, event: AgentEvent): void => cb(event)
       ipcRenderer.on('agent:event', listener)
       return () => ipcRenderer.removeListener('agent:event', listener)
-    }
+    },
+    workspaceSnapshot: (): Promise<WorkspaceSnapshot> =>
+      ipcRenderer.invoke('agent:workspace-snapshot')
   },
   sessions: {
     list: (root: string): Promise<SessionRecord[]> => ipcRenderer.invoke('sessions:list', root),

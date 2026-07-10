@@ -172,7 +172,8 @@ async function startSession(
       projectKey: emitKey,
       ...(ctx?.sessionId ? { sessionId: ctx.sessionId } : {})
     }
-    // agent.ts watches this in-process hook for the spawn's terminal done/error.
+    // agent.ts watches this in-process hook for a spawn's terminal done/error, and
+    // (v9) an interactive session's for workspace-snapshot isRunning tracking.
     ctx?.onEvent?.(tagged)
     getWindow()?.webContents.send('agent:event', tagged)
   }
