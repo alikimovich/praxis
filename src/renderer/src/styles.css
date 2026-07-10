@@ -130,7 +130,6 @@
 .rounded-full,
 .composer__send,
 .composer__spinner,
-.rail__dot,
 .rail__sdot {
     -electron-corner-smoothing: 0%;
 }
@@ -592,9 +591,6 @@ body.is-fullscreen .sidebar-toggle {
     align-items: stretch;
     border-radius: 6px;
 }
-.rail__item--active {
-    background: var(--border);
-}
 .rail__open {
     flex: 1 1 auto;
     display: flex;
@@ -609,25 +605,13 @@ body.is-fullscreen .sidebar-toggle {
     font: inherit;
     text-align: left;
 }
-.rail__dot {
-    /* Center the 7px dot inside a 16px slot so it lines up with the action
-       icons (size-4) above — this keeps the project name flush with the
-       "Open project" / "New project" labels. */
+/* Project glyph — a folder that opens when the project is the active one. */
+.rail__folder {
     flex: 0 0 auto;
-    box-sizing: content-box;
-    width: 7px;
-    height: 7px;
-    /* The dot's rendered box is 9px (7px + 1px border each side); center it in
-       a 16px slot to match the 16px action icons. */
-    margin: 0 calc((16px - 9px) / 2);
-    border-radius: 50%;
-    background: transparent;
-    border: 1px solid var(--text-muted);
+    color: var(--text-muted);
 }
-.rail__dot--on {
-    background: #22c55e;
-    border-color: #22c55e;
-    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+.rail__item--active .rail__folder {
+    color: var(--text);
 }
 .rail__name {
     overflow: hidden;
@@ -683,7 +667,6 @@ body.is-fullscreen .sidebar-toggle {
     color: var(--text);
 }
 
-/* v5-D — "previous agents" under the active project in the rail. */
 .rail__row {
     display: flex;
     align-items: center;
@@ -691,37 +674,91 @@ body.is-fullscreen .sidebar-toggle {
 .rail__row .rail__open {
     flex: 1 1 auto;
 }
-.rail__sessions {
+
+/* Chats under the active project (Cursor-style): a flat list of full-width
+   rows whose text is flush-left, aligned under the project name (the row's
+   left padding matches the project glyph + gap). Live chats sit first (active
+   one highlighted), then previous chats. No status dots — just the auto-name
+   and, for a past chat, a trailing "time ago". */
+.rail__chats {
     list-style: none;
-    margin: 2px 0 4px;
-    padding: 0 0 0 14px;
+    margin: 1px 0 4px;
+    padding: 0;
     display: flex;
     flex-direction: column;
     gap: 1px;
 }
-.rail__session {
+.rail__chat-item {
     display: flex;
     align-items: center;
-    border-radius: 5px;
+    border-radius: 6px;
 }
-.rail__session:hover {
+.rail__chat-item:hover {
     background: var(--border);
 }
-.rail__session-open {
+.rail__chat {
     flex: 1 1 auto;
     display: flex;
     align-items: center;
     gap: 6px;
     min-width: 0;
-    padding: 4px 6px;
+    /* Left padding lines the chat name up with the project name above
+       (rail__open padding 8 + folder icon 16 + gap 7). */
+    padding: 5px 8px 5px 31px;
     border: none;
+    border-radius: 6px;
     background: none;
     cursor: pointer;
     color: var(--text-muted);
     font: inherit;
-    font-size: 11.5px;
+    font-size: 12px;
     text-align: left;
 }
+.rail__chat-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.rail__chat-time {
+    flex: 0 0 auto;
+    font-size: 11px;
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+.rail__chat--active {
+    background: var(--border);
+    color: var(--text);
+    font-weight: 500;
+}
+.rail__chat--spawn {
+    cursor: default;
+}
+.rail__chat-x {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    margin-right: 4px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    opacity: 0;
+}
+.rail__chat-item:hover .rail__chat-x {
+    opacity: 1;
+}
+.rail__chat-x:hover {
+    background: var(--bg);
+    color: var(--text);
+}
+
+/* v8 F1: comment-spawned background agents surface as chat rows with a small
+   status dot instead of a name-time; the dot keeps its working/queued meaning. */
 .rail__sdot {
     flex: 0 0 auto;
     width: 5px;
@@ -729,32 +766,6 @@ body.is-fullscreen .sidebar-toggle {
     border-radius: 50%;
     background: var(--text-muted);
     opacity: 0.5;
-}
-.rail__sdot--pr {
-    background: #2563eb;
-    opacity: 1;
-}
-/* v8 F1: comment-spawned background agents currently working. */
-.rail__spawns {
-    list-style: none;
-    margin: 2px 0 2px;
-    padding: 0 0 0 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-}
-.rail__spawn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    padding: 4px 6px;
-    color: var(--text-muted);
-    font-size: 11.5px;
-}
-.rail__spawn .rail__session-label {
-    flex: 1 1 auto;
-    min-width: 0;
 }
 .rail__sdot--working {
     background: #f59e0b;
@@ -774,37 +785,9 @@ body.is-fullscreen .sidebar-toggle {
         opacity: 1;
     }
 }
-.rail__session-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.rail__session-x {
-    flex: 0 0 auto;
-    width: 16px;
-    height: 16px;
-    margin-right: 4px;
-    border: none;
-    border-radius: 4px;
-    background: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    font-size: 13px;
-    line-height: 1;
-    opacity: 0;
-}
-.rail__session:hover .rail__session-x {
-    opacity: 1;
-}
-.rail__session-x:hover {
-    background: var(--bg);
-    color: var(--text);
-}
 
-/* v9 multi-chat — "+" to start another live chat for the active project, and
-   the switcher between a project's own open chats (shown only once there's
-   more than one). Echo .rail__close / .rail__sessions' quiet, hover-revealed
-   styling so they read as part of the same family. */
+/* v9 multi-chat — "+" to start another live chat for the active project. Echoes
+   .rail__close's quiet, hover-revealed styling so they read as one family. */
 .rail__new-chat {
     flex: 0 0 auto;
     width: 20px;
@@ -827,37 +810,6 @@ body.is-fullscreen .sidebar-toggle {
 .rail__new-chat:hover {
     background: var(--border);
     color: var(--text);
-}
-.rail__chats {
-    list-style: none;
-    margin: 2px 0 2px;
-    padding: 0 0 0 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-}
-.rail__chat {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    min-width: 0;
-    padding: 4px 6px;
-    border: none;
-    border-radius: 5px;
-    background: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    font: inherit;
-    font-size: 11.5px;
-    text-align: left;
-}
-.rail__chat:hover {
-    background: var(--border);
-}
-.rail__chat--active {
-    color: var(--text);
-    font-weight: 500;
 }
 
 /* v5-D — past-session review modal (plain CSS; renders over the panes, not the

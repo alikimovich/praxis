@@ -2,6 +2,28 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-09 — Rail: folder-icon projects + Cursor-style chat list (LKM-28)
+
+Reworked the left rail's per-project display to match Cursor. Each project now
+leads with a **folder icon** (`FolderOpen` when it's the active project,
+`Folder` otherwise) in place of the old status dot. The active project expands
+to a single **flat, left-aligned chat list** whose text lines up under the
+project name (row left-padding = glyph + gap), replacing the two separate,
+indented, dot-prefixed sub-lists (live-chat switcher + "previous agents").
+
+- **One list, no dots.** Live/open chats come first (the active one gets a
+  full-width highlight pill), then previous chats (persisted `SessionRecord`s),
+  then any comment-spawn rows. The only remaining dot is the spawn status dot;
+  chat rows carry no status badge (per the request).
+- **Auto-named chats.** `chatTitle()` (store) derives a short name from a chat's
+  opening user message — live chats read `useChat`'s first user message, past
+  chats read `rec.transcript`'s. Empty chats fall back to "New chat".
+- **Compact time.** `shortAgo()` (store) gives Cursor-style trailing labels
+  ("3m", "2h", "5d", "4mo", "1y") on past-chat rows; live chats show none.
+- Dropped the full active-item background (only the active chat is highlighted
+  now) and the orphaned `.rail__dot` / `.rail__session*` / `.rail__spawn*` CSS.
+  `test/history-ui.mjs` updated to the new `.rail__chat*` DOM.
+
 ## 2026-07-09 — Survive sleep/crash: renderer recovery + full workspace/chat restore
 
 Closing the laptop could kill the main renderer (Chromium reaps it around a

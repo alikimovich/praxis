@@ -869,6 +869,36 @@ export const relativeTime = (ms: number, now = Date.now()): string => {
 }
 
 /**
+ * Tighter "time ago" for the rail's chat list — Cursor-style trailing labels
+ * with no "ago" suffix and month/year buckets ("3m", "2h", "5d", "4mo", "1y").
+ */
+export const shortAgo = (ms: number, now = Date.now()): string => {
+  const s = Math.max(0, Math.round((now - ms) / 1000))
+  if (s < 60) return 'now'
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m}m`
+  const h = Math.round(m / 60)
+  if (h < 24) return `${h}h`
+  const d = Math.round(h / 24)
+  if (d < 30) return `${d}d`
+  const mo = Math.round(d / 30)
+  if (mo < 12) return `${mo}mo`
+  return `${Math.round(d / 365)}y`
+}
+
+/**
+ * Auto-name a chat from its opening user message — Praxis never asks the user to
+ * title a chat, so the first prompt stands in (whitespace-collapsed and capped).
+ * Falls back to `fallback` when the chat has no user turn yet.
+ */
+export const chatTitle = (firstUserText: string | undefined | null, fallback = 'New chat'): string => {
+  const t = (firstUserText ?? '').replace(/\s+/g, ' ').trim()
+  if (!t) return fallback
+  const MAX = 34
+  return t.length > MAX ? `${t.slice(0, MAX).trimEnd()}…` : t
+}
+
+/**
  * Heuristic: does this agent error look like a missing/invalid Claude login?
  * Per-user auth means a fresh teammate hits this before they've run
  * `claude setup-token` — we want to guide them, not show a raw 401.

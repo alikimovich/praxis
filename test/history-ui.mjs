@@ -68,18 +68,21 @@ try {
   })
   assert(key, 'workspace should produce a project key')
 
-  // The rail shows the past session row with a relative time + status dot.
-  await win.waitForSelector('.rail__session', { timeout: 5000 })
-  const label = (await win.textContent('.rail__session-label'))?.trim() ?? ''
-  assert(/ago/.test(label), `session row should show a relative time (got "${label}")`)
+  // The rail shows the past chat row: an auto-generated name (from the first
+  // user prompt) + a compact trailing "time ago", no status dot.
+  const pastChat = '.rail__chat:has(.rail__chat-time)'
+  await win.waitForSelector(pastChat, { timeout: 5000 })
+  const name = (await win.textContent(`${pastChat} .rail__chat-name`))?.trim() ?? ''
   assert(
-    (await win.$('.rail__sdot--pr')) !== null,
-    'a PR-tagged session should get the --pr status dot'
+    name.includes('make the header blue'),
+    `chat row should be named from its first prompt (got "${name}")`
   )
+  const time = (await win.textContent(`${pastChat} .rail__chat-time`))?.trim() ?? ''
+  assert(/^\d+(m|h|d|mo|y)$/.test(time), `chat row should show a compact time (got "${time}")`)
   await win.screenshot({ path: join(artifacts, 'history-rail.png') })
 
   // Click the row → the review modal opens with branch chip, PR link, files, transcript.
-  await win.click('.rail__session-open')
+  await win.click(pastChat)
   await win.waitForSelector('.review', { timeout: 5000 })
   const meta = (await win.textContent('.review__meta')) ?? ''
   assert(meta.includes('dsgn/history-x'), `review should show the branch chip (got "${meta}")`)
@@ -100,10 +103,13 @@ try {
 
   // Delete the row → it leaves the rail (drives useHistory.remove; the main-side
   // sessions:remove is a harmless no-op on a fake id).
-  await win.click('.rail__session-x')
-  await win.waitForFunction(() => !document.querySelector('.rail__session'), { timeout: 5000 })
+  await win.click('.rail__chat-item:has(.rail__chat-time) .rail__chat-x')
+  await win.waitForFunction(
+    () => !document.querySelector('.rail__chat-time'),
+    { timeout: 5000 }
+  )
 
-  console.log('HISTORY-UI OK — rail lists previous agents, review modal renders, delete removes')
+  console.log('HISTORY-UI OK — rail lists previous chats, review modal renders, delete removes')
 } catch (err) {
   console.error('HISTORY-UI FAILED:', err?.message ?? err)
   process.exitCode = 1
