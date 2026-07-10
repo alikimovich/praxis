@@ -63,6 +63,23 @@ const fileMatches = (ours, theirs) =>
   existsSync(ours) && existsSync(theirs) &&
   readFileSync(ours).equals(readFileSync(theirs))
 
+// Refresh LaunchServices. Renaming + re-signing the bundle in place does NOT
+// invalidate the LS cache, so the Dock, Cmd-Tab, and menu-bar app title keep
+// showing the stale "Electron" identity until a reboot. Force a re-register so
+// the rebrand shows on the next `bun run dev` (relaunch a running app to see it).
+// Runs even when the bundle is already patched, to migrate machines patched by
+// an older version of this script that didn't refresh LS.
+const lsregister =
+  '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister'
+const refreshLaunchServices = () => {
+  if (!existsSync(lsregister)) return
+  try {
+    execFileSync(lsregister, ['-f', appBundle], { stdio: 'ignore' })
+  } catch {
+    // Best-effort: a stale LS entry only affects the displayed name, not function.
+  }
+}
+
 let iconName = ''
 try {
   iconName = buddy(plist, 'Print :CFBundleIconName')
@@ -76,7 +93,10 @@ const patched =
   buddy(plist, 'Print :CFBundleIdentifier') === BUNDLE_ID &&
   fileMatches(ourIcns, icns) &&
   fileMatches(ourCar, car)
-if (patched) process.exit(0)
+if (patched) {
+  refreshLaunchServices()
+  process.exit(0)
+}
 
 // Main bundle identity + icon.
 setOrAdd(plist, 'CFBundleName', APP_NAME)
@@ -115,4 +135,6 @@ if (existsSync(frameworks)) {
 execFileSync('codesign', ['--force', '--deep', '--sign', '-', appBundle], {
   stdio: 'inherit',
 })
+refreshLaunchServices()
+
 console.log(`[patch-electron] dev Electron.app rebranded as ${APP_NAME}`)
