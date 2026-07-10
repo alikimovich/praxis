@@ -24,6 +24,8 @@ interface Props {
   onNewChat: (key: string) => void;
   /** v9 multi-chat — switch to one of this project's already-live sessionKeys. */
   onSwitchSession: (key: string, sessionKey: string) => void;
+  /** v9 multi-chat — close one of this project's live chats (leaving the project open). */
+  onCloseChat: (key: string, sessionKey: string) => void;
 }
 
 /** First user-typed line of a transcript/chat — the seed for a chat's auto-name. */
@@ -56,6 +58,7 @@ export default function Rail({
   onReview,
   onNewChat,
   onSwitchSession,
+  onCloseChat,
 }: Props): React.JSX.Element | null {
   const projects = useWorkspace((s) => s.projects);
   const activeKey = useWorkspace((s) => s.activeKey);
@@ -197,6 +200,17 @@ export default function Rail({
                             title={name}
                           >
                             <span className="rail__chat-name">{name}</span>
+                          </button>
+                          <button
+                            className="rail__chat-x"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onCloseChat(p.key, sk);
+                            }}
+                            aria-label={`Close chat ${name}`}
+                            title="Close chat"
+                          >
+                            ×
                           </button>
                         </li>
                       );

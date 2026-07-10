@@ -2,6 +2,31 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-10 — Close individual live chats from the rail (LKM-34)
+
+Each live chat row in the rail now carries the same hover-revealed × the past
+chats and spawns already had — so a user can close ONE of a project's open chats
+without closing the whole project.
+
+- **New `agent:close-chat` IPC** (`root`, `sessionKey`): tears down just that
+  session via the existing `closeSession` (so a closed chat persists to history
+  and becomes a resumable "previous agent", exactly like project close), then
+  re-points the project's active chat to a survivor (prefers the default `key`).
+  Returns `{ remaining, activeSessionKey }`; `activeSessionKey` is null when no
+  chat remains. If the closed chat was the globally active one, `activeKey`
+  follows the survivor (only while the project is still intended-active — never
+  resurrects a backgrounded session into a chat the renderer isn't showing).
+- **Renderer `closeChatForProject(key, sessionKey)`** (App): closing a project's
+  LAST live chat falls through to `closeProjectFromRail` (nothing left to show);
+  otherwise it awaits the IPC (so main disposes before the slice is cleared —
+  a trailing emit can't resurrect it), drops the `useChat` slice, rewires the
+  entry's `sessionKeys`/`activeSessionKey`, and switches the visible chat only
+  when the closed one was the active chat on screen.
+- Wired through `shared/api.ts` + the preload bridge + a new `onCloseChat` Rail
+  prop; the × reuses the existing `.rail__chat-x` styling (hover-to-reveal).
+  `test/agent-multi.mjs` extended: open a 2nd chat, close only it, assert the
+  project stays live and the closed key is gone from `remaining`.
+
 ## 2026-07-09 — macOS: sidebar vibrancy behind the rail
 
 The main window's base is now the NSVisualEffect *sidebar* material instead of
