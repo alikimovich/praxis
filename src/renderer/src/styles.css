@@ -72,6 +72,7 @@
     --text: #1a1a1a;
     --rail-text: #4a4a4a;
     --text-muted: #8a8a8a;
+    --scroll-thumb: #aaaaaa;
     --accent: #1a1a1a;
     --radius: 10px;
     color-scheme: light;
@@ -110,6 +111,7 @@
     --text: #ededed;
     --rail-text: #b0b0b0;
     --text-muted: #8d8d94;
+    --scroll-thumb: #6a6a6a;
     --accent: #ededed;
 }
 
@@ -550,6 +552,7 @@ body.is-fullscreen .sidebar-toggle {
    width inner slides with it (translateX + fade), so the sidebar appears from the
    left and disappears to the left instead of popping. */
 .rail {
+    position: relative;
     flex: 0 0 auto;
     width: 168px;
     overflow: hidden;
@@ -558,6 +561,17 @@ body.is-fullscreen .sidebar-toggle {
     transition:
         width 0.24s ease,
         border-right-color 0.24s ease;
+}
+/* rail__inner's own padding-top (40px, clearing the traffic lights) is empty —
+   nothing there made it draggable. This strip fills exactly that reserved
+   clearance, so it never overlaps rail__inner's buttons below it. */
+.rail-drag {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    -webkit-app-region: drag;
 }
 .rail--collapsed {
     width: 0;
@@ -1064,7 +1078,6 @@ body.is-fullscreen .sidebar-toggle {
     flex: 0 0 auto;
     display: flex;
     flex-direction: column;
-    padding-top: 10px;
     position: relative;
 }
 
@@ -1103,11 +1116,23 @@ body.is-fullscreen .sidebar-toggle {
 }
 
 .pane--preview {
+    position: relative;
     flex: 1 1 auto;
     display: flex;
     /* Equal breathing room on all open sides — the card floats top to bottom. */
     padding: 10px 10px 10px 0;
     background: var(--bg);
+}
+/* Fills exactly the pane's own top padding (the previewcard/previewbar below
+   it already drag on their own) — the last top-of-window gap between the
+   chat pane's strip and the previewbar's drag surface. */
+.preview-drag {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 10px;
+    -webkit-app-region: drag;
 }
 
 /* The preview card — its own surface with a header bar (branch, URL, controls)
@@ -1280,6 +1305,17 @@ body.is-resizing {
    overflow/flex here or it fights the scroller. */
 .chat__messages {
     min-height: 0;
+}
+
+/* The actual scroll container is use-stick-to-bottom's internal scrollRef div
+   (Conversation itself sits at overflow-y:hidden) — reached via the
+   `scrollClassName` prop on ConversationContent, not .chat__messages. */
+.chat__scroll {
+    scrollbar-gutter: stable !important;
+    scrollbar-color: var(--scroll-thumb) var(--bg);
+}
+.chat__scroll::-webkit-scrollbar-track {
+    background: var(--bg);
 }
 
 .chat__empty {

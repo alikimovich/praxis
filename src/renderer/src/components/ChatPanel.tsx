@@ -852,7 +852,10 @@ export default function ChatPanel(): React.JSX.Element {
       <Conversation className="chat__messages min-h-0 flex-1">
         {/* pb-9 (36px, up from p-4's 16px): extra breathing room after the
             last message, so it doesn't sit flush against the status/fade area. */}
-        <ConversationContent className="gap-3.5 p-4 pt-11 pb-9">
+        <ConversationContent
+          className="gap-3.5 p-4 pt-11 pb-9"
+          scrollClassName="chat__scroll"
+        >
           {setup.needed && !setup.dismissed && (
             <SetupCard
               busy={setup.busy}

@@ -75,6 +75,11 @@ export default function Rail({
       aria-label="Open projects"
       aria-hidden={collapsed}
     >
+      {/* Window-drag strip over the rail's reserved top clearance (traffic
+          lights) — rail__inner's own padding-top leaves this empty, so
+          nothing here made it draggable. Sits below rail__inner's own
+          buttons in the DOM/paint order, so it never blocks a click. */}
+      <div className="rail-drag" aria-hidden="true" />
       <div className="rail__inner">
         {/* Project actions — quiet list items (no dashed CTA borders) — lead the
           rail so opening/creating is always reachable. The "Projects" heading
