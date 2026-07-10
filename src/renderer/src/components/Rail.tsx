@@ -1,4 +1,4 @@
-import { Folder, FolderOpen, Plus } from 'lucide-react'
+import { ChevronRight, Folder, FolderOpen, Plus } from 'lucide-react'
 import type { SessionRecord } from '../../../shared/api'
 import { chatTitle, shortAgo, useChat, useHistory, useSpawns, useWorkspace } from '../store'
 
@@ -105,7 +105,15 @@ export default function Rail({
                   aria-current={active}
                   title={p.root}
                 >
-                  <FolderIcon className="rail__folder size-4" aria-hidden="true" />
+                  {/* Cursor-style glyph: a subdued folder (open when expanded,
+                      closed otherwise) that, on hover, gives way to a chevron —
+                      pointing down while expanded, right while collapsed. */}
+                  <span className="rail__glyph" aria-hidden="true">
+                    <FolderIcon className="rail__folder size-4" />
+                    <ChevronRight
+                      className={`rail__chevron size-4 ${active ? 'rail__chevron--open' : ''}`}
+                    />
+                  </span>
                   <span className="rail__name">{p.name}</span>
                 </button>
                 {active && (
