@@ -149,17 +149,27 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
-/* macOS under-page vibrancy: main.tsx stamps `vibrancy` on <html> when the
-   window was created with the under-page material (main/index.ts) — the
-   full-window SHELL surfaces go transparent so it shows through. Component
-   fills (cards, buttons, modals, inputs) keep their opaque --bg; the preview
-   card and the native view paint their own surfaces. The prop-panel island
-   (panel-host) is a separate transparent window and never gets the stamp. */
+/* macOS vibrancy: main.tsx stamps `vibrancy` on <html> when the window was
+   created with the SIDEBAR material (main/index.ts). The rail shows the raw
+   material (true sidebar vibrancy); the chat + preview panes are opaque --bg
+   (the panes' content is the point, not the wallpaper behind it); the Welcome
+   screen keeps a light --bg wash so the material greets an empty window.
+   Component fills (cards, buttons, modals, inputs) keep their opaque --bg. The
+   prop-panel island (panel-host) is a separate transparent window and never
+   gets the stamp. */
+:root {
+    --vib-main: 60%;
+}
 html.vibrancy body,
-html.vibrancy .rail,
-html.vibrancy .empty,
-html.vibrancy .pane--preview {
+html.vibrancy .rail {
     background: transparent;
+}
+html.vibrancy .empty {
+    background: color-mix(in srgb, var(--bg) var(--vib-main), transparent);
+}
+html.vibrancy .pane--chat,
+html.vibrancy .pane--preview {
+    background: var(--bg);
 }
 
 .app {
@@ -1058,7 +1068,7 @@ body.is-fullscreen .sidebar-toggle {
     top: 0;
     left: 0;
     right: 0;
-    height: 56px;
+    height: 72px;
     z-index: 5;
     pointer-events: none;
     background: linear-gradient(to bottom, var(--bg) 18%, transparent);

@@ -2,18 +2,26 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
-## 2026-07-09 — macOS: under-page vibrancy as the main window background
+## 2026-07-09 — macOS: sidebar vibrancy behind the rail
 
-The main window's base is now the NSVisualEffect *under-page* material instead
-of a solid white/dark fill (macOS only; Windows/Linux keep the theme color).
-`createWindow` passes `vibrancy: 'under-page'` and skips the opaque
-`backgroundColor` (which would paint over it — including the nativeTheme
-re-apply on OS theme flips); `main.tsx` stamps `html.vibrancy` (main window
-only, never the prop-panel island), and `styles.css` clears the SHELL surfaces
-(`body`, `.rail`, `.empty`, `.pane--preview`) so the material shows through.
-Component fills (cards, modals, buttons, inputs, the preview card + native
-view) stay opaque. Theme always follows the OS, so the material and the token
-palette can't disagree.
+The main window's base is now the NSVisualEffect *sidebar* material instead of
+a solid white/dark fill (macOS only; Windows/Linux keep the theme color).
+Electron allows ONE vibrancy material per window (a true multi-material split
+needs a native NSVisualEffectView addon — the old `electron-vibrancy` package
+is dead, NAN-era, won't build on Electron 43), so the split is CSS zones over
+the material:
+
+- rail → fully transparent (raw sidebar material),
+- chat + preview panes → opaque `--bg` (tried translucent washes first; the
+  content areas read better solid),
+- Welcome screen (`.empty`) → light `--vib-main` `--bg` wash so an empty
+  window still shows the material.
+
+`createWindow` skips the opaque `backgroundColor` on darwin (it would paint
+over the material — the nativeTheme re-apply skips the window there too);
+`main.tsx` stamps `html.vibrancy` (main window only, never the prop-panel
+island). Component fills (cards, modals, buttons, inputs) stay opaque. Theme
+always follows the OS, so the material and the token palette can't disagree.
 
 ## 2026-07-09 — Rail: folder-icon projects + Cursor-style chat list (LKM-28)
 
