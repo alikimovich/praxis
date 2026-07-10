@@ -337,6 +337,10 @@ export interface ProjectEntry {
   /** Preview viewport for THIS project — each remembers its own; restored on
    *  switch (a global viewport leaked one project's Mobile into the next). */
   viewport?: Viewport
+  /** Rail: hide this project's chat list while it stays active (chevron toggle).
+   *  Independent of `activeKey` — collapsing doesn't deactivate the project, its
+   *  dev server/preview stay live. Defaults to expanded (undefined = false). */
+  chatsCollapsed?: boolean
   /** Monotonic recency stamp (bumped on activate) — drives LRU warm-server eviction. */
   touchedAt: number
   /** Chat length at the last successful Publish — the next Publish summarizes
@@ -367,6 +371,8 @@ interface WorkspaceState {
   patchEntry: (key: string, partial: Partial<ProjectEntry>) => void
   close: (key: string) => void
   toggleCollapsed: () => void
+  /** Toggle whether an (active) project's chat list is hidden — see `chatsCollapsed`. */
+  toggleChatsCollapsed: (key: string) => void
   reset: () => void
   /** Replace the whole set (boot restore) — see restore.ts. Also advances the
    *  LRU recency counter past the restored `touchedAt`s so entries opened after a
@@ -730,6 +736,12 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   patchEntry: (key, partial) =>
     set((s) => ({
       projects: s.projects.map((p) => (p.key === key ? { ...p, ...partial } : p))
+    })),
+  toggleChatsCollapsed: (key) =>
+    set((s) => ({
+      projects: s.projects.map((p) =>
+        p.key === key ? { ...p, chatsCollapsed: !p.chatsCollapsed } : p
+      )
     })),
   close: (key) =>
     set((s) => {

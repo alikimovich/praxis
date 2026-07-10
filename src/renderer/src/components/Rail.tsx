@@ -1,27 +1,36 @@
-import { ChevronRight, Folder, FolderOpen, Plus } from 'lucide-react'
-import type { SessionRecord } from '../../../shared/api'
-import { chatTitle, shortAgo, useChat, useHistory, useSpawns, useWorkspace } from '../store'
+import { ChevronRight, Folder, FolderOpen, Plus, X } from "lucide-react";
+import type { SessionRecord } from "../../../shared/api";
+import {
+  chatTitle,
+  shortAgo,
+  useChat,
+  useHistory,
+  useSpawns,
+  useWorkspace,
+} from "../store";
 
 interface Props {
   /** Switch to an already-open project. */
-  onSwitch: (key: string) => void
+  onSwitch: (key: string) => void;
   /** Close (fully stop) a project. */
-  onClose: (key: string) => void
+  onClose: (key: string) => void;
   /** Open another project, keeping the current one warm. */
-  onOpen: () => void
+  onOpen: () => void;
   /** Create a brand-new project (scaffold), keeping the current one warm. */
-  onCreate: () => void
+  onCreate: () => void;
   /** Open a past session for review (v5-D). */
-  onReview: (rec: SessionRecord) => void
+  onReview: (rec: SessionRecord) => void;
   /** v9 multi-chat — start an ADDITIONAL live chat for this (already-open) project. */
-  onNewChat: (key: string) => void
+  onNewChat: (key: string) => void;
   /** v9 multi-chat — switch to one of this project's already-live sessionKeys. */
-  onSwitchSession: (key: string, sessionKey: string) => void
+  onSwitchSession: (key: string, sessionKey: string) => void;
 }
 
 /** First user-typed line of a transcript/chat — the seed for a chat's auto-name. */
-const firstUserText = (entries: { role: string; text: string }[]): string | undefined =>
-  entries.find((e) => e.role === 'user' && e.text.trim())?.text
+const firstUserText = (
+  entries: { role: string; text: string }[],
+): string | undefined =>
+  entries.find((e) => e.role === "user" && e.text.trim())?.text;
 
 /**
  * v5 left rail (Cursor-style) — the open projects, each led by a folder icon
@@ -46,179 +55,216 @@ export default function Rail({
   onCreate,
   onReview,
   onNewChat,
-  onSwitchSession
+  onSwitchSession,
 }: Props): React.JSX.Element | null {
-  const projects = useWorkspace((s) => s.projects)
-  const activeKey = useWorkspace((s) => s.activeKey)
-  const collapsed = useWorkspace((s) => s.collapsed)
+  const projects = useWorkspace((s) => s.projects);
+  const activeKey = useWorkspace((s) => s.activeKey);
+  const collapsed = useWorkspace((s) => s.collapsed);
   // Re-render on any chat change so the per-project "working" dots stay live.
-  const byKey = useChat((s) => s.byKey)
+  const byKey = useChat((s) => s.byKey);
   // Past sessions per project (loaded by App on open/switch/close).
-  const history = useHistory((s) => s.byKey)
+  const history = useHistory((s) => s.byKey);
   // v8 F1: comment-spawned background agents currently running, per project.
-  const spawns = useSpawns((s) => s.byKey)
+  const spawns = useSpawns((s) => s.byKey);
 
-  if (projects.length === 0) return null
+  if (projects.length === 0) return null;
 
   return (
     <nav
-      className={`rail ${collapsed ? 'rail--collapsed' : ''}`}
+      className={`rail ${collapsed ? "rail--collapsed" : ""}`}
       aria-label="Open projects"
       aria-hidden={collapsed}
     >
       <div className="rail__inner">
-      {/* Project actions — quiet list items (no dashed CTA borders) — lead the
+        {/* Project actions — quiet list items (no dashed CTA borders) — lead the
           rail so opening/creating is always reachable. The "Projects" heading
           sits below them, directly labelling the open-projects list. */}
-      <button
-        className="rail__action"
-        onClick={onOpen}
-        title="Open an existing folder (⌘O)"
-      >
-        <Folder className="size-4" aria-hidden="true" />
-        <span>Open project</span>
-      </button>
-      <button
-        className="rail__action"
-        onClick={onCreate}
-        title="Create a brand-new project (⌘N)"
-      >
-        <Plus className="size-4" aria-hidden="true" />
-        <span>New project</span>
-      </button>
-      <div className="rail__head">
-        <span>Projects</span>
-      </div>
-      <ul className="rail__list">
-        {projects.map((p) => {
-          const active = p.key === activeKey
-          const sessionKeys = p.sessionKeys ?? [p.key]
-          const past = active ? (history[p.key] ?? []) : []
-          const working = active ? (spawns[p.key] ?? []) : []
-          const FolderIcon = active ? FolderOpen : Folder
-          return (
-            <li key={p.key} className={`rail__item ${active ? 'rail__item--active' : ''}`}>
-              <div className="rail__row">
-                <button
-                  className="rail__open"
-                  onClick={() => onSwitch(p.key)}
-                  aria-current={active}
-                  title={p.root}
-                >
-                  {/* Cursor-style glyph: a subdued folder (open when expanded,
+        <button
+          className="rail__action"
+          onClick={onOpen}
+          title="Open an existing folder (⌘O)"
+        >
+          <Folder className="size-4" aria-hidden="true" />
+          <span>Open project</span>
+        </button>
+        <button
+          className="rail__action"
+          onClick={onCreate}
+          title="Create a brand-new project (⌘N)"
+        >
+          <Plus className="size-4" aria-hidden="true" />
+          <span>New project</span>
+        </button>
+        <div className="rail__head">
+          <span>Projects</span>
+        </div>
+        <ul className="rail__list">
+          {projects.map((p) => {
+            const active = p.key === activeKey;
+            // Chats show only for the active project, AND only while it isn't
+            // collapsed — collapsing hides the list but leaves the project (and
+            // its dev server/preview) live; it's independent of `activeKey`.
+            const expanded = active && !p.chatsCollapsed;
+            const sessionKeys = p.sessionKeys ?? [p.key];
+            const past = expanded ? (history[p.key] ?? []) : [];
+            const working = expanded ? (spawns[p.key] ?? []) : [];
+            const FolderIcon = expanded ? FolderOpen : Folder;
+            return (
+              <li
+                key={p.key}
+                className={`rail__item ${active ? "rail__item--active" : ""}`}
+              >
+                <div className="rail__row">
+                  <div className="rail__open" title={p.root}>
+                    {/* Cursor-style glyph: a subdued folder (open when expanded,
                       closed otherwise) that, on hover, gives way to a chevron —
-                      pointing down while expanded, right while collapsed. */}
-                  <span className="rail__glyph" aria-hidden="true">
-                    <FolderIcon className="rail__folder size-4" />
-                    <ChevronRight
-                      className={`rail__chevron size-4 ${active ? 'rail__chevron--open' : ''}`}
-                    />
-                  </span>
-                  <span className="rail__name">{p.name}</span>
-                </button>
-                {active && (
-                  <button
-                    className="rail__new-chat"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onNewChat(p.key)
-                    }}
-                    aria-label={`Start another chat for ${p.name}`}
-                    title="Start another chat for this project"
-                  >
-                    <Plus className="size-3.5" aria-hidden="true" />
-                  </button>
-                )}
-                <button
-                  className="rail__close"
-                  onClick={() => onClose(p.key)}
-                  aria-label={`Close ${p.name}`}
-                  title="Close project"
-                >
-                  ×
-                </button>
-              </div>
-              {/* Active project: a flat, left-aligned list of its chats — live
-                  chats first (active one highlighted), then previous chats. No
-                  status dots; names are auto-generated from each chat's first
-                  prompt, mirroring Cursor's sidebar. */}
-              {active && (
-                <ul className="rail__chats" aria-label={`${p.name}'s chats`}>
-                  {sessionKeys.map((sk) => {
-                    const isActiveChat = sk === (p.activeSessionKey ?? p.key)
-                    const name = chatTitle(firstUserText(byKey[sk]?.messages ?? []))
-                    return (
-                      <li key={sk} className="rail__chat-item">
-                        <button
-                          className={`rail__chat ${isActiveChat ? 'rail__chat--active' : ''}`}
-                          onClick={() => onSwitchSession(p.key, sk)}
-                          aria-current={isActiveChat}
-                          title={name}
-                        >
-                          <span className="rail__chat-name">{name}</span>
-                        </button>
-                      </li>
-                    )
-                  })}
-                  {/* v8 F1: comment-spawned background agents working (or queued). */}
-                  {working.map((sp) => (
-                    <li key={sp.id} className="rail__chat-item" title={sp.label}>
-                      <span className="rail__chat rail__chat--spawn">
-                        <span
-                          className={`rail__sdot ${sp.status === 'queued' ? 'rail__sdot--queued' : 'rail__sdot--working'}`}
-                          aria-hidden="true"
+                      pointing down while expanded, right while collapsed.
+                      For the active project this toggles the chat list without
+                      switching away; for an inactive one it just switches. */}
+                    <button
+                      className="rail__glyph-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (active)
+                          useWorkspace.getState().toggleChatsCollapsed(p.key);
+                        else onSwitch(p.key);
+                      }}
+                      aria-label={
+                        active
+                          ? `${expanded ? "Collapse" : "Expand"} ${p.name}'s chats`
+                          : `Open ${p.name}`
+                      }
+                    >
+                      <span className="rail__glyph" aria-hidden="true">
+                        <FolderIcon className="rail__folder size-4" />
+                        <ChevronRight
+                          className={`rail__chevron size-4 ${expanded ? "rail__chevron--open" : ""}`}
                         />
-                        <span className="rail__chat-name">
-                          {sp.status === 'queued' ? `${sp.label} · queued` : sp.label}
-                        </span>
                       </span>
-                      <button
-                        className="rail__chat-x"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          void window.api.agent.spawnInterrupt(sp.id)
-                        }}
-                        aria-label="Cancel agent"
-                        title="Cancel this agent"
+                    </button>
+                    <button
+                      className="rail__name-btn"
+                      onClick={() => onSwitch(p.key)}
+                      aria-current={active}
+                    >
+                      <span className="rail__name">{p.name}</span>
+                    </button>
+                  </div>
+                  {active && (
+                    <button
+                      className="rail__new-chat"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onNewChat(p.key);
+                      }}
+                      aria-label={`Start another chat for ${p.name}`}
+                      title="Start another chat for this project"
+                    >
+                      <Plus className="size-3.5" aria-hidden="true" />
+                    </button>
+                  )}
+                  <button
+                    className="rail__close"
+                    onClick={() => onClose(p.key)}
+                    aria-label={`Close ${p.name}`}
+                    title="Close project"
+                  >
+                    <X className="size-3.5" aria-hidden="true" />
+                  </button>
+                </div>
+                {/* Active + expanded project: a flat, left-aligned list of its chats
+                  — live chats first (active one highlighted), then previous
+                  chats. No status dots; names are auto-generated from each
+                  chat's first prompt, mirroring Cursor's sidebar. */}
+                {expanded && (
+                  <ul className="rail__chats" aria-label={`${p.name}'s chats`}>
+                    {sessionKeys.map((sk) => {
+                      const isActiveChat = sk === (p.activeSessionKey ?? p.key);
+                      const name = chatTitle(
+                        firstUserText(byKey[sk]?.messages ?? []),
+                      );
+                      return (
+                        <li key={sk} className="rail__chat-item">
+                          <button
+                            className={`rail__chat ${isActiveChat ? "rail__chat--active" : ""}`}
+                            onClick={() => onSwitchSession(p.key, sk)}
+                            aria-current={isActiveChat}
+                            title={name}
+                          >
+                            <span className="rail__chat-name">{name}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                    {/* v8 F1: comment-spawned background agents working (or queued). */}
+                    {working.map((sp) => (
+                      <li
+                        key={sp.id}
+                        className="rail__chat-item"
+                        title={sp.label}
                       >
-                        ×
-                      </button>
-                    </li>
-                  ))}
-                  {/* Previous chats for this project (newest first). */}
-                  {past.map((rec) => {
-                    const name = chatTitle(firstUserText(rec.transcript))
-                    return (
-                      <li key={rec.id} className="rail__chat-item">
-                        <button
-                          className="rail__chat"
-                          onClick={() => onReview(rec)}
-                          title={`${name} — ${rec.filesTouched.length} file(s)`}
-                        >
-                          <span className="rail__chat-name">{name}</span>
-                          <span className="rail__chat-time">{shortAgo(rec.startedAt)}</span>
-                        </button>
+                        <span className="rail__chat rail__chat--spawn">
+                          <span
+                            className={`rail__sdot ${sp.status === "queued" ? "rail__sdot--queued" : "rail__sdot--working"}`}
+                            aria-hidden="true"
+                          />
+                          <span className="rail__chat-name">
+                            {sp.status === "queued"
+                              ? `${sp.label} · queued`
+                              : sp.label}
+                          </span>
+                        </span>
                         <button
                           className="rail__chat-x"
                           onClick={(e) => {
-                            e.stopPropagation()
-                            void useHistory.getState().remove(rec.projectRoot, rec.id)
+                            e.stopPropagation();
+                            void window.api.agent.spawnInterrupt(sp.id);
                           }}
-                          aria-label="Delete chat"
-                          title="Delete from history"
+                          aria-label="Cancel agent"
+                          title="Cancel this agent"
                         >
                           ×
                         </button>
                       </li>
-                    )
-                  })}
-                </ul>
-              )}
-            </li>
-          )
-        })}
-      </ul>
+                    ))}
+                    {/* Previous chats for this project (newest first). */}
+                    {past.map((rec) => {
+                      const name = chatTitle(firstUserText(rec.transcript));
+                      return (
+                        <li key={rec.id} className="rail__chat-item">
+                          <button
+                            className="rail__chat"
+                            onClick={() => onReview(rec)}
+                            title={`${name} — ${rec.filesTouched.length} file(s)`}
+                          >
+                            <span className="rail__chat-name">{name}</span>
+                            <span className="rail__chat-time">
+                              {shortAgo(rec.startedAt)}
+                            </span>
+                          </button>
+                          <button
+                            className="rail__chat-x"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void useHistory
+                                .getState()
+                                .remove(rec.projectRoot, rec.id);
+                            }}
+                            aria-label="Delete chat"
+                            title="Delete from history"
+                          >
+                            ×
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       </div>
     </nav>
-  )
+  );
 }
