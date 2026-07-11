@@ -1295,8 +1295,10 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
  * load) — mirrors main's `did-navigate`/`did-navigate-in-page` reports. A single
  * global value: only one native preview `WebContentsView` is ever live, so it
  * always reflects whichever project is currently active. Kept in sync by a
- * single top-level listener (see App.tsx); read by the chat composer so the
- * agent knows what page it's looking at without the user having to say so.
+ * single top-level listener (see App.tsx). The chat composer no longer reads
+ * this to prepend hidden context — the agent has a `preview_location` tool
+ * (main-process) it can call itself when it needs to know the current page.
+ * This store may still back renderer UI (e.g. a preview URL bar) later.
  */
 interface PreviewLocationState {
   url: string | null
@@ -1307,21 +1309,6 @@ export const usePreviewLocation = create<PreviewLocationState>((set) => ({
   url: null,
   setUrl: (url) => set({ url })
 }))
-
-/** Build the hidden chat-prompt prefix naming the page currently shown in the
- *  preview — relative to the project's dev-server origin when it matches. */
-export const describePreviewLocationForPrompt = (base: string | null): string => {
-  const url = usePreviewLocation.getState().url
-  if (!url) return ''
-  let where = url
-  try {
-    const u = new URL(url)
-    if (base && new URL(base).origin === u.origin) where = u.pathname + u.search + u.hash
-  } catch {
-    /* keep the full URL if either side fails to parse */
-  }
-  return `The preview is currently showing ${where}. `
-}
 
 // Exposed for the Playwright test harness (and handy for live debugging).
 ;(
@@ -1360,8 +1347,3 @@ export const describePreviewLocationForPrompt = (base: string | null): string =>
 ;(
   window as unknown as { __dsgnPreviewLocation?: typeof usePreviewLocation }
 ).__dsgnPreviewLocation = usePreviewLocation
-;(
-  window as unknown as {
-    __dsgnDescribePreviewLocationForPrompt?: typeof describePreviewLocationForPrompt
-  }
-).__dsgnDescribePreviewLocationForPrompt = describePreviewLocationForPrompt

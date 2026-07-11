@@ -1,25 +1,29 @@
 /**
- * dsgn agent rules (v8 R) — a small, VERSIONED set of operating instructions
- * dsgn injects so the agent behaves consistently across turns and backends. One
+ * Praxis agent rules (v8 R) — a small, VERSIONED set of operating instructions
+ * Praxis injects so the agent behaves consistently across turns and backends. One
  * source of truth: a pure string builder (no electron import) so it's unit-testable
  * and reusable by every provider.
  *
  * Injection per backend:
- * - Claude — appended to the `claude_code` preset (`systemPrompt.append`).
+ * - Claude — appended to the `claude_code` preset (`systemPrompt.append`), with
+ *   `{ previewTools: true }` so it learns the in-process `preview_*` SDK tools.
  * - Codex / Gemini (subprocess, no system-prompt arg) — prepended to the first
- *   turn's prompt (skills/CLAUDE.md are Claude-only, so rules are how non-Claude
- *   backends inherit dsgn behavior).
+ *   turn's prompt, WITHOUT previewTools (those tools are Claude-only, so the
+ *   section must not appear for backends that can't call them).
  *
  * Bump DSGN_RULES_VERSION whenever the rule text changes (so logs/tests can pin it).
  */
-export const DSGN_RULES_VERSION = 2
+export const DSGN_RULES_VERSION = 3
 
-export function dsgnRules(): string {
-  return [
-    `# dsgn operating rules (v${DSGN_RULES_VERSION})`,
-    `You are editing the user's real repository inside dsgn — a Claude-powered chat on`,
-    `the left, a live preview of that same repo on the right. Edits hot-reload into the`,
-    `preview. Follow these rules so changes stay consistent across the project.`,
+export function dsgnRules(opts?: { previewTools?: boolean }): string {
+  const lines: string[] = [
+    `# Praxis operating rules (v${DSGN_RULES_VERSION})`,
+    `Praxis is a design tool: you edit the user's real repository while they watch a`,
+    `live preview of that same repo on the right. The user is usually a designer`,
+    `pointing at UI in that preview, not at files — element selections arrive stamped`,
+    `with their source location (\`data-dsgn-source\` file:line), so a selection tells`,
+    `you exactly which code renders what they clicked. Your edits hot-reload into the`,
+    `preview instantly. Follow these rules so changes stay consistent across the project.`,
     ``,
     `## Scope of an element edit`,
     `A selected element is the ENTRY POINT for a change, not its full scope. Before`,
@@ -31,7 +35,26 @@ export function dsgnRules(): string {
     `  the same string or concept and update them too, so terminology and UI stay`,
     `  consistent.`,
     `When in doubt, search first. Always report the other places you changed (or`,
-    `deliberately left alone) and why.`,
+    `deliberately left alone) and why.`
+  ]
+
+  if (opts?.previewTools) {
+    lines.push(
+      ``,
+      `## Seeing the user's preview`,
+      `Two read-only tools let you observe exactly what the user is looking at:`,
+      `- \`preview_location\` — the page/route currently shown in their preview. Call it`,
+      `  when the conversation concerns a particular page, or when knowing where the`,
+      `  user currently is would change your answer. Don't call it reflexively every turn.`,
+      `- \`preview_screenshot\` — returns exactly what the user sees in their preview pane`,
+      `  right now (their route, their viewport, simulator included). Use it to verify a`,
+      `  visual change you just made, or when the user references what they're looking at.`,
+      `Division of labor: these tools OBSERVE the user's own view; \`agent-browser\` (below)`,
+      `is your OWN headless copy for interacting/inspecting.`
+    )
+  }
+
+  lines.push(
     ``,
     `## Inspecting the running app in a browser`,
     `When you need to inspect or interact with the running web preview — read the DOM,`,
@@ -44,5 +67,7 @@ export function dsgnRules(): string {
     `Do NOT launch Chrome DevTools, a headed/visible browser, \`chrome://inspect\`, or a`,
     `one-off Playwright/Puppeteer script to do this — UNLESS the user explicitly asks you`,
     `to open DevTools or a real browser. Default to \`agent-browser\`.`
-  ].join('\n')
+  )
+
+  return lines.join('\n')
 }

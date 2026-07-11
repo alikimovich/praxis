@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_MODEL,
-  describePreviewLocationForPrompt,
   describeSelectionForPrompt,
   isAuthError,
   oneLine,
@@ -20,7 +19,6 @@ import {
   useTokens,
   useUiActions,
   usePropsIsland,
-  useWorkspace,
 } from "../store";
 import { projectKey } from "../../../shared/projectKey";
 import type { QuestionAnswers, SetupResult } from "../../../shared/api";
@@ -701,14 +699,12 @@ export default function ChatPanel(): React.JSX.Element {
       mediaType: a.mediaType,
       data: a.data,
     }));
-    // The selection pill AND the preview's current page ride along as hidden
-    // context: the transcript shows the user's own words; the model gets the
-    // element reference / route prepended so it knows what it's looking at.
-    const ws = useWorkspace.getState();
-    const base = ws.projects.find((p) => p.key === ws.activeKey)?.url ?? null;
-    const ctx =
-      describePreviewLocationForPrompt(base) +
-      (selected ? describeSelectionForPrompt(selected) : "");
+    // The selection pill rides along as hidden context: the transcript shows
+    // the user's own words; the model gets the element reference prepended so
+    // it knows what it's looking at. (The preview's current page is no longer
+    // silently prepended — the agent has a `preview_location` tool and asks
+    // when the page actually matters.)
+    const ctx = selected ? describeSelectionForPrompt(selected) : "";
     appendUser(text || (images.length ? `🖼 ${images.length} image(s)` : ""));
     startAssistant();
     setInput("");

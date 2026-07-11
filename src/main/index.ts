@@ -25,6 +25,7 @@ import { createProject } from './scaffold'
 import { registerDiagnoseIpc } from './diagnose'
 import { registerUpdateIpc } from './update-ipc'
 import { registerFeedbackIpc } from './feedback'
+import { registerPreviewSource } from './preview-state'
 
 // Product name — drives the macOS app menu label and the About panel. Set at
 // module load (before app is ready) so the menu bar reads "Praxis", not "Electron".
@@ -546,6 +547,18 @@ function createWindow(): void {
 }
 
 function registerPreviewIpc(): void {
+  // Let the in-process agent tools (backends/claude.ts) observe the user's live
+  // preview without importing this module (would be a cycle). getUrl reports the
+  // preview's CURRENT location (SPA navigations included) but null for the
+  // placeholder/empty state; capture snapshots the current frame.
+  registerPreviewSource({
+    getUrl: () => {
+      const url = previewView?.webContents.getURL()
+      return url && /^https?:/.test(url) ? url : null
+    },
+    capture: async () => (await previewView?.webContents.capturePage()) ?? null
+  })
+
   // Apply the renderer's slot rect (PreviewPane already lays out around the
   // floating prop panel's strip, viewport-aware).
   const applyBounds = (): void => {
