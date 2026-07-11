@@ -67,10 +67,6 @@ src/
     devserver.ts    detect framework/PM, spawn dev server, parse URL, readiness
     static-server.ts in-process static file server for vanilla HTML/JS projects
                     (framework 'static': no package.json/dev command; live-reload)
-    editor.ts / editor-net.ts   "Code mode" — vendors + runs a single shared
-                    code-server instance (download-on-demand), served in a third
-                    WebContentsView; editor-net.ts holds the electron-free pure
-                    helpers (asset naming, `?folder=` URL) so they're unit-testable
     agent.ts        persistent multi-turn agent session (streams over agent:* IPC)
     backends/       provider seam: claude.ts, codex.ts, gemini.ts behind pickProvider
                     (gemini currently has NO SDK dep — treat as experimental)

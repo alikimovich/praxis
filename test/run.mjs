@@ -46,7 +46,6 @@ const UNIT = [
   'svelte-instance',
   'docs-links',
   'update',
-  'editor-url',
 ];
 
 // electron = the `node test/NAME.mjs` group AFTER `electron-vite build` in `test`.
@@ -92,7 +91,6 @@ const ELECTRON = [
   'sim-preflight',
   'sim-frame',
   'sim-control',
-  'editor-pane',
 ];
 
 // live = the 3 tests present in `verify` but not in `test`.

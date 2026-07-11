@@ -3,27 +3,6 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
-## Code mode (embedded VS Code editor pane) — SHIPPED, follow-ups open
-
-See `docs/PROGRESS.md` (2026-07-10) for the full writeup. `src/main/editor.ts`
-+ `src/main/editor-net.ts` vendor/run a shared code-server instance; the
-"Preview | Code" toggle swaps `EditorPane` in for `PreviewPane`.
-
-- [ ] **Pin the release checksum.** `CODE_SERVER_SHA256` in `editor.ts` is a
-      structured no-op (`verifyChecksum()` never runs). Compute the sha256 of
-      each platform's v4.127.0 tarball and enforce it after download, before
-      extraction.
-- [ ] **`file@line` deep-link from a selected preview element into Code mode.**
-      The Inspector's code peek already resolves a stamped element to
-      `file:line` (`source:read`); Code mode has no equivalent entry point yet
-      — flipping to Code mode always opens the workspace root, never jumps to
-      the file/line of whatever was selected in the preview.
-- [ ] **Linux asset test.** `test/editor-url.mjs` unit-tests the
-      linux-arm64/linux-amd64 asset-name mapping already (pure string logic),
-      but `test/editor-pane.mjs`'s real cold-start run has only been verified
-      against the macOS-arm64 binary. Run it against a linux binary (CI runner
-      or a Linux dev box) before relying on the Linux vendor path in prod.
-
 ## Vanilla HTML / static sites (2026-07-09, user-requested) — SHIPPED
 
 - [x] **Open plain HTML/CSS/JS projects.** ✅ 2026-07-09 — `detect()` falls back

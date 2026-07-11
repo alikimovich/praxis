@@ -88,9 +88,7 @@
     "test:agenthistory": "electron-vite build && node test/agent-history.mjs",
     "test:historyui": "electron-vite build && node test/history-ui.mjs",
     "test:svelte-instance": "bun test/svelte-instance.mjs",
-    "test:restore": "electron-vite build && node test/restore-reload.mjs",
-    "test:editor-url": "bun test/editor-url.mjs",
-    "test:editor-pane": "electron-vite build && node test/editor-pane.mjs"
+    "test:restore": "electron-vite build && node test/restore-reload.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.186",

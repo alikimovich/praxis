@@ -12,67 +12,6 @@ not when a non-whitespace char precedes "/"), but the parsing lived inline in
 (unit tier) locking the behavior: opens at start and after space/newline/tab,
 stays closed for `foo/bar`, `a/`, `http://x`, and once a trailing space ends the
 token. `ChatPanel` now calls the shared helper — no behavior change, just testable.
-## 2026-07-10 — "Code mode": an embedded VS Code editor pane
-
-A "Preview | Code" segmented toggle next to the viewport toggle switches the
-right-hand card from the live preview to a full VS Code workbench (Explorer,
-editor tabs, terminal — the works) pointed at the open project's folder, via a
-vendored, download-on-demand **code-server** (v4.127.0, MIT).
-
-- **Single shared instance, per-project URL.** `src/main/editor.ts` spawns ONE
-  code-server process for the whole app (own port allocator based at 8888,
-  clear of devserver.ts's 7777) and hands each project its own
-  `?folder=<abs path>` URL against it — switching projects while in Code mode
-  just re-navigates the same server, it doesn't spawn a new one.
-- **Third native `WebContentsView`**, alongside the preview and the props-panel
-  view, added in `src/main/index.ts` (`ensureEditorView`): sandboxed, no
-  preload (code-server is a self-contained web app), `editor:*` IPC drives its
-  bounds/visibility exactly like the preview (`EditorPane.tsx` mirrors
-  `PreviewPane`'s `ResizeObserver` → `setBounds` pattern, minus the mobile
-  bezel — Code mode has no viewport concept). `preview:set-dragging` hides it
-  too, so resize-drag and modals behave the same as over the preview.
-- **Vendoring**: binary resolution is `DSGN_CODE_SERVER_BIN` env override →
-  `<userData>/dsgn/vendor/code-server-<ver>-<platform>-<arch>/bin/code-server`
-  → download-and-extract the pinned GitHub release tarball on first use
-  (`editor:status` streams `downloading` progress → `starting` → `ready`).
-  code-server's own state (`user-data`/`extensions`/`config.yaml`) lives under
-  `<userData>/dsgn/code-server`, never the user's real `~/.config/code-server`.
-  No checksum pin yet (`CODE_SERVER_SHA256` is a structured no-op — see
-  TASKS.md).
-- **Mode persistence** mirrors `viewport` exactly: `ProjectEntry.mode?:
-  'preview' | 'code'` in `store.ts`, written back via `patchEntry` on every
-  `useEditorMode.setMode()`, restored alongside viewport in both `applyProject`
-  and the boot-restore path — flipping to Code mode on one project never leaks
-  into another.
-- **Bug fixed during verification**: the `--config` file was written as a
-  comment-only YAML doc, which code-server parses as YAML `null` and rejects
-  with `invalid config: null` — it never opened its listening socket, so
-  `waitReady()` always timed out and the pane got stuck in "Starting editor…"
-  forever. Fixed by appending `{}\n` so the file still parses to an (empty)
-  object.
-- **Testable split**: `editor.ts` imports `electron` at module scope (like
-  `devserver.ts`), which only resolves inside a real Electron process — under
-  plain bun/node it's a path string, not `{ app, ipcMain }`, so importing it
-  standalone throws. Pure helpers (`assetPlatformArch`/`assetDirName`, the
-  `?folder=` URL builder, the `DSGN_CODE_SERVER_BIN` override check) were
-  pulled into `src/main/editor-net.ts` — no `electron` import — mirroring the
-  existing `devserver.ts`/`devserver-net.ts` split, so they're unit-testable.
-- **Tests**: `test/editor-url.mjs` (unit) covers `urlFor` encoding (spaces,
-  unicode, reserved URL characters), the platform/arch → asset-name mapping
-  for all four supported combos, and `DSGN_CODE_SERVER_BIN` precedence
-  (unset/missing/present). `test/editor-pane.mjs` (electron tier) is
-  self-skipping like the live tier — it needs a real code-server binary
-  (`DSGN_CODE_SERVER_BIN`) for a genuine cold start, so it SKIPs (exit 0)
-  without one and only runs for real when a binary is supplied (e.g. in a
-  release-asset smoke check). It asserts from the MAIN process
-  (`BrowserWindow#contentView.children`, each view's `.getVisible()`/
-  `.getBounds()`) rather than renderer DOM, since the editor view is a
-  separate CDP target like the preview — opens a real fixture project,
-  flips to Code mode via the store, waits for the editor view to become
-  visible with `?folder=` in its URL, flips back to Preview, and asserts the
-  editor view hides (zeroed bounds) while the preview view reclaims the slot.
-  Verified against the real v4.127.0 macOS-arm64 binary: both the SKIP path
-  (no env var) and the real cold-start path pass.
 
 ## 2026-07-10 — Discoverable "Edit text" in the preview toolbar (LKM-38)
 
