@@ -191,6 +191,10 @@ function ensureOverlay(): void {
   toolbar.addEventListener('click', swallow)
 
   const ICONS: Record<string, { title: string; svg: string }> = {
+    edit: {
+      title: 'Edit text in place',
+      svg: '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>'
+    },
     props: {
       title: 'Edit props',
       svg: '<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>'
@@ -276,14 +280,17 @@ function ensureOverlay(): void {
   separator.style.cssText =
     'flex:0 0 auto;width:1px;height:16px;background:rgba(255,255,255,0.10);margin:0 2px;'
 
+  const editBtn = makeIcon('edit')
   const propsBtn = makeIcon('props')
   const codeBtn = makeIcon('code')
   const deleteBtn = makeIcon('delete')
 
-  // DOM order: comment, annotate, [input], props, code | delete. The divider
+  // DOM order: comment, annotate, [input], edit, props, code | delete. The divider
   // sits before Delete only; the button[data-kind] order the tests assert stays
-  // comment, annotate, props, code, delete (the separator has no data-kind).
-  toolbar.append(commentBtn, annotateBtn, inputWrap, propsBtn, codeBtn, separator, deleteBtn)
+  // comment, annotate, edit, props, code, delete (the separator has no data-kind).
+  // `edit` only renders for plain-text stamped leaves (setEditAction) — the
+  // discoverable form of the double-click-to-edit gesture.
+  toolbar.append(commentBtn, annotateBtn, inputWrap, editBtn, propsBtn, codeBtn, separator, deleteBtn)
 
   shadow.append(sel, box, label, pins, hint, toolbar, style)
   document.documentElement.appendChild(host)
@@ -307,6 +314,38 @@ function setTrailingActions(show: boolean): void {
   toolbarEl?.querySelector<HTMLButtonElement>('[data-kind="props"]')?.style.setProperty('display', disp)
   toolbarEl?.querySelector<HTMLButtonElement>('[data-kind="delete"]')?.style.setProperty('display', disp)
   if (separatorEl) separatorEl.style.display = show ? 'block' : 'none'
+  // Edit re-derives from the current selection's editability when shown.
+  if (show) setEditAction()
+  else toolbarEl?.querySelector<HTMLButtonElement>('[data-kind="edit"]')?.style.setProperty('display', 'none')
+}
+
+// Void/replaced elements have no editable text child even with 0 children.
+const NON_TEXT_TAGS = new Set([
+  'input', 'textarea', 'select', 'img', 'br', 'hr', 'svg', 'canvas', 'video',
+  'iframe', 'audio', 'embed', 'object', 'picture', 'source'
+])
+
+/**
+ * True when an element can be edited in place: a directly-stamped element whose
+ * only content is plain text (no child elements) — so its `data-dsgn-source`
+ * maps to exactly this element's text child. Matches the onDblClick guard so the
+ * toolbar's Edit button and the double-click gesture agree on "when it's possible".
+ */
+function isTextEditable(el: Element): el is HTMLElement {
+  return (
+    el instanceof HTMLElement &&
+    el.childElementCount === 0 &&
+    el.hasAttribute('data-dsgn-source') &&
+    !NON_TEXT_TAGS.has(el.tagName.toLowerCase())
+  )
+}
+
+/** Reveal the Edit-text action only for the current selection when it's a
+ *  plain-text stamped leaf; hide it otherwise. */
+function setEditAction(): void {
+  const b = toolbarEl?.querySelector<HTMLButtonElement>('[data-kind="edit"]')
+  if (!b) return
+  b.style.display = selectedEl && isTextEditable(selectedEl) ? 'flex' : 'none'
 }
 
 /**
@@ -407,6 +446,8 @@ function showToolbar(el: Element): void {
   // The code action needs a source stamp to open a file — hide it otherwise.
   const codeBtn = toolbarEl.querySelector<HTMLButtonElement>('[data-kind="code"]')
   if (codeBtn) codeBtn.style.display = findSource(el) ? 'flex' : 'none'
+  // Edit-text only applies to plain-text stamped leaves.
+  setEditAction()
   toolbarEl.style.display = 'flex'
   positionToolbar()
 }
@@ -658,11 +699,16 @@ function onDblClick(e: MouseEvent): void {
   const el = e.target as HTMLElement | null
   // Only a directly-stamped element with plain text (no child elements) — so the
   // source maps to exactly this element's text child.
-  if (!el || isOverlay(el) || el.childElementCount > 0 || !el.hasAttribute('data-dsgn-source')) {
-    return
-  }
+  if (!el || isOverlay(el) || !isTextEditable(el)) return
   e.preventDefault()
   e.stopPropagation()
+  startTextEdit(el)
+}
+
+/** Enter the inline contentEditable edit on a plain-text stamped leaf. Shared by
+ *  the double-click gesture and the toolbar's Edit-text button. */
+function startTextEdit(el: HTMLElement): void {
+  if (editing) return
   editing = el
   editOriginal = el.textContent ?? ''
   hideOverlay()
@@ -841,6 +887,9 @@ function onToolbarButton(kind: string): void {
     if (inputKind === kind) collapseInput()
     else if (inputKind) switchInputKind(kind)
     else enterInputState(kind, el, false)
+  } else if (kind === 'edit') {
+    // Same in-place edit as double-click, but discoverable from the toolbar.
+    if (isTextEditable(el)) startTextEdit(el)
   } else {
     ipcRenderer.send(TOOLBAR_ACTION, kind)
   }
