@@ -34,6 +34,34 @@ as an explicit **Edit text** button on the in-preview selection toolbar.
   and that it renders visible for the plain-text `#hero-title`; a new step clicks
   the Edit button and asserts it arms `contenteditable="plaintext-only"`, then
   Escapes to cancel. (UI tier — needs a display; typecheck green.)
+## 2026-07-10 — Agent knows it's in Praxis; preview becomes a pair of tools
+
+Rules v3 (`main/rules.ts`, `dsgnRules(opts?)`): the product is named **Praxis**
+in the agent-facing text (identifiers unchanged), the opening context tightened
+(designer pointing at UI, `data-dsgn-source` file:line selections, instant
+HMR), and a new `previewTools` flag gates a "Seeing the user's preview" section
+so Codex/Gemini never hear about tools they don't have.
+
+The silent per-message "The preview is currently showing <path>." prefix is
+GONE (ChatPanel no longer prepends it; `describePreviewLocationForPrompt`
+removed; `usePreviewLocation` stays for UI). Instead the Claude backend now
+registers Praxis's first in-process SDK tools via `createSdkMcpServer`:
+
+- `mcp__praxis__preview_location` — the agent asks where the user is when the
+  page actually matters (live SPA URL from the preview webContents; "No project
+  preview is open." on the placeholder).
+- `mcp__praxis__preview_screenshot` — exactly what the user sees (their route,
+  viewport, simulator): `capturePage()` downscaled to ≤1200px JPEG, returned as
+  an MCP image block.
+
+Both are read-only and never raise a permission card (`allowedTools` + a
+`canUseTool` early-allow). A new `main/preview-state.ts` registry hands the
+preview URL/capture to the backends without an index.ts↔backends import cycle.
+A bundled plugin (`agent-plugin/` at the repo root, wired via the SDK `plugins`
+option when present) ships a `praxis-preview` skill teaching the workflow:
+observe with the tools, interact via `agent-browser`, verify visual changes
+with a screenshot. `test/rules.mjs` pins v3 + the gating;
+`test/preview-location.mjs` now asserts the composer does NOT prepend.
 
 ## 2026-07-10 — Drag-resize the code drawer (LKM-35)
 

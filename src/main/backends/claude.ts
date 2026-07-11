@@ -17,9 +17,25 @@ import type {
   ProviderSession,
   SpawnContext
 } from './types'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { AUTO_ALLOW_TOOLS, describeTool, toolDetail, touchesSidecar } from './tools'
 import { createRecordCapture } from './record'
 import { dsgnRules } from '../rules'
+import { capturePreview, getPreviewUrl } from '../preview-state'
+
+// The bundled Praxis agent plugin (skills teaching the preview workflow). Lives
+// at the repo root; resolved relative to the compiled main (out/main →
+// ../../agent-plugin), the same walk as index.ts's appIcon. Only wired in when
+// present so a stripped build degrades gracefully instead of erroring.
+const PLUGIN_PATH = join(__dirname, '../../agent-plugin')
+
+// The two in-process `praxis` MCP tools, fully-qualified (mcp__<server>__<tool>).
+// Read-only observers of the user's preview — auto-allowed so they never prompt.
+const PREVIEW_TOOL_NAMES = new Set([
+  'mcp__praxis__preview_location',
+  'mcp__praxis__preview_screenshot'
+])
 
 // The Agent SDK is ESM-only; this CJS main bundle must reach it via a dynamic
 // import() (preserved by Rollup for external deps) rather than a static require.
@@ -156,7 +172,17 @@ async function startSession(
   // the plain `projectKey(root)`, so an additional/resumed chat (whose `emitKey` is
   // `${key}#…`) would otherwise get a history record no rail lookup can ever find.
   const cap = createRecordCapture(root, key)
-  const { query } = await loadSdk()
+  const { query, resolveSettings, filterEscalatingDefaultMode, createSdkMcpServer, tool } =
+    await loadSdk()
+  // `settingSources` below loads a project's own committed .claude/settings.json
+  // (needed for its CLAUDE.md/skills) — but that means a repo could otherwise
+  // silently escalate this session's permission mode via a committed
+  // `permissions.defaultMode: "acceptEdits"`. Apply the SDK's own trust-tier
+  // filter (what the CLI applies) and re-inject the result as the highest-
+  // priority "flag settings" tier, so an untrusted project-committed escalation
+  // can never override dsgn's own explicit `permissionMode` below.
+  const resolvedSettings = await resolveSettings({ cwd: root, settingSources: ['user', 'project', 'local'] })
+  const trustedSettings = filterEscalatingDefaultMode(resolvedSettings)
   const input = new InputStream()
   const abort = new AbortController()
   const pending = new Map<string, PendingPrompt>()
@@ -178,14 +204,74 @@ async function startSession(
     getWindow()?.webContents.send('agent:event', tagged)
   }
 
+  // In-process SDK MCP server exposing read-only views of the user's live
+  // preview (the native WebContentsView that index.ts owns, reached via the
+  // preview-state registry). These OBSERVE what the user sees; agent-browser is
+  // the agent's own headless copy for interaction. Both tools take no input and
+  // are auto-allowed (see allowedTools + canUseTool) so they never prompt.
+  const previewServer = createSdkMcpServer({
+    name: 'praxis',
+    version: '1.0.0',
+    tools: [
+      tool(
+        'preview_location',
+        "The page/route currently shown in the user's live preview pane.",
+        {},
+        async () => {
+          const url = getPreviewUrl()
+          if (!url) return { content: [{ type: 'text', text: 'No project preview is open.' }] }
+          let text = `The preview is currently showing ${url}.`
+          try {
+            const u = new URL(url)
+            text += ` (path: ${u.pathname}${u.search}${u.hash})`
+          } catch {
+            /* non-parseable URL — the full string above is enough */
+          }
+          return { content: [{ type: 'text', text }] }
+        }
+      ),
+      tool(
+        'preview_screenshot',
+        "A screenshot of exactly what the user sees in their preview pane right now (their route, viewport, simulator included).",
+        {},
+        async () => {
+          const img = await capturePreview()
+          if (!img || img.isEmpty()) {
+            return { content: [{ type: 'text', text: 'No project preview is open.' }] }
+          }
+          // Downscale like feedback.ts's captureWindow so the base64 payload
+          // stays reasonable; 1200px keeps UI legible for verification.
+          const { width } = img.getSize()
+          const scaled = width > 1200 ? img.resize({ width: 1200 }) : img
+          const jpeg = scaled.toJPEG(70)
+          return {
+            content: [{ type: 'image', data: jpeg.toString('base64'), mimeType: 'image/jpeg' }]
+          }
+        }
+      )
+    ]
+  })
+
   const q: Query = query({
     prompt: input,
     options: {
       cwd: root,
       settingSources: ['user', 'project', 'local'],
-      // The repo's CLAUDE.md + skills load via settingSources; dsgn's own operating
-      // rules (v8 R) are appended to the Claude Code preset.
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: dsgnRules() },
+      // Highest-priority settings tier — carries the trust-filtered
+      // permissions.defaultMode (see above) so a project-committed escalation
+      // can't win even if the SDK would otherwise prefer it over permissionMode.
+      settings: trustedSettings,
+      // The repo's CLAUDE.md + skills load via settingSources; Praxis's own
+      // operating rules (v8 R) are appended to the Claude Code preset, with the
+      // preview-tools section (Claude alone can call the in-process praxis tools).
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: dsgnRules({ previewTools: true }) },
+      // The praxis MCP server (preview_location / preview_screenshot). Its two
+      // read-only tools are auto-allowed here so they never surface a permission
+      // card (canUseTool also short-circuits them, belt-and-suspenders).
+      mcpServers: { praxis: previewServer },
+      allowedTools: [...PREVIEW_TOOL_NAMES],
+      // The bundled Praxis skill plugin (only when present in this build).
+      ...(existsSync(PLUGIN_PATH) ? { plugins: [{ type: 'local' as const, path: PLUGIN_PATH }] } : {}),
       includePartialMessages: true,
       permissionMode: options.permissionMode ?? 'default',
       allowDangerouslySkipPermissions: true,
@@ -234,6 +320,13 @@ async function startSession(
             opts.signal.addEventListener('abort', onAbort, { once: true })
             emit({ type: 'question-request', request })
           })
+        }
+        // The in-process praxis preview tools are read-only observers of the
+        // user's own view — auto-allow (they're also in allowedTools, but guard
+        // here too so a canUseTool call for them can never reach a prompt).
+        if (PREVIEW_TOOL_NAMES.has(toolName)) {
+          emit({ type: 'status', text: describeTool(toolName, toolInput) })
+          return { behavior: 'allow', updatedInput: toolInput }
         }
         if (touchesSidecar(toolName, toolInput)) {
           return {
