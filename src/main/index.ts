@@ -14,6 +14,7 @@ import {
 import { join } from 'path'
 import type { RecentMenuEntry, SelectedElement } from '../shared/api'
 import { registerDevServerIpc } from './devserver'
+import { registerEditorIpc } from './editor'
 import { registerSimulatorIpc } from './simulator'
 import { registerAgentIpc } from './agent'
 import { registerPropsIpc } from './props'
@@ -108,6 +109,19 @@ let lastPreviewBounds = { x: 0, y: 0, width: 0, height: 0, radius: 0 }
 // overlay (e.g. a project launch finishing while the user reads a past chat).
 // Visibility returns when the renderer releases the hide (set-dragging false).
 let previewHiddenByRenderer = false
+
+// ── "Code mode" native editor view ──────────────────────────────────────────
+// A THIRD native WebContentsView (after the preview + the props island) that
+// renders the vendored code-server IDE. Self-contained web app → no preload.
+// Main owns which URL it loads (index.ts loadURL, guarded to 127.0.0.1); the
+// renderer only drives geometry/visibility, exactly like the preview.
+let editorView: WebContentsView | null = null
+// The renderer's desired editor visibility (Code mode on). Combined with
+// previewHiddenByRenderer (drag/freeze hide) to get the effective visibility, so
+// an overlay hiding the preview hides the editor too — and releasing it restores
+// the editor only if the renderer still wants it shown.
+let editorVisibleByRenderer = false
+let lastEditorBounds = { x: 0, y: 0, width: 0, height: 0, radius: 0 }
 
 // Chromium error codes worth retrying — the dev server is up but not yet serving.
 const TRANSIENT_LOAD_ERRORS = new Set([-324, -102, -101, -105, -106, -109])
@@ -333,6 +347,33 @@ function ensurePanelView(): WebContentsView {
   return panelView
 }
 
+// The Code-mode IDE view. Added BELOW the props island (so the island still
+// paints on top) but it's otherwise a plain sandboxed view: code-server is a
+// self-contained web app, so no preload is injected. Loads about:blank until
+// the renderer's first editor:load hands it a code-server URL.
+function ensureEditorView(): WebContentsView {
+  if (editorView) return editorView
+  editorView = new WebContentsView({
+    webPreferences: {
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false
+    }
+  })
+  editorView.setBackgroundColor(previewBg())
+  editorView.webContents.loadURL('about:blank')
+  // VS Code links (docs, marketplace) must escape to the user's browser, never
+  // navigate the IDE view. openExternalSafe only opens http(s)/mailto; deny all.
+  editorView.webContents.setWindowOpenHandler(({ url }) => {
+    openExternalSafe(url)
+    return { action: 'deny' }
+  })
+  mainWindow?.contentView.addChildView(editorView)
+  // Keep the props island above the editor (re-append = raise).
+  if (panelView) mainWindow?.contentView.addChildView(panelView)
+  return editorView
+}
+
 function ensurePreviewView(): WebContentsView {
   if (previewView) return previewView
   previewView = new WebContentsView({
@@ -460,6 +501,13 @@ function resetStalePreview(): void {
   commentModeActive = null
   frameModeActive = false
   annotationPins = []
+  // A reattaching renderer forgets it was in Code mode (defaults back to
+  // preview), so hide + zero the editor view too — but keep its page warm (the
+  // code-server session is server-side) so a re-open is instant.
+  editorView?.setVisible(false)
+  editorView?.setBounds({ x: 0, y: 0, width: 0, height: 0 })
+  lastEditorBounds = { x: 0, y: 0, width: 0, height: 0, radius: 0 }
+  editorVisibleByRenderer = false
 }
 
 function createWindow(): void {
@@ -635,6 +683,10 @@ function registerPreviewIpc(): void {
   ipcMain.on('preview:set-dragging', (_e, active: boolean) => {
     previewHiddenByRenderer = active
     previewView?.setVisible(!active)
+    // A modal/dropdown that must paint above the preview must also not be
+    // painted over by the IDE view — hide the editor on the same signal, and
+    // restore it (on release) only if the renderer still wants Code mode shown.
+    editorView?.setVisible(!active && editorVisibleByRenderer)
   })
 
   // Freeze-frame support: snapshot the live preview so renderer UI (e.g. the
@@ -774,6 +826,48 @@ function registerPreviewIpc(): void {
     }
   )
 
+  // ── Code-mode editor view (geometry/visibility/URL) ─────────────────────────
+  // Same rounding/radius contract as the preview's applyBounds.
+  const applyEditorBounds = (): void => {
+    const view = ensureEditorView()
+    view.setBounds({
+      x: Math.round(lastEditorBounds.x),
+      y: Math.round(lastEditorBounds.y),
+      width: Math.max(0, Math.round(lastEditorBounds.width)),
+      height: Math.round(lastEditorBounds.height)
+    })
+    view.setBorderRadius(Math.round(lastEditorBounds.radius || 0))
+  }
+  ipcMain.on(
+    'editor:set-bounds',
+    (_e, bounds: { x: number; y: number; width: number; height: number; radius?: number }) => {
+      lastEditorBounds = { ...bounds, radius: bounds.radius ?? 0 }
+      applyEditorBounds()
+    }
+  )
+  ipcMain.on('editor:set-visible', (_e, visible: boolean) => {
+    editorVisibleByRenderer = !!visible
+    // An overlay-driven hide (previewHiddenByRenderer) still wins while it's up.
+    ensureEditorView().setVisible(editorVisibleByRenderer && !previewHiddenByRenderer)
+  })
+  // Main owns which URL the editor view loads. Only accept the local code-server
+  // origin (editor.ts hands back http://127.0.0.1:<port>/?folder=…).
+  ipcMain.handle('editor:load', (_e, url: string) => {
+    // Parse the URL and check its real host — a naive startsWith() prefix check
+    // is bypassable via userinfo smuggling (http://127.0.0.1:8888@evil.com/).
+    let host: string
+    try {
+      const u = new URL(url)
+      if (u.protocol !== 'http:') return
+      host = u.hostname
+    } catch {
+      return
+    }
+    if (host !== '127.0.0.1') return
+    const view = ensureEditorView()
+    if (view.webContents.getURL() !== url) view.webContents.loadURL(url)
+  })
+
   ipcMain.handle('project:pick', async (): Promise<string | null> => {
     if (!mainWindow) return null
     const res = await dialog.showOpenDialog(mainWindow, {
@@ -834,6 +928,7 @@ app.whenReady().then(() => {
   })
   registerPreviewIpc()
   registerDevServerIpc(() => mainWindow)
+  registerEditorIpc(() => mainWindow)
   registerSimulatorIpc(() => mainWindow)
   registerAgentIpc(() => mainWindow)
   registerPropsIpc()

@@ -337,6 +337,9 @@ export interface ProjectEntry {
   /** Preview viewport for THIS project — each remembers its own; restored on
    *  switch (a global viewport leaked one project's Mobile into the next). */
   viewport?: Viewport
+  /** Preview vs. Code mode for THIS project — each remembers its own, same
+   *  restore-on-switch rationale as `viewport`. Defaults to 'preview'. */
+  mode?: EditorMode
   /** Rail: hide this project's chat list while it stays active (chevron toggle).
    *  Independent of `activeKey` — collapsing doesn't deactivate the project, its
    *  dev server/preview stay live. Defaults to expanded (undefined = false). */
@@ -417,6 +420,25 @@ export const useViewport = create<ViewportState>((set) => ({
     // entry so a switch can restore it (App restores via applyProject/attempt).
     const ws = useWorkspace.getState()
     if (ws.activeKey) ws.patchEntry(ws.activeKey, { viewport })
+  }
+}))
+
+/** Preview vs. Code mode — the previewbar's segmented toggle. 'code' swaps
+ *  PreviewPane for EditorPane in the same card slot (a native code-server
+ *  WebContentsView, like the preview but pointed at the project's files). */
+export type EditorMode = 'preview' | 'code'
+interface EditorModeState {
+  mode: EditorMode
+  setMode: (m: EditorMode) => void
+}
+export const useEditorMode = create<EditorModeState>((set) => ({
+  mode: 'preview',
+  setMode: (mode) => {
+    set({ mode })
+    // Same per-project write-back as useViewport — each project remembers
+    // whether it was left in Code mode.
+    const ws = useWorkspace.getState()
+    if (ws.activeKey) ws.patchEntry(ws.activeKey, { mode })
   }
 }))
 
@@ -1341,6 +1363,7 @@ export const usePreviewLocation = create<PreviewLocationState>((set) => ({
 ;(window as unknown as { __dsgnHistory?: typeof useHistory }).__dsgnHistory = useHistory
 ;(window as unknown as { __dsgnSpawns?: typeof useSpawns }).__dsgnSpawns = useSpawns
 ;(window as unknown as { __dsgnViewport?: typeof useViewport }).__dsgnViewport = useViewport
+;(window as unknown as { __dsgnEditorMode?: typeof useEditorMode }).__dsgnEditorMode = useEditorMode
 ;(window as unknown as { __dsgnPanelInset?: typeof usePanelInset }).__dsgnPanelInset = usePanelInset
 ;(window as unknown as { __dsgnCodeDrawer?: typeof useCodeDrawer }).__dsgnCodeDrawer = useCodeDrawer
 ;(window as unknown as { __dsgnPropsIsland?: typeof usePropsIsland }).__dsgnPropsIsland = usePropsIsland

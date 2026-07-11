@@ -13,6 +13,7 @@ import type {
   PanelAction,
   PanelState,
   DsgnApi,
+  EditorStatus,
   FeedbackInput,
   FeedbackResult,
   Framework,
@@ -179,6 +180,18 @@ const api: DsgnApi = {
       const listener = (_e: IpcRendererEvent, line: string): void => cb(line)
       ipcRenderer.on('devserver:log', listener)
       return () => ipcRenderer.removeListener('devserver:log', listener)
+    }
+  },
+  editor: {
+    open: (root: string): Promise<{ ok: boolean; url?: string; error?: string }> =>
+      ipcRenderer.invoke('editor:open', root),
+    load: (url: string): Promise<void> => ipcRenderer.invoke('editor:load', url),
+    setBounds: (bounds: Bounds): void => ipcRenderer.send('editor:set-bounds', bounds),
+    setVisible: (visible: boolean): void => ipcRenderer.send('editor:set-visible', visible),
+    onStatus: (cb: (status: EditorStatus) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, status: EditorStatus): void => cb(status)
+      ipcRenderer.on('editor:status', listener)
+      return () => ipcRenderer.removeListener('editor:status', listener)
     }
   },
   git: {

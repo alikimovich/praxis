@@ -4,6 +4,7 @@ import CatLoader from './components/CatLoader'
 import ConsolePanel from './components/ConsolePanel'
 import DiagnoseCard from './components/DiagnoseCard'
 import PreviewPane from './components/PreviewPane'
+import EditorPane from './components/EditorPane'
 import PanelHost from './components/PanelHost'
 import PreviewUrl from './components/PreviewUrl'
 import CodeDrawer from './components/CodeDrawer'
@@ -33,6 +34,7 @@ import {
   useUpdate,
   usePropsIsland,
   useViewport,
+  useEditorMode,
   usePreviewFreeze,
   openWithPreviewFreeze,
   usePublishMode,
@@ -96,6 +98,7 @@ export default function App(): React.JSX.Element {
   const [previewKind, setPreviewKind] = useState<PreviewKind>('web')
   const [publishing, setPublishing] = useState(false)
   const viewport = useViewport((s) => s.viewport)
+  const editorMode = useEditorMode((s) => s.mode)
   const publishMode = usePublishMode((s) => s.mode)
   const recents = useRecents((s) => s.recents)
   // Boot restore deps (App closures), kept current for the once-on-mount effect.
@@ -830,6 +833,10 @@ export default function App(): React.JSX.Element {
         .setViewport(
           useWorkspace.getState().projects.find((p) => p.key === wsKey)?.viewport ?? 'desktop'
         )
+      // Same restore-or-default for Preview/Code mode.
+      useEditorMode
+        .getState()
+        .setMode(useWorkspace.getState().projects.find((p) => p.key === wsKey)?.mode ?? 'preview')
       // Remember for the empty state's "Recent" list (one-click reopen).
       useRecents.getState().addRecent(root, name)
       // Start this project's chat fresh — clear any slice a trailing event from a
@@ -1016,6 +1023,10 @@ export default function App(): React.JSX.Element {
     // Each project keeps its own viewport — restore it (after activate, so the
     // write-back in setViewport lands on THIS entry, not the outgoing one).
     useViewport.getState().setViewport(target.viewport ?? 'desktop')
+    // Each project also keeps its own Preview/Code mode — same restore-on-switch
+    // rationale as viewport (EditorPane opens/loads the new root's `?folder=` URL
+    // as a side effect of `root` changing, once it mounts below).
+    useEditorMode.getState().setMode(target.mode ?? 'preview')
     // Refresh the rail's "previous agents" for the project we're switching to.
     void useHistory.getState().load(target.root)
     setPreviewKind(target.previewKind)
@@ -1723,14 +1734,36 @@ export default function App(): React.JSX.Element {
                   >
                     <MessageSquarePlus className="size-4" aria-hidden="true" />
                   </button>
+                  {/* Preview/Code segmented toggle — independent of the dev
+                      server's status (code-server serves the filesystem, not
+                      the running app), so it's not gated on `status.kind`. */}
+                  <div className="viewport-toggle">
+                    <button
+                      type="button"
+                      className={`viewport-toggle__btn ${editorMode === 'preview' ? 'is-active' : ''}`}
+                      onClick={() => useEditorMode.getState().setMode('preview')}
+                      aria-pressed={editorMode === 'preview'}
+                    >
+                      Preview
+                    </button>
+                    <button
+                      type="button"
+                      className={`viewport-toggle__btn ${editorMode === 'code' ? 'is-active' : ''}`}
+                      onClick={() => useEditorMode.getState().setMode('code')}
+                      aria-pressed={editorMode === 'code'}
+                    >
+                      Code
+                    </button>
+                  </div>
                   {status.kind === 'running' && (
                     <>
                       {/* Element-select moved to the chat composer (Figma Make-style);
                           comment/annotate are element-scoped actions on the selection
                           pill now. Keyboard: S select, C comment, Y annotate. */}
                       {/* Viewport toggle (Figma-style device icon; also Actions
-                          menu ⌘1 / ⌘2). Active = mobile. */}
-                      {previewKind !== 'simulator' && (
+                          menu ⌘1 / ⌘2). Active = mobile. Preview-only — Code mode
+                          has no viewport concept. */}
+                      {previewKind !== 'simulator' && editorMode === 'preview' && (
                         <button
                           className={`iconbtn ${viewport === 'mobile' ? 'is-active' : ''}`}
                           onClick={() =>
@@ -1802,7 +1835,11 @@ export default function App(): React.JSX.Element {
                 </div>
               </div>
               <div className={`previewcard__body ${status.kind === 'error' ? 'previewcard__body--errored' : ''}`}>
-                <PreviewPane />
+                {editorMode === 'code' && projectRoot ? (
+                  <EditorPane root={projectRoot} />
+                ) : (
+                  <PreviewPane />
+                )}
                 {drawerSource && projectRoot && (
                   <CodeDrawer
                     root={projectRoot}

@@ -326,6 +326,20 @@ export interface Bounds {
 }
 
 /**
+ * Vendor + startup state of "Code mode" (the single code-server instance). Pushed
+ * over `editor:status` as it moves: 'absent' → 'downloading' (with `progress`)
+ * → 'starting' → 'ready', or 'error' (with `message`) on any failure.
+ */
+export interface EditorStatus {
+  state: 'absent' | 'downloading' | 'starting' | 'ready' | 'error'
+  /** 0..1 download fraction, only while state === 'downloading' (omitted when
+   *  the response has no Content-Length). */
+  progress?: number
+  /** Human-readable failure, only while state === 'error'. */
+  message?: string
+}
+
+/**
  * An element the user picked in the live preview (v2 select mode). `source` is
  * the repo's opt-in `data-dsgn-source` stamp ("path/File.tsx:line") when present
  * — that's what lets the agent edit the exact component (see DESIGN.md).
@@ -726,6 +740,26 @@ export interface DsgnApi {
      *  instead of respawning on a fresh port. */
     info: (root: string) => Promise<DevServerInfo>
     onLog: (cb: (line: string) => void) => () => void
+  }
+  /**
+   * "Code mode" — a native WebContentsView (like the preview) rendering a single
+   * vendored code-server instance. `open` ensures it's downloaded + running and
+   * returns this project's `?folder=` URL; main then loads it into the view via
+   * `load`. The renderer drives geometry/visibility exactly like the preview.
+   */
+  editor: {
+    /** Ensure the single code-server instance is vendored + running; resolves with
+     *  this project's per-`?folder=` URL. Idempotent — repeated calls reuse it. */
+    open: (root: string) => Promise<{ ok: boolean; url?: string; error?: string }>
+    /** Load a code-server URL into the native editor view (main owns which URL
+     *  loads; only http://127.0.0.1: URLs are accepted). */
+    load: (url: string) => Promise<void>
+    /** Position the native editor view (same Bounds+radius shape as preview). */
+    setBounds: (bounds: Bounds) => void
+    /** Show/hide the native editor view. */
+    setVisible: (visible: boolean) => void
+    /** Fires as vendoring/startup progresses (download %, ready, error). */
+    onStatus: (cb: (status: EditorStatus) => void) => () => void
   }
   git: {
     /** Ensure work happens on a `dsgn/*` branch (creates one off HEAD if needed). */
