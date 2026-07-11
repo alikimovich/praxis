@@ -2,6 +2,28 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-10 — Discoverable "Edit text" in the preview toolbar (LKM-38)
+
+Inline text editing already existed (double-click a stamped, text-only element in
+Select mode → contentEditable → source splice; see 2026-06-24), but it was a
+hidden gesture with no on-screen affordance, so it read as "gone". Re-surfaced it
+as an explicit **Edit text** button on the in-preview selection toolbar.
+
+- **`edit` icon button** (pencil) added to the toolbar pill in `preview/preload.ts`,
+  in DOM order `comment, annotate, [input], edit, props, code | delete`. It shares
+  the *exact* edit engine as the double-click: `onDblClick` and the button both
+  call a new `startTextEdit(el)` (extracted from the old `onDblClick` body).
+- **"When it's possible"** — `isTextEditable(el)` gates the button: a directly-
+  stamped element with no child elements and not a void/replaced tag
+  (`img`/`input`/`svg`/…). `setEditAction()` shows the button only for such a
+  selection (mirrors `onDblClick`'s guard), and `setTrailingActions` hides it
+  while the comment/annotate input is open. Non-text or expression content still
+  falls back to the agent on commit, unchanged.
+- `test/select-element.mjs`: toolbar order assertion now expects the `edit` kind
+  and that it renders visible for the plain-text `#hero-title`; a new step clicks
+  the Edit button and asserts it arms `contenteditable="plaintext-only"`, then
+  Escapes to cancel. (UI tier — needs a display; typecheck green.)
+
 ## 2026-07-10 — Drag-resize the code drawer (LKM-35)
 
 The bottom code drawer (`CodeDrawer.tsx`) can now be resized by dragging its top
