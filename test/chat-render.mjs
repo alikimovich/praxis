@@ -88,6 +88,20 @@ try {
   await win.waitForSelector('.slash__item', { timeout: 5000 })
   await win.screenshot({ path: join(artifacts, '05-toolbar-slash.png') })
 
+  // The menu also opens mid-message when "/" follows whitespace (caret at end).
+  await win.fill('.composer__input', 'refactor /comp')
+  await win.waitForFunction(
+    () =>
+      [...document.querySelectorAll('.slash__item')].some((b) =>
+        b.textContent?.includes('compact'),
+      ),
+    { timeout: 5000 },
+  )
+  // But NOT when a non-whitespace char sits right before "/".
+  await win.fill('.composer__input', 'refactor/comp')
+  await win.waitForSelector('.slash__item', { state: 'detached', timeout: 5000 })
+  await win.fill('.composer__input', '')
+
   // First-run auth onboarding: flipping authNeeded shows the guidance banner.
   await win.fill('.composer__input', '')
   await win.evaluate(() => window.__dsgnSession.getState().setAuthNeeded(true))

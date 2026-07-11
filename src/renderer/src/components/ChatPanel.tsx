@@ -333,6 +333,9 @@ export default function ChatPanel(): React.JSX.Element {
     text: string;
   } | null>(null);
   const [input, setInput] = useState("");
+  // Caret position in the composer — drives which "/" token the slash menu reads
+  // (the menu can open mid-message, not just at the start).
+  const [caret, setCaret] = useState(0);
   const [menuActive, setMenuActive] = useState(0);
   const [menuDismissed, setMenuDismissed] = useState(false);
   // Images pasted/dropped into the composer, sent as vision blocks with the turn.
@@ -420,6 +423,7 @@ export default function ChatPanel(): React.JSX.Element {
       if (!el) return;
       el.focus();
       el.setSelectionRange(el.value.length, el.value.length);
+      setCaret(el.value.length);
     });
   }, [composerSeed]);
 
@@ -512,9 +516,17 @@ export default function ChatPanel(): React.JSX.Element {
     });
   }, [appendDelta, appendStatus, finish]);
 
-  // "/" slash-command menu state.
-  const slashQuery =
-    input.startsWith("/") && !input.includes(" ") ? input.slice(1) : null;
+  // "/" slash-command menu state. The menu reads the "/" token containing the
+  // caret, so it triggers anywhere in the message — at the very start or after a
+  // space — but NOT when a non-whitespace character sits right before the "/".
+  const slashToken = useMemo(() => {
+    const before = input.slice(0, caret);
+    const m = before.match(/(?:^|\s)\/(\S*)$/);
+    if (!m) return null;
+    const query = m[1];
+    return { query, start: caret - query.length - 1 };
+  }, [input, caret]);
+  const slashQuery = slashToken?.query ?? null;
   const matches = useMemo(() => {
     if (slashQuery === null) return [];
     const q = slashQuery.toLowerCase();
@@ -528,15 +540,26 @@ export default function ChatPanel(): React.JSX.Element {
     setMenuDismissed(false);
   }, [slashQuery]);
 
-  const onInputChange = (value: string): void => {
+  const onInputChange = (value: string, pos: number): void => {
     setInput(value);
-    if (!value.startsWith("/")) setMenuDismissed(false);
+    setCaret(pos);
   };
 
   const pickCommand = (cmd: string): void => {
-    setInput(`/${cmd} `);
+    if (!slashToken) return;
+    const { start } = slashToken;
+    const insert = `/${cmd} `;
+    const next = input.slice(0, start) + insert + input.slice(caret);
+    const nextCaret = start + insert.length;
+    setInput(next);
+    setCaret(nextCaret);
     setMenuDismissed(true);
-    inputRef.current?.focus();
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(nextCaret, nextCaret);
+    });
   };
 
   // Seed the composer with `text` and drop the cursor at the end.
@@ -547,6 +570,7 @@ export default function ChatPanel(): React.JSX.Element {
       if (!el) return;
       el.focus();
       el.setSelectionRange(el.value.length, el.value.length);
+      setCaret(el.value.length);
     });
   };
 
@@ -712,6 +736,7 @@ export default function ChatPanel(): React.JSX.Element {
     appendUser(text || (images.length ? `🖼 ${images.length} image(s)` : ""));
     startAssistant();
     setInput("");
+    setCaret(0);
     setAttachments([]);
     // A newly-sent ask becomes the pinned message — any previously-expanded
     // ask should collapse back to its clamp instead of hanging around full-height.
@@ -1054,8 +1079,9 @@ export default function ChatPanel(): React.JSX.Element {
             placeholder="Ask Praxis  (/ for skills)"
             value={input}
             rows={2}
-            onChange={(e) => onInputChange(e.target.value)}
+            onChange={(e) => onInputChange(e.target.value, e.target.selectionStart)}
             onKeyDown={onKeyDown}
+            onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
             onPaste={onPaste}
           />
           <InputGroupAddon align="block-end" className="gap-1">
