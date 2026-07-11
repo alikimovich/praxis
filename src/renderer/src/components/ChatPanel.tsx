@@ -23,6 +23,7 @@ import {
   useWorkspace,
 } from "../store";
 import { projectKey } from "../../../shared/projectKey";
+import { parseSlashToken } from "../../../shared/slash-token";
 import type { QuestionAnswers, SetupResult } from "../../../shared/api";
 import Inspector from "./Inspector";
 import Markdown from "./Markdown";
@@ -519,13 +520,10 @@ export default function ChatPanel(): React.JSX.Element {
   // "/" slash-command menu state. The menu reads the "/" token containing the
   // caret, so it triggers anywhere in the message — at the very start or after a
   // space — but NOT when a non-whitespace character sits right before the "/".
-  const slashToken = useMemo(() => {
-    const before = input.slice(0, caret);
-    const m = before.match(/(?:^|\s)\/(\S*)$/);
-    if (!m) return null;
-    const query = m[1];
-    return { query, start: caret - query.length - 1 };
-  }, [input, caret]);
+  const slashToken = useMemo(
+    () => parseSlashToken(input, caret),
+    [input, caret],
+  );
   const slashQuery = slashToken?.query ?? null;
   const matches = useMemo(() => {
     if (slashQuery === null) return [];

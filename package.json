@@ -53,6 +53,7 @@
     "test:sim-e2e": "electron-vite build && node test/sim-e2e.mjs",
     "test:prbody": "bun test/pr-body.mjs",
     "test:feedback-body": "bun test/feedback-body.mjs",
+    "test:slash-token": "bun test/slash-token.mjs",
     "test:devnet": "bun test/devserver-net.mjs",
     "test:xcode": "bun test/xcode.mjs",
     "test:git": "bun test/git.mjs",
