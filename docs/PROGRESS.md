@@ -2,6 +2,17 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-11 — Regression-test the mid-message "/" menu trigger (LKM-37)
+
+The "/" skills menu already opened mid-message (it reads the "/" token the caret
+sits in via `/(?:^|\s)\/(\S*)$/`, so it fires at the start or after whitespace but
+not when a non-whitespace char precedes "/"), but the parsing lived inline in
+`ChatPanel` with no coverage. Extracted it to a pure, string-only
+`src/shared/slash-token.ts` (`parseSlashToken`) and added `test/slash-token.mjs`
+(unit tier) locking the behavior: opens at start and after space/newline/tab,
+stays closed for `foo/bar`, `a/`, `http://x`, and once a trailing space ends the
+token. `ChatPanel` now calls the shared helper — no behavior change, just testable.
+
 ## 2026-07-10 — Discoverable "Edit text" in the preview toolbar (LKM-38)
 
 Inline text editing already existed (double-click a stamped, text-only element in

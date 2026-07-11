@@ -30,6 +30,7 @@ const UNIT = [
   'pr-body',
   'feedback-body',
   'publish-message',
+  'slash-token',
   'project-key',
   'project-create',
   'devserver-net',
