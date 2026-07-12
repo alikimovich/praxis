@@ -568,6 +568,8 @@ body.is-fullscreen .sidebar-toggle {
     position: relative;
     flex: 0 0 auto;
     width: 168px;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     background: var(--bg);
     border-right: 1px solid var(--border-prominent);
@@ -593,7 +595,8 @@ body.is-fullscreen .sidebar-toggle {
 }
 .rail__inner {
     width: 168px;
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -908,6 +911,52 @@ body.is-fullscreen .sidebar-toggle {
     opacity: 1;
 }
 .rail__new-chat:hover {
+    background: var(--border);
+    color: var(--text);
+}
+
+/* Praxis self-update — pinned at the rail's bottom (a rail__inner sibling, not
+   its last child, so a long project list can't scroll it away). Stacked
+   (text above button) rather than the old horizontal top banner — the rail is
+   only 168px wide. */
+.rail__update {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 11.5px;
+    color: var(--text-muted);
+}
+.rail__update-text {
+    white-space: normal;
+    overflow-wrap: break-word;
+}
+.rail__update-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.rail__update-btn {
+    flex: 1 1 auto;
+    padding: 5px 8px;
+    font-size: 11.5px;
+}
+.rail__update-dismiss {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.rail__update-dismiss:hover {
     background: var(--border);
     color: var(--text);
 }

@@ -22,7 +22,11 @@ import {
 } from "../store";
 import { projectKey } from "../../../shared/projectKey";
 import { parseSlashToken } from "../../../shared/slash-token";
-import type { QuestionAnswers, SetupResult } from "../../../shared/api";
+import type {
+  PermissionMode,
+  QuestionAnswers,
+  SetupResult,
+} from "../../../shared/api";
 import Inspector from "./Inspector";
 import Markdown from "./Markdown";
 import NotesPanel from "./NotesPanel";
@@ -58,6 +62,15 @@ const MODELS = [
   { value: "opus", label: "Opus" },
   { value: "sonnet", label: "Sonnet" },
   { value: "haiku", label: "Haiku" },
+];
+
+// `bypassPermissions` is intentionally omitted — see its "unused" doc note on
+// PermissionMode (shared/api.ts): skips dsgn's own canUseTool guards too, not
+// just the SDK's, so it isn't offered as a user-facing choice.
+const PERMISSION_MODES: { value: PermissionMode; label: string }[] = [
+  { value: "auto", label: "Auto" },
+  { value: "acceptEdits", label: "Allow edits" },
+  { value: "default", label: "Ask always" },
 ];
 
 // Selectable backends (v7). Each authenticates with the user's own subscription
@@ -318,7 +331,7 @@ export default function ChatPanel(): React.JSX.Element {
   const selectMode = useSelection((s) => s.selectMode);
   const inspection = useSelection((s) => s.inspection);
   const inspecting = useSelection((s) => s.inspecting);
-  const { pending, removeRequest } = usePermissions();
+  const { mode: permissionMode, pending, removeRequest, setMode } = usePermissions();
   const questions = useQuestions((s) => s.pending);
   const removeQuestion = useQuestions((s) => s.removeRequest);
   const { list: notes, focusedId, setList: setNotes } = useAnnotations();
@@ -759,6 +772,12 @@ export default function ChatPanel(): React.JSX.Element {
     if (value !== DEFAULT_MODEL) void window.api.agent.setModel(value);
   };
 
+  const onPermissionModeChange = (value: string): void => {
+    const mode = value as PermissionMode;
+    setMode(mode);
+    void window.api.agent.setPermissionMode(mode);
+  };
+
   // Switching the backend means a different agent session entirely — the model
   // can't change live across providers. Reopen the active project's session on the
   // new backend (the visible transcript stays; context resets, like an LRU reopen).
@@ -1115,6 +1134,19 @@ export default function ChatPanel(): React.JSX.Element {
                 aria-label="Model"
               >
                 {MODELS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                className={selectCls}
+                value={permissionMode}
+                onChange={(e) => onPermissionModeChange(e.target.value)}
+                aria-label="Permission mode"
+                title="How much the agent can do without asking"
+              >
+                {PERMISSION_MODES.map((m) => (
                   <option key={m.value} value={m.value}>
                     {m.label}
                   </option>

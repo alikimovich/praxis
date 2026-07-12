@@ -6,6 +6,7 @@ import {
   useChat,
   useHistory,
   useSpawns,
+  useUpdate,
   useWorkspace,
 } from "../store";
 
@@ -69,6 +70,11 @@ export default function Rail({
   const history = useHistory((s) => s.byKey);
   // v8 F1: comment-spawned background agents currently running, per project.
   const spawns = useSpawns((s) => s.byKey);
+  const updateStatus = useUpdate((s) => s.status);
+  const updateSubject = useUpdate((s) => s.subject);
+  const updateProgress = useUpdate((s) => s.progress);
+  const updateError = useUpdate((s) => s.error);
+  const updateDismissedSubject = useUpdate((s) => s.dismissedSubject);
 
   if (projects.length === 0) return null;
 
@@ -284,6 +290,52 @@ export default function Rail({
           })}
         </ul>
       </div>
+      {/* Pinned outside rail__inner's scroll area (a sibling, not its last
+          child) so a long project/chat list can't scroll it out of view. */}
+      {updateStatus === "available" && updateSubject !== updateDismissedSubject && (
+        <div className="rail__update">
+          <span className="rail__update-text">
+            Update available{updateSubject ? `: ${updateSubject}` : ""}
+          </span>
+          <div className="rail__update-actions">
+            <button
+              className="btn rail__update-btn"
+              onClick={() => void window.api.update.apply()}
+            >
+              Update &amp; Restart
+            </button>
+            <button
+              className="rail__update-dismiss"
+              onClick={() => useUpdate.getState().dismiss()}
+              aria-label="Dismiss"
+            >
+              <X className="size-3.5" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
+      {updateStatus === "updating" && (
+        <div className="rail__update">
+          <span className="rail__update-text">
+            Updating… {updateProgress ?? ""}
+          </span>
+          <button className="btn rail__update-btn" disabled>
+            Updating…
+          </button>
+        </div>
+      )}
+      {updateStatus === "error" && (
+        <div className="rail__update">
+          <span className="rail__update-text">Update failed: {updateError}</span>
+          <button
+            className="rail__update-dismiss"
+            onClick={() => useUpdate.getState().dismiss()}
+            aria-label="Dismiss"
+          >
+            <X className="size-3.5" aria-hidden="true" />
+          </button>
+        </div>
+      )}
     </nav>
   );
 }

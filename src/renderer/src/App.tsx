@@ -166,11 +166,6 @@ export default function App(): React.JSX.Element {
   const authNeeded = useSession((s) => s.authNeeded)
   const setAuthNeeded = useSession((s) => s.setAuthNeeded)
   const logOpen = useLog((s) => s.open)
-  const updateStatus = useUpdate((s) => s.status)
-  const updateSubject = useUpdate((s) => s.subject)
-  const updateProgress = useUpdate((s) => s.progress)
-  const updateError = useUpdate((s) => s.error)
-  const updateDismissedSubject = useUpdate((s) => s.dismissedSubject)
 
   // Rename / switch the working branch (name is coerced to dsgn/<…> in main).
   const changeBranch = async (name: string): Promise<void> => {
@@ -1517,46 +1512,6 @@ export default function App(): React.JSX.Element {
       )}
 
 
-
-      {updateStatus === 'available' && updateSubject !== updateDismissedSubject && (
-        <div className="banner banner--info">
-          <span className="banner__text">
-            Update available{updateSubject ? `: ${updateSubject}` : ''}
-          </span>
-          <button className="btn" onClick={() => void window.api.update.apply()}>
-            Update &amp; Restart
-          </button>
-          <button
-            className="banner__close"
-            onClick={() => useUpdate.getState().dismiss()}
-            aria-label="Dismiss"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
-      {updateStatus === 'updating' && (
-        <div className="banner banner--info">
-          <span className="banner__text">Updating… {updateProgress ?? ''}</span>
-          <button className="btn" disabled>
-            Updating…
-          </button>
-        </div>
-      )}
-
-      {updateStatus === 'error' && (
-        <div className="banner banner--info">
-          <span className="banner__text">Update failed: {updateError}</span>
-          <button
-            className="banner__close"
-            onClick={() => useUpdate.getState().dismiss()}
-            aria-label="Dismiss"
-          >
-            ✕
-          </button>
-        </div>
-      )}
 
       <DiagnoseCard onApply={applyFix} onDismiss={dismissFix} />
 
