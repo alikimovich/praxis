@@ -961,6 +961,36 @@ body.is-fullscreen .sidebar-toggle {
     color: var(--text);
 }
 
+/* Feedback — pinned to the rail's bottom-left (a sibling of rail__inner, so a
+   long project list never scrolls it away). Mirrors .rail__action's quiet
+   list-item look, with a top border and small margin lifting it off the edge. */
+.rail__feedback {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 4px 6px 6px;
+    padding: 6px 8px;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--rail-text);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.rail__feedback svg {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+}
+.rail__feedback:hover {
+    background: var(--border);
+    color: var(--text);
+}
+
 /* v5-D — past-session review modal (plain CSS; renders over the panes, not the
    native preview, so a normal overlay is fine). */
 .review__backdrop {

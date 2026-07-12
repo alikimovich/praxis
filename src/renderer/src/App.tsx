@@ -45,7 +45,7 @@ import {
 } from './store'
 import { projectKey } from '../../shared/projectKey'
 import { restoreWorkspace, type RestoreDeps } from './restore'
-import { MessageSquarePlus, MonitorSmartphone, PanelLeft } from 'lucide-react'
+import { MonitorSmartphone, PanelLeft } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -1678,16 +1678,6 @@ export default function App(): React.JSX.Element {
                   <span className="previewbar__url">{hint}</span>
                 )}
                 <div className="previewbar__actions">
-                  {/* Feedback — always available; files a GitHub issue on the
-                      Praxis repo with an optional screenshot + conversation. */}
-                  <button
-                    className="iconbtn"
-                    onClick={() => useFeedback.getState().setOpen(true)}
-                    aria-label="Send feedback"
-                    title="Send feedback"
-                  >
-                    <MessageSquarePlus className="size-4" aria-hidden="true" />
-                  </button>
                   {status.kind === 'running' && (
                     <>
                       {/* Element-select moved to the chat composer (Figma Make-style);
