@@ -67,12 +67,12 @@ let overlayLabel: HTMLDivElement | null = null
 let pinsLayer: HTMLDivElement | null = null
 let annotationPins: { id: string; selector: string }[] = []
 
-// Inline-comment state. `commentMode` is the armed whole-page mode (C/Y).
-// `commenting` is the element the OPEN inline input is frozen onto (the click
-// froze it); `inputKind` is what that open input submits as (null while the pill
-// shows its icon row). `inputFromMode` marks an input opened by a whole-page C/Y
-// click with no prior pick — Escape then hides the pill entirely instead of
-// collapsing back to icons.
+// Inline-comment state. `commentMode` is the armed whole-page mode (armed from
+// the renderer via setCommentMode). `commenting` is the element the OPEN inline
+// input is frozen onto (the click froze it); `inputKind` is what that open input
+// submits as (null while the pill shows its icon row). `inputFromMode` marks an
+// input opened by a whole-page mode click with no prior pick — Escape then hides
+// the pill entirely instead of collapsing back to icons.
 let commentMode: CommentMode = null
 let commenting: Element | null = null
 let inputKind: CommentMode = null
@@ -992,13 +992,7 @@ function onKey(e: KeyboardEvent): void {
     return
   }
   if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || isTypingTarget(e.target)) return
-  if (e.key === 'c' || e.key === 'C') {
-    e.preventDefault()
-    setCommentMode(commentMode === 'comment' ? null : 'comment')
-  } else if (e.key === 'y' || e.key === 'Y') {
-    e.preventDefault()
-    setCommentMode(commentMode === 'annotate' ? null : 'annotate')
-  } else if (e.key === 's' || e.key === 'S') {
+  if (e.key === 's' || e.key === 'S') {
     // S must work with the preview focused too. The renderer owns the toggle
     // (store + web/simulator routing) — relay instead of flipping locally.
     e.preventDefault()

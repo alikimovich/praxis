@@ -354,36 +354,29 @@ export default function App(): React.JSX.Element {
     }
   }, [])
 
-  // Global C/Y/Escape shortcuts when focus is on the app side (the preview's own
-  // preload handles them when the preview is focused). Ignored while typing.
+  // Global S/Escape shortcuts when focus is on the app side (the preview's own
+  // preload handles them when the preview is focused). S is ignored while typing;
+  // Escape turns off select mode even from the composer, so it always disarms.
   useEffect(() => {
-    const arm = (mode: 'comment' | 'annotate' | null): void => {
-      useSelection.getState().setCommentMode(mode)
-      if (mode) useSelection.getState().setSelected(null)
-      void window.api.preview.setCommentMode(mode)
-    }
     const onKey = (e: KeyboardEvent): void => {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
-      const t = e.target as HTMLElement | null
-      const tag = t?.tagName?.toLowerCase()
-      if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return
-      const cur = useSelection.getState().commentMode
-      if (e.key === 'c' || e.key === 'C') {
-        e.preventDefault()
-        arm(cur === 'comment' ? null : 'comment')
-      } else if (e.key === 'y' || e.key === 'Y') {
-        e.preventDefault()
-        arm(cur === 'annotate' ? null : 'annotate')
-      } else if (e.key === 'Escape') {
-        // Escape exits whichever mode is armed: comment/annotate, or select.
-        if (cur) {
+      if (e.key === 'Escape') {
+        // Escape disarms whichever mode is on — checked before the typing guard so
+        // it still fires while the chat composer (a textarea) holds focus.
+        if (useSelection.getState().commentMode) {
           e.preventDefault()
-          arm(null)
+          useSelection.getState().setCommentMode(null)
+          void window.api.preview.setCommentMode(null)
         } else if (useSelection.getState().selectMode) {
           e.preventDefault()
           actionsRef.current.toggleSelect()
         }
-      } else if ((e.key === 's' || e.key === 'S') && useSession.getState().projectRoot) {
+        return
+      }
+      const t = e.target as HTMLElement | null
+      const tag = t?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return
+      if ((e.key === 's' || e.key === 'S') && useSession.getState().projectRoot) {
         // S toggles element-select (when a preview is open). The native menu's
         // Cmd+Shift+S covers the case where the preview itself has focus.
         e.preventDefault()
