@@ -13,10 +13,19 @@ import type { SourceView } from '../../../shared/api'
 import { useCodeDrawer, usePanelInset } from '../store'
 import { Button } from '@/components/ui/button'
 
-/** Collapsed height of the drawer + the native-preview strip it reserves. */
+/** Default (collapsed) height of the drawer + the native-preview strip it reserves. */
 const DRAWER_H = 300
+/** Smallest the drawer can be dragged down to (still shows a couple of lines + chrome). */
+const MIN_DRAWER_H = 120
 /** Slice of preview kept visible when the drawer is expanded (so it isn't hidden). */
 const MIN_PREVIEW = 160
+/** Hard ceiling on the drawer: it may never grow past this share of the window height. */
+const MAX_VIEWPORT_FRACTION = 0.8
+
+/** Clamp the drawer height to [MIN_DRAWER_H, cap]. */
+function clampHeight(h: number, cap: number): number {
+  return Math.max(MIN_DRAWER_H, Math.min(h, cap))
+}
 
 /** CodeMirror language extension for a file, by extension (empty = plain text). */
 function langFor(file: string): Extension[] {
@@ -131,12 +140,20 @@ export default function CodeDrawer({
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
+  // Explicit height set by dragging the top edge. null = follow expand/collapse.
+  // Stored unclamped; the render-time clamp keeps it inside the live bounds so a
+  // window/container resize can't strand it out of range.
+  const [dragHeight, setDragHeight] = useState<number | null>(null)
   // Cmd+click jump history (browser semantics) — lives in the drawer store.
   const navIndex = useCodeDrawer((s) => s.index)
   const navLen = useCodeDrawer((s) => s.stack.length)
   // Height of the drawer's positioning container (.previewcard__body), tracked so
   // "expand" can fill it while leaving a MIN_PREVIEW strip of native preview above.
   const [containerH, setContainerH] = useState(0)
+  // Window height, tracked so the 80%-of-viewport ceiling follows resizes.
+  const [viewportH, setViewportH] = useState(() =>
+    typeof window === 'undefined' ? 0 : window.innerHeight
+  )
 
   useEffect(() => {
     const el = rootRef.current?.offsetParent as HTMLElement | null
@@ -153,7 +170,28 @@ export default function CodeDrawer({
     return () => ro?.disconnect()
   }, [])
 
-  const height = expanded && containerH > 0 ? Math.max(DRAWER_H, containerH - MIN_PREVIEW) : DRAWER_H
+  useEffect(() => {
+    const onResize = (): void => setViewportH(window.innerHeight)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  // The tallest the drawer may get: never past 80% of the window, and never so
+  // tall it hides the whole preview (leave a MIN_PREVIEW strip when we know the
+  // container size).
+  const maxHeight = Math.max(
+    MIN_DRAWER_H,
+    Math.min(
+      viewportH > 0 ? viewportH * MAX_VIEWPORT_FRACTION : Infinity,
+      containerH > 0 ? containerH - MIN_PREVIEW : Infinity
+    )
+  )
+  const height =
+    dragHeight != null
+      ? clampHeight(dragHeight, maxHeight)
+      : expanded
+        ? maxHeight
+        : Math.min(DRAWER_H, maxHeight)
 
   // Reserve the bottom strip of the native preview for as long as the drawer is
   // open, tracking the current (expanded/collapsed) height.
@@ -364,6 +402,33 @@ export default function CodeDrawer({
     setErrorMsg(null)
   }
 
+  // Drag the top edge to resize. Height is captured at drag start and updated by
+  // the pointer's vertical delta (up = taller); the render-time clamp enforces the
+  // MIN_DRAWER_H..80%-of-viewport bounds. Listeners live on window so the drag
+  // survives the pointer leaving the thin handle.
+  const startDrag = (e: React.PointerEvent): void => {
+    e.preventDefault()
+    const startY = e.clientY
+    const startH = height
+    setExpanded(false)
+    const onMove = (ev: PointerEvent): void => setDragHeight(startH + (startY - ev.clientY))
+    const onUp = (): void => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'ns-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+  // Keyboard resize for the handle (Up/Down grow/shrink; browser convention).
+  const nudge = (delta: number): void => {
+    setExpanded(false)
+    setDragHeight(clampHeight((dragHeight ?? height) + delta, maxHeight))
+  }
+
   return (
     <div
       ref={rootRef}
@@ -371,6 +436,19 @@ export default function CodeDrawer({
       style={{ height }}
       aria-label="Code editor"
     >
+      {/* Drag-to-resize handle straddling the top border. */}
+      <div
+        className="codedrawer__resize absolute inset-x-0 -top-1 z-10 h-2 cursor-ns-resize"
+        onPointerDown={startDrag}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowUp') (e.preventDefault(), nudge(24))
+          else if (e.key === 'ArrowDown') (e.preventDefault(), nudge(-24))
+        }}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize code editor"
+        tabIndex={0}
+      />
       <div className="codedrawer__head flex items-center gap-2 border-b px-3 py-1.5">
         {/* Cmd+click jumps build history — navigate it like a browser. */}
         <Button
@@ -436,7 +514,7 @@ export default function CodeDrawer({
           variant="ghost"
           size="icon"
           className="codedrawer__expand size-6"
-          onClick={() => setExpanded((e) => !e)}
+          onClick={() => (setDragHeight(null), setExpanded((e) => !e))}
           aria-label={expanded ? 'Collapse code editor' : 'Expand code editor'}
           aria-pressed={expanded}
           title={expanded ? 'Collapse' : 'Expand'}

@@ -2,6 +2,337 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-11 — Codex: don't nag on switch, and give it its own model picker (LKM-42)
+
+Two Codex UX bugs. **(1) The `codex login` hint showed on *every* switch to the
+Codex backend**, even for an already-connected user — the render guard was just
+`if (!p?.login)`. Gated it on a new `codexAuthNeeded` store flag that's raised
+only when a Codex turn actually reports an auth/"not connected" error (mirrors
+`authNeeded` for Claude, kept separate so the Claude onboarding banner never
+fires for a Codex failure). `isAuthError` now also matches Codex's `sign in` /
+`codex login` phrasings. **(2) The model picker always listed Claude's models**
+(opus/sonnet/haiku), so on Codex you couldn't pick a real model and selecting one
+handed a Claude name to Codex → the turn failed. The picker now switches per
+backend via `modelsFor(provider)` (Codex → Default / GPT-5 Codex / GPT-5), and
+because Codex fixes its model at `startThread`, `onModelChange` reopens the
+session on the new model instead of a no-op live `setModel`. Switching backend
+resets the model to Default (names don't cross providers).
+
+- **Gotcha fixed in the same pass:** Codex's backend emits `done` after *every*
+  turn — including the failed auth turn, right after the `error` that raises the
+  hint. Clearing `codexAuthNeeded` on `done` (as the first cut did, copying the
+  Claude path) would wipe the hint the instant it appeared, so it's now cleared
+  only on a real `delta` (streamed output = genuinely connected). Claude keeps
+  clearing on `done` because its backend only emits `done` on success.
+- `test/chat-render.mjs` extended: hint stays hidden on switch, the model picker
+  lists Codex models (not `opus`), and the hint appears once `codexAuthNeeded` is
+  raised. (Electron UI tier — needs a display; can't run on a headless runner.)
+
+## 2026-07-11 — Regression-test the mid-message "/" menu trigger (LKM-37)
+
+The "/" skills menu already opened mid-message (it reads the "/" token the caret
+sits in via `/(?:^|\s)\/(\S*)$/`, so it fires at the start or after whitespace but
+not when a non-whitespace char precedes "/"), but the parsing lived inline in
+`ChatPanel` with no coverage. Extracted it to a pure, string-only
+`src/shared/slash-token.ts` (`parseSlashToken`) and added `test/slash-token.mjs`
+(unit tier) locking the behavior: opens at start and after space/newline/tab,
+stays closed for `foo/bar`, `a/`, `http://x`, and once a trailing space ends the
+token. `ChatPanel` now calls the shared helper — no behavior change, just testable.
+
+## 2026-07-10 — Discoverable "Edit text" in the preview toolbar (LKM-38)
+
+Inline text editing already existed (double-click a stamped, text-only element in
+Select mode → contentEditable → source splice; see 2026-06-24), but it was a
+hidden gesture with no on-screen affordance, so it read as "gone". Re-surfaced it
+as an explicit **Edit text** button on the in-preview selection toolbar.
+
+- **`edit` icon button** (pencil) added to the toolbar pill in `preview/preload.ts`,
+  in DOM order `comment, annotate, [input], edit, props, code | delete`. It shares
+  the *exact* edit engine as the double-click: `onDblClick` and the button both
+  call a new `startTextEdit(el)` (extracted from the old `onDblClick` body).
+- **"When it's possible"** — `isTextEditable(el)` gates the button: a directly-
+  stamped element with no child elements and not a void/replaced tag
+  (`img`/`input`/`svg`/…). `setEditAction()` shows the button only for such a
+  selection (mirrors `onDblClick`'s guard), and `setTrailingActions` hides it
+  while the comment/annotate input is open. Non-text or expression content still
+  falls back to the agent on commit, unchanged.
+- `test/select-element.mjs`: toolbar order assertion now expects the `edit` kind
+  and that it renders visible for the plain-text `#hero-title`; a new step clicks
+  the Edit button and asserts it arms `contenteditable="plaintext-only"`, then
+  Escapes to cancel. (UI tier — needs a display; typecheck green.)
+## 2026-07-10 — Agent knows it's in Praxis; preview becomes a pair of tools
+
+Rules v3 (`main/rules.ts`, `dsgnRules(opts?)`): the product is named **Praxis**
+in the agent-facing text (identifiers unchanged), the opening context tightened
+(designer pointing at UI, `data-dsgn-source` file:line selections, instant
+HMR), and a new `previewTools` flag gates a "Seeing the user's preview" section
+so Codex/Gemini never hear about tools they don't have.
+
+The silent per-message "The preview is currently showing <path>." prefix is
+GONE (ChatPanel no longer prepends it; `describePreviewLocationForPrompt`
+removed; `usePreviewLocation` stays for UI). Instead the Claude backend now
+registers Praxis's first in-process SDK tools via `createSdkMcpServer`:
+
+- `mcp__praxis__preview_location` — the agent asks where the user is when the
+  page actually matters (live SPA URL from the preview webContents; "No project
+  preview is open." on the placeholder).
+- `mcp__praxis__preview_screenshot` — exactly what the user sees (their route,
+  viewport, simulator): `capturePage()` downscaled to ≤1200px JPEG, returned as
+  an MCP image block.
+
+Both are read-only and never raise a permission card (`allowedTools` + a
+`canUseTool` early-allow). A new `main/preview-state.ts` registry hands the
+preview URL/capture to the backends without an index.ts↔backends import cycle.
+A bundled plugin (`agent-plugin/` at the repo root, wired via the SDK `plugins`
+option when present) ships a `praxis-preview` skill teaching the workflow:
+observe with the tools, interact via `agent-browser`, verify visual changes
+with a screenshot. `test/rules.mjs` pins v3 + the gating;
+`test/preview-location.mjs` now asserts the composer does NOT prepend.
+
+## 2026-07-10 — Drag-resize the code drawer (LKM-35)
+
+The bottom code drawer (`CodeDrawer.tsx`) can now be resized by dragging its top
+edge, not just toggled between the fixed 300px height and expanded.
+
+- **A `.codedrawer__resize` handle** straddling the top border (`absolute -top-1
+  h-2`, `cursor-ns-resize`, `role="separator"`). `onPointerDown` captures the
+  start Y + current height and installs window `pointermove`/`pointerup`
+  listeners (so the drag survives the pointer leaving the thin strip); each move
+  sets an explicit `dragHeight` from the vertical delta (up = taller). Arrow
+  Up/Down on the focused handle nudges it 24px for keyboard users.
+- **Height precedence:** `dragHeight` (if set) → `expanded` → default `DRAWER_H`.
+  All pass through `clampHeight` to `[MIN_DRAWER_H (120), maxHeight]`.
+  `maxHeight` = `min(80% of the window height, containerH − MIN_PREVIEW)`, so the
+  drawer never exceeds 80% of the viewport and never fully hides the preview. A
+  window `resize` listener tracks `viewportH` so the ceiling stays live; the
+  render-time clamp keeps a stored `dragHeight` from stranding out of range.
+  The expand toggle clears `dragHeight` so it reclaims precedence.
+- `test/code-drawer.mjs` extended: drag the handle to the top of the window and
+  assert the reserved inset grows but stays ≤ 80% of `window.innerHeight`.
+
+## 2026-07-10 — Close individual live chats from the rail (LKM-34)
+
+Each live chat row in the rail now carries the same hover-revealed × the past
+chats and spawns already had — so a user can close ONE of a project's open chats
+without closing the whole project.
+
+- **New `agent:close-chat` IPC** (`root`, `sessionKey`): tears down just that
+  session via the existing `closeSession` (so a closed chat persists to history
+  and becomes a resumable "previous agent", exactly like project close), then
+  re-points the project's active chat to a survivor (prefers the default `key`).
+  Returns `{ remaining, activeSessionKey }`; `activeSessionKey` is null when no
+  chat remains. If the closed chat was the globally active one, `activeKey`
+  follows the survivor (only while the project is still intended-active — never
+  resurrects a backgrounded session into a chat the renderer isn't showing).
+- **Renderer `closeChatForProject(key, sessionKey)`** (App): closing a project's
+  LAST live chat falls through to `closeProjectFromRail` (nothing left to show);
+  otherwise it awaits the IPC (so main disposes before the slice is cleared —
+  a trailing emit can't resurrect it), drops the `useChat` slice, rewires the
+  entry's `sessionKeys`/`activeSessionKey`, and switches the visible chat only
+  when the closed one was the active chat on screen.
+- Wired through `shared/api.ts` + the preload bridge + a new `onCloseChat` Rail
+  prop; the × reuses the existing `.rail__chat-x` styling (hover-to-reveal).
+  `test/agent-multi.mjs` extended: open a 2nd chat, close only it, assert the
+  project stays live and the closed key is gone from `remaining`.
+
+## 2026-07-09 — macOS: sidebar vibrancy behind the rail
+
+The main window's base is now the NSVisualEffect *sidebar* material instead of
+a solid white/dark fill (macOS only; Windows/Linux keep the theme color).
+Electron allows ONE vibrancy material per window (a true multi-material split
+needs a native NSVisualEffectView addon — the old `electron-vibrancy` package
+is dead, NAN-era, won't build on Electron 43), so the split is CSS zones over
+the material:
+
+- rail → fully transparent (raw sidebar material),
+- chat + preview panes → opaque `--bg` (tried translucent washes first; the
+  content areas read better solid),
+- Welcome screen (`.empty`) → light `--vib-main` `--bg` wash so an empty
+  window still shows the material.
+
+`createWindow` skips the opaque `backgroundColor` on darwin (it would paint
+over the material — the nativeTheme re-apply skips the window there too);
+`main.tsx` stamps `html.vibrancy` (main window only, never the prop-panel
+island). Component fills (cards, modals, buttons, inputs) stay opaque. Theme
+always follows the OS, so the material and the token palette can't disagree.
+
+## 2026-07-09 — Rail: folder-icon projects + Cursor-style chat list (LKM-28)
+
+Reworked the left rail's per-project display to match Cursor. Each project now
+leads with a **folder icon** (`FolderOpen` when it's the active project,
+`Folder` otherwise) in place of the old status dot. The active project expands
+to a single **flat, left-aligned chat list** whose text lines up under the
+project name (row left-padding = glyph + gap), replacing the two separate,
+indented, dot-prefixed sub-lists (live-chat switcher + "previous agents").
+
+- **One list, no dots.** Live/open chats come first (the active one gets a
+  full-width highlight pill), then previous chats (persisted `SessionRecord`s),
+  then any comment-spawn rows. The only remaining dot is the spawn status dot;
+  chat rows carry no status badge (per the request).
+- **Auto-named chats.** `chatTitle()` (store) derives a short name from a chat's
+  opening user message — live chats read `useChat`'s first user message, past
+  chats read `rec.transcript`'s. Empty chats fall back to "New chat".
+- **Compact time.** `shortAgo()` (store) gives Cursor-style trailing labels
+  ("3m", "2h", "5d", "4mo", "1y") on past-chat rows; live chats show none.
+- Dropped the full active-item background (only the active chat is highlighted
+  now) and the orphaned `.rail__dot` / `.rail__session*` / `.rail__spawn*` CSS.
+  `test/history-ui.mjs` updated to the new `.rail__chat*` DOM.
+## 2026-07-09 — Session-review modal: freeze-frame the preview; loads can't punch through
+## 2026-07-09 — Modals freeze-frame the preview; loads can't punch through
+
+Three sightings of the same seam (session-review modal ×2, feedback dialog).
+(1) Opening a past chat while a project launch was still in flight: the modal
+hid the native preview (drag-hide path), then the launch settled and
+`preview:load`'s unconditional "recover from any leaked hide"
+`setVisible(true)` painted the preview straight over the open modal — native
+views always win over DOM. (2) Even without the race, reviewing a past chat
+blanked the preview pane for as long as the modal was open. (3) The feedback
+dialog (LKM-27) rendered partially under the preview.
+
+- Main now tracks `previewHiddenByRenderer` (set by `preview:set-dragging`):
+  `preview:load` still loads the URL but only unhides when NO renderer hide is
+  active — the leaked-hide recovery survives for actual leaks. The flag clears
+  in `resetStalePreview` (the overlay died with the old renderer document).
+- The dropdowns' open-after-freeze logic moved to `store.ts` as
+  `openWithPreviewFreeze`; the review modal AND the feedback dialog now use it:
+  the preview stays visually in place as a snapshot `<img>` under the overlay
+  instead of disappearing (or being covered), and the live view returns on
+  close. Bonus: the feedback screenshot is captured after the freeze, so it now
+  INCLUDES the preview (the native view is a separate target `capturePage`
+  never saw — screenshots used to have a hole there).
+- `test/history-ui.mjs` now asserts the contract from the main side (native view
+  hidden under the modal, still hidden after a mid-modal `preview:load`,
+  restored on close). Standalone tip: with the app open, standalone test runs
+  need `DSGN_USER_DATA=$(mktemp -d)` — the running app holds the shared
+  single-instance lock (the runner already isolates).
+
+## 2026-07-09 — Survive sleep/crash: renderer recovery + full workspace/chat restore
+
+Closing the laptop could kill the main renderer (Chromium reaps it around a
+long sleep); the app either froze or — once reloaded — booted to the Welcome
+screen with the OLD project's native preview still painted on top and every
+chat apparently gone, even though main was still running the agent sessions
+and dev server. Three layers of fix, in three commits:
+
+1. **Main renderer recovery** (`main/index.ts`): reload on
+   `render-process-gone`, repaint on `powerMonitor` resume, and hide/zero the
+   preview `WebContentsView` on every main-frame `did-navigate` — PreviewPane's
+   unmount cleanup never runs across a hard reload, so main must reset the
+   stale view itself (page kept warm; `preview:load` re-claims it instantly).
+2. **Reattach APIs** (`devserver.ts`, `agent.ts`, backends): `devserver:info`
+   returns a running server's `RunningDevServer` (covers in-process static
+   servers too) so a reattaching renderer recovers the URL instead of
+   respawning on a new port; `agent:workspace-snapshot` returns every live
+   project/chat with its in-memory record (a live session has no on-disk
+   record — those are written only on close). Per-chat `isRunning` rides the
+   ProviderSession contract's own terminal `done`/`error` event via
+   `ctx.onEvent`, now wired in all three backends for every interactive session.
+3. **Renderer restore** (`renderer/src/restore.ts`, store, App): `useWorkspace`
+   `{projects, activeKey}` persists to localStorage (`dsgn:workspace`; the
+   `?dsgnPanel=1` window never writes it). On boot, `restoreWorkspace` reattaches
+   to whatever the snapshot says is live — rail rehydrated, each live chat
+   seeded via `messagesFromTranscript` + `useChat.hydrate` (extended with an
+   `isRunning` mode that opens a fresh streaming tail: the pre-reload buffered
+   text only reaches the transcript on flush, so continuing deltas can't
+   double-render), active project re-applied through `applyProject` with the
+   preview URL from `devserver:info`. When main has nothing (real relaunch),
+   the last dsgn-launched project reopens via `attempt()` and its newest
+   resumable record is resumed with history seeded. Any failure falls back to
+   Welcome.
+
+Tests: `test/restore-reload.mjs` (electron tier — real reattach across a hard
+`webContents.reload()`, seed/no-clobber/streaming-tail guards, dead-workspace
+no-wedge). Because persisted workspace state now changes BOOT behavior, the
+electron tier leaked state between tests (a prior test's project auto-reopened
+in the next test's launch): `test/run.mjs` now gives each test its own
+throwaway userData dir via the new `DSGN_USER_DATA` env override in
+`main/index.ts` (also isolates the single-instance lock, so a killed run can't
+block the next). Note: tests invoked directly (`node test/x.mjs`) still share
+the real userData; the runner is the isolation boundary.
+
+Also fixed in passing: `preview-location.mjs` was failing at HEAD~ already —
+its renderer-side `window.api.agent.send = spy` silently no-ops because the
+contextBridge freezes `window.api`; it now spies in MAIN by swapping the
+`agent:send` handler via `app.evaluate` (and asserts on the last *user*
+message, since submit opens an empty streaming-assistant placeholder).
+
+## 2026-07-09 — Resume shows the past chat, not an empty tree — LKM-25
+
+Resuming a "previous agent" (SessionReview's Resume) handed the SDK the
+resumable session id so the model kept its context, but the renderer switched to
+a brand-new, empty chat slice and never populated it from the record's
+transcript — so the thread looked blank even though the agent "remembered."
+
+The persisted `SessionRecord` already carries the full `transcript`
+(`user`/`assistant`/`status` lines) and `resumeRecord` in `App.tsx` already has
+the record in hand, so the fix is renderer-only (no IPC change):
+
+- **store.ts:** new `messagesFromTranscript(transcript)` rebuilds `ChatMessage[]`
+  from the flat transcript, regrouping each turn's assistant text + tool
+  `status` lines into one assistant message with interleaved `segments` — the
+  same shape the live stream builds via `startAssistant`/`appendDelta`/
+  `appendStatus`. New `hydrate(key, messages)` action seeds a chat slice, but
+  **only when it's empty** so it can never clobber a live chat.
+- **App.tsx:** `resumeRecord` calls
+  `hydrate(sessionKey, messagesFromTranscript(record.transcript))` before
+  `setActiveChat`, so the resumed thread renders its history; new turns then
+  append after it as usual.
+- **Test:** `test/chat-render.mjs` gained a block that hydrates a slice from a
+  sample transcript, asserts the grouping (2 user + 1 grouped assistant turn
+  with text→tools→text segments and 2 statuses), renders it, and confirms
+  re-hydration is a no-op on a populated slice. `messagesFromTranscript` is
+  exposed as `window.__dsgnMessagesFromTranscript` for the harness.
+
+## 2026-07-09 — In-app feedback button (files a GitHub issue) — LKM-27
+
+A "Send feedback" affordance now files a GitHub issue on Praxis's OWN repo (the
+app's git checkout, `app.getAppPath()` — same seam the self-updater uses), with
+an optional screenshot and conversation transcript, each behind its own toggle.
+
+- **Main:** `feedback.ts` registers `feedback:capture` (downscales a
+  `webContents.capturePage()` of the app window to a ≤900px JPEG data URI) and
+  `feedback:submit` (preflight git repo / origin / `gh`, then `gh issue create`).
+  Wired in `index.ts` via `registerFeedbackIpc(() => mainWindow)`.
+- **Body builder:** `src/shared/feedback-body.ts` (pure, unit-tested) assembles
+  the issue title + body. GitHub gives no API to *attach* an image and caps issue
+  bodies at 65536 chars, so an opted-in screenshot rides along as a base64
+  data-URI inside a collapsed `<details>` (copy into a browser to view); any
+  optional section that would blow the cap is dropped with a visible note while
+  the feedback text always survives.
+- **Renderer:** `FeedbackDialog.tsx` (shadcn Dialog) — textarea + two toggles;
+  the screenshot is captured on open and previewed. Opened from a new previewbar
+  icon button (always visible) and an empty-state "Send feedback" button via a
+  tiny `useFeedback` store. Transcript comes from `formatConversation(messages)`.
+- **Tests:** `test/feedback-body.mjs` (unit — title/body/limits) and
+  `test/feedback-dialog.mjs` (electron — opens the dialog, asserts the toggles +
+  send-button gating; never posts). Both registered in `test/run.mjs`.
+## 2026-07-09 — Open vanilla HTML / static-site projects
+
+Praxis previously refused any folder without a package.json (`detect()` threw
+"No package.json found") and any package.json without a `dev`/`start` script.
+Plain HTML/CSS/JS projects — the kind with no build tooling — were unopenable.
+
+`detect()` now falls back to a new `framework: 'static'` when a folder has an
+HTML entry (`index.html`, else the first `*.html`): either with no package.json
+at all, or with a package.json whose framework is unrecognized *and* has no
+dev/start script. A **recognized** framework (vite/next/…) without a dev script
+still errors — its `index.html` is a build template that won't serve raw — so
+the user is asked for a launch command. Both error messages now say "Enter a
+command to launch this project", which the preview's existing error bar already
+turns into a custom-command retry — so anything we can't auto-launch prompts for
+the command (the second half of the task, already wired via `attempt(root, cmd)`).
+
+Static sites are served by a new in-process `src/main/static-server.ts` (Node
+`http.Server`, not a spawned child) so no external tool (`serve`, `python -m
+http.server`) needs to be on PATH and we own the exact port. It resolves the
+directory index, sets content-types, blocks path traversal, and injects a tiny
+SSE live-reload snippet into served HTML + watches the tree — so agent edits
+reflect in the preview the way a real dev server's HMR would (vanilla sites have
+none). `devserver.ts` routes `framework:'static'` (with no command override) to
+it, tracks the servers in a parallel `staticServers` map, and teaches
+`stop`/`stopAll`/`isRunning` about them. New `test/static-serve.mjs` (electron
+tier) covers detect→serve→assets→live-reload→traversal-block→stop.
+
 ## 2026-07-08 — Agent now knows the preview's current page
 
 The preview's real location (link clicks, SPA route changes, initial load)

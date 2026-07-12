@@ -51,11 +51,19 @@ try {
   if ((await win.$$('.diag__copy')).length !== 2) throw new Error('missing copy buttons')
   await win.screenshot({ path: join(artifacts, '30-diagnose-card.png') })
 
-  // Apply seeds the composer with the repo fix and clears the card.
+  // Apply seeds the composer with the repo fix and clears the card. The seed
+  // lands in a React state update that can commit a tick after the card
+  // detaches — poll for it instead of reading the value once (flaked in CI).
   await win.click('button:has-text("Apply repo fix")')
   await win.waitForSelector('.diag', { state: 'detached', timeout: 5000 })
-  const input = await win.inputValue('.composer__input')
-  if (!input.includes('@ai-sdk/xai')) throw new Error(`composer not seeded: "${input}"`)
+  await win
+    .waitForFunction(
+      () => (document.querySelector('.composer__input')?.value ?? '').includes('@ai-sdk/xai'),
+      { timeout: 5000 }
+    )
+    .catch(async () => {
+      throw new Error(`composer not seeded: "${await win.inputValue('.composer__input')}"`)
+    })
 
   // Dismiss clears the card too.
   await win.evaluate((d) => window.__dsgnDiagnosis.getState().setCurrent(d), DIAG)

@@ -8,6 +8,7 @@ import {
   shell,
   nativeImage,
   nativeTheme,
+  powerMonitor,
   type MenuItemConstructorOptions
 } from 'electron'
 import { join } from 'path'
@@ -23,12 +24,17 @@ import { ensureBranch, switchBranch, listBranches, checkoutBranch } from './git'
 import { createProject } from './scaffold'
 import { registerDiagnoseIpc } from './diagnose'
 import { registerUpdateIpc } from './update-ipc'
+import { registerFeedbackIpc } from './feedback'
+import { registerPreviewSource } from './preview-state'
 
 // Product name — drives the macOS app menu label and the About panel. Set at
 // module load (before app is ready) so the menu bar reads "Praxis", not "Electron".
 app.setName('Praxis')
 // The About panel otherwise reports the Electron bundle's own version string.
-app.setAboutPanelOptions({ applicationName: 'Praxis', applicationVersion: app.getVersion() })
+app.setAboutPanelOptions({
+  applicationName: 'Praxis',
+  applicationVersion: app.getVersion()
+})
 
 // App icon (dev dock icon + Win/Linux window icon). Lives at build/icon.png,
 // resolved relative to the compiled main (out/main → ../../build). Loaded up front
@@ -36,6 +42,15 @@ app.setAboutPanelOptions({ applicationName: 'Praxis', applicationVersion: app.ge
 const appIcon = nativeImage.createFromPath(join(__dirname, '../../build/icon.png'))
 
 let mainWindow: BrowserWindow | null = null
+
+// Test isolation: the electron test tier (test/run.mjs) points each test at its
+// own throwaway userData dir so persisted state (localStorage: workspace/recents)
+// can't leak between tests — and each gets its own single-instance lock, so a
+// stale app from a killed run can't block the next launch. Never set in
+// production; must run before the lock request below.
+if (process.env.DSGN_USER_DATA) {
+  app.setPath('userData', process.env.DSGN_USER_DATA)
+}
 
 // Single-instance: re-running `praxis` (or relaunching after an update) focuses
 // the running window instead of spawning a second Praxis.
@@ -81,6 +96,18 @@ let previewStatusText: string | null = null
 
 // Latest annotation pins, re-pushed to the preview after each navigation.
 let annotationPins: { id: string; selector: string }[] = []
+
+// Renderer's last-reported preview slot rect. Module-scope (not local to
+// registerPreviewIpc) so resetStalePreview can zero it too.
+let lastPreviewBounds = { x: 0, y: 0, width: 0, height: 0, radius: 0 }
+
+// The renderer asked the native preview hidden (split-drag, or the freeze-frame
+// path under an overlay that must paint above it — dropdowns, the session-review
+// modal). While set, a completing preview:load must NOT unhide the view: native
+// views always paint over DOM, so it would punch straight through the open
+// overlay (e.g. a project launch finishing while the user reads a past chat).
+// Visibility returns when the renderer releases the hide (set-dragging false).
+let previewHiddenByRenderer = false
 
 // Chromium error codes worth retrying — the dev server is up but not yet serving.
 const TRANSIENT_LOAD_ERRORS = new Set([-324, -102, -101, -105, -106, -109])
@@ -186,8 +213,7 @@ let recentProjects: RecentMenuEntry[] = []
  */
 function buildAppMenu(): void {
   const send = (action: string): void => mainWindow?.webContents.send('menu:action', action)
-  const openRecent = (root: string): void =>
-    mainWindow?.webContents.send('menu:open-recent', root)
+  const openRecent = (root: string): void => mainWindow?.webContents.send('menu:open-recent', root)
 
   const recentItems: MenuItemConstructorOptions[] = recentProjects.length
     ? [
@@ -207,8 +233,16 @@ function buildAppMenu(): void {
     {
       label: 'File',
       submenu: [
-        { label: 'New Project…', accelerator: 'CmdOrCtrl+N', click: () => send('new-project') },
-        { label: 'Open Project…', accelerator: 'CmdOrCtrl+O', click: () => send('open-project') },
+        {
+          label: 'New Project…',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => send('new-project')
+        },
+        {
+          label: 'Open Project…',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => send('open-project')
+        },
         { label: 'Open Recent', submenu: recentItems }
       ]
     },
@@ -216,17 +250,45 @@ function buildAppMenu(): void {
     {
       label: 'Actions',
       submenu: [
-        { label: 'Reload Preview', accelerator: 'CmdOrCtrl+R', click: () => send('reload') },
-        { label: 'Select Element', accelerator: 'CmdOrCtrl+Shift+S', click: () => send('select') },
-        { label: 'Toggle Logs', accelerator: 'CmdOrCtrl+L', click: () => send('logs') },
-        { label: 'Publish', accelerator: 'CmdOrCtrl+Shift+P', click: () => send('publish') },
-        { label: 'Stop Project', accelerator: 'CmdOrCtrl+.', click: () => send('stop') },
+        {
+          label: 'Reload Preview',
+          accelerator: 'CmdOrCtrl+R',
+          click: () => send('reload')
+        },
+        {
+          label: 'Select Element',
+          accelerator: 'CmdOrCtrl+Shift+S',
+          click: () => send('select')
+        },
+        {
+          label: 'Toggle Logs',
+          accelerator: 'CmdOrCtrl+L',
+          click: () => send('logs')
+        },
+        {
+          label: 'Publish',
+          accelerator: 'CmdOrCtrl+Shift+P',
+          click: () => send('publish')
+        },
+        {
+          label: 'Stop Project',
+          accelerator: 'CmdOrCtrl+.',
+          click: () => send('stop')
+        },
         { type: 'separator' },
         {
           label: 'Viewport',
           submenu: [
-            { label: 'Desktop', accelerator: 'CmdOrCtrl+1', click: () => send('viewport:desktop') },
-            { label: 'Mobile', accelerator: 'CmdOrCtrl+2', click: () => send('viewport:mobile') }
+            {
+              label: 'Desktop',
+              accelerator: 'CmdOrCtrl+1',
+              click: () => send('viewport:desktop')
+            },
+            {
+              label: 'Mobile',
+              accelerator: 'CmdOrCtrl+2',
+              click: () => send('viewport:mobile')
+            }
           ]
         }
       ]
@@ -372,6 +434,34 @@ function ensurePreviewView(): WebContentsView {
   return previewView
 }
 
+/**
+ * Reset the native preview to an unclaimed state after the MAIN renderer reloads
+ * (crash-recovery reload, hard refresh). The preview is a separate
+ * WebContentsView that survives a main-frame reload untouched — it keeps
+ * painting its last frame at its last bounds, and PreviewPane's unmount cleanup
+ * (which normally zeros this out) never runs across a hard navigation, so a
+ * fresh renderer would otherwise boot on the Welcome screen with a stale
+ * preview floating on top of it. Deliberately does NOT load the placeholder URL
+ * or clear `previewUrl` — the page stays warm so a reattaching renderer's
+ * `preview:load` (which already does `setVisible(true)`) comes back instantly
+ * instead of a fresh navigation. Guarded with `previewView?.` so the very first
+ * window load (before the preview view exists) is a no-op.
+ */
+function resetStalePreview(): void {
+  previewView?.setVisible(false)
+  previewView?.setBounds({ x: 0, y: 0, width: 0, height: 0 })
+  lastPreviewBounds = { x: 0, y: 0, width: 0, height: 0, radius: 0 }
+  // The overlay that requested a hide died with the old renderer document —
+  // don't let its stale intent block the reattaching renderer's preview:load.
+  previewHiddenByRenderer = false
+  // Same flags `preview:reset` clears (index.ts ~484-496) — keeps a stale mode
+  // from silently re-arming via did-finish-load once a project reattaches.
+  selectModeActive = false
+  commentModeActive = null
+  frameModeActive = false
+  annotationPins = []
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -383,7 +473,17 @@ function createWindow(): void {
     // Window icon (Windows/Linux; macOS uses the dock icon set below). Omit when
     // the PNG is missing so Electron falls back to its default rather than erroring.
     ...(appIcon.isEmpty() ? {} : { icon: appIcon }),
-    backgroundColor: previewBg(),
+    // macOS: the window base is the NSVisualEffect SIDEBAR material. The
+    // renderer carves it up (styles.css `html.vibrancy` rules, stamped by
+    // main.tsx): the rail shows it raw (true sidebar vibrancy), the chat +
+    // preview panes paint opaque --bg over it, the Welcome screen a light
+    // wash. Electron allows ONE material per window — a true multi-material
+    // split would need a native NSVisualEffectView addon. An opaque
+    // backgroundColor would paint over the material, so only the other
+    // platforms get the solid fill.
+    ...(process.platform === 'darwin'
+      ? { vibrancy: 'sidebar' as const }
+      : { backgroundColor: previewBg() }),
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -401,13 +501,19 @@ function createWindow(): void {
     mainWindow?.webContents.send('window:fullscreen', mainWindow.isFullScreen())
   mainWindow.on('enter-full-screen', sendFullscreen)
   mainWindow.on('leave-full-screen', sendFullscreen)
+  // No material swap on these transitions: in fullscreen the renderer paints
+  // every shell surface opaque (`body.is-fullscreen` in styles.css), so no
+  // material is visible — and a main-side setVibrancy can't be ordered against
+  // that CSS flip across the process boundary without risking a flash.
 
   // Keep the native surfaces' base color in step with the OS appearance (the
   // placeholder HTML re-themes itself via prefers-color-scheme; this handles the
   // solid fill behind it and the window).
   nativeTheme.on('updated', () => {
     const bg = previewBg()
-    mainWindow?.setBackgroundColor(bg)
+    // Not on macOS — an opaque window background would paint over the
+    // under-page vibrancy material (the window has none to update there).
+    if (process.platform !== 'darwin') mainWindow?.setBackgroundColor(bg)
     previewView?.setBackgroundColor(bg)
   })
 
@@ -417,38 +523,78 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  if (process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  const loadRenderer = (): void => {
+    if (process.env['ELECTRON_RENDERER_URL']) {
+      mainWindow?.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    } else {
+      mainWindow?.loadFile(join(__dirname, '../renderer/index.html'))
+    }
   }
+
+  // Unlike previewView (which self-heals via did-fail-load), a crashed main
+  // renderer had nothing to reload it — Chromium can silently kill/reset the
+  // GPU or renderer process around a long system sleep, leaving the window
+  // frozen on its last (often blank) frame with no recovery. Reload it.
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    console.error(`Main renderer process gone (${details.reason}); reloading.`)
+    loadRenderer()
+  })
+
+  // Any full navigation of the MAIN renderer (the render-process-gone reload
+  // above, a hard refresh, a dev-server full reload) leaves the preview
+  // WebContentsView painted at its last bounds while the fresh renderer boots
+  // with no memory of it — hide it until the renderer reattaches. Covers the
+  // initial load too (previewView is still null then, so this is a no-op).
+  mainWindow.webContents.on('did-navigate', resetStalePreview)
+
+  loadRenderer()
 }
 
 function registerPreviewIpc(): void {
-  let lastBounds = { x: 0, y: 0, width: 0, height: 0, radius: 0 }
+  // Let the in-process agent tools (backends/claude.ts) observe the user's live
+  // preview without importing this module (would be a cycle). getUrl reports the
+  // preview's CURRENT location (SPA navigations included) but null for the
+  // placeholder/empty state; capture snapshots the current frame.
+  registerPreviewSource({
+    getUrl: () => {
+      const url = previewView?.webContents.getURL()
+      return url && /^https?:/.test(url) ? url : null
+    },
+    capture: async () => (await previewView?.webContents.capturePage()) ?? null
+  })
+
   // Apply the renderer's slot rect (PreviewPane already lays out around the
   // floating prop panel's strip, viewport-aware).
   const applyBounds = (): void => {
     const view = ensurePreviewView()
     view.setBounds({
-      x: Math.round(lastBounds.x),
-      y: Math.round(lastBounds.y),
-      width: Math.max(0, Math.round(lastBounds.width)),
-      height: Math.round(lastBounds.height)
+      x: Math.round(lastPreviewBounds.x),
+      y: Math.round(lastPreviewBounds.y),
+      width: Math.max(0, Math.round(lastPreviewBounds.width)),
+      height: Math.round(lastPreviewBounds.height)
     })
     // Round the native view's corners: the card's inner radius in desktop
     // viewport, the iPhone screen's in mobile (both supplied by the renderer).
-    view.setBorderRadius(Math.round(lastBounds.radius || 0))
+    view.setBorderRadius(Math.round(lastPreviewBounds.radius || 0))
   }
 
   // Renderer reports where the preview rectangle is, in CSS pixels (== DIP).
   ipcMain.on(
     'preview:set-bounds',
-    (_e, bounds: { x: number; y: number; width: number; height: number; radius?: number }) => {
-      lastBounds = { ...bounds, radius: bounds.radius ?? 0 }
+    (
+      _e,
+      bounds: {
+        x: number
+        y: number
+        width: number
+        height: number
+        radius?: number
+      }
+    ) => {
+      lastPreviewBounds = { ...bounds, radius: bounds.radius ?? 0 }
       applyBounds()
-  })
-
+    }
+  )
 
   // Mobile viewport toggles the in-page iPhone bezel overlay (click pass-through).
   ipcMain.on('preview:set-frame', (_e, active: boolean) => {
@@ -461,9 +607,12 @@ function registerPreviewIpc(): void {
     previewUrl = url
     previewRetries = 0
     const view = ensurePreviewView()
-    // Recover from any leaked hide (set-dragging is also used by overlaying
-    // renderer UI, e.g. the branch dropdown) — a fresh load must be visible.
-    view.setVisible(true)
+    // Recover from any LEAKED hide (a renderer bug) — a fresh load should be
+    // visible. But an ACTIVE hide (previewHiddenByRenderer: the review modal /
+    // a dropdown's freeze-frame is up) must win, or a load completing under it
+    // pops the native view over the open overlay; set-dragging(false) restores
+    // visibility when the overlay closes.
+    if (!previewHiddenByRenderer) view.setVisible(true)
     view.webContents.loadURL(url)
   })
 
@@ -481,8 +630,10 @@ function registerPreviewIpc(): void {
     ensurePreviewView().webContents.loadURL(PLACEHOLDER_HTML)
   })
 
-  // Hide the native view during a split-drag so the renderer keeps mouse events.
+  // Hide the native view during a split-drag (renderer keeps mouse events) or
+  // under a freeze-frame overlay; remember the intent so preview:load respects it.
   ipcMain.on('preview:set-dragging', (_e, active: boolean) => {
+    previewHiddenByRenderer = active
     previewView?.setVisible(!active)
   })
 
@@ -542,8 +693,7 @@ function registerPreviewIpc(): void {
   })
 
   // ── Floating prop-panel plumbing (renderer ⇄ panel view, via main) ──────────
-  const fromMainWindow = (e: Electron.IpcMainEvent): boolean =>
-    e.sender === mainWindow?.webContents
+  const fromMainWindow = (e: Electron.IpcMainEvent): boolean => e.sender === mainWindow?.webContents
   ipcMain.on('panel:show', (e, b: { x: number; y: number; width: number; height: number }) => {
     if (!fromMainWindow(e)) return
     const v = ensurePanelView()
@@ -611,7 +761,14 @@ function registerPreviewIpc(): void {
   // A submitted comment/annotation (element + text) → renderer (agent vs pin).
   ipcMain.on(
     PREVIEW_COMMENT,
-    (e, payload: { kind: 'comment' | 'annotate'; el: SelectedElement; text: string }) => {
+    (
+      e,
+      payload: {
+        kind: 'comment' | 'annotate'
+        el: SelectedElement
+        text: string
+      }
+    ) => {
       if (e.sender !== previewView?.webContents) return
       mainWindow?.webContents.send('preview:comment', payload)
     }
@@ -658,6 +815,13 @@ app.whenReady().then(() => {
   // render oversized next to other dock icons.
   createWindow()
   buildAppMenu()
+
+  // A system sleep/wake cycle can reset the GPU process without the main
+  // renderer ever firing 'render-process-gone' — it just goes quietly stale.
+  // Nudge a repaint on resume; harmless no-op if the frame was already fine.
+  powerMonitor.on('resume', () => {
+    mainWindow?.webContents.invalidate()
+  })
   // File → Open Recent is driven by the renderer's recents store: it pushes the
   // current list, we cap at 8 and rebuild the menu.
   ipcMain.on('menu:set-recents', (_e, recents: RecentMenuEntry[]) => {
@@ -683,6 +847,7 @@ app.whenReady().then(() => {
   ipcMain.handle('window:is-fullscreen', () => mainWindow?.isFullScreen() ?? false)
   registerDiagnoseIpc()
   registerUpdateIpc(() => mainWindow)
+  registerFeedbackIpc(() => mainWindow)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

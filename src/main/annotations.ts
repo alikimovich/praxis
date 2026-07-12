@@ -259,6 +259,21 @@ async function shipToMain(
     await git(root, ['checkout', '-b', branch])
     return { ok: true, branch, ...(url ? { url } : {}) }
   } catch (err) {
+    // Recovery: steps 5–7 check out `base` before restoring `branch`, so a
+    // failure partway through (e.g. `pull --ff-only`) strands the user on the
+    // default branch even though the titlebar still shows their work branch.
+    // Put them back on it — check it out if it still exists, else recreate it
+    // off HEAD (the squash-merge already landed the work on base). Best-effort.
+    try {
+      const now = await git(root, ['rev-parse', '--abbrev-ref', 'HEAD'])
+      if (now !== branch) {
+        await git(root, ['checkout', branch]).catch(() =>
+          git(root, ['checkout', '-b', branch])
+        )
+      }
+    } catch {
+      /* couldn't restore — surface the original error below */
+    }
     const msg = (err instanceof Error ? err.message : String(err)).split('\n').slice(0, 4).join('\n')
     return { ok: false, error: msg }
   }

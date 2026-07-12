@@ -12,6 +12,9 @@ export type Framework =
   | 'sveltekit'
   | 'expo'
   | 'react-native'
+  // A plain static site (vanilla HTML/CSS/JS, no package.json or build step) —
+  // served by dsgn's own built-in static file server, not a spawned dev command.
+  | 'static'
   | 'unknown'
 
 /**
@@ -76,6 +79,13 @@ export interface RunningDevServer {
   pid: number
   /** True when we attached to a server the user was already running (we don't own it). */
   attached?: boolean
+}
+
+/** Result of `devserver:info` — lets a reattaching renderer recover an already-
+ *  running project's URL instead of blindly respawning on a fresh port. */
+export interface DevServerInfo {
+  running: boolean
+  server?: RunningDevServer
 }
 
 /**
@@ -270,6 +280,39 @@ export interface SessionRecord {
    * affordance gates on, since it doubles as a Claude-backend marker.
    */
   sdkSessionId?: string
+}
+
+/**
+ * One live (still-open, in-memory) agent chat, as seen from main — used to
+ * reattach the renderer after a reload without tearing down the session. The
+ * full in-progress `SessionRecord` (transcript included) travels here so the
+ * renderer can repaint the chat without a round trip to disk (a live session
+ * is only persisted on teardown, so `sessions:list`/`sessions:get` can't see it).
+ */
+export interface LiveChatSnapshot {
+  sessionKey: string
+  record: SessionRecord
+  /** A turn is currently in flight for this session (best-effort — see
+   *  `agent:workspace-snapshot`'s implementation for how it's derived). */
+  isRunning: boolean
+}
+
+/** One live project (an open workspace-rail entry) and its live chat(s). */
+export interface LiveProjectSnapshot {
+  projectKey: string
+  /** Absolute project root, recovered from the session record. */
+  root: string
+  chats: LiveChatSnapshot[]
+  /** Which of `chats` was last active for this project, if any. */
+  activeSessionKey: string | null
+}
+
+/** Everything still live in main when the renderer asks — the reattach source
+ *  of truth after a hard reload (render-process-gone, hard refresh). */
+export interface WorkspaceSnapshot {
+  projects: LiveProjectSnapshot[]
+  /** The project root of the globally active sessionKey, if any. */
+  activeRoot: string | null
 }
 
 export interface Bounds {
@@ -475,6 +518,28 @@ export interface PublishResult {
   error?: string
 }
 
+/**
+ * In-app feedback (LKM-27) posted as a GitHub issue on Praxis's OWN repo (the
+ * app's git checkout, `app.getAppPath()`), not the opened target project. The
+ * screenshot + conversation are opt-in attachments — the renderer only sends
+ * them when the corresponding toggle is on, so a bare report carries neither.
+ */
+export interface FeedbackInput {
+  /** The user's typed feedback. */
+  body: string
+  /** A `data:image/…;base64,…` app screenshot, present only when opted in. */
+  screenshot?: string | null
+  /** The rendered chat transcript, present only when opted in. */
+  conversation?: string | null
+}
+
+export interface FeedbackResult {
+  ok: boolean
+  /** The created issue URL on success. */
+  url?: string
+  error?: string
+}
+
 /** Result of scaffolding source-stamping into an unprepared project. */
 export type Frontend = 'react' | 'react-native' | 'svelte' | 'vue' | 'solid' | 'unknown'
 /** How dsgn instruments source mapping for the detected framework. */
@@ -656,6 +721,10 @@ export interface DsgnApi {
     stop: (root: string) => Promise<void>
     /** Is this project's dev server still running? (warm servers can die) */
     isRunning: (root: string) => Promise<boolean>
+    /** Like `isRunning`, but also returns the running server's URL/pid — lets a
+     *  reattaching renderer (e.g. after a reload) recover the live preview URL
+     *  instead of respawning on a fresh port. */
+    info: (root: string) => Promise<DevServerInfo>
     onLog: (cb: (line: string) => void) => () => void
   }
   git: {
@@ -788,6 +857,17 @@ export interface DsgnApi {
       root: string,
       recordId: string
     ) => Promise<{ ok: boolean; sessionKey?: string; error?: string }>
+    /**
+     * Close ONE of a project's live chats (v9 multi-chat) — tears down just that
+     * `sessionKey`'s session (persisting it to history like any teardown), leaving
+     * the project and its other chats untouched. Returns the project's remaining
+     * live sessionKeys and whichever one is now active (`null` if none remain, so
+     * the caller closes the project). A no-op-safe call if the key isn't live.
+     */
+    closeChat: (
+      root: string,
+      sessionKey: string
+    ) => Promise<{ ok: boolean; remaining: string[]; activeSessionKey: string | null }>
     send: (text: string, images?: ImageAttachment[]) => Promise<void>
     setModel: (model: string) => Promise<void>
     /** Change the permission posture live (drives the SDK's setPermissionMode). */
@@ -823,6 +903,10 @@ export interface DsgnApi {
       recordId: string
     ) => Promise<{ ok: boolean; prUrl?: string; error?: string }>
     onEvent: (cb: (event: AgentEvent) => void) => () => void
+    /** Everything still live in main (open projects, their live chats + in-progress
+     *  transcripts) — used to reattach the renderer after a reload without tearing
+     *  down any session. Read-only: never suspends/starts/closes anything. */
+    workspaceSnapshot: () => Promise<WorkspaceSnapshot>
   }
   /** Persisted agent-session history ("previous agents") — v5-D. */
   sessions: {
@@ -830,6 +914,13 @@ export interface DsgnApi {
     list: (root: string) => Promise<SessionRecord[]>
     get: (id: string) => Promise<SessionRecord | null>
     remove: (id: string) => Promise<void>
+  }
+  /** In-app feedback → a GitHub issue on Praxis's own repo (LKM-27). */
+  feedback: {
+    /** Snapshot the app window as a downscaled data URL, for the opt-in screenshot. */
+    capture: () => Promise<string | null>
+    /** Post the feedback (with any opted-in attachments) as a GitHub issue. */
+    submit: (input: FeedbackInput) => Promise<FeedbackResult>
   }
   /** Praxis self-update: check the git remote and apply an update in place. */
   update: {

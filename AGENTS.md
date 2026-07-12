@@ -1,9 +1,9 @@
-# CLAUDE.md — working guide for Praxis
+# AGENTS.md — working guide for Praxis
 
 Praxis is an Electron app: an AI chat on the left that edits a user's repo, with
 that repo's dev server live-previewed on the right. Distributed as source
 (clone + `bun install` + `bun run dev`); each user authenticates with their own
-provider subscription (`claude setup-token` / `claude login`; Codex and Gemini
+provider subscription (`Codex setup-token` / `Codex login`; Codex and Gemini
 backends exist behind the same seam).
 
 The project's original name was **dsgn**; it survives in the `data-dsgn-source`
@@ -68,7 +68,7 @@ src/
     static-server.ts in-process static file server for vanilla HTML/JS projects
                     (framework 'static': no package.json/dev command; live-reload)
     agent.ts        persistent multi-turn agent session (streams over agent:* IPC)
-    backends/       provider seam: claude.ts, codex.ts, gemini.ts behind pickProvider
+    backends/       provider seam: Codex.ts, codex.ts, gemini.ts behind pickProvider
                     (gemini currently has NO SDK dep — treat as experimental)
     simulator.ts    iOS Simulator preview (Metro/Expo detect, MJPEG sim bridge)
     props.ts / props-svelte.ts   prop editing engines (React via react-docgen /
@@ -119,7 +119,7 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   plain-CSS on 2026-06-26). Legacy custom-property CSS still lives in
   `renderer/src/styles.css`; prefer Tailwind utilities + shadcn primitives for
   new UI, and migrate legacy rules out of styles.css when you touch them.
-- The Claude Agent SDK is **ESM-only** — `main` is CJS, so it's loaded via
+- The Codex Agent SDK is **ESM-only** — `main` is CJS, so it's loaded via
   dynamic `import()` in `agent.ts`/`backends/` (never static/`require`).
 - All cross-process types go in `src/shared/api.ts`; keep `DsgnApi`, the
   preload bridge, and the ipcMain handlers in sync — a change to one is a

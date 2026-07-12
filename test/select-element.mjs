@@ -146,7 +146,9 @@ try {
     throw new Error(`composer must stay clean of selector text, got: ${composed}`)
   }
   // The element-scoped actions appear as a floating toolbar INSIDE the preview,
-  // adjacent to the selection (comment/annotate/code/delete).
+  // adjacent to the selection (comment/annotate/edit/props/code/delete). `edit`
+  // is a text-only leaf action; #hero-title (plain-text <h1>) qualifies, so it
+  // renders visible here.
   const toolbarShown = await app.evaluate(async ({ webContents }) => {
     const wc = webContents
       .getAllWebContents()
@@ -159,13 +161,46 @@ try {
       if (getComputedStyle(bar).display === 'none') return 'hidden'
       // Scope to [data-kind] so the inline-input's Submit button (no data-kind)
       // isn't counted — the pill morphs to hold it in the comment/annotate state.
-      return 'visible:' + [...bar.querySelectorAll('button[data-kind]')].map((b) => b.dataset.kind).join(',')
+      const kinds = [...bar.querySelectorAll('button[data-kind]')].map((b) => b.dataset.kind).join(',')
+      const editShown =
+        getComputedStyle(bar.querySelector('[data-kind="edit"]')).display !== 'none'
+      return 'visible:' + kinds + (editShown ? ' edit-shown' : ' edit-hidden')
     })()`)
   })
-  if (!/^visible:comment,annotate,props,code,delete$/.test(toolbarShown)) {
+  if (!/^visible:comment,annotate,edit,props,code,delete edit-shown$/.test(toolbarShown)) {
     throw new Error(`in-preview selection toolbar wrong: ${toolbarShown}`)
   }
   await win.screenshot({ path: join(artifacts, '07-select-handoff.png') })
+
+  // Clicking Edit-text arms the inline contentEditable on the selected leaf —
+  // the discoverable form of the double-click gesture. (Our own overlay button,
+  // so a JS .click() drives the same onToolbarButton path a user click does.)
+  const editArmed = await app.evaluate(async ({ webContents }) => {
+    const wc = webContents
+      .getAllWebContents()
+      .find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
+    if (!wc) return 'no-preview'
+    return wc.executeJavaScript(`(() => {
+      const bar = document.querySelector('[data-dsgn-overlay]')?.shadowRoot?.querySelector('[data-dsgn-toolbar]')
+      bar?.querySelector('[data-kind="edit"]')?.click()
+      const el = document.querySelector('#hero-title')
+      return el?.getAttribute('contenteditable') ?? 'off'
+    })()`)
+  })
+  if (editArmed !== 'plaintext-only') {
+    throw new Error(`Edit-text button did not arm contentEditable, got: ${editArmed}`)
+  }
+  // Escape cancels the edit (restores text, drops contentEditable) so the pill
+  // teardown below starts from a clean state.
+  await app.evaluate(async ({ webContents }) => {
+    const wc = webContents
+      .getAllWebContents()
+      .find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
+    wc?.focus()
+    wc?.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' })
+    wc?.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' })
+  })
+
   // The pill is removable — × clears the selection AND the in-preview toolbar.
   await win.click('.inspector__close')
   await win.waitForFunction(() => !window.__dsgnSelection.getState().selected, { timeout: 5000 })

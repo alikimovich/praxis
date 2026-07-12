@@ -15,6 +15,8 @@
 // summary table at the end, and exit non-zero if any test FAILED.
 
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -26,7 +28,9 @@ const ROOT = dirname(TEST_DIR);
 // unit = the `bun test/NAME.mjs` group before `electron-vite build` in `test`.
 const UNIT = [
   'pr-body',
+  'feedback-body',
   'publish-message',
+  'slash-token',
   'project-key',
   'project-create',
   'devserver-net',
@@ -54,6 +58,7 @@ const ELECTRON = [
   'rail',
   'rail-collapse',
   'devserver-multi',
+  'static-serve',
   'agent-multi',
   'agent-cap',
   'provider-seam',
@@ -61,7 +66,9 @@ const ELECTRON = [
   'history-ui',
   'chat-render',
   'chat-route',
+  'restore-reload',
   'preview-location',
+  'feedback-dialog',
   'questions',
   'diagnose-card',
   'select-element',
@@ -127,7 +134,21 @@ function fmtDuration(ms) {
 function runOne(runner, name) {
   const file = join(TEST_DIR, `${name}.mjs`);
   const started = Date.now();
-  const res = spawnSync(runner, [file], { cwd: ROOT, stdio: 'inherit' });
+  // Each Electron test gets its own throwaway userData (main honors
+  // DSGN_USER_DATA): persisted state (workspace/recents localStorage) can't leak
+  // between tests — boot restore would otherwise auto-reopen a prior test's
+  // project — and each launch holds its own single-instance lock.
+  const userData = mkdtempSync(join(tmpdir(), `dsgn-test-${name}-`));
+  let res;
+  try {
+    res = spawnSync(runner, [file], {
+      cwd: ROOT,
+      stdio: 'inherit',
+      env: { ...process.env, DSGN_USER_DATA: userData },
+    });
+  } finally {
+    rmSync(userData, { recursive: true, force: true });
+  }
   const duration = Date.now() - started;
   // spawnSync sets .error on spawn failure (e.g. runner not found) and .signal
   // when killed by a signal; both are failures. Exit 0 (incl. e2e SKIP) = pass.

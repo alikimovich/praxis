@@ -27,6 +27,7 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck:preview": "tsc --noEmit -p tsconfig.preview.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web && npm run typecheck:preview",
+    "test:feedback-dialog": "electron-vite build && node test/feedback-dialog.mjs",
     "test:smoke": "electron-vite build && node test/smoke.mjs",
     "test:menu": "electron-vite build && node test/menu-recents.mjs",
     "test:preview": "electron-vite build && node test/open-preview.mjs",
@@ -51,6 +52,8 @@
     "test:sim-control": "electron-vite build && node test/sim-control.mjs",
     "test:sim-e2e": "electron-vite build && node test/sim-e2e.mjs",
     "test:prbody": "bun test/pr-body.mjs",
+    "test:feedback-body": "bun test/feedback-body.mjs",
+    "test:slash-token": "bun test/slash-token.mjs",
     "test:devnet": "bun test/devserver-net.mjs",
     "test:xcode": "bun test/xcode.mjs",
     "test:git": "bun test/git.mjs",
@@ -68,6 +71,7 @@
     "test:spawn": "electron-vite build && node test/spawn-comment.mjs",
     "test:projkey": "bun test/project-key.mjs",
     "test:devmulti": "electron-vite build && node test/devserver-multi.mjs",
+    "test:static-serve": "electron-vite build && node test/static-serve.mjs",
     "test:agentmulti": "electron-vite build && node test/agent-multi.mjs",
     "test:agentcap": "electron-vite build && node test/agent-cap.mjs",
     "test:chatroute": "electron-vite build && node test/chat-route.mjs",
@@ -83,7 +87,8 @@
     "test:tw-classes": "bun test/tw-classes.mjs",
     "test:agenthistory": "electron-vite build && node test/agent-history.mjs",
     "test:historyui": "electron-vite build && node test/history-ui.mjs",
-    "test:svelte-instance": "bun test/svelte-instance.mjs"
+    "test:svelte-instance": "bun test/svelte-instance.mjs",
+    "test:restore": "electron-vite build && node test/restore-reload.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.186",

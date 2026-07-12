@@ -8,9 +8,12 @@ import PanelHost from './components/PanelHost'
 import PreviewUrl from './components/PreviewUrl'
 import CodeDrawer from './components/CodeDrawer'
 import SessionReview from './components/SessionReview'
+import FeedbackDialog from './components/FeedbackDialog'
 import {
   describeSelectionForPrompt,
+  useFeedback,
   isAuthError,
+  messagesFromTranscript,
   oneLine,
   toAgentOptions,
   useAnnotations,
@@ -31,6 +34,7 @@ import {
   usePropsIsland,
   useViewport,
   usePreviewFreeze,
+  openWithPreviewFreeze,
   usePublishMode,
   useRecents,
   usePanelInset,
@@ -40,6 +44,7 @@ import {
   type ProjectEntry
 } from './store'
 import { projectKey } from '../../shared/projectKey'
+import { restoreWorkspace, type RestoreDeps } from './restore'
 import { MonitorSmartphone, PanelLeft } from 'lucide-react'
 import {
   DropdownMenu,
@@ -93,6 +98,8 @@ export default function App(): React.JSX.Element {
   const viewport = useViewport((s) => s.viewport)
   const publishMode = usePublishMode((s) => s.mode)
   const recents = useRecents((s) => s.recents)
+  // Boot restore deps (App closures), kept current for the once-on-mount effect.
+  const restoreDepsRef = useRef<RestoreDeps | null>(null)
   // Latest action handlers, for the global keydown + native-menu listeners (which
   // subscribe once but must call the current closures).
   const actionsRef = useRef<{
@@ -130,23 +137,8 @@ export default function App(): React.JSX.Element {
   // capture's ~80ms and then "pop" fully visible when it hides (read: flicker).
   const [branchMenuOpen, setBranchMenuOpen] = useState(false)
   const [pubMenuOpen, setPubMenuOpen] = useState(false)
-  const openWithFreeze = (setOpen: (b: boolean) => void): void => {
-    usePreviewFreeze.getState().setFrozen(true)
-    if (usePreviewFreeze.getState().ready) {
-      setOpen(true)
-      return
-    }
-    const done = (): void => {
-      unsub()
-      clearTimeout(failsafe)
-      setOpen(true)
-    }
-    const unsub = usePreviewFreeze.subscribe((s) => {
-      if (s.ready) done()
-    })
-    // Failsafe: a wedged capture must never block the menu.
-    const failsafe = setTimeout(done, 350)
-  }
+  const openWithFreeze = (setOpen: (b: boolean) => void): void =>
+    openWithPreviewFreeze(() => setOpen(true))
   const closeWithFreeze = (setOpen: (b: boolean) => void): void => {
     setOpen(false)
     usePreviewFreeze.getState().setFrozen(false)
@@ -154,11 +146,18 @@ export default function App(): React.JSX.Element {
   // v5-D: the past session open for review (rendered as a modal over the panes).
   const [reviewing, setReviewing] = useState<SessionRecord | null>(null)
   // The review modal is renderer DOM; the native preview WebContentsView paints
-  // ABOVE it (same reason PropPanel reserves an inset strip). Hide the preview
-  // entirely while the modal is open (reuses the drag-hide path), restore on close.
+  // ABOVE it (same reason PropPanel reserves an inset strip). Freeze-frame the
+  // preview while the modal is open — the snapshot <img> keeps it visually in
+  // place under the modal instead of blanking the pane — and restore the live
+  // view on close. Open through `openReview` (below) so the modal, like the
+  // dropdowns, waits for the freeze before rendering (no behind-the-native flash).
   useEffect(() => {
-    window.api.preview.setDragging(!!reviewing)
+    if (!reviewing) usePreviewFreeze.getState().setFrozen(false)
   }, [reviewing])
+  const openReview = (record: SessionRecord): void =>
+    openWithFreeze((open) => {
+      if (open) setReviewing(record)
+    })
   // The code drawer holds one project's source stamp — close it when the active
   // project changes so it can't read a stale path against the new root.
   useEffect(() => {
@@ -167,11 +166,6 @@ export default function App(): React.JSX.Element {
   const authNeeded = useSession((s) => s.authNeeded)
   const setAuthNeeded = useSession((s) => s.setAuthNeeded)
   const logOpen = useLog((s) => s.open)
-  const updateStatus = useUpdate((s) => s.status)
-  const updateSubject = useUpdate((s) => s.subject)
-  const updateProgress = useUpdate((s) => s.progress)
-  const updateError = useUpdate((s) => s.error)
-  const updateDismissedSubject = useUpdate((s) => s.dismissedSubject)
 
   // Rename / switch the working branch (name is coerced to dsgn/<…> in main).
   const changeBranch = async (name: string): Promise<void> => {
@@ -253,10 +247,20 @@ export default function App(): React.JSX.Element {
           session.setSlashCommands(event.commands)
         } else if (event.type === 'error' && isAuthError(event.message)) {
           // The onboarding banner is Claude-specific (setup-token / claude login);
-          // don't raise it for a non-Claude backend's auth error. (v7)
+          // Codex gets its own inline `codex login` hint. Raise whichever matches
+          // the active backend — never the Claude banner for a Codex failure. (v7)
           if ((session.provider ?? 'claude') === 'claude') session.setAuthNeeded(true)
+          else if (session.provider === 'codex') session.setCodexAuthNeeded(true)
         } else if (event.type === 'delta' || event.type === 'done') {
+          // A turn that streamed/finished proves we're connected — clear the
+          // Claude banner (its backend only emits `done` on success).
           if (session.authNeeded) session.setAuthNeeded(false)
+          // Codex emits `done` after EVERY turn — including a failed auth turn,
+          // right after the `error` that raised the hint — so `done` must NOT
+          // clear it (that would wipe the hint the instant it appears). Only real
+          // streamed output (`delta`) proves Codex actually connected.
+          if (event.type === 'delta' && session.codexAuthNeeded)
+            session.setCodexAuthNeeded(false)
         } else if (event.type === 'permission-request') {
           usePermissions.getState().addRequest(event.request)
         } else if (event.type === 'permission-resolved') {
@@ -360,36 +364,29 @@ export default function App(): React.JSX.Element {
     }
   }, [])
 
-  // Global C/Y/Escape shortcuts when focus is on the app side (the preview's own
-  // preload handles them when the preview is focused). Ignored while typing.
+  // Global S/Escape shortcuts when focus is on the app side (the preview's own
+  // preload handles them when the preview is focused). S is ignored while typing;
+  // Escape turns off select mode even from the composer, so it always disarms.
   useEffect(() => {
-    const arm = (mode: 'comment' | 'annotate' | null): void => {
-      useSelection.getState().setCommentMode(mode)
-      if (mode) useSelection.getState().setSelected(null)
-      void window.api.preview.setCommentMode(mode)
-    }
     const onKey = (e: KeyboardEvent): void => {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
-      const t = e.target as HTMLElement | null
-      const tag = t?.tagName?.toLowerCase()
-      if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return
-      const cur = useSelection.getState().commentMode
-      if (e.key === 'c' || e.key === 'C') {
-        e.preventDefault()
-        arm(cur === 'comment' ? null : 'comment')
-      } else if (e.key === 'y' || e.key === 'Y') {
-        e.preventDefault()
-        arm(cur === 'annotate' ? null : 'annotate')
-      } else if (e.key === 'Escape') {
-        // Escape exits whichever mode is armed: comment/annotate, or select.
-        if (cur) {
+      if (e.key === 'Escape') {
+        // Escape disarms whichever mode is on — checked before the typing guard so
+        // it still fires while the chat composer (a textarea) holds focus.
+        if (useSelection.getState().commentMode) {
           e.preventDefault()
-          arm(null)
+          useSelection.getState().setCommentMode(null)
+          void window.api.preview.setCommentMode(null)
         } else if (useSelection.getState().selectMode) {
           e.preventDefault()
           actionsRef.current.toggleSelect()
         }
-      } else if ((e.key === 's' || e.key === 'S') && useSession.getState().projectRoot) {
+        return
+      }
+      const t = e.target as HTMLElement | null
+      const tag = t?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return
+      if ((e.key === 's' || e.key === 'S') && useSession.getState().projectRoot) {
         // S toggles element-select (when a preview is open). The native menu's
         // Cmd+Shift+S covers the case where the preview itself has focus.
         e.preventDefault()
@@ -977,6 +974,15 @@ export default function App(): React.JSX.Element {
       } else {
         log.append(`Publish failed: ${res.error}`, 'error')
         log.setOpen(true)
+        // A mid-publish failure can leave git on a different branch than the
+        // titlebar shows (the merge step checks out the default branch first).
+        // Re-sync the displayed branch to reality so the two never disagree.
+        void window.api.git.list(root).then(({ current }) => {
+          if (current && current !== useSession.getState().branch) {
+            useSession.getState().setBranch(current)
+            useWorkspace.getState().patchEntry(key, { branch: current })
+          }
+        })
       }
     } finally {
       setPublishing(false)
@@ -1151,6 +1157,11 @@ export default function App(): React.JSX.Element {
       sessionKeys: existing.includes(sessionKey) ? existing : [...existing, sessionKey],
       activeSessionKey: sessionKey
     })
+    // Seed the (fresh) chat slice with the record's past turns so the resumed
+    // thread shows its history instead of an empty tree — the agent already has
+    // the context via the SDK resume id, but the UI needs the transcript. No-op
+    // if the slice is somehow already populated (hydrate guards that).
+    useChat.getState().hydrate(sessionKey, messagesFromTranscript(record.transcript))
     if (useSession.getState().projectRoot === record.projectRoot) {
       useChat.getState().setActiveChat(sessionKey)
     }
@@ -1180,6 +1191,40 @@ export default function App(): React.JSX.Element {
     // (default + any additional/resumed), not just the default, so none leak.
     for (const sk of entry.sessionKeys ?? [key]) useChat.getState().clearChat(sk)
     if (next) await applyProject(next)
+  }
+
+  // Rail chat × — close ONE of a project's live chats without closing the project.
+  // Closing the project's LAST chat closes the whole project (nothing left to show),
+  // so it falls through to closeProjectFromRail. Otherwise main tears down just that
+  // session and reports the survivor; we drop the slice + rewire the entry, switching
+  // the visible chat only when the closed one was the active chat on screen.
+  const closeChatForProject = async (key: string, sessionKey: string): Promise<void> => {
+    const entry = useWorkspace.getState().projects.find((p) => p.key === key)
+    if (!entry) return
+    const sessionKeys = entry.sessionKeys ?? [key]
+    if (sessionKeys.length <= 1) {
+      await closeProjectFromRail(key)
+      return
+    }
+    // Await so main disposes the session before we clear its slice — a trailing
+    // emit then can't resurrect the cleared chat.
+    const res = await window.api.agent.closeChat(entry.root, sessionKey)
+    const remaining = sessionKeys.filter((sk) => sk !== sessionKey)
+    const nextActive =
+      res.activeSessionKey && remaining.includes(res.activeSessionKey)
+        ? res.activeSessionKey
+        : (remaining[0] ?? key)
+    const wasActive = (entry.activeSessionKey ?? key) === sessionKey
+    useWorkspace.getState().patchEntry(key, {
+      sessionKeys: remaining,
+      activeSessionKey: wasActive ? nextActive : (entry.activeSessionKey ?? key)
+    })
+    useChat.getState().clearChat(sessionKey)
+    // Move the visible chat off the closed one only when it was on screen.
+    if (wasActive && useSession.getState().projectRoot === entry.root) {
+      useChat.getState().setActiveChat(nextActive)
+      void window.api.agent.setActive(entry.root, nextActive)
+    }
   }
 
   // Bound memory: keep at most N projects' dev servers warm; LRU-suspend the rest
@@ -1357,6 +1402,10 @@ export default function App(): React.JSX.Element {
     publish: () => void publish()
   }
 
+  // Boot restore reuses these App closures (reattach / auto-reopen / resume). Kept
+  // on a ref so the once-on-mount effect always sees the current ones.
+  restoreDepsRef.current = { attempt, applyProject, resumeRecord }
+
   // Let the composer's select button (ChatPanel) drive the same toggle — via the
   // ref so it always hits the current closure (previewKind routing included).
   useEffect(() => {
@@ -1366,6 +1415,13 @@ export default function App(): React.JSX.Element {
   // S inside the focused preview toggles select mode — same handler as the
   // app-side shortcut/menu (via the ref, so it sees current closures).
   useEffect(() => window.api.preview.onToggleSelect(() => actionsRef.current.toggleSelect()), [])
+
+  // Boot: reattach to surviving main-process state (renderer reload) or auto-reopen
+  // the last project (real relaunch). Runs exactly once; restore.ts self-guards a
+  // StrictMode double-mount. The deps ref is populated during render (above).
+  useEffect(() => {
+    if (restoreDepsRef.current) void restoreWorkspace(restoreDepsRef.current)
+  }, [])
 
   // Mirror the preview's real location (link clicks, SPA routes, initial load)
   // into a global store — a single native preview view is ever live, so the
@@ -1460,46 +1516,6 @@ export default function App(): React.JSX.Element {
 
 
 
-      {updateStatus === 'available' && updateSubject !== updateDismissedSubject && (
-        <div className="banner banner--info">
-          <span className="banner__text">
-            Update available{updateSubject ? `: ${updateSubject}` : ''}
-          </span>
-          <button className="btn" onClick={() => void window.api.update.apply()}>
-            Update &amp; Restart
-          </button>
-          <button
-            className="banner__close"
-            onClick={() => useUpdate.getState().dismiss()}
-            aria-label="Dismiss"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
-      {updateStatus === 'updating' && (
-        <div className="banner banner--info">
-          <span className="banner__text">Updating… {updateProgress ?? ''}</span>
-          <button className="btn" disabled>
-            Updating…
-          </button>
-        </div>
-      )}
-
-      {updateStatus === 'error' && (
-        <div className="banner banner--info">
-          <span className="banner__text">Update failed: {updateError}</span>
-          <button
-            className="banner__close"
-            onClick={() => useUpdate.getState().dismiss()}
-            aria-label="Dismiss"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
       <DiagnoseCard onApply={applyFix} onDismiss={dismissFix} />
 
       {openCount === 0 ? (
@@ -1543,6 +1559,12 @@ export default function App(): React.JSX.Element {
               >
                 New project
               </button>
+              <button
+                className="btn empty__feedback"
+                onClick={() => useFeedback.getState().setOpen(true)}
+              >
+                Send feedback
+              </button>
             </div>
           </div>
           <div className="empty__cat">
@@ -1562,9 +1584,10 @@ export default function App(): React.JSX.Element {
             onClose={(key) => void closeProjectFromRail(key)}
             onOpen={() => void openAnother()}
             onCreate={() => void createNewProject()}
-            onReview={setReviewing}
+            onReview={openReview}
             onNewChat={(key) => void newChatForProject(key)}
             onSwitchSession={(key, sessionKey) => void switchSession(key, sessionKey)}
+            onCloseChat={(key, sessionKey) => void closeChatForProject(key, sessionKey)}
           />
           <section className="pane pane--chat" style={{ width: chatWidth }}>
             {/* Window-drag strip across the chat's top edge — the one top-of-window
@@ -1581,6 +1604,10 @@ export default function App(): React.JSX.Element {
             aria-orientation="vertical"
           />
           <section className="pane pane--preview">
+            {/* Window-drag strip over the pane's own top padding — the only
+                top-of-window gap left once the rail and chat strips drag
+                (the previewbar below it already drags on its own). */}
+            <div className="preview-drag" aria-hidden="true" />
             {/* The preview lives in its own card (Cursor/claude.ai design-mode
                 style): a header bar with the branch, URL, and controls, and the
                 live preview inset below it. */}
@@ -1803,6 +1830,9 @@ export default function App(): React.JSX.Element {
           onResume={(rec) => resumeRecord(rec)}
         />
       )}
+
+      {/* LKM-27: in-app feedback → a GitHub issue on the Praxis repo. */}
+      <FeedbackDialog />
     </div>
   )
 }

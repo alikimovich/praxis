@@ -9,9 +9,12 @@ import type {
   CommentMode,
   Diagnosis,
   DetectedProject,
+  DevServerInfo,
   PanelAction,
   PanelState,
   DsgnApi,
+  FeedbackInput,
+  FeedbackResult,
   Framework,
   ImageAttachment,
   PermissionMode,
@@ -34,7 +37,8 @@ import type {
   TokenScaffoldResult,
   TokenSet,
   UndoResult,
-  UpdateStatus
+  UpdateStatus,
+  WorkspaceSnapshot
 } from '../shared/api'
 
 const api: DsgnApi = {
@@ -170,6 +174,7 @@ const api: DsgnApi = {
     }): Promise<RunningDevServer> => ipcRenderer.invoke('devserver:start', opts),
     stop: (root: string): Promise<void> => ipcRenderer.invoke('devserver:stop', root),
     isRunning: (root: string): Promise<boolean> => ipcRenderer.invoke('devserver:running', root),
+    info: (root: string): Promise<DevServerInfo> => ipcRenderer.invoke('devserver:info', root),
     onLog: (cb: (line: string) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, line: string): void => cb(line)
       ipcRenderer.on('devserver:log', listener)
@@ -288,6 +293,11 @@ const api: DsgnApi = {
       recordId: string
     ): Promise<{ ok: boolean; sessionKey?: string; error?: string }> =>
       ipcRenderer.invoke('agent:resume-session', root, recordId),
+    closeChat: (
+      root: string,
+      sessionKey: string
+    ): Promise<{ ok: boolean; remaining: string[]; activeSessionKey: string | null }> =>
+      ipcRenderer.invoke('agent:close-chat', root, sessionKey),
     send: (text: string, images?: ImageAttachment[]): Promise<void> =>
       ipcRenderer.invoke('agent:send', text, images),
     setModel: (model: string): Promise<void> => ipcRenderer.invoke('agent:set-model', model),
@@ -326,12 +336,19 @@ const api: DsgnApi = {
       const listener = (_e: IpcRendererEvent, event: AgentEvent): void => cb(event)
       ipcRenderer.on('agent:event', listener)
       return () => ipcRenderer.removeListener('agent:event', listener)
-    }
+    },
+    workspaceSnapshot: (): Promise<WorkspaceSnapshot> =>
+      ipcRenderer.invoke('agent:workspace-snapshot')
   },
   sessions: {
     list: (root: string): Promise<SessionRecord[]> => ipcRenderer.invoke('sessions:list', root),
     get: (id: string): Promise<SessionRecord | null> => ipcRenderer.invoke('sessions:get', id),
     remove: (id: string): Promise<void> => ipcRenderer.invoke('sessions:remove', id)
+  },
+  feedback: {
+    capture: (): Promise<string | null> => ipcRenderer.invoke('feedback:capture'),
+    submit: (input: FeedbackInput): Promise<FeedbackResult> =>
+      ipcRenderer.invoke('feedback:submit', input)
   },
   update: {
     onStatus: (cb: (status: UpdateStatus) => void): (() => void) => {

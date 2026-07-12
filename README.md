@@ -13,6 +13,9 @@ GitHub PR.
 - **Live preview of your repo.** Open a folder → Praxis detects the framework
   and package manager, boots that repo's dev server, and previews it in a
   native `WebContentsView`. It self-heals if the dev server dies and restarts.
+  Plain HTML/CSS/JS folders (no package.json or build step) are served by a
+  built-in static server with live-reload; anything Praxis can't auto-launch
+  prompts for a custom command.
 - **AI chat that edits the running app.** A persistent multi-turn agent session
   streams over IPC and edits source with hot-reload. Backends are pluggable —
   Claude (via the Agent SDK), Codex, and Gemini behind one provider seam

@@ -65,11 +65,14 @@
 }
 
 :root {
-    --bg: #ffffff;
+    --bg: #ebebeb;
     --bg-subtle: #fafafa;
     --border: #ececec;
+    --border-prominent: #dcdcdc;
     --text: #1a1a1a;
+    --rail-text: #4a4a4a;
     --text-muted: #8a8a8a;
+    --scroll-thumb: #aaaaaa;
     --accent: #1a1a1a;
     --radius: 10px;
     color-scheme: light;
@@ -104,8 +107,11 @@
     --bg: #111113;
     --bg-subtle: #18181b;
     --border: #2a2a2e;
+    --border-prominent: #3a3a3e;
     --text: #ededed;
+    --rail-text: #b0b0b0;
     --text-muted: #8d8d94;
+    --scroll-thumb: #6a6a6a;
     --accent: #ededed;
 }
 
@@ -130,7 +136,6 @@
 .rounded-full,
 .composer__send,
 .composer__spinner,
-.rail__dot,
 .rail__sdot {
     -electron-corner-smoothing: 0%;
 }
@@ -148,6 +153,42 @@ body {
     color: var(--text);
     background: var(--bg);
     -webkit-font-smoothing: antialiased;
+}
+
+/* macOS vibrancy: main.tsx stamps `vibrancy` on <html> when the window was
+   created with the SIDEBAR material (main/index.ts). The rail shows the raw
+   material (true sidebar vibrancy); the chat + preview panes are opaque --bg
+   (the panes' content is the point, not the wallpaper behind it); the Welcome
+   screen keeps a light --bg wash so the material greets an empty window.
+   Component fills (cards, buttons, modals, inputs) keep their opaque --bg. The
+   prop-panel island (panel-host) is a separate transparent window and never
+   gets the stamp. */
+:root {
+    --vib-main: 60%;
+}
+html.vibrancy body,
+html.vibrancy .rail {
+    background: transparent;
+}
+html.vibrancy .empty {
+    background: color-mix(in srgb, var(--bg) var(--vib-main), transparent);
+}
+/* Native fullscreen: nothing shows behind the window, so the material reads as
+   a flat gray slab — paint the shell opaque instead (the rail matches the chat
+   pane). `body.is-fullscreen` is mirrored from main's enter/leave-full-screen
+   events (App.tsx); back out of fullscreen and the material returns. The
+   NSVisualEffectView stays attached (main doesn't toggle it) — swapping it on
+   the transition can't be ordered against this CSS flip across the process
+   boundary, and an uncovered transparent region over NO material flashes
+   black; fully covering it costs nothing. */
+html.vibrancy body.is-fullscreen,
+html.vibrancy body.is-fullscreen .rail,
+html.vibrancy body.is-fullscreen .empty {
+    background: var(--bg);
+}
+html.vibrancy .pane--chat,
+html.vibrancy .pane--preview {
+    background: var(--bg);
 }
 
 .app {
@@ -524,14 +565,28 @@ body.is-fullscreen .sidebar-toggle {
    width inner slides with it (translateX + fade), so the sidebar appears from the
    left and disappears to the left instead of popping. */
 .rail {
+    position: relative;
     flex: 0 0 auto;
     width: 168px;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     background: var(--bg);
-    border-right: 1px solid var(--border);
+    border-right: 1px solid var(--border-prominent);
     transition:
         width 0.24s ease,
         border-right-color 0.24s ease;
+}
+/* rail__inner's own padding-top (40px, clearing the traffic lights) is empty —
+   nothing there made it draggable. This strip fills exactly that reserved
+   clearance, so it never overlaps rail__inner's buttons below it. */
+.rail-drag {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    -webkit-app-region: drag;
 }
 .rail--collapsed {
     width: 0;
@@ -540,7 +595,8 @@ body.is-fullscreen .sidebar-toggle {
 }
 .rail__inner {
     width: 168px;
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -592,16 +648,21 @@ body.is-fullscreen .sidebar-toggle {
     align-items: stretch;
     border-radius: 6px;
 }
-.rail__item--active {
-    background: var(--border);
-}
+/* .rail__open is now a plain flex wrapper (not a button) around two buttons —
+   the glyph (toggles the active project's chat list) and the name (switches
+   project) — so they can have independent click behavior. */
 .rail__open {
     flex: 1 1 auto;
     display: flex;
     align-items: center;
     gap: 7px;
     min-width: 0;
-    padding: 6px 8px;
+}
+.rail__glyph-btn,
+.rail__name-btn {
+    display: flex;
+    align-items: center;
+    min-width: 0;
     background: none;
     border: none;
     cursor: pointer;
@@ -609,25 +670,49 @@ body.is-fullscreen .sidebar-toggle {
     font: inherit;
     text-align: left;
 }
-.rail__dot {
-    /* Center the 7px dot inside a 16px slot so it lines up with the action
-       icons (size-4) above — this keeps the project name flush with the
-       "Open project" / "New project" labels. */
+.rail__glyph-btn {
     flex: 0 0 auto;
-    box-sizing: content-box;
-    width: 7px;
-    height: 7px;
-    /* The dot's rendered box is 9px (7px + 1px border each side); center it in
-       a 16px slot to match the 16px action icons. */
-    margin: 0 calc((16px - 9px) / 2);
-    border-radius: 50%;
-    background: transparent;
-    border: 1px solid var(--text-muted);
+    padding: 6px 0 6px 8px;
 }
-.rail__dot--on {
-    background: #22c55e;
-    border-color: #22c55e;
-    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+.rail__name-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 6px 8px 6px 0;
+}
+/* Project glyph — a subdued folder (open when the project is expanded, closed
+   otherwise) that, on row hover, cross-fades to a chevron. Both icons share one
+   16px slot; stacking them absolutely lets the swap happen without reflow. */
+.rail__glyph {
+    position: relative;
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+}
+.rail__folder,
+.rail__chevron {
+    position: absolute;
+    inset: 0;
+    /* Keep the folder deliberately quiet, even for the active project. */
+    color: var(--text-muted);
+    transition: opacity 0.12s ease;
+}
+/* Chevron hidden until the row is hovered; it rotates from pointing right
+   (collapsed) to pointing down (expanded/active). */
+.rail__chevron {
+    opacity: 0;
+    transform: rotate(0deg);
+    transition:
+        opacity 0.12s ease,
+        transform 0.15s ease;
+}
+.rail__chevron--open {
+    transform: rotate(90deg);
+}
+.rail__row:hover .rail__folder {
+    opacity: 0;
+}
+.rail__row:hover .rail__chevron {
+    opacity: 1;
 }
 .rail__name {
     overflow: hidden;
@@ -640,13 +725,14 @@ body.is-fullscreen .sidebar-toggle {
     width: 20px;
     height: 20px;
     margin-right: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border: none;
     border-radius: 4px;
     background: none;
     color: var(--text-muted);
     cursor: pointer;
-    font-size: 15px;
-    line-height: 1;
     opacity: 0;
 }
 .rail__item:hover .rail__close,
@@ -667,23 +753,23 @@ body.is-fullscreen .sidebar-toggle {
     border: none;
     border-radius: 6px;
     background: none;
-    color: var(--text-muted);
+    color: var(--rail-text);
     cursor: pointer;
     font: inherit;
-    font-size: 13px;
+    font-size: 12px;
     text-align: left;
     white-space: nowrap;
     overflow: hidden;
 }
 .rail__action svg {
     flex: 0 0 auto;
+    color: var(--text-muted);
 }
 .rail__action:hover {
     background: var(--border);
     color: var(--text);
 }
 
-/* v5-D — "previous agents" under the active project in the rail. */
 .rail__row {
     display: flex;
     align-items: center;
@@ -691,37 +777,91 @@ body.is-fullscreen .sidebar-toggle {
 .rail__row .rail__open {
     flex: 1 1 auto;
 }
-.rail__sessions {
+
+/* Chats under the active project (Cursor-style): a flat list of full-width
+   rows whose text is flush-left, aligned under the project name (the row's
+   left padding matches the project glyph + gap). Live chats sit first (active
+   one highlighted), then previous chats. No status dots — just the auto-name
+   and, for a past chat, a trailing "time ago". */
+.rail__chats {
     list-style: none;
-    margin: 2px 0 4px;
-    padding: 0 0 0 14px;
+    margin: 1px 0 4px;
+    padding: 0;
     display: flex;
     flex-direction: column;
     gap: 1px;
 }
-.rail__session {
+.rail__chat-item {
     display: flex;
     align-items: center;
-    border-radius: 5px;
+    border-radius: 6px;
 }
-.rail__session:hover {
-    background: var(--border);
+.rail__chat-item:hover {
+    background: rgb(from var(--rail-text) r g b / 0.075);
 }
-.rail__session-open {
+.rail__chat {
     flex: 1 1 auto;
     display: flex;
     align-items: center;
     gap: 6px;
     min-width: 0;
-    padding: 4px 6px;
+    /* Left padding lines the chat name up with the project name above
+       (rail__open padding 8 + folder icon 16 + gap 7). */
+    padding: 5px 8px 5px 31px;
     border: none;
+    border-radius: 6px;
     background: none;
     cursor: pointer;
-    color: var(--text-muted);
+    color: var(--rail-text);
     font: inherit;
-    font-size: 11.5px;
+    font-size: 12px;
     text-align: left;
 }
+.rail__chat-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.rail__chat-time {
+    flex: 0 0 auto;
+    font-size: 11px;
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+.rail__chat--active {
+    background: rgb(from var(--rail-text) r g b / 0.075);
+    color: var(--text);
+    font-weight: 500;
+}
+.rail__chat--spawn {
+    cursor: default;
+}
+.rail__chat-x {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    margin-right: 4px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    opacity: 0;
+}
+.rail__chat-item:hover .rail__chat-x {
+    opacity: 1;
+}
+.rail__chat-x:hover {
+    background: var(--bg);
+    color: var(--text);
+}
+
+/* v8 F1: comment-spawned background agents surface as chat rows with a small
+   status dot instead of a name-time; the dot keeps its working/queued meaning. */
 .rail__sdot {
     flex: 0 0 auto;
     width: 5px;
@@ -729,32 +869,6 @@ body.is-fullscreen .sidebar-toggle {
     border-radius: 50%;
     background: var(--text-muted);
     opacity: 0.5;
-}
-.rail__sdot--pr {
-    background: #2563eb;
-    opacity: 1;
-}
-/* v8 F1: comment-spawned background agents currently working. */
-.rail__spawns {
-    list-style: none;
-    margin: 2px 0 2px;
-    padding: 0 0 0 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-}
-.rail__spawn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    padding: 4px 6px;
-    color: var(--text-muted);
-    font-size: 11.5px;
-}
-.rail__spawn .rail__session-label {
-    flex: 1 1 auto;
-    min-width: 0;
 }
 .rail__sdot--working {
     background: #f59e0b;
@@ -774,37 +888,9 @@ body.is-fullscreen .sidebar-toggle {
         opacity: 1;
     }
 }
-.rail__session-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.rail__session-x {
-    flex: 0 0 auto;
-    width: 16px;
-    height: 16px;
-    margin-right: 4px;
-    border: none;
-    border-radius: 4px;
-    background: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    font-size: 13px;
-    line-height: 1;
-    opacity: 0;
-}
-.rail__session:hover .rail__session-x {
-    opacity: 1;
-}
-.rail__session-x:hover {
-    background: var(--bg);
-    color: var(--text);
-}
 
-/* v9 multi-chat — "+" to start another live chat for the active project, and
-   the switcher between a project's own open chats (shown only once there's
-   more than one). Echo .rail__close / .rail__sessions' quiet, hover-revealed
-   styling so they read as part of the same family. */
+/* v9 multi-chat — "+" to start another live chat for the active project. Echoes
+   .rail__close's quiet, hover-revealed styling so they read as one family. */
 .rail__new-chat {
     flex: 0 0 auto;
     width: 20px;
@@ -828,36 +914,81 @@ body.is-fullscreen .sidebar-toggle {
     background: var(--border);
     color: var(--text);
 }
-.rail__chats {
-    list-style: none;
-    margin: 2px 0 2px;
-    padding: 0 0 0 14px;
+
+/* Praxis self-update — pinned at the rail's bottom (a rail__inner sibling, not
+   its last child, so a long project list can't scroll it away). Stacked
+   (text above button) rather than the old horizontal top banner — the rail is
+   only 168px wide. */
+.rail__update {
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 6px;
+    padding: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 11.5px;
+    color: var(--text-muted);
 }
-.rail__chat {
+.rail__update-text {
+    white-space: normal;
+    overflow-wrap: break-word;
+}
+.rail__update-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
-    width: 100%;
-    min-width: 0;
-    padding: 4px 6px;
+    gap: 4px;
+}
+.rail__update-btn {
+    flex: 1 1 auto;
+    padding: 5px 8px;
+    font-size: 11.5px;
+}
+.rail__update-dismiss {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
     border: none;
-    border-radius: 5px;
+    border-radius: 4px;
     background: none;
     color: var(--text-muted);
     cursor: pointer;
-    font: inherit;
-    font-size: 11.5px;
-    text-align: left;
 }
-.rail__chat:hover {
+.rail__update-dismiss:hover {
     background: var(--border);
-}
-.rail__chat--active {
     color: var(--text);
-    font-weight: 500;
+}
+
+/* Feedback — pinned to the rail's bottom-left (a sibling of rail__inner, so a
+   long project list never scrolls it away). Mirrors .rail__action's quiet
+   list-item look, with a top border and small margin lifting it off the edge. */
+.rail__feedback {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 4px 6px 6px;
+    padding: 6px 8px;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--rail-text);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.rail__feedback svg {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+}
+.rail__feedback:hover {
+    background: var(--border);
+    color: var(--text);
 }
 
 /* v5-D — past-session review modal (plain CSS; renders over the panes, not the
@@ -1039,7 +1170,6 @@ body.is-fullscreen .sidebar-toggle {
     flex: 0 0 auto;
     display: flex;
     flex-direction: column;
-    padding-top: 10px;
     position: relative;
 }
 
@@ -1068,7 +1198,7 @@ body.is-fullscreen .sidebar-toggle {
     top: 0;
     left: 0;
     right: 0;
-    height: 56px;
+    height: 72px;
     z-index: 5;
     pointer-events: none;
     background: linear-gradient(to bottom, var(--bg) 18%, transparent);
@@ -1078,11 +1208,23 @@ body.is-fullscreen .sidebar-toggle {
 }
 
 .pane--preview {
+    position: relative;
     flex: 1 1 auto;
     display: flex;
     /* Equal breathing room on all open sides — the card floats top to bottom. */
     padding: 10px 10px 10px 0;
     background: var(--bg);
+}
+/* Fills exactly the pane's own top padding (the previewcard/previewbar below
+   it already drag on their own) — the last top-of-window gap between the
+   chat pane's strip and the previewbar's drag surface. */
+.preview-drag {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 10px;
+    -webkit-app-region: drag;
 }
 
 /* The preview card — its own surface with a header bar (branch, URL, controls)
@@ -1093,7 +1235,7 @@ body.is-fullscreen .sidebar-toggle {
     display: flex;
     flex-direction: column;
     background: var(--bg-subtle);
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-prominent);
     /* Match the composer's rounded-2xl (16px) so the Ask-Praxis form and the
        preview card round the same way (both squircled by the global rule). */
     border-radius: 16px;
@@ -1142,7 +1284,7 @@ body.is-fullscreen .sidebar-toggle {
     /* Positioning context for the v9 code drawer (absolute, pinned to the bottom
        over the strip usePanelInset frees up under the shrunk native view). */
     position: relative;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-prominent);
     border-radius: 16px;
     margin: 0 -1px -1px -1px;
 }
@@ -1257,6 +1399,17 @@ body.is-resizing {
     min-height: 0;
 }
 
+/* The actual scroll container is use-stick-to-bottom's internal scrollRef div
+   (Conversation itself sits at overflow-y:hidden) — reached via the
+   `scrollClassName` prop on ConversationContent, not .chat__messages. */
+.chat__scroll {
+    scrollbar-gutter: stable !important;
+    scrollbar-color: var(--scroll-thumb) var(--bg);
+}
+.chat__scroll::-webkit-scrollbar-track {
+    background: var(--bg);
+}
+
 .chat__empty {
     color: var(--text-muted);
     font-size: 13px;
@@ -1297,7 +1450,6 @@ body.is-resizing {
     z-index: 6;
     pointer-events: none;
     padding-bottom: 20px;
-    background: linear-gradient(to bottom, var(--bg) 65%, transparent);
 }
 .msg--user-pinned .msg__text {
     pointer-events: auto;
@@ -1307,9 +1459,11 @@ body.is-resizing {
    the last message). */
 .msg__actions {
     display: flex;
+    justify-content: flex-end;
     gap: 2px;
     opacity: 0;
     transition: opacity 0.15s ease;
+    margin-top: -2px;
 }
 .msg:hover .msg__actions,
 .msg:last-child .msg__actions {
@@ -1500,7 +1654,7 @@ body.is-resizing {
 
 .composer {
     flex: 0 0 auto;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--border-prominent);
     /* top right bottom left — bottom + right sit at 10px so the form floats a
        consistent 10px from the window's bottom-right (matching the preview inset). */
     padding: 10px;
@@ -1545,6 +1699,10 @@ body.is-resizing {
     padding: 4px;
     max-height: 240px;
     overflow-y: auto;
+    /* The menu opens UP into the region occupied by the status row (the running
+       cat + its bottom fade), which paints at z-index 5. Sit above it so the
+       cat/gradient never cover the menu's lowest item. */
+    z-index: 30;
 }
 
 .slash__hint {
@@ -1668,7 +1826,11 @@ body.is-resizing {
     gap: 8px;
     min-height: 28px;
     margin-top: -42px;
-    padding: 16px 16px 0;
+    /* Bottom padding (new): now that the composer frame paints an opaque
+       --card fill instead of staying transparent, the cat needs real
+       clearance above it — a 0 bottom inset let the two abut with nothing
+       between them. */
+    padding: 16px 16px 0px;
     background: linear-gradient(to bottom, transparent, var(--bg) 70%);
     pointer-events: none;
 }

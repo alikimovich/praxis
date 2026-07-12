@@ -105,6 +105,21 @@ try {
   if (!drawerText.includes('variant')) throw new Error('drawer did not load the file source')
   await win.screenshot({ path: join(artifacts, '13-code-drawer.png') })
 
+  // --- Drag the top edge to resize; the reserved inset grows but is capped at
+  // 80% of the window height. ---
+  const beforeDrag = await win.evaluate(() => window.__dsgnPanelInset.getState().bottom)
+  const handle = await win.waitForSelector('.codedrawer__resize', { timeout: 5000 })
+  const box = await handle.boundingBox()
+  if (!box) throw new Error('resize handle has no bounding box')
+  await win.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await win.mouse.down()
+  await win.mouse.move(box.x + box.width / 2, 0, { steps: 8 }) // drag to the very top
+  await win.mouse.up()
+  const afterDrag = await win.evaluate(() => window.__dsgnPanelInset.getState().bottom)
+  const cap = await win.evaluate(() => window.innerHeight * 0.8)
+  if (!(afterDrag > beforeDrag)) throw new Error(`drag did not grow the drawer (${beforeDrag} → ${afterDrag})`)
+  if (afterDrag > cap + 1) throw new Error(`drawer exceeded the 80% cap (${afterDrag} > ${cap})`)
+
   // Close releases the inset.
   await win.$eval('.codedrawer__close', (el) => el.click())
   await win.waitForFunction(() => window.__dsgnPanelInset.getState().bottom === 0, undefined, {

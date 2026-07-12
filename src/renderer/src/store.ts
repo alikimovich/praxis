@@ -11,6 +11,7 @@ import type {
   PropInspection,
   SelectedElement,
   SessionRecord,
+  SessionTranscriptEntry,
   TokenSet,
   UpdateStatus
 } from '../../shared/api'
@@ -53,6 +54,16 @@ interface ChatState {
   isRunning: boolean
   /** Show a project's chat (preserves each project's history across switches). */
   setActiveChat: (key: string) => void
+  /**
+   * Populate a chat slice from a session transcript (v9 resume, boot reattach) so
+   * the conversation shows its past turns, not an empty thread. No-op if the slice
+   * already has messages (never clobbers a live chat / a repeat restore). When
+   * `isRunning` (a reattached turn still in flight in main), opens a fresh empty
+   * streaming assistant message so the turn's continuing `agent:event` deltas keep
+   * rendering into it (the pre-reload buffered text isn't in the transcript yet —
+   * see restore.ts).
+   */
+  hydrate: (key: string, messages: ChatMessage[], isRunning?: boolean) => void
   /** Drop a project's chat buffer (on close). */
   clearChat: (key: string) => void
   // Actions default to the active project; pass a key to target a backgrounded one.
@@ -104,6 +115,23 @@ export const useChat = create<ChatState>((set, get) => {
           messages: slice.messages,
           isRunning: slice.isRunning
         }
+      }),
+    hydrate: (key, messages, isRunning = false) =>
+      set((s) => {
+        const prev = s.byKey[key] ?? emptySlice()
+        // Only seed an empty slice — never overwrite a chat that's already live.
+        if (prev.messages.length) return {}
+        let msgs = messages
+        let streamingId: string | null = null
+        if (isRunning) {
+          const id = nextId()
+          msgs = [...messages, { id, role: 'assistant', text: '', statuses: [], segments: [] }]
+          streamingId = id
+        }
+        const slice: ChatSlice = { messages: msgs, isRunning, streamingId }
+        return key === s.activeKey
+          ? { byKey: { ...s.byKey, [key]: slice }, messages: slice.messages, isRunning }
+          : { byKey: { ...s.byKey, [key]: slice } }
       }),
     clearChat: (key) =>
       set((s) => {
@@ -188,6 +216,51 @@ export const useChat = create<ChatState>((set, get) => {
   }
 })
 
+/**
+ * Rebuild chat messages from a persisted session transcript (v9 resume). The
+ * on-disk transcript is a flat, chronological list of `user` / `assistant` /
+ * `status` (tool-use) lines; this regroups each turn's assistant text + tool
+ * statuses into a single assistant `ChatMessage` with interleaved `segments`,
+ * mirroring what the live stream builds (`startAssistant` → `appendDelta` /
+ * `appendStatus`). A `user` line ends the current turn and starts a fresh one.
+ */
+export const messagesFromTranscript = (
+  transcript: SessionTranscriptEntry[]
+): ChatMessage[] => {
+  const messages: ChatMessage[] = []
+  // The assistant message the current turn's text/tool lines accrue into.
+  let current: ChatMessage | null = null
+  for (const entry of transcript) {
+    if (entry.role === 'user') {
+      current = null
+      messages.push({
+        id: nextId(),
+        role: 'user',
+        text: entry.text,
+        statuses: [],
+        segments: entry.text ? [{ kind: 'text', text: entry.text }] : []
+      })
+      continue
+    }
+    if (!current) {
+      current = { id: nextId(), role: 'assistant', text: '', statuses: [], segments: [] }
+      messages.push(current)
+    }
+    const last = current.segments[current.segments.length - 1]
+    if (entry.role === 'assistant') {
+      if (last?.kind === 'text') last.text += entry.text
+      else current.segments.push({ kind: 'text', text: entry.text })
+      current.text = current.text ? `${current.text}\n\n${entry.text}` : entry.text
+    } else {
+      // A 'status' line is a tool-use run.
+      if (last?.kind === 'tools') last.statuses.push(entry.text)
+      else current.segments.push({ kind: 'tools', statuses: [entry.text] })
+      current.statuses.push(entry.text)
+    }
+  }
+  return messages
+}
+
 // Sentinel values mean "use the account/model default" (omit from SDK options).
 export const DEFAULT_MODEL = 'default'
 export const DEFAULT_EFFORT = 'auto'
@@ -202,6 +275,13 @@ interface SessionState {
   slashCommands: string[]
   /** Set when the agent reports an auth failure — drives the onboarding banner. */
   authNeeded: boolean
+  /**
+   * Set when a *Codex* turn reports an auth/"not connected" failure — drives the
+   * inline `codex login` hint. Kept separate from `authNeeded` (which owns the
+   * Claude-specific onboarding banner) so the hint only nags after a real
+   * failure, not on every switch to the Codex backend.
+   */
+  codexAuthNeeded: boolean
   /** Absolute path of the open project (needed to resolve prop-edit sources). */
   projectRoot: string | null
   /** The `dsgn/*` branch dsgn is working on (null if not a git repo). */
@@ -211,6 +291,7 @@ interface SessionState {
   setProvider: (provider: string) => void
   setSlashCommands: (commands: string[]) => void
   setAuthNeeded: (authNeeded: boolean) => void
+  setCodexAuthNeeded: (codexAuthNeeded: boolean) => void
   setProjectRoot: (projectRoot: string | null) => void
   setBranch: (branch: string | null) => void
 }
@@ -221,6 +302,7 @@ export const useSession = create<SessionState>((set) => ({
   provider: DEFAULT_PROVIDER,
   slashCommands: [],
   authNeeded: false,
+  codexAuthNeeded: false,
   projectRoot: null,
   branch: null,
   setModel: (model) => set({ model }),
@@ -228,6 +310,7 @@ export const useSession = create<SessionState>((set) => ({
   setProvider: (provider) => set({ provider }),
   setSlashCommands: (slashCommands) => set({ slashCommands }),
   setAuthNeeded: (authNeeded) => set({ authNeeded }),
+  setCodexAuthNeeded: (codexAuthNeeded) => set({ codexAuthNeeded }),
   setProjectRoot: (projectRoot) => set({ projectRoot }),
   setBranch: (branch) => set({ branch })
 }))
@@ -264,6 +347,10 @@ export interface ProjectEntry {
   /** Preview viewport for THIS project — each remembers its own; restored on
    *  switch (a global viewport leaked one project's Mobile into the next). */
   viewport?: Viewport
+  /** Rail: hide this project's chat list while it stays active (chevron toggle).
+   *  Independent of `activeKey` — collapsing doesn't deactivate the project, its
+   *  dev server/preview stay live. Defaults to expanded (undefined = false). */
+  chatsCollapsed?: boolean
   /** Monotonic recency stamp (bumped on activate) — drives LRU warm-server eviction. */
   touchedAt: number
   /** Chat length at the last successful Publish — the next Publish summarizes
@@ -294,7 +381,13 @@ interface WorkspaceState {
   patchEntry: (key: string, partial: Partial<ProjectEntry>) => void
   close: (key: string) => void
   toggleCollapsed: () => void
+  /** Toggle whether an (active) project's chat list is hidden — see `chatsCollapsed`. */
+  toggleChatsCollapsed: (key: string) => void
   reset: () => void
+  /** Replace the whole set (boot restore) — see restore.ts. Also advances the
+   *  LRU recency counter past the restored `touchedAt`s so entries opened after a
+   *  restore still sort as newer. */
+  hydrate: (projects: ProjectEntry[], activeKey: string | null) => void
 }
 
 /**
@@ -358,6 +451,32 @@ export const usePreviewFreeze = create<PreviewFreezeState>((set) => ({
   setFrozen: (frozen) => set(frozen ? { frozen } : { frozen, ready: false }),
   setReady: (ready) => set({ ready })
 }))
+
+/**
+ * Open an overlay that must paint above the native preview (dropdowns, the
+ * session-review modal, the feedback dialog): freeze-frame first (PreviewPane
+ * swaps in a snapshot <img> and hides the native view), then call `show` once
+ * the freeze is ready — showing in the same tick would render the overlay
+ * behind the native view for the capture's ~80ms and then "pop" (flicker). A
+ * wedged capture never blocks the overlay (350ms failsafe). Callers restore
+ * with `usePreviewFreeze.getState().setFrozen(false)` on close.
+ */
+export const openWithPreviewFreeze = (show: () => void): void => {
+  usePreviewFreeze.getState().setFrozen(true)
+  if (usePreviewFreeze.getState().ready) {
+    show()
+    return
+  }
+  const done = (): void => {
+    unsub()
+    clearTimeout(failsafe)
+    show()
+  }
+  const unsub = usePreviewFreeze.subscribe((s) => {
+    if (s.ready) done()
+  })
+  const failsafe = setTimeout(done, 350)
+}
 
 /**
  * Right-edge strip (px) reserved by the floating prop panel. PreviewPane lays
@@ -628,6 +747,12 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     set((s) => ({
       projects: s.projects.map((p) => (p.key === key ? { ...p, ...partial } : p))
     })),
+  toggleChatsCollapsed: (key) =>
+    set((s) => ({
+      projects: s.projects.map((p) =>
+        p.key === key ? { ...p, chatsCollapsed: !p.chatsCollapsed } : p
+      )
+    })),
   close: (key) =>
     set((s) => {
       const projects = s.projects.filter((p) => p.key !== key)
@@ -635,8 +760,70 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
         s.activeKey === key ? (projects.at(-1)?.key ?? null) : s.activeKey
       return { projects, activeKey }
     }),
-  reset: () => set({ projects: [], activeKey: null })
+  reset: () => set({ projects: [], activeKey: null }),
+  hydrate: (projects, activeKey) =>
+    set(() => {
+      // Persisted `touchedAt`s outrank a fresh launch's counter (reset to 0), which
+      // would make restored entries look newer than anything opened afterwards.
+      // Advance past them so LRU eviction ordering stays monotonic.
+      touchSeq = projects.reduce((m, p) => Math.max(m, p.touchedAt || 0), touchSeq)
+      return { projects, activeKey }
+    })
 }))
+
+/**
+ * Persist the workspace shape (open projects + which is active) so a renderer
+ * reload / app relaunch can restore it (see restore.ts). In-memory today, mirrored
+ * to localStorage here; every ProjectEntry field is plain JSON data (launchSpec /
+ * viewport included), so it round-trips. Only the MAIN renderer persists — the
+ * floating prop-panel view (`?dsgnPanel=1`) shares this origin's localStorage but
+ * has its own (empty) workspace, so it must never write over the real one.
+ */
+const WORKSPACE_KEY = 'dsgn:workspace'
+const isPanelWindow = (): boolean => {
+  try {
+    return new URLSearchParams(window.location.search).has('dsgnPanel')
+  } catch {
+    return false
+  }
+}
+
+export interface PersistedWorkspace {
+  projects: ProjectEntry[]
+  activeKey: string | null
+}
+
+export const readPersistedWorkspace = (): PersistedWorkspace | null => {
+  try {
+    const raw = localStorage.getItem(WORKSPACE_KEY)
+    if (!raw) return null
+    const v = JSON.parse(raw) as PersistedWorkspace
+    if (!v || !Array.isArray(v.projects)) return null
+    const projects = v.projects.filter(
+      (p) => p && typeof p.root === 'string' && typeof p.key === 'string'
+    )
+    return { projects, activeKey: typeof v.activeKey === 'string' ? v.activeKey : null }
+  } catch {
+    return null
+  }
+}
+
+const writePersistedWorkspace = (ws: WorkspaceState): void => {
+  try {
+    localStorage.setItem(
+      WORKSPACE_KEY,
+      JSON.stringify({ projects: ws.projects, activeKey: ws.activeKey })
+    )
+  } catch {
+    /* private mode / no storage — keep it in memory only */
+  }
+}
+
+// Write on every workspace change (open/close/switch/patch). The panel window
+// never subscribes, so it can't clobber the main renderer's saved shape.
+if (!isPanelWindow()) {
+  useWorkspace.subscribe(writePersistedWorkspace)
+}
 
 /**
  * v5-D "previous agents" — persisted agent sessions per project, surfaced under
@@ -730,12 +917,44 @@ export const relativeTime = (ms: number, now = Date.now()): string => {
 }
 
 /**
- * Heuristic: does this agent error look like a missing/invalid Claude login?
+ * Tighter "time ago" for the rail's chat list — Cursor-style trailing labels
+ * with no "ago" suffix and month/year buckets ("3m", "2h", "5d", "4mo", "1y").
+ */
+export const shortAgo = (ms: number, now = Date.now()): string => {
+  const s = Math.max(0, Math.round((now - ms) / 1000))
+  if (s < 60) return 'now'
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m}m`
+  const h = Math.round(m / 60)
+  if (h < 24) return `${h}h`
+  const d = Math.round(h / 24)
+  if (d < 30) return `${d}d`
+  const mo = Math.round(d / 30)
+  if (mo < 12) return `${mo}mo`
+  return `${Math.round(d / 365)}y`
+}
+
+/**
+ * Auto-name a chat from its opening user message — Praxis never asks the user to
+ * title a chat, so the first prompt stands in (whitespace-collapsed and capped).
+ * Falls back to `fallback` when the chat has no user turn yet.
+ */
+export const chatTitle = (firstUserText: string | undefined | null, fallback = 'New chat'): string => {
+  const t = (firstUserText ?? '').replace(/\s+/g, ' ').trim()
+  if (!t) return fallback
+  const MAX = 34
+  return t.length > MAX ? `${t.slice(0, MAX).trimEnd()}…` : t
+}
+
+/**
+ * Heuristic: does this agent error look like a missing/invalid login?
  * Per-user auth means a fresh teammate hits this before they've run
- * `claude setup-token` — we want to guide them, not show a raw 401.
+ * `claude setup-token` (Claude) or `codex login` (Codex) — we want to guide
+ * them, not show a raw 401. The `sign in` / `codex login` phrasings cover the
+ * Codex backend's "not connected" errors (see backends/codex.ts).
  */
 export const isAuthError = (message: string): boolean =>
-  /\b401\b|invalid authentication|unauthorized|setup-token|not logged in|no credentials|authentication_error/i.test(
+  /\b401\b|invalid authentication|unauthorized|setup-token|not logged in|no credentials|authentication_error|sign in|codex login/i.test(
     message
   )
 
@@ -887,6 +1106,30 @@ export const useUiActions = create<UiActionsState>((set) => ({
   toggleSelect: () => {},
   register: (actions) => set(actions)
 }))
+
+/**
+ * In-app feedback dialog (LKM-27) — a single global open flag so any surface (the
+ * previewbar button, the empty-state button) can raise the one dialog App renders.
+ */
+interface FeedbackState {
+  open: boolean
+  setOpen: (open: boolean) => void
+}
+export const useFeedback = create<FeedbackState>((set) => ({
+  open: false,
+  setOpen: (open) => set({ open })
+}))
+
+/** Render a chat slice as a plain-text transcript for a feedback attachment. */
+export const formatConversation = (messages: ChatMessage[]): string =>
+  messages
+    .map((m) => {
+      const who = m.role === 'user' ? 'You' : 'Praxis'
+      const text = m.text.trim()
+      return text ? `${who}: ${text}` : ''
+    })
+    .filter(Boolean)
+    .join('\n\n')
 
 /**
  * Props island visibility. Opening is EXPLICIT (the selection toolbar's props
@@ -1064,8 +1307,10 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
  * load) — mirrors main's `did-navigate`/`did-navigate-in-page` reports. A single
  * global value: only one native preview `WebContentsView` is ever live, so it
  * always reflects whichever project is currently active. Kept in sync by a
- * single top-level listener (see App.tsx); read by the chat composer so the
- * agent knows what page it's looking at without the user having to say so.
+ * single top-level listener (see App.tsx). The chat composer no longer reads
+ * this to prepend hidden context — the agent has a `preview_location` tool
+ * (main-process) it can call itself when it needs to know the current page.
+ * This store may still back renderer UI (e.g. a preview URL bar) later.
  */
 interface PreviewLocationState {
   url: string | null
@@ -1076,21 +1321,6 @@ export const usePreviewLocation = create<PreviewLocationState>((set) => ({
   url: null,
   setUrl: (url) => set({ url })
 }))
-
-/** Build the hidden chat-prompt prefix naming the page currently shown in the
- *  preview — relative to the project's dev-server origin when it matches. */
-export const describePreviewLocationForPrompt = (base: string | null): string => {
-  const url = usePreviewLocation.getState().url
-  if (!url) return ''
-  let where = url
-  try {
-    const u = new URL(url)
-    if (base && new URL(base).origin === u.origin) where = u.pathname + u.search + u.hash
-  } catch {
-    /* keep the full URL if either side fails to parse */
-  }
-  return `The preview is currently showing ${where}. `
-}
 
 // Exposed for the Playwright test harness (and handy for live debugging).
 ;(
@@ -1106,6 +1336,9 @@ export const describePreviewLocationForPrompt = (base: string | null): string =>
   }
 ).__dsgnStore = useChat
 ;(window as unknown as { __dsgnSession?: typeof useSession }).__dsgnSession = useSession
+;(
+  window as unknown as { __dsgnMessagesFromTranscript?: typeof messagesFromTranscript }
+).__dsgnMessagesFromTranscript = messagesFromTranscript
 ;(window as unknown as { __dsgnSelection?: typeof useSelection }).__dsgnSelection = useSelection
 ;(window as unknown as { __dsgnPermissions?: typeof usePermissions }).__dsgnPermissions =
   usePermissions
@@ -1126,8 +1359,3 @@ export const describePreviewLocationForPrompt = (base: string | null): string =>
 ;(
   window as unknown as { __dsgnPreviewLocation?: typeof usePreviewLocation }
 ).__dsgnPreviewLocation = usePreviewLocation
-;(
-  window as unknown as {
-    __dsgnDescribePreviewLocationForPrompt?: typeof describePreviewLocationForPrompt
-  }
-).__dsgnDescribePreviewLocationForPrompt = describePreviewLocationForPrompt
