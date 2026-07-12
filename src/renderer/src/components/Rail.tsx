@@ -1,9 +1,17 @@
-import { ChevronRight, Folder, FolderOpen, Plus, X } from "lucide-react";
+import {
+  ChevronRight,
+  Folder,
+  FolderOpen,
+  MessageSquarePlus,
+  Plus,
+  X,
+} from "lucide-react";
 import type { SessionRecord } from "../../../shared/api";
 import {
   chatTitle,
   shortAgo,
   useChat,
+  useFeedback,
   useHistory,
   useSpawns,
   useUpdate,
@@ -290,6 +298,19 @@ export default function Rail({
           })}
         </ul>
       </div>
+      {/* Feedback — pinned to the rail's bottom-left, outside rail__inner's
+          scroll area so a long project/chat list never scrolls it away. Always
+          available; files a GitHub issue on the Praxis repo with an optional
+          screenshot + conversation. */}
+      <button
+        className="rail__feedback"
+        onClick={() => useFeedback.getState().setOpen(true)}
+        aria-label="Send feedback"
+        title="Send feedback"
+      >
+        <MessageSquarePlus className="size-4" aria-hidden="true" />
+        <span>Send feedback</span>
+      </button>
       {/* Pinned outside rail__inner's scroll area (a sibling, not its last
           child) so a long project/chat list can't scroll it out of view. */}
       {updateStatus === "available" && updateSubject !== updateDismissedSubject && (
