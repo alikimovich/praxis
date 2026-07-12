@@ -247,10 +247,20 @@ export default function App(): React.JSX.Element {
           session.setSlashCommands(event.commands)
         } else if (event.type === 'error' && isAuthError(event.message)) {
           // The onboarding banner is Claude-specific (setup-token / claude login);
-          // don't raise it for a non-Claude backend's auth error. (v7)
+          // Codex gets its own inline `codex login` hint. Raise whichever matches
+          // the active backend — never the Claude banner for a Codex failure. (v7)
           if ((session.provider ?? 'claude') === 'claude') session.setAuthNeeded(true)
+          else if (session.provider === 'codex') session.setCodexAuthNeeded(true)
         } else if (event.type === 'delta' || event.type === 'done') {
+          // A turn that streamed/finished proves we're connected — clear the
+          // Claude banner (its backend only emits `done` on success).
           if (session.authNeeded) session.setAuthNeeded(false)
+          // Codex emits `done` after EVERY turn — including a failed auth turn,
+          // right after the `error` that raised the hint — so `done` must NOT
+          // clear it (that would wipe the hint the instant it appears). Only real
+          // streamed output (`delta`) proves Codex actually connected.
+          if (event.type === 'delta' && session.codexAuthNeeded)
+            session.setCodexAuthNeeded(false)
         } else if (event.type === 'permission-request') {
           usePermissions.getState().addRequest(event.request)
         } else if (event.type === 'permission-resolved') {

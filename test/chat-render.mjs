@@ -151,9 +151,23 @@ try {
     throw new Error(`unexpected backends: ${JSON.stringify(backends)}`)
   }
   await win.selectOption('select[aria-label="Backend"]', 'codex')
+  // The `codex login` hint is NOT a nag on every switch — an already-connected
+  // user shouldn't see it. It only appears after a turn fails to connect.
+  if ((await win.$('.provider-hint')) !== null)
+    throw new Error('provider hint should stay hidden until a Codex turn fails')
+  // Selecting Codex swaps the model picker to Codex's own models (not Claude's).
+  const codexModels = await win.$$eval('select[aria-label="Model"] option', (os) =>
+    os.map((o) => o.value)
+  )
+  if (!codexModels.includes('gpt-5-codex') || codexModels.includes('opus')) {
+    throw new Error(`Codex backend should list Codex models, got: ${JSON.stringify(codexModels)}`)
+  }
+  // A Codex auth/"not connected" failure surfaces the login hint.
+  await win.evaluate(() => window.__dsgnSession.getState().setCodexAuthNeeded(true))
   await win.waitForSelector('.provider-hint', { timeout: 5000 })
   const hint = (await win.textContent('.provider-hint'))?.toLowerCase() ?? ''
   if (!hint.includes('codex login')) throw new Error(`provider hint should mention codex login: ${hint}`)
+  await win.evaluate(() => window.__dsgnSession.getState().setCodexAuthNeeded(false))
   await win.selectOption('select[aria-label="Backend"]', 'claude') // reset
   if ((await win.$('.provider-hint')) !== null) throw new Error('hint should hide for Claude')
 

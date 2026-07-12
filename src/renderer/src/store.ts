@@ -275,6 +275,13 @@ interface SessionState {
   slashCommands: string[]
   /** Set when the agent reports an auth failure — drives the onboarding banner. */
   authNeeded: boolean
+  /**
+   * Set when a *Codex* turn reports an auth/"not connected" failure — drives the
+   * inline `codex login` hint. Kept separate from `authNeeded` (which owns the
+   * Claude-specific onboarding banner) so the hint only nags after a real
+   * failure, not on every switch to the Codex backend.
+   */
+  codexAuthNeeded: boolean
   /** Absolute path of the open project (needed to resolve prop-edit sources). */
   projectRoot: string | null
   /** The `dsgn/*` branch dsgn is working on (null if not a git repo). */
@@ -284,6 +291,7 @@ interface SessionState {
   setProvider: (provider: string) => void
   setSlashCommands: (commands: string[]) => void
   setAuthNeeded: (authNeeded: boolean) => void
+  setCodexAuthNeeded: (codexAuthNeeded: boolean) => void
   setProjectRoot: (projectRoot: string | null) => void
   setBranch: (branch: string | null) => void
 }
@@ -294,6 +302,7 @@ export const useSession = create<SessionState>((set) => ({
   provider: DEFAULT_PROVIDER,
   slashCommands: [],
   authNeeded: false,
+  codexAuthNeeded: false,
   projectRoot: null,
   branch: null,
   setModel: (model) => set({ model }),
@@ -301,6 +310,7 @@ export const useSession = create<SessionState>((set) => ({
   setProvider: (provider) => set({ provider }),
   setSlashCommands: (slashCommands) => set({ slashCommands }),
   setAuthNeeded: (authNeeded) => set({ authNeeded }),
+  setCodexAuthNeeded: (codexAuthNeeded) => set({ codexAuthNeeded }),
   setProjectRoot: (projectRoot) => set({ projectRoot }),
   setBranch: (branch) => set({ branch })
 }))
@@ -937,12 +947,14 @@ export const chatTitle = (firstUserText: string | undefined | null, fallback = '
 }
 
 /**
- * Heuristic: does this agent error look like a missing/invalid Claude login?
+ * Heuristic: does this agent error look like a missing/invalid login?
  * Per-user auth means a fresh teammate hits this before they've run
- * `claude setup-token` — we want to guide them, not show a raw 401.
+ * `claude setup-token` (Claude) or `codex login` (Codex) — we want to guide
+ * them, not show a raw 401. The `sign in` / `codex login` phrasings cover the
+ * Codex backend's "not connected" errors (see backends/codex.ts).
  */
 export const isAuthError = (message: string): boolean =>
-  /\b401\b|invalid authentication|unauthorized|setup-token|not logged in|no credentials|authentication_error/i.test(
+  /\b401\b|invalid authentication|unauthorized|setup-token|not logged in|no credentials|authentication_error|sign in|codex login/i.test(
     message
   )
 

@@ -2,6 +2,32 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-11 — Codex: don't nag on switch, and give it its own model picker (LKM-42)
+
+Two Codex UX bugs. **(1) The `codex login` hint showed on *every* switch to the
+Codex backend**, even for an already-connected user — the render guard was just
+`if (!p?.login)`. Gated it on a new `codexAuthNeeded` store flag that's raised
+only when a Codex turn actually reports an auth/"not connected" error (mirrors
+`authNeeded` for Claude, kept separate so the Claude onboarding banner never
+fires for a Codex failure). `isAuthError` now also matches Codex's `sign in` /
+`codex login` phrasings. **(2) The model picker always listed Claude's models**
+(opus/sonnet/haiku), so on Codex you couldn't pick a real model and selecting one
+handed a Claude name to Codex → the turn failed. The picker now switches per
+backend via `modelsFor(provider)` (Codex → Default / GPT-5 Codex / GPT-5), and
+because Codex fixes its model at `startThread`, `onModelChange` reopens the
+session on the new model instead of a no-op live `setModel`. Switching backend
+resets the model to Default (names don't cross providers).
+
+- **Gotcha fixed in the same pass:** Codex's backend emits `done` after *every*
+  turn — including the failed auth turn, right after the `error` that raises the
+  hint. Clearing `codexAuthNeeded` on `done` (as the first cut did, copying the
+  Claude path) would wipe the hint the instant it appeared, so it's now cleared
+  only on a real `delta` (streamed output = genuinely connected). Claude keeps
+  clearing on `done` because its backend only emits `done` on success.
+- `test/chat-render.mjs` extended: hint stays hidden on switch, the model picker
+  lists Codex models (not `opus`), and the hint appears once `codexAuthNeeded` is
+  raised. (Electron UI tier — needs a display; can't run on a headless runner.)
+
 ## 2026-07-11 — Regression-test the mid-message "/" menu trigger (LKM-37)
 
 The "/" skills menu already opened mid-message (it reads the "/" token the caret
