@@ -172,17 +172,7 @@ async function startSession(
   // the plain `projectKey(root)`, so an additional/resumed chat (whose `emitKey` is
   // `${key}#…`) would otherwise get a history record no rail lookup can ever find.
   const cap = createRecordCapture(root, key)
-  const { query, resolveSettings, filterEscalatingDefaultMode, createSdkMcpServer, tool } =
-    await loadSdk()
-  // `settingSources` below loads a project's own committed .claude/settings.json
-  // (needed for its CLAUDE.md/skills) — but that means a repo could otherwise
-  // silently escalate this session's permission mode via a committed
-  // `permissions.defaultMode: "acceptEdits"`. Apply the SDK's own trust-tier
-  // filter (what the CLI applies) and re-inject the result as the highest-
-  // priority "flag settings" tier, so an untrusted project-committed escalation
-  // can never override dsgn's own explicit `permissionMode` below.
-  const resolvedSettings = await resolveSettings({ cwd: root, settingSources: ['user', 'project', 'local'] })
-  const trustedSettings = filterEscalatingDefaultMode(resolvedSettings)
+  const { query, createSdkMcpServer, tool } = await loadSdk()
   const input = new InputStream()
   const abort = new AbortController()
   const pending = new Map<string, PendingPrompt>()
@@ -257,10 +247,6 @@ async function startSession(
     options: {
       cwd: root,
       settingSources: ['user', 'project', 'local'],
-      // Highest-priority settings tier — carries the trust-filtered
-      // permissions.defaultMode (see above) so a project-committed escalation
-      // can't win even if the SDK would otherwise prefer it over permissionMode.
-      settings: trustedSettings,
       // The repo's CLAUDE.md + skills load via settingSources; Praxis's own
       // operating rules (v8 R) are appended to the Claude Code preset, with the
       // preview-tools section (Claude alone can call the in-process praxis tools).
