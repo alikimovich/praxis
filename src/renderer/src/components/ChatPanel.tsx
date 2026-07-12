@@ -57,12 +57,24 @@ import {
 } from "@/components/ui/collapsible";
 import CatLoader from "./CatLoader";
 
-const MODELS = [
+// The model picker is per-backend: Claude's own models vs. the models the
+// `codex` CLI accepts via --model. "Default" is a sentinel meaning "omit the
+// model, use the account/backend default" (see toAgentOptions). Handing a
+// Claude model name (e.g. "opus") to Codex would fail the turn, so switching
+// backend also resets the model to Default (see onProviderChange).
+const CLAUDE_MODELS = [
   { value: DEFAULT_MODEL, label: "Default" },
   { value: "opus", label: "Opus" },
   { value: "sonnet", label: "Sonnet" },
   { value: "haiku", label: "Haiku" },
 ];
+const CODEX_MODELS = [
+  { value: DEFAULT_MODEL, label: "Default" },
+  { value: "gpt-5-codex", label: "GPT-5 Codex" },
+  { value: "gpt-5", label: "GPT-5" },
+];
+const modelsFor = (provider: string): { value: string; label: string }[] =>
+  provider === "codex" ? CODEX_MODELS : CLAUDE_MODELS;
 
 // `bypassPermissions` is intentionally omitted — see its "unused" doc note on
 // PermissionMode (shared/api.ts): skips dsgn's own canUseTool guards too, not
@@ -327,6 +339,7 @@ export default function ChatPanel(): React.JSX.Element {
   } = useChat();
   const { model, provider, slashCommands, projectRoot, setModel, setProvider } =
     useSession();
+  const codexAuthNeeded = useSession((s) => s.codexAuthNeeded);
   const { selected, setSelected } = useSelection();
   const selectMode = useSelection((s) => s.selectMode);
   const inspection = useSelection((s) => s.inspection);
@@ -769,6 +782,19 @@ export default function ChatPanel(): React.JSX.Element {
 
   const onModelChange = (value: string): void => {
     setModel(value);
+    // Codex fixes the model when the thread starts — a live `setModel` is a
+    // no-op there (see backends/codex.ts), so switch models by reopening the
+    // session on the new one (transcript stays; context resets, like the
+    // backend switch below). Claude honors `setModel` live.
+    if (provider === "codex") {
+      if (!projectRoot) return;
+      void window.api.agent.openProject(projectRoot, {
+        ...toAgentOptions({ ...useSession.getState(), model: value }),
+        permissionMode: usePermissions.getState().mode,
+      });
+      useChat.getState().finish();
+      return;
+    }
     if (value !== DEFAULT_MODEL) void window.api.agent.setModel(value);
   };
 
@@ -783,6 +809,10 @@ export default function ChatPanel(): React.JSX.Element {
   // new backend (the visible transcript stays; context resets, like an LRU reopen).
   const onProviderChange = (value: string): void => {
     setProvider(value);
+    // Model names don't carry across backends ("opus" is meaningless to Codex,
+    // "gpt-5" to Claude), so reset to the backend default on switch — the picker
+    // repopulates with the new backend's models (see modelsFor).
+    setModel(DEFAULT_MODEL);
     if (!projectRoot) return;
     void window.api.agent.openProject(projectRoot, {
       ...toAgentOptions({ ...useSession.getState(), provider: value }),
@@ -1006,11 +1036,13 @@ export default function ChatPanel(): React.JSX.Element {
           onRemove={(id) => void removeNote(id)}
           onPublish={() => void publish()}
         />
-        {/* v7: when a non-Claude backend is selected, point the user at its
-            one-time subscription login (no API keys). */}
+        {/* v7: a non-Claude backend authenticates with its own subscription
+            login (no API keys). Only surface the hint once a turn has actually
+            failed to connect (codexAuthNeeded) — an already-logged-in user
+            shouldn't be nagged every time they switch to the backend. */}
         {(() => {
           const p = PROVIDERS.find((x) => x.value === provider);
-          if (!p?.login) return null;
+          if (!p?.login || !codexAuthNeeded) return null;
           return (
             <div
               className="provider-hint rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11.5px] text-blue-900"
@@ -1020,7 +1052,7 @@ export default function ChatPanel(): React.JSX.Element {
               <code className="rounded bg-blue-100 px-1 font-mono text-[11px]">
                 {p.login}
               </code>{" "}
-              once if a turn says it’s not connected.
+              once to connect, then try again.
             </div>
           );
         })()}
@@ -1133,7 +1165,7 @@ export default function ChatPanel(): React.JSX.Element {
                 onChange={(e) => onModelChange(e.target.value)}
                 aria-label="Model"
               >
-                {MODELS.map((m) => (
+                {modelsFor(provider).map((m) => (
                   <option key={m.value} value={m.value}>
                     {m.label}
                   </option>
