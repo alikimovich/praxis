@@ -39,6 +39,7 @@ const UNIT = [
   'diag-cache',
   'diag-rules',
   'sessions-store',
+  'chat-title',
   'edit-history',
   'worktrees',
   'rules',

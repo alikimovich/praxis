@@ -42,6 +42,10 @@ interface ChatSlice {
   messages: ChatMessage[]
   isRunning: boolean
   streamingId: string | null
+  /** Auto-generated name summarising what this chat is about (main's `title`
+   *  event). The rail prefers it over the first-message heuristic; undefined
+   *  until generated. */
+  title?: string
 }
 const emptySlice = (): ChatSlice => ({ messages: [], isRunning: false, streamingId: null })
 
@@ -64,6 +68,9 @@ interface ChatState {
    * see restore.ts).
    */
   hydrate: (key: string, messages: ChatMessage[], isRunning?: boolean) => void
+  /** Store this chat's auto-generated name (main's `title` event / a resumed
+   *  chat's persisted title). Preserves the slice's messages. */
+  setTitle: (key: string, title: string) => void
   /** Drop a project's chat buffer (on close). */
   clearChat: (key: string) => void
   // Actions default to the active project; pass a key to target a backgrounded one.
@@ -128,11 +135,12 @@ export const useChat = create<ChatState>((set, get) => {
           msgs = [...messages, { id, role: 'assistant', text: '', statuses: [], segments: [] }]
           streamingId = id
         }
-        const slice: ChatSlice = { messages: msgs, isRunning, streamingId }
+        const slice: ChatSlice = { messages: msgs, isRunning, streamingId, title: prev.title }
         return key === s.activeKey
           ? { byKey: { ...s.byKey, [key]: slice }, messages: slice.messages, isRunning }
           : { byKey: { ...s.byKey, [key]: slice } }
       }),
+    setTitle: (key, title) => patch(key, (sl) => ({ ...sl, title })),
     clearChat: (key) =>
       set((s) => {
         const byKey = { ...s.byKey }

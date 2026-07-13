@@ -81,6 +81,7 @@
     "test:railcollapse": "electron-vite build && node test/rail-collapse.mjs",
     "test:providerseam": "electron-vite build && node test/provider-seam.mjs",
     "test:sessionstore": "bun test/sessions-store.mjs",
+    "test:chat-title": "bun test/chat-title.mjs",
     "test:edithistory": "bun test/edit-history.mjs",
     "test:worktrees": "bun test/worktrees.mjs",
     "test:rules": "bun test/rules.mjs",

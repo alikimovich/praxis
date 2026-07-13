@@ -98,6 +98,53 @@ const trackRunning =
     if (e.type === 'done' || e.type === 'error') runningKeys.delete(sessionKey)
   }
 
+// Chats whose auto-name is currently being generated — guards against a second
+// `done` firing another title call before the first resolves.
+const titling = new Set<string>()
+
+/**
+ * Give a chat a meaningful name once it has real content: after a turn finishes,
+ * ask the backend to summarise the conversation into a short title (see
+ * `ModelProvider.generateTitle`) and push it to the renderer, instead of the rail
+ * standing in the opening words of the first prompt. Runs once per chat (guarded
+ * by `record.title`), only when both sides have spoken, and never throws — a
+ * backend without title support or any failure just leaves the heuristic name.
+ */
+async function maybeGenerateTitle(sessionKey: string): Promise<void> {
+  const session = sessions.get(sessionKey)
+  if (!session || session.record.title || titling.has(sessionKey)) return
+  session.finalize() // flush the just-finished turn into the transcript
+  const transcript = session.record.transcript
+  const hasUser = transcript.some((t) => t.role === 'user')
+  const hasAssistant = transcript.some((t) => t.role === 'assistant')
+  if (!hasUser || !hasAssistant) return
+  const generate = pickProvider(session.options).generateTitle
+  if (!generate) return
+  titling.add(sessionKey)
+  try {
+    const title = await generate(transcript, session.options)
+    // The session may have been closed/replaced while we awaited — re-check, and
+    // don't clobber a title set meanwhile.
+    const live = sessions.get(sessionKey)
+    if (title && live === session && !session.record.title) {
+      session.record.title = title
+      session.emit({ type: 'title', title })
+    }
+  } catch {
+    /* best-effort — the rail keeps the first-message heuristic */
+  } finally {
+    titling.delete(sessionKey)
+  }
+}
+
+/** Interactive-session event hook: running-state bookkeeping + one-time auto-naming. */
+const interactiveEvents =
+  (sessionKey: string) =>
+  (e: AgentEvent): void => {
+    trackRunning(sessionKey)(e)
+    if (e.type === 'done') void maybeGenerateTitle(sessionKey)
+  }
+
 // v8 F1: detached comment spawns — background agents each in their OWN git worktree,
 // keyed by spawn id. Kept SEPARATE from `sessions` so they never touch `activeKey`
 // or the interactive chat stream.
@@ -334,7 +381,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       }
       const s = await pickProvider(options).startSession(root, options, getWindow, {
         emitKey: key,
-        onEvent: trackRunning(key)
+        onEvent: interactiveEvents(key)
       })
       sessions.set(key, s)
       // Only claim the active slot if the renderer still wants this project active.
@@ -428,7 +475,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       try {
         const s = await pickProvider({}).startSession(root, {}, getWindow, {
           emitKey: sessionKey,
-          onEvent: trackRunning(sessionKey)
+          onEvent: interactiveEvents(sessionKey)
         })
         sessions.set(sessionKey, s)
         activeSessionKeyByProject.set(key, sessionKey)
@@ -471,8 +518,14 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
         const s = await pickProvider({}).startSession(root, {}, getWindow, {
           emitKey: sessionKey,
           resumeSessionId: rec.sdkSessionId,
-          onEvent: trackRunning(sessionKey)
+          onEvent: interactiveEvents(sessionKey)
         })
+        // Carry the past chat's generated name onto the fresh record so a resumed
+        // chat keeps its subject label (and doesn't re-title on its next turn).
+        if (rec.title) {
+          s.record.title = rec.title
+          s.emit({ type: 'title', title: rec.title })
+        }
         sessions.set(sessionKey, s)
         activeSessionKeyByProject.set(key, sessionKey)
         if (intendedKey === key) activeKey = sessionKey

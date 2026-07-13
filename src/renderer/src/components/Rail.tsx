@@ -202,9 +202,11 @@ export default function Rail({
                   <ul className="rail__chats" aria-label={`${p.name}'s chats`}>
                     {sessionKeys.map((sk) => {
                       const isActiveChat = sk === (p.activeSessionKey ?? p.key);
-                      const name = chatTitle(
-                        firstUserText(byKey[sk]?.messages ?? []),
-                      );
+                      // Prefer the conversation-derived name (main's auto-title);
+                      // fall back to the opening prompt until it's generated.
+                      const name =
+                        byKey[sk]?.title ??
+                        chatTitle(firstUserText(byKey[sk]?.messages ?? []));
                       return (
                         <li key={sk} className="rail__chat-item">
                           <button
@@ -262,7 +264,8 @@ export default function Rail({
                     ))}
                     {/* Previous chats for this project (newest first). */}
                     {past.map((rec) => {
-                      const name = chatTitle(firstUserText(rec.transcript));
+                      const name =
+                        rec.title ?? chatTitle(firstUserText(rec.transcript));
                       return (
                         <li key={rec.id} className="rail__chat-item">
                           <button

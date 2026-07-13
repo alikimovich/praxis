@@ -502,6 +502,10 @@ export default function ChatPanel(): React.JSX.Element {
       const isActive = key === useChat.getState().activeKey;
       if (event.type === "delta") {
         appendDelta(event.text, key);
+      } else if (event.type === "title") {
+        // Auto-generated chat name (main summarised the conversation) — the rail
+        // shows it in place of the opening-words heuristic.
+        useChat.getState().setTitle(key, event.title);
       } else if (event.type === "status") {
         appendStatus(event.text, key);
       } else if (event.type === "error") {
