@@ -286,8 +286,11 @@ const api: DsgnApi = {
     setActive: (root: string, sessionKey?: string): Promise<void> =>
       ipcRenderer.invoke('agent:set-active', root, sessionKey),
     isOpen: (root: string): Promise<boolean> => ipcRenderer.invoke('agent:is-open', root),
-    newChat: (root: string): Promise<{ ok: boolean; sessionKey?: string; error?: string }> =>
-      ipcRenderer.invoke('agent:new-chat', root),
+    newChat: (
+      root: string,
+      options?: AgentOptions
+    ): Promise<{ ok: boolean; sessionKey?: string; error?: string }> =>
+      ipcRenderer.invoke('agent:new-chat', root, options),
     resumeSession: (
       root: string,
       recordId: string

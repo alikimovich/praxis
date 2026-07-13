@@ -1109,7 +1109,10 @@ export default function App(): React.JSX.Element {
   const newChatForProject = async (key: string): Promise<void> => {
     const entry = useWorkspace.getState().projects.find((p) => p.key === key)
     if (!entry) return
-    const res = await window.api.agent.newChat(entry.root)
+    const res = await window.api.agent.newChat(entry.root, {
+      ...toAgentOptions(useSession.getState()),
+      permissionMode: usePermissions.getState().mode
+    })
     if (!res.ok || !res.sessionKey) {
       useLog.getState().append(res.error ?? 'Could not start another chat.', 'error')
       return

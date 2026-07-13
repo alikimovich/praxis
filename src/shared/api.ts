@@ -846,7 +846,10 @@ export interface DsgnApi {
      * running. Returns the new session's key (`${projectKey}#…`) and makes it the
      * project's active session.
      */
-    newChat: (root: string) => Promise<{ ok: boolean; sessionKey?: string; error?: string }>
+    newChat: (
+      root: string,
+      options?: AgentOptions
+    ) => Promise<{ ok: boolean; sessionKey?: string; error?: string }>
     /**
      * Resume a past ("previous agent") session by its history record id — requires
      * the record to carry a Claude `sdkSessionId` (else `ok:false`). Starts a live
