@@ -195,12 +195,14 @@ export default function Rail({
                   </button>
                 </div>
                 {/* Active + expanded project: a flat, left-aligned list of its chats
-                  — live chats first (active one highlighted), then previous
-                  chats. No status dots; names are auto-generated from each
-                  chat's first prompt, mirroring Cursor's sidebar. */}
+                  — live chats newest-first (the active one highlighted), then
+                  previous chats. `sessionKeys` grows by append, so we render a
+                  reversed copy to float freshly-started chats to the top. No
+                  status dots; names are auto-generated from each chat's first
+                  prompt, mirroring Cursor's sidebar. */}
                 {expanded && (
                   <ul className="rail__chats" aria-label={`${p.name}'s chats`}>
-                    {sessionKeys.map((sk) => {
+                    {[...sessionKeys].reverse().map((sk) => {
                       const isActiveChat = sk === (p.activeSessionKey ?? p.key);
                       const name = chatTitle(
                         firstUserText(byKey[sk]?.messages ?? []),
