@@ -465,7 +465,11 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   // slice and the rail can list it as a second, independently-switchable chat.
   ipcMain.handle(
     'agent:new-chat',
-    async (_e, root: string): Promise<{ ok: boolean; sessionKey?: string; error?: string }> => {
+    async (
+      _e,
+      root: string,
+      options: AgentOptions = {}
+    ): Promise<{ ok: boolean; sessionKey?: string; error?: string }> => {
       const key = projectKey(root)
       if (!sessions.has(key)) {
         return { ok: false, error: 'Open the project before starting another chat.' }
@@ -473,7 +477,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       intendedKey = key
       const sessionKey = `${key}#${randomUUID()}`
       try {
-        const s = await pickProvider({}).startSession(root, {}, getWindow, {
+        const s = await pickProvider(options).startSession(root, options, getWindow, {
           emitKey: sessionKey,
           onEvent: interactiveEvents(sessionKey)
         })
