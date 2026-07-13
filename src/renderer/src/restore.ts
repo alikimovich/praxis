@@ -83,6 +83,9 @@ export async function restoreWorkspace(deps: RestoreDeps): Promise<void> {
         useChat
           .getState()
           .hydrate(c.sessionKey, messagesFromTranscript(c.record.transcript), c.isRunning)
+        // Restore the chat's auto-generated name so the rail shows its subject
+        // label immediately, not the opening-words fallback, after a reload.
+        if (c.record.title) useChat.getState().setTitle(c.sessionKey, c.record.title)
       }
     }
 

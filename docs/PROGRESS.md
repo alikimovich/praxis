@@ -2,6 +2,32 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-12 — Auto-name chats by subject, not opening words (LKM-45)
+
+The rail named a chat by truncating its first user message (`chatTitle` +
+`firstUserText`), so a chat that opened "Hey, can you help me…" got that literal
+string as its name instead of what it turned out to be about. Now the backend
+**summarises the conversation into a short title** once a chat's first turn
+finishes.
+
+- **Backend seam.** New optional `ModelProvider.generateTitle(transcript,
+  options)` — a one-shot, tool-less `query()` (Claude backend). It runs with
+  `settingSources: []` (no repo CLAUDE.md/skills) and denies every tool via
+  `canUseTool`, so it can't touch the repo or drift into work; a 20s abort +
+  catch-all makes it strictly best-effort (any failure → null). The pure
+  transcript-digest / output-sanitiser helpers live in `backends/title.ts` (kept
+  Electron-free so they unit-test in bun — `test/chat-title.mjs`).
+- **Trigger.** `agent.ts` fires `maybeGenerateTitle` off each interactive
+  session's `done` event (new `interactiveEvents` hook wraps `trackRunning`).
+  Runs **once per chat** (guarded by `record.title`), only when both sides have
+  spoken, sets `record.title`, and emits a new `{ type: 'title' }` AgentEvent.
+  A resumed chat carries its prior `record.title` forward so it keeps its name.
+- **Renderer.** ChatPanel routes the `title` event to `useChat.setTitle`; the
+  rail prefers `slice.title` / `rec.title` and falls back to the old
+  first-message heuristic until a title exists. `restore.ts` re-seeds the title
+  on reload from the persisted record. Backends without `generateTitle`
+  (Codex/Gemini) simply keep the heuristic name.
+
 ## 2026-07-11 — Codex: don't nag on switch, and give it its own model picker (LKM-42)
 
 Two Codex UX bugs. **(1) The `codex login` hint showed on *every* switch to the

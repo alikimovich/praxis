@@ -201,6 +201,10 @@ export type AgentEvent = (
   | { type: 'question-resolved'; id: string }
   | { type: 'done' }
   | { type: 'error'; message: string }
+  /** An auto-generated name for this chat, summarising what the conversation is
+   *  about (not its opening words). Emitted once per chat after the first turn
+   *  completes; the renderer stores it on the chat slice and the rail shows it. */
+  | { type: 'title'; title: string }
   /** A queued comment spawn (v8 F1 Phase 3) started running — flip its rail row from
    *  queued → running and attach its branch. */
   | { type: 'spawn-started'; branch: string }
@@ -271,6 +275,13 @@ export interface SessionRecord {
   /** Repo-relative (or absolute) paths the agent edited this session. */
   filesTouched: string[]
   transcript: SessionTranscriptEntry[]
+  /**
+   * An auto-generated name summarising what this chat is about (LLM-derived from
+   * the conversation once its first turn finishes), so the rail shows a meaningful
+   * label instead of the opening words. Absent until generated (or on a backend
+   * without title support) — the rail then falls back to the first user message.
+   */
+  title?: string
   /** A detached comment spawn (v8 F1), vs the interactive project chat. */
   kind?: 'comment'
   /**

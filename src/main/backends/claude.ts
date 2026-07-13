@@ -7,7 +7,8 @@ import type {
   PermissionRequest,
   QuestionAnswers,
   QuestionRequest,
-  QuestionSpec
+  QuestionSpec,
+  SessionTranscriptEntry
 } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
 import type {
@@ -21,6 +22,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { AUTO_ALLOW_TOOLS, describeTool, toolDetail, touchesSidecar } from './tools'
 import { createRecordCapture } from './record'
+import { sanitizeTitle, transcriptDigest } from './title'
 import { dsgnRules } from '../rules'
 import { capturePreview, getPreviewUrl } from '../preview-state'
 
@@ -469,4 +471,65 @@ async function startSession(
   }
 }
 
-export const claudeProvider: ModelProvider = { id: 'claude', supportsSpawn: true, startSession }
+/**
+ * One-shot, tool-less completion that names a chat by its subject (see the
+ * `ModelProvider.generateTitle` contract). Runs a fresh headless `query()` with
+ * no setting sources (skip the repo's CLAUDE.md/skills — a title needs none) and
+ * every tool denied, so it can't touch the repo or drift into work. Aborts after
+ * a short deadline; any failure resolves to null (the rail keeps its heuristic
+ * name). Reuses the session's model so it honours the user's provider auth.
+ */
+async function generateTitle(
+  transcript: SessionTranscriptEntry[],
+  options: AgentOptions
+): Promise<string | null> {
+  const convo = transcriptDigest(transcript)
+  if (!convo) return null
+
+  const { query } = await loadSdk()
+  const abort = new AbortController()
+  const timer = setTimeout(() => abort.abort(), 20_000)
+  try {
+    const prompt =
+      'Below is the start of a conversation between a user and a coding assistant working on a UI/design project.\n\n' +
+      `${convo}\n\n` +
+      'Write a short, specific title (3–6 words, Title Case, no quotes, no trailing punctuation) naming what this ' +
+      'conversation is actually about — the task or subject, not a greeting and not the literal opening words. ' +
+      'Reply with ONLY the title.'
+    let out = ''
+    const q = query({
+      prompt,
+      options: {
+        settingSources: [],
+        allowedTools: [],
+        includePartialMessages: false,
+        permissionMode: 'default',
+        abortController: abort,
+        // A title needs no tools; deny everything so it can never edit the repo.
+        canUseTool: async () => ({ behavior: 'deny', message: 'Titling uses no tools.' }),
+        ...(options.model ? { model: options.model } : {})
+      }
+    })
+    for await (const msg of q) {
+      if (msg.type === 'assistant') {
+        for (const block of msg.message.content) {
+          if (block.type === 'text') out += block.text
+        }
+      } else if (msg.type === 'result') {
+        break
+      }
+    }
+    return sanitizeTitle(out)
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+export const claudeProvider: ModelProvider = {
+  id: 'claude',
+  supportsSpawn: true,
+  startSession,
+  generateTitle
+}

@@ -5,7 +5,8 @@ import type {
   ImageAttachment,
   PermissionMode,
   QuestionAnswers,
-  SessionRecord
+  SessionRecord,
+  SessionTranscriptEntry
 } from '../../shared/api'
 
 /**
@@ -122,4 +123,13 @@ export interface ModelProvider {
      *  ignore it (Codex/Gemini accept it and no-op the resume). */
     ctx?: SpawnContext
   ) => Promise<ProviderSession>
+  /**
+   * Summarise a chat into a short name (3–6 words) describing what it's *about*,
+   * from the conversation so far — so the rail can label a chat by its subject
+   * rather than the opening words of the first prompt. A one-shot, tool-less
+   * completion, independent of any live session. Best-effort: returns `null`
+   * (and agent.ts falls back to the first-message heuristic) on any failure.
+   * Optional — a backend without a cheap completion primitive omits it.
+   */
+  generateTitle?: (transcript: SessionTranscriptEntry[], options: AgentOptions) => Promise<string | null>
 }
