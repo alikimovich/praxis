@@ -550,6 +550,70 @@ function createWindow(): void {
   loadRenderer()
 }
 
+// The code drawer, popped out into its own window. Runs the same renderer bundle
+// with ?dsgnEditor=1 (like the ?dsgnPanel island), so it reuses CodeMirror, the
+// source:* IPC, and the app's theming — it just renders the editor full-window
+// instead of docked under the preview. Keyed by project root so a second pop-out
+// for the same project re-focuses the existing window rather than stacking.
+const editorWindows = new Map<string, BrowserWindow>()
+
+function openEditorWindow(root: string, source: string): void {
+  const existing = editorWindows.get(root)
+  if (existing && !existing.isDestroyed()) {
+    // Retarget the already-open window at the newly requested file, then focus it.
+    existing.webContents.send('editor:navigate', source)
+    if (existing.isMinimized()) existing.restore()
+    existing.focus()
+    return
+  }
+
+  const win = new BrowserWindow({
+    width: 720,
+    height: 720,
+    minWidth: 420,
+    minHeight: 260,
+    show: false,
+    title: 'Praxis — Code',
+    ...(appIcon.isEmpty() ? {} : { icon: appIcon }),
+    ...(process.platform === 'darwin' ? {} : { backgroundColor: previewBg() }),
+    titleBarStyle: 'hiddenInset',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      sandbox: true
+    }
+  })
+  editorWindows.set(root, win)
+  win.on('ready-to-show', () => win.show())
+  win.on('closed', () => {
+    if (editorWindows.get(root) === win) editorWindows.delete(root)
+  })
+  // External links (Cmd+click into a URL, etc.) open in the browser, not in-app.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url)
+    return { action: 'deny' }
+  })
+
+  const query = { dsgnEditor: '1', root, source }
+  if (process.env['ELECTRON_RENDERER_URL']) {
+    const u = new URL(process.env['ELECTRON_RENDERER_URL'])
+    for (const [k, v] of Object.entries(query)) u.searchParams.set(k, v)
+    void win.loadURL(u.toString())
+  } else {
+    void win.loadFile(join(__dirname, '../renderer/index.html'), { query })
+  }
+}
+
+function registerEditorIpc(): void {
+  ipcMain.handle('source:popout', (_e, root: string, source: string) => {
+    openEditorWindow(root, source)
+  })
+  // Close the editor window that sent this (a popped-out editor closing itself).
+  ipcMain.handle('source:close-window', (e) => {
+    BrowserWindow.fromWebContents(e.sender)?.close()
+  })
+}
+
 function registerPreviewIpc(): void {
   // Let the in-process agent tools (backends/claude.ts) observe the user's live
   // preview without importing this module (would be a cycle). getUrl reports the
@@ -833,6 +897,7 @@ app.whenReady().then(() => {
     buildAppMenu()
   })
   registerPreviewIpc()
+  registerEditorIpc()
   registerDevServerIpc(() => mainWindow)
   registerSimulatorIpc(() => mainWindow)
   registerAgentIpc(() => mainWindow)

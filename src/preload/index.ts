@@ -243,7 +243,15 @@ const api: DsgnApi = {
       baseline: string,
       content: string
     ): Promise<SourceWriteResult> =>
-      ipcRenderer.invoke('source:write', root, source, baseline, content)
+      ipcRenderer.invoke('source:write', root, source, baseline, content),
+    popout: (root: string, source: string): Promise<void> =>
+      ipcRenderer.invoke('source:popout', root, source),
+    closeWindow: (): Promise<void> => ipcRenderer.invoke('source:close-window'),
+    onNavigate: (cb: (source: string) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, source: string): void => cb(source)
+      ipcRenderer.on('editor:navigate', listener)
+      return () => ipcRenderer.removeListener('editor:navigate', listener)
+    }
   },
   edits: {
     undo: (root: string): Promise<UndoResult> => ipcRenderer.invoke('edit:undo', root),
