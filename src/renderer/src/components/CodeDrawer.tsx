@@ -8,7 +8,16 @@ import { javascript } from '@codemirror/lang-javascript'
 import { html } from '@codemirror/lang-html'
 import { css } from '@codemirror/lang-css'
 import { svelte } from '@replit/codemirror-lang-svelte'
-import { X, Save, ExternalLink, Maximize2, Minimize2, ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  X,
+  Save,
+  ExternalLink,
+  Maximize2,
+  Minimize2,
+  ChevronLeft,
+  ChevronRight,
+  SquareArrowOutUpRight
+} from 'lucide-react'
 import type { SourceView } from '../../../shared/api'
 import { useCodeDrawer, usePanelInset } from '../store'
 import { Button } from '@/components/ui/button'
@@ -120,12 +129,19 @@ function stampDeco(doc: EditorState['doc'], start: number, end: number): Decorat
 export default function CodeDrawer({
   root,
   source,
-  onClose
+  onClose,
+  variant = 'drawer'
 }: {
   root: string
   source: string
   onClose: () => void
+  /** 'drawer' = docked strip under the preview; 'window' = fills a pop-out window. */
+  variant?: 'drawer' | 'window'
 }): React.JSX.Element {
+  // In 'window' mode the editor owns a whole native window: it fills the viewport,
+  // reserves no preview inset, and drops the drawer-only chrome (resize handle,
+  // expand toggle). The native title bar handles resizing and dragging.
+  const isWindow = variant === 'window'
   const rootRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -194,11 +210,13 @@ export default function CodeDrawer({
         : Math.min(DRAWER_H, maxHeight)
 
   // Reserve the bottom strip of the native preview for as long as the drawer is
-  // open, tracking the current (expanded/collapsed) height.
+  // open, tracking the current (expanded/collapsed) height. A pop-out window owns
+  // its own native surface, so it reserves nothing.
   useEffect(() => {
+    if (isWindow) return undefined
     usePanelInset.getState().setBottom(height)
     return () => usePanelInset.getState().setBottom(0)
-  }, [height])
+  }, [height, isWindow])
 
   // A ref-indirected save so the CodeMirror keymap (built once) always runs the
   // current closure.
@@ -228,6 +246,13 @@ export default function CodeDrawer({
     setOpenError(null)
     const res = await window.api.source.openInEditor(root, source)
     if (!res.ok) setOpenError(res.error ?? 'Could not open an editor.')
+  }
+
+  // Pop the drawer out into its own window showing the same file, then close the
+  // docked drawer (the window takes over). No-op in the already-popped window.
+  const popOut = (): void => {
+    void window.api.source.popout(root, source)
+    onClose()
   }
 
   // Build the editor once the file is read. Re-runs when the selected source
@@ -429,27 +454,40 @@ export default function CodeDrawer({
     setDragHeight(clampHeight((dragHeight ?? height) + delta, maxHeight))
   }
 
+  const isMac = typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac')
   return (
     <div
       ref={rootRef}
-      className="codedrawer absolute inset-x-0 bottom-0 z-50 flex flex-col border-t bg-background shadow-[0_-4px_18px_rgba(0,0,0,0.08)]"
-      style={{ height }}
+      className={
+        isWindow
+          ? 'codedrawer codedrawer--window flex h-screen flex-col bg-background'
+          : 'codedrawer absolute inset-x-0 bottom-0 z-50 flex flex-col border-t bg-background shadow-[0_-4px_18px_rgba(0,0,0,0.08)]'
+      }
+      style={isWindow ? undefined : { height }}
       aria-label="Code editor"
     >
-      {/* Drag-to-resize handle straddling the top border. */}
+      {/* Drag-to-resize handle straddling the top border (docked drawer only). */}
+      {!isWindow && (
+        <div
+          className="codedrawer__resize absolute inset-x-0 -top-1 z-10 h-2 cursor-ns-resize"
+          onPointerDown={startDrag}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowUp') (e.preventDefault(), nudge(24))
+            else if (e.key === 'ArrowDown') (e.preventDefault(), nudge(-24))
+          }}
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize code editor"
+          tabIndex={0}
+        />
+      )}
       <div
-        className="codedrawer__resize absolute inset-x-0 -top-1 z-10 h-2 cursor-ns-resize"
-        onPointerDown={startDrag}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowUp') (e.preventDefault(), nudge(24))
-          else if (e.key === 'ArrowDown') (e.preventDefault(), nudge(-24))
-        }}
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label="Resize code editor"
-        tabIndex={0}
-      />
-      <div className="codedrawer__head flex items-center gap-2 border-b px-3 py-1.5">
+        className={`codedrawer__head flex items-center gap-2 border-b py-1.5 pr-3 ${
+          // Pop-out window: the header doubles as the title bar (macOS hiddenInset),
+          // so clear the traffic lights. The draggable region is the file span
+          // (below), which keeps the buttons clickable without per-button no-drag.
+          isWindow && isMac ? 'pl-20' : 'pl-3'
+        }`}>
         {/* Cmd+click jumps build history — navigate it like a browser. */}
         <Button
           variant="ghost"
@@ -473,7 +511,10 @@ export default function CodeDrawer({
         >
           <ChevronRight className="size-3.5" />
         </Button>
-        <span className="codedrawer__file min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11.5px] text-muted-foreground">
+        <span
+          className="codedrawer__file min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11.5px] text-muted-foreground"
+          style={isWindow ? ({ WebkitAppRegion: 'drag' } as React.CSSProperties) : undefined}
+        >
           {meta ? `${meta.file}:${meta.line}` : 'Loading…'}
           {dirty && <span className="codedrawer__dirty ml-1.5 text-amber-600" title="Unsaved changes">●</span>}
         </span>
@@ -510,17 +551,31 @@ export default function CodeDrawer({
           <Save className="size-3.5" />
           {status === 'saving' ? 'Saving…' : 'Save'}
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="codedrawer__expand size-6"
-          onClick={() => (setDragHeight(null), setExpanded((e) => !e))}
-          aria-label={expanded ? 'Collapse code editor' : 'Expand code editor'}
-          aria-pressed={expanded}
-          title={expanded ? 'Collapse' : 'Expand'}
-        >
-          {expanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
-        </Button>
+        {!isWindow && (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="codedrawer__popout size-6"
+              onClick={popOut}
+              aria-label="Open code editor in a separate window"
+              title="Pop out into its own window"
+            >
+              <SquareArrowOutUpRight className="size-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="codedrawer__expand size-6"
+              onClick={() => (setDragHeight(null), setExpanded((e) => !e))}
+              aria-label={expanded ? 'Collapse code editor' : 'Expand code editor'}
+              aria-pressed={expanded}
+              title={expanded ? 'Collapse' : 'Expand'}
+            >
+              {expanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+            </Button>
+          </>
+        )}
         <Button
           variant="ghost"
           size="icon"
