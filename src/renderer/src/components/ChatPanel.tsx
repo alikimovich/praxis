@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_MODEL,
   describeSelectionForPrompt,
+  selectionForBubble,
   isAuthError,
   oneLine,
   toAgentOptions,
@@ -757,7 +758,17 @@ export default function ChatPanel(): React.JSX.Element {
     // silently prepended — the agent has a `preview_location` tool and asks
     // when the page actually matters.)
     const ctx = selected ? describeSelectionForPrompt(selected) : "";
-    appendUser(text || (images.length ? `🖼 ${images.length} image(s)` : ""));
+    // Carry the images + selection onto the sent bubble so they stay visible in
+    // the transcript (not just the composer) — the image thumbnails the user
+    // dropped in and the element pill they picked.
+    appendUser(text, undefined, {
+      attachments: attachments.map((a) => ({
+        id: a.id,
+        mediaType: a.mediaType,
+        url: a.url,
+      })),
+      selection: selected ? selectionForBubble(selected) : undefined,
+    });
     startAssistant();
     setInput("");
     setCaret(0);
@@ -974,6 +985,36 @@ export default function ChatPanel(): React.JSX.Element {
                         "msg--user-pinned",
                     )}
                   >
+                    {m.role === "user" && m.selection && (
+                      <span className="msg__selection inline-flex w-fit max-w-full items-center gap-1 self-end rounded-md bg-indigo-50 px-1.5 py-1 text-indigo-700">
+                        <span className="truncate font-mono text-[12px] font-semibold leading-none">
+                          {m.selection.tag}
+                          {m.selection.ident}
+                        </span>
+                        {m.selection.source && (
+                          <span
+                            className="min-w-0 truncate font-mono text-[10px] font-normal text-indigo-400"
+                            title={m.selection.source}
+                          >
+                            {m.selection.source}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                    {m.role === "user" &&
+                      m.attachments &&
+                      m.attachments.length > 0 && (
+                        <div className="msg__attachments flex flex-wrap justify-end gap-1.5">
+                          {m.attachments.map((a) => (
+                            <img
+                              key={a.id}
+                              src={a.url}
+                              alt="attachment"
+                              className="h-16 w-16 rounded-md border border-border object-cover"
+                            />
+                          ))}
+                        </div>
+                      )}
                     {m.segments.map((seg, segIdx) => {
                       if (seg.kind === "tools") {
                         const active =
