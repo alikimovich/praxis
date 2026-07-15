@@ -2,6 +2,29 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-15 — Keep images + selection visible in sent chat bubbles (LKM-53)
+
+Attached images and the selected-element pill were shown in the composer but
+disappeared the instant you sent the turn — the message bubble only rendered
+text, so the transcript lost the visual context of what the ask was about.
+
+- **`ChatMessage` carries the extras.** Two new optional fields (`store.ts`):
+  `attachments` (image thumbnails — `{id, mediaType, url}`) and `selection` (a
+  display-only `{tag, ident, source}` snapshot). `appendUser` gained an `extras`
+  arg to attach them; `selectionForBubble(el)` builds the snapshot, mirroring the
+  Inspector pill's `#id`/`.class` identifier logic so live pill and sent pill match.
+- **`send()` passes them through.** `ChatPanel.send` maps the composer's
+  `attachments` + current `selected` onto the appended user message. The model
+  still gets the selection as hidden prompt context (`describeSelectionForPrompt`
+  prefix), unchanged — only the bubble is new. Dropped the old
+  `🖼 N image(s)` placeholder text; the thumbnails stand in for it now.
+- **Render.** User bubbles now show the selection pill + image thumbnails above
+  their text (right-aligned to match `.msg--user`).
+- **Known limit:** images aren't persisted to the on-disk transcript, so a
+  reloaded/resumed chat won't re-show them (the selection still survives as the
+  prompt-prefix text it always did). In-scope fix is the live send experience.
+- `test/chat-render.mjs`: a sent user turn keeps its thumbnail + pill.
+
 ## 2026-07-14 — Pop the code drawer out into its own window (LKM-48)
 
 The v9 code drawer was locked to the strip under the preview. You can now pop it

@@ -254,6 +254,23 @@ try {
   await win.click('button[aria-label="Remove image"]')
   await win.waitForFunction(() => !document.querySelector('img[alt="attachment"]'), { timeout: 5000 })
 
+  // A SENT user turn keeps its images + the selected element pill in the bubble
+  // (LKM-53) — they used to vanish from the composer without surfacing in the
+  // transcript. `appendUser` carries them onto the message.
+  await win.evaluate(() => {
+    window.__dsgnStore.getState().appendUser('Tweak this button', undefined, {
+      attachments: [
+        { id: 'att1', mediaType: 'image/png', url: 'data:image/png;base64,iVBORw0KGgo=' },
+      ],
+      selection: { tag: 'button', ident: '.cta', source: 'src/App.tsx:12:3' },
+    })
+  })
+  await win.waitForSelector('.msg--user .msg__attachments img[alt="attachment"]', { timeout: 5000 })
+  const pill = (await win.textContent('.msg--user .msg__selection'))?.replace(/\s+/g, ' ').trim() ?? ''
+  if (!pill.includes('button.cta') || !pill.includes('src/App.tsx:12:3')) {
+    throw new Error(`sent bubble should show the selection pill: ${pill}`)
+  }
+
   // Composer responsiveness: at a narrow chat pane the send button stays visible
   // (selects wrap), and the textarea auto-grows up to ~6 lines for a long prompt.
   await win.evaluate(() => {
