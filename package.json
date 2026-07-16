@@ -69,6 +69,7 @@
     "test:props-self": "electron-vite build && node test/prop-svelte-self.mjs",
     "test:comment": "electron-vite build && node test/comment-mode.mjs",
     "test:spawn": "electron-vite build && node test/spawn-comment.mjs",
+    "test:chat-isolation": "electron-vite build && node test/chat-isolation.mjs",
     "test:projkey": "bun test/project-key.mjs",
     "test:devmulti": "electron-vite build && node test/devserver-multi.mjs",
     "test:static-serve": "electron-vite build && node test/static-serve.mjs",

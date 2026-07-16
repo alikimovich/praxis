@@ -76,6 +76,7 @@ const ELECTRON = [
   'select-element',
   'comment-mode',
   'spawn-comment',
+  'chat-isolation',
   'prop-edit',
   'prop-edit-svelte',
   'prop-svelte-self',
