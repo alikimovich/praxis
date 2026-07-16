@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-16 — Empty chats get no rail row until their first message (LKM-55)
+
+Mashing the rail's "+" minted a new live session every click, filling the rail
+with identical "New chat" rows — unlimited empty chats.
+
+- **Rail** now skips live chats whose slice has no messages: a chat's row
+  appears only once its first message is sent (Cursor-style). An empty chat has
+  nothing to name or return to; past/spawn rows are unaffected.
+- **App's `newChatForProject`** reuses an existing empty live chat (switches to
+  it) instead of stacking another session — an empty chat already IS a "new
+  chat", so "+" is idempotent until you actually type something.
+- Tests: `test/chat-render.mjs` asserts empty chats render no rows, "+" with an
+  empty chat live doesn't grow `sessionKeys`, and rows appear per-chat as each
+  first message lands.
+
 ## 2026-07-16 — Project skills first in the "/" menu, with descriptions (LKM-54)
 
 The composer's "/" menu listed the SDK's advertised command names flat, so the

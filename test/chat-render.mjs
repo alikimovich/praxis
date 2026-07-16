@@ -286,6 +286,33 @@ try {
     session.setChatAgentSettings({ provider: 'codex', model: 'default', effort: 'high' })
     return { key, newer }
   })
+  // LKM-55: a chat with no messages yet has no rail row — it appears only once
+  // its first message is sent, so "+" can't fill the rail with "New chat" rows.
+  await win.waitForFunction(() => document.querySelectorAll('.rail__chat').length === 0, null, {
+    timeout: 5000
+  })
+  // The older chat gains its first message → its row appears; the still-empty
+  // newer chat stays hidden.
+  await win.evaluate(({ key }) => {
+    window.__dsgnStore.getState().appendUser('older chat prompt', key)
+  }, perChat)
+  await win.waitForFunction(() => document.querySelectorAll('.rail__chat').length === 1, null, {
+    timeout: 5000
+  })
+  // LKM-55: "+" while an empty live chat exists reuses it (here: the already-
+  // active `newer`) instead of stacking another session.
+  await win.click('.rail__new-chat')
+  const afterPlus = await win.evaluate(({ key }) => {
+    const p = window.__dsgnWorkspace.getState().projects.find((x) => x.key === key)
+    return { count: p?.sessionKeys.length, active: p?.activeSessionKey }
+  }, perChat)
+  if (afterPlus.count !== 2 || afterPlus.active !== perChat.newer) {
+    throw new Error(`"+" with an empty chat live should reuse it: ${JSON.stringify(afterPlus)}`)
+  }
+  // The newer chat's first message lands → both rows show (newest first).
+  await win.evaluate(({ newer }) => {
+    window.__dsgnStore.getState().appendUser('newer chat prompt', newer)
+  }, perChat)
   await win.waitForFunction(() => document.querySelectorAll('.rail__chat').length === 2, null, {
     timeout: 5000
   })

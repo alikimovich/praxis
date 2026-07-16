@@ -1113,6 +1113,17 @@ export default function App(): React.JSX.Element {
   const newChatForProject = async (key: string): Promise<void> => {
     const entry = useWorkspace.getState().projects.find((p) => p.key === key)
     if (!entry) return
+    // An empty live chat already IS a "new chat" — switch to it instead of
+    // stacking another session, so mashing "+" can't mint unlimited empty
+    // chats (the rail hides message-less chats until their first prompt).
+    const chats = useChat.getState().byKey
+    const empty = (entry.sessionKeys ?? [key]).find(
+      (sk) => (chats[sk]?.messages.length ?? 0) === 0
+    )
+    if (empty) {
+      await switchSession(key, empty)
+      return
+    }
     // A new chat starts with the choices visible on the chat it was created
     // from. Later picker changes stay isolated to the new sessionKey.
     const chatSettings = chatAgentSettingsFor(entry, entry.activeSessionKey ?? entry.key)
