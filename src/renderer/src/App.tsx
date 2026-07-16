@@ -1316,7 +1316,7 @@ export default function App(): React.JSX.Element {
       useSetup
         .getState()
         .setStatus(
-          'Setup wired the config, but dsgn is attached to your own dev server — restart it to apply the change.'
+          'Setup wired the config, but Praxis is attached to your own dev server — restart it to apply the change.'
         )
       return
     }
@@ -1527,7 +1527,7 @@ export default function App(): React.JSX.Element {
       {authNeeded && (
         <div className="banner banner--auth">
           <span className="banner__text">
-            dsgn couldn’t reach Claude. Each teammate authenticates with their own
+            Praxis couldn’t reach Claude. Each teammate authenticates with their own
             subscription — run <code>claude setup-token</code> (or <code>claude login</code>) in a
             terminal, then reopen the project.
           </span>

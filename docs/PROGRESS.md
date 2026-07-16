@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-16 — User-visible "dsgn" mentions replaced with "Praxis" (LKM-57)
+
+The old product name still leaked into user-facing copy (setup card, prop-panel
+hints, diagnose card, auth banner, preview context menu, dev-server conflict
+error, publish/PR titles + bodies, scaffolded template, worktree git author).
+All of it now says **Praxis**; the comment-agent PR body also pointed at the
+old `alikimovich/dsgn` repo URL — fixed to `alikimovich/praxis`.
+
+Deliberately **kept** (protocol/identifiers, per CLAUDE.md): `data-dsgn-source`
+stamps, the `.dsgn/` dir + helper file names, the `dsgn/*` branch prefix (the
+publish-from-base error now reads "a Praxis work branch (dsgn/*)"),
+`?dsgnPanel`/`?dsgnSim` flags, storage keys, and `Dsgn*`/`dsgn*` type and
+function names. The scaffolded `.dsgn/` helpers' prose comments say Praxis but
+their plugin names/exports are unchanged. Tests updated:
+`test/publish-message.mjs`, `test/ready-gating.mjs`.
+
 ## 2026-07-16 — Empty chats get no rail row until their first message (LKM-55)
 
 Mashing the rail's "+" minted a new live session every click, filling the rail

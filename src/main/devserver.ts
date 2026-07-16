@@ -224,7 +224,7 @@ const CONFLICT_RE =
 function interpretFailure(code: number | null, tail: string): string {
   if (CONFLICT_RE.test(tail)) {
     return (
-      'A dev server is already running for this project. dsgn manages the dev server itself — ' +
+      'A dev server is already running for this project. Praxis manages the dev server itself — ' +
       'stop your other instance (e.g. the `dev` running in your terminal) and try again.'
     )
   }

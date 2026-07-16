@@ -29,7 +29,7 @@ export default function DiagnoseCard({
   return (
     <div className="diag">
       <div className="diag__title">
-        dsgn diagnosed this{diagnosis.seenBefore ? ' · seen before on this machine' : ''}
+        Praxis diagnosed this{diagnosis.seenBefore ? ' · seen before on this machine' : ''}
       </div>
       <div className="diag__summary">{diagnosis.summary}</div>
       {diagnosis.detail && <div className="diag__detail">{diagnosis.detail}</div>}

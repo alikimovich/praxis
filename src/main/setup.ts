@@ -23,8 +23,8 @@ const LEGACY_ROOT_PLUGIN = 'dsgn-source-plugin.cjs' // the old (buggy) root-leve
 
 // React/Solid: a JSX Babel plugin that stamps data-dsgn-source. Structurally
 // dev-gated (returns an empty visitor in production — not trust-the-comment).
-const REACT_HELPER_CONTENT = `// Added by dsgn (.dsgn/). Stamps data-dsgn-source="path:line:col" on JSX elements
-// so dsgn can map a clicked element to its source. Wire into the React Babel
+const REACT_HELPER_CONTENT = `// Added by Praxis (.dsgn/). Stamps data-dsgn-source="path:line:col" on JSX elements
+// so Praxis can map a clicked element to its source. Wire into the React Babel
 // plugins for DEVELOPMENT ONLY; it also self-disables in production builds.
 module.exports = function dsgnSource({ types: t }) {
   if (process.env.NODE_ENV === 'production') return { name: 'dsgn-source', visitor: {} }
@@ -77,8 +77,8 @@ module.exports = function dsgnSource({ types: t }) {
 // stamp `testID="dsgn:path:line:col"` — which iOS surfaces as the view's
 // accessibilityIdentifier, letting dsgn map an idb view-hierarchy hit back to
 // source. Dev-gated; only stamps elements without an existing testID.
-const RN_HELPER_CONTENT = `// Added by dsgn (.dsgn/). Stamps testID="dsgn:path:line:col" on JSX elements so
-// dsgn can map a tapped simulator element to its source via idb's accessibility
+const RN_HELPER_CONTENT = `// Added by Praxis (.dsgn/). Stamps testID="dsgn:path:line:col" on JSX elements so
+// Praxis can map a tapped simulator element to its source via idb's accessibility
 // hierarchy. Wire into the React Native Babel plugins for DEVELOPMENT ONLY; it
 // also self-disables in production builds.
 module.exports = function dsgnRnSource({ types: t }) {
@@ -109,8 +109,8 @@ module.exports = function dsgnRnSource({ types: t }) {
 // Svelte: a markup preprocessor that stamps data-dsgn-source on elements. The
 // line/col use svelte/compiler offsets (1-based line, 0-based col) so they match
 // dsgn's Svelte adapter. Dev-gated; idempotent.
-const SVELTE_HELPER_CONTENT = `// Added by dsgn (.dsgn/). A dev-only Svelte markup preprocessor that stamps
-// data-dsgn-source="path:line:col" on elements so dsgn can map them to source.
+const SVELTE_HELPER_CONTENT = `// Added by Praxis (.dsgn/). A dev-only Svelte markup preprocessor that stamps
+// data-dsgn-source="path:line:col" on elements so Praxis can map them to source.
 // Add to svelte.config preprocess for development only.
 import { parse } from 'svelte/compiler'
 import path from 'node:path'

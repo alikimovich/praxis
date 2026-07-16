@@ -33,7 +33,7 @@ export default function SetupCard({
         Set this project up for visual editing?
       </div>
       <div className="setup__body text-[12.5px] leading-snug text-blue-800 dark:text-blue-200/90">
-        Its elements aren’t source-mapped yet, so dsgn can only suggest changes via chat. I can add
+        Its elements aren’t source-mapped yet, so Praxis can only suggest changes via chat. I can add
         a dev-only source-stamping plugin and have the agent type your components so you can edit
         props directly.
       </div>

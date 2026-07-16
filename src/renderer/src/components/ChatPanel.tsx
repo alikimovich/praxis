@@ -291,7 +291,7 @@ function setupPrompt(res: SetupResult): string | null {
   switch (res.framework) {
     case "react":
       return (
-        `dsgn detected a React project and added a dev-only Babel plugin at \`${file}\`. Please: ` +
+        `Praxis detected a React project and added a dev-only Babel plugin at \`${file}\`. Please: ` +
         `(1) read the actual vite.config and wire ${file} into the React plugin's Babel config ` +
         `(\`react({ babel: { plugins: [...] } })\`) FOR DEVELOPMENT ONLY — gate it on the serve/dev ` +
         `command; if the config shape differs, adapt to the real file or tell me what's blocking ` +
@@ -300,9 +300,9 @@ function setupPrompt(res: SetupResult): string | null {
       );
     case "react-native":
       return (
-        `dsgn detected a React Native / Expo project and added a dev-only Babel plugin at ` +
+        `Praxis detected a React Native / Expo project and added a dev-only Babel plugin at ` +
         `\`${file}\` that stamps \`testID="dsgn:path:line:col"\` on elements (the RN analog of ` +
-        `data-dsgn-source — iOS surfaces testID as the accessibility id, which dsgn reads from ` +
+        `data-dsgn-source — iOS surfaces testID as the accessibility id, which Praxis reads from ` +
         `the simulator's view hierarchy). Please: (1) read babel.config.js (or .babelrc) and add ` +
         `${file} to the \`plugins\` array FOR DEVELOPMENT ONLY (gate on a dev env check; adapt to ` +
         `the real config, don't guess its shape). (2) Add an explicit \`interface Props\` to your ` +
@@ -310,7 +310,7 @@ function setupPrompt(res: SetupResult): string | null {
       );
     case "solid":
       return (
-        `dsgn detected a Solid project and added a dev-only Babel JSX plugin at \`${file}\`. Please ` +
+        `Praxis detected a Solid project and added a dev-only Babel JSX plugin at \`${file}\`. Please ` +
         `wire ${file} into the Solid Vite plugin's Babel config for development only (adapt to the ` +
         `real config), and type each component's props with an explicit \`Props\` type. Then I'll ` +
         `reload the preview.`
@@ -321,7 +321,7 @@ function setupPrompt(res: SetupResult): string | null {
           ? "Type props with typed `export let` declarations (Svelte 4)"
           : "Type props with `interface Props` + `let { ... }: Props = $props()` (Svelte 5)";
       return (
-        `dsgn detected a Svelte project and added a dev-only markup preprocessor at \`${file}\`. ` +
+        `Praxis detected a Svelte project and added a dev-only markup preprocessor at \`${file}\`. ` +
         `Please: (1) read svelte.config.* and add ${file}'s default export to the \`preprocess\` ` +
         `array FOR DEVELOPMENT ONLY (gate on dev; adapt to the real config, don't guess its shape). ` +
         `(2) ${typing} so props are editable. Then I'll reload the preview.`
@@ -329,7 +329,7 @@ function setupPrompt(res: SetupResult): string | null {
     }
     case "vue":
       return (
-        `dsgn detected a Vue project. Please add a DEV-ONLY way to map elements to their source as a ` +
+        `Praxis detected a Vue project. Please add a DEV-ONLY way to map elements to their source as a ` +
         `\`data-dsgn-source="path:line:col"\` attribute (e.g. vite-plugin-vue-inspector, or a small ` +
         `template transform), and type props with \`defineProps<Props>()\`. Then I'll reload the preview.`
       );
@@ -638,7 +638,7 @@ export default function ChatPanel(): React.JSX.Element {
         // React prompt into a repo we couldn't classify.
         setup.setStatus(
           res.framework && res.framework !== "unknown"
-            ? `Detected ${res.framework}, which dsgn can't auto-instrument yet. Ask me directly to add element→source mapping.`
+            ? `Detected ${res.framework}, which Praxis can't auto-instrument yet. Ask me directly to add element→source mapping.`
             : `Couldn't detect a supported framework (React/Svelte/Vue/Solid). Open one of those, or ask me directly.`,
         );
         setup.setBusy(false);
@@ -653,7 +653,7 @@ export default function ChatPanel(): React.JSX.Element {
       startAssistant();
       void window.api.agent.send(prompt);
       setup.setStatus(
-        `Detected ${res.framework}. Asked dsgn to wire it in and type your components — I'll restart the preview and verify automatically when it finishes.`,
+        `Detected ${res.framework}. Asked Praxis to wire it in and type your components — I'll restart the preview and verify automatically when it finishes.`,
       );
     } catch {
       setup.setStatus("Setup could not be started.");

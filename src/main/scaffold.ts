@@ -102,7 +102,7 @@ createRoot(document.getElementById('root')!).render(
   return (
     <main className="hero">
       <h1>${name}</h1>
-      <p>Fresh project, created with dsgn. Ask the chat to make it yours.</p>
+      <p>Fresh project, created with Praxis. Ask the chat to make it yours.</p>
     </main>
   )
 }
@@ -170,7 +170,7 @@ export async function createProject(
   try {
     await execFileP('git', ['init', '-b', 'main'], { cwd: root, timeout: 10000 })
     await execFileP('git', ['add', '-A'], { cwd: root, timeout: 10000 })
-    await execFileP('git', ['commit', '-m', 'Initial commit from dsgn'], {
+    await execFileP('git', ['commit', '-m', 'Initial commit from Praxis'], {
       cwd: root,
       timeout: 10000
     })
