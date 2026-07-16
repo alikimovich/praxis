@@ -358,9 +358,10 @@ try {
     })
   })
   await win.waitForSelector('.msg--user .msg__attachments img[alt="attachment"]', { timeout: 5000 })
-  const pill = (await win.textContent('.msg--user .msg__selection'))?.replace(/\s+/g, ' ').trim() ?? ''
-  if (!pill.includes('button.cta') || !pill.includes('src/App.tsx:12:3')) {
-    throw new Error(`sent bubble should show the selection pill: ${pill}`)
+  const selectionPill =
+    (await win.textContent('.msg--user .msg__selection'))?.replace(/\s+/g, ' ').trim() ?? ''
+  if (!selectionPill.includes('button.cta') || !selectionPill.includes('src/App.tsx:12:3')) {
+    throw new Error(`sent bubble should show the selection pill: ${selectionPill}`)
   }
 
   // Composer responsiveness: at a narrow chat pane the send button stays visible
