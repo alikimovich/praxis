@@ -199,10 +199,16 @@ export default function Rail({
                   previous chats. `sessionKeys` grows by append, so we render a
                   reversed copy to float freshly-started chats to the top. No
                   status dots; names are auto-generated from each chat's first
-                  prompt, mirroring Cursor's sidebar. */}
+                  prompt, mirroring Cursor's sidebar. A chat with no messages yet
+                  has nothing to name or return to — it gets its row only once
+                  its first message is sent (Cursor-style; keeps "+" from
+                  filling the rail with "New chat" rows). */}
                 {expanded && (
                   <ul className="rail__chats" aria-label={`${p.name}'s chats`}>
-                    {[...sessionKeys].reverse().map((sk) => {
+                    {[...sessionKeys]
+                      .reverse()
+                      .filter((sk) => (byKey[sk]?.messages.length ?? 0) > 0)
+                      .map((sk) => {
                       const isActiveChat = sk === (p.activeSessionKey ?? p.key);
                       // Prefer the conversation-derived name (main's auto-title);
                       // fall back to the opening prompt until it's generated.
