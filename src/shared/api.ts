@@ -213,6 +213,11 @@ export type AgentEvent = (
    *  branch. `summary` (the agent's closing message) + `files` drive a notification
    *  in the parent project's chat so the user can follow up on it. */
   | { type: 'spawn-finished'; branch: string | null; summary?: string; files?: string[] }
+  /** Per-chat worktree isolation status (v9). A chat's turn merged back onto the live
+   *  checkout ('merged'), a private worktree was forked for the chat ('isolated'), or a
+   *  turn parked on its branch after mid-turn drift ('parked'). Routed by `projectKey` =
+   *  the chat's emitKey, like every other interactive-chat event. */
+  | { type: 'isolation'; state: 'isolated' | 'merged' | 'parked'; branch?: string; files?: string[] }
 ) & {
   /** Which project's session emitted this — set by main so the renderer routes it
    * to the right chat (active project shows live; others accumulate in the rail). */
@@ -306,6 +311,9 @@ export interface LiveChatSnapshot {
   /** A turn is currently in flight for this session (best-effort — see
    *  `agent:workspace-snapshot`'s implementation for how it's derived). */
   isRunning: boolean
+  /** Per-chat worktree isolation status (v9), for the renderer to rehydrate the chat's
+   *  isolation chip after a reload. Absent for a non-isolated chat (treated as 'live'). */
+  isolation?: { state: 'live' | 'isolated' | 'parked'; branch?: string }
 }
 
 /** One live project (an open workspace-rail entry) and its live chat(s). */

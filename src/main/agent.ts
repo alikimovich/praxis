@@ -30,6 +30,17 @@ import {
   autoApplyWorktree,
   type Worktree
 } from './worktrees'
+import {
+  initChatIsolation,
+  isolatedCwd,
+  adoptSession,
+  beforeTurn,
+  afterTurn,
+  releaseChat,
+  liveChatWorktreeIds,
+  dropAll,
+  isolationSnapshot
+} from './chat-isolation'
 
 const execFileP = promisify(execFile)
 const git = (root: string, args: string[]): Promise<{ stdout: string }> =>
@@ -143,6 +154,14 @@ const interactiveEvents =
   (e: AgentEvent): void => {
     trackRunning(sessionKey)(e)
     if (e.type === 'done') void maybeGenerateTitle(sessionKey)
+    // Turn boundary — merge the isolated chat's work back onto the live tree (on
+    // `error` too, to salvage interrupted edits). No-op for a non-isolated chat.
+    if (e.type === 'done' || e.type === 'error') {
+      const last = [...(sessions.get(sessionKey)?.record.transcript ?? [])]
+        .reverse()
+        .find((t) => t.role === 'user')?.text
+      afterTurn(sessionKey, firstLine(last ?? 'dsgn chat edit'))
+    }
   }
 
 // v8 F1: detached comment spawns — background agents each in their OWN git worktree,
@@ -306,6 +325,10 @@ async function startSpawn(q: QueuedSpawn): Promise<string | null> {
     })
     s.record.kind = 'comment'
     s.record.branch = wt.branch
+    // The spawn's cwd is its worktree, so createRecordCapture keyed the record to
+    // projectKey(wt.path); stamp it back to the parent project (like projectRoot/Name
+    // below) so parked spawn records are visible to sessions:list.
+    s.record.projectKey = q.parentKey
     s.record.projectRoot = q.root
     s.record.projectName = basename(q.root) || q.root
     s.record.transcript.push({ role: 'user', text: q.text, at: Date.now() })
@@ -362,6 +385,8 @@ function resolveQuestion(s: ProviderSession, id: string, answers: QuestionAnswer
 
 export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   getWindow_ = getWindow // share with finalizeSpawn (runs outside this closure)
+  // v9 per-chat worktree isolation — deps-injected so this module barely grows.
+  initChatIsolation({ worktreesDir, store, getWindow })
   ipcMain.handle('agent:open-project', async (_e, root: string, options: AgentOptions = {}) => {
     const key = projectKey(root)
     // This is the renderer's latest intent — record it synchronously, before any await.
@@ -378,11 +403,19 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
         closeSession(existing)
         sessions.delete(key)
         runningKeys.delete(key)
+        // Merge + tear down the replaced chat's worktree BEFORE forking the new one,
+        // so the fresh worktree's captureBase includes the old chat's merged output.
+        await releaseChat(key)
       }
-      const s = await pickProvider(options).startSession(root, options, getWindow, {
+      // Isolated chats run in a private `dsgn/chat-<id>` worktree (repo roots only);
+      // isolatedCwd returns the live root otherwise. adoptSession re-stamps the record
+      // back to the live project so history/reattach see it under the real root.
+      const cwd = await isolatedCwd(root, key)
+      const s = await pickProvider(options).startSession(cwd, options, getWindow, {
         emitKey: key,
         onEvent: interactiveEvents(key)
       })
+      adoptSession(key, s.record, root)
       sessions.set(key, s)
       // Only claim the active slot if the renderer still wants this project active.
       // A later open/set-active for a different project moved `intendedKey` on, and
@@ -396,7 +429,14 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       // before removing the checkout. Skip ids of spawns live THIS session (their
       // checkouts are under the same dir). Best-effort, fire-and-forget.
       if (await isRepoRoot(root)) {
-        void pruneOrphans(root, worktreesDir(), new Set(spawns.keys())).catch(() => {})
+        // Skip live spawns AND live chat worktrees (the worktrees dir is global across
+        // projects) so a recovery sweep never reclaims a chat's live checkout. Full
+        // chat crash-recovery (park records for reclaimed dirty branches) lands in C4.
+        void pruneOrphans(
+          root,
+          worktreesDir(),
+          new Set([...spawns.keys(), ...liveChatWorktreeIds()])
+        ).catch(() => {})
       }
     })()
     opening.set(key, run)
@@ -419,6 +459,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
         closeSession(s)
         sessions.delete(sk)
         runningKeys.delete(sk)
+        void releaseChat(sk) // final merge + drop the chat's worktree (keeps branch if parked)
       }
     }
     activeSessionKeyByProject.delete(key)
@@ -477,10 +518,12 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       intendedKey = key
       const sessionKey = `${key}#${randomUUID()}`
       try {
-        const s = await pickProvider(options).startSession(root, options, getWindow, {
+        const cwd = await isolatedCwd(root, sessionKey)
+        const s = await pickProvider(options).startSession(cwd, options, getWindow, {
           emitKey: sessionKey,
           onEvent: interactiveEvents(sessionKey)
         })
+        adoptSession(sessionKey, s.record, root)
         sessions.set(sessionKey, s)
         activeSessionKeyByProject.set(key, sessionKey)
         if (intendedKey === key) activeKey = sessionKey
@@ -512,10 +555,15 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       sessions.delete(sessionKey)
       runningKeys.delete(sessionKey)
       try {
-        const s = await pickProvider(options).startSession(root, options, getWindow, {
+        // Reuse the chat's EXISTING worktree (isolatedCwd is idempotent for a known
+        // sessionKey) so a model/backend restart keeps its isolation instead of
+        // silently dropping to the live root and leaking the worktree.
+        const cwd = await isolatedCwd(root, sessionKey)
+        const s = await pickProvider(options).startSession(cwd, options, getWindow, {
           emitKey: sessionKey,
           onEvent: interactiveEvents(sessionKey)
         })
+        adoptSession(sessionKey, s.record, root)
         sessions.set(sessionKey, s)
         if (activeKey === sessionKey) activeSessionKeyByProject.set(key, sessionKey)
         return { ok: true }
@@ -553,11 +601,15 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
         return { ok: true, sessionKey }
       }
       try {
-        const s = await pickProvider({}).startSession(root, {}, getWindow, {
+        // Resumed chats get a FRESH worktree (their past edits already live in the
+        // repo); isolatedCwd falls back to the live root for non-repo projects.
+        const cwd = await isolatedCwd(root, sessionKey)
+        const s = await pickProvider({}).startSession(cwd, {}, getWindow, {
           emitKey: sessionKey,
           resumeSessionId: rec.sdkSessionId,
           onEvent: interactiveEvents(sessionKey)
         })
+        adoptSession(sessionKey, s.record, root)
         // Carry the past chat's generated name onto the fresh record so a resumed
         // chat keeps its subject label (and doesn't re-title on its next turn).
         if (rec.title) {
@@ -593,6 +645,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
         closeSession(s)
         sessions.delete(sessionKey)
         runningKeys.delete(sessionKey)
+        void releaseChat(sessionKey) // final merge + drop the chat's worktree (keeps branch if parked)
       }
       const remaining = sessionKeysForProject(key)
       // Prefer the project's default chat as the survivor, else the first remaining.
@@ -669,6 +722,10 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     // derives it from the same variable) — mark it running before the turn starts
     // so a workspace-snapshot taken mid-turn sees it.
     if (activeKey) runningKeys.add(activeKey)
+    // Turn-start: sync the user's between-turn live edits into this chat's worktree
+    // (serialized behind the chat's chain — waits out any in-flight merge). No-op for
+    // a non-isolated chat.
+    if (activeKey) await beforeTurn(activeKey, text)
     session.send(text, images)
   })
 
@@ -829,7 +886,12 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
         }
         byProject.set(pKey, proj)
       }
-      proj.chats.push({ sessionKey, record: s.record, isRunning: runningKeys.has(sessionKey) })
+      proj.chats.push({
+        sessionKey,
+        record: s.record,
+        isRunning: runningKeys.has(sessionKey),
+        isolation: isolationSnapshot(sessionKey)
+      })
     }
     const activeRoot = (activeKey && sessions.get(activeKey)?.record.projectRoot) || null
     return { projects: [...byProject.values()], activeRoot }
@@ -858,5 +920,8 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     // leftover to its branch (recovering the work) and reclaims the checkout.
     for (const { session } of spawns.values()) closeSession(session)
     spawns.clear()
+    // v9: forget chat-isolation state (mirror of spawns) — checkouts stay on disk for
+    // the next launch's crash recovery, never committed/removed during the quit race.
+    dropAll()
   })
 }
