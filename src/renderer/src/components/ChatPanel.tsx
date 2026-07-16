@@ -45,6 +45,7 @@ import {
 import { useStickToBottomContext } from "use-stick-to-bottom";
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
   ArrowUp,
@@ -342,6 +343,7 @@ export default function ChatPanel(): React.JSX.Element {
   const {
     messages,
     isRunning,
+    isolation,
     appendUser,
     startAssistant,
     appendDelta,
@@ -551,6 +553,31 @@ export default function ChatPanel(): React.JSX.Element {
             s.setRestartRequested(true);
           }
           s.setBusy(false);
+        }
+      } else if (event.type === "isolation") {
+        // v9: this chat's per-turn worktree merge — drives the header chip.
+        // 'merged' folds back to the resting 'isolated' state (the chip already
+        // reads "Isolated"; a per-turn merge is the expected happy path, so it
+        // gets a subtle status line rather than a full note).
+        useChat
+          .getState()
+          .setIsolation(key, event.state === "parked" ? "parked" : "isolated");
+        if (event.state === "merged") {
+          // No active streaming message exists post-`done` (appendStatus needs
+          // one) — a plain note is the subtle line instead.
+          useChat.getState().appendNote("Merged into your branch", key);
+        } else if (event.state === "parked") {
+          useChat
+            .getState()
+            .appendNote(
+              "⚠️ Couldn't auto-merge this turn — review it in the sidebar",
+              key,
+            );
+          // Same pattern as spawn-finished: the park record is now in history,
+          // so refresh the sidebar if it's showing this chat's project.
+          const root = useSession.getState().projectRoot;
+          if (root && projectKey(root) === key.split("#")[0])
+            void useHistory.getState().load(root);
         }
       }
     });
@@ -1256,6 +1283,22 @@ export default function ChatPanel(): React.JSX.Element {
             {/* The selectors shrink + wrap when the chat pane is narrow so the send
                 button (shrink-0, below) is never pushed off the edge. */}
             <div className="mr-auto flex min-w-0 flex-wrap items-center gap-1">
+              {/* Per-chat worktree isolation chip (v9) — this chat's turns run in a
+                  private worktree, auto-merged back after each reply; "Parked" means
+                  a merge conflicted and awaits review in the sidebar. */}
+              {isolation !== "live" && (
+                <Badge
+                  variant={isolation === "parked" ? "destructive" : "secondary"}
+                  className="shrink-0"
+                  title={
+                    isolation === "parked"
+                      ? "Merge conflict — review this chat's changes in the sidebar"
+                      : "Working in an isolated worktree, merged back after each reply"
+                  }
+                >
+                  {isolation === "parked" ? "Parked" : "Isolated"}
+                </Badge>
+              )}
               {/* Element-select toggle — lives here (Figma Make-style), not in the
                 preview bar. Routing to web/simulator select mode is App's. */}
               {projectRoot && (
