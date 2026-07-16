@@ -4,10 +4,13 @@
  * leaves a durable branch, and its diff applies back onto the live (possibly dirty)
  * working tree via 3-way patch — NOT `git merge` (which fails on uncommitted WIP).
  *
- * Asserts: create forks WIP without touching the main tree; two concurrent creates
- * are isolated; commit captures the authoritative file list; diff→apply lands the
- * change onto a DIRTY main tree; remove reclaims the checkout (keeping the branch);
- * pruneOrphans reclaims a leftover. Uses real temp git repos.
+ * Asserts: captureBase returns a real sha snapshotting live WIP; create forks WIP
+ * without touching the main tree; a custom branchName scheme (per-chat isolation)
+ * lands on the expected branch; two concurrent creates are isolated; commit captures
+ * the authoritative file list; diff→apply lands the change onto a DIRTY main tree;
+ * remove reclaims the checkout (keeping the branch); pruneOrphans reclaims leftovers
+ * and reports each as `{id, dirty}` (dirty from `status --porcelain`, not commit
+ * success). Uses real temp git repos.
  *
  * Run with: bun run test:worktrees
  */
@@ -19,7 +22,8 @@ import {
   autoApplyWorktree,
   removeWorktree,
   branchPatch,
-  pruneOrphans
+  pruneOrphans,
+  captureBase
 } from '../src/main/worktrees.ts'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
@@ -72,6 +76,22 @@ try {
     existsSync(join(wtA.path, 'Untracked.tsx')),
     'worktree base includes UNTRACKED live files (new components the agent just made)'
   )
+
+  // --- captureBase is exported and returns a real commit sha off the live tree ---
+  const captured = await captureBase(repo, join(base, '.index-capturebase-test'))
+  ok(/^[0-9a-f]{40}$/.test(captured), `captureBase returns a sha: ${captured}`)
+  ok(
+    g(repo, 'show', `${captured}:App.tsx`).includes('// WIP'),
+    'captureBase snapshot includes the live WIP'
+  )
+
+  // --- createWorktree honors a custom branchName scheme (per-chat isolation) ---
+  const wtChat = await createWorktree(repo, worktreesDir, { branchName: (id) => `chat-${id}` })
+  ok(
+    wtChat.branch === `dsgn/chat-${wtChat.id}`,
+    `custom branchName lands on dsgn/chat-<id>: ${wtChat.branch}`
+  )
+  await removeWorktree(repo, wtChat, {})
 
   // --- two concurrent creates are isolated (distinct dirs + branches) ---
   const [w1, w2] = await Promise.all([
@@ -154,12 +174,20 @@ try {
   // branch — but SKIPS a checkout named as live (an active spawn this session) ---
   const orphan = await createWorktree(repo, worktreesDir, {})
   writeFileSync(join(orphan.path, 'Scratch.tsx'), 'leftover\n')
+  const orphanClean = await createWorktree(repo, worktreesDir, {}) // untouched — nothing to recover
   const live = await createWorktree(repo, worktreesDir, {}) // pretend this one is active
   const reclaimed = await pruneOrphans(repo, worktreesDir, new Set([live.id]))
-  ok(reclaimed.includes(orphan.id), `pruneOrphans reclaimed the orphan: ${JSON.stringify(reclaimed)}`)
+  const reclaimedOrphan = reclaimed.find((r) => r.id === orphan.id)
+  const reclaimedClean = reclaimed.find((r) => r.id === orphanClean.id)
+  ok(!!reclaimedOrphan, `pruneOrphans reclaimed the orphan: ${JSON.stringify(reclaimed)}`)
   ok(!existsSync(orphan.path), 'orphan checkout removed by prune')
   ok(existsSync(live.path), 'pruneOrphans must SKIP a live (active) spawn checkout')
-  ok(!reclaimed.includes(live.id), 'live spawn id not reclaimed')
+  ok(!reclaimed.some((r) => r.id === live.id), 'live spawn id not reclaimed')
+  // {id, dirty} shape: dirty true for the orphan with uncommitted changes, false for
+  // the untouched one — checked via `status --porcelain`, not commit success/failure.
+  ok(reclaimedOrphan?.dirty === true, `dirty orphan reports dirty:true: ${JSON.stringify(reclaimedOrphan)}`)
+  ok(!!reclaimedClean, `pruneOrphans also reclaimed the clean orphan: ${JSON.stringify(reclaimed)}`)
+  ok(reclaimedClean?.dirty === false, `clean orphan reports dirty:false: ${JSON.stringify(reclaimedClean)}`)
   // The orphan's dirty work was committed to its branch before removal (not lost).
   ok(g(repo, 'show', `${orphan.branch}:Scratch.tsx`).includes('leftover'), 'orphan work recovered to its branch')
   await removeWorktree(repo, live, {})

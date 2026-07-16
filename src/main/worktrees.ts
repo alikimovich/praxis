@@ -58,7 +58,7 @@ export interface Worktree {
  * (`.gitignore` keeps node_modules/.env out), write a tree, commit it off HEAD.
  * A clean tree just yields HEAD.
  */
-async function captureBase(repoRoot: string, indexFile: string): Promise<string> {
+export async function captureBase(repoRoot: string, indexFile: string): Promise<string> {
   const head = (await git(repoRoot, ['rev-parse', 'HEAD'])).stdout.trim()
   const env: NodeJS.ProcessEnv = {
     GIT_INDEX_FILE: indexFile,
@@ -93,7 +93,7 @@ async function captureBase(repoRoot: string, indexFile: string): Promise<string>
 export function createWorktree(
   repoRoot: string,
   worktreesDir: string,
-  opts: { label?: string; id?: string } = {}
+  opts: { label?: string; id?: string; branchName?: (id: string) => string } = {}
 ): Promise<Worktree> {
   const run = createChain.then(() => doCreateWorktree(repoRoot, worktreesDir, opts))
   createChain = run.catch(() => {}) // keep the chain alive even if one create fails
@@ -103,12 +103,14 @@ export function createWorktree(
 async function doCreateWorktree(
   repoRoot: string,
   worktreesDir: string,
-  opts: { label?: string; id?: string }
+  opts: { label?: string; id?: string; branchName?: (id: string) => string }
 ): Promise<Worktree> {
   // The id may be assigned up front (so a queued spawn's rail row keeps a stable id
   // before its worktree exists); otherwise generate one.
   const id = opts.id ?? randomUUID().slice(0, 8)
-  const branch = normalizeBranchName(`comment-${id}`)
+  // Callers other than comment-spawn (e.g. per-chat isolation) can supply their own
+  // branch-name scheme; default keeps today's `dsgn/comment-<id>` naming.
+  const branch = normalizeBranchName((opts.branchName ?? ((i) => `comment-${i}`))(id))
   const dir = join(worktreesDir, id)
   await mkdir(worktreesDir, { recursive: true })
 
@@ -335,13 +337,15 @@ export async function removeWorktree(
  * any dirty work to its branch (so a crashed-mid-run spawn isn't lost) and remove the
  * checkout. `skip` names ids that are CURRENTLY ACTIVE (a live spawn this session) —
  * never touch those. Branches are kept; we only reclaim the on-disk checkouts.
- * Returns the ids it reclaimed. Never throws.
+ * Returns each reclaimed id with `dirty` — whether the worktree had uncommitted
+ * changes at reclaim time (checked via `status --porcelain` BEFORE the recovery
+ * add/commit, not inferred from whether the commit succeeded). Never throws.
  */
 export async function pruneOrphans(
   repoRoot: string,
   worktreesDir: string,
   skip: Set<string> = new Set()
-): Promise<string[]> {
+): Promise<Array<{ id: string; dirty: boolean }>> {
   try {
     await git(repoRoot, ['worktree', 'prune'])
   } catch {
@@ -353,7 +357,7 @@ export async function pruneOrphans(
   } catch {
     return [] // dir doesn't exist yet — nothing to reclaim
   }
-  const reclaimed: string[] = []
+  const reclaimed: Array<{ id: string; dirty: boolean }> = []
   for (const id of entries) {
     if (skip.has(id)) continue // a live spawn this session — leave it alone
     const dir = join(worktreesDir, id)
@@ -361,6 +365,13 @@ export async function pruneOrphans(
       if (!(await stat(dir)).isDirectory()) continue
     } catch {
       continue
+    }
+    let dirty = false
+    try {
+      const status = (await git(dir, ['status', '--porcelain'])).stdout
+      dirty = status.trim().length > 0
+    } catch {
+      /* not a worktree — treat as clean */
     }
     // Best-effort: commit any dirty leftover to its branch before removing the dir,
     // so a crashed-mid-run spawn's work isn't lost.
@@ -391,7 +402,7 @@ export async function pruneOrphans(
     } catch {
       await rm(dir, { recursive: true, force: true }).catch(() => {})
     }
-    reclaimed.push(id)
+    reclaimed.push({ id, dirty })
   }
   try {
     await git(repoRoot, ['worktree', 'prune'])
