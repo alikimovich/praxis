@@ -41,6 +41,60 @@ switch.
   affects a sibling.
 - `test/chat-render.mjs` now covers new-chat model selection followed by switches
   back and forth between two chats, asserting that each picker is restored.
+## 2026-07-15 — Keep images + selection visible in sent chat bubbles (LKM-53)
+
+Attached images and the selected-element pill were shown in the composer but
+disappeared the instant you sent the turn — the message bubble only rendered
+text, so the transcript lost the visual context of what the ask was about.
+
+- **`ChatMessage` carries the extras.** Two new optional fields (`store.ts`):
+  `attachments` (image thumbnails — `{id, mediaType, url}`) and `selection` (a
+  display-only `{tag, ident, source}` snapshot). `appendUser` gained an `extras`
+  arg to attach them; `selectionForBubble(el)` builds the snapshot, mirroring the
+  Inspector pill's `#id`/`.class` identifier logic so live pill and sent pill match.
+- **`send()` passes them through.** `ChatPanel.send` maps the composer's
+  `attachments` + current `selected` onto the appended user message. The model
+  still gets the selection as hidden prompt context (`describeSelectionForPrompt`
+  prefix), unchanged — only the bubble is new. Dropped the old
+  `🖼 N image(s)` placeholder text; the thumbnails stand in for it now.
+- **Render.** User bubbles now show the selection pill + image thumbnails above
+  their text (right-aligned to match `.msg--user`).
+- **Known limit:** images aren't persisted to the on-disk transcript, so a
+  reloaded/resumed chat won't re-show them (the selection still survives as the
+  prompt-prefix text it always did). In-scope fix is the live send experience.
+- `test/chat-render.mjs`: a sent user turn keeps its thumbnail + pill.
+
+## 2026-07-14 — Pop the code drawer out into its own window (LKM-48)
+
+The v9 code drawer was locked to the strip under the preview. You can now pop it
+into a standalone, freely-resizable native window.
+
+- **New window = same bundle, new entry.** `main/index.ts` `openEditorWindow`
+  opens a `BrowserWindow` running the renderer with `?dsgnEditor=1&root=…&source=…`
+  — the same trick the `?dsgnPanel` prop-island uses. `main.tsx` routes that query
+  to a new `EditorWindow` component (renderer/src/components/EditorWindow.tsx),
+  which renders the editor full-window instead of `<App>`. Reuses CodeMirror, all
+  `source:*` IPC (same preload), and the app theming for free.
+- **One window per project root.** `editorWindows` is keyed by root: a second
+  pop-out for the same project re-focuses the open window and retargets it at the
+  new file via an `editor:navigate` push (`source.onNavigate` in the preload)
+  rather than stacking duplicates. The rail keeps several projects open, so
+  different roots each get their own window.
+- **`CodeDrawer` grew a `variant` prop.** `'drawer'` (default) is unchanged;
+  `'window'` fills `h-screen`, reserves **no** preview inset (`usePanelInset`
+  early-returns), and drops the drawer-only chrome (resize handle, expand toggle).
+  The header doubles as the macOS `hiddenInset` title bar — left-padded past the
+  traffic lights, with the file-name span as the drag region so the buttons stay
+  clickable. Cmd+click nav + back/forward still work: `EditorWindow` drives the
+  drawer off the store, so jumps navigate within the popped-out window.
+- **New IPC** (`src/shared/api.ts` + preload + `registerEditorIpc`):
+  `source.popout(root, source)`, `source.closeWindow()` (a popped editor closing
+  itself), `source.onNavigate(cb)`. A new **pop-out** button sits in the docked
+  drawer's header; clicking it opens the window and closes the docked strip.
+- `test/code-drawer.mjs` extended: the pop-out button opens a second window
+  running the `.codedrawer--window` variant (no resize handle), releases the
+  drawer inset, and its close button closes the window. (Electron UI tier —
+  needs a display; can't run on a headless runner.)
 
 ## 2026-07-12 — Auto-name chats by subject, not opening words (LKM-45)
 

@@ -25,6 +25,12 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
       as a conflict. `test/code-drawer.mjs`.
       **Known limit:** the floating PropPanel overlaps the drawer's top-right in a
       narrow window — complementary but unaware of each other's inset.
+- [x] **Phase 3 — pop the drawer out into its own window.** ✅ 2026-07-14 (LKM-48)
+      — a pop-out button opens the editor in a standalone, freely-resizable
+      `BrowserWindow` (same renderer bundle via `?dsgnEditor=1`, new `EditorWindow`
+      entry + `CodeDrawer` `variant="window"`). One window per project root;
+      re-focuses + retargets on a repeat pop-out. `source.popout/closeWindow/
+      onNavigate` IPC. `test/code-drawer.mjs`.
 
 ## Health / infra (from the 2026-07-07 review)
 

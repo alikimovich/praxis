@@ -807,6 +807,13 @@ export interface DsgnApi {
       baseline: string,
       content: string
     ) => Promise<SourceWriteResult>
+    /** Pop the code drawer out into its own resizable window showing `source`.
+     *  Focuses the existing window if one is already open for this root. */
+    popout: (root: string, source: string) => Promise<void>
+    /** Close the standalone editor window (called from inside a popped-out editor). */
+    closeWindow: () => Promise<void>
+    /** Standalone editor window: retarget event when a second pop-out reuses it. */
+    onNavigate: (cb: (source: string) => void) => () => void
   }
   /** Undo/redo over ALL direct dsgn source edits — props, text, token swaps (v8 F3b).
    *  Scoped per project root: the rail keeps several projects open at once. */

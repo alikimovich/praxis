@@ -127,6 +127,29 @@ try {
   })
   if (await win.$('.codedrawer')) throw new Error('drawer did not unmount on close')
 
+  // --- Pop out: the button opens a second BrowserWindow running the editor and
+  // closes the docked drawer. ---
+  await win.evaluate((src) => window.__dsgnCodeDrawer.getState().open(src), SRC)
+  await win.waitForSelector('.codedrawer__popout', { timeout: 5000 })
+  const windowsBefore = app.windows().length
+  await win.$eval('.codedrawer__popout', (el) => el.click())
+  // The docked drawer unmounts and its inset is released…
+  await win.waitForFunction(() => !document.querySelector('.codedrawer'), undefined, { timeout: 5000 })
+  if (await win.evaluate(() => window.__dsgnPanelInset.getState().bottom)) {
+    throw new Error('pop-out did not release the drawer inset')
+  }
+  // …and a new window appears, running the full-window editor variant.
+  const editorWin = await app.waitForEvent('window', { timeout: 5000 })
+  await editorWin.waitForSelector('.codedrawer--window .cm-editor', { timeout: 8000 })
+  if (await editorWin.$('.codedrawer__resize')) {
+    throw new Error('window variant must not render the drag-resize handle')
+  }
+  if (app.windows().length <= windowsBefore) throw new Error('pop-out did not open a new window')
+  await editorWin.screenshot({ path: join(artifacts, '13b-code-editor-window.png') })
+  // Closing from inside the popped-out editor closes its window.
+  await editorWin.$eval('.codedrawer__close', (el) => el.click())
+  await editorWin.waitForEvent('close', { timeout: 5000 })
+
   if (disk() !== baseline) throw new Error('fixture left modified')
   // --- Cmd+click resolution engine + drawer nav history. ---
   const resolved = await win.evaluate(

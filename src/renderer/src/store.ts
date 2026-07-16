@@ -26,6 +26,21 @@ import { projectKey } from '../../shared/projectKey'
  */
 export type MsgSegment = { kind: 'text'; text: string } | { kind: 'tools'; statuses: string[] }
 
+/** A vision image attached to a user turn, kept for in-bubble display (data URL). */
+export interface MsgAttachment {
+  id: string
+  mediaType: string
+  url: string
+}
+
+/** A compact, display-only snapshot of the element selection a user turn carried,
+ *  so the sent bubble can show the same pill the composer did. */
+export interface MsgSelection {
+  tag: string
+  ident: string
+  source: string | null
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
@@ -34,6 +49,10 @@ export interface ChatMessage {
   statuses: string[]
   /** Ordered text/tool-run chunks — see `MsgSegment`. */
   segments: MsgSegment[]
+  /** Images the user attached to this turn (user messages). */
+  attachments?: MsgAttachment[]
+  /** The element the user had selected when they sent this turn (user messages). */
+  selection?: MsgSelection
 }
 
 /** One project's chat. `streamingId` is the assistant message currently being
@@ -74,7 +93,11 @@ interface ChatState {
   /** Drop a project's chat buffer (on close). */
   clearChat: (key: string) => void
   // Actions default to the active project; pass a key to target a backgrounded one.
-  appendUser: (text: string, key?: string) => void
+  appendUser: (
+    text: string,
+    key?: string,
+    extras?: { attachments?: MsgAttachment[]; selection?: MsgSelection }
+  ) => void
   /** Add a standalone assistant note (e.g. a finished comment-spawn notification). */
   appendNote: (text: string, key?: string) => void
   startAssistant: (key?: string) => void
@@ -147,7 +170,7 @@ export const useChat = create<ChatState>((set, get) => {
         delete byKey[key]
         return { byKey }
       }),
-    appendUser: (text, key) =>
+    appendUser: (text, key, extras) =>
       patch(key, (sl) => ({
         ...sl,
         messages: [
@@ -157,7 +180,9 @@ export const useChat = create<ChatState>((set, get) => {
             role: 'user',
             text,
             statuses: [],
-            segments: text ? [{ kind: 'text', text }] : []
+            segments: text ? [{ kind: 'text', text }] : [],
+            ...(extras?.attachments?.length ? { attachments: extras.attachments } : {}),
+            ...(extras?.selection ? { selection: extras.selection } : {})
           }
         ]
       })),
@@ -1343,6 +1368,18 @@ export const describeSelectionForPrompt = (el: SelectedElement): string => {
   const text = el.text ? ` with text “${oneLine(el.text, 40)}”` : ''
   return `In the preview I selected the <${oneLine(el.tag, 32)}${ident}> element${where}${text}. `
 }
+
+/**
+ * A display-only snapshot of a selection for the sent message bubble — the same
+ * tag + `#id`/`.class` identifier the composer's Inspector pill shows, plus the
+ * source ref. Kept alongside the message so the bubble can render the pill after
+ * the selection is cleared from the composer.
+ */
+export const selectionForBubble = (el: SelectedElement): MsgSelection => ({
+  tag: el.tag,
+  ident: el.id ? `#${el.id}` : el.classes[0] ? `.${el.classes[0]}` : '',
+  source: el.source ?? null
+})
 
 /**
  * The preview's real current location (link clicks, SPA route changes, initial
