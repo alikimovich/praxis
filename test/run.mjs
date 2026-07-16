@@ -31,6 +31,7 @@ const UNIT = [
   'feedback-body',
   'publish-message',
   'slash-token',
+  'skills-discovery',
   'project-key',
   'project-create',
   'devserver-net',

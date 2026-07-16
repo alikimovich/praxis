@@ -12,6 +12,7 @@ import type {
   SelectedElement,
   SessionRecord,
   SessionTranscriptEntry,
+  SlashCommandItem,
   TokenSet,
   UpdateStatus
 } from '../../shared/api'
@@ -320,7 +321,8 @@ interface SessionState {
   effort: string
   /** Which backend runs the agent ('claude' | 'codex' | …) — v7. */
   provider: string
-  slashCommands: string[]
+  /** "/" menu entries — project skills first, described; built by main (LKM-54). */
+  slashCommands: SlashCommandItem[]
   /** Set when the agent reports an auth failure — drives the onboarding banner. */
   authNeeded: boolean
   /**
@@ -338,7 +340,7 @@ interface SessionState {
   setEffort: (effort: string) => void
   setProvider: (provider: string) => void
   setChatAgentSettings: (settings: ChatAgentSettings) => void
-  setSlashCommands: (commands: string[]) => void
+  setSlashCommands: (commands: SlashCommandItem[]) => void
   setAuthNeeded: (authNeeded: boolean) => void
   setCodexAuthNeeded: (codexAuthNeeded: boolean) => void
   setProjectRoot: (projectRoot: string | null) => void

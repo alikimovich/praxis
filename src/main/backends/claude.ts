@@ -8,9 +8,11 @@ import type {
   QuestionAnswers,
   QuestionRequest,
   QuestionSpec,
-  SessionTranscriptEntry
+  SessionTranscriptEntry,
+  SlashCommandItem
 } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
+import { discoverProjectSkills, mergeSlashCommands } from '../skills'
 import type {
   ModelProvider,
   PendingPrompt,
@@ -370,6 +372,23 @@ async function startSession(
     }
   })
 
+  // The "/" menu (LKM-54): project skills — the opened repo's
+  // `.claude/skills/**/SKILL.md`, discovered + described here in main so the
+  // renderer never touches the filesystem — rank ahead of the SDK's advertised
+  // commands, shadowing same-named ones. Either side may resolve first, so both
+  // land in this closure and re-emit the merged list.
+  let projectSkills: SlashCommandItem[] = []
+  let sdkCommandNames: string[] = []
+  const emitCommands = (): void => {
+    const merged = mergeSlashCommands(projectSkills, sdkCommandNames)
+    if (merged.length) emit({ type: 'commands', commands: merged })
+  }
+  void discoverProjectSkills(root).then((skills) => {
+    if (disposed || !skills.length) return
+    projectSkills = skills
+    emitCommands()
+  })
+
   // Populate the "/" menu immediately: with a streaming input, the SDK's `init`
   // system message (which carries slash_commands) only arrives after the FIRST
   // user message — so a freshly-opened project's "/" menu would be empty until you
@@ -377,7 +396,9 @@ async function startSession(
   void q
     .supportedCommands()
     .then((cmds) => {
-      if (!disposed && cmds.length) emit({ type: 'commands', commands: cmds.map((c) => c.name) })
+      if (disposed || !cmds.length) return
+      sdkCommandNames = cmds.map((c) => c.name)
+      emitCommands()
     })
     .catch(() => {
       /* older SDK / not ready — the init message will still populate on first turn */
@@ -399,7 +420,8 @@ async function startSession(
                 cap.setSdkSessionId(sys.session_id)
               }
               if (Array.isArray(sys.slash_commands)) {
-                emit({ type: 'commands', commands: sys.slash_commands })
+                sdkCommandNames = sys.slash_commands
+                emitCommands()
               }
             }
             break

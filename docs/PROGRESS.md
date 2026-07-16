@@ -2,6 +2,33 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-16 — Project skills first in the "/" menu, with descriptions (LKM-54)
+
+The composer's "/" menu listed the SDK's advertised command names flat, so the
+opened repo's own skills (`.claude/skills/**/SKILL.md`) drowned among built-ins
+and had no descriptions.
+
+- **`AgentEvent` `commands` now carries structured items** —
+  `SlashCommandItem { name, description?, source: 'project' | 'other' }`
+  (`shared/api.ts`) instead of bare strings.
+- **New `src/main/skills.ts`** (main-process — the renderer stays free of fs
+  reads): `discoverProjectSkills(root)` scans `.claude/skills` (nested dirs
+  tolerated) and pulls `description` from each SKILL.md's YAML frontmatter with
+  a defensive no-dependency parser (plain/quoted/block scalars; malformed input
+  degrades to an undescribed item, never breaks the menu);
+  `mergeSlashCommands(project, sdkNames)` ranks project skills first and lets a
+  project skill shadow a same-named SDK command.
+- **`backends/claude.ts`** discovers once per session and re-emits the merged
+  list whenever either side (project scan, `supportedCommands()`, the init
+  message's `slash_commands`) arrives.
+- **`ChatPanel`** filters by name, keeps project-first ranking + dedupe on the
+  render side too (guards store seeds/other backends), and renders two-line
+  items: `/name` plus the description truncated to one visual line (`truncate`).
+  Filtering, keyboard nav, click-to-insert, and the 8-item cap are unchanged.
+- Tests: `test/skills-discovery.mjs` (unit tier — parse/scan/merge);
+  `test/chat-render.mjs` now asserts priority order, duplicate collapse,
+  description fallback, one-line ellipsis truncation, and Enter/click insertion.
+
 ## 2026-07-15 — Attach arbitrary files (not just images) to the chat
 
 The composer only accepted images (read into base64, sent as vision blocks).
