@@ -9,7 +9,7 @@ import { _electron as electron } from 'playwright'
 import electronPath from 'electron'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const artifacts = join(root, 'test', 'artifacts')
@@ -134,9 +134,14 @@ try {
   await win.click('.perm__allow')
   await win.waitForFunction(() => !document.querySelector('.perm'), { timeout: 5000 })
 
-  // dsgn runs in Auto (approve-all) by default — no permission-mode selector.
-  if (await win.$('select[aria-label="Permission mode"]'))
-    throw new Error('permission-mode selector should be removed (Auto is the default)')
+  // The permission-mode selector is present (restored in a612f83) and defaults to
+  // Auto (approve-all).
+  const permModes = await win.$$eval('select[aria-label="Permission mode"] option', (os) =>
+    os.map((o) => o.value)
+  )
+  if (JSON.stringify(permModes) !== JSON.stringify(['auto', 'acceptEdits', 'default'])) {
+    throw new Error(`unexpected permission modes: ${JSON.stringify(permModes)}`)
+  }
   const defaultMode = await win.evaluate(() => window.__dsgnPermissions.getState().mode)
   if (defaultMode !== 'auto')
     throw new Error(`default permission mode should be auto, got ${defaultMode}`)
@@ -306,6 +311,41 @@ try {
   await win.click('button[aria-label="Remove image"]')
   await win.waitForFunction(() => !document.querySelector('img[alt="attachment"]'), { timeout: 5000 })
 
+  // Drop a non-image file → a filename card appears. The composer recovers the
+  // file's real on-disk path via the preload's webUtils.getPathForFile, which only
+  // works for a path-backed File (a synthetic `new File()` has none). So seed a
+  // real file through a hidden <input type=file> (Playwright's setInputFiles backs
+  // it with a real path), then dispatch the drop carrying that File — exercising
+  // the true preload seam, not a stub.
+  const droppedPath = join(artifacts, 'dropped-notes.txt')
+  writeFileSync(droppedPath, 'hello from a dropped file')
+  await win.evaluate(() => {
+    const fi = document.createElement('input')
+    fi.type = 'file'
+    fi.id = '__test_file_input'
+    fi.style.display = 'none'
+    document.body.appendChild(fi)
+  })
+  await win.setInputFiles('#__test_file_input', droppedPath)
+  await win.evaluate(() => {
+    const fi = document.getElementById('__test_file_input')
+    const dt = new DataTransfer()
+    dt.items.add(fi.files[0])
+    const ta = document.querySelector('.composer__input')
+    ta.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }))
+    fi.remove()
+  })
+  const fileCard = await win.waitForSelector(`[title="${droppedPath}"]`, { timeout: 5000 })
+  const cardText = (await fileCard.textContent())?.trim() ?? ''
+  if (!cardText.includes('dropped-notes.txt')) {
+    throw new Error(`dropped file card should show its name: ${cardText}`)
+  }
+  // Removing it clears the card.
+  await win.click('button[aria-label="Remove dropped-notes.txt"]')
+  await win.waitForFunction((p) => !document.querySelector(`[title="${p}"]`), droppedPath, {
+    timeout: 5000
+  })
+
   // Composer responsiveness: at a narrow chat pane the send button stays visible
   // (selects wrap), and the textarea auto-grows up to ~6 lines for a long prompt.
   await win.evaluate(() => {
@@ -410,7 +450,7 @@ try {
   if (guarded !== 3) throw new Error(`hydrate should not clobber a populated slice, got ${guarded}`)
 
   console.log(
-    'CHAT-RENDER OK — markdown, toolbar, auth banner, branch pill, workspace store, rail collapse, image paste, composer responsive, actions menu + viewport, resume hydration'
+    'CHAT-RENDER OK — markdown, toolbar, auth banner, branch pill, workspace store, rail collapse, image paste, file drop, composer responsive, actions menu + viewport, resume hydration'
   )
 } catch (err) {
   console.error('CHAT-RENDER FAILED:', err?.message ?? err)

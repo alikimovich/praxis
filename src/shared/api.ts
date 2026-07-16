@@ -635,6 +635,10 @@ export interface DsgnApi {
    *  'open-project' | 'new-project' | 'clear-recents' | 'viewport:desktop' |
    *  'viewport:mobile'. Returns an unsubscribe. */
   onMenuAction: (cb: (action: string) => void) => () => void
+  /** Recover a dropped/selected file's absolute on-disk path (Electron's
+   *  `webUtils.getPathForFile`, run in the preload). Returns '' for a file with
+   *  no on-disk path (e.g. an in-memory clipboard blob). Synchronous. */
+  pathForFile: (file: File) => string
   /** Native window-chrome state. Drives layout that depends on whether the macOS
    *  traffic lights are present (they vanish in fullscreen). */
   window: {

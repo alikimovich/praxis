@@ -2,6 +2,28 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-15 — Attach arbitrary files (not just images) to the chat
+
+The composer only accepted images (read into base64, sent as vision blocks).
+You can now drop **any** file into the message area: non-image files are handed
+to the agent **by absolute path** (it reads them with its own tools) and shown
+as a filename card next to the image thumbnails.
+
+- Images are unchanged (still base64 vision blocks). Only non-image drops/pastes
+  take the new by-path route, split in a shared `addDroppedFiles` helper.
+- A new preload bridge `pathForFile` wraps `webUtils.getPathForFile` — Electron
+  43 removed `File.path`, so the real on-disk path must be recovered in the
+  (sandboxed) preload. Pathless blobs (e.g. an in-memory clipboard file) yield
+  '' and are skipped.
+- No IPC contract change: file paths are folded into the existing `agent.send`
+  text argument (a `[Attached files]` block prepended like the selection `ctx`),
+  so `ImageAttachment`/`agent:send` stay as they were.
+- `test/chat-render.mjs` now drops a real file via a hidden `<input type=file>`
+  (so `getPathForFile` resolves a true path — a synthetic `File` has none),
+  asserting the filename card renders and removes. It also fixes a stale
+  assertion there that still expected the permission-mode selector to be absent
+  after a612f83 restored it.
+
 ## 2026-07-15 — Keep agent model choices with their individual chats
 
 The model/backend picker lived in the renderer-wide session store, so selecting

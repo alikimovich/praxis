@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import type {
   AgentEvent,
   AgentOptions,
@@ -47,6 +47,10 @@ const api: DsgnApi = {
     ipcRenderer.on('menu:action', listener)
     return () => ipcRenderer.removeListener('menu:action', listener)
   },
+  // Electron 43 dropped File.path; webUtils.getPathForFile recovers a
+  // dropped/selected file's real on-disk path (must run in the preload — the
+  // File is passed across the contextBridge). Empty string for pathless blobs.
+  pathForFile: (file: File): string => webUtils.getPathForFile(file),
   window: {
     isFullscreen: (): Promise<boolean> => ipcRenderer.invoke('window:is-fullscreen'),
     onFullscreenChange: (cb: (fullscreen: boolean) => void): (() => void) => {

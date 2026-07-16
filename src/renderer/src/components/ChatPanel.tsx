@@ -50,6 +50,7 @@ import {
   Check,
   ChevronRight,
   Copy,
+  FileText,
   MousePointer2,
 } from "lucide-react";
 import {
@@ -58,6 +59,13 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import CatLoader from "./CatLoader";
+
+// A pending composer attachment. Images carry base64 bytes + a data URL for the
+// thumbnail (sent as a vision block); files carry only their name + absolute path
+// (folded into the prompt text so the agent reads them itself).
+type Attachment =
+  | { id: string; kind: "image"; mediaType: string; data: string; url: string }
+  | { id: string; kind: "file"; name: string; path: string };
 
 // The model picker is per-backend: Claude's own models vs. the models the
 // `codex` CLI accepts via --model. "Default" is a sentinel meaning "omit the
@@ -365,10 +373,10 @@ export default function ChatPanel(): React.JSX.Element {
   const [caret, setCaret] = useState(0);
   const [menuActive, setMenuActive] = useState(0);
   const [menuDismissed, setMenuDismissed] = useState(false);
-  // Images pasted/dropped into the composer, sent as vision blocks with the turn.
-  const [attachments, setAttachments] = useState<
-    { id: string; mediaType: string; data: string; url: string }[]
-  >([]);
+  // Attachments pasted/dropped into the composer. Images ride the turn as base64
+  // vision blocks (as before); other files are handed to the agent by path (it
+  // reads them with its own tools) and shown as a filename card.
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // Long user asks are clamped by default (item 2) — ids in this set render
@@ -718,48 +726,78 @@ export default function ChatPanel(): React.JSX.Element {
         const data = url.slice(url.indexOf(",") + 1);
         setAttachments((a) => [
           ...a,
-          { id: `att${nextId++}`, mediaType: file.type, data, url },
+          { id: `att${nextId++}`, kind: "image", mediaType: file.type, data, url },
         ]);
       };
       reader.readAsDataURL(file);
     }
   };
 
+  // Non-image files ride along by absolute path (recovered in the preload — the
+  // renderer's File has no .path on Electron 43), which the agent reads itself.
+  // Pathless blobs (e.g. an in-memory clipboard file) have nothing to hand over,
+  // so they're skipped.
+  const addFiles = (files: File[]): number => {
+    let nextId = Date.now();
+    const added: Attachment[] = [];
+    for (const file of files) {
+      const path = window.api.pathForFile(file);
+      if (!path) continue;
+      added.push({ id: `file${nextId++}`, kind: "file", name: file.name, path });
+    }
+    if (added.length) setAttachments((a) => [...a, ...added]);
+    return added.length;
+  };
+
+  // Split a dropped/pasted FileList into the image bucket (base64 vision blocks)
+  // and everything else (by-path file cards). Returns whether anything attached.
+  const addDroppedFiles = (files: File[]): boolean => {
+    const images = files.filter((f) => f.type.startsWith("image/"));
+    const others = files.filter((f) => !f.type.startsWith("image/"));
+    if (images.length) addImageFiles(images);
+    const filesAdded = others.length ? addFiles(others) : 0;
+    return images.length > 0 || filesAdded > 0;
+  };
+
   const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>): void => {
-    const files = Array.from(e.clipboardData.files).filter((f) =>
-      f.type.startsWith("image/"),
-    );
-    if (files.length) {
-      e.preventDefault(); // don't also paste the image's path/text
-      addImageFiles(files);
+    const files = Array.from(e.clipboardData.files);
+    if (files.length && addDroppedFiles(files)) {
+      e.preventDefault(); // don't also paste the file's path/text
     }
   };
 
   const onDrop = (e: React.DragEvent): void => {
-    const files = Array.from(e.dataTransfer.files).filter((f) =>
-      f.type.startsWith("image/"),
-    );
-    if (files.length) {
-      e.preventDefault();
-      addImageFiles(files);
-    }
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length && addDroppedFiles(files)) e.preventDefault();
     setDragOver(false);
   };
 
   const send = (raw: string = input): void => {
     const text = raw.trim();
     if ((!text && attachments.length === 0) || isRunning) return;
-    const images = attachments.map((a) => ({
-      mediaType: a.mediaType,
-      data: a.data,
-    }));
+    const images = attachments
+      .filter((a) => a.kind === "image")
+      .map((a) => ({ mediaType: a.mediaType, data: a.data }));
+    const files = attachments.filter((a) => a.kind === "file");
+    // File attachments ride as hidden context (like the selection pill below):
+    // the agent gets each absolute path prepended so it can read the file with
+    // its own tools; the transcript keeps the user's own words.
+    const fileCtx = files.length
+      ? `[Attached files]\n${files.map((f) => f.path).join("\n")}\n\n`
+      : "";
     // The selection pill rides along as hidden context: the transcript shows
     // the user's own words; the model gets the element reference prepended so
     // it knows what it's looking at. (The preview's current page is no longer
     // silently prepended — the agent has a `preview_location` tool and asks
     // when the page actually matters.)
     const ctx = selected ? describeSelectionForPrompt(selected) : "";
-    appendUser(text || (images.length ? `🖼 ${images.length} image(s)` : ""));
+    const attachSummary = [
+      files.length ? `📎 ${files.map((f) => f.name).join(", ")}` : "",
+      images.length ? `🖼 ${images.length} image(s)` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    appendUser(text || attachSummary);
     startAssistant();
     setInput("");
     setCaret(0);
@@ -767,7 +805,10 @@ export default function ChatPanel(): React.JSX.Element {
     // A newly-sent ask becomes the pinned message — any previously-expanded
     // ask should collapse back to its clamp instead of hanging around full-height.
     setExpandedUserMsgs(new Set());
-    void window.api.agent.send(ctx + text, images.length ? images : undefined);
+    void window.api.agent.send(
+      fileCtx + ctx + text,
+      images.length ? images : undefined,
+    );
     if (selected) setSelected(null);
   };
 
@@ -1108,13 +1149,27 @@ export default function ChatPanel(): React.JSX.Element {
               {attachments.map((a) => (
                 <div
                   key={a.id}
-                  className="relative h-12 w-12 overflow-hidden rounded-md border border-border"
+                  title={a.kind === "file" ? a.path : undefined}
+                  className={
+                    a.kind === "image"
+                      ? "relative h-12 w-12 overflow-hidden rounded-md border border-border"
+                      : "relative flex h-12 max-w-40 items-center gap-1.5 overflow-hidden rounded-md border border-border bg-muted/40 pl-2 pr-5"
+                  }
                 >
-                  <img
-                    src={a.url}
-                    alt="attachment"
-                    className="h-full w-full object-cover"
-                  />
+                  {a.kind === "image" ? (
+                    <img
+                      src={a.url}
+                      alt="attachment"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <>
+                      <FileText className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate text-xs text-muted-foreground">
+                        {a.name}
+                      </span>
+                    </>
+                  )}
                   <button
                     type="button"
                     onClick={() =>
@@ -1122,7 +1177,9 @@ export default function ChatPanel(): React.JSX.Element {
                         list.filter((x) => x.id !== a.id),
                       )
                     }
-                    aria-label="Remove image"
+                    aria-label={
+                      a.kind === "image" ? "Remove image" : `Remove ${a.name}`
+                    }
                     className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-[10px] leading-none text-white"
                   >
                     ×
