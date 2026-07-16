@@ -567,7 +567,15 @@ export default function ChatPanel(): React.JSX.Element {
   const matches = useMemo(() => {
     if (slashQuery === null) return [];
     const q = slashQuery.toLowerCase();
-    return slashCommands.filter((c) => c.toLowerCase().includes(q)).slice(0, 8);
+    const hits = slashCommands.filter((c) => c.name.toLowerCase().includes(q));
+    // Project skills rank first; a same-named non-project command is shadowed
+    // (main already dedupes — this guards store seeds/other backends too).
+    const project = hits.filter((c) => c.source === "project");
+    const shadowed = new Set(project.map((c) => c.name));
+    const other = hits.filter(
+      (c) => c.source !== "project" && !shadowed.has(c.name),
+    );
+    return [...project, ...other].slice(0, 8);
   }, [slashQuery, slashCommands]);
   const menuOpen = slashQuery !== null && matches.length > 0 && !menuDismissed;
 
@@ -952,7 +960,7 @@ export default function ChatPanel(): React.JSX.Element {
       }
       if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
-        pickCommand(matches[menuActive]);
+        pickCommand(matches[menuActive].name);
         return;
       }
       if (e.key === "Escape") {
@@ -1230,12 +1238,17 @@ export default function ChatPanel(): React.JSX.Element {
               <div className="slash__hint">Skills & commands</div>
               {matches.map((cmd, i) => (
                 <button
-                  key={cmd}
+                  key={cmd.name}
                   className={`slash__item ${i === menuActive ? "is-active" : ""}`}
                   onMouseEnter={() => setMenuActive(i)}
-                  onClick={() => pickCommand(cmd)}
+                  onClick={() => pickCommand(cmd.name)}
                 >
-                  /{cmd}
+                  <span className="slash__name block">/{cmd.name}</span>
+                  {cmd.description && (
+                    <span className="slash__desc block truncate font-sans text-[11px] text-[var(--text-muted)]">
+                      {cmd.description}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
