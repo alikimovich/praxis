@@ -84,6 +84,7 @@
     "test:chat-title": "bun test/chat-title.mjs",
     "test:edithistory": "bun test/edit-history.mjs",
     "test:worktrees": "bun test/worktrees.mjs",
+    "test:chat-worktrees": "bun test/chat-worktrees.mjs",
     "test:rules": "bun test/rules.mjs",
     "test:tw-classes": "bun test/tw-classes.mjs",
     "test:agenthistory": "electron-vite build && node test/agent-history.mjs",

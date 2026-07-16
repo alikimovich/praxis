@@ -42,6 +42,7 @@ const UNIT = [
   'chat-title',
   'edit-history',
   'worktrees',
+  'chat-worktrees',
   'rules',
   'tw-classes',
   'svelte-instance',
