@@ -9,8 +9,9 @@
  * lands on the expected branch; two concurrent creates are isolated; commit captures
  * the authoritative file list; diff→apply lands the change onto a DIRTY main tree;
  * remove reclaims the checkout (keeping the branch); pruneOrphans reclaims leftovers
- * and reports each as `{id, dirty}` (dirty from `status --porcelain`, not commit
- * success). Uses real temp git repos.
+ * and reports each as `{id, dirty, branch, repoRoot}` (dirty from `status --porcelain`,
+ * not commit success; branch/repoRoot captured before removal) and FOLDS a parked
+ * chat squash's recovery commit into one commit. Uses real temp git repos.
  *
  * Run with: bun run test:worktrees
  */
@@ -183,14 +184,71 @@ try {
   ok(!existsSync(orphan.path), 'orphan checkout removed by prune')
   ok(existsSync(live.path), 'pruneOrphans must SKIP a live (active) spawn checkout')
   ok(!reclaimed.some((r) => r.id === live.id), 'live spawn id not reclaimed')
-  // {id, dirty} shape: dirty true for the orphan with uncommitted changes, false for
-  // the untouched one — checked via `status --porcelain`, not commit success/failure.
+  // {id, dirty, branch, repoRoot} shape: dirty true for the orphan with uncommitted
+  // changes, false for the untouched one — checked via `status --porcelain`, not commit
+  // success/failure. branch + owning repoRoot are captured BEFORE the checkout is gone.
   ok(reclaimedOrphan?.dirty === true, `dirty orphan reports dirty:true: ${JSON.stringify(reclaimedOrphan)}`)
+  ok(reclaimedOrphan?.branch === orphan.branch, `reclaimed reports the branch: ${JSON.stringify(reclaimedOrphan)}`)
+  ok(
+    !!reclaimedOrphan?.repoRoot && existsSync(join(reclaimedOrphan.repoRoot, '.git')),
+    `reclaimed reports the owning repoRoot: ${JSON.stringify(reclaimedOrphan)}`
+  )
   ok(!!reclaimedClean, `pruneOrphans also reclaimed the clean orphan: ${JSON.stringify(reclaimed)}`)
   ok(reclaimedClean?.dirty === false, `clean orphan reports dirty:false: ${JSON.stringify(reclaimedClean)}`)
   // The orphan's dirty work was committed to its branch before removal (not lost).
   ok(g(repo, 'show', `${orphan.branch}:Scratch.tsx`).includes('leftover'), 'orphan work recovered to its branch')
   await removeWorktree(repo, live, {})
+
+  // --- W2: a PARKED chat orphan (tip = cumulative dsgn squash, a `chatpark-<id>` record
+  // exists) that crashed mid-turn must FOLD the recovery commit into that squash, so
+  // branchPatch stays the full diff (a stacked recovery commit would hide the parked work
+  // from the record's Apply). The fold is gated on the `isParked` predicate. ---
+  const chatWt = await createWorktree(repo, worktreesDir, { branchName: (i) => `chat-${i}` })
+  // Turn 1 parked: the isolation layer squashes it into ONE dsgn commit off base.
+  writeFileSync(join(chatWt.path, 'Parked.tsx'), 'export const P = () => null\n')
+  const pc = await commitWorktree(chatWt, 'parked turn one')
+  ok(pc.committed && pc.files.includes('Parked.tsx'), 'parked squash committed')
+  // Turn 2 crashed mid-run — leaves uncommitted WIP on top of the parked squash.
+  writeFileSync(join(chatWt.path, 'Parked.tsx'), 'export const P = () => null\n// turn two\n')
+  const chatReclaim = await pruneOrphans(repo, worktreesDir, new Set(), (id) => id === chatWt.id)
+  const rc = chatReclaim.find((r) => r.id === chatWt.id)
+  ok(rc?.dirty === true && rc?.branch === chatWt.branch, `chat orphan reclaimed: ${JSON.stringify(rc)}`)
+  // Folded → exactly ONE commit off base, carrying BOTH the parked turn and turn two.
+  const chatRevs = g(repo, 'rev-list', `${chatWt.baseSha}..${chatWt.branch}`).trim().split('\n').filter(Boolean)
+  ok(chatRevs.length === 1, `parked squash + recovery folded into one commit: ${chatRevs.length}`)
+  ok(g(repo, 'show', `${chatWt.branch}:Parked.tsx`).includes('turn two'), 'the crashed turn-two WIP was recovered')
+  const chatBp = await branchPatch(repo, chatWt.branch)
+  ok(/Parked\.tsx/.test(chatBp) && /turn two/.test(chatBp), 'branchPatch still carries the full parked diff')
+  await removeWorktree(repo, chatWt, { keepBranch: false })
+
+  // --- W2 regression: a chat orphan whose tip is a previously-MERGED turn (baseSha has
+  // ADVANCED to that tip, NO park record → NOT parked) that crashed mid-turn must NOT fold.
+  // Folding would splice the already-live merged commit into the recovery, so its Apply
+  // would re-apply live content and surface spurious 3-way conflicts. branchPatch must carry
+  // ONLY the genuinely-unmerged crash WIP, committed ON TOP of the merged tip. ---
+  const mergedWt = await createWorktree(repo, worktreesDir, { branchName: (i) => `chat-${i}` })
+  // Turn 1 merged: one commit, then baseSha advances to that tip (mirrors afterTurn's
+  // base-advance on a successful auto-apply). This is the merged content — already live.
+  writeFileSync(join(mergedWt.path, 'Merged.tsx'), 'export const M = 1\n')
+  const mc = await commitWorktree(mergedWt, 'merged turn one')
+  ok(mc.committed && mc.files.includes('Merged.tsx'), 'merged turn committed')
+  const mergedTip = g(mergedWt.path, 'rev-parse', 'HEAD').trim()
+  mergedWt.baseSha = mergedTip // baseSha advanced to the merged tip (nothing pending now)
+  // Turn 2 crashed mid-run — uncommitted WIP in a NEW file on top of the merged tip.
+  writeFileSync(join(mergedWt.path, 'Crash.tsx'), 'export const C = 2\n')
+  // No `chatpark-<id>` record for this worktree → predicate returns false → no fold.
+  const mergedReclaim = await pruneOrphans(repo, worktreesDir, new Set(), () => false)
+  const mrc = mergedReclaim.find((r) => r.id === mergedWt.id)
+  ok(mrc?.dirty === true && mrc?.branch === mergedWt.branch, `merged-tip orphan reclaimed: ${JSON.stringify(mrc)}`)
+  // NOT folded → recovery commit sits ON TOP of the merged tip (base..branch = 2 commits).
+  const mergedRevs = g(repo, 'rev-list', `${mergedTip}~1..${mergedWt.branch}`).trim().split('\n').filter(Boolean)
+  ok(mergedRevs.length === 2, `merged tip preserved + recovery on top (not folded): ${mergedRevs.length}`)
+  // The merged tip's parent IS the merged commit — so branchPatch (branch^..branch) carries
+  // ONLY the crash WIP, NOT the already-live Merged.tsx (which would cause re-apply conflicts).
+  const mergedBp = await branchPatch(repo, mergedWt.branch)
+  ok(/Crash\.tsx/.test(mergedBp), 'branchPatch carries the genuinely-unmerged crash WIP')
+  ok(!/Merged\.tsx/.test(mergedBp), 'branchPatch does NOT re-include the already-merged (live) content')
+  await removeWorktree(repo, mergedWt, { keepBranch: false })
 
   // --- empty patch applies as a no-op success ---
   const noop = await applyToWorkingTree(repo, '', tmpDir)

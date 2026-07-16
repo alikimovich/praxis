@@ -38,6 +38,10 @@ import {
   afterTurn,
   releaseChat,
   liveChatWorktreeIds,
+  hasParkRecord,
+  handleReclaimed,
+  applyParkedBranch,
+  discardParkedBranch,
   dropAll,
   isolationSnapshot
 } from './chat-isolation'
@@ -155,12 +159,12 @@ const interactiveEvents =
     trackRunning(sessionKey)(e)
     if (e.type === 'done') void maybeGenerateTitle(sessionKey)
     // Turn boundary — merge the isolated chat's work back onto the live tree (on
-    // `error` too, to salvage interrupted edits). No-op for a non-isolated chat.
+    // `error` too, to salvage interrupted edits). No-op for a non-isolated chat. The
+    // transcript rides along so a PARKED turn's record shows its last exchange.
     if (e.type === 'done' || e.type === 'error') {
-      const last = [...(sessions.get(sessionKey)?.record.transcript ?? [])]
-        .reverse()
-        .find((t) => t.role === 'user')?.text
-      afterTurn(sessionKey, firstLine(last ?? 'dsgn chat edit'))
+      const transcript = sessions.get(sessionKey)?.record.transcript ?? []
+      const last = [...transcript].reverse().find((t) => t.role === 'user')?.text
+      afterTurn(sessionKey, firstLine(last ?? 'dsgn chat edit'), transcript)
     }
   }
 
@@ -430,13 +434,18 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       // checkouts are under the same dir). Best-effort, fire-and-forget.
       if (await isRepoRoot(root)) {
         // Skip live spawns AND live chat worktrees (the worktrees dir is global across
-        // projects) so a recovery sweep never reclaims a chat's live checkout. Full
-        // chat crash-recovery (park records for reclaimed dirty branches) lands in C4.
+        // projects) so a recovery sweep never reclaims a chat's live checkout.
+        // handleReclaimed then surfaces any crashed-mid-turn chat's work as a recovery
+        // park record (keyed to the orphan's OWN repo) and deletes cleanly-merged
+        // leftover chat branches; comment-spawn orphans keep their prior behavior.
         void pruneOrphans(
           root,
           worktreesDir(),
-          new Set([...spawns.keys(), ...liveChatWorktreeIds()])
-        ).catch(() => {})
+          new Set([...spawns.keys(), ...liveChatWorktreeIds()]),
+          hasParkRecord
+        )
+          .then((reclaimed) => handleReclaimed(reclaimed))
+          .catch(() => {})
       }
     })()
     opening.set(key, run)
@@ -800,6 +809,21 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   // HMRs it). Not `git merge` — patch-apply tolerates the main agent's WIP; on textual
   // overlap it surfaces conflict markers for the user to resolve.
   ipcMain.handle('agent:spawn-apply', async (_e, root: string, branch: string) => {
+    // v9: if this branch belongs to a LIVE parked chat, apply it through the isolation
+    // path (advance the fork point + unpark) rather than the stock spawn-branch apply.
+    // A crash-recovered (dead) chat's branch is not owned by any live chat → falls
+    // through to the stock path below unchanged.
+    const parked = await applyParkedBranch(root, branch)
+    if (parked.handled) {
+      if (parked.ok) return { ok: true }
+      return {
+        ok: false,
+        conflict: parked.conflict,
+        error: parked.conflict
+          ? 'Applied with conflicts — resolve the markers in your editor, then keep going.'
+          : (parked.error ?? 'Could not apply the changes.')
+      }
+    }
     if (!(await isRepoRoot(root))) return { ok: false, error: 'Not a git repository.' }
     if (!(await branchExists(root, branch))) return { ok: false, error: 'That branch no longer exists.' }
     const patch = await branchPatch(root, branch)
@@ -817,6 +841,10 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
 
   // DISCARD: drop the spawn's branch (the renderer also removes the history record).
   ipcMain.handle('agent:spawn-discard', async (_e, root: string, branch: string) => {
+    // v9: a LIVE parked chat's branch is reset in place (its worktree still checks it
+    // out, so `git branch -D` would fail); only a real/dead spawn branch is deleted.
+    const parked = await discardParkedBranch(root, branch)
+    if (parked.handled) return { ok: true }
     if (branch) await deleteBranch(root, branch)
     return { ok: true }
   })
