@@ -32,6 +32,19 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
       re-focuses + retargets on a repeat pop-out. `source.popout/closeWindow/
       onNavigate` IPC. `test/code-drawer.mjs`.
 
+## Per-chat worktree isolation (2026-07-16, concurrent-chat safety) — SHIPPED
+
+- [x] **Isolate concurrent chats in per-repo worktrees.** ✅ 2026-07-16 —
+      Every interactive chat on a git repo root gets its own long-lived worktree
+      on branch `dsgn/chat-<id>`, created before `startSession` and removed on
+      close. Turn edits commit to the worktree branch; on `done`/`error` they
+      auto-merge to the live tree (the preview always serves live, never a
+      worktree). Conflicts park on the branch for review via the existing
+      `SessionReview` UI. `src/main/chat-worktrees.ts` (turn operations),
+      `src/main/chat-isolation.ts` (lifecycle + crash recovery), extended
+      `src/main/worktrees.ts` (C1 primitives), `test/chat-worktrees.mjs` (unit),
+      `test/chat-isolation.mjs` (Electron).
+
 ## Health / infra (from the 2026-07-07 review)
 
 Ranked by leverage. Deferred items note *why* they're not auto-completable.
