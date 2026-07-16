@@ -7,8 +7,8 @@ import { buildPublishMessage } from '../src/shared/publish-message.ts'
 
 // No asks → the old fallback (but with a body).
 let m = buildPublishMessage('dsgn/main', [])
-assert.equal(m.title, 'dsgn: publish dsgn/main')
-assert.equal(m.body, 'Published from dsgn.')
+assert.equal(m.title, 'Praxis: publish dsgn/main')
+assert.equal(m.body, 'Published from Praxis.')
 
 // One ask → it IS the title, and the body lists it.
 m = buildPublishMessage('dsgn/main', ['make the hero heading teal'])

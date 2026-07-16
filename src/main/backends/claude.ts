@@ -361,7 +361,7 @@ async function startSession(
               resolve(
                 behavior === 'allow'
                   ? { behavior: 'allow', updatedInput: toolInput }
-                  : { behavior: 'deny', message: 'Denied by the user in dsgn.' }
+                  : { behavior: 'deny', message: 'Denied by the user in Praxis.' }
               )
             }
           })

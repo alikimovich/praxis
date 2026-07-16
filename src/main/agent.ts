@@ -170,7 +170,7 @@ const spawnQueue: QueuedSpawn[] = []
 const runningCount = (parentKey: string): number =>
   [...spawns.values()].filter((s) => s.parentKey === parentKey).length
 const worktreesDir = (): string => join(app.getPath('userData'), 'dsgn', 'worktrees')
-const firstLine = (t: string): string => (t.split('\n')[0] || 'dsgn comment edit').slice(0, 72)
+const firstLine = (t: string): string => (t.split('\n')[0] || 'Praxis comment edit').slice(0, 72)
 
 /** Tear down a session: stop it emitting, deny its prompts, provider teardown,
  * then persist it to history (v5-D) — a torn-down session is a "previous agent". */
@@ -783,10 +783,10 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       }
       try {
         await git(root, ['push', '-u', 'origin', branch])
-        const body = `Edited by a dsgn comment agent.\n\n🤖 Generated with [dsgn](https://github.com/alikimovich/dsgn)`
+        const body = `Edited by a Praxis comment agent.\n\n🤖 Generated with [Praxis](https://github.com/alikimovich/praxis)`
         const { stdout } = await execFileP(
           'gh',
-          ['pr', 'create', '--head', branch, '--title', title || 'dsgn comment edit', '--body', body],
+          ['pr', 'create', '--head', branch, '--title', title || 'Praxis comment edit', '--body', body],
           { cwd: root }
         )
         const prUrl = stdout.trim().split('\n').find((l) => /^https?:\/\//.test(l)) ?? stdout.trim()

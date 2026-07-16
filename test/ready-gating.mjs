@@ -101,8 +101,8 @@ try {
     throw new Error('a no-schema element should not render editable prop rows')
   }
   const stampedHint = (await panelEval("document.querySelector('.proppanel__ready--no')?.textContent ?? ''")) ?? ''
-  if (!/ask dsgn/i.test(stampedHint)) {
-    throw new Error(`stamped host element should be prompt-only (ask dsgn): ${stampedHint}`)
+  if (!/ask Praxis/i.test(stampedHint)) {
+    throw new Error(`stamped host element should be prompt-only (ask Praxis): ${stampedHint}`)
   }
   if (await panelEval("document.querySelectorAll('.proppanel__link').length")) {
     throw new Error('a stamped element must NOT show the "set up the project" link')
