@@ -171,6 +171,58 @@ try {
   await win.selectOption('select[aria-label="Backend"]', 'claude') // reset
   if ((await win.$('.provider-hint')) !== null) throw new Error('hint should hide for Claude')
 
+  // Model/backend choices are per live chat. Changing the new chat's Codex model
+  // must not overwrite the older chat, and switching between their rail rows must
+  // restore each picker's own values. No live agent is needed here: the renderer
+  // records the setting before its best-effort Codex restart IPC.
+  const perChat = await win.evaluate(() => {
+    const ws = window.__dsgnWorkspace.getState()
+    const session = window.__dsgnSession.getState()
+    ws.reset()
+    const key = ws.openOrActivate('/tmp/dsgn-per-chat-model')
+    const newer = `${key}#new`
+    ws.patchEntry(key, {
+      sessionKeys: [key, newer],
+      activeSessionKey: newer,
+      chatSettings: {
+        [key]: { provider: 'claude', model: 'sonnet', effort: 'high' },
+        [newer]: { provider: 'codex', model: 'default', effort: 'high' }
+      }
+    })
+    window.__dsgnStore.getState().setActiveChat(newer)
+    session.setProjectRoot('/tmp/dsgn-per-chat-model')
+    session.setChatAgentSettings({ provider: 'codex', model: 'default', effort: 'high' })
+    return { key, newer }
+  })
+  await win.waitForFunction(() => document.querySelectorAll('.rail__chat').length === 2, null, {
+    timeout: 5000
+  })
+  await win.selectOption('select[aria-label="Model"]', 'gpt-5-codex')
+  const changedNew = await win.evaluate(({ key, newer }) =>
+    window.__dsgnWorkspace.getState().projects.find((p) => p.key === key)?.chatSettings?.[newer]?.model,
+  perChat)
+  if (changedNew !== 'gpt-5-codex') throw new Error(`new chat model was not stored: ${changedNew}`)
+  // The rail orders chats newest first, so the second button is the original one.
+  await win.locator('.rail__chat').nth(1).click()
+  await win.waitForFunction(
+    () => window.__dsgnSession.getState().model === 'sonnet',
+    null,
+    { timeout: 5000 },
+  )
+  const oldPicker = await win.evaluate(() => ({
+    provider: window.__dsgnSession.getState().provider,
+    model: window.__dsgnSession.getState().model,
+  }))
+  if (oldPicker.provider !== 'claude' || oldPicker.model !== 'sonnet') {
+    throw new Error(`old chat picker leaked the new chat model: ${JSON.stringify(oldPicker)}`)
+  }
+  await win.locator('.rail__chat').nth(0).click()
+  await win.waitForFunction(
+    () => window.__dsgnSession.getState().model === 'gpt-5-codex',
+    null,
+    { timeout: 5000 },
+  )
+
   // Working-branch pill: shows the branch and opens a switcher dropdown on click;
   // "New branch…" reveals the inline rename editor.
   await win.evaluate(() => window.__dsgnSession.getState().setBranch('dsgn/main'))

@@ -11,6 +11,7 @@ import SessionReview from './components/SessionReview'
 import FeedbackDialog from './components/FeedbackDialog'
 import {
   describeSelectionForPrompt,
+  chatAgentSettingsFor,
   useFeedback,
   isAuthError,
   messagesFromTranscript,
@@ -1009,6 +1010,9 @@ export default function App(): React.JSX.Element {
     // v9 multi-chat: restore whichever of THIS project's own sessionKeys (default,
     // or an additional/resumed chat) was last active, not always the plain default.
     useChat.getState().setActiveChat(target.activeSessionKey ?? target.key)
+    useSession
+      .getState()
+      .setChatAgentSettings(chatAgentSettingsFor(target, target.activeSessionKey ?? target.key))
     useSession.getState().setProjectRoot(target.root)
     useSession.getState().setBranch(target.branch)
     // Each project keeps its own viewport — restore it (after activate, so the
@@ -1032,7 +1036,7 @@ export default function App(): React.JSX.Element {
     // reference). Await the reopen so a follow-up send can't race a half-created
     // session, and surface a clear note instead of failing silently.
     if (await window.api.agent.isOpen(target.root)) {
-      void window.api.agent.setActive(target.root)
+      void window.api.agent.setActive(target.root, target.activeSessionKey ?? target.key)
     } else {
       try {
         await window.api.agent.openProject(target.root, {
@@ -1109,8 +1113,11 @@ export default function App(): React.JSX.Element {
   const newChatForProject = async (key: string): Promise<void> => {
     const entry = useWorkspace.getState().projects.find((p) => p.key === key)
     if (!entry) return
+    // A new chat starts with the choices visible on the chat it was created
+    // from. Later picker changes stay isolated to the new sessionKey.
+    const chatSettings = chatAgentSettingsFor(entry, entry.activeSessionKey ?? entry.key)
     const res = await window.api.agent.newChat(entry.root, {
-      ...toAgentOptions(useSession.getState()),
+      ...toAgentOptions(chatSettings),
       permissionMode: usePermissions.getState().mode
     })
     if (!res.ok || !res.sessionKey) {
@@ -1120,7 +1127,8 @@ export default function App(): React.JSX.Element {
     const sessionKey = res.sessionKey
     useWorkspace.getState().patchEntry(key, {
       sessionKeys: [...(entry.sessionKeys ?? [key]), sessionKey],
-      activeSessionKey: sessionKey
+      activeSessionKey: sessionKey,
+      chatSettings: { ...entry.chatSettings, [sessionKey]: chatSettings }
     })
     // Only flip the visible chat if this project is the one on screen — a "+"
     // fired for a backgrounded project just adds the session, warm in the rail.
@@ -1138,6 +1146,7 @@ export default function App(): React.JSX.Element {
     useWorkspace.getState().patchEntry(key, { activeSessionKey: sessionKey })
     if (useSession.getState().projectRoot === entry.root) {
       useChat.getState().setActiveChat(sessionKey)
+      useSession.getState().setChatAgentSettings(chatAgentSettingsFor(entry, sessionKey))
       void window.api.agent.setActive(entry.root, sessionKey)
     }
   }

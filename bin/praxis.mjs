@@ -9,6 +9,11 @@ import { fileURLToPath } from 'node:url'
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const require = createRequire(import.meta.url)
 
+function detectPackageManager() {
+  const check = spawnSync('bun', ['--version'], { stdio: 'ignore' })
+  return !check.error && check.status === 0 ? 'bun' : 'npm'
+}
+
 function usage() {
   return `Usage: praxis [command]
 
@@ -24,7 +29,7 @@ function getElectronPath() {
   try {
     return require('electron')
   } catch {
-    console.error("Praxis isn't installed yet — run: bun install")
+    console.error(`Praxis isn't installed yet — run: ${detectPackageManager()} install`)
     process.exit(1)
   }
 }
@@ -39,7 +44,7 @@ function launch() {
   const builtEntry = join(repoRoot, 'out', 'main', 'index.js')
 
   if (!existsSync(builtEntry)) {
-    const buildResult = spawnSync('bun', ['run', 'build'], {
+    const buildResult = spawnSync(detectPackageManager(), ['run', 'build'], {
       cwd: repoRoot,
       stdio: 'inherit',
     })
@@ -75,10 +80,11 @@ function update() {
     process.exit(1)
   }
 
+  const pm = detectPackageManager()
   const steps = [
     ['git', ['pull', '--ff-only']],
-    ['bun', ['install']],
-    ['bun', ['run', 'build']],
+    [pm, ['install']],
+    [pm, ['run', 'build']],
   ]
 
   for (const [cmd, args] of steps) {

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
+  chatAgentSettingsFor,
   DEFAULT_MODEL,
   describeSelectionForPrompt,
   isAuthError,
@@ -18,6 +19,7 @@ import {
   useSpawns,
   useTokens,
   useUiActions,
+  useWorkspace,
   usePropsIsland,
 } from "../store";
 import { projectKey } from "../../../shared/projectKey";
@@ -786,13 +788,24 @@ export default function ChatPanel(): React.JSX.Element {
 
   const onModelChange = (value: string): void => {
     setModel(value);
+    const entry = useWorkspace.getState().projects.find((p) => p.root === projectRoot);
+    if (entry) {
+      const sessionKey = entry.activeSessionKey ?? entry.key;
+      useWorkspace.getState().patchEntry(entry.key, {
+        chatSettings: {
+          ...entry.chatSettings,
+          [sessionKey]: { ...chatAgentSettingsFor(entry, sessionKey), model: value },
+        },
+      });
+    }
     // Codex fixes the model when the thread starts — a live `setModel` is a
-    // no-op there (see backends/codex.ts), so switch models by reopening the
-    // session on the new one (transcript stays; context resets, like the
-    // backend switch below). Claude honors `setModel` live.
+    // no-op there (see backends/codex.ts), so restart only THIS chat on the
+    // new model. Reopening the whole project would replace its default chat,
+    // even when the user is looking at an additional chat.
     if (provider === "codex") {
-      if (!projectRoot) return;
-      void window.api.agent.openProject(projectRoot, {
+      if (!projectRoot || !entry) return;
+      const sessionKey = entry.activeSessionKey ?? entry.key;
+      void window.api.agent.restartChat(projectRoot, sessionKey, {
         ...toAgentOptions({ ...useSession.getState(), model: value }),
         permissionMode: usePermissions.getState().mode,
       });
@@ -817,8 +830,20 @@ export default function ChatPanel(): React.JSX.Element {
     // "gpt-5" to Claude), so reset to the backend default on switch — the picker
     // repopulates with the new backend's models (see modelsFor).
     setModel(DEFAULT_MODEL);
-    if (!projectRoot) return;
-    void window.api.agent.openProject(projectRoot, {
+    const entry = useWorkspace.getState().projects.find((p) => p.root === projectRoot);
+    if (!projectRoot || !entry) return;
+    const sessionKey = entry.activeSessionKey ?? entry.key;
+    useWorkspace.getState().patchEntry(entry.key, {
+      chatSettings: {
+        ...entry.chatSettings,
+        [sessionKey]: {
+          ...chatAgentSettingsFor(entry, sessionKey),
+          provider: value,
+          model: DEFAULT_MODEL,
+        },
+      },
+    });
+    void window.api.agent.restartChat(projectRoot, sessionKey, {
       ...toAgentOptions({ ...useSession.getState(), provider: value }),
       permissionMode: usePermissions.getState().mode,
     });

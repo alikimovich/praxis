@@ -861,6 +861,13 @@ export interface DsgnApi {
       root: string,
       options?: AgentOptions
     ) => Promise<{ ok: boolean; sessionKey?: string; error?: string }>
+    /** Restart one live chat with startup-only options (such as a Codex model)
+     * without touching any of its sibling chats. */
+    restartChat: (
+      root: string,
+      sessionKey: string,
+      options?: AgentOptions
+    ) => Promise<{ ok: boolean; error?: string }>
     /**
      * Resume a past ("previous agent") session by its history record id — requires
      * the record to carry a Claude `sdkSessionId` (else `ok:false`). Starts a live

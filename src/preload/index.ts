@@ -291,6 +291,12 @@ const api: DsgnApi = {
       options?: AgentOptions
     ): Promise<{ ok: boolean; sessionKey?: string; error?: string }> =>
       ipcRenderer.invoke('agent:new-chat', root, options),
+    restartChat: (
+      root: string,
+      sessionKey: string,
+      options?: AgentOptions
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('agent:restart-chat', root, sessionKey, options),
     resumeSession: (
       root: string,
       recordId: string

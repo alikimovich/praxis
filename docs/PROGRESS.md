@@ -2,6 +2,24 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-15 — Keep agent model choices with their individual chats
+
+The model/backend picker lived in the renderer-wide session store, so selecting
+a model in a newly created chat made an older chat *display* that new model when
+the user returned to it. Live chats now retain their own model, provider, and
+reasoning-effort settings in their workspace entry; the picker mirrors only the
+currently selected chat and restores that chat's saved settings on every rail
+switch.
+
+- A new chat inherits the choices of the chat it was created from, then diverges
+  independently. Older workspace data without settings safely uses defaults.
+- Codex must choose its model when it starts. A new `agent:restart-chat` IPC
+  therefore replaces only the selected Codex chat when its model or provider
+  changes — it no longer reopens the project's default chat and accidentally
+  affects a sibling.
+- `test/chat-render.mjs` now covers new-chat model selection followed by switches
+  back and forth between two chats, asserting that each picker is restored.
+
 ## 2026-07-12 — Auto-name chats by subject, not opening words (LKM-45)
 
 The rail named a chat by truncating its first user message (`chatTitle` +

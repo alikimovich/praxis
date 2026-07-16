@@ -8,8 +8,15 @@ if ! command -v git >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! command -v bun >/dev/null 2>&1; then
-  echo "bun is required. Install it with:  curl -fsSL https://bun.sh/install | bash" >&2
+if command -v bun >/dev/null 2>&1; then
+  PM="bun"
+elif command -v npm >/dev/null 2>&1; then
+  echo "bun not found on PATH; falling back to npm."
+  echo "(For faster installs, consider:  curl -fsSL https://bun.sh/install | bash)"
+  PM="npm"
+else
+  echo "Error: neither bun nor npm was found on PATH." >&2
+  echo "Install bun with:  curl -fsSL https://bun.sh/install | bash" >&2
   exit 1
 fi
 
@@ -25,10 +32,10 @@ fi
 
 echo "==> Installing dependencies"
 cd "$PRAXIS_HOME"
-bun install
+"$PM" install
 
 echo "==> Building Praxis"
-bun run build
+"$PM" run build
 
 echo "==> Linking the praxis command"
 mkdir -p "$HOME/.local/bin"

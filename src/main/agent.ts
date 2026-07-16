@@ -491,6 +491,40 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     }
   )
 
+  // Codex fixes its model/backend when a thread is created. Restart exactly the
+  // selected chat (not the project's default session) so a picker change never
+  // alters a sibling chat or leaves an additional chat on its old model.
+  ipcMain.handle(
+    'agent:restart-chat',
+    async (
+      _e,
+      root: string,
+      sessionKey: string,
+      options: AgentOptions = {}
+    ): Promise<{ ok: boolean; error?: string }> => {
+      const key = projectKey(root)
+      if (!sessionKeysForProject(key).includes(sessionKey)) {
+        return { ok: false, error: 'That chat is no longer open.' }
+      }
+      const existing = sessions.get(sessionKey)
+      if (!existing) return { ok: false, error: 'That chat is no longer open.' }
+      closeSession(existing)
+      sessions.delete(sessionKey)
+      runningKeys.delete(sessionKey)
+      try {
+        const s = await pickProvider(options).startSession(root, options, getWindow, {
+          emitKey: sessionKey,
+          onEvent: interactiveEvents(sessionKey)
+        })
+        sessions.set(sessionKey, s)
+        if (activeKey === sessionKey) activeSessionKeyByProject.set(key, sessionKey)
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    }
+  )
+
   // v9 resume — hand a past ("previous agent") SessionRecord back to a LIVE SDK
   // query via `options.resume` (Claude-only: the record's `sdkSessionId` doubles
   // as the "this backend supports resume" marker, since only claude.ts sets it).

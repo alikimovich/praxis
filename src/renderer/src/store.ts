@@ -275,6 +275,21 @@ export const DEFAULT_EFFORT = 'auto'
 /** The default backend (the Claude Agent SDK). */
 export const DEFAULT_PROVIDER = 'claude'
 
+/** Agent choices belong to a chat. `useSession` mirrors the active chat so the
+ * toolbar stays simple, while `ProjectEntry.chatSettings` retains every chat's
+ * choice as the user moves through the rail. */
+export interface ChatAgentSettings {
+  model: string
+  effort: string
+  provider: string
+}
+
+export const defaultChatAgentSettings = (): ChatAgentSettings => ({
+  model: DEFAULT_MODEL,
+  effort: 'high',
+  provider: DEFAULT_PROVIDER
+})
+
 interface SessionState {
   model: string
   effort: string
@@ -297,6 +312,7 @@ interface SessionState {
   setModel: (model: string) => void
   setEffort: (effort: string) => void
   setProvider: (provider: string) => void
+  setChatAgentSettings: (settings: ChatAgentSettings) => void
   setSlashCommands: (commands: string[]) => void
   setAuthNeeded: (authNeeded: boolean) => void
   setCodexAuthNeeded: (codexAuthNeeded: boolean) => void
@@ -316,6 +332,7 @@ export const useSession = create<SessionState>((set) => ({
   setModel: (model) => set({ model }),
   setEffort: (effort) => set({ effort }),
   setProvider: (provider) => set({ provider }),
+  setChatAgentSettings: ({ model, effort, provider }) => set({ model, effort, provider }),
   setSlashCommands: (slashCommands) => set({ slashCommands }),
   setAuthNeeded: (authNeeded) => set({ authNeeded }),
   setCodexAuthNeeded: (codexAuthNeeded) => set({ codexAuthNeeded }),
@@ -375,7 +392,23 @@ export interface ProjectEntry {
    *  per-project `activeSessionKeyByProject`, kept in sync by whoever switches/
    *  creates/resumes a chat while this project is active). Defaults to `key`. */
   activeSessionKey: string
+  /** Model/backend choices for each live chat. Missing entries are legacy
+   * workspace data and safely use the defaults. */
+  chatSettings?: Record<string, ChatAgentSettings>
 }
+
+export const chatAgentSettingsFor = (
+  entry: ProjectEntry,
+  sessionKey: string
+): ChatAgentSettings => ({ ...defaultChatAgentSettings(), ...entry.chatSettings?.[sessionKey] })
+
+export const chatAgentSettingsFromSession = (
+  session: Pick<SessionState, 'model' | 'effort' | 'provider'>
+): ChatAgentSettings => ({
+  model: session.model,
+  effort: session.effort,
+  provider: session.provider
+})
 
 interface WorkspaceState {
   projects: ProjectEntry[]
@@ -736,7 +769,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
                 launchSpec: null,
                 touchedAt: 0,
                 sessionKeys: [key],
-                activeSessionKey: key
+                activeSessionKey: key,
+                chatSettings: { [key]: chatAgentSettingsFromSession(useSession.getState()) }
               }
             ],
         key
