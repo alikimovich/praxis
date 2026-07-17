@@ -44,6 +44,16 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
       `src/main/chat-isolation.ts` (lifecycle + crash recovery), extended
       `src/main/worktrees.ts` (C1 primitives), `test/chat-worktrees.mjs` (unit),
       `test/chat-isolation.mjs` (Electron).
+- [x] **Parked-conflict UX — sidebar badge + AI "Resolve it".** ✅ 2026-07-16 —
+      a parked live chat shows an amber "conflict" badge in the rail, and an
+      in-chat `ConflictCard` explains the collision in plain language and offers
+      **Resolve it** (the AI reconciles both sides — `stageResolve` re-lays the
+      chat's diff onto the user's live tree, then either auto-merges cleanly with
+      no turn or runs a resolution turn on the conflict markers) / **Discard
+      changes**. New `agent.resolveConflict`/`discardConflict` IPC keyed by the
+      active session; `src/renderer/src/components/ConflictCard.tsx`;
+      `stageResolve` + `resolveParkedChat`/`discardParkedChat`; extended
+      `test/chat-worktrees.mjs`.
 
 ## Health / infra (from the 2026-07-07 review)
 

@@ -20,7 +20,8 @@ import {
   syncFromLive,
   completeTurn,
   applyParked,
-  discardParked
+  discardParked,
+  stageResolve
 } from '../src/main/chat-worktrees.ts'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
@@ -186,7 +187,64 @@ try {
     'discardParked did NOT delete the branch (the chat is still live)'
   )
 
-  if (failed === 0) console.log('CHAT-WORKTREES OK — fork/turn-merge/incremental/sync/park/apply/discard')
+  // ============================================================================
+  // repo5 — stageResolve on a NON-overlapping drift merges cleanly (no agent needed),
+  //         and a follow-up completeTurn lands the reconciled result on live
+  // ============================================================================
+  const repo5 = makeRepo('repo5', { 'README.md': 'line1\nline2\nline3\n' })
+  const wt5 = await createChatWorktree(repo5, 'chatfive', worktreesDir)
+  // Chat appends at the END; the user prepends at the TOP — same file, different regions.
+  writeFileSync(join(wt5.path, 'README.md'), 'line1\nline2\nline3\nCHAT\n')
+  writeFileSync(join(repo5, 'README.md'), 'USER\nline1\nline2\nline3\n')
+  const r5park = await completeTurn(repo5, wt5, 'to be parked')
+  ok(r5park.outcome === 'parked', `repo5 file-level drift parks: ${JSON.stringify(r5park.outcome)}`)
+  const prep5 = await stageResolve(repo5, wt5)
+  ok(prep5.clean && prep5.conflicted.length === 0, `non-overlapping drift stages clean (no markers): ${JSON.stringify(prep5)}`)
+  const merged5 = readFileSync(join(wt5.path, 'README.md'), 'utf8')
+  ok(
+    merged5 === 'USER\nline1\nline2\nline3\nCHAT\n',
+    `stageResolve 3-way-merged both regions in the worktree: ${JSON.stringify(merged5)}`
+  )
+  // baseSha advanced to the live snapshot, so the merge-back is now clean.
+  const r5done = await completeTurn(repo5, wt5, 'resolve merge')
+  ok(r5done.outcome === 'merged', `post-stage completeTurn merges onto live: ${JSON.stringify(r5done.outcome)}`)
+  ok(
+    readFileSync(join(repo5, 'README.md'), 'utf8') === 'USER\nline1\nline2\nline3\nCHAT\n',
+    'the reconciled result landed on the live tree'
+  )
+
+  // ============================================================================
+  // repo6 — stageResolve on an OVERLAPPING drift leaves conflict markers for the agent
+  // ============================================================================
+  const repo6 = makeRepo('repo6', { 'README.md': 'line1\nline2\nline3\n' })
+  const wt6 = await createChatWorktree(repo6, 'chatsix', worktreesDir)
+  // Chat and user edit the SAME line differently → a real textual conflict.
+  writeFileSync(join(wt6.path, 'README.md'), 'line1\nCHAT-EDIT\nline3\n')
+  writeFileSync(join(repo6, 'README.md'), 'line1\nUSER-EDIT\nline3\n')
+  const r6park = await completeTurn(repo6, wt6, 'to be parked')
+  ok(r6park.outcome === 'parked', `repo6 overlapping drift parks: ${JSON.stringify(r6park.outcome)}`)
+  const prep6 = await stageResolve(repo6, wt6)
+  ok(
+    !prep6.clean && prep6.conflicted.includes('README.md'),
+    `overlapping drift reports the conflicted file: ${JSON.stringify(prep6)}`
+  )
+  const marked6 = readFileSync(join(wt6.path, 'README.md'), 'utf8')
+  ok(
+    marked6.includes('<<<<<<<') && marked6.includes('>>>>>>>') && marked6.includes('CHAT-EDIT') && marked6.includes('USER-EDIT'),
+    'stageResolve left conflict markers carrying BOTH sides for the agent to reconcile'
+  )
+  // The agent resolves the markers (writes a reconciled file); the follow-up completeTurn
+  // must commit + merge onto live — proving the marker-apply left no unmerged index entry
+  // that would wedge the commit.
+  writeFileSync(join(wt6.path, 'README.md'), 'line1\nCHAT-EDIT+USER-EDIT\nline3\n')
+  const r6done = await completeTurn(repo6, wt6, 'resolve conflict')
+  ok(r6done.outcome === 'merged', `post-resolution completeTurn merges: ${JSON.stringify(r6done.outcome)}`)
+  ok(
+    readFileSync(join(repo6, 'README.md'), 'utf8') === 'line1\nCHAT-EDIT+USER-EDIT\nline3\n',
+    "the agent's reconciled result landed on the live tree"
+  )
+
+  if (failed === 0) console.log('CHAT-WORKTREES OK — fork/turn-merge/incremental/sync/park/apply/discard/resolve')
   else console.error(`CHAT-WORKTREES: ${failed} assertion(s) failed`)
   process.exitCode = failed === 0 ? 0 : 1
 } catch (err) {

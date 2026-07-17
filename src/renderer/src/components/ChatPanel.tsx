@@ -30,6 +30,7 @@ import type {
   QuestionAnswers,
   SetupResult,
 } from "../../../shared/api";
+import ConflictCard from "./ConflictCard";
 import Inspector from "./Inspector";
 import Markdown from "./Markdown";
 import NotesPanel from "./NotesPanel";
@@ -45,7 +46,6 @@ import {
 import { useStickToBottomContext } from "use-stick-to-bottom";
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
   ArrowUp,
@@ -344,7 +344,9 @@ export default function ChatPanel(): React.JSX.Element {
     messages,
     isRunning,
     isolation,
+    isolationFiles,
     appendUser,
+    appendNote,
     startAssistant,
     appendDelta,
     appendStatus,
@@ -381,6 +383,10 @@ export default function ChatPanel(): React.JSX.Element {
   // reads them with its own tools) and shown as a filename card.
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  // Which conflict-card action is in flight (drives its spinners); null when idle.
+  const [conflictBusy, setConflictBusy] = useState<null | "resolve" | "discard">(
+    null,
+  );
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // Long user asks are clamped by default (item 2) — ids in this set render
   // full-height instead. Clicking only ever EXPANDS (never collapses): the
@@ -561,20 +567,19 @@ export default function ChatPanel(): React.JSX.Element {
         // gets a subtle status line rather than a full note).
         useChat
           .getState()
-          .setIsolation(key, event.state === "parked" ? "parked" : "isolated");
+          .setIsolation(
+            key,
+            event.state === "parked" ? "parked" : "isolated",
+            event.files,
+          );
         if (event.state === "merged") {
           // No active streaming message exists post-`done` (appendStatus needs
           // one) — a plain note is the subtle line instead.
           useChat.getState().appendNote("Merged into your branch", key);
         } else if (event.state === "parked") {
-          useChat
-            .getState()
-            .appendNote(
-              "⚠️ Couldn't auto-merge this turn — review it in the sidebar",
-              key,
-            );
-          // Same pattern as spawn-finished: the park record is now in history,
-          // so refresh the sidebar if it's showing this chat's project.
+          // The in-chat ConflictCard (driven by `isolation === 'parked'`) now explains
+          // this and offers Resolve/Discard — no text note needed. Still refresh the
+          // sidebar so the parked chat's badge/record reflects it if it's showing.
           const root = useSession.getState().projectRoot;
           if (root && projectKey(root) === key.split("#")[0])
             void useHistory.getState().load(root);
@@ -728,6 +733,45 @@ export default function ChatPanel(): React.JSX.Element {
     );
     setSelected(null);
   };
+  // Conflict card — "Resolve it". Main stages the parked chat's worktree with both
+  // sides 3-way merged; if they overlap it returns a resolution prompt we run as a
+  // normal turn (whose merge-back unparks the chat), and if they merged cleanly it has
+  // already applied them (no turn to run). The user's request bubble is short and
+  // human-readable; the detailed prompt travels hidden, like `deleteSelection`.
+  const resolveConflict = async (): Promise<void> => {
+    if (conflictBusy || isRunning) return;
+    setConflictBusy("resolve");
+    try {
+      const r = await window.api.agent.resolveConflict();
+      if (!r.ok) {
+        appendNote(
+          `I couldn't start resolving those changes${r.error ? ` (${r.error})` : ""}. You can try again or discard them.`,
+        );
+        return;
+      }
+      if (r.conflicted.length && r.prompt) {
+        appendUser("Resolve the conflict with my recent edits");
+        startAssistant();
+        void window.api.agent.send(r.prompt);
+      }
+      // Otherwise the two sides merged cleanly — the 'merged' isolation event already
+      // flipped the chat back and dropped a note; nothing to send.
+    } finally {
+      setConflictBusy(null);
+    }
+  };
+  // Conflict card — "Discard changes". Drop the parked chat's unmerged work; main emits
+  // an 'isolated' event that unmounts the card.
+  const discardConflict = async (): Promise<void> => {
+    if (conflictBusy || isRunning) return;
+    setConflictBusy("discard");
+    try {
+      await window.api.agent.discardConflict();
+    } finally {
+      setConflictBusy(null);
+    }
+  };
+
   // The in-preview selection toolbar routes its code/delete actions here (its
   // comment/annotate open the preview's own composer). Ref-indirected so the
   // one-time listener always runs the current closure.
@@ -1168,6 +1212,18 @@ export default function ChatPanel(): React.JSX.Element {
       </div>
 
       <div className="composer">
+        {/* Per-chat isolation conflict (v9): the chat's edits collided with the user's
+            own changes, so its work is parked. Explain + offer Resolve (AI reconciles)
+            / Discard. Pinned above the input so it's always visible while parked. */}
+        {isolation === "parked" && (
+          <ConflictCard
+            files={isolationFiles ?? []}
+            resolving={isRunning || conflictBusy === "resolve"}
+            discarding={conflictBusy === "discard"}
+            onResolve={() => void resolveConflict()}
+            onDiscard={() => void discardConflict()}
+          />
+        )}
         <QuestionCards requests={questions} onRespond={respondQuestion} />
         <PermissionCards requests={pending} onRespond={respondPermission} />
         <NotesPanel
@@ -1296,22 +1352,9 @@ export default function ChatPanel(): React.JSX.Element {
             {/* The selectors shrink + wrap when the chat pane is narrow so the send
                 button (shrink-0, below) is never pushed off the edge. */}
             <div className="mr-auto flex min-w-0 flex-wrap items-center gap-1">
-              {/* Per-chat worktree isolation chip (v9) — this chat's turns run in a
-                  private worktree, auto-merged back after each reply; "Parked" means
-                  a merge conflicted and awaits review in the sidebar. */}
-              {isolation !== "live" && (
-                <Badge
-                  variant={isolation === "parked" ? "destructive" : "secondary"}
-                  className="shrink-0"
-                  title={
-                    isolation === "parked"
-                      ? "Merge conflict — review this chat's changes in the sidebar"
-                      : "Working in an isolated worktree, merged back after each reply"
-                  }
-                >
-                  {isolation === "parked" ? "Parked" : "Isolated"}
-                </Badge>
-              )}
+              {/* Per-chat worktree isolation (v9) runs silently; a parked (unmergeable)
+                  chat surfaces the full ConflictCard above the composer instead of a
+                  chip here. */}
               {/* Element-select toggle — lives here (Figma Make-style), not in the
                 preview bar. Routing to web/simulator select mode is App's. */}
               {projectRoot && (

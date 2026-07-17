@@ -72,6 +72,10 @@ interface ChatSlice {
    *  conflicted and the work awaits review in the sidebar. Driven by the
    *  `'isolation'` `AgentEvent` and rehydrated from `LiveChatSnapshot.isolation`. */
   isolation: 'live' | 'isolated' | 'parked'
+  /** Files carrying the unmerged changes while `'parked'` — named in the in-chat
+   *  conflict card. Empty/undefined otherwise (and after a reload, where the snapshot
+   *  doesn't carry them — the card then omits the file list). */
+  isolationFiles?: string[]
 }
 const emptySlice = (): ChatSlice => ({
   messages: [],
@@ -88,6 +92,7 @@ interface ChatState {
   messages: ChatMessage[]
   isRunning: boolean
   isolation: 'live' | 'isolated' | 'parked'
+  isolationFiles?: string[]
   /** Show a project's chat (preserves each project's history across switches). */
   setActiveChat: (key: string) => void
   /**
@@ -104,8 +109,13 @@ interface ChatState {
    *  chat's persisted title). Preserves the slice's messages. */
   setTitle: (key: string, title: string) => void
   /** Update a chat's worktree-isolation status (the `'isolation'` `AgentEvent`,
-   *  or a `LiveChatSnapshot` rehydrate on reload). */
-  setIsolation: (key: string, isolation: 'live' | 'isolated' | 'parked') => void
+   *  or a `LiveChatSnapshot` rehydrate on reload). `files` accompany a `'parked'`
+   *  status (the unmerged files) and are cleared on any other status. */
+  setIsolation: (
+    key: string,
+    isolation: 'live' | 'isolated' | 'parked',
+    files?: string[]
+  ) => void
   /** Drop a project's chat buffer (on close). */
   clearChat: (key: string) => void
   // Actions default to the active project; pass a key to target a backgrounded one.
@@ -144,7 +154,13 @@ export const useChat = create<ChatState>((set, get) => {
       const slice = fn(state.byKey[k] ?? emptySlice())
       const byKey = { ...state.byKey, [k]: slice }
       return k === state.activeKey
-        ? { byKey, messages: slice.messages, isRunning: slice.isRunning, isolation: slice.isolation }
+        ? {
+            byKey,
+            messages: slice.messages,
+            isRunning: slice.isRunning,
+            isolation: slice.isolation,
+            isolationFiles: slice.isolationFiles
+          }
         : { byKey }
     })
   return {
@@ -161,7 +177,8 @@ export const useChat = create<ChatState>((set, get) => {
           byKey: { ...s.byKey, [key]: slice },
           messages: slice.messages,
           isRunning: slice.isRunning,
-          isolation: slice.isolation
+          isolation: slice.isolation,
+          isolationFiles: slice.isolationFiles
         }
       }),
     hydrate: (key, messages, isRunning = false) =>
@@ -181,19 +198,24 @@ export const useChat = create<ChatState>((set, get) => {
           isRunning,
           streamingId,
           title: prev.title,
-          isolation: prev.isolation
+          isolation: prev.isolation,
+          isolationFiles: prev.isolationFiles
         }
         return key === s.activeKey
           ? {
               byKey: { ...s.byKey, [key]: slice },
               messages: slice.messages,
               isRunning,
-              isolation: slice.isolation
+              isolation: slice.isolation,
+              isolationFiles: slice.isolationFiles
             }
           : { byKey: { ...s.byKey, [key]: slice } }
       }),
     setTitle: (key, title) => patch(key, (sl) => ({ ...sl, title })),
-    setIsolation: (key, isolation) => patch(key, (sl) => ({ ...sl, isolation })),
+    setIsolation: (key, isolation, files) =>
+      // Only a park carries files; clear them on any other status so a stale list can't
+      // linger after a merge.
+      patch(key, (sl) => ({ ...sl, isolation, isolationFiles: isolation === 'parked' ? files : undefined })),
     clearChat: (key) =>
       set((s) => {
         const byKey = { ...s.byKey }

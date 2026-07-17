@@ -954,6 +954,13 @@ export interface DsgnApi {
       title: string,
       recordId: string
     ) => Promise<{ ok: boolean; prUrl?: string; error?: string }>
+    /** v9 conflict card — "Resolve it" on the ACTIVE parked chat. Stages the worktree
+     *  with both sides 3-way merged; `conflicted` lists the files with real overlap and
+     *  `prompt` is the resolution turn the renderer should `send`. An empty `conflicted`
+     *  means the sides merged cleanly and were already applied (no turn to run). */
+    resolveConflict: () => Promise<{ ok: boolean; conflicted: string[]; prompt?: string; error?: string }>
+    /** v9 conflict card — "Discard changes" on the ACTIVE parked chat (drop its work). */
+    discardConflict: () => Promise<{ ok: boolean }>
     onEvent: (cb: (event: AgentEvent) => void) => () => void
     /** Everything still live in main (open projects, their live chats + in-progress
      *  transcripts) — used to reattach the renderer after a reload without tearing

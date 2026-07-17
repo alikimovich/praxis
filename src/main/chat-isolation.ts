@@ -6,7 +6,15 @@ import { promisify } from 'node:util'
 import type { BrowserWindow } from 'electron'
 import type { AgentEvent, SessionRecord, SessionTranscriptEntry } from '../shared/api'
 import { projectKey } from '../shared/projectKey'
-import { applyParked, completeTurn, createChatWorktree, discardParked, syncFromLive } from './chat-worktrees'
+import {
+  applyParked,
+  completeTurn,
+  createChatWorktree,
+  discardParked,
+  stageResolve,
+  syncFromLive,
+  type ResolvePrep
+} from './chat-worktrees'
 import { recordEdit } from './edit-history'
 import { isRepoRoot } from './git'
 import type { SessionStore } from './sessions-store'
@@ -335,6 +343,60 @@ export async function discardParkedBranch(root: string, branch: string): Promise
   dropParkRecord(st)
   emitIsolation(key, 'isolated', st.wt.branch)
   return { handled: true }
+}
+
+/**
+ * "Resolve it" backend for a live PARKED chat (the in-chat conflict card). Stage the
+ * worktree so it holds BOTH the user's live edits and the chat's own changes 3-way
+ * merged (see `stageResolve`), then:
+ *  - clean (no textual overlap) → commit + merge back onto the live tree right here and
+ *    unpark; the caller runs NO agent turn. Returns `conflicted: []`.
+ *  - overlapping → leave the marker-bearing worktree in place (still parked) and return
+ *    the conflicted files; the caller fires ONE agent turn to reconcile them, whose
+ *    normal `afterTurn` commits + merges + unparks.
+ * Serialized on the chat's chain. `{ ok: false }` if the chat isn't parked.
+ */
+export async function resolveParkedChat(
+  sessionKey: string
+): Promise<{ ok: boolean; conflicted: string[]; error?: string }> {
+  const st = states.get(sessionKey)
+  if (!st) return { ok: false, conflicted: [], error: 'no-chat' }
+  if (!st.parked) return { ok: false, conflicted: [], error: 'not-parked' }
+  const task = st.chain.then(() => stageResolve(st.liveRoot, st.wt))
+  st.chain = task.catch(() => {})
+  let prep: ResolvePrep
+  try {
+    prep = await task
+  } catch (e) {
+    return { ok: false, conflicted: [], error: e instanceof Error ? e.message : String(e) }
+  }
+  if (!prep.clean) return { ok: true, conflicted: prep.conflicted }
+  // No overlap — the sides merged automatically. Commit + merge onto live and unpark now.
+  const merge = st.chain.then(async () => {
+    const outcome = await completeTurn(st.liveRoot, st.wt, 'Resolve chat/live merge')
+    if (outcome.outcome === 'merged') {
+      for (const e of outcome.edits) {
+        recordEdit(st.liveRoot, e.file, e.before, e.after, undefined, `chat:${st.wt.id}:resolve`)
+      }
+      if (outcome.newBase) st.wt.baseSha = outcome.newBase
+      st.parked = false
+      dropParkRecord(st)
+      emitIsolation(sessionKey, 'merged', st.wt.branch, outcome.files)
+    }
+  })
+  st.chain = merge.catch(() => {})
+  await merge.catch(() => {})
+  return { ok: true, conflicted: [] }
+}
+
+/** "Discard changes" backend for a live PARKED chat: drop the chat's unmerged work
+ *  (reset its worktree to the fork point) and unpark. Thin wrapper over
+ *  `discardParkedBranch` keyed by `sessionKey` so the renderer needn't know the branch. */
+export async function discardParkedChat(sessionKey: string): Promise<{ ok: boolean }> {
+  const st = states.get(sessionKey)
+  if (!st) return { ok: false }
+  const res = await discardParkedBranch(st.liveRoot, st.wt.branch)
+  return { ok: res.handled }
 }
 
 /** Ids of every live chat worktree across ALL open projects — the `pruneOrphans`

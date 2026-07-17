@@ -353,6 +353,9 @@ const api: DsgnApi = {
       recordId: string
     ): Promise<{ ok: boolean; prUrl?: string; error?: string }> =>
       ipcRenderer.invoke('agent:spawn-pr', root, branch, title, recordId),
+    resolveConflict: (): Promise<{ ok: boolean; conflicted: string[]; prompt?: string; error?: string }> =>
+      ipcRenderer.invoke('agent:resolve-conflict'),
+    discardConflict: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('agent:discard-conflict'),
     onEvent: (cb: (event: AgentEvent) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, event: AgentEvent): void => cb(event)
       ipcRenderer.on('agent:event', listener)

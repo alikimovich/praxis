@@ -830,6 +830,23 @@ body.is-fullscreen .sidebar-toggle {
     color: var(--text-muted);
     opacity: 0.7;
 }
+/* Per-chat isolation (v9): a chat whose changes couldn't auto-merge shows an amber
+   "conflict" status badge so it's visible in the rail without opening it. */
+.rail__chat-badge {
+    flex: 0 0 auto;
+    padding: 0 6px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 16px;
+    letter-spacing: 0.01em;
+    background: #fde68a;
+    color: #92400e;
+}
+.dark .rail__chat-badge {
+    background: rgb(180 83 9 / 0.35);
+    color: #fcd34d;
+}
 .rail__chat--active {
     background: rgb(from var(--rail-text) r g b / 0.075);
     color: var(--text);

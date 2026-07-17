@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-16 — Parked-chat conflict UX: sidebar badge + AI "Resolve it" card
+
+Made the per-chat isolation "parked" state (a turn whose changes couldn't auto-merge because the user edited the same files) legible and actionable, instead of a cryptic note pointing at the sidebar.
+
+- **Sidebar badge** — a live chat whose `isolation === 'parked'` shows an amber **"conflict"** pill on its rail row (`Rail.tsx`, `.rail__chat-badge` in `styles.css`). While a project has a parked live chat, its redundant `chatpark-*` history row is hidden from "previous chats" (the badge + card own that state now).
+- **In-chat ConflictCard** (`src/renderer/src/components/ConflictCard.tsx`, mirrors `SetupCard`) — pinned above the composer while parked. Plain-language explanation ("This chat edited files that also changed in your project…"), the affected file chips, and two actions: **Resolve it** and **Discard changes**. Replaces the old `appendNote` warning; the small composer "Parked" chip was removed.
+- **"Resolve it" = AI reconciles** (per user steer — most users won't touch git markers). New `stageResolve` (`chat-worktrees.ts`) resets the chat's worktree onto the user's live tree and 3-way re-applies the chat's diff, so the worktree holds BOTH sides. If they don't overlap it merges cleanly and `resolveParkedChat` (`chat-isolation.ts`) commits + merges + unparks with no agent turn. If they overlap, it leaves conflict markers and returns the files; `agent:resolve-conflict` hands back a resolution prompt the renderer runs as a normal turn, whose `afterTurn` merges + unparks. **Discard changes** → `agent:discard-conflict` → `discardParkedChat` (resets the worktree, unparks).
+- **IPC:** `agent.resolveConflict()` / `agent.discardConflict()` (api + preload + handlers), keyed by the active session so the renderer never needs the branch name. Store: `ChatSlice.isolationFiles` carries the parked files to the card; `setIsolation(key, state, files)`.
+
+**Known limits:** if the AI resolution turn leaves markers unresolved (or errors), `afterTurn`'s auto-apply can write them to the live tree — the prompt strongly instructs removing all markers. On reload the card shows without its file list (the snapshot doesn't carry files; resolve still works — main recomputes).
+
+**Tests:** extended `test/chat-worktrees.mjs` with `stageResolve` cases (non-overlapping drift → clean auto-merge + landed on live; overlapping drift → conflict markers carrying both sides). Typecheck + build green.
+
 ## 2026-07-16 — Per-chat worktree isolation with merge-back
 
 Multiple concurrent chats on the same project can now run in isolation without clobbering each other's edits. Every interactive chat (default, new-chat, resumed) on a git repo root gets its own long-lived git worktree on branch `dsgn/chat-<id>`; edits from each turn are committed to that branch, then merged back to the live tree at turn end (on `done` and `error` events). The preview always serves the live checkout and reflects merged edits between turns.

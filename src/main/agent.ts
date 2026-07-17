@@ -42,6 +42,8 @@ import {
   handleReclaimed,
   applyParkedBranch,
   discardParkedBranch,
+  resolveParkedChat,
+  discardParkedChat,
   dropAll,
   isolationSnapshot
 } from './chat-isolation'
@@ -847,6 +849,33 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     if (parked.handled) return { ok: true }
     if (branch) await deleteBranch(root, branch)
     return { ok: true }
+  })
+
+  // v9 conflict card — "Resolve it". Stage the active parked chat's worktree so it holds
+  // BOTH the user's live edits and the chat's changes (3-way merged). If they overlap,
+  // return the conflicted files + a resolution PROMPT for the renderer to run as a normal
+  // turn (its `afterTurn` merges + unparks). If they merged cleanly, `resolveParkedChat`
+  // already committed + merged + unparked — nothing more to send (`conflicted: []`).
+  ipcMain.handle('agent:resolve-conflict', async () => {
+    if (!activeKey) return { ok: false, conflicted: [] as string[], error: 'no-session' }
+    const res = await resolveParkedChat(activeKey)
+    if (!res.ok || res.conflicted.length === 0) return { ...res, conflicted: res.conflicted }
+    const list = res.conflicted.join(', ')
+    const prompt =
+      `The changes from this chat overlapped with edits you made to the same files, so I combined ` +
+      `both versions and marked the overlapping spots with conflict markers ` +
+      `(\`<<<<<<<\`, \`=======\`, \`>>>>>>>\`) in: ${list}. ` +
+      `Please open each of those files, reconcile the two sides into the result that was clearly ` +
+      `intended — keeping the recent edits AND the change this chat was making — and remove every ` +
+      `conflict marker. Use your best judgment instead of asking me to choose. When you're done, ` +
+      `briefly say what you reconciled.`
+    return { ok: true, conflicted: res.conflicted, prompt }
+  })
+
+  // v9 conflict card — "Discard changes". Drop the active parked chat's unmerged work.
+  ipcMain.handle('agent:discard-conflict', async () => {
+    if (!activeKey) return { ok: false }
+    return discardParkedChat(activeKey)
   })
 
   // PR: push the spawn's branch + open a PR from it (no checkout — the work is already

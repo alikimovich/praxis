@@ -1,4 +1,5 @@
 import { execFile } from 'child_process'
+import { readFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import { promisify } from 'util'
 import {
@@ -133,6 +134,48 @@ export async function applyParked(liveRoot: string, wt: Worktree): Promise<Apply
     return { ok: true, conflict: false, files, newBase }
   }
   return { ok: false, conflict: res.conflict, files, error: res.error }
+}
+
+export interface ResolvePrep {
+  /** Files left carrying `<<<<<<<` conflict markers — the agent must reconcile these.
+   *  Empty ⇒ the two sides merged with no textual overlap (no agent turn needed). */
+  conflicted: string[]
+  /** Every file the chat's branch touched (the resolution turn's blast radius). */
+  files: string[]
+  clean: boolean
+}
+
+/**
+ * Prepare a PARKED chat's worktree for AI (or clean) conflict resolution. A park means
+ * the user edited the same files live that the chat edited, so the auto-merge refused.
+ * To let the agent reconcile BOTH sides it must SEE both: reset the worktree onto the
+ * user's current live tree, then re-lay the chat's own diff on top with a 3-way apply —
+ * which merges cleanly where the two didn't overlap and drops `<<<<<<<`/`>>>>>>>` markers
+ * where they did. Advances `wt.baseSha` to the live snapshot so the eventual merge-back
+ * (after the agent resolves) is a clean, driftless apply. The chat's diff is captured
+ * BEFORE the reset (the reset would erase it). Returns the marker-bearing files.
+ */
+export async function stageResolve(liveRoot: string, wt: Worktree): Promise<ResolvePrep> {
+  const patch = await diffWorktree(wt) // chat's cumulative changes — capture before reset
+  const files = await changedFiles(wt)
+  const indexFile = join(dirname(wt.path), `.index-resolve-${wt.id}`)
+  const live = await captureBase(liveRoot, indexFile) // snapshot the user's live tree
+  await git(wt.path, ['clean', '-fd'])
+  await git(wt.path, ['reset', '--hard', live]) // worktree := live
+  wt.baseSha = live
+  const tmpDir = join(dirname(wt.path), '.resolve-tmp')
+  await applyToWorkingTree(wt.path, patch, tmpDir) // re-lay chat changes (leaves 3-way markers)
+  const conflicted: string[] = []
+  for (const rel of files) {
+    let text = ''
+    try {
+      text = await readFile(join(wt.path, rel), 'utf8')
+    } catch {
+      continue // deleted/renamed — no marker to find
+    }
+    if (text.includes('<<<<<<<') && text.includes('>>>>>>>')) conflicted.push(rel)
+  }
+  return { conflicted, files, clean: conflicted.length === 0 }
 }
 
 /**

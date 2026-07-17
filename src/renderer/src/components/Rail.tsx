@@ -128,7 +128,17 @@ export default function Rail({
             // its dev server/preview) live; it's independent of `activeKey`.
             const expanded = active && !p.chatsCollapsed;
             const sessionKeys = p.sessionKeys ?? [p.key];
-            const past = expanded ? (history[p.key] ?? []) : [];
+            // A live chat whose changes couldn't auto-merge is "parked" (v9). While one
+            // is, its `chatpark-*` history record is redundant with the live row's badge
+            // + in-chat card, so hide it from the "previous chats" list below.
+            const anyParked = expanded
+              ? sessionKeys.some((sk) => byKey[sk]?.isolation === "parked")
+              : false;
+            const past = expanded
+              ? (history[p.key] ?? []).filter(
+                  (r) => !(anyParked && r.id.startsWith("chatpark-")),
+                )
+              : [];
             const working = expanded ? (spawns[p.key] ?? []) : [];
             const FolderIcon = expanded ? FolderOpen : Folder;
             return (
@@ -215,15 +225,28 @@ export default function Rail({
                       const name =
                         byKey[sk]?.title ??
                         chatTitle(firstUserText(byKey[sk]?.messages ?? []));
+                      const parked = byKey[sk]?.isolation === "parked";
                       return (
                         <li key={sk} className="rail__chat-item">
                           <button
                             className={`rail__chat ${isActiveChat ? "rail__chat--active" : ""}`}
                             onClick={() => onSwitchSession(p.key, sk)}
                             aria-current={isActiveChat}
-                            title={name}
+                            title={
+                              parked
+                                ? `${name} — changes couldn't be merged; open to resolve`
+                                : name
+                            }
                           >
                             <span className="rail__chat-name">{name}</span>
+                            {parked && (
+                              <span
+                                className="rail__chat-badge"
+                                title="Changes couldn't be merged"
+                              >
+                                conflict
+                              </span>
+                            )}
                           </button>
                           <button
                             className="rail__chat-x"
