@@ -66,8 +66,19 @@ interface ChatSlice {
    *  event). The rail prefers it over the first-message heuristic; undefined
    *  until generated. */
   title?: string
+  /** Per-chat git-worktree isolation status (v9). `'live'` for a non-repo
+   *  project (no worktree — the old behavior); `'isolated'` while its worktree
+   *  auto-merges cleanly after each turn; `'parked'` when a turn's merge
+   *  conflicted and the work awaits review in the sidebar. Driven by the
+   *  `'isolation'` `AgentEvent` and rehydrated from `LiveChatSnapshot.isolation`. */
+  isolation: 'live' | 'isolated' | 'parked'
 }
-const emptySlice = (): ChatSlice => ({ messages: [], isRunning: false, streamingId: null })
+const emptySlice = (): ChatSlice => ({
+  messages: [],
+  isRunning: false,
+  streamingId: null,
+  isolation: 'live'
+})
 
 interface ChatState {
   /** Per-project chat, keyed by projectKey ('' is the default / no-project slice). */
@@ -76,6 +87,7 @@ interface ChatState {
   // Mirrors of the active slice — what ChatPanel and the tests read.
   messages: ChatMessage[]
   isRunning: boolean
+  isolation: 'live' | 'isolated' | 'parked'
   /** Show a project's chat (preserves each project's history across switches). */
   setActiveChat: (key: string) => void
   /**
@@ -91,6 +103,9 @@ interface ChatState {
   /** Store this chat's auto-generated name (main's `title` event / a resumed
    *  chat's persisted title). Preserves the slice's messages. */
   setTitle: (key: string, title: string) => void
+  /** Update a chat's worktree-isolation status (the `'isolation'` `AgentEvent`,
+   *  or a `LiveChatSnapshot` rehydrate on reload). */
+  setIsolation: (key: string, isolation: 'live' | 'isolated' | 'parked') => void
   /** Drop a project's chat buffer (on close). */
   clearChat: (key: string) => void
   // Actions default to the active project; pass a key to target a backgrounded one.
@@ -129,7 +144,7 @@ export const useChat = create<ChatState>((set, get) => {
       const slice = fn(state.byKey[k] ?? emptySlice())
       const byKey = { ...state.byKey, [k]: slice }
       return k === state.activeKey
-        ? { byKey, messages: slice.messages, isRunning: slice.isRunning }
+        ? { byKey, messages: slice.messages, isRunning: slice.isRunning, isolation: slice.isolation }
         : { byKey }
     })
   return {
@@ -137,6 +152,7 @@ export const useChat = create<ChatState>((set, get) => {
     activeKey: '',
     messages: [],
     isRunning: false,
+    isolation: 'live',
     setActiveChat: (key) =>
       set((s) => {
         const slice = s.byKey[key] ?? emptySlice()
@@ -144,7 +160,8 @@ export const useChat = create<ChatState>((set, get) => {
           activeKey: key,
           byKey: { ...s.byKey, [key]: slice },
           messages: slice.messages,
-          isRunning: slice.isRunning
+          isRunning: slice.isRunning,
+          isolation: slice.isolation
         }
       }),
     hydrate: (key, messages, isRunning = false) =>
@@ -159,12 +176,24 @@ export const useChat = create<ChatState>((set, get) => {
           msgs = [...messages, { id, role: 'assistant', text: '', statuses: [], segments: [] }]
           streamingId = id
         }
-        const slice: ChatSlice = { messages: msgs, isRunning, streamingId, title: prev.title }
+        const slice: ChatSlice = {
+          messages: msgs,
+          isRunning,
+          streamingId,
+          title: prev.title,
+          isolation: prev.isolation
+        }
         return key === s.activeKey
-          ? { byKey: { ...s.byKey, [key]: slice }, messages: slice.messages, isRunning }
+          ? {
+              byKey: { ...s.byKey, [key]: slice },
+              messages: slice.messages,
+              isRunning,
+              isolation: slice.isolation
+            }
           : { byKey: { ...s.byKey, [key]: slice } }
       }),
     setTitle: (key, title) => patch(key, (sl) => ({ ...sl, title })),
+    setIsolation: (key, isolation) => patch(key, (sl) => ({ ...sl, isolation })),
     clearChat: (key) =>
       set((s) => {
         const byKey = { ...s.byKey }
@@ -205,6 +234,7 @@ export const useChat = create<ChatState>((set, get) => {
       patch(key, (sl) => {
         const id = nextId()
         return {
+          ...sl,
           messages: [
             ...sl.messages,
             { id, role: 'assistant', text: '', statuses: [], segments: [] }

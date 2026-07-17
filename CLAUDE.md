@@ -74,7 +74,10 @@ src/
     props.ts / props-svelte.ts   prop editing engines (React via react-docgen /
                     Svelte 5); they mirror each other's splice/apply contract
     tokens.ts       design-token detection/scaffold   annotations.ts  comments → PR
-    git.ts, worktrees.ts          setup.ts, scaffold.ts, xcode.ts
+    git.ts, worktrees.ts, chat-worktrees.ts, chat-isolation.ts
+                    git/worktree primitives; worktrees: per-chat isolation + sync/merge/recovery;
+                    chat-worktrees: turn-scoped ops (sync, commit, apply); chat-isolation: lifecycle
+    setup.ts, scaffold.ts, xcode.ts
     diagnose.ts, diag-cache.ts, diag-rules.ts         sessions-store.ts, edit-history.ts
     update.ts       self-update detection (pure: fetch + rev-list behind-count)
     update-ipc.ts   update:* IPC + relaunch; "apply" shells out to bin/praxis.mjs
@@ -160,3 +163,11 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   `package.json#trustedDependencies` so their binaries install.
 - **The agent is denied writes under a target repo's `.dsgn/`** (annotations +
   scaffolded instrumentation live there).
+- **Chats run in per-chat worktrees (dsgn/chat-<id>), auto-merged back to the
+  live tree on each turn's done/error.** The preview ALWAYS serves the live
+  checkout, never a worktree. Non-repo-root projects (subdirs, non-git) run on
+  the live tree as today (`isRepoRoot` gate in git.ts). Resumed sessions get a
+  fresh worktree; the model picker (agent:restart-chat) reuses the existing one.
+  Drift from concurrent live edits syncs at turn start; conflicts park on the
+  branch for review. One worktree per open chat costs disk (~node_modules are
+  symlinked); worktree directories live under `<userData>/dsgn/worktrees`.

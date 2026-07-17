@@ -86,6 +86,9 @@ export async function restoreWorkspace(deps: RestoreDeps): Promise<void> {
         // Restore the chat's auto-generated name so the rail shows its subject
         // label immediately, not the opening-words fallback, after a reload.
         if (c.record.title) useChat.getState().setTitle(c.sessionKey, c.record.title)
+        // Restore the isolation chip (v9) — main's chat-isolation state survives a
+        // renderer-only reload, so re-seed the chip instead of defaulting to 'live'.
+        if (c.isolation) useChat.getState().setIsolation(c.sessionKey, c.isolation.state)
       }
     }
 

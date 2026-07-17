@@ -1,0 +1,197 @@
+/**
+ * chat-worktrees.ts unit test (pure — no Electron). Per-CHAT worktree isolation (v9):
+ * every interactive chat runs in its own `dsgn/chat-<id>` worktree, and after each
+ * completed turn its work auto-merges onto the LIVE tree; on mid-turn drift the turn
+ * PARKS on the branch instead of clobbering the user's edit.
+ *
+ * Asserts: fork includes the live WIP and lands on `dsgn/chat-<id>` with node_modules/
+ * .env symlinked; turn-1 completeTurn merges onto the live tree and advances the base;
+ * turn-2's diff is INCREMENTAL (only the new file, base advanced past turn-1); syncFromLive
+ * mirrors a between-turn live edit and no-ops when identical; mid-turn drift on a touched
+ * file PARKS and does NOT clobber the live file; a parked second turn re-squashes into ONE
+ * cumulative commit; applyParked 3-way-applies onto a DIRTY live tree; discardParked resets
+ * the worktree (keeping the branch); `clean -fd` spares the node_modules/.env symlinks.
+ * Uses real temp git repos.
+ *
+ * Run with: bun run test:chat-worktrees
+ */
+import {
+  createChatWorktree,
+  syncFromLive,
+  completeTurn,
+  applyParked,
+  discardParked
+} from '../src/main/chat-worktrees.ts'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+const base = mkdtempSync(join(tmpdir(), 'dsgn-cwt-'))
+const worktreesDir = join(base, 'worktrees')
+let failed = 0
+const ok = (cond, msg) => {
+  if (!cond) {
+    console.error(`FAIL: ${msg}`)
+    failed++
+  }
+}
+const g = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' })
+
+/** Spin up a fresh temp git repo with node_modules/.env gitignored + committed files. */
+function makeRepo(name, files) {
+  const repo = join(base, name)
+  mkdirSync(repo, { recursive: true })
+  g(repo, 'init', '-q', '-b', 'main')
+  g(repo, 'config', 'user.name', 'Test')
+  g(repo, 'config', 'user.email', 'test@local')
+  writeFileSync(join(repo, '.gitignore'), 'node_modules\n.env\n')
+  // Real runtime deps the worktree symlinks in — present so the links resolve.
+  mkdirSync(join(repo, 'node_modules'), { recursive: true })
+  writeFileSync(join(repo, 'node_modules', '.marker'), 'dep\n')
+  writeFileSync(join(repo, '.env'), 'SECRET=1\n')
+  for (const [f, content] of Object.entries(files)) writeFileSync(join(repo, f), content)
+  g(repo, 'add', '-A')
+  g(repo, 'commit', '-q', '-m', 'init')
+  return repo
+}
+
+try {
+  // ============================================================================
+  // repo1 — fork includes WIP · turn-1 merge · turn-2 incremental · syncFromLive
+  //         · clean -fd spares symlinks
+  // ============================================================================
+  const repo1 = makeRepo('repo1', { 'README.md': 'base\n' })
+  // The interactive main agent has uncommitted WIP + an untracked file in the live tree.
+  writeFileSync(join(repo1, 'README.md'), 'base\nWIP\n')
+  writeFileSync(join(repo1, 'Untracked.tsx'), 'export const New = () => null\n')
+
+  const wt = await createChatWorktree(repo1, 'chatone', worktreesDir)
+  ok(wt.branch === 'dsgn/chat-chatone', `fork lands on dsgn/chat-<id>: ${wt.branch}`)
+  ok(existsSync(wt.path), 'chat worktree checkout exists')
+  ok(readFileSync(join(wt.path, 'README.md'), 'utf8').includes('WIP'), 'fork includes the live WIP')
+  ok(existsSync(join(wt.path, 'Untracked.tsx')), 'fork includes the untracked live file')
+  ok(existsSync(join(wt.path, 'node_modules', '.marker')), 'node_modules symlinked into the fork')
+  ok(existsSync(join(wt.path, '.env')), '.env symlinked into the fork')
+
+  // --- turn 1: agent creates FileA in the worktree → completeTurn merges onto live ---
+  writeFileSync(join(wt.path, 'FileA.tsx'), 'a\n')
+  const t1 = await completeTurn(repo1, wt, 'turn 1')
+  ok(t1.outcome === 'merged', `turn 1 merges: ${JSON.stringify(t1.outcome)}`)
+  ok(!!t1.newBase, 'merged turn returns a newBase for the caller to advance')
+  ok(t1.files.includes('FileA.tsx'), `turn-1 files: ${JSON.stringify(t1.files)}`)
+  ok(
+    existsSync(join(repo1, 'FileA.tsx')) && readFileSync(join(repo1, 'FileA.tsx'), 'utf8') === 'a\n',
+    'turn 1 landed FileA on the LIVE tree'
+  )
+  ok(readFileSync(join(repo1, 'README.md'), 'utf8').includes('WIP'), "the main agent's live WIP survived the merge")
+  ok(
+    t1.edits.length === 1 && t1.edits[0].after === 'a\n',
+    `merged turn returns before/after edits for undo: ${JSON.stringify(t1.edits)}`
+  )
+  wt.baseSha = t1.newBase // caller advances the base after a merge
+
+  // --- turn 2: agent creates FileB → diff is INCREMENTAL (FileA already merged/based) ---
+  const beforeTurn2Base = wt.baseSha
+  writeFileSync(join(wt.path, 'FileB.tsx'), 'b\n')
+  const t2 = await completeTurn(repo1, wt, 'turn 2')
+  ok(t2.outcome === 'merged', `turn 2 merges: ${JSON.stringify(t2.outcome)}`)
+  ok(
+    t2.files.length === 1 && t2.files[0] === 'FileB.tsx',
+    `turn-2 diff is incremental (only the new file, not FileA): ${JSON.stringify(t2.files)}`
+  )
+  const t2revs = g(repo1, 'rev-list', `${beforeTurn2Base}..${t2.newBase}`).trim().split('\n').filter(Boolean)
+  ok(t2revs.length === 1, `turn 2 is a single commit off the advanced base: ${t2revs.length}`)
+  ok(existsSync(join(repo1, 'FileB.tsx')), 'turn 2 landed FileB on the live tree')
+  wt.baseSha = t2.newBase
+
+  // --- syncFromLive mirrors a between-turn live edit; no-ops when identical ---
+  writeFileSync(join(repo1, 'LiveEdit.tsx'), 'live\n') // user (or another chat's merge) edits the live tree
+  const s1 = await syncFromLive(repo1, wt)
+  ok(s1.synced === true, 'syncFromLive syncs a between-turn live edit')
+  ok(
+    existsSync(join(wt.path, 'LiveEdit.tsx')) && readFileSync(join(wt.path, 'LiveEdit.tsx'), 'utf8') === 'live\n',
+    'syncFromLive mirrored the live edit into the worktree'
+  )
+  const s2 = await syncFromLive(repo1, wt)
+  ok(s2.synced === false, 'syncFromLive is a no-op when the worktree already matches live')
+  // clean -fd (run by syncFromLive) must NOT remove the gitignored runtime-dep symlinks.
+  ok(existsSync(join(wt.path, 'node_modules', '.marker')), 'clean -fd spared the node_modules symlink')
+  ok(existsSync(join(wt.path, '.env')), 'clean -fd spared the .env symlink')
+
+  // ============================================================================
+  // repo2 — mid-turn drift PARKS without clobbering · parked turn 2 re-squashes to 1 commit
+  // ============================================================================
+  const repo2 = makeRepo('repo2', { 'README.md': 'base\n', 'Extra.tsx': 'x\n' })
+  const wt2 = await createChatWorktree(repo2, 'chattwo', worktreesDir)
+
+  // Turn 1: the agent edits README in the worktree, but the USER edits the same file live
+  // (mid-turn drift) — the merge must refuse and PARK, leaving the user's edit intact.
+  writeFileSync(join(wt2.path, 'README.md'), 'from chat\n')
+  writeFileSync(join(repo2, 'README.md'), 'user typed this\n')
+  const p1 = await completeTurn(repo2, wt2, 'parked turn 1')
+  ok(p1.outcome === 'parked', `mid-turn drift on a touched file parks: ${JSON.stringify(p1.outcome)}`)
+  ok(
+    readFileSync(join(repo2, 'README.md'), 'utf8') === 'user typed this\n',
+    'a parked turn must NOT clobber the concurrent live edit'
+  )
+
+  // Turn 2 while parked: agent edits Extra → still drifted → still parked, and the branch
+  // re-squashes turn-1 + turn-2 into ONE cumulative commit off base (keeps branchPatch correct).
+  writeFileSync(join(wt2.path, 'Extra.tsx'), 'chat extra\n')
+  const p2 = await completeTurn(repo2, wt2, 'parked turn 2')
+  ok(p2.outcome === 'parked', `parked chat re-attempts and stays parked while drifted: ${JSON.stringify(p2.outcome)}`)
+  const p2revs = g(wt2.path, 'rev-list', `${wt2.baseSha}..HEAD`).trim().split('\n').filter(Boolean)
+  ok(p2revs.length === 1, `parked turn 2 re-squashes into a single cumulative commit: ${p2revs.length}`)
+  ok(
+    g(wt2.path, 'show', 'HEAD:README.md') === 'from chat\n' && g(wt2.path, 'show', 'HEAD:Extra.tsx') === 'chat extra\n',
+    'the single squash commit carries BOTH parked turns'
+  )
+
+  // ============================================================================
+  // repo3 — applyParked 3-way applies onto a DIRTY live tree (explicit user Apply)
+  // ============================================================================
+  const repo3 = makeRepo('repo3', { 'README.md': 'base\n', 'Other.tsx': 'o\n' })
+  const wt3 = await createChatWorktree(repo3, 'chatthree', worktreesDir)
+  writeFileSync(join(wt3.path, 'README.md'), 'chat readme\n')
+  writeFileSync(join(repo3, 'README.md'), 'user drift\n') // drift → the turn parks
+  const p3 = await completeTurn(repo3, wt3, 'to be parked')
+  ok(p3.outcome === 'parked', `repo3 turn parked as expected: ${JSON.stringify(p3.outcome)}`)
+
+  // User resolves the drift (README back to base) but leaves UNRELATED WIP → dirty tree.
+  writeFileSync(join(repo3, 'README.md'), 'base\n')
+  writeFileSync(join(repo3, 'Other.tsx'), 'o\n// unrelated WIP\n')
+  const ap = await applyParked(repo3, wt3)
+  ok(ap.ok, `applyParked applies the parked diff onto a dirty tree: ${JSON.stringify(ap)}`)
+  ok(!!ap.newBase, 'a clean applyParked returns a newBase to advance')
+  ok(readFileSync(join(repo3, 'README.md'), 'utf8') === 'chat readme\n', 'applyParked landed the parked change on live')
+  ok(
+    readFileSync(join(repo3, 'Other.tsx'), 'utf8').includes('// unrelated WIP'),
+    'applyParked (3-way) preserved the unrelated live WIP'
+  )
+
+  // ============================================================================
+  // repo4 — discardParked resets the worktree, keeps the branch
+  // ============================================================================
+  const repo4 = makeRepo('repo4', { 'README.md': 'base\n' })
+  const wt4 = await createChatWorktree(repo4, 'chatfour', worktreesDir)
+  writeFileSync(join(wt4.path, 'README.md'), 'junk\n')
+  writeFileSync(join(wt4.path, 'Junk.tsx'), 'junk\n')
+  await discardParked(wt4)
+  ok(readFileSync(join(wt4.path, 'README.md'), 'utf8') === 'base\n', 'discardParked reset the tracked file to base')
+  ok(!existsSync(join(wt4.path, 'Junk.tsx')), 'discardParked cleaned the stray file')
+  ok(g(wt4.path, 'status', '--porcelain').trim() === '', 'discardParked left a clean worktree')
+  ok(
+    g(repo4, 'branch', '--list', wt4.branch).includes(wt4.branch),
+    'discardParked did NOT delete the branch (the chat is still live)'
+  )
+
+  if (failed === 0) console.log('CHAT-WORKTREES OK — fork/turn-merge/incremental/sync/park/apply/discard')
+  else console.error(`CHAT-WORKTREES: ${failed} assertion(s) failed`)
+  process.exitCode = failed === 0 ? 0 : 1
+} catch (err) {
+  console.error('CHAT-WORKTREES FAILED:', err?.message ?? err)
+  process.exitCode = 1
+} finally {
+  rmSync(base, { recursive: true, force: true })
+}

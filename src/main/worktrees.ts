@@ -1,7 +1,7 @@
 import { execFile } from 'child_process'
 import { mkdir, symlink, writeFile, readFile, rm, readdir, stat } from 'fs/promises'
 import { randomUUID } from 'crypto'
-import { join } from 'path'
+import { join, dirname, resolve } from 'path'
 import { promisify } from 'util'
 import { normalizeBranchName } from './git'
 
@@ -58,7 +58,7 @@ export interface Worktree {
  * (`.gitignore` keeps node_modules/.env out), write a tree, commit it off HEAD.
  * A clean tree just yields HEAD.
  */
-async function captureBase(repoRoot: string, indexFile: string): Promise<string> {
+export async function captureBase(repoRoot: string, indexFile: string): Promise<string> {
   const head = (await git(repoRoot, ['rev-parse', 'HEAD'])).stdout.trim()
   const env: NodeJS.ProcessEnv = {
     GIT_INDEX_FILE: indexFile,
@@ -93,7 +93,7 @@ async function captureBase(repoRoot: string, indexFile: string): Promise<string>
 export function createWorktree(
   repoRoot: string,
   worktreesDir: string,
-  opts: { label?: string; id?: string } = {}
+  opts: { label?: string; id?: string; branchName?: (id: string) => string } = {}
 ): Promise<Worktree> {
   const run = createChain.then(() => doCreateWorktree(repoRoot, worktreesDir, opts))
   createChain = run.catch(() => {}) // keep the chain alive even if one create fails
@@ -103,12 +103,14 @@ export function createWorktree(
 async function doCreateWorktree(
   repoRoot: string,
   worktreesDir: string,
-  opts: { label?: string; id?: string }
+  opts: { label?: string; id?: string; branchName?: (id: string) => string }
 ): Promise<Worktree> {
   // The id may be assigned up front (so a queued spawn's rail row keeps a stable id
   // before its worktree exists); otherwise generate one.
   const id = opts.id ?? randomUUID().slice(0, 8)
-  const branch = normalizeBranchName(`comment-${id}`)
+  // Callers other than comment-spawn (e.g. per-chat isolation) can supply their own
+  // branch-name scheme; default keeps today's `dsgn/comment-<id>` naming.
+  const branch = normalizeBranchName((opts.branchName ?? ((i) => `comment-${i}`))(id))
   const dir = join(worktreesDir, id)
   await mkdir(worktreesDir, { recursive: true })
 
@@ -329,19 +331,50 @@ export async function removeWorktree(
   }
 }
 
+/** The branch a leftover checkout is on and its OWNING repo root — both discoverable
+ *  only BEFORE the checkout is removed. The owning repo may differ from the project
+ *  being opened (the worktrees dir is shared across projects), so crash-recovery keys
+ *  its record to this repo, not the opener's. Nulls on any failure (not a worktree). */
+async function orphanMeta(dir: string): Promise<{ branch: string | null; repoRoot: string | null }> {
+  let branch: string | null = null
+  let repoRoot: string | null = null
+  try {
+    branch = (await git(dir, ['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim() || null
+  } catch {
+    /* detached / not a worktree */
+  }
+  try {
+    // `--git-common-dir` is the MAIN repo's `.git` (shared across its linked
+    // worktrees); its parent is the owning repo root.
+    const common = (await git(dir, ['rev-parse', '--git-common-dir'])).stdout.trim()
+    if (common) repoRoot = dirname(resolve(dir, common))
+  } catch {
+    /* not a worktree */
+  }
+  return { branch, repoRoot }
+}
+
 /**
  * Startup recovery: a crash/quit can leave checkouts in worktreesDir whose admin
  * entries git no longer tracks. Prune stale entries, then for each leftover commit
- * any dirty work to its branch (so a crashed-mid-run spawn isn't lost) and remove the
- * checkout. `skip` names ids that are CURRENTLY ACTIVE (a live spawn this session) —
- * never touch those. Branches are kept; we only reclaim the on-disk checkouts.
- * Returns the ids it reclaimed. Never throws.
+ * any dirty work to its branch (so a crashed-mid-run spawn/chat isn't lost) and remove
+ * the checkout. `skip` names ids that are CURRENTLY ACTIVE (a live spawn/chat this
+ * session) — never touch those. Branches are kept; we only reclaim the on-disk
+ * checkouts. Returns each reclaimed id with `dirty` (whether the worktree had
+ * uncommitted changes at reclaim time — checked via `status --porcelain` BEFORE the
+ * recovery add/commit, not inferred from commit success) plus its `branch` and owning
+ * `repoRoot` (both captured before removal, for the caller's crash-recovery records).
+ * Never throws.
  */
 export async function pruneOrphans(
   repoRoot: string,
   worktreesDir: string,
-  skip: Set<string> = new Set()
-): Promise<string[]> {
+  skip: Set<string> = new Set(),
+  /** True when a persisted `chatpark-<id>` record exists for this worktree id (the
+   *  branch was PARKED). Only then is a dirty per-chat orphan's recovery commit folded
+   *  into the parked squash — see the fold block below. Defaults to "never parked". */
+  isParked: (id: string) => boolean = () => false
+): Promise<Array<{ id: string; dirty: boolean; branch: string | null; repoRoot: string | null }>> {
   try {
     await git(repoRoot, ['worktree', 'prune'])
   } catch {
@@ -353,14 +386,40 @@ export async function pruneOrphans(
   } catch {
     return [] // dir doesn't exist yet — nothing to reclaim
   }
-  const reclaimed: string[] = []
+  const reclaimed: Array<{ id: string; dirty: boolean; branch: string | null; repoRoot: string | null }> = []
   for (const id of entries) {
-    if (skip.has(id)) continue // a live spawn this session — leave it alone
+    if (skip.has(id)) continue // a live spawn/chat this session — leave it alone
     const dir = join(worktreesDir, id)
     try {
       if (!(await stat(dir)).isDirectory()) continue
     } catch {
       continue
+    }
+    // Capture branch + owning repo BEFORE removal (both are lost with the checkout).
+    const { branch, repoRoot: ownRoot } = await orphanMeta(dir)
+    let dirty = false
+    try {
+      const status = (await git(dir, ['status', '--porcelain'])).stdout
+      dirty = status.trim().length > 0
+    } catch {
+      /* not a worktree — treat as clean */
+    }
+    // For a per-chat orphan that was actually PARKED (a persisted `chatpark-<id>` record
+    // exists → its tip is the cumulative parked squash), FOLD the dirty recovery commit
+    // into that squash — soft-reset HEAD^ first — so the branch stays a single commit and
+    // `branchPatch(branch^..branch)` still yields the full pending diff. A stacked
+    // recovery commit would otherwise hide the parked work from the park record's Apply.
+    //
+    // Gating on the park record (not author/message) is essential: a chat branch gains one
+    // commit per MERGED turn and `baseSha` advances to the tip on each merge, so a crash
+    // mid-turn after a merged turn leaves tip = a dsgn-authored, non-base commit that is
+    // ALREADY LIVE. Folding that (as an author/message heuristic would) splices merged
+    // content into the recovery commit, and the record's Apply then re-applies live changes
+    // → spurious 3-way conflicts. Un-parked (merged-tip) orphans just get the WIP committed
+    // ON TOP, so branchPatch = only the genuinely-unmerged crash WIP. Comment-spawn orphans
+    // have no park record either, so they are unaffected (unchanged prune behavior).
+    if (dirty && branch?.startsWith('dsgn/chat-') && isParked(id)) {
+      await git(dir, ['reset', '--soft', 'HEAD^']).catch(() => {})
     }
     // Best-effort: commit any dirty leftover to its branch before removing the dir,
     // so a crashed-mid-run spawn's work isn't lost.
@@ -391,7 +450,7 @@ export async function pruneOrphans(
     } catch {
       await rm(dir, { recursive: true, force: true }).catch(() => {})
     }
-    reclaimed.push(id)
+    reclaimed.push({ id, dirty, branch, repoRoot: ownRoot })
   }
   try {
     await git(repoRoot, ['worktree', 'prune'])

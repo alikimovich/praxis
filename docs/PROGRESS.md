@@ -2,6 +2,24 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-16 — Per-chat worktree isolation with merge-back
+
+Multiple concurrent chats on the same project can now run in isolation without clobbering each other's edits. Every interactive chat (default, new-chat, resumed) on a git repo root gets its own long-lived git worktree on branch `dsgn/chat-<id>`; edits from each turn are committed to that branch, then merged back to the live tree at turn end (on `done` and `error` events). The preview always serves the live checkout and reflects merged edits between turns.
+
+**Design:** the core git machinery (`createWorktree`, `commitWorktree`, `autoApplyWorktree`, `removeWorktree`, `pruneOrphans`) already existed from v8's comment-spawn feature and is reused without modification. Two new pure modules coordinate the per-chat lifecycle:
+
+- **`src/main/chat-worktrees.ts`** (~185 lines, unit-tested): state-free turn operations — `syncFromLive` (drift sync at turn start), `completeTurn` (commit + merge decision), `applyParked` / `discardParked` (conflict-park review actions).
+- **`src/main/chat-isolation.ts`** (~280 lines, Electron-coupled): per-chat lifecycle and state — `initChatIsolation`, `isolatedCwd` (route new sessions through their worktree), `adoptSession` (stamp record back to live values for reload reattach), `beforeTurn` / `afterTurn` (turn chain serialization), `releaseChat`, `liveChatWorktreeIds`, `handleReclaimed` (crash recovery).
+
+**Turn flow:** on `agent:send`, await `beforeTurn` to serialize drift-sync and drain any in-flight post-`done` merge from the prior turn. On turn end (`done` / `error`), fire `afterTurn` (queued on the per-chat chain) to commit + attempt auto-apply. If applied, edits are recorded as one undo group per turn and the base is advanced so the next turn sees only new drift. If refused (conflict / binary / write failure), the work parks on the branch as a persistent commit; the chat gets a warning note and the branch surfaces in the sidebar for review — `SessionReview.tsx` gates Apply/Discard/PR on `kind === 'comment' && !!branch`, reusing the spawn review UI. Parked chats re-attempt auto-apply on every `done` (self-heals when drift resolves).
+
+**Lifecycle & crash recovery:** worktrees created on session start (`agent:new-chat`, `agent:resume-session`, `agent:open-project`); removed on session close after a final completeTurn. Restart (model picker) reuses the existing worktree. `open-project`'s `pruneOrphans` crash-recovery skips live chat worktree ids (one global `liveChatWorktreeIds()` call covers all open projects), recovers dirty orphaned `dsgn/chat-*` branches as park records, and deletes clean unrecorded branches only if all files already match the live tree (closing a commit-before-merge crash data-loss window).
+
+**IPC:** new `isolation` event type in `AgentEvent` (no new channels); lives in the chat's `LiveChatSnapshot` for reload reattach. `agent.ts` spawn projectKey fix lands here too: `startSpawn` now stamps `s.record.projectKey = q.parentKey`, fixing spawn records' invisibility to `sessions:list`.
+
+**Known limits:** resumed sessions get a fresh worktree; agent writes via absolute live-root paths escape the worktree (mitigated by a rules.ts note); heavy mid-turn live editing (prop panel during long turns) parks often.
+
+**Tests:** `test/chat-worktrees.mjs` (unit, pure git repos), `test/chat-isolation.mjs` (Electron, real app), existing fixtures on the live-cwd path unchanged.
 ## 2026-07-16 — User-visible "dsgn" mentions replaced with "Praxis" (LKM-57)
 
 The old product name still leaked into user-facing copy (setup card, prop-panel

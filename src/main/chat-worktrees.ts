@@ -1,0 +1,146 @@
+import { execFile } from 'child_process'
+import { dirname, join } from 'path'
+import { promisify } from 'util'
+import {
+  createWorktree,
+  commitWorktree,
+  autoApplyWorktree,
+  diffWorktree,
+  applyToWorkingTree,
+  captureBase,
+  type Worktree
+} from './worktrees'
+
+/**
+ * Per-CHAT git-worktree isolation (v9). Generalizes the comment-spawn worktree
+ * machinery (`worktrees.ts`) to interactive chats: every chat on a git repo root
+ * runs in its own long-lived `dsgn/chat-<id>` worktree, and after each completed
+ * agent turn its work auto-merges back onto the LIVE checkout so the preview (which
+ * always serves the live tree) updates between turns. On mid-turn drift the turn
+ * parks on the branch for review instead of clobbering the user's edit.
+ *
+ * Pure (child_process + git + fs via worktrees.ts, no electron) so it's unit-testable
+ * against temp repos. The Electron glue lives in `chat-isolation.ts`.
+ *
+ * Base-advance contract: git-state operations that MUST re-point the fork point
+ * (`syncFromLive`) mutate `wt.baseSha` in place; turn/apply operations return the new
+ * base as `newBase` and let the caller (`chat-isolation.ts`) own the mutation, so the
+ * advance only happens on a successful merge/apply.
+ */
+
+const execFileP = promisify(execFile)
+
+const git = (cwd: string, args: string[], timeout = 15000): Promise<{ stdout: string; stderr: string }> =>
+  execFileP('git', args, { cwd, timeout, maxBuffer: 16 * 1024 * 1024 }) as Promise<{
+    stdout: string
+    stderr: string
+  }>
+
+const revParse = async (cwd: string, rev: string): Promise<string> =>
+  (await git(cwd, ['rev-parse', rev])).stdout.trim()
+
+/** Repo-relative files changed between the worktree's fork point and its HEAD. */
+async function changedFiles(wt: Worktree): Promise<string[]> {
+  return (await git(wt.path, ['diff', '--name-only', `${wt.baseSha}..HEAD`])).stdout
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+/**
+ * Fork a fresh worktree for a chat on branch `dsgn/chat-<id>`, forking from the live
+ * tree's CURRENT state (uncommitted WIP included, via `captureBase`) and symlinking
+ * node_modules/.env — exactly like comment spawns, only the branch-name scheme differs.
+ */
+export function createChatWorktree(liveRoot: string, id: string, worktreesDir: string): Promise<Worktree> {
+  return createWorktree(liveRoot, worktreesDir, { id, branchName: (i) => `chat-${i}` })
+}
+
+/**
+ * Turn-start drift sync (live → worktree). Snapshot the live tree; if the worktree's
+ * HEAD tree already matches it there's no drift — no-op. Otherwise reset the worktree
+ * hard onto the fresh live snapshot (`clean -fd` first drops any stray files but spares
+ * gitignored node_modules/.env symlinks — no `-x`). The caller guarantees the worktree
+ * is CLEAN at turn start (everything was committed at the previous turn's `done`), so
+ * the reset can never conflict. Advances `wt.baseSha` in place to the new fork point.
+ */
+export async function syncFromLive(liveRoot: string, wt: Worktree): Promise<{ synced: boolean }> {
+  const indexFile = join(dirname(wt.path), `.index-sync-${wt.id}`)
+  const live = await captureBase(liveRoot, indexFile)
+  const liveTree = await revParse(liveRoot, `${live}^{tree}`)
+  const wtTree = await revParse(wt.path, 'HEAD^{tree}')
+  if (liveTree === wtTree) return { synced: false }
+  await git(wt.path, ['clean', '-fd'])
+  await git(wt.path, ['reset', '--hard', live])
+  wt.baseSha = live
+  return { synced: true }
+}
+
+export interface TurnOutcome {
+  outcome: 'noop' | 'merged' | 'parked'
+  files: string[]
+  edits: { file: string; before: string; after: string }[]
+  /** Worktree HEAD after a merge — the caller advances `wt.baseSha` to it. */
+  newBase?: string
+}
+
+/**
+ * Turn-end commit + merge. Squash the turn's work into one commit off `baseSha` (soft
+ * reset means successive parked turns re-squash into ONE cumulative commit, so the
+ * branch is always the full pending diff), then auto-apply onto the live tree:
+ *  - nothing committed            → `noop`
+ *  - applied onto the live tree   → `merged` (+ `edits` for the undo history, `newBase`)
+ *  - refused (live drifted)       → `parked` (work stays on the branch for review)
+ *  - already at target (no write) → `noop`
+ */
+export async function completeTurn(liveRoot: string, wt: Worktree, message: string): Promise<TurnOutcome> {
+  const { committed, files } = await commitWorktree(wt, message)
+  if (!committed) return { outcome: 'noop', files: [], edits: [] }
+  const { applied, edits } = await autoApplyWorktree(liveRoot, wt, files)
+  if (applied) {
+    const newBase = await revParse(wt.path, 'HEAD')
+    return { outcome: 'merged', files, edits, newBase }
+  }
+  // autoApplyWorktree returns `applied:false` with an EMPTY edits list only when it
+  // refused the batch (drift/binary/delete); a non-empty edits list with no write means
+  // the live tree already matched the target — a no-op, not a park.
+  if (edits.length === 0) return { outcome: 'parked', files, edits: [] }
+  return { outcome: 'noop', files, edits: [] }
+}
+
+export interface ApplyOutcome {
+  ok: boolean
+  conflict: boolean
+  files: string[]
+  /** Worktree HEAD when the apply landed cleanly — caller advances `wt.baseSha`. */
+  newBase?: string
+  error?: string
+}
+
+/**
+ * Explicit user "Apply" of a PARKED chat: 3-way apply the branch's cumulative diff onto
+ * the live tree (tolerates the user's uncommitted WIP; may leave conflict markers, which
+ * is acceptable for an explicit action). On a clean apply, return `newBase` so the caller
+ * advances the fork point and unparks.
+ */
+export async function applyParked(liveRoot: string, wt: Worktree): Promise<ApplyOutcome> {
+  const patch = await diffWorktree(wt)
+  const files = await changedFiles(wt)
+  const tmpDir = join(dirname(wt.path), '.apply-tmp')
+  const res = await applyToWorkingTree(liveRoot, patch, tmpDir)
+  if (res.ok) {
+    const newBase = await revParse(wt.path, 'HEAD')
+    return { ok: true, conflict: false, files, newBase }
+  }
+  return { ok: false, conflict: res.conflict, files, error: res.error }
+}
+
+/**
+ * Explicit user "Discard" of a PARKED chat: reset the worktree back to its fork point
+ * and drop any stray files. The branch is intentionally NOT deleted — the chat is still
+ * live and its worktree keeps the branch checked out (a `git branch -D` would fail).
+ */
+export async function discardParked(wt: Worktree): Promise<void> {
+  await git(wt.path, ['reset', '--hard', wt.baseSha]).catch(() => {})
+  await git(wt.path, ['clean', '-fd']).catch(() => {})
+}
