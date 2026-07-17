@@ -28,8 +28,11 @@ export interface StylePropMeta {
   min?: number
   max?: number
   step?: number
-  /** For control 'select'. */
+  /** For control 'select' — REAL CSS values for the property (these feed the
+   * commit paths verbatim), never display names. */
   options?: string[]
+  /** Display labels for select options whose CSS value is unwieldy. */
+  optionLabels?: Record<string, string>
   /** Only shown when the element computes to display flex/grid (gap). */
   flexGridOnly?: boolean
 }
@@ -77,7 +80,20 @@ export const STYLE_PROP_META: Record<string, StylePropMeta> = {
   'transition-property': {
     group: 'transition',
     control: 'select',
-    options: ['all', 'colors', 'opacity', 'transform', 'shadow']
+    // CSS values, not Tailwind family names: 'colors'/'shadow' would commit
+    // `transition-property: shadow` — parseable but inert (no such property).
+    // tailwindClassFor maps these to transition-colors / transition-shadow.
+    options: [
+      'all',
+      'color, background-color, border-color, text-decoration-color, fill, stroke',
+      'opacity',
+      'transform',
+      'box-shadow'
+    ],
+    optionLabels: {
+      'color, background-color, border-color, text-decoration-color, fill, stroke': 'colors',
+      'box-shadow': 'shadow'
+    }
   },
   'transition-duration': {
     group: 'transition',

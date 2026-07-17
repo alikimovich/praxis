@@ -13,7 +13,8 @@ import {
   locateAnchor,
   lexLiteral,
   renderLiteral,
-  resolveLiteralValue
+  resolveLiteralValue,
+  upsertPanel
 } from '../src/main/control-manifest.ts'
 
 let failed = 0
@@ -160,6 +161,23 @@ const lexAt = (anchor, kind) => {
   assert(lexAt('const EASE_CSS = ', 'bezier')?.raw === "'cubic-bezier(0.4, 0, 0.2, 1)'", 'lex bezier cubic-bezier string')
   assert(lexAt('const ACCENT = ', 'number') === null, 'kind mismatch → null (number over string)')
   assert(lexAt('const STAGGER_MS = ', 'toggle') === null, 'kind mismatch → null (toggle over number)')
+
+  // Exponent forms lex in FULL — a partial span ('1' of '1e3') would corrupt
+  // the value on splice (250e3) and misreport it on resolve.
+  assert(lexLiteral('const D = 1e3', 10, 'number')?.raw === '1e3', 'lex exponent literal fully')
+  assert(lexLiteral('const D = 1.5E-2;', 10, 'number')?.raw === '1.5E-2', 'lex signed exponent fully')
+  assert(lexLiteral('const D = -2e10,', 10, 'number')?.raw === '-2e10', 'lex negative exponent fully')
+  // Unlexable numeric forms REFUSE (stale) instead of truncating.
+  assert(lexLiteral('const C = 0x1f', 10, 'number') === null, 'hex literal → null, not "0"')
+  assert(lexLiteral('const D = 120_000', 10, 'number') === null, 'separator literal → null, not "120"')
+  assert(lexLiteral('const B = 4n;', 10, 'number') === null, 'BigInt literal → null, not "4"')
+  assert(lexLiteral('const P = 1.5.x', 10, 'number') === null, 'trailing property access → null')
+  // Toggle needs a word boundary — identifier prefixes are not booleans.
+  assert(lexLiteral('const F = trueish', 10, 'toggle') === null, 'trueish → null, not "true"')
+  assert(lexLiteral('const F = falsey', 10, 'toggle') === null, 'falsey → null, not "false"')
+  assert(lexLiteral('const F = true_x', 10, 'toggle') === null, 'true_x → null (underscore continues)')
+  assert(lexLiteral('a = true', 4, 'toggle')?.raw === 'true', 'true at end of source still lexes')
+  assert(lexLiteral('a = true,', 4, 'toggle')?.raw === 'true', 'true before comma still lexes')
   assert(lexLiteral('v = `has ${x} interp`', 4, 'text') === null, 'template interpolation refuses')
   const long = `e = [${'1,'.repeat(60)}1]`
   assert(lexLiteral(long, 4, 'bezier') === null, 'bezier array must be 4 numbers within 80 chars')
@@ -241,6 +259,19 @@ const splice = (code, anchor, kind, rendered) => {
 
   assert(resolveLiteralValue(FIXTURE, validParam({ apply: { strategy: 'prop', propName: 'x' } })) === null, 'non-literal strategy → null')
   assert(resolveLiteralValue(FIXTURE, validParam({ apply: { strategy: 'literal', anchor: 'const GONE = ' } })) === null, 'missing anchor → null')
+
+  // Exponent literal resolves to its true value and round-trips via splice.
+  const e = validParam({ apply: { strategy: 'literal', anchor: 'const DELAY = ' } })
+  const expCode = 'const DELAY = 1e3\n'
+  assert(resolveLiteralValue(expCode, e) === 1000, '1e3 resolves as 1000, not 1')
+  const expEdited = splice(expCode, e.apply.anchor, 'number', renderLiteral('number', 250, e))
+  assert(expEdited === 'const DELAY = 250\n', 'splice replaces the WHOLE exponent literal')
+  assert(resolveLiteralValue(expEdited, e) === 250, 'round-trip after exponent splice')
+  // Shapes the lexer refuses resolve as stale (null), never a wrong value.
+  assert(resolveLiteralValue('const DELAY = 120_000\n', e) === null, 'separator literal → stale')
+  assert(resolveLiteralValue('const DELAY = 0xff8800\n', e) === null, 'hex literal → stale')
+  const tb = validParam({ kind: 'toggle', apply: { strategy: 'literal', anchor: 'const FEATURE = ' } })
+  assert(resolveLiteralValue('const FEATURE = trueByDefault\n', tb) === null, 'identifier starting with true → stale')
 }
 
 // ---------- anchors survive unrelated edits (positionless) ----------
@@ -264,8 +295,41 @@ const splice = (code, anchor, kind, rendered) => {
   assert(locateAnchor(duplicated, p.apply.anchor).error === 'ambiguous', 'duplicated anchor → ambiguous')
 }
 
+// ---------- upsert by (file, component) — regenerate replaces, never duplicates ----------
+
+{
+  const mkPanel = (over = {}) => {
+    const r = validateManifest(validManifest(over))
+    assert(!('error' in r), `upsert fixture manifest validates: ${r.error ?? ''}`)
+    return r
+  }
+  const first = mkPanel()
+  const one = upsertPanel([], first)
+  assert(Array.isArray(one) && one.length === 1, 'insert into empty store')
+  // Same file+component (different id/title/params) → replaced in place.
+  const regen = mkPanel({ id: 'hero-controls-v2', title: 'Hero timing v2' })
+  const replaced = upsertPanel(one, regen)
+  assert(Array.isArray(replaced) && replaced.length === 1, 'regenerate replaces, never duplicates')
+  assert(replaced[0].id === 'hero-controls-v2', 'replacement is the new manifest')
+  // Different component in the same file → appends.
+  const sibling = mkPanel({ id: 'footer-controls', component: 'Footer' })
+  const two = upsertPanel(replaced, sibling)
+  assert(Array.isArray(two) && two.length === 2, 'different component appends')
+  // Same component in a different file → appends (keyed by file AND component).
+  const otherFile = mkPanel({ id: 'other-hero', file: 'src/components/Other.tsx' })
+  assert(upsertPanel(two, otherFile).length === 3, 'same component, different file appends')
+  // Input array is never mutated.
+  assert(one.length === 1 && one[0].id === 'hero-controls', 'upsert is pure (input untouched)')
+  // ≤20 panels per repo: the 21st insert refuses, but replacing at the cap works.
+  const twenty = Array.from({ length: 20 }, (_, i) => mkPanel({ id: `p-${i}`, file: `src/F${i}.tsx` }))
+  const overflow = upsertPanel(twenty, mkPanel({ id: 'p-20', file: 'src/F20.tsx' }))
+  assert('error' in overflow, '21st panel → error (20-panel cap)')
+  const replacedAtCap = upsertPanel(twenty, mkPanel({ id: 'p-5-v2', file: 'src/F5.tsx' }))
+  assert(Array.isArray(replacedAtCap) && replacedAtCap.length === 20, 'replace still allowed at the cap')
+}
+
 if (failed) {
   console.error(`CONTROL-PANELS: ${failed}/${count} assertion(s) failed`)
   process.exit(1)
 }
-console.log(`CONTROL-PANELS OK — ${count} assertions: validation matrix, anchor locate, kind-typed lexing, clamped/quote-safe rendering, resolve round-trips`)
+console.log(`CONTROL-PANELS OK — ${count} assertions: validation matrix, anchor locate, kind-typed lexing, clamped/quote-safe rendering, resolve round-trips, upsert-by-file+component`)

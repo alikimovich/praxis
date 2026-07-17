@@ -90,6 +90,23 @@ export function mergeStyleString(
   return kept.join('; ')
 }
 
+/** Does `text` contain a `//` or `/*` comment outside quotes? splitTop/
+ * indexOfTop are comment-blind, so a splice could land INSIDE a comment (the
+ * code still compiles, the style silently never applies) — callers refuse.
+ * A lone `/` (division: `size / 2`) doesn't trip this. */
+function hasComment(text: string): boolean {
+  let quote: string | null = null
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (quote) {
+      if (ch === '\\') i++
+      else if (ch === quote) quote = null
+    } else if (ch === "'" || ch === '"' || ch === '`') quote = ch
+    else if (ch === '/' && (text[i + 1] === '/' || text[i + 1] === '*')) return true
+  }
+  return false
+}
+
 const STRING_LITERAL = /^(['"])(?:\\.|(?!\1)[^\\\n])*\1$/
 const NUMBER_LITERAL = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i
 
@@ -109,9 +126,14 @@ export function mergeStyleObjectSource(
   const close = objectSource.lastIndexOf('}')
   if (open === -1 || close < open) return null
   const inner = objectSource.slice(open + 1, close)
+  if (hasComment(inner)) return null // a splice could land inside the comment
   const jsKey = cssPropToJsKey(prop)
   const literal = JSON.stringify(value)
 
+  // Scan EVERY entry before splicing: a spread anywhere (even after a match)
+  // makes the final object unknowable, and with duplicate keys the LAST one
+  // wins at runtime — replacing an earlier duplicate would have no effect.
+  let target: { start: number; raw: string; colon: number } | null = null
   for (const { start, end } of splitTop(inner, ',')) {
     const raw = inner.slice(start, end)
     const trimmed = raw.trim()
@@ -121,7 +143,10 @@ export function mergeStyleObjectSource(
     // Shorthand entry (`{ color }`): key only, value is a variable.
     const keyText = (colon === -1 ? raw : raw.slice(0, colon)).trim()
     const key = STRING_LITERAL.test(keyText) ? keyText.slice(1, -1) : keyText
-    if (key !== jsKey && key !== prop) continue
+    if (key === jsKey || key === prop) target = { start, raw, colon }
+  }
+  if (target) {
+    const { start, raw, colon } = target
     if (colon === -1) return null // target's value is an identifier, not a literal
     const after = raw.slice(colon + 1)
     if (!STRING_LITERAL.test(after.trim()) && !NUMBER_LITERAL.test(after.trim())) return null

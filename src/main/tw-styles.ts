@@ -166,6 +166,38 @@ function arbitraryInner(cls: string, prefix: string): string | null {
 }
 
 const COLOR_VALUE_RE = /^(#|rgba?\(|hsla?\(|oklch\(|oklab\(|lab\(|lch\(|color\(|var\(--)/
+// CSS named colors (+ transparent/currentcolor): Tailwind accepts them as bare
+// arbitrary values (`text-[red]`) and infers the color type, so they must be
+// color-family — NOT font-size — or a font-size scrub deletes the color class.
+const NAMED_COLORS = new Set(
+  ('aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue ' +
+    'blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk ' +
+    'crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki ' +
+    'darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen ' +
+    'darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue ' +
+    'dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite ' +
+    'gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki ' +
+    'lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan ' +
+    'lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen ' +
+    'lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen ' +
+    'magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen ' +
+    'mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream ' +
+    'mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid ' +
+    'palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum ' +
+    'powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown ' +
+    'seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen ' +
+    'steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow ' +
+    'yellowgreen transparent currentcolor').split(' ')
+)
+
+/** Is the inner text of an arbitrary-value class a color? Covers value grammars
+ * (#hex, rgb()…, var(--…)), Tailwind's `color:` data-type hint
+ * (`text-[color:red]`) and bare CSS color keywords (`text-[transparent]`). */
+function isColorInner(inner: string): boolean {
+  return (
+    COLOR_VALUE_RE.test(inner) || inner.startsWith('color:') || NAMED_COLORS.has(inner.toLowerCase())
+  )
+}
 const SCALE_SUFFIX_RE = /^(?:\d+(?:\.\d+)?|px|auto|full)$/
 const RADIUS_CLASS_RE = /^rounded(?:-(?:none|xs|sm|md|lg|xl|2xl|3xl|full))?$/
 const FONT_SIZE_CLASS_RE = /^text-(?:xs|sm|base|lg|xl|[2-9]xl)$/
@@ -193,17 +225,19 @@ function isFamilyMatch(prop: string, cls: string): boolean {
       return RADIUS_CLASS_RE.test(cls) || arbitraryInner(cls, 'rounded') != null
     case 'color': {
       const inner = arbitraryInner(cls, 'text')
-      return colorClassFamily(cls) === 'text' || (inner != null && COLOR_VALUE_RE.test(inner))
+      return colorClassFamily(cls) === 'text' || (inner != null && isColorInner(inner))
     }
     case 'background-color': {
       const inner = arbitraryInner(cls, 'bg')
-      return colorClassFamily(cls) === 'bg' || (inner != null && COLOR_VALUE_RE.test(inner))
+      return colorClassFamily(cls) === 'bg' || (inner != null && isColorInner(inner))
     }
     case 'opacity':
       return /^opacity-(?:\d+|\[.+\])$/.test(cls)
     case 'font-size': {
+      // Non-color arbitrary text-[…] is font-size; `length:`/`font-size:`
+      // data-type hints land here too (they're not color inners).
       const inner = arbitraryInner(cls, 'text')
-      return FONT_SIZE_CLASS_RE.test(cls) || (inner != null && !COLOR_VALUE_RE.test(inner))
+      return FONT_SIZE_CLASS_RE.test(cls) || (inner != null && !isColorInner(inner))
     }
     case 'font-weight': {
       const inner = arbitraryInner(cls, 'font')

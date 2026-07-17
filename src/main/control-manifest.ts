@@ -25,6 +25,7 @@ const STYLE_PROPS = new Set([
   'transition-timing-function'
 ])
 const MAX_PARAMS = 12
+const MAX_PANELS = 20
 const MAX_LABEL = 80
 const MAX_MANIFEST_BYTES = 32 * 1024
 const MAX_STRING_VALUE = 500
@@ -136,6 +137,26 @@ export function validateManifest(input: unknown): ControlPanelManifest | { error
 }
 
 /**
+ * Upsert `manifest` into `panels` by (file, component): a regenerate REPLACES
+ * the existing panel for the same component in place — never duplicates. New
+ * panels append, capped at 20 per repo. Pure — returns a new array (or
+ * `{ error }` at the cap); control-panels.ts persists the result.
+ */
+export function upsertPanel(
+  panels: ControlPanelManifest[],
+  manifest: ControlPanelManifest
+): ControlPanelManifest[] | { error: string } {
+  const at = panels.findIndex((p) => p.file === manifest.file && p.component === manifest.component)
+  if (at !== -1) {
+    const next = panels.slice()
+    next[at] = manifest
+    return next
+  }
+  if (panels.length >= MAX_PANELS) return { error: `panel cap reached (${MAX_PANELS} per repo)` }
+  return [...panels, manifest]
+}
+
+/**
  * Find the anchor in `code`. The anchor must occur EXACTLY once — a missing
  * anchor means the constant was renamed/removed, an ambiguous one means a
  * splice could land at the wrong site; both refuse. `at` is the offset just
@@ -148,7 +169,16 @@ export function locateAnchor(code: string, anchor: string): { at: number } | { e
   return { at: first + anchor.length }
 }
 
-const NUMBER_RE = /-?\d*\.?\d+/y
+// Decimal JS numbers incl. exponent forms (120, -0.75, .5, 1e3, 1.5E-2). Hex/
+// binary/octal (0x10), numeric separators (1_000) and BigInt (4n) are NOT
+// lexable: the boundary check in lexLiteral makes them resolve as stale
+// instead of truncating to a partial match (a partial-span splice would
+// silently corrupt the value — e.g. '250' over the '1' of '1e3' → '250e3').
+const NUMBER_RE = /-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/iy
+// A literal followed by one of these is a form we only partially matched
+// (0x10, 1_000, 4n, trueish) — refuse, per "stale, never a wrong-site splice".
+const IDENT_CONT_RE = /[\w$]/
+const NUM_CONT_RE = /[\w$.]/
 const BEZIER_STR_RE = /^cubic-bezier\(\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*\)$/
 
 /** Lex a quoted string ('/"/`) at `i`, honoring backslash escapes. */
@@ -190,10 +220,13 @@ export function lexLiteral(
   if (kind === 'number') {
     NUMBER_RE.lastIndex = i
     const m = NUMBER_RE.exec(code)
-    if (m) span = { start: i, end: i + m[0].length }
+    if (m && !NUM_CONT_RE.test(code[i + m[0].length] ?? '')) span = { start: i, end: i + m[0].length }
   } else if (kind === 'toggle') {
-    if (code.startsWith('true', i)) span = { start: i, end: i + 4 }
-    else if (code.startsWith('false', i)) span = { start: i, end: i + 5 }
+    // Word boundary required — `trueish`/`falseByDefault` are identifiers, not
+    // booleans; lexing their prefix would splice mid-identifier.
+    if (code.startsWith('true', i) && !IDENT_CONT_RE.test(code[i + 4] ?? '')) span = { start: i, end: i + 4 }
+    else if (code.startsWith('false', i) && !IDENT_CONT_RE.test(code[i + 5] ?? ''))
+      span = { start: i, end: i + 5 }
   } else if (kind === 'bezier') {
     span = lexBezierArray(code, i)
     if (!span) {

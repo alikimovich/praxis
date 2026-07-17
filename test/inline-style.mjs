@@ -180,6 +180,50 @@ assert.strictEqual(
   'shorthand target → null'
 )
 
+// Comments anywhere in the object → null: the splicers are comment-blind, so
+// an append after `// tweak me` would land INSIDE the comment — code compiles,
+// edit reports success, style silently never applies.
+assert.strictEqual(
+  mergeStyleObjectSource('{ padding: 4 // tweak me\n}', 'padding-top', '8px'),
+  null,
+  'trailing line comment → null, not a swallowed append'
+)
+assert.strictEqual(
+  mergeStyleObjectSource('{ padding: 4 /* px */ }', 'color', 'red'),
+  null,
+  'block comment → null'
+)
+// A '/' inside a quoted value is not a comment; division isn't either.
+assert.strictEqual(
+  mergeStyleObjectSource("{ backgroundImage: 'url(https://x/y.png)' }", 'color', 'red'),
+  '{ backgroundImage: \'url(https://x/y.png)\', color: "red" }',
+  'quoted // is not a comment'
+)
+assert.strictEqual(
+  mergeStyleObjectSource("{ width: size / 2, color: 'blue' }", 'color', 'red'),
+  '{ width: size / 2, color: "red" }',
+  'division is not a comment'
+)
+
+// Duplicate keys: the LAST one wins at runtime, so that's the one replaced.
+assert.strictEqual(
+  mergeStyleObjectSource("{ color: 'red', color: 'blue' }", 'color', '#0f0'),
+  "{ color: 'red', color: \"#0f0\" }",
+  'duplicate keys → last occurrence replaced'
+)
+assert.strictEqual(
+  mergeStyleObjectSource("{ 'background-color': 'red', backgroundColor: 'blue' }", 'background-color', '#0f0'),
+  "{ 'background-color': 'red', backgroundColor: \"#0f0\" }",
+  'mixed-form duplicate → last occurrence replaced'
+)
+
+// Spread AFTER the target still poisons the object (it may override the prop).
+assert.strictEqual(
+  mergeStyleObjectSource("{ color: 'blue', ...base }", 'color', 'red'),
+  null,
+  'spread after match → null'
+)
+
 // A non-target expression entry doesn't block editing another prop.
 assert.strictEqual(
   mergeStyleObjectSource("{ width: size * 2, color: 'blue' }", 'color', 'red'),

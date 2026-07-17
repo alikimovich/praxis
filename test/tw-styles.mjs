@@ -169,6 +169,58 @@ eq(rewriteClassList('-mt-2 flex', 'margin-top', '16px'), 'mt-4 flex', 'negative 
 eq(rewriteClassList('bg-blue-500', 'background-color', '#000'), 'bg-[#000]', 'bg palette replaced')
 eq(rewriteClassList('p-2', 'width', '10px'), null, 'unmappable prop → null even with classes')
 
+// --- arbitrary text color classes (keyword / color: hint) vs font-size ---
+
+// A font-size scrub must never delete a color class.
+eq(
+  rewriteClassList('text-[color:red] flex', 'font-size', '18px'),
+  'text-[color:red] flex text-lg',
+  'color:-hinted class survives a font-size edit (append)'
+)
+eq(
+  rewriteClassList('text-[color:var(--x)] flex', 'font-size', '18px'),
+  'text-[color:var(--x)] flex text-lg',
+  'color:var() hint survives a font-size edit'
+)
+eq(
+  rewriteClassList('text-[red] p-2', 'font-size', '18px'),
+  'text-[red] p-2 text-lg',
+  'named-color arbitrary class survives a font-size edit'
+)
+eq(
+  rewriteClassList('text-[transparent] p-2', 'font-size', '18px'),
+  'text-[transparent] p-2 text-lg',
+  'transparent survives a font-size edit'
+)
+// …and a color edit REPLACES them instead of appending a conflicting class.
+eq(
+  rewriteClassList('text-[color:red] flex', 'color', '#000000'),
+  'text-[#000000] flex',
+  'color edit replaces the color:-hinted class'
+)
+eq(
+  rewriteClassList('text-[red] p-2', 'color', '#000000'),
+  'text-[#000000] p-2',
+  'color edit replaces the named-color class'
+)
+eq(
+  rewriteClassList('bg-[red] flex', 'background-color', '#eee'),
+  'bg-[#eee] flex',
+  'bg named-color class replaced by a background-color edit'
+)
+// length:/font-size:-hinted arbitrary text classes stay font-size family.
+eq(
+  rewriteClassList('text-[length:var(--fs)] flex', 'font-size', '18px'),
+  'text-lg flex',
+  'length:-hinted class IS replaced by a font-size edit'
+)
+// Non-color words that aren't CSS color keywords stay font-size family.
+eq(
+  rewriteClassList('text-[larger] flex', 'font-size', '18px'),
+  'text-lg flex',
+  'non-color keyword arbitrary text class stays font-size family'
+)
+
 // --- variant-prefix immunity: never candidates, never blockers ---
 
 eq(

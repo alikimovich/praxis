@@ -24,6 +24,9 @@ import {
   snapBezierPreset,
   stylePropMeta
 } from '../src/renderer/src/lib/css-values.ts'
+// Cross-module regression (finding: options were Tailwind family names, not
+// CSS): the select options must be committable through the S1 class path.
+import { tailwindClassFor } from '../src/main/tw-styles.ts'
 
 let failed = 0
 let count = 0
@@ -115,10 +118,35 @@ assert(m('letter-spacing')?.min < 0, 'letter-spacing allows negatives')
 for (const p of ['transition-duration', 'transition-delay']) {
   assert(m(p)?.unit === 'ms' && m(p)?.step === 10, `${p} in ms, step 10`)
 }
+// transition-property options are REAL CSS values (they feed the commit paths
+// verbatim): 'colors'/'shadow' are Tailwind family names, and committing
+// `transition-property: shadow` is inert — no such CSS property exists.
+const TP_COLORS = 'color, background-color, border-color, text-decoration-color, fill, stroke'
 assert(
-  eq(m('transition-property')?.options, ['all', 'colors', 'opacity', 'transform', 'shadow']),
-  'transition-property select options'
+  eq(m('transition-property')?.options, ['all', TP_COLORS, 'opacity', 'transform', 'box-shadow']),
+  'transition-property select options are css values'
 )
+assert(
+  eq(m('transition-property')?.optionLabels, { [TP_COLORS]: 'colors', 'box-shadow': 'shadow' }),
+  'unwieldy option values carry display labels'
+)
+// Every option must map to a NAMED Tailwind transition class — an arbitrary
+// `transition-[…]` here would mean the option isn't a value Tailwind knows.
+{
+  const expected = {
+    all: 'transition-all',
+    [TP_COLORS]: 'transition-colors',
+    opacity: 'transition-opacity',
+    transform: 'transition-transform',
+    'box-shadow': 'transition-shadow'
+  }
+  for (const opt of m('transition-property')?.options ?? []) {
+    assert(
+      tailwindClassFor('transition-property', opt) === expected[opt],
+      `option ${JSON.stringify(opt)} commits as ${expected[opt]}`
+    )
+  }
+}
 assert(m('transition-timing-function')?.control === 'bezier', 'timing-function is bezier')
 assert(m('color')?.control === 'color', 'color uses ColorControl')
 assert(m('background-color')?.control === 'color', 'background-color uses ColorControl')
