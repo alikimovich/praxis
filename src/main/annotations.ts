@@ -189,7 +189,7 @@ async function shipToMain(
     /* origin/HEAD not set — assume main */
   }
   if (branch === base) {
-    return { ok: false, error: `You're on ${base} — publish runs from a dsgn/* work branch.` }
+    return { ok: false, error: `You're on ${base} — publish runs from a Praxis work branch (dsgn/*).` }
   }
   try {
     await git(root, ['remote', 'get-url', 'origin'])

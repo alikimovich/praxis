@@ -1113,6 +1113,17 @@ export default function App(): React.JSX.Element {
   const newChatForProject = async (key: string): Promise<void> => {
     const entry = useWorkspace.getState().projects.find((p) => p.key === key)
     if (!entry) return
+    // An empty live chat already IS a "new chat" — switch to it instead of
+    // stacking another session, so mashing "+" can't mint unlimited empty
+    // chats (the rail hides message-less chats until their first prompt).
+    const chats = useChat.getState().byKey
+    const empty = (entry.sessionKeys ?? [key]).find(
+      (sk) => (chats[sk]?.messages.length ?? 0) === 0
+    )
+    if (empty) {
+      await switchSession(key, empty)
+      return
+    }
     // A new chat starts with the choices visible on the chat it was created
     // from. Later picker changes stay isolated to the new sessionKey.
     const chatSettings = chatAgentSettingsFor(entry, entry.activeSessionKey ?? entry.key)
@@ -1305,7 +1316,7 @@ export default function App(): React.JSX.Element {
       useSetup
         .getState()
         .setStatus(
-          'Setup wired the config, but dsgn is attached to your own dev server — restart it to apply the change.'
+          'Setup wired the config, but Praxis is attached to your own dev server — restart it to apply the change.'
         )
       return
     }
@@ -1516,7 +1527,7 @@ export default function App(): React.JSX.Element {
       {authNeeded && (
         <div className="banner banner--auth">
           <span className="banner__text">
-            dsgn couldn’t reach Claude. Each teammate authenticates with their own
+            Praxis couldn’t reach Claude. Each teammate authenticates with their own
             subscription — run <code>claude setup-token</code> (or <code>claude login</code>) in a
             terminal, then reopen the project.
           </span>

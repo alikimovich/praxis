@@ -54,6 +54,7 @@
     "test:prbody": "bun test/pr-body.mjs",
     "test:feedback-body": "bun test/feedback-body.mjs",
     "test:slash-token": "bun test/slash-token.mjs",
+    "test:skills": "bun test/skills-discovery.mjs",
     "test:devnet": "bun test/devserver-net.mjs",
     "test:xcode": "bun test/xcode.mjs",
     "test:git": "bun test/git.mjs",

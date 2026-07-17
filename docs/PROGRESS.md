@@ -20,6 +20,63 @@ Multiple concurrent chats on the same project can now run in isolation without c
 **Known limits:** resumed sessions get a fresh worktree; agent writes via absolute live-root paths escape the worktree (mitigated by a rules.ts note); heavy mid-turn live editing (prop panel during long turns) parks often.
 
 **Tests:** `test/chat-worktrees.mjs` (unit, pure git repos), `test/chat-isolation.mjs` (Electron, real app), existing fixtures on the live-cwd path unchanged.
+## 2026-07-16 — User-visible "dsgn" mentions replaced with "Praxis" (LKM-57)
+
+The old product name still leaked into user-facing copy (setup card, prop-panel
+hints, diagnose card, auth banner, preview context menu, dev-server conflict
+error, publish/PR titles + bodies, scaffolded template, worktree git author).
+All of it now says **Praxis**; the comment-agent PR body also pointed at the
+old `alikimovich/dsgn` repo URL — fixed to `alikimovich/praxis`.
+
+Deliberately **kept** (protocol/identifiers, per CLAUDE.md): `data-dsgn-source`
+stamps, the `.dsgn/` dir + helper file names, the `dsgn/*` branch prefix (the
+publish-from-base error now reads "a Praxis work branch (dsgn/*)"),
+`?dsgnPanel`/`?dsgnSim` flags, storage keys, and `Dsgn*`/`dsgn*` type and
+function names. The scaffolded `.dsgn/` helpers' prose comments say Praxis but
+their plugin names/exports are unchanged. Tests updated:
+`test/publish-message.mjs`, `test/ready-gating.mjs`.
+
+## 2026-07-16 — Empty chats get no rail row until their first message (LKM-55)
+
+Mashing the rail's "+" minted a new live session every click, filling the rail
+with identical "New chat" rows — unlimited empty chats.
+
+- **Rail** now skips live chats whose slice has no messages: a chat's row
+  appears only once its first message is sent (Cursor-style). An empty chat has
+  nothing to name or return to; past/spawn rows are unaffected.
+- **App's `newChatForProject`** reuses an existing empty live chat (switches to
+  it) instead of stacking another session — an empty chat already IS a "new
+  chat", so "+" is idempotent until you actually type something.
+- Tests: `test/chat-render.mjs` asserts empty chats render no rows, "+" with an
+  empty chat live doesn't grow `sessionKeys`, and rows appear per-chat as each
+  first message lands.
+
+## 2026-07-16 — Project skills first in the "/" menu, with descriptions (LKM-54)
+
+The composer's "/" menu listed the SDK's advertised command names flat, so the
+opened repo's own skills (`.claude/skills/**/SKILL.md`) drowned among built-ins
+and had no descriptions.
+
+- **`AgentEvent` `commands` now carries structured items** —
+  `SlashCommandItem { name, description?, source: 'project' | 'other' }`
+  (`shared/api.ts`) instead of bare strings.
+- **New `src/main/skills.ts`** (main-process — the renderer stays free of fs
+  reads): `discoverProjectSkills(root)` scans `.claude/skills` (nested dirs
+  tolerated) and pulls `description` from each SKILL.md's YAML frontmatter with
+  a defensive no-dependency parser (plain/quoted/block scalars; malformed input
+  degrades to an undescribed item, never breaks the menu);
+  `mergeSlashCommands(project, sdkNames)` ranks project skills first and lets a
+  project skill shadow a same-named SDK command.
+- **`backends/claude.ts`** discovers once per session and re-emits the merged
+  list whenever either side (project scan, `supportedCommands()`, the init
+  message's `slash_commands`) arrives.
+- **`ChatPanel`** filters by name, keeps project-first ranking + dedupe on the
+  render side too (guards store seeds/other backends), and renders two-line
+  items: `/name` plus the description truncated to one visual line (`truncate`).
+  Filtering, keyboard nav, click-to-insert, and the 8-item cap are unchanged.
+- Tests: `test/skills-discovery.mjs` (unit tier — parse/scan/merge);
+  `test/chat-render.mjs` now asserts priority order, duplicate collapse,
+  description fallback, one-line ellipsis truncation, and Enter/click insertion.
 
 ## 2026-07-15 — Attach arbitrary files (not just images) to the chat
 

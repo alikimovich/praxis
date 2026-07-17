@@ -62,10 +62,10 @@ export async function captureBase(repoRoot: string, indexFile: string): Promise<
   const head = (await git(repoRoot, ['rev-parse', 'HEAD'])).stdout.trim()
   const env: NodeJS.ProcessEnv = {
     GIT_INDEX_FILE: indexFile,
-    GIT_AUTHOR_NAME: 'dsgn',
-    GIT_AUTHOR_EMAIL: 'dsgn@local',
-    GIT_COMMITTER_NAME: 'dsgn',
-    GIT_COMMITTER_EMAIL: 'dsgn@local'
+    GIT_AUTHOR_NAME: 'Praxis',
+    GIT_AUTHOR_EMAIL: 'praxis@local',
+    GIT_COMMITTER_NAME: 'Praxis',
+    GIT_COMMITTER_EMAIL: 'praxis@local'
   }
   try {
     await git(repoRoot, ['read-tree', 'HEAD'], env)
@@ -162,13 +162,13 @@ export async function commitWorktree(
   // the spawn's finalization, losing the work.
   await git(wt.path, [
     '-c',
-    'user.name=dsgn',
+    'user.name=Praxis',
     '-c',
-    'user.email=dsgn@local',
+    'user.email=praxis@local',
     'commit',
     '--no-verify',
     '-m',
-    message || 'dsgn comment edit'
+    message || 'Praxis comment edit'
   ])
   return { committed: true, files: staged }
 }
@@ -426,21 +426,21 @@ export async function pruneOrphans(
     try {
       await git(dir, [
         '-c',
-        'user.name=dsgn',
+        'user.name=Praxis',
         '-c',
-        'user.email=dsgn@local',
+        'user.email=praxis@local',
         'add',
         '-A'
       ])
       await git(dir, [
         '-c',
-        'user.name=dsgn',
+        'user.name=Praxis',
         '-c',
-        'user.email=dsgn@local',
+        'user.email=praxis@local',
         'commit',
         '--no-verify',
         '-m',
-        'dsgn: recovered orphaned worktree'
+        'Praxis: recovered orphaned worktree'
       ]).catch(() => {})
     } catch {
       /* not a worktree / already clean */

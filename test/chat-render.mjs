@@ -78,15 +78,102 @@ try {
     throw new Error(`expanded steps wrong: ${JSON.stringify(steps)}`)
   }
 
-  // Toolbar + "/" slash menu: seed commands and open the menu.
+  // Toolbar + "/" slash menu: seed commands (the SlashCommandItem shape main now
+  // emits — LKM-54) and open the menu. Includes: project skills with/without a
+  // description, a duplicate name in both sources, and a very long description.
   await win.evaluate(() => {
-    window.__dsgnSession
-      .getState()
-      .setSlashCommands(['design-review', 'accessibility-review', 'commit', 'compact', 'init'])
+    window.__dsgnSession.getState().setSlashCommands([
+      { name: 'commit', source: 'other' },
+      { name: 'compact', source: 'other' },
+      { name: 'init', source: 'other' },
+      // Same name in both sources: only the project one may render.
+      { name: 'design-review', source: 'other' },
+      {
+        name: 'design-review',
+        description:
+          'Run the full project design review: check every screen against the token set, ' +
+          'measure spacing, contrast and typography, and file annotations for anything off.',
+        source: 'project'
+      },
+      { name: 'accessibility-review', description: 'Audit a11y', source: 'project' },
+      { name: 'no-desc-skill', source: 'project' }
+    ])
   })
   await win.fill('.composer__input', '/')
   await win.waitForSelector('.slash__item', { timeout: 5000 })
   await win.screenshot({ path: join(artifacts, '05-toolbar-slash.png') })
+
+  // Project skills rank first (in seed order), then the other commands; the
+  // duplicate design-review collapses to the single project entry.
+  const menuNames = await win.$$eval('.slash__item .slash__name', (els) =>
+    els.map((e) => e.textContent?.trim())
+  )
+  const expectedOrder = [
+    '/design-review',
+    '/accessibility-review',
+    '/no-desc-skill',
+    '/commit',
+    '/compact',
+    '/init'
+  ]
+  if (JSON.stringify(menuNames) !== JSON.stringify(expectedOrder)) {
+    throw new Error(`slash menu order wrong: ${JSON.stringify(menuNames)}`)
+  }
+
+  // Each described skill shows its description on a second line, truncated to ONE
+  // visual line (ellipsis) no matter how long; an undescribed command stays a
+  // single-line item.
+  const descCheck = await win.evaluate(() => {
+    const items = [...document.querySelectorAll('.slash__item')]
+    const byName = (n) =>
+      items.find((it) => it.querySelector('.slash__name')?.textContent?.trim() === n)
+    const long = byName('/design-review').querySelector('.slash__desc')
+    const cs = getComputedStyle(long)
+    return {
+      dupCount: items.filter(
+        (it) => it.querySelector('.slash__name')?.textContent?.trim() === '/design-review'
+      ).length,
+      longText: long.textContent,
+      oneLine:
+        cs.whiteSpace === 'nowrap' &&
+        cs.textOverflow === 'ellipsis' &&
+        cs.overflow === 'hidden' &&
+        long.scrollWidth > long.clientWidth &&
+        long.clientHeight < 2 * parseFloat(cs.fontSize),
+      bareHasNoDesc: !byName('/no-desc-skill').querySelector('.slash__desc'),
+      otherHasNoDesc: !byName('/commit').querySelector('.slash__desc')
+    }
+  })
+  if (descCheck.dupCount !== 1) {
+    throw new Error(`duplicate name should render once, got ${descCheck.dupCount}`)
+  }
+  if (!descCheck.longText.includes('design review')) {
+    throw new Error(`project skill should show its SKILL.md description: ${descCheck.longText}`)
+  }
+  if (!descCheck.oneLine) {
+    throw new Error('a long description must truncate to a single visual line with an ellipsis')
+  }
+  if (!descCheck.bareHasNoDesc || !descCheck.otherHasNoDesc) {
+    throw new Error('commands without a description should render as single-line items')
+  }
+
+  // Keyboard nav + Enter inserts the highlighted (first = project) command.
+  await win.focus('.composer__input')
+  await win.keyboard.press('ArrowDown') // → accessibility-review
+  await win.keyboard.press('Enter')
+  const inserted = await win.inputValue('.composer__input')
+  if (inserted !== '/accessibility-review ') {
+    throw new Error(`Enter should insert the highlighted command: ${JSON.stringify(inserted)}`)
+  }
+
+  // Click-to-insert still works.
+  await win.fill('.composer__input', '/com')
+  await win.waitForSelector('.slash__item', { timeout: 5000 })
+  await win.click('.slash__item:has-text("/commit")')
+  const clicked = await win.inputValue('.composer__input')
+  if (clicked !== '/commit ') {
+    throw new Error(`click should insert the command: ${JSON.stringify(clicked)}`)
+  }
 
   // The menu also opens mid-message when "/" follows whitespace (caret at end).
   await win.fill('.composer__input', 'refactor /comp')
@@ -199,6 +286,33 @@ try {
     session.setChatAgentSettings({ provider: 'codex', model: 'default', effort: 'high' })
     return { key, newer }
   })
+  // LKM-55: a chat with no messages yet has no rail row — it appears only once
+  // its first message is sent, so "+" can't fill the rail with "New chat" rows.
+  await win.waitForFunction(() => document.querySelectorAll('.rail__chat').length === 0, null, {
+    timeout: 5000
+  })
+  // The older chat gains its first message → its row appears; the still-empty
+  // newer chat stays hidden.
+  await win.evaluate(({ key }) => {
+    window.__dsgnStore.getState().appendUser('older chat prompt', key)
+  }, perChat)
+  await win.waitForFunction(() => document.querySelectorAll('.rail__chat').length === 1, null, {
+    timeout: 5000
+  })
+  // LKM-55: "+" while an empty live chat exists reuses it (here: the already-
+  // active `newer`) instead of stacking another session.
+  await win.click('.rail__new-chat')
+  const afterPlus = await win.evaluate(({ key }) => {
+    const p = window.__dsgnWorkspace.getState().projects.find((x) => x.key === key)
+    return { count: p?.sessionKeys.length, active: p?.activeSessionKey }
+  }, perChat)
+  if (afterPlus.count !== 2 || afterPlus.active !== perChat.newer) {
+    throw new Error(`"+" with an empty chat live should reuse it: ${JSON.stringify(afterPlus)}`)
+  }
+  // The newer chat's first message lands → both rows show (newest first).
+  await win.evaluate(({ newer }) => {
+    window.__dsgnStore.getState().appendUser('newer chat prompt', newer)
+  }, perChat)
   await win.waitForFunction(() => document.querySelectorAll('.rail__chat').length === 2, null, {
     timeout: 5000
   })

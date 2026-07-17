@@ -197,7 +197,7 @@ export default function PropPanel({
               <button className="proppanel__link text-blue-600 underline" onClick={onSetup}>
                 set up the project
               </button>{' '}
-              or ask dsgn below.
+              or ask Praxis below.
             </div>
           ) : hasOwner ? (
             <div className="proppanel__ready proppanel__ready--no text-[12px] text-muted-foreground">
@@ -205,11 +205,11 @@ export default function PropPanel({
               <button className="proppanel__owner text-blue-600 underline" onClick={onSelectOwner}>
                 edit its component
               </button>{' '}
-              or ask dsgn below.
+              or ask Praxis below.
             </div>
           ) : (
             <div className="proppanel__ready proppanel__ready--no text-[12px] text-muted-foreground">
-              No editable props on {`<${element.tag}>`} — ask dsgn below to change it.
+              No editable props on {`<${element.tag}>`} — ask Praxis below to change it.
             </div>
           )}
         </div>

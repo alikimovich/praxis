@@ -188,10 +188,22 @@ export interface PermissionRequest {
   detail?: string
 }
 
+/**
+ * One entry in the composer's "/" menu. `source: 'project'` marks a skill
+ * discovered in the opened repo (`.claude/skills/<name>/SKILL.md`) — these rank
+ * first and carry the SKILL.md frontmatter `description`; everything else the
+ * backend advertises (built-ins, user-level skills) is `'other'`.
+ */
+export interface SlashCommandItem {
+  name: string
+  description?: string
+  source: 'project' | 'other'
+}
+
 export type AgentEvent = (
   | { type: 'delta'; text: string }
   | { type: 'status'; text: string }
-  | { type: 'commands'; commands: string[] }
+  | { type: 'commands'; commands: SlashCommandItem[] }
   | { type: 'permission-request'; request: PermissionRequest }
   /** A pending request was resolved without the user (abort/session change) — dismiss its card. */
   | { type: 'permission-resolved'; id: string }
