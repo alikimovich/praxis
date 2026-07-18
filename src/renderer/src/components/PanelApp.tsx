@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PanelState } from '../../../shared/api'
 import { SlidersHorizontal } from 'lucide-react'
+import IslandCard from './IslandCard'
 import PropPanel from './PropPanel'
+import StylePanel from './StylePanel'
 
 const COLLAPSED_KEY = 'dsgn.proppanel.collapsed'
 
@@ -64,18 +66,33 @@ export default function PanelApp(): React.JSX.Element | null {
         </button>
       ) : (
         <div style={{ width: 268 }}>
-          <PropPanel
-            maxHeight={state.maxHeight}
-            root={state.root}
+          <IslandCard
             element={state.element}
             inspection={state.inspection}
-            inspecting={state.inspecting}
-            onChange={(next) => window.api.panel.action({ kind: 'inspection', inspection: next })}
-            onSeedPrompt={(text) => window.api.panel.action({ kind: 'seed', text })}
-            onSetup={() => window.api.panel.action({ kind: 'setup' })}
-            onSelectOwner={() => window.api.panel.action({ kind: 'owner' })}
+            maxHeight={state.maxHeight}
             onCollapse={() => setCollapsed(true)}
             onClose={() => window.api.panel.action({ kind: 'close' })}
+            propsTab={
+              <PropPanel
+                root={state.root}
+                element={state.element}
+                inspection={state.inspection}
+                inspecting={state.inspecting}
+                onChange={(next) =>
+                  window.api.panel.action({ kind: 'inspection', inspection: next })
+                }
+                onSeedPrompt={(text) => window.api.panel.action({ kind: 'seed', text })}
+                onSetup={() => window.api.panel.action({ kind: 'setup' })}
+                onSelectOwner={() => window.api.panel.action({ kind: 'owner' })}
+              />
+            }
+            stylesTab={
+              <StylePanel
+                root={state.root}
+                element={state.element}
+                onSeedPrompt={(text) => window.api.panel.action({ kind: 'seed', text })}
+              />
+            }
           />
         </div>
       )}

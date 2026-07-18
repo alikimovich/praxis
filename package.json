@@ -36,6 +36,7 @@
     "test:chat": "electron-vite build && node test/chat-render.mjs",
     "test:select": "electron-vite build && node test/select-element.mjs",
     "test:props": "electron-vite build && node test/prop-edit.mjs",
+    "test:style-edit": "electron-vite build && node test/style-edit.mjs",
     "test:props-svelte": "electron-vite build && node test/prop-edit-svelte.mjs",
     "test:codepeek": "electron-vite build && node test/code-peek.mjs",
     "test:codedrawer": "electron-vite build && node test/code-drawer.mjs",

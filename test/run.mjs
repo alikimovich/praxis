@@ -83,6 +83,7 @@ const ELECTRON = [
   'spawn-comment',
   'chat-isolation',
   'prop-edit',
+  'style-edit',
   'prop-edit-svelte',
   'prop-svelte-self',
   'code-peek',
