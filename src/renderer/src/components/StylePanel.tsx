@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight, Play } from 'lucide-react'
 import {
   type Bezier,
   STYLE_PROP_META,
+  clampBezier,
   formatBezier,
   formatCssNumber,
   formatMs,
@@ -14,7 +15,7 @@ import {
   parseCssNumber,
   snapBezierPreset
 } from '@/lib/css-values'
-import BezierEditor from './styles/BezierEditor'
+import BezierEditor, { TW_EASE_EQUIV, displayBezierPreset } from './styles/BezierEditor'
 import ColorControl from './styles/ColorControl'
 import ScrubInput from './styles/ScrubInput'
 
@@ -90,21 +91,6 @@ function parseColorLike(text: string): { r: number; g: number; b: number; a: num
   const nums = parts.map(Number)
   if (!nums.every(Number.isFinite)) return null
   return { r: nums[0], g: nums[1], b: nums[2], a: parts.length === 4 ? nums[3] : 1 }
-}
-
-/**
- * Tailwind's ease-* classes carry slightly DIFFERENT curves than the CSS
- * keywords S1 maps them from (the `ease-out` class is cubic-bezier(0,0,0.2,1);
- * CSS `ease-out` is (0,0,0.58,1)). Reconcile must treat a committed keyword
- * and its Tailwind curve as the same value, or every keyword commit on a
- * Tailwind element would keep its live override forever. Mirrors the
- * EASE_KEYWORDS table in main/tw-styles.ts (`linear`/`ease` need no entry —
- * they land as the keyword itself and match textually).
- */
-const TW_EASE_EQUIV: Record<string, Bezier> = {
-  'ease-in': { x1: 0.4, y1: 0, x2: 1, y2: 1 },
-  'ease-out': { x1: 0, y1: 0, x2: 0.2, y2: 1 },
-  'ease-in-out': { x1: 0.4, y1: 0, x2: 0.2, y2: 1 }
 }
 
 /** Coord-wise bezier equality with room for computed-style float noise. */
@@ -668,7 +654,11 @@ function TimingRow({
   const parsed = parseBezier(raw)
   const live = drag && drag.over === raw ? drag.b : null
 
-  if (!parsed) {
+  // parseBezier only spec-constrains x; CSS allows any finite y, but the
+  // editor canvas is y ∈ [-1,2]. Hand an authored curve beyond that to chat
+  // like steps(): the editor would clamp it, and the first nudge or drag
+  // would then silently rewrite the untouched handle's coordinates too.
+  if (!parsed || !sameBezier(parsed, clampBezier(parsed))) {
     return (
       <div className="stylepanel__row stylepanel__row--readonly grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
         <span
@@ -699,7 +689,10 @@ function TimingRow({
     )
   }
 
-  const preset = snapBezierPreset(parsed)
+  // Display through the Tailwind-aware snap: after a keyword commit on a
+  // Tailwind element, reconcile merges the computed Tailwind curve back in,
+  // and the plain CSS snap would flip the readout to raw coords.
+  const preset = displayBezierPreset(parsed)
   return (
     <div className="stylepanel__timing flex flex-col gap-1">
       <div className="stylepanel__row grid min-h-7 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-1">

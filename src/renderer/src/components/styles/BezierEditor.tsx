@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   BEZIER_PRESETS,
+  BEZIER_SNAP_TOLERANCE,
   type Bezier,
   clampBezier,
   clampBezierX,
@@ -72,6 +73,39 @@ const KEY_DIRS: Record<string, readonly [number, number]> = {
   ArrowDown: [0, -1]
 }
 
+/**
+ * Tailwind's ease-* classes carry slightly DIFFERENT curves than the CSS
+ * keywords S1 maps them from (the `ease-out` class is cubic-bezier(0,0,0.2,1);
+ * CSS `ease-out` is (0,0,0.58,1)). Mirrors the EASE_KEYWORDS table in
+ * main/tw-styles.ts (`linear`/`ease` need no entry — they land as the keyword
+ * itself). Consumed two ways: StylePanel's reconcile treats a committed
+ * keyword and its Tailwind curve as the same value, and displayBezierPreset
+ * below names the Tailwind curve for readout/chip display — without it, a
+ * keyword commit on a Tailwind element would visually "drift" to raw coords
+ * when reconcile merges the computed Tailwind curve back in.
+ */
+export const TW_EASE_EQUIV: Record<string, Bezier> = {
+  'ease-in': { x1: 0.4, y1: 0, x2: 1, y2: 1 },
+  'ease-out': { x1: 0, y1: 0, x2: 0.2, y2: 1 },
+  'ease-in-out': { x1: 0.4, y1: 0, x2: 0.2, y2: 1 }
+}
+
+/**
+ * DISPLAY-ONLY preset name: the CSS keyword snap first, else a Tailwind
+ * ease-* curve read back from a committed keyword. Commits must keep using
+ * snapBezierPreset — writing a keyword for the Tailwind coords would be
+ * wrong everywhere but Tailwind.
+ */
+export function displayBezierPreset(b: Bezier): string | null {
+  const snap = snapBezierPreset(b)
+  if (snap) return snap
+  for (const [name, p] of Object.entries(TW_EASE_EQUIV)) {
+    const ds = [b.x1 - p.x1, b.y1 - p.y1, b.x2 - p.x2, b.y2 - p.y2].map(Math.abs)
+    if (ds.every((d) => d <= BEZIER_SNAP_TOLERANCE)) return name
+  }
+  return null
+}
+
 export default function BezierEditor({
   value,
   disabled,
@@ -79,13 +113,22 @@ export default function BezierEditor({
   onCommit,
   onReplay
 }: BezierEditorProps): React.JSX.Element {
-  // Defensive: computed input may carry float noise / out-of-range y.
+  // Defensive: computed input may carry float noise. TimingRow gates curves
+  // whose y falls outside the editor's [-1,2] range to its edit-via-chat
+  // branch, so this clamp never silently rewrites an authored overshoot.
   const b = clampBezier(value)
   const bezierCss = formatBezier(b)
 
   const svgRef = useRef<SVGSVGElement>(null)
-  /** Non-null exactly while a handle drag is active. */
-  const dragRef = useRef<{ handle: HandleId; last: Bezier; moved: boolean } | null>(null)
+  /** Non-null exactly while a handle drag is active. `pointerId` pins the
+   * drag to its capturing pointer — capture is per-pointer, so without it a
+   * second touch pointer over the other circle could move or commit this one. */
+  const dragRef = useRef<{
+    handle: HandleId
+    pointerId: number
+    last: Bezier
+    moved: boolean
+  } | null>(null)
 
   // --- demo dot (Web Animations API) ---------------------------------------
   const trackRef = useRef<HTMLDivElement>(null)
@@ -134,13 +177,16 @@ export default function BezierEditor({
     (e: React.PointerEvent<SVGCircleElement>): void => {
       if (disabled || e.button !== 0 || dragRef.current) return
       e.preventDefault()
+      // preventDefault suppresses focus-on-click (with the compat mousedown),
+      // and the arrow-key nudges need focus — grant it explicitly.
+      e.currentTarget.focus()
       e.currentTarget.setPointerCapture(e.pointerId)
-      dragRef.current = { handle, last: b, moved: false }
+      dragRef.current = { handle, pointerId: e.pointerId, last: b, moved: false }
     }
 
   const onHandleMove = (e: React.PointerEvent<SVGCircleElement>): void => {
     const drag = dragRef.current
-    if (!drag) return
+    if (!drag || e.pointerId !== drag.pointerId) return
     const p = pointToBezier(e.clientX, e.clientY)
     if (!p) return
     const next = withHandle(drag.last, drag.handle, p)
@@ -159,9 +205,9 @@ export default function BezierEditor({
   /** Release, cancel, and lost-capture all land here; commit-at-current, once.
    * An unmoved press (click on the handle) commits nothing — a same-value
    * commit would splice a spurious edit into source. */
-  const endDrag = (): void => {
+  const endDrag = (e: React.PointerEvent<SVGCircleElement>): void => {
     const drag = dragRef.current
-    if (!drag) return
+    if (!drag || e.pointerId !== drag.pointerId) return
     dragRef.current = null
     if (drag.moved) onCommit(drag.last)
   }
@@ -186,7 +232,7 @@ export default function BezierEditor({
 
   // --- render ---------------------------------------------------------------
 
-  const activePreset = snapBezierPreset(b)
+  const activePreset = displayBezierPreset(b)
   const yTop = yToPx(1) // unit square top
   const yBot = yToPx(0) // unit square bottom
 
