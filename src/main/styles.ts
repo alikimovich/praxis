@@ -103,6 +103,9 @@ export async function applyStyleEdit(root: string, edit: StyleEdit): Promise<Sty
   }
   const loc = resolveSource(root, edit.source)
   if (!loc) return { applied: false, error: 'Could not resolve the source location.' }
+  // Normalize the page-supplied classes BEFORE any dispatch — both engines
+  // iterate them, and the IPC boundary doesn't guarantee the field's shape.
+  if (!Array.isArray(edit.classes)) edit = { ...edit, classes: [] }
   if (loc.file.endsWith('.svelte')) return applyStyleEditSvelte(root, edit, loc)
   let code: string
   try {
@@ -117,8 +120,14 @@ export async function applyStyleEdit(root: string, edit: StyleEdit): Promise<Sty
     agentPrompt: styleAgentPrompt(edit, found?.name)
   })
   if (!found) return toAgent() // stale stamp — the agent can still find it
+  // An element-level spread could carry className/style at runtime — the final
+  // attributes are unknowable, so neither a class rewrite nor an inserted style
+  // attr is provably effective (same gate as the Svelte adapter).
+  if ((found.opening.attributes ?? []).some((a) => a.type === 'JSXSpreadAttribute')) {
+    return toAgent()
+  }
   const key = `${edit.source}:style:${edit.prop}`
-  const classes = Array.isArray(edit.classes) ? edit.classes : []
+  const classes = edit.classes
 
   // S1 — Tailwind class rewrite: live classes look like utilities AND the
   // className is a literal string (same gate as the T2 token swap in props.ts).

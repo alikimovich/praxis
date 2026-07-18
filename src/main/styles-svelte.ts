@@ -72,6 +72,15 @@ const hasAttrOfType = (el: SvelteNode, type: string): boolean =>
 // able to close the quote or the tag. (The IPC layer validates values too.)
 const SPLICE_SAFE_RE = /^[^"<>]*$/
 
+/** Does a `style="…"` literal declare the `transition` SHORTHAND? The split is
+ *  quote-blind (unlike mergeStyleString's), but that only risks a false
+ *  positive on a pathological quoted `;` — which merely routes to the agent. */
+const hasTransitionShorthand = (styleValue: string): boolean =>
+  styleValue.split(';').some((decl) => {
+    const colon = decl.indexOf(':')
+    return (colon === -1 ? decl : decl.slice(0, colon)).trim().toLowerCase() === 'transition'
+  })
+
 const styleAgentPrompt = (edit: StyleEdit): string =>
   `Set the CSS property \`${edit.prop}\` to \`${edit.value}\` on the element at ${edit.source} ` +
   `(rewrite its classes or styles however fits the component best).`
@@ -128,6 +137,13 @@ export async function applyStyleEditSvelte(
   if (hasAttrOfType(el, 'StyleDirective')) return toAgent()
   const styleAttr = findAttr(el, 'style')
   if (styleAttr && styleAttr.literal == null) return toAgent() // style={expr} / concat
+  // Editing a transition longhand while the literal carries the `transition`
+  // SHORTHAND: mergeStyleString replaces an existing longhand IN PLACE, so a
+  // later shorthand would silently reset it by cascade order — untangling that
+  // is the agent's job (same guard as the JSX path in styles.ts).
+  if (edit.prop.startsWith('transition-') && hasTransitionShorthand(styleAttr?.literal ?? '')) {
+    return toAgent()
+  }
   const merged = mergeStyleString(styleAttr?.literal ?? '', edit.prop, edit.value)
   if (!SPLICE_SAFE_RE.test(merged)) return toAgent()
   if (styleAttr) {

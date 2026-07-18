@@ -662,9 +662,15 @@ function describe(el: Element): SelectedElement {
 
 // Original inline values, stashed on FIRST touch per property so clear-preview
 // restores the element exactly ('' = the property was absent → removeProperty).
+// The stash is bound to the element it was taken from (styleStashEl): restores
+// always target THAT element — never whatever happens to be selected when a
+// deferred clear-preview finally arrives — and previewing a different element
+// first reverts the old one and resets the stash, so a stale entry can neither
+// leak an override nor be replayed onto the wrong element.
 // Navigation wipes this whole isolated world, which is the correct lifetime: a
 // fresh page has no overrides left to revert.
 const styleOriginals = new Map<string, string>()
+let styleStashEl: HTMLElement | null = null
 
 /**
  * The element style ops target: the current selection, re-resolved through its
@@ -687,16 +693,34 @@ function resolveStyleTarget(): HTMLElement | null {
   return el instanceof HTMLElement && el.isConnected ? el : null
 }
 
+/** Point the stash at `el`, reverting any overrides left on a previous target. */
+function retargetStash(el: HTMLElement): void {
+  if (styleStashEl === el) return
+  if (styleStashEl?.isConnected) {
+    for (const [prop, orig] of styleOriginals) {
+      if (orig) styleStashEl.style.setProperty(prop, orig)
+      else styleStashEl.style.removeProperty(prop)
+    }
+  }
+  styleOriginals.clear()
+  styleStashEl = el
+}
+
 function stashOriginal(el: HTMLElement, prop: string): void {
+  retargetStash(el)
   if (!styleOriginals.has(prop)) styleOriginals.set(prop, el.style.getPropertyValue(prop))
 }
 
-/** Restore one stashed inline value exactly (removeProperty when it was absent). */
-function restoreOriginal(el: HTMLElement | null, prop: string): void {
+/** Restore one stashed inline value exactly (removeProperty when it was absent)
+ *  onto the element the stash was taken from. A disconnected stash element means
+ *  HMR replaced the node — the override died with it, so only the entry drops. */
+function restoreOriginal(prop: string): void {
   if (!styleOriginals.has(prop)) return
   const orig = styleOriginals.get(prop) ?? ''
   styleOriginals.delete(prop)
-  if (!el) return
+  const el = styleStashEl
+  if (!styleOriginals.size) styleStashEl = null
+  if (!el?.isConnected) return
   if (orig) el.style.setProperty(prop, orig)
   else el.style.removeProperty(prop)
 }
@@ -710,9 +734,8 @@ function previewStyle(prop: string, value: string): void {
 }
 
 function clearStylePreview(prop?: string): void {
-  const el = resolveStyleTarget()
-  if (prop) restoreOriginal(el, prop)
-  else for (const p of Array.from(styleOriginals.keys())) restoreOriginal(el, p)
+  if (prop) restoreOriginal(prop)
+  else for (const p of Array.from(styleOriginals.keys())) restoreOriginal(p)
 }
 
 /** Fresh computed values for the panel (pick-time snapshots go stale). */
@@ -755,26 +778,43 @@ function replayTimeoutMs(cs: CSSStyleDeclaration): number {
  * Replay a transition: jump to `from` with transitions disabled, force reflow so
  * that becomes the committed start state, re-enable, then set `to` — the browser
  * sees a discrete change and runs the transition again. After transitionend (or
- * a computed-duration timeout) the temporary inline values are reverted through
- * the same stash-restore discipline as previews.
+ * a computed-duration timeout) the temporary inline values are reverted.
+ *
+ * Replay keeps its OWN snapshot of the inline values it touches — never the
+ * preview stash: a live scrub override (say `transition-duration: 500ms`
+ * mid-tune) must survive the replay, drive its timing, and still be revertable
+ * by a later clear-preview; completion restores the values that were current
+ * when the replay STARTED, not the pre-scrub originals. Transitions are
+ * disabled via the `transition-property` LONGHAND only: the shorthand
+ * serializes to '' when just some longhands are inline, and setting/removing
+ * it would clobber every transition-* override on the element.
  */
 function replayStyle(prop: string, from: string, to: string): void {
   const el = resolveStyleTarget()
   if (!el) return
   replayDone?.()
-  stashOriginal(el, 'transition')
-  stashOriginal(el, prop)
-  el.style.setProperty('transition', 'none')
+  const snap = new Map<string, string>()
+  const save = (p: string): void => {
+    if (!snap.has(p)) snap.set(p, el.style.getPropertyValue(p))
+  }
+  const restore = (p: string): void => {
+    const v = snap.get(p) ?? ''
+    if (v) el.style.setProperty(p, v)
+    else el.style.removeProperty(p)
+  }
+  save('transition-property')
+  save(prop)
+  el.style.setProperty('transition-property', 'none')
   el.style.setProperty(prop, from)
   void el.offsetWidth // force reflow — commit `from` before transitions return
-  restoreOriginal(el, 'transition')
+  restore('transition-property')
   el.style.setProperty(prop, to)
   let timer: ReturnType<typeof setTimeout> | null = null
   const done = (): void => {
     if (timer) clearTimeout(timer)
     el.removeEventListener('transitionend', onEnd)
     replayDone = null
-    restoreOriginal(el.isConnected ? el : null, prop)
+    if (el.isConnected) restore(prop)
   }
   const onEnd = (e: TransitionEvent): void => {
     if (e.target === el && e.propertyName === prop) done()
