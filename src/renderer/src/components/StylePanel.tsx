@@ -4,12 +4,17 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ChevronDown, ChevronRight, Play } from 'lucide-react'
 import {
+  type Bezier,
   STYLE_PROP_META,
+  formatBezier,
   formatCssNumber,
   formatMs,
   normalizeMs,
-  parseCssNumber
+  parseBezier,
+  parseCssNumber,
+  snapBezierPreset
 } from '@/lib/css-values'
+import BezierEditor from './styles/BezierEditor'
 import ColorControl from './styles/ColorControl'
 import ScrubInput from './styles/ScrubInput'
 
@@ -88,9 +93,35 @@ function parseColorLike(text: string): { r: number; g: number; b: number; a: num
 }
 
 /**
- * Does a fresh computed value equal what we committed? Textual equality is not
- * enough: we commit '#ff0000' and read back 'rgb(255, 0, 0)', commit '300ms'
- * and read back '0.3s'. Normalize per control kind before comparing.
+ * Tailwind's ease-* classes carry slightly DIFFERENT curves than the CSS
+ * keywords S1 maps them from (the `ease-out` class is cubic-bezier(0,0,0.2,1);
+ * CSS `ease-out` is (0,0,0.58,1)). Reconcile must treat a committed keyword
+ * and its Tailwind curve as the same value, or every keyword commit on a
+ * Tailwind element would keep its live override forever. Mirrors the
+ * EASE_KEYWORDS table in main/tw-styles.ts (`linear`/`ease` need no entry —
+ * they land as the keyword itself and match textually).
+ */
+const TW_EASE_EQUIV: Record<string, Bezier> = {
+  'ease-in': { x1: 0.4, y1: 0, x2: 1, y2: 1 },
+  'ease-out': { x1: 0, y1: 0, x2: 0.2, y2: 1 },
+  'ease-in-out': { x1: 0.4, y1: 0, x2: 0.2, y2: 1 }
+}
+
+/** Coord-wise bezier equality with room for computed-style float noise. */
+function sameBezier(a: Bezier, b: Bezier): boolean {
+  return (
+    Math.abs(a.x1 - b.x1) < 0.005 &&
+    Math.abs(a.y1 - b.y1) < 0.005 &&
+    Math.abs(a.x2 - b.x2) < 0.005 &&
+    Math.abs(a.y2 - b.y2) < 0.005
+  )
+}
+
+/**
+ * Does a fresh computed value (`a`) equal what we committed (`b`)? Textual
+ * equality is not enough: we commit '#ff0000' and read back 'rgb(255, 0, 0)',
+ * commit '300ms' and read back '0.3s', commit 'ease-out' and read back its
+ * (Tailwind) curve. Normalize per control kind before comparing.
  */
 function sameCssValue(prop: string, a: string, b: string): boolean {
   if (a === b) return true
@@ -100,6 +131,16 @@ function sameCssValue(prop: string, a: string, b: string): boolean {
     const cb = parseColorLike(b)
     if (!ca || !cb) return false
     return ca.r === cb.r && ca.g === cb.g && ca.b === cb.b && Math.abs(ca.a - cb.a) < 0.02
+  }
+  if (meta?.control === 'bezier') {
+    const ba = parseBezier(a)
+    if (ba) {
+      const bb = parseBezier(b)
+      if (bb && sameBezier(ba, bb)) return true
+      const tw = TW_EASE_EQUIV[b.trim().toLowerCase()]
+      if (tw && sameBezier(ba, tw)) return true
+    }
+    return a.trim().toLowerCase() === b.trim().toLowerCase()
   }
   if (meta?.unit === 'ms') {
     const ma = normalizeMs(a)
@@ -288,7 +329,8 @@ export default function StylePanel({ root, element, onSeedPrompt }: Props): Reac
     else window.api.styles.replay('opacity', '0.5', valuesRef.current.opacity || '1')
   }
 
-  const seedColorEdit = (prop: string): void =>
+  /** Hand a prop the panel can't edit (non-sRGB color, steps() easing) to chat. */
+  const seedStyleEdit = (prop: string): void =>
     onSeedPrompt(
       `In ${source ?? 'the selected element'}, change the \`${prop}\` (currently \`${
         values[prop] ?? 'unset'
@@ -307,7 +349,6 @@ export default function StylePanel({ root, element, onSeedPrompt }: Props): Reac
 
   const ctx: RowCtx = { values, disabled, preview, commit, cancel: dropPreview }
   const display = values.display ?? ''
-  const timing = values['transition-timing-function'] ?? 'ease'
 
   return (
     <>
@@ -327,11 +368,11 @@ export default function StylePanel({ root, element, onSeedPrompt }: Props): Reac
         </StyleGroup>
 
         <StyleGroup title="Appearance">
-          <ColorRow prop="color" ctx={ctx} onNeedsAgent={() => seedColorEdit('color')} />
+          <ColorRow prop="color" ctx={ctx} onNeedsAgent={() => seedStyleEdit('color')} />
           <ColorRow
             prop="background-color"
             ctx={ctx}
-            onNeedsAgent={() => seedColorEdit('background-color')}
+            onNeedsAgent={() => seedStyleEdit('background-color')}
           />
           <NumberRow prop="border-radius" ctx={ctx} />
           <NumberRow prop="opacity" ctx={ctx} />
@@ -350,10 +391,11 @@ export default function StylePanel({ root, element, onSeedPrompt }: Props): Reac
           <TransitionPropertyRow ctx={ctx} />
           <NumberRow prop="transition-duration" ctx={ctx} />
           <NumberRow prop="transition-delay" ctx={ctx} />
-          {/* TODO(bezier): replace this readout with <BezierEditor value={timing}
-              onChange/onCommit → preview/commit('transition-timing-function', …)>
-              when it lands (phase 4). */}
-          <ReadoutRow label="timing-function" value={timing} />
+          <TimingRow
+            ctx={ctx}
+            onReplay={replay}
+            onNeedsAgent={() => seedStyleEdit('transition-timing-function')}
+          />
           <div className="stylepanel__row grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
             <span />
             <Button
@@ -589,7 +631,128 @@ function TransitionPropertyRow({ ctx }: { ctx: RowCtx }): React.JSX.Element {
   )
 }
 
-/** Read-only value row (mono-ish readout; used for timing + non-numeric text). */
+const TIMING_PROP = 'transition-timing-function'
+
+/** '.17, .67, .83, .67' — compact coord readout that fits the value column. */
+function shortBezier(b: Bezier): string {
+  return [b.x1, b.y1, b.x2, b.y2].map((n) => String(n).replace(/^(-?)0\./, '$1.')).join(', ')
+}
+
+/**
+ * transition-timing-function: collapsed, a readout (the keyword name when the
+ * curve matches a CSS preset, else compact coords) + a chevron; expanded, the
+ * BezierEditor inline (the island view is content-sized — growth is handled by
+ * PanelApp's ResizeObserver). Drags preview live through the rAF-throttled
+ * ctx.preview; commits snap to a keyword preset within tolerance, so S1 writes
+ * `ease-out` classes instead of arbitrary values when the curve is (close to)
+ * a keyword. A computed value the editor can't model — steps(), a per-property
+ * list — renders read-only with an edit-via-chat affordance, mirroring
+ * ColorControl's non-sRGB branch.
+ */
+function TimingRow({
+  ctx,
+  onReplay,
+  onNeedsAgent
+}: {
+  ctx: RowCtx
+  onReplay: () => void
+  onNeedsAgent: () => void
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  /** The in-flight drag's curve — ctx.values only updates on commit, so the
+   * editor needs a local echo of onChange for its handles to track. Tagged
+   * with the value it was echoing: a fresh committed / reconciled / reselected
+   * value supersedes any stale echo without an effect. */
+  const [drag, setDrag] = useState<{ over: string; b: Bezier } | null>(null)
+  const raw = ctx.values[TIMING_PROP] ?? 'ease'
+  const parsed = parseBezier(raw)
+  const live = drag && drag.over === raw ? drag.b : null
+
+  if (!parsed) {
+    return (
+      <div className="stylepanel__row stylepanel__row--readonly grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
+        <span
+          className="stylepanel__name select-none overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-muted-foreground"
+          title={TIMING_PROP}
+        >
+          timing-function
+        </span>
+        <div className="flex items-center gap-1.5 justify-self-end">
+          <span
+            className="stylepanel__readout max-w-[64px] overflow-hidden text-ellipsis whitespace-nowrap text-xs text-muted-foreground/80"
+            title={raw}
+          >
+            {raw}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="stylepanel__timing-agent h-7 px-2 text-[11.5px]"
+            onClick={onNeedsAgent}
+            disabled={ctx.disabled}
+            title={`${raw} — not editable here`}
+          >
+            edit via chat
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const preset = snapBezierPreset(parsed)
+  return (
+    <div className="stylepanel__timing flex flex-col gap-1">
+      <div className="stylepanel__row grid min-h-7 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="stylepanel__timing-toggle size-5 shrink-0 text-muted-foreground"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-label={open ? 'Hide the easing editor' : 'Edit the easing curve'}
+          title={open ? 'Hide the easing editor' : 'Edit the easing curve'}
+        >
+          {open ? (
+            <ChevronDown className="size-3.5" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="size-3.5" aria-hidden="true" />
+          )}
+        </Button>
+        <span
+          className="stylepanel__name select-none overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-muted-foreground"
+          title={TIMING_PROP}
+        >
+          timing-function
+        </span>
+        <span
+          className="stylepanel__readout max-w-[128px] justify-self-end overflow-hidden text-ellipsis whitespace-nowrap text-xs text-muted-foreground/80"
+          title={formatBezier(parsed)}
+        >
+          {preset ?? shortBezier(parsed)}
+        </span>
+      </div>
+      {open && (
+        <div className="stylepanel__beziereditor">
+          <BezierEditor
+            value={live ?? parsed}
+            disabled={ctx.disabled}
+            onChange={(nb) => {
+              setDrag({ over: raw, b: nb })
+              ctx.preview(TIMING_PROP, formatBezier(nb))
+            }}
+            onCommit={(nb) => {
+              setDrag(null)
+              void ctx.commit(TIMING_PROP, snapBezierPreset(nb) ?? formatBezier(nb))
+            }}
+            onReplay={onReplay}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Read-only value row (mono-ish readout; used for non-numeric text). */
 function ReadoutRow({ label, value }: { label: string; value: string }): React.JSX.Element {
   return (
     <div className="stylepanel__row stylepanel__row--readonly grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">

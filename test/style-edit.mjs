@@ -15,6 +15,16 @@
  *   and coalesces in edit-history → ONE `edits.undo` restores the pre-burst
  *   file → island screenshots.
  *
+ * v10 phase 4 — transitions: re-select the Tailwind element →
+ * `transition-duration: 150ms` snaps to the named time scale (`duration-150`)
+ * → a non-keyword curve lands as an arbitrary `ease-[cubic-bezier(…)]` class
+ * with NO spaces → expand the timing row's chevron in the island UI (the
+ * BezierEditor renders inline; screenshot) → an ArrowUp nudge on a handle
+ * commits through the REAL BezierEditor → TimingRow → commit path, and the
+ * curve (0.25, 0.11, 0.25, 1) is within snap tolerance of the `ease` keyword,
+ * so the keyword (Tailwind: `ease-[ease]`) replaces the arbitrary class →
+ * the remaining undo chain unwinds every entry back to the pristine file.
+ *
  * Run with: bun run test:style-edit
  */
 import { _electron as electron } from 'playwright'
@@ -316,10 +326,117 @@ try {
     throw new Error('one undo did not restore the pre-burst source (burst not coalesced?)')
   }
 
+  // --- Transitions (phase 4): back to the Tailwind element. ---
+  await pickElement('tw-box', TW_SRC)
+  await openStylesTab()
+
+  // S1 duration: 150ms sits on Tailwind's named time scale → `duration-150`
+  // (not `duration-[150ms]`) appends to the class list.
+  const durRes = await panelEval(
+    `window.api.styles.apply(${JSON.stringify(fixture)}, {
+      source: ${JSON.stringify(TW_SRC)},
+      prop: 'transition-duration',
+      value: '150ms',
+      classes: ['p-4', 'rounded-md']
+    })`
+  )
+  if (!durRes?.applied || durRes.strategy !== 'tailwind') {
+    throw new Error(`duration apply failed: ${JSON.stringify(durRes)}`)
+  }
+  const afterDur = readFileSync(styled, 'utf8')
+  if (!/className="[^"]*\bduration-150\b[^"]*"/.test(afterDur)) {
+    throw new Error(
+      `duration-150 not on disk; className line: ${afterDur.match(/className="[^"]*"/)?.[0]}`
+    )
+  }
+
+  // S1 timing: a non-keyword curve has no named class — it must land as an
+  // arbitrary ease-[…] class with the spaces stripped (Tailwind arbitrary
+  // values allow none).
+  const bezRes = await panelEval(
+    `window.api.styles.apply(${JSON.stringify(fixture)}, {
+      source: ${JSON.stringify(TW_SRC)},
+      prop: 'transition-timing-function',
+      value: 'cubic-bezier(0.17, 0.67, 0.83, 0.67)',
+      classes: ['p-4', 'rounded-md']
+    })`
+  )
+  if (!bezRes?.applied || bezRes.strategy !== 'tailwind') {
+    throw new Error(`timing-function apply failed: ${JSON.stringify(bezRes)}`)
+  }
+  const beforeSnap = readFileSync(styled, 'utf8')
+  if (!beforeSnap.includes('ease-[cubic-bezier(0.17,0.67,0.83,0.67)]')) {
+    throw new Error(
+      `arbitrary bezier class not on disk; className line: ${beforeSnap.match(/className="[^"]*"/)?.[0]}`
+    )
+  }
+
+  // --- Expand the timing row in the ISLAND UI: the chevron toggles the inline
+  // BezierEditor. Click-only-until-rendered — a re-click would collapse it. ---
+  await waitPanel(`(() => {
+    if (document.querySelector('.bezier__svg')) return true
+    document.querySelector('.stylepanel__timing-toggle')?.click()
+    return false
+  })()`)
+  // Bring the editor fully into the (content-sized, maxHeight-capped) view
+  // before capturing, then let the resize + demo dot settle.
+  await waitPanel(`(() => {
+    const bz = document.querySelector('.bezier')
+    if (!bz) return false
+    bz.scrollIntoView({ block: 'nearest' })
+    const r = bz.getBoundingClientRect()
+    return r.height > 0 && r.top >= 0 && r.bottom <= window.innerHeight + 1
+  })()`)
+  await new Promise((r) => setTimeout(r, 500))
+  await shotIsland('style-edit-bezier.png')
+
+  // --- UI-driven preset snap: the computed timing on #tw-box is `ease`
+  // (0.25, 0.1, 0.25, 1) — the on-disk class never reaches the static preview.
+  // An ArrowUp nudge on handle 1 (step 0.01) makes (0.25, 0.11, 0.25, 1),
+  // within the 0.01/coord snap tolerance of `ease`, so the REAL BezierEditor →
+  // TimingRow → commit path must write the KEYWORD (Tailwind spells it
+  // `ease-[ease]`), replacing the arbitrary bezier class — not the raw coords. ---
+  const nudged = await panelEval(`(() => {
+    const h = document.querySelector('.bezier__handle')
+    if (!h) return false
+    h.focus()
+    h.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }))
+    return true
+  })()`)
+  if (nudged !== true) throw new Error('bezier handle not found for the keyboard nudge')
+  let afterSnap = ''
+  for (let i = 0; i < 40; i++) {
+    afterSnap = readFileSync(styled, 'utf8')
+    if (afterSnap.includes('ease-[ease]')) break
+    await new Promise((r) => setTimeout(r, 150))
+  }
+  if (!afterSnap.includes('ease-[ease]') || afterSnap.includes('ease-[cubic-bezier')) {
+    throw new Error(
+      `preset snap did not land ease-[ease]; className line: ${afterSnap.match(/className="[^"]*"/)?.[0]}`
+    )
+  }
+
+  // --- Undo chain: the snap commit first (restores the arbitrary bezier class
+  // byte-for-byte), then every remaining entry back to the pristine fixture
+  // (the inline burst was already undone above). ---
+  const undoSnap = await win.evaluate((a) => window.api.edits.undo(a.fixture), { fixture })
+  if (!undoSnap.ok) throw new Error(`undo (snap) not ok: ${JSON.stringify(undoSnap)}`)
+  if (readFileSync(styled, 'utf8') !== beforeSnap) {
+    throw new Error('undo did not restore the arbitrary bezier class exactly')
+  }
+  for (let i = 0; i < 8 && readFileSync(styled, 'utf8') !== original; i++) {
+    const u = await win.evaluate((a) => window.api.edits.undo(a.fixture), { fixture })
+    if (!u.ok) throw new Error(`undo chain broke early: ${JSON.stringify(u)}`)
+  }
+  if (readFileSync(styled, 'utf8') !== original) {
+    throw new Error('the undo chain did not restore the original fixture source')
+  }
+
   console.log(
     'STYLE-EDIT OK — Styles tab groups + fresh read, S1 tailwind rewrite (pt-[13px]), ' +
       'live preview inject/clear, UI-driven ScrubInput commit (rounded-[13px]), ' +
-      'S2 inline merge burst, one-undo coalescing'
+      'S2 inline merge burst, one-undo coalescing, transitions (duration-150, ' +
+      'ease-[cubic-bezier(…)] no-spaces, BezierEditor nudge → ease keyword snap), full undo chain'
   )
 } catch (err) {
   console.error('STYLE-EDIT FAILED:', err?.message ?? err)
