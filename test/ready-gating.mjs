@@ -55,9 +55,36 @@ try {
       await new Promise((res) => setTimeout(res, 250))
     }
   }
-  // Tests assume the expanded card (a previous run may have collapsed it).
-  const expandPanel = () =>
-    panelEval("localStorage.setItem('dsgn.proppanel.collapsed','0'); document.querySelector('.proppanel__expand')?.click(); true")
+  // Tests assume the expanded card ON THE PROPS TAB. Both are persisted in the
+  // shared userData that direct `bun run test:*` runs use, so a previous run
+  // (or the style-edit suite / real-app use) may have collapsed the card or
+  // left the Styles tab active — and Radix unmounts inactive tab content, so a
+  // stale 'styles' tab would make every props-content wait time out. Retried:
+  // the island's webContents appears asynchronously, so a one-shot eval could
+  // run before it (or its React tree) exists.
+  const expandPanel = async () => {
+    const end = Date.now() + 10000
+    for (;;) {
+      const ok = await panelEval(`(() => {
+        localStorage.setItem('dsgn.proppanel.collapsed', '0')
+        localStorage.setItem('dsgn.island.tab', 'props')
+        document.querySelector('.proppanel__expand')?.click()
+        // If the island is already mounted on Styles, click Props (Radix
+        // TabsTrigger activates on mousedown — a bare .click() is not enough).
+        const t = [...document.querySelectorAll('.proppanel__tab')].find((b) => b.textContent.trim() === 'Props')
+        if (t && t.getAttribute('data-state') !== 'active') {
+          for (const type of ['mousedown', 'mouseup', 'click']) {
+            t.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: 0 }))
+          }
+        }
+        return !!t && t.getAttribute('data-state') === 'active'
+      })()`)
+      if (ok === true) return
+      // Give up quietly — the caller's next waitPanel surfaces the real failure.
+      if (Date.now() > end) return
+      await new Promise((r) => setTimeout(r, 250))
+    }
+  }
 
   // --- setup.scaffold writes the stamping plugin (and is idempotent). ---
   const first = await win.evaluate((d) => window.api.setup.scaffold(d), scaffoldDir)

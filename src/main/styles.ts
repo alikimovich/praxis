@@ -103,9 +103,14 @@ export async function applyStyleEdit(root: string, edit: StyleEdit): Promise<Sty
   }
   const loc = resolveSource(root, edit.source)
   if (!loc) return { applied: false, error: 'Could not resolve the source location.' }
-  // Normalize the page-supplied classes BEFORE any dispatch — both engines
-  // iterate them, and the IPC boundary doesn't guarantee the field's shape.
-  if (!Array.isArray(edit.classes)) edit = { ...edit, classes: [] }
+  // Normalize the island-supplied fields BEFORE any dispatch — both engines
+  // read them, and the IPC boundary doesn't guarantee their shape. `group` is
+  // an opaque undo-batch label, so a bound + type check is all it needs.
+  edit = {
+    ...edit,
+    classes: Array.isArray(edit.classes) ? edit.classes : [],
+    group: typeof edit.group === 'string' && edit.group ? edit.group.slice(0, 120) : undefined
+  }
   if (loc.file.endsWith('.svelte')) return applyStyleEditSvelte(root, edit, loc)
   let code: string
   try {
@@ -143,7 +148,7 @@ export async function applyStyleEdit(root: string, edit: StyleEdit): Promise<Sty
       if (rewritten != null) {
         const next =
           code.slice(0, strNode.start) + JSON.stringify(rewritten) + code.slice(strNode.end)
-        return committed(await commitEdit(root, loc.file, code, next, key), 'tailwind')
+        return committed(await commitEdit(root, loc.file, code, next, key, edit.group), 'tailwind')
       }
     }
   }
@@ -157,7 +162,7 @@ export async function applyStyleEdit(root: string, edit: StyleEdit): Promise<Sty
     const insertAt = (found.opening.name as { end: number }).end
     const attrText = ` style={{ ${cssPropToJsKey(edit.prop)}: ${JSON.stringify(edit.value)} }}`
     const next = code.slice(0, insertAt) + attrText + code.slice(insertAt)
-    return committed(await commitEdit(root, loc.file, code, next, key), 'inline')
+    return committed(await commitEdit(root, loc.file, code, next, key, edit.group), 'inline')
   }
   const attrVal = styleAttr.value
   const expr = attrVal?.type === 'JSXExpressionContainer' ? attrVal.expression : undefined
@@ -176,7 +181,7 @@ export async function applyStyleEdit(root: string, edit: StyleEdit): Promise<Sty
     const merged = mergeStyleObjectSource(code.slice(expr.start, expr.end), edit.prop, edit.value)
     if (merged != null) {
       const next = code.slice(0, expr.start) + merged + code.slice(expr.end)
-      return committed(await commitEdit(root, loc.file, code, next, key), 'inline')
+      return committed(await commitEdit(root, loc.file, code, next, key, edit.group), 'inline')
     }
   }
 

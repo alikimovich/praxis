@@ -7,9 +7,13 @@
  *   the four control groups → `styles.apply` padding-top 13px commits an S1
  *   class rewrite (`pt-[13px]` lands in src/Styled.tsx) → `styles.preview`
  *   injects a live override the preview's computed style reflects (and
- *   clearPreview reverts exactly) → select the inline-styled element →
- *   `styles.apply` merges `paddingTop: "11px"` into its `style={{…}}` literal
- *   (S2) → one `edits.undo` restores the file → island screenshots.
+ *   clearPreview reverts exactly) → a UI-DRIVEN commit: Enter on the
+ *   border-radius track opens ScrubInput's exact-value editor, typing 13 +
+ *   Enter runs the real ScrubInput → StylePanel.commit → styles.apply wiring
+ *   (`rounded-[13px]` lands) → select the inline-styled element → a two-apply
+ *   same-prop BURST merges `paddingTop` into its `style={{…}}` literal (S2)
+ *   and coalesces in edit-history → ONE `edits.undo` restores the pre-burst
+ *   file → island screenshots.
  *
  * Run with: bun run test:style-edit
  */
@@ -182,9 +186,10 @@ try {
   )
   await shotIsland('style-edit-island.png')
 
-  // --- S1 commit: the exact call ScrubInput's commit path makes. With the
-  // element's utility classes, padding-top 13px must land as a Tailwind
-  // arbitrary-value class rewrite in source (13 ∉ the 4px scale). ---
+  // --- S1 commit, engine-direct (the UI-driven path is exercised on
+  // border-radius below). With the element's utility classes, padding-top 13px
+  // must land as a Tailwind arbitrary-value class rewrite in source
+  // (13 ∉ the 4px scale). ---
   const twRes = await panelEval(
     `window.api.styles.apply(${JSON.stringify(fixture)}, {
       source: ${JSON.stringify(TW_SRC)},
@@ -232,6 +237,48 @@ try {
   }
   if (padAfter !== '16px') throw new Error(`clearPreview did not restore padding-top, computed: ${padAfter}`)
 
+  // --- UI-driven commit: the REAL ScrubInput → StylePanel.commit path (a
+  // wiring regression — onCommit never firing, wrong classes/source threaded —
+  // must fail here, not stay green behind a direct api call). Enter on the
+  // border-radius track opens the exact-value editor; typing 13 + Enter
+  // commits with the element's live classes, so S1 rewrites rounded-md in
+  // place (the only rounded-* class). ---
+  const editorOpened = await panelEval(`(() => {
+    const row = [...document.querySelectorAll('.scrubinput')].find(
+      (r) => r.querySelector('.scrubinput__label')?.title === 'border-radius'
+    )
+    if (!row) return false
+    const track = row.querySelector('.scrubinput__track')
+    if (!track) return false
+    track.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    return true
+  })()`)
+  if (editorOpened !== true) throw new Error('border-radius scrub row not found in the Styles tab')
+  await waitPanel("!!document.querySelector('.scrubinput__input')")
+  const typed = await panelEval(`(() => {
+    const input = document.querySelector('.scrubinput__input')
+    if (!input) return false
+    // React's onChange needs the native value setter + an 'input' event (a
+    // plain .value assignment is swallowed by React's value tracker).
+    const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+    set.call(input, '13')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    return true
+  })()`)
+  if (typed !== true) throw new Error('the exact-value editor input never rendered')
+  let uiAfter = ''
+  for (let i = 0; i < 40; i++) {
+    uiAfter = readFileSync(styled, 'utf8')
+    if (uiAfter.includes('rounded-[13px]')) break
+    await new Promise((r) => setTimeout(r, 150))
+  }
+  if (!uiAfter.includes('rounded-[13px]')) {
+    throw new Error(
+      `UI-driven commit did not land rounded-[13px]; className line: ${uiAfter.match(/className="[^"]*"/)?.[0]}`
+    )
+  }
+
   // --- Select the inline-styled element; S2 must merge into its style object. ---
   await pickElement('inline-box', INLINE_SRC)
   // A fresh pick closes the island — reopen on the new selection.
@@ -239,32 +286,40 @@ try {
   await shotIsland('style-edit-island-inline.png')
 
   const beforeInline = readFileSync(styled, 'utf8')
+  // A same-prop BURST — two applies back-to-back (well inside edit-history's
+  // 500ms coalesce window, same `${source}:style:${prop}` key) must collapse
+  // into ONE undo entry. Both run in a single island round trip so the burst
+  // can't be stretched past the window by IPC latency.
   const inlineRes = await panelEval(
-    `window.api.styles.apply(${JSON.stringify(fixture)}, {
-      source: ${JSON.stringify(INLINE_SRC)},
-      prop: 'padding-top',
-      value: '11px',
-      classes: []
-    })`
+    `(async () => {
+      const root = ${JSON.stringify(fixture)}
+      const edit = { source: ${JSON.stringify(INLINE_SRC)}, prop: 'padding-top', classes: [] }
+      const first = await window.api.styles.apply(root, { ...edit, value: '11px' })
+      if (!first.applied) return first
+      return window.api.styles.apply(root, { ...edit, value: '12px' })
+    })()`
   )
   if (!inlineRes?.applied || inlineRes.strategy !== 'inline') {
     throw new Error(`inline apply failed: ${JSON.stringify(inlineRes)}`)
   }
   const afterInline = readFileSync(styled, 'utf8')
-  if (!afterInline.includes(`style={{ padding: '8px', paddingTop: "11px" }}`)) {
+  if (!afterInline.includes(`style={{ padding: '8px', paddingTop: "12px" }}`)) {
     throw new Error(`S2 style-object merge not on disk; style line: ${afterInline.match(/style=\{\{[^}]*\}\}/)?.[0]}`)
   }
 
-  // --- Undo (real IPC): one step reverts the inline splice exactly. ---
+  // --- Undo (real IPC): ONE step reverts the whole coalesced burst exactly —
+  // if the two applies made separate entries, this restores the 11px
+  // intermediate state instead and the byte comparison fails. ---
   const undid = await win.evaluate((a) => window.api.edits.undo(a.fixture), { fixture })
   if (!undid.ok) throw new Error(`undo not ok: ${JSON.stringify(undid)}`)
   if (readFileSync(styled, 'utf8') !== beforeInline) {
-    throw new Error('undo did not restore the pre-splice source')
+    throw new Error('one undo did not restore the pre-burst source (burst not coalesced?)')
   }
 
   console.log(
     'STYLE-EDIT OK — Styles tab groups + fresh read, S1 tailwind rewrite (pt-[13px]), ' +
-      'live preview inject/clear, S2 inline merge, undo'
+      'live preview inject/clear, UI-driven ScrubInput commit (rounded-[13px]), ' +
+      'S2 inline merge burst, one-undo coalescing'
   )
 } catch (err) {
   console.error('STYLE-EDIT FAILED:', err?.message ?? err)

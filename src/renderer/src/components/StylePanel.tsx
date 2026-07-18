@@ -31,6 +31,9 @@ const FLEX_GRID = new Set(['flex', 'grid', 'inline-flex', 'inline-grid'])
 /** Post-commit settle time before reconciling against a fresh read (lets HMR land). */
 const RECONCILE_MS = 600
 
+/** Reconcile attempts before conceding — a build slower than ~3s keeps the override. */
+const RECONCILE_TRIES = 5
+
 // ---------------------------------------------------------------------------
 // pure row helpers
 // ---------------------------------------------------------------------------
@@ -113,7 +116,10 @@ interface RowCtx {
   values: Record<string, string>
   disabled: boolean
   preview: (prop: string, css: string) => void
-  commit: (prop: string, css: string) => void
+  /** `group` batches a multi-prop gesture (linked sides) into one undo step. */
+  commit: (prop: string, css: string, group?: string) => Promise<void>
+  /** Drop the prop's live override + queued frame (editor cancelled, apply failed). */
+  cancel: (prop: string) => void
 }
 
 /**
@@ -192,26 +198,49 @@ export default function StylePanel({ root, element, onSeedPrompt }: Props): Reac
   }
 
   /**
-   * Post-commit reconciliation: do NOT clear the live override immediately
-   * (HMR flash); after a settle delay re-read the prop — equal to what we
-   * committed → the source now provides it, clear the override; selection gone
-   * → nothing; mismatch → keep the override (the committed source is still
-   * correct, something else diverged).
+   * Clear a prop's live override AND its queued preview frame. Without the
+   * queue drain, a pending rAF flush landing after the clear would re-inject
+   * the abandoned value — and nothing would ever remove it (reconciles are
+   * only scheduled on successful applies).
    */
-  const scheduleReconcile = (prop: string, committed: string): void => {
+  const dropPreview = (prop: string): void => {
+    pendingRef.current.delete(prop)
+    if (pendingRef.current.size === 0 && rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+    window.api.styles.clearPreview(prop)
+  }
+
+  /**
+   * Post-commit reconciliation: do NOT clear the live override immediately
+   * (HMR flash); after a settle delay LIFT the override and read the
+   * UNDERLYING value — reading through the override would be a self-comparison
+   * (the override IS the committed value, so it would always "match" and the
+   * clear would fire before slow builds land, snapping the element back).
+   * Underlying equals committed → the source provides it now, stay cleared;
+   * selection gone → nothing (the override died with the node); mismatch → the
+   * build hasn't landed yet: re-inject the override and retry, conceding after
+   * RECONCILE_TRIES (the committed source is still correct — keep the override).
+   */
+  const scheduleReconcile = (prop: string, committed: string, tries = RECONCILE_TRIES): void => {
     const id = window.setTimeout(async () => {
       timersRef.current.delete(id)
+      window.api.styles.clearPreview(prop) // lift the override for the read
       const res = await window.api.styles.read([prop])
-      if (!res) return
-      const fresh = res[prop]
+      const fresh = res?.[prop]
       if (fresh === undefined) return
-      merge({ [prop]: fresh })
-      if (sameCssValue(prop, fresh, committed)) window.api.styles.clearPreview(prop)
+      if (sameCssValue(prop, fresh, committed)) {
+        merge({ [prop]: fresh })
+        return
+      }
+      window.api.styles.preview(prop, committed) // not landed yet — restore it
+      if (tries > 1) scheduleReconcile(prop, committed, tries - 1)
     }, RECONCILE_MS)
     timersRef.current.add(id)
   }
 
-  const commit = async (prop: string, css: string): Promise<void> => {
+  const commit = async (prop: string, css: string, group?: string): Promise<void> => {
     if (!source) return
     setError(null)
     // Tuning a duration/delay with transitions off would commit an invisible
@@ -223,12 +252,16 @@ export default function StylePanel({ root, element, onSeedPrompt }: Props): Reac
     const prev = valuesRef.current[prop] ?? css
     preview(prop, css) // non-scrub commits (select / Enter) show instantly too
     merge({ [prop]: css })
+    // Every not-applied branch uses dropPreview, NOT bare clearPreview: the
+    // preview above may still sit in the rAF queue, and a flush after a bare
+    // clear would re-inject the never-applied value permanently.
     try {
       const res = await window.api.styles.apply(root, {
         source,
         prop,
         value: css,
-        classes: element.classes
+        classes: element.classes,
+        group
       })
       if (res.applied) {
         lastCommitRef.current = { prop, from: prev, to: css }
@@ -237,14 +270,14 @@ export default function StylePanel({ root, element, onSeedPrompt }: Props): Reac
         onSeedPrompt(
           res.agentPrompt ?? `In ${source}, set \`${prop}\` to \`${css}\` on the <${element.tag}> element.`
         )
-        window.api.styles.clearPreview(prop)
+        dropPreview(prop)
       } else {
         setError(res.error ?? 'Could not apply the change.')
-        window.api.styles.clearPreview(prop)
+        dropPreview(prop)
       }
     } catch {
       setError('The edit could not be sent.')
-      window.api.styles.clearPreview(prop)
+      dropPreview(prop)
     }
   }
 
@@ -272,7 +305,7 @@ export default function StylePanel({ root, element, onSeedPrompt }: Props): Reac
     )
   }
 
-  const ctx: RowCtx = { values, disabled, preview, commit }
+  const ctx: RowCtx = { values, disabled, preview, commit, cancel: dropPreview }
   const display = values.display ?? ''
   const timing = values['transition-timing-function'] ?? 'ease'
 
@@ -378,6 +411,7 @@ function NumberRow({ prop, ctx }: { prop: string; ctx: RowCtx }): React.JSX.Elem
       onScrub={(v) => ctx.preview(prop, toCssText(prop, v))}
       onInput={(v) => ctx.preview(prop, toCssText(prop, v))}
       onCommit={(v) => void ctx.commit(prop, toCssText(prop, v))}
+      onCancel={() => ctx.cancel(prop)}
     />
   )
 }
@@ -397,9 +431,16 @@ function SideRows({ base, ctx }: { base: 'padding' | 'margin'; ctx: RowCtx }): R
   const previewAll = (v: number): void => {
     for (const p of props) ctx.preview(p, toCssText(p, v))
   }
+  const cancelAll = (): void => {
+    for (const p of props) ctx.cancel(p)
+  }
   const commitAll = async (v: number): Promise<void> => {
+    // One undo step for the whole gesture: the four longhands commit under
+    // DIFFERENT coalesce keys, so only a shared edit-history group can batch
+    // them (unique per gesture — a static group would chain gestures together).
+    const group = `style-sides:${base}:${Date.now()}`
     // Sequential: four longhand writes into the same file/class list must not race.
-    for (const p of props) await ctx.commit(p, toCssText(p, v))
+    for (const p of props) await ctx.commit(p, toCssText(p, v), group)
   }
 
   if (allEqual && !open) {
@@ -427,6 +468,7 @@ function SideRows({ base, ctx }: { base: 'padding' | 'margin'; ctx: RowCtx }): R
             onScrub={previewAll}
             onInput={previewAll}
             onCommit={(v) => void commitAll(v)}
+            onCancel={cancelAll}
           />
         </div>
       </div>
@@ -466,6 +508,7 @@ function SideRows({ base, ctx }: { base: 'padding' | 'margin'; ctx: RowCtx }): R
               onScrub={(v) => ctx.preview(p, toCssText(p, v))}
               onInput={(v) => ctx.preview(p, toCssText(p, v))}
               onCommit={(v) => void ctx.commit(p, toCssText(p, v))}
+              onCancel={() => ctx.cancel(p)}
             />
           )
         )}

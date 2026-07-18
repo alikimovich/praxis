@@ -115,7 +115,15 @@ export default function ColorControl({
   // flips the row to the read-only branch.
   const parsed = useMemo(() => parseSrgb(value), [value])
   const [draft, setDraft] = useState(parsed ? formatHex(parsed) : value)
-  useEffect(() => setDraft(parsed ? formatHex(parsed) : value), [value, parsed])
+  // Sync the draft to a fresh value — but never while the hex field has focus:
+  // the post-commit reconcile merges a re-read ~600ms after every commit, and
+  // the computed form always differs textually ('#ff0000' → 'rgb(255, 0, 0)'),
+  // so an unguarded sync would wipe in-progress typing right after a commit.
+  const hexFocusedRef = useRef(false)
+  useEffect(() => {
+    if (hexFocusedRef.current) return
+    setDraft(parsed ? formatHex(parsed) : value)
+  }, [value, parsed])
 
   const nativeRef = useRef<HTMLInputElement>(null)
   // The native picker's rgb-only edits re-attach this alpha on emit; a ref so
@@ -128,6 +136,12 @@ export default function ColorControl({
 
   // React's onChange on inputs is the 'input' event — the native 'change'
   // (fires when the picker CLOSES) needs a real listener for commit-on-close.
+  // Keyed on the branch: the non-sRGB branch renders NO input, and a branch
+  // flip recreates the DOM node — a mount-only effect would leave the fresh
+  // input listener-less (picker edits would preview but never commit).
+  const editable = parsed !== null
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `editable` keys the
+  // re-attach to the branch's input node; the handler reads only refs.
   useEffect(() => {
     const el = nativeRef.current
     if (!el) return
@@ -137,7 +151,7 @@ export default function ColorControl({
     }
     el.addEventListener('change', commit)
     return () => el.removeEventListener('change', commit)
-  }, [])
+  }, [editable])
 
   if (!parsed || !shown) {
     // Non-sRGB (oklch/lab/color()/var()) — let the browser paint the raw
@@ -209,7 +223,13 @@ export default function ColorControl({
         spellCheck={false}
         aria-label="Hex color"
         onChange={(e) => setDraft(e.target.value)}
-        onBlur={commitDraft}
+        onFocus={() => {
+          hexFocusedRef.current = true
+        }}
+        onBlur={() => {
+          hexFocusedRef.current = false
+          commitDraft()
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault()

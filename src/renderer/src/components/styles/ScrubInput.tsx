@@ -23,6 +23,13 @@ export interface ScrubInputProps {
   onCommit: (value: number) => void
   /** Live parsed value while typing in the inline exact-value editor. */
   onInput?: (value: number) => void
+  /**
+   * The editor was dismissed WITHOUT a commit (Escape, or unparseable text on
+   * blur) — the caller should drop any live preview the typing injected.
+   * Re-previewing the old value instead would leave a stale inline override
+   * masking later legitimate changes (agent edits, HMR).
+   */
+  onCancel?: () => void
 }
 
 /** Total pointer travel under this = a click (opens the exact-value editor). */
@@ -65,7 +72,8 @@ export default function ScrubInput({
   formatValue,
   onScrub,
   onCommit,
-  onInput
+  onInput,
+  onCancel
 }: ScrubInputProps): React.JSX.Element {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -102,8 +110,12 @@ export default function ScrubInput({
         if (session.moved < CLICK_THRESHOLD_PX) return
         session.started = true
       }
-      session.acc += ev.movementX * stepFor(step, ev)
-      const next = round(clamp(session.acc, min, max))
+      // Clamp the ACCUMULATOR, not just the derived value — an unclamped acc
+      // keeps racking up past min/max under pointer lock, and the user would
+      // have to drag the whole overshoot back through a dead zone before the
+      // value responds to a reversal.
+      session.acc = clamp(session.acc + ev.movementX * stepFor(step, ev), min, max)
+      const next = round(session.acc)
       setScrubValue(next)
       onScrub(next)
     }
@@ -139,14 +151,18 @@ export default function ScrubInput({
         window.setTimeout(() => document.removeEventListener('pointerlockchange', bail), 500)
       }
       const v = round(clamp(session.acc, min, max))
-      if (session.started || viaLockExit) {
-        // Lock exit (Escape included) COMMITS at the current value — never revert.
+      if (session.started) {
+        // A real scrub always commits — incl. lock exit (Escape): COMMIT at
+        // the current value, never revert.
         setScrubValue(v)
         onCommit(v)
-      } else {
+      } else if (!viaLockExit) {
         // Total drag < 3px → it was a click: swap to the exact-value input.
         openEditor(v)
       }
+      // else: aborted before any real travel (Escape / pointercancel with the
+      // value untouched) — nothing changed, so committing would only splice
+      // spurious classes into source. No-op.
     }
 
     dragCleanupRef.current = () => {
@@ -205,7 +221,10 @@ export default function ScrubInput({
     editDoneRef.current = true
     setEditing(false)
     const n = parseDraft(draft)
-    if (n === null) return // unparseable → same as cancel
+    if (n === null) {
+      onCancel?.() // unparseable → cancel: clear the preview the typing injected
+      return
+    }
     const v = round(clamp(n, min, max))
     setScrubValue(v)
     onCommit(v)
@@ -215,7 +234,7 @@ export default function ScrubInput({
     if (editDoneRef.current) return
     editDoneRef.current = true
     setEditing(false)
-    onInput?.(shown) // let the caller's live preview fall back to the pre-edit value
+    onCancel?.() // drop the typed-in preview — never re-inject the old value
   }
 
   return (

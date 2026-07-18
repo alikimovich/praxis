@@ -508,6 +508,13 @@ export interface StyleEdit {
   value: string
   /** The element's current class list (Tailwind class-rewrite candidates). */
   classes: string[]
+  /**
+   * Optional undo-batch id: a multi-prop gesture (the linked padding/margin
+   * scrubber commits four longhands) sends one shared group so a single Cmd+Z
+   * reverts the whole gesture — the per-prop coalesce keys differ, so
+   * edit-history's group batching is the only thing that can join them.
+   */
+  group?: string
 }
 
 /** Result of applying a StyleEdit (mirrors PropEditResult's shape). */

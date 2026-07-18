@@ -115,7 +115,8 @@ export async function applyStyleEditSvelte(
   if (hasAttrOfType(el, 'SpreadAttribute')) return toAgent()
 
   const commit = async (next: string, strategy: 'tailwind' | 'inline'): Promise<StyleEditResult> => {
-    const res = await commitEdit(root, resolved.file, code, next, `${edit.source}:style:${edit.prop}`)
+    const key = `${edit.source}:style:${edit.prop}`
+    const res = await commitEdit(root, resolved.file, code, next, key, edit.group)
     return res.applied ? { applied: true, strategy } : { applied: false, error: res.error }
   }
 

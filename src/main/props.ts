@@ -27,15 +27,18 @@ import { recordEdit, undo, redo, canUndo, canRedo } from './edit-history'
 /**
  * Write a source edit and record it for undo/redo (v8 F3b). A no-op (after ===
  * before) reports success without writing. `key` coalesces rapid edits of the same
- * target (e.g. retyping a prop) into one undo step. Shared by the React + Svelte
- * adapters so EVERY dsgn source edit is reversible.
+ * target (e.g. retyping a prop) into one undo step; `group` batches distinct-key
+ * edits of one gesture (e.g. the four sides of a linked padding scrub) into one
+ * atomic undo. Shared by the React + Svelte adapters so EVERY dsgn source edit
+ * is reversible.
  */
 export async function commitEdit(
   root: string,
   file: string,
   before: string,
   after: string,
-  key: string
+  key: string,
+  group?: string
 ): Promise<PropEditResult> {
   if (after === before) return { applied: true }
   try {
@@ -43,7 +46,7 @@ export async function commitEdit(
   } catch {
     return { applied: false, error: 'Could not write the source file.' }
   }
-  recordEdit(root, file, before, after, key)
+  recordEdit(root, file, before, after, key, group)
   return { applied: true }
 }
 
