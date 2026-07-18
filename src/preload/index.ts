@@ -34,6 +34,8 @@ import type {
   SourceView,
   SourceWriteResult,
   SimPreflight,
+  StyleEdit,
+  StyleEditResult,
   TokenScaffoldResult,
   TokenSet,
   UndoResult,
@@ -233,6 +235,17 @@ const api: DsgnApi = {
   text: {
     apply: (root: string, edit: { source: string; text: string }): Promise<PropEditResult> =>
       ipcRenderer.invoke('text:apply', root, edit)
+  },
+  styles: {
+    apply: (root: string, edit: StyleEdit): Promise<StyleEditResult> =>
+      ipcRenderer.invoke('styles:apply', root, edit),
+    preview: (prop: string, value: string): void =>
+      ipcRenderer.send('styles:preview', { prop, value }),
+    clearPreview: (prop?: string): void => ipcRenderer.send('styles:clear-preview', { prop }),
+    read: (props: string[]): Promise<Record<string, string> | null> =>
+      ipcRenderer.invoke('styles:read', props),
+    replay: (prop: string, from: string, to: string): void =>
+      ipcRenderer.send('styles:replay', { prop, from, to })
   },
   source: {
     read: (root: string, source: string): Promise<SourceView | null> =>

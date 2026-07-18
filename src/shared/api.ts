@@ -923,6 +923,25 @@ export interface DsgnApi {
     /** Rewrite the element's text content in source; agent-fallback for complex content. */
     apply: (root: string, edit: { source: string; text: string }) => Promise<PropEditResult>
   }
+  /** The island's Styles tab (v10): live scrub injection into the previewed app
+   *  plus the Tailwind-first commit engine (`main/styles.ts`). */
+  styles: {
+    /** Commit a style edit to source: Tailwind class rewrite → inline-style
+     *  splice → agent fallback (`needsAgent`, like prop editing). */
+    apply: (root: string, edit: StyleEdit) => Promise<StyleEditResult>
+    /** Live scrub override — inject `prop: value` inline on the selected element
+     *  (the preload stashes the original for exact revert). Fire-and-forget. */
+    preview: (prop: string, value: string) => void
+    /** Revert live override(s) exactly — one prop, or all when omitted. */
+    clearPreview: (prop?: string) => void
+    /** Fresh computed values for `props` from the current selection (pick-time
+     *  snapshots go stale). Null when the selection is gone (navigation /
+     *  element removed), there's no preview, or the read timed out. */
+    read: (props: string[]) => Promise<Record<string, string> | null>
+    /** Replay a transition on the selected element: jump to `from` with
+     *  transitions disabled, force reflow, then set `to` so it animates. */
+    replay: (prop: string, from: string, to: string) => void
+  }
   source: {
     /** Resolve a component tag name to its defining file via imports (Cmd+click). */
     resolveComponent: (root: string, fromFile: string, name: string) => Promise<string | null>

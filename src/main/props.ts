@@ -167,7 +167,7 @@ async function parseFile(code: string): Promise<BabelNode> {
  * line (a DOM click resolves to the deepest stamped element), falling back to
  * the smallest element that encloses the line.
  */
-async function findElementAtLine(
+export async function findElementAtLine(
   code: string,
   line: number,
   column?: number
@@ -212,7 +212,7 @@ export interface CurrentAttr {
 }
 
 /** Read the current attributes off an opening element (literal values only). */
-function readAttributes(opening: BabelNode): CurrentAttr[] {
+export function readAttributes(opening: BabelNode): CurrentAttr[] {
   const attrs: CurrentAttr[] = []
   for (const attr of opening.attributes ?? []) {
     if (attr.type !== 'JSXAttribute') continue // skip spreads
@@ -813,7 +813,7 @@ function stylePropKey(p: BabelNode): string | null {
 
 /** The literal-string AST node behind a className attr value (`"…"` or `{'…'}`),
  * or null for an expression/dynamic className we must not rewrite. */
-function classNameStringNode(v: BabelNode | null | undefined): BabelNode | null {
+export function classNameStringNode(v: BabelNode | null | undefined): BabelNode | null {
   if (!v) return null
   if (v.type === 'StringLiteral') return v
   if (v.type === 'JSXExpressionContainer') {

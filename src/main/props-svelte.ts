@@ -87,7 +87,7 @@ function collectElements(node: unknown, out: Node[]): void {
 }
 
 /** The element the stamp points at (mirrors the React findElementAtLine logic). */
-function findElement(
+export function findElement(
   root: Node,
   code: string,
   line: number,

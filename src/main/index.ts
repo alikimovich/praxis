@@ -17,6 +17,7 @@ import { registerDevServerIpc } from './devserver'
 import { registerSimulatorIpc } from './simulator'
 import { registerAgentIpc } from './agent'
 import { registerPropsIpc } from './props'
+import { registerStylesIpc } from './styles'
 import { registerAnnotationsIpc } from './annotations'
 import { registerTokensIpc } from './tokens'
 import { registerSetupIpc } from './setup'
@@ -788,6 +789,60 @@ function registerPreviewIpc(): void {
     mainWindow?.webContents.send('panel:size', size)
   })
 
+  // ── Styles tab: live-injection relays + computed-style reads (v10) ──────────
+  // The style controls live in the island (panelView), but the main renderer may
+  // also drive them — accept either sender, relay into the preview's preload.
+  const fromMainOrPanel = (
+    e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent
+  ): boolean => e.sender === mainWindow?.webContents || e.sender === panelView?.webContents
+  ipcMain.on('styles:preview', (e, p: { prop: string; value: string }) => {
+    if (!fromMainOrPanel(e)) return
+    previewView?.webContents.send('styles:preview', p)
+  })
+  ipcMain.on('styles:clear-preview', (e, p?: { prop?: string }) => {
+    if (!fromMainOrPanel(e)) return
+    previewView?.webContents.send('styles:clear-preview', p)
+  })
+  ipcMain.on('styles:replay', (e, p: { prop: string; from: string; to: string }) => {
+    if (!fromMainOrPanel(e)) return
+    previewView?.webContents.send('styles:replay', p)
+  })
+
+  // Fresh computed values from the selection. The preview preload is sandboxed
+  // (no contextBridge; executeJavaScript can't reach its isolated world), so
+  // reads are a request-id round trip over IPC: send `styles:read` {id, props},
+  // await the matching `styles:read-reply` {id, values}. A 500ms timeout guards
+  // a dead/navigating preview — null means no preview / no selection / timeout.
+  let styleReadSeq = 0
+  const pendingStyleReads = new Map<number, (values: Record<string, string> | null) => void>()
+  ipcMain.on(
+    'styles:read-reply',
+    (e, p: { id?: unknown; values?: Record<string, string> | null }) => {
+      if (e.sender !== previewView?.webContents) return
+      const resolve = typeof p?.id === 'number' ? pendingStyleReads.get(p.id) : undefined
+      resolve?.(p.values ?? null)
+    }
+  )
+  ipcMain.handle(
+    'styles:read',
+    (e, props: string[]): Promise<Record<string, string> | null> | null => {
+      if (!fromMainOrPanel(e) || !previewView || !Array.isArray(props)) return null
+      const id = ++styleReadSeq
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          pendingStyleReads.delete(id)
+          resolve(null)
+        }, 500)
+        pendingStyleReads.set(id, (values) => {
+          clearTimeout(timer)
+          pendingStyleReads.delete(id)
+          resolve(values)
+        })
+        previewView?.webContents.send('styles:read', { id, props })
+      })
+    }
+  )
+
   // v3 annotation pins: renderer pushes the list → preview; clicks come back.
   ipcMain.on('preview:set-annotations', (_e, pins: { id: string; selector: string }[]) => {
     annotationPins = Array.isArray(pins) ? pins : []
@@ -902,6 +957,7 @@ app.whenReady().then(() => {
   registerSimulatorIpc(() => mainWindow)
   registerAgentIpc(() => mainWindow)
   registerPropsIpc()
+  registerStylesIpc()
   registerAnnotationsIpc()
   registerTokensIpc()
   registerSetupIpc()
