@@ -1,13 +1,13 @@
 import { readFile, writeFile } from 'fs/promises'
 
 /**
- * Undo/redo for ALL dsgn source edits (v8 F3b) — props, inline text, token swaps,
+ * Undo/redo for ALL praxis source edits (v8 F3b) — props, inline text, token swaps,
  * React + Svelte. Every apply path calls `recordEdit(root, file, before, after)`
  * after a successful write; `undo(root)`/`redo(root)` revert/re-apply against the
  * file's CURRENT content, refusing to clobber if the user changed it in their own
  * editor since.
  *
- * History is scoped per project root — dsgn keeps several projects open in the rail
+ * History is scoped per project root — praxis keeps several projects open in the rail
  * (v5-C), so Cmd+Z in project B must never revert a file in project A. The edits
  * write straight to source, so the dev server's HMR refreshes the preview on undo
  * just like apply.

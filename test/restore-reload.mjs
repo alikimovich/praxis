@@ -45,8 +45,8 @@ try {
 
   // ── A. hydrate: transcript → messages, only-if-empty guard, streaming tail ──
   const a = await win.evaluate(() => {
-    const chat = window.__dsgnStore.getState()
-    const toMsgs = window.__dsgnMessagesFromTranscript
+    const chat = window.__praxisStore.getState()
+    const toMsgs = window.__praxisMessagesFromTranscript
     const msgs = toMsgs([
       { role: 'user', text: 'change the title', at: 1 },
       { role: 'assistant', text: 'Sure.', at: 2 },
@@ -54,13 +54,13 @@ try {
     ])
     chat.setActiveChat('K')
     chat.hydrate('K', msgs, false)
-    const seeded = window.__dsgnStore.getState().byKey['K'].messages.map((m) => ({
+    const seeded = window.__praxisStore.getState().byKey['K'].messages.map((m) => ({
       role: m.role,
       text: m.text
     }))
     // Guard: a second seed with different content must NOT clobber the populated slice.
     chat.hydrate('K', toMsgs([{ role: 'user', text: 'DIFFERENT', at: 9 }]), false)
-    const afterGuard = window.__dsgnStore.getState().byKey['K'].messages.map((m) => m.text)
+    const afterGuard = window.__praxisStore.getState().byKey['K'].messages.map((m) => m.text)
     return { seeded, afterGuard }
   })
   assert(a.seeded.length === 2, `seed → user + assistant messages, got ${a.seeded.length}`)
@@ -77,13 +77,13 @@ try {
   // isRunning seed opens a streaming assistant message; a continuing delta appends
   // to IT (continuation, not a duplicate of the seeded history).
   const b = await win.evaluate(() => {
-    const chat = window.__dsgnStore.getState()
-    const toMsgs = window.__dsgnMessagesFromTranscript
+    const chat = window.__praxisStore.getState()
+    const toMsgs = window.__praxisMessagesFromTranscript
     chat.hydrate('R', toMsgs([{ role: 'user', text: 'go', at: 1 }]), true)
-    const before = window.__dsgnStore.getState().byKey['R']
+    const before = window.__praxisStore.getState().byKey['R']
     chat.setActiveChat('R')
     chat.appendDelta('streamed', 'R')
-    const after = window.__dsgnStore.getState().byKey['R']
+    const after = window.__praxisStore.getState().byKey['R']
     return {
       running: before.isRunning,
       hadStreamId: !!before.streamingId,
@@ -106,10 +106,10 @@ try {
   // Persist a workspace entry for it (no launchSpec/url → the reattach path uses
   // the live session; applyProject won't try to relaunch a dev server).
   const key = await win.evaluate((f) => {
-    const ws = window.__dsgnWorkspace.getState()
+    const ws = window.__praxisWorkspace.getState()
     const k = ws.openOrActivate(f)
-    const entry = window.__dsgnWorkspace.getState().projects.find((p) => p.key === k)
-    localStorage.setItem('dsgn:workspace', JSON.stringify({ projects: [entry], activeKey: k }))
+    const entry = window.__praxisWorkspace.getState().projects.find((p) => p.key === k)
+    localStorage.setItem('praxis:workspace', JSON.stringify({ projects: [entry], activeKey: k }))
     return k
   }, fixture)
 
@@ -118,8 +118,8 @@ try {
   // Restore is async (workspaceSnapshot → applyProject); wait for it to land.
   await win.waitForFunction(
     (k) => {
-      const ws = window.__dsgnWorkspace?.getState?.()
-      const slice = window.__dsgnStore?.getState?.().byKey?.[k]
+      const ws = window.__praxisWorkspace?.getState?.()
+      const slice = window.__praxisStore?.getState?.().byKey?.[k]
       return !!ws && ws.projects.some((p) => p.key === k) && !!slice
     },
     key,
@@ -127,8 +127,8 @@ try {
   )
   await win.waitForSelector('.composer__input', { timeout: 15000 })
   const reattach = await win.evaluate((k) => {
-    const ws = window.__dsgnWorkspace.getState()
-    const slice = window.__dsgnStore.getState().byKey[k]
+    const ws = window.__praxisWorkspace.getState()
+    const slice = window.__praxisStore.getState().byKey[k]
     return {
       hasProject: ws.projects.some((p) => p.key === k),
       activeKey: ws.activeKey,
@@ -149,23 +149,23 @@ try {
   await win.evaluate((f) => window.api.agent.closeProject(f), fixture)
   await win.evaluate(() => {
     localStorage.setItem(
-      'dsgn:workspace',
+      'praxis:workspace',
       JSON.stringify({
         projects: [
           {
-            root: '/tmp/dsgn-dead-proj',
-            key: '/tmp/dsgn-dead-proj',
+            root: '/tmp/praxis-dead-proj',
+            key: '/tmp/praxis-dead-proj',
             name: 'dead',
             url: null,
             previewKind: 'web',
             branch: null,
             launchSpec: null,
             touchedAt: 1,
-            sessionKeys: ['/tmp/dsgn-dead-proj'],
-            activeSessionKey: '/tmp/dsgn-dead-proj'
+            sessionKeys: ['/tmp/praxis-dead-proj'],
+            activeSessionKey: '/tmp/praxis-dead-proj'
           }
         ],
-        activeKey: '/tmp/dsgn-dead-proj'
+        activeKey: '/tmp/praxis-dead-proj'
       })
     )
   })
@@ -174,7 +174,7 @@ try {
   await win.waitForSelector('.empty__open', { timeout: 15000 })
   // Give restore a beat to (not) reopen, then confirm the rail stayed empty.
   await new Promise((r) => setTimeout(r, 800))
-  const dead = await win.evaluate(() => window.__dsgnWorkspace.getState().projects.length)
+  const dead = await win.evaluate(() => window.__praxisWorkspace.getState().projects.length)
   assert(dead === 0, `persisted-but-dead workspace stays on Welcome, got ${dead} project(s)`)
 
   console.log(
@@ -188,8 +188,8 @@ try {
   try {
     const w = await app?.firstWindow()
     await w?.evaluate(() => {
-      localStorage.removeItem('dsgn:workspace')
-      localStorage.removeItem('dsgn:recent-projects')
+      localStorage.removeItem('praxis:workspace')
+      localStorage.removeItem('praxis:recent-projects')
     })
   } catch {
     /* app may already be gone */

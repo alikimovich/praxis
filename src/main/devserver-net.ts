@@ -133,7 +133,7 @@ const rendererPort = ((): string => {
  * If the user already runs this project's dev server, find it so we can attach
  * instead of spawning a competitor — two dev servers on one project clash (e.g.
  * over SvelteKit's .svelte-kit/) and the duplicate errors. We only attach to a
- * HEALTHY server (status < 400), and never to dsgn's own renderer.
+ * HEALTHY server (status < 400), and never to praxis's own renderer.
  */
 export async function findRunningServer(
   framework?: Framework,

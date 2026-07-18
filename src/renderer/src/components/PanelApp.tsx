@@ -3,10 +3,10 @@ import type { PanelState } from '../../../shared/api'
 import { SlidersHorizontal } from 'lucide-react'
 import PropPanel from './PropPanel'
 
-const COLLAPSED_KEY = 'dsgn.proppanel.collapsed'
+const COLLAPSED_KEY = 'praxis.proppanel.collapsed'
 
 /**
- * Root of the floating prop-panel island (the ?dsgnPanel=1 renderer instance —
+ * Root of the floating prop-panel island (the ?praxisPanel=1 renderer instance —
  * a WebContentsView stacked above the native preview). Stateless w.r.t. the
  * selection: renders whatever the main renderer pushes over panel:state and
  * relays user actions back. The collapsed state is local (the island outlives

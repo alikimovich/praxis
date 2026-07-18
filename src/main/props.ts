@@ -28,7 +28,7 @@ import { recordEdit, undo, redo, canUndo, canRedo } from './edit-history'
  * Write a source edit and record it for undo/redo (v8 F3b). A no-op (after ===
  * before) reports success without writing. `key` coalesces rapid edits of the same
  * target (e.g. retyping a prop) into one undo step. Shared by the React + Svelte
- * adapters so EVERY dsgn source edit is reversible.
+ * adapters so EVERY praxis source edit is reversible.
  */
 export async function commitEdit(
   root: string,
@@ -50,13 +50,13 @@ export async function commitEdit(
 /**
  * Prop editing is framework-agnostic by dispatch: the source file's extension
  * picks an adapter. `.svelte` → props-svelte.ts; everything else (.tsx/.jsx/.ts/
- * .js) → the React/JSX engine below. Both speak the same `data-dsgn-source`
+ * .js) → the React/JSX engine below. Both speak the same `data-praxis-source`
  * stamp, the same shared helpers (resolveSource, mergeFields, …), and return the
  * same PropInspection / PropEditResult shapes.
  */
 
 /**
- * Prop/token editing for the v2 inspector. Given an element's `data-dsgn-source`
+ * Prop/token editing for the v2 inspector. Given an element's `data-praxis-source`
  * stamp ("relpath:line"), we parse the source file, find the JSX element on that
  * line, and read its current literal attributes — enriched, when we can resolve
  * a schema, by react-docgen. Edits are applied the "hybrid" way: simple literal
@@ -1181,7 +1181,7 @@ export function registerPropsIpc(): void {
     (_e, root: string, source: string, baseline: string, content: string) =>
       writeSourceFile(root, source, baseline, content)
   )
-  // v8 F3b: undo/redo over ALL dsgn source edits (props, text, token swaps),
+  // v8 F3b: undo/redo over ALL praxis source edits (props, text, token swaps),
   // scoped to the active project root (the rail keeps several projects open).
   ipcMain.handle('edit:undo', (_e, root: string) => undo(root))
   ipcMain.handle('edit:redo', (_e, root: string) => redo(root))

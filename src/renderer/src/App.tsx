@@ -168,7 +168,7 @@ export default function App(): React.JSX.Element {
   const setAuthNeeded = useSession((s) => s.setAuthNeeded)
   const logOpen = useLog((s) => s.open)
 
-  // Rename / switch the working branch (name is coerced to dsgn/<…> in main).
+  // Rename / switch the working branch (name is coerced to praxis/<…> in main).
   const changeBranch = async (name: string): Promise<void> => {
     setEditingBranch(false)
     const root = useSession.getState().projectRoot
@@ -192,7 +192,7 @@ export default function App(): React.JSX.Element {
     const root = useSession.getState().projectRoot
     if (root) void window.api.git.list(root).then((r) => setBranches(r.branches))
   }
-  // Check out an EXISTING branch by exact name (the dropdown) — no dsgn/ coercion.
+  // Check out an EXISTING branch by exact name (the dropdown) — no praxis/ coercion.
   const switchToBranch = async (b: string): Promise<void> => {
     const root = useSession.getState().projectRoot
     if (!root || b === branch) return
@@ -428,7 +428,7 @@ export default function App(): React.JSX.Element {
     window.api.menu.setRecents(recents.slice(0, 8).map((r) => ({ root: r.root, name: r.name })))
   }, [recents])
 
-  // v8 F3b: Cmd+Z / Cmd+Shift+Z (or Cmd+Y) undo/redo over ALL direct dsgn source
+  // v8 F3b: Cmd+Z / Cmd+Shift+Z (or Cmd+Y) undo/redo over ALL direct praxis source
   // edits (props, text, token swaps). Skipped while typing in the composer or any
   // field — there the OS/browser native undo for that input should win. After a
   // revert we re-inspect the selected element so the panel reflects the new source,
@@ -763,7 +763,7 @@ export default function App(): React.JSX.Element {
         for (const sk of prevSessionKeys ?? [projectKey(prevRoot)]) useChat.getState().clearChat(sk)
       }
 
-      // Do dsgn's work on a dsgn/* branch so the user's main branch stays clean.
+      // Do praxis's work on a praxis/* branch so the user's main branch stays clean.
       try {
         const b = await window.api.git.ensure(root)
         useSession.getState().setBranch(b.branch)
@@ -838,7 +838,7 @@ export default function App(): React.JSX.Element {
       // Detect this repo's design tokens (manifest → tailwind → CSS vars).
       // Guard against a project switch racing a slow scan — only apply if `root`
       // is still the open project when it resolves. When the repo exposes no
-      // tokens at all, offer to scaffold a starter `.dsgn/tokens.json`.
+      // tokens at all, offer to scaffold a starter `.praxis/tokens.json`.
       void window.api.tokens.detect(root).then((t) => {
         if (useSession.getState().projectRoot !== root) return
         const tk = useTokens.getState()
@@ -928,7 +928,7 @@ export default function App(): React.JSX.Element {
     await attempt(res.root, undefined, !!useSession.getState().projectRoot)
   }
 
-  // Publish: commit everything on the current dsgn/* branch, push, open a PR,
+  // Publish: commit everything on the current praxis/* branch, push, open a PR,
   // squash-merge it to main, pull main, delete the merged branch, and start a
   // fresh same-named branch to keep working on. Progress + result go to the log.
   // The commit/PR/merge messages summarize the user asks since the LAST publish

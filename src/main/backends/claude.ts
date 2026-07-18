@@ -25,7 +25,7 @@ import { join } from 'node:path'
 import { AUTO_ALLOW_TOOLS, describeTool, toolDetail, touchesSidecar } from './tools'
 import { createRecordCapture } from './record'
 import { sanitizeTitle, transcriptDigest } from './title'
-import { dsgnRules } from '../rules'
+import { praxisRules } from '../rules'
 import { capturePreview, getPreviewUrl } from '../preview-state'
 
 // The bundled Praxis agent plugin (skills teaching the preview workflow). Lives
@@ -142,7 +142,7 @@ function parseQuestions(input: unknown): QuestionSpec[] {
  * Feed the user's picks back to the model as the AskUserQuestion tool result. We
  * DENY the tool with the answer as its message: in headless SDK mode there is no
  * built-in interactive prompt to run, so intercepting `canUseTool` and returning
- * the answer here keeps the whole exchange under dsgn's control. The message is
+ * the answer here keeps the whole exchange under praxis's control. The message is
  * phrased as an answer so the model continues with the user's choice in hand.
  */
 function formatAnswers(questions: QuestionSpec[], answers: QuestionAnswers): string {
@@ -254,7 +254,7 @@ async function startSession(
       // The repo's CLAUDE.md + skills load via settingSources; Praxis's own
       // operating rules (v8 R) are appended to the Claude Code preset, with the
       // preview-tools section (Claude alone can call the in-process praxis tools).
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: dsgnRules({ previewTools: true }) },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: praxisRules({ previewTools: true }) },
       // The praxis MCP server (preview_location / preview_screenshot). Its two
       // read-only tools are auto-allowed here so they never surface a permission
       // card (canUseTool also short-circuits them, belt-and-suspenders).
@@ -321,7 +321,7 @@ async function startSession(
         if (touchesSidecar(toolName, toolInput)) {
           return {
             behavior: 'deny',
-            message: 'The .dsgn/ sidecar is managed by dsgn, not the agent.'
+            message: 'The .praxis/ sidecar is managed by praxis, not the agent.'
           }
         }
         if (AUTO_ALLOW_TOOLS.has(toolName)) {

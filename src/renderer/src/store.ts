@@ -386,7 +386,7 @@ interface SessionState {
   codexAuthNeeded: boolean
   /** Absolute path of the open project (needed to resolve prop-edit sources). */
   projectRoot: string | null
-  /** The `dsgn/*` branch dsgn is working on (null if not a git repo). */
+  /** The `praxis/*` branch praxis is working on (null if not a git repo). */
   branch: string | null
   setModel: (model: string) => void
   setEffort: (effort: string) => void
@@ -530,7 +530,7 @@ const applyTheme = (t: Theme): void => {
     /* no DOM (tests) */
   }
 }
-applyTheme(systemTheme()) // set the class before first paint — dsgn always matches the OS
+applyTheme(systemTheme()) // set the class before first paint — praxis always matches the OS
 
 /** Preview viewport: 'desktop' = fill the pane, 'mobile' = a centered phone width. */
 export type Viewport = 'desktop' | 'mobile'
@@ -625,7 +625,7 @@ export const usePanelInset = create<PanelInsetState>((set) => ({
  * preview (right side) and reserves a bottom inset (usePanelInset).
  */
 interface CodeDrawerState {
-  /** The `data-dsgn-source` string of the file open in the drawer, or null. */
+  /** The `data-praxis-source` string of the file open in the drawer, or null. */
   source: string | null
   /** Navigation history (Cmd+click jumps push here); index points at `source`. */
   stack: string[]
@@ -663,7 +663,7 @@ export interface RecentProject {
   name: string
   at: number
 }
-const RECENTS_KEY = 'dsgn:recent-projects'
+const RECENTS_KEY = 'praxis:recent-projects'
 const readRecents = (): RecentProject[] => {
   try {
     const v = JSON.parse(localStorage.getItem(RECENTS_KEY) ?? '[]') as RecentProject[]
@@ -718,7 +718,7 @@ export const useRecents = create<RecentsState>((set) => ({
  * the split button's settings menu; persisted across launches.
  */
 export type PublishMode = 'merge' | 'pr'
-const PUBLISH_MODE_KEY = 'dsgn:publish-mode'
+const PUBLISH_MODE_KEY = 'praxis:publish-mode'
 const readPublishMode = (): PublishMode => {
   try {
     return localStorage.getItem(PUBLISH_MODE_KEY) === 'pr' ? 'pr' : 'merge'
@@ -748,7 +748,7 @@ export const usePublishMode = create<PublishModeState>((set) => ({
  * `subject` it was dismissed for (persisted) so the SAME update doesn't
  * re-nag, but a newer one (different subject) still surfaces.
  */
-const UPDATE_DISMISSED_KEY = 'dsgn:update-dismissed-subject'
+const UPDATE_DISMISSED_KEY = 'praxis:update-dismissed-subject'
 const readDismissed = (): string | null => {
   try {
     return localStorage.getItem(UPDATE_DISMISSED_KEY)
@@ -799,7 +799,7 @@ try {
 }
 
 // Remember the rail collapse preference across launches (renderer-only UI state).
-const RAIL_KEY = 'dsgn:rail-collapsed'
+const RAIL_KEY = 'praxis:rail-collapsed'
 const readCollapsed = (): boolean => {
   try {
     return localStorage.getItem(RAIL_KEY) === '1'
@@ -897,13 +897,13 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
  * reload / app relaunch can restore it (see restore.ts). In-memory today, mirrored
  * to localStorage here; every ProjectEntry field is plain JSON data (launchSpec /
  * viewport included), so it round-trips. Only the MAIN renderer persists — the
- * floating prop-panel view (`?dsgnPanel=1`) shares this origin's localStorage but
+ * floating prop-panel view (`?praxisPanel=1`) shares this origin's localStorage but
  * has its own (empty) workspace, so it must never write over the real one.
  */
-const WORKSPACE_KEY = 'dsgn:workspace'
+const WORKSPACE_KEY = 'praxis:workspace'
 const isPanelWindow = (): boolean => {
   try {
-    return new URLSearchParams(window.location.search).has('dsgnPanel')
+    return new URLSearchParams(window.location.search).has('praxisPanel')
   } catch {
     return false
   }
@@ -1142,9 +1142,9 @@ interface PermissionState {
 
 export const usePermissions = create<PermissionState>((set) => ({
   // Auto mode by default — the SDK's model classifier approves/denies each tool
-  // call; only the ones it flags as risky fall through to dsgn's canUseTool card.
+  // call; only the ones it flags as risky fall through to praxis's canUseTool card.
   // No prompts for routine work, dangerous ops still surface, and canUseTool still
-  // runs (so the .dsgn/ sidecar guard + AskUserQuestion card stay in force).
+  // runs (so the .praxis/ sidecar guard + AskUserQuestion card stay in force).
   mode: 'auto',
   pending: [],
   setMode: (mode) => set({ mode }),
@@ -1319,7 +1319,7 @@ export const useSetup = create<SetupState>((set) => ({
 /** Design tokens detected for the open project (one source wins). */
 interface TokenState {
   set: TokenSet | null
-  /** First-run offer to scaffold `.dsgn/tokens.json` when no tokens were found. */
+  /** First-run offer to scaffold `.praxis/tokens.json` when no tokens were found. */
   offerNeeded: boolean
   offerDismissed: boolean
   scaffolding: boolean
@@ -1458,37 +1458,37 @@ export const usePreviewLocation = create<PreviewLocationState>((set) => ({
 // Exposed for the Playwright test harness (and handy for live debugging).
 ;(
   window as unknown as {
-    __dsgnStore?: typeof useChat
-    __dsgnSession?: typeof useSession
-    __dsgnSelection?: typeof useSelection
-    __dsgnPermissions?: typeof usePermissions
-    __dsgnQuestions?: typeof useQuestions
-    __dsgnAnnotations?: typeof useAnnotations
-    __dsgnTokens?: typeof useTokens
-    __dsgnSetup?: typeof useSetup
+    __praxisStore?: typeof useChat
+    __praxisSession?: typeof useSession
+    __praxisSelection?: typeof useSelection
+    __praxisPermissions?: typeof usePermissions
+    __praxisQuestions?: typeof useQuestions
+    __praxisAnnotations?: typeof useAnnotations
+    __praxisTokens?: typeof useTokens
+    __praxisSetup?: typeof useSetup
   }
-).__dsgnStore = useChat
-;(window as unknown as { __dsgnSession?: typeof useSession }).__dsgnSession = useSession
+).__praxisStore = useChat
+;(window as unknown as { __praxisSession?: typeof useSession }).__praxisSession = useSession
 ;(
-  window as unknown as { __dsgnMessagesFromTranscript?: typeof messagesFromTranscript }
-).__dsgnMessagesFromTranscript = messagesFromTranscript
-;(window as unknown as { __dsgnSelection?: typeof useSelection }).__dsgnSelection = useSelection
-;(window as unknown as { __dsgnPermissions?: typeof usePermissions }).__dsgnPermissions =
+  window as unknown as { __praxisMessagesFromTranscript?: typeof messagesFromTranscript }
+).__praxisMessagesFromTranscript = messagesFromTranscript
+;(window as unknown as { __praxisSelection?: typeof useSelection }).__praxisSelection = useSelection
+;(window as unknown as { __praxisPermissions?: typeof usePermissions }).__praxisPermissions =
   usePermissions
-;(window as unknown as { __dsgnQuestions?: typeof useQuestions }).__dsgnQuestions = useQuestions
-;(window as unknown as { __dsgnAnnotations?: typeof useAnnotations }).__dsgnAnnotations =
+;(window as unknown as { __praxisQuestions?: typeof useQuestions }).__praxisQuestions = useQuestions
+;(window as unknown as { __praxisAnnotations?: typeof useAnnotations }).__praxisAnnotations =
   useAnnotations
-;(window as unknown as { __dsgnTokens?: typeof useTokens }).__dsgnTokens = useTokens
-;(window as unknown as { __dsgnSetup?: typeof useSetup }).__dsgnSetup = useSetup
-;(window as unknown as { __dsgnLog?: typeof useLog }).__dsgnLog = useLog
-;(window as unknown as { __dsgnDiagnosis?: typeof useDiagnosis }).__dsgnDiagnosis = useDiagnosis
-;(window as unknown as { __dsgnWorkspace?: typeof useWorkspace }).__dsgnWorkspace = useWorkspace
-;(window as unknown as { __dsgnHistory?: typeof useHistory }).__dsgnHistory = useHistory
-;(window as unknown as { __dsgnSpawns?: typeof useSpawns }).__dsgnSpawns = useSpawns
-;(window as unknown as { __dsgnViewport?: typeof useViewport }).__dsgnViewport = useViewport
-;(window as unknown as { __dsgnPanelInset?: typeof usePanelInset }).__dsgnPanelInset = usePanelInset
-;(window as unknown as { __dsgnCodeDrawer?: typeof useCodeDrawer }).__dsgnCodeDrawer = useCodeDrawer
-;(window as unknown as { __dsgnPropsIsland?: typeof usePropsIsland }).__dsgnPropsIsland = usePropsIsland
+;(window as unknown as { __praxisTokens?: typeof useTokens }).__praxisTokens = useTokens
+;(window as unknown as { __praxisSetup?: typeof useSetup }).__praxisSetup = useSetup
+;(window as unknown as { __praxisLog?: typeof useLog }).__praxisLog = useLog
+;(window as unknown as { __praxisDiagnosis?: typeof useDiagnosis }).__praxisDiagnosis = useDiagnosis
+;(window as unknown as { __praxisWorkspace?: typeof useWorkspace }).__praxisWorkspace = useWorkspace
+;(window as unknown as { __praxisHistory?: typeof useHistory }).__praxisHistory = useHistory
+;(window as unknown as { __praxisSpawns?: typeof useSpawns }).__praxisSpawns = useSpawns
+;(window as unknown as { __praxisViewport?: typeof useViewport }).__praxisViewport = useViewport
+;(window as unknown as { __praxisPanelInset?: typeof usePanelInset }).__praxisPanelInset = usePanelInset
+;(window as unknown as { __praxisCodeDrawer?: typeof useCodeDrawer }).__praxisCodeDrawer = useCodeDrawer
+;(window as unknown as { __praxisPropsIsland?: typeof usePropsIsland }).__praxisPropsIsland = usePropsIsland
 ;(
-  window as unknown as { __dsgnPreviewLocation?: typeof usePreviewLocation }
-).__dsgnPreviewLocation = usePreviewLocation
+  window as unknown as { __praxisPreviewLocation?: typeof usePreviewLocation }
+).__praxisPreviewLocation = usePreviewLocation

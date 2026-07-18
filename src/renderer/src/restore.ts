@@ -15,7 +15,7 @@ import {
  * MAIN process survives with its live agent sessions, dev servers, and preview —
  * but the fresh renderer has no in-memory state and would land on Welcome. This
  * reattaches the UI to whatever is still live in main, repainting chat transcripts;
- * and when main has nothing (a real relaunch), auto-reopens the last dsgn-launched
+ * and when main has nothing (a real relaunch), auto-reopens the last praxis-launched
  * project and resumes its most recent chat from disk.
  *
  * Reuses App's own `attempt`/`applyProject`/`resumeRecord` (passed in) rather than
@@ -124,7 +124,7 @@ export async function restoreWorkspace(deps: RestoreDeps): Promise<void> {
       }
       await deps.applyProject(entry)
     } else if (activePersisted && activePersisted.launchSpec) {
-      // Real relaunch (main empty) — only auto-reopen a project dsgn OWNS the launch
+      // Real relaunch (main empty) — only auto-reopen a project praxis OWNS the launch
       // of (a persisted launchSpec). Attached-server / never-launched entries can't
       // be relaunched meaningfully and are left in recents for the user to reopen.
       await deps.attempt(activePersisted.root)
@@ -134,7 +134,7 @@ export async function restoreWorkspace(deps: RestoreDeps): Promise<void> {
         await resumeMostRecent(activePersisted.root, deps)
       }
     }
-    // else: nothing live and the last project isn't dsgn-launched → stay on Welcome.
+    // else: nothing live and the last project isn't praxis-launched → stay on Welcome.
   } catch (err) {
     // Any failure falls back cleanly rather than a broken half-state.
     const message = err instanceof Error ? err.message : String(err)

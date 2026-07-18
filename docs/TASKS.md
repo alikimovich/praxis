@@ -27,7 +27,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
       narrow window — complementary but unaware of each other's inset.
 - [x] **Phase 3 — pop the drawer out into its own window.** ✅ 2026-07-14 (LKM-48)
       — a pop-out button opens the editor in a standalone, freely-resizable
-      `BrowserWindow` (same renderer bundle via `?dsgnEditor=1`, new `EditorWindow`
+      `BrowserWindow` (same renderer bundle via `?praxisEditor=1`, new `EditorWindow`
       entry + `CodeDrawer` `variant="window"`). One window per project root;
       re-focuses + retargets on a repeat pop-out. `source.popout/closeWindow/
       onNavigate` IPC. `test/code-drawer.mjs`.
@@ -36,7 +36,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 - [x] **Isolate concurrent chats in per-repo worktrees.** ✅ 2026-07-16 —
       Every interactive chat on a git repo root gets its own long-lived worktree
-      on branch `dsgn/chat-<id>`, created before `startSession` and removed on
+      on branch `praxis/chat-<id>`, created before `startSession` and removed on
       close. Turn edits commit to the worktree branch; on `done`/`error` they
       auto-merge to the live tree (the preview always serves live, never a
       worktree). Conflicts park on the branch for review via the existing
@@ -74,7 +74,7 @@ Ranked by leverage. Deferred items note *why* they're not auto-completable.
       100); `lint`/`format` scripts. The repo-wide `biome check --write` reformat
       is deliberately NOT done — run it as its own commit when ready.
 - [x] **Gemini backend gated.** ✅ 2026-07-07 — `pickProvider` returns Claude for
-      `provider:'gemini'` unless `DSGN_EXPERIMENTAL_GEMINI=1`; `gemini.ts` banner
+      `provider:'gemini'` unless `PRAXIS_EXPERIMENTAL_GEMINI=1`; `gemini.ts` banner
       marks it experimental/unwired; removed from the renderer picker so it can't be
       silently selected. Add the SDK dep + a self-skipping e2e test to un-gate.
 - [ ] **Shared test harness.** 55 `.mjs` tests re-derive root + Playwright/Electron
@@ -85,7 +85,7 @@ Ranked by leverage. Deferred items note *why* they're not auto-completable.
       (1189), `simulator.ts` (1169), `store.ts` (981). Extract, don't append.
       *Deferred: high-risk refactor; needs the Electron UI running to verify, which
       isn't possible headless — do interactively with the app open.*
-- [ ] **Optional: rename the `dsgn` internals to Praxis.** The product and repo are
-      Praxis, but the codebase still uses `dsgn` (the `data-dsgn-source` attribute,
-      `DsgnApi`, `.dsgn/`). Renaming the attribute is a breaking change for stamped
-      target repos, so it's a deliberate call, not a mechanical rename.
+- [x] **Rename the `dsgn` internals to Praxis.** Done 2026-07-17: `data-praxis-source`,
+      `PraxisApi`, `.praxis/`, `praxis/*` branches, `<userData>/praxis`. Clean break for
+      stamped target repos (re-run setup); legacy shims cover uninstall, old work
+      branches, and one-time sidecar/userData migration. See PROGRESS 2026-07-17.

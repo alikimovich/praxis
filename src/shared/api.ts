@@ -13,7 +13,7 @@ export type Framework =
   | 'expo'
   | 'react-native'
   // A plain static site (vanilla HTML/CSS/JS, no package.json or build step) —
-  // served by dsgn's own built-in static file server, not a spawned dev command.
+  // served by praxis's own built-in static file server, not a spawned dev command.
   | 'static'
   | 'unknown'
 
@@ -27,7 +27,7 @@ export type Framework =
 export type PreviewKind = 'web' | 'simulator'
 
 /**
- * AI-assisted diagnosis of an open/launch failure. dsgn *proposes* a fix (never
+ * AI-assisted diagnosis of an open/launch failure. praxis *proposes* a fix (never
  * auto-runs): repo-scoped steps it can apply, host-scoped steps (sudo / global /
  * downloads) the user runs. Cached per-machine by `signature` so a repeat error
  * recalls the plan instead of re-diagnosing.
@@ -36,7 +36,7 @@ export interface DiagStep {
   text: string
   /** Optional exact shell command (shown with a copy button). */
   command?: string
-  /** 'repo' = dsgn can apply it; 'host' = machine-level, the user must run it. */
+  /** 'repo' = praxis can apply it; 'host' = machine-level, the user must run it. */
   scope: 'repo' | 'host'
 }
 export interface Diagnosis {
@@ -51,7 +51,7 @@ export interface Diagnosis {
   status?: 'proposed' | 'applied' | 'dismissed'
 }
 
-/** Result of ensuring/switching the opened project's `dsgn/*` working branch. */
+/** Result of ensuring/switching the opened project's `praxis/*` working branch. */
 export interface BranchResult {
   isRepo: boolean
   /** The branch now checked out (null if not a git repo or the switch failed). */
@@ -129,13 +129,13 @@ export interface SimPreflight {
 
 /**
  * The agent's permission posture, mirroring the SDK's `PermissionMode`:
- * - `auto` — **dsgn's default**: a model classifier approves/denies each tool
- *   call; only the ones it flags as risky fall through to dsgn's canUseTool
+ * - `auto` — **praxis's default**: a model classifier approves/denies each tool
+ *   call; only the ones it flags as risky fall through to praxis's canUseTool
  *   (approve/deny card). No prompts for routine work, but genuinely dangerous
  *   ops still surface.
  * - `default` — ask (cards) for every tool the SDK gates.
  * - `acceptEdits` — auto-accept file edits, still ask for the rest (e.g. Bash).
- * - `bypassPermissions` — skip all checks (and dsgn's canUseTool guards); unused.
+ * - `bypassPermissions` — skip all checks (and praxis's canUseTool guards); unused.
  */
 export type PermissionMode = 'auto' | 'default' | 'acceptEdits' | 'bypassPermissions'
 
@@ -285,7 +285,7 @@ export interface SessionRecord {
   projectName: string
   startedAt: number
   endedAt: number | null
-  /** The dsgn/* branch it worked on, if the renderer tagged it. */
+  /** The praxis/* branch it worked on, if the renderer tagged it. */
   branch?: string
   /** The PR it produced, if published. */
   prUrl?: string
@@ -358,7 +358,7 @@ export interface Bounds {
 
 /**
  * An element the user picked in the live preview (v2 select mode). `source` is
- * the repo's opt-in `data-dsgn-source` stamp ("path/File.tsx:line") when present
+ * the repo's opt-in `data-praxis-source` stamp ("path/File.tsx:line") when present
  * — that's what lets the agent edit the exact component (see DESIGN.md).
  */
 export interface SelectedElement {
@@ -368,7 +368,7 @@ export interface SelectedElement {
   selector: string
   source: string | null
   /**
-   * The nearest COMPONENT-instance call site (v8 F3a) — `data-dsgn-component-source`,
+   * The nearest COMPONENT-instance call site (v8 F3a) — `data-praxis-component-source`,
    * which the stamp plugin forwards so the authored `<Component …/>` (not the
    * innermost host) wins. Lets the inspector edit per-instance props. Null when the
    * element isn't inside a stamped component instance (or on a non-React backend).
@@ -441,7 +441,7 @@ export interface PropField {
 /** Result of inspecting a selected element's editable props. */
 export interface PropInspection {
   component: string
-  /** The `path:line` we edit at (from the element's data-dsgn-source). */
+  /** The `path:line` we edit at (from the element's data-praxis-source). */
   source: string
   fields: PropField[]
   /**
@@ -491,7 +491,7 @@ export interface PropEditResult {
   error?: string
 }
 
-/** Result of an undo/redo over the dsgn source-edit history (v8 F3b). */
+/** Result of an undo/redo over the praxis source-edit history (v8 F3b). */
 export interface UndoResult {
   ok: boolean
   /** The file reverted/re-applied. */
@@ -509,7 +509,7 @@ export interface UndoResult {
  * expression, multiple candidates) fall back to the agent (`needsAgent`).
  */
 export interface TokenEdit {
-  /** The element's `data-dsgn-source` stamp (null → agent). */
+  /** The element's `data-praxis-source` stamp (null → agent). */
   source: string | null
   token: Token
   /** The token's group name (e.g. 'colors' | 'spacing' | 'radius' | 'fontSize'). */
@@ -520,10 +520,10 @@ export interface TokenEdit {
   classes: string[]
 }
 
-/** A reviewer note pinned to an element, stored in the repo's .dsgn sidecar. */
+/** A reviewer note pinned to an element, stored in the repo's .praxis sidecar. */
 export interface Annotation {
   id: string
-  /** The element's data-dsgn-source, if any. */
+  /** The element's data-praxis-source, if any. */
   source: string | null
   selector: string
   tag: string
@@ -544,7 +544,7 @@ export interface PublishResult {
   ok: boolean
   /** The created PR URL on success. */
   url?: string
-  /** The fresh dsgn/* branch created to continue on (publish.ship). */
+  /** The fresh praxis/* branch created to continue on (publish.ship). */
   branch?: string
   error?: string
 }
@@ -573,7 +573,7 @@ export interface FeedbackResult {
 
 /** Result of scaffolding source-stamping into an unprepared project. */
 export type Frontend = 'react' | 'react-native' | 'svelte' | 'vue' | 'solid' | 'unknown'
-/** How dsgn instruments source mapping for the detected framework. */
+/** How praxis instruments source mapping for the detected framework. */
 export type SetupStrategy =
   | 'babel-plugin'
   | 'babel-plugin-rn'
@@ -589,7 +589,7 @@ export interface SetupResult {
   strategy?: SetupStrategy
   /** Svelte major version (4 or 5), so the prop-typing idiom is right. */
   svelteMajor?: number
-  /** Repo-relative files dsgn wrote (under `.dsgn/`). */
+  /** Repo-relative files praxis wrote (under `.praxis/`). */
   files?: string[]
   /** False if the helper already existed (idempotent). */
   written?: boolean
@@ -611,12 +611,12 @@ export interface TokenGroup {
 /** Design tokens detected in the opened repo (one source wins per project). */
 export interface TokenSet {
   source: TokenSource
-  /** Human label for where they came from, e.g. ".dsgn/tokens.json". */
+  /** Human label for where they came from, e.g. ".praxis/tokens.json". */
   origin?: string
   groups: TokenGroup[]
 }
 
-/** Result of scaffolding a starter `.dsgn/tokens.json` manifest. */
+/** Result of scaffolding a starter `.praxis/tokens.json` manifest. */
 export interface TokenScaffoldResult {
   ok: boolean
   /** False if a manifest already existed (idempotent — nothing written). */
@@ -650,7 +650,7 @@ export interface UpdateStatus {
 }
 
 /** The surface exposed on `window.api` by the preload bridge. */
-export interface DsgnApi {
+export interface PraxisApi {
   /** Subscribe to native-menu (Actions/File) commands: 'reload' | 'stop' | 'select' |
    *  'open-project' | 'new-project' | 'clear-recents' | 'viewport:desktop' |
    *  'viewport:mobile'. Returns an unsubscribe. */
@@ -763,13 +763,13 @@ export interface DsgnApi {
     onLog: (cb: (line: string) => void) => () => void
   }
   git: {
-    /** Ensure work happens on a `dsgn/*` branch (creates one off HEAD if needed). */
+    /** Ensure work happens on a `praxis/*` branch (creates one off HEAD if needed). */
     ensure: (root: string) => Promise<BranchResult>
-    /** Switch to / create a specific branch (name is coerced to `dsgn/<…>`). */
+    /** Switch to / create a specific branch (name is coerced to `praxis/<…>`). */
     set: (root: string, name: string) => Promise<BranchResult>
     /** List local branches (current first) so the titlebar pill can switch. */
     list: (root: string) => Promise<{ branches: string[]; current: string | null }>
-    /** Check out an existing branch by exact name (no dsgn/ coercion). */
+    /** Check out an existing branch by exact name (no praxis/ coercion). */
     checkout: (root: string, branch: string) => Promise<BranchResult>
   }
   diagnose: {
@@ -794,7 +794,7 @@ export interface DsgnApi {
   props: {
     /**
      * Inspect the editable props of the element at `source` ("path:line").
-     * `text` is the clicked element's rendered text — for Svelte it lets dsgn
+     * `text` is the clicked element's rendered text — for Svelte it lets praxis
      * content-match the click to the concrete component INSTANCE (v8 F3a-svelte)
      * instead of falling back to a definition-default edit.
      */
@@ -835,7 +835,7 @@ export interface DsgnApi {
     /** Standalone editor window: retarget event when a second pop-out reuses it. */
     onNavigate: (cb: (source: string) => void) => () => void
   }
-  /** Undo/redo over ALL direct dsgn source edits — props, text, token swaps (v8 F3b).
+  /** Undo/redo over ALL direct praxis source edits — props, text, token swaps (v8 F3b).
    *  Scoped per project root: the rail keeps several projects open at once. */
   edits: {
     undo: (root: string) => Promise<UndoResult>
@@ -845,7 +845,7 @@ export interface DsgnApi {
   tokens: {
     /** Detect design tokens in the repo (manifest → tailwind → CSS vars). */
     detect: (root: string) => Promise<TokenSet>
-    /** Write a starter `.dsgn/tokens.json` (idempotent — skips if one exists). */
+    /** Write a starter `.praxis/tokens.json` (idempotent — skips if one exists). */
     scaffold: (root: string) => Promise<TokenScaffoldResult>
   }
   annotations: {
@@ -859,13 +859,13 @@ export interface DsgnApi {
     /** Create a branch + GitHub PR with the annotations; returns the PR URL. */
     toPr: (root: string, opts: { title: string }) => Promise<PublishResult>
     /** Full ship: commit all → push → PR → squash-merge to the default branch →
-     *  pull it → delete the merged branch → start a fresh dsgn/* branch. */
+     *  pull it → delete the merged branch → start a fresh praxis/* branch. */
     ship: (root: string, summary?: string[], mode?: 'merge' | 'pr') => Promise<PublishResult>
   }
   setup: {
     /** Write the dev-only source-stamping plugin into the repo (deterministic). */
     scaffold: (root: string) => Promise<SetupResult>
-    /** Remove dsgn's scaffold files from the repo (the .dsgn helpers + legacy root plugin). */
+    /** Remove praxis's scaffold files from the repo (the .praxis helpers + legacy root plugin). */
     uninstall: (root: string) => Promise<SetupResult>
   }
   agent: {

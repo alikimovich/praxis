@@ -54,7 +54,7 @@ function langFor(file: string): Extension[] {
 // Editor chrome painted from the app's own design tokens (via CSS custom
 // properties), so the drawer matches the surrounding surfaces and flips with the
 // light/dark theme automatically — no separate CodeMirror dark theme to drift.
-const dsgnTheme = EditorView.theme({
+const praxisTheme = EditorView.theme({
   '&': {
     height: '100%',
     fontSize: '12px',
@@ -83,7 +83,7 @@ const dsgnTheme = EditorView.theme({
 // Syntax palette matched 1:1 to the highlight.js theme in styles.css (the same
 // colors the chat's markdown code blocks use), so every code surface in the app
 // reads the same. Tags left unmapped fall back to the plain foreground color.
-const dsgnHighlight = HighlightStyle.define([
+const praxisHighlight = HighlightStyle.define([
   { tag: [t.comment, t.lineComment, t.blockComment, t.docComment], color: '#8a8a8a', fontStyle: 'italic' },
   {
     tag: [t.keyword, t.moduleKeyword, t.controlKeyword, t.operatorKeyword, t.definitionKeyword, t.modifier, t.self],
@@ -381,8 +381,8 @@ export default function CodeDrawer({
           EditorView.updateListener.of((u) => {
             if (u.docChanged) setDirty(u.state.doc.toString() !== baselineRef.current)
           }),
-          dsgnTheme,
-          syntaxHighlighting(dsgnHighlight)
+          praxisTheme,
+          syntaxHighlighting(praxisHighlight)
         ]
       })
       const editor = new EditorView({ state, parent: hostRef.current })

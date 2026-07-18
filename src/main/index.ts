@@ -48,8 +48,8 @@ let mainWindow: BrowserWindow | null = null
 // can't leak between tests — and each gets its own single-instance lock, so a
 // stale app from a killed run can't block the next launch. Never set in
 // production; must run before the lock request below.
-if (process.env.DSGN_USER_DATA) {
-  app.setPath('userData', process.env.DSGN_USER_DATA)
+if (process.env.PRAXIS_USER_DATA) {
+  app.setPath('userData', process.env.PRAXIS_USER_DATA)
 }
 
 // Single-instance: re-running `praxis` (or relaunching after an update) focuses
@@ -75,21 +75,21 @@ let commentModeActive: 'comment' | 'annotate' | null = null
 // none) so it overlays the app's screen corners yet passes clicks/selection through.
 let frameModeActive = false
 // Channels mirrored in src/preview/preload.ts (the injected preview preload).
-const PREVIEW_SET_MODE = 'dsgn:preview:set-select-mode'
-const PREVIEW_PICKED = 'dsgn:preview:element-picked'
-const PREVIEW_CANCELLED = 'dsgn:preview:select-cancelled'
-const PREVIEW_SET_PINS = 'dsgn:preview:set-annotations'
-const PREVIEW_PIN_CLICK = 'dsgn:preview:pin-click'
-const PREVIEW_READINESS = 'dsgn:preview:readiness'
-const PREVIEW_TEXT_EDIT = 'dsgn:preview:text-edit'
-const PREVIEW_SET_COMMENT_MODE = 'dsgn:preview:set-comment-mode'
-const PREVIEW_COMMENT_MODE = 'dsgn:preview:comment-mode'
-const PREVIEW_COMMENT = 'dsgn:preview:comment'
-const PREVIEW_SET_FRAME = 'dsgn:preview:set-frame'
-const PREVIEW_TOOLBAR_ACTION = 'dsgn:preview:toolbar-action'
-const PREVIEW_CLEAR_SELECTED = 'dsgn:preview:clear-selected'
-const PREVIEW_SET_STATUS = 'dsgn:preview:set-status'
-const PREVIEW_TOGGLE_SELECT = 'dsgn:preview:toggle-select'
+const PREVIEW_SET_MODE = 'praxis:preview:set-select-mode'
+const PREVIEW_PICKED = 'praxis:preview:element-picked'
+const PREVIEW_CANCELLED = 'praxis:preview:select-cancelled'
+const PREVIEW_SET_PINS = 'praxis:preview:set-annotations'
+const PREVIEW_PIN_CLICK = 'praxis:preview:pin-click'
+const PREVIEW_READINESS = 'praxis:preview:readiness'
+const PREVIEW_TEXT_EDIT = 'praxis:preview:text-edit'
+const PREVIEW_SET_COMMENT_MODE = 'praxis:preview:set-comment-mode'
+const PREVIEW_COMMENT_MODE = 'praxis:preview:comment-mode'
+const PREVIEW_COMMENT = 'praxis:preview:comment'
+const PREVIEW_SET_FRAME = 'praxis:preview:set-frame'
+const PREVIEW_TOOLBAR_ACTION = 'praxis:preview:toolbar-action'
+const PREVIEW_CLEAR_SELECTED = 'praxis:preview:clear-selected'
+const PREVIEW_SET_STATUS = 'praxis:preview:set-status'
+const PREVIEW_TOGGLE_SELECT = 'praxis:preview:toggle-select'
 
 // Launch-status pill text (shown inside the preview); re-pushed after loads.
 let previewStatusText: string | null = null
@@ -189,7 +189,7 @@ function sameUrl(a: string | null, b: string | null): boolean {
 }
 
 /**
- * Cmd/Ctrl+R must NOT reload the dsgn renderer: that wipes the chat + the open
+ * Cmd/Ctrl+R must NOT reload the praxis renderer: that wipes the chat + the open
  * project (renderer-only zustand state) while the native preview WebContentsView
  * survives, stranding the tool in a broken half-state ("no project open" but the
  * preview still showing). Intercept it on whichever webContents has focus and
@@ -302,7 +302,7 @@ function buildAppMenu(): void {
 // The floating props island must paint ON TOP of the live preview content, and
 // renderer DOM never can (the preview is a native WebContentsView, which always
 // draws above the page). So the island is its own WebContentsView stacked after
-// (= above) the preview, running the same renderer bundle with ?dsgnPanel=1 —
+// (= above) the preview, running the same renderer bundle with ?praxisPanel=1 —
 // that entry renders just the PropPanel and syncs state/actions over panel:*.
 let panelView: WebContentsView | null = null
 let panelState: unknown = null
@@ -319,10 +319,10 @@ function ensurePanelView(): WebContentsView {
   // Transparent — the card draws its own surface + shadow inside the view rect.
   panelView.setBackgroundColor('#00000000')
   if (process.env['ELECTRON_RENDERER_URL']) {
-    void panelView.webContents.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?dsgnPanel=1`)
+    void panelView.webContents.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?praxisPanel=1`)
   } else {
     void panelView.webContents.loadFile(join(__dirname, '../renderer/index.html'), {
-      query: { dsgnPanel: '1' }
+      query: { praxisPanel: '1' }
     })
   }
   // The panel page is stateless — re-push the latest state after any (re)load.
@@ -551,7 +551,7 @@ function createWindow(): void {
 }
 
 // The code drawer, popped out into its own window. Runs the same renderer bundle
-// with ?dsgnEditor=1 (like the ?dsgnPanel island), so it reuses CodeMirror, the
+// with ?praxisEditor=1 (like the ?praxisPanel island), so it reuses CodeMirror, the
 // source:* IPC, and the app's theming — it just renders the editor full-window
 // instead of docked under the preview. Keyed by project root so a second pop-out
 // for the same project re-focuses the existing window rather than stacking.
@@ -594,7 +594,7 @@ function openEditorWindow(root: string, source: string): void {
     return { action: 'deny' }
   })
 
-  const query = { dsgnEditor: '1', root, source }
+  const query = { praxisEditor: '1', root, source }
   if (process.env['ELECTRON_RENDERER_URL']) {
     const u = new URL(process.env['ELECTRON_RENDERER_URL'])
     for (const [k, v] of Object.entries(query)) u.searchParams.set(k, v)
@@ -869,7 +869,7 @@ function registerPreviewIpc(): void {
 // dev signal used in createWindow (loadURL vs loadFile), so a built/packaged app
 // never opens the port.
 if (process.env['ELECTRON_RENDERER_URL']) {
-  app.commandLine.appendSwitch('remote-debugging-port', process.env['DSGN_DEBUG_PORT'] ?? '9222')
+  app.commandLine.appendSwitch('remote-debugging-port', process.env['PRAXIS_DEBUG_PORT'] ?? '9222')
 }
 
 app.whenReady().then(() => {

@@ -89,7 +89,7 @@ const modelsFor = (provider: string): { value: string; label: string }[] =>
   provider === "codex" ? CODEX_MODELS : CLAUDE_MODELS;
 
 // `bypassPermissions` is intentionally omitted — see its "unused" doc note on
-// PermissionMode (shared/api.ts): skips dsgn's own canUseTool guards too, not
+// PermissionMode (shared/api.ts): skips praxis's own canUseTool guards too, not
 // just the SDK's, so it isn't offered as a user-facing choice.
 const PERMISSION_MODES: { value: PermissionMode; label: string }[] = [
   { value: "auto", label: "Auto" },
@@ -100,7 +100,7 @@ const PERMISSION_MODES: { value: PermissionMode; label: string }[] = [
 // Selectable backends (v7). Each authenticates with the user's own subscription
 // login — no API keys. Only backends wired in main's pickProvider are listed.
 // Gemini is EXPERIMENTAL/unwired (no SDK dep) and gated behind
-// DSGN_EXPERIMENTAL_GEMINI in main, so it's omitted here — listing it would let a
+// PRAXIS_EXPERIMENTAL_GEMINI in main, so it's omitted here — listing it would let a
 // user pick a provider that silently falls back to Claude. Re-add when its
 // adapter ships. `login` is the one-time CLI step.
 const PROVIDERS: {
@@ -120,7 +120,7 @@ const PROVIDERS: {
 
 /**
  * Framework-correct setup instructions for the agent. Returns null when the
- * framework isn't one dsgn can instrument — never hand React instructions to a
+ * framework isn't one praxis can instrument — never hand React instructions to a
  * non-React repo.
  */
 /**
@@ -302,8 +302,8 @@ function setupPrompt(res: SetupResult): string | null {
     case "react-native":
       return (
         `Praxis detected a React Native / Expo project and added a dev-only Babel plugin at ` +
-        `\`${file}\` that stamps \`testID="dsgn:path:line:col"\` on elements (the RN analog of ` +
-        `data-dsgn-source — iOS surfaces testID as the accessibility id, which Praxis reads from ` +
+        `\`${file}\` that stamps \`testID="praxis:path:line:col"\` on elements (the RN analog of ` +
+        `data-praxis-source — iOS surfaces testID as the accessibility id, which Praxis reads from ` +
         `the simulator's view hierarchy). Please: (1) read babel.config.js (or .babelrc) and add ` +
         `${file} to the \`plugins\` array FOR DEVELOPMENT ONLY (gate on a dev env check; adapt to ` +
         `the real config, don't guess its shape). (2) Add an explicit \`interface Props\` to your ` +
@@ -331,7 +331,7 @@ function setupPrompt(res: SetupResult): string | null {
     case "vue":
       return (
         `Praxis detected a Vue project. Please add a DEV-ONLY way to map elements to their source as a ` +
-        `\`data-dsgn-source="path:line:col"\` attribute (e.g. vite-plugin-vue-inspector, or a small ` +
+        `\`data-praxis-source="path:line:col"\` attribute (e.g. vite-plugin-vue-inspector, or a small ` +
         `template transform), and type props with \`defineProps<Props>()\`. Then I'll reload the preview.`
       );
     default:
@@ -693,7 +693,7 @@ export default function ChatPanel(): React.JSX.Element {
     }
   };
 
-  // Write a starter `.dsgn/tokens.json` (deterministic — no agent turn) and show
+  // Write a starter `.praxis/tokens.json` (deterministic — no agent turn) and show
   // the new tokens in the palette. Idempotent on the main side.
   const acceptTokenScaffold = async (): Promise<void> => {
     if (!projectRoot || tokens.scaffolding) return;
@@ -1002,7 +1002,7 @@ export default function ChatPanel(): React.JSX.Element {
     setPublishMsg(null);
     try {
       const res = await window.api.publish.toPr(projectRoot, {
-        title: "dsgn: design handoff",
+        title: "praxis: design handoff",
       });
       // Tag the session's history record with the PR it produced (v5-D).
       if (res.ok && res.url)

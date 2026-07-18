@@ -11,17 +11,17 @@
  *   turn's prompt, WITHOUT previewTools (those tools are Claude-only, so the
  *   section must not appear for backends that can't call them).
  *
- * Bump DSGN_RULES_VERSION whenever the rule text changes (so logs/tests can pin it).
+ * Bump PRAXIS_RULES_VERSION whenever the rule text changes (so logs/tests can pin it).
  */
-export const DSGN_RULES_VERSION = 3
+export const PRAXIS_RULES_VERSION = 3
 
-export function dsgnRules(opts?: { previewTools?: boolean }): string {
+export function praxisRules(opts?: { previewTools?: boolean }): string {
   const lines: string[] = [
-    `# Praxis operating rules (v${DSGN_RULES_VERSION})`,
+    `# Praxis operating rules (v${PRAXIS_RULES_VERSION})`,
     `Praxis is a design tool: you edit the user's real repository while they watch a`,
     `live preview of that same repo on the right. The user is usually a designer`,
     `pointing at UI in that preview, not at files — element selections arrive stamped`,
-    `with their source location (\`data-dsgn-source\` file:line), so a selection tells`,
+    `with their source location (\`data-praxis-source\` file:line), so a selection tells`,
     `you exactly which code renders what they clicked. Your edits hot-reload into the`,
     `preview instantly. Follow these rules so changes stay consistent across the project.`,
     ``,

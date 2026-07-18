@@ -1,5 +1,9 @@
-import { app, ipcMain, type BrowserWindow } from 'electron'
+import { execFile } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { existsSync, readdirSync, renameSync } from 'node:fs'
 import { basename, join } from 'node:path'
+import { promisify } from 'node:util'
+import { app, type BrowserWindow, ipcMain } from 'electron'
 import type {
   AgentEvent,
   AgentOptions,
@@ -10,43 +14,40 @@ import type {
   WorkspaceSnapshot
 } from '../shared/api'
 import { projectKey } from '../shared/projectKey'
-import { pickProvider, type ProviderSession } from './backends'
+import { type ProviderSession, pickProvider } from './backends'
 import { EDIT_TOOLS } from './backends/tools'
-import { createSessionStore, type SessionStore } from './sessions-store'
-import { clearHistory, recordEdit } from './edit-history'
-import { isRepoRoot } from './git'
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
-import { randomUUID } from 'node:crypto'
 import {
-  createWorktree,
-  commitWorktree,
-  removeWorktree,
-  pruneOrphans,
-  branchPatch,
-  branchExists,
-  deleteBranch,
-  applyToWorkingTree,
-  autoApplyWorktree,
-  type Worktree
-} from './worktrees'
-import {
-  initChatIsolation,
-  isolatedCwd,
   adoptSession,
-  beforeTurn,
   afterTurn,
-  releaseChat,
-  liveChatWorktreeIds,
-  hasParkRecord,
-  handleReclaimed,
   applyParkedBranch,
+  beforeTurn,
   discardParkedBranch,
-  resolveParkedChat,
   discardParkedChat,
   dropAll,
-  isolationSnapshot
+  handleReclaimed,
+  hasParkRecord,
+  initChatIsolation,
+  isolatedCwd,
+  isolationSnapshot,
+  liveChatWorktreeIds,
+  releaseChat,
+  resolveParkedChat
 } from './chat-isolation'
+import { clearHistory, recordEdit } from './edit-history'
+import { isRepoRoot } from './git'
+import { createSessionStore, type SessionStore } from './sessions-store'
+import {
+  applyToWorkingTree,
+  autoApplyWorktree,
+  branchExists,
+  branchPatch,
+  commitWorktree,
+  createWorktree,
+  deleteBranch,
+  pruneOrphans,
+  removeWorktree,
+  type Worktree
+} from './worktrees'
 
 const execFileP = promisify(execFile)
 const git = (root: string, args: string[]): Promise<{ stdout: string }> =>
@@ -54,9 +55,33 @@ const git = (root: string, args: string[]): Promise<{ stdout: string }> =>
 
 // On-disk agent-session history (v5-D). Lazy so it resolves userData after the
 // app is ready; under the app's userData dir, out of any user repo.
+// `dataDir` migrates the pre-rename `userData/dsgn` dir on first touch: a plain
+// rename, then `git worktree repair` per chat worktree — their `.git` files and
+// the parent repos' admin records hold absolute paths to the old location.
+let _dataDir: string | null = null
+function dataDir(): string {
+  if (_dataDir) return _dataDir
+  const dir = join(app.getPath('userData'), 'praxis')
+  const legacy = join(app.getPath('userData'), 'dsgn')
+  if (!existsSync(dir) && existsSync(legacy)) {
+    try {
+      renameSync(legacy, dir)
+      const wts = join(dir, 'worktrees')
+      if (existsSync(wts)) {
+        for (const id of readdirSync(wts)) {
+          if (id.startsWith('.')) continue // .index-* snapshots, tmp dirs
+          execFile('git', ['worktree', 'repair'], { cwd: join(wts, id) }, () => {})
+        }
+      }
+    } catch (err) {
+      console.error('dsgn→praxis userData migration failed:', err)
+    }
+  }
+  _dataDir = dir
+  return dir
+}
 let _store: SessionStore | null = null
-const store = (): SessionStore =>
-  (_store ??= createSessionStore(join(app.getPath('userData'), 'dsgn')))
+const store = (): SessionStore => (_store ??= createSessionStore(dataDir()))
 
 /**
  * Agent sessions — one persistent multi-turn session per open project (keyed by
@@ -166,7 +191,7 @@ const interactiveEvents =
     if (e.type === 'done' || e.type === 'error') {
       const transcript = sessions.get(sessionKey)?.record.transcript ?? []
       const last = [...transcript].reverse().find((t) => t.role === 'user')?.text
-      afterTurn(sessionKey, firstLine(last ?? 'dsgn chat edit'), transcript)
+      afterTurn(sessionKey, firstLine(last ?? 'praxis chat edit'), transcript)
     }
   }
 
@@ -194,7 +219,7 @@ interface QueuedSpawn {
 const spawnQueue: QueuedSpawn[] = []
 const runningCount = (parentKey: string): number =>
   [...spawns.values()].filter((s) => s.parentKey === parentKey).length
-const worktreesDir = (): string => join(app.getPath('userData'), 'dsgn', 'worktrees')
+const worktreesDir = (): string => join(dataDir(), 'worktrees')
 const firstLine = (t: string): string => (t.split('\n')[0] || 'Praxis comment edit').slice(0, 72)
 
 /** Tear down a session: stop it emitting, deny its prompts, provider teardown,
@@ -203,7 +228,8 @@ function closeSession(s: ProviderSession): void {
   s.dispose()
   ;[...s.pending.keys()].forEach((id) => resolvePending(s, id, 'deny'))
   // Release any unanswered questions so their SDK callbacks unblock (dismiss).
-  if (s.pendingQuestions) [...s.pendingQuestions.keys()].forEach((id) => resolveQuestion(s, id, null))
+  if (s.pendingQuestions)
+    [...s.pendingQuestions.keys()].forEach((id) => resolveQuestion(s, id, null))
   s.shutdown()
   // Only persist sessions the user actually engaged (≥1 prompt) — skip opened-then
   // -closed empties. Best-effort: a disk hiccup must not break teardown.
@@ -221,7 +247,7 @@ function closeSession(s: ProviderSession): void {
 /**
  * A detached comment spawn (v8 F1) reached its terminal event. By default we now
  * AUTO-APPLY its change straight onto the working branch the user is on — no
- * separate `dsgn/comment-*` branch, no PR, no manual Apply (that was "too many
+ * separate `praxis/comment-*` branch, no PR, no manual Apply (that was "too many
  * approvals") — and record it in the undo history so Cmd+Z reverts the whole
  * comment atomically. The branch + checkout are deleted and the record is NOT
  * persisted, so the finished spawn vanishes from the rail instead of lingering as
@@ -240,7 +266,9 @@ async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<voi
   try {
     closeSession(session) // finalize + persist the record (removed below if we auto-apply)
     // The agent's closing message → a chat notification the user can reply to.
-    const summary = [...session.record.transcript].reverse().find((t) => t.role === 'assistant')?.text
+    const summary = [...session.record.transcript]
+      .reverse()
+      .find((t) => t.role === 'assistant')?.text
     const { committed, files } = await commitWorktree(wt, firstLine(text))
     let auto: { applied: boolean; edits: { file: string; before: string; after: string }[] } = {
       applied: false,
@@ -257,7 +285,8 @@ async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<voi
       // Land it on the working branch + make the whole comment ONE Cmd+Z (shared
       // group). Then drop the branch and un-persist the record so the rail clears.
       const group = `comment:${id}`
-      for (const e of auto.edits) recordEdit(parentRoot, e.file, e.before, e.after, undefined, group)
+      for (const e of auto.edits)
+        recordEdit(parentRoot, e.file, e.before, e.after, undefined, group)
       await removeWorktree(parentRoot, wt, { keepBranch: false })
       try {
         store().remove(session.record.id)
@@ -413,7 +442,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
         // so the fresh worktree's captureBase includes the old chat's merged output.
         await releaseChat(key)
       }
-      // Isolated chats run in a private `dsgn/chat-<id>` worktree (repo roots only);
+      // Isolated chats run in a private `praxis/chat-<id>` worktree (repo roots only);
       // isolatedCwd returns the live root otherwise. adoptSession re-stamps the record
       // back to the live project so history/reattach see it under the real root.
       const cwd = await isolatedCwd(root, key)
@@ -749,9 +778,10 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       // Prefer whichever of the project's sessions is currently active (an
       // additional/resumed chat, if that's what's live) — falls back to the
       // default session, matching pre-v9 behavior when there's only one.
-      const s = activeKey && sessionKeysForProject(key).includes(activeKey)
-        ? sessions.get(activeKey)
-        : sessions.get(key)
+      const s =
+        activeKey && sessionKeysForProject(key).includes(activeKey)
+          ? sessions.get(activeKey)
+          : sessions.get(key)
       if (!s) return
       if (typeof tag.branch === 'string') s.record.branch = tag.branch
       if (typeof tag.prUrl === 'string') s.record.prUrl = tag.prUrl
@@ -761,7 +791,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   // v8 F1: spawn a detached comment agent in its own git worktree. It runs in the
   // background (bypassPermissions — a headless run has no card UI), edits its private
   // checkout (zero cross-writes with the main agent or other spawns), and on finish
-  // commits to a `dsgn/comment-<id>` branch + lands in this project's history. Over the
+  // commits to a `praxis/comment-<id>` branch + lands in this project's history. Over the
   // per-repo cap (Phase 3) it QUEUES and starts when a slot frees.
   ipcMain.handle(
     'agent:spawn-comment',
@@ -827,7 +857,8 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       }
     }
     if (!(await isRepoRoot(root))) return { ok: false, error: 'Not a git repository.' }
-    if (!(await branchExists(root, branch))) return { ok: false, error: 'That branch no longer exists.' }
+    if (!(await branchExists(root, branch)))
+      return { ok: false, error: 'That branch no longer exists.' }
     const patch = await branchPatch(root, branch)
     if (!patch.trim()) return { ok: false, error: 'That run made no changes to apply.' }
     const res = await applyToWorkingTree(root, patch, worktreesDir())
@@ -884,7 +915,8 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     'agent:spawn-pr',
     async (_e, root: string, branch: string, title: string, recordId: string) => {
       if (!(await isRepoRoot(root))) return { ok: false, error: 'Not a git repository.' }
-      if (!(await branchExists(root, branch))) return { ok: false, error: 'That branch no longer exists.' }
+      if (!(await branchExists(root, branch)))
+        return { ok: false, error: 'That branch no longer exists.' }
       try {
         await git(root, ['remote', 'get-url', 'origin'])
       } catch {
@@ -900,10 +932,23 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
         const body = `Edited by a Praxis comment agent.\n\n🤖 Generated with [Praxis](https://github.com/alikimovich/praxis)`
         const { stdout } = await execFileP(
           'gh',
-          ['pr', 'create', '--head', branch, '--title', title || 'Praxis comment edit', '--body', body],
+          [
+            'pr',
+            'create',
+            '--head',
+            branch,
+            '--title',
+            title || 'Praxis comment edit',
+            '--body',
+            body
+          ],
           { cwd: root }
         )
-        const prUrl = stdout.trim().split('\n').find((l) => /^https?:\/\//.test(l)) ?? stdout.trim()
+        const prUrl =
+          stdout
+            .trim()
+            .split('\n')
+            .find((l) => /^https?:\/\//.test(l)) ?? stdout.trim()
         // Persist prUrl onto the history record (overwrite by id).
         const rec = store().get(recordId)
         if (rec) {
@@ -956,16 +1001,16 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
 
   ipcMain.handle('agent:interrupt', async () => {
     const session = activeSession()
-    if (!session) return
-    // Release any open prompts (interrupt may not abort their per-call signal),
-    // so cards don't orphan and the backend callbacks unblock.
+    if (!session)
+      return // Release any open prompts (interrupt may not abort their per-call signal),
+      // so cards don't orphan and the backend callbacks unblock.
     ;[...session.pending.keys()].forEach((id) => resolvePending(session, id, 'deny'))
     if (session.pendingQuestions)
       [...session.pendingQuestions.keys()].forEach((id) => resolveQuestion(session, id, null))
     await session.interrupt?.()
   })
 
-  // Don't leave any backend subprocess running after dsgn quits.
+  // Don't leave any backend subprocess running after praxis quits.
   app.on('before-quit', () => {
     for (const s of sessions.values()) closeSession(s)
     sessions.clear()

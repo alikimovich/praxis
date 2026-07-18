@@ -28,7 +28,7 @@ interface Props {
 
 /**
  * The floating props island — shown for EVERY selection, always as a card over
- * the preview's top right (it renders inside the ?dsgnPanel WebContentsView; a
+ * the preview's top right (it renders inside the ?praxisPanel WebContentsView; a
  * docked-sidebar mode no longer exists — the header button collapses it to a
  * chip instead, see PanelApp). A schema-backed component gets editable fields;
  * anything else gets the readiness message (setup offer / owner jump /

@@ -5,7 +5,7 @@ import { extname, join, normalize, resolve, sep } from 'path'
 import type { RunningDevServer } from '../shared/api'
 
 /**
- * dsgn's built-in static file server — the preview backend for plain
+ * praxis's built-in static file server — the preview backend for plain
  * HTML/CSS/JS projects that have no package.json and no dev command to spawn.
  *
  * It's an in-process Node http.Server (not a spawned child) so it needs no
@@ -45,7 +45,7 @@ const MIME: Record<string, string> = {
   '.pdf': 'application/pdf'
 }
 
-const RELOAD_PATH = '/__dsgn_reload'
+const RELOAD_PATH = '/__praxis_reload'
 
 // Injected before </body>: opens an SSE stream and hard-reloads on any change.
 const LIVE_RELOAD_SNIPPET = `<script>(function(){try{var es=new EventSource("${RELOAD_PATH}");es.onmessage=function(){location.reload()}}catch(e){}})();</script>`

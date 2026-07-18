@@ -8,7 +8,7 @@ import type { Token, TokenGroup, TokenScaffoldResult, TokenSet } from '../shared
  * tokens three ways; we probe them in priority order and the first that yields
  * tokens wins, so the right source is chosen per project automatically:
  *
- *   1. `.dsgn/tokens.json`  — an explicit, curated manifest (highest priority)
+ *   1. `.praxis/tokens.json`  — an explicit, curated manifest (highest priority)
  *   2. `tailwind.config.*`  — the theme scale (static parse, no code execution)
  *   3. CSS custom properties — `--name: value` scanned from the repo's CSS
  *
@@ -30,12 +30,12 @@ const TAILWIND_CONFIGS = [
 const TW_CATEGORIES = ['colors', 'spacing', 'fontSize', 'borderRadius', 'fontWeight', 'boxShadow']
 
 // ---------------------------------------------------------------------------
-// 1. Manifest: .dsgn/tokens.json  → { groupName: { tokenName: "value" } }
+// 1. Manifest: .praxis/tokens.json  → { groupName: { tokenName: "value" } }
 // ---------------------------------------------------------------------------
 async function fromManifest(root: string): Promise<TokenSet | null> {
   let parsed: unknown
   try {
-    parsed = JSON.parse(await readFile(join(root, '.dsgn', 'tokens.json'), 'utf8'))
+    parsed = JSON.parse(await readFile(join(root, '.praxis', 'tokens.json'), 'utf8'))
   } catch {
     return null
   }
@@ -51,7 +51,7 @@ async function fromManifest(root: string): Promise<TokenSet | null> {
     }
     if (tokens.length) groups.push({ name: groupName, tokens })
   }
-  return groups.length ? { source: 'manifest', origin: '.dsgn/tokens.json', groups } : null
+  return groups.length ? { source: 'manifest', origin: '.praxis/tokens.json', groups } : null
 }
 
 // ---------------------------------------------------------------------------
@@ -265,7 +265,7 @@ const STARTER_MANIFEST = {
 } as const
 
 /**
- * Write a starter `.dsgn/tokens.json` so a token-less project gets an editable,
+ * Write a starter `.praxis/tokens.json` so a token-less project gets an editable,
  * canonical token source (which then wins detection). Idempotent: if a manifest
  * already exists we leave it untouched and report `written: false`.
  */
@@ -277,9 +277,9 @@ async function scaffoldManifest(root: string): Promise<TokenScaffoldResult> {
     if (current.source !== 'none') {
       return { ok: true, written: false, set: current }
     }
-    await mkdir(join(root, '.dsgn'), { recursive: true })
+    await mkdir(join(root, '.praxis'), { recursive: true })
     await writeFile(
-      join(root, '.dsgn', 'tokens.json'),
+      join(root, '.praxis', 'tokens.json'),
       JSON.stringify(STARTER_MANIFEST, null, 2) + '\n',
       'utf8'
     )

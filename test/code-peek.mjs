@@ -30,7 +30,7 @@ try {
   })
   const win = await app.firstWindow()
   await win.waitForSelector('.empty__open', { timeout: 15000 })
-  await win.evaluate(() => window.__dsgnWorkspace.getState().openOrActivate('/tmp/dsgn-test-project'))
+  await win.evaluate(() => window.__praxisWorkspace.getState().openOrActivate('/tmp/praxis-test-project'))
   await win.waitForSelector('.composer__input', { timeout: 15000 })
 
   // --- Engine: source.read returns the file + stamp line + element span. ---
@@ -71,8 +71,8 @@ try {
   // --- UI: select an element → the Code button opens the editor drawer. ---
   await win.evaluate(
     (args) => {
-      window.__dsgnSession.getState().setProjectRoot(args.fixture)
-      window.__dsgnSelection.getState().setSelected({
+      window.__praxisSession.getState().setProjectRoot(args.fixture)
+      window.__praxisSelection.getState().setSelected({
         tag: 'span',
         id: null,
         classes: ['badge'],
@@ -91,7 +91,7 @@ try {
   // test window (they live in different panes at real sizes).
   // The Code action lives in the in-preview selection toolbar now; open the
   // drawer through its store (what the toolbar's relay calls).
-  await win.evaluate((src) => window.__dsgnCodeDrawer.getState().open(src), SRC)
+  await win.evaluate((src) => window.__praxisCodeDrawer.getState().open(src), SRC)
 
   // The editor drawer mounts (CodeMirror) with the stamped file loaded, and the
   // stamp span highlighted — no inline peek is rendered in the left panel.

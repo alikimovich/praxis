@@ -10,7 +10,7 @@ import type {
 } from '../../shared/api'
 
 /**
- * The model-provider seam (v7). dsgn's chat is backend-agnostic: `agent.ts` owns
+ * The model-provider seam (v7). praxis's chat is backend-agnostic: `agent.ts` owns
  * the per-project `sessions` map, `activeKey`, teardown, the permission-card
  * settle loop, and every `agent:*` IPC handler — all in terms of `ProviderSession`
  * + `AgentEvent`. A `ModelProvider` plugs a specific backend (Claude Agent SDK,

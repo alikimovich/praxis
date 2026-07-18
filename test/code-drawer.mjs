@@ -37,7 +37,7 @@ try {
   })
   const win = await app.firstWindow()
   await win.waitForSelector('.empty__open', { timeout: 15000 })
-  await win.evaluate(() => window.__dsgnWorkspace.getState().openOrActivate('/tmp/dsgn-test-project'))
+  await win.evaluate(() => window.__praxisWorkspace.getState().openOrActivate('/tmp/praxis-test-project'))
   await win.waitForSelector('.composer__input', { timeout: 15000 })
 
   // --- Engine: conflict guard — a stale baseline is refused, file untouched. ---
@@ -49,7 +49,7 @@ try {
   if (disk() !== baseline) throw new Error('conflicting write must not touch the file')
 
   // --- Engine: a good save writes the whole file + records an undo step. ---
-  const next = baseline + '\n// dsgn-drawer-test\n'
+  const next = baseline + '\n// praxis-drawer-test\n'
   const saved = await win.evaluate(
     (a) => window.api.source.write(a.fixture, a.src, a.baseline, a.next),
     { fixture, src: SRC, baseline, next }
@@ -72,8 +72,8 @@ try {
   // --- UI: select an element → the Code button opens the editor drawer. ---
   await win.evaluate(
     (args) => {
-      window.__dsgnSession.getState().setProjectRoot(args.fixture)
-      window.__dsgnSelection.getState().setSelected({
+      window.__praxisSession.getState().setProjectRoot(args.fixture)
+      window.__praxisSelection.getState().setSelected({
         tag: 'span',
         id: null,
         classes: ['badge'],
@@ -92,14 +92,14 @@ try {
   // test window (they live in different panes at real sizes).
   // The Code action lives in the in-preview selection toolbar now; open the
   // drawer through its store (what the toolbar's relay calls).
-  await win.evaluate((src) => window.__dsgnCodeDrawer.getState().open(src), SRC)
+  await win.evaluate((src) => window.__praxisCodeDrawer.getState().open(src), SRC)
 
   // CodeMirror mounts, the stamp span is highlighted, and the bottom inset is reserved.
   await win.waitForSelector('.codedrawer .cm-editor', { timeout: 5000 })
   await win.waitForFunction(() => document.querySelectorAll('.codedrawer .cm-stamp-line').length > 0, undefined, {
     timeout: 5000
   })
-  const bottom = await win.evaluate(() => window.__dsgnPanelInset.getState().bottom)
+  const bottom = await win.evaluate(() => window.__praxisPanelInset.getState().bottom)
   if (!(bottom > 0)) throw new Error(`drawer did not reserve a bottom inset (got ${bottom})`)
   const drawerText = await win.$eval('.codedrawer .cm-content', (el) => el.textContent ?? '')
   if (!drawerText.includes('variant')) throw new Error('drawer did not load the file source')
@@ -107,7 +107,7 @@ try {
 
   // --- Drag the top edge to resize; the reserved inset grows but is capped at
   // 80% of the window height. ---
-  const beforeDrag = await win.evaluate(() => window.__dsgnPanelInset.getState().bottom)
+  const beforeDrag = await win.evaluate(() => window.__praxisPanelInset.getState().bottom)
   const handle = await win.waitForSelector('.codedrawer__resize', { timeout: 5000 })
   const box = await handle.boundingBox()
   if (!box) throw new Error('resize handle has no bounding box')
@@ -115,27 +115,27 @@ try {
   await win.mouse.down()
   await win.mouse.move(box.x + box.width / 2, 0, { steps: 8 }) // drag to the very top
   await win.mouse.up()
-  const afterDrag = await win.evaluate(() => window.__dsgnPanelInset.getState().bottom)
+  const afterDrag = await win.evaluate(() => window.__praxisPanelInset.getState().bottom)
   const cap = await win.evaluate(() => window.innerHeight * 0.8)
   if (!(afterDrag > beforeDrag)) throw new Error(`drag did not grow the drawer (${beforeDrag} → ${afterDrag})`)
   if (afterDrag > cap + 1) throw new Error(`drawer exceeded the 80% cap (${afterDrag} > ${cap})`)
 
   // Close releases the inset.
   await win.$eval('.codedrawer__close', (el) => el.click())
-  await win.waitForFunction(() => window.__dsgnPanelInset.getState().bottom === 0, undefined, {
+  await win.waitForFunction(() => window.__praxisPanelInset.getState().bottom === 0, undefined, {
     timeout: 5000
   })
   if (await win.$('.codedrawer')) throw new Error('drawer did not unmount on close')
 
   // --- Pop out: the button opens a second BrowserWindow running the editor and
   // closes the docked drawer. ---
-  await win.evaluate((src) => window.__dsgnCodeDrawer.getState().open(src), SRC)
+  await win.evaluate((src) => window.__praxisCodeDrawer.getState().open(src), SRC)
   await win.waitForSelector('.codedrawer__popout', { timeout: 5000 })
   const windowsBefore = app.windows().length
   await win.$eval('.codedrawer__popout', (el) => el.click())
   // The docked drawer unmounts and its inset is released…
   await win.waitForFunction(() => !document.querySelector('.codedrawer'), undefined, { timeout: 5000 })
-  if (await win.evaluate(() => window.__dsgnPanelInset.getState().bottom)) {
+  if (await win.evaluate(() => window.__praxisPanelInset.getState().bottom)) {
     throw new Error('pop-out did not release the drawer inset')
   }
   // …and a new window appears, running the full-window editor variant.
@@ -163,7 +163,7 @@ try {
   )
   if (bare !== null) throw new Error(`bare package import must not resolve: ${bare}`)
   const nav = await win.evaluate(() => {
-    const d = () => window.__dsgnCodeDrawer.getState()
+    const d = () => window.__praxisCodeDrawer.getState()
     d().open('src/Card.tsx:3')
     d().open('src/Button.tsx:1')
     d().back()

@@ -10,8 +10,8 @@ interface Props {
 }
 
 /**
- * The on-open "make this project dsgn-ready" dialogue. Shown when the previewed
- * app has no `data-dsgn-source` stamps — so dsgn can't map elements to source
+ * The on-open "make this project praxis-ready" dialogue. Shown when the previewed
+ * app has no `data-praxis-source` stamps — so praxis can't map elements to source
  * and prop editing is unavailable. Accepting writes the dev-only stamping plugin
  * (deterministic) and asks the agent to wire it in + type the components.
  * shadcn Buttons; Tailwind blue info surface. `.setup*` hooks preserved.

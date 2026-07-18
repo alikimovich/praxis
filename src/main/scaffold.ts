@@ -4,7 +4,7 @@ import { join, basename } from 'path'
 import { promisify } from 'util'
 
 /**
- * Create a brand-new project from dsgn: a minimal Vite + React + TS app written
+ * Create a brand-new project from praxis: a minimal Vite + React + TS app written
  * directly (no network templates, deterministic), then `git init` + first commit
  * and a dependency install (bun if available, else npm). Pure node (no electron)
  * so it's unit-testable against a temp dir.
@@ -166,7 +166,7 @@ export async function createProject(
   }
 
   // Git first (fast, and the initial commit captures the clean template even if
-  // the install below fails); non-fatal — dsgn's branch flow just stays off.
+  // the install below fails); non-fatal — praxis's branch flow just stays off.
   try {
     await execFileP('git', ['init', '-b', 'main'], { cwd: root, timeout: 10000 })
     await execFileP('git', ['add', '-A'], { cwd: root, timeout: 10000 })

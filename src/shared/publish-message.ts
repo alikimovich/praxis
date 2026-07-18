@@ -1,13 +1,13 @@
 /**
  * Build the Publish commit/PR title + body from what the user actually asked
- * dsgn to do this session (pure — unit-tested via bun, no electron).
+ * praxis to do this session (pure — unit-tested via bun, no electron).
  *
  * The squash-merge commit on the default branch inherits these, so the GitHub
  * history reads as real work ("Remove the tooltip from the PLUS8 entry (+2
- * more)") instead of "dsgn: publish dsgn/main".
+ * more)") instead of "praxis: publish praxis/main".
  */
 
-/** Strip dsgn's own element-reference preamble from a seeded selection ask. */
+/** Strip praxis's own element-reference preamble from a seeded selection ask. */
 const cleanAsk = (t: string): string =>
   t
     .replace(/^In the preview I selected [\s\S]*?\.\s+/i, '')

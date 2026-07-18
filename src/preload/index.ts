@@ -12,7 +12,7 @@ import type {
   DevServerInfo,
   PanelAction,
   PanelState,
-  DsgnApi,
+  PraxisApi,
   FeedbackInput,
   FeedbackResult,
   Framework,
@@ -41,7 +41,7 @@ import type {
   WorkspaceSnapshot
 } from '../shared/api'
 
-const api: DsgnApi = {
+const api: PraxisApi = {
   onMenuAction: (cb: (action: string) => void): (() => void) => {
     const listener = (_e: IpcRendererEvent, action: string): void => cb(action)
     ipcRenderer.on('menu:action', listener)

@@ -1,7 +1,7 @@
 import { useDiagnosis } from '../store'
 
 /**
- * Propose-first fix card for an open/launch failure. dsgn shows the AI's
+ * Propose-first fix card for an open/launch failure. praxis shows the AI's
  * diagnosis + steps; the user applies the repo fix or copies the host commands.
  * Nothing runs automatically.
  */

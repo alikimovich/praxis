@@ -31,7 +31,7 @@ const gitOut = async (cwd: string, args: string[]): Promise<string> =>
 /**
  * Per-CHAT git-worktree isolation glue (v9). Generalizes the comment-spawn
  * worktree machinery to interactive chats: every chat on a git repo ROOT gets one
- * long-lived `dsgn/chat-<id>` worktree, forked before its session starts and used
+ * long-lived `praxis/chat-<id>` worktree, forked before its session starts and used
  * as the session's `cwd` for the chat's whole life. After each completed agent turn
  * the chat's work auto-merges back onto the LIVE checkout (which the preview always
  * serves) so the preview updates between turns; on mid-turn drift the turn PARKS on
@@ -458,7 +458,7 @@ async function branchAlreadyLive(repoRoot: string, branch: string): Promise<bool
 
 /**
  * Crash recovery for chat worktrees reclaimed by `pruneOrphans` (called from
- * `agent:open-project`). For each reclaimed `dsgn/chat-*` orphan, keyed to its OWN repo
+ * `agent:open-project`). For each reclaimed `praxis/chat-*` orphan, keyed to its OWN repo
  * (which may differ from the project being opened — the worktrees dir is shared):
  *  - dirty → a crashed-mid-turn chat: surface its work via a recovery park record.
  *  - clean + already recorded → a persisted park: keep its record + branch untouched.
@@ -472,7 +472,7 @@ export async function handleReclaimed(
 ): Promise<void> {
   if (!deps) return
   for (const r of reclaimed) {
-    if (!r.branch?.startsWith('dsgn/chat-') || !r.repoRoot) continue
+    if (!r.branch?.startsWith('praxis/chat-') || !r.repoRoot) continue
     if (r.dirty) {
       await recoveryParkRecord(r.repoRoot, r.id, r.branch)
       continue
@@ -500,7 +500,7 @@ export async function releaseChat(sessionKey: string): Promise<void> {
     await st.chain.catch(() => {})
     if (!st.parked) {
       const turnNo = ++st.turnNo
-      const outcome = await completeTurn(st.liveRoot, st.wt, 'dsgn chat changes')
+      const outcome = await completeTurn(st.liveRoot, st.wt, 'praxis chat changes')
       if (outcome.outcome === 'merged') {
         for (const e of outcome.edits) {
           recordEdit(

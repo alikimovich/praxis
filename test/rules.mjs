@@ -1,10 +1,10 @@
 /**
- * dsgn agent rules (v8 R) — pure unit test of the rules builder. Runs under bun
+ * praxis agent rules (v8 R) — pure unit test of the rules builder. Runs under bun
  * (no electron), like project-key/xcode/git.
  *
  * Run with: bun test/rules.mjs
  */
-import { dsgnRules, DSGN_RULES_VERSION } from '../src/main/rules.ts'
+import { PRAXIS_RULES_VERSION, praxisRules } from '../src/main/rules.ts'
 
 let failed = 0
 const assert = (cond, msg) => {
@@ -14,16 +14,16 @@ const assert = (cond, msg) => {
   }
 }
 
-const r = dsgnRules()
+const r = praxisRules()
 assert(typeof r === 'string' && r.length > 0, 'rules render to a non-empty string')
-assert(typeof DSGN_RULES_VERSION === 'number', 'version is a number')
-assert(DSGN_RULES_VERSION === 3, 'version bumped to 3')
-assert(r.includes(`v${DSGN_RULES_VERSION}`), 'rules carry the version marker')
+assert(typeof PRAXIS_RULES_VERSION === 'number', 'version is a number')
+assert(PRAXIS_RULES_VERSION === 3, 'version bumped to 3')
+assert(r.includes(`v${PRAXIS_RULES_VERSION}`), 'rules carry the version marker')
 // v3 naming — the product is Praxis in the rule text now.
 assert(/praxis/i.test(r), 'names the product Praxis')
 assert(!/\bdsgn operating rules\b/i.test(r), 'no stale "dsgn operating rules" header')
-// v3 context — designer pointing at UI, selections carry data-dsgn-source, hot-reload.
-assert(/data-dsgn-source/.test(r), 'context mentions the data-dsgn-source stamp')
+// v3 context — designer pointing at UI, selections carry data-praxis-source, hot-reload.
+assert(/data-praxis-source/.test(r), 'context mentions the data-praxis-source stamp')
 assert(/hot-reload/i.test(r), 'context mentions instant hot-reload')
 // R1 — scope of an element edit.
 assert(/scope of an element edit/i.test(r), 'R1: scope-of-edit heading present')
@@ -32,19 +32,22 @@ assert(/search first|grep/i.test(r), 'R1: search-first guidance')
 assert(/report/i.test(r), 'R1: report-what-changed guidance')
 // R2: browser inspection → agent-browser, never Chrome DevTools unless asked.
 assert(/agent-browser/i.test(r), 'R2: directs the agent to agent-browser')
-assert(/devtools/i.test(r) && /unless the user explicitly asks/i.test(r), 'R2: no DevTools unless asked')
+assert(
+  /devtools/i.test(r) && /unless the user explicitly asks/i.test(r),
+  'R2: no DevTools unless asked'
+)
 // Deterministic (same output every call — safe to inject per turn).
-assert(dsgnRules() === r, 'dsgnRules is deterministic')
+assert(praxisRules() === r, 'praxisRules is deterministic')
 
 // R3 — preview tools appear ONLY when previewTools is requested (Claude), never
 // for the plain (Codex/Gemini) rendering.
-const withTools = dsgnRules({ previewTools: true })
+const withTools = praxisRules({ previewTools: true })
 assert(/preview_location/.test(withTools), 'previewTools: mentions preview_location')
 assert(/preview_screenshot/.test(withTools), 'previewTools: mentions preview_screenshot')
 assert(/seeing the user's preview/i.test(withTools), 'previewTools: has the preview section')
 assert(!/preview_location/.test(r), 'default rendering omits preview_location')
 assert(!/preview_screenshot/.test(r), 'default rendering omits preview_screenshot')
-assert(dsgnRules({ previewTools: true }) === withTools, 'previewTools rendering is deterministic')
+assert(praxisRules({ previewTools: true }) === withTools, 'previewTools rendering is deterministic')
 // The agent-browser section survives in both renderings.
 assert(/agent-browser/.test(withTools), 'previewTools: still keeps agent-browser guidance')
 
@@ -53,5 +56,5 @@ if (failed) {
   process.exit(1)
 }
 console.log(
-  `RULES OK — v${DSGN_RULES_VERSION} builder, Praxis naming, R1 scope + preview-tools gating, deterministic`
+  `RULES OK — v${PRAXIS_RULES_VERSION} builder, Praxis naming, R1 scope + preview-tools gating, deterministic`
 )

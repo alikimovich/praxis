@@ -5,7 +5,7 @@
  *   open fixture → enable Select mode (renderer → main → preview preload) →
  *   dispatch a click on a stamped element inside the preview WebContentsView →
  *   main relays the pick → renderer shows the inspector with the resolved
- *   `data-dsgn-source` → "Ask dsgn to change this…" seeds the composer.
+ *   `data-praxis-source` → "Ask praxis to change this…" seeds the composer.
  *
  * The preview is a separate CDP target, so we reach it via the main process
  * (`webContents.executeJavaScript`) rather than the renderer page.
@@ -48,10 +48,10 @@ try {
   await win.waitForSelector('.empty__open', { timeout: 15000 })
 
   // The props panel lives in the floating ISLAND (its own webContents,
-  // ?dsgnPanel=1) — query its DOM there.
+  // ?praxisPanel=1) — query its DOM there.
   const panelEval = (code) =>
     app.evaluate(async ({ webContents }, c) => {
-      const wc = webContents.getAllWebContents().find((w) => w.getURL().includes('dsgnPanel'))
+      const wc = webContents.getAllWebContents().find((w) => w.getURL().includes('praxisPanel'))
       if (!wc) return '__no_panel__'
       try { return await wc.executeJavaScript(c) } catch { return '__no_panel__' }
     }, code)
@@ -66,7 +66,7 @@ try {
   }
   // Tests assume the expanded card (a previous run may have collapsed it).
   const expandPanel = () =>
-    panelEval("localStorage.setItem('dsgn.proppanel.collapsed','0'); document.querySelector('.proppanel__expand')?.click(); true")
+    panelEval("localStorage.setItem('praxis.proppanel.collapsed','0'); document.querySelector('.proppanel__expand')?.click(); true")
 
   // Make the native folder picker return our fixture.
   await app.evaluate(async ({ dialog }, fixturePath) => {
@@ -155,8 +155,8 @@ try {
       .find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
     if (!wc) return 'no-preview'
     return wc.executeJavaScript(`(() => {
-      const host = document.querySelector('[data-dsgn-overlay]')
-      const bar = host?.shadowRoot?.querySelector('[data-dsgn-toolbar]')
+      const host = document.querySelector('[data-praxis-overlay]')
+      const bar = host?.shadowRoot?.querySelector('[data-praxis-toolbar]')
       if (!bar) return 'no-toolbar'
       if (getComputedStyle(bar).display === 'none') return 'hidden'
       // Scope to [data-kind] so the inline-input's Submit button (no data-kind)
@@ -181,7 +181,7 @@ try {
       .find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
     if (!wc) return 'no-preview'
     return wc.executeJavaScript(`(() => {
-      const bar = document.querySelector('[data-dsgn-overlay]')?.shadowRoot?.querySelector('[data-dsgn-toolbar]')
+      const bar = document.querySelector('[data-praxis-overlay]')?.shadowRoot?.querySelector('[data-praxis-toolbar]')
       bar?.querySelector('[data-kind="edit"]')?.click()
       const el = document.querySelector('#hero-title')
       return el?.getAttribute('contenteditable') ?? 'off'
@@ -203,13 +203,13 @@ try {
 
   // The pill is removable — × clears the selection AND the in-preview toolbar.
   await win.click('.inspector__close')
-  await win.waitForFunction(() => !window.__dsgnSelection.getState().selected, { timeout: 5000 })
+  await win.waitForFunction(() => !window.__praxisSelection.getState().selected, { timeout: 5000 })
   const toolbarAfter = await app.evaluate(async ({ webContents }) => {
     const wc = webContents
       .getAllWebContents()
       .find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
     return wc?.executeJavaScript(`(() => {
-      const bar = document.querySelector('[data-dsgn-overlay]')?.shadowRoot?.querySelector('[data-dsgn-toolbar]')
+      const bar = document.querySelector('[data-praxis-overlay]')?.shadowRoot?.querySelector('[data-praxis-toolbar]')
       return bar ? getComputedStyle(bar).display : 'gone'
     })()`)
   })
@@ -218,7 +218,7 @@ try {
   }
   // Re-select for the owner-jump flow below (the pick flow was proven above).
   await win.evaluate((src) => {
-    window.__dsgnSelection.getState().setSelected({
+    window.__praxisSelection.getState().setSelected({
       tag: 'h1', id: 'hero-title', classes: [], selector: '#hero-title',
       source: src, componentSource: null, text: 'Welcome',
       rect: { x: 0, y: 0, width: 0, height: 0 }, styles: {}
@@ -231,8 +231,8 @@ try {
   // Open the props island + the code drawer on the CURRENT selection — picking
   // the next element must reset both (a fresh pick shows just the toolbar).
   await win.evaluate(() => {
-    window.__dsgnPropsIsland.getState().setOpen(true)
-    window.__dsgnCodeDrawer.getState().open('src/components/Hero.tsx:7')
+    window.__praxisPropsIsland.getState().setOpen(true)
+    window.__praxisCodeDrawer.getState().open('src/components/Hero.tsx:7')
   })
 
   const GET_AMOUNT = `(() => { const el = document.querySelector('#amount'); if (!el) return null;
@@ -267,26 +267,26 @@ try {
   if (!pickedAmount) throw new Error('inspector never showed the host source for #amount')
 
   const resetState = await win.evaluate(() => ({
-    island: window.__dsgnPropsIsland.getState().open,
-    drawer: window.__dsgnCodeDrawer.getState().source
+    island: window.__praxisPropsIsland.getState().open,
+    drawer: window.__praxisCodeDrawer.getState().source
   }))
   if (resetState.island || resetState.drawer) {
     throw new Error(`a new pick must close island + drawer: ${JSON.stringify(resetState)}`)
   }
 
   // The store carries the forwarded component-instance source.
-  const cs = await win.evaluate(() => window.__dsgnSelection.getState().selected?.componentSource)
+  const cs = await win.evaluate(() => window.__praxisSelection.getState().selected?.componentSource)
   if (cs !== 'src/screens/Wallet.tsx:18') {
     throw new Error(`componentSource should be the instance call site, got "${cs}"`)
   }
   // The "edit owner component" affordance is offered (in the props island), and
   // re-points the selection.
-  await win.evaluate(() => window.__dsgnPropsIsland.getState().setOpen(true))
+  await win.evaluate(() => window.__praxisPropsIsland.getState().setOpen(true))
   await expandPanel()
   await waitPanel("!!document.querySelector('.proppanel__owner')")
   await panelEval("document.querySelector('.proppanel__owner').click(); true")
   await win.waitForFunction(
-    () => window.__dsgnSelection.getState().selected?.source === 'src/screens/Wallet.tsx:18',
+    () => window.__praxisSelection.getState().selected?.source === 'src/screens/Wallet.tsx:18',
     { timeout: 5000 }
   )
 

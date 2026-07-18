@@ -30,12 +30,12 @@ try {
 
   const win = await app.firstWindow()
   await win.waitForSelector('.empty__open', { timeout: 15000 })
-  await win.evaluate(() => window.__dsgnWorkspace.getState().openOrActivate('/tmp/dsgn-test-project'))
+  await win.evaluate(() => window.__praxisWorkspace.getState().openOrActivate('/tmp/praxis-test-project'))
   await win.waitForSelector('.composer__input', { timeout: 15000 })
 
   // 1) A single single-select question renders as a card with header + options.
   await win.evaluate(() => {
-    window.__dsgnQuestions.getState().addRequest({
+    window.__praxisQuestions.getState().addRequest({
       id: 'q_single',
       questions: [
         {
@@ -68,7 +68,7 @@ try {
   // 2) A multi-select question does NOT auto-submit: pick two, then Send. The
   // Send button is disabled until at least one option is chosen.
   await win.evaluate(() => {
-    window.__dsgnQuestions.getState().addRequest({
+    window.__praxisQuestions.getState().addRequest({
       id: 'q_multi',
       questions: [
         {
@@ -99,7 +99,7 @@ try {
 
   // 3) "Skip" dismisses a question without answering.
   await win.evaluate(() => {
-    window.__dsgnQuestions.getState().addRequest({
+    window.__praxisQuestions.getState().addRequest({
       id: 'q_skip',
       questions: [
         {
@@ -121,7 +121,7 @@ try {
   // 4) A `question-resolved` event from main clears a still-open card (e.g. the
   // agent answered elsewhere, or the turn was interrupted).
   await win.evaluate(() => {
-    window.__dsgnQuestions.getState().addRequest({
+    window.__praxisQuestions.getState().addRequest({
       id: 'q_resolved',
       questions: [
         {

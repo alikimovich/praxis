@@ -2,6 +2,42 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-17 — Renamed the `dsgn` internals to Praxis (clean break + legacy shims)
+
+Swept the pre-rename `dsgn` name out of the code (~900 occurrences, 111 files):
+`data-praxis-source` / `data-praxis-component-source` stamps (RN testID prefix
+`praxis:`), `.praxis/` sidecar, `PraxisApi`, `praxis/*` work branches,
+`<userData>/praxis` data dir, `PRAXIS_DEBUG_PORT`, `__praxis*` test hooks,
+`mcp__praxis__*` tools. Entries in THIS file keep their historical wording.
+
+**Clean break for stamped target repos** (per user call): the old
+`data-dsgn-source` attribute is NOT read anymore — old instrumented repos get
+the setup offer again. Deliberate legacy shims, and only these:
+
+- `setup.ts` uninstall also removes the old `.dsgn/` helpers + root plugin.
+- `git.ts` `isWorkBranch` — a repo already on a `dsgn/*` branch keeps it
+  (never nests `praxis/dsgn/…`); publish keeps working from it.
+- `sidecar-migrate.ts` (new, pure; hooked into `project:detect`) — one-time move
+  of `.dsgn/{annotations,tokens}.json` into `.praxis/`; helpers stay put because
+  the target repo's build config may still reference them. Unit-tested
+  (`test/sidecar-migrate.mjs`).
+- `agent.ts` `dataDir()` — one-time `<userData>/dsgn` → `<userData>/praxis`
+  rename + `git worktree repair` per chat worktree (their `.git` back-pointers
+  hold absolute paths).
+- The agent sidecar write-deny (`tools.ts` SIDECAR_RE) covers `.praxis` AND
+  `.dsgn`.
+
+Also fixed sed-self-defeats in tests (`rules.mjs` stale-header check,
+`setup-detect.mjs` legacy filenames), the `bun.lock` workspace name, and the
+fixture dir `test/fixtures/tokens-priority/.dsgn` → `.praxis`. lkmv.ch (the one
+instrumented repo) re-instrumented by hand in the same sweep.
+
+Piggybacked (same file was rename-touched anyway): `test/chat-isolation.mjs`
+part B still asserted the composer "Isolated"/"Parked" chips that the
+2026-07-16 conflict-UX chunk deliberately removed — updated it to the new
+contract (merged → store state + note, no card; parked → ConflictCard pinned
+with the affected files + history reload). Full unit + electron tiers green.
+
 ## 2026-07-16 — Parked-chat conflict UX: sidebar badge + AI "Resolve it" card
 
 Made the per-chat isolation "parked" state (a turn whose changes couldn't auto-merge because the user edited the same files) legible and actionable, instead of a cryptic note pointing at the sidebar.

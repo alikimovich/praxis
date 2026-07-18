@@ -18,7 +18,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const fixtures = join(root, 'test', 'fixtures')
 const artifacts = join(root, 'test', 'artifacts')
 mkdirSync(artifacts, { recursive: true })
-const scaffoldDir = mkdtempSync(join(tmpdir(), 'dsgn-setup-'))
+const scaffoldDir = mkdtempSync(join(tmpdir(), 'praxis-setup-'))
 // Setup is framework-first now: give it a React package.json so detect() branches
 // to the Babel-plugin strategy (full per-framework coverage is in setup-detect.mjs).
 writeFileSync(
@@ -35,14 +35,14 @@ try {
   })
   const win = await app.firstWindow()
   await win.waitForSelector('.empty__open', { timeout: 15000 })
-  await win.evaluate(() => window.__dsgnWorkspace.getState().openOrActivate('/tmp/dsgn-test-project'))
+  await win.evaluate(() => window.__praxisWorkspace.getState().openOrActivate('/tmp/praxis-test-project'))
   await win.waitForSelector('.composer__input', { timeout: 15000 })
 
   // The props panel lives in the floating ISLAND (its own webContents,
-  // ?dsgnPanel=1) — query its DOM there.
+  // ?praxisPanel=1) — query its DOM there.
   const panelEval = (code) =>
     app.evaluate(async ({ webContents }, c) => {
-      const wc = webContents.getAllWebContents().find((w) => w.getURL().includes('dsgnPanel'))
+      const wc = webContents.getAllWebContents().find((w) => w.getURL().includes('praxisPanel'))
       if (!wc) return '__no_panel__'
       try { return await wc.executeJavaScript(c) } catch { return '__no_panel__' }
     }, code)
@@ -57,15 +57,15 @@ try {
   }
   // Tests assume the expanded card (a previous run may have collapsed it).
   const expandPanel = () =>
-    panelEval("localStorage.setItem('dsgn.proppanel.collapsed','0'); document.querySelector('.proppanel__expand')?.click(); true")
+    panelEval("localStorage.setItem('praxis.proppanel.collapsed','0'); document.querySelector('.proppanel__expand')?.click(); true")
 
   // --- setup.scaffold writes the stamping plugin (and is idempotent). ---
   const first = await win.evaluate((d) => window.api.setup.scaffold(d), scaffoldDir)
   if (!first.ok || !first.written) throw new Error(`scaffold: ${JSON.stringify(first)}`)
   if (first.framework !== 'react') throw new Error(`expected react detect: ${JSON.stringify(first)}`)
-  const pluginPath = join(scaffoldDir, '.dsgn', 'dsgn-source.cjs')
+  const pluginPath = join(scaffoldDir, '.praxis', 'praxis-source.cjs')
   if (!existsSync(pluginPath)) throw new Error('plugin file not written')
-  if (!readFileSync(pluginPath, 'utf8').includes('data-dsgn-source')) {
+  if (!readFileSync(pluginPath, 'utf8').includes('data-praxis-source')) {
     throw new Error('plugin missing the stamping logic')
   }
   const second = await win.evaluate((d) => window.api.setup.scaffold(d), scaffoldDir)
@@ -73,11 +73,11 @@ try {
 
   // --- Gating: a STAMPED host <span> (no component schema) is prompt-only, no
   // panel — and, since it already has a source stamp, it must NOT nag to "set up
-  // the project" (the project is clearly set up). It's prompt-only → ask dsgn. ---
+  // the project" (the project is clearly set up). It's prompt-only → ask praxis. ---
   await win.evaluate(
     (args) => {
-      window.__dsgnSession.getState().setProjectRoot(args.fixture)
-      window.__dsgnSelection.getState().setSelected({
+      window.__praxisSession.getState().setProjectRoot(args.fixture)
+      window.__praxisSelection.getState().setSelected({
         tag: 'span',
         id: null,
         classes: ['badge'],
@@ -94,7 +94,7 @@ try {
   // The island opens on demand (toolbar props action) and then follows
   // selection changes; a no-schema element shows the prompt-only readiness
   // message inside it (no editable fields).
-  await win.evaluate(() => window.__dsgnPropsIsland.getState().setOpen(true))
+  await win.evaluate(() => window.__praxisPropsIsland.getState().setOpen(true))
   await expandPanel()
   await waitPanel("!!document.querySelector('.proppanel .proppanel__ready--no')")
   if (await panelEval("document.querySelectorAll('.proppanel__row').length")) {
@@ -112,26 +112,26 @@ try {
   // --- A genuinely UNSTAMPED element (source: null) is what warrants the setup
   // link — that's the only "not set up for prop editing" case. ---
   await win.evaluate(() => {
-    window.__dsgnSelection.getState().setSelected({
+    window.__praxisSelection.getState().setSelected({
       tag: 'div',
       id: null,
       classes: [],
       selector: 'div',
-      source: null, // no data-dsgn-source stamp → project isn't set up
+      source: null, // no data-praxis-source stamp → project isn't set up
       componentSource: null,
       text: null,
       rect: { x: 0, y: 0, width: 0, height: 0 },
       styles: {}
     })
   })
-  await win.evaluate(() => window.__dsgnPropsIsland.getState().setOpen(true))
+  await win.evaluate(() => window.__praxisPropsIsland.getState().setOpen(true))
   await waitPanel("!!document.querySelector('.proppanel__link')")
 
   // Positive case: a schema-backed <Badge> usage DOES open the floating panel
   // (keeps the gate honest in both directions).
   await win.evaluate(
     (args) => {
-      window.__dsgnSelection.getState().setSelected({
+      window.__praxisSelection.getState().setSelected({
         tag: 'span',
         id: null,
         classes: ['badge'],
@@ -144,11 +144,11 @@ try {
     },
     { fixture: join(fixtures, 'propedit-app') }
   )
-  await win.evaluate(() => window.__dsgnPropsIsland.getState().setOpen(true))
+  await win.evaluate(() => window.__praxisPropsIsland.getState().setOpen(true))
   await waitPanel("!!document.querySelector('.proppanel__row')")
 
   // --- The on-open setup dialogue renders with the action. ---
-  await win.evaluate(() => window.__dsgnSetup.getState().setNeeded(true))
+  await win.evaluate(() => window.__praxisSetup.getState().setNeeded(true))
   await win.waitForSelector('.setup', { timeout: 5000 })
   const yes = (await win.textContent('.setup__yes'))?.trim()
   if (yes !== 'Set it up') throw new Error(`setup action label: ${yes}`)

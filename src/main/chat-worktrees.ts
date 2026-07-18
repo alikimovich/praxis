@@ -15,7 +15,7 @@ import {
 /**
  * Per-CHAT git-worktree isolation (v9). Generalizes the comment-spawn worktree
  * machinery (`worktrees.ts`) to interactive chats: every chat on a git repo root
- * runs in its own long-lived `dsgn/chat-<id>` worktree, and after each completed
+ * runs in its own long-lived `praxis/chat-<id>` worktree, and after each completed
  * agent turn its work auto-merges back onto the LIVE checkout so the preview (which
  * always serves the live tree) updates between turns. On mid-turn drift the turn
  * parks on the branch for review instead of clobbering the user's edit.
@@ -49,7 +49,7 @@ async function changedFiles(wt: Worktree): Promise<string[]> {
 }
 
 /**
- * Fork a fresh worktree for a chat on branch `dsgn/chat-<id>`, forking from the live
+ * Fork a fresh worktree for a chat on branch `praxis/chat-<id>`, forking from the live
  * tree's CURRENT state (uncommitted WIP included, via `captureBase`) and symlinking
  * node_modules/.env — exactly like comment spawns, only the branch-name scheme differs.
  */

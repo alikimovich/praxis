@@ -5,7 +5,7 @@ import { projectKey } from '../../shared/projectKey'
 import type { ModelProvider, PendingPrompt, ProviderSession, SpawnContext } from './types'
 import { describeTool } from './tools'
 import { createRecordCapture } from './record'
-import { dsgnRules } from '../rules'
+import { praxisRules } from '../rules'
 
 /**
  * EXPERIMENTAL / UNWIRED (v7) — Google Gemini backend via the **Gemini CLI**
@@ -13,12 +13,12 @@ import { dsgnRules } from '../rules'
  * dependency in package.json — it shells out to an external `gemini` binary that
  * most installs won't have. Because a selectable-but-missing backend is a runtime
  * trap, `pickProvider` (see ./index.ts) does NOT route to it by default: it is
- * gated behind the DSGN_EXPERIMENTAL_GEMINI=1 opt-in env flag. Do not add a Gemini
+ * gated behind the PRAXIS_EXPERIMENTAL_GEMINI=1 opt-in env flag. Do not add a Gemini
  * SDK / wire this into the default provider list without revisiting that gate.
  *
  * Auth is the user's **Google account** ("Login with Google": run `gemini` once and
  * sign in) — NO API key. Gemini edits the repo with its own tools; we just map its
- * headless JSONL event stream to dsgn's `AgentEvent` stream.
+ * headless JSONL event stream to praxis's `AgentEvent` stream.
  *
  * Each turn spawns `gemini -p <prompt> --output-format stream-json` in the repo and
  * streams its JSONL events (`init`/`message`/`tool_use`/`tool_result`/`error`/
@@ -32,9 +32,9 @@ import { dsgnRules } from '../rules'
 
 // Overridable so tests can force the CLI-absent path even on machines where a
 // real `gemini` is installed (provider-seam asserts the fail-soft behavior).
-const GEMINI_BIN = process.env.DSGN_GEMINI_BIN || 'gemini'
+const GEMINI_BIN = process.env.PRAXIS_GEMINI_BIN || 'gemini'
 
-/** Map one parsed Gemini JSONL event to a dsgn AgentEvent (or null to ignore). */
+/** Map one parsed Gemini JSONL event to a praxis AgentEvent (or null to ignore). */
 function mapEvent(ev: unknown): AgentEvent | null {
   const e = ev as Record<string, unknown>
   const type = e?.type as string | undefined
@@ -85,7 +85,7 @@ async function startSession(
   let disposed = false
   let aborted = false
   let child: ChildProcessWithoutNullStreams | null = null
-  // dsgn rules (v8 R): no system-prompt arg here, so prepend them to the first turn.
+  // praxis rules (v8 R): no system-prompt arg here, so prepend them to the first turn.
   let firstTurn = true
 
   const emit = (event: AgentEvent): void => {
@@ -170,7 +170,7 @@ async function startSession(
     options,
     // Gemini CLI is text-only here; images (paste/drop) are ignored for now.
     send: (text, _images) => {
-      const prompt = firstTurn ? `${dsgnRules()}\n\n---\n\n${text}` : text
+      const prompt = firstTurn ? `${praxisRules()}\n\n---\n\n${text}` : text
       firstTurn = false
       chain = chain.then(() => runTurn(prompt))
     },

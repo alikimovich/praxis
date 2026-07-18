@@ -15,9 +15,10 @@ export const AUTO_ALLOW_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'Notebook
 // Tools that 'acceptEdits' auto-approves (mirrors the SDK's edit semantics).
 export const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 
-const SIDECAR_RE = /(^|[\s/\\"'])\.dsgn([/\\]|$)/
+// `.dsgn` is the sidecar's pre-rename name — old repos still carry it.
+const SIDECAR_RE = /(^|[\s/\\"'])\.(praxis|dsgn)([/\\]|$)/
 
-/** Does this tool target the .dsgn/ sidecar (edit-tool path or a Bash command)? */
+/** Does this tool target the .praxis/ sidecar (edit-tool path or a Bash command)? */
 export function touchesSidecar(toolName: string, input: unknown): boolean {
   const i = input as Record<string, unknown>
   if (EDIT_TOOLS.has(toolName)) {

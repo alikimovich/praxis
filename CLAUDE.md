@@ -6,8 +6,14 @@ that repo's dev server live-previewed on the right. Distributed as source
 provider subscription (`claude setup-token` / `claude login`; Codex and Gemini
 backends exist behind the same seam).
 
-The project's original name was **dsgn**; it survives in the `data-dsgn-source`
-stamp attribute and various file and type names (`DsgnApi`, `.dsgn/`, etc.).
+The project's original name was **dsgn**. A repo-wide rename (2026-07) swept it
+out of the code — the stamp is `data-praxis-source`, the sidecar is `.praxis/`,
+work branches are `praxis/*`. The old name survives only in deliberate legacy
+shims: setup uninstall removes old `.dsgn/` helpers, `git.ts` recognizes
+`dsgn/*` work branches, `sidecar-migrate.ts` moves old sidecar data, `agent.ts`
+migrates the old `<userData>/dsgn` dir, and the agent sidecar write-deny covers
+both dir names. Don't "fix" those dsgn strings — and keep `docs/PROGRESS.md`
+history as written.
 
 ## Start here every session
 
@@ -114,7 +120,7 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
 - **Prop editing is hybrid**: simple literals splice straight into source (instant
   HMR); complex/expression values fall back to the agent. React and Svelte have
   separate engines because their ASTs differ; selection/tokens are framework-
-  agnostic (they only need the `data-dsgn-source` stamp — see `docs/DESIGN.md`).
+  agnostic (they only need the `data-praxis-source` stamp — see `docs/DESIGN.md`).
 
 ## Conventions
 
@@ -124,7 +130,7 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   new UI, and migrate legacy rules out of styles.css when you touch them.
 - The Claude Agent SDK is **ESM-only** — `main` is CJS, so it's loaded via
   dynamic `import()` in `agent.ts`/`backends/` (never static/`require`).
-- All cross-process types go in `src/shared/api.ts`; keep `DsgnApi`, the
+- All cross-process types go in `src/shared/api.ts`; keep `PraxisApi`, the
   preload bridge, and the ipcMain handlers in sync — a change to one is a
   change to all three.
 - New test = new `.mjs` in `test/` **plus** its name in the right tier array in
@@ -155,19 +161,19 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   react-docgen/svelte schema). Unready components are prompt-only; the on-open
   setup offer instruments them.
 - **Dev CDP**: `bun run dev` opens `--remote-debugging-port` 9222 (override
-  `DSGN_DEBUG_PORT`; dev-only). Inspect either target via Chrome
+  `PRAXIS_DEBUG_PORT`; dev-only). Inspect either target via Chrome
   `chrome://inspect#devices`; Playwright's `_electron` still can't reach the
   preview as a page target. On Chrome 111+ attach failures, add
   `app.commandLine.appendSwitch('remote-allow-origins', 'devtools://devtools')`.
 - **bun blocks postinstall for untrusted deps** — `electron`/`esbuild` are in
   `package.json#trustedDependencies` so their binaries install.
-- **The agent is denied writes under a target repo's `.dsgn/`** (annotations +
+- **The agent is denied writes under a target repo's `.praxis/` (and legacy `.dsgn/`)** (annotations +
   scaffolded instrumentation live there).
-- **Chats run in per-chat worktrees (dsgn/chat-<id>), auto-merged back to the
+- **Chats run in per-chat worktrees (praxis/chat-<id>), auto-merged back to the
   live tree on each turn's done/error.** The preview ALWAYS serves the live
   checkout, never a worktree. Non-repo-root projects (subdirs, non-git) run on
   the live tree as today (`isRepoRoot` gate in git.ts). Resumed sessions get a
   fresh worktree; the model picker (agent:restart-chat) reuses the existing one.
   Drift from concurrent live edits syncs at turn start; conflicts park on the
   branch for review. One worktree per open chat costs disk (~node_modules are
-  symlinked); worktree directories live under `<userData>/dsgn/worktrees`.
+  symlinked); worktree directories live under `<userData>/praxis/worktrees`.

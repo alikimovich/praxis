@@ -1,6 +1,6 @@
 /**
  * edit-history unit test (pure — no Electron). The v8 F3b undo/redo engine that
- * wraps ALL direct dsgn source edits (props, text, token swaps): record + coalesce,
+ * wraps ALL direct praxis source edits (props, text, token swaps): record + coalesce,
  * undo writes `before` / redo writes `after`, the on-disk conflict guard (refuse to
  * clobber a file the user changed under us), per-project-root scoping (the rail
  * keeps several projects open), and the fresh-edit-invalidates-redo rule.
@@ -19,7 +19,7 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const base = mkdtempSync(join(tmpdir(), 'dsgn-edits-'))
+const base = mkdtempSync(join(tmpdir(), 'praxis-edits-'))
 let failed = 0
 const ok = (cond, msg) => {
   if (!cond) {

@@ -19,9 +19,9 @@ GitHub PR.
 - **AI chat that edits the running app.** A persistent multi-turn agent session
   streams over IPC and edits source with hot-reload. Backends are pluggable —
   Claude (via the Agent SDK), Codex, and Gemini behind one provider seam
-  (Gemini is experimental, gated behind `DSGN_EXPERIMENTAL_GEMINI`).
+  (Gemini is experimental, gated behind `PRAXIS_EXPERIMENTAL_GEMINI`).
 - **Click-to-edit.** A **Select** mode maps a clicked element to its source
-  location (via the `data-dsgn-source` stamp — see
+  location (via the `data-praxis-source` stamp — see
   [`docs/DESIGN.md`](docs/DESIGN.md)), then edits its **props** with typed
   controls (react-docgen for React, `svelte/compiler` for Svelte 5), applies
   the repo's **design tokens** (auto-detected from a manifest, Tailwind, or CSS

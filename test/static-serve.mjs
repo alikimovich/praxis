@@ -1,6 +1,6 @@
 /**
  * Vanilla HTML / static-site support — through real IPC. Proves that plain
- * folders with no dev command are openable via dsgn's built-in static server:
+ * folders with no dev command are openable via praxis's built-in static server:
  *  - detect() on a folder with only index.html (no package.json) → framework
  *    'static', empty devCommand.
  *  - detect() on a package.json with no dev/start script but an index.html →
@@ -21,7 +21,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const work = mkdtempSync(join(tmpdir(), 'dsgn-static-'))
+const work = mkdtempSync(join(tmpdir(), 'praxis-static-'))
 
 const assert = (cond, msg) => {
   if (!cond) throw new Error(msg)
@@ -56,7 +56,7 @@ try {
   })
   const win = await app.firstWindow()
   await win.waitForSelector('.empty__open', { timeout: 15000 })
-  await win.evaluate(() => window.__dsgnWorkspace.getState().openOrActivate('/tmp/dsgn-test-project'))
+  await win.evaluate(() => window.__praxisWorkspace.getState().openOrActivate('/tmp/praxis-test-project'))
   await win.waitForSelector('.composer__input', { timeout: 15000 })
 
   const detect = (dir) => win.evaluate((d) => window.api.project.detect(d), dir)
@@ -103,7 +103,7 @@ try {
   assert(/Hello vanilla/.test(index.body), `index should serve the HTML: ${index.body?.slice(0, 120)}`)
   assert(/text\/html/.test(index.type ?? ''), `index content-type should be html: ${index.type}`)
   // Live-reload snippet injected before </body>.
-  assert(/__dsgn_reload/.test(index.body), 'index should have the live-reload snippet injected')
+  assert(/__praxis_reload/.test(index.body), 'index should have the live-reload snippet injected')
 
   // Nested asset with the right content-type.
   const assetJs = await get(`${server.url}/assets/app.js`)

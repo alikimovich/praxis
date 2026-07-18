@@ -1,5 +1,5 @@
-import { ipcMain } from 'electron'
 import { execFile } from 'child_process'
+import { ipcMain } from 'electron'
 import { mkdir, readFile, rename, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { promisify } from 'util'
@@ -9,13 +9,13 @@ import { buildPublishMessage } from '../shared/publish-message'
 
 /**
  * Annotation sidecar + engineer handoff (v3). Reviewer notes are pinned to
- * elements and stored in `<repo>/.dsgn/annotations.json` — a sidecar the agent
- * is told not to touch (writes under `.dsgn/` are denied in agent.ts). "Publish"
- * turns the dsgn-related working changes + the notes into a branch and a PR.
+ * elements and stored in `<repo>/.praxis/annotations.json` — a sidecar the agent
+ * is told not to touch (writes under `.praxis/` are denied in agent.ts). "Publish"
+ * turns the praxis-related working changes + the notes into a branch and a PR.
  */
 
 const execFileP = promisify(execFile)
-const dir = (root: string): string => join(root, '.dsgn')
+const dir = (root: string): string => join(root, '.praxis')
 const file = (root: string): string => join(dir(root), 'annotations.json')
 
 let counter = 0
@@ -84,11 +84,14 @@ async function git(root: string, args: string[]): Promise<string> {
 /** Tracked files changed vs HEAD — clean paths (no porcelain quoting/rename arrows). */
 async function changedSince(root: string): Promise<string[]> {
   const out = await git(root, ['-c', 'core.quotePath=false', 'diff', '--name-only', 'HEAD'])
-  return out.split('\n').map((l) => l.trim()).filter(Boolean)
+  return out
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
 }
 
 async function publishToPr(root: string, opts: { title: string }): Promise<PublishResult> {
-  const title = opts.title || 'dsgn: design handoff'
+  const title = opts.title || 'praxis: design handoff'
   // --- Pre-flight: fail before any mutation. ---
   let original: string
   try {
@@ -117,14 +120,14 @@ async function publishToPr(root: string, opts: { title: string }): Promise<Publi
     return { ok: false, error: 'Nothing to publish — no changes or notes yet.' }
   }
 
-  const branch = `dsgn/handoff-${Date.now().toString(36)}`
+  const branch = `praxis/handoff-${Date.now().toString(36)}`
   let committed = false
   try {
     await git(root, ['checkout', '-b', branch])
     // Stage tracked changes + the sidecar only — never sweep in untracked files
     // (local .env, build artifacts, unrelated WIP).
     await git(root, ['add', '-u'])
-    await git(root, ['add', '--', '.dsgn'])
+    await git(root, ['add', '--', '.praxis'])
     const staged = await git(root, ['diff', '--cached', '--name-only'])
     if (!staged) {
       await git(root, ['checkout', original])
@@ -140,10 +143,16 @@ async function publishToPr(root: string, opts: { title: string }): Promise<Publi
       cwd: root,
       maxBuffer: 10 * 1024 * 1024
     })
-    const url = stdout.trim().split('\n').find((l) => /^https?:\/\//.test(l))
+    const url = stdout
+      .trim()
+      .split('\n')
+      .find((l) => /^https?:\/\//.test(l))
     return { ok: true, ...(url ? { url } : {}) }
   } catch (err) {
-    const msg = (err instanceof Error ? err.message : String(err)).split('\n').slice(0, 3).join('\n')
+    const msg = (err instanceof Error ? err.message : String(err))
+      .split('\n')
+      .slice(0, 3)
+      .join('\n')
     // Roll back to the user's branch. If we already committed, the work lives on
     // the handoff branch — say so rather than silently leaving them stranded.
     try {
@@ -159,10 +168,10 @@ async function publishToPr(root: string, opts: { title: string }): Promise<Publi
 }
 
 /**
- * Full "Publish": commit every change on the current dsgn/* branch → push →
+ * Full "Publish": commit every change on the current praxis/* branch → push →
  * create (or reuse) a PR → squash-merge it into the default branch (deleting the
  * remote branch) → check out the default branch and pull → delete the merged
- * local branch → start a fresh same-named dsgn/* branch off the updated base to
+ * local branch → start a fresh same-named praxis/* branch off the updated base to
  * keep working on. One-click ship-and-continue.
  */
 async function shipToMain(
@@ -181,15 +190,19 @@ async function shipToMain(
   // Default branch (main/master), from origin/HEAD; fall back to main.
   let base = 'main'
   try {
-    base = (await git(root, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'])).replace(
-      /^origin\//,
-      ''
-    ) || 'main'
+    base =
+      (await git(root, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'])).replace(
+        /^origin\//,
+        ''
+      ) || 'main'
   } catch {
     /* origin/HEAD not set — assume main */
   }
   if (branch === base) {
-    return { ok: false, error: `You're on ${base} — publish runs from a Praxis work branch (dsgn/*).` }
+    return {
+      ok: false,
+      error: `You're on ${base} — publish runs from a Praxis work branch (praxis/*).`
+    }
   }
   try {
     await git(root, ['remote', 'get-url', 'origin'])
@@ -209,7 +222,7 @@ async function shipToMain(
     // 1. Commit all changes (gitignore-respected). Skip the commit if clean.
     // Title + body come from the session's user requests (and the diffstat vs
     // base), so the branch commit, the PR, and the squash-merge commit all read
-    // as the actual work — not "dsgn: publish <branch>".
+    // as the actual work — not "praxis: publish <branch>".
     await git(root, ['add', '-A'])
     const diffstat = await git(root, ['diff', '--stat', base]).catch(() => '')
     const msg = buildPublishMessage(branch, summary, diffstat)
@@ -225,10 +238,22 @@ async function shipToMain(
     let url = ''
     try {
       const { stdout } = await gh([
-        'pr', 'create', '--base', base, '--head', branch,
-        '--title', msg.title, '--body', msg.body
+        'pr',
+        'create',
+        '--base',
+        base,
+        '--head',
+        branch,
+        '--title',
+        msg.title,
+        '--body',
+        msg.body
       ])
-      url = stdout.trim().split('\n').find((l) => /^https?:\/\//.test(l)) ?? ''
+      url =
+        stdout
+          .trim()
+          .split('\n')
+          .find((l) => /^https?:\/\//.test(l)) ?? ''
     } catch (e) {
       const existing = await gh(['pr', 'view', branch, '--json', 'url', '-q', '.url']).catch(
         () => ({ stdout: '' })
@@ -247,9 +272,15 @@ async function shipToMain(
     // "default commit message" setting; keep GitHub's "(#N)" convention.
     const prNumber = url.match(/\/pull\/(\d+)/)?.[1]
     await gh([
-      'pr', 'merge', branch, '--squash', '--delete-branch',
-      '--subject', prNumber ? `${msg.title} (#${prNumber})` : msg.title,
-      '--body', msg.body
+      'pr',
+      'merge',
+      branch,
+      '--squash',
+      '--delete-branch',
+      '--subject',
+      prNumber ? `${msg.title} (#${prNumber})` : msg.title,
+      '--body',
+      msg.body
     ])
     // 5. Update the local base branch.
     await git(root, ['checkout', base])
@@ -267,14 +298,15 @@ async function shipToMain(
     try {
       const now = await git(root, ['rev-parse', '--abbrev-ref', 'HEAD'])
       if (now !== branch) {
-        await git(root, ['checkout', branch]).catch(() =>
-          git(root, ['checkout', '-b', branch])
-        )
+        await git(root, ['checkout', branch]).catch(() => git(root, ['checkout', '-b', branch]))
       }
     } catch {
       /* couldn't restore — surface the original error below */
     }
-    const msg = (err instanceof Error ? err.message : String(err)).split('\n').slice(0, 4).join('\n')
+    const msg = (err instanceof Error ? err.message : String(err))
+      .split('\n')
+      .slice(0, 4)
+      .join('\n')
     return { ok: false, error: msg }
   }
 }
@@ -284,9 +316,7 @@ export function registerAnnotationsIpc(): void {
   ipcMain.handle('annotations:add', (_e, root: string, input: AnnotationInput) =>
     addAnnotation(root, input)
   )
-  ipcMain.handle('annotations:remove', (_e, root: string, id: string) =>
-    removeAnnotation(root, id)
-  )
+  ipcMain.handle('annotations:remove', (_e, root: string, id: string) => removeAnnotation(root, id))
   ipcMain.handle('publish:to-pr', (_e, root: string, opts: { title: string }) =>
     publishToPr(root, opts)
   )

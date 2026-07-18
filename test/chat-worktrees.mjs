@@ -1,10 +1,10 @@
 /**
  * chat-worktrees.ts unit test (pure — no Electron). Per-CHAT worktree isolation (v9):
- * every interactive chat runs in its own `dsgn/chat-<id>` worktree, and after each
+ * every interactive chat runs in its own `praxis/chat-<id>` worktree, and after each
  * completed turn its work auto-merges onto the LIVE tree; on mid-turn drift the turn
  * PARKS on the branch instead of clobbering the user's edit.
  *
- * Asserts: fork includes the live WIP and lands on `dsgn/chat-<id>` with node_modules/
+ * Asserts: fork includes the live WIP and lands on `praxis/chat-<id>` with node_modules/
  * .env symlinked; turn-1 completeTurn merges onto the live tree and advances the base;
  * turn-2's diff is INCREMENTAL (only the new file, base advanced past turn-1); syncFromLive
  * mirrors a between-turn live edit and no-ops when identical; mid-turn drift on a touched
@@ -28,7 +28,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const base = mkdtempSync(join(tmpdir(), 'dsgn-cwt-'))
+const base = mkdtempSync(join(tmpdir(), 'praxis-cwt-'))
 const worktreesDir = join(base, 'worktrees')
 let failed = 0
 const ok = (cond, msg) => {
@@ -68,7 +68,7 @@ try {
   writeFileSync(join(repo1, 'Untracked.tsx'), 'export const New = () => null\n')
 
   const wt = await createChatWorktree(repo1, 'chatone', worktreesDir)
-  ok(wt.branch === 'dsgn/chat-chatone', `fork lands on dsgn/chat-<id>: ${wt.branch}`)
+  ok(wt.branch === 'praxis/chat-chatone', `fork lands on praxis/chat-<id>: ${wt.branch}`)
   ok(existsSync(wt.path), 'chat worktree checkout exists')
   ok(readFileSync(join(wt.path, 'README.md'), 'utf8').includes('WIP'), 'fork includes the live WIP')
   ok(existsSync(join(wt.path, 'Untracked.tsx')), 'fork includes the untracked live file')

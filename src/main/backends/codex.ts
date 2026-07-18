@@ -6,7 +6,7 @@ import { projectKey } from '../../shared/projectKey'
 import type { ModelProvider, PendingPrompt, ProviderSession, SpawnContext } from './types'
 import { describeTool } from './tools'
 import { createRecordCapture } from './record'
-import { dsgnRules } from '../rules'
+import { praxisRules } from '../rules'
 import type {
   ModelReasoningEffort,
   Thread,
@@ -17,8 +17,8 @@ import type {
 /**
  * OpenAI Codex backend (v7) via `@openai/codex-sdk`. Auth is the user's **ChatGPT
  * subscription** ("sign in with ChatGPT": `codex login`) — NO API key. The SDK shells
- * out to the `codex` CLI, which edits the repo with its OWN sandboxed tools, so dsgn
- * doesn't define a toolset here — it maps Codex's streamed `ThreadEvent`s onto dsgn's
+ * out to the `codex` CLI, which edits the repo with its OWN sandboxed tools, so praxis
+ * doesn't define a toolset here — it maps Codex's streamed `ThreadEvent`s onto praxis's
  * `AgentEvent` stream.
  *
  * Reachable only when `AgentOptions.provider === 'codex'`. ESM-only, so loaded via a
@@ -27,7 +27,7 @@ import type {
  * renderer maps it to the "sign in with ChatGPT" banner.
  *
  * Tool approvals run headless (`approvalPolicy: 'never'`, `sandboxMode: 'workspace-write'`)
- * — mapping Codex approvals → dsgn permission cards is a follow-up (the SDK event stream
+ * — mapping Codex approvals → praxis permission cards is a follow-up (the SDK event stream
  * has no approval-request event to bridge).
  */
 
@@ -38,7 +38,7 @@ const loadCodex = (): Promise<CodexModule> => (codexPromise ??= import('@openai/
 const execFileP = promisify(execFile)
 // Overridable so tests can force the CLI-absent path even where `codex` resolves
 // (e.g. `bun run` puts node_modules/.bin — which has the SDK's codex shim — on PATH).
-const CODEX_BIN = process.env.DSGN_CODEX_BIN || 'codex'
+const CODEX_BIN = process.env.PRAXIS_CODEX_BIN || 'codex'
 /** The SDK shells out to the `codex` CLI; probe it up front so a missing/unauthed CLI
  *  fails soft FAST + clearly, instead of surfacing a slow spawn ENOENT mid-turn. */
 async function codexCliPresent(): Promise<boolean> {
@@ -83,7 +83,7 @@ async function startSession(
   let disposed = false
   let aborted = false // session teardown (permanent)
   let turnAbort: AbortController | null = null // cancels the in-flight turn only
-  // dsgn rules (v8 R): no system-prompt arg here, so prepend them to the first turn.
+  // praxis rules (v8 R): no system-prompt arg here, so prepend them to the first turn.
   let firstTurn = true
 
   const emit = (event: AgentEvent): void => {
@@ -244,7 +244,7 @@ async function startSession(
     options,
     // Codex CLI is text-only here; images (paste/drop) are ignored for now.
     send: (text, _images) => {
-      const prompt = firstTurn ? `${dsgnRules()}\n\n---\n\n${text}` : text
+      const prompt = firstTurn ? `${praxisRules()}\n\n---\n\n${text}` : text
       firstTurn = false
       chain = chain.then(() => runTurn(prompt))
     },

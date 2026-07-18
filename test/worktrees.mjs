@@ -31,7 +31,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const base = mkdtempSync(join(tmpdir(), 'dsgn-wt-'))
+const base = mkdtempSync(join(tmpdir(), 'praxis-wt-'))
 const repo = join(base, 'repo')
 const worktreesDir = join(base, 'worktrees')
 const tmpDir = join(base, 'tmp')
@@ -57,14 +57,14 @@ try {
 
   // Simulate the interactive main agent having UNCOMMITTED WIP in the live tree.
   writeFileSync(appFile, 'export const App = () => <div className="root">hi</div>\n// WIP\n')
-  // ...AND an UNTRACKED new file — the dsgn agent constantly creates files; the fork
+  // ...AND an UNTRACKED new file — the praxis agent constantly creates files; the fork
   // base must include these (git stash create would silently drop them).
   writeFileSync(join(repo, 'Untracked.tsx'), 'export const New = () => null\n')
   const dirtyBefore = readFileSync(appFile, 'utf8')
 
   // --- create: forks the WIP, and does NOT disturb the main tree ---
   const wtA = await createWorktree(repo, worktreesDir, { label: 'make it blue' })
-  ok(wtA.branch === 'dsgn/comment-' + wtA.id, `branch name: ${wtA.branch}`)
+  ok(wtA.branch === 'praxis/comment-' + wtA.id, `branch name: ${wtA.branch}`)
   ok(existsSync(wtA.path), 'worktree checkout exists')
   ok(readFileSync(appFile, 'utf8') === dirtyBefore, 'create did NOT touch the main working tree')
   // The worktree forked from the live WIP — tracked modification...
@@ -89,8 +89,8 @@ try {
   // --- createWorktree honors a custom branchName scheme (per-chat isolation) ---
   const wtChat = await createWorktree(repo, worktreesDir, { branchName: (id) => `chat-${id}` })
   ok(
-    wtChat.branch === `dsgn/chat-${wtChat.id}`,
-    `custom branchName lands on dsgn/chat-<id>: ${wtChat.branch}`
+    wtChat.branch === `praxis/chat-${wtChat.id}`,
+    `custom branchName lands on praxis/chat-<id>: ${wtChat.branch}`
   )
   await removeWorktree(repo, wtChat, {})
 
@@ -114,10 +114,10 @@ try {
     'export const App = () => <div className="root accent">hi</div>\n// WIP\n'
   )
   writeFileSync(join(wtA.path, 'New.tsx'), 'export const New = () => null\n')
-  // A stray .dsgn write (a spawn runs bypassPermissions, so the sidecar deny is off)
-  // must be excluded from the commit — the sidecar is dsgn-managed, not the agent's.
-  mkdirSync(join(wtA.path, '.dsgn'), { recursive: true })
-  writeFileSync(join(wtA.path, '.dsgn', 'annotations.json'), '[{"sneaky":true}]\n')
+  // A stray .praxis write (a spawn runs bypassPermissions, so the sidecar deny is off)
+  // must be excluded from the commit — the sidecar is praxis-managed, not the agent's.
+  mkdirSync(join(wtA.path, '.praxis'), { recursive: true })
+  writeFileSync(join(wtA.path, '.praxis', 'annotations.json'), '[{"sneaky":true}]\n')
   const committed = await commitWorktree(wtA, 'make it blue')
   ok(committed.committed, 'commitWorktree committed')
   ok(
@@ -125,8 +125,8 @@ try {
     `committed files: ${JSON.stringify(committed.files)}`
   )
   ok(
-    !committed.files.some((f) => f.startsWith('.dsgn')),
-    `.dsgn must be excluded from a spawn commit: ${JSON.stringify(committed.files)}`
+    !committed.files.some((f) => f.startsWith('.praxis')),
+    `.praxis must be excluded from a spawn commit: ${JSON.stringify(committed.files)}`
   )
 
   // --- diff → apply onto the DIRTY live tree (3-way, tolerates WIP) ---
@@ -199,12 +199,12 @@ try {
   ok(g(repo, 'show', `${orphan.branch}:Scratch.tsx`).includes('leftover'), 'orphan work recovered to its branch')
   await removeWorktree(repo, live, {})
 
-  // --- W2: a PARKED chat orphan (tip = cumulative dsgn squash, a `chatpark-<id>` record
+  // --- W2: a PARKED chat orphan (tip = cumulative praxis squash, a `chatpark-<id>` record
   // exists) that crashed mid-turn must FOLD the recovery commit into that squash, so
   // branchPatch stays the full diff (a stacked recovery commit would hide the parked work
   // from the record's Apply). The fold is gated on the `isParked` predicate. ---
   const chatWt = await createWorktree(repo, worktreesDir, { branchName: (i) => `chat-${i}` })
-  // Turn 1 parked: the isolation layer squashes it into ONE dsgn commit off base.
+  // Turn 1 parked: the isolation layer squashes it into ONE praxis commit off base.
   writeFileSync(join(chatWt.path, 'Parked.tsx'), 'export const P = () => null\n')
   const pc = await commitWorktree(chatWt, 'parked turn one')
   ok(pc.committed && pc.files.includes('Parked.tsx'), 'parked squash committed')
@@ -269,13 +269,13 @@ try {
   g2('add', '-A')
   g2('commit', '-qm', 'init')
   const wt2 = await createWorktree(repo2, worktreesDir, { label: 'edit readme' })
-  writeFileSync(join(wt2.path, 'README.md'), 'hello DSGN\n') // the "agent" edits in the worktree
+  writeFileSync(join(wt2.path, 'README.md'), 'hello PRAXIS\n') // the "agent" edits in the worktree
   const c2 = await commitWorktree(wt2, 'edit readme')
   const auto = await autoApplyWorktree(repo2, wt2, c2.files)
   ok(auto.applied, `autoApply should apply onto an unchanged live tree: ${JSON.stringify(auto)}`)
-  ok(readFileSync(join(repo2, 'README.md'), 'utf8') === 'hello DSGN\n', 'autoApply wrote the live file')
+  ok(readFileSync(join(repo2, 'README.md'), 'utf8') === 'hello PRAXIS\n', 'autoApply wrote the live file')
   ok(
-    auto.edits.length === 1 && auto.edits[0].before === 'hello world\n' && auto.edits[0].after === 'hello DSGN\n',
+    auto.edits.length === 1 && auto.edits[0].before === 'hello world\n' && auto.edits[0].after === 'hello PRAXIS\n',
     `autoApply returns before/after for the undo history: ${JSON.stringify(auto.edits)}`
   )
 

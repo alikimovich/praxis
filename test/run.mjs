@@ -37,6 +37,7 @@ const UNIT = [
   'devserver-net',
   'xcode',
   'git',
+  'sidecar-migrate',
   'diag-cache',
   'diag-rules',
   'sessions-store',
@@ -139,16 +140,16 @@ function runOne(runner, name) {
   const file = join(TEST_DIR, `${name}.mjs`);
   const started = Date.now();
   // Each Electron test gets its own throwaway userData (main honors
-  // DSGN_USER_DATA): persisted state (workspace/recents localStorage) can't leak
+  // PRAXIS_USER_DATA): persisted state (workspace/recents localStorage) can't leak
   // between tests — boot restore would otherwise auto-reopen a prior test's
   // project — and each launch holds its own single-instance lock.
-  const userData = mkdtempSync(join(tmpdir(), `dsgn-test-${name}-`));
+  const userData = mkdtempSync(join(tmpdir(), `praxis-test-${name}-`));
   let res;
   try {
     res = spawnSync(runner, [file], {
       cwd: ROOT,
       stdio: 'inherit',
-      env: { ...process.env, DSGN_USER_DATA: userData },
+      env: { ...process.env, PRAXIS_USER_DATA: userData },
     });
   } finally {
     rmSync(userData, { recursive: true, force: true });

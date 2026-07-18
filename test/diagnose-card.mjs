@@ -36,10 +36,10 @@ try {
   })
   const win = await app.firstWindow()
   await win.waitForSelector('.empty__open', { timeout: 15000 })
-  await win.evaluate(() => window.__dsgnWorkspace.getState().openOrActivate('/tmp/dsgn-test-project'))
+  await win.evaluate(() => window.__praxisWorkspace.getState().openOrActivate('/tmp/praxis-test-project'))
   await win.waitForSelector('.composer__input', { timeout: 15000 })
 
-  await win.evaluate((d) => window.__dsgnDiagnosis.getState().setCurrent(d), DIAG)
+  await win.evaluate((d) => window.__praxisDiagnosis.getState().setCurrent(d), DIAG)
   await win.waitForSelector('.diag', { timeout: 5000 })
 
   const summary = await win.textContent('.diag__summary')
@@ -66,7 +66,7 @@ try {
     })
 
   // Dismiss clears the card too.
-  await win.evaluate((d) => window.__dsgnDiagnosis.getState().setCurrent(d), DIAG)
+  await win.evaluate((d) => window.__praxisDiagnosis.getState().setCurrent(d), DIAG)
   await win.waitForSelector('.diag', { timeout: 5000 })
   await win.click('button:has-text("Dismiss")')
   await win.waitForSelector('.diag', { state: 'detached', timeout: 5000 })

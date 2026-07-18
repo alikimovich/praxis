@@ -7,7 +7,7 @@ import { normalizeBranchName } from './git'
 
 /**
  * Git-worktree management for F1 (comment → parallel agent session). Each spawned
- * comment agent runs in its OWN `git worktree` on a `dsgn/comment-<id>` branch — a
+ * comment agent runs in its OWN `git worktree` on a `praxis/comment-<id>` branch — a
  * private on-disk checkout that shares the repo's object store — so N comments edit
  * the repo truly in parallel with zero cross-writes, and the user's live preview
  * (which stays on the main working tree) is undisturbed until they accept one.
@@ -43,7 +43,7 @@ export interface Worktree {
   repoRoot: string
   /** The on-disk checkout (under worktreesDir). */
   path: string
-  /** `dsgn/comment-<id>`. */
+  /** `praxis/comment-<id>`. */
   branch: string
   /** The commit the worktree forked from (main-tree HEAD + any uncommitted WIP). */
   baseSha: string
@@ -52,7 +52,7 @@ export interface Worktree {
 /**
  * Snapshot the live tree's FULL current state — tracked modifications AND brand-new
  * untracked files — into a dangling base commit, WITHOUT touching the live tree or
- * its index. `git stash create` omits untracked files (no `-u`), and the dsgn
+ * its index. `git stash create` omits untracked files (no `-u`), and the praxis
  * interactive agent constantly creates new files, so we build the snapshot in a
  * throwaway index instead: seed it from HEAD, `add -A` the whole working tree
  * (`.gitignore` keeps node_modules/.env out), write a tree, commit it off HEAD.
@@ -73,7 +73,7 @@ export async function captureBase(repoRoot: string, indexFile: string): Promise<
     const tree = (await git(repoRoot, ['write-tree'], env)).stdout.trim()
     if (!tree) return head
     const commit = (
-      await git(repoRoot, ['commit-tree', tree, '-p', head, '-m', 'dsgn: spawn base (WIP snapshot)'], env)
+      await git(repoRoot, ['commit-tree', tree, '-p', head, '-m', 'praxis: spawn base (WIP snapshot)'], env)
     ).stdout.trim()
     return commit || head
   } catch {
@@ -109,7 +109,7 @@ async function doCreateWorktree(
   // before its worktree exists); otherwise generate one.
   const id = opts.id ?? randomUUID().slice(0, 8)
   // Callers other than comment-spawn (e.g. per-chat isolation) can supply their own
-  // branch-name scheme; default keeps today's `dsgn/comment-<id>` naming.
+  // branch-name scheme; default keeps today's `praxis/comment-<id>` naming.
   const branch = normalizeBranchName((opts.branchName ?? ((i) => `comment-${i}`))(id))
   const dir = join(worktreesDir, id)
   await mkdir(worktreesDir, { recursive: true })
@@ -147,10 +147,10 @@ export async function commitWorktree(
   // `branchPatch`'s `branch^..branch`. The reset is a no-op when HEAD == baseSha.
   await git(wt.path, ['reset', '--soft', wt.baseSha]).catch(() => {})
   await git(wt.path, ['add', '-A'])
-  // `.dsgn/` is dsgn-managed and NOT gitignored in target repos, so unstage it: a
+  // `.praxis/` is praxis-managed and NOT gitignored in target repos, so unstage it: a
   // spawn's accidental sidecar writes must never reach the durable branch or the
   // apply patch. (The Bash allowlist is deferred.)
-  await git(wt.path, ['reset', '-q', '--', '.dsgn']).catch(() => {})
+  await git(wt.path, ['reset', '-q', '--', '.praxis']).catch(() => {})
   const staged = (await git(wt.path, ['diff', '--cached', '--name-only'])).stdout
     .split('\n')
     .map((s) => s.trim())
@@ -412,13 +412,13 @@ export async function pruneOrphans(
     //
     // Gating on the park record (not author/message) is essential: a chat branch gains one
     // commit per MERGED turn and `baseSha` advances to the tip on each merge, so a crash
-    // mid-turn after a merged turn leaves tip = a dsgn-authored, non-base commit that is
+    // mid-turn after a merged turn leaves tip = a praxis-authored, non-base commit that is
     // ALREADY LIVE. Folding that (as an author/message heuristic would) splices merged
     // content into the recovery commit, and the record's Apply then re-applies live changes
     // → spurious 3-way conflicts. Un-parked (merged-tip) orphans just get the WIP committed
     // ON TOP, so branchPatch = only the genuinely-unmerged crash WIP. Comment-spawn orphans
     // have no park record either, so they are unaffected (unchanged prune behavior).
-    if (dirty && branch?.startsWith('dsgn/chat-') && isParked(id)) {
+    if (dirty && branch?.startsWith('praxis/chat-') && isParked(id)) {
       await git(dir, ['reset', '--soft', 'HEAD^']).catch(() => {})
     }
     // Best-effort: commit any dirty leftover to its branch before removing the dir,

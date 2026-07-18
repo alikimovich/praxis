@@ -102,8 +102,8 @@ try {
   await waitRunning()
 
   // Both servers warm.
-  const ws = await win.evaluate(() => window.__dsgnWorkspace.getState())
-  const urlA = ws.projects.find((p) => p.name === 'dsgn-fixture-static')?.url
+  const ws = await win.evaluate(() => window.__praxisWorkspace.getState())
+  const urlA = ws.projects.find((p) => p.name === 'praxis-fixture-static')?.url
   const urlB = ws.projects.find((p) => p.name.includes('selectable'))?.url
   if (!urlA || !urlB || urlA === urlB) {
     throw new Error(`expected two distinct warm URLs, got ${urlA} / ${urlB}`)
@@ -112,9 +112,9 @@ try {
   if (!(await reachable(app, urlB))) throw new Error('project B server should be running')
 
   // Active is B; give B's chat a distinctive message so we can prove the slice swaps.
-  await win.evaluate(() => window.__dsgnStore.getState().appendUser('hello from B'))
+  await win.evaluate(() => window.__praxisStore.getState().appendUser('hello from B'))
   const bText = await win.evaluate(
-    () => window.__dsgnStore.getState().messages.at(-1)?.text
+    () => window.__praxisStore.getState().messages.at(-1)?.text
   )
   if (bText !== 'hello from B') throw new Error(`B chat should hold its message, got "${bText}"`)
 
@@ -122,7 +122,7 @@ try {
   if (!(await waitPreviewPort(app, port(urlB)))) throw new Error("preview should show B after opening it")
 
   // Switch to A via the rail.
-  await win.click('.rail__item:has-text("dsgn-fixture-static") .rail__open')
+  await win.click('.rail__item:has-text("praxis-fixture-static") .rail__open')
   await win.waitForFunction(
     (u) => document.querySelector('.previewbar__url')?.textContent?.includes(u),
     new URL(urlA).host,
@@ -131,7 +131,7 @@ try {
   if (!(await waitPreviewPort(app, port(urlA)))) throw new Error("switching should load A in the preview")
   // A's chat is its OWN slice — it must NOT contain B's message (per-project isolation).
   const aHasBText = await win.evaluate(() =>
-    window.__dsgnStore.getState().messages.some((m) => m.text.includes('hello from B'))
+    window.__praxisStore.getState().messages.some((m) => m.text.includes('hello from B'))
   )
   if (aHasBText) throw new Error("A's chat leaked B's message — per-project isolation broken")
 

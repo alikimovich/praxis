@@ -42,11 +42,11 @@ try {
 
   const win = await app.firstWindow()
   await win.waitForSelector('.empty__open', { timeout: 15000 })
-  await win.evaluate(() => window.__dsgnWorkspace.getState().openOrActivate('/tmp/dsgn-test-project'))
+  await win.evaluate(() => window.__praxisWorkspace.getState().openOrActivate('/tmp/praxis-test-project'))
   await win.waitForSelector('.composer__input', { timeout: 15000 })
 
   await win.evaluate(async (sample) => {
-    const store = window.__dsgnStore
+    const store = window.__praxisStore
     const s = store.getState()
     s.appendUser('Make the hero heading teal and tighten the spacing')
     s.startAssistant()
@@ -82,7 +82,7 @@ try {
   // emits — LKM-54) and open the menu. Includes: project skills with/without a
   // description, a duplicate name in both sources, and a very long description.
   await win.evaluate(() => {
-    window.__dsgnSession.getState().setSlashCommands([
+    window.__praxisSession.getState().setSlashCommands([
       { name: 'commit', source: 'other' },
       { name: 'compact', source: 'other' },
       { name: 'init', source: 'other' },
@@ -191,14 +191,14 @@ try {
 
   // First-run auth onboarding: flipping authNeeded shows the guidance banner.
   await win.fill('.composer__input', '')
-  await win.evaluate(() => window.__dsgnSession.getState().setAuthNeeded(true))
+  await win.evaluate(() => window.__praxisSession.getState().setAuthNeeded(true))
   await win.waitForSelector('.banner--auth code', { timeout: 5000 })
   const authText = (await win.textContent('.banner--auth'))?.toLowerCase() ?? ''
   if (!authText.includes('setup-token')) {
     throw new Error('auth banner should mention claude setup-token')
   }
   await win.screenshot({ path: join(artifacts, '08-auth-onboarding.png') })
-  await win.evaluate(() => window.__dsgnSession.getState().setAuthNeeded(false))
+  await win.evaluate(() => window.__praxisSession.getState().setAuthNeeded(false))
 
   // Permission cards: seed a pending tool prompt, confirm it renders, approve it.
   // NOTE: no project is open here, so clicking Allow only exercises the renderer's
@@ -206,7 +206,7 @@ try {
   // session. The full canUseTool round-trip is covered by the live agent-e2e
   // (which needs Claude credentials), not this store-driven visual test.
   await win.evaluate(() => {
-    window.__dsgnPermissions.getState().addRequest({
+    window.__praxisPermissions.getState().addRequest({
       id: 'tu_test',
       toolName: 'Bash',
       title: 'Allow Bash?',
@@ -229,7 +229,7 @@ try {
   if (JSON.stringify(permModes) !== JSON.stringify(['auto', 'acceptEdits', 'default'])) {
     throw new Error(`unexpected permission modes: ${JSON.stringify(permModes)}`)
   }
-  const defaultMode = await win.evaluate(() => window.__dsgnPermissions.getState().mode)
+  const defaultMode = await win.evaluate(() => window.__praxisPermissions.getState().mode)
   if (defaultMode !== 'auto')
     throw new Error(`default permission mode should be auto, got ${defaultMode}`)
 
@@ -255,11 +255,11 @@ try {
     throw new Error(`Codex backend should list Codex models, got: ${JSON.stringify(codexModels)}`)
   }
   // A Codex auth/"not connected" failure surfaces the login hint.
-  await win.evaluate(() => window.__dsgnSession.getState().setCodexAuthNeeded(true))
+  await win.evaluate(() => window.__praxisSession.getState().setCodexAuthNeeded(true))
   await win.waitForSelector('.provider-hint', { timeout: 5000 })
   const hint = (await win.textContent('.provider-hint'))?.toLowerCase() ?? ''
   if (!hint.includes('codex login')) throw new Error(`provider hint should mention codex login: ${hint}`)
-  await win.evaluate(() => window.__dsgnSession.getState().setCodexAuthNeeded(false))
+  await win.evaluate(() => window.__praxisSession.getState().setCodexAuthNeeded(false))
   await win.selectOption('select[aria-label="Backend"]', 'claude') // reset
   if ((await win.$('.provider-hint')) !== null) throw new Error('hint should hide for Claude')
 
@@ -268,10 +268,10 @@ try {
   // restore each picker's own values. No live agent is needed here: the renderer
   // records the setting before its best-effort Codex restart IPC.
   const perChat = await win.evaluate(() => {
-    const ws = window.__dsgnWorkspace.getState()
-    const session = window.__dsgnSession.getState()
+    const ws = window.__praxisWorkspace.getState()
+    const session = window.__praxisSession.getState()
     ws.reset()
-    const key = ws.openOrActivate('/tmp/dsgn-per-chat-model')
+    const key = ws.openOrActivate('/tmp/praxis-per-chat-model')
     const newer = `${key}#new`
     ws.patchEntry(key, {
       sessionKeys: [key, newer],
@@ -281,8 +281,8 @@ try {
         [newer]: { provider: 'codex', model: 'default', effort: 'high' }
       }
     })
-    window.__dsgnStore.getState().setActiveChat(newer)
-    session.setProjectRoot('/tmp/dsgn-per-chat-model')
+    window.__praxisStore.getState().setActiveChat(newer)
+    session.setProjectRoot('/tmp/praxis-per-chat-model')
     session.setChatAgentSettings({ provider: 'codex', model: 'default', effort: 'high' })
     return { key, newer }
   })
@@ -294,7 +294,7 @@ try {
   // The older chat gains its first message → its row appears; the still-empty
   // newer chat stays hidden.
   await win.evaluate(({ key }) => {
-    window.__dsgnStore.getState().appendUser('older chat prompt', key)
+    window.__praxisStore.getState().appendUser('older chat prompt', key)
   }, perChat)
   await win.waitForFunction(() => document.querySelectorAll('.rail__chat').length === 1, null, {
     timeout: 5000
@@ -303,7 +303,7 @@ try {
   // active `newer`) instead of stacking another session.
   await win.click('.rail__new-chat')
   const afterPlus = await win.evaluate(({ key }) => {
-    const p = window.__dsgnWorkspace.getState().projects.find((x) => x.key === key)
+    const p = window.__praxisWorkspace.getState().projects.find((x) => x.key === key)
     return { count: p?.sessionKeys.length, active: p?.activeSessionKey }
   }, perChat)
   if (afterPlus.count !== 2 || afterPlus.active !== perChat.newer) {
@@ -311,43 +311,43 @@ try {
   }
   // The newer chat's first message lands → both rows show (newest first).
   await win.evaluate(({ newer }) => {
-    window.__dsgnStore.getState().appendUser('newer chat prompt', newer)
+    window.__praxisStore.getState().appendUser('newer chat prompt', newer)
   }, perChat)
   await win.waitForFunction(() => document.querySelectorAll('.rail__chat').length === 2, null, {
     timeout: 5000
   })
   await win.selectOption('select[aria-label="Model"]', 'gpt-5-codex')
   const changedNew = await win.evaluate(({ key, newer }) =>
-    window.__dsgnWorkspace.getState().projects.find((p) => p.key === key)?.chatSettings?.[newer]?.model,
+    window.__praxisWorkspace.getState().projects.find((p) => p.key === key)?.chatSettings?.[newer]?.model,
   perChat)
   if (changedNew !== 'gpt-5-codex') throw new Error(`new chat model was not stored: ${changedNew}`)
   // The rail orders chats newest first, so the second button is the original one.
   await win.locator('.rail__chat').nth(1).click()
   await win.waitForFunction(
-    () => window.__dsgnSession.getState().model === 'sonnet',
+    () => window.__praxisSession.getState().model === 'sonnet',
     null,
     { timeout: 5000 },
   )
   const oldPicker = await win.evaluate(() => ({
-    provider: window.__dsgnSession.getState().provider,
-    model: window.__dsgnSession.getState().model,
+    provider: window.__praxisSession.getState().provider,
+    model: window.__praxisSession.getState().model,
   }))
   if (oldPicker.provider !== 'claude' || oldPicker.model !== 'sonnet') {
     throw new Error(`old chat picker leaked the new chat model: ${JSON.stringify(oldPicker)}`)
   }
   await win.locator('.rail__chat').nth(0).click()
   await win.waitForFunction(
-    () => window.__dsgnSession.getState().model === 'gpt-5-codex',
+    () => window.__praxisSession.getState().model === 'gpt-5-codex',
     null,
     { timeout: 5000 },
   )
 
   // Working-branch pill: shows the branch and opens a switcher dropdown on click;
   // "New branch…" reveals the inline rename editor.
-  await win.evaluate(() => window.__dsgnSession.getState().setBranch('dsgn/main'))
+  await win.evaluate(() => window.__praxisSession.getState().setBranch('praxis/main'))
   await win.waitForSelector('.branch', { timeout: 5000 })
   const pill = (await win.textContent('.branch'))?.trim()
-  if (!pill?.includes('dsgn/main')) throw new Error(`branch pill: ${pill}`)
+  if (!pill?.includes('praxis/main')) throw new Error(`branch pill: ${pill}`)
   await win.click('.branch')
   await win.waitForSelector('[role="menuitem"]', { timeout: 5000 })
   await win.click('text=New branch…')
@@ -355,16 +355,16 @@ try {
 
   // v5 workspace store: open/activate/close transitions, keyed by projectKey.
   const ws = await win.evaluate(() => {
-    const w = window.__dsgnWorkspace.getState()
+    const w = window.__praxisWorkspace.getState()
     w.reset()
     const a = w.openOrActivate('/tmp/proj-a/')
     const b = w.openOrActivate('/tmp/proj-b')
     w.openOrActivate('/tmp/proj-a') // dedupe: same key, no new entry
-    const afterOpen = window.__dsgnWorkspace.getState()
-    window.__dsgnWorkspace.getState().activate(a)
-    const afterActivate = window.__dsgnWorkspace.getState().activeKey
-    window.__dsgnWorkspace.getState().close(a)
-    const afterClose = window.__dsgnWorkspace.getState()
+    const afterOpen = window.__praxisWorkspace.getState()
+    window.__praxisWorkspace.getState().activate(a)
+    const afterActivate = window.__praxisWorkspace.getState().activeKey
+    window.__praxisWorkspace.getState().close(a)
+    const afterClose = window.__praxisWorkspace.getState()
     return {
       a,
       b,
@@ -464,7 +464,7 @@ try {
   // (LKM-53) — they used to vanish from the composer without surfacing in the
   // transcript. `appendUser` carries them onto the message.
   await win.evaluate(() => {
-    window.__dsgnStore.getState().appendUser('Tweak this button', undefined, {
+    window.__praxisStore.getState().appendUser('Tweak this button', undefined, {
       attachments: [
         { id: 'att1', mediaType: 'image/png', url: 'data:image/png;base64,iVBORw0KGgo=' },
       ],
@@ -520,11 +520,11 @@ try {
   await app.evaluate(({ BrowserWindow }) => {
     BrowserWindow.getAllWindows()[0].webContents.send('menu:action', 'viewport:mobile')
   })
-  await win.waitForFunction(() => window.__dsgnViewport.getState().viewport === 'mobile', { timeout: 5000 })
+  await win.waitForFunction(() => window.__praxisViewport.getState().viewport === 'mobile', { timeout: 5000 })
   await app.evaluate(({ BrowserWindow }) => {
     BrowserWindow.getAllWindows()[0].webContents.send('menu:action', 'viewport:desktop')
   })
-  await win.waitForFunction(() => window.__dsgnViewport.getState().viewport === 'desktop', { timeout: 5000 })
+  await win.waitForFunction(() => window.__praxisViewport.getState().viewport === 'desktop', { timeout: 5000 })
 
   // v9 resume hydration: a persisted transcript (user / assistant / status lines)
   // rebuilds into grouped chat messages and renders as a populated thread — the
@@ -539,9 +539,9 @@ try {
       { role: 'assistant', text: 'Done — the header is sticky now.', at: 5 },
       { role: 'user', text: 'Thanks', at: 6 }
     ]
-    const msgs = window.__dsgnMessagesFromTranscript(transcript)
-    window.__dsgnStore.getState().hydrate(key, msgs)
-    window.__dsgnStore.getState().setActiveChat(key)
+    const msgs = window.__praxisMessagesFromTranscript(transcript)
+    window.__praxisStore.getState().hydrate(key, msgs)
+    window.__praxisStore.getState().setActiveChat(key)
     return {
       count: msgs.length,
       roles: msgs.map((m) => m.role),
@@ -576,8 +576,8 @@ try {
   // Re-hydrating a populated slice is a no-op (never clobbers a live chat).
   const guarded = await win.evaluate(() => {
     const key = 'resume-test#sdk-abc'
-    window.__dsgnStore.getState().hydrate(key, [])
-    return window.__dsgnStore.getState().byKey[key].messages.length
+    window.__praxisStore.getState().hydrate(key, [])
+    return window.__praxisStore.getState().byKey[key].messages.length
   })
   if (guarded !== 3) throw new Error(`hydrate should not clobber a populated slice, got ${guarded}`)
 
