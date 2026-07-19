@@ -8,7 +8,7 @@
  * renderer-supplied strings are never spliced raw. Filesystem checks (file
  * exists, anchor-once against the live file) live in control-panels.ts.
  */
-import type { ControlKind, ControlParam, ControlPanelManifest } from '../shared/api'
+import type { ControlKind, ControlPanelManifest, ControlParam } from '../shared/api'
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,40}$/
 // Mirrors props.ts's ATTR_NAME_RE (props.ts imports electron, so a pure module
@@ -17,11 +17,26 @@ const PROP_NAME_RE = /^[A-Za-z_][\w-]*$/
 const KINDS: ControlKind[] = ['number', 'color', 'select', 'toggle', 'text', 'bezier']
 // The Styles engine's fixed v1 longhand allowlist (plan "v1 property set").
 const STYLE_PROPS = new Set([
-  'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
-  'margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'gap',
-  'color', 'background-color', 'border-radius', 'opacity',
-  'font-size', 'font-weight', 'line-height', 'letter-spacing',
-  'transition-property', 'transition-duration', 'transition-delay',
+  'padding-top',
+  'padding-right',
+  'padding-bottom',
+  'padding-left',
+  'margin-top',
+  'margin-right',
+  'margin-bottom',
+  'margin-left',
+  'gap',
+  'color',
+  'background-color',
+  'border-radius',
+  'opacity',
+  'font-size',
+  'font-weight',
+  'line-height',
+  'letter-spacing',
+  'transition-property',
+  'transition-duration',
+  'transition-delay',
   'transition-timing-function'
 ])
 const MAX_PARAMS = 12
@@ -42,7 +57,8 @@ function isSafeRelativeFile(file: string): boolean {
 }
 
 function validateParam(p: unknown, seen: Set<string>): { param: ControlParam } | { error: string } {
-  if (typeof p !== 'object' || p == null || Array.isArray(p)) return { error: 'param must be an object' }
+  if (typeof p !== 'object' || p == null || Array.isArray(p))
+    return { error: 'param must be an object' }
   const q = p as Record<string, unknown>
   if (!isStr(q.id) || !ID_RE.test(q.id)) return { error: `bad param id: ${JSON.stringify(q.id)}` }
   if (seen.has(q.id)) return { error: `duplicate param id: ${q.id}` }
@@ -55,11 +71,14 @@ function validateParam(p: unknown, seen: Set<string>): { param: ControlParam } |
   const kind = q.kind as ControlKind
   // Numeric metadata only makes sense on 'number' — reject elsewhere (untrusted input: strict).
   for (const k of ['unit', 'min', 'max', 'step'] as const) {
-    if (q[k] !== undefined && kind !== 'number') return { error: `${where}: '${k}' only allowed for kind 'number'` }
+    if (q[k] !== undefined && kind !== 'number')
+      return { error: `${where}: '${k}' only allowed for kind 'number'` }
   }
-  if (q.unit !== undefined && (!isStr(q.unit) || q.unit.length > 16)) return { error: `${where}: bad unit` }
+  if (q.unit !== undefined && (!isStr(q.unit) || q.unit.length > 16))
+    return { error: `${where}: bad unit` }
   for (const k of ['min', 'max', 'step'] as const) {
-    if (q[k] !== undefined && !isFin(q[k])) return { error: `${where}: '${k}' must be a finite number` }
+    if (q[k] !== undefined && !isFin(q[k]))
+      return { error: `${where}: '${k}' must be a finite number` }
   }
   if (isFin(q.min) && isFin(q.max) && q.min > q.max) return { error: `${where}: min > max` }
   if (isFin(q.step) && q.step <= 0) return { error: `${where}: step must be > 0` }
@@ -68,6 +87,10 @@ function validateParam(p: unknown, seen: Set<string>): { param: ControlParam } |
       return { error: `${where}: kind 'select' requires 1-20 options` }
     if (!q.options.every((o) => isStr(o) && o.length > 0 && o.length <= MAX_LABEL))
       return { error: `${where}: options must be 1-${MAX_LABEL} char strings` }
+    // '<'/'>' are refused in rendered string values (see renderLiteral) — an
+    // option that could never apply must not be registered in the first place.
+    if (q.options.some((o) => /[<>]/.test(o as string)))
+      return { error: `${where}: options must not contain '<' or '>'` }
   } else if (q.options !== undefined) {
     return { error: `${where}: 'options' only allowed for kind 'select'` }
   }
@@ -75,15 +98,23 @@ function validateParam(p: unknown, seen: Set<string>): { param: ControlParam } |
   if (typeof a !== 'object' || a == null) return { error: `${where}: missing apply` }
   let apply: ControlParam['apply']
   if (a.strategy === 'prop') {
-    if (!isStr(a.propName) || !PROP_NAME_RE.test(a.propName)) return { error: `${where}: bad propName` }
+    if (!isStr(a.propName) || !PROP_NAME_RE.test(a.propName))
+      return { error: `${where}: bad propName` }
     apply = { strategy: 'prop', propName: a.propName }
   } else if (a.strategy === 'style') {
     if (!isStr(a.styleProp) || !STYLE_PROPS.has(a.styleProp))
       return { error: `${where}: styleProp not in the v1 allowlist` }
     apply = { strategy: 'style', styleProp: a.styleProp }
   } else if (a.strategy === 'literal') {
-    if (!isStr(a.anchor) || !a.anchor.trim() || a.anchor.length < ANCHOR_MIN || a.anchor.length > ANCHOR_MAX)
-      return { error: `${where}: anchor must be ${ANCHOR_MIN}-${ANCHOR_MAX} chars, non-empty after trim` }
+    if (
+      !isStr(a.anchor) ||
+      !a.anchor.trim() ||
+      a.anchor.length < ANCHOR_MIN ||
+      a.anchor.length > ANCHOR_MAX
+    )
+      return {
+        error: `${where}: anchor must be ${ANCHOR_MIN}-${ANCHOR_MAX} chars, non-empty after trim`
+      }
     apply = { strategy: 'literal', anchor: a.anchor }
   } else {
     return { error: `${where}: unknown apply strategy` }
@@ -133,7 +164,14 @@ export function validateManifest(input: unknown): ControlPanelManifest | { error
     if ('error' in r) return r
     params.push(r.param)
   }
-  return { id: m.id, file: m.file, component: m.component, title: m.title, params, createdAt: m.createdAt }
+  return {
+    id: m.id,
+    file: m.file,
+    component: m.component,
+    title: m.title,
+    params,
+    createdAt: m.createdAt
+  }
 }
 
 /**
@@ -147,6 +185,11 @@ export function upsertPanel(
   manifest: ControlPanelManifest
 ): ControlPanelManifest[] | { error: string } {
   const at = panels.findIndex((p) => p.file === manifest.file && p.component === manifest.component)
+  // Store-wide id uniqueness: applyLiteral and removePanel key on id ALONE, so
+  // an id shared with a different (file, component) panel would mis-route an
+  // edit to the wrong file or delete both panels on remove.
+  if (panels.some((p, i) => i !== at && p.id === manifest.id))
+    return { error: `panel id '${manifest.id}' is already used by another panel` }
   if (at !== -1) {
     const next = panels.slice()
     next[at] = manifest
@@ -157,12 +200,42 @@ export function upsertPanel(
 }
 
 /**
+ * Partition raw store entries (untrusted disk JSON) into loadable panels and
+ * preserved entries. Loadable = validates, id unique so far, under the panel
+ * cap — first occurrence wins. Everything else is PRESERVED verbatim: it stays
+ * out of resolution, but control-panels.ts writes it back on every store
+ * mutation, so a hand-edit typo (the file is user-editable) or a field from a
+ * newer app version can't be permanently erased by an unrelated save.
+ */
+export function partitionStoreEntries(raw: unknown[]): {
+  panels: ControlPanelManifest[]
+  preserved: unknown[]
+} {
+  const panels: ControlPanelManifest[] = []
+  const preserved: unknown[] = []
+  const ids = new Set<string>()
+  for (const entry of raw) {
+    const v = validateManifest(entry)
+    if ('error' in v || ids.has(v.id) || panels.length >= MAX_PANELS) {
+      preserved.push(entry)
+    } else {
+      ids.add(v.id)
+      panels.push(v)
+    }
+  }
+  return { panels, preserved }
+}
+
+/**
  * Find the anchor in `code`. The anchor must occur EXACTLY once — a missing
  * anchor means the constant was renamed/removed, an ambiguous one means a
  * splice could land at the wrong site; both refuse. `at` is the offset just
  * after the anchor, where the literal's lexing starts.
  */
-export function locateAnchor(code: string, anchor: string): { at: number } | { error: 'missing' | 'ambiguous' } {
+export function locateAnchor(
+  code: string,
+  anchor: string
+): { at: number } | { error: 'missing' | 'ambiguous' } {
   const first = code.indexOf(anchor)
   if (first === -1) return { error: 'missing' }
   if (code.indexOf(anchor, first + 1) !== -1) return { error: 'ambiguous' }
@@ -179,7 +252,8 @@ const NUMBER_RE = /-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/iy
 // (0x10, 1_000, 4n, trueish) — refuse, per "stale, never a wrong-site splice".
 const IDENT_CONT_RE = /[\w$]/
 const NUM_CONT_RE = /[\w$.]/
-const BEZIER_STR_RE = /^cubic-bezier\(\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*\)$/
+const BEZIER_STR_RE =
+  /^cubic-bezier\(\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*\)$/
 
 /** Lex a quoted string ('/"/`) at `i`, honoring backslash escapes. */
 function lexQuoted(code: string, i: number): { start: number; end: number } | null {
@@ -187,8 +261,10 @@ function lexQuoted(code: string, i: number): { start: number; end: number } | nu
   if (quote !== "'" && quote !== '"' && quote !== '`') return null
   for (let j = i + 1; j < code.length; j++) {
     const c = code[j]
-    if (c === '\\') j++ // skip the escaped char
-    else if (quote === '`' && c === '$' && code[j + 1] === '{') return null // interpolation — can't lex safely
+    if (c === '\\')
+      j++ // skip the escaped char
+    else if (quote === '`' && c === '$' && code[j + 1] === '{')
+      return null // interpolation — can't lex safely
     else if (c === quote) return { start: i, end: j + 1 }
     else if (quote !== '`' && c === '\n') return null // unterminated
   }
@@ -198,7 +274,10 @@ function lexQuoted(code: string, i: number): { start: number; end: number } | nu
 /** Lex a 4-number array literal `[a, b, c, d]` at `i`, spanning ≤80 chars. */
 function lexBezierArray(code: string, i: number): { start: number; end: number } | null {
   const window = code.slice(i, i + 80)
-  const m = /^\[\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*,?\s*\]/.exec(window)
+  const m =
+    /^\[\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*,?\s*\]/.exec(
+      window
+    )
   return m ? { start: i, end: i + m[0].length } : null
 }
 
@@ -220,11 +299,13 @@ export function lexLiteral(
   if (kind === 'number') {
     NUMBER_RE.lastIndex = i
     const m = NUMBER_RE.exec(code)
-    if (m && !NUM_CONT_RE.test(code[i + m[0].length] ?? '')) span = { start: i, end: i + m[0].length }
+    if (m && !NUM_CONT_RE.test(code[i + m[0].length] ?? ''))
+      span = { start: i, end: i + m[0].length }
   } else if (kind === 'toggle') {
     // Word boundary required — `trueish`/`falseByDefault` are identifiers, not
     // booleans; lexing their prefix would splice mid-identifier.
-    if (code.startsWith('true', i) && !IDENT_CONT_RE.test(code[i + 4] ?? '')) span = { start: i, end: i + 4 }
+    if (code.startsWith('true', i) && !IDENT_CONT_RE.test(code[i + 4] ?? ''))
+      span = { start: i, end: i + 4 }
     else if (code.startsWith('false', i) && !IDENT_CONT_RE.test(code[i + 5] ?? ''))
       span = { start: i, end: i + 5 }
   } else if (kind === 'bezier') {
@@ -285,8 +366,10 @@ export function renderLiteral(
   if (kind === 'number') {
     if (!isFin(value)) return { error: 'value must be a finite number' }
     let n = value
-    if (isFin(param.min) && (!isFin(param.max) || param.min <= param.max)) n = Math.max(param.min, n)
-    if (isFin(param.max) && (!isFin(param.min) || param.min <= param.max)) n = Math.min(param.max, n)
+    if (isFin(param.min) && (!isFin(param.max) || param.min <= param.max))
+      n = Math.max(param.min, n)
+    if (isFin(param.max) && (!isFin(param.min) || param.min <= param.max))
+      n = Math.min(param.max, n)
     return fmtNum(n)
   }
   if (kind === 'toggle') {
@@ -304,9 +387,17 @@ export function renderLiteral(
   }
   // 'text' | 'color' | 'select' — string literals, quote-safe via JSON.stringify
   if (!isStr(value)) return { error: 'value must be a string' }
-  if (value.length > MAX_STRING_VALUE) return { error: `string value exceeds ${MAX_STRING_VALUE} chars` }
-  if (kind === 'color' && !isValidColor(value)) return { error: 'not a valid color (hex/rgb()/hsl()/var())' }
-  if (kind === 'select' && !(param.options ?? []).includes(value)) return { error: 'value not in options' }
+  if (value.length > MAX_STRING_VALUE)
+    return { error: `string value exceeds ${MAX_STRING_VALUE} chars` }
+  // JSON.stringify is JS-quote-safe but NOT HTML-context-safe: a '</script>'
+  // inside the rendered string terminates an inline <script> when the target is
+  // a previewed .html file, turning a spliced value into live markup. Refuse
+  // rather than escape — escaping would corrupt the value in non-JS contexts.
+  if (/[<>]/.test(value)) return { error: "string values must not contain '<' or '>'" }
+  if (kind === 'color' && !isValidColor(value))
+    return { error: 'not a valid color (hex/rgb()/hsl()/var())' }
+  if (kind === 'select' && !(param.options ?? []).includes(value))
+    return { error: 'value not in options' }
   return JSON.stringify(value)
 }
 
@@ -317,7 +408,10 @@ export function renderLiteral(
  * `valid: false`). Bezier values normalize to a `cubic-bezier(...)` string
  * whichever shape the source uses.
  */
-export function resolveLiteralValue(code: string, param: ControlParam): string | number | boolean | null {
+export function resolveLiteralValue(
+  code: string,
+  param: ControlParam
+): string | number | boolean | null {
   if (param.apply.strategy !== 'literal') return null
   const loc = locateAnchor(code, param.apply.anchor)
   if ('error' in loc) return null

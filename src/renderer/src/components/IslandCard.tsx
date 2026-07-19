@@ -1,8 +1,9 @@
+import { Minimize2 } from 'lucide-react'
 import { useState } from 'react'
-import type { PropInspection, SelectedElement } from '../../../shared/api'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Minimize2 } from 'lucide-react'
+import type { PropInspection, SelectedElement } from '../../../shared/api'
+import ControlsTrigger from './styles/ControlsTrigger'
 
 const TAB_KEY = 'dsgn.island.tab'
 type IslandTab = 'props' | 'styles'
@@ -20,6 +21,8 @@ interface Props {
   propsTab: React.ReactNode
   /** Body of the Styles tab (StylePanel). */
   stylesTab: React.ReactNode
+  /** Ask the AI to surface a control panel (Custom Controls, v10). */
+  onControls: (hint?: string) => void
 }
 
 /**
@@ -39,7 +42,8 @@ export default function IslandCard({
   onCollapse,
   onClose,
   propsTab,
-  stylesTab
+  stylesTab,
+  onControls
 }: Props): React.JSX.Element {
   const [tab, setTabRaw] = useState<IslandTab>(() =>
     localStorage.getItem(TAB_KEY) === 'styles' ? 'styles' : 'props'
@@ -50,11 +54,7 @@ export default function IslandCard({
     setTabRaw(next)
   }
   const source = inspection?.source ?? element.source ?? ''
-  const ident = element.id
-    ? `#${element.id}`
-    : element.classes[0]
-      ? `.${element.classes[0]}`
-      : ''
+  const ident = element.id ? `#${element.id}` : element.classes[0] ? `.${element.classes[0]}` : ''
 
   return (
     <aside
@@ -114,6 +114,12 @@ export default function IslandCard({
           {stylesTab}
         </TabsContent>
       </Tabs>
+      {/* Footer affordance shared by both tabs: when neither the props schema
+          nor the fixed style set exposes what the user wants, ask the AI to
+          instrument the source and surface a custom panel. */}
+      <footer className="proppanel__footer shrink-0 border-t px-3 py-1.5">
+        <ControlsTrigger hasSource={!!element.source} onTrigger={onControls} />
+      </footer>
     </aside>
   )
 }

@@ -18,6 +18,7 @@ import { registerSimulatorIpc } from './simulator'
 import { registerAgentIpc } from './agent'
 import { registerPropsIpc } from './props'
 import { registerStylesIpc } from './styles'
+import { registerControlsIpc } from './control-panels'
 import { registerAnnotationsIpc } from './annotations'
 import { registerTokensIpc } from './tokens'
 import { registerSetupIpc } from './setup'
@@ -792,9 +793,8 @@ function registerPreviewIpc(): void {
   // ── Styles tab: live-injection relays + computed-style reads (v10) ──────────
   // The style controls live in the island (panelView), but the main renderer may
   // also drive them — accept either sender, relay into the preview's preload.
-  const fromMainOrPanel = (
-    e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent
-  ): boolean => e.sender === mainWindow?.webContents || e.sender === panelView?.webContents
+  const fromMainOrPanel = (e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean =>
+    e.sender === mainWindow?.webContents || e.sender === panelView?.webContents
   ipcMain.on('styles:preview', (e, p: { prop: string; value: string }) => {
     if (!fromMainOrPanel(e)) return
     previewView?.webContents.send('styles:preview', p)
@@ -958,6 +958,7 @@ app.whenReady().then(() => {
   registerAgentIpc(() => mainWindow)
   registerPropsIpc()
   registerStylesIpc()
+  registerControlsIpc()
   registerAnnotationsIpc()
   registerTokensIpc()
   registerSetupIpc()

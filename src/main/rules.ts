@@ -13,7 +13,7 @@
  *
  * Bump DSGN_RULES_VERSION whenever the rule text changes (so logs/tests can pin it).
  */
-export const DSGN_RULES_VERSION = 3
+export const DSGN_RULES_VERSION = 4
 
 export function dsgnRules(opts?: { previewTools?: boolean }): string {
   const lines: string[] = [
@@ -50,7 +50,21 @@ export function dsgnRules(opts?: { previewTools?: boolean }): string {
       `  right now (their route, their viewport, simulator included). Use it to verify a`,
       `  visual change you just made, or when the user references what they're looking at.`,
       `Division of labor: these tools OBSERVE the user's own view; \`agent-browser\` (below)`,
-      `is your OWN headless copy for interacting/inspecting.`
+      `is your OWN headless copy for interacting/inspecting.`,
+      ``,
+      `## Surfacing control panels (define_controls)`,
+      `When the user asks for sliders / knobs / a control panel to tweak some parameter`,
+      `(a stagger delay, a spring config, a magic number), first INSTRUMENT the code so`,
+      `each parameter is a tweakable target: extract magic values to named top-level`,
+      `constants in the component's OWN file (keeps hot-reload fast), or expose them as`,
+      `typed props with literal defaults. Keep behavior identical. Then call the`,
+      `\`define_controls\` tool with a manifest describing the params. For a 'literal'`,
+      `param, the anchor is a substring of the file that occurs exactly once and ends`,
+      `immediately before the literal — ideal shape: \`const STAGGER_MS = \`. Strategy`,
+      `choice: \`prop\` = per-instance values, \`literal\` = module constants, \`style\` =`,
+      `pure CSS properties. For number params, give a sensible min/max/step/unit (those`,
+      `fields are only valid on kind 'number'). Never write under \`.dsgn/\` yourself —`,
+      `the tool persists the manifest for you.`
     )
   }
 

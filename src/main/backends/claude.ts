@@ -21,12 +21,17 @@ import type {
   SpawnContext
 } from './types'
 import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
+import { z } from 'zod'
 import { AUTO_ALLOW_TOOLS, describeTool, toolDetail, touchesSidecar } from './tools'
 import { createRecordCapture } from './record'
 import { sanitizeTitle, transcriptDigest } from './title'
 import { dsgnRules } from '../rules'
 import { capturePreview, getPreviewUrl } from '../preview-state'
+import { lexLiteral, locateAnchor, validateManifest } from '../control-manifest'
+import { saveManifest } from '../control-panels'
 
 // The bundled Praxis agent plugin (skills teaching the preview workflow). Lives
 // at the repo root; resolved relative to the compiled main (out/main →
@@ -40,6 +45,77 @@ const PREVIEW_TOOL_NAMES = new Set([
   'mcp__praxis__preview_location',
   'mcp__praxis__preview_screenshot'
 ])
+// All in-process `praxis` tools — the observers above plus `define_controls`
+// (v10 Custom Controls). define_controls DOES persist state, but only through
+// main's own validated `saveManifest` path (main stays the sole `.dsgn/`
+// writer), so it's equally safe to auto-allow: allowedTools + the canUseTool
+// short-circuit both use this set.
+const PRAXIS_TOOL_NAMES = new Set([...PREVIEW_TOOL_NAMES, 'mcp__praxis__define_controls'])
+
+// `define_controls` input — ControlPanelManifest minus `id`/`createdAt` (main
+// assigns those). The SDK converts this zod shape to JSON Schema over MCP, so
+// the model sees the exact manifest schema without any prompt bloat. Structural
+// security limits live in validateManifest (control-manifest.ts) — the shape
+// here stays permissive-but-typed and every input re-runs the real validator.
+const defineControlsShape = {
+  manifest: z.object({
+    file: z.string().describe('Repo-relative path of the source file the params live in'),
+    component: z.string().describe('The component the panel targets (its exported name)'),
+    title: z.string().describe('Panel heading shown to the user (≤80 chars)'),
+    params: z
+      .array(
+        z.object({
+          id: z.string().describe('Stable id, unique in the panel: ^[a-z0-9][a-z0-9-]{0,40}$'),
+          label: z.string().describe('Human label rendered next to the control (≤80 chars)'),
+          kind: z.enum(['number', 'color', 'select', 'toggle', 'text', 'bezier']),
+          unit: z.string().optional().describe("Display unit for kind 'number', e.g. 'px' | 'ms'"),
+          min: z.number().optional().describe("Clamp minimum (kind 'number' only)"),
+          max: z.number().optional().describe("Clamp maximum (kind 'number' only)"),
+          step: z.number().optional().describe("Scrub increment (kind 'number' only)"),
+          options: z
+            .array(z.string())
+            .optional()
+            .describe("Allowed values (kind 'select' only, 1-20 entries)"),
+          apply: z
+            .discriminatedUnion('strategy', [
+              z.object({
+                strategy: z.literal('prop'),
+                propName: z.string().describe('Component prop to edit (per-instance values)')
+              }),
+              z.object({
+                strategy: z.literal('style'),
+                styleProp: z.string().describe("CSS longhand routed through the Styles engine, e.g. 'border-radius'")
+              }),
+              z.object({
+                strategy: z.literal('literal'),
+                anchor: z
+                  .string()
+                  .describe(
+                    'Unique substring of the file (4-200 chars) ending immediately before the ' +
+                      "literal to edit — ideal shape: 'const STAGGER_MS = '. Must occur exactly once."
+                  )
+              })
+            ])
+            .describe('How the param writes back to source')
+        })
+      )
+      .min(1)
+      .max(12)
+  })
+}
+
+/** Panel id assigned by main: component slug + a short hash of file+component,
+ *  matching validateManifest's `^[a-z0-9][a-z0-9-]{0,40}$` by construction. */
+function panelId(file: string, component: string): string {
+  const slug =
+    component
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 32) || 'panel'
+  const hash = createHash('sha1').update(`${file}:${component}`).digest('hex').slice(0, 6)
+  return `${slug}-${hash}`
+}
 
 // The Agent SDK is ESM-only; this CJS main bundle must reach it via a dynamic
 // import() (preserved by Rollup for external deps) rather than a static require.
@@ -242,6 +318,76 @@ async function startSession(
             content: [{ type: 'image', data: jpeg.toString('base64'), mimeType: 'image/jpeg' }]
           }
         }
+      ),
+      // v10 Custom Controls: register an AI-surfaced control panel. The manifest
+      // is UNTRUSTED — main re-validates structure, checks every literal anchor
+      // against the file the agent just wrote (this session's cwd, which may be
+      // a per-chat worktree), and persists to the LIVE root (ctx.liveRoot) so
+      // the panel isn't stranded when the worktree merges/drops. Failures come
+      // back as tool-result text (never a throw) so the model can fix + retry.
+      tool(
+        'define_controls',
+        'Register a control panel of tweakable parameters (sliders, color pickers, toggles) ' +
+          'for a component, after instrumenting its source so each parameter is a clean ' +
+          'target: a named top-level constant in the component file (literal strategy), a ' +
+          'typed prop with a literal default (prop strategy), or a CSS property (style ' +
+          'strategy). The user tweaks these live in the Praxis island.',
+        defineControlsShape,
+        async (args) => {
+          const fail = (text: string) => ({
+            content: [{ type: 'text' as const, text: `define_controls failed: ${text}` }],
+            isError: true
+          })
+          const input = args.manifest
+          // Main assigns identity; the model never picks ids or timestamps.
+          const manifest = validateManifest({
+            ...input,
+            id: panelId(input.file, input.component),
+            createdAt: new Date().toISOString()
+          })
+          if ('error' in manifest) return fail(manifest.error)
+          // Anchor check against THIS session's tree (the worktree, where the
+          // agent just wrote) — the live tree may not have the constant yet.
+          let code: string
+          try {
+            code = await readFile(join(root, manifest.file), 'utf8')
+          } catch {
+            return fail(`could not read ${manifest.file} — does the file exist?`)
+          }
+          for (const param of manifest.params) {
+            if (param.apply.strategy !== 'literal') continue
+            const loc = locateAnchor(code, param.apply.anchor)
+            if ('error' in loc) {
+              const why =
+                loc.error === 'missing'
+                  ? 'does not occur in the file'
+                  : 'occurs more than once (must be unique)'
+              return fail(`param '${param.id}': anchor ${why}. Adjust the anchor or the code.`)
+            }
+            if (!lexLiteral(code, loc.at, param.kind)) {
+              return fail(
+                `param '${param.id}': no ${param.kind} literal immediately after the anchor. ` +
+                  'The anchor must end right before the literal value.'
+              )
+            }
+          }
+          const saved = await saveManifest(ctx?.liveRoot ?? root, manifest)
+          if ('error' in saved) return fail(saved.error)
+          getWindow()?.webContents.send('controls:updated', { root: ctx?.liveRoot ?? root })
+          const n = manifest.params.length
+          return {
+            content: [
+              {
+                type: 'text',
+                text:
+                  `Registered control panel "${manifest.title}" for ${manifest.component} ` +
+                  `(${manifest.file}) with ${n} param${n === 1 ? '' : 's'}: ` +
+                  `${manifest.params.map((p) => p.id).join(', ')}. ` +
+                  'The user can now tweak them live from the Custom tab of the selection island.'
+              }
+            ]
+          }
+        }
       )
     ]
   })
@@ -255,11 +401,12 @@ async function startSession(
       // operating rules (v8 R) are appended to the Claude Code preset, with the
       // preview-tools section (Claude alone can call the in-process praxis tools).
       systemPrompt: { type: 'preset', preset: 'claude_code', append: dsgnRules({ previewTools: true }) },
-      // The praxis MCP server (preview_location / preview_screenshot). Its two
-      // read-only tools are auto-allowed here so they never surface a permission
-      // card (canUseTool also short-circuits them, belt-and-suspenders).
+      // The praxis MCP server (preview_location / preview_screenshot /
+      // define_controls). Its tools are auto-allowed here so they never surface
+      // a permission card (canUseTool also short-circuits them, belt-and-
+      // suspenders) — main validates everything define_controls persists.
       mcpServers: { praxis: previewServer },
-      allowedTools: [...PREVIEW_TOOL_NAMES],
+      allowedTools: [...PRAXIS_TOOL_NAMES],
       // The bundled Praxis skill plugin (only when present in this build).
       ...(existsSync(PLUGIN_PATH) ? { plugins: [{ type: 'local' as const, path: PLUGIN_PATH }] } : {}),
       includePartialMessages: true,
@@ -311,10 +458,12 @@ async function startSession(
             emit({ type: 'question-request', request })
           })
         }
-        // The in-process praxis preview tools are read-only observers of the
-        // user's own view — auto-allow (they're also in allowedTools, but guard
-        // here too so a canUseTool call for them can never reach a prompt).
-        if (PREVIEW_TOOL_NAMES.has(toolName)) {
+        // The in-process praxis tools are auto-allowed: the preview pair are
+        // read-only observers of the user's own view, and define_controls only
+        // persists through main's validated saveManifest path. They're also in
+        // allowedTools, but guard here too so a canUseTool call for them can
+        // never reach a prompt.
+        if (PRAXIS_TOOL_NAMES.has(toolName)) {
           emit({ type: 'status', text: describeTool(toolName, toolInput) })
           return { behavior: 'allow', updatedInput: toolInput }
         }

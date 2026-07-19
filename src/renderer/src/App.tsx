@@ -45,6 +45,7 @@ import {
   type ProjectEntry
 } from './store'
 import { projectKey } from '../../shared/projectKey'
+import { controlsPrompt } from './lib/controls-prompt'
 import { restoreWorkspace, type RestoreDeps } from './restore'
 import { MonitorSmartphone, PanelLeft } from 'lucide-react'
 import {
@@ -1503,6 +1504,19 @@ export default function App(): React.JSX.Element {
           }
         } else if (a.kind === 'inspection') {
           sel.setInspection(a.inspection)
+        } else if (a.kind === 'controls') {
+          // Custom Controls (v10): build the trigger prompt from the live
+          // selection + the chat's backend, and send it as a REAL agent turn
+          // (setSubmit auto-sends; it downgrades to a prefill mid-turn).
+          if (sel.selected) {
+            const prompt = controlsPrompt(
+              sel.selected,
+              sel.inspection,
+              a.hint,
+              useSession.getState().provider
+            )
+            useComposer.getState().setSubmit(prompt)
+          }
         }
       }),
     []

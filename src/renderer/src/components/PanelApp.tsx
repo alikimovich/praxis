@@ -72,6 +72,7 @@ export default function PanelApp(): React.JSX.Element | null {
             maxHeight={state.maxHeight}
             onCollapse={() => setCollapsed(true)}
             onClose={() => window.api.panel.action({ kind: 'close' })}
+            onControls={(hint) => window.api.panel.action({ kind: 'controls', hint })}
             propsTab={
               <PropPanel
                 root={state.root}
@@ -84,6 +85,7 @@ export default function PanelApp(): React.JSX.Element | null {
                 onSeedPrompt={(text) => window.api.panel.action({ kind: 'seed', text })}
                 onSetup={() => window.api.panel.action({ kind: 'setup' })}
                 onSelectOwner={() => window.api.panel.action({ kind: 'owner' })}
+                onControls={() => window.api.panel.action({ kind: 'controls' })}
               />
             }
             stylesTab={

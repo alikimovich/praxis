@@ -39,7 +39,9 @@ export default function PanelHost({
   )
 
   useEffect(() => {
-    window.api.panel.setState({ root, element, inspection, inspecting, maxHeight })
+    // `controls: null` until the Custom tab lands (phase 8) — App will fetch
+    // matching panels via controls:get and thread them through here.
+    window.api.panel.setState({ root, element, inspection, inspecting, maxHeight, controls: null })
   }, [root, element, inspection, inspecting, maxHeight])
 
   // Place at the top right of the preview card body, tracked live.

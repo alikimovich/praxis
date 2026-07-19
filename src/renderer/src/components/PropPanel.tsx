@@ -18,6 +18,9 @@ interface Props {
   onSetup: () => void
   /** v8 F3a: re-select the owning component instance. */
   onSelectOwner: () => void
+  /** Ask the AI to surface a control panel (Custom Controls, v10) — offered
+   *  from the "not ready" states as an alternative to prompting. */
+  onControls?: () => void
 }
 
 /**
@@ -35,7 +38,8 @@ export default function PropPanel({
   onChange,
   onSeedPrompt,
   onSetup,
-  onSelectOwner
+  onSelectOwner,
+  onControls
 }: Props): React.JSX.Element {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -157,6 +161,17 @@ export default function PropPanel({
             <div className="proppanel__ready proppanel__ready--no text-[12px] text-muted-foreground">
               No editable props on {`<${element.tag}>`} — ask Praxis below to change it.
             </div>
+          )}
+          {/* Custom Controls (v10): when the automatic paths came up empty, the
+              AI can instrument the source and surface a panel — needs a stamp. */}
+          {!inspecting && element.source && onControls && (
+            <button
+              type="button"
+              className="proppanel__controls self-start text-[11.5px] text-blue-600 underline"
+              onClick={onControls}
+            >
+              Surface controls with AI
+            </button>
           )}
         </div>
       )}

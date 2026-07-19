@@ -465,6 +465,9 @@ export interface PanelState {
    * height follows the card's reported height; 100vh would be circular).
    */
   maxHeight: number
+  /** AI-surfaced control panels matching the selection (Custom Controls, v10) —
+   *  fetched by the main renderer via `controls:get`; null while unfetched. */
+  controls: ResolvedControlPanel[] | null
 }
 
 /** A user action inside the island, relayed back to the main renderer. */
@@ -474,6 +477,9 @@ export type PanelAction =
   | { kind: 'setup' }
   | { kind: 'owner' }
   | { kind: 'inspection'; inspection: PropInspection }
+  /** Ask the AI to surface a control panel for the selection (Custom Controls,
+   *  v10) — App builds the trigger prompt and auto-sends it as a real turn. */
+  | { kind: 'controls'; hint?: string }
 
 export interface PropEdit {
   source: string
@@ -948,6 +954,28 @@ export interface DsgnApi {
     /** Replay a transition on the selected element: jump to `from` with
      *  transitions disabled, force reflow, then set `to` so it animates. */
     replay: (prop: string, from: string, to: string) => void
+  }
+  /** AI-surfaced custom-control panels (v10) — manifests persisted by main in
+   *  the repo's `.dsgn/control-panels.json`, values resolved fresh per read. */
+  controls: {
+    /** Panels matching the selection's candidate files (two-stamp match), with
+     *  every param's value freshly resolved against the live tree. */
+    get: (root: string, q: { files: string[]; component?: string }) => Promise<ResolvedControlPanel[]>
+    /** Every stored panel for the repo (unresolved manifests). */
+    list: (root: string) => Promise<ControlPanelManifest[]>
+    /** Delete a panel by id ("Remove panel"). */
+    remove: (root: string, id: string) => Promise<void>
+    /** Apply a value to a literal-strategy param — main re-anchors, lexes and
+     *  renders the replacement itself (never splices a supplied string raw). */
+    applyLiteral: (
+      root: string,
+      panelId: string,
+      paramId: string,
+      value: string | number | boolean
+    ) => Promise<StyleEditResult>
+    /** Fires when the agent's `define_controls` tool saved a manifest — App
+     *  re-fetches and re-pushes panel state for that root. */
+    onUpdated: (cb: (root: string) => void) => () => void
   }
   source: {
     /** Resolve a component tag name to its defining file via imports (Cmd+click). */
