@@ -34,8 +34,8 @@ interface Props {
   panels: ResolvedControlPanel[]
   /** Seed a chat prompt for params the panel can't apply directly. */
   onSeedPrompt: (text: string) => void
-  /** Broken param → ask the agent to regenerate the panel (a real turn). */
-  onRegenerate: () => void
+  /** Broken param → ask the agent to regenerate that panel (a real turn). */
+  onRegenerate: (panelId: string) => void
   /** "Remove panel" — the caller persists (controls.remove) and hides it. */
   onRemove: (panelId: string) => void
 }
@@ -66,6 +66,8 @@ interface PendingWrite {
   commit: (v: Val) => Promise<void>
   timer: number | null
   busy: boolean
+  /** Release/Enter asked for this value now — skip the throttle for one flush. */
+  force: boolean
 }
 
 /** '.17, .67, .83, .67' — compact readout (mirrors StylePanel's shortBezier). */
@@ -119,6 +121,9 @@ export default function CustomPanel({
   const rafRef = useRef<number | null>(null)
   /** Pending style reconcile timers — cancelled on selection change. */
   const reconcileRef = useRef(new Set<number>())
+  /** Last resolved literal value seen per param — tells a fresh resolution
+   *  (the value moved without us) from a repeat of one we already had. */
+  const seenRef = useRef(new Map<string, Val | null>())
 
   // Selection identity, not object identity (state pushes re-create objects).
   const elKey = `${element.source ?? ''}|${element.selector}`
@@ -127,6 +132,7 @@ export default function CustomPanel({
   useEffect(() => {
     appliedRef.current = {}
     setAppliedRaw({})
+    seenRef.current.clear()
     setError(null)
     return () => {
       for (const p of pendingRef.current.values())
@@ -139,6 +145,39 @@ export default function CustomPanel({
       reconcileRef.current.clear()
     }
   }, [elKey])
+
+  // An optimistic patch only covers the gap until the write lands and a refetch
+  // confirms it. Once a resolution arrives that either agrees with the patch or
+  // carries genuinely new information (the value moved without us — undo, an
+  // agent edit, a hand edit) and no write for that param is still in flight, the
+  // resolved value is the truth and the patch must go; otherwise a stale patch
+  // would mask every later change until the element is re-selected.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the panels payload — `applied` is read through its ref.
+  useEffect(() => {
+    const next = { ...appliedRef.current }
+    let changed = false
+    for (const panel of panels) {
+      for (const param of panel.params) {
+        const key = `${panel.manifest.id}:${param.id}`
+        const resolved = param.apply.strategy === 'literal' ? param.value : undefined
+        if (resolved === undefined) continue
+        const fresh = seenRef.current.has(key) && seenRef.current.get(key) !== resolved
+        seenRef.current.set(key, resolved)
+        const patch = next[key]
+        if (patch === undefined) continue
+        const p = pendingRef.current.get(key)
+        if (p && (p.busy || p.timer !== null)) continue
+        if (patch === resolved || fresh) {
+          delete next[key]
+          changed = true
+        }
+      }
+    }
+    if (changed) {
+      appliedRef.current = next
+      setAppliedRaw(next)
+    }
+  }, [panels])
 
   // -------------------------------------------------------------------------
   // literal / prop: trailing-throttled write-through (the HMR-cadence tier)
@@ -153,34 +192,49 @@ export default function CustomPanel({
     }
     const v = p.latest
     p.busy = true
+    p.force = false
     try {
       await p.commit(v)
     } finally {
       p.busy = false
     }
-    // The scrub moved on while the write was in flight — chase the tail.
-    if (p.latest !== v) void flush(key)
+    // The scrub moved on while the write was in flight. Re-arm the throttle
+    // rather than recursing straight away: an immediate chase would commit at
+    // IPC speed for as long as the drag lasts, and every one of those writes is
+    // a file write + HMR round trip.
+    if (p.latest !== v) {
+      if (p.force) void flush(key)
+      else arm(key)
+    }
+  }
+
+  /** Start the trailing-edge timer for `key` unless one is already running. */
+  const arm = (key: string): void => {
+    const p = pendingRef.current.get(key)
+    if (!p || p.timer !== null) return
+    p.timer = window.setTimeout(() => {
+      const cur = pendingRef.current.get(key)
+      if (cur) cur.timer = null
+      void flush(key)
+    }, WRITE_THROTTLE_MS)
   }
 
   const queueWrite = (key: string, v: Val, commit: (v: Val) => Promise<void>): void => {
     let p = pendingRef.current.get(key)
     if (!p) {
-      p = { latest: v, commit, timer: null, busy: false }
+      p = { latest: v, commit, timer: null, busy: false, force: false }
       pendingRef.current.set(key, p)
     }
     p.latest = v
     p.commit = commit
-    if (p.timer === null && !p.busy)
-      p.timer = window.setTimeout(() => {
-        const cur = pendingRef.current.get(key)
-        if (cur) cur.timer = null
-        void flush(key)
-      }, WRITE_THROTTLE_MS)
+    if (!p.busy) arm(key)
   }
 
   /** Release/Enter: make `v` the tail and flush it now (the final commit). */
   const flushWrite = (key: string, v: Val, commit: (v: Val) => Promise<void>): void => {
     queueWrite(key, v, commit)
+    const p = pendingRef.current.get(key)
+    if (p) p.force = true
     void flush(key)
   }
 
@@ -340,7 +394,7 @@ export default function CustomPanel({
           key={param.id}
           label={param.label}
           reason={param.reason}
-          onRegenerate={onRegenerate}
+          onRegenerate={() => onRegenerate(panel.manifest.id)}
         />
       )
     const apply = param.apply
@@ -385,8 +439,11 @@ export default function CustomPanel({
           key={param.id}
           label={param.label}
           value={n}
-          min={param.min ?? 0}
-          max={param.max ?? 1000}
+          // Bounds are optional in a manifest. Widen the defaults around the
+          // authored value so an unbounded param whose real value is negative
+          // or large isn't clamped the moment it's scrubbed.
+          min={param.min ?? Math.min(0, n)}
+          max={param.max ?? Math.max(1000, n)}
           step={param.step ?? 1}
           unit={unit}
           onScrub={scrub}

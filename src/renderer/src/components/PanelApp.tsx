@@ -113,8 +113,8 @@ export default function PanelApp(): React.JSX.Element | null {
                   inspection={state.inspection}
                   panels={controls}
                   onSeedPrompt={(text) => window.api.panel.action({ kind: 'seed', text })}
-                  onRegenerate={() =>
-                    window.api.panel.action({ kind: 'controls', hint: 'regenerate' })
+                  onRegenerate={(panelId) =>
+                    window.api.panel.action({ kind: 'controls', hint: 'regenerate', panelId })
                   }
                   onRemove={(panelId) => {
                     void window.api.controls.remove(state.root, panelId)

@@ -479,7 +479,7 @@ export type PanelAction =
   | { kind: 'inspection'; inspection: PropInspection }
   /** Ask the AI to surface a control panel for the selection (Custom Controls,
    *  v10) — App builds the trigger prompt and auto-sends it as a real turn. */
-  | { kind: 'controls'; hint?: string }
+  | { kind: 'controls'; hint?: string; panelId?: string }
 
 export interface PropEdit {
   source: string

@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import { mkdir, readFile, rename, stat, writeFile } from 'fs/promises'
 import { isAbsolute, join, normalize } from 'path'
 import type {
@@ -264,7 +264,15 @@ export function registerControlsIpc(): void {
       resolvePanels(root, Array.isArray(opts?.files) ? opts.files : [], opts?.component)
   )
   ipcMain.handle('controls:list', (_e, root: string) => listPanels(root))
-  ipcMain.handle('controls:remove', (_e, root: string, id: string) => removePanel(root, id))
+  ipcMain.handle('controls:remove', async (_e, root: string, id: string) => {
+    const panels = await removePanel(root, id)
+    // Tell the renderer to re-resolve. Without this the island only hides the
+    // panel locally, so main's cached panel state and the renderer's fetched
+    // list both keep the deleted panel — it would come back on the next island
+    // reload and could still be picked as a Regenerate target.
+    for (const w of BrowserWindow.getAllWindows()) w.webContents.send('controls:updated', { root })
+    return panels
+  })
   ipcMain.handle(
     'controls:apply-literal',
     (_e, root: string, panelId: string, paramId: string, value: unknown) =>

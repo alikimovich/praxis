@@ -304,12 +304,18 @@ export default function App(): React.JSX.Element {
         const session = useSession.getState()
         if (event.type === 'commands') {
           session.setSlashCommands(event.commands)
-        } else if (event.type === 'error' && isAuthError(event.message)) {
-          // The onboarding banner is Claude-specific (setup-token / claude login);
-          // Codex gets its own inline `codex login` hint. Raise whichever matches
-          // the active backend — never the Claude banner for a Codex failure. (v7)
-          if ((session.provider ?? 'claude') === 'claude') session.setAuthNeeded(true)
-          else if (session.provider === 'codex') session.setCodexAuthNeeded(true)
+        } else if (event.type === 'error') {
+          // The worktree merges back on error too ("salvage interrupted edits",
+          // agent.ts), so an errored turn can still have landed instrumented
+          // source + a manifest on the live tree. Re-resolve like `done` does.
+          void fetchControlsRef.current()
+          if (isAuthError(event.message)) {
+            // The onboarding banner is Claude-specific (setup-token / claude login);
+            // Codex gets its own inline `codex login` hint. Raise whichever matches
+            // the active backend — never the Claude banner for a Codex failure. (v7)
+            if ((session.provider ?? 'claude') === 'claude') session.setAuthNeeded(true)
+            else if (session.provider === 'codex') session.setCodexAuthNeeded(true)
+          }
         } else if (event.type === 'delta' || event.type === 'done') {
           // A finished turn may have merged instrumented source + a fresh
           // control-panel manifest back to the live tree — re-resolve the
@@ -1570,12 +1576,16 @@ export default function App(): React.JSX.Element {
           // selection + the chat's backend, and send it as a REAL agent turn
           // (setSubmit auto-sends; it downgrades to a prefill mid-turn).
           if (sel.selected) {
-            // The island's Regenerate button sends the 'regenerate' sentinel:
-            // when a manifest already resolved for this selection (the fetched
-            // list leads with the component-matching panel), embed it + its
-            // broken param ids so the agent corrects it in place (saveManifest
-            // upserts by file+component — never duplicates).
-            const existing = islandControlsRef.current?.[0]
+            // The island's Regenerate button sends the 'regenerate' sentinel
+            // plus the id of the panel whose row was clicked — a selection can
+            // resolve several panels (the two-stamp file match stacks them), so
+            // the id, not list order, decides which manifest is embedded. Its
+            // broken param ids go along so the agent corrects it in place
+            // (saveManifest upserts by file+component — never duplicates).
+            const resolved = islandControlsRef.current
+            const existing = a.panelId
+              ? resolved?.find((p) => p.manifest.id === a.panelId)
+              : resolved?.[0]
             const regen =
               a.hint === 'regenerate' && existing
                 ? {
