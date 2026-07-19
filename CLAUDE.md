@@ -73,6 +73,13 @@ src/
     simulator.ts    iOS Simulator preview (Metro/Expo detect, MJPEG sim bridge)
     props.ts / props-svelte.ts   prop editing engines (React via react-docgen /
                     Svelte 5); they mirror each other's splice/apply contract
+    styles.ts / styles-svelte.ts  CSS editing for the island's Styles tab: one
+                    edit → Tailwind class rewrite, else inline-style splice,
+                    else hand to the agent; tw-styles.ts + inline-style.ts are
+                    the pure mapping/splicing halves
+    control-manifest.ts / control-panels.ts   AI-surfaced control panels:
+                    validate + anchor-lex + render literals (pure) and the
+                    main-owned .dsgn/control-panels.json store + controls:* IPC
     tokens.ts       design-token detection/scaffold   annotations.ts  comments → PR
     git.ts, worktrees.ts, chat-worktrees.ts, chat-isolation.ts
                     git/worktree primitives; worktrees: per-chat isolation + sync/merge/recovery;
@@ -161,8 +168,21 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   `app.commandLine.appendSwitch('remote-allow-origins', 'devtools://devtools')`.
 - **bun blocks postinstall for untrusted deps** — `electron`/`esbuild` are in
   `package.json#trustedDependencies` so their binaries install.
-- **The agent is denied writes under a target repo's `.dsgn/`** (annotations +
-  scaffolded instrumentation live there).
+- **The agent is denied writes under a target repo's `.dsgn/`** (annotations,
+  scaffolded instrumentation, and control-panel manifests live there). The
+  `define_controls` tool exists precisely because of this: the agent hands main
+  a manifest and main is the only writer.
+- **A control-panel manifest stores no values.** Every value is re-resolved from
+  source on lookup (literal → lex the literal after the anchor; prop → the live
+  inspection; style → computed styles), so an edit that moves a constant is
+  harmless and one that renames it just marks the param stale. Anchors must
+  occur exactly once — re-checked at save AND at every apply, so a drifted
+  anchor can never splice the wrong site. Only main renders spliced literals;
+  agent- and renderer-supplied strings are never written verbatim.
+- **A tool callback's `root` is the chat's WORKTREE, not the live tree.**
+  Anything persisting app state must use `SpawnContext.liveRoot` (threaded from
+  every `agent.ts` startSession call site) — `define_controls` validates anchors
+  against the worktree file the agent just wrote, but saves to the live root.
 - **Chats run in per-chat worktrees (dsgn/chat-<id>), auto-merged back to the
   live tree on each turn's done/error.** The preview ALWAYS serves the live
   checkout, never a worktree. Non-repo-root projects (subdirs, non-git) run on
