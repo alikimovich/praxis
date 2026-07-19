@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { PropInspection, SelectedElement } from '../../../shared/api'
+import type { PropInspection, ResolvedControlPanel, SelectedElement } from '../../../shared/api'
 import { usePreviewFreeze } from '../store'
 
 /** Shadow padding inside the island view (kept in sync with PanelApp). */
@@ -19,12 +19,16 @@ export default function PanelHost({
   root,
   element,
   inspection,
-  inspecting
+  inspecting,
+  controls
 }: {
   root: string
   element: SelectedElement
   inspection: PropInspection | null
   inspecting: boolean
+  /** AI-surfaced control panels for the selection (Custom Controls, v10) —
+   *  fetched by App via controls:get; null while unfetched. */
+  controls: ResolvedControlPanel[] | null
 }): null {
   const [size, setSize] = useState({ width: 268 + PAD.left + PAD.right, height: 160 })
   const [maxHeight, setMaxHeight] = useState(480)
@@ -39,10 +43,8 @@ export default function PanelHost({
   )
 
   useEffect(() => {
-    // `controls: null` until the Custom tab lands (phase 8) — App will fetch
-    // matching panels via controls:get and thread them through here.
-    window.api.panel.setState({ root, element, inspection, inspecting, maxHeight, controls: null })
-  }, [root, element, inspection, inspecting, maxHeight])
+    window.api.panel.setState({ root, element, inspection, inspecting, maxHeight, controls })
+  }, [root, element, inspection, inspecting, maxHeight, controls])
 
   // Place at the top right of the preview card body, tracked live.
   useEffect(() => {

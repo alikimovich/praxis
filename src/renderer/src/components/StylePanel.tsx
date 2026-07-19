@@ -1,11 +1,9 @@
+import { ChevronDown, ChevronRight, Play } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { SelectedElement } from '../../../shared/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ChevronDown, ChevronRight, Play } from 'lucide-react'
 import {
   type Bezier,
-  STYLE_PROP_META,
   clampBezier,
   formatBezier,
   formatCssNumber,
@@ -13,9 +11,11 @@ import {
   normalizeMs,
   parseBezier,
   parseCssNumber,
+  STYLE_PROP_META,
   snapBezierPreset
 } from '@/lib/css-values'
-import BezierEditor, { TW_EASE_EQUIV, displayBezierPreset } from './styles/BezierEditor'
+import type { SelectedElement } from '../../../shared/api'
+import BezierEditor, { displayBezierPreset, TW_EASE_EQUIV } from './styles/BezierEditor'
 import ColorControl from './styles/ColorControl'
 import ScrubInput from './styles/ScrubInput'
 
@@ -86,7 +86,10 @@ function parseColorLike(text: string): { r: number; g: number; b: number; a: num
   }
   const m = /^rgba?\(([^)]+)\)$/.exec(t)
   if (!m) return null
-  const parts = m[1].replace('/', ' ').trim().split(/[\s,]+/)
+  const parts = m[1]
+    .replace('/', ' ')
+    .trim()
+    .split(/[\s,]+/)
   if (parts.length !== 3 && parts.length !== 4) return null
   const nums = parts.map(Number)
   if (!nums.every(Number.isFinite)) return null
@@ -107,9 +110,10 @@ function sameBezier(a: Bezier, b: Bezier): boolean {
  * Does a fresh computed value (`a`) equal what we committed (`b`)? Textual
  * equality is not enough: we commit '#ff0000' and read back 'rgb(255, 0, 0)',
  * commit '300ms' and read back '0.3s', commit 'ease-out' and read back its
- * (Tailwind) curve. Normalize per control kind before comparing.
+ * (Tailwind) curve. Normalize per control kind before comparing. Exported for
+ * CustomPanel, whose style-strategy params reuse the same reconcile discipline.
  */
-function sameCssValue(prop: string, a: string, b: string): boolean {
+export function sameCssValue(prop: string, a: string, b: string): boolean {
   if (a === b) return true
   const meta = STYLE_PROP_META[prop]
   if (meta?.control === 'color') {
@@ -190,8 +194,7 @@ export default function StylePanel({ root, element, onSeedPrompt }: Props): Reac
   // reasons that aren't a new selection, e.g. inspection updates).
   const elKey = `${source ?? ''}|${element.selector}`
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: elKey is the
-  // selection identity; element.styles/read intentionally refresh only then.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: elKey is the selection identity; element.styles/read intentionally refresh only then
   useEffect(() => {
     let alive = true
     setLost(false)
@@ -200,7 +203,8 @@ export default function StylePanel({ root, element, onSeedPrompt }: Props): Reac
     setValues({ ...element.styles }) // instant paint from the pick-time snapshot…
     window.api.styles.read(ALL_PROPS).then((res) => {
       if (!alive) return
-      if (res) merge(res) // …then the fresh truth
+      if (res)
+        merge(res) // …then the fresh truth
       else setLost(true)
     })
     return () => {
@@ -295,7 +299,8 @@ export default function StylePanel({ root, element, onSeedPrompt }: Props): Reac
         scheduleReconcile(prop, css)
       } else if (res.needsAgent) {
         onSeedPrompt(
-          res.agentPrompt ?? `In ${source}, set \`${prop}\` to \`${css}\` on the <${element.tag}> element.`
+          res.agentPrompt ??
+            `In ${source}, set \`${prop}\` to \`${css}\` on the <${element.tag}> element.`
         )
         dropPreview(prop)
       } else {

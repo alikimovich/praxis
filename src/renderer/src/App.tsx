@@ -64,11 +64,16 @@ import type {
   Framework,
   PreviewComment,
   PreviewKind,
+  ResolvedControlPanel,
   SessionRecord
 } from '../../shared/api'
 
 const MIN_CHAT_WIDTH = 320
 const MAX_CHAT_WIDTH = 760
+
+/** A `data-dsgn-source` stamp's repo-relative file ("path/File.tsx:12:3" →
+ *  "path/File.tsx") — control-panel manifests are keyed by file, not line. */
+const fileOf = (stamp: string): string => stamp.replace(/:\d+(?::\d+)?$/, '')
 
 type Status =
   | { kind: 'idle' }
@@ -129,6 +134,58 @@ export default function App(): React.JSX.Element {
   const propsIslandOpen = usePropsIsland((s) => s.open)
   const projectRoot = useSession((s) => s.projectRoot)
   const drawerSource = useCodeDrawer((s) => s.source)
+
+  // Custom Controls (v10): the selection's AI-surfaced panels, fetched here
+  // (the island is stateless — PanelHost pushes these inside panel:state).
+  // Re-fetched on selection/component/project change, on controls:updated
+  // (the agent's define_controls tool saved a manifest), and on agent `done`
+  // (a turn's worktree auto-merge may have landed the instrumented source).
+  const [islandControls, setIslandControls] = useState<ResolvedControlPanel[] | null>(null)
+  // Latest fetch wins — a slow response for a previous selection must not
+  // overwrite the current one's panels.
+  const controlsSeqRef = useRef(0)
+  const islandControlsRef = useRef<ResolvedControlPanel[] | null>(null)
+  islandControlsRef.current = islandControls
+  const fetchControls = async (): Promise<void> => {
+    const root = useSession.getState().projectRoot
+    const sel = useSelection.getState()
+    const el = sel.selected
+    const seq = ++controlsSeqRef.current
+    // Two-stamp file match: the element's own source file OR its component
+    // call site's — panels surface whether the user picked the instance or a
+    // plain DOM element inside it.
+    const files = el
+      ? [...new Set([el.source, el.componentSource].filter((s): s is string => !!s).map(fileOf))]
+      : []
+    if (!root || files.length === 0) {
+      setIslandControls(null)
+      return
+    }
+    try {
+      const res = await window.api.controls.get(root, {
+        files,
+        component: sel.inspection?.component
+      })
+      if (seq === controlsSeqRef.current) setIslandControls(res)
+    } catch {
+      if (seq === controlsSeqRef.current) setIslandControls(null)
+    }
+  }
+  // Once-mounted subscriptions (onUpdated, agent onEvent) call through the ref
+  // so they see the current closure — the actionsRef pattern.
+  const fetchControlsRef = useRef(fetchControls)
+  fetchControlsRef.current = fetchControls
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-fetch keys on the selection, the inspected component, and the project — nothing else.
+  useEffect(() => {
+    void fetchControlsRef.current()
+  }, [selected, inspection?.component, projectRoot])
+  useEffect(
+    () =>
+      window.api.controls.onUpdated((root) => {
+        if (root === useSession.getState().projectRoot) void fetchControlsRef.current()
+      }),
+    []
+  )
   const openCount = useWorkspace((s) => s.projects.length)
   const railCollapsed = useWorkspace((s) => s.collapsed)
   const branch = useSession((s) => s.branch)
@@ -254,6 +311,10 @@ export default function App(): React.JSX.Element {
           if ((session.provider ?? 'claude') === 'claude') session.setAuthNeeded(true)
           else if (session.provider === 'codex') session.setCodexAuthNeeded(true)
         } else if (event.type === 'delta' || event.type === 'done') {
+          // A finished turn may have merged instrumented source + a fresh
+          // control-panel manifest back to the live tree — re-resolve the
+          // island's Custom tab against it. (Custom Controls, v10)
+          if (event.type === 'done') void fetchControlsRef.current()
           // A turn that streamed/finished proves we're connected — clear the
           // Claude banner (its backend only emits `done` on success).
           if (session.authNeeded) session.setAuthNeeded(false)
@@ -1509,11 +1570,25 @@ export default function App(): React.JSX.Element {
           // selection + the chat's backend, and send it as a REAL agent turn
           // (setSubmit auto-sends; it downgrades to a prefill mid-turn).
           if (sel.selected) {
+            // The island's Regenerate button sends the 'regenerate' sentinel:
+            // when a manifest already resolved for this selection (the fetched
+            // list leads with the component-matching panel), embed it + its
+            // broken param ids so the agent corrects it in place (saveManifest
+            // upserts by file+component — never duplicates).
+            const existing = islandControlsRef.current?.[0]
+            const regen =
+              a.hint === 'regenerate' && existing
+                ? {
+                    json: JSON.stringify(existing.manifest, null, 2),
+                    brokenIds: existing.params.filter((p) => !p.valid).map((p) => p.id)
+                  }
+                : undefined
             const prompt = controlsPrompt(
               sel.selected,
               sel.inspection,
-              a.hint,
-              useSession.getState().provider
+              regen ? undefined : a.hint,
+              useSession.getState().provider,
+              regen
             )
             useComposer.getState().setSubmit(prompt)
           }
@@ -1856,6 +1931,7 @@ export default function App(): React.JSX.Element {
           element={selected}
           inspection={inspection}
           inspecting={inspecting}
+          controls={islandControls}
         />
       )}
 

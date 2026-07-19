@@ -6,7 +6,10 @@ import type { PropInspection, SelectedElement } from '../../../shared/api'
 import ControlsTrigger from './styles/ControlsTrigger'
 
 const TAB_KEY = 'dsgn.island.tab'
-type IslandTab = 'props' | 'styles'
+type IslandTab = 'props' | 'styles' | 'custom'
+
+const isIslandTab = (t: string | null): t is IslandTab =>
+  t === 'props' || t === 'styles' || t === 'custom'
 
 interface Props {
   element: SelectedElement
@@ -21,6 +24,9 @@ interface Props {
   propsTab: React.ReactNode
   /** Body of the Styles tab (StylePanel). */
   stylesTab: React.ReactNode
+  /** Body of the Custom tab (CustomPanel) — null when the selection has no
+   *  AI-surfaced panels; the third tab only renders when it's present. */
+  customTab?: React.ReactNode | null
   /** Ask the AI to surface a control panel (Custom Controls, v10). */
   onControls: (hint?: string) => void
 }
@@ -43,16 +49,22 @@ export default function IslandCard({
   onClose,
   propsTab,
   stylesTab,
+  customTab,
   onControls
 }: Props): React.JSX.Element {
-  const [tab, setTabRaw] = useState<IslandTab>(() =>
-    localStorage.getItem(TAB_KEY) === 'styles' ? 'styles' : 'props'
-  )
+  const [tab, setTabRaw] = useState<IslandTab>(() => {
+    const stored = localStorage.getItem(TAB_KEY)
+    return isIslandTab(stored) ? stored : 'props'
+  })
   const setTab = (t: string): void => {
-    const next: IslandTab = t === 'styles' ? 'styles' : 'props'
+    const next: IslandTab = isIslandTab(t) ? t : 'props'
     localStorage.setItem(TAB_KEY, next)
     setTabRaw(next)
   }
+  const hasCustom = customTab != null
+  // The persisted tab may be 'custom' from a selection that HAD panels — fall
+  // back to Props (without rewriting the preference) while this one has none.
+  const activeTab = tab === 'custom' && !hasCustom ? 'props' : tab
   const source = inspection?.source ?? element.source ?? ''
   const ident = element.id ? `#${element.id}` : element.classes[0] ? `.${element.classes[0]}` : ''
 
@@ -96,15 +108,22 @@ export default function IslandCard({
           ✕
         </Button>
       </header>
-      <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1 gap-0">
+      <Tabs value={activeTab} onValueChange={setTab} className="min-h-0 flex-1 gap-0">
         <div className="proppanel__tabsrow shrink-0 px-3 pb-1.5">
-          <TabsList className="proppanel__tabs grid h-6 w-full grid-cols-2">
+          <TabsList
+            className={`proppanel__tabs grid h-6 w-full ${hasCustom ? 'grid-cols-3' : 'grid-cols-2'}`}
+          >
             <TabsTrigger value="props" className="proppanel__tab py-0.5 text-[11.5px]">
               Props
             </TabsTrigger>
             <TabsTrigger value="styles" className="proppanel__tab py-0.5 text-[11.5px]">
               Styles
             </TabsTrigger>
+            {hasCustom && (
+              <TabsTrigger value="custom" className="proppanel__tab py-0.5 text-[11.5px]">
+                Custom
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
         <TabsContent value="props" className="flex min-h-0 flex-col">
@@ -113,6 +132,11 @@ export default function IslandCard({
         <TabsContent value="styles" className="flex min-h-0 flex-col">
           {stylesTab}
         </TabsContent>
+        {hasCustom && (
+          <TabsContent value="custom" className="flex min-h-0 flex-col">
+            {customTab}
+          </TabsContent>
+        )}
       </Tabs>
       {/* Footer affordance shared by both tabs: when neither the props schema
           nor the fixed style set exposes what the user wants, ask the AI to
