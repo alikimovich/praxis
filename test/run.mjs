@@ -47,6 +47,10 @@ const UNIT = [
   'chat-worktrees',
   'rules',
   'tw-classes',
+  'tw-styles',
+  'inline-style',
+  'css-values',
+  'control-panels',
   'svelte-instance',
   'docs-links',
   'update',
@@ -80,6 +84,8 @@ const ELECTRON = [
   'spawn-comment',
   'chat-isolation',
   'prop-edit',
+  'style-edit',
+  'custom-controls',
   'prop-edit-svelte',
   'prop-svelte-self',
   'code-peek',
@@ -98,8 +104,8 @@ const ELECTRON = [
   'sim-control',
 ];
 
-// live = the 3 tests present in `verify` but not in `test`.
-const LIVE = ['agent-e2e', 'codex-e2e', 'sim-e2e'];
+// live = the tests present in `verify` but not in `test`.
+const LIVE = ['agent-e2e', 'codex-e2e', 'controls-agent', 'sim-e2e'];
 
 const TIERS = {
   unit: { runner: 'bun', build: false, tests: UNIT },

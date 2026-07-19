@@ -27,15 +27,18 @@ import { recordEdit, undo, redo, canUndo, canRedo } from './edit-history'
 /**
  * Write a source edit and record it for undo/redo (v8 F3b). A no-op (after ===
  * before) reports success without writing. `key` coalesces rapid edits of the same
- * target (e.g. retyping a prop) into one undo step. Shared by the React + Svelte
- * adapters so EVERY praxis source edit is reversible.
+ * target (e.g. retyping a prop) into one undo step; `group` batches distinct-key
+ * edits of one gesture (e.g. the four sides of a linked padding scrub) into one
+ * atomic undo. Shared by the React + Svelte adapters so EVERY praxis source edit
+ * is reversible.
  */
 export async function commitEdit(
   root: string,
   file: string,
   before: string,
   after: string,
-  key: string
+  key: string,
+  group?: string
 ): Promise<PropEditResult> {
   if (after === before) return { applied: true }
   try {
@@ -43,7 +46,7 @@ export async function commitEdit(
   } catch {
     return { applied: false, error: 'Could not write the source file.' }
   }
-  recordEdit(root, file, before, after, key)
+  recordEdit(root, file, before, after, key, group)
   return { applied: true }
 }
 
@@ -167,7 +170,7 @@ async function parseFile(code: string): Promise<BabelNode> {
  * line (a DOM click resolves to the deepest stamped element), falling back to
  * the smallest element that encloses the line.
  */
-async function findElementAtLine(
+export async function findElementAtLine(
   code: string,
   line: number,
   column?: number
@@ -212,7 +215,7 @@ export interface CurrentAttr {
 }
 
 /** Read the current attributes off an opening element (literal values only). */
-function readAttributes(opening: BabelNode): CurrentAttr[] {
+export function readAttributes(opening: BabelNode): CurrentAttr[] {
   const attrs: CurrentAttr[] = []
   for (const attr of opening.attributes ?? []) {
     if (attr.type !== 'JSXAttribute') continue // skip spreads
@@ -813,7 +816,7 @@ function stylePropKey(p: BabelNode): string | null {
 
 /** The literal-string AST node behind a className attr value (`"…"` or `{'…'}`),
  * or null for an expression/dynamic className we must not rewrite. */
-function classNameStringNode(v: BabelNode | null | undefined): BabelNode | null {
+export function classNameStringNode(v: BabelNode | null | undefined): BabelNode | null {
   if (!v) return null
   if (v.type === 'StringLiteral') return v
   if (v.type === 'JSXExpressionContainer') {

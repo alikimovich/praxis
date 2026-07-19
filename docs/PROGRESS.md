@@ -2,6 +2,28 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-19 — Merged origin/candidate (Styles/Custom-controls) into the rename branch
+
+Integrated the 14-commit Styles-panel + Custom-controls feature that landed on
+`origin/candidate` while the dsgn→praxis rename was in flight. 11 conflicts, all
+the same shape (upstream's new feature code vs the rename's naming) — resolved by
+taking upstream's side, then re-running the mechanical `dsgn→praxis` sweep over
+the merged tree (excluding the deliberate legacy shims + PROGRESS history). This
+also caught the `dsgn` references in the newly-added Styles files (they predated
+the rename): `data-praxis-source`, `.praxis/control-panels.json`, `PRAXIS_RULES_VERSION`,
+`praxisRules`, `praxis:preview:*` channels, etc.
+
+Watch-outs handled:
+- `git checkout --theirs` on `api.ts` dropped the WIP conflict-UX API members
+  (`agent.resolveConflict`/`discardConflict`) since it takes the whole file — re-added them.
+- `test/rules.mjs`'s stale-header assertion got over-swept again (it intentionally
+  names the OLD header): reset to guard `dsgn operating rules`, header is `Praxis`.
+- New sidecar `.praxis/control-panels.json` added to `sidecar-migrate.ts`'s move list
+  (same class as annotations/tokens); the agent write-deny already covers it via SIDECAR_RE.
+- `RULES_VERSION` is now 4 (upstream bumped it for `define_controls`).
+
+Typecheck + unit + electron tiers green.
+
 ## 2026-07-18 — Send feedback moved from the entry screen to the sidebar
 
 The empty state's "Send feedback" button is gone (per user call); the rail now
@@ -59,6 +81,73 @@ Made the per-chat isolation "parked" state (a turn whose changes couldn't auto-m
 **Known limits:** if the AI resolution turn leaves markers unresolved (or errors), `afterTurn`'s auto-apply can write them to the live tree — the prompt strongly instructs removing all markers. On reload the card shows without its file list (the snapshot doesn't carry files; resolve still works — main recomputes).
 
 **Tests:** extended `test/chat-worktrees.mjs` with `stageResolve` cases (non-overlapping drift → clean auto-merge + landed on live; overlapping drift → conflict markers carrying both sides). Typecheck + build green.
+## 2026-07-18 — Styles tab (Dialkit-style controls) + AI-surfaced custom controls
+
+The island panel is now tabbed: **Props | Styles | Custom**. Styles gives direct,
+scrub-to-adjust control over the v1 CSS set (padding/margin/gap, colors, radius,
+opacity, the type properties, and transitions incl. a draggable cubic-bezier
+editor). Custom appears when a component has an AI-generated control panel —
+the user asks Praxis to "surface controls" for something the automatic paths
+can't see, and the agent instruments the source and registers a manifest.
+
+**Why a hybrid commit path.** A scrub has to end up in source, and there are
+three honest outcomes: the element uses utility classes → rewrite the class
+(`p-4` → `p-[13px]`, named-scale snap where one exists); it doesn't → splice an
+inline style; the site is dynamic (spread, `style={expr}`, ambiguous class
+family) → hand it to the agent, the same `needsAgent` escape prop editing
+already uses. Everything commits through `commitEdit`, so HMR and undo come
+free, and edit-history's 500ms coalescing means one scrub burst is one Cmd+Z by
+construction rather than by bookkeeping. Live feedback while dragging is CSS
+injected into the preview (`styles:preview`), reverted from a stash bound to the
+element it was taken from; after a commit the panel lifts its own override
+before re-reading, so the reconcile compares against real source output instead
+of reading back its own injection.
+
+**Why manifests store no values.** A control panel is metadata: which parameter,
+how to reach it, what range. Values are re-resolved on every lookup — literals
+by lexing the literal that follows a unique anchor string, props from the live
+inspection, styles from computed styles. Staleness then handles itself: moving a
+constant is invisible, renaming one marks that param stale with a reason and a
+Regenerate button, and no cache can drift from the file. Anchor uniqueness is
+re-checked at save and again at every apply, so a manifest can never splice the
+wrong site; main renders every literal it writes (clamped, quoted, markup
+rejected) because the manifest is agent-authored and therefore untrusted.
+
+**The worktree trap.** `define_controls` runs in the chat's worktree, so the
+naive `saveManifest(root, …)` would have written the manifest somewhere that
+merges back later — or not at all. `SpawnContext.liveRoot` now carries the true
+project root; the callback validates anchors against the worktree file the agent
+just wrote and persists to the live tree. Mid-turn the manifest may reference a
+constant that only exists in the worktree, so it resolves as stale until the
+merge lands and the Custom tab flips live on the turn's `done` (and `error` —
+the worktree merges back there too, to salvage interrupted edits).
+
+**Non-Claude backends** get no custom tools, so the trigger prompt branches: the
+agent exposes typed props with literal defaults and the Props tab picks them up
+on re-inspect. The prompt does the instrumenting either way — steering constants
+into the component's own file, which is also what keeps a literal scrub on a
+fast react-refresh boundary instead of a full page reload.
+
+**Notable calls:** literal params have no live-preview channel (an arbitrary
+constant can drive anything), so they commit at a 250ms trailing cadence and the
+file write through HMR *is* the preview; the transition-property select is a
+native `<select>` because a portal dropdown would clip at the island view's
+edge; ScrubInput uses pointer *lock*, not capture, since capture dies at that
+same edge, and exiting the lock commits rather than reverts.
+
+**Tests:** `tw-styles`, `inline-style`, `css-values`, `control-panels` (unit);
+`style-edit` and `custom-controls` (Electron, driving the real island UI and
+asserting on disk, with island screenshots in `test/artifacts/`);
+`controls-agent` (live tier, self-skipping) runs a real turn and asserts a valid
+manifest lands in the live tree — it passed end to end, which is what proves the
+`liveRoot` path.
+
+**Known limits:** computed px is accepted where source authored rem (named-scale
+snapping recovers it in the Tailwind case); a `cn(...)` element falls to the
+inline path and leaves the old utility in place; no springs/framer-motion, no
+width/height or box-shadow, no responsive/state variants; navigation wipes the
+preload's selection state and the panel asks for a re-pick rather than
+re-resolving.
 
 ## 2026-07-16 — Per-chat worktree isolation with merge-back
 

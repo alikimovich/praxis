@@ -55,6 +55,43 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
       `stageResolve` + `resolveParkedChat`/`discardParkedChat`; extended
       `test/chat-worktrees.mjs`.
 
+## v10 — Styles tab + AI-surfaced control panels (2026-07-18, user-requested) — SHIPPED
+
+- [x] **Dialkit-style Styles tab.** ✅ 2026-07-18 — the island gained a
+      `Props | Styles` switch; scrub-to-adjust controls over the v1 CSS set with
+      live preview injection, committing via Tailwind class rewrite → inline
+      splice → agent fallback through `commitEdit`. `src/main/styles.ts`,
+      `styles-svelte.ts`, `tw-styles.ts`, `inline-style.ts`,
+      `src/renderer/src/lib/css-values.ts`, `components/StylePanel.tsx` +
+      `components/styles/{ScrubInput,ColorControl,BezierEditor}.tsx`.
+      `test/{tw-styles,inline-style,css-values}.mjs`, `test/style-edit.mjs`.
+- [x] **Transitions + cubic-bezier editor.** ✅ 2026-07-18 — duration/delay/
+      property plus a draggable bezier editor with preset snap and replay.
+- [x] **AI-surfaced control panels.** ✅ 2026-07-18 — "Surface controls with AI"
+      runs a real agent turn that instruments the source and calls a new
+      `define_controls` tool; main validates and owns
+      `.praxis/control-panels.json`; the Custom tab renders the manifest with the
+      Styles primitives. `src/main/control-manifest.ts`, `control-panels.ts`,
+      `components/CustomPanel.tsx`, `lib/controls-prompt.ts`.
+      `test/control-panels.mjs` (unit), `test/custom-controls.mjs` (Electron),
+      `test/controls-agent.mjs` (live).
+
+**Follow-ups (not started):**
+
+- [ ] **Springs / framer-motion animation params.** v1 is CSS transitions only;
+      a spring config isn't a single CSS value, so it needs its own control
+      shape and a library-aware apply path.
+- [ ] **More style properties** — width/height, box-shadow, per-corner radius,
+      borders, position/inset; each needs a family mapping + a sane control.
+- [ ] **Responsive / state variants** (`hover:`, `md:`) — the rewrite currently
+      treats variant-prefixed classes as neither candidates nor blockers, so
+      editing them at all is unimplemented, not merely unsupported.
+- [ ] **Auto re-pick after navigation.** A full navigation wipes the preview
+      preload's selection; the panel asks for a manual re-click today.
+- [ ] **`define_controls` for Codex/Gemini.** Those backends get no custom
+      tools, so they fall back to instrument-as-props. A per-backend bridge
+      (or a file-based manifest hand-off main picks up) would close the gap.
+
 ## Health / infra (from the 2026-07-07 review)
 
 Ranked by leverage. Deferred items note *why* they're not auto-completable.

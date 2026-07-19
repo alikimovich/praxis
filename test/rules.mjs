@@ -4,7 +4,7 @@
  *
  * Run with: bun test/rules.mjs
  */
-import { PRAXIS_RULES_VERSION, praxisRules } from '../src/main/rules.ts'
+import { praxisRules, PRAXIS_RULES_VERSION } from '../src/main/rules.ts'
 
 let failed = 0
 const assert = (cond, msg) => {
@@ -17,7 +17,7 @@ const assert = (cond, msg) => {
 const r = praxisRules()
 assert(typeof r === 'string' && r.length > 0, 'rules render to a non-empty string')
 assert(typeof PRAXIS_RULES_VERSION === 'number', 'version is a number')
-assert(PRAXIS_RULES_VERSION === 3, 'version bumped to 3')
+assert(PRAXIS_RULES_VERSION === 4, 'version bumped to 4')
 assert(r.includes(`v${PRAXIS_RULES_VERSION}`), 'rules carry the version marker')
 // v3 naming — the product is Praxis in the rule text now.
 assert(/praxis/i.test(r), 'names the product Praxis')
@@ -32,10 +32,7 @@ assert(/search first|grep/i.test(r), 'R1: search-first guidance')
 assert(/report/i.test(r), 'R1: report-what-changed guidance')
 // R2: browser inspection → agent-browser, never Chrome DevTools unless asked.
 assert(/agent-browser/i.test(r), 'R2: directs the agent to agent-browser')
-assert(
-  /devtools/i.test(r) && /unless the user explicitly asks/i.test(r),
-  'R2: no DevTools unless asked'
-)
+assert(/devtools/i.test(r) && /unless the user explicitly asks/i.test(r), 'R2: no DevTools unless asked')
 // Deterministic (same output every call — safe to inject per turn).
 assert(praxisRules() === r, 'praxisRules is deterministic')
 
@@ -50,6 +47,13 @@ assert(!/preview_screenshot/.test(r), 'default rendering omits preview_screensho
 assert(praxisRules({ previewTools: true }) === withTools, 'previewTools rendering is deterministic')
 // The agent-browser section survives in both renderings.
 assert(/agent-browser/.test(withTools), 'previewTools: still keeps agent-browser guidance')
+// R4 (v10) — custom-controls section rides with the Claude-only in-process tools:
+// define_controls exists only on the praxis SDK server, so backends without
+// previewTools must never be told to call it.
+assert(/define_controls/.test(withTools), 'previewTools: teaches define_controls')
+assert(/const STAGGER_MS = /.test(withTools), 'previewTools: shows the ideal anchor shape')
+assert(/\.praxis\//.test(withTools), 'previewTools: forbids writing under .praxis/')
+assert(!/define_controls/.test(r), 'default rendering omits define_controls')
 
 if (failed) {
   console.error(`RULES FAILED — ${failed} assertion(s)`)

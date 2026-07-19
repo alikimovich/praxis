@@ -353,6 +353,7 @@ async function startSpawn(q: QueuedSpawn): Promise<string | null> {
     const s = await pickProvider(opts).startSession(wt.path, opts, getWindow_, {
       sessionId: wt.id,
       emitKey: q.parentKey,
+      liveRoot: q.root,
       onEvent: (e) => {
         if (e.type === 'done') void finalizeSpawn(wt.id, 'done')
         else if (e.type === 'error') void finalizeSpawn(wt.id, 'error')
@@ -448,6 +449,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
       const cwd = await isolatedCwd(root, key)
       const s = await pickProvider(options).startSession(cwd, options, getWindow, {
         emitKey: key,
+        liveRoot: root,
         onEvent: interactiveEvents(key)
       })
       adoptSession(key, s.record, root)
@@ -561,6 +563,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
         const cwd = await isolatedCwd(root, sessionKey)
         const s = await pickProvider(options).startSession(cwd, options, getWindow, {
           emitKey: sessionKey,
+          liveRoot: root,
           onEvent: interactiveEvents(sessionKey)
         })
         adoptSession(sessionKey, s.record, root)
@@ -601,6 +604,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
         const cwd = await isolatedCwd(root, sessionKey)
         const s = await pickProvider(options).startSession(cwd, options, getWindow, {
           emitKey: sessionKey,
+          liveRoot: root,
           onEvent: interactiveEvents(sessionKey)
         })
         adoptSession(sessionKey, s.record, root)
@@ -646,6 +650,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
         const cwd = await isolatedCwd(root, sessionKey)
         const s = await pickProvider({}).startSession(cwd, {}, getWindow, {
           emitKey: sessionKey,
+          liveRoot: root,
           resumeSessionId: rec.sdkSessionId,
           onEvent: interactiveEvents(sessionKey)
         })

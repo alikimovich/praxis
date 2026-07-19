@@ -17,7 +17,7 @@ const exists = (p: string): Promise<boolean> =>
   )
 
 export async function migrateLegacySidecar(root: string): Promise<void> {
-  for (const f of ['annotations.json', 'tokens.json']) {
+  for (const f of ['annotations.json', 'tokens.json', 'control-panels.json']) {
     const from = join(root, '.dsgn', f)
     const to = join(root, '.praxis', f)
     try {
