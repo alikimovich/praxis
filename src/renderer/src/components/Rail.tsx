@@ -1,9 +1,17 @@
-import { ChevronRight, Folder, FolderOpen, Plus, X } from "lucide-react";
+import {
+  ChevronRight,
+  Folder,
+  FolderOpen,
+  MessageSquare,
+  Plus,
+  X,
+} from "lucide-react";
 import type { SessionRecord } from "../../../shared/api";
 import {
   chatTitle,
   shortAgo,
   useChat,
+  useFeedback,
   useHistory,
   useSpawns,
   useUpdate,
@@ -370,6 +378,16 @@ export default function Rail({
           </button>
         </div>
       )}
+      {/* Pinned last (below any update banner) so it's always in the same spot,
+          and — like rail__update — a sibling of rail__inner, out of its scroll. */}
+      <button
+        className="rail__feedback"
+        onClick={() => useFeedback.getState().setOpen(true)}
+        title="Report a problem or suggest an improvement"
+      >
+        <MessageSquare className="size-4" aria-hidden="true" />
+        <span>Send feedback</span>
+      </button>
     </nav>
   );
 }

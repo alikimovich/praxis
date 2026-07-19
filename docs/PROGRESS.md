@@ -2,6 +2,15 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-18 — Send feedback moved from the entry screen to the sidebar
+
+The empty state's "Send feedback" button is gone (per user call); the rail now
+pins one at its bottom-left (below any update banner, outside `rail__inner`'s
+scroll), opening the same FeedbackDialog. `styles.css` already carried the
+`.rail__feedback` block — this wired up the markup it was written for. The
+feedback-dialog test seeds a fake workspace entry (rail only renders with a
+project open) and clicks the pinned button.
+
 ## 2026-07-17 — Renamed the `dsgn` internals to Praxis (clean break + legacy shims)
 
 Swept the pre-rename `dsgn` name out of the code (~900 occurrences, 111 files):

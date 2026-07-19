@@ -12,7 +12,6 @@ import FeedbackDialog from './components/FeedbackDialog'
 import {
   describeSelectionForPrompt,
   chatAgentSettingsFor,
-  useFeedback,
   isAuthError,
   messagesFromTranscript,
   oneLine,
@@ -1581,12 +1580,6 @@ export default function App(): React.JSX.Element {
                 disabled={status.kind === 'busy'}
               >
                 New project
-              </button>
-              <button
-                className="btn empty__feedback"
-                onClick={() => useFeedback.getState().setOpen(true)}
-              >
-                Send feedback
               </button>
             </div>
           </div>
