@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PanelState } from '../../../shared/api'
 import { SlidersHorizontal } from 'lucide-react'
+import CustomPanel from './CustomPanel'
+import IslandCard from './IslandCard'
 import PropPanel from './PropPanel'
+import StylePanel from './StylePanel'
 
 const COLLAPSED_KEY = 'dsgn.proppanel.collapsed'
 
@@ -15,16 +18,24 @@ const COLLAPSED_KEY = 'dsgn.proppanel.collapsed'
  */
 export default function PanelApp(): React.JSX.Element | null {
   const [state, setState] = useState<PanelState | null>(null)
-  const [collapsed, setCollapsedRaw] = useState(
-    () => localStorage.getItem(COLLAPSED_KEY) === '1'
-  )
+  const [collapsed, setCollapsedRaw] = useState(() => localStorage.getItem(COLLAPSED_KEY) === '1')
   const setCollapsed = (c: boolean): void => {
     localStorage.setItem(COLLAPSED_KEY, c ? '1' : '0')
     setCollapsedRaw(c)
   }
   const ref = useRef<HTMLDivElement>(null)
+  // Removed-panel tombstones: "Remove panel" deletes from the store directly
+  // (like PropPanel calls props IPC), but the pushed state stays stale until
+  // App's next controls re-fetch — filter removed ids locally so the panel
+  // (and the Custom tab, when none remain) disappears immediately. Reset per
+  // selection: a fresh pick re-fetches, so stale tombstones must not outlive it.
+  const [removedPanels, setRemovedPanels] = useState<string[]>([])
 
   useEffect(() => window.api.panel.onState(setState), [])
+
+  const elKey = state ? `${state.element.source ?? ''}|${state.element.selector}` : ''
+  // biome-ignore lint/correctness/useExhaustiveDependencies: elKey is the selection identity — tombstones reset only on a new selection.
+  useEffect(() => setRemovedPanels([]), [elKey])
 
   // Report rendered size (includes the shadow padding) whenever it changes.
   useEffect(() => {
@@ -41,6 +52,7 @@ export default function PanelApp(): React.JSX.Element | null {
   }, [state === null, collapsed])
 
   if (!state) return null
+  const controls = (state.controls ?? []).filter((p) => !removedPanels.includes(p.manifest.id))
   return (
     /* Padding = exactly the card shadow's extent per side (0 8px 24px → up 16,
        sides 24, down 32), so the blur never clips at the view edges and the
@@ -64,18 +76,53 @@ export default function PanelApp(): React.JSX.Element | null {
         </button>
       ) : (
         <div style={{ width: 268 }}>
-          <PropPanel
-            maxHeight={state.maxHeight}
-            root={state.root}
+          <IslandCard
             element={state.element}
             inspection={state.inspection}
-            inspecting={state.inspecting}
-            onChange={(next) => window.api.panel.action({ kind: 'inspection', inspection: next })}
-            onSeedPrompt={(text) => window.api.panel.action({ kind: 'seed', text })}
-            onSetup={() => window.api.panel.action({ kind: 'setup' })}
-            onSelectOwner={() => window.api.panel.action({ kind: 'owner' })}
+            maxHeight={state.maxHeight}
             onCollapse={() => setCollapsed(true)}
             onClose={() => window.api.panel.action({ kind: 'close' })}
+            onControls={(hint) => window.api.panel.action({ kind: 'controls', hint })}
+            propsTab={
+              <PropPanel
+                root={state.root}
+                element={state.element}
+                inspection={state.inspection}
+                inspecting={state.inspecting}
+                onChange={(next) =>
+                  window.api.panel.action({ kind: 'inspection', inspection: next })
+                }
+                onSeedPrompt={(text) => window.api.panel.action({ kind: 'seed', text })}
+                onSetup={() => window.api.panel.action({ kind: 'setup' })}
+                onSelectOwner={() => window.api.panel.action({ kind: 'owner' })}
+                onControls={() => window.api.panel.action({ kind: 'controls' })}
+              />
+            }
+            stylesTab={
+              <StylePanel
+                root={state.root}
+                element={state.element}
+                onSeedPrompt={(text) => window.api.panel.action({ kind: 'seed', text })}
+              />
+            }
+            customTab={
+              controls.length ? (
+                <CustomPanel
+                  root={state.root}
+                  element={state.element}
+                  inspection={state.inspection}
+                  panels={controls}
+                  onSeedPrompt={(text) => window.api.panel.action({ kind: 'seed', text })}
+                  onRegenerate={(panelId) =>
+                    window.api.panel.action({ kind: 'controls', hint: 'regenerate', panelId })
+                  }
+                  onRemove={(panelId) => {
+                    void window.api.controls.remove(state.root, panelId)
+                    setRemovedPanels((prev) => [...prev, panelId])
+                  }}
+                />
+              ) : null
+            }
           />
         </div>
       )}

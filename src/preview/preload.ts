@@ -34,6 +34,13 @@ const TOOLBAR_ACTION = 'dsgn:preview:toolbar-action' // preload → renderer (co
 const CLEAR_SELECTED = 'dsgn:preview:clear-selected' // renderer → preload (pill ×, send)
 const SET_STATUS = 'dsgn:preview:set-status' // main → preload (launch progress pill)
 const TOGGLE_SELECT = 'dsgn:preview:toggle-select' // preload → renderer (S pressed in preview)
+// Styles panel (island → main → this preload): live inline injection while
+// scrubbing, exact revert, fresh computed reads, transition replay.
+const STYLES_PREVIEW = 'styles:preview' // renderer → preload {prop, value}
+const STYLES_CLEAR_PREVIEW = 'styles:clear-preview' // renderer → preload {prop?}
+const STYLES_READ = 'styles:read' // renderer → preload {id, props}
+const STYLES_READ_REPLY = 'styles:read-reply' // preload → renderer {id, values|null}
+const STYLES_REPLAY = 'styles:replay' // renderer → preload {prop, from, to}
 
 type CommentMode = 'comment' | 'annotate' | null
 
@@ -46,18 +53,37 @@ type CommentMode = 'comment' | 'annotate' | null
 const IS_SIM_BRIDGE =
   typeof location !== 'undefined' && /[?&]dsgnSim=1\b/.test(location.search)
 
-/** Computed styles worth surfacing in the inspector (curated, not the whole CSSOM). */
+/** Computed styles worth surfacing in the inspector + Styles panel: the v1
+ *  longhand set (curated, not the whole CSSOM). Longhands, not shorthands, so
+ *  each maps 1:1 to a panel control and to a `styles:preview` override. */
 const TRACKED_STYLES = [
+  // Layout
+  'padding-top',
+  'padding-right',
+  'padding-bottom',
+  'padding-left',
+  'margin-top',
+  'margin-right',
+  'margin-bottom',
+  'margin-left',
+  'gap',
+  // Appearance
   'color',
   'background-color',
+  'border-radius',
+  'opacity',
+  // Typography
   'font-size',
-  'font-family',
   'font-weight',
   'line-height',
-  'padding',
-  'margin',
-  'border-radius',
-  'display'
+  'letter-spacing',
+  'font-family',
+  'display',
+  // Transition
+  'transition-property',
+  'transition-duration',
+  'transition-delay',
+  'transition-timing-function'
 ] as const
 
 let active = false
@@ -632,6 +658,172 @@ function describe(el: Element): SelectedElement {
   }
 }
 
+// ---- Styles panel: live injection, exact revert, reads, transition replay ---
+
+// Original inline values, stashed on FIRST touch per property so clear-preview
+// restores the element exactly ('' = the property was absent → removeProperty).
+// The stash is bound to the element it was taken from (styleStashEl): restores
+// always target THAT element — never whatever happens to be selected when a
+// deferred clear-preview finally arrives — and previewing a different element
+// first reverts the old one and resets the stash, so a stale entry can neither
+// leak an override nor be replayed onto the wrong element.
+// Navigation wipes this whole isolated world, which is the correct lifetime: a
+// fresh page has no overrides left to revert.
+const styleOriginals = new Map<string, string>()
+let styleStashEl: HTMLElement | null = null
+
+/**
+ * The element style ops target: the current selection, re-resolved through its
+ * `data-dsgn-source` stamp when HMR swapped the node out from under us.
+ */
+function resolveStyleTarget(): HTMLElement | null {
+  let el: Element | null = selectedEl
+  if (el && !el.isConnected) {
+    const src = findSource(el) // attributes survive on detached nodes
+    el = null
+    if (src) {
+      try {
+        el = document.querySelector(`[data-dsgn-source="${CSS.escape(src)}"]`)
+      } catch {
+        el = null
+      }
+    }
+    if (el) selectedEl = el // heal the selection for subsequent ops
+  }
+  return el instanceof HTMLElement && el.isConnected ? el : null
+}
+
+/** Point the stash at `el`, reverting any overrides left on a previous target. */
+function retargetStash(el: HTMLElement): void {
+  if (styleStashEl === el) return
+  if (styleStashEl?.isConnected) {
+    for (const [prop, orig] of styleOriginals) {
+      if (orig) styleStashEl.style.setProperty(prop, orig)
+      else styleStashEl.style.removeProperty(prop)
+    }
+  }
+  styleOriginals.clear()
+  styleStashEl = el
+}
+
+function stashOriginal(el: HTMLElement, prop: string): void {
+  retargetStash(el)
+  if (!styleOriginals.has(prop)) styleOriginals.set(prop, el.style.getPropertyValue(prop))
+}
+
+/** Restore one stashed inline value exactly (removeProperty when it was absent)
+ *  onto the element the stash was taken from. A disconnected stash element means
+ *  HMR replaced the node — the override died with it, so only the entry drops. */
+function restoreOriginal(prop: string): void {
+  if (!styleOriginals.has(prop)) return
+  const orig = styleOriginals.get(prop) ?? ''
+  styleOriginals.delete(prop)
+  const el = styleStashEl
+  if (!styleOriginals.size) styleStashEl = null
+  if (!el?.isConnected) return
+  if (orig) el.style.setProperty(prop, orig)
+  else el.style.removeProperty(prop)
+}
+
+/** Live scrub override: stash the original inline value, then inject. */
+function previewStyle(prop: string, value: string): void {
+  const el = resolveStyleTarget()
+  if (!el) return
+  stashOriginal(el, prop)
+  el.style.setProperty(prop, value)
+}
+
+function clearStylePreview(prop?: string): void {
+  if (prop) restoreOriginal(prop)
+  else for (const p of Array.from(styleOriginals.keys())) restoreOriginal(p)
+}
+
+/** Fresh computed values for the panel (pick-time snapshots go stale). */
+function readStyles(id: unknown, props: string[]): void {
+  const el = resolveStyleTarget()
+  if (!el) {
+    ipcRenderer.send(STYLES_READ_REPLY, { id, values: null })
+    return
+  }
+  const cs = getComputedStyle(el)
+  const values: Record<string, string> = {}
+  // Same cap discipline as describe(): the page is only semi-trusted, so bound
+  // every string that crosses the IPC boundary.
+  for (const prop of props.slice(0, 64)) {
+    if (typeof prop !== 'string') continue
+    const p = prop.slice(0, 64)
+    values[p] = cs.getPropertyValue(p).trim().slice(0, 256)
+  }
+  ipcRenderer.send(STYLES_READ_REPLY, { id, values })
+}
+
+// One pending replay at a time (there's only one selection); starting another
+// finalizes the previous immediately so its timer can't restore stale values.
+let replayDone: (() => void) | null = null
+
+/** Worst-case transition time for the element, bounding the replay cleanup. */
+function replayTimeoutMs(cs: CSSStyleDeclaration): number {
+  const maxMs = (list: string): number => {
+    let max = 0
+    for (const part of list.split(',')) {
+      const n = parseFloat(part)
+      if (Number.isFinite(n)) max = Math.max(max, /ms\s*$/.test(part.trim()) ? n : n * 1000)
+    }
+    return max
+  }
+  return Math.min(maxMs(cs.transitionDuration) + maxMs(cs.transitionDelay) + 150, 5000)
+}
+
+/**
+ * Replay a transition: jump to `from` with transitions disabled, force reflow so
+ * that becomes the committed start state, re-enable, then set `to` — the browser
+ * sees a discrete change and runs the transition again. After transitionend (or
+ * a computed-duration timeout) the temporary inline values are reverted.
+ *
+ * Replay keeps its OWN snapshot of the inline values it touches — never the
+ * preview stash: a live scrub override (say `transition-duration: 500ms`
+ * mid-tune) must survive the replay, drive its timing, and still be revertable
+ * by a later clear-preview; completion restores the values that were current
+ * when the replay STARTED, not the pre-scrub originals. Transitions are
+ * disabled via the `transition-property` LONGHAND only: the shorthand
+ * serializes to '' when just some longhands are inline, and setting/removing
+ * it would clobber every transition-* override on the element.
+ */
+function replayStyle(prop: string, from: string, to: string): void {
+  const el = resolveStyleTarget()
+  if (!el) return
+  replayDone?.()
+  const snap = new Map<string, string>()
+  const save = (p: string): void => {
+    if (!snap.has(p)) snap.set(p, el.style.getPropertyValue(p))
+  }
+  const restore = (p: string): void => {
+    const v = snap.get(p) ?? ''
+    if (v) el.style.setProperty(p, v)
+    else el.style.removeProperty(p)
+  }
+  save('transition-property')
+  save(prop)
+  el.style.setProperty('transition-property', 'none')
+  el.style.setProperty(prop, from)
+  void el.offsetWidth // force reflow — commit `from` before transitions return
+  restore('transition-property')
+  el.style.setProperty(prop, to)
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const done = (): void => {
+    if (timer) clearTimeout(timer)
+    el.removeEventListener('transitionend', onEnd)
+    replayDone = null
+    if (el.isConnected) restore(prop)
+  }
+  const onEnd = (e: TransitionEvent): void => {
+    if (e.target === el && e.propertyName === prop) done()
+  }
+  el.addEventListener('transitionend', onEnd)
+  timer = setTimeout(done, replayTimeoutMs(getComputedStyle(el)))
+  replayDone = done
+}
+
 function onMove(e: MouseEvent): void {
   // Self-heal: if the frozen node was swapped out (HMR) without a blur, clear it
   // so a mode isn't stranded anchored to a detached element.
@@ -1175,4 +1367,19 @@ window.addEventListener('load', () => {
     setSelectionHighlight(null)
   })
   ipcRenderer.on(SET_STATUS, (_e, text: string | null) => setStatusPill(text))
+  // Styles panel (relayed from the island by main): payloads originate in our
+  // own renderer but are validated anyway — this file runs inside the preview.
+  ipcRenderer.on(STYLES_PREVIEW, (_e, p: { prop?: unknown; value?: unknown }) => {
+    if (typeof p?.prop === 'string' && typeof p?.value === 'string') previewStyle(p.prop, p.value)
+  })
+  ipcRenderer.on(STYLES_CLEAR_PREVIEW, (_e, p: { prop?: unknown } | undefined) => {
+    clearStylePreview(typeof p?.prop === 'string' ? p.prop : undefined)
+  })
+  ipcRenderer.on(STYLES_READ, (_e, p: { id?: unknown; props?: unknown }) => {
+    readStyles(p?.id, Array.isArray(p?.props) ? (p.props as string[]) : [])
+  })
+  ipcRenderer.on(STYLES_REPLAY, (_e, p: { prop?: unknown; from?: unknown; to?: unknown }) => {
+    if (typeof p?.prop === 'string' && typeof p?.from === 'string' && typeof p?.to === 'string')
+      replayStyle(p.prop, p.from, p.to)
+  })
 }

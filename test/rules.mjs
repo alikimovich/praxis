@@ -17,7 +17,7 @@ const assert = (cond, msg) => {
 const r = dsgnRules()
 assert(typeof r === 'string' && r.length > 0, 'rules render to a non-empty string')
 assert(typeof DSGN_RULES_VERSION === 'number', 'version is a number')
-assert(DSGN_RULES_VERSION === 3, 'version bumped to 3')
+assert(DSGN_RULES_VERSION === 4, 'version bumped to 4')
 assert(r.includes(`v${DSGN_RULES_VERSION}`), 'rules carry the version marker')
 // v3 naming — the product is Praxis in the rule text now.
 assert(/praxis/i.test(r), 'names the product Praxis')
@@ -47,6 +47,13 @@ assert(!/preview_screenshot/.test(r), 'default rendering omits preview_screensho
 assert(dsgnRules({ previewTools: true }) === withTools, 'previewTools rendering is deterministic')
 // The agent-browser section survives in both renderings.
 assert(/agent-browser/.test(withTools), 'previewTools: still keeps agent-browser guidance')
+// R4 (v10) — custom-controls section rides with the Claude-only in-process tools:
+// define_controls exists only on the praxis SDK server, so backends without
+// previewTools must never be told to call it.
+assert(/define_controls/.test(withTools), 'previewTools: teaches define_controls')
+assert(/const STAGGER_MS = /.test(withTools), 'previewTools: shows the ideal anchor shape')
+assert(/\.dsgn\//.test(withTools), 'previewTools: forbids writing under .dsgn/')
+assert(!/define_controls/.test(r), 'default rendering omits define_controls')
 
 if (failed) {
   console.error(`RULES FAILED — ${failed} assertion(s)`)
