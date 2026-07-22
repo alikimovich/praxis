@@ -13,7 +13,7 @@
  *
  * Bump PRAXIS_RULES_VERSION whenever the rule text changes (so logs/tests can pin it).
  */
-export const PRAXIS_RULES_VERSION = 6
+export const PRAXIS_RULES_VERSION = 7
 
 export function praxisRules(opts?: { previewTools?: boolean }): string {
   const lines: string[] = [
@@ -81,7 +81,18 @@ export function praxisRules(opts?: { previewTools?: boolean }): string {
       `not eyeballing or the old 4.5:1 ratio. Pass the real \`fontSizePx\`/\`fontWeight\` (APCA`,
       `readability depends on text size + weight). When a pair fails, the tool returns the`,
       `nearest accessible color with the hue preserved — use that hex so the palette still`,
-      `matches, rather than guessing. See the accessible-colors skill.`
+      `matches, rather than guessing. See the accessible-colors skill.`,
+      ``,
+      `## Design-system calculators (fluid_clamp / color_scale / layered_shadow)`,
+      `For these, call the tool instead of hand-writing values — each is exact math you should`,
+      `not eyeball:`,
+      `- \`fluid_clamp\` — responsive font-size/spacing that scales with the viewport. The clamp()`,
+      `  calc() term is a two-point solve that's easy to get wrong; pass minPx+maxPx (or a scale).`,
+      `- \`color_scale\` — a perceptually-even OKLCH tonal ramp from a seed color (shades/tints, a`,
+      `  brand palette). Hand-picked hex ramps drift in hue; pair steps with \`check_contrast\`.`,
+      `- \`layered_shadow\` — a realistic multi-layer box-shadow from one elevation value. A single`,
+      `  flat box-shadow reads as cheap/AI-generated; use the layered stack.`,
+      `See the fluid-typography, color-scales, and depth-shadows skills.`
     )
   }
 

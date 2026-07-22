@@ -57,6 +57,9 @@ const UNIT = [
   'update',
   'spring',
   'apca',
+  'fluid',
+  'oklch',
+  'shadows',
 ];
 
 // electron = the `node test/NAME.mjs` group AFTER `electron-vite build` in `test`.

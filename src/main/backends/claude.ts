@@ -20,8 +20,11 @@ import { projectKey } from '../../shared/projectKey'
 import { checkContrast, suggestAccessible } from '../apca'
 import { lexLiteral, locateAnchor, validateManifest } from '../control-manifest'
 import { saveManifest } from '../control-panels'
+import { fluidClamp, fluidScale } from '../fluid'
+import { oklchScale } from '../oklch'
 import { capturePreview, getPreviewUrl } from '../preview-state'
 import { praxisRules } from '../rules'
+import { elevationScale, layeredShadow } from '../shadows'
 import { discoverProjectSkills, mergeSlashCommands } from '../skills'
 import {
   analyze,
@@ -70,7 +73,12 @@ const PRAXIS_TOOL_NAMES = new Set([
   'mcp__praxis__spring_to_css',
   // APCA accessible-contrast checker + color suggester. Also pure (reads no repo
   // state, writes nothing) — auto-allowed for the same reason.
-  'mcp__praxis__check_contrast'
+  'mcp__praxis__check_contrast',
+  // Design-system calculators (fluid clamp() sizing, OKLCH color ramps, layered
+  // shadows). All pure math — no state, no disk — so auto-allowed like the rest.
+  'mcp__praxis__fluid_clamp',
+  'mcp__praxis__color_scale',
+  'mcp__praxis__layered_shadow'
 ])
 
 // `define_controls` input — ControlPanelManifest minus `id`/`createdAt` (main
@@ -250,6 +258,119 @@ const checkContrastShape = {
         "new foreground only if the pair fails; 'foreground'/'background' force a suggestion for that color; " +
         "'none' skips it."
     )
+}
+
+// `fluid_clamp` input — a single fluid value (minPx+maxPx) or a whole modular
+// scale. Viewport/root knobs are shared. Pure Utopia math (fluid.ts).
+const fluidClampShape = {
+  minPx: z
+    .number()
+    .positive()
+    .optional()
+    .describe('Size in px at the min viewport (single-value mode). Pair with maxPx.'),
+  maxPx: z
+    .number()
+    .positive()
+    .optional()
+    .describe('Size in px at the max viewport (single-value mode). Pair with minPx.'),
+  scale: z
+    .object({
+      baseMinPx: z.number().positive().describe('Base step size (px) at the min viewport.'),
+      baseMaxPx: z.number().positive().describe('Base step size (px) at the max viewport.'),
+      ratioMin: z
+        .number()
+        .positive()
+        .optional()
+        .describe('Modular ratio at the min viewport (default 1.2 — tighter on mobile).'),
+      ratioMax: z
+        .number()
+        .positive()
+        .optional()
+        .describe('Modular ratio at the max viewport (default 1.25).'),
+      stepsUp: z.number().int().optional().describe('Steps above base (default 5).'),
+      stepsDown: z.number().int().optional().describe('Steps below base (default 2).')
+    })
+    .optional()
+    .describe('Generate a whole fluid type/space scale instead of a single value.'),
+  minViewportPx: z
+    .number()
+    .positive()
+    .optional()
+    .describe('Viewport where the min size applies (default 320).'),
+  maxViewportPx: z
+    .number()
+    .positive()
+    .optional()
+    .describe('Viewport where the max size applies (default 1280).'),
+  rootPx: z
+    .number()
+    .positive()
+    .optional()
+    .describe('Root font size for rem conversion (default 16).'),
+  format: z
+    .enum(['value', 'css-vars'])
+    .optional()
+    .describe(
+      "Output shape. 'value' (default) = raw clamp() strings; 'css-vars' = a --step-* custom-property block."
+    )
+}
+
+// `color_scale` input — an OKLCH perceptual tonal ramp from a seed color (oklch.ts).
+const colorScaleShape = {
+  seed: z.string().describe('Seed color (hex) to build the ramp around.'),
+  steps: z
+    .number()
+    .int()
+    .optional()
+    .describe('Number of steps (default 12; step 1 = lightest, N = darkest).'),
+  hueShift: z.number().optional().describe('Degrees to rotate the hue from the seed (default 0).'),
+  lightnessRange: z
+    .tuple([z.number(), z.number()])
+    .optional()
+    .describe('[darkestL, lightestL] in OKLCH lightness 0..1 (default [0.18, 0.98]).'),
+  format: z
+    .enum(['hex-list', 'css-vars', 'tailwind'])
+    .optional()
+    .describe("Output shape (default 'hex-list')."),
+  name: z
+    .string()
+    .optional()
+    .describe("Token name prefix for css-vars/tailwind output (default 'color').")
+}
+
+// `layered_shadow` input — one elevation shadow or a whole elevation scale (shadows.ts).
+const layeredShadowShape = {
+  elevation: z
+    .number()
+    .optional()
+    .describe('Logical lift (0 = flush, larger = more raised, ~0..24). Single-shadow mode.'),
+  scale: z
+    .boolean()
+    .optional()
+    .describe('Generate a whole elevation scale instead of a single shadow.'),
+  levels: z
+    .number()
+    .int()
+    .optional()
+    .describe('Number of elevation tokens when scale=true (default 5).'),
+  layers: z.number().int().optional().describe('Stacked box-shadow layers per shadow (default 5).'),
+  lightAngleDeg: z
+    .number()
+    .optional()
+    .describe('Direction light comes from (default 180 = top → shadow cast downward).'),
+  colorRgb: z
+    .tuple([z.number(), z.number(), z.number()])
+    .optional()
+    .describe('Shadow color as RGB 0-255 (default [0,0,0]).'),
+  baseAlpha: z
+    .number()
+    .positive()
+    .optional()
+    .describe('Opacity of the closest (tightest) layer (default 0.12).'),
+  format: z
+    .enum(['value', 'css-vars'])
+    .optional()
+    .describe("Output shape. 'value' (default) or a --shadow-* custom-property block.")
 }
 
 /** Panel id assigned by main: component slug + a short hash of file+component,
@@ -432,12 +553,11 @@ async function startSession(
   // of the user's live preview (the native WebContentsView that index.ts owns,
   // reached via the preview-state registry) which OBSERVE what the user sees
   // (agent-browser is the agent's own headless copy for interaction),
-  // define_controls (v10 Custom Controls), spring_to_css (pure spring→CSS
-  // calculator), and check_contrast (pure APCA contrast checker + color
-  // suggester). All are auto-allowed (see allowedTools + canUseTool) so they
-  // never prompt — the observers, spring_to_css and check_contrast are
-  // side-effect-free, and define_controls persists only through main's
-  // validated saveManifest path.
+  // define_controls (v10 Custom Controls), and a family of pure design-system
+  // calculators — spring_to_css, check_contrast, fluid_clamp, color_scale,
+  // layered_shadow. All are auto-allowed (see allowedTools + canUseTool) so they
+  // never prompt — the observers and every calculator are side-effect-free, and
+  // define_controls persists only through main's validated saveManifest path.
   const previewServer = createSdkMcpServer({
     name: 'praxis',
     version: '1.0.0',
@@ -679,6 +799,162 @@ async function startSession(
             }
           }
         }
+      ),
+      // Fluid clamp() sizing. The middle `calc()` term of a fluid clamp() is a
+      // two-point solve in mixed rem/vw units that LLMs get subtly wrong (the
+      // size ends up off at real viewports). This computes it exactly and is
+      // verified to hit both endpoints. Pure math — no state, auto-allowed.
+      tool(
+        'fluid_clamp',
+        'Compute a CSS `clamp()` for fluid (responsive) type or spacing that scales smoothly between a ' +
+          'min size at a small viewport and a max size at a large one. Use whenever you set a responsive ' +
+          'font-size or spacing that should grow with the screen — do NOT hand-write the clamp() calc() ' +
+          'term, it is easy to get wrong. Give minPx+maxPx for one value, or `scale` for a whole modular ' +
+          'type/space scale. Output is rem-based so it respects user zoom.',
+        fluidClampShape,
+        async (args) => {
+          try {
+            const vp = {
+              minViewportPx: args.minViewportPx,
+              maxViewportPx: args.maxViewportPx,
+              rootPx: args.rootPx
+            }
+            if (args.scale) {
+              const steps = fluidScale({ ...args.scale, ...vp })
+              const body =
+                args.format === 'css-vars'
+                  ? steps.map((s) => `  --step-${s.step}: ${s.css};`).join('\n')
+                  : steps.map((s) => `step ${s.step}: ${s.css}`).join('\n')
+              const out = args.format === 'css-vars' ? `:root {\n${body}\n}` : body
+              return { content: [{ type: 'text' as const, text: out }] }
+            }
+            if (args.minPx === undefined || args.maxPx === undefined) {
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: 'fluid_clamp failed: provide minPx and maxPx (single value), or a `scale` object.'
+                  }
+                ],
+                isError: true
+              }
+            }
+            const r = fluidClamp({ minPx: args.minPx, maxPx: args.maxPx, ...vp })
+            const css = args.format === 'css-vars' ? `--fluid: ${r.css};` : r.css
+            const note = r.isStatic
+              ? 'min and max are equal — emitted a static rem value.'
+              : `verified: ${r.checkAtMinPx}px at ${args.minViewportPx ?? 320}px viewport, ${r.checkAtMaxPx}px at ${args.maxViewportPx ?? 1280}px.${r.warning ? ` Note: ${r.warning}` : ''}`
+            return { content: [{ type: 'text' as const, text: `${css}\n\n/* ${note} */` }] }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            return {
+              content: [{ type: 'text' as const, text: `fluid_clamp failed: ${msg}` }],
+              isError: true
+            }
+          }
+        }
+      ),
+      // OKLCH perceptual tonal ramp. Hand-picked hex ramps drift in hue and have
+      // uneven perceptual lightness steps; OKLCH↔sRGB is a nonlinear transform
+      // with an iterative gamut-map an LLM can't do in its head. Pure, auto-allowed.
+      tool(
+        'color_scale',
+        'Generate a perceptually-even OKLCH tonal color ramp (Radix/Material-style 1..N scale) from a ' +
+          'single seed color, each step gamut-mapped to valid sRGB. Use when building a color system, ' +
+          'shades/tints of a brand color, or a token palette — do NOT hand-pick hex shades (they drift ' +
+          'in hue and step unevenly). Pair the resulting steps with check_contrast to pick accessible ' +
+          'text/background pairs.',
+        colorScaleShape,
+        async (args) => {
+          try {
+            const steps = oklchScale({
+              seed: args.seed,
+              steps: args.steps,
+              hueShift: args.hueShift,
+              lightnessRange: args.lightnessRange
+            })
+            const name = args.name ?? 'color'
+            let out: string
+            switch (args.format) {
+              case 'css-vars':
+                out = `:root {\n${steps.map((s) => `  --${name}-${s.index}: ${s.hex};`).join('\n')}\n}`
+                break
+              case 'tailwind':
+                out = `${name}: {\n${steps.map((s) => `  ${s.index * 50}: '${s.hex}',`).join('\n')}\n}`
+                break
+              default:
+                out = steps
+                  .map(
+                    (s) =>
+                      `${s.index}: ${s.hex}  (oklch ${s.oklch.l.toFixed(3)} ${s.oklch.c.toFixed(3)} ${s.oklch.h.toFixed(1)})`
+                  )
+                  .join('\n')
+            }
+            return { content: [{ type: 'text' as const, text: out }] }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            return {
+              content: [{ type: 'text' as const, text: `color_scale failed: ${msg}` }],
+              isError: true
+            }
+          }
+        }
+      ),
+      // Layered box-shadow. A realistic cast shadow is 5-6 correlated layers with
+      // a shared light angle; LLMs emit one flat `0 4px 6px rgba(...)`. This
+      // derives the whole stack from one elevation number. Pure, auto-allowed.
+      tool(
+        'layered_shadow',
+        'Generate a realistic multi-layer CSS `box-shadow` (or a whole elevation scale) from one elevation ' +
+          'value — several stacked layers with a shared light angle, the way real depth looks. Use whenever ' +
+          'you add a shadow/elevation to a card, popover, button, etc. — do NOT hand-write a single flat ' +
+          'box-shadow; it looks cheap. Set `scale: true` for a coherent sm..2xl token set.',
+        layeredShadowShape,
+        async (args) => {
+          try {
+            const common = {
+              layers: args.layers,
+              lightAngleDeg: args.lightAngleDeg,
+              colorRgb: args.colorRgb,
+              baseAlpha: args.baseAlpha
+            }
+            if (args.scale) {
+              const set = elevationScale({ levels: args.levels, ...common })
+              const out =
+                args.format === 'css-vars'
+                  ? `:root {\n${set.map((e) => `  --shadow-${e.label}: ${e.css};`).join('\n')}\n}`
+                  : set.map((e) => `${e.label} (level ${e.level}): ${e.css}`).join('\n\n')
+              return { content: [{ type: 'text' as const, text: out }] }
+            }
+            if (args.elevation === undefined) {
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: 'layered_shadow failed: provide `elevation`, or set `scale: true`.'
+                  }
+                ],
+                isError: true
+              }
+            }
+            const r = layeredShadow({ elevation: args.elevation, ...common })
+            const out = args.format === 'css-vars' ? `--shadow: ${r.css};` : r.css
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: `${out}\n\n/* ${r.layers.length} layers, shared light angle */`
+                }
+              ]
+            }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            return {
+              content: [{ type: 'text' as const, text: `layered_shadow failed: ${msg}` }],
+              isError: true
+            }
+          }
+        }
       )
     ]
   })
@@ -696,8 +972,8 @@ async function startSession(
         preset: 'claude_code',
         append: praxisRules({ previewTools: true })
       },
-      // The praxis MCP server (preview_location / preview_screenshot /
-      // define_controls / spring_to_css / check_contrast). Its tools are auto-allowed here so they never surface
+      // The praxis MCP server (preview_location / preview_screenshot / define_controls /
+      // spring_to_css / check_contrast / fluid_clamp / color_scale / layered_shadow). Its tools are auto-allowed here so they never surface
       // a permission card (canUseTool also short-circuits them, belt-and-
       // suspenders) — main validates everything define_controls persists.
       mcpServers: { praxis: previewServer },

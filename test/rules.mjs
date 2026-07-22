@@ -17,7 +17,7 @@ const assert = (cond, msg) => {
 const r = praxisRules()
 assert(typeof r === 'string' && r.length > 0, 'rules render to a non-empty string')
 assert(typeof PRAXIS_RULES_VERSION === 'number', 'version is a number')
-assert(PRAXIS_RULES_VERSION === 6, 'version bumped to 6')
+assert(PRAXIS_RULES_VERSION === 7, 'version bumped to 7')
 assert(r.includes(`v${PRAXIS_RULES_VERSION}`), 'rules carry the version marker')
 // v3 naming — the product is Praxis in the rule text now.
 assert(/praxis/i.test(r), 'names the product Praxis')
@@ -62,6 +62,11 @@ assert(!/spring_to_css/.test(r), 'default rendering omits spring_to_css')
 assert(/check_contrast/.test(withTools), 'previewTools: teaches check_contrast')
 assert(/APCA/.test(withTools), 'previewTools: mentions APCA')
 assert(!/check_contrast/.test(r), 'default rendering omits check_contrast')
+// R7 (design-system calculators) — fluid/color/shadow tools ride with previewTools too.
+assert(/fluid_clamp/.test(withTools), 'previewTools: teaches fluid_clamp')
+assert(/color_scale/.test(withTools), 'previewTools: teaches color_scale')
+assert(/layered_shadow/.test(withTools), 'previewTools: teaches layered_shadow')
+assert(!/fluid_clamp/.test(r), 'default rendering omits fluid_clamp')
 
 if (failed) {
   console.error(`RULES FAILED — ${failed} assertion(s)`)

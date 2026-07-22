@@ -104,6 +104,9 @@
     "test:svelte-instance": "bun test/svelte-instance.mjs",
     "test:spring": "bun test/spring.mjs",
     "test:apca": "bun test/apca.mjs",
+    "test:fluid": "bun test/fluid.mjs",
+    "test:oklch": "bun test/oklch.mjs",
+    "test:shadows": "bun test/shadows.mjs",
     "test:restore": "electron-vite build && node test/restore-reload.mjs"
   },
   "dependencies": {

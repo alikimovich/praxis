@@ -94,6 +94,9 @@ src/
     apca.ts         APCA (Lc) contrast checker + accessible-color suggester
                     (adapted from ~/dev/apca-cli; apca-w3 + colorparsley loaded via
                     dynamic import — ESM-only); powers the check_contrast agent tool
+    fluid.ts / oklch.ts / shadows.ts   pure design-system calculators powering the
+                    fluid_clamp (Utopia clamp() math), color_scale (OKLCH tonal ramp
+                    + gamut map) and layered_shadow (multi-layer box-shadow) agent tools
     git.ts, worktrees.ts, chat-worktrees.ts, chat-isolation.ts
                     git/worktree primitives; worktrees: per-chat isolation + sync/merge/recovery;
                     chat-worktrees: turn-scoped ops (sync, commit, apply); chat-isolation: lifecycle
