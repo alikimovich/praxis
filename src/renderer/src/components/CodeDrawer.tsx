@@ -7,15 +7,7 @@ import { Decoration, type DecorationSet, EditorView, keymap } from '@codemirror/
 import { tags as t } from '@lezer/highlight'
 import { svelte } from '@replit/codemirror-lang-svelte'
 import { basicSetup } from 'codemirror'
-import {
-  ChevronLeft,
-  ChevronRight,
-  Maximize2,
-  Minimize2,
-  Save,
-  SquareArrowOutUpRight,
-  X
-} from 'lucide-react'
+import { ChevronLeft, ChevronRight, Save, SquareArrowOutUpRight, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { SourceView } from '../../../shared/api'
@@ -26,7 +18,7 @@ import FileTreePanel from './FileTreePanel'
 const DRAWER_H = 300
 /** Smallest the drawer can be dragged down to (still shows a couple of lines + chrome). */
 const MIN_DRAWER_H = 120
-/** Slice of preview kept visible when the drawer is expanded (so it isn't hidden). */
+/** Slice of preview kept visible when the drawer is dragged tall (so it isn't hidden). */
 const MIN_PREVIEW = 160
 /** Hard ceiling on the drawer: it may never grow past this share of the window height. */
 const MAX_VIEWPORT_FRACTION = 0.8
@@ -150,8 +142,8 @@ function stampDeco(doc: EditorState['doc'], start: number, end: number): Decorat
  * drawer fills the freed strip). The whole file is loaded, scrolled to the stamped
  * element with its line span highlighted; Cmd+S saves through source.write →
  * commitEdit, so undo/redo, on-disk conflict detection, and HMR all come for free.
- * An expand toggle grows the drawer (leaving a MIN_PREVIEW strip of live preview),
- * and "open in editor" jumps to the file in the user's own editor.
+ * Drag the top edge to resize (up to a MIN_PREVIEW strip of live preview), and
+ * "open in editor" jumps to the file in the user's own editor.
  */
 export default function CodeDrawer({
   root,
@@ -166,8 +158,8 @@ export default function CodeDrawer({
   variant?: 'drawer' | 'window'
 }): React.JSX.Element {
   // In 'window' mode the editor owns a whole native window: it fills the viewport,
-  // reserves no preview inset, and drops the drawer-only chrome (resize handle,
-  // expand toggle). The native title bar handles resizing and dragging.
+  // reserves no preview inset, and drops the drawer-only resize handle. The native
+  // title bar handles resizing and dragging.
   const isWindow = variant === 'window'
   const rootRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<HTMLDivElement>(null)
@@ -182,7 +174,6 @@ export default function CodeDrawer({
   const [status, setStatus] = useState<'idle' | 'saving' | 'conflict' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
-  const [expanded, setExpanded] = useState(false)
   // Pop-out only: the file-tree sidebar width, drag-adjustable and persisted.
   const [treeWidth, setTreeWidth] = useState(() => {
     if (typeof window === 'undefined') return TREE_W_DEFAULT
@@ -236,15 +227,11 @@ export default function CodeDrawer({
     )
   )
   const height =
-    dragHeight != null
-      ? clampHeight(dragHeight, maxHeight)
-      : expanded
-        ? maxHeight
-        : Math.min(DRAWER_H, maxHeight)
+    dragHeight != null ? clampHeight(dragHeight, maxHeight) : Math.min(DRAWER_H, maxHeight)
 
   // Reserve the bottom strip of the native preview for as long as the drawer is
-  // open, tracking the current (expanded/collapsed) height. A pop-out window owns
-  // its own native surface, so it reserves nothing.
+  // open, tracking its current (drag-adjusted) height. A pop-out window owns its
+  // own native surface, so it reserves nothing.
   useEffect(() => {
     if (isWindow) return undefined
     usePanelInset.getState().setBottom(height)
@@ -473,7 +460,6 @@ export default function CodeDrawer({
     e.preventDefault()
     const startY = e.clientY
     const startH = height
-    setExpanded(false)
     const onMove = (ev: PointerEvent): void => setDragHeight(startH + (startY - ev.clientY))
     const onUp = (): void => {
       window.removeEventListener('pointermove', onMove)
@@ -488,7 +474,6 @@ export default function CodeDrawer({
   }
   // Keyboard resize for the handle (Up/Down grow/shrink; browser convention).
   const nudge = (delta: number): void => {
-    setExpanded(false)
     setDragHeight(clampHeight((dragHeight ?? height) + delta, maxHeight))
   }
 
@@ -661,29 +646,16 @@ export default function CodeDrawer({
             {status === 'saving' ? 'Saving…' : 'Save'}
           </Button>
           {!isWindow && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="codedrawer__popout size-6"
-                onClick={popOut}
-                aria-label="Open code editor in a separate window"
-                title="Pop out into its own window"
-              >
-                <SquareArrowOutUpRight className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="codedrawer__expand size-6"
-                onClick={() => (setDragHeight(null), setExpanded((e) => !e))}
-                aria-label={expanded ? 'Collapse code editor' : 'Expand code editor'}
-                aria-pressed={expanded}
-                title={expanded ? 'Collapse' : 'Expand'}
-              >
-                {expanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
-              </Button>
-            </>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="codedrawer__popout size-6"
+              onClick={popOut}
+              aria-label="Open code editor in a separate window"
+              title="Pop out into its own window"
+            >
+              <SquareArrowOutUpRight className="size-3.5" />
+            </Button>
           )}
           {/* Pop-out window closes via its native traffic lights, so only the
             docked drawer needs an explicit close button. */}
