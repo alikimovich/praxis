@@ -31,9 +31,20 @@ const MIN_PREVIEW = 160
 /** Hard ceiling on the drawer: it may never grow past this share of the window height. */
 const MAX_VIEWPORT_FRACTION = 0.8
 
+/** Pop-out file-tree sidebar: default/min/max width (drag its right edge) + persistence key. */
+const TREE_W_DEFAULT = 224
+const TREE_W_MIN = 160
+const TREE_W_MAX = 520
+const TREE_W_KEY = 'praxis.editorTreeWidth'
+
 /** Clamp the drawer height to [MIN_DRAWER_H, cap]. */
 function clampHeight(h: number, cap: number): number {
   return Math.max(MIN_DRAWER_H, Math.min(h, cap))
+}
+
+/** Clamp the sidebar width to [TREE_W_MIN, TREE_W_MAX]. */
+function clampTreeW(w: number): number {
+  return Math.max(TREE_W_MIN, Math.min(w, TREE_W_MAX))
 }
 
 /** CodeMirror language extension for a file, by extension (empty = plain text). */
@@ -172,6 +183,12 @@ export default function CodeDrawer({
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
+  // Pop-out only: the file-tree sidebar width, drag-adjustable and persisted.
+  const [treeWidth, setTreeWidth] = useState(() => {
+    if (typeof window === 'undefined') return TREE_W_DEFAULT
+    const saved = Number(window.localStorage.getItem(TREE_W_KEY))
+    return Number.isFinite(saved) && saved > 0 ? clampTreeW(saved) : TREE_W_DEFAULT
+  })
   // Explicit height set by dragging the top edge. null = follow expand/collapse.
   // Stored unclamped; the render-time clamp keeps it inside the live bounds so a
   // window/container resize can't strand it out of range.
@@ -475,6 +492,38 @@ export default function CodeDrawer({
     setDragHeight(clampHeight((dragHeight ?? height) + delta, maxHeight))
   }
 
+  // Pop-out: drag the divider to resize the file tree. Width is captured at drag
+  // start, updated by the pointer's horizontal delta, and persisted on release.
+  const startTreeDrag = (e: React.PointerEvent): void => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = treeWidth
+    let last = startW
+    const onMove = (ev: PointerEvent): void => {
+      last = clampTreeW(startW + (ev.clientX - startX))
+      setTreeWidth(last)
+    }
+    const onUp = (): void => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      window.localStorage.setItem(TREE_W_KEY, String(last))
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+  // Keyboard resize for the tree divider (Left/Right shrink/grow); persist after.
+  const nudgeTree = (delta: number): void => {
+    setTreeWidth((w) => {
+      const next = clampTreeW(w + delta)
+      window.localStorage.setItem(TREE_W_KEY, String(next))
+      return next
+    })
+  }
+
   const isMac = typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac')
   return (
     <div
@@ -506,15 +555,40 @@ export default function CodeDrawer({
           over its top-left, so a draggable spacer clears them (the header no
           longer needs to reserve room for them). */}
       {isWindow && (
-        <aside className="codedrawer__tree flex w-56 shrink-0 flex-col border-r bg-background">
-          {isMac && (
-            <div
-              className="h-9 shrink-0"
-              style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-            />
-          )}
-          <FileTreePanel root={root} />
-        </aside>
+        <>
+          <aside
+            className="codedrawer__tree flex shrink-0 flex-col bg-background"
+            style={{ width: treeWidth }}
+          >
+            {isMac && (
+              <div
+                className="h-9 shrink-0"
+                style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+              />
+            )}
+            <FileTreePanel root={root} />
+          </aside>
+          {/* Drag the divider to resize the tree; the 1px line is the seam and the
+              wider hit area (with hover tint) makes it easy to grab. */}
+          <div
+            className="codedrawer__treeresize group relative w-1 shrink-0 cursor-col-resize border-r"
+            onPointerDown={startTreeDrag}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowLeft') e.preventDefault(), nudgeTree(-24)
+              else if (e.key === 'ArrowRight') e.preventDefault(), nudgeTree(24)
+            }}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize file tree"
+            aria-valuenow={Math.round(treeWidth)}
+            aria-valuemin={TREE_W_MIN}
+            aria-valuemax={TREE_W_MAX}
+            tabIndex={0}
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
+            <span className="absolute inset-y-0 -left-1 -right-1 group-hover:bg-accent/40" />
+          </div>
+        </>
       )}
       <div className="codedrawer__main flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="codedrawer__head flex items-center gap-2 border-b py-1.5 pl-3 pr-3">
