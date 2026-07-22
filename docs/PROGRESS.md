@@ -2,6 +2,30 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-22 — `praxis --update` no longer aborts on install-generated lockfile drift
+
+`praxis --update` was failing at its first step with `git pull --ff-only`:
+> error: Your local changes to the following files would be overwritten by merge: bun.lock
+
+Root cause: `bun install` (run by the updater itself, and by every `dev`/`build`)
+rewrites the tracked `bun.lock` as a side effect, so a checkout that's been built
+once always carries a dirty, machine-authored lockfile. `--ff-only` refuses to
+run over it. This bites every user on their second update.
+
+Fix (`bin/praxis.mjs`): before pulling, discard dirty tracked lockfiles back to
+HEAD — safe because the very next step (`install`) regenerates the lockfile
+against the pulled `package.json`. Only the machine-generated lockfiles are
+touched (`bun.lock`/`bun.lockb`/`package-lock.json`/`npm-shrinkwrap.json`/
+`yarn.lock`/`pnpm-lock.yaml`); real source edits still hit the existing
+"commit or stash" error. The decision is a pure exported helper
+`lockfilesToRestore(porcelain)`, unit-tested in `test/praxis-cli.mjs` (added to
+the `unit` tier + a `test:praxis-cli` alias). To make the module importable by
+the test, the bottom-of-file `main()` call is now guarded by `invokedAsScript()`
+(realpath-compares `argv[1]` to the module, so the PATH symlink install.sh
+creates still runs the CLI). Verified end-to-end against a temp repo: the
+original failure reproduces, and after the restore the fast-forward pulls both
+upstream's `bun.lock` and a new file cleanly. Unit tier 28/28 green.
+
 ## 2026-07-19 — Merged origin/candidate (Styles/Custom-controls) into the rename branch
 
 Integrated the 14-commit Styles-panel + Custom-controls feature that landed on
