@@ -102,6 +102,8 @@
     "test:agenthistory": "electron-vite build && node test/agent-history.mjs",
     "test:historyui": "electron-vite build && node test/history-ui.mjs",
     "test:svelte-instance": "bun test/svelte-instance.mjs",
+    "test:spring": "bun test/spring.mjs",
+    "test:apca": "bun test/apca.mjs",
     "test:restore": "electron-vite build && node test/restore-reload.mjs"
   },
   "dependencies": {
@@ -114,10 +116,12 @@
     "@pierre/trees": "^1.0.0-beta.5",
     "@replit/codemirror-lang-svelte": "^6.0.0",
     "@tailwindcss/vite": "^4.3.1",
+    "apca-w3": "^0.1.9",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "codemirror": "^6.0.2",
+    "colorparsley": "^0.1.8",
     "highlight.js": "^11.11.1",
     "lucide-react": "^1.21.0",
     "radix-ui": "^1.6.0",

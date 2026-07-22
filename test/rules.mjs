@@ -17,7 +17,7 @@ const assert = (cond, msg) => {
 const r = praxisRules()
 assert(typeof r === 'string' && r.length > 0, 'rules render to a non-empty string')
 assert(typeof PRAXIS_RULES_VERSION === 'number', 'version is a number')
-assert(PRAXIS_RULES_VERSION === 4, 'version bumped to 4')
+assert(PRAXIS_RULES_VERSION === 6, 'version bumped to 6')
 assert(r.includes(`v${PRAXIS_RULES_VERSION}`), 'rules carry the version marker')
 // v3 naming — the product is Praxis in the rule text now.
 assert(/praxis/i.test(r), 'names the product Praxis')
@@ -54,6 +54,14 @@ assert(/define_controls/.test(withTools), 'previewTools: teaches define_controls
 assert(/const STAGGER_MS = /.test(withTools), 'previewTools: shows the ideal anchor shape')
 assert(/\.praxis\//.test(withTools), 'previewTools: forbids writing under .praxis/')
 assert(!/define_controls/.test(r), 'default rendering omits define_controls')
+// R5 (spring) — spring_to_css rides with the Claude-only in-process tools too.
+assert(/spring_to_css/.test(withTools), 'previewTools: teaches spring_to_css')
+assert(/prefers-reduced-motion/.test(withTools), 'previewTools: spring reduced-motion guidance')
+assert(!/spring_to_css/.test(r), 'default rendering omits spring_to_css')
+// R6 (accessible colors) — check_contrast rides with the Claude-only in-process tools.
+assert(/check_contrast/.test(withTools), 'previewTools: teaches check_contrast')
+assert(/APCA/.test(withTools), 'previewTools: mentions APCA')
+assert(!/check_contrast/.test(r), 'default rendering omits check_contrast')
 
 if (failed) {
   console.error(`RULES FAILED — ${failed} assertion(s)`)

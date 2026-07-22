@@ -13,7 +13,7 @@
  *
  * Bump PRAXIS_RULES_VERSION whenever the rule text changes (so logs/tests can pin it).
  */
-export const PRAXIS_RULES_VERSION = 4
+export const PRAXIS_RULES_VERSION = 6
 
 export function praxisRules(opts?: { previewTools?: boolean }): string {
   const lines: string[] = [
@@ -64,7 +64,24 @@ export function praxisRules(opts?: { previewTools?: boolean }): string {
       `choice: \`prop\` = per-instance values, \`literal\` = module constants, \`style\` =`,
       `pure CSS properties. For number params, give a sensible min/max/step/unit (those`,
       `fields are only valid on kind 'number'). Never write under \`.praxis/\` yourself —`,
-      `the tool persists the manifest for you.`
+      `the tool persists the manifest for you.`,
+      ``,
+      `## Spring animations (spring_to_css)`,
+      `For any spring / bouncy / physics-based motion — or when the user gives spring`,
+      `params (stiffness/damping/mass, damping-ratio + frequency, or bounce + duration) —`,
+      `call the \`spring_to_css\` tool instead of hand-writing \`linear()\` points or guessing`,
+      `a \`cubic-bezier\`. It returns the exact CSS easing + duration for a mass-spring-damper,`,
+      `so the motion runs on the compositor. Animate \`transform\`/\`opacity\` (the only cheap`,
+      `properties) and gate it behind \`prefers-reduced-motion\`. See the spring-animations skill`,
+      `for the trigger pattern and gotchas.`,
+      ``,
+      `## Accessible colors (check_contrast)`,
+      `Whenever you pick, change, or review a text/UI color pair, verify it with the`,
+      `\`check_contrast\` tool — it uses APCA (the perceptual model WCAG 3 is built around),`,
+      `not eyeballing or the old 4.5:1 ratio. Pass the real \`fontSizePx\`/\`fontWeight\` (APCA`,
+      `readability depends on text size + weight). When a pair fails, the tool returns the`,
+      `nearest accessible color with the hue preserved — use that hex so the palette still`,
+      `matches, rather than guessing. See the accessible-colors skill.`
     )
   }
 

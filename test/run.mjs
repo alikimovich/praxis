@@ -55,6 +55,8 @@ const UNIT = [
   'svelte-instance',
   'docs-links',
   'update',
+  'spring',
+  'apca',
 ];
 
 // electron = the `node test/NAME.mjs` group AFTER `electron-vite build` in `test`.

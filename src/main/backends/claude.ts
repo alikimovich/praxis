@@ -1,5 +1,10 @@
-import type { BrowserWindow } from 'electron'
+import { createHash } from 'node:crypto'
+import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
+import type { BrowserWindow } from 'electron'
+import { z } from 'zod'
 import type {
   AgentEvent,
   AgentOptions,
@@ -12,7 +17,26 @@ import type {
   SlashCommandItem
 } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
+import { checkContrast, suggestAccessible } from '../apca'
+import { lexLiteral, locateAnchor, validateManifest } from '../control-manifest'
+import { saveManifest } from '../control-panels'
+import { capturePreview, getPreviewUrl } from '../preview-state'
+import { praxisRules } from '../rules'
 import { discoverProjectSkills, mergeSlashCommands } from '../skills'
+import {
+  analyze,
+  fromBounceDuration,
+  fromRatioFreq,
+  PRESETS,
+  type SpringConfig,
+  springToCss,
+  toCssVars,
+  toKeyframes,
+  toTransition
+} from '../spring'
+import { createRecordCapture } from './record'
+import { sanitizeTitle, transcriptDigest } from './title'
+import { AUTO_ALLOW_TOOLS, describeTool, toolDetail, touchesSidecar } from './tools'
 import type {
   ModelProvider,
   PendingPrompt,
@@ -20,18 +44,6 @@ import type {
   ProviderSession,
   SpawnContext
 } from './types'
-import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
-import { createHash } from 'node:crypto'
-import { join } from 'node:path'
-import { z } from 'zod'
-import { AUTO_ALLOW_TOOLS, describeTool, toolDetail, touchesSidecar } from './tools'
-import { createRecordCapture } from './record'
-import { sanitizeTitle, transcriptDigest } from './title'
-import { praxisRules } from '../rules'
-import { capturePreview, getPreviewUrl } from '../preview-state'
-import { lexLiteral, locateAnchor, validateManifest } from '../control-manifest'
-import { saveManifest } from '../control-panels'
 
 // The bundled Praxis agent plugin (skills teaching the preview workflow). Lives
 // at the repo root; resolved relative to the compiled main (out/main →
@@ -50,7 +62,16 @@ const PREVIEW_TOOL_NAMES = new Set([
 // main's own validated `saveManifest` path (main stays the sole `.praxis/`
 // writer), so it's equally safe to auto-allow: allowedTools + the canUseTool
 // short-circuit both use this set.
-const PRAXIS_TOOL_NAMES = new Set([...PREVIEW_TOOL_NAMES, 'mcp__praxis__define_controls'])
+const PRAXIS_TOOL_NAMES = new Set([
+  ...PREVIEW_TOOL_NAMES,
+  'mcp__praxis__define_controls',
+  // Pure, deterministic spring→CSS calculator. No state, no side effects, so
+  // it's auto-allowed like the observers — it never touches disk or the repo.
+  'mcp__praxis__spring_to_css',
+  // APCA accessible-contrast checker + color suggester. Also pure (reads no repo
+  // state, writes nothing) — auto-allowed for the same reason.
+  'mcp__praxis__check_contrast'
+])
 
 // `define_controls` input — ControlPanelManifest minus `id`/`createdAt` (main
 // assigns those). The SDK converts this zod shape to JSON Schema over MCP, so
@@ -84,7 +105,9 @@ const defineControlsShape = {
               }),
               z.object({
                 strategy: z.literal('style'),
-                styleProp: z.string().describe("CSS longhand routed through the Styles engine, e.g. 'border-radius'")
+                styleProp: z
+                  .string()
+                  .describe("CSS longhand routed through the Styles engine, e.g. 'border-radius'")
               }),
               z.object({
                 strategy: z.literal('literal'),
@@ -102,6 +125,131 @@ const defineControlsShape = {
       .min(1)
       .max(12)
   })
+}
+
+// `spring_to_css` input — three interchangeable ways to describe the spring
+// (physical, ζ/frequency, or Framer-style bounce/duration) plus a preset shortcut
+// and output-shape knobs. Pure calculation: the SDK turns this zod shape into
+// JSON Schema so the model sees every field without prompt bloat.
+const springToCssShape = {
+  stiffness: z
+    .number()
+    .positive()
+    .optional()
+    .describe('Physical spring: spring constant k (>0). Pair with damping.'),
+  damping: z
+    .number()
+    .min(0)
+    .optional()
+    .describe('Physical spring: damping coefficient c (>=0). Pair with stiffness.'),
+  mass: z
+    .number()
+    .positive()
+    .optional()
+    .describe('Mass m (>0). Default 1. Applies to all input modes.'),
+  dampingRatio: z
+    .number()
+    .positive()
+    .optional()
+    .describe('ζ: <1 bounces, 1 critical, >1 overdamped. Pair with frequencyHz.'),
+  frequencyHz: z
+    .number()
+    .positive()
+    .optional()
+    .describe('Natural frequency in Hz. Pair with dampingRatio.'),
+  bounce: z
+    .number()
+    .optional()
+    .describe('Framer-style bounciness (~0–1; higher = bouncier). Pair with durationMs.'),
+  durationMs: z
+    .number()
+    .positive()
+    .optional()
+    .describe('Framer-style target settle duration (ms). Pair with bounce.'),
+  preset: z
+    .string()
+    .optional()
+    .describe(`Named preset instead of raw params. One of: ${Object.keys(PRESETS).join(', ')}.`),
+  property: z.string().optional().describe("CSS property the motion drives. Default 'transform'."),
+  format: z
+    .enum(['transition', 'linear', 'css-vars', 'keyframes', 'json'])
+    .optional()
+    .describe("Output shape. Default 'transition' (property + duration + linear())."),
+  simplify: z
+    .number()
+    .optional()
+    .describe(
+      'RDP tolerance (e.g. 0.001) to trim control points on long curves. Omit for full resolution.'
+    )
+}
+
+/** Resolve the spring config from whichever of the three input modes was given. */
+function resolveSpringConfig(a: {
+  stiffness?: number
+  damping?: number
+  mass?: number
+  dampingRatio?: number
+  frequencyHz?: number
+  bounce?: number
+  durationMs?: number
+  preset?: string
+}): SpringConfig | { error: string } {
+  const mass = a.mass ?? 1
+  if (a.preset !== undefined) {
+    const cfg = PRESETS[a.preset]
+    if (!cfg)
+      return {
+        error: `unknown preset "${a.preset}". Choose one of: ${Object.keys(PRESETS).join(', ')}.`
+      }
+    return cfg
+  }
+  if (a.stiffness !== undefined || a.damping !== undefined) {
+    if (a.stiffness === undefined || a.damping === undefined) {
+      return { error: 'stiffness and damping must be given together.' }
+    }
+    return { stiffness: a.stiffness, damping: a.damping, mass }
+  }
+  if (a.dampingRatio !== undefined || a.frequencyHz !== undefined) {
+    if (a.dampingRatio === undefined || a.frequencyHz === undefined) {
+      return { error: 'dampingRatio and frequencyHz must be given together.' }
+    }
+    return fromRatioFreq(a.dampingRatio, a.frequencyHz, mass)
+  }
+  if (a.bounce !== undefined || a.durationMs !== undefined) {
+    if (a.bounce === undefined || a.durationMs === undefined) {
+      return { error: 'bounce and durationMs must be given together.' }
+    }
+    return fromBounceDuration(a.bounce, a.durationMs, mass)
+  }
+  return {
+    error:
+      'no spring given. Provide one of: stiffness+damping, dampingRatio+frequencyHz, bounce+durationMs, or preset.'
+  }
+}
+
+// `check_contrast` input — a color pair plus text context, and how to suggest an
+// accessible alternative when it fails. Pure calculation over the APCA reference
+// tables (apca.ts); the SDK turns this zod shape into JSON Schema for the model.
+const checkContrastShape = {
+  foreground: z.string().describe('Text/foreground color: hex, rgb(), hsl(), or CSS color name.'),
+  background: z.string().describe('Background color (same formats).'),
+  fontSizePx: z.number().positive().optional().describe('Text size in px. Default 16.'),
+  fontWeight: z
+    .number()
+    .optional()
+    .describe('Font weight 100–900 (snapped to nearest 100). Default 400.'),
+  wcag2: z
+    .boolean()
+    .optional()
+    .describe('Also report the legacy WCAG 2 ratio (AA/AAA). Default false.'),
+  suggest: z
+    .enum(['auto', 'foreground', 'background', 'none'])
+    .optional()
+    .describe(
+      "When/what to suggest an accessible alternative for, preserving hue: 'auto' (default) suggests a " +
+        "new foreground only if the pair fails; 'foreground'/'background' force a suggestion for that color; " +
+        "'none' skips it."
+    )
 }
 
 /** Panel id assigned by main: component slug + a short hash of file+component,
@@ -189,11 +337,17 @@ function parseQuestions(input: unknown): QuestionSpec[] {
   if (!Array.isArray(raw)) return []
   const out: QuestionSpec[] = []
   for (const q of raw) {
-    const question = typeof (q as { question?: unknown })?.question === 'string' ? (q as { question: string }).question : ''
+    const question =
+      typeof (q as { question?: unknown })?.question === 'string'
+        ? (q as { question: string }).question
+        : ''
     const options = Array.isArray((q as { options?: unknown })?.options)
       ? (q as { options: unknown[] }).options
           .map((o) => ({
-            label: typeof (o as { label?: unknown })?.label === 'string' ? (o as { label: string }).label : '',
+            label:
+              typeof (o as { label?: unknown })?.label === 'string'
+                ? (o as { label: string }).label
+                : '',
             ...(typeof (o as { description?: unknown })?.description === 'string'
               ? { description: (o as { description: string }).description }
               : {})
@@ -274,11 +428,16 @@ async function startSession(
     getWindow()?.webContents.send('agent:event', tagged)
   }
 
-  // In-process SDK MCP server exposing read-only views of the user's live
-  // preview (the native WebContentsView that index.ts owns, reached via the
-  // preview-state registry). These OBSERVE what the user sees; agent-browser is
-  // the agent's own headless copy for interaction. Both tools take no input and
-  // are auto-allowed (see allowedTools + canUseTool) so they never prompt.
+  // In-process SDK MCP server bundling Praxis's own agent tools: read-only views
+  // of the user's live preview (the native WebContentsView that index.ts owns,
+  // reached via the preview-state registry) which OBSERVE what the user sees
+  // (agent-browser is the agent's own headless copy for interaction),
+  // define_controls (v10 Custom Controls), spring_to_css (pure spring→CSS
+  // calculator), and check_contrast (pure APCA contrast checker + color
+  // suggester). All are auto-allowed (see allowedTools + canUseTool) so they
+  // never prompt — the observers, spring_to_css and check_contrast are
+  // side-effect-free, and define_controls persists only through main's
+  // validated saveManifest path.
   const previewServer = createSdkMcpServer({
     name: 'praxis',
     version: '1.0.0',
@@ -302,7 +461,7 @@ async function startSession(
       ),
       tool(
         'preview_screenshot',
-        "A screenshot of exactly what the user sees in their preview pane right now (their route, viewport, simulator included).",
+        'A screenshot of exactly what the user sees in their preview pane right now (their route, viewport, simulator included).',
         {},
         async () => {
           const img = await capturePreview()
@@ -388,6 +547,138 @@ async function startSession(
             ]
           }
         }
+      ),
+      // Pure spring→CSS calculator. LLMs can't reliably integrate a spring in
+      // their head, so this computes the EXACT `linear()` easing + duration the
+      // agent should paste into the target repo's CSS. No state, no disk, no
+      // side effects — deterministic function, auto-allowed like the observers.
+      tool(
+        'spring_to_css',
+        'Compute a CSS `linear()` easing + duration from a physical spring, so a bouncy/springy ' +
+          'motion runs on the compositor as a normal `transition`/`@keyframes` instead of a JS loop. ' +
+          'Use this ANY time the user asks for a spring, bouncy, springy, or physics-based animation, ' +
+          'or gives spring params (stiffness/damping/mass, ζ+frequency, or bounce+duration) — do NOT ' +
+          'hand-write spring `linear()` values or guess a cubic-bezier. Returns exact values to paste ' +
+          'into source. Note: only `transform` and `opacity` are compositor-cheap.',
+        springToCssShape,
+        async (args) => {
+          const cfg = resolveSpringConfig(args)
+          if ('error' in cfg) {
+            return {
+              content: [{ type: 'text' as const, text: `spring_to_css failed: ${cfg.error}` }],
+              isError: true
+            }
+          }
+
+          const opts = { simplify: args.simplify ?? 0, property: args.property }
+          const m = analyze(cfg, opts)
+          const p2 = (n: number): number => Number(n.toFixed(2))
+
+          let out: string
+          switch (args.format ?? 'transition') {
+            case 'linear':
+              out = springToCss(cfg, opts).easing
+              break
+            case 'css-vars':
+              out = toCssVars(cfg, opts)
+              break
+            case 'keyframes':
+              out = toKeyframes(cfg, {
+                ...opts,
+                prop: args.property ? `--${args.property}` : undefined
+              })
+              break
+            case 'json':
+              out = JSON.stringify(springToCss(cfg, opts), null, 2)
+              break
+            default:
+              out = toTransition(cfg, opts)
+          }
+
+          const property = args.property ?? 'transform'
+          const compositorSafe = property === 'transform' || property === 'opacity'
+          const notes = [
+            `ζ=${p2(m.dampingRatio)} (${m.regime}), ${p2(m.frequencyHz)}Hz, overshoot ${p2(m.overshoot * 100)}%`,
+            `settle ${m.settleDuration}ms · visual ~${m.visualDuration}ms · ${m.pointCount} points`,
+            compositorSafe
+              ? `'${property}' is compositor-friendly.`
+              : `Warning: '${property}' is NOT compositor-cheap (only transform/opacity are) — this runs on the main thread and can jank.`,
+            'Wrap in @media (prefers-reduced-motion: reduce) to disable. Needs Chrome/Edge 113+, Firefox 112+, Safari 17.2+ (falls back to ease).'
+          ]
+
+          return {
+            content: [{ type: 'text' as const, text: `${out}\n\n/* ${notes.join('\n   ')} */` }]
+          }
+        }
+      ),
+      // APCA (Lc) accessible-contrast checker + color suggester. APCA is the
+      // perceptual model WCAG 3 is built around — don't eyeball readability or
+      // use the old 4.5:1 ratio. When a pair fails, it hands back the nearest
+      // accessible color (hue preserved) so the palette still matches. Pure
+      // calc over the reference tables — no state, no disk, auto-allowed.
+      tool(
+        'check_contrast',
+        'Check whether a foreground/background color pair is readable using APCA (Lc) — the perceptual ' +
+          'contrast model WCAG 3 is built around, more accurate than WCAG 2. Use it whenever you pick, ' +
+          'change, or review text/UI colors, or the user asks if a color pair is accessible/readable/legible. ' +
+          'When the pair fails it also SUGGESTS the nearest accessible color (adjusting lightness, keeping ' +
+          'hue) so the palette still matches — use that hex instead of guessing. Pass fontSizePx/fontWeight ' +
+          'for accurate thresholds (APCA readability depends on text size + weight).',
+        checkContrastShape,
+        async (args) => {
+          try {
+            const res = await checkContrast({
+              foreground: args.foreground,
+              background: args.background,
+              fontSizePx: args.fontSizePx,
+              fontWeight: args.fontWeight,
+              wcag2: args.wcag2
+            })
+
+            const badge =
+              res.verdict === 'pass'
+                ? '✓ PASS'
+                : res.verdict === 'fail'
+                  ? '✗ FAIL'
+                  : `⚠ ${res.verdict.toUpperCase()}`
+            const lines = [
+              `${badge} — APCA Lc ${res.lc.toFixed(1)} for ${res.foreground} on ${res.background} at ${res.fontSizePx}px/${res.fontWeight}`,
+              res.message
+            ]
+            if (res.wcag2) {
+              lines.push(
+                `WCAG 2: ${res.wcag2.ratioRounded}:1 — AA ${res.wcag2.AA}, AAA ${res.wcag2.AAA}, UI 3:1 ${res.wcag2.uiComponents}.`
+              )
+            }
+
+            // Decide whether to suggest an accessible alternative.
+            const mode = args.suggest ?? 'auto'
+            const role: 'foreground' | 'background' | null =
+              mode === 'foreground' || mode === 'background'
+                ? mode
+                : mode === 'auto' && res.verdict !== 'pass'
+                  ? 'foreground'
+                  : null
+            if (role) {
+              const adjust = role === 'foreground' ? args.foreground : args.background
+              const fixed = role === 'foreground' ? args.background : args.foreground
+              const s = await suggestAccessible(adjust, fixed, role, res.fontSizePx, res.fontWeight)
+              lines.push(
+                s.bestEffort
+                  ? `Suggested ${role}: ${s.hex} (Lc ${s.lc.toFixed(1)}, ${s.verdict}) — closest to ${adjust} preserving hue, but no hue-preserving lightness fully passes at this size; increase font size/weight or shift the other color too.`
+                  : `Suggested accessible ${role}: ${s.hex} (Lc ${s.lc.toFixed(1)}, passes) — nearest to ${adjust} preserving hue.`
+              )
+            }
+
+            return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            return {
+              content: [{ type: 'text' as const, text: `check_contrast failed: ${msg}` }],
+              isError: true
+            }
+          }
+        }
       )
     ]
   })
@@ -400,15 +691,21 @@ async function startSession(
       // The repo's CLAUDE.md + skills load via settingSources; Praxis's own
       // operating rules (v8 R) are appended to the Claude Code preset, with the
       // preview-tools section (Claude alone can call the in-process praxis tools).
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: praxisRules({ previewTools: true }) },
+      systemPrompt: {
+        type: 'preset',
+        preset: 'claude_code',
+        append: praxisRules({ previewTools: true })
+      },
       // The praxis MCP server (preview_location / preview_screenshot /
-      // define_controls). Its tools are auto-allowed here so they never surface
+      // define_controls / spring_to_css / check_contrast). Its tools are auto-allowed here so they never surface
       // a permission card (canUseTool also short-circuits them, belt-and-
       // suspenders) — main validates everything define_controls persists.
       mcpServers: { praxis: previewServer },
       allowedTools: [...PRAXIS_TOOL_NAMES],
       // The bundled Praxis skill plugin (only when present in this build).
-      ...(existsSync(PLUGIN_PATH) ? { plugins: [{ type: 'local' as const, path: PLUGIN_PATH }] } : {}),
+      ...(existsSync(PLUGIN_PATH)
+        ? { plugins: [{ type: 'local' as const, path: PLUGIN_PATH }] }
+        : {}),
       includePartialMessages: true,
       permissionMode: options.permissionMode ?? 'default',
       allowDangerouslySkipPermissions: true,

@@ -89,6 +89,11 @@ src/
                     validate + anchor-lex + render literals (pure) and the
                     main-owned .dsgn/control-panels.json store + controls:* IPC
     tokens.ts       design-token detection/scaffold   annotations.ts  comments → PR
+    spring.ts       pure spring→CSS linear() engine (vendored from ~/dev/spring2css);
+                    powers the spring_to_css agent tool in backends/claude.ts
+    apca.ts         APCA (Lc) contrast checker + accessible-color suggester
+                    (adapted from ~/dev/apca-cli; apca-w3 + colorparsley loaded via
+                    dynamic import — ESM-only); powers the check_contrast agent tool
     git.ts, worktrees.ts, chat-worktrees.ts, chat-isolation.ts
                     git/worktree primitives; worktrees: per-chat isolation + sync/merge/recovery;
                     chat-worktrees: turn-scoped ops (sync, commit, apply); chat-isolation: lifecycle
