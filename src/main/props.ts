@@ -22,7 +22,7 @@ import {
   removeSvelteProp
 } from './props-svelte'
 import { swapTailwindClass } from './tw-classes'
-import { recordEdit, undo, redo, canUndo, canRedo } from './edit-history'
+import { recordEdit, undo, redo, canUndo, canRedo, revertGroup, canRevertGroup } from './edit-history'
 
 /**
  * Write a source edit and record it for undo/redo (v8 F3b). A no-op (after ===
@@ -1189,4 +1189,8 @@ export function registerPropsIpc(): void {
   ipcMain.handle('edit:undo', (_e, root: string) => undo(root))
   ipcMain.handle('edit:redo', (_e, root: string) => redo(root))
   ipcMain.handle('edit:can', (_e, root: string) => ({ undo: canUndo(root), redo: canRedo(root) }))
+  // Per-turn "Revert changes" (chat): addressable revert of one recorded turn group
+  // (chat:<wtId>:<turnNo>) — restores its pre-turn files unless any drifted since.
+  ipcMain.handle('edit:revert', (_e, root: string, group: string) => revertGroup(root, group))
+  ipcMain.handle('edit:can-revert', (_e, root: string, group: string) => canRevertGroup(root, group))
 }

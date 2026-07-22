@@ -2,6 +2,46 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-21 — Per-turn "Revert changes" in the chat
+
+Each completed chat turn's file edits can now be rolled back from a discoverable
+per-message button, next to Copy — not just via the invisible, strictly-LIFO
+global Cmd+Z. It reuses the existing in-memory edit-history substrate: every
+merged turn on a git-repo-root chat is already recorded as one atomic group
+`chat:<wtId>:<turnNo>` with full `{before, after}` snapshots, so this is a
+surfacing job, not new persistence.
+
+- **`edit-history.ts`** gains two addressable-group functions beside undo/redo:
+  `revertGroup(root, group)` restores every file's `before` for ONE group
+  anywhere in the stack (not just the top), all-or-nothing, refusing (conflict)
+  if any file drifted from the `after` that turn wrote — the same "is this safe?"
+  guard `undo` uses. On success the group leaves the undo stack; nothing is
+  pushed to redo (revert is a one-way action outside the linear undo/redo model).
+  `canRevertGroup` is the cheap drift-aware pre-check for greying the button.
+- **IPC trio** (`props.ts` `edit:revert`/`edit:can-revert` → `shared/api.ts`
+  `edits.revert`/`canRevert` → `preload`), kept in sync per the usual rule.
+- **`chat-isolation.ts`** tags the merged turn: `emitIsolation` now carries the
+  `group` id and a `revertable` flag on the `isolation` event. `revertable` is
+  `false` once the chat's work is pushed & merged — gated on the session record's
+  `prUrl` (held by reference from `adoptSession`, so a later `tag-session` shows
+  through). The renderer hides Revert when `revertable === false`.
+- **Renderer**: `ChatMessage.revertGroup` + a `tagRevert` store action stamp the
+  latest assistant turn from the merged event (before the "Merged into your
+  branch" note, so the real turn gets tagged). `RevertAction` sits by `CopyAction`
+  in a shared `msg__actions` row; a refused revert shows an inline "Can't revert —
+  files changed since this turn" hint. The dev server HMRs the restored files.
+
+**Limitations (by design):** only git-repo-root chats get per-turn groups (subdir
+/ non-git projects run on the live tree with no `recordEdit`, so no button, same
+as today's undo); history is in-memory (cleared on close/quit); reverting an older
+turn no-ops with the conflict hint if a later turn or hand edit touched its files.
+
+Verification: `test/edit-history.mjs` extended (addressable revert, drift conflict,
+all-or-nothing group) — unit tier green. New `test/revert-action.mjs` (electron
+tier) drives a finished turn, asserts Revert renders only once tagged and sits by
+Copy, and clicks it to exercise the full renderer→preload→main round-trip (the
+conflict hint). `bun run typecheck` green across node/web/preview.
+
 ## 2026-07-20 — Pop-out editor gets a file-tree sidebar; IDE button + close cleanup
 
 The popped-out code editor (`?praxisEditor=1` window) now has a left file-tree

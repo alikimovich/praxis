@@ -297,7 +297,11 @@ const api: PraxisApi = {
     undo: (root: string): Promise<UndoResult> => ipcRenderer.invoke('edit:undo', root),
     redo: (root: string): Promise<UndoResult> => ipcRenderer.invoke('edit:redo', root),
     can: (root: string): Promise<{ undo: boolean; redo: boolean }> =>
-      ipcRenderer.invoke('edit:can', root)
+      ipcRenderer.invoke('edit:can', root),
+    revert: (root: string, group: string): Promise<UndoResult> =>
+      ipcRenderer.invoke('edit:revert', root, group),
+    canRevert: (root: string, group: string): Promise<boolean> =>
+      ipcRenderer.invoke('edit:can-revert', root, group)
   },
   tokens: {
     detect: (root: string): Promise<TokenSet> => ipcRenderer.invoke('tokens:detect', root),

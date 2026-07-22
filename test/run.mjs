@@ -74,6 +74,7 @@ const ELECTRON = [
   'agent-history',
   'history-ui',
   'chat-render',
+  'revert-action',
   'chat-route',
   'restore-reload',
   'preview-location',
