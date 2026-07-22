@@ -616,14 +616,16 @@ export default function ChatPanel(): React.JSX.Element {
             event.files,
           );
         if (event.state === "merged") {
-          // Tag the just-finished assistant turn with its revert group BEFORE the
-          // note below (which appends a fresh assistant message) so Revert lands on
-          // the real turn. Skipped when main marks it non-revertable (pushed via PR).
+          // No active streaming message exists post-`done` (appendStatus needs
+          // one) — a plain note is the subtle line instead. Append it FIRST so the
+          // revert group below lands on this note (now the last assistant message).
+          useChat.getState().appendNote("Merged into your branch", key);
+          // Tag the note — the very last thing in the turn — with the revert group so
+          // the Revert button sits at the END of the AI output; tagging the response
+          // bubble above the note leaves the button buried where it's easy to miss.
+          // Skipped when main marks it non-revertable (pushed via PR).
           if (event.group && event.revertable !== false)
             useChat.getState().tagRevert(key, event.group);
-          // No active streaming message exists post-`done` (appendStatus needs
-          // one) — a plain note is the subtle line instead.
-          useChat.getState().appendNote("Merged into your branch", key);
         } else if (event.state === "parked") {
           // The in-chat ConflictCard (driven by `isolation === 'parked'`) now explains
           // this and offers Resolve/Discard — no text note needed. Still refresh the
