@@ -531,7 +531,7 @@ export default function CodeDrawer({
       className={
         isWindow
           ? 'codedrawer codedrawer--window flex h-screen bg-background'
-          : 'codedrawer absolute inset-x-0 bottom-0 z-50 flex flex-col border-t bg-background shadow-[0_-4px_18px_rgba(0,0,0,0.08)]'
+          : 'codedrawer absolute inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t bg-background shadow-[0_-4px_18px_rgba(0,0,0,0.08)]'
       }
       style={isWindow ? undefined : { height }}
       aria-label="Code editor"
