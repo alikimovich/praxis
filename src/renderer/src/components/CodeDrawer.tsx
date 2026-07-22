@@ -636,14 +636,14 @@ export default function CodeDrawer({
           </Button>
           <Button
             variant="ghost"
-            size="sm"
-            className="codedrawer__save h-6 gap-1 px-2 text-[11.5px]"
+            size="icon"
+            className="codedrawer__save size-6"
             onClick={() => void save()}
             disabled={!dirty || status === 'saving'}
-            title="Save (⌘S)"
+            aria-label={status === 'saving' ? 'Saving…' : 'Save'}
+            title={status === 'saving' ? 'Saving…' : 'Save (⌘S)'}
           >
             <Save className="size-3.5" />
-            {status === 'saving' ? 'Saving…' : 'Save'}
           </Button>
           {!isWindow && (
             <Button
