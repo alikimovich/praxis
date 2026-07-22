@@ -45,6 +45,7 @@ const UNIT = [
   'edit-history',
   'worktrees',
   'chat-worktrees',
+  'file-tree',
   'rules',
   'tw-classes',
   'tw-styles',

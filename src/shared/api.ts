@@ -998,6 +998,8 @@ export interface PraxisApi {
     popout: (root: string, source: string) => Promise<void>
     /** Close the standalone editor window (called from inside a popped-out editor). */
     closeWindow: () => Promise<void>
+    /** Repo-relative file paths for the pop-out editor's file-tree sidebar. */
+    tree: (root: string) => Promise<string[]>
     /** Standalone editor window: retarget event when a second pop-out reuses it. */
     onNavigate: (cb: (source: string) => void) => () => void
   }

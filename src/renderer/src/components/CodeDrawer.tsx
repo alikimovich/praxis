@@ -1,26 +1,26 @@
-import { useEffect, useRef, useState } from 'react'
-import { EditorState, StateEffect, StateField, type Extension } from '@codemirror/state'
-import { EditorView, Decoration, keymap, type DecorationSet } from '@codemirror/view'
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
-import { tags as t } from '@lezer/highlight'
-import { basicSetup } from 'codemirror'
-import { javascript } from '@codemirror/lang-javascript'
-import { html } from '@codemirror/lang-html'
 import { css } from '@codemirror/lang-css'
+import { html } from '@codemirror/lang-html'
+import { javascript } from '@codemirror/lang-javascript'
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
+import { EditorState, type Extension, StateEffect, StateField } from '@codemirror/state'
+import { Decoration, type DecorationSet, EditorView, keymap } from '@codemirror/view'
+import { tags as t } from '@lezer/highlight'
 import { svelte } from '@replit/codemirror-lang-svelte'
+import { basicSetup } from 'codemirror'
 import {
-  X,
-  Save,
-  ExternalLink,
-  Maximize2,
-  Minimize2,
   ChevronLeft,
   ChevronRight,
-  SquareArrowOutUpRight
+  Maximize2,
+  Minimize2,
+  Save,
+  SquareArrowOutUpRight,
+  X
 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Button } from '@/components/ui/button'
 import type { SourceView } from '../../../shared/api'
 import { useCodeDrawer, usePanelInset } from '../store'
-import { Button } from '@/components/ui/button'
+import FileTreePanel from './FileTreePanel'
 
 /** Default (collapsed) height of the drawer + the native-preview strip it reserves. */
 const DRAWER_H = 300
@@ -84,9 +84,21 @@ const praxisTheme = EditorView.theme({
 // colors the chat's markdown code blocks use), so every code surface in the app
 // reads the same. Tags left unmapped fall back to the plain foreground color.
 const praxisHighlight = HighlightStyle.define([
-  { tag: [t.comment, t.lineComment, t.blockComment, t.docComment], color: '#8a8a8a', fontStyle: 'italic' },
   {
-    tag: [t.keyword, t.moduleKeyword, t.controlKeyword, t.operatorKeyword, t.definitionKeyword, t.modifier, t.self],
+    tag: [t.comment, t.lineComment, t.blockComment, t.docComment],
+    color: '#8a8a8a',
+    fontStyle: 'italic'
+  },
+  {
+    tag: [
+      t.keyword,
+      t.moduleKeyword,
+      t.controlKeyword,
+      t.operatorKeyword,
+      t.definitionKeyword,
+      t.modifier,
+      t.self
+    ],
     color: '#a626a4'
   },
   // Quoted literals only — strings, regexes, and the *values* of HTML attributes.
@@ -96,7 +108,11 @@ const praxisHighlight = HighlightStyle.define([
   { tag: [t.attributeName], color: '#986801' },
   { tag: [t.number, t.bool, t.atom, t.null], color: '#b76b01' },
   {
-    tag: [t.function(t.variableName), t.function(t.propertyName), t.definition(t.function(t.variableName))],
+    tag: [
+      t.function(t.variableName),
+      t.function(t.propertyName),
+      t.definition(t.function(t.variableName))
+    ],
     color: '#4078f2'
   },
   { tag: [t.typeName, t.className], color: '#c18401' },
@@ -298,7 +314,9 @@ export default function CodeDrawer({
         update: (deco, tr) => {
           for (const e of tr.effects) {
             if (e.is(setLink)) {
-              return e.value ? Decoration.set([linkMark.range(e.value.from, e.value.to)]) : Decoration.none
+              return e.value
+                ? Decoration.set([linkMark.range(e.value.from, e.value.to)])
+                : Decoration.none
             }
           }
           return tr.docChanged ? Decoration.none : deco
@@ -401,7 +419,10 @@ export default function CodeDrawer({
 
       // Park the stamped element a third of the way down the viewport.
       const pos = editor.state.doc.line(Math.min(start, editor.state.doc.lines)).from
-      editor.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: 'start', yMargin: 60 }) })
+      editor.dispatch({
+        selection: { anchor: pos },
+        effects: EditorView.scrollIntoView(pos, { y: 'start', yMargin: 60 })
+      })
       editor.focus()
     })
 
@@ -460,7 +481,7 @@ export default function CodeDrawer({
       ref={rootRef}
       className={
         isWindow
-          ? 'codedrawer codedrawer--window flex h-screen flex-col bg-background'
+          ? 'codedrawer codedrawer--window flex h-screen bg-background'
           : 'codedrawer absolute inset-x-0 bottom-0 z-50 flex flex-col border-t bg-background shadow-[0_-4px_18px_rgba(0,0,0,0.08)]'
       }
       style={isWindow ? undefined : { height }}
@@ -472,8 +493,8 @@ export default function CodeDrawer({
           className="codedrawer__resize absolute inset-x-0 -top-1 z-10 h-2 cursor-ns-resize"
           onPointerDown={startDrag}
           onKeyDown={(e) => {
-            if (e.key === 'ArrowUp') (e.preventDefault(), nudge(24))
-            else if (e.key === 'ArrowDown') (e.preventDefault(), nudge(-24))
+            if (e.key === 'ArrowUp') e.preventDefault(), nudge(24)
+            else if (e.key === 'ArrowDown') e.preventDefault(), nudge(-24)
           }}
           role="separator"
           aria-orientation="horizontal"
@@ -481,112 +502,134 @@ export default function CodeDrawer({
           tabIndex={0}
         />
       )}
-      <div
-        className={`codedrawer__head flex items-center gap-2 border-b py-1.5 pr-3 ${
-          // Pop-out window: the header doubles as the title bar (macOS hiddenInset),
-          // so clear the traffic lights. The draggable region is the file span
-          // (below), which keeps the buttons clickable without per-button no-drag.
-          isWindow && isMac ? 'pl-20' : 'pl-3'
-        }`}>
-        {/* Cmd+click jumps build history — navigate it like a browser. */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="codedrawer__back size-6 text-muted-foreground"
-          onClick={() => useCodeDrawer.getState().back()}
-          disabled={navIndex <= 0}
-          aria-label="Back"
-          title="Back"
-        >
-          <ChevronLeft className="size-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="codedrawer__fwd -ml-1.5 size-6 text-muted-foreground"
-          onClick={() => useCodeDrawer.getState().forward()}
-          disabled={navIndex >= navLen - 1}
-          aria-label="Forward"
-          title="Forward"
-        >
-          <ChevronRight className="size-3.5" />
-        </Button>
-        <span
-          className="codedrawer__file min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11.5px] text-muted-foreground"
-          style={isWindow ? ({ WebkitAppRegion: 'drag' } as React.CSSProperties) : undefined}
-        >
-          {meta ? `${meta.file}:${meta.line}` : 'Loading…'}
-          {dirty && <span className="codedrawer__dirty ml-1.5 text-amber-600" title="Unsaved changes">●</span>}
-        </span>
-        {status === 'conflict' && (
-          <span className="codedrawer__conflict flex items-center gap-1.5 text-[11px] text-amber-700">
-            File changed on disk.
-            <button className="underline underline-offset-2" onClick={() => void reload()}>
-              Reload
-            </button>
+      {/* Pop-out only: the file-tree sidebar. On macOS the traffic lights float
+          over its top-left, so a draggable spacer clears them (the header no
+          longer needs to reserve room for them). */}
+      {isWindow && (
+        <aside className="codedrawer__tree flex w-56 shrink-0 flex-col border-r bg-background">
+          {isMac && (
+            <div
+              className="h-9 shrink-0"
+              style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+            />
+          )}
+          <FileTreePanel root={root} />
+        </aside>
+      )}
+      <div className="codedrawer__main flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="codedrawer__head flex items-center gap-2 border-b py-1.5 pl-3 pr-3">
+          {/* Cmd+click jumps build history — navigate it like a browser. */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="codedrawer__back size-6 text-muted-foreground"
+            onClick={() => useCodeDrawer.getState().back()}
+            disabled={navIndex <= 0}
+            aria-label="Back"
+            title="Back"
+          >
+            <ChevronLeft className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="codedrawer__fwd -ml-1.5 size-6 text-muted-foreground"
+            onClick={() => useCodeDrawer.getState().forward()}
+            disabled={navIndex >= navLen - 1}
+            aria-label="Forward"
+            title="Forward"
+          >
+            <ChevronRight className="size-3.5" />
+          </Button>
+          <span
+            className="codedrawer__file min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11.5px] text-muted-foreground"
+            style={isWindow ? ({ WebkitAppRegion: 'drag' } as React.CSSProperties) : undefined}
+          >
+            {meta ? `${meta.file}:${meta.line}` : 'Loading…'}
+            {dirty && (
+              <span className="codedrawer__dirty ml-1.5 text-amber-600" title="Unsaved changes">
+                ●
+              </span>
+            )}
           </span>
-        )}
-        {status === 'error' && errorMsg && (
-          <span className="codedrawer__error text-[11px] text-red-700">{errorMsg}</span>
-        )}
-        {openError && <span className="codedrawer__openerror text-[11px] text-amber-700">{openError}</span>}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="codedrawer__open h-6 gap-1 px-2 text-[11.5px] text-muted-foreground"
-          onClick={() => void openEditor()}
-          title="Open this file in your code editor"
-        >
-          <ExternalLink className="size-3.5" />
-          Editor
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="codedrawer__save h-6 gap-1 px-2 text-[11.5px]"
-          onClick={() => void save()}
-          disabled={!dirty || status === 'saving'}
-          title="Save (⌘S)"
-        >
-          <Save className="size-3.5" />
-          {status === 'saving' ? 'Saving…' : 'Save'}
-        </Button>
-        {!isWindow && (
-          <>
+          {status === 'conflict' && (
+            <span className="codedrawer__conflict flex items-center gap-1.5 text-[11px] text-amber-700">
+              File changed on disk.
+              <button className="underline underline-offset-2" onClick={() => void reload()}>
+                Reload
+              </button>
+            </span>
+          )}
+          {status === 'error' && errorMsg && (
+            <span className="codedrawer__error text-[11px] text-red-700">{errorMsg}</span>
+          )}
+          {openError && (
+            <span className="codedrawer__openerror text-[11px] text-amber-700">{openError}</span>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="codedrawer__open h-6 px-2 text-[11.5px] text-muted-foreground"
+            onClick={() => void openEditor()}
+            title="Open this file in your IDE"
+          >
+            IDE
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="codedrawer__save h-6 gap-1 px-2 text-[11.5px]"
+            onClick={() => void save()}
+            disabled={!dirty || status === 'saving'}
+            title="Save (⌘S)"
+          >
+            <Save className="size-3.5" />
+            {status === 'saving' ? 'Saving…' : 'Save'}
+          </Button>
+          {!isWindow && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="codedrawer__popout size-6"
+                onClick={popOut}
+                aria-label="Open code editor in a separate window"
+                title="Pop out into its own window"
+              >
+                <SquareArrowOutUpRight className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="codedrawer__expand size-6"
+                onClick={() => (setDragHeight(null), setExpanded((e) => !e))}
+                aria-label={expanded ? 'Collapse code editor' : 'Expand code editor'}
+                aria-pressed={expanded}
+                title={expanded ? 'Collapse' : 'Expand'}
+              >
+                {expanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+              </Button>
+            </>
+          )}
+          {/* Pop-out window closes via its native traffic lights, so only the
+            docked drawer needs an explicit close button. */}
+          {!isWindow && (
             <Button
               variant="ghost"
               size="icon"
-              className="codedrawer__popout size-6"
-              onClick={popOut}
-              aria-label="Open code editor in a separate window"
-              title="Pop out into its own window"
+              className="codedrawer__close size-6"
+              onClick={onClose}
+              aria-label="Close code editor"
             >
-              <SquareArrowOutUpRight className="size-3.5" />
+              <X className="size-3.5" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="codedrawer__expand size-6"
-              onClick={() => (setDragHeight(null), setExpanded((e) => !e))}
-              aria-label={expanded ? 'Collapse code editor' : 'Expand code editor'}
-              aria-pressed={expanded}
-              title={expanded ? 'Collapse' : 'Expand'}
-            >
-              {expanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
-            </Button>
-          </>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="codedrawer__close size-6"
-          onClick={onClose}
-          aria-label="Close code editor"
-        >
-          <X className="size-3.5" />
-        </Button>
+          )}
+        </div>
+        <div
+          ref={hostRef}
+          className="codedrawer__editor min-h-0 flex-1 overflow-hidden text-[12px]"
+        />
       </div>
-      <div ref={hostRef} className="codedrawer__editor min-h-0 flex-1 overflow-hidden text-[12px]" />
     </div>
   )
 }

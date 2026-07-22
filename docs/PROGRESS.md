@@ -2,6 +2,33 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-20 — Pop-out editor gets a file-tree sidebar; IDE button + close cleanup
+
+The popped-out code editor (`?praxisEditor=1` window) now has a left file-tree
+sidebar. Clicking a file opens it in the shared `useCodeDrawer` store, so
+Cmd+click navigation and back/forward keep working; the tree mirrors the open
+file's selection.
+
+- Tree = **`@pierre/trees`** (trees.software), used via its **vanilla (non-React)**
+  entry on purpose: the package's `/react` entry peer-requires React 19 but the
+  renderer is React 18. The vanilla `FileTree` class renders into its own shadow
+  root via Preact — fully decoupled from our React — so `FileTreePanel.tsx` just
+  mounts it imperatively in a `useEffect` and bridges selection ↔ the drawer.
+- New `src/main/file-tree.ts` + `source:tree` IPC lists the project's files:
+  `git ls-files` (tracked + untracked-not-ignored) for repos, bounded fs-walk
+  fallback (skips node_modules/dist/etc.) for non-git folders. POSIX paths,
+  sorted, capped at 20k. Unit-tested in `test/file-tree.mjs` (unit tier).
+- CodeDrawer window variant relaid out as a row (tree aside + editor column); the
+  macOS traffic lights now float over the sidebar, so a draggable spacer clears
+  them and the header dropped its `pl-20` inset.
+- Toolbar: the **"Editor"** button is now **"IDE"** (icon dropped); the top-right
+  **close** button is hidden in the pop-out (its native traffic lights close it)
+  and kept only on the docked drawer.
+
+Typecheck + build green; `test:file-tree` green. The Electron UI tiers couldn't
+run in this headless session (no display — even unmodified UI tests fail to
+launch); the tree render itself needs a manual `bun run dev` check.
+
 ## 2026-07-19 — Merged origin/candidate (Styles/Custom-controls) into the rename branch
 
 Integrated the 14-commit Styles-panel + Custom-controls feature that landed on

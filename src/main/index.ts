@@ -23,6 +23,7 @@ import { registerAnnotationsIpc } from './annotations'
 import { registerTokensIpc } from './tokens'
 import { registerSetupIpc } from './setup'
 import { ensureBranch, switchBranch, listBranches, checkoutBranch } from './git'
+import { listProjectFiles } from './file-tree'
 import { createProject } from './scaffold'
 import { registerDiagnoseIpc } from './diagnose'
 import { registerUpdateIpc } from './update-ipc'
@@ -610,6 +611,8 @@ function registerEditorIpc(): void {
   ipcMain.handle('source:popout', (_e, root: string, source: string) => {
     openEditorWindow(root, source)
   })
+  // The pop-out editor's file-tree sidebar: repo-relative file paths for `root`.
+  ipcMain.handle('source:tree', (_e, root: string) => listProjectFiles(root))
   // Close the editor window that sent this (a popped-out editor closing itself).
   ipcMain.handle('source:close-window', (e) => {
     BrowserWindow.fromWebContents(e.sender)?.close()

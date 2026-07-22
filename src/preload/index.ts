@@ -286,6 +286,7 @@ const api: PraxisApi = {
     popout: (root: string, source: string): Promise<void> =>
       ipcRenderer.invoke('source:popout', root, source),
     closeWindow: (): Promise<void> => ipcRenderer.invoke('source:close-window'),
+    tree: (root: string): Promise<string[]> => ipcRenderer.invoke('source:tree', root),
     onNavigate: (cb: (source: string) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, source: string): void => cb(source)
       ipcRenderer.on('editor:navigate', listener)
