@@ -995,6 +995,23 @@ export default function ChatPanel(): React.JSX.Element {
   const onPermissionModeChange = (value: string): void => {
     const mode = value as PermissionMode;
     setMode(mode);
+    // Persist per-chat (mirrors onModelChange) so switching away and back restores
+    // THIS chat's mode instead of the toolbar drifting from the session's real mode.
+    const entry = useWorkspace
+      .getState()
+      .projects.find((p) => p.root === projectRoot);
+    if (entry) {
+      const sessionKey = entry.activeSessionKey ?? entry.key;
+      useWorkspace.getState().patchEntry(entry.key, {
+        chatSettings: {
+          ...entry.chatSettings,
+          [sessionKey]: {
+            ...chatAgentSettingsFor(entry, sessionKey),
+            permissionMode: mode,
+          },
+        },
+      });
+    }
     void window.api.agent.setPermissionMode(mode);
   };
 

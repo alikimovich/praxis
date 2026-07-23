@@ -376,12 +376,16 @@ export interface ChatAgentSettings {
   model: string
   effort: string
   provider: string
+  /** Tool-permission posture for THIS chat. Persisted per-chat like model/provider
+   *  so switching chats restores it (main keeps mode per-session; see usePermissions). */
+  permissionMode: PermissionMode
 }
 
 export const defaultChatAgentSettings = (): ChatAgentSettings => ({
   model: DEFAULT_MODEL,
   effort: 'high',
-  provider: DEFAULT_PROVIDER
+  provider: DEFAULT_PROVIDER,
+  permissionMode: 'auto'
 })
 
 interface SessionState {
@@ -427,7 +431,14 @@ export const useSession = create<SessionState>((set) => ({
   setModel: (model) => set({ model }),
   setEffort: (effort) => set({ effort }),
   setProvider: (provider) => set({ provider }),
-  setChatAgentSettings: ({ model, effort, provider }) => set({ model, effort, provider }),
+  setChatAgentSettings: ({ model, effort, provider, permissionMode }) => {
+    set({ model, effort, provider })
+    // Mode is a per-chat choice too, but it lives in usePermissions (which also owns
+    // the pending-prompt queue). Restore it here so activating a chat re-points the
+    // toolbar dropdown to THAT chat's real mode instead of a stale global value —
+    // this is the single place every switch/boot path funnels through.
+    usePermissions.getState().setMode(permissionMode)
+  },
   setSlashCommands: (slashCommands) => set({ slashCommands }),
   setAuthNeeded: (authNeeded) => set({ authNeeded }),
   setCodexAuthNeeded: (codexAuthNeeded) => set({ codexAuthNeeded }),
@@ -502,7 +513,8 @@ export const chatAgentSettingsFromSession = (
 ): ChatAgentSettings => ({
   model: session.model,
   effort: session.effort,
-  provider: session.provider
+  provider: session.provider,
+  permissionMode: usePermissions.getState().mode
 })
 
 interface WorkspaceState {
