@@ -39,6 +39,30 @@ smoke launches clean. NOTE: the fix only takes effect after a rebuild + relaunch
 — a running old binary keeps crashing (its stack line numbers are the tell).
 (pre-existing `apca` unit skip: `apca-w3` not installed locally.)
 
+## 2026-07-23 — Resumed chats keep their transcript across a window close+reopen
+
+Surfaced once the crash fix above let close+reopen actually complete: after
+closing the window (app stays alive on macOS) and reopening, the chat repainted
+EMPTY while the preview came back. Not a regression from the crash fix — a
+pre-existing gap the crashes had been masking.
+
+Root cause (found via temporary `[restore-debug]` traces in the workspace
+snapshot): a chat resumed from disk (`agent:resume-session`) starts a fresh
+session with the SDK's `resumeSessionId` and shows the user the past messages
+from the on-disk record — but never copied that history into the live
+`session.record.transcript`, which only accrues NEW turns. So the reattach source
+of truth (`agent:workspace-snapshot`, read on the next boot) saw an empty
+transcript and `restore.ts` hydrated a blank chat. The first launch masks it
+(it resumes from disk directly); only the SECOND reopen, which reattaches to the
+still-live-but-empty record, shows blank.
+
+Fix (`agent.ts` `agent:resume-session`): seed the fresh live record with
+`rec.transcript` (entries copied, so a later finalize/push can't mutate the disk
+record) right after `adoptSession`, guarded on the live transcript being empty.
+Now the live record faithfully mirrors the resumed history, so a reattach
+repaints the full chat. Verified live: `transcriptLens` is non-zero on the
+second reopen and the chat comes back.
+
 ## 2026-07-21 — Per-turn "Revert changes" in the chat
 
 Each completed chat turn's file edits can now be rolled back from a discoverable

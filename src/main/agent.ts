@@ -664,6 +664,16 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
           onEvent: interactiveEvents(sessionKey)
         })
         adoptSession(sessionKey, s.record, root)
+        // Seed the fresh live record with the resumed chat's on-disk history. The
+        // SDK resumes the conversation context and the renderer paints the past
+        // messages from the record it resumed, but `s.record.transcript` starts
+        // empty and only accrues NEW turns — so without this a later reattach
+        // (agent:workspace-snapshot, after a window close+reopen) would repaint an
+        // empty chat. Copy the entries (not references) so the disk record can't be
+        // mutated by this session's subsequent finalize/pushes.
+        if (rec.transcript.length && s.record.transcript.length === 0) {
+          s.record.transcript.push(...rec.transcript.map((t) => ({ ...t })))
+        }
         // Carry the past chat's generated name onto the fresh record so a resumed
         // chat keeps its subject label (and doesn't re-title on its next turn).
         if (rec.title) {
