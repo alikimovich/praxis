@@ -2,6 +2,28 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-24 — "/" menu shows all skills (drop the 8-item cap)
+
+The composer's slash menu silently truncated at 8 matches
+(`ChatPanel.tsx` did `[...project, ...other].slice(0, 8)`), so anyone with more
+than a handful of project skills + backend commands only ever saw a fraction of
+them — the rest were unreachable unless you typed enough letters to filter down.
+
+- **Extracted the ranking to `src/shared/slash-menu.ts` (`rankSlashMatches`)** —
+  pure (renderer can't import `main/skills.ts`; it pulls in `node:fs`), so it's
+  unit-testable and shared. Same behavior as before *minus the cap*: case-
+  insensitive substring filter, project skills first, same-named non-project
+  command shadowed by its project skill.
+- **No cap.** The `.slash` popup already has `max-height: 240px; overflow-y:
+  auto`, so overflow was always meant to scroll — the slice just hid it. Project
+  skills stay at the front of the list, so they're never the ones scrolled past.
+- **Keyboard nav follows the scroll:** an effect calls
+  `activeItemRef.scrollIntoView({ block: 'nearest' })` on `menuActive` change, so
+  arrowing down past the fold keeps the selected row visible.
+- Tests: extended `test/skills-discovery.mjs` with `rankSlashMatches` cases
+  (empty query returns all, case-insensitive filter, project-first, shadowing,
+  and a >8-match no-truncation regression).
+
 ## 2026-07-23 — Stop the "Object has been destroyed" crash dialog on wake
 
 Closing the window (traffic-light close, NOT quit — the app stays alive to own
