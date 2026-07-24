@@ -60,6 +60,8 @@ const UNIT = [
   'fluid',
   'oklch',
   'shadows',
+  'type-metrics',
+  'skills-install',
 ];
 
 // electron = the `node test/NAME.mjs` group AFTER `electron-vite build` in `test`.

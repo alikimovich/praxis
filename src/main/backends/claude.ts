@@ -25,7 +25,9 @@ import { oklchScale } from '../oklch'
 import { capturePreview, getPreviewUrl } from '../preview-state'
 import { praxisRules } from '../rules'
 import { elevationScale, layeredShadow } from '../shadows'
+import { findPack, SKILL_PACKS } from '../skill-packs'
 import { discoverProjectSkills, mergeSlashCommands } from '../skills'
+import { installSkillPack } from '../skills-install'
 import {
   analyze,
   fromBounceDuration,
@@ -37,6 +39,7 @@ import {
   toKeyframes,
   toTransition
 } from '../spring'
+import { letterSpacing, lineHeight } from '../type-metrics'
 import { createRecordCapture } from './record'
 import { sanitizeTitle, transcriptDigest } from './title'
 import { AUTO_ALLOW_TOOLS, describeTool, toolDetail, touchesSidecar } from './tools'
@@ -75,10 +78,16 @@ const PRAXIS_TOOL_NAMES = new Set([
   // state, writes nothing) — auto-allowed for the same reason.
   'mcp__praxis__check_contrast',
   // Design-system calculators (fluid clamp() sizing, OKLCH color ramps, layered
-  // shadows). All pure math — no state, no disk — so auto-allowed like the rest.
+  // shadows, size-aware line-height). All pure math — no state, no disk — so
+  // auto-allowed like the rest.
   'mcp__praxis__fluid_clamp',
   'mcp__praxis__color_scale',
-  'mcp__praxis__layered_shadow'
+  'mcp__praxis__layered_shadow',
+  'mcp__praxis__line_height',
+  // Lists the curated skill-pack catalog — pure/read-only (no install, no
+  // network), so auto-allowed. Its sibling `install_skills` is deliberately NOT
+  // here: it writes files + hits the network, so it must surface a permission card.
+  'mcp__praxis__list_recommended_skills'
 ])
 
 // `define_controls` input — ControlPanelManifest minus `id`/`createdAt` (main
@@ -373,6 +382,36 @@ const layeredShadowShape = {
     .describe("Output shape. 'value' (default) or a --shadow-* custom-property block.")
 }
 
+// `line_height` input — a font size plus optional measure/role and output knobs.
+// Pure type-metrics math (type-metrics.ts): size-aware, WCAG-floored leading and
+// (optional) Material-3 tracking. The SDK turns this zod shape into JSON Schema.
+const lineHeightShape = {
+  fontSizePx: z.number().positive().describe('Font size in px to compute leading for.'),
+  measureCh: z
+    .number()
+    .positive()
+    .optional()
+    .describe(
+      'Line length in characters (measure). Longer lines get a touch more leading (~66ch ideal).'
+    ),
+  role: z
+    .enum(['auto', 'body', 'heading', 'display'])
+    .optional()
+    .describe(
+      "Type role (default 'auto' = inferred from size). Sets the WCAG floor: 'body' is floored at 1.5; 'heading'/'display' may sit tighter."
+    ),
+  includeTracking: z
+    .boolean()
+    .optional()
+    .describe('Also return a recommended letter-spacing (tracking) for this size.'),
+  format: z
+    .enum(['value', 'css'])
+    .optional()
+    .describe(
+      "Output shape. 'value' (default) = the unitless line-height number; 'css' = a `line-height: <n>;` declaration (plus `letter-spacing` when includeTracking)."
+    )
+}
+
 /** Panel id assigned by main: component slug + a short hash of file+component,
  *  matching validateManifest's `^[a-z0-9][a-z0-9-]{0,40}$` by construction. */
 function panelId(file: string, component: string): string {
@@ -553,11 +592,14 @@ async function startSession(
   // of the user's live preview (the native WebContentsView that index.ts owns,
   // reached via the preview-state registry) which OBSERVE what the user sees
   // (agent-browser is the agent's own headless copy for interaction),
-  // define_controls (v10 Custom Controls), and a family of pure design-system
+  // define_controls (v10 Custom Controls), a family of pure design-system
   // calculators — spring_to_css, check_contrast, fluid_clamp, color_scale,
-  // layered_shadow. All are auto-allowed (see allowedTools + canUseTool) so they
-  // never prompt — the observers and every calculator are side-effect-free, and
-  // define_controls persists only through main's validated saveManifest path.
+  // layered_shadow, line_height — and the skill-pack tools (list_recommended_skills
+  // pure; install_skills side-effecting). The observers, calculators and
+  // list_recommended_skills are auto-allowed (see allowedTools + canUseTool) so they
+  // never prompt — all are side-effect-free, and define_controls persists only
+  // through main's validated saveManifest path. install_skills is NOT auto-allowed:
+  // it writes files + hits the network, so it surfaces a normal permission card.
   const previewServer = createSdkMcpServer({
     name: 'praxis',
     version: '1.0.0',
@@ -955,6 +997,124 @@ async function startSession(
             }
           }
         }
+      ),
+      // Size-aware, WCAG-floored line-height (and optional letter-spacing). LLMs
+      // default to a hardcoded 1.5 everywhere; real leading is inverse to size and
+      // measure-aware, with body text floored at 1.5. Pure math (type-metrics.ts) —
+      // no state, no disk, auto-allowed like the other calculators.
+      tool(
+        'line_height',
+        'Compute an accessible, size-appropriate CSS line-height (and optional letter-spacing) for a ' +
+          'font size. Call this WHENEVER you set a font-size or line-height instead of defaulting to 1.5 ' +
+          'everywhere — leading should tighten as type grows, stay measure-aware, and body text is floored ' +
+          'at 1.5 per WCAG 2.1 SC 1.4.12. Pass includeTracking for a matching letter-spacing.',
+        lineHeightShape,
+        async (args) => {
+          const lh = lineHeight({
+            fontSizePx: args.fontSizePx,
+            measureCh: args.measureCh,
+            role: args.role
+          })
+          const ls = args.includeTracking ? letterSpacing(args.fontSizePx) : null
+          const lines: string[] = []
+          if ((args.format ?? 'value') === 'css') {
+            lines.push(`line-height: ${lh.lineHeight};`)
+            if (ls) lines.push(`letter-spacing: ${ls.css};`)
+          } else {
+            lines.push(
+              `line-height: ${lh.lineHeight} (${lh.lineHeightPx}px at ${args.fontSizePx}px)`
+            )
+            if (ls) lines.push(`letter-spacing: ${ls.css}`)
+          }
+          const notes = [lh.rationale]
+          if (ls) notes.push(ls.rationale)
+          if (lh.floored) {
+            notes.push('WCAG 2.1 SC 1.4.12: body text must stay usable at line-height ≥ 1.5.')
+          }
+          return {
+            content: [
+              { type: 'text' as const, text: `${lines.join('\n')}\n\n/* ${notes.join('\n   ')} */` }
+            ]
+          }
+        }
+      ),
+      // Curated catalog of external "taste" skill packs Praxis can OFFER to install.
+      // Pure/read-only — just formats SKILL_PACKS for the model; no network, no disk,
+      // so it's auto-allowed. Its sibling install_skills is NOT (it writes + fetches).
+      tool(
+        'list_recommended_skills',
+        'List the curated catalog of external design/craft skill packs Praxis can offer to install into ' +
+          "the user's project or user scope. Call this when a design task would benefit from established " +
+          'craft you lack (animation/interaction taste, color systems, frontend polish), then OFFER the ' +
+          'user a relevant pack — never install silently. Use the returned id with install_skills.',
+        {},
+        async () => {
+          const text = SKILL_PACKS.map(
+            (p) =>
+              `• ${p.id} — ${p.title}\n  ${p.description}\n  ${p.url} (recommended scope: ${p.recommendedScope})`
+          ).join('\n\n')
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Curated skill packs (install with install_skills using the id):\n\n${text}`
+              }
+            ]
+          }
+        }
+      ),
+      // Install a curated skill pack (`npx skills add … --copy`) into the project or
+      // user scope. SIDE-EFFECTING: writes files + hits the network, so it is NOT in
+      // PRAXIS_TOOL_NAMES — it surfaces a normal permission card. packId is validated
+      // against the curated allowlist (skill-packs.ts) BEFORE anything spawns, so an
+      // arbitrary repo string can never reach `npx skills add`. Persists to the LIVE
+      // root (ctx.liveRoot), not the per-chat worktree, so installs aren't stranded.
+      tool(
+        'install_skills',
+        "Install a curated skill pack into the user's project (<repo>/.claude/skills/) or user scope " +
+          '(~/.claude/skills/), after the user agrees. Only packs from list_recommended_skills are allowed. ' +
+          'OFFER first and let the user pick the scope — never install silently. Newly installed skills are ' +
+          'discovered on the next message/session, so they take effect then.',
+        {
+          packId: z
+            .string()
+            .describe('Pack id from list_recommended_skills (curated allowlist only).'),
+          scope: z
+            .enum(['project', 'user'])
+            .optional()
+            .describe(
+              "Install target: 'project' = <repo>/.claude/skills, 'user' = ~/.claude/skills. Defaults to the pack's recommendedScope."
+            )
+        },
+        async (args) => {
+          const pack = findPack(args.packId)
+          if (!pack) {
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text:
+                    `install_skills failed: '${args.packId}' is not in the curated skill-pack allowlist. ` +
+                    'Call list_recommended_skills and use one of its ids.'
+                }
+              ],
+              isError: true
+            }
+          }
+          const scope = args.scope ?? pack.recommendedScope
+          const result = await installSkillPack({
+            packId: args.packId,
+            scope,
+            liveRoot: ctx?.liveRoot ?? root
+          })
+          const restart =
+            'Newly installed skills are discovered when the agent starts its next turn — they take ' +
+            'effect on your next message (or a fresh session), not mid-turn.'
+          return {
+            content: [{ type: 'text' as const, text: `${result.message}\n\n${restart}` }],
+            ...(result.ok ? {} : { isError: true })
+          }
+        }
       )
     ]
   })
@@ -973,9 +1133,11 @@ async function startSession(
         append: praxisRules({ previewTools: true })
       },
       // The praxis MCP server (preview_location / preview_screenshot / define_controls /
-      // spring_to_css / check_contrast / fluid_clamp / color_scale / layered_shadow). Its tools are auto-allowed here so they never surface
-      // a permission card (canUseTool also short-circuits them, belt-and-
-      // suspenders) — main validates everything define_controls persists.
+      // spring_to_css / check_contrast / fluid_clamp / color_scale / layered_shadow /
+      // line_height / list_recommended_skills / install_skills). All but install_skills
+      // are auto-allowed here so they never surface a permission card (canUseTool also
+      // short-circuits them, belt-and-suspenders) — main validates everything
+      // define_controls persists, and install_skills prompts (writes files + network).
       mcpServers: { praxis: previewServer },
       allowedTools: [...PRAXIS_TOOL_NAMES],
       // The bundled Praxis skill plugin (only when present in this build).

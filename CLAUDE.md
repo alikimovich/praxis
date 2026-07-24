@@ -97,6 +97,11 @@ src/
     fluid.ts / oklch.ts / shadows.ts   pure design-system calculators powering the
                     fluid_clamp (Utopia clamp() math), color_scale (OKLCH tonal ramp
                     + gamut map) and layered_shadow (multi-layer box-shadow) agent tools
+    type-metrics.ts pure line-height + letter-spacing recommender (size-aware,
+                    WCAG-floored leading; Material-3 tracking); powers the line_height agent tool
+    skill-packs.ts / skills-install.ts   curated allowlist catalog of external "taste"
+                    skills + the `npx skills add --copy` runner; power the
+                    list_recommended_skills (pure) and install_skills (side-effecting) agent tools
     git.ts, worktrees.ts, chat-worktrees.ts, chat-isolation.ts
                     git/worktree primitives; worktrees: per-chat isolation + sync/merge/recovery;
                     chat-worktrees: turn-scoped ops (sync, commit, apply); chat-isolation: lifecycle
