@@ -61,14 +61,6 @@ export const SKILL_PACKS: SkillPack[] = [
     recommendedScope: 'user'
   },
   {
-    id: 'oklch-color-scales',
-    repo: 'jakubkrehel/oklch-skill',
-    title: 'OKLCH color scales (Jakub Krehel)',
-    description: 'Build perceptually even OKLCH color scales and tokens for a design system.',
-    url: 'https://github.com/jakubkrehel/oklch-skill',
-    recommendedScope: 'project'
-  },
-  {
     id: 'color-expert',
     repo: 'meodai/skill.color-expert',
     title: 'Color expert (meodai)',
