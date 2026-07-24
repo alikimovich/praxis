@@ -107,6 +107,8 @@
     "test:fluid": "bun test/fluid.mjs",
     "test:oklch": "bun test/oklch.mjs",
     "test:shadows": "bun test/shadows.mjs",
+    "test:type-metrics": "bun test/type-metrics.mjs",
+    "test:skills-install": "bun test/skills-install.mjs",
     "test:restore": "electron-vite build && node test/restore-reload.mjs"
   },
   "dependencies": {

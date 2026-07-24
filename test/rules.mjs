@@ -4,7 +4,7 @@
  *
  * Run with: bun test/rules.mjs
  */
-import { praxisRules, PRAXIS_RULES_VERSION } from '../src/main/rules.ts'
+import { PRAXIS_RULES_VERSION, praxisRules } from '../src/main/rules.ts'
 
 let failed = 0
 const assert = (cond, msg) => {
@@ -17,7 +17,7 @@ const assert = (cond, msg) => {
 const r = praxisRules()
 assert(typeof r === 'string' && r.length > 0, 'rules render to a non-empty string')
 assert(typeof PRAXIS_RULES_VERSION === 'number', 'version is a number')
-assert(PRAXIS_RULES_VERSION === 7, 'version bumped to 7')
+assert(PRAXIS_RULES_VERSION === 8, 'version bumped to 8')
 assert(r.includes(`v${PRAXIS_RULES_VERSION}`), 'rules carry the version marker')
 // v3 naming — the product is Praxis in the rule text now.
 assert(/praxis/i.test(r), 'names the product Praxis')
@@ -32,7 +32,10 @@ assert(/search first|grep/i.test(r), 'R1: search-first guidance')
 assert(/report/i.test(r), 'R1: report-what-changed guidance')
 // R2: browser inspection → agent-browser, never Chrome DevTools unless asked.
 assert(/agent-browser/i.test(r), 'R2: directs the agent to agent-browser')
-assert(/devtools/i.test(r) && /unless the user explicitly asks/i.test(r), 'R2: no DevTools unless asked')
+assert(
+  /devtools/i.test(r) && /unless the user explicitly asks/i.test(r),
+  'R2: no DevTools unless asked'
+)
 // Deterministic (same output every call — safe to inject per turn).
 assert(praxisRules() === r, 'praxisRules is deterministic')
 
@@ -67,6 +70,13 @@ assert(/fluid_clamp/.test(withTools), 'previewTools: teaches fluid_clamp')
 assert(/color_scale/.test(withTools), 'previewTools: teaches color_scale')
 assert(/layered_shadow/.test(withTools), 'previewTools: teaches layered_shadow')
 assert(!/fluid_clamp/.test(r), 'default rendering omits fluid_clamp')
+// R8a (line-height) — size-aware line_height calculator rides with previewTools.
+assert(/line_height/.test(withTools), 'previewTools: teaches line_height')
+assert(!/line_height/.test(r), 'default rendering omits line_height')
+// R8b (skills install) — offer-to-install skill packs rides with previewTools too.
+assert(/list_recommended_skills/.test(withTools), 'previewTools: teaches list_recommended_skills')
+assert(/install_skills/.test(withTools), 'previewTools: teaches install_skills')
+assert(!/install_skills/.test(r), 'default rendering omits install_skills')
 
 if (failed) {
   console.error(`RULES FAILED — ${failed} assertion(s)`)
