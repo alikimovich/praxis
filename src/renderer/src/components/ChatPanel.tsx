@@ -54,6 +54,7 @@ import {
   Copy,
   FileText,
   MousePointer2,
+  Undo2,
 } from "lucide-react";
 import {
   Collapsible,
@@ -261,29 +262,71 @@ function ClampedUserText({
   );
 }
 
-/** Hover action row under a finished assistant message — just Copy for now. */
+/** Copy-to-clipboard button for a finished assistant message. Renders bare (no row
+ *  wrapper) so it sits alongside Revert in the shared `msg__actions` row. */
 function CopyAction({ text }: { text: string }): React.JSX.Element {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="msg__actions">
+    <button
+      className="msg__action"
+      aria-label="Copy message"
+      title="Copy"
+      onClick={() => {
+        void navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        });
+      }}
+    >
+      {copied ? (
+        <Check className="size-3.5" aria-hidden="true" />
+      ) : (
+        <Copy className="size-3.5" aria-hidden="true" />
+      )}
+    </button>
+  );
+}
+
+/**
+ * Per-turn "Revert changes" button (v-next): rolls back the file edits one merged
+ * chat turn made, via its edit-history group. Only rendered when the turn carries a
+ * `revertGroup` (a merged, not-yet-pushed turn on a repo-root chat). A revert is
+ * refused with an inline hint when a later turn or a hand edit touched the same files
+ * since — the "safe" semantics. The dev server HMRs the restored files automatically.
+ */
+function RevertAction({
+  root,
+  group,
+}: {
+  root: string;
+  group: string;
+}): React.JSX.Element {
+  const [state, setState] = useState<"idle" | "done" | "conflict">("idle");
+  return (
+    <>
       <button
         className="msg__action"
-        aria-label="Copy message"
-        title="Copy"
+        aria-label="Revert changes"
+        title="Revert this turn's changes"
         onClick={() => {
-          void navigator.clipboard.writeText(text).then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
+          void window.api.edits.revert(root, group).then((r) => {
+            setState(r.ok ? "done" : "conflict");
+            setTimeout(() => setState("idle"), r.ok ? 1500 : 3000);
           });
         }}
       >
-        {copied ? (
+        {state === "done" ? (
           <Check className="size-3.5" aria-hidden="true" />
         ) : (
-          <Copy className="size-3.5" aria-hidden="true" />
+          <Undo2 className="size-3.5" aria-hidden="true" />
         )}
       </button>
-    </div>
+      {state === "conflict" && (
+        <span className="msg__action-hint">
+          Can't revert — files changed since this turn
+        </span>
+      )}
+    </>
   );
 }
 
@@ -574,8 +617,15 @@ export default function ChatPanel(): React.JSX.Element {
           );
         if (event.state === "merged") {
           // No active streaming message exists post-`done` (appendStatus needs
-          // one) — a plain note is the subtle line instead.
+          // one) — a plain note is the subtle line instead. Append it FIRST so the
+          // revert group below lands on this note (now the last assistant message).
           useChat.getState().appendNote("Merged into your branch", key);
+          // Tag the note — the very last thing in the turn — with the revert group so
+          // the Revert button sits at the END of the AI output; tagging the response
+          // bubble above the note leaves the button buried where it's easy to miss.
+          // Skipped when main marks it non-revertable (pushed via PR).
+          if (event.group && event.revertable !== false)
+            useChat.getState().tagRevert(key, event.group);
         } else if (event.state === "parked") {
           // The in-chat ConflictCard (driven by `isolation === 'parked'`) now explains
           // this and offers Resolve/Discard — no text note needed. Still refresh the
@@ -945,6 +995,23 @@ export default function ChatPanel(): React.JSX.Element {
   const onPermissionModeChange = (value: string): void => {
     const mode = value as PermissionMode;
     setMode(mode);
+    // Persist per-chat (mirrors onModelChange) so switching away and back restores
+    // THIS chat's mode instead of the toolbar drifting from the session's real mode.
+    const entry = useWorkspace
+      .getState()
+      .projects.find((p) => p.root === projectRoot);
+    if (entry) {
+      const sessionKey = entry.activeSessionKey ?? entry.key;
+      useWorkspace.getState().patchEntry(entry.key, {
+        chatSettings: {
+          ...entry.chatSettings,
+          [sessionKey]: {
+            ...chatAgentSettingsFor(entry, sessionKey),
+            permissionMode: mode,
+          },
+        },
+      });
+    }
     void window.api.agent.setPermissionMode(mode);
   };
 
@@ -1184,7 +1251,17 @@ export default function ChatPanel(): React.JSX.Element {
                     })}
                     {m.role === "assistant" &&
                       m.text &&
-                      !(isRunning && isLast) && <CopyAction text={m.text} />}
+                      !(isRunning && isLast) && (
+                        <div className="msg__actions">
+                          <CopyAction text={m.text} />
+                          {m.revertGroup && projectRoot && (
+                            <RevertAction
+                              root={projectRoot}
+                              group={m.revertGroup}
+                            />
+                          )}
+                        </div>
+                      )}
                   </div>
                 );
               })}

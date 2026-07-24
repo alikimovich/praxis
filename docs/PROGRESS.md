@@ -2,6 +2,133 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-23 — Stop the "Object has been destroyed" crash dialog on wake
+
+Closing the window (traffic-light close, NOT quit — the app stays alive to own
+the dev server) and then sleeping/waking the Mac popped a *series* of Electron
+`Uncaught Exception: TypeError: Object has been destroyed` dialogs — from
+`powerMonitor` 'resume', a dev-server `Socket.onData`, `WebContents.reportUrl`,
+and IPC forwarders.
+
+**The real root cause:** `createWindow()` never nulled `mainWindow` on
+`'closed'`. So after the window closed, `mainWindow` (and the child
+`previewView`/`panelView`) kept pointing at the *destroyed* objects — every
+`mainWindow?.…` guard in the codebase was defeated (non-null but dead). Any
+background listener that survives the window and fires on wake then threw.
+
+Fixes, defense-in-depth:
+- **`index.ts` — the primary fix:** `mainWindow.on('closed', …)` now nulls
+  `mainWindow`, `previewView`, `panelView`, `previewUrl`, `lastPreviewBounds`.
+  This makes every `?.` guard short-circuit AND fixes a latent reopen bug
+  (`ensurePreviewView`/`ensurePanelView` would otherwise hand back a dead view
+  on the next dock re-open).
+- **`index.ts` — powerMonitor 'resume':** guards `webContents.isDestroyed()`
+  before `.invalidate()`.
+- **`index.ts` — top-level backstop:** a `process.on('uncaughtException')` that
+  swallows (logs) only `TypeError: Object has been destroyed` — the benign
+  post-teardown race — and re-surfaces everything else via `dialog.showErrorBox`,
+  so real bugs aren't hidden but a teardown race can't pop the modal.
+- **Async-send guards (isDestroyed) for every event-driven `.send()`:**
+  `index.ts` `sendToMain()` (all 15 sites, covers `reportUrl` + IPC forwarders),
+  `devserver.ts` (`devserver:log`), `backends/tools.ts` `sendToRenderer()` used
+  by `claude.ts`/`codex.ts`/`gemini.ts`, `agent.ts` (`safeSend`), `simulator.ts`
+  (`sendToWin`), `update-ipc.ts`, `chat-isolation.ts`, `control-panels.ts`.
+
+No behavior change while the renderer is alive; typecheck + unit tier green,
+smoke launches clean. NOTE: the fix only takes effect after a rebuild + relaunch
+— a running old binary keeps crashing (its stack line numbers are the tell).
+(pre-existing `apca` unit skip: `apca-w3` not installed locally.)
+
+## 2026-07-23 — Resumed chats keep their transcript across a window close+reopen
+
+Surfaced once the crash fix above let close+reopen actually complete: after
+closing the window (app stays alive on macOS) and reopening, the chat repainted
+EMPTY while the preview came back. Not a regression from the crash fix — a
+pre-existing gap the crashes had been masking.
+
+Root cause (found via temporary `[restore-debug]` traces in the workspace
+snapshot): a chat resumed from disk (`agent:resume-session`) starts a fresh
+session with the SDK's `resumeSessionId` and shows the user the past messages
+from the on-disk record — but never copied that history into the live
+`session.record.transcript`, which only accrues NEW turns. So the reattach source
+of truth (`agent:workspace-snapshot`, read on the next boot) saw an empty
+transcript and `restore.ts` hydrated a blank chat. The first launch masks it
+(it resumes from disk directly); only the SECOND reopen, which reattaches to the
+still-live-but-empty record, shows blank.
+
+Fix (`agent.ts` `agent:resume-session`): seed the fresh live record with
+`rec.transcript` (entries copied, so a later finalize/push can't mutate the disk
+record) right after `adoptSession`, guarded on the live transcript being empty.
+Now the live record faithfully mirrors the resumed history, so a reattach
+repaints the full chat. Verified live: `transcriptLens` is non-zero on the
+second reopen and the chat comes back.
+
+## 2026-07-21 — Per-turn "Revert changes" in the chat
+
+Each completed chat turn's file edits can now be rolled back from a discoverable
+per-message button, next to Copy — not just via the invisible, strictly-LIFO
+global Cmd+Z. It reuses the existing in-memory edit-history substrate: every
+merged turn on a git-repo-root chat is already recorded as one atomic group
+`chat:<wtId>:<turnNo>` with full `{before, after}` snapshots, so this is a
+surfacing job, not new persistence.
+
+- **`edit-history.ts`** gains two addressable-group functions beside undo/redo:
+  `revertGroup(root, group)` restores every file's `before` for ONE group
+  anywhere in the stack (not just the top), all-or-nothing, refusing (conflict)
+  if any file drifted from the `after` that turn wrote — the same "is this safe?"
+  guard `undo` uses. On success the group leaves the undo stack; nothing is
+  pushed to redo (revert is a one-way action outside the linear undo/redo model).
+  `canRevertGroup` is the cheap drift-aware pre-check for greying the button.
+- **IPC trio** (`props.ts` `edit:revert`/`edit:can-revert` → `shared/api.ts`
+  `edits.revert`/`canRevert` → `preload`), kept in sync per the usual rule.
+- **`chat-isolation.ts`** tags the merged turn: `emitIsolation` now carries the
+  `group` id and a `revertable` flag on the `isolation` event. `revertable` is
+  `false` once the chat's work is pushed & merged — gated on the session record's
+  `prUrl` (held by reference from `adoptSession`, so a later `tag-session` shows
+  through). The renderer hides Revert when `revertable === false`.
+- **Renderer**: `ChatMessage.revertGroup` + a `tagRevert` store action stamp the
+  latest assistant turn from the merged event (before the "Merged into your
+  branch" note, so the real turn gets tagged). `RevertAction` sits by `CopyAction`
+  in a shared `msg__actions` row; a refused revert shows an inline "Can't revert —
+  files changed since this turn" hint. The dev server HMRs the restored files.
+
+**Limitations (by design):** only git-repo-root chats get per-turn groups (subdir
+/ non-git projects run on the live tree with no `recordEdit`, so no button, same
+as today's undo); history is in-memory (cleared on close/quit); reverting an older
+turn no-ops with the conflict hint if a later turn or hand edit touched its files.
+
+Verification: `test/edit-history.mjs` extended (addressable revert, drift conflict,
+all-or-nothing group) — unit tier green. New `test/revert-action.mjs` (electron
+tier) drives a finished turn, asserts Revert renders only once tagged and sits by
+Copy, and clicks it to exercise the full renderer→preload→main round-trip (the
+conflict hint). `bun run typecheck` green across node/web/preview.
+
+## 2026-07-20 — Pop-out editor gets a file-tree sidebar; IDE button + close cleanup
+
+The popped-out code editor (`?praxisEditor=1` window) now has a left file-tree
+sidebar. Clicking a file opens it in the shared `useCodeDrawer` store, so
+Cmd+click navigation and back/forward keep working; the tree mirrors the open
+file's selection.
+
+- Tree = **`@pierre/trees`** (trees.software), used via its **vanilla (non-React)**
+  entry on purpose: the package's `/react` entry peer-requires React 19 but the
+  renderer is React 18. The vanilla `FileTree` class renders into its own shadow
+  root via Preact — fully decoupled from our React — so `FileTreePanel.tsx` just
+  mounts it imperatively in a `useEffect` and bridges selection ↔ the drawer.
+- New `src/main/file-tree.ts` + `source:tree` IPC lists the project's files:
+  `git ls-files` (tracked + untracked-not-ignored) for repos, bounded fs-walk
+  fallback (skips node_modules/dist/etc.) for non-git folders. POSIX paths,
+  sorted, capped at 20k. Unit-tested in `test/file-tree.mjs` (unit tier).
+- CodeDrawer window variant relaid out as a row (tree aside + editor column); the
+  macOS traffic lights now float over the sidebar, so a draggable spacer clears
+  them and the header dropped its `pl-20` inset.
+- Toolbar: the **"Editor"** button is now **"IDE"** (icon dropped); the top-right
+  **close** button is hidden in the pop-out (its native traffic lights close it)
+  and kept only on the docked drawer.
+
+Typecheck + build green; `test:file-tree` green. The Electron UI tiers couldn't
+run in this headless session (no display — even unmodified UI tests fail to
+launch); the tree render itself needs a manual `bun run dev` check.
 ## 2026-07-22 — `praxis --update` no longer aborts on install-generated lockfile drift
 
 `praxis --update` was failing at its first step with `git pull --ff-only`:

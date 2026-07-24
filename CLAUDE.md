@@ -73,6 +73,8 @@ src/
     devserver.ts    detect framework/PM, spawn dev server, parse URL, readiness
     static-server.ts in-process static file server for vanilla HTML/JS projects
                     (framework 'static': no package.json/dev command; live-reload)
+    file-tree.ts    list a project's files (git ls-files / fs-walk) for the
+                    pop-out editor's @pierre/trees sidecar (source:tree IPC)
     agent.ts        persistent multi-turn agent session (streams over agent:* IPC)
     backends/       provider seam: claude.ts, codex.ts, gemini.ts behind pickProvider
                     (gemini currently has NO SDK dep — treat as experimental)
@@ -87,6 +89,19 @@ src/
                     validate + anchor-lex + render literals (pure) and the
                     main-owned .dsgn/control-panels.json store + controls:* IPC
     tokens.ts       design-token detection/scaffold   annotations.ts  comments → PR
+    spring.ts       pure spring→CSS linear() engine (vendored from ~/dev/spring2css);
+                    powers the spring_to_css agent tool in backends/claude.ts
+    apca.ts         APCA (Lc) contrast checker + accessible-color suggester
+                    (adapted from ~/dev/apca-cli; apca-w3 + colorparsley loaded via
+                    dynamic import — ESM-only); powers the check_contrast agent tool
+    fluid.ts / oklch.ts / shadows.ts   pure design-system calculators powering the
+                    fluid_clamp (Utopia clamp() math), color_scale (OKLCH tonal ramp
+                    + gamut map) and layered_shadow (multi-layer box-shadow) agent tools
+    type-metrics.ts pure line-height + letter-spacing recommender (size-aware,
+                    WCAG-floored leading; Material-3 tracking); powers the line_height agent tool
+    skill-packs.ts / skills-install.ts   curated allowlist catalog of external "taste"
+                    skills + the `npx skills add --copy` runner; power the
+                    list_recommended_skills (pure) and install_skills (side-effecting) agent tools
     git.ts, worktrees.ts, chat-worktrees.ts, chat-isolation.ts
                     git/worktree primitives; worktrees: per-chat isolation + sync/merge/recovery;
                     chat-worktrees: turn-scoped ops (sync, commit, apply); chat-isolation: lifecycle

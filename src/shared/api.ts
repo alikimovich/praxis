@@ -229,7 +229,19 @@ export type AgentEvent = (
    *  checkout ('merged'), a private worktree was forked for the chat ('isolated'), or a
    *  turn parked on its branch after mid-turn drift ('parked'). Routed by `projectKey` =
    *  the chat's emitKey, like every other interactive-chat event. */
-  | { type: 'isolation'; state: 'isolated' | 'merged' | 'parked'; branch?: string; files?: string[] }
+  | {
+      type: 'isolation'
+      state: 'isolated' | 'merged' | 'parked'
+      branch?: string
+      files?: string[]
+      /** On 'merged': the edit-history group id (`chat:<wtId>:<turnNo>`) that reverts
+       *  this turn's file changes — the renderer tags the merged assistant message with
+       *  it to render a per-turn Revert button. */
+      group?: string
+      /** On 'merged': whether this turn is safely revertable (false once the chat's
+       *  work has been pushed & merged via a PR) — the renderer hides Revert if false. */
+      revertable?: boolean
+    }
 ) & {
   /** Which project's session emitted this — set by main so the renderer routes it
    * to the right chat (active project shows live; others accumulate in the rail). */
@@ -998,6 +1010,8 @@ export interface PraxisApi {
     popout: (root: string, source: string) => Promise<void>
     /** Close the standalone editor window (called from inside a popped-out editor). */
     closeWindow: () => Promise<void>
+    /** Repo-relative file paths for the pop-out editor's file-tree sidebar. */
+    tree: (root: string) => Promise<string[]>
     /** Standalone editor window: retarget event when a second pop-out reuses it. */
     onNavigate: (cb: (source: string) => void) => () => void
   }
@@ -1007,6 +1021,13 @@ export interface PraxisApi {
     undo: (root: string) => Promise<UndoResult>
     redo: (root: string) => Promise<UndoResult>
     can: (root: string) => Promise<{ undo: boolean; redo: boolean }>
+    /** Per-turn chat revert: restore the pre-turn files of the recorded group
+     *  `chat:<wtId>:<turnNo>` (addressable, not stack-order). `conflict` when a file
+     *  drifted since (a later turn or hand edit touched it). */
+    revert: (root: string, group: string) => Promise<UndoResult>
+    /** Is that group still safely revertable right now (on the stack, no file drifted)?
+     *  A cheap pre-check for greying out the Revert button. */
+    canRevert: (root: string, group: string) => Promise<boolean>
   }
   tokens: {
     /** Detect design tokens in the repo (manifest → tailwind → CSS vars). */

@@ -59,6 +59,10 @@ interface ChatState {
   turnNo: number
   /** Per-chat serialization chain (sync + merge queue). */
   chain: Promise<unknown>
+  /** The live session's history record (adopted right after startSession). Held by
+   *  reference so a later `agent:tag-session` prUrl mutation is seen live — a chat
+   *  whose work was pushed & merged (prUrl set) marks its turns non-revertable. */
+  record?: SessionRecord
 }
 
 interface Deps {
@@ -84,15 +88,23 @@ function emitIsolation(
   sessionKey: string,
   state: 'isolated' | 'merged' | 'parked',
   branch?: string,
-  files?: string[]
+  files?: string[],
+  group?: string,
+  revertable?: boolean
 ): void {
-  deps?.getWindow()?.webContents.send('agent:event', {
-    type: 'isolation',
-    state,
-    ...(branch ? { branch } : {}),
-    ...(files && files.length ? { files } : {}),
-    projectKey: sessionKey
-  } satisfies AgentEvent)
+  // Guard a destroyed webContents: this fires from async turn lifecycle hooks,
+  // which can land after the renderer process is killed (OS display sleep).
+  const wc = deps?.getWindow()?.webContents
+  if (wc && !wc.isDestroyed())
+    wc.send('agent:event', {
+      type: 'isolation',
+      state,
+      ...(branch ? { branch } : {}),
+      ...(files && files.length ? { files } : {}),
+      ...(group ? { group } : {}),
+      ...(revertable !== undefined ? { revertable } : {}),
+      projectKey: sessionKey
+    } satisfies AgentEvent)
 }
 
 /**
@@ -137,7 +149,8 @@ export function adoptSession(sessionKey: string, record: SessionRecord, liveRoot
   record.projectKey = projectKey(liveRoot)
   record.projectRoot = liveRoot
   record.projectName = basename(liveRoot) || liveRoot
-  void sessionKey
+  const st = states.get(sessionKey)
+  if (st) st.record = record
 }
 
 /**
@@ -180,22 +193,17 @@ export function afterTurn(sessionKey: string, message: string, transcript: Sessi
       const turnNo = ++st.turnNo
       const outcome = await completeTurn(st.liveRoot, st.wt, message)
       if (outcome.outcome === 'merged') {
+        const group = `chat:${st.wt.id}:${turnNo}`
         for (const e of outcome.edits) {
-          recordEdit(
-            st.liveRoot,
-            e.file,
-            e.before,
-            e.after,
-            undefined,
-            `chat:${st.wt.id}:${turnNo}`
-          )
+          recordEdit(st.liveRoot, e.file, e.before, e.after, undefined, group)
         }
         if (outcome.newBase) st.wt.baseSha = outcome.newBase
         if (st.parked) {
           st.parked = false
           dropParkRecord(st)
         }
-        emitIsolation(sessionKey, 'merged', st.wt.branch, outcome.files)
+        // Not revertable once this chat's work has been pushed & merged via a PR.
+        emitIsolation(sessionKey, 'merged', st.wt.branch, outcome.files, group, !st.record?.prUrl)
       } else if (outcome.outcome === 'parked') {
         st.parked = true
         upsertParkRecord(st, outcome.files, turn)
@@ -375,13 +383,14 @@ export async function resolveParkedChat(
   const merge = st.chain.then(async () => {
     const outcome = await completeTurn(st.liveRoot, st.wt, 'Resolve chat/live merge')
     if (outcome.outcome === 'merged') {
+      const group = `chat:${st.wt.id}:resolve`
       for (const e of outcome.edits) {
-        recordEdit(st.liveRoot, e.file, e.before, e.after, undefined, `chat:${st.wt.id}:resolve`)
+        recordEdit(st.liveRoot, e.file, e.before, e.after, undefined, group)
       }
       if (outcome.newBase) st.wt.baseSha = outcome.newBase
       st.parked = false
       dropParkRecord(st)
-      emitIsolation(sessionKey, 'merged', st.wt.branch, outcome.files)
+      emitIsolation(sessionKey, 'merged', st.wt.branch, outcome.files, group, !st.record?.prUrl)
     }
   })
   st.chain = merge.catch(() => {})

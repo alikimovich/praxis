@@ -54,6 +54,10 @@ export interface ChatMessage {
   attachments?: MsgAttachment[]
   /** The element the user had selected when they sent this turn (user messages). */
   selection?: MsgSelection
+  /** Edit-history group id (`chat:<wtId>:<turnNo>`) whose file changes this assistant
+   *  turn made — set from the 'merged' isolation event; drives the per-turn Revert
+   *  button. Absent for turns that made no edits or whose work was already pushed. */
+  revertGroup?: string
 }
 
 /** One project's chat. `streamingId` is the assistant message currently being
@@ -116,6 +120,10 @@ interface ChatState {
     isolation: 'live' | 'isolated' | 'parked',
     files?: string[]
   ) => void
+  /** Tag this chat's latest assistant turn with the edit-history group that reverts
+   *  its file changes (the 'merged' isolation event). No-op if there's no assistant
+   *  message yet. Call it BEFORE any post-merge note so the real turn gets tagged. */
+  tagRevert: (key: string, group: string) => void
   /** Drop a project's chat buffer (on close). */
   clearChat: (key: string) => void
   // Actions default to the active project; pass a key to target a backgrounded one.
@@ -216,6 +224,14 @@ export const useChat = create<ChatState>((set, get) => {
       // Only a park carries files; clear them on any other status so a stale list can't
       // linger after a merge.
       patch(key, (sl) => ({ ...sl, isolation, isolationFiles: isolation === 'parked' ? files : undefined })),
+    tagRevert: (key, group) =>
+      patch(key, (sl) => {
+        const idx = sl.messages.map((m) => m.role).lastIndexOf('assistant')
+        if (idx < 0) return sl
+        const messages = sl.messages.slice()
+        messages[idx] = { ...messages[idx], revertGroup: group }
+        return { ...sl, messages }
+      }),
     clearChat: (key) =>
       set((s) => {
         const byKey = { ...s.byKey }
@@ -360,12 +376,16 @@ export interface ChatAgentSettings {
   model: string
   effort: string
   provider: string
+  /** Tool-permission posture for THIS chat. Persisted per-chat like model/provider
+   *  so switching chats restores it (main keeps mode per-session; see usePermissions). */
+  permissionMode: PermissionMode
 }
 
 export const defaultChatAgentSettings = (): ChatAgentSettings => ({
   model: DEFAULT_MODEL,
   effort: 'high',
-  provider: DEFAULT_PROVIDER
+  provider: DEFAULT_PROVIDER,
+  permissionMode: 'auto'
 })
 
 interface SessionState {
@@ -411,7 +431,14 @@ export const useSession = create<SessionState>((set) => ({
   setModel: (model) => set({ model }),
   setEffort: (effort) => set({ effort }),
   setProvider: (provider) => set({ provider }),
-  setChatAgentSettings: ({ model, effort, provider }) => set({ model, effort, provider }),
+  setChatAgentSettings: ({ model, effort, provider, permissionMode }) => {
+    set({ model, effort, provider })
+    // Mode is a per-chat choice too, but it lives in usePermissions (which also owns
+    // the pending-prompt queue). Restore it here so activating a chat re-points the
+    // toolbar dropdown to THAT chat's real mode instead of a stale global value —
+    // this is the single place every switch/boot path funnels through.
+    usePermissions.getState().setMode(permissionMode)
+  },
   setSlashCommands: (slashCommands) => set({ slashCommands }),
   setAuthNeeded: (authNeeded) => set({ authNeeded }),
   setCodexAuthNeeded: (codexAuthNeeded) => set({ codexAuthNeeded }),
@@ -486,7 +513,8 @@ export const chatAgentSettingsFromSession = (
 ): ChatAgentSettings => ({
   model: session.model,
   effort: session.effort,
-  provider: session.provider
+  provider: session.provider,
+  permissionMode: usePermissions.getState().mode
 })
 
 interface WorkspaceState {

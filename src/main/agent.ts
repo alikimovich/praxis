@@ -293,7 +293,7 @@ async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<voi
       } catch {
         /* history is non-critical */
       }
-      getWindow_()?.webContents.send('agent:event', {
+      safeSend(getWindow_, 'agent:event', {
         type: 'spawn-finished',
         projectKey: parentKey,
         sessionId: id,
@@ -309,7 +309,7 @@ async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<voi
         store().save(session.record)
       }
       await removeWorktree(parentRoot, wt, { keepBranch: committed })
-      getWindow_()?.webContents.send('agent:event', {
+      safeSend(getWindow_, 'agent:event', {
         type: 'spawn-finished',
         projectKey: parentKey,
         sessionId: id,
@@ -328,6 +328,15 @@ async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<voi
 // accessor. Captured when IPC is registered.
 let getWindow_: () => BrowserWindow | null = () => null
 
+// Agent events stream from async SDK callbacks that keep firing after the
+// renderer process is killed (OS display sleep / GPU loss): the window outlives
+// its webContents, so a bare `.send()` throws an uncaught "Object has been
+// destroyed". Guard isDestroyed() to make a late emit a safe no-op.
+function safeSend(get: () => BrowserWindow | null, channel: string, payload: unknown): void {
+  const wc = get()?.webContents
+  if (wc && !wc.isDestroyed()) wc.send(channel, payload)
+}
+
 /**
  * Create the worktree + start a detached session for one spawn. Shared by the
  * immediate path and the queue. On a setup failure it reclaims the worktree and
@@ -339,7 +348,7 @@ async function startSpawn(q: QueuedSpawn): Promise<string | null> {
   try {
     wt = await createWorktree(q.root, worktreesDir(), { label: q.text, id: q.id })
   } catch {
-    getWindow_()?.webContents.send('agent:event', {
+    safeSend(getWindow_, 'agent:event', {
       type: 'spawn-finished',
       projectKey: q.parentKey,
       sessionId: q.id,
@@ -373,7 +382,7 @@ async function startSpawn(q: QueuedSpawn): Promise<string | null> {
     return wt.branch
   } catch {
     await removeWorktree(q.root, wt, { keepBranch: false })
-    getWindow_()?.webContents.send('agent:event', {
+    safeSend(getWindow_, 'agent:event', {
       type: 'spawn-finished',
       projectKey: q.parentKey,
       sessionId: q.id,
@@ -393,7 +402,7 @@ async function pumpQueue(parentKey: string): Promise<void> {
     const [q] = spawnQueue.splice(idx, 1)
     const branch = await startSpawn(q)
     if (branch) {
-      getWindow_()?.webContents.send('agent:event', {
+      safeSend(getWindow_, 'agent:event', {
         type: 'spawn-started',
         projectKey: parentKey,
         sessionId: q.id,
@@ -655,6 +664,16 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
           onEvent: interactiveEvents(sessionKey)
         })
         adoptSession(sessionKey, s.record, root)
+        // Seed the fresh live record with the resumed chat's on-disk history. The
+        // SDK resumes the conversation context and the renderer paints the past
+        // messages from the record it resumed, but `s.record.transcript` starts
+        // empty and only accrues NEW turns — so without this a later reattach
+        // (agent:workspace-snapshot, after a window close+reopen) would repaint an
+        // empty chat. Copy the entries (not references) so the disk record can't be
+        // mutated by this session's subsequent finalize/pushes.
+        if (rec.transcript.length && s.record.transcript.length === 0) {
+          s.record.transcript.push(...rec.transcript.map((t) => ({ ...t })))
+        }
         // Carry the past chat's generated name onto the fresh record so a resumed
         // chat keeps its subject label (and doesn't re-title on its next turn).
         if (rec.title) {
@@ -755,7 +774,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('agent:send', async (_e, text: string, images?: ImageAttachment[]) => {
     const session = activeSession()
     if (!session) {
-      getWindow()?.webContents.send('agent:event', {
+      safeSend(getWindow, 'agent:event', {
         type: 'error',
         message: 'Open a project first — the agent works inside a repo.'
       } satisfies AgentEvent)
@@ -828,7 +847,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     const queuedIdx = spawnQueue.findIndex((q) => q.id === id)
     if (queuedIdx !== -1) {
       const [q] = spawnQueue.splice(queuedIdx, 1)
-      getWindow()?.webContents.send('agent:event', {
+      safeSend(getWindow, 'agent:event', {
         type: 'spawn-finished',
         projectKey: q.parentKey,
         sessionId: id,

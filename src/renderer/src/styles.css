@@ -1502,6 +1502,12 @@ body.is-resizing {
     background: color-mix(in srgb, var(--text) 8%, transparent);
     color: var(--text);
 }
+/* Inline "can't revert" hint shown in the actions row after a refused revert. */
+.msg__action-hint {
+    align-self: center;
+    font-size: 11px;
+    color: var(--text-muted);
+}
 
 .msg__text {
     font-size: 14px;

@@ -401,7 +401,14 @@ export function registerDevServerIpc(getWindow: () => BrowserWindow | null): voi
   ipcMain.handle(
     'devserver:start',
     (_e, opts: { root: string; command: string; framework?: Framework }) =>
-      start(opts, (line) => getWindow()?.webContents.send('devserver:log', line))
+      // The dev server's stdout/stderr `onData` keeps firing after the renderer
+      // process is killed (OS display sleep / GPU loss): the window outlives its
+      // webContents, so guard isDestroyed() or `.send()` throws an uncaught
+      // "Object has been destroyed" — the crash dialog seen on wake.
+      start(opts, (line) => {
+        const wc = getWindow()?.webContents
+        if (wc && !wc.isDestroyed()) wc.send('devserver:log', line)
+      })
   )
 
   ipcMain.handle('devserver:stop', async (_e, root: string) => stop(root))

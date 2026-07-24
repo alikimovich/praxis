@@ -31,6 +31,13 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
       entry + `CodeDrawer` `variant="window"`). One window per project root;
       re-focuses + retargets on a repeat pop-out. `source.popout/closeWindow/
       onNavigate` IPC. `test/code-drawer.mjs`.
+- [x] **Phase 4 — file-tree sidebar in the pop-out.** ✅ 2026-07-20 — the pop-out
+      window gains a left file tree (`@pierre/trees`, vanilla/shadow-DOM entry so
+      it's decoupled from the renderer's React 18). Click a file → opens in the
+      shared drawer store. `src/main/file-tree.ts` + `source:tree` IPC list the
+      project (git ls-files, fs-walk fallback). `test/file-tree.mjs`. Also renamed
+      the toolbar "Editor" button → "IDE" and dropped the pop-out's redundant
+      close button (native traffic lights close it).
 
 ## Per-chat worktree isolation (2026-07-16, concurrent-chat safety) — SHIPPED
 
