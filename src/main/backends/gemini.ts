@@ -3,7 +3,7 @@ import type { BrowserWindow } from 'electron'
 import type { AgentEvent, AgentOptions } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
 import type { ModelProvider, PendingPrompt, ProviderSession, SpawnContext } from './types'
-import { describeTool } from './tools'
+import { describeTool, sendToRenderer } from './tools'
 import { createRecordCapture } from './record'
 import { praxisRules } from '../rules'
 
@@ -94,7 +94,7 @@ async function startSession(
     // agent.ts's in-process hook — v9 workspace-snapshot isRunning tracking
     // (set for every interactive session: default, new-chat, resumed).
     ctx?.onEvent?.(tagged)
-    getWindow()?.webContents.send('agent:event', tagged)
+    sendToRenderer(getWindow, 'agent:event', tagged)
   }
 
   // Serialize turns: each send() runs one `gemini -p` process to completion.

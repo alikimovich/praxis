@@ -270,7 +270,8 @@ export function registerControlsIpc(): void {
     // panel locally, so main's cached panel state and the renderer's fetched
     // list both keep the deleted panel — it would come back on the next island
     // reload and could still be picked as a Regenerate target.
-    for (const w of BrowserWindow.getAllWindows()) w.webContents.send('controls:updated', { root })
+    for (const w of BrowserWindow.getAllWindows())
+      if (!w.webContents.isDestroyed()) w.webContents.send('controls:updated', { root })
     return panels
   })
   ipcMain.handle(

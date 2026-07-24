@@ -293,7 +293,7 @@ async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<voi
       } catch {
         /* history is non-critical */
       }
-      getWindow_()?.webContents.send('agent:event', {
+      safeSend(getWindow_, 'agent:event', {
         type: 'spawn-finished',
         projectKey: parentKey,
         sessionId: id,
@@ -309,7 +309,7 @@ async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<voi
         store().save(session.record)
       }
       await removeWorktree(parentRoot, wt, { keepBranch: committed })
-      getWindow_()?.webContents.send('agent:event', {
+      safeSend(getWindow_, 'agent:event', {
         type: 'spawn-finished',
         projectKey: parentKey,
         sessionId: id,
@@ -328,6 +328,15 @@ async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<voi
 // accessor. Captured when IPC is registered.
 let getWindow_: () => BrowserWindow | null = () => null
 
+// Agent events stream from async SDK callbacks that keep firing after the
+// renderer process is killed (OS display sleep / GPU loss): the window outlives
+// its webContents, so a bare `.send()` throws an uncaught "Object has been
+// destroyed". Guard isDestroyed() to make a late emit a safe no-op.
+function safeSend(get: () => BrowserWindow | null, channel: string, payload: unknown): void {
+  const wc = get()?.webContents
+  if (wc && !wc.isDestroyed()) wc.send(channel, payload)
+}
+
 /**
  * Create the worktree + start a detached session for one spawn. Shared by the
  * immediate path and the queue. On a setup failure it reclaims the worktree and
@@ -339,7 +348,7 @@ async function startSpawn(q: QueuedSpawn): Promise<string | null> {
   try {
     wt = await createWorktree(q.root, worktreesDir(), { label: q.text, id: q.id })
   } catch {
-    getWindow_()?.webContents.send('agent:event', {
+    safeSend(getWindow_, 'agent:event', {
       type: 'spawn-finished',
       projectKey: q.parentKey,
       sessionId: q.id,
@@ -373,7 +382,7 @@ async function startSpawn(q: QueuedSpawn): Promise<string | null> {
     return wt.branch
   } catch {
     await removeWorktree(q.root, wt, { keepBranch: false })
-    getWindow_()?.webContents.send('agent:event', {
+    safeSend(getWindow_, 'agent:event', {
       type: 'spawn-finished',
       projectKey: q.parentKey,
       sessionId: q.id,
@@ -393,7 +402,7 @@ async function pumpQueue(parentKey: string): Promise<void> {
     const [q] = spawnQueue.splice(idx, 1)
     const branch = await startSpawn(q)
     if (branch) {
-      getWindow_()?.webContents.send('agent:event', {
+      safeSend(getWindow_, 'agent:event', {
         type: 'spawn-started',
         projectKey: parentKey,
         sessionId: q.id,
@@ -755,7 +764,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('agent:send', async (_e, text: string, images?: ImageAttachment[]) => {
     const session = activeSession()
     if (!session) {
-      getWindow()?.webContents.send('agent:event', {
+      safeSend(getWindow, 'agent:event', {
         type: 'error',
         message: 'Open a project first — the agent works inside a repo.'
       } satisfies AgentEvent)
@@ -828,7 +837,7 @@ export function registerAgentIpc(getWindow: () => BrowserWindow | null): void {
     const queuedIdx = spawnQueue.findIndex((q) => q.id === id)
     if (queuedIdx !== -1) {
       const [q] = spawnQueue.splice(queuedIdx, 1)
-      getWindow()?.webContents.send('agent:event', {
+      safeSend(getWindow, 'agent:event', {
         type: 'spawn-finished',
         projectKey: q.parentKey,
         sessionId: id,

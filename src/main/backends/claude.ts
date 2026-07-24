@@ -42,7 +42,7 @@ import {
 import { letterSpacing, lineHeight } from '../type-metrics'
 import { createRecordCapture } from './record'
 import { sanitizeTitle, transcriptDigest } from './title'
-import { AUTO_ALLOW_TOOLS, describeTool, toolDetail, touchesSidecar } from './tools'
+import { AUTO_ALLOW_TOOLS, describeTool, sendToRenderer, toolDetail, touchesSidecar } from './tools'
 import type {
   ModelProvider,
   PendingPrompt,
@@ -585,7 +585,7 @@ async function startSession(
     // agent.ts watches this in-process hook for a spawn's terminal done/error, and
     // (v9) an interactive session's for workspace-snapshot isRunning tracking.
     ctx?.onEvent?.(tagged)
-    getWindow()?.webContents.send('agent:event', tagged)
+    sendToRenderer(getWindow, 'agent:event', tagged)
   }
 
   // In-process SDK MCP server bundling Praxis's own agent tools: read-only views
@@ -694,7 +694,7 @@ async function startSession(
           }
           const saved = await saveManifest(ctx?.liveRoot ?? root, manifest)
           if ('error' in saved) return fail(saved.error)
-          getWindow()?.webContents.send('controls:updated', { root: ctx?.liveRoot ?? root })
+          sendToRenderer(getWindow, 'controls:updated', { root: ctx?.liveRoot ?? root })
           const n = manifest.params.length
           return {
             content: [

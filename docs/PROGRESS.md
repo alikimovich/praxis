@@ -2,6 +2,43 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-07-23 — Stop the "Object has been destroyed" crash dialog on wake
+
+Closing the window (traffic-light close, NOT quit — the app stays alive to own
+the dev server) and then sleeping/waking the Mac popped a *series* of Electron
+`Uncaught Exception: TypeError: Object has been destroyed` dialogs — from
+`powerMonitor` 'resume', a dev-server `Socket.onData`, `WebContents.reportUrl`,
+and IPC forwarders.
+
+**The real root cause:** `createWindow()` never nulled `mainWindow` on
+`'closed'`. So after the window closed, `mainWindow` (and the child
+`previewView`/`panelView`) kept pointing at the *destroyed* objects — every
+`mainWindow?.…` guard in the codebase was defeated (non-null but dead). Any
+background listener that survives the window and fires on wake then threw.
+
+Fixes, defense-in-depth:
+- **`index.ts` — the primary fix:** `mainWindow.on('closed', …)` now nulls
+  `mainWindow`, `previewView`, `panelView`, `previewUrl`, `lastPreviewBounds`.
+  This makes every `?.` guard short-circuit AND fixes a latent reopen bug
+  (`ensurePreviewView`/`ensurePanelView` would otherwise hand back a dead view
+  on the next dock re-open).
+- **`index.ts` — powerMonitor 'resume':** guards `webContents.isDestroyed()`
+  before `.invalidate()`.
+- **`index.ts` — top-level backstop:** a `process.on('uncaughtException')` that
+  swallows (logs) only `TypeError: Object has been destroyed` — the benign
+  post-teardown race — and re-surfaces everything else via `dialog.showErrorBox`,
+  so real bugs aren't hidden but a teardown race can't pop the modal.
+- **Async-send guards (isDestroyed) for every event-driven `.send()`:**
+  `index.ts` `sendToMain()` (all 15 sites, covers `reportUrl` + IPC forwarders),
+  `devserver.ts` (`devserver:log`), `backends/tools.ts` `sendToRenderer()` used
+  by `claude.ts`/`codex.ts`/`gemini.ts`, `agent.ts` (`safeSend`), `simulator.ts`
+  (`sendToWin`), `update-ipc.ts`, `chat-isolation.ts`, `control-panels.ts`.
+
+No behavior change while the renderer is alive; typecheck + unit tier green,
+smoke launches clean. NOTE: the fix only takes effect after a rebuild + relaunch
+— a running old binary keeps crashing (its stack line numbers are the tell).
+(pre-existing `apca` unit skip: `apca-w3` not installed locally.)
+
 ## 2026-07-21 — Per-turn "Revert changes" in the chat
 
 Each completed chat turn's file edits can now be rolled back from a discoverable

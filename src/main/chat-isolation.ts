@@ -92,15 +92,19 @@ function emitIsolation(
   group?: string,
   revertable?: boolean
 ): void {
-  deps?.getWindow()?.webContents.send('agent:event', {
-    type: 'isolation',
-    state,
-    ...(branch ? { branch } : {}),
-    ...(files && files.length ? { files } : {}),
-    ...(group ? { group } : {}),
-    ...(revertable !== undefined ? { revertable } : {}),
-    projectKey: sessionKey
-  } satisfies AgentEvent)
+  // Guard a destroyed webContents: this fires from async turn lifecycle hooks,
+  // which can land after the renderer process is killed (OS display sleep).
+  const wc = deps?.getWindow()?.webContents
+  if (wc && !wc.isDestroyed())
+    wc.send('agent:event', {
+      type: 'isolation',
+      state,
+      ...(branch ? { branch } : {}),
+      ...(files && files.length ? { files } : {}),
+      ...(group ? { group } : {}),
+      ...(revertable !== undefined ? { revertable } : {}),
+      projectKey: sessionKey
+    } satisfies AgentEvent)
 }
 
 /**

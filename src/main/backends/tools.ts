@@ -1,3 +1,23 @@
+import type { BrowserWindow } from 'electron'
+
+/**
+ * Send an IPC message to the main renderer, guarding a destroyed webContents.
+ *
+ * Backend event streams fire from async SDK callbacks that keep running after
+ * the renderer process is killed (OS display sleep / GPU loss): the window
+ * outlives its `webContents`, so a bare `getWindow()?.webContents.send(...)`
+ * throws an uncaught "Object has been destroyed" — the crash dialog seen on
+ * wake. `isDestroyed()` makes a late emit a safe no-op.
+ */
+export function sendToRenderer(
+  getWindow: () => BrowserWindow | null,
+  channel: string,
+  payload: unknown
+): void {
+  const wc = getWindow()?.webContents
+  if (wc && !wc.isDestroyed()) wc.send(channel, payload)
+}
+
 /**
  * Tool-name policy + status helpers shared by the model-provider backends
  * (`claude.ts`, `codex.ts`, …) and by the generic permission machinery in

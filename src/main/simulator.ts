@@ -534,9 +534,17 @@ interface Interaction {
 let simSelectMode = false
 // The window to emit picks to, set in registerSimulatorIpc.
 let getWin: () => BrowserWindow | null = () => null
+// Send to the renderer, guarding a destroyed webContents: the window can outlive
+// its renderer process (OS kills it on display sleep), and async sources here —
+// the sim launch's socket `onData`, the bridge server — keep emitting during that
+// window and would throw an uncaught "Object has been destroyed" from `.send()`.
+const sendToWin = (channel: string, ...args: unknown[]): void => {
+  const wc = getWin()?.webContents
+  if (wc && !wc.isDestroyed()) wc.send(channel, ...args)
+}
 // Status line into the renderer's simulator log (safe before registration: no-op).
 const simLog = (line: string): void => {
-  getWin()?.webContents.send('simulator:log', line)
+  sendToWin('simulator:log', line)
 }
 
 // --- the bridge HTTP server -------------------------------------------------
@@ -1072,7 +1080,7 @@ async function start(
         onSelectTap: (fx, fy) => {
           void idbHitTest(udid, fx, fy)
             .then((pick) => {
-              if (pick) getWin()?.webContents.send('simulator:element-picked', pick)
+              if (pick) sendToWin('simulator:element-picked', pick)
             })
             .catch((err) => simLog(`Element select failed: ${msg(err)}`))
         }
@@ -1123,7 +1131,7 @@ async function startTestBridge(interactive = false): Promise<{ url: string }> {
         isSelectMode: () => simSelectMode,
         onSelectTap: () => {
           testPicks.push(TEST_PICK)
-          getWin()?.webContents.send('simulator:element-picked', TEST_PICK)
+          sendToWin('simulator:element-picked', TEST_PICK)
         }
       }
     : null

@@ -39,12 +39,53 @@ app.setAboutPanelOptions({
   applicationVersion: app.getVersion()
 })
 
+// Backstop for the post-teardown race. Around a sleep/wake cycle — especially
+// after the window was closed but the app kept running (macOS) — a stray
+// Electron event can still fire into an object destroyed with the window before
+// its listener is torn down, throwing "Object has been destroyed". The specific
+// handlers are guarded (sendToMain, powerMonitor, the closed→null cleanup), but
+// this catches anything they miss (incl. Electron-internal emitters) so a benign
+// teardown race can't pop the modal "A JavaScript error occurred" dialog. Real
+// errors keep the default surfacing (an error box), so nothing is silently lost.
+process.on('uncaughtException', (err) => {
+  const msg = err instanceof Error ? err.message : String(err)
+  if (err instanceof TypeError && /Object has been destroyed/.test(msg)) {
+    console.error('Ignoring post-teardown "Object has been destroyed":', msg)
+    return
+  }
+  console.error('Uncaught exception in main process:', err)
+  try {
+    dialog.showErrorBox(
+      'A JavaScript error occurred in the main process',
+      err instanceof Error ? (err.stack ?? err.message) : String(err)
+    )
+  } catch {
+    /* dialog unavailable this early — already logged above */
+  }
+})
+
 // App icon (dev dock icon + Win/Linux window icon). Lives at build/icon.png,
 // resolved relative to the compiled main (out/main → ../../build). Loaded up front
 // so a missing file degrades to an empty image (guarded at use) instead of throwing.
 const appIcon = nativeImage.createFromPath(join(__dirname, '../../build/icon.png'))
 
 let mainWindow: BrowserWindow | null = null
+
+/**
+ * Send an IPC message to the main renderer, defensively.
+ *
+ * A bare `mainWindow?.webContents.send(...)` only guards `mainWindow` being null
+ * — but the window can outlive its `webContents` (the OS kills the renderer process on
+ * display sleep / GPU loss). Async event sources — preview navigation events,
+ * dev-server socket data — keep firing during that window and throw an uncaught
+ * "Object has been destroyed" from `.send()`, surfacing the crash dialog the
+ * user sees on wake. Checking `isDestroyed()` makes every send a safe no-op once
+ * the renderer is gone.
+ */
+function sendToMain(channel: string, ...args: unknown[]): void {
+  const wc = mainWindow?.webContents
+  if (wc && !wc.isDestroyed()) wc.send(channel, ...args)
+}
 
 // Test isolation: the electron test tier (test/run.mjs) points each test at its
 // own throwaway userData dir so persisted state (localStorage: workspace/recents)
@@ -215,8 +256,8 @@ let recentProjects: RecentMenuEntry[] = []
  * `menu:open-recent`; reload is handled here directly.
  */
 function buildAppMenu(): void {
-  const send = (action: string): void => mainWindow?.webContents.send('menu:action', action)
-  const openRecent = (root: string): void => mainWindow?.webContents.send('menu:open-recent', root)
+  const send = (action: string): void => sendToMain('menu:action', action)
+  const openRecent = (root: string): void => sendToMain('menu:open-recent', root)
 
   const recentItems: MenuItemConstructorOptions[] = recentProjects.length
     ? [
@@ -429,7 +470,7 @@ function ensurePreviewView(): WebContentsView {
   // data: placeholder.
   const reportUrl = (): void => {
     const url = wc.getURL()
-    if (/^https?:/.test(url)) mainWindow?.webContents.send('preview:url-changed', url)
+    if (/^https?:/.test(url)) sendToMain('preview:url-changed', url)
   }
   wc.on('did-navigate', reportUrl)
   wc.on('did-navigate-in-page', reportUrl)
@@ -501,7 +542,7 @@ function createWindow(): void {
   // macOS traffic lights are hidden, so the floating sidebar toggle re-aligns to
   // the window's left edge instead of clearing the (now absent) window controls.
   const sendFullscreen = (): void =>
-    mainWindow?.webContents.send('window:fullscreen', mainWindow.isFullScreen())
+    sendToMain('window:fullscreen', mainWindow?.isFullScreen() ?? false)
   mainWindow.on('enter-full-screen', sendFullscreen)
   mainWindow.on('leave-full-screen', sendFullscreen)
   // No material swap on these transitions: in fullscreen the renderer paints
@@ -549,6 +590,23 @@ function createWindow(): void {
   // with no memory of it — hide it until the renderer reattaches. Covers the
   // initial load too (previewView is still null then, so this is a no-op).
   mainWindow.webContents.on('did-navigate', resetStalePreview)
+
+  // Closing the window (traffic-light close) does NOT quit on macOS — the app
+  // stays alive to own the dev server. Without this, `mainWindow` kept pointing
+  // at the *destroyed* BrowserWindow, so every `mainWindow?.…` guard elsewhere
+  // was defeated (non-null but dead) and background listeners that fire on wake
+  // — powerMonitor 'resume', dev-server socket data, preview navigation — threw
+  // an uncaught "Object has been destroyed", popping the crash dialog. Null the
+  // window and its child views (destroyed with it) so those guards short-circuit
+  // and a later dock re-open (app 'activate') rebuilds fresh views instead of
+  // ensurePreviewView/ensurePanelView handing back a dead one.
+  mainWindow.on('closed', () => {
+    mainWindow = null
+    previewView = null
+    panelView = null
+    previewUrl = null
+    lastPreviewBounds = { x: 0, y: 0, width: 0, height: 0, radius: 0 }
+  })
 
   loadRenderer()
 }
@@ -728,12 +786,12 @@ function registerPreviewIpc(): void {
   // preview → renderer relays. Only trust events from the preview's webContents.
   ipcMain.on(PREVIEW_PICKED, (e, el: SelectedElement) => {
     if (e.sender !== previewView?.webContents) return
-    mainWindow?.webContents.send('preview:element-picked', el)
+    sendToMain('preview:element-picked', el)
   })
   ipcMain.on(PREVIEW_CANCELLED, (e) => {
     if (e.sender !== previewView?.webContents) return
     selectModeActive = false
-    mainWindow?.webContents.send('preview:select-cancelled')
+    sendToMain('preview:select-cancelled')
   })
 
   // Selection-toolbar actions that need the renderer (code drawer / delete turn);
@@ -741,7 +799,7 @@ function registerPreviewIpc(): void {
   ipcMain.on(PREVIEW_TOOLBAR_ACTION, (e, kind: string) => {
     if (e.sender !== previewView?.webContents) return
     if (kind !== 'code' && kind !== 'delete' && kind !== 'props') return
-    mainWindow?.webContents.send('preview:toolbar-action', kind)
+    sendToMain('preview:toolbar-action', kind)
   })
   // Renderer dropped the selection (pill ×, message sent) → hide the toolbar.
   ipcMain.on('preview:clear-selected', () => {
@@ -751,7 +809,7 @@ function registerPreviewIpc(): void {
   // S pressed while the preview has focus → the renderer runs its toggle.
   ipcMain.on(PREVIEW_TOGGLE_SELECT, (e) => {
     if (e.sender !== previewView?.webContents) return
-    mainWindow?.webContents.send('preview:toggle-select')
+    sendToMain('preview:toggle-select')
   })
 
   // Launch progress, drawn INSIDE the preview (bottom-center pill) instead of a
@@ -786,11 +844,11 @@ function registerPreviewIpc(): void {
   // Panel → main renderer: user actions (close/dock/seed/…) and content height.
   ipcMain.on('panel:action', (e, action: unknown) => {
     if (e.sender !== panelView?.webContents) return
-    mainWindow?.webContents.send('panel:action', action)
+    sendToMain('panel:action', action)
   })
   ipcMain.on('panel:size', (e, size: { width: number; height: number }) => {
     if (e.sender !== panelView?.webContents) return
-    mainWindow?.webContents.send('panel:size', size)
+    sendToMain('panel:size', size)
   })
 
   // ── Styles tab: live-injection relays + computed-style reads (v10) ──────────
@@ -853,19 +911,19 @@ function registerPreviewIpc(): void {
   })
   ipcMain.on(PREVIEW_PIN_CLICK, (e, id: string) => {
     if (e.sender !== previewView?.webContents) return
-    mainWindow?.webContents.send('annotations:pin-click', id)
+    sendToMain('annotations:pin-click', id)
   })
 
   // Readiness probe (stamp count) → renderer, to drive the setup offer.
   ipcMain.on(PREVIEW_READINESS, (e, info: { stamps: number }) => {
     if (e.sender !== previewView?.webContents) return
-    mainWindow?.webContents.send('preview:readiness', info)
+    sendToMain('preview:readiness', info)
   })
 
   // Inline text edit committed in the preview → renderer (which applies it).
   ipcMain.on(PREVIEW_TEXT_EDIT, (e, edit: { source: string; text: string }) => {
     if (e.sender !== previewView?.webContents) return
-    mainWindow?.webContents.send('preview:text-edit', edit)
+    sendToMain('preview:text-edit', edit)
   })
 
   // Inline commenting (C/Y): renderer arms the mode → preview.
@@ -878,7 +936,7 @@ function registerPreviewIpc(): void {
   ipcMain.on(PREVIEW_COMMENT_MODE, (e, mode: 'comment' | 'annotate' | null) => {
     if (e.sender !== previewView?.webContents) return
     commentModeActive = mode
-    mainWindow?.webContents.send('preview:comment-mode', mode)
+    sendToMain('preview:comment-mode', mode)
   })
   // A submitted comment/annotation (element + text) → renderer (agent vs pin).
   ipcMain.on(
@@ -892,7 +950,7 @@ function registerPreviewIpc(): void {
       }
     ) => {
       if (e.sender !== previewView?.webContents) return
-      mainWindow?.webContents.send('preview:comment', payload)
+      sendToMain('preview:comment', payload)
     }
   )
 
@@ -942,7 +1000,11 @@ app.whenReady().then(() => {
   // renderer ever firing 'render-process-gone' — it just goes quietly stale.
   // Nudge a repaint on resume; harmless no-op if the frame was already fine.
   powerMonitor.on('resume', () => {
-    mainWindow?.webContents.invalidate()
+    // The window may have been closed (app stays alive on macOS) or its renderer
+    // killed while asleep — either way its webContents is destroyed, and a bare
+    // .invalidate() would throw an uncaught "Object has been destroyed" on wake.
+    const wc = mainWindow?.webContents
+    if (wc && !wc.isDestroyed()) wc.invalidate()
   })
   // File → Open Recent is driven by the renderer's recents store: it pushes the
   // current list, we cap at 8 and rebuild the menu.
