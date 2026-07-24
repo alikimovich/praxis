@@ -63,6 +63,7 @@
     "test:git": "bun test/git.mjs",
     "test:sidecar-migrate": "bun test/sidecar-migrate.mjs",
     "test:update": "bun test/update.mjs",
+    "test:praxis-cli": "bun test/praxis-cli.mjs",
     "test:diag-cache": "bun test/diag-cache.mjs",
     "test:diag-rules": "bun test/diag-rules.mjs",
     "test:diagnose-card": "electron-vite build && node test/diagnose-card.mjs",

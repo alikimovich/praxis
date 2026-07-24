@@ -62,6 +62,7 @@ const UNIT = [
   'shadows',
   'type-metrics',
   'skills-install',
+  'praxis-cli',
 ];
 
 // electron = the `node test/NAME.mjs` group AFTER `electron-vite build` in `test`.
