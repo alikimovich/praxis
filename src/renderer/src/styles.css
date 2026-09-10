@@ -401,7 +401,7 @@ html.vibrancy .pane--preview {
 .sidebar-toggle {
     position: absolute;
     top: 8px;
-    left: 78px;
+    left: 86px;
     z-index: 20;
     -webkit-app-region: no-drag;
     display: flex;

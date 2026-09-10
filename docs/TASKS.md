@@ -6,6 +6,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 ## Sidebar toggle alignment (2026-09-09, user-requested) — SHIPPED
 
 - [x] **Move the sidebar toggle up one pixel.**
+- [x] **Add 8px of space beside the traffic lights, preserving the fullscreen inset.**
 
 ## Copy-on-write workspace investigation (2026-09-09)
 

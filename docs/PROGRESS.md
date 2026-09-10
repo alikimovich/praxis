@@ -2,6 +2,14 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-09 — Sidebar toggle traffic-light spacing
+
+Added 8px to the sidebar toggle's normal left inset (78px → 86px).
+The fullscreen override remains 12px when the traffic lights are absent.
+Type checks and sidebar-collapse coverage pass; inspected the updated screenshot.
+Full suite: 130/131 passed, with the existing provider-skills model-switch timing
+assertion still failing.
+
 ## 2026-09-09 — Recurring snapshot/index investigation
 
 Profiled captureBase and compared fresh indexes, retained private indexes, clean
