@@ -41,6 +41,14 @@ export default function PanelApp(): React.JSX.Element | null {
     return off
   }, [])
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') window.api.panel.action({ kind: 'cancel-selection' })
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [])
+
   const elKey = state ? `${state.element.source ?? ''}|${state.element.selector}` : ''
   // biome-ignore lint/correctness/useExhaustiveDependencies: elKey is the selection identity — tombstones reset only on a new selection.
   useEffect(() => setRemovedPanels([]), [elKey])

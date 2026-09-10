@@ -1263,6 +1263,8 @@ function onEditKey(e: KeyboardEvent): void {
       el.textContent = editOriginal // restore
       el.blur()
     }
+    setActive(false)
+    ipcRenderer.send(CANCELLED)
   }
 }
 

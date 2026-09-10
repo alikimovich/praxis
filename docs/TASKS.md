@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Escape selection shortcut (2026-09-09, user-requested) — SHIPPED
+
+- [x] **Escape turns off S selection mode across the app and floating inspector.**
+      Inline text edits cancel and disarm together; focused controls cannot swallow
+      the main renderer's selection cancellation.
+
 ## Automatic visual-edit subagents (2026-09-09, user-requested) — SHIPPED
 
 - [x] **Start AI-required preview/inspector edits immediately in background agents.**

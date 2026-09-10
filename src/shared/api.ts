@@ -786,6 +786,7 @@ export interface PanelState {
 
 /** A user action inside the island, relayed back to the main renderer. */
 export type PanelAction =
+  | { kind: 'cancel-selection' }
   | { kind: 'close' }
   | { kind: 'seed'; text: string }
   | { kind: 'apply-edit'; root: string; text: string }

@@ -234,6 +234,12 @@ try {
   await panelEval(`document.querySelector('.stylepanel__animationhint')?.dispatchEvent(
     new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
   ); true`)
+  // Escape now disarms selection even inside inspector controls. Re-select
+  // before exercising the remaining style operations.
+  await win.waitForSelector('button[aria-label="Select"][aria-pressed="false"]')
+  await win.click('button[aria-label="Select"]')
+  await pickElement('tw-box', TW_SRC)
+  await openStylesTab(TW_SRC)
   // …with a linked padding scrub row showing the FRESH computed value (16px
   // from .p-4 — proves the styles:read round trip into the sandboxed preload).
   await waitPanel(

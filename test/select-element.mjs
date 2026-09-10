@@ -270,8 +270,8 @@ try {
     wc?.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' })
   })
 
-  // The pill is removable — × clears the selection AND the in-preview toolbar.
-  await win.click('.inspector__close')
+  // Escape also disarms selection while cancelling inline text editing.
+  await win.waitForSelector('button[aria-label="Select"][aria-pressed="false"]')
   await win.waitForFunction(() => !window.__praxisSelection.getState().selected, { timeout: 5000 })
   const toolbarAfter = await app.evaluate(async ({ webContents }) => {
     const wc = webContents
@@ -285,6 +285,7 @@ try {
   if (toolbarAfter !== 'none' && toolbarAfter !== 'gone') {
     throw new Error(`toolbar should hide when the pill is cleared, got: ${toolbarAfter}`)
   }
+  await win.click('button[aria-label="Select"]')
   // Re-select for the owner-jump flow below (the pick flow was proven above).
   await win.evaluate((src) => {
     window.__praxisSelection.getState().setSelected({
@@ -358,6 +359,23 @@ try {
     () => window.__praxisSelection.getState().selected?.source === 'src/screens/Wallet.tsx:18',
     { timeout: 5000 }
   )
+
+  // The floating inspector is a separate WebContents: Escape must relay back.
+  await app.evaluate(({ webContents }) => {
+    const wc = webContents.getAllWebContents().find((w) => w.getURL().includes('praxisPanel'))
+    wc.focus()
+    wc.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' })
+    wc.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' })
+  })
+  await win.waitForSelector('button[aria-label="Select"][aria-pressed="false"]')
+  await win.locator('.composer__input').focus()
+  // Arm via S on a non-editable app surface, then Escape from the composer.
+  await win.evaluate(() => document.activeElement?.blur())
+  await win.keyboard.press('s')
+  await win.waitForSelector('button[aria-label="Select"][aria-pressed="true"]')
+  await win.locator('.composer__input').focus()
+  await win.keyboard.press('Escape')
+  await win.waitForSelector('button[aria-label="Select"][aria-pressed="false"]')
 
   console.log('SELECT-ELEMENT OK — picked', EXPECTED_SOURCE, '→ selection pill (clean composer); F3a owner re-select')
 } catch (err) {

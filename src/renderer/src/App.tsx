@@ -448,7 +448,7 @@ export default function App(): React.JSX.Element {
   // Escape turns off select mode even from the composer, so it always disarms.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
       if (e.key === 'Escape') {
         // Escape disarms whichever mode is on — checked before the typing guard so
         // it still fires while the chat composer (a textarea) holds focus.
@@ -462,6 +462,7 @@ export default function App(): React.JSX.Element {
         }
         return
       }
+      if (e.defaultPrevented) return
       const t = e.target as HTMLElement | null
       const tag = t?.tagName?.toLowerCase()
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return
@@ -472,8 +473,8 @@ export default function App(): React.JSX.Element {
         actionsRef.current.toggleSelect()
       }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [])
 
   // Native "Actions" menu commands (main → renderer). Subscribed once; calls the
@@ -1753,7 +1754,9 @@ export default function App(): React.JSX.Element {
     () =>
       window.api.panel.onAction((a) => {
         const sel = useSelection.getState()
-        if (a.kind === 'close') usePropsIsland.getState().setOpen(false)
+        if (a.kind === 'cancel-selection') {
+          if (useSelection.getState().selectMode) actionsRef.current.toggleSelect()
+        } else if (a.kind === 'close') usePropsIsland.getState().setOpen(false)
         else if (a.kind === 'seed') useComposer.getState().setSeed(a.text)
         else if (a.kind === 'apply-edit') dispatchVisualEdit(a.root, a.text)
         else if (a.kind === 'setup') {

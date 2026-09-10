@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-09 — Escape disarms selection from the inspector
+
+Escape now reaches the selection toggle from the separate floating inspector
+renderer. The main renderer listens during capture so focused controls cannot
+swallow selection cancellation. Cancelling inline preview text editing restores
+the original text and disarms selection in the same keypress.
+
+Extended the selection Electron regression to cover inline-edit cancellation,
+inspector Escape, and S followed by Escape from the composer. Targeted regression
+and TypeScript checks pass. The full suite passed 129/130; the style test relied
+on Escape retaining selection. Updated it to assert disarming and reselect, then
+its isolated rerun passed. All 130 checks now pass across those runs.
+
 ## 2026-09-09 — Automatic visual-edit subagents, including Codex
 
 Committed visual edits that require AI now start a detached child immediately:
