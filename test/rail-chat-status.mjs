@@ -299,6 +299,50 @@ try {
     { timeout: 3000 }
   )
 
+  // Long titles reserve both action buttons, reveal their last character, and
+  // reset on exit. Drive animation time directly so this check is deterministic.
+  const longTitle = 'I like how Josh Puckett explains the details of this interface right to the end'
+  await win.locator('.rail__chats .rail__chat-rename').first().evaluate(b => b.click())
+  await win.fill('.rail__chat-input', longTitle)
+  await win.press('.rail__chat-input', 'Enter')
+  const longRow = win.locator('.rail__chats > .rail__chat-item').filter({ hasText: longTitle })
+  await longRow.waitFor()
+  await win.mouse.move(600, 300)
+  const restingWidth = await longRow.locator('.rail__chat-name').evaluate(e => e.clientWidth)
+  await longRow.hover({ position: { x: 40, y: 8 } })
+  await win.waitForFunction(() => document.querySelector('.rail__chats .rail__chat-name-text')?.getAnimations().length > 0)
+  const moving = await longRow.evaluate(row => {
+    const viewport = row.querySelector('.rail__chat-name')
+    const text = row.querySelector('.rail__chat-name-text')
+    const actions = row.querySelector('.rail__chat-actions')
+    const animation = text.getAnimations()[0]
+    const timing = animation.effect.getComputedTiming()
+    animation.currentTime = timing.delay + Number(timing.duration) / 2
+    const halfway = new DOMMatrixReadOnly(getComputedStyle(text).transform).m41
+    animation.finish()
+    return {
+      width: viewport.clientWidth,
+      right: viewport.getBoundingClientRect().right,
+      actionsLeft: actions.getBoundingClientRect().left,
+      textRight: text.getBoundingClientRect().right,
+      halfway
+    }
+  })
+  if (moving.width >= restingWidth || moving.right > moving.actionsLeft - 6)
+    throw new Error(`title overlaps buttons: ${JSON.stringify(moving)}`)
+  if (moving.halfway >= 0 || Math.abs(moving.textRight - moving.right) > 1)
+    throw new Error(`marquee must reveal the final character: ${JSON.stringify(moving)}`)
+  await win.screenshot({ path: join(artifacts, '20-rail-chat-marquee-end.png'), style: '.rail { background: var(--bg) !important; }' })
+  await win.mouse.move(600, 300)
+  if (await longRow.locator('.rail__chat-name-text').evaluate(e => getComputedStyle(e).transform) !== 'none')
+    throw new Error('marquee must reset when hover ends')
+  await longRow.locator('button.rail__chat').focus()
+  await win.waitForFunction(() => document.querySelector('.rail__chats .rail__chat-name-text')?.getAnimations().length > 0)
+  await win.emulateMedia({ reducedMotion: 'reduce' })
+  if (await longRow.locator('.rail__chat-name-text').evaluate(e => getComputedStyle(e).animationName) !== 'none')
+    throw new Error('reduced motion must keep the title still')
+  await win.screenshot({ path: join(artifacts, '20-rail-chat-marquee-reduced.png'), style: '.rail { background: var(--bg) !important; }' })
+
   console.log('rail-chat-status: OK')
 } finally {
   await app?.close()

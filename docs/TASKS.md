@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Chat title marquee (2026-09-09, user-requested) — SHIPPED
+
+- [x] **Fit titles around revealed buttons and marquee overflowing text.** Reserve
+      the action width on hover/focus, reveal the final words, reset on exit,
+      and preserve static ellipsis for reduced motion.
+
 ## Chat scroll fade (2026-09-09, user-requested) — SHIPPED
 
 - [x] **Replace the top blur with shadcn scroll-fade.** Use the real scroller's

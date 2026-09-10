@@ -2,6 +2,25 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-09 — Chat title marquee around revealed actions
+
+Chat rows now reserve the measured button layout width (one or two actions plus
+spacing) when hovered or keyboard-focused. The former 24px title padding allowed
+the pencil and close button to overlap text. Trailing metadata yields its space
+while the actions are visible, and titles regain their full width on exit.
+
+`RailChatTitle` measures the remaining viewport with ResizeObserver and animates
+only overflowing names: a 700ms pause, a 30px/second reveal to the final character,
+then a hold at the end. Leaving the row resets it; changed names remount the title
+so old measurements/animation state cannot leak. Reduced motion keeps a static
+ellipsis, with the existing complete title tooltip available. Short titles stay
+still. The shared row covers live chats, history, and background agents.
+
+Extended the rail-status Electron regression to verify non-overlap, actual title
+motion, the final character's alignment, reset on exit, keyboard focus, and
+reduced motion. Inspected the marquee-end and reduced-motion screenshots.
+All three TypeScript projects, targeted lint, and all 129 unit/Electron tests pass.
+
 ## 2026-09-09 — Scroll-aware chat fade with a crisp pinned request
 
 Replaced the chat pane's always-on backdrop-blur overlay with shadcn's

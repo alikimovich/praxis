@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "shadcn/tailwind.css";
 @import "./chat-scroll.css";
+@import "./rail-chat-title.css";
 @custom-variant dark (&:is(.dark *));
 
 /* Tailwind v4 + shadcn/ui tokens (new-york / neutral). Utilities & preflight live
@@ -1025,15 +1026,6 @@ body.is-fullscreen .sidebar-toggle {
 .rail__chat-actions:focus-within {
     opacity: 1;
     pointer-events: auto;
-}
-.rail__chat-item--actions:hover .rail__chat-time,
-.rail__chat-item--actions:hover .rail__chat-badge {
-    opacity: 0;
-}
-/* Make room for hover actions without permanently shortening chat titles. */
-.rail__chat-item--actions:hover .rail__chat-name,
-.rail__chat-item--actions:focus-within .rail__chat-name {
-    padding-right: 24px;
 }
 .rail__chat-x,
 .rail__chat-rename {

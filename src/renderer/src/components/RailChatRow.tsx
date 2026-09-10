@@ -1,5 +1,6 @@
 import { Pencil } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
+import RailChatTitle from "./RailChatTitle";
 
 /**
  * What a chat row's status dot says, left of the name:
@@ -114,28 +115,33 @@ export default function RailChatRow({
       </li>
     );
 
-  const hasActions = Boolean(onRename || onClose)
+  const actionCount = Number(Boolean(onRename)) + Number(Boolean(onClose));
+  const hasActions = actionCount > 0;
 
   return (
     <li
       className={`rail__chat-item ${hasActions ? "rail__chat-item--actions" : ""}`}
+      style={{
+        "--chat-actions-width": `${actionCount * 16 + Math.max(0, actionCount - 1) * 2}px`,
+      } as CSSProperties}
       title={spawn ? title : undefined}
     >
       {spawn ? (
         <span className="rail__chat rail__chat--spawn">
           {dot}
-          <span className="rail__chat-name">{name}</span>
+          <RailChatTitle key={name} name={name} />
           {children}
         </span>
       ) : (
         <button
+          type="button"
           className={`rail__chat ${active ? "rail__chat--active" : ""}`}
           onClick={onOpen}
           aria-current={active}
           title={title ?? name}
         >
           {dot}
-          <span className="rail__chat-name">{name}</span>
+          <RailChatTitle key={name} name={name} />
           {children}
         </button>
       )}
@@ -143,6 +149,7 @@ export default function RailChatRow({
         <span className="rail__chat-actions">
           {onRename && (
             <button
+              type="button"
               className="rail__chat-rename"
               onClick={(e) => {
                 e.stopPropagation();
@@ -156,6 +163,7 @@ export default function RailChatRow({
           )}
           {onClose && (
             <button
+              type="button"
               className="rail__chat-x"
               onClick={(e) => {
                 e.stopPropagation();
