@@ -3,6 +3,14 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Codex runtime and cross-provider skills (2026-09-09, user-reported) — SHIPPED
+
+- [x] **Update the bundled Codex SDK/CLI for GPT-6 Astra.** Upgrade from 0.146.0
+      to 0.154.0; verify a live `gpt-6-astra` request succeeds.
+- [x] **Populate `/` skills for Codex, custom endpoints, and experimental Gemini.**
+      Discover project/user skills before the first turn and attach the selected
+      skill file reference to the prompt; retain project precedence and symlinks.
+
 ## Preview sibling dragging (2026-09-04, user-requested) — SHIPPED
 
 - [x] **Cmd/Ctrl-drag the selected element among its siblings in the native preview.**

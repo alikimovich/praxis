@@ -2,6 +2,32 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-09 — Codex runtime compatibility and skills across providers
+
+Upgraded the bundled Codex SDK/CLI from 0.146.0 to 0.154.0. Praxis launches the
+SDK's vendored CLI, so updating a global Codex installation did not address the
+reported GPT-6 Astra version rejection. A live read-only `gpt-6-astra` request
+through the upgraded binary returned the expected marker successfully.
+
+Only Claude previously emitted the composer's skills list. Codex, custom
+endpoints, and experimental Gemini now share eager project/user discovery from
+`.agents`, their native skills directory, and `.claude` for existing installed
+packs. Project skills shadow user skills; symlinked installs, system skills,
+and CODEX_HOME are supported. Isolated chats discover from the live project root.
+Invoking `/name` passes an explicit SKILL.md reference so non-Claude harnesses
+can read and use the selected skill. Claude retains SDK command discovery.
+
+Regression coverage checks discovery, precedence, linked/broken installs,
+invocation references, isolated roots, and eager session emission. The Electron
+regression switches the actual provider dropdown to Codex, opens the menu before
+any turn with the CLI deliberately absent, and verifies insertion. Inspected its
+screenshot, including the Codex selection and skill description.
+
+All three TypeScript projects pass. Full `bun run verify` finished 135/135 with
+no failures (the live simulator test skipped because Xcode is unavailable).
+Rebuilt the final live-root discovery adjustment and reran the Codex menu test;
+targeted discovery/invocation regressions and lint also pass.
+
 ## 2026-09-04 — Modifier-drag siblings in the native preview
 
 Select any stamped element, then Command-drag (Control on Windows/Linux) to

@@ -8,6 +8,7 @@ capabilities instead of assuming Claude, Codex, gateways, and Gemini are interch
 | --- | --- | --- | --- | --- |
 | Persistent multi-turn context | Yes | Yes | Yes, through Codex | No guaranteed continuity |
 | Repository instruction discovery | `CLAUDE.md` + Claude skills | Codex-native instructions + Praxis rules | Same as Codex | Limited |
+| Skills menu before the first turn | Yes | Yes | Yes, through Codex | Yes |
 | Provider-native coding tools | Yes | Yes | Depends on model through Codex | Limited |
 | Praxis preview MCP tools | Yes | No | No | No |
 | Praxis worktree control tools | No | Yes | Yes, through Codex | No |
@@ -38,3 +39,18 @@ promising unsupported actions in backend-agnostic copy. Open-model connections i
 the Codex harness's strengths and gaps; changing the model id does not grant Claude's
 in-process preview/design tools. It does retain the two Praxis worktree-control tools
 because those belong to the harness, not the selected endpoint model.
+
+## Skills menu and Codex runtime
+
+Praxis bundles Codex SDK/CLI 0.154.0 or newer; updating the global `codex` binary
+alone does not update the runtime used by Praxis. Run `bun install` and rebuild
+after pulling a dependency update.
+
+Codex, custom endpoints, and experimental Gemini discover project and user skills
+in `.agents/skills`, their native `.codex/skills` or `.gemini/skills`, and
+`.claude/skills` for compatibility with Praxis-installed packs. Codex honors
+`CODEX_HOME` for its user skills. Project entries shadow same-named user entries;
+symlinked installs and Codex system skills are included. Menus populate before
+the first turn, independently of authentication. Invoking `/name` supplies the
+selected skill file path in the prompt so the harness can read its instructions.
+Claude keeps its native SDK command discovery.

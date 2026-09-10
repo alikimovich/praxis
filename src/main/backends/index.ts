@@ -3,6 +3,10 @@ import type { ModelProvider } from './types'
 import { claudeProvider } from './claude'
 import { codexProvider } from './codex'
 import { geminiProvider } from './gemini'
+import { withSkillMenu } from './skill-menu'
+
+const codexWithSkills = withSkillMenu(codexProvider)
+const geminiWithSkills = withSkillMenu(geminiProvider)
 
 export type { ModelProvider, ProviderSession, PendingPrompt } from './types'
 
@@ -43,12 +47,12 @@ export function pickProvider(options: AgentOptions): ModelProvider {
   // A connection is an endpoint, not a harness — and Codex is the harness that can
   // point at one. It wins the dispatch (see the note above); codex.ts fails the turn
   // soft if the id no longer resolves.
-  if (options.connectionId) return codexProvider
+  if (options.connectionId) return codexWithSkills
   switch (options.provider) {
     case 'codex':
-      return codexProvider
+      return codexWithSkills
     case 'gemini':
-      return geminiEnabled() ? geminiProvider : claudeProvider
+      return geminiEnabled() ? geminiWithSkills : claudeProvider
     case 'claude':
     case undefined:
     default:

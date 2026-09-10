@@ -11,7 +11,8 @@
  * unreadable file, or no `.claude/skills` dir at all must never break the menu —
  * every failure degrades to "skill without a description" or "no project skills".
  */
-import { readdir, readFile } from 'node:fs/promises'
+import type { Dirent } from 'node:fs'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { SlashCommandItem } from '../shared/api'
 
@@ -62,24 +63,40 @@ export function parseSkillMeta(content: string): { name?: string; description?: 
 const validName = (name: string): boolean => /^[^\s/]+$/.test(name)
 
 /**
- * Discover the opened repo's project skills: every `SKILL.md` under
- * `<root>/.claude/skills/` (nested dirs tolerated, shallow depth cap). The
+ * Discover skills beneath a supplied skills directory (nested directories and
+ * installed symlinks tolerated, shallow depth cap). The
  * skill name is the frontmatter `name` when present, else the containing
  * folder's name. Returns [] on any failure — never throws.
  */
-export async function discoverProjectSkills(root: string): Promise<SlashCommandItem[]> {
-  const found: SlashCommandItem[] = []
+export interface DiscoveredSkill extends SlashCommandItem {
+  path: string
+}
+
+export async function discoverSkillsInDirectory(
+  directory: string,
+  source: SlashCommandItem['source'],
+  includeHidden = false
+): Promise<DiscoveredSkill[]> {
+  const found: DiscoveredSkill[] = []
   const walk = async (dir: string, depth: number): Promise<void> => {
     if (depth > 3) return
-    let entries
+    let entries: Dirent[]
     try {
       entries = await readdir(dir, { withFileTypes: true })
     } catch {
       return
     }
     for (const e of entries) {
-      if (!e.isDirectory() || e.name.startsWith('.')) continue
+      if (!includeHidden && e.name.startsWith('.')) continue
       const sub = join(dir, e.name)
+      if (!e.isDirectory()) {
+        if (!e.isSymbolicLink()) continue
+        try {
+          if (!(await stat(sub)).isDirectory()) continue
+        } catch {
+          continue
+        }
+      }
       let meta: { name?: string; description?: string } = {}
       let hasSkill = false
       try {
@@ -94,7 +111,8 @@ export async function discoverProjectSkills(root: string): Promise<SlashCommandI
           found.push({
             name,
             ...(meta.description ? { description: meta.description } : {}),
-            source: 'project'
+            source,
+            path: join(sub, 'SKILL.md')
           })
         }
       } else {
@@ -102,9 +120,14 @@ export async function discoverProjectSkills(root: string): Promise<SlashCommandI
       }
     }
   }
-  await walk(join(root, '.claude', 'skills'), 0)
+  await walk(directory, 0)
   found.sort((a, b) => a.name.localeCompare(b.name))
   return found
+}
+
+export async function discoverProjectSkills(root: string): Promise<SlashCommandItem[]> {
+  const skills = await discoverSkillsInDirectory(join(root, '.claude', 'skills'), 'project')
+  return skills.map(({ path: _path, ...item }) => item)
 }
 
 /**
