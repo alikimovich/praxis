@@ -2,6 +2,36 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-09 — Automatic visual-edit subagents, including Codex
+
+Committed visual edits that require AI now start a detached child immediately:
+props, styles, custom controls, layer-panel moves, and preview sibling gestures
+join the existing inline-text path. Inspector actions carry the project root;
+shared dispatch retains that project's parent settings and leaves drafts and
+transcripts untouched. Vague Ask-agent affordances still seed an instruction so
+the user can specify the change. Literal/source-resolvable edits still write
+immediately. Unsupported providers/non-Git workspaces retain an explained composer
+fallback; Git-backed successful children auto-land through the existing path.
+
+Codex and custom endpoints now advertise background support and stamp every child
+event with its session id. A child cannot invoke the parent chat's workspace
+resolution tools. Failed or cancelled children never auto-apply partial edits;
+terminal outcomes distinguish failure, cancellation, no-change, review, and apply.
+Fast startup failures cannot leave a ghost running row when completion beats the
+spawn IPC response. Automatic edit completion stays in the activity log.
+
+Added an Electron regression that sends the inspector's committed-edit action,
+checks actual Codex dispatch and failure cleanup, and preserves draft/transcript.
+An opt-in live mode verifies Codex writes reach the live preview and that a child
+cancelled after a private source edit retains recovery work without changing live.
+
+All TypeScript projects and targeted lint pass. Full verification finished
+135/136; the chat slash-menu UI test failed during overlapping Electron runs,
+then passed on an isolated rerun. Rebuilt the final custom-control fallbacks and
+reran chat rendering, custom controls, and visual-edit dispatch sequentially; all
+passed. Real Codex auto-apply and cancellation checks passed. The simulator live
+test skipped because Xcode is unavailable.
+
 ## 2026-09-09 — Chat title marquee around revealed actions
 
 Chat rows now reserve the measured button layout width (one or two actions plus

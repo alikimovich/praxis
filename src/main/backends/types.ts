@@ -136,7 +136,7 @@ export interface ModelProvider {
   id: string
   /** Whether this backend can run a detached comment spawn (v8 F1) — it must
    *  honor the `SpawnContext` (route events through `ctx.onEvent`, emit the
-   *  terminal `done`/`error`). Only Claude does today; others would silently
+   *  terminal `done`/`error`). Claude and Codex do today; others would silently
    *  leak a worktree + rail row, so agent.ts refuses to spawn on them. */
   supportsSpawn?: boolean
   startSession: (

@@ -603,7 +603,7 @@ export default function ChatPanel(): React.JSX.Element {
         } else if (event.type === "spawn-finished") {
           useSpawns.getState().remove(pkey, event.sessionId);
           // User-authored comments keep their follow-up note in the parent chat.
-          // Automatic text-edit agents stay out of the transcript entirely: their
+          // Automatic visual-edit agents stay out of the transcript entirely: their
           // running row is the progress UI, and completion goes to the activity log.
           // A non-null branch means auto-apply was unsafe and sidebar review remains.
           const files = event.files?.length
@@ -613,10 +613,14 @@ export default function ChatPanel(): React.JSX.Element {
             useLog
               .getState()
               .append(
-                event.branch
-                  ? `Background text edit needs review in the sidebar${files}`
-                  : `Background text edit applied${files}`,
-                event.branch ? "error" : "success",
+                event.outcome === "failed" || event.outcome === "cancelled"
+                  ? `Background visual edit ${event.outcome}${event.branch ? " — partial work is in the sidebar" : ""}${files}`
+                  : event.outcome === "no-change"
+                    ? "Background visual edit finished without source changes"
+                    : event.branch
+                      ? `Background visual edit needs review in the sidebar${files}`
+                      : `Background visual edit applied${files}`,
+                event.branch || event.outcome === "failed" ? "error" : "success",
               );
           } else {
             const head = event.branch

@@ -130,7 +130,7 @@ try {
   const activity = await win.evaluate(() =>
     window.__praxisLog.getState().lines.map((line) => line.text).join('\n')
   )
-  if (!/Background text edit applied · Badge\.tsx/.test(activity)) {
+  if (!/Background visual edit applied · Badge\.tsx/.test(activity)) {
     throw new Error(`background text completion should reach activity log: ${activity}`)
   }
 

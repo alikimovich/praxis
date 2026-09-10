@@ -34,6 +34,8 @@ interface Props {
   tokens: TokenSet | null
   /** Seed a chat prompt for changes the styles engine can't land as a literal. */
   onSeedPrompt: (text: string) => void
+  /** Run an already-specified visual edit in a background agent. */
+  onApplyAgent: (text: string) => void
   /** Ask the agent to add an animation and surface Dialkit-style controls. */
   onAnimationControls: (hint?: string) => void
 }
@@ -70,6 +72,7 @@ export default function StylePanel({
   canInstrument,
   tokens,
   onSeedPrompt,
+  onApplyAgent,
   onAnimationControls
 }: Props): React.JSX.Element {
   const [values, setValuesRaw] = useState<Record<string, string>>(() => ({ ...element.styles }))
@@ -319,7 +322,7 @@ export default function StylePanel({
         lastCommitRef.current = { prop, from: prev, to: css }
         scheduleReconcile(prop, css)
       } else if (res.needsAgent) {
-        onSeedPrompt(
+        onApplyAgent(
           res.agentPrompt ??
             `In ${source}, set \`${prop}\` to \`${css}\` on the <${element.tag}> element.`
         )

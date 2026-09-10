@@ -275,6 +275,7 @@ interface Spawn {
   parentRoot: string
   text: string
   origin: BackgroundSpawnOrigin
+  cancelled?: boolean
 }
 const spawns = new Map<string, Spawn>()
 // v8 F1 Phase 3: bound concurrent spawns per project; the rest queue (FIFO) and start
@@ -366,7 +367,7 @@ function closeSession(
  * branch + persist the record so the user can resolve it via the review modal.
  * Best-effort throughout — a finalizer must never throw.
  */
-async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<void> {
+async function finalizeSpawn(id: string, status: 'done' | 'error'): Promise<void> {
   const spawn = spawns.get(id)
   if (!spawn) return
   spawns.delete(id)
@@ -382,7 +383,7 @@ async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<voi
       applied: false,
       edits: []
     }
-    if (committed && files.length) {
+    if (status === 'done' && !spawn.cancelled && committed && files.length) {
       try {
         auto = await autoApplyWorktree(parentRoot, wt, files)
       } catch {
@@ -414,6 +415,7 @@ async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<voi
         branch: null,
         origin,
         ...(summary ? { summary } : {}),
+        outcome: 'applied',
         files: auto.edits.map((e) => basename(e.file))
       } satisfies AgentEvent)
     } else {
@@ -431,6 +433,7 @@ async function finalizeSpawn(id: string, _status: 'done' | 'error'): Promise<voi
         branch: committed ? wt.branch : null,
         origin,
         ...(summary ? { summary } : {}),
+        outcome: spawn.cancelled ? 'cancelled' : status === 'error' ? 'failed' : committed ? 'review' : 'no-change',
         files: committed ? files.map((f) => basename(f)) : []
       } satisfies AgentEvent)
     }
@@ -1168,12 +1171,14 @@ export function registerAgentIpc(
         projectKey: q.parentSessionKey,
         sessionId: id,
         branch: null,
-        origin: q.origin
+        origin: q.origin,
+        outcome: 'cancelled'
       } satisfies AgentEvent)
       return
     }
     const spawn = spawns.get(id)
     if (!spawn) return
+    spawn.cancelled = true
     // → emits done → finalizeSpawn commits any work. Interrupting a turn that
     // already finished/aborted makes the SDK throw "Operation aborted" — a stop
     // that arrives late is a no-op, not an error.

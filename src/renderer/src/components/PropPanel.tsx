@@ -14,6 +14,8 @@ interface Props {
   onChange: (next: PropInspection) => void
   /** Seed a chat prompt for changes that can't be applied as a literal. */
   onSeedPrompt: (text: string) => void
+  /** Run an already-specified visual edit in a background agent. */
+  onApplyAgent: (text: string) => void
   /** Offer to set the project up for editing (unstamped element). */
   onSetup: () => void
   /** v8 F3a: re-select the owning component instance. */
@@ -28,7 +30,7 @@ interface Props {
  * IslandCard, which renders this inside its Props tab). A schema-backed
  * component gets editable fields; anything else gets the readiness message
  * (setup offer / owner jump / prompt-only hint). Simple literal edits write
- * straight to source; non-literal ones go to chat.
+ * straight to source; non-literal committed values start a background edit.
  */
 export default function PropPanel({
   root,
@@ -37,6 +39,7 @@ export default function PropPanel({
   inspecting,
   onChange,
   onSeedPrompt,
+  onApplyAgent,
   onSetup,
   onSelectOwner,
   onControls
@@ -73,7 +76,7 @@ export default function PropPanel({
           })
         }
       } else if (res.needsAgent) {
-        onSeedPrompt(res.agentPrompt ?? `In ${source}, change the ${field.name} prop.`)
+        onApplyAgent(res.agentPrompt ?? `In ${source}, set the ${field.name} prop to ${JSON.stringify(value)}.`)
       } else {
         setError(res.error ?? 'Could not apply the change.')
         reload()

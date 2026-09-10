@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { LayerNode, LayersSnapshot } from '../../../shared/api'
-import { useComposer, useLayersPanel, useSelection, useSession } from '../store'
+import { useLayersPanel, useSelection, useSession } from '../store'
+import { dispatchVisualEdit } from '../background-edits'
 import LayersTree, { type DropTarget } from './LayersTree'
 
 /**
@@ -83,7 +84,7 @@ export default function LayersPanel(): React.JSX.Element | null {
     if (res.applied) {
       void refresh()
     } else if (res.needsAgent) {
-      useComposer.getState().setSeed(res.agentPrompt ?? null)
+      dispatchVisualEdit(projectRoot, res.agentPrompt ?? '')
     } else if (res.error) {
       setError(res.error)
     }

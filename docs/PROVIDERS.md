@@ -16,7 +16,7 @@ capabilities instead of assuming Claude, Codex, gateways, and Gemini are interch
 | Praxis approve/deny cards | Yes | No SDK approval event | No SDK approval event | No |
 | Image input | Yes | Not wired | Not wired | Not wired |
 | Resume provider thread | Yes | Not wired | Not wired | No |
-| Detached background agents (comments + complex text edits) | Yes | Disabled | Disabled | Disabled |
+| Detached background agents (comments + visual edits) | Yes | Yes | Yes, through Codex | Disabled |
 | Custom endpoint | No | Built-in ChatGPT seat | Yes (`/responses`) | No |
 
 “No” often means Praxis has not built the bridge, not that the underlying model can
@@ -25,13 +25,16 @@ server with `workspace_state` and `prepare_conflict_resolution`: the former read
 landing coordinator rather than guessing from the private checkout, while the latter
 routes the existing three-way resolver through Praxis's repository queue. It deliberately
 does not expose raw Git or discard/reset operations. Preview tools remain Claude-only;
-question cards, resume, image transport, and detached background-agent support are separately
+question cards, resume, image transport, and background-agent support are separately
 declared because they have different lifecycle and security requirements.
 
-Preview comments and agent-required inline text edits inherit the originating chat's
-selected provider/model settings. A detached child starts only when that provider
-declares background-spawn support (Claude today). An unsupported comment routes into
-its parent chat; an unsupported text edit is left in the composer for explicit review.
+Preview comments and committed visual edits inherit the originating chat's
+selected provider/model settings. AI fallbacks from text, props, styles, custom
+controls, and layer moves start detached children immediately on Claude and Codex
+(including custom endpoints). The main draft and transcript stay intact; successful
+results auto-land and refresh the preview. Failed or interrupted results never
+auto-land. A provider without background support or a folder without Git worktree
+support preserves the instruction in the composer and explains the fallback.
 The rail always shows the harness/model the child actually received.
 
 Until capability negotiation exists in `src/shared/api.ts`, the product should avoid

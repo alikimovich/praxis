@@ -3,6 +3,14 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Automatic visual-edit subagents (2026-09-09, user-requested) — SHIPPED
+
+- [x] **Start AI-required preview/inspector edits immediately in background agents.**
+      Props, styles, custom controls, inline text, and layer moves preserve the
+      draft/main transcript and auto-apply successful results. Codex and gateway
+      sessions now support detached children; failures/cancellation keep partial
+      work recoverable. Literal edits retain immediate direct source writes.
+
 ## Chat title marquee (2026-09-09, user-requested) — SHIPPED
 
 - [x] **Fit titles around revealed buttons and marquee overflowing text.** Reserve
@@ -360,9 +368,9 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
       evaluator that merges durable decisions into shared memory. Per-project queues
       prevent peer-chat races and protect concurrent manual edits; the memory editor
       remains the user's direct review and override surface. See PROGRESS 2026-09-04.
-- [ ] **Enable detached background agents on Codex/gateway sessions.** Parent-model
-      inheritance is already wired, but the provider capability remains Claude-only;
-      unsupported comments explicitly fall back into their chat.
+- [x] **Enable detached background agents on Codex/gateway sessions.** Shipped
+      2026-09-09 with tagged child output, automatic visual-edit routing, safe
+      terminal outcomes, and real Codex auto-landing/cancellation verification.
 
 ## Per-chat isolation (2026-08-08, user-reported)
 
@@ -544,7 +552,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
       them over a local MCP server injected via `CodexOptions.config`, whose
       `mcp_tool_call` events `backends/codex.ts` already maps); no
       `AskUserQuestion` equivalent; no resume (`resumeThread(id)` +
-      `ThreadStartedEvent.thread_id` make this nearly free); `supportsSpawn` off.
+      `ThreadStartedEvent.thread_id` make this nearly free). Background spawning shipped
+      2026-09-09; provider-thread resume remains open.
       Per-tool approve/deny cards are NOT closable — the SDK event stream has no
       approval-request event; user accepted that trade-off 2026-08-07.
 

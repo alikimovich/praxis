@@ -1,5 +1,6 @@
+import { dispatchVisualEdit } from './background-edits'
 import { useEffect } from 'react'
-import { useComposer, useSession } from './store'
+import { useSession } from './store'
 
 /** Keep preview-originated moves available even when the Layers panel is closed. */
 export function usePreviewReorder(
@@ -14,7 +15,7 @@ export function usePreviewReorder(
           .move(root, request)
           .then((result) => {
             if (useSession.getState().projectRoot !== root) return
-            if (result.needsAgent) useComposer.getState().setSeed(result.agentPrompt ?? null)
+            if (result.needsAgent) dispatchVisualEdit(root, result.agentPrompt ?? '')
             else if (result.error) onError({ kind: 'error', message: result.error })
           })
           .catch((error: unknown) => {

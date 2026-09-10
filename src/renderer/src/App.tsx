@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { dispatchBackgroundAgent, dispatchVisualEdit } from './background-edits'
 import { usePreviewReorder } from './use-preview-reorder'
 import ChatPanel from './components/ChatPanel'
 import CatLoader from './components/CatLoader'
@@ -19,12 +20,10 @@ import {
   chatAgentSettingsFromSession,
   describeSelectionForPrompt,
   chatAgentSettingsFor,
-  chatModelLabel,
   isAuthError,
   resumeChatSettings,
   messagesFromTranscript,
   oneLine,
-  toAgentOptions,
   useAnnotations,
   useChat,
   useComposer,
@@ -36,7 +35,6 @@ import {
   useSelection,
   useSession,
   useSetup,
-  useSpawns,
   useTokens,
   useUiActions,
   useUpdate,
@@ -70,7 +68,6 @@ import {
 import { Check, ChevronDown } from 'lucide-react'
 import Rail from './components/Rail'
 import type {
-  BackgroundSpawnOrigin,
   CommentMode,
   Framework,
   PreviewComment,
@@ -81,56 +78,6 @@ import type {
 
 const MIN_CHAT_WIDTH = 320
 const MAX_CHAT_WIDTH = 760
-
-/** Dispatch one isolated background agent without touching the visible transcript.
- * Comment mode and complex inline text edits share the same worktree/queue seam;
- * callers choose their own lossless fallback for unsupported backends/non-repos. */
-function dispatchBackgroundAgent(opts: {
-  root: string
-  prompt: string
-  label: string
-  origin: BackgroundSpawnOrigin
-  fallback: () => void
-}): void {
-  const parentSessionKey = useChat.getState().activeKey || projectKey(opts.root)
-  const agentSettings = useSession.getState()
-  void window.api.agent
-    .spawnComment(
-      opts.root,
-      opts.prompt,
-      parentSessionKey,
-      toAgentOptions(agentSettings),
-      opts.origin
-    )
-    .then((result) => {
-      if (result.ok && result.spawnId) {
-        useSpawns.getState().add(parentSessionKey, {
-          id: result.spawnId,
-          branch: result.branch ?? null,
-          label: opts.label,
-          modelLabel: chatModelLabel({
-            model: agentSettings.model,
-            modelId: agentSettings.modelId,
-            provider: agentSettings.provider,
-            connectionId: agentSettings.connectionId
-          }),
-          status: result.queued ? 'queued' : 'running'
-        })
-        return
-      }
-      if (result.reason === 'unsupported-backend') {
-        useLog
-          .getState()
-          .append(
-            opts.origin === 'text-edit'
-              ? 'This model cannot run a detached text edit; the instruction was placed in the composer.'
-              : 'This model cannot run a detached background agent yet; the comment was sent to its chat.'
-          )
-      }
-      opts.fallback()
-    })
-    .catch(opts.fallback)
-}
 
 /** A `data-praxis-source` stamp's repo-relative file ("path/File.tsx:12:3" →
  *  "path/File.tsx") — control-panel manifests are keyed by file, not line. */
@@ -1808,6 +1755,7 @@ export default function App(): React.JSX.Element {
         const sel = useSelection.getState()
         if (a.kind === 'close') usePropsIsland.getState().setOpen(false)
         else if (a.kind === 'seed') useComposer.getState().setSeed(a.text)
+        else if (a.kind === 'apply-edit') dispatchVisualEdit(a.root, a.text)
         else if (a.kind === 'setup') {
           useSetup.getState().setDismissed(false)
           useSetup.getState().setNeeded(true)

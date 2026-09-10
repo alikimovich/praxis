@@ -278,6 +278,7 @@ export type AgentEvent = (
    *  automatic edit origins deliberately remain out of the transcript. */
   | {
       type: 'spawn-finished'
+      outcome?: 'applied' | 'review' | 'failed' | 'cancelled' | 'no-change'
       branch: string | null
       origin?: BackgroundSpawnOrigin
       summary?: string
@@ -787,6 +788,7 @@ export interface PanelState {
 export type PanelAction =
   | { kind: 'close' }
   | { kind: 'seed'; text: string }
+  | { kind: 'apply-edit'; root: string; text: string }
   | { kind: 'setup' }
   | { kind: 'owner' }
   | { kind: 'inspection'; inspection: PropInspection }

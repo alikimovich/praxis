@@ -122,6 +122,7 @@ const ELECTRON = [
   'history-ui',
   'chat-render',
   'provider-skills-menu',
+  'visual-edit-agent',
   'revert-action',
   'chat-route',
   'composer-draft',

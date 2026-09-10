@@ -108,6 +108,7 @@ export default function PanelApp(): React.JSX.Element | null {
                   window.api.panel.action({ kind: 'inspection', inspection: next })
                 }
                 onSeedPrompt={(text) => window.api.panel.action({ kind: 'seed', text })}
+                onApplyAgent={(text) => window.api.panel.action({ kind: 'apply-edit', root: state.root, text })}
                 onSetup={() => window.api.panel.action({ kind: 'setup' })}
                 onSelectOwner={() => window.api.panel.action({ kind: 'owner' })}
                 onControls={() => window.api.panel.action({ kind: 'controls' })}
@@ -120,6 +121,7 @@ export default function PanelApp(): React.JSX.Element | null {
                 canInstrument={state.canInstrument}
                 tokens={state.tokens}
                 onSeedPrompt={(text) => window.api.panel.action({ kind: 'seed', text })}
+                onApplyAgent={(text) => window.api.panel.action({ kind: 'apply-edit', root: state.root, text })}
                 onAnimationControls={(hint) =>
                   window.api.panel.action({ kind: 'animation-controls', hint })
                 }
@@ -133,6 +135,7 @@ export default function PanelApp(): React.JSX.Element | null {
                   inspection={state.inspection}
                   panels={controls}
                   onSeedPrompt={(text) => window.api.panel.action({ kind: 'seed', text })}
+                onApplyAgent={(text) => window.api.panel.action({ kind: 'apply-edit', root: state.root, text })}
                   onRegenerate={(panelId) =>
                     window.api.panel.action({ kind: 'controls', hint: 'regenerate', panelId })
                   }

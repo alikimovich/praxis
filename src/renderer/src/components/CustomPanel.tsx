@@ -34,6 +34,8 @@ interface Props {
   panels: ResolvedControlPanel[]
   /** Seed a chat prompt for params the panel can't apply directly. */
   onSeedPrompt: (text: string) => void
+  /** Run an already-specified visual edit in a background agent. */
+  onApplyAgent: (text: string) => void
   /** Broken param → ask the agent to regenerate that panel (a real turn). */
   onRegenerate: (panelId: string) => void
   /** "Remove panel" — the caller persists (controls.remove) and hides it. */
@@ -103,6 +105,7 @@ export default function CustomPanel({
   inspection,
   panels,
   onSeedPrompt,
+  onApplyAgent,
   onRegenerate,
   onRemove
 }: Props): React.JSX.Element {
@@ -317,9 +320,13 @@ export default function CustomPanel({
       if (apply.strategy === 'literal') {
         const res = await window.api.controls.applyLiteral(root, panel.manifest.id, param.id, v)
         if (res.applied) setApplied(key, v)
+        else if (res.needsAgent) onApplyAgent(res.agentPrompt ?? `In ${panel.manifest.file}, set ${param.label} to ${JSON.stringify(v)}.`)
         else setError(res.error ?? 'Could not apply the change.')
       } else if (apply.strategy === 'prop') {
-        if (!propSource) return
+        if (!propSource) {
+          onApplyAgent(`In ${panel.manifest.file}, set "${param.label}" (the \`${apply.propName}\` prop of ${panel.manifest.component}) to ${JSON.stringify(v)}.`)
+          return
+        }
         const res = await window.api.props.apply(root, {
           source: propSource,
           name: apply.propName,
@@ -328,7 +335,7 @@ export default function CustomPanel({
         })
         if (res.applied) setApplied(key, v)
         else if (res.needsAgent)
-          onSeedPrompt(
+          onApplyAgent(
             res.agentPrompt ??
               `In ${propSource}, set the \`${apply.propName}\` prop to \`${String(v)}\`.`
           )
@@ -336,7 +343,7 @@ export default function CustomPanel({
       } else {
         const css = String(v)
         if (!element.source) {
-          seedParam(panel, param)
+          onApplyAgent(`In ${panel.manifest.file}, set "${param.label}" (the \`${param.id}\` control of ${panel.manifest.component}) to ${JSON.stringify(v)}.`)
           return
         }
         previewStyle(apply.styleProp, css) // non-scrub commits show instantly too
@@ -350,7 +357,7 @@ export default function CustomPanel({
           setApplied(key, css)
           scheduleReconcile(apply.styleProp, css)
         } else if (res.needsAgent) {
-          onSeedPrompt(
+          onApplyAgent(
             res.agentPrompt ??
               `In ${element.source}, set \`${apply.styleProp}\` to \`${css}\` on the <${element.tag}> element.`
           )
