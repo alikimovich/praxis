@@ -2,6 +2,27 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-09 — Recurring snapshot/index investigation
+
+Profiled captureBase and compared fresh indexes, retained private indexes, clean
+HEAD reuse and repeated snapshot reuse. Five-sample warm clean medians were
+93 → 50 ms for Praxis, 412 → 59 ms with 5,000 added files, and 195 → 48 ms with
+64 MiB of unchanged assets. Most savings come from git add avoiding repeated
+hashing (322 → 18 ms on the many-file fixture), not skipping commit creation.
+
+Thirteen production-oracle comparisons passed with the real index byte-preserved,
+including WIP, external edits, ignore changes and recovery. Separate probes exposed
+three cache hazards: keeping formerly untracked files after ignore changes,
+skipping normalization after attribute changes, and missing restored-mtime edits
+with ctime checks disabled. Fresh rebuilding corrected each mismatch. Documented
+invalidation, cache-boundary locking, stat settings and GC requirements; recommend
+guarded metadata reuse before CoW, with fresh-index fallback. Production is unchanged.
+Reproducible scripts, raw samples and analysis live in SNAPSHOT-INVESTIGATION.md.
+
+TypeScript checks passed; full unit/Electron suite passed 130/131. The same existing
+provider-skills-menu assertion observed Claude immediately after selecting Codex.
+All workspace regressions passed. Inspected the chat-render PNG.
+
 ## 2026-09-09 — Sidebar toggle alignment
 
 Moved the floating sidebar toggle up one CSS pixel (top: 9px → 8px), as requested

@@ -12,9 +12,13 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] **Measure current worktrees against native CoW workspace creation.** Added a
       reproducible disposable-repo benchmark and recorded results/limitations in
       `docs/COW-INVESTIGATION.md`; retain current production behavior.
-- [ ] **Profile recurring snapshot/index work before choosing an optimization.**
-      Measure a safe optimization against unchanged and externally edited trees,
-      including staged/untracked files. A CoW fast path remains exploratory.
+- [x] **Profile recurring snapshot/index work before choosing an optimization.**
+      Recorded per-command timings, 13 passing oracle checks, and three semantic
+      hazards in `docs/SNAPSHOT-INVESTIGATION.md`. Retained-index prototypes reduce
+      warm snapshot costs substantially; production remains unchanged.
+- [ ] **Implement and measure a guarded private-index fast path.** Include attribute/
+      config invalidation, stat-setting fallbacks, cache-boundary locking and
+      recovery. Keep fresh-index fallback; CoW remains exploratory.
 
 ## Model-switch conversation handoff (2026-09-09, user-requested) — SHIPPED
 

@@ -1,0 +1,4 @@
+{"probe":"ignore-rules-without-reseed","cachedMatchesFresh":false,"differingPaths":["new.txt"],"freshRebuildMatches":true}
+{"probe":"attributes-change","cachedMatchesFresh":false,"differingPaths":["file.txt"],"freshRebuildMatches":true}
+{"probe":"autocrlf-change","cachedMatchesFresh":true,"differingPaths":[],"freshRebuildMatches":true}
+{"probe":"restored-mtime-with-trustctime-disabled","cachedMatchesFresh":false,"differingPaths":["file.txt"],"freshRebuildMatches":true}

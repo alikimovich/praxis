@@ -5,6 +5,9 @@ Investigate the recurring snapshot cost before adding a native CoW creation path
 CoW is promising for large working files, but this experiment does not establish
 enough end-to-end benefit to justify replacing worktrees.
 
+Follow-up: [SNAPSHOT-INVESTIGATION.md](SNAPSHOT-INVESTIGATION.md) profiles recurring
+capture costs, measures private-index reuse, and reproduces its correctness hazards.
+
 ## Measurements
 
 Run `bun scripts/benchmark-workspace-cow.mjs 5` on macOS with Command Line Tools.
