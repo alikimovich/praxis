@@ -3,6 +3,15 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Copy-on-write workspace investigation (2026-09-09)
+
+- [x] **Measure current worktrees against native CoW workspace creation.** Added a
+      reproducible disposable-repo benchmark and recorded results/limitations in
+      `docs/COW-INVESTIGATION.md`; retain current production behavior.
+- [ ] **Profile recurring snapshot/index work before choosing an optimization.**
+      Measure a safe optimization against unchanged and externally edited trees,
+      including staged/untracked files. A CoW fast path remains exploratory.
+
 ## Model-switch conversation handoff (2026-09-09, user-requested) — SHIPPED
 
 - [x] **Preserve conversation context when changing models mid-chat.** Replay

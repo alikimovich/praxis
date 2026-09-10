@@ -5,6 +5,10 @@ Models edit there; the preview and the user's editor remain on the live checkout
 isolation boundary is the worktree, while convergence is owned by one repository-scoped
 landing queue.
 
+Copy-on-write creation measurements and integration tradeoffs are recorded in
+[COW-INVESTIGATION.md](COW-INVESTIGATION.md). The experiment leaves this lifecycle
+unchanged; CoW file duplication alone does not provide landing or recovery.
+
 All chats are peers in the rail and in the isolation model: each crosses the same
 landing queue. Chat identity and worktree identity are independent; closing a
 conversation does not justify retaining a stale branch.

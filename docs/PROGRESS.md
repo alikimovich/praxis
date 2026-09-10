@@ -2,6 +2,31 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-09 — Copy-on-write workspace investigation
+
+Benchmarked actual chat worktree creation and turn-start syncing against a native
+APFS CoW hybrid in disposable repositories, with five alternating-order samples
+for Praxis source, 5,000 additional small files, and 64 MiB of random assets.
+Median creation fell from 214 to 196 ms, 1,193 to 917 ms, and 370 to 304 ms, before
+production clone validation/fallback costs. The small-source result is noisy.
+Raw source-copy timings omit Git semantics and are not equivalent workspaces.
+
+Retain the current implementation: the experiment does not establish a simpler
+replacement for Git-based landing/recovery. Recurring captureBase work measured
+118–447 ms and is a better next profiling target. The native forced-clone helper
+also exposed a runtime distinction: Node v26.7.0's force-reflink call returned
+ENOSYS here while native cloning worked. Per-file cloning requires protection
+against live changes between Git capture and copying. Recorded methodology,
+samples, correctness checks, limitations and follow-up in COW-INVESTIGATION.md.
+
+All benchmark content/WIP/private-write/sync/staged-state checks and TypeScript
+checks pass. The initial sandboxed suite could not bind sockets or launch Electron;
+the unrestricted rerun passed 130/131. The existing provider-skills-menu assertion
+still observed Claude immediately after selecting Codex, and repeated in a fresh
+isolated rerun. All workspace regressions passed; the optional live comment probe
+skipped without an applied provider edit. Inspected the chat-render PNG. No
+production behavior changed.
+
 ## 2026-09-09 — Model-switch history handoff and token confirmation
 
 The picker previously copied only the display/persistence record on Codex/provider
