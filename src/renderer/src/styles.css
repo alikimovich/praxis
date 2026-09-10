@@ -400,7 +400,7 @@ html.vibrancy .pane--preview {
    gone, so it slides to the window's left edge (body.is-fullscreen below). */
 .sidebar-toggle {
     position: absolute;
-    top: 9px;
+    top: 8px;
     left: 78px;
     z-index: 20;
     -webkit-app-region: no-drag;

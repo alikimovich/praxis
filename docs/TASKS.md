@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Sidebar toggle alignment (2026-09-09, user-requested) — SHIPPED
+
+- [x] **Move the sidebar toggle up one pixel.**
+
 ## Copy-on-write workspace investigation (2026-09-09)
 
 - [x] **Measure current worktrees against native CoW workspace creation.** Added a

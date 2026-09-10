@@ -2,6 +2,14 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-09 — Sidebar toggle alignment
+
+Moved the floating sidebar toggle up one CSS pixel (top: 9px → 8px), as requested
+for its alignment beside the macOS traffic lights. Type checks and the sidebar
+collapse test pass; inspected its screenshot. Full suite: 129/131 passed. The
+provider-skills test observed Claude before its Codex switch completed; the
+spawn-comment test reported success but hung during cleanup and was terminated.
+
 ## 2026-09-09 — Copy-on-write workspace investigation
 
 Benchmarked actual chat worktree creation and turn-start syncing against a native
