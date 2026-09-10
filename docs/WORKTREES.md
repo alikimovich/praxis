@@ -110,3 +110,7 @@ chooses ours/theirs across the repository.
 
 Implementation: `src/main/publish-reconcile.ts`, integrated by
 `src/main/annotations.ts`. Regression coverage: `test/publish-reconcile.mjs`.
+
+Model/provider changes keep the selected chat's worktree and require confirmation
+when the chat contains messages. The replacement session receives a one-time
+recorded conversation handoff on its next turn; sibling chats are untouched.

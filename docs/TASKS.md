@@ -3,6 +3,13 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Model-switch conversation handoff (2026-09-09, user-requested) — SHIPPED
+
+- [x] **Preserve conversation context when changing models mid-chat.** Replay
+      recorded history once to the selected model after explicit confirmation
+      explaining additional input-token usage. Cancel preserves the current model;
+      empty chats switch directly; active responses block switching.
+
 ## Escape selection shortcut (2026-09-09, user-requested) — SHIPPED
 
 - [x] **Escape turns off S selection mode across the app and floating inspector.**

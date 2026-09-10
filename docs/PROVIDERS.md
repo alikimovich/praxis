@@ -57,3 +57,18 @@ symlinked installs and Codex system skills are included. Menus populate before
 the first turn, independently of authentication. Invoking `/name` supplies the
 selected skill file path in the prompt so the harness can read its instructions.
 Claude keeps its native SDK command discovery.
+
+## Switching models within a chat
+
+Changing a model or provider in a nonempty chat requires confirmation: replaying
+its recorded conversation consumes additional input tokens on the next message.
+Cancel preserves the current choice. Empty chats do not need this confirmation,
+and model/provider controls are disabled while a response or switch is running.
+
+Every picker change starts a fresh session for that chat, preserving its private
+worktree and transcript. Its first user turn includes the prior user/assistant
+text and tool summaries once; later turns rely on the new provider's own context.
+This handoff stays out of the displayed/saved transcript and does not reuse a
+previous provider's SDK session id. Past image bytes and full tool outputs are
+not present in the transcript and are not replayed. Large histories may reach the
+selected model's context limit; Praxis does not silently truncate the conversation.

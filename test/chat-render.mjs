@@ -370,6 +370,7 @@ try {
   }
   // Switching provider re-points the harness and repopulates the models.
   await win.selectOption('select[aria-label="Provider"]', 'codex')
+  await win.getByRole('button', { name: 'Switch model', exact: true }).click()
   const derived = await win.evaluate(() => window.__praxisSession.getState().provider)
   if (derived !== 'codex') throw new Error(`picking the Codex provider should set it: ${derived}`)
   const codexModels = (await optionsOf('Model')).map((o) => o.value)
@@ -377,6 +378,7 @@ try {
     throw new Error(`model picker should follow the provider: ${JSON.stringify(codexModels)}`)
   }
   await win.selectOption('select[aria-label="Model"]', codexValue)
+  await win.getByRole('button', { name: 'Switch model', exact: true }).click()
   await win.waitForFunction((v) => window.__praxisSession.getState().model === v, codexValue, {
     timeout: 5000
   })
@@ -391,6 +393,7 @@ try {
   if (!hint.includes('codex login')) throw new Error(`provider hint should mention codex login: ${hint}`)
   await win.evaluate(() => window.__praxisSession.getState().setCodexAuthNeeded(false))
   await win.selectOption('select[aria-label="Provider"]', 'claude') // reset to Claude
+  await win.getByRole('button', { name: 'Switch model', exact: true }).click()
   if ((await win.$('.provider-hint')) !== null) throw new Error('hint should hide for Claude')
   // Switching provider lands on that provider's Default rather than carrying a
   // model id across (it would mean nothing to the other harness).
@@ -463,6 +466,11 @@ try {
   // must not overwrite the older chat, and switching between their rail rows must
   // restore each picker's own values. No live agent is needed here: the renderer
   // records the setting before its best-effort Codex restart IPC.
+  // These are UI-only synthetic chat records; isolate the restart transport.
+  await app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('agent:restart-chat')
+    ipcMain.handle('agent:restart-chat', () => ({ ok: true }))
+  })
   const perChat = await win.evaluate(() => {
     const ws = window.__praxisWorkspace.getState()
     const session = window.__praxisSession.getState()
@@ -506,10 +514,30 @@ try {
     timeout: 5000
   })
   await win.selectOption('select[aria-label="Model"]', codexValue)
+  await win.getByRole('dialog').waitFor()
+  await win.screenshot({ path: join(artifacts, 'model-switch-approval.png') })
+  if (!(await win.getByRole('dialog').textContent()).includes('extra input tokens')) throw new Error('model switch must explain token usage')
+  await win.getByRole('button', { name: 'Cancel', exact: true }).click()
+  const cancelledModel = await win.evaluate(() => window.__praxisSession.getState().model)
+  if (cancelledModel === codexValue) throw new Error('cancel must preserve the current model')
+  await win.selectOption('select[aria-label="Model"]', codexValue)
+  await win.getByRole('button', { name: 'Switch model', exact: true }).click()
+
+  await win.waitForFunction(value => window.__praxisSession.getState().model === value, codexValue)
   const changedNew = await win.evaluate(({ key, newer }) =>
     window.__praxisWorkspace.getState().projects.find((p) => p.key === key)?.chatSettings?.[newer]?.model,
   perChat)
   if (changedNew !== codexValue) throw new Error(`new chat model was not stored: ${changedNew}`)
+  await app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('agent:restart-chat')
+    ipcMain.handle('agent:restart-chat', () => ({ ok: false, error: 'Test startup failure' }))
+  })
+  await win.selectOption('select[aria-label="Provider"]', 'claude')
+  await win.getByRole('button', { name: 'Switch model', exact: true }).click()
+  await win.getByRole('alert').filter({ hasText: 'Test startup failure' }).waitFor()
+  if (await win.evaluate(() => window.__praxisSession.getState().model) !== codexValue) {
+    throw new Error('failed restart must retain the current model')
+  }
   // Chats render newest first; switch to the older peer and back.
   await win.locator('.rail__chat').nth(1).click()
   await win.waitForFunction(

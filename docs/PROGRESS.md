@@ -2,6 +2,30 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-09 — Model-switch history handoff and token confirmation
+
+The picker previously copied only the display/persistence record on Codex/provider
+restarts, leaving the new model unaware of earlier turns. Every picker change now
+starts a fresh session for that chat and injects recorded user/assistant text and
+tool summaries on its next message once. The wrapper keeps the replay out of the
+saved transcript, preserves current-turn attachments, and avoids carrying a stale
+provider SDK id. Restart creation failures retain the existing session.
+
+A preview-safe confirmation dialog explains extra input tokens and possible
+cost/allowance usage before nonempty chats change models. Cancel leaves the choice
+alone, empty chats switch directly, and switches are blocked during responses.
+The composer waits for restart completion; failures appear in an alert.
+
+Unit checks cover replay ordering/content, no transcript mutation, one-time use,
+empty chats, attachments, and synchronous send failure. Electron coverage verifies
+token disclosure, Cancel, approval, and per-chat model settings; inspected its PNG.
+A live Codex restart recalled a random reference existing only in the prior chat.
+TypeScript, targeted lint, and the final rebuilt chat UI regression pass, including
+failed-start retention. Full verification passed 137/138 (simulator skipped without
+Xcode); the unrelated live tool-invocation probe missed line_height. Its isolated
+rerun also missed the requested tools. The new live history-recall test passed in
+both its targeted run and full verification.
+
 ## 2026-09-09 — Escape disarms selection from the inspector
 
 Escape now reaches the selection toggle from the separate floating inspector

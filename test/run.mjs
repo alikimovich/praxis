@@ -27,6 +27,7 @@ const ROOT = dirname(TEST_DIR);
 
 // unit = the `bun test/NAME.mjs` group before `electron-vite build` in `test`.
 const UNIT = [
+  'conversation-handoff',
   'pr-body',
   'feedback-body',
   'publish-message',
@@ -165,6 +166,7 @@ const ELECTRON = [
 
 // live = the tests present in `verify` but not in `test`.
 const LIVE = [
+  'model-switch-e2e',
   'agent-e2e',
   'codex-e2e',
   'controls-agent',

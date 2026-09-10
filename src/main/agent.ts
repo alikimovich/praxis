@@ -18,6 +18,7 @@ import type {
 import { projectKey } from '../shared/projectKey'
 import { pruneAttachments, saveImageAttachment } from './attachments'
 import { type ProviderSession, pickProvider } from './backends'
+import { withConversationHandoff } from './backends/conversation-handoff'
 import { seedFromRecord } from './backends/record'
 import { EDIT_TOOLS } from './backends/tools'
 import type { SpawnContext } from './backends/types'
@@ -827,10 +828,7 @@ export function registerAgentIpc(
     const existing = sessions.get(sessionKey)
     if (!existing) return { ok: false, error: 'That chat is no longer open.' }
     const previous = existing.record
-    closeSession(existing, how.persist)
-    sessions.delete(sessionKey)
-    memoryRevisionBySession.delete(sessionKey)
-    runningKeys.delete(sessionKey)
+    existing.finalize()
     try {
       // Reuse the chat's EXISTING worktree (isolatedCwd is idempotent for a known
       // sessionKey) so a model/backend restart keeps its isolation instead of
@@ -846,8 +844,18 @@ export function registerAgentIpc(
           onEvent: interactiveEvents(sessionKey)
         })
       )
+      closeSession(existing, how.persist)
+      memoryRevisionBySession.delete(sessionKey)
+      runningKeys.delete(sessionKey)
       adoptSession(sessionKey, s.record, root)
-      if (how.seed) seedFromRecord(s.record, previous, { reuseId: true })
+      if (how.seed) {
+        const sdkSessionId = s.record.sdkSessionId
+        seedFromRecord(s.record, previous, { reuseId: true })
+        // A new provider session has no SDK history, even though the UI keeps it.
+        if (sdkSessionId) s.record.sdkSessionId = sdkSessionId
+        else delete s.record.sdkSessionId
+        s.send = withConversationHandoff(s.send, previous.transcript)
+      }
       s.record.endedAt = null
       sessions.set(sessionKey, s)
       if (activeKey === sessionKey) activeSessionKeyByProject.set(key, sessionKey)
@@ -864,7 +872,10 @@ export function registerAgentIpc(
       root: string,
       sessionKey: string,
       options: AgentOptions = {}
-    ): Promise<{ ok: boolean; error?: string }> => restartChatSession(root, sessionKey, options)
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (runningKeys.has(sessionKey)) return { ok: false, error: 'Wait for the current response to finish before switching models.' }
+      return restartChatSession(root, sessionKey, options)
+    }
   )
 
   // v9 resume — hand a past ("previous agent") SessionRecord back to a LIVE SDK

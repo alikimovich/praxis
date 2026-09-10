@@ -1,3 +1,4 @@
+import ModelSwitchDialog from "./ModelSwitchDialog";
 import {
   Fragment,
   useEffect,
@@ -416,6 +417,9 @@ export default function ChatPanel(): React.JSX.Element {
   } = useChat();
   const { model, modelId, provider, connectionId, slashCommands, projectRoot, setModelSelection } =
     useSession();
+  const [switchingModel, setSwitchingModel] = useState(false);
+  const [modelSwitchError, setModelSwitchError] = useState<string | null>(null);
+  const [pendingModel, setPendingModel] = useState<ModelSelection | null>(null);
   const codexAuthNeeded = useSession((s) => s.codexAuthNeeded);
   // v10 model picker contents (main is the single source of truth). Fetched once,
   // and re-fetched by the settings dialog after every save/remove.
@@ -1006,6 +1010,7 @@ export default function ChatPanel(): React.JSX.Element {
   };
 
   const send = (raw: string = input): void => {
+    if (switchingModel) return;
     const text = raw.trim();
     if ((!text && attachments.length === 0) || isRunning) return;
     const imageAtts = attachments.flatMap((a) =>
@@ -1137,35 +1142,37 @@ export default function ChatPanel(): React.JSX.Element {
    * a plain Claude model clears a previous choice's `modelId`/`connectionId`
    * instead of inheriting them).
    *
-   * Restart rules, unchanged since the pre-v10 pair of dropdowns: Claude alone
-   * can swap models mid-thread. Codex fixes its model when the thread starts (a
-   * live `setModel` is a no-op there — see backends/codex.ts), and a connection
-   * rides the SAME Codex harness with a different endpoint, so any move onto, off
-   * of, or between Codex/connection models restarts just THIS chat. Reopening the
-   * whole project would replace its default chat even while the user is looking
-   * at an additional one.
+   * A fresh session receives the recorded history on its first turn. Restart
+   * only this chat so sibling chats keep their own model and context.
    */
   const applySelection = (next: ModelSelection): void => {
-    const liveSwap =
-      next.provider === "claude" &&
-      provider === "claude" &&
-      !next.connectionId &&
-      !connectionId;
-    setModelSelection(next);
-    const chat = persistChatSettings(next);
-    if (!liveSwap) {
-      if (!projectRoot || !chat) return;
-      void window.api.agent.restartChat(
-        projectRoot,
-        chat.sessionKey,
-        agentOptionsFor(chat.settings),
-      );
-      useChat.getState().finish();
+    const entry = useWorkspace.getState().projects.find((p) => p.root === projectRoot);
+    if (!projectRoot || !entry) {
+      setModelSelection(next);
       return;
     }
-    // "Default" means "no model" — there's nothing to hand the live session.
-    const id = agentModelId(next);
-    if (id) void window.api.agent.setModel(id);
+    const sessionKey = entry.activeSessionKey ?? entry.key;
+    const settings = { ...chatAgentSettingsFromSession(useSession.getState()), ...next };
+    setSwitchingModel(true);
+    setModelSwitchError(null);
+    void window.api.agent.restartChat(projectRoot, sessionKey, agentOptionsFor(settings)).then((result) => {
+      if (!result.ok) {
+        setModelSwitchError(result.error ?? "Unable to start the selected model.");
+        return;
+      }
+      const currentEntry = useWorkspace.getState().projects.find((p) => p.key === entry.key);
+      if (currentEntry) useWorkspace.getState().patchEntry(entry.key, {
+        chatSettings: { ...currentEntry.chatSettings, [sessionKey]: settings },
+      });
+      if (useChat.getState().activeKey === sessionKey) setModelSelection(next);
+      recordLastUsedSettings(settings);
+    }).catch((error) => setModelSwitchError(String(error))).finally(() => setSwitchingModel(false));
+  };
+
+  const requestSelection = (next: ModelSelection): void => {
+    if (isRunning || switchingModel || (next.model === model && next.provider === provider && next.connectionId === connectionId)) return;
+    if (messages.some((message) => message.role === "user")) setPendingModel(next);
+    else applySelection(next);
   };
 
   // Switching provider lands on that provider's Default (a connection has no
@@ -1175,7 +1182,7 @@ export default function ChatPanel(): React.JSX.Element {
     const option = providers.find((o) => o.key === key);
     const choice = option && defaultChoiceFor(option);
     if (!option || !choice) return;
-    applySelection({
+    requestSelection({
       model: choice.value,
       modelId: choice.modelId,
       provider: option.provider,
@@ -1188,7 +1195,7 @@ export default function ChatPanel(): React.JSX.Element {
   const onModelChange = (value: string): void => {
     const choice = selection.option?.models.find((c) => c.value === value);
     if (!choice) return;
-    applySelection({
+    requestSelection({
       model: choice.value,
       modelId: choice.modelId,
       provider: choice.provider,
@@ -1306,6 +1313,11 @@ export default function ChatPanel(): React.JSX.Element {
 
   return (
     <div className="chat flex h-full flex-col" ref={chatRootRef}>
+      {modelSwitchError && <p role="alert">Model switch failed: {modelSwitchError}</p>}
+      <ModelSwitchDialog open={pendingModel !== null} onCancel={() => setPendingModel(null)} onConfirm={() => {
+        if (pendingModel) applySelection(pendingModel);
+        setPendingModel(null);
+      }} />
       {/* A tree of the previewed page's DOM, toggled from the composer. A
           flex-none sibling ABOVE Conversation — its own bounded/resizable
           height, so Conversation keeps flex-1 and use-stick-to-bottom's own
@@ -1653,6 +1665,7 @@ export default function ChatPanel(): React.JSX.Element {
                   }
                   onProviderChange(key);
                 }}
+                disabled={isRunning || switchingModel}
                 aria-label="Provider"
                 title="Which harness (or saved connection) runs this chat"
               >
@@ -1673,6 +1686,7 @@ export default function ChatPanel(): React.JSX.Element {
                 className={`${selectCls} max-w-28 flex-[2_1_7rem]`}
                 value={selection.choice?.value ?? model}
                 onChange={(e) => onModelChange(e.target.value)}
+                disabled={isRunning || switchingModel}
                 aria-label="Model"
               >
                 {/* The placeholder must render a human label, never the raw picker
@@ -1724,7 +1738,7 @@ export default function ChatPanel(): React.JSX.Element {
                 size="icon"
                 className="composer__send shrink-0"
                 onClick={() => send()}
-                disabled={!input.trim() && attachments.length === 0}
+                disabled={switchingModel || (!input.trim() && attachments.length === 0)}
                 aria-label="Send message"
               >
                 <ArrowUp className="size-4" aria-hidden="true" />
