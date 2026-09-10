@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Chat scroll fade (2026-09-09, user-requested) — SHIPPED
+
+- [x] **Replace the top blur with shadcn scroll-fade.** Use the real scroller's
+      scroll-driven mask, keep the pinned request crisp above its answer, and
+      preserve the visible scrollbar gutter.
+
 ## Codex runtime and cross-provider skills (2026-09-09, user-reported) — SHIPPED
 
 - [x] **Update the bundled Codex SDK/CLI for GPT-6 Astra.** Upgrade from 0.146.0

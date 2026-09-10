@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "shadcn/tailwind.css";
+@import "./chat-scroll.css";
 @custom-variant dark (&:is(.dark *));
 
 /* Tailwind v4 + shadcn/ui tokens (new-york / neutral). Utilities & preflight live
@@ -1342,21 +1344,15 @@ body.is-fullscreen .sidebar-toggle {
 }
 
 /* Hidden UI (⌘. / previewbar toggle): width goes to 0 inline (App.tsx) while
-   the pane stays mounted — clip the content instead of letting it paint over
-   the preview, and drop the top fade (it would blur the preview's left edge). */
+   the pane stays mounted — clip the content before it reaches the preview. */
 .pane--chat-hidden {
     overflow: hidden;
-}
-.pane--chat-hidden::before {
-    display: none;
 }
 
 /* Grab strip along the chat pane's top edge so the window is draggable there —
    with no native titlebar, this strip is the only top-of-window drag surface over
    the chat (the rail head and previewbar already drag). Absolute, so it reserves
-   no space and shifts nothing; z-index below the top fade (5) and the sticky
-   pinned ask (6) so those stay interactive, and the pointer-events:none fade lets
-   drag events fall through to it. */
+   no space and shifts nothing. The pinned ask starts below this strip. */
 .chat-drag {
     position: absolute;
     top: 0;
@@ -1365,24 +1361,6 @@ body.is-fullscreen .sidebar-toggle {
     height: 38px;
     z-index: 4;
     -webkit-app-region: drag;
-}
-
-/* With no titlebar the chat scrolls into the window's top edge — dissolve it:
-   a bg-colored gradient + progressively-masked backdrop blur, so scrolled text
-   fades out instead of hard-clipping at the traffic-light strip. */
-.pane--chat::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: var(--chat-scrollbar-width);
-    height: 72px;
-    z-index: 5;
-    pointer-events: none;
-    background: linear-gradient(to bottom, var(--bg) 18%, transparent);
-    backdrop-filter: blur(5px);
-    -webkit-mask-image: linear-gradient(to bottom, #000 25%, transparent);
-    mask-image: linear-gradient(to bottom, #000 25%, transparent);
 }
 
 .pane--preview {
@@ -1626,22 +1604,9 @@ body.is-resizing {
 .msg--user .msg__text {
     box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
 }
-/* z-index:1 — just enough to win over the turn's own scrolling content (so
-   the sticky pin still visually stays put above whatever scrolls past
-   beneath it), but BELOW the top fade (.pane--chat::before, z-index 5) so a
-   pinned ask dissolves under the gradient like every other message instead
-   of punching through it crisp. (Previously z-index:6, on purpose — reversed
-   on user feedback: the class applies to every collapsed ask the whole time
-   it's collapsed, not only while genuinely stuck, so during the sticky
-   hand-off between two turns the outgoing bubble kept rendering above the
-   fade too.) The row itself is click-through so it never blocks the
-   scroll-to-bottom button or content underneath — only the bubble re-enables
-   pointer events. padding-bottom + the fading background give the pinned
-   bubble its own buffer: without it, whatever scrolls up from beneath butts
-   flush against the bubble the moment it's stuck (the flex `gap` between
-   them is a one-time static-flow spacing that scrolls away with the rest of
-   the turn, not a persistent buffer) — this reserves and fades that space
-   every time. */
+/* The pinned bubble sits below the 40px scroll fade, so it stays crisp while
+   its answer scrolls behind it. The click-through row preserves the bubble's
+   controls and reserves a small buffer beneath it. */
 .msg--user-pinned {
     position: sticky;
     top: 44px;

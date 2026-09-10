@@ -1315,7 +1315,7 @@ export default function ChatPanel(): React.JSX.Element {
             last message, so it doesn't sit flush against the status/fade area. */}
         <ConversationContent
           className="gap-3.5 p-4 pt-11 pb-9"
-          scrollClassName="chat__scroll"
+          scrollClassName="chat__scroll scroll-fade-t scroll-fade-t-10"
         >
           {setup.needed && !setup.dismissed && (
             <SetupCard

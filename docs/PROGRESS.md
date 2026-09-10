@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-09 — Scroll-aware chat fade with a crisp pinned request
+
+Replaced the chat pane's always-on backdrop-blur overlay with shadcn's
+`scroll-fade-t` utility on the actual conversation scroller. The fade reveals
+with scrolling and disappears at the start. Its 40px depth ends before the
+pinned request's 44px sticky inset, keeping that bubble sharp while the reply
+scrolls behind it. An additive gutter mask preserves the visible native
+scrollbar; the existing bottom status treatment is unchanged.
+
+Imported the shared `shadcn/tailwind.css` utilities and kept the gutter adaptation
+in `chat-scroll.css`. Electron visual verification measured a 40px fade and 44px
+pinned inset, confirmed no backdrop blur, checked the unmasked 12px scrollbar
+strip, and verified the top fade returns to zero at scroll start. Inspected the
+scrolled, top-of-history, pinned-message handoff, and dark-mode screenshots.
+All three TypeScript projects, the build, and all 129 unit/Electron tests pass.
+
 ## 2026-09-09 — Codex runtime compatibility and skills across providers
 
 Upgraded the bundled Codex SDK/CLI from 0.146.0 to 0.154.0. Praxis launches the
