@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-10 — Text-sized composer selectors
+
+Provider, model, and permission controls now size to the selected label instead
+of fixed flex allocations. A shared ComposerSelect displays the first 10
+characters plus `...` for longer labels and can shrink further in narrow panes.
+Native menus retain full option names, keyboard behavior, and accessible labels;
+hover titles include the complete selection.
+
+Type checks and a focused Electron selector check pass; inspected short-label
+and narrow long-label screenshots. Updated chat-render's overflow check to use
+real provider data and assert text-sized controls. Full suite: 129/131 passed;
+provider-skills-menu retains its recorded switch timing failure, and chat-render
+times out at its unrelated two-chat sidebar assertion (line 495), before the
+selector checks. The isolated selector check passed those layout assertions.
+
 ## 2026-09-10 — File badges on sent messages
 
 Sent messages now retain file attachment metadata and display a file icon plus

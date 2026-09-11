@@ -791,22 +791,31 @@ try {
     () => parseFloat(document.querySelector('.composer__input').style.height) > 90,
     { timeout: 4000 }
   )
-  // Exercise the actual overflow case without changing provider state: native
-  // selects expose their option text through an internal renderer, so append a
-  // deliberately long selected label and inspect the compact toolbar itself.
+  // Change real picker data so the visible label and native menu update together.
   await win.evaluate(() => {
-    for (const [label, text] of [
-      ['Provider', 'A very long saved provider connection'],
-      ['Model', 'GPT-5.6-Sol with an intentionally long model label']
-    ]) {
-      const select = document.querySelector(`select[aria-label="${label}"]`)
-      const option = document.createElement('option')
-      option.value = `long-${label.toLowerCase()}`
-      option.textContent = text
-      select.append(option)
-      select.value = option.value
-    }
+    const providers = window.__praxisProviders
+    providers.setState({
+      choices: providers.getState().choices.map((choice) => ({
+        ...choice,
+        label: 'GPT-5.6-Sol with an intentionally long model label'
+      }))
+    })
   })
+  await win.waitForFunction(() =>
+    document.querySelector('select[aria-label="Model"]').previousElementSibling.textContent === 'GPT-5.6-So...'
+  )
+  const labels = await win.locator('.composer__picker').evaluateAll((selects) =>
+    selects.map((select) => ({
+      visible: select.previousElementSibling.textContent,
+      full: select.selectedOptions[0].textContent,
+      width: select.getBoundingClientRect().width,
+      textWidth: select.previousElementSibling.getBoundingClientRect().width
+    }))
+  )
+  if (labels.some(({ visible, full, width, textWidth }) =>
+    visible !== (Array.from(full).length > 10 ? Array.from(full).slice(0, 10).join('') + '...' : full) ||
+    Math.abs(width - textWidth - 8) > 1
+  )) throw new Error(`picker widths must fit their compact labels: ${JSON.stringify(labels)}`)
   const sendVisible = await win.evaluate(() => {
     const br = document.querySelector('.composer__send').getBoundingClientRect()
     const pr = document.querySelector('.pane--chat').getBoundingClientRect()
@@ -939,7 +948,7 @@ try {
     'CHAT-RENDER OK — markdown, toolbar, auth banner, branch pill, workspace store, rail collapse, image paste, file drop, composer responsive, actions menu + viewport, resume hydration'
   )
 } catch (err) {
-  console.error('CHAT-RENDER FAILED:', err?.message ?? err)
+  console.error('CHAT-RENDER FAILED:', err?.stack ?? err)
   process.exitCode = 1
 } finally {
   await app?.close()

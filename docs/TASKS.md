@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Compact composer selectors (2026-09-10, user-requested) — SHIPPED
+
+- [x] **Size provider, model, and permission selectors to their selected text.**
+      Display at most 10 characters followed by `...` for longer names, retaining
+      full native menu labels and allowing further truncation in narrow panes.
+
 ## Sent file attachments (2026-09-10, user-requested) — SHIPPED
 
 - [x] **Keep files visible on sent messages.** Show an icon and filename badge
