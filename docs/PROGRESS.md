@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-10 — File badges on sent messages
+
+Sent messages now retain file attachment metadata and display a file icon plus
+filename beside image thumbnails, with the absolute path available on hover.
+Badges remain visible when the message includes text; file-only sends use the
+badge instead of a fallback filename in the message body. Existing image records
+remain compatible. Extracted attachment rendering into MessageAttachments.
+
+Extended chat-render coverage through the real file-drop/send flow with stubbed
+agent transport, plus mixed file/image display. Inspected the attachment PNG.
+Type checks pass; full unit/Electron suite passes 130/131, with the previously
+recorded provider-skills-menu timing assertion (Claude observed before Codex).
+
 ## 2026-09-10 — Expanded preview traffic-light clearance
 
 The expanded preview header now reserves an 86px left inset in native macOS

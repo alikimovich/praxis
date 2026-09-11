@@ -57,12 +57,10 @@ export {
  */
 export type MsgSegment = { kind: 'text'; text: string } | { kind: 'tools'; statuses: string[] }
 
-/** A vision image attached to a user turn, kept for in-bubble display (data URL). */
-export interface MsgAttachment {
-  id: string
-  mediaType: string
-  url: string
-}
+/** Display metadata retained on sent turns. Missing kind supports older images. */
+export type MsgAttachment =
+  | { id: string; kind?: 'image'; mediaType: string; url: string }
+  | { id: string; kind: 'file'; name: string; path: string }
 
 /** A compact, display-only snapshot of the element selection a user turn carried,
  *  so the sent bubble can show the same pill the composer did. */
@@ -80,7 +78,7 @@ export interface ChatMessage {
   statuses: string[]
   /** Ordered text/tool-run chunks — see `MsgSegment`. */
   segments: MsgSegment[]
-  /** Images the user attached to this turn (user messages). */
+  /** Files and images the user attached to this turn (user messages). */
   attachments?: MsgAttachment[]
   /** The element the user had selected when they sent this turn (user messages). */
   selection?: MsgSelection

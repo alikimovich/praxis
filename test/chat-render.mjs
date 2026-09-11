@@ -698,11 +698,24 @@ try {
   if (!cardText.includes('dropped-notes.txt')) {
     throw new Error(`dropped file card should show its name: ${cardText}`)
   }
-  // Removing it clears the card.
-  await win.click('button[aria-label="Remove dropped-notes.txt"]')
-  await win.waitForFunction((p) => !document.querySelector(`[title="${p}"]`), droppedPath, {
-    timeout: 5000
+  // Send through the real composer, with transport stubbed to avoid a provider turn.
+  await app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('agent:send')
+    ipcMain.handle('agent:send', () => {})
   })
+  await win.fill('.composer__input', 'Read these notes')
+  await win.press('.composer__input', 'Enter')
+  await win.waitForSelector(`.msg__file[title="${droppedPath}"]`, { timeout: 5000 })
+  if (await win.locator('.composer__attachments').count()) {
+    throw new Error('sending should move the attachment from the composer onto the message')
+  }
+  const sentText = await win.evaluate(() => {
+    const state = window.__praxisStore.getState()
+    const message = state.byKey[state.activeKey].messages.filter((m) => m.role === 'user').at(-1)
+    state.finish()
+    return message.text
+  })
+  if (sentText !== 'Read these notes') throw new Error('file badge should preserve the user’s message text')
 
   // Drop an IMAGE file → it becomes a vision thumbnail as before, but it ALSO
   // keeps the file's real on-disk path (LKM-67), which the turn hands to the
@@ -747,7 +760,8 @@ try {
   await win.evaluate(() => {
     window.__praxisStore.getState().appendUser('Tweak this button', undefined, {
       attachments: [
-        { id: 'att1', mediaType: 'image/png', url: 'data:image/png;base64,iVBORw0KGgo=' },
+        { id: 'att1', mediaType: 'image/png', url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' },
+        { id: 'file1', kind: 'file', name: 'project-notes.txt', path: '/tmp/project-notes.txt' },
       ],
       selection: { tag: 'button', ident: '.cta', source: 'src/App.tsx:12:3' },
     })
@@ -758,6 +772,13 @@ try {
   if (!selectionPill.includes('button.cta') || !selectionPill.includes('src/App.tsx:12:3')) {
     throw new Error(`sent bubble should show the selection pill: ${selectionPill}`)
   }
+
+  const sentFile = win.locator('.msg--user .msg__file').last()
+  if ((await sentFile.textContent()).trim() !== 'project-notes.txt' ||
+      await sentFile.getAttribute('title') !== '/tmp/project-notes.txt') {
+    throw new Error('sent files should retain their filename and full path beside image thumbnails')
+  }
+  await win.locator('.msg--user').last().screenshot({ path: join(artifacts, '04c-sent-attachments.png') })
 
   // Composer responsiveness: at a narrow chat pane the controls stay on one line,
   // bounded selects truncate instead of wrapping, the send button stays visible,

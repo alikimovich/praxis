@@ -1,3 +1,4 @@
+import { MessageAttachments } from "./MessageAttachments";
 import ModelSwitchDialog from "./ModelSwitchDialog";
 import {
   Fragment,
@@ -1033,19 +1034,13 @@ export default function ChatPanel(): React.JSX.Element {
     // silently prepended — the agent has a `preview_location` tool and asks
     // when the page actually matters.)
     const ctx = selected ? describeSelectionForPrompt(selected) : "";
-    // Carry the images + selection onto the sent bubble so they stay visible in
-    // the transcript (not just the composer) — the image thumbnails the user
-    // dropped in and the element pill they picked. Files have no thumbnail, so
-    // when the user typed nothing, name them in the bubble text instead.
-    const fileSummary = files.length
-      ? `📎 ${files.map((f) => f.name).join(", ")}`
-      : "";
-    appendUser(text || fileSummary, undefined, {
-      attachments: imageAtts.map((a) => ({
-        id: a.id,
-        mediaType: a.mediaType,
-        url: a.url,
-      })),
+    // Keep display metadata for every attachment alongside the user's words.
+    appendUser(text, undefined, {
+      attachments: attachments.map((a) =>
+        a.kind === "file"
+          ? { id: a.id, kind: "file", name: a.name, path: a.path }
+          : { id: a.id, kind: "image", mediaType: a.mediaType, url: a.url },
+      ),
       selection: selected ? selectionForBubble(selected) : undefined,
     });
     startAssistant();
@@ -1395,20 +1390,9 @@ export default function ChatPanel(): React.JSX.Element {
                         )}
                       </span>
                     )}
-                    {m.role === "user" &&
-                      m.attachments &&
-                      m.attachments.length > 0 && (
-                        <div className="msg__attachments flex flex-wrap justify-end gap-1.5">
-                          {m.attachments.map((a) => (
-                            <img
-                              key={a.id}
-                              src={a.url}
-                              alt="attachment"
-                              className="h-16 w-16 rounded-md border border-border object-cover"
-                            />
-                          ))}
-                        </div>
-                      )}
+                    {m.role === "user" && (
+                      <MessageAttachments attachments={m.attachments} />
+                    )}
                     {m.segments.map((seg, segIdx) => {
                       if (seg.kind === "tools") {
                         const active =

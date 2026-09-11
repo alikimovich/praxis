@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Sent file attachments (2026-09-10, user-requested) — SHIPPED
+
+- [x] **Keep files visible on sent messages.** Show an icon and filename badge
+      beside image thumbnails, with the full file path on hover.
+
 ## Expanded preview header (2026-09-10, user-reported) — SHIPPED
 
 - [x] **Keep the branch clear of traffic lights when the preview is expanded.**
