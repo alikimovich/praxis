@@ -2,6 +2,14 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-11 — Subagent cats stand on the border
+
+Bottom-aligned the subagent group and the sprites inside its buttons so the
+small cats' feet share the big cat's border instead of floating above it.
+Type checks and the rail-chat-status bottom-edge assertion pass; inspected the
+updated screenshot. Full suite: 129/131 passed, with the previously documented
+chat-render sidebar timeout and provider-skills-menu switch timing failure.
+
 ## 2026-09-10 — Subagent cats beside the composer
 
 Replaced nested background-agent sidebar rows with up to six smaller copies of

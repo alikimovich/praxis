@@ -13,13 +13,13 @@ export default function SubagentCats({ sessionKey }: { sessionKey: string }): Re
     .slice(0, 6)
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="ml-auto flex shrink-0 items-center gap-1 pointer-events-auto" aria-label="Background agents">
+      <div className="ml-auto flex shrink-0 self-end items-end gap-1 pointer-events-auto" aria-label="Background agents">
         {visible.map((agent) => (
           <Tooltip key={agent.id}>
             <TooltipTrigger asChild>
               <button
                 type="button"
-                className="flex size-6 items-center justify-center rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                className="flex size-6 items-end justify-center rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
                 aria-label={`${agent.status === 'queued' ? 'Queued' : 'Running'}: ${agent.label}. Cancel agent`}
                 onClick={() => void window.api.agent.spawnInterrupt(agent.id)}
               >

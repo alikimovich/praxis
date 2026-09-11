@@ -163,9 +163,9 @@ try {
     const main = document.querySelector('.chat__status > .cat-loader').getBoundingClientRect()
     const cats = document.querySelector('[aria-label="Background agents"]').getBoundingClientRect()
     const small = document.querySelector('[aria-label="Background agents"] .cat-loader').getBoundingClientRect()
-    return { main: main.width, small: small.width, right: cats.left > main.right }
+    return { main: main.width, small: small.width, right: cats.left > main.right, bottomDelta: small.bottom - main.bottom }
   })
-  if (sizes.small >= sizes.main || !sizes.right) throw new Error(`cat layout: ${JSON.stringify(sizes)}`)
+  if (sizes.small >= sizes.main || !sizes.right || Math.abs(sizes.bottomDelta) > 0.5) throw new Error(`cat layout: ${JSON.stringify(sizes)}`)
   await cats.first().hover()
   await win.getByRole('tooltip').waitFor()
   if (!(await win.getByRole('tooltip').textContent()).includes('Operation 5'))

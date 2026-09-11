@@ -8,6 +8,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] **Replace nested subagent rows with smaller cats beside the composer.**
       Show up to six cats on the right of the status line for the active chat;
       hover/focus explains each operation, queued cats idle, and clicking cancels.
+- [x] **Align the small cats with the border beneath the big cat.**
 
 ## Compact composer selectors (2026-09-10, user-requested) — SHIPPED
 
