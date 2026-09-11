@@ -1194,7 +1194,7 @@ export const useHistory = create<HistoryState>((set) => ({
 
 /**
  * v8 F1: detached comment spawns currently running, keyed by their parent
- * `sessionKey`, so the rail can nest each agent beneath the chat that created it. A row
+ * `sessionKey`, so the composer can show cats for the chat that created them. A cat
  * appears the moment a comment is dispatched and is removed on `spawn-finished` (the
  * finished run reappears in `useHistory` as a "previous agent" carrying its branch).
  * These never enter `useChat` — the main chat stream stays byte-clean.

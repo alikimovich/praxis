@@ -109,7 +109,7 @@ try {
   await win.waitForFunction(
     () =>
       document.querySelectorAll('.rail__chats > .rail__chat-item').length === 3 &&
-      document.querySelectorAll('.rail__agents .rail__chat-item').length === 1 &&
+      document.querySelectorAll('.rail__agents .rail__chat-item').length === 0 &&
       document.querySelector('.rail__section-toggle'),
     undefined,
     { timeout: 5000 }
@@ -147,13 +147,43 @@ try {
     throw new Error('chat lists should have no model labels or Chats heading')
   const historyName = await win.textContent('.rail__history .rail__chat-name')
   if (historyName !== 'Past chat') throw new Error(`history expected Past chat, got ${historyName}`)
-  const nested = await win.evaluate(() => ({
-    name: document.querySelector('.rail__agents .rail__chat-name')?.textContent,
-    model: document.querySelector('.rail__agents .rail__model')?.textContent
-  }))
-  if (nested.name !== 'Review mobile layout' || nested.model !== undefined) {
-    throw new Error(`nested agent missing or mislabeled: ${JSON.stringify(nested)}`)
-  }
+  if (await win.locator('[aria-label="Background agents"]').count())
+    throw new Error('another chat’s agents should not appear in the active composer')
+  await win.evaluate(() => {
+    const key = window.__praxisStore.getState().activeKey
+    for (let i = 0; i < 7; i++) window.__praxisSpawns.getState().add(key, {
+      id: `cat-${i}`, branch: null, label: `Operation ${i}`, modelLabel: 'Codex',
+      status: i === 6 ? 'queued' : 'running'
+    })
+  })
+  const cats = win.locator('[aria-label="Background agents"] button')
+  await cats.first().waitFor()
+  if (await cats.count() !== 6) throw new Error('expected six subagent cats')
+  const sizes = await win.evaluate(() => {
+    const main = document.querySelector('.chat__status > .cat-loader').getBoundingClientRect()
+    const cats = document.querySelector('[aria-label="Background agents"]').getBoundingClientRect()
+    const small = document.querySelector('[aria-label="Background agents"] .cat-loader').getBoundingClientRect()
+    return { main: main.width, small: small.width, right: cats.left > main.right }
+  })
+  if (sizes.small >= sizes.main || !sizes.right) throw new Error(`cat layout: ${JSON.stringify(sizes)}`)
+  await cats.first().hover()
+  await win.getByRole('tooltip').waitFor()
+  if (!(await win.getByRole('tooltip').textContent()).includes('Operation 5'))
+    throw new Error('cat tooltip must describe the operation')
+  await win.screenshot({ path: join(artifacts, '20-subagent-cats.png') })
+  await win.evaluate(() => {
+    const key = window.__praxisStore.getState().activeKey
+    for (let i = 0; i < 6; i++) window.__praxisSpawns.getState().remove(key, `cat-${i}`)
+  })
+  await win.waitForFunction(() => document.querySelectorAll('[aria-label="Background agents"] button').length === 1)
+  if (await win.locator('[aria-label="Background agents"] [data-running]').count())
+    throw new Error('queued cats should be idle')
+  await cats.first().focus()
+  await win.getByRole('tooltip').waitFor()
+  if (!(await win.getByRole('tooltip').textContent()).includes('Queued'))
+    throw new Error('keyboard tooltip must explain queued state')
+  await win.evaluate(() => window.__praxisSpawns.getState().remove(window.__praxisStore.getState().activeKey, 'cat-6'))
+  await win.locator('[aria-label="Background agents"]').waitFor({ state: 'detached' })
 
   // Alignment: EVERY leading glyph in a project's block — the status dots, the
   // History fold chevron — centres on the active project's

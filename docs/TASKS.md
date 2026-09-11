@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Subagent cats (2026-09-10, user-requested) — SHIPPED
+
+- [x] **Replace nested subagent rows with smaller cats beside the composer.**
+      Show up to six cats on the right of the status line for the active chat;
+      hover/focus explains each operation, queued cats idle, and clicking cancels.
+
 ## Compact composer selectors (2026-09-10, user-requested) — SHIPPED
 
 - [x] **Size provider, model, and permission selectors to their selected text.**

@@ -93,6 +93,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import CatLoader from "./CatLoader";
+import SubagentCats from "./SubagentCats";
 import RunStats from "./RunStats";
 
 // The picker is TWO dropdowns (the pre-v10 shape): a provider — Claude, Codex,
@@ -1449,6 +1450,7 @@ export default function ChatPanel(): React.JSX.Element {
       <div className="chat__status">
         <CatLoader running={isRunning} />
         <RunStats />
+        <SubagentCats sessionKey={activeChatKey} />
       </div>
 
       <div className="composer">

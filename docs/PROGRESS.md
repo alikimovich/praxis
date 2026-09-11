@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-10 — Subagent cats beside the composer
+
+Replaced nested background-agent sidebar rows with up to six smaller copies of
+the main cat on the right of the composer status line. Cats follow the active
+chat, animate for running work, and idle while queued; running work takes
+priority when more than six operations exist. Hover and keyboard focus show the
+operation label and queued state. Clicking retains the existing cancel action.
+
+Type checks and the extended rail-chat-status Electron test pass. Inspected the
+six-cat screenshot and operation tooltip; coverage also checks chat scoping,
+the display limit, smaller size, queued state, and disappearance on completion.
+Full unit/Electron suite: 129/131 passed, with the previously recorded chat-render
+sidebar timeout (line 495) and provider-skills-menu model-switch timing failure.
+
 ## 2026-09-10 — Text-sized composer selectors
 
 Provider, model, and permission controls now size to the selected label instead

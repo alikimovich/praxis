@@ -12,7 +12,13 @@ import run2Url from '../assets/cat/run-2.svg'
  * `currentColor` so the cat picks up the theme's muted foreground and works in
  * both light and dark mode without recoloring the art.
  */
-export default function CatLoader({ running }: { running: boolean }): React.JSX.Element {
+export default function CatLoader({
+  running,
+  small = false
+}: {
+  running: boolean
+  small?: boolean
+}): React.JSX.Element {
   const [frame, setFrame] = useState(0)
   useEffect(() => {
     if (!running) return
@@ -25,7 +31,12 @@ export default function CatLoader({ running }: { running: boolean }): React.JSX.
     <span
       className="cat-loader"
       data-running={running ? '' : undefined}
-      style={{ WebkitMaskImage: `url(${src})`, maskImage: `url(${src})` }}
+      style={{
+        width: small ? 20 : undefined,
+        height: small ? 20 : undefined,
+        WebkitMaskImage: `url(${src})`,
+        maskImage: `url(${src})`
+      }}
       role="img"
       aria-label={running ? 'Working…' : 'Idle'}
       title={running ? 'Working…' : undefined}

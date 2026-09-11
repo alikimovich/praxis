@@ -321,29 +321,6 @@ export default function Rail({
                                 </span>
                               )}
                             </RailChatRow>
-                            {childAgents.length > 0 && (
-                              <ul
-                                className="rail__agents"
-                                aria-label={`${name}'s background agents`}
-                              >
-                                {childAgents.map((agent) => (
-                                  <RailChatRow
-                                    key={agent.id}
-                                    spawn
-                                    name={
-                                      agent.status === 'queued'
-                                        ? `${agent.label} · queued`
-                                        : agent.label
-                                    }
-                                    status={agent.status === 'queued' ? 'idle' : 'working'}
-                                    title={agent.label}
-                                    onClose={() => void window.api.agent.spawnInterrupt(agent.id)}
-                                    closeLabel="Cancel agent"
-                                    closeTitle="Cancel this agent"
-                                  />
-                                ))}
-                              </ul>
-                            )}
                           </Fragment>
                         )
                       })}
