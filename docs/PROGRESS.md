@@ -2,6 +2,17 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-10 — Expanded preview traffic-light clearance
+
+The expanded preview header now reserves an 86px left inset in native macOS
+windows so its branch and URL stay clear of the traffic lights. Fullscreen,
+browser mode, and the ordinary split layout retain their existing padding.
+Extended chat-hide coverage to check branch clearance and fullscreen
+state notifications. Type checks and the corrected targeted test pass; inspected
+the expanded-header screenshot. Full suite: 129/131 initially passed, with a native
+fullscreen animation timeout in chat-hide (replaced by deterministic notification
+coverage, passing on rerun) and the existing provider-skills timing failure.
+
 ## 2026-09-09 — Sidebar toggle traffic-light spacing
 
 Added 8px to the sidebar toggle's normal left inset (78px → 86px).

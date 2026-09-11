@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Expanded preview header (2026-09-10, user-reported) — SHIPPED
+
+- [x] **Keep the branch clear of traffic lights when the preview is expanded.**
+      Apply clearance only to native macOS windows outside fullscreen.
+
 ## Sidebar toggle alignment (2026-09-09, user-requested) — SHIPPED
 
 - [x] **Move the sidebar toggle up one pixel.**

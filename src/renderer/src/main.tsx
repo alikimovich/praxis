@@ -29,6 +29,9 @@ const editorSource = params.get('source')
 // vibrancy material behind them, so they keep opaque backgrounds.
 if (!isPanel && !editorRoot && navigator.platform.startsWith('Mac')) {
   document.documentElement.classList.add('vibrancy')
+  if (navigator.userAgent.includes('Electron/')) {
+    document.documentElement.classList.add('native-traffic-lights')
+  }
 }
 
 const root = createRoot(document.getElementById('root')!)

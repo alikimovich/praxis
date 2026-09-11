@@ -82,6 +82,17 @@ try {
   if (hidden.railWidth > 4)
     throw new Error(`rail width ${hidden.railWidth}px while UI hidden — should collapse to ~0`)
   if (hidden.stored !== '1') throw new Error(`praxis:chat-hidden should be "1", got ${hidden.stored}`)
+  await win.evaluate(() => window.__praxisSession.getState().setBranch('praxis/main'))
+  if (process.platform === 'darwin') {
+    const branchLeft = await win.locator('.branch').evaluate(el => el.getBoundingClientRect().left)
+    if (branchLeft < 86) throw new Error(`branch overlaps traffic lights: ${branchLeft}px`)
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('window:fullscreen', true))
+    await win.waitForFunction(() => document.body.classList.contains('is-fullscreen'))
+    const fullscreenPadding = await win.locator('.previewbar').evaluate(el => getComputedStyle(el).paddingLeft)
+    if (fullscreenPadding !== '12px') throw new Error(`fullscreen retained traffic-light clearance: ${fullscreenPadding}`)
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('window:fullscreen', false))
+    await win.waitForFunction(() => !document.body.classList.contains('is-fullscreen'))
+  }
   await win.screenshot({ path: join(artifacts, '15-chat-hidden.png') })
 
   // Show again via the previewbar button (needs the dev server running).

@@ -1400,6 +1400,11 @@ body.is-fullscreen .sidebar-toggle {
     user-select: none;
 }
 
+/* Expanded preview starts at the window edge beneath macOS window controls. */
+html.native-traffic-lights body:not(.is-fullscreen) .panes--chat-hidden .previewbar {
+    padding-left: 86px;
+}
+
 .previewbar__url {
     min-width: 0;
     overflow: hidden;
