@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-11 — Quiet project action icons
+
+Changed the sidebar project menu and new-chat icons to neutral gray at rest and
+black on hover. Removed their accent hover background while retaining keyboard
+focus outlines and the existing project-hover visibility behavior. Type checks
+pass; verified computed colors/transparency for both buttons and inspected the
+hover screenshot (with a gray backing for Electron's transparent capture).
+
+Full suite: 128/132 passed. Layers-panel passes separately. Startup reduced-
+motion assertion also fails separately; chat-render and provider-skills-menu
+retain their previously documented failures.
+
 ## 2026-09-11 — Svelte inspector defaults
 
 Preserved literal defaults from Svelte 5 `$props()` and Svelte 4 `export let`,

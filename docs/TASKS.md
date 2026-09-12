@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Project action icon hover (2026-09-11, user-requested) — SHIPPED
+
+- [x] **Use lighter gray project action icons, black on hover, with no hover fill.**
+
 ## Svelte inspector defaults (2026-09-11, user-reported) — SHIPPED
 
 - [x] **Show declared Svelte defaults without turning them into overrides.** Cover

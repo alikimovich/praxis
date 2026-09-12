@@ -8,7 +8,7 @@ import {
 } from './ui/dropdown-menu'
 
 const actionClass =
-  'flex size-6 shrink-0 items-center justify-center rounded border-0 bg-transparent text-inherit opacity-0 pointer-events-none transition-opacity group-hover/project:opacity-100 group-hover/project:pointer-events-auto group-focus-within/project:opacity-100 group-focus-within/project:pointer-events-auto data-[state=open]:opacity-100 data-[state=open]:pointer-events-auto hover:bg-accent focus-visible:outline focus-visible:outline-2 [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto'
+  'flex size-6 shrink-0 items-center justify-center rounded border-0 bg-transparent text-neutral-500 opacity-0 pointer-events-none transition-opacity group-hover/project:opacity-100 group-hover/project:pointer-events-auto group-focus-within/project:opacity-100 group-focus-within/project:pointer-events-auto data-[state=open]:opacity-100 data-[state=open]:pointer-events-auto hover:text-black focus-visible:outline focus-visible:outline-2 [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto'
 
 export default function RailProjectActions({
   name,
