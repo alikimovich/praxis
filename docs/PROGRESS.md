@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-11 — Supplied icon artwork and state transitions
+
+Replaced all 35 renderer Lucide imports with the user's SVG artwork. Original
+exports live in assets/icons; scripts/generate-icons.py creates theme-inheriting
+path data and equivalent cubic endpoints for the supplied folder/sidebar states.
+A shared React component preserves sizing and accessibility props. CSS morphs
+the same mounted paths on expansion/collapse; reduced motion switches instantly.
+Folders remain visible on hover so the motion is not covered by the chevron;
+project favicons retain their existing hover treatment.
+
+Type checks and the extended rail-collapse Electron test pass. Coverage checks
+both directions, mounted-node continuity, real CSS transitions, hover visibility,
+and reduced motion. Inspected the open-folder and sidebar screenshots.
+Full unit/Electron suite: 130/132 passed, with the previously documented
+chat-render sidebar timeout and provider-skills-menu switch assertion.
+
 ## 2026-09-11 — Centered pixel-cat startup intro
 
 Ported the supplied HTML's 60-square cat and single-layer SVG threshold reveal

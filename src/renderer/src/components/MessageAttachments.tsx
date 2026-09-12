@@ -1,4 +1,4 @@
-import { FileText } from "lucide-react";
+import { FileText } from "../icons";
 import type { MsgAttachment } from "../store";
 
 export function MessageAttachments({

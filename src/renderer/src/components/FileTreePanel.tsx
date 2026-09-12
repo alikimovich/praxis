@@ -1,5 +1,5 @@
 import { FileTree } from '@pierre/trees'
-import { FilePlus, Pencil, Trash2 } from 'lucide-react'
+import { FilePlus, Pencil, Trash2 } from '../icons'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useCodeDrawer } from '../store'

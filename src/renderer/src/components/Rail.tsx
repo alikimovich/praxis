@@ -1,4 +1,4 @@
-import { ChevronRight, Folder, FolderOpen, MessageSquare, Plus, X } from 'lucide-react'
+import { ChevronRight, Folder, MessageSquare, Plus, X } from '../icons'
 import { Fragment, useEffect, useState } from 'react'
 import type { SessionRecord } from '../../../shared/api'
 import { useProjectIcons } from '../project-icons'
@@ -214,16 +214,15 @@ export default function Rail({
             const showAllPast = moreShown.has(p.key)
             const pastVisible = showAllPast ? past : past.slice(0, MAX_HISTORY_ROWS)
             const hiddenPast = past.length - pastVisible.length
-            const FolderIcon = expanded ? FolderOpen : Folder
             const icon = icons[p.key]
             return (
               <li key={p.key} className={`rail__item ${active ? 'rail__item--active' : ''}`}>
                 <div className="rail__row group/project">
                   <div className="rail__open" title={icon ? `${p.root} — ${icon.path}` : p.root}>
                     {/* Project glyph: the project's OWN favicon when it ships one,
-                      else the Cursor-style subdued folder (open when expanded,
-                      closed otherwise). Either way it gives way to a chevron on
-                      hover — pointing down while expanded, right while collapsed.
+                      else the supplied folder, morphing with the expanded state.
+                      Favicons give way to a chevron on hover; folders remain
+                      visible so their opening/closing motion can be seen.
                       The favicon rides `rail__folder` so it inherits the same
                       16px slot and the same hover cross-fade as the folder it
                       replaces; only the paint differs.
@@ -249,7 +248,7 @@ export default function Rail({
                             draggable={false}
                           />
                         ) : (
-                          <FolderIcon className="rail__folder size-4" />
+                          <Folder open={expanded} className="rail__folder size-4" />
                         )}
                         <ChevronRight
                           className={`rail__chevron size-4 ${expanded ? 'rail__chevron--open' : ''}`}

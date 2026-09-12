@@ -1,4 +1,4 @@
-import { Pencil } from "lucide-react";
+import { Pencil } from "../icons";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import RailChatTitle from "./RailChatTitle";
 

@@ -56,7 +56,7 @@ import { projectKey } from '../../shared/projectKey'
 import { preferredChatAgentSettings } from './preferred-model'
 import { animationControlsPrompt, controlsPrompt } from './lib/controls-prompt'
 import { restoreWorkspace, type RestoreDeps } from './restore'
-import { Code2, Maximize2, Minimize2, MonitorSmartphone, PanelLeft } from 'lucide-react'
+import { Code2, Maximize2, Minimize2, MonitorSmartphone, PanelLeft } from './icons'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -66,7 +66,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem
 } from '@/components/ui/dropdown-menu'
-import { Check, ChevronDown } from 'lucide-react'
+import { Check, ChevronDown } from './icons'
 import Rail from './components/Rail'
 import type {
   CommentMode,
@@ -2156,7 +2156,7 @@ export default function App(): React.JSX.Element {
               aria-pressed={!railCollapsed}
               title={railCollapsed ? 'Show sidebar' : 'Hide sidebar'}
             >
-              <PanelLeft className="size-3.5" aria-hidden="true" />
+              <PanelLeft open={!railCollapsed} className="size-3.5" aria-hidden="true" />
             </button>
           )}
         </div>

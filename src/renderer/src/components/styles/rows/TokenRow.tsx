@@ -1,4 +1,4 @@
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown } from '../../../icons'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import type { TokenCandidate } from '../../../../../shared/token-match'

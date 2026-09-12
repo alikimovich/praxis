@@ -1,4 +1,4 @@
-import { Play } from 'lucide-react'
+import { Play } from '../../icons'
 import { useCallback, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import {

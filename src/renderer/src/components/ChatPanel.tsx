@@ -86,7 +86,7 @@ import {
   Layers,
   MousePointer2,
   Undo2,
-} from "lucide-react";
+} from "../icons";
 import {
   Collapsible,
   CollapsibleContent,

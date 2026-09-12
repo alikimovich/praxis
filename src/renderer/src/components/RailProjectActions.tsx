@@ -1,4 +1,4 @@
-import { Brain, Ellipsis, SquarePen, X } from 'lucide-react'
+import { Brain, Ellipsis, SquarePen, X } from '../icons'
 import {
   DropdownMenu,
   DropdownMenuContent,

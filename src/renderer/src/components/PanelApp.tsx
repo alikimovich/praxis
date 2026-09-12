@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PanelState } from '../../../shared/api'
-import { SlidersHorizontal } from 'lucide-react'
+import { SlidersHorizontal } from '../icons'
 import CustomPanel from './CustomPanel'
 import IslandCard from './IslandCard'
 import PropPanel from './PropPanel'

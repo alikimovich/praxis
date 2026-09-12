@@ -3,6 +3,14 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Supplied icon artwork (2026-09-11, user-requested) — SHIPPED
+
+- [x] **Replace the 35 Lucide imports with the supplied SVG set.** Preserve
+      artwork, sizes, and theme inheritance; retain source SVGs for future edits.
+- [x] **Animate project folders and the sidebar toggle between supplied states.**
+      Morph mounted paths with CSS, keep folders visible on hover, and respect
+      reduced motion.
+
 ## Centered startup animation (2026-09-11, user-requested) — SHIPPED
 
 - [x] **Play the supplied blue pixel-cat reveal before showing the app.** Center

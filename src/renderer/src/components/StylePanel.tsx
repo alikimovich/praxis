@@ -1,4 +1,4 @@
-import { Play } from 'lucide-react'
+import { Play } from '../icons'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { hasActiveTransition, STYLE_PROP_META, sameCssValue } from '@/lib/css-values'

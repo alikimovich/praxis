@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight } from '../icons'
 import { useMemo, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import type { LayerNode } from '../../../shared/api'

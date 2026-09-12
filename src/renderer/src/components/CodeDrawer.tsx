@@ -7,7 +7,7 @@ import { Decoration, type DecorationSet, EditorView, keymap } from '@codemirror/
 import { tags as t } from '@lezer/highlight'
 import { svelte } from '@replit/codemirror-lang-svelte'
 import { basicSetup } from 'codemirror'
-import { ChevronLeft, ChevronRight, Save, SquareArrowOutUpRight, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Save, SquareArrowOutUpRight, X } from '../icons'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { SourceView } from '../../../shared/api'

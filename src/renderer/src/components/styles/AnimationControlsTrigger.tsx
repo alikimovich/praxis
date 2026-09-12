@@ -1,4 +1,4 @@
-import { Sparkles } from 'lucide-react'
+import { Sparkles } from '../../icons'
 import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 

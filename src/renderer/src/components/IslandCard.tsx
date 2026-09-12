@@ -1,4 +1,4 @@
-import { Minimize2 } from 'lucide-react'
+import { Minimize2 } from '../icons'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
