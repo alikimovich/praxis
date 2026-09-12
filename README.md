@@ -160,6 +160,11 @@ Tests are hand-rolled `.mjs` scripts in three tiers:
 
 `bun run test` runs unit + UI; `bun run verify` adds the live e2e tier.
 
+The suite keeps a fresh app/profile per test file and skips the desktop startup
+intro except in `startup-intro`. To skip it in a targeted run too, use
+`PRAXIS_TEST_SKIP_INTRO=1 bun run test:smoke` (or another UI test script).
+Other UI animations remain enabled.
+
 ## Scripts
 
 | Command | Description |

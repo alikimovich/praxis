@@ -731,10 +731,14 @@ function createWindow(): void {
   })
 
   const loadRenderer = (): void => {
+    const query: Record<string, string> =
+      process.env.PRAXIS_TEST_SKIP_INTRO === '1' ? { praxisSkipIntro: '1' } : {}
     if (process.env['ELECTRON_RENDERER_URL']) {
-      mainWindow?.loadURL(process.env['ELECTRON_RENDERER_URL'])
+      const url = new URL(process.env['ELECTRON_RENDERER_URL'])
+      for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value)
+      mainWindow?.loadURL(url.toString())
     } else {
-      mainWindow?.loadFile(join(__dirname, '../renderer/index.html'))
+      mainWindow?.loadFile(join(__dirname, '../renderer/index.html'), { query })
     }
   }
 

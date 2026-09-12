@@ -30,6 +30,13 @@ try {
   // With no project open the shell shows an empty-state CTA (no chat/preview,
   // no titlebar — the window is all surface).
   await win.waitForSelector('.empty__open', { timeout: 15000 })
+  if (process.env.PRAXIS_TEST_SKIP_INTRO === '1') {
+    const skipped = await win.evaluate(() =>
+      new URLSearchParams(location.search).get('praxisSkipIntro') === '1' &&
+      !document.querySelector('[data-startup-ui], [data-startup-intro]')
+    )
+    if (!skipped) throw new Error('test launch should bypass the startup wrapper')
+  }
   await shot(win, '01-launch.png')
 
   // Open a project (store-only) so the chat + preview panes render for the checks.

@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-12 — Skip startup intro in ordinary test runs
+
+The suite now passes PRAXIS_TEST_SKIP_INTRO=1 for ordinary tests and explicitly
+sets it to 0 for startup-intro. Desktop main forwards the switch as a renderer
+query parameter, bypassing the intro wrapper while retaining fresh app/profile
+isolation and all other UI motion. Targeted scripts can opt in with the same
+environment variable; README documents the command.
+
+Type checks pass. Full unit/Electron suite: 131/132 passed, with only the
+previously documented chat-render timeout. Startup-intro passes with animation
+enabled; smoke asserts the wrapper is bypassed. Inspected its launch screenshot.
+
 ## 2026-09-11 — Quiet project action icons
 
 Changed the sidebar project menu and new-chat icons to neutral gray at rest and

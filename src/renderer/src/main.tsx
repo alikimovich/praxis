@@ -47,6 +47,8 @@ if (editorRoot && editorSource) {
     <React.StrictMode>
       {isPanel ? (
         <PanelApp />
+      ) : params.get('praxisSkipIntro') === '1' ? (
+        <App />
       ) : (
         <StartupIntro>
           <App />
