@@ -2,6 +2,42 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-12 — Merge local and remote main
+
+Merged origin/main into local main, preserving the native composer pickers and
+remote joined startup contours/test-intro bypass. Git merged without conflict
+markers; reordered the combined recent progress entries newest-first.
+
+Type checks pass. Full unit/Electron suite: 130/132 passed, with the previously
+documented chat-render timeout and provider-skills-menu provider assertion.
+Startup-intro and smoke pass; inspected the completed startup screenshot.
+The suite required an unsandboxed run for Electron and local test servers.
+
+## 2026-09-12 — Joined startup cat contours
+
+Replaced the 60 separate startup squares with the supplied load.svg's 21
+contours, preserving its unioned bars and stepped shapes. Each contour animates
+as one piece through the existing reveal and crossfade. Kept the silhouette
+centered after the artwork's coordinates moved to whole SVG units.
+
+Type checks and the startup Electron test pass; inspected intermediate and final
+screenshots. Updated the shape-count assertion and waited for the asynchronous
+reduced-motion update before asserting dismissal, fixing the recorded test race.
+Full suite: 130/132 passed. The recorded chat-render timeout remains, and the
+code-drawer drag assertion (300 → 300) also fails in an isolated rerun.
+
+## 2026-09-12 — Skip startup intro in ordinary test runs
+
+The suite now passes PRAXIS_TEST_SKIP_INTRO=1 for ordinary tests and explicitly
+sets it to 0 for startup-intro. Desktop main forwards the switch as a renderer
+query parameter, bypassing the intro wrapper while retaining fresh app/profile
+isolation and all other UI motion. Targeted scripts can opt in with the same
+environment variable; README documents the command.
+
+Type checks pass. Full unit/Electron suite: 131/132 passed, with only the
+previously documented chat-render timeout. Startup-intro passes with animation
+enabled; smoke asserts the wrapper is bypassed. Inspected its launch screenshot.
+
 ## 2026-09-11 — Correct dropdown scope; restore composer pickers
 
 The user clarified that provider, model, and permission pickers should retain

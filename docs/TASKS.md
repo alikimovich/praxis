@@ -3,6 +3,17 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Merge local and remote main (2026-09-12) — SHIPPED
+
+- [x] **Integrate origin/main while preserving native composer pickers.** Retain
+      remote startup artwork/test changes and reconcile the progress log.
+
+## Faster test startup (2026-09-12, user-requested) — SHIPPED
+
+- [x] **Skip the desktop intro in ordinary suite runs.** Keep the dedicated
+      startup test animated, retain app/profile isolation and other motion, and
+      document the environment switch for targeted tests.
+
 ## Project action icon hover (2026-09-11, user-requested) — SHIPPED
 
 - [x] **Use lighter gray project action icons, black on hover, with no hover fill.**
@@ -30,6 +41,9 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
       reduced motion.
 
 ## Centered startup animation (2026-09-11, user-requested) — SHIPPED
+
+- [x] **Use the supplied joined SVG contours.** Reveal its 21 shapes as whole
+      pieces instead of animating 60 individual squares.
 
 - [x] **Crossfade into the app after the reveal.** Fade the completed cat out and
       the interface in over 500ms; keep native preview bounds suppressed until

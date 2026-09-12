@@ -224,7 +224,13 @@ function runOne(runner, name) {
     res = spawnSync(runner, [file], {
       cwd: ROOT,
       stdio: 'inherit',
-      env: { ...process.env, PRAXIS_USER_DATA: userData },
+      env: {
+        ...process.env,
+        PRAXIS_USER_DATA: userData,
+        // Exercise the reveal only in its dedicated test. Preserve other motion
+        // and fresh-process isolation for ordinary UI tests.
+        PRAXIS_TEST_SKIP_INTRO: name === 'startup-intro' ? '0' : '1',
+      },
     });
   } finally {
     rmSync(userData, { recursive: true, force: true });
