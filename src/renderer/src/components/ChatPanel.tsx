@@ -99,9 +99,7 @@ import RunStats from "./RunStats";
 // The picker is TWO dropdowns (the pre-v10 shape): a provider — Claude, Codex,
 // then every saved connection — and that provider's models. Both are derived from
 // the ONE flat list main hands over (`providers.choices()`); nothing about models
-// or endpoints is hardcoded here any more. A sentinel row at the bottom of the
-// provider list opens Settings instead of selecting a provider.
-const MANAGE_PROVIDERS = "__manage-providers__";
+// or endpoints is hardcoded here any more. The provider menu also opens Settings.
 
 // `bypassPermissions` is intentionally omitted — see its "unused" doc note on
 // PermissionMode (shared/api.ts): skips praxis's own canUseTool guards too, not
@@ -1636,70 +1634,36 @@ export default function ChatPanel(): React.JSX.Element {
               <ComposerSelect
                 label={selection.option?.label ?? providerFallback}
                 value={selection.providerKey}
-                onChange={(e) => {
-                  const key = e.target.value;
-                  if (key === MANAGE_PROVIDERS) {
-                    // Not a provider — bounce the control back and open Settings.
-                    e.currentTarget.value = selection.providerKey;
-                    useProviders.getState().setSettingsOpen(true);
-                    return;
-                  }
-                  onProviderChange(key);
-                }}
+                onValueChange={onProviderChange}
+                action={{ label: 'Add new…', onSelect: () => useProviders.getState().setSettingsOpen(true) }}
+                options={[
+                  ...(!selection.option ? [{ value: selection.providerKey, label: providerFallback }] : []),
+                  ...providers.map((o) => ({ value: o.key, label: o.label }))
+                ]}
                 disabled={isRunning || switchingModel}
                 aria-label="Provider"
                 title="Which harness (or saved connection) runs this chat"
-              >
-                {!selection.option && (
-                  <option value={selection.providerKey}>
-                    {providerFallback}
-                  </option>
-                )}
-                {providers.map((o) => (
-                  <option key={o.key} value={o.key}>
-                    {o.label}
-                  </option>
-                ))}
-                <option value={MANAGE_PROVIDERS}>Add new…</option>
-              </ComposerSelect>
+              />
               {/* Model: only the selected provider's. */}
               <ComposerSelect
                 label={selection.choice?.label ?? agentModelId({ model, modelId }) ?? "Default"}
                 value={selection.choice?.value ?? model}
-                onChange={(e) => onModelChange(e.target.value)}
+                onValueChange={onModelChange}
                 disabled={isRunning || switchingModel}
                 aria-label="Model"
-              >
-                {/* The placeholder must render a human label, never the raw picker
-                    value: since v10 `model` holds a namespaced `ModelChoice.value`
-                    (`claude:opus`, `codex:8f3a…:moonshotai/kimi-k2`), so printing it
-                    flashed `claude:opus` in the toolbar on every mount before
-                    `providers.choices()` resolved. `agentModelId` unwraps the tuple
-                    to the real model id, or undefined for the Default sentinel. */}
-                {!selection.choice && (
-                  <option value={model}>
-                    {agentModelId({ model, modelId }) ?? "Default"}
-                  </option>
-                )}
-                {selection.option?.models.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </ComposerSelect>
+                options={[
+                  ...(!selection.choice ? [{ value: model, label: agentModelId({ model, modelId }) ?? 'Default' }] : []),
+                  ...(selection.option?.models.map((c) => ({ value: c.value, label: c.label })) ?? [])
+                ]}
+              />
               <ComposerSelect
                 label={PERMISSION_MODES.find((mode) => mode.value === permissionMode)?.label ?? permissionMode}
                 value={permissionMode}
-                onChange={(e) => onPermissionModeChange(e.target.value)}
+                onValueChange={onPermissionModeChange}
                 aria-label="Permission mode"
                 title="How much the agent can do without asking"
-              >
-                {PERMISSION_MODES.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
-                ))}
-              </ComposerSelect>
+                options={PERMISSION_MODES}
+              />
             </div>
             {isRunning ? (
               <Button

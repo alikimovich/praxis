@@ -47,6 +47,22 @@ Full suite: 129/132 initially passed. The native drag test sent input before the
 crossfade finished; it now waits for the intro to leave, and its rerun passes.
 The two remaining failures are the previously documented chat-render sidebar
 timeout and provider-skills-menu switch assertion.
+## 2026-09-11 — Shadcn composer dropdowns
+
+Migrated provider, model, and permission pickers from native selects to the shared
+shadcn dropdown component. Compact trigger labels remain; menus show full labels,
+checkmarks, and a separate Add new action. Shared menu surfaces use softer corners
+and shadow. Branch, publish, and project menus already used this component.
+Motion spring animation remains the next step requested by the user.
+
+Composer menus wait for the native preview snapshot before opening. Nonmodal
+menus release focus/pointer handling during provider changes, and disabling the
+trigger cancels its pending open state. Updated existing picker tests to interact
+with menus and extended coverage for keyboard opening, Escape/focus restoration,
+selection, outside dismissal, and the Settings action. Inspected menu screenshots.
+
+Type checks and the focused menu regression pass. Full unit/Electron suite:
+131/132 passed; only the previously documented chat-render sidebar timeout remains.
 
 ## 2026-09-11 — Supplied icon artwork and state transitions
 

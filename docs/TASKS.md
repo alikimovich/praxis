@@ -13,6 +13,13 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
       Svelte 4/5, falsy values, negative numbers, expressions, definition routing,
       mounted-input refresh, and reset-to-default in the Electron regression.
 
+## System-style dropdown menus (2026-09-11, user-requested)
+
+- [x] **Use shadcn dropdown menus for the composer provider, model, and permissions.**
+      Keep compact triggers, full option labels, keyboard navigation, checked
+      choices, and preview freeze handling; separate Add new from provider choices.
+- [ ] **Add a quick spring zoom with Motion.** Follow-up after the component migration.
+
 ## Supplied icon artwork (2026-09-11, user-requested) — SHIPPED
 
 - [x] **Replace the 35 Lucide imports with the supplied SVG set.** Preserve

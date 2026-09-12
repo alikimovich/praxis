@@ -1,3 +1,4 @@
+import { composerOptions, chooseComposerOption } from './helpers/composer-menu.mjs'
 /**
  * Visual test of chat rendering (markdown + tool-status lines) without needing
  * the agent/auth: drives the exposed store directly in the renderer, then
@@ -304,9 +305,7 @@ try {
 
   // The permission-mode selector is present (restored in a612f83) and defaults to
   // Auto (approve-all).
-  const permModes = await win.$$eval('select[aria-label="Permission mode"] option', (os) =>
-    os.map((o) => o.value)
-  )
+  const permModes = (await composerOptions(win, 'Permission mode')).map(o => o.value)
   if (JSON.stringify(permModes) !== JSON.stringify(['auto', 'acceptEdits', 'default'])) {
     throw new Error(`unexpected permission modes: ${JSON.stringify(permModes)}`)
   }
@@ -314,7 +313,7 @@ try {
   if (defaultMode !== 'auto')
     throw new Error(`default permission mode should be auto, got ${defaultMode}`)
 
-  // The picker is TWO <select>s, both derived from main's one `providers.choices()`
+  // The picker is two dropdown menus, both derived from main's one `providers.choices()`
   // list: a Provider (the built-in seats, then each saved connection, then an
   // "Add new…" row that opens Settings) and the models of whichever provider is
   // selected. Wait for the choices to land.
@@ -342,10 +341,7 @@ try {
   const codexValue = await firstRealModel('codex')
   if (!claudeValue || !codexValue)
     throw new Error('built-in seats missing from providers.choices()')
-  const optionsOf = (label) =>
-    win.$$eval(`select[aria-label="${label}"] option`, (os) =>
-      os.map((o) => ({ value: o.value, label: o.textContent?.trim() ?? '' }))
-    )
+  const optionsOf = label => composerOptions(win, label)
   const providerOptions = await optionsOf('Provider')
   // The two built-in seats lead (labelled by harness), and the Settings row is
   // LAST — any saved connection sits between them.
@@ -369,7 +365,7 @@ try {
     )
   }
   // Switching provider re-points the harness and repopulates the models.
-  await win.selectOption('select[aria-label="Provider"]', 'codex')
+  await chooseComposerOption(win, 'Provider', 'codex')
   await win.getByRole('button', { name: 'Switch model', exact: true }).click()
   const derived = await win.evaluate(() => window.__praxisSession.getState().provider)
   if (derived !== 'codex') throw new Error(`picking the Codex provider should set it: ${derived}`)
@@ -377,7 +373,7 @@ try {
   if (!codexModels.includes(codexValue) || codexModels.includes(claudeValue)) {
     throw new Error(`model picker should follow the provider: ${JSON.stringify(codexModels)}`)
   }
-  await win.selectOption('select[aria-label="Model"]', codexValue)
+  await chooseComposerOption(win, 'Model', codexValue)
   await win.getByRole('button', { name: 'Switch model', exact: true }).click()
   await win.waitForFunction((v) => window.__praxisSession.getState().model === v, codexValue, {
     timeout: 5000
@@ -392,7 +388,7 @@ try {
   const hint = (await win.textContent('.provider-hint'))?.toLowerCase() ?? ''
   if (!hint.includes('codex login')) throw new Error(`provider hint should mention codex login: ${hint}`)
   await win.evaluate(() => window.__praxisSession.getState().setCodexAuthNeeded(false))
-  await win.selectOption('select[aria-label="Provider"]', 'claude') // reset to Claude
+  await chooseComposerOption(win, 'Provider', 'claude') // reset to Claude
   await win.getByRole('button', { name: 'Switch model', exact: true }).click()
   if ((await win.$('.provider-hint')) !== null) throw new Error('hint should hide for Claude')
   // Switching provider lands on that provider's Default rather than carrying a
@@ -410,7 +406,7 @@ try {
     throw new Error(`switching provider should select its Default: ${JSON.stringify(afterSwitch)}`)
   }
   // "Add new…" isn't a provider — it opens Settings and leaves the pick be.
-  await win.selectOption('select[aria-label="Provider"]', '__manage-providers__')
+  await chooseComposerOption(win, 'Provider', '__manage-providers__')
   const afterManage = await win.evaluate(() => ({
     open: window.__praxisProviders.getState().settingsOpen,
     provider: window.__praxisSession.getState().provider,
@@ -441,12 +437,13 @@ try {
       permissionMode: 'auto'
     })
   )
+  const staleOptions = await optionsOf('Model')
   const staleId = await win.evaluate(() => {
-    const modelSel = document.querySelector('select[aria-label="Model"]')
+    const modelSel = document.querySelector('button[aria-label="Model"]')
     return {
-      provider: document.querySelector('select[aria-label="Provider"]').value,
-      label: modelSel.selectedOptions[0]?.textContent?.trim() ?? '',
-      values: [...modelSel.options].map((o) => o.value),
+      provider: document.querySelector('button[aria-label="Provider"]').dataset.value,
+      label: modelSel.dataset.label,
+
       stored: window.__praxisSession.getState().model
     }
   })
@@ -455,7 +452,7 @@ try {
       `a retired model id should fall back to its provider's Default: ${JSON.stringify(staleId)}`
     )
   }
-  if (staleId.values.includes('claude:retired-in-2026')) {
+  if (staleOptions.some(o => o.value === 'claude:retired-in-2026')) {
     throw new Error('the retired id must not be offered as an option of its own')
   }
   if (staleId.stored !== 'claude:retired-in-2026') {
@@ -513,14 +510,14 @@ try {
   await win.waitForFunction(() => document.querySelectorAll('.rail__chat').length === 2, null, {
     timeout: 5000
   })
-  await win.selectOption('select[aria-label="Model"]', codexValue)
+  await chooseComposerOption(win, 'Model', codexValue)
   await win.getByRole('dialog').waitFor()
   await win.screenshot({ path: join(artifacts, 'model-switch-approval.png') })
   if (!(await win.getByRole('dialog').textContent()).includes('extra input tokens')) throw new Error('model switch must explain token usage')
   await win.getByRole('button', { name: 'Cancel', exact: true }).click()
   const cancelledModel = await win.evaluate(() => window.__praxisSession.getState().model)
   if (cancelledModel === codexValue) throw new Error('cancel must preserve the current model')
-  await win.selectOption('select[aria-label="Model"]', codexValue)
+  await chooseComposerOption(win, 'Model', codexValue)
   await win.getByRole('button', { name: 'Switch model', exact: true }).click()
 
   await win.waitForFunction(value => window.__praxisSession.getState().model === value, codexValue)
@@ -532,7 +529,7 @@ try {
     ipcMain.removeHandler('agent:restart-chat')
     ipcMain.handle('agent:restart-chat', () => ({ ok: false, error: 'Test startup failure' }))
   })
-  await win.selectOption('select[aria-label="Provider"]', 'claude')
+  await chooseComposerOption(win, 'Provider', 'claude')
   await win.getByRole('button', { name: 'Switch model', exact: true }).click()
   await win.getByRole('alert').filter({ hasText: 'Test startup failure' }).waitFor()
   if (await win.evaluate(() => window.__praxisSession.getState().model) !== codexValue) {
@@ -791,7 +788,7 @@ try {
     () => parseFloat(document.querySelector('.composer__input').style.height) > 90,
     { timeout: 4000 }
   )
-  // Change real picker data so the visible label and native menu update together.
+  // Change real picker data so the visible label and dropdown menu update together.
   await win.evaluate(() => {
     const providers = window.__praxisProviders
     providers.setState({
@@ -802,14 +799,14 @@ try {
     })
   })
   await win.waitForFunction(() =>
-    document.querySelector('select[aria-label="Model"]').previousElementSibling.textContent === 'GPT-5.6-So...'
+    document.querySelector('button[aria-label="Model"]').textContent === 'GPT-5.6-So...'
   )
   const labels = await win.locator('.composer__picker').evaluateAll((selects) =>
     selects.map((select) => ({
-      visible: select.previousElementSibling.textContent,
-      full: select.selectedOptions[0].textContent,
+      visible: select.textContent,
+      full: select.dataset.label,
       width: select.getBoundingClientRect().width,
-      textWidth: select.previousElementSibling.getBoundingClientRect().width
+      textWidth: select.firstElementChild.getBoundingClientRect().width
     }))
   )
   if (labels.some(({ visible, full, width, textWidth }) =>
