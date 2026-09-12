@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-12 — Default arrow on buttons
+
+Replaced pointer cursors with the default arrow for shell buttons, expandable
+chat messages, editor search controls, and the preview overlay's action/submit
+buttons. Kept non-button cursor behavior (links, selects, annotation pins, and
+resize/text controls) intact.
+
+Type checks and build pass. Verified computed cursors on 15 visible shell
+buttons and inspected the smoke screenshot; editor-search passes separately.
+Full unit/Electron suite: 131/132 passed, with only the previously documented
+chat-render timeout. The initial sandboxed run could not launch Electron or
+bind test servers; reran with the required access.
+
 ## 2026-09-12 — Skip startup intro in ordinary test runs
 
 The suite now passes PRAXIS_TEST_SKIP_INTRO=1 for ordinary tests and explicitly

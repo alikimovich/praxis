@@ -282,7 +282,7 @@ function ensureOverlay(): void {
     b.setAttribute('aria-label', kind)
     b.style.cssText =
       'flex:0 0 auto;width:26px;height:26px;border:none;border-radius:7px;background:transparent;' +
-      'display:flex;align-items:center;justify-content:center;cursor:pointer;color:#d4d4d4;'
+      'display:flex;align-items:center;justify-content:center;cursor:default;color:#d4d4d4;'
     b.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[kind].svg}</svg>`
     b.addEventListener('mouseenter', () => {
       b.style.background = b.dataset.pressed === '1' ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.08)'
@@ -319,7 +319,7 @@ function ensureOverlay(): void {
   send.setAttribute('aria-label', 'Submit')
   send.textContent = '↑'
   send.style.cssText =
-    'flex:0 0 auto;width:26px;height:26px;border:none;border-radius:50%;cursor:pointer;' +
+    'flex:0 0 auto;width:26px;height:26px;border:none;border-radius:50%;cursor:default;' +
     'background:#2563eb;color:#fff;font:600 15px/1 system-ui;display:flex;' +
     'align-items:center;justify-content:center;'
   input.addEventListener('keydown', onInputKey, true)

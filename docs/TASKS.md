@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Default button cursor (2026-09-12, user-requested) — SHIPPED
+
+- [x] **Use the default arrow on Praxis buttons.** Cover the shell, expandable
+      chat messages, and preview-overlay action buttons.
+
 ## Faster test startup (2026-09-12, user-requested) — SHIPPED
 
 - [x] **Skip the desktop intro in ordinary suite runs.** Keep the dedicated

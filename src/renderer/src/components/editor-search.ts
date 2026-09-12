@@ -269,7 +269,7 @@ const zedSearchTheme = EditorView.theme({
     background: 'transparent',
     color: 'var(--muted-foreground)',
     font: '11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-    cursor: 'pointer'
+    cursor: 'default'
   },
   '.cm-zed-search__toggle:hover': { color: 'var(--foreground)' },
   '.cm-zed-search__toggle.is-active': {
@@ -287,7 +287,7 @@ const zedSearchTheme = EditorView.theme({
     borderRadius: '6px',
     background: 'transparent',
     color: 'var(--muted-foreground)',
-    cursor: 'pointer'
+    cursor: 'default'
   },
   '.cm-zed-search__btn:hover': {
     background: 'color-mix(in oklab, var(--muted) 70%, transparent)',

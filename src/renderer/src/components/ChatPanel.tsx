@@ -248,7 +248,7 @@ function ClampedUserText({
       className={cn(
         "msg__text w-fit max-w-full rounded-lg border border-[var(--border-prominent)] bg-muted px-3 py-2 text-sm",
         !expanded && "msg__text--clamp",
-        clickable && "cursor-pointer",
+        clickable && "cursor-default",
       )}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
