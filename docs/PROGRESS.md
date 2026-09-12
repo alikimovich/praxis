@@ -2,6 +2,24 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-11 — Startup crossfade
+
+Added a 500ms eased crossfade after the four-second cat reveal. The completed
+cat stays sharp while its layer fades out and the mounted app fades in beneath
+it, without remounting the app at the end. StartupVisibility holds native preview
+bounds at zero until the crossfade finishes so the native surface cannot cover
+the transition; browser previews inherit the shell opacity. Reduced motion skips
+the reveal and crossfade, including when enabled mid-transition.
+
+Type checks and the extended startup Electron test pass. It asserts overlapping
+intermediate opacities, retained final cat pixels, cleanup, reload behavior, and
+reduced motion. Inspected the crossfade screenshot.
+Full suite: 129/132 initially passed. The native drag test sent input before the
+crossfade finished; it now waits for the intro to leave, and its rerun passes.
+The two remaining failures are the previously documented chat-render sidebar
+timeout and provider-skills-menu switch assertion.
+
+
 ## 2026-09-11 — Supplied icon artwork and state transitions
 
 Replaced all 35 renderer Lucide imports with the user's SVG artwork. Original

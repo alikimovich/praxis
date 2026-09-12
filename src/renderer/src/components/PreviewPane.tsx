@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
+import { StartupVisibility } from "../startup-visibility";
 import { usePanelInset, usePreviewFreeze, useViewport } from "../store";
 import ViewportReadout from "./ViewportReadout";
 import {
@@ -33,6 +34,7 @@ export const DESKTOP_CORNER_RADIUS = 0;
 export default function PreviewPane(): React.JSX.Element {
   const slotRef = useRef<HTMLDivElement>(null);
   const browserMode = !!window.__PRAXIS_WEB_CONFIG__;
+  const startupVisible = useContext(StartupVisibility);
   const viewport = useViewport((s) => s.viewport);
   const frozen = usePreviewFreeze((s) => s.frozen);
   // Right-edge strip reserved by the floating prop panel: desktop narrows the
@@ -61,6 +63,10 @@ export default function PreviewPane(): React.JSX.Element {
     if (!el) return;
 
     const report = (): void => {
+      if (!startupVisible && !browserMode) {
+        window.api.preview.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+        return;
+      }
       const r = el.getBoundingClientRect();
       // The area the preview may occupy (the panel strip on the right + the code
       // drawer at the bottom, when open, are off-limits).
@@ -132,7 +138,7 @@ export default function PreviewPane(): React.JSX.Element {
       // viewport switch the effect re-runs and report() restores bounds at once.
       window.api.preview.setBounds({ x: 0, y: 0, width: 0, height: 0 });
     };
-  }, [viewport, inset, bottomInset]);
+  }, [viewport, inset, bottomInset, startupVisible, browserMode]);
 
   // Freeze under overlays: capture FIRST (identical pixels); unfreeze restores
   // the live view and drops the snapshot.

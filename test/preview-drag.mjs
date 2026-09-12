@@ -30,6 +30,8 @@ try {
     env: { ...process.env, PRAXIS_USER_DATA: profile } })
   const win = await app.firstWindow()
   await win.waitForSelector('.empty__open')
+  // Native input must wait until the startup crossfade has released the view.
+  await win.waitForSelector('[data-startup-intro]', { state: 'detached' })
   await app.evaluate(({ dialog }, path) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] })
   }, fixture)

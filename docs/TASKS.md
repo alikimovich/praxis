@@ -13,6 +13,10 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Centered startup animation (2026-09-11, user-requested) — SHIPPED
 
+- [x] **Crossfade into the app after the reveal.** Fade the completed cat out and
+      the interface in over 500ms; keep native preview bounds suppressed until
+      the transition ends and preserve reduced-motion behavior.
+
 - [x] **Play the supplied blue pixel-cat reveal before showing the app.** Center
       it in the window, preserve 4s/16px/24% settings, omit demo controls, and
       skip for reduced motion. Keep native previews behind the intro on reload.

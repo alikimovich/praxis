@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { StartupVisibility } from '../startup-visibility'
 import StartupCat from './StartupCat'
 
 const DURATION = 4000
@@ -6,18 +7,18 @@ const clamp = (value: number): number => Math.max(0, Math.min(1, value))
 
 /** Keep native preview creation behind the intro so it cannot cover the animation. */
 export default function StartupIntro({ children }: { children: ReactNode }): React.JSX.Element {
-  const [finished, setFinished] = useState(false)
+  const [phase, setPhase] = useState<'reveal' | 'fade' | 'done'>('reveal')
   const stage = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const root = stage.current
-    if (!root || finished) return
+    if (!root || phase !== 'reveal') return
     // A renderer reload can leave the previous native view alive in main.
     // PreviewPane will restore its bounds after the intro mounts the app.
     window.api.preview.setBounds({ x: 0, y: 0, width: 0, height: 0 })
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)')
     if (reduced.matches) {
-      setFinished(true)
+      setPhase('done')
       return
     }
     const pixels = [...root.querySelectorAll<SVGRectElement>('.pixel')]
@@ -48,11 +49,18 @@ export default function StartupIntro({ children }: { children: ReactNode }): Rea
       soften?.setAttribute('stdDeviation', String(0.36 * (1 - clamp((progress - 0.8) / 0.2))))
       for (const animation of animations) animation.currentTime = progress * DURATION
       if (progress < 1) frame = requestAnimationFrame(tick)
-      else setFinished(true)
+      else {
+        // Retain the final sharp cat when the reveal animations are cleaned up.
+        for (const pixel of pixels) {
+          pixel.style.opacity = '1'
+          pixel.style.filter = 'none'
+        }
+        setPhase('fade')
+      }
     }
     frame = requestAnimationFrame(tick)
     const skip = (): void => {
-      if (reduced.matches) setFinished(true)
+      if (reduced.matches) setPhase('done')
     }
     reduced.addEventListener('change', skip)
     return () => {
@@ -60,23 +68,62 @@ export default function StartupIntro({ children }: { children: ReactNode }): Rea
       for (const animation of animations) animation.cancel()
       reduced.removeEventListener('change', skip)
     }
-  }, [finished])
+  }, [phase])
 
-  if (finished) return <>{children}</>
+  useEffect(() => {
+    if (phase !== 'fade') return
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const skip = (): void => {
+      if (reduced.matches) setPhase('done')
+    }
+    skip()
+    reduced.addEventListener('change', skip)
+    const timer = setTimeout(() => setPhase('done'), 500)
+    return () => {
+      clearTimeout(timer)
+      reduced.removeEventListener('change', skip)
+    }
+  }, [phase])
+
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center bg-[#fafafa]"
-      data-startup-intro
-      role="status"
-      aria-label="Starting Praxis"
-    >
-      <div
-        ref={stage}
-        aria-hidden="true"
-        className="w-[min(400px,80vmin)] [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"
-      >
-        <StartupCat />
-      </div>
-    </div>
+    <StartupVisibility.Provider value={phase === 'done'}>
+      <style>{`
+        @keyframes startup-ui-in { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes startup-cat-out { from { opacity: 1 } to { opacity: 0 } }
+      `}</style>
+      {phase !== 'reveal' && (
+        <div
+          data-startup-ui
+          className="h-full"
+          style={
+            phase === 'fade'
+              ? { animation: 'startup-ui-in 500ms ease-in-out both', pointerEvents: 'none' }
+              : undefined
+          }
+        >
+          {children}
+        </div>
+      )}
+      {phase !== 'done' && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#fafafa]"
+          style={
+            phase === 'fade' ? { animation: 'startup-cat-out 500ms ease-in-out both' } : undefined
+          }
+          data-startup-intro
+          data-phase={phase}
+          role="status"
+          aria-label="Starting Praxis"
+        >
+          <div
+            ref={stage}
+            aria-hidden="true"
+            className="w-[min(400px,80vmin)] [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"
+          >
+            <StartupCat />
+          </div>
+        </div>
+      )}
+    </StartupVisibility.Provider>
   )
 }
