@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Svelte inspector defaults (2026-09-11, user-reported) — SHIPPED
+
+- [x] **Show declared Svelte defaults without turning them into overrides.** Cover
+      Svelte 4/5, falsy values, negative numbers, expressions, definition routing,
+      mounted-input refresh, and reset-to-default in the Electron regression.
+
 ## Supplied icon artwork (2026-09-11, user-requested) — SHIPPED
 
 - [x] **Replace the 35 Lucide imports with the supplied SVG set.** Preserve

@@ -9,6 +9,7 @@
  *
  * Run with: bun run test:props-svelte
  */
+import { checkSvelteDefaults } from './svelte-defaults-coverage.mjs'
 import { _electron as electron } from 'playwright'
 import electronPath from 'electron'
 import { fileURLToPath } from 'node:url'
@@ -44,6 +45,7 @@ try {
   if (variant?.kind !== 'enum' || !variant.options?.includes('warn')) {
     throw new Error(`variant enum not resolved from Props: ${JSON.stringify(variant)}`)
   }
+  if (variant.default !== 'ok') throw new Error('variant enum default not preserved')
   if (variant.value !== 'ok') throw new Error(`variant live value: ${variant.value}`)
   if (field(btn, 'label')?.kind !== 'string') throw new Error('label not string')
   if (field(btn, 'count')?.value !== 3) throw new Error(`count not 3: ${field(btn, 'count')?.value}`)
@@ -133,6 +135,8 @@ try {
   if (!svUndo.ok || readFileSync(card, 'utf8') !== beforeRm) {
     throw new Error('undo did not restore the svelte reset-removed prop')
   }
+
+  await checkSvelteDefaults(app, win, join(root, 'test/artifacts'))
 
   console.log(
     'PROP-EDIT-SVELTE OK — cross-file $props schema + literal edit + tailwind token swap + F2 reset/undo'

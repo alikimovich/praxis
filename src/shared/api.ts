@@ -734,7 +734,9 @@ export interface PropField {
   required?: boolean
   /** This prop isn't currently on the element (offered from the schema to add). */
   fromSchema?: boolean
-  /** The component's declared default (react-docgen), when one was resolved.
+  /** The declared default is an expression; never evaluate it for the inspector. */
+  defaultExpression?: boolean
+  /** The component's declared literal default, when one was resolved.
    *  Drives the "reset to default" affordance — resetting removes the attribute
    *  so the value falls back to this. (v8 F2) */
   default?: string | number | boolean

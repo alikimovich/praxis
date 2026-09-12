@@ -224,15 +224,21 @@ function collectTypeMembers(body: Node[], typeName: string): Map<string, Node> {
 function fieldFrom(name: string, tsType: Node | undefined, defInit: Node | undefined): PropField {
   let kind: PropKind = 'other'
   let options: string[] | undefined
+  const literal = literalFrom(defInit)
   const fromType = kindFromTsType(tsType)
   if (fromType) {
     kind = fromType.kind
     options = fromType.options
-  } else {
-    const lit = literalFrom(defInit)
-    if (lit) kind = lit.kind
+  } else if (literal) {
+    kind = literal.kind
   }
-  return { name, kind, ...(options ? { options } : {}), fromSchema: true }
+  return {
+    name,
+    kind,
+    ...(options ? { options } : {}),
+    fromSchema: true,
+    ...(literal ? { default: literal.value } : defInit ? { defaultExpression: true } : {})
+  }
 }
 
 /** Extract a component's props from its instance-script Program (Svelte 4 + 5). */

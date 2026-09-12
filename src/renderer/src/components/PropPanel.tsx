@@ -195,8 +195,9 @@ function PropRow({
   onReset: () => void
   onAskAgent: () => void
 }): React.JSX.Element {
-  const [draft, setDraft] = useState(field.value ?? '')
-  useEffect(() => setDraft(field.value ?? ''), [field.value])
+  const value = field.value ?? field.default ?? ''
+  const [draft, setDraft] = useState(value)
+  useEffect(() => setDraft(value), [value])
 
   // The attribute is present on the element (not a pure schema offering) → it can
   // be reset/removed. Never offer it for a required prop (would break the component).
@@ -204,7 +205,7 @@ function PropRow({
   const canReset = isPresent && !field.required
 
   let control: React.JSX.Element
-  if (field.expression || field.kind === 'other') {
+  if (field.expression || (!isPresent && field.defaultExpression) || field.kind === 'other') {
     control = (
       <Button
         variant="outline"
@@ -221,7 +222,7 @@ function PropRow({
       <input
         type="checkbox"
         className="justify-self-end"
-        checked={field.value === true}
+        checked={value === true}
         disabled={busy}
         onChange={(e) => onApply(e.target.checked)}
       />
@@ -230,7 +231,7 @@ function PropRow({
     control = (
       <select
         className="select h-7 w-[128px] justify-self-end rounded-md border bg-transparent px-1.5 text-xs"
-        value={String(field.value ?? '')}
+        value={String(value)}
         disabled={busy}
         onChange={(e) => onApply(e.target.value)}
       >
@@ -265,8 +266,8 @@ function PropRow({
     function commit(): void {
       if (isNumber) {
         const n = Number(draft)
-        if (draft !== '' && !Number.isNaN(n) && n !== field.value) onApply(n)
-      } else if (draft !== field.value) {
+        if (draft !== '' && !Number.isNaN(n) && n !== value) onApply(n)
+      } else if (draft !== value) {
         onApply(String(draft))
       }
     }

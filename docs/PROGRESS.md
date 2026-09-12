@@ -2,6 +2,23 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-11 — Svelte inspector defaults
+
+Preserved literal defaults from Svelte 5 `$props()` and Svelte 4 `export let`,
+including negative numbers and falsy values. Prop rows display explicit values
+before defaults, compare commits against the displayed value, and refresh when
+the default changes. Defaults remain separate from attributes, so only explicit
+overrides offer Reset. Expression defaults stay unevaluated and use edit via
+chat; definition edits retain the existing default-edit agent route.
+
+Extended the Svelte Electron regression with the CodeBlock copy-button example,
+legacy declarations, mounted-field refresh, explicit overrides, expressions,
+unchanged blur, and edit/reset source verification. Type checks and the focused
+Electron test pass; inspected the floating-inspector screenshot.
+
+Full unit/Electron suite: 128/132 passed. Mobile-frame and measure-alt pass on
+separate reruns; chat-render and provider-skills-menu match documented failures.
+
 ## 2026-09-11 — Startup crossfade
 
 Added a 500ms eased crossfade after the four-second cat reveal. The completed
