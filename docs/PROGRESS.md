@@ -48,7 +48,6 @@ crossfade finished; it now waits for the intro to leave, and its rerun passes.
 The two remaining failures are the previously documented chat-render sidebar
 timeout and provider-skills-menu switch assertion.
 
-
 ## 2026-09-11 — Supplied icon artwork and state transitions
 
 Replaced all 35 renderer Lucide imports with the user's SVG artwork. Original
