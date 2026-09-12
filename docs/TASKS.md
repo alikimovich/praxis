@@ -15,10 +15,11 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## System-style dropdown menus (2026-09-11, user-requested)
 
-- [x] **Use shadcn dropdown menus for the composer provider, model, and permissions.**
-      Keep compact triggers, full option labels, keyboard navigation, checked
-      choices, and preview freeze handling; separate Add new from provider choices.
-- [ ] **Add a quick spring zoom with Motion.** Follow-up after the component migration.
+- [x] **Polish existing branch, publish, and project action dropdowns.** Retain
+      shadcn, softer corners/shadow, and checkmarks for selected choices.
+- [x] **Restore the original provider, model, and permission pickers.** The user
+      prefers their native menus; composer pickers are outside this work's scope.
+- [ ] **Add a quick spring zoom with Motion to the existing action menus.**
 
 ## Supplied icon artwork (2026-09-11, user-requested) — SHIPPED
 

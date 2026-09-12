@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-11 — Correct dropdown scope; restore composer pickers
+
+The user clarified that provider, model, and permission pickers should retain
+their original native menus. Reversed only the composer migration and its test
+adaptations, preserving intervening work. The existing branch, publish, and
+project action menus retain the shared shadcn styling improvements (softer
+corners/shadow and selection checkmarks). Motion remains the next step for
+those menus only.
+
+Type checks pass. Visually verified native composer selects alongside the existing
+project action menu. Full suite: 129/132 passed; code-drawer passes on a separate
+rerun, leaving the documented chat-render and provider-skills-menu failures.
+
 ## 2026-09-11 — Quiet project action icons
 
 Changed the sidebar project menu and new-chat icons to neutral gray at rest and
