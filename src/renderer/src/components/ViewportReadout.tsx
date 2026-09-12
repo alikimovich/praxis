@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { createViewportReadout } from '../../../preview/viewport-readout'
 
-/** Visible above the frozen snapshot during divider dragging, and in browser mode. */
+/** Size readout for browser previews and renderer overlays. */
 export default function ViewportReadout({
   left,
   top,

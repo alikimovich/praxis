@@ -1193,7 +1193,7 @@ export interface PraxisApi {
     setBounds: (bounds: Bounds) => void
     load: (url: string) => Promise<void>
     reset: () => Promise<void>
-    /** Hide the native view while the user drags the split (it would otherwise eat mouse events). */
+    /** Hide the native view under renderer overlays that use a frozen snapshot. */
     setDragging: (active: boolean) => void
     /** Toggle click-to-select mode in the previewed app (v2). */
     setSelectMode: (active: boolean) => Promise<void>

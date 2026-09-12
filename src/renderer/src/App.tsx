@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { dispatchBackgroundAgent, dispatchVisualEdit } from './background-edits'
 import { usePreviewReorder } from './use-preview-reorder'
+import { usePreviewResize } from './use-preview-resize'
 import ChatPanel from './components/ChatPanel'
 import CatLoader from './components/CatLoader'
 import ConsolePanel from './components/ConsolePanel'
@@ -76,8 +77,6 @@ import type {
   SessionRecord
 } from '../../shared/api'
 
-const MIN_CHAT_WIDTH = 320
-const MAX_CHAT_WIDTH = 760
 
 /** A `data-praxis-source` stamp's repo-relative file ("path/File.tsx:12:3" →
  *  "path/File.tsx") — control-panel manifests are keyed by file, not line. */
@@ -93,7 +92,6 @@ export default function App(): React.JSX.Element {
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const [log, setLog] = useState('')
   const [chatWidth, setChatWidth] = useState(440)
-  const dragging = useRef(false)
   // The project a pending diagnosis belongs to (projectRoot is cleared on failure).
   const diagRoot = useRef<string | null>(null)
   // When a launch fails we remember the folder so the user can retry with a
@@ -743,49 +741,7 @@ export default function App(): React.JSX.Element {
     window.api.preview.setAnnotations(notes.map((n) => ({ id: n.id, selector: n.selector })))
   }, [notes])
 
-  // Drag-to-resize the split. The native preview is hidden while dragging.
-  useEffect(() => {
-    const onMove = (e: MouseEvent): void => {
-      if (!dragging.current) return
-      // Width is measured from the CHAT PANE's left edge, not the window's —
-      // the rail sits before it, so raw clientX would jump the split right by
-      // exactly the rail's width on the first move.
-      const left = document.querySelector('.pane--chat')?.getBoundingClientRect().left ?? 0
-      // Also clamp against the window so the preview card keeps ~400px — its
-      // header now holds the controls (Publish/tabs/icons), which must never be
-      // clipped out of reach by dragging the chat wide (rail 208 + divider 0 +
-      // card gutters ≈ 224 → 624 with the 400px floor).
-      const maxChat = Math.max(MIN_CHAT_WIDTH, Math.min(MAX_CHAT_WIDTH, window.innerWidth - 624))
-      setChatWidth(Math.min(maxChat, Math.max(MIN_CHAT_WIDTH, e.clientX - left)))
-    }
-    const endDrag = (): void => {
-      if (!dragging.current) return
-      dragging.current = false
-      document.body.classList.remove('is-resizing')
-      usePreviewFreeze.getState().setFrozen(false)
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', endDrag)
-    // Recover if the terminal mouseup is lost (focus steal, cmd-tab, etc.).
-    window.addEventListener('blur', endDrag)
-    document.addEventListener('visibilitychange', endDrag)
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', endDrag)
-      window.removeEventListener('blur', endDrag)
-      document.removeEventListener('visibilitychange', endDrag)
-    }
-  }, [])
-
-  const startResize = (e: React.MouseEvent): void => {
-    e.preventDefault()
-    dragging.current = true
-    document.body.classList.add('is-resizing')
-    // Freeze-frame rather than blank: the live view can't track the drag (its
-    // bounds lag) and would swallow mousemove once the cursor crosses into it —
-    // the snapshot stretches with the slot and passes events through.
-    usePreviewFreeze.getState().setFrozen(true)
-  }
+  const startResize = usePreviewResize(setChatWidth)
 
   // Propose-first: on a failure, recall a cached fix or ask the AI, then show a card.
   const proposeFix = (root: string, error: string, context: string): void => {
@@ -1937,7 +1893,8 @@ export default function App(): React.JSX.Element {
           {!chatHidden && (
             <div
               className="divider"
-              onMouseDown={startResize}
+              onPointerDown={startResize}
+              style={{ touchAction: 'none' }}
               role="separator"
               aria-orientation="vertical"
             />

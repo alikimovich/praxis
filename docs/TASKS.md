@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Live viewport resizing (2026-09-11, user-reported) — SHIPPED
+
+- [x] **Reflow the preview continuously during divider dragging.** Capture the
+      pointer on the divider and keep the native view live so text and responsive
+      layouts update before release. Recover on cancellation and lost focus.
+
 ## Preview size readout (2026-09-11, user-requested) — SHIPPED
 
 - [x] **Show the actual preview dimensions while resizing.** Display width ×

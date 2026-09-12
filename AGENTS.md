@@ -164,8 +164,9 @@ Project-memory persistence and Main-context reset are documented in `docs/MEMORY
 - **ESM/CJS**: the Agent SDK is ESM-only, `main` is CJS → dynamic `import()`
   only, never static/`require`.
 - **The preview `WebContentsView` is a separate CDP target** — not in renderer
-  page screenshots (use `capturePage()`), and it eats mouse events (hidden
-  during resize drag). Drive it from a test via the main process
+  page screenshots (use `capturePage()`). The divider uses pointer capture to
+  keep resizing the live view throughout a drag. Drive it from a test via the
+  main process
   (`webContents.executeJavaScript`), as `test/select-element.mjs` does.
 - **A renderer DOM panel can't float *above* the native preview** (native views
   render over the page). Panels reserve a strip instead, shrinking the native

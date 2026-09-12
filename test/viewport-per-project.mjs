@@ -117,18 +117,66 @@ try {
     return (await wc.capturePage()).toPNG().toString('base64')
   })
   writeFileSync(join(artifacts, 'viewport-size-native.png'), Buffer.from(capture, 'base64'))
+  // Inject a responsive probe: its layout must change DURING the drag, and the
+  // native view must remain visible rather than being replaced by a stretched PNG.
+  await app.evaluate(async ({ webContents }) => {
+    const wc = webContents.getAllWebContents().find(w => /^http:\/\/(localhost|127\.0\.0\.1):/.test(w.getURL()))
+    await wc.executeJavaScript(`(() => {
+      const style = document.createElement('style')
+      style.textContent = '#resize-probe {display:grid;grid-template-columns:1fr 1fr;font:20px/1.5 sans-serif} @media(max-width:680px){#resize-probe{grid-template-columns:1fr}}'
+      document.head.append(style)
+      const probe = document.createElement('div')
+      probe.id = 'resize-probe'
+      probe.innerHTML = '<div>Responsive column one</div><div>Responsive column two</div>'
+      document.body.replaceChildren(probe)
+    })()`)
+  })
   const divider = await win.locator('.divider').boundingBox()
   await win.mouse.move(divider.x + divider.width / 2, divider.y + 100)
   await win.mouse.down()
   await sleep(250)
-  await win.mouse.move(divider.x - 60, divider.y + 100, { steps: 6 })
+  await win.mouse.move(divider.x + 140, divider.y + 100, { steps: 6 })
   await win.waitForFunction(() => {
     const badge = document.querySelector('[data-praxis-viewport-size]')?.shadowRoot.firstElementChild
     const rect = document.querySelector('.preview-slot').getBoundingClientRect()
     return badge?.style.display === 'block' && badge.textContent === `${Math.round(rect.width)}px × ${Math.round(rect.height)}px`
   })
-  await win.screenshot({ path: join(artifacts, 'viewport-size-drag.png') })
+  assert.equal(await win.locator('.preview-freeze').count(), 0, 'drag never creates a snapshot')
+  await sleep(200)
+  const live = await app.evaluate(async ({ BrowserWindow, webContents }) => {
+    const wc = webContents.getAllWebContents().find(w => /^http:\/\/(localhost|127\.0\.0\.1):/.test(w.getURL()))
+    const view = BrowserWindow.getAllWindows()[0].contentView.children.find(v => v.webContents?.id === wc.id)
+    return {
+      visible: view.getVisible(),
+      layout: await wc.executeJavaScript(`({width: innerWidth, columns: getComputedStyle(document.querySelector('#resize-probe')).gridTemplateColumns, font: getComputedStyle(document.querySelector('#resize-probe')).fontSize})`),
+      capture: (await wc.capturePage()).toPNG().toString('base64')
+    }
+  })
+  assert.equal(live.visible, true, 'native preview stays visible while held')
+  assert.ok(live.layout.width < 680, 'viewport shrinks before mouseup')
+  assert.equal(live.layout.columns.split(' ').length, 1, 'media query reflows before mouseup')
+  assert.equal(live.layout.font, '20px', 'text keeps its actual font size')
+  writeFileSync(join(artifacts, 'viewport-size-drag.png'), Buffer.from(live.capture, 'base64'))
+  // Reverse direction while still held to prove capture keeps delivering events.
+  await win.mouse.move(divider.x - 60, divider.y + 100, { steps: 6 })
+  await sleep(150)
+  assert.equal(await win.locator('.preview-freeze').count(), 0)
+  const wide = await app.evaluate(async ({ webContents }) => {
+    const wc = webContents.getAllWebContents().find(w => /^http:\/\/(localhost|127\.0\.0\.1):/.test(w.getURL()))
+    return wc.executeJavaScript(`getComputedStyle(document.querySelector('#resize-probe')).gridTemplateColumns`)
+  })
+  assert.equal(wide.split(' ').length, 2, 'reverse drag restores the wide layout before mouseup')
   await win.mouse.up()
+  assert.equal(await win.evaluate(() => document.body.classList.contains('is-resizing')), false)
+  // Lost focus (e.g. Cmd-Tab) must stop subsequent pointer moves.
+  const afterDrag = await win.locator('.divider').boundingBox()
+  await win.mouse.move(afterDrag.x, afterDrag.y + 100)
+  await win.mouse.down()
+  await win.evaluate(() => window.dispatchEvent(new Event('blur')))
+  await win.mouse.move(afterDrag.x + 40, afterDrag.y + 100)
+  await win.mouse.up()
+  assert.equal(await win.evaluate(() => document.body.classList.contains('is-resizing')), false)
+  assert.equal(Math.round((await win.locator('.divider').boundingBox()).x), Math.round(afterDrag.x))
   await sleep(1200)
   assert.equal((await nativeSize()).visible, false, 'readout disappears after resize')
 

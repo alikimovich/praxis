@@ -63,7 +63,7 @@ export interface PreviewState {
   retries: number
   /** Renderer's last-reported preview slot rect, in CSS pixels (== DIP). */
   bounds: { x: number; y: number; width: number; height: number; radius: number }
-  /** Renderer asked the view hidden (split-drag / freeze-frame overlay). */
+  /** Renderer asked the view hidden beneath a freeze-frame overlay. */
   hiddenByRenderer: boolean
   selectMode: boolean
   commentMode: 'comment' | 'annotate' | null
@@ -230,8 +230,8 @@ export function registerPreviewIpc(host: PreviewIpcHost): void {
     host.ensurePreviewView().webContents.loadURL(host.placeholderUrl)
   })
 
-  // Hide the native view during a split-drag (renderer keeps mouse events) or
-  // under a freeze-frame overlay; remember the intent so preview:load respects it.
+  // Hide the native view beneath a renderer freeze-frame overlay; remember the
+  // intent so preview:load respects it.
   ipcMain.on('preview:set-dragging', (_e, active: boolean) => {
     state.hiddenByRenderer = active
     host.getPreviewView()?.setVisible(!active)
@@ -244,8 +244,8 @@ export function registerPreviewIpc(host: PreviewIpcHost): void {
     const wc = previewWc()
     let readoutStyle: string | undefined
     try {
-      // The renderer draws a fresh size label over the snapshot. Baking the old
-      // label into the image would stretch stale numbers beneath it during drag.
+      // The renderer owns the size label over snapshots. Avoid baking a stale
+      // label into the image if the preview resizes while an overlay is open.
       readoutStyle = await wc?.insertCSS('[data-praxis-viewport-size] { display: none !important; }')
       const img = await wc?.capturePage()
       return img && !img.isEmpty() ? img.toDataURL() : null

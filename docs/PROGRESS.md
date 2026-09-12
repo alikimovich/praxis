@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-11 — Resize the live viewport during divider dragging
+
+Replaced the divider's stretched freeze-frame with pointer capture. The native
+preview remains visible and receives its changing bounds throughout the gesture,
+so text reflows and media queries respond before release. Extracted the gesture
+into usePreviewResize, with pointer cancellation, lost-capture, lost-focus, and
+unmount cleanup. Freeze-frame behavior remains for menus and dialogs.
+
+Type checks and the extended viewport Electron test pass. It verifies native
+visibility, no snapshot, responsive one/two-column reflow in both drag directions,
+unchanged font size, and lost-focus cancellation. Inspected the native screenshot
+taken while the drag was held. An additional macOS computer-use check could not
+run because the Mac was locked; no OS-level drag result is claimed.
+Full unit/Electron suite: 129/131 passed, with the previously documented
+chat-render sidebar timeout and provider-skills-menu switch failure.
+
 ## 2026-09-11 — Live preview dimensions
 
 Added a Chrome-style width × height badge at the preview's top-right corner.
