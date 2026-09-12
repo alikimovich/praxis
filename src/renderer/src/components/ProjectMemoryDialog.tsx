@@ -78,8 +78,8 @@ export default function ProjectMemoryDialog({
 
   return (
     <Dialog open={open && shown} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-y-auto sm:max-w-xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{name} memory</DialogTitle>
           <DialogDescription>
             Praxis learns durable decisions from completed chats and shares them with every chat and
@@ -95,14 +95,14 @@ export default function ProjectMemoryDialog({
           rows={14}
           placeholder={'# Decisions\n\n- The integration branch is praxis/master.\n- …'}
           aria-label={`${name} project memory`}
-          className="min-h-64 resize-y font-mono text-xs"
+          className="field-sizing-fixed h-80 min-h-24 shrink resize-none overflow-y-auto font-mono text-xs"
         />
-        <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+        <div className="flex shrink-0 items-center justify-between gap-3 text-xs text-muted-foreground">
           <span>{message ?? 'Stored locally by Praxis, outside the repository.'}</span>
           <span className="shrink-0">{content.length.toLocaleString()} / 16,000</span>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Close
           </Button>

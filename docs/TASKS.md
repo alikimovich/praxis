@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Scrollable project memory (2026-09-11, user-reported) — SHIPPED
+
+- [x] **Keep long memory inside the window.** Bound the dialog and editor height,
+      scroll the text internally, and keep Save and Close accessible.
+
 ## Subagent cats (2026-09-10, user-requested) — SHIPPED
 
 - [x] **Replace nested subagent rows with smaller cats beside the composer.**

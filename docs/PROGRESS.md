@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-11 — Scrollable project memory
+
+Disabled content-driven textarea sizing in the memory dialog, bounded the dialog
+to the viewport, and let the editor shrink and scroll internally. The header,
+status, Save, and Close remain accessible with long memories and smaller windows.
+
+Type checks pass. Extended the existing Electron test with a 15k-character memory,
+wheel scrolling, keyboard navigation to the end, and visible controls at two
+window sizes; the focused test passes and both screenshots were inspected.
+The full suite ran 128/131: the memory test initially exposed a test-caret reset
+issue, fixed and verified in the focused rerun; chat-render and provider-skills-menu
+retain their previously recorded failures.
+
 ## 2026-09-11 — Subagent cats stand on the border
 
 Bottom-aligned the subagent group and the sprites inside its buttons so the
