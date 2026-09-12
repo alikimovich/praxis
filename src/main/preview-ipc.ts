@@ -241,11 +241,20 @@ export function registerPreviewIpc(host: PreviewIpcHost): void {
   // branch dropdown) can overlay a pixel-identical <img> while the native view
   // hides beneath it — the preview appears to stay put, but the DOM wins.
   ipcMain.handle('preview:capture', async (): Promise<string | null> => {
+    const wc = previewWc()
+    let readoutStyle: string | undefined
     try {
-      const img = await previewWc()?.capturePage()
+      // The renderer draws a fresh size label over the snapshot. Baking the old
+      // label into the image would stretch stale numbers beneath it during drag.
+      readoutStyle = await wc?.insertCSS('[data-praxis-viewport-size] { display: none !important; }')
+      const img = await wc?.capturePage()
       return img && !img.isEmpty() ? img.toDataURL() : null
     } catch {
       return null
+    } finally {
+      if (readoutStyle && wc && !wc.isDestroyed()) {
+        await wc.removeInsertedCSS(readoutStyle).catch(() => {})
+      }
     }
   })
 

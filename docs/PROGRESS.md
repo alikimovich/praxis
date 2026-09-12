@@ -2,6 +2,24 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-11 — Live preview dimensions
+
+Added a Chrome-style width × height badge at the preview's top-right corner.
+The native page measures its CSS viewport; the renderer shares the readout for
+divider-drag snapshots and browser previews. It updates on size changes and hides
+after one second of inactivity. Snapshot capture excludes the old badge so it
+cannot stretch underneath the current dimensions. A separate overlay identifier
+preserves the inspector's existing DOM contract.
+
+Type checks and the extended viewport Electron test pass, covering native window
+resizing, actual viewport dimensions, divider dragging, and automatic dismissal.
+Inspected native and drag screenshots; badge text passes the APCA contrast check.
+Selection, spacing measurement, and comment tests pass after correcting an overlay
+identifier collision exposed by the full suite.
+Full suite initially passed 126/131; the three overlay failures are fixed and
+their focused reruns pass. The remaining chat-render and provider-skills-menu
+failures match the previously recorded sidebar and provider-switch failures.
+
 ## 2026-09-11 — Scrollable project memory
 
 Disabled content-driven textarea sizing in the memory dialog, bounded the dialog

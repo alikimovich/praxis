@@ -9,7 +9,8 @@ import { _electron as electron } from 'playwright'
 import electronPath from 'electron'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { mkdtempSync, cpSync } from 'node:fs'
+import { mkdtempSync, cpSync, mkdirSync, writeFileSync } from 'node:fs'
+import assert from 'node:assert/strict'
 import { tmpdir } from 'node:os'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -87,6 +88,49 @@ try {
   await openVia(fixtureA)
   const urlA = await waitNewUrl()
   await expect('A opens at desktop', 'desktop')
+
+  // Read the actual native page, not the renderer's reserved rectangle.
+  const nativeSize = () => app.evaluate(async ({ webContents }) => {
+    const wc = webContents.getAllWebContents().find(w => /^http:\/\/(localhost|127\.0\.0\.1):/.test(w.getURL()))
+    return wc.executeJavaScript(`(() => {
+      const host = document.querySelector('[data-praxis-viewport-size]')
+      const badge = host?.shadowRoot.firstElementChild
+      return { text: badge?.textContent, visible: badge?.style.display === 'block',
+        expected: innerWidth + 'px × ' + innerHeight + 'px' }
+    })()`)
+  })
+  await sleep(1100)
+  assert.equal((await nativeSize()).visible, false, 'readout hides while idle')
+  await app.evaluate(({ BrowserWindow }) => {
+    const w = BrowserWindow.getAllWindows()[0]
+    const [width, height] = w.getSize()
+    w.setSize(width - 80, height - 60)
+  })
+  await sleep(200)
+  const resized = await nativeSize()
+  assert.equal(resized.visible, true)
+  assert.equal(resized.text, resized.expected, 'native readout matches CSS viewport')
+  const artifacts = join(root, 'test', 'artifacts')
+  mkdirSync(artifacts, { recursive: true })
+  const capture = await app.evaluate(async ({ webContents }) => {
+    const wc = webContents.getAllWebContents().find(w => /^http:\/\/(localhost|127\.0\.0\.1):/.test(w.getURL()))
+    return (await wc.capturePage()).toPNG().toString('base64')
+  })
+  writeFileSync(join(artifacts, 'viewport-size-native.png'), Buffer.from(capture, 'base64'))
+  const divider = await win.locator('.divider').boundingBox()
+  await win.mouse.move(divider.x + divider.width / 2, divider.y + 100)
+  await win.mouse.down()
+  await sleep(250)
+  await win.mouse.move(divider.x - 60, divider.y + 100, { steps: 6 })
+  await win.waitForFunction(() => {
+    const badge = document.querySelector('[data-praxis-viewport-size]')?.shadowRoot.firstElementChild
+    const rect = document.querySelector('.preview-slot').getBoundingClientRect()
+    return badge?.style.display === 'block' && badge.textContent === `${Math.round(rect.width)}px × ${Math.round(rect.height)}px`
+  })
+  await win.screenshot({ path: join(artifacts, 'viewport-size-drag.png') })
+  await win.mouse.up()
+  await sleep(1200)
+  assert.equal((await nativeSize()).visible, false, 'readout disappears after resize')
 
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].webContents.send('menu:action', 'viewport:mobile')

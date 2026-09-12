@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { usePanelInset, usePreviewFreeze, useViewport } from "../store";
+import ViewportReadout from "./ViewportReadout";
 import {
   FRAME_ASPECT,
   FRAME_INSET,
@@ -229,6 +230,7 @@ export default function PreviewPane(): React.JSX.Element {
           }}
         />
       )}
+      {viewRect && <ViewportReadout {...viewRect} />}
     </div>
   );
 }

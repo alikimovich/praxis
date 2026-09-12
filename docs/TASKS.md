@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Preview size readout (2026-09-11, user-requested) — SHIPPED
+
+- [x] **Show the actual preview dimensions while resizing.** Display width ×
+      height in CSS pixels at the top right, including divider-drag snapshots,
+      then hide after one second without a size change.
+
 ## Scrollable project memory (2026-09-11, user-reported) — SHIPPED
 
 - [x] **Keep long memory inside the window.** Bound the dialog and editor height,

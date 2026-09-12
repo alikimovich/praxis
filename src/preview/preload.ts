@@ -14,6 +14,7 @@
  * events from the previewed app.
  */
 import { ipcRenderer } from 'electron'
+import { createViewportReadout } from './viewport-readout'
 import type { SelectedElement } from '../shared/api'
 import { isScopeClass } from '../shared/display-classes'
 import { FRAME_DATA_URI, FRAME_INSET } from '../shared/iphone-frame'
@@ -1632,6 +1633,16 @@ const previewDrag = IS_SIM_BRIDGE ? null : installDragReorder({
 
 // Capture-phase so we see events before the page and can suppress the click.
 if (!IS_SIM_BRIDGE) {
+  const installReadout = (): void => {
+    const readout = createViewportReadout(document.documentElement, true)
+    // Use the page's CSS viewport, including scrollbar space, just like DevTools.
+    const update = (): void => readout.update(window.innerWidth, window.innerHeight)
+    update()
+    window.addEventListener('resize', update)
+  }
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', installReadout, { once: true })
+  } else installReadout()
   window.addEventListener('mousemove', onMove, true)
 window.addEventListener('click', onClick, true)
 window.addEventListener('dblclick', onDblClick, true)
