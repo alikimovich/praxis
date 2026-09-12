@@ -36,6 +36,9 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Centered startup animation (2026-09-11, user-requested) — SHIPPED
 
+- [x] **Use the supplied joined SVG contours.** Reveal its 21 shapes as whole
+      pieces instead of animating 60 individual squares.
+
 - [x] **Crossfade into the app after the reveal.** Fade the completed cat out and
       the interface in over 500ms; keep native preview bounds suppressed until
       the transition ends and preserve reduced-motion behavior.

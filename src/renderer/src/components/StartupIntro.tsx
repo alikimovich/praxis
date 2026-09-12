@@ -21,7 +21,7 @@ export default function StartupIntro({ children }: { children: ReactNode }): Rea
       setPhase('done')
       return
     }
-    const pixels = [...root.querySelectorAll<SVGRectElement>('.pixel')]
+    const pixels = [...root.querySelectorAll<SVGGraphicsElement>('.pixel')]
     const soften = root.querySelector('feGaussianBlur')
     // Preserve the supplied animation's single-layer threshold reveal and timings.
     const animations = pixels.map((pixel, i) => {

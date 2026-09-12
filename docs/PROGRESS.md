@@ -14,6 +14,19 @@ Type checks pass. Full unit/Electron suite: 131/132 passed, with only the
 previously documented chat-render timeout. Startup-intro passes with animation
 enabled; smoke asserts the wrapper is bypassed. Inspected its launch screenshot.
 
+## 2026-09-12 — Joined startup cat contours
+
+Replaced the 60 separate startup squares with the supplied load.svg's 21
+contours, preserving its unioned bars and stepped shapes. Each contour animates
+as one piece through the existing reveal and crossfade. Kept the silhouette
+centered after the artwork's coordinates moved to whole SVG units.
+
+Type checks and the startup Electron test pass; inspected intermediate and final
+screenshots. Updated the shape-count assertion and waited for the asynchronous
+reduced-motion update before asserting dismissal, fixing the recorded test race.
+Full suite: 130/132 passed. The recorded chat-render timeout remains, and the
+code-drawer drag assertion (300 → 300) also fails in an isolated rerun.
+
 ## 2026-09-11 — Quiet project action icons
 
 Changed the sidebar project menu and new-chat icons to neutral gray at rest and

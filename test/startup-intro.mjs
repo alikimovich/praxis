@@ -13,7 +13,7 @@ try {
   const page = await app.firstWindow()
   await page.waitForSelector('[data-startup-intro]')
   assert.equal(await page.locator('.empty__open').count(), 0, 'intro appears before the app')
-  assert.equal(await page.locator('[data-startup-intro] rect').count(), 60)
+  assert.equal(await page.locator('[data-startup-intro] .pixel').count(), 21)
   const centered = await page.locator('[data-startup-intro] svg').evaluate(el => {
     const r = el.getBoundingClientRect()
     return Math.abs(r.x + r.width / 2 - innerWidth / 2) < 1 && Math.abs(r.y + r.height / 2 - innerHeight / 2) < 1
@@ -31,7 +31,7 @@ try {
   const fade = await page.evaluate(() => ({
     cat: Number(getComputedStyle(document.querySelector('[data-startup-intro]')).opacity),
     ui: Number(getComputedStyle(document.querySelector('[data-startup-ui]')).opacity),
-    pixels: [...document.querySelectorAll('[data-startup-intro] rect')].every(p => p.style.opacity === '1')
+    pixels: [...document.querySelectorAll('[data-startup-intro] .pixel')].every(p => p.style.opacity === '1')
   }))
   assert.ok(fade.cat > 0 && fade.cat < 1 && fade.ui > 0 && fade.ui < 1, 'cat and UI crossfade together')
   assert.ok(fade.pixels, 'completed cat remains sharp during fade')
@@ -59,12 +59,14 @@ try {
   })
   assert.equal(fadingPreviewWidth, 0, 'restored native preview stays behind the entire crossfade')
   await page.emulateMedia({ reducedMotion: 'reduce' })
+  // Media-query change listeners and the React commit run asynchronously.
+  await page.waitForSelector('[data-startup-intro]', { state: 'detached', timeout: 1000 })
   await page.waitForSelector('.pane--chat', { timeout: 3000 })
   assert.equal(await page.locator('[data-startup-intro]').count(), 0, 'changing reduced motion ends intro')
   await page.reload()
   await page.waitForSelector('.pane--chat', { timeout: 3000 })
   assert.equal(await page.locator('[data-startup-intro]').count(), 0, 'reduced motion skips intro')
-  console.log('STARTUP-INTRO OK — centered 60-pixel reveal, app handoff, cleanup, reduced motion')
+  console.log('STARTUP-INTRO OK — centered 21-piece reveal, app handoff, cleanup, reduced motion')
 } finally {
   await app.close()
 }
