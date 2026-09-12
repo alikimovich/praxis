@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Centered startup animation (2026-09-11, user-requested) — SHIPPED
+
+- [x] **Play the supplied blue pixel-cat reveal before showing the app.** Center
+      it in the window, preserve 4s/16px/24% settings, omit demo controls, and
+      skip for reduced motion. Keep native previews behind the intro on reload.
+
 ## Live viewport resizing (2026-09-11, user-reported) — SHIPPED
 
 - [x] **Reflow the preview continuously during divider dragging.** Capture the

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import EditorWindow from './components/EditorWindow'
 import PanelApp from './components/PanelApp'
+import StartupIntro from './components/StartupIntro'
 import { installWebApi } from './web-api'
 import './styles.css'
 
@@ -42,5 +43,15 @@ if (editorRoot && editorSource) {
     </React.StrictMode>
   )
 } else {
-  root.render(<React.StrictMode>{isPanel ? <PanelApp /> : <App />}</React.StrictMode>)
+  root.render(
+    <React.StrictMode>
+      {isPanel ? (
+        <PanelApp />
+      ) : (
+        <StartupIntro>
+          <App />
+        </StartupIntro>
+      )}
+    </React.StrictMode>
+  )
 }

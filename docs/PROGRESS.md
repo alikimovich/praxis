@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-11 — Centered pixel-cat startup intro
+
+Ported the supplied HTML's 60-square cat and single-layer SVG threshold reveal
+into StartupCat/StartupIntro. Preserved the 4-second duration, 16px blur, 24%
+stagger, and 250ms lead-in. The cat is centered on the reference's off-white
+background without demo controls; the main app mounts when it finishes. Editor
+and inspector windows bypass the intro, and reduced motion skips it. Existing
+native preview bounds are zeroed during renderer reload so they cannot cover it.
+
+Type checks and the new Electron startup test pass: centered geometry, all 60
+pixels, intermediate/final screenshots, app handoff, animation cleanup, native
+preview suppression on reload, and reduced-motion changes. Inspected both PNGs.
+Full unit/Electron suite: 130/132 passed; only the previously documented
+chat-render sidebar timeout and provider-skills-menu switch failure remain.
+
 ## 2026-09-11 — Resize the live viewport during divider dragging
 
 Replaced the divider's stretched freeze-frame with pointer capture. The native
