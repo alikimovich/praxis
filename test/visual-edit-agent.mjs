@@ -1,3 +1,4 @@
+import { chooseComposerOption } from './helpers/composer-menu.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
@@ -25,7 +26,8 @@ try {
   BrowserWindow.getAllWindows()[0].webContents.send('menu:action','open-project')
  }, repo)
  await win.waitForFunction(root => window.__praxisWorkspace.getState().projects.some(p=>p.root === root && p.url), repo)
- await win.locator('select[aria-label="Provider"]').selectOption({label:'Codex'})
+ await chooseComposerOption(win, 'Provider', 'codex')
+  await win.waitForFunction(() => window.__praxisSession.getState().provider === 'codex')
  await win.fill('.composer__input', 'Keep my unsent draft')
  const before = await win.evaluate(() => {
   window.__visualEvents = []
