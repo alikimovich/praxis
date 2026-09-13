@@ -3,6 +3,14 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Cat activity animations (2026-09-12, user-requested) — SHIPPED
+
+- [x] **Play the supplied thinking animation while a question awaits an answer.**
+- [x] **Play idle occasionally and jump once when the active task completes.**
+      Use a randomized 15–30 second rest interval, suppress completion jumps for
+      errors and Stop, reset on chat switches, and respect reduced motion.
+- [x] **Save all 12 supplied animations and their original timings for future use.**
+
 ## Default button cursor (2026-09-12, user-requested) — SHIPPED
 
 - [x] **Use the default arrow on Praxis buttons.** Cover the shell, expandable

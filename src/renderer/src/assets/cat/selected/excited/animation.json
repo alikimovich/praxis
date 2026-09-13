@@ -1,0 +1,32 @@
+{
+  "name": "excited",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "loop": true,
+  "frames": [
+    {
+      "file": "excited-1.svg",
+      "durationMs": 130
+    },
+    {
+      "file": "excited-2.svg",
+      "durationMs": 100
+    },
+    {
+      "file": "excited-3.svg",
+      "durationMs": 110
+    },
+    {
+      "file": "excited-4.svg",
+      "durationMs": 110
+    },
+    {
+      "file": "excited-5.svg",
+      "durationMs": 110
+    },
+    {
+      "file": "excited-6.svg",
+      "durationMs": 130
+    }
+  ]
+}

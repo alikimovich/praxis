@@ -2,6 +2,24 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-12 — Cat activity animation pack
+
+Saved all 12 supplied animations (60 original SVG frames, 12 timing manifests,
+and README) under the cat assets, unchanged. The composer cat loops think while
+its chat has a pending question, plays idle once after each randomized 15–30
+second rest, and jumps once on an active turn's completion. Existing working
+sprites remain in use. Error/Stop completions do not jump, chat switches reset
+playback, and reduced motion freezes sprites and disables idle/jump timers.
+Only the three newly used animations are imported into the renderer bundle.
+
+Type checks and focused lint pass. The new Electron regression passes for
+question/resume, jump/rest, occasional idle, error/Stop/background completion,
+and reduced motion; inspected all three animation screenshots. The full suite
+reported 130/133 passing: the new test initially hit Electron's unsupported
+Playwright clock API, then passed separately after switching to real timers;
+startup-intro also passed on an isolated fresh-profile rerun. The previously
+documented chat-render failure remains.
+
 ## 2026-09-12 — Default arrow on buttons
 
 Replaced pointer cursors with the default arrow for shell buttons, expandable

@@ -1,0 +1,24 @@
+{
+  "name": "look",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "loop": true,
+  "frames": [
+    {
+      "file": "look-1.svg",
+      "durationMs": 650
+    },
+    {
+      "file": "look-2.svg",
+      "durationMs": 300
+    },
+    {
+      "file": "look-3.svg",
+      "durationMs": 300
+    },
+    {
+      "file": "look-4.svg",
+      "durationMs": 650
+    }
+  ]
+}

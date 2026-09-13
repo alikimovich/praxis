@@ -1,0 +1,24 @@
+{
+  "name": "jump",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "loop": false,
+  "frames": [
+    {
+      "file": "jump-1.svg",
+      "durationMs": 120
+    },
+    {
+      "file": "jump-2.svg",
+      "durationMs": 130
+    },
+    {
+      "file": "jump-3.svg",
+      "durationMs": 180
+    },
+    {
+      "file": "jump-4.svg",
+      "durationMs": 150
+    }
+  ]
+}

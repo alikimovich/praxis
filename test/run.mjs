@@ -99,6 +99,7 @@ const UNIT = [
 
 // electron = the `node test/NAME.mjs` group AFTER `electron-vite build` in `test`.
 const ELECTRON = [
+  'cat-animations',
   'startup-intro',
   'browser-mode',
   'remote-indicator',

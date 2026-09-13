@@ -1,0 +1,32 @@
+{
+  "name": "think",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "loop": true,
+  "frames": [
+    {
+      "file": "think-1.svg",
+      "durationMs": 250
+    },
+    {
+      "file": "think-2.svg",
+      "durationMs": 350
+    },
+    {
+      "file": "think-3.svg",
+      "durationMs": 350
+    },
+    {
+      "file": "think-4.svg",
+      "durationMs": 650
+    },
+    {
+      "file": "think-5.svg",
+      "durationMs": 450
+    },
+    {
+      "file": "think-6.svg",
+      "durationMs": 300
+    }
+  ]
+}

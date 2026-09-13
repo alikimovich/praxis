@@ -2052,7 +2052,7 @@ body.is-resizing {
 
 /* The sprite is a solid-black SVG drawn as a mask over currentColor, so it
    adopts the theme's colors (and stays crisp) in both light and dark mode.
-   CatLoader.tsx swaps the two run frames while `running`. */
+   CatLoader.tsx plays the supplied frames for each activity state. */
 .cat-loader {
     flex: 0 0 auto;
     display: inline-block;

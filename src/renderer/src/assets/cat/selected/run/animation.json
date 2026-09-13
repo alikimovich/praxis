@@ -1,0 +1,24 @@
+{
+  "name": "run",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "loop": true,
+  "frames": [
+    {
+      "file": "run-1.svg",
+      "durationMs": 90
+    },
+    {
+      "file": "run-2.svg",
+      "durationMs": 90
+    },
+    {
+      "file": "run-3.svg",
+      "durationMs": 90
+    },
+    {
+      "file": "run-4.svg",
+      "durationMs": 90
+    }
+  ]
+}

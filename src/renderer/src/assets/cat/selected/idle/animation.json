@@ -1,0 +1,24 @@
+{
+  "name": "idle",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "loop": true,
+  "frames": [
+    {
+      "file": "idle-1.svg",
+      "durationMs": 500
+    },
+    {
+      "file": "idle-2.svg",
+      "durationMs": 200
+    },
+    {
+      "file": "idle-3.svg",
+      "durationMs": 500
+    },
+    {
+      "file": "idle-4.svg",
+      "durationMs": 200
+    }
+  ]
+}
