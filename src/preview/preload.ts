@@ -535,7 +535,7 @@ function buildPins(): void {
   annotationPins.forEach((pin, i) => {
     const dot = document.createElement('div')
     dot.style.cssText =
-      'position:fixed;pointer-events:auto;cursor:pointer;width:18px;height:18px;' +
+      'position:fixed;pointer-events:auto;cursor:default;width:18px;height:18px;' +
       'display:none;align-items:center;justify-content:center;border-radius:50%;' +
       'background:#f59e0b;color:#fff;font:700 10px/1 ui-monospace,Menlo,sans-serif;' +
       'box-shadow:0 1px 3px rgba(0,0,0,0.3);transform:translate(-50%,-50%);'

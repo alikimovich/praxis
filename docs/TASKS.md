@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Control cursors and chat action hover (2026-09-14, user-requested) — SHIPPED
+
+- [x] **Use the arrow on remaining clickable controls.** Include selects, links,
+      annotation pins, editor folding controls, and the shadow-DOM file tree.
+- [x] **Remove the hover fill from chat rename and close buttons.**
+
 ## Cat activity animations (2026-09-12, user-requested) — SHIPPED
 
 - [x] **Play the supplied thinking animation while a question awaits an answer.**

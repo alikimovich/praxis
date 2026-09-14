@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-14 — Arrow cursors across controls and transparent chat actions
+
+Extended the arrow cursor to selects, links/source navigation, annotation pins,
+and shared native clickable controls. CodeMirror folding controls get a scoped
+CSS override, and the file tree gets its own shadow-DOM style override. Removed
+the background fill on chat rename/close hover while preserving the icon color
+change. Text-editing and resizing cursors retain their interaction cues.
+
+Type checks and build pass. Full unit/Electron suite: 132/133 passed, with only
+the previously documented chat-render timeout. After the final editor overrides,
+rebuilt and verified eight fold controls and twelve shadow-DOM file rows use the
+arrow. Both hovered chat actions compute a transparent background and default
+cursor; inspected the hover screenshot.
+
 ## 2026-09-12 — Cat activity animation pack
 
 Saved all 12 supplied animations (60 original SVG frames, 12 timing manifests,

@@ -2,6 +2,7 @@
 @import "shadcn/tailwind.css";
 @import "./chat-scroll.css";
 @import "./rail-chat-title.css";
+@import "./control-cursors.css";
 @custom-variant dark (&:is(.dark *));
 
 /* Tailwind v4 + shadcn/ui tokens (new-york / neutral). Utilities & preflight live
@@ -1047,7 +1048,7 @@ body.is-fullscreen .sidebar-toggle {
 }
 .rail__chat-x:hover,
 .rail__chat-rename:hover {
-    background: var(--bg);
+    background: transparent;
     color: var(--text);
 }
 /* Inline rename input — occupies the name's exact slot so the row doesn't shift
@@ -1881,7 +1882,7 @@ body.is-resizing {
     border: 1px solid var(--border);
     border-radius: 7px;
     padding: 4px 8px;
-    cursor: pointer;
+    cursor: default;
     outline: none;
 }
 
@@ -2363,6 +2364,6 @@ html.panel-host #root {
 .cm-cmdlink {
     text-decoration: underline;
     text-underline-offset: 2px;
-    cursor: pointer;
+    cursor: default;
     color: #2563eb;
 }

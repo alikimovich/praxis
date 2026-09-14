@@ -127,6 +127,8 @@ export default function FileTreePanel({ root }: { root: string }): React.JSX.Ele
         initialExpansion: paths.length > 300 ? 1 : 'open',
         flattenEmptyDirectories: true,
         search: true,
+        // The tree's shadow root cannot inherit the shell's control styles.
+        unsafeCSS: '[data-type="item"], [data-type="context-menu-trigger"] { cursor: default; }',
         onSelectionChange: (selectedPaths) => {
           const path = selectedPaths[selectedPaths.length - 1]
           // Only files open; directory selections are ignored.
