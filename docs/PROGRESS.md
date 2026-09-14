@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-14 — System-accent focus rings
+
+The chat rows were inheriting Chromium's orange `outline: auto`, which paints a
+white edge as well. Native clickable controls now use one solid 2px `AccentColor`
+outline on focus-visible, inset to avoid sidebar clipping. Shared light/dark
+focus tokens use the same system color; Tailwind ring shadows are suppressed on
+these controls to avoid a second ring.
+
+Type checks and build pass. Full unit/Electron suite: 132/133 passed, with only
+the known chat-render timeout. Rebuilt after the inset adjustment, verified
+computed outline color/style/width against CSS AccentColor in both themes, and
+inspected both final screenshots: a complete blue ring with no white edge.
+
 ## 2026-09-14 — Arrow cursors across controls and transparent chat actions
 
 Extended the arrow cursor to selects, links/source navigation, annotation pins,

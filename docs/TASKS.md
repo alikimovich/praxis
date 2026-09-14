@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## System accent focus rings (2026-09-14, user-requested) — SHIPPED
+
+- [x] **Replace the orange/white browser focus outline with a single system-accent
+      ring.** Use the same accent for shared focus tokens in both themes and keep
+      the ring inside controls so sidebar clipping does not cut it off.
+
 ## Control cursors and chat action hover (2026-09-14, user-requested) — SHIPPED
 
 - [x] **Use the arrow on remaining clickable controls.** Include selects, links,

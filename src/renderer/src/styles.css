@@ -3,6 +3,7 @@
 @import "./chat-scroll.css";
 @import "./rail-chat-title.css";
 @import "./control-cursors.css";
+@import "./focus.css";
 @custom-variant dark (&:is(.dark *));
 
 /* Tailwind v4 + shadcn/ui tokens (new-york / neutral). Utilities & preflight live
@@ -29,9 +30,7 @@
     --destructive-foreground: oklch(0.985 0 0);
     --border-shadcn: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
-    /* Darkened from shadcn's default oklch(0.708) (#a1a1a1, ~2.6:1 on white) to
-     clear the 3:1 non-text focus-indicator threshold (v6 a11y review). */
-    --ring: oklch(0.55 0 0);
+    --ring: AccentColor;
 }
 
 @theme inline {
@@ -106,7 +105,7 @@
     --destructive-foreground: oklch(0.98 0 0);
     --border-shadcn: oklch(0.3 0 0);
     --input: oklch(0.32 0 0);
-    --ring: oklch(0.6 0 0);
+    --ring: AccentColor;
     /* app-shell tokens */
     --bg: #111113;
     --bg-subtle: #18181b;
