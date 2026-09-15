@@ -16,7 +16,7 @@
  */
 import { projectMemoryRules } from './project-memory'
 
-export const PRAXIS_RULES_VERSION = 12
+export const PRAXIS_RULES_VERSION = 13
 
 export function praxisRules(opts?: {
   previewTools?: boolean
@@ -163,17 +163,38 @@ export function praxisRules(opts?: {
 
   lines.push(
     ``,
-    `## Inspecting the running app in a browser`,
-    `When you need to inspect or interact with the running web preview — read the DOM,`,
-    `check the console, click around, verify a change visually, grab a screenshot — use`,
-    `the \`agent-browser\` CLI (it drives a headless browser made for agents). Useful`,
-    `commands: \`agent-browser open <url>\`, \`snapshot\` (accessibility tree with refs),`,
-    `\`get text|html|styles|value <sel>\`, \`get console\`, \`eval <js>\`, \`click <sel>\`,`,
-    `\`type <sel> <text>\`, \`screenshot <path>\`. The URL is the dev server shown in the`,
-    `preview.`,
+    `## Required browser verification with agent-browser`,
+    `For web UI changes, visual verification, responsive testing, or browser interaction,`,
+    `you MUST use \`agent-browser\` when available. This is required, not a suggestion;`,
+    `a build, typecheck, or DOM-only guess does not replace browser verification.`,
+    `Before your first browser task in a session, run \`command -v agent-browser\` and`,
+    `\`agent-browser --help\` in your execution environment. Recheck after installation`,
+    `or a PATH change. If the installed CLI supports it, read its version-matched guide`,
+    `with \`agent-browser skills get core --full\`; otherwise use its help.`,
+    `If the CLI is missing, or its browser cannot launch, report the actual blocker and`,
+    `offer installation/setup. Do not install packages without the user's permission,`,
+    `silently substitute another browser tool, or claim browser verification passed.`,
+    `Use a unique \`--session praxis-<task-id>\` on every browser command so concurrent`,
+    `chats do not change each other's pages or viewport. Close only your own session.`,
+    `Open the Praxis-managed preview URL and the relevant route; do not start another`,
+    `dev server or attach to the user's browser. Check that the page contains the change`,
+    `being tested. Private worktree edits may not be served until Praxis lands the turn:`,
+    `if the preview still shows older code, report verification as pending, never passed,`,
+    `and do not bypass Praxis's worktree/landing lifecycle to make it visible.`,
+    `Use \`open <url>\`, \`snapshot\`, \`get text|html|styles|value <sel>\`, \`console\`,`,
+    `\`errors\`, \`eval <js>\`, \`click <sel>\`, and \`screenshot <path>\` as appropriate.`,
+    `Exercise the changed interaction and inspect screenshots of the affected UI.`,
+    `For layout or responsive changes, test phone, tablet, and desktop CSS viewports:`,
+    `\`set viewport 390 844\`, \`set viewport 768 1024\`, and \`set viewport 1440 900\`,`,
+    `unless the user specifies other sizes. Check overflow, clipped content, and usable`,
+    `controls at each size; capture and inspect a screenshot at each size. Viewport`,
+    `resizing checks layout, not real-device behavior or Safari compatibility.`,
+    `Before finishing, report the route, sizes, interactions checked, and any blockers.`,
+    `If preview screenshot tools are available, they complement this workflow by showing`,
+    `the user's current view; they do not replace the required responsive checks.`,
     `Do NOT launch Chrome DevTools, a headed/visible browser, \`chrome://inspect\`, or a`,
-    `one-off Playwright/Puppeteer script to do this — UNLESS the user explicitly asks you`,
-    `to open DevTools or a real browser. Default to \`agent-browser\`.`
+    `one-off Playwright/Puppeteer script to do this — UNLESS the user explicitly asks`,
+    `for that tool. An explicit user request for another tool overrides this default.`
   )
 
   return lines.join('\n')

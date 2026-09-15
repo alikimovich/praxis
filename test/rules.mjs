@@ -17,7 +17,7 @@ const assert = (cond, msg) => {
 const r = praxisRules()
 assert(typeof r === 'string' && r.length > 0, 'rules render to a non-empty string')
 assert(typeof PRAXIS_RULES_VERSION === 'number', 'version is a number')
-assert(PRAXIS_RULES_VERSION === 12, 'version bumped to 12')
+assert(PRAXIS_RULES_VERSION === 13, 'version bumped to 13')
 assert(r.includes(`v${PRAXIS_RULES_VERSION}`), 'rules carry the version marker')
 // v3 naming — the product is Praxis in the rule text now.
 assert(/praxis/i.test(r), 'names the product Praxis')
@@ -62,6 +62,23 @@ assert(!/preview_screenshot/.test(r), 'default rendering omits preview_screensho
 assert(praxisRules({ previewTools: true }) === withTools, 'previewTools rendering is deterministic')
 // The agent-browser section survives in both renderings.
 assert(/agent-browser/.test(withTools), 'previewTools: still keeps agent-browser guidance')
+// Browser verification is mandatory across provider capability combinations.
+for (const opts of [{}, { previewTools: true }, { workspaceTools: true }]) {
+  const rules = praxisRules(opts)
+  assert(/MUST use `agent-browser` when available/.test(rules), 'browser: required when available')
+  assert(/command -v agent-browser/.test(rules), 'browser: check the runtime PATH')
+  assert(/agent-browser --help/.test(rules), 'browser: inspect installed CLI capabilities')
+  assert(/CLI is missing, or its browser cannot launch/.test(rules), 'browser: missing binary and launch failure')
+  assert(/Do not install packages without the user's permission/.test(rules), 'browser: no silent installation')
+  assert(/--session praxis-<task-id>/.test(rules), 'browser: isolated task sessions')
+  assert(/Close only your own session/.test(rules), 'browser: preserve other sessions')
+  for (const size of ['390 844', '768 1024', '1440 900']) {
+    assert(rules.includes(`set viewport ${size}`), `browser: responsive coverage at ${size}`)
+  }
+  assert(/capture and inspect a screenshot at each size/.test(rules), 'browser: require visual inspection')
+  assert(/report verification as pending, never passed/.test(rules), 'browser: stale previews cannot prove an edit')
+  assert(/user request for another tool overrides/.test(rules), 'browser: explicit user choice wins')
+}
 // R4 (v10) — custom-controls section rides with the Claude-only in-process tools:
 // define_controls exists only on the praxis SDK server, so backends without
 // previewTools must never be told to call it.

@@ -43,6 +43,20 @@ the Codex harness's strengths and gaps; changing the model id does not grant Cla
 in-process preview/design tools. It does retain the two Praxis worktree-control tools
 because those belong to the harness, not the selected endpoint model.
 
+## Required browser verification
+
+All providers receive the same built-in agent-browser operating rule. For web UI
+changes and browser testing, agents must check CLI availability in their execution
+environment and use it when available. Responsive/layout checks cover phone,
+tablet, and desktop viewports, with screenshots and interaction checks. Each task
+uses its own named browser session. Missing CLI/browser support is reported;
+installation requires user permission. An explicit user tool choice takes priority.
+
+This is prompt-level enforcement, not a runtime tool-call gate. Existing sessions
+need to be recreated to receive updated rules. A preview still serving code from
+before a private worktree edit cannot verify that edit; the agent must report it as
+pending instead of bypassing Praxis's landing lifecycle or claiming success.
+
 ## Skills menu and Codex runtime
 
 Praxis bundles Codex SDK/CLI 0.154.0 or newer; updating the global `codex` binary

@@ -2,6 +2,23 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-14 — Required agent-browser workflow
+
+Operating rules v13 require agent-browser for web UI/browser verification when
+available across all providers. Agents check their execution PATH and CLI help,
+use an isolated named session, and test layout changes at phone/tablet/desktop
+sizes with screenshot inspection and interaction checks. Missing CLI/browser
+support requires an honest blocker report and permission before installation.
+Explicit user tool choices still win. A stale preview cannot verify unlanded
+worktree edits; agents must report pending verification and preserve the landing
+lifecycle. README and provider docs describe this prompt-level requirement and
+the need to recreate existing sessions for updated rules.
+
+Type checks and the expanded rule tests pass across provider capability variants.
+Full verification: 139/140 runner passes, with only the previously documented
+chat-render timeout. Real model-switch, Claude/Codex edit, controls, and tool
+invocation checks passed. Simulator e2e self-skipped because Xcode is unavailable.
+
 ## 2026-09-14 — Optional agent-browser installation
 
 The installer recommends agent-browser for browser and responsive-layout checks

@@ -3,6 +3,13 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Required agent-browser workflow (2026-09-14, user-requested) — SHIPPED
+
+- [x] **Require agent-browser for browser verification when available.** Shared
+      provider instructions check availability, use isolated sessions, cover three
+      responsive sizes, require screenshots, and report missing/stale verification.
+      Document prompt-level enforcement and preserve explicit user tool choices.
+
 ## Optional agent-browser installation (2026-09-14, user-requested) — SHIPPED
 
 - [x] **Recommend agent-browser and offer to install it during setup.** Prompt via
