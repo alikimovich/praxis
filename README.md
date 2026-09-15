@@ -84,6 +84,13 @@ and puts a `praxis` command on your `PATH`:
 curl -fsSL https://raw.githubusercontent.com/alikimovich/praxis/main/install.sh | bash
 ```
 
+The installer recommends **agent-browser** for automated browser checks, including
+different screen sizes, and asks whether to install its global CLI and browser.
+It uses Bun (or npm when Bun is unavailable), skips the offer when the CLI is
+already on PATH, and defaults to **No**. Unattended installs skip the prompt.
+An optional browser-install failure does not prevent Praxis installation.
+To install it later: `bun install --global agent-browser && agent-browser install`.
+
 Then authorize the agent once and launch:
 
 ```bash

@@ -2,6 +2,24 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-14 — Optional agent-browser installation
+
+The installer recommends agent-browser for browser and responsive-layout checks
+and offers an explicit default-No global CLI plus browser install. It reads from
+the controlling terminal so the curl-pipe flow works, skips when the CLI is
+already on PATH or no terminal exists, and prints manual installation commands
+when declined. Optional failures leave Praxis installed. Bun global binaries
+outside PATH can still finish browser setup, with a PATH reminder. README now
+documents the offer.
+
+Shell syntax and type checks pass. Nine mocked full-installer cases pass,
+including piped input with a real pseudo-terminal: accept, decline, empty default,
+unattended, existing CLI, CLI failure, browser failure, npm fallback, and Bun's
+global bin outside PATH. No external packages were installed during these checks.
+Full unit/Electron suite: 130/133 passed; startup-intro, chat-render, and
+layers-panel failed. The first sandboxed run could not bind test servers or
+launch Electron; the reported result is from the rerun with the required access.
+
 ## 2026-09-14 — System-accent focus rings
 
 The chat rows were inheriting Chromium's orange `outline: auto`, which paints a

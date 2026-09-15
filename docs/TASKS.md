@@ -3,6 +3,17 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Optional agent-browser installation (2026-09-14, user-requested) — SHIPPED
+
+- [x] **Recommend agent-browser and offer to install it during setup.** Prompt via
+      the terminal for piped installers, default to No, skip existing installs or
+      absent terminals, and keep optional failures from blocking Praxis setup.
+
+## Simultaneous startup reveal (2026-09-14, user-requested) — SHIPPED
+
+- [x] **Reveal the entire startup cat equally at once.** Synchronize contour
+      opacity and blur, preserving the four-second intro and app crossfade.
+
 ## System accent focus rings (2026-09-14, user-requested) — SHIPPED
 
 - [x] **Replace the orange/white browser focus outline with a single system-accent
