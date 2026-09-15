@@ -53,6 +53,11 @@ GitHub PR.
   the repo's **design tokens** (auto-detected from a manifest, Tailwind, or CSS
   vars), and edits text inline. Non-literal text cases run as detached background
   agents without entering the visible chat.
+- **Controls from chat.** Ask Claude, Codex, or a custom-endpoint model to surface
+  animation controls in the desktop preview. It can select the object and open
+  Props, Styles, or Custom directly. Custom controls include numeric scrubbing,
+  toggles, color pickers, and easing curves. Props and Styles show authored values
+  by default; **Show all** exposes optional props and computed styles.
 - **Review → handoff.** Pin comments/notes to elements and **Publish** a branch
   + GitHub PR. Comments and complex inline text edits can spawn parallel background
   agent sessions (each in its own git worktree).

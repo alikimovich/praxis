@@ -32,7 +32,7 @@ export function controlsPrompt(
     `1. Read the element's source and find the values behind those parameters, including ones buried in magic numbers, config objects, or hooks.`,
     `2. If a value isn't already a tweakable target, instrument it first: extract it to a named top-level constant in the component's OWN file (e.g. \`const STAGGER_MS = 120\`), or expose it as a typed prop with a literal default. Keep runtime behavior identical.`
   )
-  if (provider === 'claude') {
+  if (provider !== 'gemini') {
     lines.push(
       `3. Then call the \`define_controls\` tool ONCE with every parameter. For a 'literal' param, the anchor must occur exactly once in the file and end immediately before the value (ideal shape: \`const STAGGER_MS = \`). Pick strategies: \`prop\` for per-instance values, \`literal\` for module constants, \`style\` for pure CSS properties. For number params, give a sensible min/max/step and unit (those fields are only valid on kind 'number').`
     )
@@ -83,7 +83,7 @@ export function animationControlsPrompt(
     `2. Implement the animation without changing unrelated layout or visual styling. Respect existing reduced-motion behavior, or add a prefers-reduced-motion fallback when the component does not have one.`,
     `3. Extract the useful parameters (for example duration, delay, easing or spring values, distance, scale, stagger, and count) into stable tweakable targets in the component's own file.`
   )
-  if (provider === 'claude') {
+  if (provider !== 'gemini') {
     lines.push(
       `4. Call the \`define_controls\` tool ONCE with those parameters. For a 'literal' param, the anchor must occur exactly once in the file and end immediately before the value. Use \`style\` only for supported pure CSS longhands; use named module constants or typed props for keyframes, Motion configs, springs, and other structured animation values. Give number params sensible min/max/step/unit fields.`
     )

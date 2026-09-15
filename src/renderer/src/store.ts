@@ -1474,6 +1474,7 @@ export const formatConversation = (messages: ChatMessage[]): string =>
  * selection is dropped.
  */
 interface PropsIslandState {
+  openRequest?: import('../../shared/api').ControlsOpenRequest
   open: boolean
   setOpen: (open: boolean) => void
 }

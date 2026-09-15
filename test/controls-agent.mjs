@@ -144,10 +144,11 @@ try {
 
   // Cheap/fast model, and Auto (bypassPermissions) so the instrument edit isn't
   // gated by an approve card no one is here to click. Stub the folder dialog.
-  await win.evaluate(() => {
-    window.__praxisSession.getState().setModel('haiku')
+  await win.evaluate((provider) => {
+    window.__praxisSession.getState().setProvider(provider)
+    if (provider === 'claude') window.__praxisSession.getState().setModel('haiku')
     window.__praxisPermissions.getState().setMode('bypassPermissions')
-  })
+  }, process.env.PRAXIS_CONTROLS_PROVIDER ?? 'claude')
   await app.evaluate(async ({ dialog }, p) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] })
   }, project)

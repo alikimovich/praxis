@@ -12,9 +12,9 @@ import {
 } from '../../../shared/token-match'
 import AnimationControlsTrigger from './styles/AnimationControlsTrigger'
 import type { RowCtx } from './styles/row-ctx'
-import { ColorRow } from './styles/rows/ColorRow'
-import { NumberRow, SideRows } from './styles/rows/NumberRow'
-import { ChipRow, StyleGroup } from './styles/rows/primitives'
+import AuthoredStyleGroups from './styles/AuthoredStyleGroups'
+import { NumberRow } from './styles/rows/NumberRow'
+import { StyleGroup } from './styles/rows/primitives'
 import { TimingRow, TransitionPropertyRow } from './styles/rows/TransitionRows'
 
 // `sameCssValue` moved to lib/css-values.ts (CustomPanel imports it from here).
@@ -42,9 +42,6 @@ interface Props {
 
 /** Every v1 property (incl. the read-only chips) — one fresh read fills the panel. */
 const ALL_PROPS = Object.keys(STYLE_PROP_META)
-
-/** `gap` only means something on these computed display values. */
-const FLEX_GRID = new Set(['flex', 'grid', 'inline-flex', 'inline-grid'])
 
 /** Post-commit settle time before reconciling against a fresh read (lets HMR land). */
 const RECONCILE_MS = 600
@@ -76,6 +73,7 @@ export default function StylePanel({
   onAnimationControls
 }: Props): React.JSX.Element {
   const [values, setValuesRaw] = useState<Record<string, string>>(() => ({ ...element.styles }))
+  const [showAll, setShowAll] = useState(false)
   const [lost, setLost] = useState(false)
   const [error, setError] = useState<string | null>(null)
   /**
@@ -98,6 +96,7 @@ export default function StylePanel({
    * per-prop on commit (the authored text is unknown until the write lands and
    * the reconcile re-read repopulates it).
    */
+  const [authoredProps, setAuthoredProps] = useState<string[]>([])
   const [specifiedVals, setSpecifiedVals] = useState<Record<string, string>>({})
 
   // Async flows (commit chains, reconcile timers) read through the ref so they
@@ -163,8 +162,7 @@ export default function StylePanel({
   }
 
   /** A token's value as it resolves on THIS element (else its recorded value). */
-  const tokenValue = (token: Token): string =>
-    resolvedVars[token.name]?.trim() || token.value
+  const tokenValue = (token: Token): string => resolvedVars[token.name]?.trim() || token.value
 
   /** Which token the property's current value IS, if any — PROVEN, not guessed. */
   const tokenFor = (prop: string): TokenResolution | null =>
@@ -181,6 +179,9 @@ export default function StylePanel({
   useEffect(() => {
     let alive = true
     setLost(false)
+    setShowAll(false)
+    setSpecifiedVals({})
+    setAuthoredProps([])
     setError(null)
     lastCommitRef.current = null
     stickyRef.current = {}
@@ -204,6 +205,7 @@ export default function StylePanel({
       setResolvedVars(vars)
       setDeclaredVars(res.declaredVars)
       setSpecifiedVals(res.specified)
+      setAuthoredProps(Object.keys(res.specified))
     })
     return () => {
       alive = false
@@ -319,6 +321,7 @@ export default function StylePanel({
         authored
       })
       if (res.applied) {
+        setAuthoredProps((props) => (props.includes(prop) ? props : [...props, prop]))
         lastCommitRef.current = { prop, from: prev, to: css }
         scheduleReconcile(prop, css)
       } else if (res.needsAgent) {
@@ -376,7 +379,9 @@ export default function StylePanel({
   // it — tailored to whether the project could be set up at all.
   if (disabled) {
     const ask = (): void =>
-      onSeedPrompt(`Change the styling of the selected <${element.tag}> element (${element.selector}).`)
+      onSeedPrompt(
+        `Change the styling of the selected <${element.tag}> element (${element.selector}).`
+      )
     return (
       <div className="stylepanel__rows flex flex-col gap-3 overflow-y-auto px-3 pb-3 pt-2">
         <div className="stylepanel__note text-[12px] leading-snug text-muted-foreground">
@@ -434,9 +439,12 @@ export default function StylePanel({
     commitToken,
     authoredFor: (prop) => specifiedVals[prop] ?? null
   }
-  const display = values.display ?? ''
+  const visible = (prop: string): boolean => showAll || authoredProps.includes(prop)
   const tokenCount = tokens?.groups.reduce((n, g) => n + g.tokens.length, 0) ?? 0
-  const transitionActive = hasActiveTransition(values)
+  const transitionActive =
+    showAll ||
+    hasActiveTransition(values) ||
+    authoredProps.some((prop) => prop.startsWith('transition-'))
 
   return (
     <>
@@ -458,42 +466,27 @@ export default function StylePanel({
             {tokenCount} tokens · {tokens?.origin}
           </div>
         )}
-        <StyleGroup title="Layout">
-          <SideRows base="padding" ctx={ctx} />
-          <SideRows base="margin" ctx={ctx} />
-          {FLEX_GRID.has(display) && <NumberRow prop="gap" ctx={ctx} />}
-        </StyleGroup>
-
-        <StyleGroup title="Appearance">
-          <ColorRow prop="color" ctx={ctx} onNeedsAgent={() => seedStyleEdit('color')} />
-          <ColorRow
-            prop="background-color"
-            ctx={ctx}
-            onNeedsAgent={() => seedStyleEdit('background-color')}
-          />
-          <NumberRow prop="border-radius" ctx={ctx} />
-          <NumberRow prop="opacity" ctx={ctx} />
-        </StyleGroup>
-
-        <StyleGroup title="Typography">
-          <NumberRow prop="font-size" ctx={ctx} />
-          <NumberRow prop="font-weight" ctx={ctx} />
-          <NumberRow prop="line-height" ctx={ctx} />
-          <NumberRow prop="letter-spacing" ctx={ctx} />
-          <ChipRow label="font-family" value={values['font-family'] ?? '—'} />
-          <ChipRow label="display" value={display || '—'} />
-        </StyleGroup>
+        <button
+          type="button"
+          className="self-start text-xs text-muted-foreground"
+          onClick={() => setShowAll(!showAll)}
+        >
+          {showAll ? 'Show authored styles' : 'Show all styles'}
+        </button>
+        <AuthoredStyleGroups ctx={ctx} visible={visible} seedStyleEdit={seedStyleEdit} />
 
         {transitionActive ? (
           <StyleGroup title="Transition">
-            <TransitionPropertyRow ctx={ctx} />
-            <NumberRow prop="transition-duration" ctx={ctx} />
-            <NumberRow prop="transition-delay" ctx={ctx} />
-            <TimingRow
-              ctx={ctx}
-              onReplay={replay}
-              onNeedsAgent={() => seedStyleEdit('transition-timing-function')}
-            />
+            {visible('transition-property') && <TransitionPropertyRow ctx={ctx} />}
+            {visible('transition-duration') && <NumberRow prop="transition-duration" ctx={ctx} />}
+            {visible('transition-delay') && <NumberRow prop="transition-delay" ctx={ctx} />}
+            {visible('transition-timing-function') && (
+              <TimingRow
+                ctx={ctx}
+                onReplay={replay}
+                onNeedsAgent={() => seedStyleEdit('transition-timing-function')}
+              />
+            )}
             <div className="stylepanel__row grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
               <span />
               <Button

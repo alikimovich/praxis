@@ -3,6 +3,17 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Controls from chat and authored inspector fields (2026-09-14) — SHIPPED
+
+- [x] **Select objects and open their inspector from the agent.** Add
+      `open_controls` for Claude, Codex, and custom endpoints; registering a
+      custom panel requests its Custom tab, with landing retries and project scoping.
+- [x] **Register animation controls on the Codex harness.** Share validated
+      manifests and literal-anchor checks with Claude, including background edits.
+- [x] **Show authored fields by default.** Hide absent optional props and
+      browser-default styles behind Show all; retain declared falsy defaults,
+      add numeric prop scrubbing, and keep rows stable while edits settle.
+
 ## Required agent-browser workflow (2026-09-14, user-requested) — SHIPPED
 
 - [x] **Require agent-browser for browser verification when available.** Shared
@@ -973,9 +984,9 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
       editing them at all is unimplemented, not merely unsupported.
 - [ ] **Auto re-pick after navigation.** A full navigation wipes the preview
       preload's selection; the panel asks for a manual re-click today.
-- [ ] **`define_controls` for Codex/Gemini.** Those backends get no custom
-      tools, so they fall back to instrument-as-props. A per-backend bridge
-      (or a file-based manifest hand-off main picks up) would close the gap.
+- [x] **`define_controls` for Codex and custom endpoints.** Shared validated
+      registration through the session-scoped MCP bridge, including background edits.
+- [ ] **`define_controls` for experimental Gemini.** Still uses typed-prop fallback.
 
 ## Health / infra (from the 2026-07-07 review)
 

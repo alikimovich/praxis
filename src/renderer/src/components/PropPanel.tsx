@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { PropField, PropInspection, SelectedElement } from '../../../shared/api'
 import { Button } from '@/components/ui/button'
+import ScrubInput from './styles/ScrubInput'
 import { Input } from '@/components/ui/input'
 
 interface Props {
@@ -44,6 +45,18 @@ export default function PropPanel({
   onSelectOwner,
   onControls
 }: Props): React.JSX.Element {
+  const [showAll, setShowAll] = useState(false)
+  useEffect(() => setShowAll(false), [element.source, element.selector])
+  const fields =
+    inspection?.fields.filter(
+      (f) =>
+        showAll ||
+        !f.fromSchema ||
+        f.value !== undefined ||
+        f.expression ||
+        f.default !== undefined ||
+        f.defaultExpression
+    ) ?? []
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const hasSchema = !!inspection?.hasSchema
@@ -76,7 +89,9 @@ export default function PropPanel({
           })
         }
       } else if (res.needsAgent) {
-        onApplyAgent(res.agentPrompt ?? `In ${source}, set the ${field.name} prop to ${JSON.stringify(value)}.`)
+        onApplyAgent(
+          res.agentPrompt ?? `In ${source}, set the ${field.name} prop to ${JSON.stringify(value)}.`
+        )
       } else {
         setError(res.error ?? 'Could not apply the change.')
         reload()
@@ -117,13 +132,20 @@ export default function PropPanel({
               {inspection.note}
             </div>
           )}
+          <button
+            type="button"
+            className="mx-3 self-start text-xs text-muted-foreground"
+            onClick={() => setShowAll(!showAll)}
+          >
+            {showAll ? 'Show authored props' : 'Show all props'}
+          </button>
           <div className="proppanel__rows flex flex-1 flex-col gap-1.5 overflow-y-auto px-3 pb-3 pt-1.5">
-            {inspection.fields.length === 0 && (
+            {fields.length === 0 && (
               <div className="proppanel__note text-[11.5px] text-muted-foreground">
                 No editable props.
               </div>
             )}
-            {inspection.fields.map((f) => (
+            {fields.map((f) => (
               <PropRow
                 key={f.name}
                 field={f}
@@ -141,9 +163,7 @@ export default function PropPanel({
            composer strip used to show. */
         <div className="proppanel__rows flex flex-col gap-2 overflow-y-auto px-3 pb-3 pt-1.5">
           {inspecting ? (
-            <div className="proppanel__ready text-[12px] text-muted-foreground">
-              Reading props…
-            </div>
+            <div className="proppanel__ready text-[12px] text-muted-foreground">Reading props…</div>
           ) : !element.source ? (
             <div className="proppanel__ready proppanel__ready--no text-[12px] text-amber-700">
               Not set up for prop editing —{' '}
@@ -216,6 +236,20 @@ function PropRow({
       >
         edit via chat
       </Button>
+    )
+  } else if (field.kind === 'number' && typeof value === 'number') {
+    control = (
+      <ScrubInput
+        hideLabel
+        label={field.name}
+        value={value}
+        min={-Number.MAX_SAFE_INTEGER}
+        max={Number.MAX_SAFE_INTEGER}
+        step={Number.isInteger(value) ? 1 : 0.01}
+        disabled={busy}
+        onScrub={() => {}}
+        onCommit={onApply}
+      />
     )
   } else if (field.kind === 'boolean') {
     control = (

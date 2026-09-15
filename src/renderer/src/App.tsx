@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useControlOpening } from './use-control-opening'
 import { dispatchBackgroundAgent, dispatchVisualEdit } from './background-edits'
 import { usePreviewReorder } from './use-preview-reorder'
 import { usePreviewResize } from './use-preview-resize'
@@ -141,6 +142,7 @@ export default function App(): React.JSX.Element {
   const propsIslandOpen = usePropsIsland((s) => s.open)
   const projectRoot = useSession((s) => s.projectRoot)
   usePreviewReorder(setStatus)
+  useControlOpening()
   const drawerSource = useCodeDrawer((s) => s.source)
 
   // Custom Controls (v10): the selection's AI-surfaced panels, fetched here

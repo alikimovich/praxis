@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { z } from 'zod'
+import { defineControlsShape } from './control-tool-schema.mjs'
 import { request } from 'node:http'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
@@ -11,8 +13,8 @@ if (!socketPath || !token) {
   process.exit(1)
 }
 
-const invoke = async (action) => {
-  const payload = JSON.stringify({ action })
+const invoke = async (action, args) => {
+  const payload = JSON.stringify({ action, args })
   const body = await new Promise((resolve, reject) => {
     const req = request(
       {
@@ -50,7 +52,8 @@ const invoke = async (action) => {
 
 const result = (value) => ({
   content: [{ type: 'text', text: JSON.stringify(value, null, 2) }],
-  structuredContent: value
+  structuredContent: value,
+  isError: !!value?.error
 })
 
 const server = new McpServer({ name: 'praxis', version: '1.0.0' })
@@ -73,6 +76,29 @@ server.registerTool(
       'Ask Praxis to safely combine the current live checkout with this chat’s parked changes inside this chat worktree. Call when workspace_state says `parked`. If files are returned, resolve every marker in them; the normal turn completion will ask Praxis to land the resolved result.'
   },
   async () => result(await invoke('prepare_conflict_resolution'))
+)
+
+server.registerTool(
+  'define_controls',
+  {
+    description:
+      'Register sliders, toggles, colors and easing controls after extracting animation or component values into named constants or typed props. Also requests opening the Custom inspector.',
+    inputSchema: defineControlsShape
+  },
+  async (args) => result(await invoke('define_controls', args))
+)
+server.registerTool(
+  'open_controls',
+  {
+    description:
+      'Select a preview object by source stamp (file:line) or repo-relative file and open its inspector. Prefer an exact source for repeated objects.',
+    inputSchema: {
+      source: z.string().optional(),
+      file: z.string().optional(),
+      tab: z.enum(['props', 'styles', 'custom']).optional()
+    }
+  },
+  async (args) => result(await invoke('open_controls', args))
 )
 
 await server.connect(new StdioServerTransport())

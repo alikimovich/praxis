@@ -16,11 +16,12 @@
  */
 import { projectMemoryRules } from './project-memory'
 
-export const PRAXIS_RULES_VERSION = 13
+export const PRAXIS_RULES_VERSION = 14
 
 export function praxisRules(opts?: {
   previewTools?: boolean
   workspaceTools?: boolean
+  controlTools?: boolean
   projectMemory?: string
 }): string {
   const lines: string[] = [
@@ -100,8 +101,17 @@ export function praxisRules(opts?: {
       `  visual change you just made, or when the user references what they're looking at.`,
       `Division of labor: these tools OBSERVE the user's own view; \`agent-browser\` (below)`,
       `is your OWN headless copy for interacting/inspecting.`,
-      ``,
-      `## Surfacing control panels (define_controls)`,
+      ``
+    )
+  }
+  if (opts?.previewTools || opts?.controlTools) {
+    lines.push(
+      `## Surfacing control panels (define_controls / open_controls)`,
+      `When asked to show controls, call open_controls with the object's source stamp`,
+      `(file:line) or source file to select it and open the requested inspector tab.`,
+      `define_controls also requests opening the Custom tab. Prefer number controls with`,
+      `ranges/steps for animation parameters, toggles for booleans, and select/bezier`,
+      `controls for easing. Surface only parameters actually used by the component.`,
       `When the user asks for sliders / knobs / a control panel to tweak some parameter`,
       `(a stagger delay, a spring config, a magic number), first INSTRUMENT the code so`,
       `each parameter is a tweakable target: extract magic values to named top-level`,
@@ -114,7 +124,11 @@ export function praxisRules(opts?: {
       `pure CSS properties. For number params, give a sensible min/max/step/unit (those`,
       `fields are only valid on kind 'number'). Never write under \`.praxis/\` yourself —`,
       `the tool persists the manifest for you.`,
-      ``,
+      ``
+    )
+  }
+  if (opts?.previewTools) {
+    lines.push(
       `## Spring animations (spring_to_css)`,
       `For any spring / bouncy / physics-based motion — or when the user gives spring`,
       `params (stiffness/damping/mass, damping-ratio + frequency, or bounce + duration) —`,

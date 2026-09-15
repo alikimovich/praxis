@@ -11,6 +11,7 @@ capabilities instead of assuming Claude, Codex, gateways, and Gemini are interch
 | Skills menu before the first turn | Yes | Yes | Yes, through Codex | Yes |
 | Provider-native coding tools | Yes | Yes | Depends on model through Codex | Limited |
 | Praxis preview MCP tools | Yes | No | No | No |
+| Register custom controls / open desktop inspector | Yes | Yes | Yes, through Codex | No |
 | Praxis worktree control tools | No | Yes | Yes, through Codex | No |
 | Praxis question cards | Yes | No | No | No |
 | Praxis approve/deny cards | Yes | No SDK approval event | No SDK approval event | No |
@@ -24,7 +25,12 @@ never support the feature. Codex and gateway sessions receive a session-scoped l
 server with `workspace_state` and `prepare_conflict_resolution`: the former reads the
 landing coordinator rather than guessing from the private checkout, while the latter
 routes the existing three-way resolver through Praxis's repository queue. It deliberately
-does not expose raw Git or discard/reset operations. Preview tools remain Claude-only;
+does not expose raw Git or discard/reset operations. The same bridge now exposes
+`define_controls` and `open_controls`, including to detached visual-edit children.
+Registration validates anchors in the agent worktree and saves the manifest on the
+live root. Opening is scoped to the active project, uses real preview selection,
+and retries after landing; ambiguous file matches require an exact source stamp.
+Preview observation/calculator tools remain Claude-only;
 question cards, resume, image transport, and background-agent support are separately
 declared because they have different lifecycle and security requirements.
 

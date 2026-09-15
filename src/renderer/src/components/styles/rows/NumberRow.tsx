@@ -65,9 +65,11 @@ export function NumberRow({ prop, ctx }: { prop: string; ctx: RowCtx }): React.J
  */
 export function SideRows({
   base,
-  ctx
+  ctx,
+  visibleProps
 }: {
   base: 'padding' | 'margin'
+  visibleProps?: string[]
   ctx: RowCtx
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
@@ -97,6 +99,15 @@ export function SideRows({
     for (const p of props) await ctx.commitToken(p, candidate, group)
   }
 
+  if (visibleProps && visibleProps.length < 4) {
+    return (
+      <>
+        {visibleProps.map((prop) => (
+          <NumberRow key={prop} prop={prop} ctx={ctx} />
+        ))}
+      </>
+    )
+  }
   if (allEqual && !open) {
     return (
       <TokenRow

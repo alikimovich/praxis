@@ -10,7 +10,7 @@ export async function checkSvelteDefaults(app, win, artifacts) {
     blurHoldMs: 150, blurEasing: 'ease-out', negative: -3, zero: 0,
     enabled: true, disabled: false, empty: '' }
   const declarations = Object.entries(defaults).map(([k, v]) => `${k} = ${JSON.stringify(v)}`)
-  const code = `<script lang="ts">\ninterface Props { ${Object.entries(defaults).map(([k,v]) => `${k}?: ${typeof v}`).join('; ')}; dynamic?: number }\nlet { ${declarations.join(', ')}, dynamic = Math.random() }: Props = $props();\n</script>\n<button>Copy</button>\n`
+  const code = `<script lang="ts">\ninterface Props { ${Object.entries(defaults).map(([k,v]) => `${k}?: ${typeof v}`).join('; ')}; dynamic?: number; unused?: string }\nlet { ${declarations.join(', ')}, dynamic = Math.random(), unused }: Props = $props();\n</script>\n<button>Copy</button>\n`
   const file = join(root, 'CodeBlock.svelte')
   const inspect = (source) => win.evaluate(({ root, source }) => window.api.props.inspect(root, source), { root, source })
   const select = async (source) => {
@@ -44,9 +44,10 @@ export async function checkSvelteDefaults(app, win, artifacts) {
     await panel.getByRole('tab', { name: 'Props', exact: true }).click()
     const row = name => panel.locator('.proppanel__row').filter({ has: panel.locator('.proppanel__name', { hasText: new RegExp(`^${name}$`) }) })
     const expectValue = async (name, value) => {
-      await row(name).locator('input').waitFor()
+      const control = typeof value === 'number' ? row(name).getByRole('slider') : row(name).locator('input')
+      await control.waitFor()
       for (let i = 0; i < 100; i++) {
-        const actual = typeof value === 'boolean' ? await row(name).locator('input').isChecked() : await row(name).locator('input').inputValue()
+        const actual = typeof value === 'number' ? await control.getAttribute('aria-valuenow') : typeof value === 'boolean' ? await row(name).locator('input').isChecked() : await row(name).locator('input').inputValue()
         if (actual === (typeof value === 'boolean' ? value : String(value))) return
         await new Promise(r => setTimeout(r, 50))
       }
@@ -58,8 +59,12 @@ export async function checkSvelteDefaults(app, win, artifacts) {
     }
     assert.equal(await row('dynamic').getByText('edit via chat').count(), 1)
     assert.equal(await row('dynamic').locator('.proppanel__reset').count(), 0)
-    await row('copiedDurationMs').locator('input').focus()
-    await row('blurPx').locator('input').focus()
+    assert.equal(await row('unused').count(), 0, 'absent optional props hidden by default')
+    await panel.getByRole('button', { name: 'Show all props', exact: true }).click()
+    await row('unused').waitFor()
+    await panel.getByRole('button', { name: 'Show authored props', exact: true }).click()
+    await row('copiedDurationMs').getByRole('slider').press('Enter')
+    await row('copiedDurationMs').locator('input').press('Tab')
     assert.equal(readFileSync(file, 'utf8'), code, 'blur of unchanged default must not write')
     const routed = await win.evaluate(({root}) => window.api.props.apply(root, {source: 'CodeBlock.svelte:5', name: 'copiedDurationMs', kind: 'number', value: 2000}), {root})
     assert.equal(routed.needsAgent, true)
@@ -88,6 +93,7 @@ export async function checkSvelteDefaults(app, win, artifacts) {
       assert.equal(await row(name).locator('.proppanel__reset').count(), 1, `${name} is explicit`)
     }
     assert.equal(await row('blurPx').getByText('edit via chat').count(), 1)
+    await row('copiedDurationMs').getByRole('slider').press('Enter')
     await row('copiedDurationMs').locator('input').fill('2500')
     await row('copiedDurationMs').locator('input').press('Tab')
     await expectValue('copiedDurationMs', 2500)

@@ -2,6 +2,34 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-14 — Agent-opened controls and authored inspector fields
+
+Claude, Codex, and custom-endpoint agents can now request selection and open the
+Props, Styles, or Custom inspector with `open_controls`. `define_controls` shares
+one validated registration path across harnesses, checks anchors in the private
+worktree, persists to the live root, and requests the Custom tab. The renderer
+uses the real Layers selection path, retries missing targets after landing, avoids
+ambiguous file matches, and cancels pending requests when the project changes.
+Existing selections can be reopened directly. Experimental Gemini retains its
+prop-based fallback; this feature targets the desktop inspector.
+
+Props default to present values and component defaults (including zero, false,
+empty strings, and expressions). Optional absent fields remain under Show all.
+Numeric props use the existing keyboard/pointer scrub control with exact-value
+entry. Styles default to matched stylesheet/inline declarations, with computed
+browser defaults under Show all. Authored field presence is separate from the
+transient value readout so committing an edit cannot hide its row. No new
+animation dependency was added; custom controls expose parameters using the
+project's existing animation implementation.
+
+Validation: type checks and build pass. Full unit/Electron run: 131/134 passed;
+two older inspector assertions assumed always-visible groups/number inputs and
+were updated, with affected tests passing on rerun. The remaining failure is the
+known chat-render timeout. All seven existing live checks passed (simulator
+self-skipped without Xcode), plus a new real Codex control-registration/landing
+regression passed. Inspected native panel screenshots, verified a Scale keyboard
+nudge through agent-browser, and checked panel layouts at 390/768/1440px.
+
 ## 2026-09-14 — Required agent-browser workflow
 
 Operating rules v13 require agent-browser for web UI/browser verification when

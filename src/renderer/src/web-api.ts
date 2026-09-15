@@ -246,6 +246,7 @@ export function installWebApi(config: WebConfig): void {
       move: (root, request) => invoke('layers:move', root, request)
     },
     controls: {
+      onOpen: on('controls:open'),
       get: async () => [],
       list: async () => [],
       remove: async () => {},

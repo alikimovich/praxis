@@ -757,8 +757,18 @@ export interface PropInspection {
   note?: string
 }
 
+/** Agent request to select an object and open its desktop inspector. */
+export interface ControlsOpenRequest {
+  root: string
+  source?: string
+  file?: string
+  tab: 'props' | 'styles' | 'custom'
+  requestId: string
+}
+
 /** What the floating prop-panel island renders from (main renderer → island). */
 export interface PanelState {
+  openRequest?: ControlsOpenRequest
   root: string
   element: SelectedElement
   inspection: PropInspection | null
@@ -1382,6 +1392,7 @@ export interface PraxisApi {
   /** AI-surfaced custom-control panels (v10) — manifests persisted by main in
    *  the repo's `.praxis/control-panels.json`, values resolved fresh per read. */
   controls: {
+    onOpen: (cb: (request: ControlsOpenRequest) => void) => () => void
     /** Panels matching the selection's candidate files (two-stamp match), with
      *  every param's value freshly resolved against the live tree. */
     get: (

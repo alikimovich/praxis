@@ -49,6 +49,13 @@ export default function PanelApp(): React.JSX.Element | null {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [])
 
+  const openRequestId = state?.openRequest?.requestId
+  useEffect(() => {
+    if (!openRequestId) return
+    localStorage.setItem(COLLAPSED_KEY, '0')
+    setCollapsedRaw(false)
+  }, [openRequestId])
+
   const elKey = state ? `${state.element.source ?? ''}|${state.element.selector}` : ''
   // biome-ignore lint/correctness/useExhaustiveDependencies: elKey is the selection identity — tombstones reset only on a new selection.
   useEffect(() => setRemovedPanels([]), [elKey])
@@ -103,6 +110,7 @@ export default function PanelApp(): React.JSX.Element | null {
             element={state.element}
             inspection={state.inspection}
             maxHeight={state.maxHeight}
+            openRequest={state.openRequest}
             onCollapse={() => setCollapsed(true)}
             onClose={() => window.api.panel.action({ kind: 'close' })}
             onControls={(hint) => window.api.panel.action({ kind: 'controls', hint })}
@@ -116,7 +124,9 @@ export default function PanelApp(): React.JSX.Element | null {
                   window.api.panel.action({ kind: 'inspection', inspection: next })
                 }
                 onSeedPrompt={(text) => window.api.panel.action({ kind: 'seed', text })}
-                onApplyAgent={(text) => window.api.panel.action({ kind: 'apply-edit', root: state.root, text })}
+                onApplyAgent={(text) =>
+                  window.api.panel.action({ kind: 'apply-edit', root: state.root, text })
+                }
                 onSetup={() => window.api.panel.action({ kind: 'setup' })}
                 onSelectOwner={() => window.api.panel.action({ kind: 'owner' })}
                 onControls={() => window.api.panel.action({ kind: 'controls' })}
@@ -129,7 +139,9 @@ export default function PanelApp(): React.JSX.Element | null {
                 canInstrument={state.canInstrument}
                 tokens={state.tokens}
                 onSeedPrompt={(text) => window.api.panel.action({ kind: 'seed', text })}
-                onApplyAgent={(text) => window.api.panel.action({ kind: 'apply-edit', root: state.root, text })}
+                onApplyAgent={(text) =>
+                  window.api.panel.action({ kind: 'apply-edit', root: state.root, text })
+                }
                 onAnimationControls={(hint) =>
                   window.api.panel.action({ kind: 'animation-controls', hint })
                 }
@@ -143,7 +155,9 @@ export default function PanelApp(): React.JSX.Element | null {
                   inspection={state.inspection}
                   panels={controls}
                   onSeedPrompt={(text) => window.api.panel.action({ kind: 'seed', text })}
-                onApplyAgent={(text) => window.api.panel.action({ kind: 'apply-edit', root: state.root, text })}
+                  onApplyAgent={(text) =>
+                    window.api.panel.action({ kind: 'apply-edit', root: state.root, text })
+                  }
                   onRegenerate={(panelId) =>
                     window.api.panel.action({ kind: 'controls', hint: 'regenerate', panelId })
                   }

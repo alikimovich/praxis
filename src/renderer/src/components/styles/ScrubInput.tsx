@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 export interface ScrubInputProps {
   /** Row label (css property name, e.g. "padding-top"). */
   label: string
+  hideLabel?: boolean
   /** Current committed value (numeric, in the property's canonical unit). */
   value: number
   min: number
@@ -71,6 +72,7 @@ function round(n: number): number {
  */
 export default function ScrubInput({
   label,
+  hideLabel,
   value,
   min,
   max,
@@ -248,16 +250,18 @@ export default function ScrubInput({
 
   return (
     <div className="scrubinput grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
-      <span
-        className={cn(
-          'scrubinput__label select-none overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-muted-foreground',
-          disabled ? 'opacity-50' : 'cursor-ew-resize'
-        )}
-        onPointerDown={beginScrub}
-        title={label}
-      >
-        {label}
-      </span>
+      {!hideLabel && (
+        <span
+          className={cn(
+            'scrubinput__label select-none overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-muted-foreground',
+            disabled ? 'opacity-50' : 'cursor-ew-resize'
+          )}
+          onPointerDown={beginScrub}
+          title={label}
+        >
+          {label}
+        </span>
+      )}
       {editing ? (
         <Input
           className="scrubinput__input h-7 w-[128px] justify-self-end px-2 text-xs"

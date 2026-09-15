@@ -5,7 +5,7 @@ import type {
   SelectedElement,
   TokenSet
 } from '../../../shared/api'
-import { usePreviewFreeze } from '../store'
+import { usePropsIsland, usePreviewFreeze } from '../store'
 
 /** Shadow padding inside the island view (kept in sync with PanelApp). */
 const PAD = { top: 16, right: 24, bottom: 32, left: 24 }
@@ -44,6 +44,7 @@ export default function PanelHost({
 }): null {
   const [size, setSize] = useState({ width: 268 + PAD.left + PAD.right, height: 160 })
   const [maxHeight, setMaxHeight] = useState(480)
+  const openRequest = usePropsIsland((s) => s.openRequest)
   const frozen = usePreviewFreeze((s) => s.frozen)
 
   useEffect(
@@ -57,6 +58,7 @@ export default function PanelHost({
   useEffect(() => {
     window.api.panel.setState({
       root,
+      openRequest,
       element,
       inspection,
       inspecting,
@@ -65,7 +67,17 @@ export default function PanelHost({
       canInstrument,
       tokens
     })
-  }, [root, element, inspection, inspecting, maxHeight, controls, canInstrument, tokens])
+  }, [
+    root,
+    openRequest,
+    element,
+    inspection,
+    inspecting,
+    maxHeight,
+    controls,
+    canInstrument,
+    tokens
+  ])
 
   // Place at the top right of the preview card body, tracked live.
   useEffect(() => {

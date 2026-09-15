@@ -230,6 +230,7 @@ const api: PraxisApi = {
       ipcRenderer.invoke('layers:move', root, req)
   },
   controls: {
+    onOpen: on('controls:open'),
     get: (root: string, q: { files: string[]; component?: string }): Promise<ResolvedControlPanel[]> =>
       ipcRenderer.invoke('controls:get', root, q),
     list: (root: string): Promise<ControlPanelManifest[]> =>

@@ -1,5 +1,5 @@
 import { Minimize2 } from '../icons'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { PropInspection, SelectedElement } from '../../../shared/api'
@@ -12,6 +12,7 @@ const isIslandTab = (t: string | null): t is IslandTab =>
   t === 'props' || t === 'styles' || t === 'custom'
 
 interface Props {
+  openRequest?: import('../../../shared/api').ControlsOpenRequest
   element: SelectedElement
   /** null → no schema (the props tab shows readiness messaging instead). */
   inspection: PropInspection | null
@@ -43,6 +44,7 @@ interface Props {
  */
 export default function IslandCard({
   element,
+  openRequest,
   inspection,
   maxHeight,
   onCollapse,
@@ -61,6 +63,11 @@ export default function IslandCard({
     localStorage.setItem(TAB_KEY, next)
     setTabRaw(next)
   }
+  const requestId = openRequest?.requestId
+  const requestedTab = openRequest?.tab
+  useEffect(() => {
+    if (requestId && requestedTab) setTabRaw(requestedTab)
+  }, [requestId, requestedTab])
   const hasCustom = customTab != null
   // The persisted tab may be 'custom' from a selection that HAD panels — fall
   // back to Props (without rewriting the preference) while this one has none.
