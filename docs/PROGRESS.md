@@ -20,6 +20,19 @@ Full unit/Electron suite: 130/133 passed; startup-intro, chat-render, and
 layers-panel failed. The first sandboxed run could not bind test servers or
 launch Electron; the reported result is from the rerun with the required access.
 
+## 2026-09-14 — Simultaneous startup cat reveal
+
+Removed contour-order timing and blur variation from the startup cat. All 21
+shapes now share one opacity/blur progression, so the artwork emerges together.
+Preserved the four-second reveal, final sharpening, and 500ms app crossfade.
+
+Type checks and build pass. Verified identical computed opacity and blur on all
+21 contours midway through the reveal and inspected the screenshot. Startup-intro
+passes, including reload preview suppression and reduced motion. Full suite:
+131/133 passed; chat-render hit its known timeout and layers-panel failed its
+focused-text-field undo assertion. The initial sandbox run could not launch
+Electron; the full result above is from the run with the required access.
+
 ## 2026-09-14 — System-accent focus rings
 
 The chat rows were inheriting Chromium's orange `outline: auto`, which paints a
