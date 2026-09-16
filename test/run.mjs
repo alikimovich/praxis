@@ -139,6 +139,7 @@ const ELECTRON = [
   'questions',
   'diagnose-card',
   'select-element',
+  'three-d-inspector',
   'measure-alt',
   'comment-mode',
   'spawn-comment',

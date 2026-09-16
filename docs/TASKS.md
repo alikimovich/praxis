@@ -3,6 +3,18 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## 3D component inspection (2026-09-15, user-requested)
+
+- [x] **Isolate a selected component in an exploded 3D workspace.** Desktop
+      selection-toolbar entry, orbit/pan/zoom, separation, front/reset, and
+      surface/dropdown selection connected to the existing inspector.
+- [x] **Keep edits connected to the live page.** Refresh captured surfaces after
+      DOM/style changes, retain source edits and undo, recover only unambiguous
+      replaced nodes, and return without navigating or remounting the page.
+- [ ] **Expand rendering fidelity.** Pseudo-elements, clip/transform/effect
+      reconstruction, portals and framework component grouping, continuously
+      animated surfaces, and browser-mode parity. See `docs/THREE_D.md`.
+
 ## Controls from chat and authored inspector fields (2026-09-14) — SHIPPED
 
 - [x] **Select objects and open their inspector from the agent.** Add

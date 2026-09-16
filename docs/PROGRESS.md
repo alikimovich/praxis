@@ -2,6 +2,34 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-15 — Desktop 3D component inspector
+
+On `candidate`, updated by fast-forward from `main`, the selection toolbar now
+opens an isolated 3D workspace. Paint-only copies of the selected DOM subtree
+separate by nesting depth, with orbit/pan/zoom, separation, front/reset, and a
+keyboard-accessible layer selector. Clicking a surface opens the existing
+inspector against its original live element. Style previews, source commits,
+and undo reuse the established editing path; returning to the page does not
+navigate or remount it.
+
+The workspace stays in the sandboxed preview preload, using a modal shadow root
+and CSS perspective without a new rendering dependency or IPC contract. Text is
+captured once per owning element; SVGs render in inert image context and canvas
+snapshots are bounded. Observers refresh changed surfaces. HMR recovery requires
+an unambiguous ID/source identity; removed or repeated instances cannot redirect
+style edits to a sibling. Capture limits and simplified effects are disclosed.
+`docs/THREE_D.md` documents controls, architecture, and the first-version limits;
+pseudo-elements, clipping/transforms, portals, and browser parity remain follow-ups.
+
+Validation: type checks, build, new-file Biome checks, and documentation links
+pass. Full unit/Electron suite: 134/135 passed; the only failure is the previously
+documented chat-render timeout. The new native regression covers trusted camera
+input, child selection, live style preview/clear, source edit/undo, simulated HMR
+subtree replacement, preserved route/scroll/application state, Escape, capture
+limits, and ambiguous identity protection. Inspected native screenshots and used
+agent-browser at 390/768/1440px, including keyboard separation adjustment. New
+control text passes APCA at its authored 15px/600 sizing.
+
 ## 2026-09-14 — Agent-opened controls and authored inspector fields
 
 Claude, Codex, and custom-endpoint agents can now request selection and open the

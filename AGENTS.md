@@ -175,7 +175,9 @@ Project-memory persistence and Main-context reset are documented in `docs/MEMORY
 - **The preview overlay preload is sandboxed** — only `ipcRenderer` (no Node, no
   contextBridge), shares the page DOM via a `pointer-events:none` shadow root,
   and re-runs on every navigation, so `main` re-sends the current select-mode on
-  `did-finish-load`.
+  `did-finish-load`. Desktop 3D inspection uses a separate modal shadow root
+  in that preload; its inert paint copies reuse selection/style IPC while the
+  source component stays mounted. See `docs/THREE_D.md` for rendering limits.
 - **Prop editing is gated** on `PropInspection.hasSchema` (a resolved
   react-docgen/svelte schema). Unready components are prompt-only; the on-open
   setup offer instruments them.

@@ -14,6 +14,7 @@
  * events from the previewed app.
  */
 import { ipcRenderer } from 'electron'
+import { createThreeDInspector } from './three-d'
 import { createViewportReadout } from './viewport-readout'
 import type { SelectedElement } from '../shared/api'
 import { isScopeClass } from '../shared/display-classes'
@@ -251,6 +252,10 @@ function ensureOverlay(): void {
       title: 'Edit text in place',
       svg: '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>'
     },
+    'three-d': {
+      title: 'Inspect in 3D',
+      svg: '<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/>'
+    },
     props: {
       title: 'Edit props',
       svg: '<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>'
@@ -279,7 +284,7 @@ function ensureOverlay(): void {
     b.type = 'button'
     b.dataset.kind = kind
     b.title = ICONS[kind].title
-    b.setAttribute('aria-label', kind)
+    b.setAttribute('aria-label', kind === 'three-d' ? 'Inspect in 3D' : kind)
     b.style.cssText =
       'flex:0 0 auto;width:26px;height:26px;border:none;border-radius:7px;background:transparent;' +
       'display:flex;align-items:center;justify-content:center;cursor:default;color:#d4d4d4;'
@@ -338,15 +343,16 @@ function ensureOverlay(): void {
 
   const editBtn = makeIcon('edit')
   const propsBtn = makeIcon('props')
+  const threeDBtn = makeIcon('three-d')
   const codeBtn = makeIcon('code')
   const deleteBtn = makeIcon('delete')
 
-  // DOM order: comment, annotate, [input], edit, props, code | delete. The divider
+  // DOM order: comment, annotate, [input], edit, props, 3D, code | delete. The divider
   // sits before Delete only; the button[data-kind] order the tests assert stays
-  // comment, annotate, edit, props, code, delete (the separator has no data-kind).
+  // comment, annotate, edit, props, three-d, code, delete (the separator has no data-kind).
   // `edit` only renders for plain-text stamped leaves (setEditAction) — the
   // discoverable form of the double-click-to-edit gesture.
-  toolbar.append(commentBtn, annotateBtn, inputWrap, editBtn, propsBtn, codeBtn, separator, deleteBtn)
+  toolbar.append(commentBtn, annotateBtn, inputWrap, editBtn, propsBtn, threeDBtn, codeBtn, separator, deleteBtn)
 
   shadow.append(sel, box, meas, label, pins, hint, toolbar, style)
   document.documentElement.appendChild(host)
@@ -368,6 +374,7 @@ function ensureOverlay(): void {
  *  inline comment/annotate input is open — those actions don't apply there. */
 function setTrailingActions(show: boolean): void {
   const disp = show ? 'flex' : 'none'
+  toolbarEl?.querySelector<HTMLButtonElement>('[data-kind="three-d"]')?.style.setProperty('display', disp)
   toolbarEl?.querySelector<HTMLButtonElement>('[data-kind="props"]')?.style.setProperty('display', disp)
   toolbarEl?.querySelector<HTMLButtonElement>('[data-kind="delete"]')?.style.setProperty('display', disp)
   if (separatorEl) separatorEl.style.display = show ? 'block' : 'none'
@@ -861,6 +868,7 @@ function isValidFingerprint(fp: unknown): fp is LayerFingerprint {
  */
 function layersSelect(path: number[], fingerprint: LayerFingerprint): void {
   if (editing || commenting) return
+  threeD.close()
   const el = resolveLayerElement(path, fingerprint)
   if (!el) return
   ipcRenderer.send(PICKED, describe(el))
@@ -951,6 +959,11 @@ let styleStashEl: HTMLElement | null = null
  * `data-praxis-source` stamp when HMR swapped the node out from under us.
  */
 function resolveStyleTarget(): HTMLElement | null {
+  if (threeD.active()) {
+    const target = threeD.selected()
+    selectedEl = target
+    return target instanceof HTMLElement ? target : null
+  }
   let el: Element | null = selectedEl
   if (el && !el.isConnected) {
     const src = findSource(el) // attributes survive on detached nodes
@@ -1136,6 +1149,7 @@ function replayStyle(prop: string, from: string, to: string): void {
 }
 
 function onMove(e: MouseEvent): void {
+  if (threeD.active()) return
   if (previewDrag?.active()) return
   // Self-heal: if the frozen node was swapped out (HMR) without a blur, clear it
   // so a mode isn't stranded anchored to a detached element.
@@ -1173,6 +1187,7 @@ function onMove(e: MouseEvent): void {
 }
 
 function onClick(e: MouseEvent): void {
+  if (threeD.active()) return
   if (editing) return
   // Only genuine user input acts — a hostile page can dispatch synthetic clicks
   // while a mode is armed; isTrusted is false for those.
@@ -1204,6 +1219,7 @@ let editing: HTMLElement | null = null
 let editOriginal = ''
 
 function onDblClick(e: MouseEvent): void {
+  if (threeD.active()) return
   if (!active || editing || !e.isTrusted) return
   const el = e.target as HTMLElement | null
   // Only a directly-stamped element with plain text (no child elements) — so the
@@ -1398,6 +1414,12 @@ function onToolbarButton(kind: string): void {
     if (inputKind === kind) collapseInput()
     else if (inputKind) switchInputKind(kind)
     else enterInputState(kind, el, false)
+  } else if (kind === 'three-d') {
+    hideToolbar()
+    hideOverlay()
+    clearMeasure()
+    setSelectionHighlight(null)
+    threeD.open(el)
   } else if (kind === 'edit') {
     // Same in-place edit as double-click, but discoverable from the toolbar.
     if (isTextEditable(el)) startTextEdit(el)
@@ -1490,6 +1512,7 @@ function setCommentMode(next: CommentMode, fromRenderer = false): void {
 }
 
 function onKey(e: KeyboardEvent): void {
+  if (threeD.active()) return
   if (!e.isTrusted || editing) return
   if (commenting) return // the open composer owns keys (its handler manages them)
   if (e.key === 'Escape') {
@@ -1623,9 +1646,28 @@ function setFrame(on: boolean): void {
   positionFrame()
 }
 
+const threeD = createThreeDInspector({
+  select: (el, open) => {
+    clearStylePreview()
+    selectedEl = el
+    ipcRenderer.send(PICKED, describe(el))
+    if (open) ipcRenderer.send(TOOLBAR_ACTION, 'props')
+  },
+  lost: () => {
+    selectedEl = null
+    ipcRenderer.send(CANCELLED)
+  },
+  close: () => {
+    if (selectedEl?.isConnected) {
+      showToolbar(selectedEl)
+      setSelectionHighlight(selectedEl)
+    }
+  }
+})
+
 const previewDrag = IS_SIM_BRIDGE ? null : installDragReorder({
   selection: () => selectedEl,
-  blocked: () => !!(editing || commenting || commentMode),
+  blocked: () => threeD.active() || !!(editing || commenting || commentMode),
   overlay: () => { ensureOverlay(); return overlayHost!.shadowRoot! },
   clearHover: () => { hideOverlay(); clearMeasure() },
   move: request => ipcRenderer.send(PREVIEW_MOVE_NODE, request)
@@ -1733,6 +1775,7 @@ window.addEventListener('load', () => {
   // element-scoped toolbar + persistent outlines with it.
   ipcRenderer.on(CLEAR_SELECTED, () => {
     selectedEl = null
+    threeD.close()
     hideToolbar()
     setSelectionHighlight(null)
     clearMeasure()

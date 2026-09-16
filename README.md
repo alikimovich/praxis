@@ -53,6 +53,11 @@ GitHub PR.
   the repo's **design tokens** (auto-detected from a manifest, Tailwind, or CSS
   vars), and edits text inline. Non-literal text cases run as detached background
   agents without entering the visible chat.
+- **Inspect components in 3D (desktop).** Select an element and click the stacked
+  layers icon to isolate its visual structure. Orbit, zoom, spread layers apart,
+  and select a surface to edit it with the existing inspector. **Back to page**
+  returns to the running screen. See [3D inspection](docs/THREE_D.md) for controls
+  and first-version rendering limits.
 - **Controls from chat.** Ask Claude, Codex, or a custom-endpoint model to surface
   animation controls in the desktop preview. It can select the object and open
   Props, Styles, or Custom directly. Custom controls include numeric scrubbing,
