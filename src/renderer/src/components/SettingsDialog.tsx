@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ChevronDown } from '../icons'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -133,24 +134,27 @@ export default function SettingsDialog(): React.JSX.Element {
                   <label htmlFor="preferred-model" className="font-medium">
                     Default model
                   </label>
-                  <select
-                    id="preferred-model"
-                    aria-label="Default model for new chats"
-                    className="h-8 w-full rounded-lg border border-input bg-background px-2 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    value={preferredSelectValue(preferred)}
-                    onChange={(e) => onPreferredChange(e.target.value)}
-                  >
-                    <option value={LAST_USED_VALUE}>Last used</option>
-                    {providers.map((group) => (
-                      <optgroup key={group.key} label={group.label}>
-                        {group.models.map((c) => (
-                          <option key={c.value} value={c.value}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select
+                      id="preferred-model"
+                      aria-label="Default model for new chats"
+                      className="h-8 w-full appearance-none rounded-lg border border-input bg-background py-0 pl-3 pr-9 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={preferredSelectValue(preferred)}
+                      onChange={(e) => onPreferredChange(e.target.value)}
+                    >
+                      <option value={LAST_USED_VALUE}>Last used</option>
+                      {providers.map((group) => (
+                        <optgroup key={group.key} label={group.label}>
+                          {group.models.map((c) => (
+                            <option key={c.value} value={c.value}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2" aria-hidden="true" />
+                  </div>
                   <p className="text-[15px] leading-snug text-muted-foreground">
                     {preferred.mode === 'fixed'
                       ? 'New chats use this model. Existing chats keep their own.'

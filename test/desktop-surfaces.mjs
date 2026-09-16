@@ -51,7 +51,14 @@ try {
     await win.screenshot({ path: join(artifacts, `desktop-menu-${theme}.png`) })
     await win.keyboard.press('Escape')
     await win.getByRole('menu').waitFor({ state: 'hidden' })
-    assert(await provider.evaluate(button => document.activeElement === button), 'Escape must return focus to the menu trigger')
+    // Radix restores focus after the close animation has unmounted the menu.
+    await win.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Provider', null, { timeout: 5000 })
+    await win.locator('.rail__row').hover()
+    await win.locator('.rail__project-menu').click()
+    await win.getByRole('menuitem', { name: 'Memory', exact: true }).waitFor()
+    await win.screenshot({ path: join(artifacts, `desktop-project-actions-${theme}.png`) })
+    await win.keyboard.press('Escape')
+    await win.getByRole('menu').waitFor({ state: 'hidden' })
   }
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(390, 600))
   await win.evaluate(() => window.__praxisProviders.getState().setSettingsOpen(true))

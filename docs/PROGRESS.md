@@ -2,6 +2,15 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-15 — Settings chevron spacing
+
+The default-model field now uses an inset decorative chevron instead of the
+browser-drawn arrow hugging its right edge. The native select retains its
+keyboard and popup behavior; extra right padding keeps long labels clear of the
+icon. Extended desktop-surface captures to show project actions in both themes,
+and wait for Radix's post-animation focus restoration before asserting it.
+Typecheck, build, focused lint/UI checks, and the full suite pass (138/138).
+
 ## 2026-09-15 — Desktop dialogs, menus, and settings
 
 Shared Radix dialogs and dropdowns now use quiet opaque surfaces with a fine

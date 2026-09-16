@@ -5,6 +5,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Desktop surfaces (2026-09-15, user-requested)
 
+- [x] Inset the default-model chevron and capture the project actions menu.
+
 - [x] Restyle shared dialogs and dropdowns with compact desktop proportions,
       quiet light/dark surfaces, inset menu separators, and reduced-motion fades.
 - [x] Rework Settings into grouped preferences with a persistent header and a
