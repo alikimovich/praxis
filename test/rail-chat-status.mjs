@@ -152,7 +152,7 @@ try {
   await win.evaluate(() => {
     const key = window.__praxisStore.getState().activeKey
     for (let i = 0; i < 7; i++) window.__praxisSpawns.getState().add(key, {
-      id: `cat-${i}`, branch: null, label: `Operation ${i}`, modelLabel: 'Codex',
+      id: `cat-${i}`, branch: null, label: `Operation ${i}: update the selected component and check the complete layout beside the live preview`, modelLabel: 'Codex',
       status: i === 6 ? 'queued' : 'running'
     })
   })
@@ -170,6 +170,16 @@ try {
   await win.getByRole('tooltip').waitFor()
   if (!(await win.getByRole('tooltip').textContent()).includes('Operation 5'))
     throw new Error('cat tooltip must describe the operation')
+  const assertTooltipInsideChat = async () => {
+    await win.waitForFunction(() => {
+      const tooltip = document.querySelector('[data-slot="tooltip-content"]')
+      const chat = document.querySelector('.chat').getBoundingClientRect()
+      const rect = tooltip?.getBoundingClientRect()
+      return rect && rect.width > 0 && rect.left >= chat.left + 7 && rect.right <= chat.right - 7
+        && tooltip.scrollWidth <= tooltip.clientWidth
+    })
+  }
+  await assertTooltipInsideChat()
   await win.screenshot({ path: join(artifacts, '20-subagent-cats.png') })
   await win.evaluate(() => {
     const key = window.__praxisStore.getState().activeKey
@@ -182,6 +192,8 @@ try {
   await win.getByRole('tooltip').waitFor()
   if (!(await win.getByRole('tooltip').textContent()).includes('Queued'))
     throw new Error('keyboard tooltip must explain queued state')
+  await assertTooltipInsideChat()
+  await win.screenshot({ path: join(artifacts, '20-subagent-tooltip-focus.png') })
   await win.evaluate(() => window.__praxisSpawns.getState().remove(window.__praxisStore.getState().activeKey, 'cat-6'))
   await win.locator('[aria-label="Background agents"]').waitFor({ state: 'detached' })
 

@@ -2,6 +2,16 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-16 — Keep subagent tooltips clear of the preview
+
+Cat tooltips now align to the trigger's right edge and use the chat pane as
+their collision boundary. Their maximum width also respects the available
+space, keeping long operation labels from extending beneath the native preview.
+Extended the rail status regression with long labels and chat-bound checks for
+hover and keyboard focus; visually inspected the captures. Typecheck and the
+full unit/Electron suite pass (138/138). Targeted lint reports the pre-existing
+generic div's aria-label warning in SubagentCats.
+
 ## 2026-09-15 — Settings chevron spacing
 
 The default-model field now uses an inset decorative chevron instead of the

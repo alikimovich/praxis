@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Subagent tooltip clipping (2026-09-16) — FIXED
+
+- [x] Keep cat tooltips inside the chat pane so the native preview cannot cover
+      long labels; verify hover and keyboard focus placement.
+
 ## Desktop surfaces (2026-09-15, user-requested)
 
 - [x] Inset the default-model chevron and capture the project actions menu.

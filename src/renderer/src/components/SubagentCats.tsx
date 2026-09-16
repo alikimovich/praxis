@@ -1,3 +1,4 @@
+import { useCallback, useState } from 'react'
 import { useSpawns } from '../store'
 import CatLoader from './CatLoader'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
@@ -5,6 +6,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 /** Active children stay beside their parent chat's composer, out of the sidebar. */
 export default function SubagentCats({ sessionKey }: { sessionKey: string }): React.JSX.Element | null {
   const agents = useSpawns((s) => s.byKey[sessionKey])
+  const [boundary, setBoundary] = useState<Element | null>(null)
+  const bindBoundary = useCallback((node: HTMLDivElement | null) => {
+    setBoundary(node?.closest('.chat') ?? null)
+  }, [])
   if (!agents?.length) return null
 
   // Running work takes priority if additional operations are waiting for a slot.
@@ -13,7 +18,7 @@ export default function SubagentCats({ sessionKey }: { sessionKey: string }): Re
     .slice(0, 6)
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="ml-auto flex shrink-0 self-end items-end gap-1 pointer-events-auto" aria-label="Background agents">
+      <div ref={bindBoundary} className="ml-auto flex shrink-0 self-end items-end gap-1 pointer-events-auto" aria-label="Background agents">
         {visible.map((agent) => (
           <Tooltip key={agent.id}>
             <TooltipTrigger asChild>
@@ -28,7 +33,15 @@ export default function SubagentCats({ sessionKey }: { sessionKey: string }): Re
                 </span>
               </button>
             </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={6} className="max-w-64 break-words">
+            {/* Native preview paints above renderer portals; constrain to the chat pane. */}
+            <TooltipContent
+              side="top"
+              align="end"
+              sideOffset={6}
+              collisionBoundary={boundary}
+              collisionPadding={8}
+              className="max-w-[min(16rem,var(--radix-tooltip-content-available-width))] break-words"
+            >
               <p>{agent.label}</p>
               <p className="mt-1 opacity-70">{agent.status === 'queued' ? 'Queued · ' : ''}Click to cancel</p>
             </TooltipContent>
