@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-15 — Fix chat-render and provider-skills-menu regressions
+
+The chat-render timeout hid a renderer exception: its synthetic per-chat settings
+omitted required permissionMode, passing undefined into the native composer's
+label formatter. Completed all three fixture tuples and report page errors as
+explicit test failures. Application settings already supply this required field.
+The skills-menu test now waits for the provider restart to commit Codex before
+asserting skill discovery, instead of reading the old provider immediately.
+
+Both focused regressions pass; inspected the skills-menu screenshot. Type checks
+pass. Full unit/Electron suite: 132/133 passed, including both repaired tests.
+The unrelated spawn-comment live check raced branch cleanup; its isolated rerun
+passed the real agent edit and branch-deletion assertions. No application code
+changed.
+
 ## 2026-09-15 — Reconcile latest remote main
 
 Merged remote focus-ring, cursor, and cat-animation updates with the local

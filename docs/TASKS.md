@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Chat regression failures (2026-09-15) — SHIPPED
+
+- [x] **Repair chat-render's incomplete settings fixture and surface renderer errors.**
+- [x] **Wait for the asynchronous provider restart in provider-skills-menu.**
+
 ## Sync remote main (2026-09-15) — SHIPPED
 
 - [x] **Merge the latest remote main updates and reconcile both project logs.**

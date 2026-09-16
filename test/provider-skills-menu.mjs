@@ -22,7 +22,8 @@ try {
   await win.waitForFunction(() => window.__praxisSession.getState().projectRoot !== null)
   await win.evaluate(() => window.__praxisSession.getState().setSlashCommands([]))
   await win.locator('select[aria-label="Provider"]').selectOption({ label: 'Codex' })
-  assert.equal(await win.evaluate(() => window.__praxisSession.getState().provider), 'codex')
+  // The picker commits its value only after main restarts this chat.
+  await win.waitForFunction(() => window.__praxisSession.getState().provider === 'codex')
   await win.waitForFunction(() => window.__praxisSession.getState().slashCommands.some(s => s.name === 'menu-regression'))
   await win.fill('.composer__input', '/menu-reg')
   const item = win.locator('.slash__item').filter({ hasText: 'menu-regression' })
