@@ -2,6 +2,75 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-15 — Reconcile latest remote main
+
+Merged remote focus-ring, cursor, and cat-animation updates with the local
+native composer picker restoration. Preserved both sides of the task-log
+conflict and repaired a silently misaligned progress-log heading/body merge.
+
+Type checks pass. Full unit/Electron suite: 131/133 passed; remaining failures
+are the previously documented chat-render timeout and provider-skills-menu
+provider assertion. Startup and cat-animation tests pass; inspected the thinking
+cat screenshot. Remote candidate is an ancestor of the combined main history.
+
+## 2026-09-14 — System-accent focus rings
+
+The chat rows were inheriting Chromium's orange `outline: auto`, which paints a
+white edge as well. Native clickable controls now use one solid 2px `AccentColor`
+outline on focus-visible, inset to avoid sidebar clipping. Shared light/dark
+focus tokens use the same system color; Tailwind ring shadows are suppressed on
+these controls to avoid a second ring.
+
+Type checks and build pass. Full unit/Electron suite: 132/133 passed, with only
+the known chat-render timeout. Rebuilt after the inset adjustment, verified
+computed outline color/style/width against CSS AccentColor in both themes, and
+inspected both final screenshots: a complete blue ring with no white edge.
+
+## 2026-09-14 — Arrow cursors across controls and transparent chat actions
+
+Extended the arrow cursor to selects, links/source navigation, annotation pins,
+and shared native clickable controls. CodeMirror folding controls get a scoped
+CSS override, and the file tree gets its own shadow-DOM style override. Removed
+the background fill on chat rename/close hover while preserving the icon color
+change. Text-editing and resizing cursors retain their interaction cues.
+
+Type checks and build pass. Full unit/Electron suite: 132/133 passed, with only
+the previously documented chat-render timeout. After the final editor overrides,
+rebuilt and verified eight fold controls and twelve shadow-DOM file rows use the
+arrow. Both hovered chat actions compute a transparent background and default
+cursor; inspected the hover screenshot.
+
+## 2026-09-12 — Cat activity animation pack
+
+Saved all 12 supplied animations (60 original SVG frames, 12 timing manifests,
+and README) under the cat assets, unchanged. The composer cat loops think while
+its chat has a pending question, plays idle once after each randomized 15–30
+second rest, and jumps once on an active turn's completion. Existing working
+sprites remain in use. Error/Stop completions do not jump, chat switches reset
+playback, and reduced motion freezes sprites and disables idle/jump timers.
+Only the three newly used animations are imported into the renderer bundle.
+
+Type checks and focused lint pass. The new Electron regression passes for
+question/resume, jump/rest, occasional idle, error/Stop/background completion,
+and reduced motion; inspected all three animation screenshots. The full suite
+reported 130/133 passing: the new test initially hit Electron's unsupported
+Playwright clock API, then passed separately after switching to real timers;
+startup-intro also passed on an isolated fresh-profile rerun. The previously
+documented chat-render failure remains.
+
+## 2026-09-12 — Default arrow on buttons
+
+Replaced pointer cursors with the default arrow for shell buttons, expandable
+chat messages, editor search controls, and the preview overlay's action/submit
+buttons. Kept non-button cursor behavior (links, selects, annotation pins, and
+resize/text controls) intact.
+
+Type checks and build pass. Verified computed cursors on 15 visible shell
+buttons and inspected the smoke screenshot; editor-search passes separately.
+Full unit/Electron suite: 131/132 passed, with only the previously documented
+chat-render timeout. The initial sandboxed run could not launch Electron or
+bind test servers; reran with the required access.
+
 ## 2026-09-12 — Merge local and remote main
 
 Merged origin/main into local main, preserving the native composer pickers and

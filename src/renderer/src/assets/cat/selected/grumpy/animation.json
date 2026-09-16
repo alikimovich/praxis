@@ -1,0 +1,32 @@
+{
+  "name": "grumpy",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "loop": true,
+  "frames": [
+    {
+      "file": "grumpy-1.svg",
+      "durationMs": 200
+    },
+    {
+      "file": "grumpy-2.svg",
+      "durationMs": 250
+    },
+    {
+      "file": "grumpy-3.svg",
+      "durationMs": 130
+    },
+    {
+      "file": "grumpy-4.svg",
+      "durationMs": 180
+    },
+    {
+      "file": "grumpy-5.svg",
+      "durationMs": 130
+    },
+    {
+      "file": "grumpy-6.svg",
+      "durationMs": 350
+    }
+  ]
+}

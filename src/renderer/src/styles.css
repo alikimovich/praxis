@@ -2,6 +2,8 @@
 @import "shadcn/tailwind.css";
 @import "./chat-scroll.css";
 @import "./rail-chat-title.css";
+@import "./control-cursors.css";
+@import "./focus.css";
 @custom-variant dark (&:is(.dark *));
 
 /* Tailwind v4 + shadcn/ui tokens (new-york / neutral). Utilities & preflight live
@@ -28,9 +30,7 @@
     --destructive-foreground: oklch(0.985 0 0);
     --border-shadcn: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
-    /* Darkened from shadcn's default oklch(0.708) (#a1a1a1, ~2.6:1 on white) to
-     clear the 3:1 non-text focus-indicator threshold (v6 a11y review). */
-    --ring: oklch(0.55 0 0);
+    --ring: AccentColor;
 }
 
 @theme inline {
@@ -105,7 +105,7 @@
     --destructive-foreground: oklch(0.98 0 0);
     --border-shadcn: oklch(0.3 0 0);
     --input: oklch(0.32 0 0);
-    --ring: oklch(0.6 0 0);
+    --ring: AccentColor;
     /* app-shell tokens */
     --bg: #111113;
     --bg-subtle: #18181b;
@@ -251,7 +251,7 @@ html.vibrancy .pane--preview {
     border-radius: 8px;
     background: none;
     color: var(--text-muted);
-    cursor: pointer;
+    cursor: default;
 }
 /* Hover/active fills mix from --text so they read on ANY surface — these
    buttons now sit in the previewbar, whose card bg IS --bg-subtle. */
@@ -280,7 +280,7 @@ html.vibrancy .pane--preview {
     font-size: 12px;
     font-weight: 500;
     padding: 5px 10px;
-    cursor: pointer;
+    cursor: default;
 }
 .viewport-toggle__btn + .viewport-toggle__btn {
     border-left: 1px solid var(--border);
@@ -327,7 +327,7 @@ html.vibrancy .pane--preview {
     font-weight: 600;
     line-height: 1;
     white-space: nowrap;
-    cursor: pointer;
+    cursor: default;
 }
 
 .btn:hover:not(:disabled) {
@@ -381,7 +381,7 @@ html.vibrancy .pane--preview {
     border: none;
     background: transparent;
     color: inherit;
-    cursor: pointer;
+    cursor: default;
     font-size: 12px;
 }
 
@@ -413,7 +413,7 @@ html.vibrancy .pane--preview {
     border-radius: 6px;
     background: none;
     color: var(--text-muted);
-    cursor: pointer;
+    cursor: default;
 }
 .sidebar-toggle:hover {
     background: var(--border);
@@ -506,7 +506,7 @@ body.is-fullscreen .sidebar-toggle {
     font: inherit;
     font-size: 13px;
     color: var(--text);
-    cursor: pointer;
+    cursor: default;
     text-align: left;
 }
 .empty__recent:hover:not(:disabled) {
@@ -667,7 +667,7 @@ body.is-fullscreen .sidebar-toggle {
     min-width: 0;
     background: none;
     border: none;
-    cursor: pointer;
+    cursor: default;
     color: var(--text);
     font: inherit;
     text-align: left;
@@ -760,7 +760,7 @@ body.is-fullscreen .sidebar-toggle {
     border-radius: 6px;
     background: none;
     color: var(--rail-text);
-    cursor: pointer;
+    cursor: default;
     font: inherit;
     font-size: 12px;
     text-align: left;
@@ -855,7 +855,7 @@ body.is-fullscreen .sidebar-toggle {
     padding-left: 8px;
     border: none;
     background: none;
-    cursor: pointer;
+    cursor: default;
     font: inherit;
     font-size: 9px;
     font-weight: 600;
@@ -918,7 +918,7 @@ body.is-fullscreen .sidebar-toggle {
     border: none;
     border-radius: 6px;
     background: none;
-    cursor: pointer;
+    cursor: default;
     color: var(--rail-text);
     font: inherit;
     font-size: 12px;
@@ -1039,7 +1039,7 @@ body.is-fullscreen .sidebar-toggle {
     border-radius: 4px;
     background: none;
     color: var(--text-muted);
-    cursor: pointer;
+    cursor: default;
 }
 .rail__chat-x {
     font-size: 13px;
@@ -1047,7 +1047,7 @@ body.is-fullscreen .sidebar-toggle {
 }
 .rail__chat-x:hover,
 .rail__chat-rename:hover {
-    background: var(--bg);
+    background: transparent;
     color: var(--text);
 }
 /* Inline rename input — occupies the name's exact slot so the row doesn't shift
@@ -1116,7 +1116,7 @@ body.is-fullscreen .sidebar-toggle {
     border-radius: 4px;
     background: none;
     color: var(--text-muted);
-    cursor: pointer;
+    cursor: default;
 }
 .rail__update-dismiss:hover {
     background: var(--border);
@@ -1137,7 +1137,7 @@ body.is-fullscreen .sidebar-toggle {
     border-radius: 6px;
     background: none;
     color: var(--rail-text);
-    cursor: pointer;
+    cursor: default;
     font: inherit;
     font-size: 12px;
     text-align: left;
@@ -1202,7 +1202,7 @@ body.is-fullscreen .sidebar-toggle {
     border: none;
     background: none;
     color: var(--text-muted);
-    cursor: pointer;
+    cursor: default;
     font-size: 18px;
     line-height: 1;
 }
@@ -1253,7 +1253,7 @@ body.is-fullscreen .sidebar-toggle {
     border: 1px solid var(--border);
     background: var(--bg);
     color: var(--text);
-    cursor: pointer;
+    cursor: default;
 }
 .review__action:hover:not(:disabled) {
     background: var(--border);
@@ -1639,7 +1639,7 @@ body.is-resizing {
     border-radius: 6px;
     background: none;
     color: var(--text-muted);
-    cursor: pointer;
+    cursor: default;
 }
 .msg__action:hover {
     background: color-mix(in srgb, var(--text) 8%, transparent);
@@ -1881,7 +1881,7 @@ body.is-resizing {
     border: 1px solid var(--border);
     border-radius: 7px;
     padding: 4px 8px;
-    cursor: pointer;
+    cursor: default;
     outline: none;
 }
 
@@ -1927,7 +1927,7 @@ body.is-resizing {
     font-size: 13px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     color: var(--text);
-    cursor: pointer;
+    cursor: default;
 }
 
 .slash__item.is-active {
@@ -1962,7 +1962,7 @@ body.is-resizing {
     /* --accent flips dark↔light with the theme; --bg is its opposite, so the arrow
      always contrasts (was a hardcoded #fff that vanished on the light dark-mode accent). */
     color: var(--bg);
-    cursor: pointer;
+    cursor: default;
     transition:
         opacity 0.15s ease,
         transform 0.05s ease;
@@ -2052,7 +2052,7 @@ body.is-resizing {
 
 /* The sprite is a solid-black SVG drawn as a mask over currentColor, so it
    adopts the theme's colors (and stays crisp) in both light and dark mode.
-   CatLoader.tsx swaps the two run frames while `running`. */
+   CatLoader.tsx plays the supplied frames for each activity state. */
 .cat-loader {
     flex: 0 0 auto;
     display: inline-block;
@@ -2112,7 +2112,7 @@ body.is-resizing {
     background: transparent;
     color: var(--text-muted);
     font-size: 12px;
-    cursor: pointer;
+    cursor: default;
     padding: 2px 6px;
     border-radius: 6px;
 }
@@ -2174,7 +2174,7 @@ body.is-resizing {
     padding: 3px 9px;
     font-size: 12px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    cursor: pointer;
+    cursor: default;
     white-space: nowrap;
     max-width: 280px;
     overflow: hidden;
@@ -2307,7 +2307,7 @@ body.is-resizing {
     border-radius: 6px;
     padding: 4px 9px;
     font-size: 12px;
-    cursor: pointer;
+    cursor: default;
 }
 
 .diag__actions {
@@ -2363,6 +2363,6 @@ html.panel-host #root {
 .cm-cmdlink {
     text-decoration: underline;
     text-underline-offset: 2px;
-    cursor: pointer;
+    cursor: default;
     color: #2563eb;
 }

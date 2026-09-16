@@ -1,0 +1,32 @@
+{
+  "name": "appear",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "loop": false,
+  "frames": [
+    {
+      "file": "appear-1.svg",
+      "durationMs": 100
+    },
+    {
+      "file": "appear-2.svg",
+      "durationMs": 90
+    },
+    {
+      "file": "appear-3.svg",
+      "durationMs": 90
+    },
+    {
+      "file": "appear-4.svg",
+      "durationMs": 90
+    },
+    {
+      "file": "appear-5.svg",
+      "durationMs": 100
+    },
+    {
+      "file": "appear-6.svg",
+      "durationMs": 650
+    }
+  ]
+}

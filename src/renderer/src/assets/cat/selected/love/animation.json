@@ -1,0 +1,32 @@
+{
+  "name": "love",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "loop": true,
+  "frames": [
+    {
+      "file": "love-1.svg",
+      "durationMs": 180
+    },
+    {
+      "file": "love-2.svg",
+      "durationMs": 240
+    },
+    {
+      "file": "love-3.svg",
+      "durationMs": 240
+    },
+    {
+      "file": "love-4.svg",
+      "durationMs": 300
+    },
+    {
+      "file": "love-5.svg",
+      "durationMs": 250
+    },
+    {
+      "file": "love-6.svg",
+      "durationMs": 200
+    }
+  ]
+}

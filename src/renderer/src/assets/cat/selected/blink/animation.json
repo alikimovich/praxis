@@ -1,0 +1,24 @@
+{
+  "name": "blink",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "loop": true,
+  "frames": [
+    {
+      "file": "blink-1.svg",
+      "durationMs": 1800
+    },
+    {
+      "file": "blink-2.svg",
+      "durationMs": 80
+    },
+    {
+      "file": "blink-3.svg",
+      "durationMs": 130
+    },
+    {
+      "file": "blink-4.svg",
+      "durationMs": 80
+    }
+  ]
+}

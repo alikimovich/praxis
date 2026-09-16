@@ -1,0 +1,32 @@
+{
+  "name": "sad",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "loop": true,
+  "frames": [
+    {
+      "file": "sad-1.svg",
+      "durationMs": 300
+    },
+    {
+      "file": "sad-2.svg",
+      "durationMs": 250
+    },
+    {
+      "file": "sad-3.svg",
+      "durationMs": 200
+    },
+    {
+      "file": "sad-4.svg",
+      "durationMs": 200
+    },
+    {
+      "file": "sad-5.svg",
+      "durationMs": 150
+    },
+    {
+      "file": "sad-6.svg",
+      "durationMs": 350
+    }
+  ]
+}

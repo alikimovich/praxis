@@ -3,6 +3,35 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Sync remote main (2026-09-15) — SHIPPED
+
+- [x] **Merge the latest remote main updates and reconcile both project logs.**
+
+## System accent focus rings (2026-09-14, user-requested) — SHIPPED
+
+- [x] **Replace the orange/white browser focus outline with a single system-accent
+      ring.** Use the same accent for shared focus tokens in both themes and keep
+      the ring inside controls so sidebar clipping does not cut it off.
+
+## Control cursors and chat action hover (2026-09-14, user-requested) — SHIPPED
+
+- [x] **Use the arrow on remaining clickable controls.** Include selects, links,
+      annotation pins, editor folding controls, and the shadow-DOM file tree.
+- [x] **Remove the hover fill from chat rename and close buttons.**
+
+## Cat activity animations (2026-09-12, user-requested) — SHIPPED
+
+- [x] **Play the supplied thinking animation while a question awaits an answer.**
+- [x] **Play idle occasionally and jump once when the active task completes.**
+      Use a randomized 15–30 second rest interval, suppress completion jumps for
+      errors and Stop, reset on chat switches, and respect reduced motion.
+- [x] **Save all 12 supplied animations and their original timings for future use.**
+
+## Default button cursor (2026-09-12, user-requested) — SHIPPED
+
+- [x] **Use the default arrow on Praxis buttons.** Cover the shell, expandable
+      chat messages, and preview-overlay action buttons.
+
 ## Merge local and remote main (2026-09-12) — SHIPPED
 
 - [x] **Integrate origin/main while preserving native composer pickers.** Retain

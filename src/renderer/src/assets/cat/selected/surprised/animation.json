@@ -1,0 +1,24 @@
+{
+  "name": "surprised",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "loop": false,
+  "frames": [
+    {
+      "file": "surprised-1.svg",
+      "durationMs": 150
+    },
+    {
+      "file": "surprised-2.svg",
+      "durationMs": 180
+    },
+    {
+      "file": "surprised-3.svg",
+      "durationMs": 350
+    },
+    {
+      "file": "surprised-4.svg",
+      "durationMs": 180
+    }
+  ]
+}

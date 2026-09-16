@@ -250,7 +250,7 @@ function ClampedUserText({
       className={cn(
         "msg__text w-fit max-w-full rounded-lg border border-[var(--border-prominent)] bg-muted px-3 py-2 text-sm",
         !expanded && "msg__text--clamp",
-        clickable && "cursor-pointer",
+        clickable && "cursor-default",
       )}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
@@ -455,6 +455,8 @@ export default function ChatPanel(): React.JSX.Element {
   // follow the user into whichever chat they switch to. Switching away parks the
   // text; switching back finds it again; a chat never typed in opens blank.
   const activeChatKey = useChat((s) => s.activeKey);
+  const [catCompletion, setCatCompletion] = useState({ key: "", count: 0 });
+  const cancelledCatTurns = useRef(new Set<string>());
   // Permission/question cards are keyed by the session that raised them (see
   // `PermissionRequest.sessionKey` / `QuestionRequest.sessionKey`) — a backgrounded
   // chat's turn can still hit a gated tool call or AskUserQuestion while another
@@ -691,6 +693,10 @@ export default function ChatPanel(): React.JSX.Element {
           useSetup.getState().setVerifying(false);
         }
       } else if (event.type === "done") {
+        if (isActive && useChat.getState().isRunning && !cancelledCatTurns.current.has(key)) {
+          setCatCompletion((previous) => ({ key, count: previous.count + 1 }));
+        }
+        cancelledCatTurns.current.delete(key);
         finish(key);
         if (isActive) {
           const s = useSetup.getState();
@@ -1089,6 +1095,7 @@ export default function ChatPanel(): React.JSX.Element {
   // successfully", so clearing it stops the incoming `done` from restarting the
   // dev server + arming a (bogus) verdict against half-written config.
   const stop = (): void => {
+    cancelledCatTurns.current.add(useChat.getState().activeKey);
     const s = useSetup.getState();
     if (s.busy) {
       s.setBusy(false);
@@ -1448,7 +1455,12 @@ export default function ChatPanel(): React.JSX.Element {
           clock ticks every second, and announcing that on a loop is noise — the
           cat's own role="img" label already says whether a turn is running. */}
       <div className="chat__status">
-        <CatLoader running={isRunning} />
+        <CatLoader
+          key={activeChatKey}
+          running={isRunning}
+          questioning={questions.length > 0}
+          completion={catCompletion.key === activeChatKey ? catCompletion.count : 0}
+        />
         <RunStats />
         <SubagentCats sessionKey={activeChatKey} />
       </div>
