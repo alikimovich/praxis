@@ -1,6 +1,7 @@
-import { Pencil } from "../icons";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { Pencil } from "../icons";
 import RailChatTitle from "./RailChatTitle";
+import type { RailDragProps } from './use-rail-reorder';
 
 /**
  * What a chat row's status dot says, left of the name:
@@ -20,6 +21,7 @@ const STATUS_LABEL: Record<ChatStatus, string> = {
 interface Props {
   /** The chat's display name (auto-generated or user-chosen). */
   name: string;
+  reorder?: RailDragProps;
   status: ChatStatus;
   /** Highlight as the chat currently on screen. */
   active?: boolean;
@@ -54,6 +56,7 @@ interface Props {
  */
 export default function RailChatRow({
   name,
+  reorder,
   status,
   active,
   title,
@@ -120,6 +123,7 @@ export default function RailChatRow({
 
   return (
     <li
+      data-reorder-item={reorder ? "chat" : undefined}
       className={`rail__chat-item ${hasActions ? "rail__chat-item--actions" : ""}`}
       style={{
         "--chat-actions-width": `${actionCount * 16 + Math.max(0, actionCount - 1) * 2}px`,
@@ -136,6 +140,7 @@ export default function RailChatRow({
         <button
           type="button"
           className={`rail__chat ${active ? "rail__chat--active" : ""}`}
+          {...reorder}
           onClick={onOpen}
           aria-current={active}
           title={title ?? name}

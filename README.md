@@ -41,6 +41,11 @@ GitHub PR.
   endpoint's model catalog, and you tick which models to offer in the picker.
   Connections run on the Codex harness; the key is encrypted with the OS
   keychain and never leaves the main process.
+- **Arrange the sidebar.** Drag project names to move their entire groups, or
+  drag chats within their project's live list or History. A lifted row and drop
+  line show the move; Escape cancels and the sidebar scrolls at its edges.
+  Alt+↑/↓ reorders the focused name with the keyboard. Manual order persists
+  across reloads/restarts without changing the active chat or running sessions.
 - **Drag to reorder in the desktop preview.** Select an element, then hold
   Command (Control on Windows/Linux) and drag it among its siblings. An insertion
   line shows the drop position for columns, rows, and grids; nesting stays fixed.

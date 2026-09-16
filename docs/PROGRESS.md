@@ -2,6 +2,33 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-15 — Persistent sidebar ordering
+
+Project names now drag entire sidebar groups; live chats and History rows reorder
+within their own project/list. Native lifted drag images and before/after lines
+show the destination, edge hovering scrolls long lists, and Escape/outside drops
+cancel without writing an order. Alt+Up/Down reorders focused names, retains
+focus, and announces moves/cancellation. Rename and close remain separate buttons.
+Mounted chat-list unfold animations are settled before dragging so Chromium
+cannot replay them while a project group moves under the pointer.
+
+Manual order lives in a dedicated versioned localStorage store, independently of
+workspace project arrays, sessionKeys, active-session selection, and LRU stamps.
+New chats appear first without disturbing the established order; missing entries
+are filtered. Renderer reloads rehydrate the display order without changing
+provider session ownership or the running preview. History and live sessions
+remain separate groups and cross-project drops are rejected.
+
+Validation: type checks, build, targeted Biome checks, docs links, pure ordering
+cases, and the new Electron regression pass. The native regression covers project,
+chat, and History drops; keyboard focus; cancellation; lifecycle invariants;
+rename; reload persistence; new entries; and edge scrolling. Native drag tests
+keep the window inside the display and sustain the edge hover for macOS input
+delivery. Inspected reordered/drag screenshots and used agent-browser to verify
+keyboard moves and sidebar layouts at 390/768/1440px in light/dark themes. Ghost
+text passes APCA at 15px/600. Full unit/Electron suite: 136/137 passed; the only
+failure is the previously documented chat-render timeout.
+
 ## 2026-09-15 — Desktop 3D component inspector
 
 On `candidate`, updated by fast-forward from `main`, the selection toolbar now

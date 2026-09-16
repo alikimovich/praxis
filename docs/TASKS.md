@@ -3,6 +3,17 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Sidebar ordering (2026-09-15, user-requested) — SHIPPED
+
+- [x] **Drag projects and chats to reorder the sidebar.** Project groups, live
+      chats within a project, and History rows have a native lifted drag image,
+      before/after drop indicator, Escape cancellation, and edge auto-scroll.
+- [x] **Persist manual display order independently of session lifecycle.** Keep
+      session keys, active chat, expansion state, and LRU recency unchanged;
+      reconcile new/deleted entries and retain ordering across renderer reloads.
+- [x] **Support keyboard reordering.** Alt+Up/Down on a row name retains focus
+      and announces the move. Rename/close buttons remain separate actions.
+
 ## 3D component inspection (2026-09-15, user-requested)
 
 - [x] **Isolate a selected component in an exploded 3D workspace.** Desktop
