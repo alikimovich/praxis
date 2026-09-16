@@ -3,6 +3,15 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Desktop surfaces (2026-09-15, user-requested)
+
+- [x] Restyle shared dialogs and dropdowns with compact desktop proportions,
+      quiet light/dark surfaces, inset menu separators, and reduced-motion fades.
+- [x] Rework Settings into grouped preferences with a persistent header and a
+      scrolling form; bring history review onto the shared accessible dialog.
+- [x] Cover keyboard dismissal, focus return, small windows, and form cleanup
+      in the Electron regression suite.
+
 ## Chat-render regression (2026-09-15) — FIXED
 
 - [x] Supply the required permission mode in synthetic per-chat settings so

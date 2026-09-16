@@ -127,6 +127,7 @@ const ELECTRON = [
   'agent-history',
   'history-ui',
   'chat-render',
+  'desktop-surfaces',
   'provider-skills-menu',
   'visual-edit-agent',
   'revert-action',

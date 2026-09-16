@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
 import type { SessionRecord } from '../../../shared/api'
 import { relativeTime, useHistory } from '../store'
 
@@ -95,36 +96,16 @@ export default function SessionReview({ record, onClose, onResume }: Props): Rea
     }
   }
 
-  // Esc closes.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
   const when = full.endedAt
     ? `${relativeTime(full.startedAt)} · ran ${Math.max(1, Math.round((full.endedAt - full.startedAt) / 1000))}s`
     : relativeTime(full.startedAt)
 
   return (
-    <div className="review__backdrop" onClick={onClose}>
-      <div
-        className="review"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Session for ${full.projectName}`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="review__head">
-          <div className="review__title">
-            <span className="review__name">{full.projectName}</span>
-            <span className="review__when">{when}</span>
-          </div>
-          <button className="review__x" onClick={onClose} aria-label="Close">
-            ×
-          </button>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="review flex flex-col gap-0 overflow-hidden p-0 sm:max-w-[640px]">
+        <header className="flex shrink-0 flex-col gap-1 border-b px-5 py-4 pr-12">
+          <DialogTitle>{full.projectName}</DialogTitle>
+          <DialogDescription>{when}</DialogDescription>
         </header>
 
         <div className="review__meta">
@@ -155,7 +136,7 @@ export default function SessionReview({ record, onClose, onResume }: Props): Rea
           <div className="review__actions">
             {isComment && (
               <>
-                <button
+                <button type="button"
                   className="review__action review__action--primary"
                   onClick={apply}
                   disabled={busy !== null}
@@ -163,7 +144,7 @@ export default function SessionReview({ record, onClose, onResume }: Props): Rea
                 >
                   {busy === 'apply' ? 'Applying…' : 'Apply'}
                 </button>
-                <button
+                <button type="button"
                   className="review__action"
                   onClick={openPr}
                   disabled={busy !== null || !!full.prUrl}
@@ -171,7 +152,7 @@ export default function SessionReview({ record, onClose, onResume }: Props): Rea
                 >
                   {busy === 'pr' ? 'Opening…' : full.prUrl ? 'PR opened' : 'Open PR'}
                 </button>
-                <button
+                <button type="button"
                   className="review__action review__action--danger"
                   onClick={discard}
                   disabled={busy !== null}
@@ -182,7 +163,7 @@ export default function SessionReview({ record, onClose, onResume }: Props): Rea
               </>
             )}
             {canResume && (
-              <button
+              <button type="button"
                 className="review__action review__action--primary"
                 onClick={resume}
                 disabled={busy !== null}
@@ -200,6 +181,7 @@ export default function SessionReview({ record, onClose, onResume }: Props): Rea
             <p className="review__empty">No transcript recorded.</p>
           ) : (
             full.transcript.map((t, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: recorded transcript entries are immutable and have no IDs.
               <div key={i} className={`review__line review__line--${t.role}`}>
                 <span className="review__role">{t.role}</span>
                 <span className="review__text">{t.text}</span>
@@ -207,7 +189,7 @@ export default function SessionReview({ record, onClose, onResume }: Props): Rea
             ))
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

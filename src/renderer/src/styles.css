@@ -4,6 +4,7 @@
 @import "./rail-chat-title.css";
 @import "./control-cursors.css";
 @import "./focus.css";
+@import "./components/ui/desktop-surfaces.css";
 @custom-variant dark (&:is(.dark *));
 
 /* Tailwind v4 + shadcn/ui tokens (new-york / neutral). Utilities & preflight live
@@ -1153,62 +1154,7 @@ body.is-fullscreen .sidebar-toggle {
     color: var(--text);
 }
 
-/* v5-D — past-session review modal (plain CSS; renders over the panes, not the
-   native preview, so a normal overlay is fine). */
-.review__backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 60;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.35);
-    padding: 40px;
-}
-.review {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    max-width: 640px;
-    max-height: 80vh;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.22);
-    overflow: hidden;
-}
-.review__head {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--border);
-}
-.review__title {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-.review__name {
-    font-size: 14px;
-    font-weight: 600;
-}
-.review__when {
-    font-size: 12px;
-    color: var(--text-muted);
-}
-.review__x {
-    border: none;
-    background: none;
-    color: var(--text-muted);
-    cursor: default;
-    font-size: 18px;
-    line-height: 1;
-}
-.review__x:hover {
-    color: var(--text);
-}
+/* Past-session content lives inside the shared desktop dialog. */
 .review__meta {
     flex: 0 0 auto;
     display: flex;

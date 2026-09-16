@@ -2,6 +2,28 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-15 — Desktop dialogs, menus, and settings
+
+Shared Radix dialogs and dropdowns now use quiet opaque surfaces with a fine
+rim, broad shadow, and quick fades (reduced-motion aware). Dialogs use a lighter
+scrim, compact titles and controls, a circular close affordance, and bounded
+scrolling. Dropdowns and submenus share rounded selection rows, inset separators,
+checkmarks, and the same light/dark surface treatment. Surface tokens live in
+`src/renderer/src/components/ui/desktop-surfaces.css` and remain scoped to floating
+UI, preserving the app shell and native preview freeze contract.
+
+Settings is a compact preferences window with a persistent header, grouped
+model/connection controls, and a scrollable form body. Removed the single-tab
+strip and lengthy introductory paragraph. History review now uses the shared
+Radix dialog, gaining focus containment and consistent dismissal while keeping
+its native-preview freeze and session actions.
+
+Added `desktop-surfaces` to the Electron tier: light/dark screenshots, menu
+keyboard focus and Escape restoration, short-window form scrolling, and
+unsaved-key disposal when leaving a connection form. Checked surface-description
+contrast at 15px/500 in both themes (APCA Lc 96.6 and 95.1). Typecheck,
+build, targeted lint, and the full unit/Electron suite pass (138/138).
+
 ## 2026-09-15 — Fix chat-render regression fixture
 
 The per-chat model-switch fixtures omitted the required `permissionMode` from
