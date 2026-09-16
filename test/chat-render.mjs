@@ -43,6 +43,7 @@ try {
   })
 
   const win = await app.firstWindow()
+  win.on('pageerror', error => console.error('PAGE ERROR', error.stack))
   await win.waitForSelector('.empty__open', { timeout: 15000 })
   await win.evaluate(() => window.__praxisWorkspace.getState().openOrActivate('/tmp/praxis-test-project'))
   await win.waitForSelector('.composer__input', { timeout: 15000 })
@@ -478,13 +479,13 @@ try {
       sessionKeys: [key, newer],
       activeSessionKey: newer,
       chatSettings: {
-        [key]: { provider: 'claude', model: 'sonnet', effort: 'high' },
-        [newer]: { provider: 'codex', model: 'default', effort: 'high' }
+        [key]: { provider: 'claude', model: 'sonnet', effort: 'high', permissionMode: 'auto' },
+        [newer]: { provider: 'codex', model: 'default', effort: 'high', permissionMode: 'auto' }
       }
     })
     window.__praxisStore.getState().setActiveChat(newer)
     session.setProjectRoot('/tmp/praxis-per-chat-model')
-    session.setChatAgentSettings({ provider: 'codex', model: 'default', effort: 'high' })
+    session.setChatAgentSettings({ provider: 'codex', model: 'default', effort: 'high', permissionMode: 'auto' })
     return { key, newer }
   })
   // Peer chats remain visible even before their first message because they already

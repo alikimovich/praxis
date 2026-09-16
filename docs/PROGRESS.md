@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-15 — Fix chat-render regression fixture
+
+The per-chat model-switch fixtures omitted the required `permissionMode` from
+both stored chats and the active session. Restoring those synthetic settings
+set the permission picker label to undefined, crashing `ComposerSelect` and
+leaving a blank renderer; the visible failure was a timeout waiting for sidebar
+chat rows. Supply `auto` for all three settings objects and report renderer
+`pageerror` stacks in the test log so future crashes expose their cause.
+
+The focused `chat-render` test, `bun run typecheck`, and the complete
+`bun run test` suite pass (137/137). Visually checked the model-switch approval
+screenshot with both peer chats and the Auto picker.
+
 ## 2026-09-15 — Persistent sidebar ordering
 
 Project names now drag entire sidebar groups; live chats and History rows reorder

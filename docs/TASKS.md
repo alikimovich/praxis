@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Chat-render regression (2026-09-15) — FIXED
+
+- [x] Supply the required permission mode in synthetic per-chat settings so
+      switching chats preserves a valid permission picker; log renderer errors.
+
 ## Sidebar ordering (2026-09-15, user-requested) — SHIPPED
 
 - [x] **Drag projects and chats to reorder the sidebar.** Project groups, live
