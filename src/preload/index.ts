@@ -1,5 +1,6 @@
 import { contextBridge, type IpcRendererEvent, ipcRenderer, webUtils } from 'electron'
 import type {
+  ProjectCreateOptions,
   AgentEvent,
   AgentOptions,
   Annotation,
@@ -153,13 +154,15 @@ const api: PraxisApi = {
     detect: (root: string): Promise<DetectedProject> => ipcRenderer.invoke('project:detect', root),
     icon: (root: string): Promise<ProjectIcon | null> => ipcRenderer.invoke('project:icon', root),
     pickNew: (): Promise<string | null> => ipcRenderer.invoke('project:pick-new'),
-    create: (root: string): Promise<ProjectCreateResult> => ipcRenderer.invoke('project:create', root)
+    create: (root: string, options?: ProjectCreateOptions): Promise<ProjectCreateResult> =>
+      ipcRenderer.invoke('project:create', root, options)
   },
   devServer: {
     start: (opts: {
       root: string
       command: string
       framework?: Framework
+      installDependencies?: boolean
     }): Promise<RunningDevServer> => ipcRenderer.invoke('devserver:start', opts),
     stop: (root: string): Promise<void> => ipcRenderer.invoke('devserver:stop', root),
     isRunning: (root: string): Promise<boolean> => ipcRenderer.invoke('devserver:running', root),

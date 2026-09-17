@@ -66,6 +66,8 @@ export interface BranchResult {
 }
 
 export interface DetectedProject {
+  /** Empty project: open chat without attempting to launch a server. */
+  setupRequired?: boolean
   root: string
   name: string
   framework: Framework
@@ -90,7 +92,11 @@ export interface ProjectIcon {
   dataUrl: string
 }
 
-/** Result of `project:create` (scaffold a minimal Vite+React app, git init,
+export interface ProjectCreateOptions {
+  template: 'react' | 'empty'
+}
+
+/** Result of `project:create` (create the chosen starter, git init,
  *  install deps). `warning` = created, but a non-fatal step failed and the
  *  user must be told now (today: `git init` / the first commit — see
  *  scaffold.ts); it can be set alongside `ok: true`. */
@@ -1278,14 +1284,15 @@ export interface PraxisApi {
     icon: (root: string) => Promise<ProjectIcon | null>
     /** Save-dialog for a folder to create (New Project…). Null when cancelled. */
     pickNew: () => Promise<string | null>
-    /** Scaffold a minimal Vite+React app there, git init, install deps. */
-    create: (root: string) => Promise<ProjectCreateResult>
+    /** Create the chosen starter; empty projects open directly into setup chat. */
+    create: (root: string, options?: ProjectCreateOptions) => Promise<ProjectCreateResult>
   }
   devServer: {
     start: (opts: {
       root: string
       command: string
       framework?: Framework
+      installDependencies?: boolean
     }) => Promise<RunningDevServer>
     /** Stop the dev server for one project (others keep running). */
     stop: (root: string) => Promise<void>

@@ -56,6 +56,17 @@ try {
     console.warn('warning: git assertions skipped (no repo/identity)')
   }
 
+  const empty = join(base, 'Custom App')
+  const custom = await createProject(empty, { template: 'empty' })
+  assert(custom.ok, `empty project failed: ${custom.error}`)
+  assert(existsSync(join(empty, '.gitignore')), 'empty starter initializes git ignores')
+  assert(!existsSync(join(empty, 'package.json')), 'empty starter must not choose a framework')
+  assert(!existsSync(join(empty, 'src')), 'empty starter must not prebuild an app')
+  assert(!existsSync(join(empty, 'node_modules')), 'empty starter must not install dependencies')
+  const invalid = join(base, 'invalid')
+  const invalidResult = await createProject(invalid, { template: 'invalid' })
+  assert(!invalidResult.ok && !existsSync(invalid), 'reject invalid starter before writing')
+
   // Guard: refuses a non-empty destination.
   const taken = join(base, 'taken')
   mkdirSync(taken, { recursive: true })

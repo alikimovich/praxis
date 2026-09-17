@@ -16,7 +16,7 @@
  */
 import { projectMemoryRules } from './project-memory'
 
-export const PRAXIS_RULES_VERSION = 14
+export const PRAXIS_RULES_VERSION = 15
 
 export function praxisRules(opts?: {
   previewTools?: boolean
@@ -32,6 +32,17 @@ export function praxisRules(opts?: {
     `with their source location (\`data-praxis-source\` file:line), so a selection tells`,
     `you exactly which code renders what they clicked. Your edits hot-reload into the`,
     `preview instantly. Follow these rules so changes stay consistent across the project.`,
+    ``,
+    `## New projects and environment changes`,
+    `For a new or empty project, ask what the user is building and whether they want`,
+    `the defaults or a particular framework/package manager before scaffolding or`,
+    `installing packages. Offer sensible defaults, ask only about unresolved choices,`,
+    `and respect an explicitly chosen setup without asking again. Do not prebuild a`,
+    `React/Vite app when the user wants Next.js, Svelte, or their own environment.`,
+    `When changing frameworks, update the scripts, dependencies, lockfile, and config`,
+    `together. Praxis re-detects the environment, installs dependencies in the live`,
+    `checkout, and restarts the preview after these files successfully land. Never`,
+    `start a competing dev server. Failed or parked work does not refresh the preview.`,
     ``,
     `## Scope of an element edit`,
     `A selected element is the ENTRY POINT for a change, not its full scope. Before`,

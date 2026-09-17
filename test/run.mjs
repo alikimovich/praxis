@@ -38,6 +38,7 @@ const UNIT = [
   'html-source',
   'project-key',
   'project-create',
+  'environment-changes',
   'project-icon',
   'devserver-net',
   'xcode',
@@ -101,6 +102,7 @@ const UNIT = [
 
 // electron = the `node test/NAME.mjs` group AFTER `electron-vite build` in `test`.
 const ELECTRON = [
+  'project-setup',
   'cat-animations',
   'startup-intro',
   'browser-mode',

@@ -2,6 +2,37 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-16 — Choose project setup before scaffolding; recover environment previews
+
+New Project now asks how to start before writing application files: use the
+React/TypeScript/Vite defaults, plan Next.js or Svelte, or discuss a custom
+setup. Discussion paths create only an empty Git repository with ignores and
+open the selected provider's chat with the user's preferences. Shared provider
+rules ask about unresolved choices before scaffolding; empty projects avoid
+premature launch errors and token-scaffold offers. Preview startup failures keep
+chat available for repair, and retry preserves the conversation.
+
+Managed web previews now respond to authoritative landed environment changes,
+not the earlier provider terminal event. Manifest/lockfile changes install in
+the live checkout through its repository write queue; config changes restart
+with fresh framework/package-manager detection. Explicit packageManager fields
+win over stale migration lockfiles. Custom launch commands stay intact,
+background projects defer refresh until activated, and cancelled starts cannot
+launch after a dependency install finishes. The first landed HTML app can start
+a previously empty preview too. Instrumentation setup waits for landing before
+verification; failed/parked turns do not restart the preview.
+
+Validation: typecheck/build, new-file lint, scaffold/environment unit checks,
+and all 140 unit/Electron tests pass. Expanded final project-setup regression
+also covers custom-command retries, background deferral, initially broken
+projects, and static recovery. Inspected setup screenshots at 390/768/1440px,
+empty-chat UI, and the native preview capture. The framework-switch regression
+uses local package fixtures to test detection/install/relaunch without network
+framework downloads. Seven live checks pass (real Claude/Codex turns, controls,
+model switching, tool invocation, and style provenance); simulator e2e skips
+because Xcode is unavailable. Existing large-file lint findings match HEAD
+(40 errors in the inspected baseline and working files); new modules lint clean.
+
 ## 2026-09-16 — Keep subagent tooltips clear of the preview
 
 Cat tooltips now align to the trigger's right edge and use the chat pane as

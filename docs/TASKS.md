@@ -3,6 +3,16 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Project setup and environment changes (2026-09-16)
+
+- [x] Ask how to start before scaffolding: defaults, Next.js, Svelte, or a custom
+      setup conversation in an empty repository.
+- [x] Open empty projects in chat and retain chat when preview startup fails.
+- [x] Refresh managed web previews after landed environment changes; re-detect
+      framework/package manager, install live-checkout dependencies, preserve
+      custom commands, and defer background refreshes until activation.
+- [x] Wait for setup edits to land before verifying instrumentation.
+
 ## Subagent tooltip clipping (2026-09-16) — FIXED
 
 - [x] Keep cat tooltips inside the chat pane so the native preview cannot cover

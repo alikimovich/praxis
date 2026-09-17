@@ -1,4 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import NewProjectDialog from './components/NewProjectDialog'
+import { useNewProject } from './use-new-project'
+import type { ProjectStatus as Status } from './project-status'
+import { useEnvironmentRefresh } from './use-environment-refresh'
 import { useControlOpening } from './use-control-opening'
 import { dispatchBackgroundAgent, dispatchVisualEdit } from './background-edits'
 import { usePreviewReorder } from './use-preview-reorder'
@@ -83,12 +87,6 @@ import type {
  *  "path/File.tsx") — control-panel manifests are keyed by file, not line. */
 const fileOf = (stamp: string): string => stamp.replace(/:\d+(?::\d+)?$/, '')
 
-type Status =
-  | { kind: 'idle' }
-  | { kind: 'busy'; label: string }
-  | { kind: 'running'; name: string; url: string }
-  | { kind: 'error'; message: string }
-
 export default function App(): React.JSX.Element {
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const [log, setLog] = useState('')
@@ -97,12 +95,13 @@ export default function App(): React.JSX.Element {
   const diagRoot = useRef<string | null>(null)
   // When a launch fails we remember the folder so the user can retry with a
   // custom command (monorepos, non-standard dev scripts).
-  const [retry, setRetry] = useState<{ root: string; command: string } | null>(null)
+  const [retry, setRetry] = useState<{ root: string; command: string; installDependencies?: boolean } | null>(null)
   // How to relaunch the current preview (root + resolved dev command + framework
   // + previewKind), so we can restart the right backend after a setup/config turn.
   const launchSpec = useRef<{
     root: string
     command: string
+    customCommand?: boolean
     framework?: Framework
     previewKind: PreviewKind
   } | null>(null)
@@ -860,9 +859,11 @@ export default function App(): React.JSX.Element {
       // A custom command is assumed to be a web dev command; only auto-detection
       // can route a project to the simulator path.
       let kind: PreviewKind = 'web'
+      let setupRequired = false
       if (!command) {
         log.append('Detecting framework + package manager…')
         const project = await window.api.project.detect(root)
+        setupRequired = !!project.setupRequired
         command = project.devCommand
         name = project.name
         framework = project.framework
@@ -906,8 +907,12 @@ export default function App(): React.JSX.Element {
 
       setPreviewKind(kind)
 
-      let url: string
-      if (kind === 'simulator') {
+      let url = ''
+      if (setupRequired) {
+        launchSpec.current = { root, command: '', previewKind: 'web' }
+        await window.api.preview.reset()
+        window.api.preview.setStatus('Let’s set up your project. Tell the chat what you want to build and which environment you prefer.')
+      } else if (kind === 'simulator') {
         // iOS Simulator path (React Native / Expo). Preflight first so a non-Mac
         // or missing-Xcode host gets a clear card, not a crash.
         log.append('Checking simulator prerequisites…')
@@ -918,7 +923,7 @@ export default function App(): React.JSX.Element {
         // Ignore the detected `expo start` for the auto path — `simulator.start`
         // defaults to `expo run:ios` (build + install + launch + serve).
         const sim = await window.api.simulator.start({ root, command: commandOverride })
-        launchSpec.current = { root, command: commandOverride ?? '', framework, previewKind: kind }
+        launchSpec.current = { root, command: commandOverride ?? '', framework, previewKind: kind, customCommand: !!commandOverride }
         log.append(`Simulator preview at ${sim.url}`, 'success')
         url = sim.url
       } else {
@@ -928,7 +933,7 @@ export default function App(): React.JSX.Element {
         const server = await window.api.devServer.start({ root, command, framework })
         launchSpec.current = server.attached
           ? null
-          : { root, command, framework, previewKind: kind }
+          : { root, command, framework, previewKind: kind, customCommand: !!commandOverride }
         log.append(
           server.attached
             ? `Attached to running server at ${server.url}`
@@ -937,8 +942,8 @@ export default function App(): React.JSX.Element {
         )
         url = server.url
       }
-      await window.api.preview.load(url)
-      log.append('Preview loaded')
+      if (url) await window.api.preview.load(url)
+      log.append(url ? 'Preview loaded' : 'Ready to discuss project setup')
       // The choices on screen when the project was opened become this chat's own
       // (persisted below, so a later switch back restores what main actually runs).
       const opened = await window.api.agent.openProject(root, agentOptionsFor(chatSettings))
@@ -972,7 +977,7 @@ export default function App(): React.JSX.Element {
         if (useSession.getState().projectRoot !== root) return
         const tk = useTokens.getState()
         tk.setSet(t)
-        if (t.source === 'none' && !tk.offerDismissed) tk.setOfferNeeded(true)
+        if (!setupRequired && t.source === 'none' && !tk.offerDismissed) tk.setOfferNeeded(true)
       })
       // Can this project be instrumented for visual editing? Populates the setup
       // gate + the Styles tab's read-only guidance up front (same switch guard).
@@ -987,7 +992,7 @@ export default function App(): React.JSX.Element {
       // A fresh session — clear any turn left "running" from a previous project.
       useChat.getState().finish()
       log.append(`Ready — ${name}`, 'success')
-      setStatus({ kind: 'running', name, url })
+      setStatus(setupRequired ? { kind: 'setup', name } : { kind: 'running', name, url })
       // Snapshot this project so the rail can switch back to it without a restart.
       useWorkspace.getState().patchEntry(projectKey(root), {
         name,
@@ -1014,11 +1019,22 @@ export default function App(): React.JSX.Element {
       // already started — stop it so it isn't orphaned (the renderer would lose
       // its root once projectRoot/launchSpec are cleared).
       void window.api.devServer.stop(root)
-      void window.api.agent.closeProject(root)
       await window.api.preview.reset()
       // The user switched to a different rail entry while this launch was in
       // flight — that project now owns the screen; don't stomp its status.
       if (useWorkspace.getState().activeKey !== key) return
+      try {
+        if (useSession.getState().projectRoot !== root) {
+          const opened = await window.api.agent.openProject(root, agentOptionsFor(chatSettings))
+          if (useWorkspace.getState().activeKey !== key) return
+          useSession.getState().setProjectRoot(root)
+          if (opened.transcript.length) useChat.getState().hydrate(key, messagesFromTranscript(opened.transcript))
+        }
+        launchSpec.current = { root, command: attemptedCommand, customCommand: !!commandOverride, previewKind: 'web' }
+        useWorkspace.getState().patchEntry(key, { launchSpec: launchSpec.current, chatSettings: { [key]: chatSettings } })
+      } catch (agentError) {
+        log.append(`Could not open setup chat: ${agentError instanceof Error ? agentError.message : String(agentError)}`, 'error')
+      }
       setRetry({ root, command: attemptedCommand })
       log.append(message, 'error')
       setStatus({ kind: 'error', message })
@@ -1052,29 +1068,7 @@ export default function App(): React.JSX.Element {
     void attempt(root, undefined, !!useSession.getState().projectRoot)
   }
 
-  // Cmd+N: create a brand-new project — pick a folder, scaffold a minimal
-  // Vite+React app (git init + install), then open it like any other project,
-  // keeping whatever is already open warm.
-  const createNewProject = async (): Promise<void> => {
-    const dest = await window.api.project.pickNew()
-    if (!dest) return
-    const log = useLog.getState()
-    setStatus({ kind: 'busy', label: 'creating project…' })
-    log.append(`Creating ${dest} (scaffold + git init + install)…`, 'server')
-    const res = await window.api.project.create(dest)
-    if (!res.ok || !res.root) {
-      const message = res.error ?? 'Could not create the project.'
-      log.append(message, 'error')
-      setStatus({ kind: 'error', message })
-      return
-    }
-    // A git step that didn't work is reported HERE, not swallowed. Without it the
-    // project looks fine until Publish, which then complains that the folder isn't
-    // a repository root — a message that never mentions git and reads as a bug.
-    if (res.warning) log.append(res.warning, 'error')
-    log.append('Project created — starting its dev server…', 'success')
-    await attempt(res.root, undefined, !!useSession.getState().projectRoot)
-  }
+  const { open: newProjectOpen, close: closeNewProject, show: createNewProject, create: createChosenProject } = useNewProject(attempt, setStatus)
 
   // Open (or close) the code editor without needing a selected element. The
   // element toolbar's "code" action only appears on source-stamped elements, so
@@ -1247,20 +1241,33 @@ export default function App(): React.JSX.Element {
     }
     if (!stillActive(target.root)) return
 
+    // Pending landed environment changes are handled by useEnvironmentRefresh.
+    if (target.environmentRevision) return
     let url = target.url
-    // A warm web server can die (crash) or be LRU-suspended — relaunch it before
-    // navigating the preview to its now-stale URL (else: dead/blank frame).
     if (target.previewKind !== 'simulator' && target.launchSpec) {
       const alive = await window.api.devServer.isRunning(target.root)
       if (!stillActive(target.root)) return
       if (!alive) {
         setStatus({ kind: 'busy', label: `Restarting ${target.name}…` })
         try {
-          const server = await window.api.devServer.start({
-            root: target.launchSpec.root,
-            command: target.launchSpec.command,
-            framework: target.launchSpec.framework
-          })
+          let spec = target.launchSpec
+          if (!spec.customCommand) {
+            const detected = await window.api.project.detect(target.root)
+            if (!stillActive(target.root)) return
+            if (detected.setupRequired) {
+              await window.api.preview.reset()
+              window.api.preview.setStatus('Tell the chat what you want to build and which environment you prefer.')
+              setStatus({ kind: 'setup', name: target.name })
+              return
+            }
+            spec = { root: target.root, command: detected.devCommand, framework: detected.framework, previewKind: detected.previewKind }
+          }
+          launchSpec.current = spec
+          useWorkspace.getState().patchEntry(target.key, { launchSpec: spec, previewKind: spec.previewKind })
+          setPreviewKind(spec.previewKind)
+          const server = spec.previewKind === 'simulator'
+            ? await window.api.simulator.start({ root: spec.root })
+            : await window.api.devServer.start(spec)
           if (!stillActive(target.root)) return
           url = server.url
           useWorkspace.getState().patchEntry(target.key, { url })
@@ -1530,8 +1537,8 @@ export default function App(): React.JSX.Element {
   // the build config (Vite/SvelteKit read it only at boot, so a page reload alone
   // won't apply the new source-stamping plugin). The post-restart readiness report
   // is what verifies the stamps actually fired (see the readiness effect).
-  const restartPreview = async (): Promise<void> => {
-    const spec = launchSpec.current
+  const restartPreview = async (installDependencies = false): Promise<void> => {
+    let spec = launchSpec.current
     if (!spec) {
       // We don't own this server (attached to one the user already had running) —
       // we can't restart it, and a page reload won't apply a config change. Be
@@ -1553,23 +1560,38 @@ export default function App(): React.JSX.Element {
     setSelected(null)
     setStatus({ kind: 'busy', label: 'Restarting preview…' })
     try {
+      if (!spec.customCommand) {
+        const project = await window.api.project.detect(root)
+        if (switched()) return
+        if (project.setupRequired) {
+          setStatus({ kind: 'setup', name })
+          return
+        }
+        spec = { root, command: project.devCommand, framework: project.framework, previewKind: project.previewKind }
+        launchSpec.current = spec
+        useWorkspace.getState().patchEntry(projectKey(root), { launchSpec: spec, previewKind: spec.previewKind })
+        setPreviewKind(spec.previewKind)
+      }
       let url: string
       if (spec.previewKind === 'simulator') {
         log.append('Restarting the simulator to apply the new config…')
         await window.api.simulator.stop()
         if (switched()) return
+        await window.api.devServer.stop(root)
         const sim = await window.api.simulator.start({
           root: spec.root,
-          command: spec.command || undefined
+          command: spec.customCommand ? spec.command : undefined
         })
         url = sim.url
       } else {
         log.append('Restarting dev server to apply the new config…')
+        await window.api.simulator.stop()
         await window.api.devServer.stop(spec.root)
         if (switched()) return
-        const server = await window.api.devServer.start(spec)
+        const server = await window.api.devServer.start({ ...spec, installDependencies })
         url = server.url
       }
+      useWorkspace.getState().patchEntry(projectKey(root), { url })
       if (switched()) return
       await window.api.preview.load(url)
       log.append(`Preview restarted at ${url}`, 'success')
@@ -1585,9 +1607,13 @@ export default function App(): React.JSX.Element {
       useSetup.getState().setStatus(`Couldn't restart the preview after setup: ${message}`)
       log.append(message, 'error')
       await window.api.preview.reset()
+      useWorkspace.getState().patchEntry(projectKey(root), { url: null, dependenciesPending: installDependencies })
+      setRetry({ root, command: spec.command, installDependencies })
       setStatus({ kind: 'error', message })
     }
   }
+
+  useEnvironmentRefresh(restartPreview)
 
   const stop = async (): Promise<void> => {
     setSelectMode(false)
@@ -1780,7 +1806,9 @@ export default function App(): React.JSX.Element {
   )
 
   const hint =
-    status.kind === 'idle'
+    status.kind === 'setup'
+      ? `${status.name} · setting up`
+      : status.kind === 'idle'
       ? 'no project open'
       : status.kind === 'busy'
         ? status.label
@@ -2119,7 +2147,14 @@ export default function App(): React.JSX.Element {
                   onSubmit={(e) => {
                     e.preventDefault()
                     const cmd = String(new FormData(e.currentTarget).get('cmd') ?? '').trim()
-                    if (cmd && retry) void attempt(retry.root, cmd)
+                    if (!cmd || !retry) return
+                    if (useSession.getState().projectRoot === retry.root && launchSpec.current) {
+                      if (cmd !== launchSpec.current.command) {
+                        launchSpec.current = { root: retry.root, command: cmd, previewKind: 'web', customCommand: true }
+                        useWorkspace.getState().patchEntry(projectKey(retry.root), { launchSpec: launchSpec.current })
+                      }
+                      void restartPreview(!!retry.installDependencies)
+                    } else void attempt(retry.root, cmd)
                   }}
                 >
                   <span className="previewcard__errtext" title={status.message}>
@@ -2196,6 +2231,7 @@ export default function App(): React.JSX.Element {
       <FeedbackDialog />
       <ConnectDialog />
       {/* v10: app settings (Cmd+, / the model picker's "Manage providers…"). */}
+      <NewProjectDialog key={String(newProjectOpen)} open={newProjectOpen} onClose={closeNewProject} onCreate={(setup, details) => void createChosenProject(setup, details)} />
       <SettingsDialog />
       <ProjectMemoryDialog
         root={memoryTarget?.root ?? null}

@@ -92,3 +92,18 @@ This handoff stays out of the displayed/saved transcript and does not reuse a
 previous provider's SDK session id. Past image bytes and full tool outputs are
 not present in the transcript and are not replayed. Large histories may reach the
 selected model's context limit; Praxis does not silently truncate the conversation.
+
+## New-project setup conversations
+
+New Project offers the deterministic React/Vite starter or an empty Git repository
+for Next.js, Svelte, or a custom environment. Discussion choices submit a short
+planning request to the selected provider. Shared Praxis rules ask for unresolved
+project/environment choices before scaffolding; an explicit choice is not asked
+again. Claude can use its question cards; Codex and gateways ask in ordinary chat.
+The model's conversational behavior remains prompt-guided. Creating the empty
+repository itself does not install packages or choose a framework.
+
+Preview refresh is provider-independent once edits land: manifest/lockfile changes
+install dependencies in the live checkout, framework config changes restart the
+managed web preview, and both re-detect the current launch settings. The provider's
+terminal event alone does not prove that private edits reached the live checkout.

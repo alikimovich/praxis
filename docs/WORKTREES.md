@@ -118,3 +118,19 @@ Implementation: `src/main/publish-reconcile.ts`, integrated by
 Model/provider changes keep the selected chat's worktree and require confirmation
 when the chat contains messages. The replacement session receives a one-time
 recorded conversation handoff on its next turn; sibling chats are untouched.
+
+## Environment changes and preview startup
+
+The renderer refreshes a managed web preview after authoritative `isolation:merged`
+or applied `spawn-finished` events containing manifests, lockfiles, or framework
+config changes. A provider's earlier `done` and parked/failed outcomes do not
+trigger this refresh. Background projects retain pending refreshes until activated.
+An empty project can open its chat before it has a dev server or application files.
+
+For dependency changes, the preview runner installs in the live checkout through
+its repository write queue before starting the server. Git does not transfer a
+worktree-local `node_modules` directory. Auto-detected commands/frameworks are
+resolved again; explicit custom launch commands retain their override. Preview
+startup failures leave chat available for repair and expose a retry command.
+This refresh covers landed Git-root work; external file edits and non-isolated
+turns still depend on the framework's own reload behavior or a manual restart.

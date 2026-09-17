@@ -17,8 +17,10 @@ const assert = (cond, msg) => {
 const r = praxisRules()
 assert(typeof r === 'string' && r.length > 0, 'rules render to a non-empty string')
 assert(typeof PRAXIS_RULES_VERSION === 'number', 'version is a number')
-assert(PRAXIS_RULES_VERSION === 14, 'version bumped to 14')
+assert(PRAXIS_RULES_VERSION === 15, 'version bumped to 15')
 assert(r.includes(`v${PRAXIS_RULES_VERSION}`), 'rules carry the version marker')
+assert(r.includes('before scaffolding or'), 'new projects ask about unresolved setup choices')
+assert(r.includes('after these files successfully land'), 'environment refresh follows landing')
 // v3 naming — the product is Praxis in the rule text now.
 assert(/praxis/i.test(r), 'names the product Praxis')
 assert(!/\bdsgn operating rules\b/i.test(r), 'no stale "dsgn operating rules" header')

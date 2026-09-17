@@ -14,7 +14,7 @@ import {
   webContents
 } from 'electron'
 import { join } from 'path'
-import type { RecentMenuEntry } from '../shared/api'
+import type { ProjectCreateOptions, RecentMenuEntry } from '../shared/api'
 // Channel names for the main ⇄ preview-preload conversation. Declared once in
 // shared/ and imported by both ends — see the header there.
 import {
@@ -870,8 +870,7 @@ function registerProjectIpc(): void {
     return res.canceled ? null : (res.filePaths[0] ?? null)
   })
 
-  // New project: a save dialog picks the folder-to-create, then the scaffold
-  // writes a minimal Vite+React app, git-inits it, and installs dependencies.
+  // After the setup choice, pick a folder and create the selected starter.
   ipcMain.handle('project:pick-new', async (): Promise<string | null> => {
     if (!mainWindow) return null
     const res = await dialog.showSaveDialog(mainWindow, {
@@ -883,7 +882,9 @@ function registerProjectIpc(): void {
     })
     return res.canceled ? null : (res.filePath ?? null)
   })
-  ipcMain.handle('project:create', (_e, root: string) => createProject(root))
+  ipcMain.handle('project:create', (_e, root: string, options?: ProjectCreateOptions) =>
+    createProject(root, { template: options?.template ?? 'react' })
+  )
   // The project's own favicon for its rail row. Cheap + cached in main, and
   // read from the source tree rather than the preview, so a project that has
   // never been run still shows its icon.

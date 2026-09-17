@@ -579,6 +579,8 @@ export const useSession = create<SessionState>((set) => ({
  */
 /** How to relaunch a project's preview (used to restart it after a config edit). */
 export interface LaunchSpec {
+  /** Preserve user-entered commands; auto-detected launches are re-detected. */
+  customCommand?: boolean
   root: string
   command: string
   framework?: Framework
@@ -586,6 +588,8 @@ export interface LaunchSpec {
 }
 
 export interface ProjectEntry {
+  environmentRevision?: number
+  dependenciesPending?: boolean
   /** Absolute repo root as opened. */
   root: string
   /** Canonical key (`projectKey(root)`) — the dedupe + map identity. */

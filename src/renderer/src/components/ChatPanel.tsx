@@ -1,3 +1,4 @@
+import { environmentChanges } from "../../../shared/environment-changes";
 import { ComposerSelect } from "./ComposerSelect";
 import { MessageAttachments } from "./MessageAttachments";
 import ModelSwitchDialog from "./ModelSwitchDialog";
@@ -455,6 +456,7 @@ export default function ChatPanel(): React.JSX.Element {
   const activeChatKey = useChat((s) => s.activeKey);
   const [catCompletion, setCatCompletion] = useState({ key: "", count: 0 });
   const cancelledCatTurns = useRef(new Set<string>());
+  const setupAwaitingLanding = useRef(new Set<string>());
   // Permission/question cards are keyed by the session that raised them (see
   // `PermissionRequest.sessionKey` / `QuestionRequest.sessionKey`) — a backgrounded
   // chat's turn can still hit a gated tool call or AskUserQuestion while another
@@ -656,6 +658,7 @@ export default function ChatPanel(): React.JSX.Element {
       const key = event.projectKey ?? "";
       const isActive = key === useChat.getState().activeKey;
       if (event.type === "delta") {
+        setupAwaitingLanding.current.delete(key);
         appendDelta(event.text, key);
       } else if (event.type === "title") {
         // Auto-generated chat name (main summarised the conversation) — the rail
@@ -671,6 +674,7 @@ export default function ChatPanel(): React.JSX.Element {
           key,
         );
       } else if (event.type === "error") {
+        setupAwaitingLanding.current.delete(key);
         // A Claude auth failure gets a short line pointing at the (Claude-specific)
         // onboarding banner. Non-Claude backends (Codex/Gemini) have no such banner
         // and emit a descriptive "install the CLI + log in" message — show that as-is
@@ -702,10 +706,13 @@ export default function ChatPanel(): React.JSX.Element {
           // the dev server only picks up on a full restart. Arm verification and ask
           // App to restart + reload the preview. Normal chat turns leave it alone.
           if (s.busy) {
-            s.setVerifying(true);
-            s.setRestartRequested(true);
+            if (useChat.getState().byKey[key]?.isolation === "live") {
+              s.setVerifying(true);
+              s.setRestartRequested(true);
+            } else setupAwaitingLanding.current.add(key);
+            s.setBusy(false);
           }
-          s.setBusy(false);
+          // Isolated chats verify on `merged`; no-change turns still leave busy.
         }
       } else if (event.type === "isolation") {
         // v9: this chat's per-turn worktree merge — drives the header chip.
@@ -720,6 +727,12 @@ export default function ChatPanel(): React.JSX.Element {
             event.files,
           );
         if (event.state === "merged") {
+          if (setupAwaitingLanding.current.delete(key) && isActive) {
+            const setup = useSetup.getState();
+            setup.setBusy(false);
+            setup.setVerifying(true);
+            if (!environmentChanges(event.files ?? []).restart) setup.setRestartRequested(true);
+          }
           // No active streaming message exists post-`done` (appendStatus needs
           // one) — a plain note is the subtle line instead. Append it FIRST so the
           // revert group below lands on this note (now the last assistant message).
@@ -731,6 +744,11 @@ export default function ChatPanel(): React.JSX.Element {
           if (event.group && event.revertable !== false)
             useChat.getState().tagRevert(key, event.group);
         } else if (event.state === "parked") {
+          setupAwaitingLanding.current.delete(key);
+          if (isActive) {
+            useSetup.getState().setBusy(false);
+            useSetup.getState().setVerifying(false);
+          }
           // The in-chat ConflictCard (driven by `isolation === 'parked'`) now explains
           // this and offers Resolve/Discard — no text note needed. Still refresh the
           // sidebar so the parked chat's badge/record reflects it if it's showing.

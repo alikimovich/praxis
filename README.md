@@ -10,6 +10,13 @@ GitHub PR.
 
 ## What it does
 
+- **Choose how a new project starts.** New Project asks whether to use the
+  React/TypeScript/Vite defaults, plan Next.js or Svelte, or discuss your own
+  environment. The discussion paths initialize an empty repository and open chat
+  before creating an app. After environment changes land, Praxis re-detects the
+  framework, installs dependencies in the preview checkout, and restarts the web
+  preview. Custom launch commands are preserved; startup errors keep chat available.
+
 - **Live preview of your repo.** Open a folder → Praxis detects the framework
   and package manager, boots that repo's dev server, and previews it in a
   native `WebContentsView`. It self-heals if the dev server dies and restarts.

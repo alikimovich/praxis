@@ -2,10 +2,11 @@ import { execFile } from 'child_process'
 import { mkdir, readdir, writeFile } from 'fs/promises'
 import { basename, join } from 'path'
 import { promisify } from 'util'
+import type { ProjectCreateOptions } from '../shared/api'
 
 /**
- * Create a brand-new project from praxis: a minimal Vite + React + TS app written
- * directly (no network templates, deterministic), then `git init` + first commit
+ * Create a new project: either an empty repository for a setup conversation,
+ * or a minimal Vite + React + TS app written directly (no network templates, deterministic), then `git init` + first commit
  * and a dependency install (bun if available, else npm). Pure node (no electron)
  * so it's unit-testable against a temp dir.
  */
@@ -156,8 +157,11 @@ async function hasBun(): Promise<boolean> {
 
 export async function createProject(
   root: string,
-  opts: { install?: boolean } = {}
+  opts: { install?: boolean; template?: ProjectCreateOptions['template'] } = {}
 ): Promise<CreateProjectResult> {
+  if (opts.template && !['react', 'empty'].includes(opts.template)) {
+    return { ok: false, error: 'Unknown project starter.' }
+  }
   // Never scaffold into a folder that already has content.
   try {
     const entries = await readdir(root)
@@ -170,8 +174,11 @@ export async function createProject(
 
   const name = packageName(root)
   try {
-    await mkdir(join(root, 'src'), { recursive: true })
-    for (const [file, content] of Object.entries(templateFiles(name))) {
+    const files = opts.template === 'empty'
+      ? { '.gitignore': 'node_modules\n.next\n.svelte-kit\ndist\nbuild\n.env\n.env.*\n!.env.example\n.DS_Store\n' }
+      : templateFiles(name)
+    await mkdir(opts.template === 'empty' ? root : join(root, 'src'), { recursive: true })
+    for (const [file, content] of Object.entries(files)) {
       await writeFile(join(root, file), content, 'utf8')
     }
   } catch (e) {
@@ -211,7 +218,7 @@ export async function createProject(
     }
   }
 
-  if (opts.install !== false) {
+  if (opts.template !== 'empty' && opts.install !== false) {
     const pm = (await hasBun()) ? 'bun' : 'npm'
     try {
       await execFileP(pm, ['install'], {
