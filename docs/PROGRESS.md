@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-16 — Harden reduced-motion cat regression
+
+The prior Electron window closure did not reproduce in the original focused
+run. Replaced its final 31-second sleep with observation of real idle timers:
+normal rest schedules one, reduced-motion completion schedules none, and enabling
+reduced motion during rest cancels the pending timer. Frame timings and the real
+idle-animation check remain unchanged; application code is untouched.
+
+Type checks, focused cat test, and the full unit/Electron suite pass (133/133).
+Inspected the idle screenshot. The optional spawn-comment live portion self-skipped
+after no edit landed. The cause of the earlier window closure remains unconfirmed;
+the revised test removes the long wait where it occurred and strengthens timer
+cleanup coverage.
+
 ## 2026-09-16 — Pull latest candidate updates
 
 Merged origin/candidate's sentence-case sidebar headings while preserving local

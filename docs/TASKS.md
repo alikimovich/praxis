@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Cat animation test reliability (2026-09-16) — SHIPPED
+
+- [x] **Replace the long reduced-motion sleep with idle-timer assertions.** Check
+      suppression and cancellation while retaining real sprite timing coverage.
+
 ## Candidate remote sync (2026-09-16) — SHIPPED
 
 - [x] **Pull the latest sentence-case sidebar headings and preserve local commits.**
