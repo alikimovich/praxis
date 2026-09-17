@@ -1885,11 +1885,15 @@ body.is-resizing {
     resize: none;
     border: none;
     background: transparent;
-    padding: 12px 14px 4px;
+    scrollbar-width: none;
     font: inherit;
     font-size: 14px;
     line-height: 1.45;
     outline: none;
+}
+
+.composer__input::-webkit-scrollbar {
+    display: none;
 }
 
 /* Circular send button, pinned to the right of the control bar. */
@@ -1900,8 +1904,6 @@ body.is-resizing {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
     border: none;
     border-radius: 50%;
     background: var(--accent);

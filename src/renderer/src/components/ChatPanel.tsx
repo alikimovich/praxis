@@ -1545,11 +1545,9 @@ export default function ChatPanel(): React.JSX.Element {
             <Inspector element={selected} onClear={() => setSelected(null)} />
           )}
           {attachments.length > 0 && (
-            /* w-full: the InputGroup is a flex COLUMN with `items-center`, so a
-               shrink-to-fit row would sit centered above the textarea. Full
-               width + the textarea's own 14px left padding lines the chips up
-               with the prompt text (same trick as Inspector's pill row). */
-            <div className="composer__attachments flex w-full flex-wrap gap-1.5 pl-[14px] pr-3 pt-2">
+            /* Full width keeps attachments aligned with the prompt. The textarea
+               supplies the matching 8px gap below the attachment row. */
+            <div className="composer__attachments flex w-full flex-wrap gap-1.5 px-2 pt-2">
               {attachments.map((a) => (
                 <div
                   key={a.id}
@@ -1616,7 +1614,7 @@ export default function ChatPanel(): React.JSX.Element {
           <textarea
             ref={inputRef}
             data-slot="input-group-control"
-            className="composer__input"
+            className="composer__input p-2"
             placeholder="Ask Praxis  (/ for skills)"
             value={input}
             rows={2}
@@ -1625,7 +1623,7 @@ export default function ChatPanel(): React.JSX.Element {
             onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
             onPaste={onPaste}
           />
-          <InputGroupAddon align="block-end" className="gap-1">
+          <InputGroupAddon align="block-end" className="gap-1 px-2 pt-0 pb-2">
             {/* Keep the compact toolbar on one line. The three selectors fit their selected
                 labels and may shrink/truncate, so a long provider or model name never
                 pushes the send button off the edge or wraps under the first row. */}
@@ -1699,7 +1697,7 @@ export default function ChatPanel(): React.JSX.Element {
               <Button
                 type="button"
                 size="icon"
-                className="composer__send composer__send--stop shrink-0"
+                className="composer__send composer__send--stop size-7 shrink-0"
                 onClick={stop}
                 aria-label="Stop"
                 title="Stop"
@@ -1711,7 +1709,7 @@ export default function ChatPanel(): React.JSX.Element {
               <Button
                 type="button"
                 size="icon"
-                className="composer__send shrink-0"
+                className="composer__send size-7 shrink-0"
                 onClick={() => send()}
                 disabled={switchingModel || (!input.trim() && attachments.length === 0)}
                 aria-label="Send message"

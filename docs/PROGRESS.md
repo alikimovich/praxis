@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-17 — Compact chat composer spacing
+
+The composer now uses 8px content and toolbar insets, with matching space above,
+left of, and below attached files. Send and Stop use the shared 28px size token.
+The draft scrollbar is hidden while long drafts retain wheel/keyboard scrolling
+and the existing six-line height cap. Padding and button dimensions use Tailwind
+utilities rather than the legacy CSS rules.
+
+Validation: typecheck passes; inspected attached-file and narrow-composer captures
+from the passing chat-render check. The full suite passed 140/142: startup-intro
+timed out waiting for its fade phase, and spawn-comment failed a branch-cleanup
+assertion. The isolated spawn-comment rerun passes. The first sandboxed suite could not
+launch Electron; the reported full run used the required desktop access.
+
 ## 2026-09-17 — Refresh previews after ordinary local branch switches
 
 The local branch dropdown and named work-branch switch now request an environment

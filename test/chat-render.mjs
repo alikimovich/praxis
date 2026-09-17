@@ -696,6 +696,8 @@ try {
   if (!cardText.includes('dropped-notes.txt')) {
     throw new Error(`dropped file card should show its name: ${cardText}`)
   }
+  await win.fill('.composer__input', 'big section of the presentation, and small squares presenting the rest of the articles. for now the all of them should be just squares for now. then when i open an article, they should go to the left, and transform in a kind of vertical timeline/navigation')
+  await win.locator('.composer').screenshot({ path: join(artifacts, '04d-composer-file-spacing.png') })
   // Send through the real composer, with transport stubbed to avoid a provider turn.
   await app.evaluate(({ ipcMain }) => {
     ipcMain.removeHandler('agent:send')

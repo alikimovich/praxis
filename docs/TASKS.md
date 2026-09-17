@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Compact chat composer (2026-09-17)
+
+- [x] Hide the draft scrollbar, equalize attachment spacing at 8px, reduce content
+      and control insets to 8px, and size Send/Stop to 28×28px.
+
 ## Local branch preview refresh (2026-09-17)
 
 - [x] Refresh the preview after ordinary local-branch and named work-branch switches.
