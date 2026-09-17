@@ -25,7 +25,8 @@ import {
   PREVIEW_SET_PINS,
   PREVIEW_SET_STATUS
 } from '../shared/preview-channels'
-import { registerAgentIpc } from './agent'
+import { projectHasRunningAgents, registerAgentIpc } from './agent'
+import { registerGitRemoteIpc } from './git-remote'
 import { registerAnnotationsIpc } from './annotations'
 import { registerControlsIpc } from './control-panels'
 import { registerDevServerIpc } from './devserver'
@@ -1006,6 +1007,7 @@ app.whenReady().then(async () => {
   registerGithubIpc()
   registerTokensIpc()
   registerSetupIpc()
+  registerGitRemoteIpc(ipcMain, projectHasRunningAgents)
   ipcMain.handle('git:ensure', (_e, root: string) => ensureBranch(root))
   ipcMain.handle('git:set', (_e, root: string, name: string) => switchBranch(root, name))
   ipcMain.handle('git:list', (_e, root: string) => listBranches(root))

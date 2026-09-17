@@ -195,6 +195,14 @@ try {
     fail('RPC accepted a repository outside the server root')
   }
 
+  for (const [channel, extra] of [
+    ['git:remote-status', [true]],
+    ['git:remote-update', [{ action: 'pull', ref: 'refs/remotes/origin/main', expectedBranch: 'main' }]]
+  ]) {
+    const outside = await rpc(channel, [root, ...extra])
+    if (outside.status !== 400 || outside.body.ok !== false) fail(`${channel} escaped the server root`)
+  }
+
   const detected = await rpc('project:detect', [fixture])
   if (
     !detected.body.ok ||

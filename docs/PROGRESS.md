@@ -2,6 +2,31 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-16 — Fetch, pull, and switch remote project branches
+
+The current-branch menu now opens Git updates in desktop and browser mode.
+Fetch discovers/prunes remote branches without changing project files. Pull
+fetches the selected remote and merges its branch into the current branch,
+preserving local commits. Switch creates a tracking branch or opens an existing
+local branch without resetting it. Successful file changes refresh the preview;
+manifest and lockfile changes also request dependency installation.
+
+Repository writes use the existing queue. Updates reject active project agents,
+stale branch selections, dirty project files, and unfinished Git operations.
+Conflicting pulls abort their merge back to the clean starting checkout. Browser
+commands remain scoped to the opened repository. Runtime sidecars do not block
+updates; Git still protects untracked file collisions.
+
+Validation: typecheck/build and real bare-remote unit regressions pass, including
+divergent commits, conflict recovery, dirty/busy guards, remote pruning, existing
+local branch preservation, and an unavailable unrelated remote. The full suite
+passed 141/142 checks; startup-intro failed its existing localhost-only native
+view lookup. A diagnostic rerun accepting all loopback hosts also exposed a
+preview-width failure during the intro fade; this unrelated issue remains open.
+Final targeted Git UI and browser-mode checks cover fetch-only behavior, pull,
+tracking checkout, automatic preview refresh, and repository scope. Inspected
+Git dialog captures at narrow/tablet/desktop widths and the native preview.
+
 ## 2026-09-16 — Choose project setup before scaffolding; recover environment previews
 
 New Project now asks how to start before writing application files: use the

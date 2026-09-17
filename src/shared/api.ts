@@ -65,6 +65,26 @@ export interface BranchResult {
   error?: string
 }
 
+export interface GitRemoteStatus {
+  localBranches: string[]
+  current: string | null
+  remotes: string[]
+  upstream: string | null
+  branches: { ref: string; remote: string; branch: string; label: string }[]
+}
+export interface GitRemoteAction {
+  action: 'pull' | 'checkout'
+  ref: string
+  expectedBranch: string
+}
+export interface GitRemoteResult {
+  ok: boolean
+  branch: string | null
+  files: string[]
+  changed: boolean
+  message: string
+}
+
 export interface DetectedProject {
   /** Empty project: open chat without attempting to launch a server. */
   setupRequired?: boolean
@@ -1305,6 +1325,8 @@ export interface PraxisApi {
     onLog: (cb: (line: string) => void) => () => void
   }
   git: {
+    remoteStatus: (root: string, fetch?: boolean) => Promise<GitRemoteStatus>
+    remoteUpdate: (root: string, action: GitRemoteAction) => Promise<GitRemoteResult>
     /** Ensure work happens on a `praxis/*` branch (creates one off HEAD if needed). */
     ensure: (root: string) => Promise<BranchResult>
     /** Switch to / create a specific branch (name is coerced to `praxis/<…>`). */

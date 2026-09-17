@@ -134,3 +134,24 @@ resolved again; explicit custom launch commands retain their override. Preview
 startup failures leave chat available for repair and expose a retry command.
 This refresh covers landed Git-root work; external file edits and non-isolated
 turns still depend on the framework's own reload behavior or a manual restart.
+
+## Pulling remote updates and switching branches
+
+The branch menu's **Git updates…** panel fetches configured remotes, pulls a
+selected remote-tracking branch into the current branch, or opens a remote branch
+locally. Pull explicitly uses a merge, preserving local commits; it does not
+rebase, force-reset, push, or silently stash. A conflicting merge is aborted back
+to the clean starting tree. New local branches track the selected remote branch;
+existing local branches are switched to without resetting or repointing them.
+Pull afterward to update an existing local branch.
+
+These operations run through the repository write queue and reject active project
+agents, uncommitted project files, in-progress Git operations, and stale current-
+branch selections. Untracked runtime sidecars do not block updates; Git retains
+its own protection against overwriting untracked incoming paths. Fetch is safe
+while agents work and does not alter the checkout. Remote references are refreshed
+and validated before mutations. Browser mode enforces the same opened-root scope.
+
+Successful pull/checkout results update branch metadata and request a preview
+restart, installing dependencies when manifests/lockfiles changed. The next chat
+turn uses the existing live-to-worktree synchronization to pick up the new tree.

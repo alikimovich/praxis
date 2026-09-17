@@ -3,6 +3,15 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Git updates and remote branches (2026-09-16)
+
+- [x] Add Git updates to the branch menu: fetch remotes, pull a selected remote
+      branch into the current branch, and check out remote branches locally.
+- [x] Preserve local branches and commits; reject dirty trees, active agents,
+      stale branch selections, and existing Git operations; abort conflicting pulls.
+- [x] Serialize with the repository writer and refresh previews after changes;
+      expose the same root-scoped controls in browser mode.
+
 ## Project setup and environment changes (2026-09-16)
 
 - [x] Ask how to start before scaffolding: defaults, Next.js, Svelte, or a custom
@@ -1076,3 +1085,5 @@ Ranked by leverage. Deferred items note *why* they're not auto-completable.
       `PraxisApi`, `.praxis/`, `praxis/*` branches, `<userData>/praxis`. Clean break for
       stamped target repos (re-run setup); legacy shims cover uninstall, old work
       branches, and one-time sidecar/userData migration. See PROGRESS 2026-07-17.
+
+- [ ] Fix startup-intro regression: recognize localhost native previews and keep the restored preview hidden throughout the intro crossfade (observed during Git-update verification, 2026-09-16).

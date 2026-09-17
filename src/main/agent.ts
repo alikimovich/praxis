@@ -303,6 +303,20 @@ const spawnQueue: QueuedSpawn[] = []
 // `await`) so the reservation lands before control ever yields back to the
 // event loop — the same tick as the cap check both callers just did.
 const startingCounts = new Map<string, number>()
+/** Git updates must not move the live branch beneath an active project turn. */
+export function projectHasRunningAgents(root: string): boolean {
+  const key = projectKey(root)
+  return (
+    [...runningKeys].some((sessionKey) => {
+      const record = sessions.get(sessionKey)?.record
+      return record && projectKey(record.projectRoot) === key
+    }) ||
+    [...spawns.values()].some((spawn) => projectKey(spawn.parentRoot) === key) ||
+    spawnQueue.some((spawn) => projectKey(spawn.root) === key) ||
+    (startingCounts.get(key) ?? 0) > 0
+  )
+}
+
 function reserveSpawnSlot(parentKey: string): void {
   startingCounts.set(parentKey, (startingCounts.get(parentKey) ?? 0) + 1)
 }

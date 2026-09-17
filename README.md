@@ -23,6 +23,11 @@ GitHub PR.
   Plain HTML/CSS/JS folders (no package.json or build step) are served by a
   built-in static server with live-reload; anything Praxis can't auto-launch
   prompts for a custom command.
+- **Pull updates and remote branches.** Click the current branch → **Git updates…**
+  to fetch branches from GitHub or another Git remote, merge a selected remote
+  branch into the current branch, or switch to a local tracking branch. Existing
+  local branches are preserved. Pull conflicts restore the clean starting tree;
+  successful updates refresh the preview, including changed dependencies.
 - **Local browser mode.** `praxis serve /path/to/repo` runs the same workspace
   engine and React UI on loopback without opening a desktop window. The preview
   is isolated behind a browser gateway and supports source-aware element selection;

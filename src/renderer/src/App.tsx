@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import NewProjectDialog from './components/NewProjectDialog'
+import GitUpdatesDialog from './components/GitUpdatesDialog'
+import { environmentChanges } from '../../shared/environment-changes'
 import { useNewProject } from './use-new-project'
 import type { ProjectStatus as Status } from './project-status'
 import { useEnvironmentRefresh } from './use-environment-refresh'
@@ -200,6 +202,7 @@ export default function App(): React.JSX.Element {
   const chatHidden = useWorkspace((s) => s.chatHidden)
   const branch = useSession((s) => s.branch)
   const [editingBranch, setEditingBranch] = useState(false)
+  const [gitUpdatesRoot, setGitUpdatesRoot] = useState<string | null>(null)
   const [branches, setBranches] = useState<string[]>([])
   // Overlay menus are CONTROLLED and wait for the preview freeze-frame to be
   // ready before opening — otherwise they render behind the native view for the
@@ -1972,6 +1975,10 @@ export default function App(): React.JSX.Element {
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
+                        <DropdownMenuItem onSelect={() => setGitUpdatesRoot(projectRoot)}>
+                          Git updates…
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         {branches.map((b) => (
                           <DropdownMenuItem key={b} onSelect={() => void switchToBranch(b)}>
                             <Check
@@ -2232,6 +2239,21 @@ export default function App(): React.JSX.Element {
       <ConnectDialog />
       {/* v10: app settings (Cmd+, / the model picker's "Manage providers…"). */}
       <NewProjectDialog key={String(newProjectOpen)} open={newProjectOpen} onClose={closeNewProject} onCreate={(setup, details) => void createChosenProject(setup, details)} />
+      <GitUpdatesDialog root={gitUpdatesRoot} onClose={() => setGitUpdatesRoot(null)} onApplied={(root, result) => {
+        const key = projectKey(root)
+        const active = useSession.getState().projectRoot === root
+        useWorkspace.getState().patchEntry(key, { branch: result.branch })
+        if (active) useSession.getState().setBranch(result.branch)
+        if (result.branch) void window.api.agent.tagSession(root, { branch: result.branch })
+        useLog.getState().append(result.message, 'success')
+        if (result.files.length) {
+          const project = useWorkspace.getState().projects.find((entry) => entry.key === key)
+          if (project) useWorkspace.getState().patchEntry(key, {
+            environmentRevision: (project.environmentRevision ?? 0) + 1,
+            dependenciesPending: project.dependenciesPending || environmentChanges(result.files).install
+          })
+        }
+      }} />
       <SettingsDialog />
       <ProjectMemoryDialog
         root={memoryTarget?.root ?? null}

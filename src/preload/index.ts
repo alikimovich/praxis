@@ -1,6 +1,9 @@
 import { contextBridge, type IpcRendererEvent, ipcRenderer, webUtils } from 'electron'
 import type {
   ProjectCreateOptions,
+  GitRemoteAction,
+  GitRemoteResult,
+  GitRemoteStatus,
   AgentEvent,
   AgentOptions,
   Annotation,
@@ -170,6 +173,8 @@ const api: PraxisApi = {
     onLog: on<string>('devserver:log')
   },
   git: {
+    remoteStatus: (root: string, fetch?: boolean): Promise<GitRemoteStatus> => ipcRenderer.invoke('git:remote-status', root, fetch),
+    remoteUpdate: (root: string, action: GitRemoteAction): Promise<GitRemoteResult> => ipcRenderer.invoke('git:remote-update', root, action),
     ensure: (root: string): Promise<BranchResult> => ipcRenderer.invoke('git:ensure', root),
     set: (root: string, name: string): Promise<BranchResult> =>
       ipcRenderer.invoke('git:set', root, name),

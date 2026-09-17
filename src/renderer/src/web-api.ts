@@ -203,6 +203,8 @@ export function installWebApi(config: WebConfig): void {
       onLog: on('devserver:log')
     },
     git: {
+      remoteStatus: (root, fetch) => invoke('git:remote-status', root, fetch),
+      remoteUpdate: (root, action) => invoke('git:remote-update', root, action),
       ensure: (root) => invoke('git:ensure', root),
       set: (root, name) => invoke('git:set', root, name),
       list: (root) => invoke('git:list', root),

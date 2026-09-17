@@ -12,7 +12,8 @@ import { connect as connectTcp } from 'node:net'
 import { extname, join, normalize, resolve } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import { WebSocket, WebSocketServer } from 'ws'
-import { registerAgentIpc } from './agent'
+import { projectHasRunningAgents, registerAgentIpc } from './agent'
+import { registerGitRemoteIpc } from './git-remote'
 import { registerDevServerIpc } from './devserver'
 import { checkoutBranch, ensureBranch, listBranches, switchBranch } from './git'
 import { connectToGitHub, githubStatus } from './github'
@@ -43,6 +44,8 @@ const ROOT_ARGUMENTS: Record<string, number | 'options'> = {
   'devserver:stop': 0,
   'devserver:running': 0,
   'devserver:info': 0,
+  'git:remote-status': 0,
+  'git:remote-update': 0,
   'git:ensure': 0,
   'git:set': 0,
   'git:list': 0,
@@ -343,6 +346,7 @@ export async function startBrowserServer(options: BrowserServerOptions): Promise
   router.handle('project:pick', () => root)
   router.handle('project:icon', () => readProjectIcon(root))
   router.handle('menu:set-recents', () => undefined)
+  registerGitRemoteIpc(router, projectHasRunningAgents)
   router.handle('git:ensure', () => ensureBranch(root))
   router.handle('git:set', (_event, _requestedRoot, name: string) => switchBranch(root, name))
   router.handle('git:list', () => listBranches(root))
