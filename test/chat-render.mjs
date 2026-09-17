@@ -31,7 +31,8 @@ const SAMPLE = [
   '- Set the pale surface to #edf4ff',
   '- Reduced top padding from `64px` to `48px`',
   '',
-  '> Preview should hot-reload automatically.'
+  '> Preview should hot-reload automatically.',
+  '[Documentation](https://example.com/docs)'
 ].join('\n')
 
 let app
@@ -65,6 +66,18 @@ try {
   }, SAMPLE)
 
   await win.waitForSelector('.markdown pre code', { timeout: 5000 })
+  const docLink = win.locator('.markdown a[href="https://example.com/docs"]')
+  if (await docLink.getAttribute('target') !== '_blank' || !(await docLink.getAttribute('rel')).includes('noopener')) {
+    throw new Error('assistant links must open separately without replacing Praxis')
+  }
+  await win.fill('.composer__input', 'Follow up after this turn')
+  await win.click('button[aria-label="Queue message"]')
+  await win.waitForSelector('[aria-label="Queued messages"]')
+  if (await win.inputValue('.composer__input')) throw new Error('queueing must clear the draft')
+  await win.locator('.composer').screenshot({ path: join(artifacts, 'queued-message.png') })
+  await win.click('button[aria-label="Remove queued message: Follow up after this turn"]')
+  await win.waitForSelector('[aria-label="Queued messages"]', { state: 'detached' })
+
   const colorPreviews = await win.$$eval('.markdown__color-token', (els) =>
     els.map((el) => ({
       color: el.getAttribute('data-color'),

@@ -2,6 +2,36 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-17 — Group selection, queued messages, and preview recovery
+
+Shift-click adds/removes explicitly selected DOM objects in desktop and browser
+previews, retaining their outlines and a selection count. Prompts and Delete
+carry every selected object; individual inspector controls retain the most recent
+object as their target. Plain clicks replace the group; clearing drops all picks.
+
+The composer now queues follow-ups per chat, capturing attachments and selection
+context when submitted. FIFO dispatch continues in background chats, preserves
+session identity across attachment saves/project switches, and waits for prior
+landing. Stop/errors pause pending messages, conflict states block dispatch, and
+users can remove items or resume. Cancellation also prevents late sends during
+attachment saving or turn preparation. Queues are in memory and clear on close.
+
+Routine merge notes are removed; Revert attaches to the completed response even
+when a queued turn starts before its merge notification. Chat links open separately,
+desktop renderer navigation cannot replace Praxis, and Back to project restores
+the project's entry URL. Existing preview origin guards remain in force.
+
+Validation: typecheck, build, focused lint, queue/context/cancellation unit tests,
+and docs links pass. The full desktop suite passed 141/143: startup-intro retains
+its documented timeout; agent-multi exposed an interrupt-completion timing assumption.
+That test now awaits the terminal state and passes. All six final-build targeted
+checks pass (chat-render, select-element, preview-iframe-navigation, chat-isolation,
+agent-multi, browser-mode). Inspected composer, grouped selection outlines, and
+preview home-button screenshots. The live tier completed 8/8 with no failures:
+real Claude/Codex edits, model handoff, controls, tools, and style provenance pass;
+the simulator check skipped because Xcode is unavailable. Tool-only completed
+responses also retain Revert without needing a merge note.
+
 ## 2026-09-17 — Consistent sidebar hover surfaces
 
 Project headers and the Open/New project actions now share the chat row's

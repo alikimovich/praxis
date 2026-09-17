@@ -248,7 +248,12 @@ try {
   const openedAgent = await rpc('agent:open-project', [fixture, { provider: 'codex' }])
   if (!openedAgent.body.ok)
     fail(`browser agent session failed to open: ${JSON.stringify(openedAgent.body)}`)
-  const sent = await rpc('agent:send', ['hello from browser transport'])
+  const foreignSend = await rpc('agent:send', ['must not send', null, 'foreign-project#chat'])
+  if (foreignSend.body.ok) fail('browser message queue accepted a foreign project session')
+  const snapshot = await rpc('agent:workspace-snapshot', [])
+  const sessionKey = snapshot.body.result.projects.find((project) => project.root === fixture)?.activeSessionKey
+  if (!sessionKey) fail('browser session must have a scoped key')
+  const sent = await rpc('agent:send', ['hello from browser transport', null, sessionKey])
   if (!sent.body.ok) fail(`browser agent command failed: ${JSON.stringify(sent.body)}`)
   await waitFor(
     () => events.some((event) => event.channel === 'agent:event' && event.payload?.type === 'done'),

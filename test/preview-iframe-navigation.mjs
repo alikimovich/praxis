@@ -176,6 +176,25 @@ try {
     `top-level navigation escaped pinned origin ${pinnedOrigin}: ${finalPreviewUrl}`
   )
 
+  // Home remains available after in-project navigation and returns to the
+  // managed project's entry URL, rather than reloading the current subroute.
+  await win.evaluate((url) => window.api.preview.load(url + '/?nested=1'), pinnedOrigin)
+  await win.waitForFunction(() => document.querySelector('[aria-label="Preview path"]')?.value.includes('nested=1'))
+  await win.click('[aria-label="Back to project"]')
+  await win.waitForFunction(() => document.querySelector('[aria-label="Preview path"]')?.value === '/')
+
+  // Even an ordinary same-window anchor in the renderer cannot replace Praxis.
+  const rendererUrl = win.url()
+  await win.evaluate((target) => {
+    const link = document.createElement('a')
+    link.href = target
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+  }, topLevelTarget)
+  await new Promise((resolve) => setTimeout(resolve, 200))
+  assert(win.url() === rendererUrl, 'a chat link must never replace the renderer')
+
   console.log('PREVIEW-IFRAME-NAVIGATION OK — subframe redirect allowed, main frame pinned')
 } catch (error) {
   console.error('PREVIEW-IFRAME-NAVIGATION FAILED:', error?.message ?? error)

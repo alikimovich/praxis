@@ -592,6 +592,8 @@ export interface Bounds {
  * — that's what lets the agent edit the exact component (see DESIGN.md).
  */
 export interface SelectedElement {
+  /** Explicit Shift-click group; the outer element remains the inspector target. */
+  selectionGroup?: SelectedElement[]
   tag: string
   id: string | null
   /** Authored display classes only; compiler-generated style-scope markers are
@@ -1594,7 +1596,7 @@ export interface PraxisApi {
       root: string,
       sessionKey: string
     ) => Promise<{ ok: boolean; remaining: string[]; activeSessionKey: string | null }>
-    send: (text: string, images?: ImageAttachment[]) => Promise<void>
+    send: (text: string, images?: ImageAttachment[], sessionKey?: string) => Promise<void>
     /** Write a pasted image (clipboard bytes, no on-disk origin) into the app's
      *  attachments dir and return its absolute path — so the turn can tell the
      *  agent WHERE the image it can see actually lives. '' if it couldn't be

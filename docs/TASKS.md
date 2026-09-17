@@ -3,6 +3,13 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Selection, message queues, and preview navigation (2026-09-17)
+
+- [x] Shift-click to add/remove selected objects and send the full group as chat context.
+- [x] Queue follow-ups per chat with captured attachments, removal, and pause/resume.
+- [x] Keep successful merges quiet while retaining Revert and conflict notices.
+- [x] Open chat links separately, guard the desktop renderer, and add Back to project.
+
 ## Consistent sidebar hover (2026-09-17)
 
 - [x] Match project and Open/New action hovers to chat rows using one shared

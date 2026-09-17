@@ -52,6 +52,12 @@ try {
       )
     )
     await win.evaluate(() => window.api.agent.interrupt())
+    // Interrupt requests cancellation; the provider's terminal event is what
+    // actually releases the session for the next turn.
+    await win.waitForFunction(async () => {
+      const snapshot = await window.api.agent.workspaceSnapshot()
+      return snapshot.projects.every((project) => project.chats.every((chat) => !chat.isRunning))
+    }, null, { timeout: 30000 })
     return flagged
   }
   const open = (d) => win.evaluate((p) => window.api.agent.openProject(p), d)

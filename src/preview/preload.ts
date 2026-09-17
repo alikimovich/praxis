@@ -417,7 +417,10 @@ function setEditAction(): void {
  * sibling with the same data-praxis-source (the same component/loop instance
  * set), Figma-style; the badge on the pick reads "h3 × 4" then.
  */
-function setSelectionHighlight(el: Element | null): void {
+let pickedElements: Element[] = []
+
+function setSelectionHighlight(el: Element | null, group?: Element[]): void {
+  pickedElements = group ?? (el ? [el] : [])
   ensureOverlay()
   if (!selLayer) return
   selLayer.textContent = ''
@@ -425,7 +428,8 @@ function setSelectionHighlight(el: Element | null): void {
   if (!el) return
   const src = findSource(el)
   let els: Element[] = [el]
-  if (src) {
+  if (group) els = group
+  if (src && !group) {
     try {
       // The stamp may live on el itself or an ancestor; the stamped elements ARE
       // the component instances — outline those (all of them).
@@ -448,7 +452,7 @@ function setSelectionHighlight(el: Element | null): void {
   const badge = makeChip()
   badge.setAttribute('data-praxis-selbadge', '')
   const tag = (els[0] ?? el).tagName.toLowerCase()
-  chipName(badge, els.length > 1 ? `${tag} × ${els.length}` : shortLabel(el))
+  chipName(badge, group && els.length > 1 ? `${els.length} objects` : els.length > 1 ? `${tag} × ${els.length}` : shortLabel(el))
   // Size comes from positionSelection — it holds the anchor's live rect, and
   // re-runs on every scroll/resize/mutation, so the numbers track the layout.
   selLayer.appendChild(badge)
@@ -1198,12 +1202,28 @@ function onClick(e: MouseEvent): void {
     // Swallow the click so the previewed app doesn't also act on it.
     e.preventDefault()
     e.stopPropagation()
-    ipcRenderer.send(PICKED, describe(el))
+    lastHovered = null
+    hideOverlay()
+    clearMeasure()
+    const group = e.shiftKey
+      ? pickedElements.includes(el)
+        ? pickedElements.filter((item) => item !== el && item.isConnected)
+        : [...pickedElements.filter((item) => item.isConnected), el]
+      : [el]
+    const target = group.at(-1)
+    if (!target) {
+      ipcRenderer.send(PICKED, { ...describe(el), selectionGroup: [] })
+      selectedEl = null
+      hideToolbar()
+      setSelectionHighlight(null)
+      return
+    }
+    ipcRenderer.send(PICKED, { ...describe(target), selectionGroup: group.map(describe) })
     // A fresh pick resets element-scoped surfaces: clear any open input from the
     // previous selection, then show the toolbar (State A) + persistent outlines.
     resetInput()
-    showToolbar(el)
-    setSelectionHighlight(el)
+    showToolbar(target)
+    setSelectionHighlight(target, e.shiftKey ? group : undefined)
   } else if (commentMode) {
     e.preventDefault()
     e.stopPropagation()

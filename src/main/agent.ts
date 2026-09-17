@@ -175,6 +175,7 @@ const opening = new Map<string, Promise<OpenProjectResult>>()
 // `agent:send`, removed on that session's next `done`/`error`, and swept wherever
 // a sessionKey leaves the `sessions` map so it can't outlive its session.
 const runningKeys = new Set<string>()
+const preparingTurns = new Map<string, { cancelled: boolean }>()
 const turnTerminals = new TurnTerminalTracker()
 const trackRunning =
   (sessionKey: string) =>
@@ -1075,8 +1076,11 @@ export function registerAgentIpc(
     }
   )
 
-  ipcMain.handle('agent:send', async (_e, text: string, images?: ImageAttachment[]) => {
-    const session = activeSession()
+  ipcMain.handle('agent:send', async (_e, text: string, images?: ImageAttachment[], requestedKey?: string) => {
+    const key = requestedKey ?? activeKey
+    const session = key ? sessions.get(key) : null
+    if (requestedKey && !session) throw new Error('This chat is closed.')
+    if (key && runningKeys.has(key)) throw new Error('This chat is already running.')
     if (!session) {
       safeSend(getWindow, 'agent:event', {
         type: 'error',
@@ -1084,29 +1088,44 @@ export function registerAgentIpc(
       } satisfies AgentEvent)
       return
     }
+    const preparation = { cancelled: false }
+    if (key) preparingTurns.set(key, preparation)
     const note = images?.length ? `${text} [${images.length} image(s) attached]`.trim() : text
-    session.record.transcript.push({ role: 'user', text: note, at: Date.now() })
-    // activeKey is the sessionKey `session` was looked up under (activeSession()
-    // derives it from the same variable) — mark it running before the turn starts
-    // so a workspace-snapshot taken mid-turn sees it.
-    if (activeKey) {
-      runningKeys.add(activeKey)
-      turnTerminals.begin(activeKey)
+    // Capture the destination before any await; queued background messages must
+    // never follow a subsequent project or chat switch.
+    if (key) {
+      runningKeys.add(key)
+      turnTerminals.begin(key)
     }
     // Turn-start: sync the user's between-turn live edits into this chat's worktree
     // (serialized behind the chat's chain — waits out any in-flight merge). No-op for
     // a non-isolated chat.
-    if (activeKey) await beforeTurn(activeKey, text)
-    // Memory is part of the provider's initial instructions. If the user edited it
-    // while this session remained open, inject the new snapshot exactly once on the
-    // next turn (not every turn, which would needlessly inflate context).
-    const root = session.record.projectRoot
-    const memory = memoryStore().get(root)
-    const knownRevision = activeKey ? memoryRevisionBySession.get(activeKey) : undefined
-    const prompt =
-      memory.updatedAt !== knownRevision ? projectMemoryUpdate(memory.content, text) : text
-    if (activeKey) memoryRevisionBySession.set(activeKey, memory.updatedAt)
-    session.send(prompt, images)
+    try {
+      if (key) await beforeTurn(key, text)
+      if (preparation.cancelled) throw new Error('Message cancelled before sending.')
+      if (key && sessions.get(key) !== session) throw new Error('This chat is closed.')
+      if (requestedKey && isolationSnapshot(requestedKey)?.state === 'parked') {
+        throw new Error('Resolve this chat’s conflicting changes before sending queued messages.')
+      }
+      session.record.transcript.push({ role: 'user', text: note, at: Date.now() })
+      // Memory is part of the provider's initial instructions. If the user edited it
+      // while this session remained open, inject the new snapshot exactly once on the
+      // next turn (not every turn, which would needlessly inflate context).
+      const root = session.record.projectRoot
+      const memory = memoryStore().get(root)
+      const knownRevision = key ? memoryRevisionBySession.get(key) : undefined
+      const prompt =
+        memory.updatedAt !== knownRevision ? projectMemoryUpdate(memory.content, text) : text
+      if (key) memoryRevisionBySession.set(key, memory.updatedAt)
+      if (key) preparingTurns.delete(key)
+      session.send(prompt, images)
+    } catch (error) {
+      if (key) {
+        runningKeys.delete(key)
+        preparingTurns.delete(key)
+      }
+      throw error
+    }
   })
 
   // Give a PASTED image a path. A dropped image already has one (the renderer
@@ -1402,6 +1421,8 @@ export function registerAgentIpc(
   })
 
   ipcMain.handle('agent:interrupt', async () => {
+    const preparation = activeKey ? preparingTurns.get(activeKey) : undefined
+    if (preparation) preparation.cancelled = true
     const session = activeSession()
     if (!session)
       return // Release any open prompts (interrupt may not abort their per-call signal),

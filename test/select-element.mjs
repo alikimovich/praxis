@@ -241,6 +241,36 @@ try {
   })
   if (overlayPng) writeFileSync(join(artifacts, '07b-selection-badge.png'), Buffer.from(overlayPng, 'base64'))
 
+
+  // Shift-click selects actual independent objects, toggles membership, and
+  // leaves the most recently selected object as the single-object inspector target.
+  const clickPreview = async (id, shift) => app.evaluate(async ({ webContents }, { id, shift }) => {
+    const wc = webContents.getAllWebContents().find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
+    const point = await wc.executeJavaScript(`(() => {
+      let el = document.getElementById(${JSON.stringify(id)})
+      if (!el) { el = document.createElement('button'); el.id = ${JSON.stringify(id)}; el.textContent = 'Second object'; el.style.cssText = 'position:fixed;bottom:40px;left:40px'; document.body.appendChild(el) }
+      const r = el.getBoundingClientRect(); return { x: Math.round(r.left+r.width/2), y: Math.round(r.top+r.height/2) }
+    })()`)
+    wc.focus()
+    const modifiers = shift ? ['shift'] : []
+    wc.sendInputEvent({ type: 'mouseDown', ...point, button: 'left', clickCount: 1, modifiers })
+    wc.sendInputEvent({ type: 'mouseUp', ...point, button: 'left', clickCount: 1, modifiers })
+  }, { id, shift })
+  await clickPreview('second-object', true)
+  await win.waitForFunction(() => window.__praxisSelection.getState().selected?.selectionGroup?.length === 2)
+  await win.locator('.composer').screenshot({ path: join(artifacts, 'multiple-selection.png') })
+  const multiPng = await app.evaluate(async ({ webContents }) => {
+    const wc = webContents.getAllWebContents().find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
+    const outlined = await wc.executeJavaScript(`document.querySelector('[data-praxis-overlay]').shadowRoot.querySelectorAll('[data-praxis-selbox]').length`)
+    if (outlined !== 2) throw new Error('both selected objects must remain outlined')
+    return (await wc.capturePage()).toPNG().toString('base64')
+  })
+  writeFileSync(join(artifacts, 'multiple-selection-preview.png'), Buffer.from(multiPng, 'base64'))
+  await clickPreview('second-object', true)
+  await win.waitForFunction(() => window.__praxisSelection.getState().selected?.selectionGroup?.length === 1)
+  await clickPreview('hero-title', false)
+  await win.waitForFunction(() => window.__praxisSelection.getState().selected?.id === 'hero-title')
+
   // Clicking Edit-text arms the inline contentEditable on the selected leaf —
   // the discoverable form of the double-click gesture. (Our own overlay button,
   // so a JS .click() drives the same onToolbarButton path a user click does.)

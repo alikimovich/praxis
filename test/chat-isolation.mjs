@@ -103,7 +103,7 @@ try {
 
   console.log('CHAT-ISOLATION OK (A) — open-project forks a detached chat worktree without a stale branch')
 
-  // --- B: synthetic isolation events -> store state, merged note, parked
+  // --- B: synthetic isolation events -> store state, quiet merge, parked
   // ConflictCard (mirrors spawn-comment.mjs's event injection: a fake key, no
   // real backend needed). Reuse FAKE_ROOT as the key so the parked handler's
   // `projectKey(root) === event.projectKey` guard (which gates the history
@@ -136,12 +136,16 @@ try {
   const conflictCardVisible = () => win.evaluate(() => !!document.querySelector('.conflict'))
   assert(!(await conflictCardVisible()), 'no ConflictCard before any isolation event')
 
-  // 'merged' — the happy per-turn path: a subtle note is appended (no active
-  // streaming message exists post-`done`, so appendStatus would be a no-op —
-  // ChatPanel uses appendNote instead). No chip/card for the happy path.
+  await win.evaluate((key) => {
+    const chat = window.__praxisStore.getState()
+    chat.startAssistant(key)
+    chat.appendStatus('Edit · a.txt', key)
+    chat.finish(key)
+  }, KEY)
+  // Clean merges stay quiet; tool-only responses still retain Revert.
   await app.evaluate(
     ({ BrowserWindow }, ev) => BrowserWindow.getAllWindows()[0].webContents.send('agent:event', ev),
-    { type: 'isolation', state: 'merged', projectKey: KEY, branch: 'praxis/chat-synthtest', files: ['a.txt'] }
+    { type: 'isolation', state: 'merged', projectKey: KEY, branch: 'praxis/chat-synthtest', files: ['a.txt'], group: 'test-merge-group' }
   )
   await sleep(300)
   const afterMerged = await win.evaluate(
@@ -150,13 +154,14 @@ try {
   )
   assert(afterMerged === 'isolated', `'merged' should set isolation to 'isolated', got ${afterMerged}`)
   assert(!(await conflictCardVisible()), 'a clean merge must not show the ConflictCard')
+  await win.waitForSelector('button[aria-label="Revert changes"]')
   const noteAfterMerged = await win.evaluate(
     (key) => (window.__praxisStore.getState().byKey[key]?.messages ?? []).map((m) => m.text).join('\n'),
     KEY
   )
   assert(
-    /Merged into your branch/.test(noteAfterMerged),
-    `a merged turn should post a status note: ${noteAfterMerged}`
+    !/Merged into your branch/.test(noteAfterMerged),
+    `a clean merge should stay quiet: ${noteAfterMerged}`
   )
 
   // 'parked' — a conflicted turn: the ConflictCard pins above the composer
@@ -205,7 +210,7 @@ try {
   )
 
   console.log(
-    'CHAT-ISOLATION OK (B) — synthetic isolation events drive the store + merged note, a parked ' +
+    'CHAT-ISOLATION OK (B) — synthetic isolation events drive the store + quiet merges, a parked ' +
       'turn pins the ConflictCard (with files) and routes the sidebar history reload'
   )
 

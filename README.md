@@ -63,7 +63,15 @@ GitHub PR.
   line shows the drop position for columns, rows, and grids; nesting stays fixed.
   Escape or releasing the modifier cancels. Moves write source and support undo;
   ambiguous template/data moves prepare a chat prompt.
-- **Click-to-edit.** A **Select** mode maps a clicked element to its source
+- **Queue follow-ups.** Enter during a running turn queues the message for that
+  chat, including its attachments and selected objects. Remove pending messages,
+  or resume after Stop/errors. Queues last for the current app session.
+- **Stay in your project.** Chat links open separately; the preview's home button
+  returns to the managed project's entry page. Successful merges stay quiet,
+  with Revert retained on the response and conflicts shown when action is needed.
+- **Click-to-edit.** Hold **Shift** while clicking to add or remove objects from
+  a selection. Chat requests and Delete include the group; individual property
+  controls target the most recent object. A **Select** mode maps a clicked element to its source
   location (via the `data-praxis-source` stamp — see
   [`docs/DESIGN.md`](docs/DESIGN.md)), then edits its **props** with typed
   controls (react-docgen for React, `svelte/compiler` for Svelte 5), applies

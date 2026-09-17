@@ -107,3 +107,8 @@ Preview refresh is provider-independent once edits land: manifest/lockfile chang
 install dependencies in the live checkout, framework config changes restart the
 managed web preview, and both re-detect the current launch settings. The provider's
 terminal event alone does not prove that private edits reached the live checkout.
+
+Composer queues are managed by Praxis for every provider. They submit separate
+turns in order, preserving the originating chat, file/image attachments, and
+selection context. They do not depend on provider-native steering support; image
+interpretation remains subject to the capability table above.

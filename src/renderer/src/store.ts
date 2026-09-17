@@ -1,3 +1,4 @@
+import { useMessageQueue } from './message-queue'
 import { create } from 'zustand'
 import type {
   Annotation,
@@ -287,7 +288,7 @@ export const useChat = create<ChatState>((set, get) => {
       patch(key, (sl) => ({ ...sl, isolation, isolationFiles: isolation === 'parked' ? files : undefined })),
     tagRevert: (key, group) =>
       patch(key, (sl) => {
-        const idx = sl.messages.map((m) => m.role).lastIndexOf('assistant')
+        const idx = sl.messages.map((m) => m.role === 'assistant' && m.id !== sl.streamingId).lastIndexOf(true)
         if (idx < 0) return sl
         const messages = sl.messages.slice()
         messages[idx] = { ...messages[idx], revertGroup: group }
@@ -297,6 +298,7 @@ export const useChat = create<ChatState>((set, get) => {
       // A closed chat's half-written message goes with it — otherwise a new chat
       // that reuses the key (a project's default `key` after closing all of them)
       // would open showing the dead chat's text.
+      useMessageQueue.getState().clear(key)
       useComposerDrafts.getState().clear(key)
       set((s) => {
         const byKey = { ...s.byKey }
@@ -1320,7 +1322,7 @@ export const useSelection = create<SelectionState>((set) => ({
   // Select and comment/annotate are mutually exclusive overlay modes.
   setSelectMode: (selectMode) => set({ selectMode, ...(selectMode ? { commentMode: null } : {}) }),
   setCommentMode: (commentMode) => set({ commentMode, ...(commentMode ? { selectMode: false } : {}) }),
-  setSelected: (selected) => set({ selected, inspection: null, inspecting: false }),
+  setSelected: (selected) => set({ selected: selected?.selectionGroup?.length === 0 ? null : selected, inspection: null, inspecting: false }),
   setInspection: (inspection) => set({ inspection }),
   setInspecting: (inspecting) => set({ inspecting })
 }))

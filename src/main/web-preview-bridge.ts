@@ -11,6 +11,8 @@ export const WEB_PREVIEW_BRIDGE = String.raw`(() => {
   const token = params.get('token') || ''
   let selectMode = false
   let hovered = null
+  let selected = []
+  let outlines = []
 
   const send = (type, payload) => {
     parent.postMessage({ source: 'praxis-preview', token, type, payload }, '*')
@@ -103,6 +105,19 @@ export const WEB_PREVIEW_BRIDGE = String.raw`(() => {
     })
   }
 
+  const paintSelection = () => {
+    outlines.forEach((node) => node.remove())
+    outlines = selected.filter((element) => element.isConnected).map((element) => {
+      const node = overlay.cloneNode()
+      const rect = element.getBoundingClientRect()
+      Object.assign(node.style, { display: 'block', left: rect.left + 'px', top: rect.top + 'px', width: rect.width + 'px', height: rect.height + 'px' })
+      document.documentElement.appendChild(node)
+      return node
+    })
+  }
+  addEventListener('scroll', paintSelection, true)
+  addEventListener('resize', paintSelection)
+
   addEventListener('pointermove', (event) => {
     if (!selectMode) return
     const element = event.target instanceof Element ? event.target : null
@@ -115,14 +130,19 @@ export const WEB_PREVIEW_BRIDGE = String.raw`(() => {
     if (!element || element === overlay) return
     event.preventDefault()
     event.stopImmediatePropagation()
-    selectMode = false
-    paint(null)
-    send('element-picked', describe(element))
+    const picked = sourceElement(element)
+    selected = event.shiftKey
+      ? selected.includes(picked) ? selected.filter((item) => item !== picked) : [...selected, picked]
+      : [picked]
+    paintSelection()
+    send('element-picked', { ...describe(selected[selected.length - 1] || picked), selectionGroup: selected.map(describe) })
   }, true)
 
   addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && selectMode) {
       selectMode = false
+      selected = []
+      paintSelection()
       paint(null)
       send('select-cancelled')
     } else if (event.key.toLowerCase() === 's' && !event.metaKey && !event.ctrlKey && !event.altKey) {
@@ -140,6 +160,8 @@ export const WEB_PREVIEW_BRIDGE = String.raw`(() => {
       selectMode = !!message.payload
       paint(selectMode ? hovered : null)
     } else if (message.type === 'clear-selected') {
+      selected = []
+      paintSelection()
       paint(null)
     } else if (message.type === 'styles-preview' && hovered) {
       const property = message.payload && message.payload.prop

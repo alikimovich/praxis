@@ -727,8 +727,13 @@ function createWindow(): void {
 
   // Open external links in the user's browser, never in-app.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    openExternalSafe(url)
     return { action: 'deny' }
+  })
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    event.preventDefault()
+    openExternalSafe(url)
   })
 
   const loadRenderer = (): void => {
@@ -819,7 +824,7 @@ function openEditorWindow(root: string, source: string): void {
   })
   // External links (Cmd+click into a URL, etc.) open in the browser, not in-app.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    openExternalSafe(url)
     return { action: 'deny' }
   })
 

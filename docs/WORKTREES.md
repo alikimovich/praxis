@@ -159,3 +159,17 @@ turn uses the existing live-to-worktree synchronization to pick up the new tree.
 Ordinary local-branch switches also restart the managed preview, re-detect the
 framework, and install dependencies when branch-tip manifests or lockfiles differ.
 Attached external servers get a page reload and a manual-restart message.
+
+## Composer message queue
+
+Enter or Queue message during a running turn captures the text, attachments, and
+selected objects for that chat. Each chat drains in FIFO order, including while
+another chat is active. Sends carry an explicit session key; attachment saving
+and the previous turn's landing cannot redirect them to a newly active project.
+The next send waits for the existing landing chain. A conflict pauses dispatch;
+Stop and agent errors pause remaining messages until Resume queue. Pending items
+can be removed. Queues are in memory, cleared on chat close or app reload.
+
+Clean merges add no chat notice. Their Revert action attaches to the completed
+assistant response, even if a queued response has already started. Conflicts and
+failures still surface normally.
