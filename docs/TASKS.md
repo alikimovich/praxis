@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Candidate remote sync (2026-09-16) — SHIPPED
+
+- [x] **Pull the latest sentence-case sidebar headings and preserve local commits.**
+
 ## Chat regression failures (2026-09-15) — SHIPPED
 
 - [x] **Repair chat-render's incomplete settings fixture and surface renderer errors.**

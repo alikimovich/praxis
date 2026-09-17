@@ -2,6 +2,23 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-16 — Pull latest candidate updates
+
+Merged origin/candidate's sentence-case sidebar headings while preserving local
+main integration and regression fixes. Restored newest-first progress-log order.
+Type checks pass; full unit/Electron suite: 132/133 passed. Cat-animations lost
+its Electron window during a wait; the optional spawn-comment live portion
+self-skipped after no edit landed. Rail/history checks pass; inspected the rail
+screenshot. No merge conflicts.
+
+## 2026-09-16 — Sentence-case rail headings
+
+Dropped the all-caps treatment (and its caps-only letter-spacing) from the
+sidebar's "Projects" heading and the per-project "History" toggle. The history
+label's 9px size only worked in caps — lowercase at that size loses too much
+x-height — so it moves to 10px, an existing value in the de facto type scale.
+`bun run typecheck` passes; rail and history-ui Electron screenshots inspected.
+
 ## 2026-09-15 — Fix chat-render and provider-skills-menu regressions
 
 The chat-render timeout hid a renderer exception: its synthetic per-chat settings
@@ -134,7 +151,6 @@ those menus only.
 Type checks pass. Visually verified native composer selects alongside the existing
 project action menu. Full suite: 129/132 passed; code-drawer passes on a separate
 rerun, leaving the documented chat-render and provider-skills-menu failures.
-
 ## 2026-09-11 — Quiet project action icons
 
 Changed the sidebar project menu and new-chat icons to neutral gray at rest and
