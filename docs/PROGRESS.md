@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-17 — Consistent sidebar hover surfaces
+
+Project headers and the Open/New project actions now share the chat row's
+translucent hover fill. Project headers use the matching 6px radius token, and
+one shared rail-hover stylesheet keeps the three selectors in sync. Existing
+chat selection styling and project action icon behavior remain intact.
+
+Validation: typecheck and sidebar/chat checks pass; inspected project/action/chat
+hover captures in light and dark themes. The full suite passed 140/142; the
+folder-icon animation and comment branch cleanup checks both pass on isolated
+reruns. The inherited 12px regular rail text remains below the
+APCA lookup's size recommendation (approximate opaque hover surfaces: Lc 72 light,
+58 dark); this change preserves the requested chat palette and typography.
+
 ## 2026-09-17 — Compact chat composer spacing
 
 The composer now uses 8px content and toolbar insets, with matching space above,

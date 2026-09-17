@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Consistent sidebar hover (2026-09-17)
+
+- [x] Match project and Open/New action hovers to chat rows using one shared
+      translucent fill and 6px corners in both themes.
+
 ## Compact chat composer (2026-09-17)
 
 - [x] Hide the draft scrollbar, equalize attachment spacing at 8px, reduce content

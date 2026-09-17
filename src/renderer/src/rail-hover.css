@@ -1,0 +1,6 @@
+/* A shared hover surface for sidebar projects, actions, and chats. */
+.rail__row:hover,
+.rail__action:hover,
+.rail__chat-item:hover {
+    background: rgb(from var(--rail-text) r g b / 0.075);
+}

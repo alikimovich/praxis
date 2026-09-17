@@ -2,6 +2,7 @@
 @import "shadcn/tailwind.css";
 @import "./chat-scroll.css";
 @import "./rail-chat-title.css";
+@import "./rail-hover.css";
 @import "./control-cursors.css";
 @import "./focus.css";
 @import "./components/ui/desktop-surfaces.css";
@@ -772,10 +773,6 @@ body.is-fullscreen .sidebar-toggle {
     flex: 0 0 auto;
     color: var(--text-muted);
 }
-.rail__action:hover {
-    background: var(--border);
-    color: var(--text);
-}
 
 .rail__row {
     display: flex;
@@ -903,9 +900,6 @@ body.is-fullscreen .sidebar-toggle {
     display: flex;
     align-items: center;
     border-radius: 6px;
-}
-.rail__chat-item:hover {
-    background: rgb(from var(--rail-text) r g b / 0.075);
 }
 .rail__chat {
     flex: 1 1 auto;

@@ -233,7 +233,7 @@ export default function Rail({
             const icon = icons[p.key]
             return (
               <li key={p.key} data-reorder-item="project" className={`rail__item ${active ? 'rail__item--active' : ''}`}>
-                <div className="rail__row group/project">
+                <div className="rail__row group/project rounded-sm">
                   <div className="rail__open" title={icon ? `${p.root} — ${icon.path}` : p.root}>
                     {/* Project glyph: the project's OWN favicon when it ships one,
                       else the supplied folder, morphing with the expanded state.

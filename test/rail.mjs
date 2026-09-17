@@ -237,6 +237,22 @@ try {
   await until(async () => await newChat.evaluate((el) => getComputedStyle(el).opacity === '1'),
     'Keyboard focus should reveal New chat')
 
+  // Capture the shared row hover surface against the opaque sidebar fallback.
+  for (const theme of ['light', 'dark']) {
+    await win.evaluate((dark) => document.documentElement.classList.toggle('dark', dark), theme === 'dark')
+    for (const [name, row] of [
+      ['project', itemB.locator('.rail__row')],
+      ['action', win.locator('.rail__action').first()],
+      ['chat', itemB.locator('.rail__chat-item').first()]
+    ]) {
+      await row.hover()
+      await win.locator('.rail').screenshot({
+        path: join(artifacts, `rail-hover-${theme}-${name}.png`),
+        style: '.rail { background: var(--bg) !important; }'
+      })
+    }
+  }
+  await win.evaluate(() => document.documentElement.classList.remove('dark'))
   await win.screenshot({ path: join(artifacts, '10-rail.png') })
   console.log(
     'RAIL OK — two projects warm, switch swaps preview + per-project chat, chats fold accordion-style'
