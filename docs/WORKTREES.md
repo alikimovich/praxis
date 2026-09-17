@@ -155,3 +155,7 @@ and validated before mutations. Browser mode enforces the same opened-root scope
 Successful pull/checkout results update branch metadata and request a preview
 restart, installing dependencies when manifests/lockfiles changed. The next chat
 turn uses the existing live-to-worktree synchronization to pick up the new tree.
+
+Ordinary local-branch switches also restart the managed preview, re-detect the
+framework, and install dependencies when branch-tip manifests or lockfiles differ.
+Attached external servers get a page reload and a manual-restart message.

@@ -56,6 +56,8 @@ export interface Diagnosis {
 
 /** Result of ensuring/switching the opened project's `praxis/*` working branch. */
 export interface BranchResult {
+  /** Files changed between branch tips; omitted when the comparison is unavailable. */
+  files?: string[]
   isRepo: boolean
   /** The branch now checked out (null if not a git repo or the switch failed). */
   branch: string | null

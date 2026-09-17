@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Local branch preview refresh (2026-09-17)
+
+- [x] Refresh the preview after ordinary local-branch and named work-branch switches.
+- [x] Re-detect the destination environment and install dependencies when manifests
+      or lockfiles differ; reload attached previews and explain external-server restarts.
+
 ## Git updates and remote branches (2026-09-16)
 
 - [x] Add Git updates to the branch menu: fetch remotes, pull a selected remote

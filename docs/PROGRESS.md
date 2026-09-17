@@ -2,6 +2,27 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-17 — Refresh previews after ordinary local branch switches
+
+The local branch dropdown and named work-branch switch now request an environment
+refresh after successful checkout. Previously these paths only updated the branch
+label, leaving the old server and preview running. Each switch restarts the managed
+preview with fresh framework detection; branch-tip manifest/lockfile differences
+request dependency installation, including files removed by the destination branch.
+An unavailable comparison conservatively requests installation. Failed switches
+leave the preview alone. Attached external servers get a page reload and an explicit
+manual-server-restart message. Custom launch commands remain preserved.
+
+Regression coverage switches back through the ordinary branch menu and verifies
+that the restarted server serves the destination branch. Git unit checks cover
+manifest differences in both directions and failed checkout. Typecheck and focused
+Git logic/UI checks pass. The full suite passed 138/142 initially: the expanded
+Git test needed to wait for the busy remote dialog before closing it, and startup,
+rail-animation, and layers-panel checks failed. After correcting that test wait,
+the final build passes the Git test (including native preview content), rail, and
+layers isolated reruns. The previously recorded startup-intro failure remains
+open. Docs links and diff whitespace checks pass.
+
 ## 2026-09-16 — Fetch, pull, and switch remote project branches
 
 The current-branch menu now opens Git updates in desktop and browser mode.

@@ -257,6 +257,17 @@ export default function App(): React.JSX.Element {
         .append(`Switched to branch ${res.branch}${res.created ? ' (created)' : ''}`, 'success')
     }
     if (res.error) useLog.getState().append(`Couldn't switch branch: ${res.error}`, 'error')
+    else if (res.branch) refreshBranchPreview(root, res.files)
+  }
+
+  const refreshBranchPreview = (root: string, files?: string[]): void => {
+    const key = projectKey(root)
+    const project = useWorkspace.getState().projects.find((entry) => entry.key === key)
+    if (!project) return
+    useWorkspace.getState().patchEntry(key, {
+      environmentRevision: (project.environmentRevision ?? 0) + 1,
+      dependenciesPending: project.dependenciesPending || !files || environmentChanges(files).install
+    })
   }
 
   // Load the branch list for the pill's dropdown (on open).
@@ -278,6 +289,7 @@ export default function App(): React.JSX.Element {
     useWorkspace.getState().patchEntry(projectKey(root), { branch: res.branch })
     if (res.branch) void window.api.agent.tagSession(root, { branch: res.branch })
     useLog.getState().append(`Switched to branch ${res.branch ?? b}`, 'success')
+    refreshBranchPreview(root, res.files)
   }
 
   useEffect(
@@ -1543,6 +1555,17 @@ export default function App(): React.JSX.Element {
   const restartPreview = async (installDependencies = false): Promise<void> => {
     let spec = launchSpec.current
     if (!spec) {
+      const project = useWorkspace.getState().projects.find(
+        (entry) => entry.root === useSession.getState().projectRoot
+      )
+      if (project?.url) {
+        try {
+          await window.api.preview.load(project.url)
+          useLog.getState().append('Preview reloaded. This project uses an external server; restart that server if its environment changed.')
+        } catch (error) {
+          useLog.getState().append(`Couldn't reload the external preview: ${String(error)}`, 'error')
+        }
+      }
       // We don't own this server (attached to one the user already had running) —
       // we can't restart it, and a page reload won't apply a config change. Be
       // honest rather than emitting a false "no stamps" verdict.
