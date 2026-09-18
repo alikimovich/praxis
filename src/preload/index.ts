@@ -126,6 +126,8 @@ const api: PraxisApi = {
     setStatus: (text: string | null): void => ipcRenderer.send('preview:set-status', text),
     /** Fires when S is pressed inside the focused preview (toggle select). */
     onToggleSelect: on<void>('preview:toggle-select'),
+    /** Agent request scoped to the active project and chat. */
+    onOpen: on<import('../shared/preview-navigation').PreviewOpenRequest>('preview:open'),
     /** Fires when the preview navigates (link clicks, SPA routes) — full URL. */
     onUrlChanged: on<string>('preview:url-changed'),
     /** Selection-toolbar actions that resolve in the renderer (code / delete). */

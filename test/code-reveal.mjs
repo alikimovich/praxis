@@ -29,3 +29,17 @@ try {
   assert.equal(events.length, 1)
   console.log('CODE-REVEAL OK — exact range, relocation, ambiguous/stale rejection, path and symlink boundaries')
 } finally { await rm(root, { recursive: true, force: true }); await rm(outside, { recursive: true, force: true }) }
+
+// Preview navigation validates routes before sending a chat/project-scoped event.
+const { openAgentPreview } = await import('../src/main/preview-tools.ts')
+const navigation = []
+const navigate = (path, background = false) => openAgentPreview('/project', 'chat', { path },
+  (channel, request) => navigation.push({ channel, request }), background)
+assert.equal(navigate('/work/article?view=full#intro').requested, true)
+assert.deepEqual(navigation[0], { channel: 'preview:open', request: {
+  root: '/project', key: 'chat', path: '/work/article?view=full#intro'
+} })
+for (const path of ['//evil.test', '/\\evil.test', 'https://evil.test', 'javascript:alert(1)', '/a\nb', '', null])
+  assert(navigate(path).error, String(path))
+assert(navigate('/article', true).error)
+assert.equal(navigation.length, 1)

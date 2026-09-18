@@ -5,7 +5,7 @@
  * navigation to that same second localhost origin is blocked and externalized.
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -137,6 +137,60 @@ try {
   )
 
   const pinnedOrigin = new URL(previewUrl).origin
+  const key = await win.evaluate(() => window.__praxisStore.getState().activeKey)
+  const openPreview = async (path, overrides = {}) => {
+    await app.evaluate(({ BrowserWindow }, request) =>
+      BrowserWindow.getAllWindows()[0].webContents.send('preview:open', request),
+      { root: fixture, key, path, ...overrides })
+  }
+  const currentUrl = () => app.evaluate(({ webContents }, origin) =>
+    webContents.getAllWebContents().find(w => w.getURL().startsWith(origin))?.getURL(), pinnedOrigin)
+  await openPreview('/wrong', { key: 'other-chat' })
+  await openPreview('/wrong', { root: '/other-project' })
+  await openPreview('//outside.invalid')
+  await new Promise(resolve => setTimeout(resolve, 150))
+  assert(await currentUrl() === previewUrl, 'invalid/stale request navigated the preview')
+  await win.evaluate(key => {
+    window.__praxisStore.setState({ isRunning: true, isolation: 'isolated' })
+  }, key)
+  await openPreview('/?article=design-process#intro')
+  await new Promise(resolve => setTimeout(resolve, 150))
+  assert(await currentUrl() === previewUrl, 'navigation ran before landing')
+  await win.evaluate(() => window.__praxisStore.setState({ isRunning: false }))
+  await new Promise(resolve => setTimeout(resolve, 100))
+  assert(await currentUrl() === previewUrl, 'turn completion alone bypassed landing')
+  await app.evaluate(({ BrowserWindow }, key) =>
+    BrowserWindow.getAllWindows()[0].webContents.send('agent:event', { type: 'isolation', state: 'merged', projectKey: key, files: [] }), key)
+  await win.waitForFunction(() => document.querySelector('[aria-label="Preview path"]')?.value === '/?article=design-process#intro')
+  assert(await currentUrl() === pinnedOrigin + '/?article=design-process#intro', 'preview did not open requested route')
+  await win.evaluate(() => window.__praxisStore.setState({ isRunning: true, isolation: 'isolated' }))
+  await openPreview('/stale')
+  await win.evaluate(key => {
+    window.__praxisStore.setState({ activeKey: 'other-chat' })
+    window.__praxisStore.setState({ activeKey: key, isRunning: false })
+  }, key)
+  await app.evaluate(({ BrowserWindow }, key) =>
+    BrowserWindow.getAllWindows()[0].webContents.send('agent:event', { type: 'isolation', state: 'merged', projectKey: key, files: [] }), key)
+  await new Promise(resolve => setTimeout(resolve, 150))
+  assert(await currentUrl() === pinnedOrigin + '/?article=design-process#intro', 'switching back replayed a stale request')
+  await win.evaluate(() => window.__praxisStore.setState({ isRunning: true, isolation: 'isolated' }))
+  await openPreview('/superseded')
+  await win.evaluate(() => {
+    window.__praxisStore.setState({ isRunning: false })
+    window.__praxisStore.setState({ isRunning: true })
+    window.__praxisStore.setState({ isRunning: false })
+  })
+  await app.evaluate(({ BrowserWindow }, key) =>
+    BrowserWindow.getAllWindows()[0].webContents.send('agent:event', { type: 'isolation', state: 'merged', projectKey: key, files: [] }), key)
+  await new Promise(resolve => setTimeout(resolve, 150))
+  assert(await currentUrl() === pinnedOrigin + '/?article=design-process#intro', 'new turn replayed a superseded request')
+  mkdirSync(join(root, 'test/artifacts'), { recursive: true })
+  const image = await app.evaluate(async ({ webContents }, origin) => {
+    const wc = webContents.getAllWebContents().find(w => w.getURL().startsWith(origin))
+    return (await wc.capturePage()).toPNG().toString('base64')
+  }, pinnedOrigin)
+  writeFileSync(join(root, 'test/artifacts/agent-preview-navigation.png'), Buffer.from(image, 'base64'))
+
   await app.evaluate(
     async ({ webContents }, { origin, target }) => {
       const wc = webContents
@@ -195,7 +249,7 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 200))
   assert(win.url() === rendererUrl, 'a chat link must never replace the renderer')
 
-  console.log('PREVIEW-IFRAME-NAVIGATION OK — subframe redirect allowed, main frame pinned')
+  console.log('PREVIEW-IFRAME-NAVIGATION OK — agent route/query/hash, landing and chat guards, subframe redirect allowed, main frame pinned')
 } catch (error) {
   console.error('PREVIEW-IFRAME-NAVIGATION FAILED:', error?.message ?? error)
   process.exitCode = 1

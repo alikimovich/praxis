@@ -1,4 +1,5 @@
 import AnimationPanel from './components/AnimationPanel'
+import { usePreviewOpening } from './use-preview-opening'
 import { useCodeOpening } from './use-code-opening'
 import { useEffect, useRef, useState } from 'react'
 import NewProjectDialog from './components/NewProjectDialog'
@@ -147,6 +148,7 @@ export default function App(): React.JSX.Element {
   usePreviewReorder(setStatus)
   useControlOpening()
   useCodeOpening()
+  usePreviewOpening(status, previewKind)
   const drawerSource = useCodeDrawer((s) => s.source)
 
   // Custom Controls (v10): the selection's AI-surfaced panels, fetched here

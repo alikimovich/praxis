@@ -127,6 +127,13 @@ export function praxisRules(opts?: {
   }
   if (opts?.previewTools || opts?.controlTools) {
     lines.push(
+      `## Opening pages in the preview`,
+      `When asked to open or show a project page, call open_preview with its root-relative`,
+      `path (for example /work/my-article). Include query/hash when needed. Do not ask`,
+      `the user to type into the address bar. The request waits for the turn to land`,
+      `and a running web preview; it is scoped to the active project and chat.`,
+      `Report it as requested, not verified loaded; external sites and simulator navigation are unsupported.`,
+      ``,
       `## Showing exact code`,
       `When the user asks to see the exact code, implementation, or a file in Praxis,`,
       `read the relevant source and call open_code with its repo-relative file and`,

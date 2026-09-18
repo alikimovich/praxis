@@ -169,6 +169,7 @@ export function installWebApi(config: WebConfig): void {
       clearSelected: () => postPreview('clear-selected'),
       setStatus: (text) => postPreview('set-status', text),
       onToggleSelect: on('preview:toggle-select'),
+      onOpen: on('preview:open'),
       onUrlChanged: on('preview:url-changed'),
       onToolbarAction: on('preview:toolbar-action'),
       capture: async () => null,

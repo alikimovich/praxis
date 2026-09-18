@@ -1,3 +1,4 @@
+import { openAgentPreview } from '../preview-tools'
 import { openAgentCode } from '../code-tools'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -87,6 +88,7 @@ const PRAXIS_TOOL_NAMES = new Set([
   'mcp__praxis__define_controls',
   'mcp__praxis__open_controls',
   'mcp__praxis__open_code',
+  'mcp__praxis__open_preview',
   // Pure, deterministic spring→CSS calculator. No state, no side effects, so
   // it's auto-allowed like the observers — it never touches disk or the repo.
   'mcp__praxis__spring_to_css',
@@ -595,6 +597,17 @@ async function startSession(
             content: [{ type: 'image', data: jpeg.toString('base64'), mimeType: 'image/jpeg' }]
           }
         }
+      ),
+      tool(
+        'open_preview',
+        'Open a project page in the user preview. Pass a root-relative path with optional query/hash. Navigation waits for this turn to land.',
+        { path: z.string() },
+        async (args) => ({
+          content: [{ type: 'text' as const, text: JSON.stringify(
+            openAgentPreview(ctx?.liveRoot ?? root, emitKey, args,
+              (channel, payload) => sendToRenderer(getWindow, channel, payload), !!ctx?.sessionId)
+          ) }]
+        })
       ),
       tool(
         'open_code',

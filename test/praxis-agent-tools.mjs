@@ -18,7 +18,7 @@ import {
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const calls = []
 const registration = await registerPraxisAgentTools(async (action, args) => {
-  if (action === 'open_code' || action === 'open_controls' || action === 'define_controls') return { received: args }
+  if (action === 'open_preview' || action === 'open_code' || action === 'open_controls' || action === 'define_controls') return { received: args }
   calls.push(action)
   if (action === 'workspace_state') {
     return { state: 'parked', files: ['src/App.tsx'] }
@@ -116,6 +116,7 @@ try {
     'define_controls',
     'open_code',
     'open_controls',
+    'open_preview',
     'prepare_conflict_resolution',
     'workspace_state'
   ])
@@ -136,6 +137,8 @@ try {
   assert.deepEqual(opened.result.structuredContent.received, { source: 'src/App.tsx:10', tab: 'styles' })
   const revealed = await request('tools/call', { name: 'open_code', arguments: { file: 'src/App.tsx', startLine: 10, endLine: 14 } })
   assert.deepEqual(revealed.result.structuredContent.received, { file: 'src/App.tsx', startLine: 10, endLine: 14 })
+  const navigated = await request('tools/call', { name: 'open_preview', arguments: { path: '/work/article?view=full#intro' } })
+  assert.deepEqual(navigated.result.structuredContent.received, { path: '/work/article?view=full#intro' })
   const manifest = { file: 'src/App.tsx', component: 'App', title: 'Motion', params: [
     { id: 'delay', label: 'Delay', kind: 'number', min: 0, max: 1000, step: 10, unit: 'ms', apply: { strategy: 'literal', anchor: 'const DELAY = ' } }
   ] }

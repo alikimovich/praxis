@@ -111,4 +111,14 @@ server.registerTool(
   async (args) => result(await invoke('open_code', args))
 )
 
+server.registerTool(
+  'open_preview',
+  {
+    annotations: { destructiveHint: false, openWorldHint: false },
+    description: 'Open a project page in the user preview. Pass a root-relative path with optional query/hash. Navigation waits for this turn to land.',
+    inputSchema: { path: z.string() }
+  },
+  async (args) => result(await invoke('open_preview', args))
+)
+
 await server.connect(new StdioServerTransport())

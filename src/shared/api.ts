@@ -1283,6 +1283,8 @@ export interface PraxisApi {
     setStatus: (text: string | null) => void
     /** Fires when S is pressed inside the focused preview (toggle select). */
     onToggleSelect: (cb: () => void) => () => void
+    /** Agent request scoped to the active project and chat. */
+    onOpen: (cb: (request: import('./preview-navigation').PreviewOpenRequest) => void) => () => void
     /** Fires when the preview navigates (link clicks, SPA routes) — full URL. */
     onUrlChanged: (cb: (url: string) => void) => () => void
     /** Selection-toolbar actions that resolve in the renderer (code / delete). */

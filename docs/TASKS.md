@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Open project pages from chat (2026-09-17)
+
+- [x] Add scoped `open_preview` to Claude and Codex/custom endpoints.
+- [x] Navigate desktop/browser previews after landing, preserving route query/hash.
+
 ## Next.js setup and inspection (2026-09-17)
 
 - [x] Separate Next framework/version/router and script-derived bundler detection.

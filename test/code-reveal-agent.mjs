@@ -12,6 +12,7 @@ for (const provider of ['claude', 'codex']) {
   const userData = mkdtempSync(join(tmpdir(), 'praxis-code-agent-ui-'))
   writeFileSync(join(root, 'index.html'), '<h1>Invoice</h1>')
   writeFileSync(join(root, 'invoice.js'), code)
+  writeFileSync(join(root, 'article.html'), '<h1>Build your own design process</h1>')
   let app
   try {
     app = await _electron.launch({ executablePath: electronPath, args: [join(process.cwd(), 'out/main/index.js')], env: { ...process.env, PRAXIS_USER_DATA: userData } })
@@ -39,6 +40,17 @@ for (const provider of ['claude', 'codex']) {
     assert.equal((await win.locator('.codedrawer .cm-stamp-line').allTextContents()).join('\n'), code.split('\n').slice(2, 5).join('\n'))
     assert.equal(await win.evaluate(() => window.__praxisSelection.getState().selected), null)
     await win.screenshot({ path: `test/artifacts/code-reveal-${provider}.png` })
+    await win.fill('.composer__input', 'Can you open /article.html in the Praxis preview for me? Do not change files.')
+    await win.click('.composer__send')
+    await win.waitForFunction(() => window.__praxisStore.getState().isRunning, null, { timeout: 20000 })
+    await win.waitForFunction(() => !window.__praxisStore.getState().isRunning, null, { timeout: 180000 })
+    await win.waitForFunction(() => document.querySelector('[aria-label="Preview path"]')?.value === '/article.html', null, { timeout: 15000 })
+    const heading = await app.evaluate(async ({ webContents }) => {
+      const preview = webContents.getAllWebContents().find(w => w.getURL().endsWith('/article.html'))
+      return preview?.executeJavaScript('document.querySelector("h1").textContent')
+    })
+    assert.equal(heading, 'Build your own design process')
+    console.log(`OPEN-PREVIEW-AGENT OK — ${provider} opened the requested article`)
     console.log(`CODE-REVEAL-AGENT OK — ${provider} opened invoice.js and highlighted the exact function without selection`)
   } finally {
     await app?.close()

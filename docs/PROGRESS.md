@@ -2,6 +2,33 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-17 — Open project pages from chat
+
+Added `open_preview` to Claude's in-process tools and the Codex/custom-endpoint
+MCP bridge, with shared provider instructions to open requested project pages.
+The tool accepts a root-relative path, including query/hash, and reports a
+navigation request rather than claiming the page has loaded. Detached agents
+cannot navigate; external origins, parser escapes, and simulator routes are
+excluded.
+
+Desktop and browser transports route requests through the existing preview load
+API. The renderer scopes requests to the active project/chat, waits for isolated
+turns to land and the web preview to run, and drops requests after chat/project
+switches, failed or parked turns, or a newer turn. This avoids opening a newly
+authored route before its source reaches the served checkout.
+
+Validation: typecheck, route-boundary tests, actual stdio MCP registration/calls,
+and Electron navigation tests passed. The UI test checks path/query/hash,
+landing waits, wrong-project/chat guards, and stale request cancellation; native
+preview screenshot inspected. Real Claude and Codex turns both opened
+`/article.html` on request, with the rendered article heading verified.
+Full `verify`: 153/157 passed. The existing `agent-multi` failure reports
+"This chat is already running"; `controls-agent` and `controls-codex` report
+the provider session limit; `tool-invocation` made no tool calls. Next's opt-in
+matrix and the simulator self-skipped without their fixture/Xcode configuration.
+A final build/typecheck and targeted Electron rerun passed after adding the
+new-turn cancellation guard. Unrelated setup hunks in App.tsx remain unstaged.
+
 ## 2026-09-17 — Dedicated Next setup and verifiable worktree helpers
 
 Setup now detects Next separately from generic React, including installed version,
