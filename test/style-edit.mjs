@@ -120,7 +120,7 @@ try {
             t.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: 0 }))
           }
         }
-        return document.querySelectorAll('.stylepanel__grouptitle').length >= 3
+        return !!document.querySelector('.stylepanel__rows') && !document.querySelector('.stylepanel__lost')
       })()`)
       if (ok === true) return
       if (Date.now() > end) throw new Error(`the Styles tab never rendered its groups for ${source}`)
@@ -218,9 +218,10 @@ try {
   const groups = await panelEval(
     "[...document.querySelectorAll('.stylepanel__grouptitle')].map((e) => e.textContent.trim())"
   )
-  for (const g of ['Layout', 'Appearance', 'Typography']) {
+  for (const g of ['Layout', 'Appearance']) {
     if (!groups.includes(g)) throw new Error(`Styles group "${g}" missing; got ${JSON.stringify(groups)}`)
   }
+  if (groups.includes('Typography')) throw new Error('Unauthored typography must be hidden')
   if (groups.includes('Transition')) {
     throw new Error(`inactive browser-default transition rendered controls: ${JSON.stringify(groups)}`)
   }

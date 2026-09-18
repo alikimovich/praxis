@@ -56,6 +56,8 @@ export interface Diagnosis {
 
 /** Result of ensuring/switching the opened project's `praxis/*` working branch. */
 export interface BranchResult {
+  /** Files changed between branch tips; omitted when the comparison is unavailable. */
+  files?: string[]
   isRepo: boolean
   /** The branch now checked out (null if not a git repo or the switch failed). */
   branch: string | null
@@ -65,7 +67,29 @@ export interface BranchResult {
   error?: string
 }
 
+export interface GitRemoteStatus {
+  localBranches: string[]
+  current: string | null
+  remotes: string[]
+  upstream: string | null
+  branches: { ref: string; remote: string; branch: string; label: string }[]
+}
+export interface GitRemoteAction {
+  action: 'pull' | 'checkout'
+  ref: string
+  expectedBranch: string
+}
+export interface GitRemoteResult {
+  ok: boolean
+  branch: string | null
+  files: string[]
+  changed: boolean
+  message: string
+}
+
 export interface DetectedProject {
+  /** Empty project: open chat without attempting to launch a server. */
+  setupRequired?: boolean
   root: string
   name: string
   framework: Framework
@@ -90,7 +114,11 @@ export interface ProjectIcon {
   dataUrl: string
 }
 
-/** Result of `project:create` (scaffold a minimal Vite+React app, git init,
+export interface ProjectCreateOptions {
+  template: 'react' | 'empty'
+}
+
+/** Result of `project:create` (create the chosen starter, git init,
  *  install deps). `warning` = created, but a non-fatal step failed and the
  *  user must be told now (today: `git init` / the first commit — see
  *  scaffold.ts); it can be set alongside `ok: true`. */
@@ -564,6 +592,8 @@ export interface Bounds {
  * — that's what lets the agent edit the exact component (see DESIGN.md).
  */
 export interface SelectedElement {
+  /** Explicit Shift-click group; the outer element remains the inspector target. */
+  selectionGroup?: SelectedElement[]
   tag: string
   id: string | null
   /** Authored display classes only; compiler-generated style-scope markers are
@@ -669,6 +699,18 @@ export interface SourceMedia {
   url: string
 }
 
+/** Request to reveal exact source in the active chat’s mini editor. */
+export interface CodeRevealRequest {
+  root: string
+  key: string
+  source: string
+  startLine: number
+  endLine: number
+  /** Exact source lines, so landing or intervening edits cannot highlight unrelated code. */
+  code: string
+  requestId: string
+}
+
 /**
  * A stamped element's source file, read for the inspector's inline code peek —
  * the whole file (so surrounding context is visible) plus the stamp line and,
@@ -757,8 +799,18 @@ export interface PropInspection {
   note?: string
 }
 
+/** Agent request to select an object and open its desktop inspector. */
+export interface ControlsOpenRequest {
+  root: string
+  source?: string
+  file?: string
+  tab: 'props' | 'styles' | 'custom'
+  requestId: string
+}
+
 /** What the floating prop-panel island renders from (main renderer → island). */
 export interface PanelState {
+  openRequest?: ControlsOpenRequest
   root: string
   element: SelectedElement
   inspection: PropInspection | null
@@ -1268,14 +1320,15 @@ export interface PraxisApi {
     icon: (root: string) => Promise<ProjectIcon | null>
     /** Save-dialog for a folder to create (New Project…). Null when cancelled. */
     pickNew: () => Promise<string | null>
-    /** Scaffold a minimal Vite+React app there, git init, install deps. */
-    create: (root: string) => Promise<ProjectCreateResult>
+    /** Create the chosen starter; empty projects open directly into setup chat. */
+    create: (root: string, options?: ProjectCreateOptions) => Promise<ProjectCreateResult>
   }
   devServer: {
     start: (opts: {
       root: string
       command: string
       framework?: Framework
+      installDependencies?: boolean
     }) => Promise<RunningDevServer>
     /** Stop the dev server for one project (others keep running). */
     stop: (root: string) => Promise<void>
@@ -1288,6 +1341,8 @@ export interface PraxisApi {
     onLog: (cb: (line: string) => void) => () => void
   }
   git: {
+    remoteStatus: (root: string, fetch?: boolean) => Promise<GitRemoteStatus>
+    remoteUpdate: (root: string, action: GitRemoteAction) => Promise<GitRemoteResult>
     /** Ensure work happens on a `praxis/*` branch (creates one off HEAD if needed). */
     ensure: (root: string) => Promise<BranchResult>
     /** Switch to / create a specific branch (name is coerced to `praxis/<…>`). */
@@ -1382,6 +1437,7 @@ export interface PraxisApi {
   /** AI-surfaced custom-control panels (v10) — manifests persisted by main in
    *  the repo's `.praxis/control-panels.json`, values resolved fresh per read. */
   controls: {
+    onOpen: (cb: (request: ControlsOpenRequest) => void) => () => void
     /** Panels matching the selection's candidate files (two-stamp match), with
      *  every param's value freshly resolved against the live tree. */
     get: (
@@ -1405,6 +1461,7 @@ export interface PraxisApi {
     onUpdated: (cb: (root: string) => void) => () => void
   }
   source: {
+    onReveal: (cb: (request: CodeRevealRequest) => void) => () => void
     /** Resolve a component tag name to its defining file via imports (Cmd+click). */
     resolveComponent: (root: string, fromFile: string, name: string) => Promise<string | null>
     /** Read the stamped element's source file for the inspector's code peek. */
@@ -1552,7 +1609,7 @@ export interface PraxisApi {
       root: string,
       sessionKey: string
     ) => Promise<{ ok: boolean; remaining: string[]; activeSessionKey: string | null }>
-    send: (text: string, images?: ImageAttachment[]) => Promise<void>
+    send: (text: string, images?: ImageAttachment[], sessionKey?: string) => Promise<void>
     /** Write a pasted image (clipboard bytes, no on-disk origin) into the app's
      *  attachments dir and return its absolute path — so the turn can tell the
      *  agent WHERE the image it can see actually lives. '' if it couldn't be

@@ -3,6 +3,140 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Candidate merge reconciliation (2026-09-17) — SHIPPED
+
+- [x] **Merge remote updates while retaining native composer pickers and local
+      regression fixes.** Reconcile both logs and check desktop menu behavior on
+      the project action menu.
+
+## Show exact code from chat (2026-09-17)
+
+- [x] Add `open_code` for Claude and Codex/custom endpoints.
+- [x] Open the mini editor with exact highlighted source, independent of selection.
+- [x] Scope requests to the active chat/project, wait for landing, and preserve drafts.
+
+## Selection-independent animation controls (2026-09-17)
+
+- [x] Bundle `/animation-controls` and route ordinary animation-control requests to it.
+- [x] Make the skill discoverable by Claude, Codex/custom endpoints, and Gemini.
+- [x] Add tuning panels inside the previewed app, independent of Praxis selection.
+- [x] Keep native inspector controls distinct and update the animation action prompt.
+
+## Selection, message queues, and preview navigation (2026-09-17)
+
+- [x] Shift-click to add/remove selected objects and send the full group as chat context.
+- [x] Queue follow-ups per chat with captured attachments, removal, and pause/resume.
+- [x] Keep successful merges quiet while retaining Revert and conflict notices.
+- [x] Open chat links separately, guard the desktop renderer, and add Back to project.
+
+## Consistent sidebar hover (2026-09-17)
+
+- [x] Match project and Open/New action hovers to chat rows using one shared
+      translucent fill and 6px corners in both themes.
+
+## Compact chat composer (2026-09-17)
+
+- [x] Hide the draft scrollbar, equalize attachment spacing at 8px, reduce content
+      and control insets to 8px, and size Send/Stop to 28×28px.
+
+## Local branch preview refresh (2026-09-17)
+
+- [x] Refresh the preview after ordinary local-branch and named work-branch switches.
+- [x] Re-detect the destination environment and install dependencies when manifests
+      or lockfiles differ; reload attached previews and explain external-server restarts.
+
+## Git updates and remote branches (2026-09-16)
+
+- [x] Add Git updates to the branch menu: fetch remotes, pull a selected remote
+      branch into the current branch, and check out remote branches locally.
+- [x] Preserve local branches and commits; reject dirty trees, active agents,
+      stale branch selections, and existing Git operations; abort conflicting pulls.
+- [x] Serialize with the repository writer and refresh previews after changes;
+      expose the same root-scoped controls in browser mode.
+
+## Project setup and environment changes (2026-09-16)
+
+- [x] Ask how to start before scaffolding: defaults, Next.js, Svelte, or a custom
+      setup conversation in an empty repository.
+- [x] Open empty projects in chat and retain chat when preview startup fails.
+- [x] Refresh managed web previews after landed environment changes; re-detect
+      framework/package manager, install live-checkout dependencies, preserve
+      custom commands, and defer background refreshes until activation.
+- [x] Wait for setup edits to land before verifying instrumentation.
+
+## Subagent tooltip clipping (2026-09-16) — FIXED
+
+- [x] Keep cat tooltips inside the chat pane so the native preview cannot cover
+      long labels; verify hover and keyboard focus placement.
+
+## Desktop surfaces (2026-09-15, user-requested)
+
+- [x] Inset the default-model chevron and capture the project actions menu.
+
+- [x] Restyle shared dialogs and dropdowns with compact desktop proportions,
+      quiet light/dark surfaces, inset menu separators, and reduced-motion fades.
+- [x] Rework Settings into grouped preferences with a persistent header and a
+      scrolling form; bring history review onto the shared accessible dialog.
+- [x] Cover keyboard dismissal, focus return, small windows, and form cleanup
+      in the Electron regression suite.
+
+## Chat-render regression (2026-09-15) — FIXED
+
+- [x] Supply the required permission mode in synthetic per-chat settings so
+      switching chats preserves a valid permission picker; log renderer errors.
+
+## Sidebar ordering (2026-09-15, user-requested) — SHIPPED
+
+- [x] **Drag projects and chats to reorder the sidebar.** Project groups, live
+      chats within a project, and History rows have a native lifted drag image,
+      before/after drop indicator, Escape cancellation, and edge auto-scroll.
+- [x] **Persist manual display order independently of session lifecycle.** Keep
+      session keys, active chat, expansion state, and LRU recency unchanged;
+      reconcile new/deleted entries and retain ordering across renderer reloads.
+- [x] **Support keyboard reordering.** Alt+Up/Down on a row name retains focus
+      and announces the move. Rename/close buttons remain separate actions.
+
+## 3D component inspection (2026-09-15, user-requested)
+
+- [x] **Isolate a selected component in an exploded 3D workspace.** Desktop
+      selection-toolbar entry, orbit/pan/zoom, separation, front/reset, and
+      surface/dropdown selection connected to the existing inspector.
+- [x] **Keep edits connected to the live page.** Refresh captured surfaces after
+      DOM/style changes, retain source edits and undo, recover only unambiguous
+      replaced nodes, and return without navigating or remounting the page.
+- [ ] **Expand rendering fidelity.** Pseudo-elements, clip/transform/effect
+      reconstruction, portals and framework component grouping, continuously
+      animated surfaces, and browser-mode parity. See `docs/THREE_D.md`.
+
+## Controls from chat and authored inspector fields (2026-09-14) — SHIPPED
+
+- [x] **Select objects and open their inspector from the agent.** Add
+      `open_controls` for Claude, Codex, and custom endpoints; registering a
+      custom panel requests its Custom tab, with landing retries and project scoping.
+- [x] **Register animation controls on the Codex harness.** Share validated
+      manifests and literal-anchor checks with Claude, including background edits.
+- [x] **Show authored fields by default.** Hide absent optional props and
+      browser-default styles behind Show all; retain declared falsy defaults,
+      add numeric prop scrubbing, and keep rows stable while edits settle.
+
+## Required agent-browser workflow (2026-09-14, user-requested) — SHIPPED
+
+- [x] **Require agent-browser for browser verification when available.** Shared
+      provider instructions check availability, use isolated sessions, cover three
+      responsive sizes, require screenshots, and report missing/stale verification.
+      Document prompt-level enforcement and preserve explicit user tool choices.
+
+## Optional agent-browser installation (2026-09-14, user-requested) — SHIPPED
+
+- [x] **Recommend agent-browser and offer to install it during setup.** Prompt via
+      the terminal for piped installers, default to No, skip existing installs or
+      absent terminals, and keep optional failures from blocking Praxis setup.
+
+## Simultaneous startup reveal (2026-09-14, user-requested) — SHIPPED
+
+- [x] **Reveal the entire startup cat equally at once.** Synchronize contour
+      opacity and blur, preserving the four-second intro and app crossfade.
+
 ## Cat animation test reliability (2026-09-16) — SHIPPED
 
 - [x] **Replace the long reduced-motion sleep with idle-timer assertions.** Check
@@ -979,9 +1113,9 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
       editing them at all is unimplemented, not merely unsupported.
 - [ ] **Auto re-pick after navigation.** A full navigation wipes the preview
       preload's selection; the panel asks for a manual re-click today.
-- [ ] **`define_controls` for Codex/Gemini.** Those backends get no custom
-      tools, so they fall back to instrument-as-props. A per-backend bridge
-      (or a file-based manifest hand-off main picks up) would close the gap.
+- [x] **`define_controls` for Codex and custom endpoints.** Shared validated
+      registration through the session-scoped MCP bridge, including background edits.
+- [ ] **`define_controls` for experimental Gemini.** Still uses typed-prop fallback.
 
 ## Health / infra (from the 2026-07-07 review)
 
@@ -1017,3 +1151,5 @@ Ranked by leverage. Deferred items note *why* they're not auto-completable.
       `PraxisApi`, `.praxis/`, `praxis/*` branches, `<userData>/praxis`. Clean break for
       stamped target repos (re-run setup); legacy shims cover uninstall, old work
       branches, and one-time sidecar/userData migration. See PROGRESS 2026-07-17.
+
+- [ ] Fix startup-intro regression: recognize localhost native previews and keep the restored preview hidden throughout the intro crossfade (observed during Git-update verification, 2026-09-16).

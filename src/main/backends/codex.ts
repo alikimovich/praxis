@@ -1,3 +1,4 @@
+import { openAgentCode } from '../code-tools'
 import { execFile } from 'node:child_process'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -24,6 +25,7 @@ import { type RolloutUsageWatch, watchRolloutUsage } from '../codex-usage'
 import { type PraxisAgentToolRegistration, registerPraxisAgentTools } from '../praxis-agent-tools'
 import { resolveConnection } from '../providers'
 import { scrubSecret } from '../providers-store'
+import { defineAgentControls, openAgentControls } from '../control-tools'
 import { praxisRules } from '../rules'
 import { createRetryCause } from './codex-retry'
 import { createItemTracker } from './codex-stream'
@@ -180,7 +182,11 @@ async function startSession(
 
   const emit = (event: AgentEvent): void => {
     if (disposed) return
-    const tagged = { ...event, projectKey: emitKey, ...(ctx?.sessionId ? { sessionId: ctx.sessionId } : {}) }
+    const tagged = {
+      ...event,
+      projectKey: emitKey,
+      ...(ctx?.sessionId ? { sessionId: ctx.sessionId } : {})
+    }
     // agent.ts's in-process hook — v9 workspace-snapshot isRunning tracking
     // (set for every interactive session: default, new-chat, resumed).
     ctx?.onEvent?.(tagged)
@@ -231,8 +237,27 @@ async function startSession(
       )
     }
     const { Codex } = await loadCodex()
-    praxisTools = await registerPraxisAgentTools(async (action) => {
-      if (ctx?.sessionId) return { ok: false, guidance: 'This background edit lands automatically. Do not change the parent chat workspace.' }
+    praxisTools = await registerPraxisAgentTools(async (action, args) => {
+      const notify = (channel: string, payload: unknown): void =>
+        sendToRenderer(getWindow, channel, payload)
+      if (action === 'define_controls')
+        return defineAgentControls(
+          root,
+          ctx?.liveRoot ?? root,
+          (args as { manifest?: unknown })?.manifest,
+          notify
+        )
+      if (action === 'open_code')
+        return ctx?.sessionId
+          ? { error: 'Background edits cannot navigate the user editor.' }
+          : openAgentCode(root, ctx?.liveRoot ?? root, emitKey, args, notify)
+      if (action === 'open_controls') return openAgentControls(ctx?.liveRoot ?? root, args, notify)
+      if (ctx?.sessionId)
+        return {
+          ok: false,
+          guidance:
+            'This background edit lands automatically. Do not change the parent chat workspace.'
+        }
       if (action === 'workspace_state') return agentWorkspaceState(emitKey)
       const before = agentWorkspaceState(emitKey)
       if (before.state === 'live' || before.state === 'isolated') {
@@ -258,7 +283,10 @@ async function startSession(
       mcp_servers: {
         praxis: {
           command: process.execPath,
-          args: [join(app.getAppPath(), 'bin', 'praxis-agent-mcp.mjs')],
+          // Electron's app path is out/main when launched from the compiled entry.
+          args: [join(__dirname, '../../bin/praxis-agent-mcp.mjs')],
+          // Source reveal is validated read-only navigation, like Claude's allowlist.
+          tools: { open_code: { approval_mode: 'approve' } },
           env: {
             ELECTRON_RUN_AS_NODE: '1',
             PRAXIS_AGENT_TOOL_SOCKET: praxisTools.socketPath,
@@ -467,7 +495,7 @@ async function startSession(
     // Codex CLI is text-only here; images (paste/drop) are ignored for now.
     send: (text, _images) => {
       const prompt = firstTurn
-        ? `${praxisRules({ workspaceTools: !ctx?.sessionId, projectMemory: ctx?.projectMemory })}\n\n---\n\n${text}`
+        ? `${praxisRules({ controlTools: true, workspaceTools: !ctx?.sessionId, projectMemory: ctx?.projectMemory })}\n\n---\n\n${text}`
         : text
       firstTurn = false
       chain = chain.then(() => runTurn(prompt))
@@ -539,4 +567,9 @@ async function updateProjectMemory(
   }
 }
 
-export const codexProvider: ModelProvider = { id: 'codex', supportsSpawn: true, startSession, updateProjectMemory }
+export const codexProvider: ModelProvider = {
+  id: 'codex',
+  supportsSpawn: true,
+  startSession,
+  updateProjectMemory
+}

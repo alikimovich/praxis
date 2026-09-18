@@ -1,5 +1,7 @@
+import { useMessageQueue } from './message-queue'
 import { create } from 'zustand'
 import type {
+  CodeRevealRequest,
   Annotation,
   CommentMode,
   Diagnosis,
@@ -287,7 +289,7 @@ export const useChat = create<ChatState>((set, get) => {
       patch(key, (sl) => ({ ...sl, isolation, isolationFiles: isolation === 'parked' ? files : undefined })),
     tagRevert: (key, group) =>
       patch(key, (sl) => {
-        const idx = sl.messages.map((m) => m.role).lastIndexOf('assistant')
+        const idx = sl.messages.map((m) => m.role === 'assistant' && m.id !== sl.streamingId).lastIndexOf(true)
         if (idx < 0) return sl
         const messages = sl.messages.slice()
         messages[idx] = { ...messages[idx], revertGroup: group }
@@ -297,6 +299,7 @@ export const useChat = create<ChatState>((set, get) => {
       // A closed chat's half-written message goes with it — otherwise a new chat
       // that reuses the key (a project's default `key` after closing all of them)
       // would open showing the dead chat's text.
+      useMessageQueue.getState().clear(key)
       useComposerDrafts.getState().clear(key)
       set((s) => {
         const byKey = { ...s.byKey }
@@ -579,6 +582,8 @@ export const useSession = create<SessionState>((set) => ({
  */
 /** How to relaunch a project's preview (used to restart it after a config edit). */
 export interface LaunchSpec {
+  /** Preserve user-entered commands; auto-detected launches are re-detected. */
+  customCommand?: boolean
   root: string
   command: string
   framework?: Framework
@@ -586,6 +591,8 @@ export interface LaunchSpec {
 }
 
 export interface ProjectEntry {
+  environmentRevision?: number
+  dependenciesPending?: boolean
   /** Absolute repo root as opened. */
   root: string
   /** Canonical key (`projectKey(root)`) — the dedupe + map identity. */
@@ -779,33 +786,37 @@ export const usePanelInset = create<PanelInsetState>((set) => ({
  * preview (right side) and reserves a bottom inset (usePanelInset).
  */
 interface CodeDrawerState {
+  reveal: CodeRevealRequest | null
+  dirty: boolean
   /** The `data-praxis-source` string of the file open in the drawer, or null. */
   source: string | null
   /** Navigation history (Cmd+click jumps push here); index points at `source`. */
   stack: string[]
   index: number
-  open: (source: string) => void
+  open: (source: string, reveal?: CodeRevealRequest) => void
   back: () => void
   forward: () => void
   close: () => void
 }
 export const useCodeDrawer = create<CodeDrawerState>((set) => ({
+  reveal: null,
+  dirty: false,
   source: null,
   stack: [],
   index: -1,
-  open: (source) =>
+  open: (source, reveal) =>
     set((s) => {
-      if (s.source === source) return {}
+      if (s.source === source && s.reveal === (reveal ?? null)) return {}
       // A new open truncates any forward history (browser semantics).
       const stack = [...s.stack.slice(0, s.index + 1), source]
-      return { source, stack, index: stack.length - 1 }
+      return { source, stack, index: stack.length - 1, reveal: reveal ?? null }
     }),
-  back: () => set((s) => (s.index > 0 ? { index: s.index - 1, source: s.stack[s.index - 1] } : {})),
+  back: () => set((s) => (s.index > 0 ? { index: s.index - 1, source: s.stack[s.index - 1], reveal: null } : {})),
   forward: () =>
     set((s) =>
-      s.index < s.stack.length - 1 ? { index: s.index + 1, source: s.stack[s.index + 1] } : {}
+      s.index < s.stack.length - 1 ? { index: s.index + 1, source: s.stack[s.index + 1], reveal: null } : {}
     ),
-  close: () => set({ source: null, stack: [], index: -1 })
+  close: () => set({ source: null, stack: [], index: -1, reveal: null, dirty: false })
 }))
 
 /**
@@ -1316,7 +1327,7 @@ export const useSelection = create<SelectionState>((set) => ({
   // Select and comment/annotate are mutually exclusive overlay modes.
   setSelectMode: (selectMode) => set({ selectMode, ...(selectMode ? { commentMode: null } : {}) }),
   setCommentMode: (commentMode) => set({ commentMode, ...(commentMode ? { selectMode: false } : {}) }),
-  setSelected: (selected) => set({ selected, inspection: null, inspecting: false }),
+  setSelected: (selected) => set({ selected: selected?.selectionGroup?.length === 0 ? null : selected, inspection: null, inspecting: false }),
   setInspection: (inspection) => set({ inspection }),
   setInspecting: (inspecting) => set({ inspecting })
 }))
@@ -1474,6 +1485,7 @@ export const formatConversation = (messages: ChatMessage[]): string =>
  * selection is dropped.
  */
 interface PropsIslandState {
+  openRequest?: import('../../shared/api').ControlsOpenRequest
   open: boolean
   setOpen: (open: boolean) => void
 }

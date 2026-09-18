@@ -202,7 +202,7 @@ try {
       return 'visible:' + kinds + (editShown ? ' edit-shown' : ' edit-hidden')
     })()`)
   })
-  if (!/^visible:comment,annotate,edit,props,code,delete edit-shown$/.test(toolbarShown)) {
+  if (!/^visible:comment,annotate,edit,props,three-d,code,delete edit-shown$/.test(toolbarShown)) {
     throw new Error(`in-preview selection toolbar wrong: ${toolbarShown}`)
   }
   await win.screenshot({ path: join(artifacts, '07-select-handoff.png') })
@@ -240,6 +240,63 @@ try {
     return img.toPNG().toString('base64')
   })
   if (overlayPng) writeFileSync(join(artifacts, '07b-selection-badge.png'), Buffer.from(overlayPng, 'base64'))
+
+
+  // Shift-click selects actual independent objects, toggles membership, and
+  // leaves the most recently selected object as the single-object inspector target.
+  const clickPreview = async (id, shift) => app.evaluate(async ({ webContents }, { id, shift }) => {
+    const wc = webContents.getAllWebContents().find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
+    const point = await wc.executeJavaScript(`(() => {
+      let el = document.getElementById(${JSON.stringify(id)})
+      if (!el) { el = document.createElement('button'); el.id = ${JSON.stringify(id)}; el.textContent = 'Second object'; el.style.cssText = 'position:fixed;bottom:40px;left:40px'; document.body.appendChild(el) }
+      const r = el.getBoundingClientRect(); return { x: Math.round(r.left+r.width/2), y: Math.round(r.top+r.height/2) }
+    })()`)
+    wc.focus()
+    const modifiers = shift ? ['shift'] : []
+    wc.sendInputEvent({ type: 'mouseDown', ...point, button: 'left', clickCount: 1, modifiers })
+    wc.sendInputEvent({ type: 'mouseUp', ...point, button: 'left', clickCount: 1, modifiers })
+  }, { id, shift })
+  await clickPreview('second-object', true)
+  await win.waitForFunction(() => window.__praxisSelection.getState().selected?.selectionGroup?.length === 2)
+  await win.locator('.composer').screenshot({ path: join(artifacts, 'multiple-selection.png') })
+  const multiPng = await app.evaluate(async ({ webContents }) => {
+    const wc = webContents.getAllWebContents().find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
+    const outlined = await wc.executeJavaScript(`document.querySelector('[data-praxis-overlay]').shadowRoot.querySelectorAll('[data-praxis-selbox]').length`)
+    if (outlined !== 2) throw new Error('both selected objects must remain outlined')
+    return (await wc.capturePage()).toPNG().toString('base64')
+  })
+  writeFileSync(join(artifacts, 'multiple-selection-preview.png'), Buffer.from(multiPng, 'base64'))
+  await clickPreview('second-object', true)
+  await win.waitForFunction(() => window.__praxisSelection.getState().selected?.selectionGroup?.length === 1)
+  await clickPreview('hero-title', false)
+  await win.waitForFunction(() => window.__praxisSelection.getState().selected?.id === 'hero-title')
+
+  // Project-owned tuning controls must work without replacing the active pick.
+  for (const marker of ['dialkit-root', 'data-praxis-controls']) {
+    await app.evaluate(async ({ webContents }, marker) => {
+      const wc = webContents.getAllWebContents().find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
+      await wc.executeJavaScript(`(() => {
+        const panel = document.createElement('div')
+        panel.id = 'test-tuning-panel'
+        if (${JSON.stringify(marker)} === 'dialkit-root') panel.className = 'dialkit-root'
+        else panel.setAttribute('data-praxis-controls', '')
+        panel.style.cssText = 'position:fixed;top:20px;right:20px;z-index:999999'
+        const button = document.createElement('button'); button.id = 'test-replay'; button.textContent = 'Replay'
+        button.onclick = () => { window.__tuningClicked = true }
+        panel.append(button); document.body.append(panel)
+      })()`)
+    }, marker)
+    await clickPreview('test-replay', false)
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    const clicked = await app.evaluate(async ({ webContents }) => {
+      const wc = webContents.getAllWebContents().find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
+      return wc.executeJavaScript(`(() => { const clicked = window.__tuningClicked; delete window.__tuningClicked; document.getElementById('test-tuning-panel').remove(); return clicked })()`)
+    })
+    if (!clicked) throw new Error(`${marker} control click swallowed by selection`)
+    if (await win.evaluate(() => window.__praxisSelection.getState().selected?.id) !== 'hero-title') {
+      throw new Error(`${marker} control changed the active selection`)
+    }
+  }
 
   // Clicking Edit-text arms the inline contentEditable on the selected leaf —
   // the discoverable form of the double-click gesture. (Our own overlay button,

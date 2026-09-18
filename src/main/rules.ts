@@ -14,13 +14,15 @@
  *
  * Bump PRAXIS_RULES_VERSION whenever the rule text changes (so logs/tests can pin it).
  */
+import { ANIMATION_CONTROLS_SKILL } from './bundled-skills'
 import { projectMemoryRules } from './project-memory'
 
-export const PRAXIS_RULES_VERSION = 12
+export const PRAXIS_RULES_VERSION = 17
 
 export function praxisRules(opts?: {
   previewTools?: boolean
   workspaceTools?: boolean
+  controlTools?: boolean
   projectMemory?: string
 }): string {
   const lines: string[] = [
@@ -31,6 +33,24 @@ export function praxisRules(opts?: {
     `with their source location (\`data-praxis-source\` file:line), so a selection tells`,
     `you exactly which code renders what they clicked. Your edits hot-reload into the`,
     `preview instantly. Follow these rules so changes stay consistent across the project.`,
+    ``,
+    `## New projects and environment changes`,
+    `For a new or empty project, ask what the user is building and whether they want`,
+    `the defaults or a particular framework/package manager before scaffolding or`,
+    `installing packages. Offer sensible defaults, ask only about unresolved choices,`,
+    `and respect an explicitly chosen setup without asking again. Do not prebuild a`,
+    `React/Vite app when the user wants Next.js, Svelte, or their own environment.`,
+    `When changing frameworks, update the scripts, dependencies, lockfile, and config`,
+    `together. Praxis re-detects the environment, installs dependencies in the live`,
+    `checkout, and restarts the preview after these files successfully land. Never`,
+    `start a competing dev server. Failed or parked work does not refresh the preview.`,
+    ``,
+    `## Animation tuning panels`,
+    `When asked to surface animation controls or add a DialKit-style panel, read`,
+    `the bundled animation-controls skill at ${JSON.stringify(ANIMATION_CONTROLS_SKILL)}.`,
+    `Build the controls inside the previewed project, independent of element selection.`,
+    `Keep their live values connected to the actual animation and the panel mounted`,
+    `when selection changes or clears. Selection-inspector requests keep their existing workflow.`,
     ``,
     `## Scope of an element edit`,
     `A selected element is the ENTRY POINT for a change, not its full scope. Before`,
@@ -100,9 +120,31 @@ export function praxisRules(opts?: {
       `  visual change you just made, or when the user references what they're looking at.`,
       `Division of labor: these tools OBSERVE the user's own view; \`agent-browser\` (below)`,
       `is your OWN headless copy for interacting/inspecting.`,
-      ``,
-      `## Surfacing control panels (define_controls)`,
-      `When the user asks for sliders / knobs / a control panel to tweak some parameter`,
+      ``
+    )
+  }
+  if (opts?.previewTools || opts?.controlTools) {
+    lines.push(
+      `## Showing exact code`,
+      `When the user asks to see the exact code, implementation, or a file in Praxis,`,
+      `read the relevant source and call open_code with its repo-relative file and`,
+      `inclusive 1-based startLine/endLine. This opens the mini code editor and`,
+      `highlights that exact range without requiring a preview selection.`,
+      `Choose the smallest useful implementation range; do not guess line numbers`,
+      `or substitute a pasted code block for opening the editor. The request waits`,
+      `for newly edited code to land and preserves unsaved user edits.`,
+      ``
+    )
+  }
+  if (opts?.previewTools || opts?.controlTools) {
+    lines.push(
+      `## Surfacing control panels (define_controls / open_controls)`,
+      `When asked to show selection-inspector controls, call open_controls with the object's source stamp`,
+      `(file:line) or source file to select it and open the requested inspector tab.`,
+      `define_controls also requests opening the Custom tab. Prefer number controls with`,
+      `ranges/steps for animation parameters, toggles for booleans, and select/bezier`,
+      `controls for easing. Surface only parameters actually used by the component.`,
+      `For selection-inspector sliders / knobs / a control panel to tweak a parameter`,
       `(a stagger delay, a spring config, a magic number), first INSTRUMENT the code so`,
       `each parameter is a tweakable target: extract magic values to named top-level`,
       `constants in the component's OWN file (keeps hot-reload fast), or expose them as`,
@@ -114,7 +156,11 @@ export function praxisRules(opts?: {
       `pure CSS properties. For number params, give a sensible min/max/step/unit (those`,
       `fields are only valid on kind 'number'). Never write under \`.praxis/\` yourself —`,
       `the tool persists the manifest for you.`,
-      ``,
+      ``
+    )
+  }
+  if (opts?.previewTools) {
+    lines.push(
       `## Spring animations (spring_to_css)`,
       `For any spring / bouncy / physics-based motion — or when the user gives spring`,
       `params (stiffness/damping/mass, damping-ratio + frequency, or bounce + duration) —`,
@@ -163,17 +209,38 @@ export function praxisRules(opts?: {
 
   lines.push(
     ``,
-    `## Inspecting the running app in a browser`,
-    `When you need to inspect or interact with the running web preview — read the DOM,`,
-    `check the console, click around, verify a change visually, grab a screenshot — use`,
-    `the \`agent-browser\` CLI (it drives a headless browser made for agents). Useful`,
-    `commands: \`agent-browser open <url>\`, \`snapshot\` (accessibility tree with refs),`,
-    `\`get text|html|styles|value <sel>\`, \`get console\`, \`eval <js>\`, \`click <sel>\`,`,
-    `\`type <sel> <text>\`, \`screenshot <path>\`. The URL is the dev server shown in the`,
-    `preview.`,
+    `## Required browser verification with agent-browser`,
+    `For web UI changes, visual verification, responsive testing, or browser interaction,`,
+    `you MUST use \`agent-browser\` when available. This is required, not a suggestion;`,
+    `a build, typecheck, or DOM-only guess does not replace browser verification.`,
+    `Before your first browser task in a session, run \`command -v agent-browser\` and`,
+    `\`agent-browser --help\` in your execution environment. Recheck after installation`,
+    `or a PATH change. If the installed CLI supports it, read its version-matched guide`,
+    `with \`agent-browser skills get core --full\`; otherwise use its help.`,
+    `If the CLI is missing, or its browser cannot launch, report the actual blocker and`,
+    `offer installation/setup. Do not install packages without the user's permission,`,
+    `silently substitute another browser tool, or claim browser verification passed.`,
+    `Use a unique \`--session praxis-<task-id>\` on every browser command so concurrent`,
+    `chats do not change each other's pages or viewport. Close only your own session.`,
+    `Open the Praxis-managed preview URL and the relevant route; do not start another`,
+    `dev server or attach to the user's browser. Check that the page contains the change`,
+    `being tested. Private worktree edits may not be served until Praxis lands the turn:`,
+    `if the preview still shows older code, report verification as pending, never passed,`,
+    `and do not bypass Praxis's worktree/landing lifecycle to make it visible.`,
+    `Use \`open <url>\`, \`snapshot\`, \`get text|html|styles|value <sel>\`, \`console\`,`,
+    `\`errors\`, \`eval <js>\`, \`click <sel>\`, and \`screenshot <path>\` as appropriate.`,
+    `Exercise the changed interaction and inspect screenshots of the affected UI.`,
+    `For layout or responsive changes, test phone, tablet, and desktop CSS viewports:`,
+    `\`set viewport 390 844\`, \`set viewport 768 1024\`, and \`set viewport 1440 900\`,`,
+    `unless the user specifies other sizes. Check overflow, clipped content, and usable`,
+    `controls at each size; capture and inspect a screenshot at each size. Viewport`,
+    `resizing checks layout, not real-device behavior or Safari compatibility.`,
+    `Before finishing, report the route, sizes, interactions checked, and any blockers.`,
+    `If preview screenshot tools are available, they complement this workflow by showing`,
+    `the user's current view; they do not replace the required responsive checks.`,
     `Do NOT launch Chrome DevTools, a headed/visible browser, \`chrome://inspect\`, or a`,
-    `one-off Playwright/Puppeteer script to do this — UNLESS the user explicitly asks you`,
-    `to open DevTools or a real browser. Default to \`agent-browser\`.`
+    `one-off Playwright/Puppeteer script to do this — UNLESS the user explicitly asks`,
+    `for that tool. An explicit user request for another tool overrides this default.`
   )
 
   return lines.join('\n')

@@ -8,6 +8,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  checkoutBranch,
   ensureBranch,
   getCurrentBranch,
   isGitRepo,
@@ -40,7 +41,7 @@ g('commit', '-m', 'init')
 assert.equal(await getCurrentBranch(dir), 'main')
 
 // ensureBranch from main → creates praxis/main and checks it out
-assert.deepEqual(await ensureBranch(dir), { isRepo: true, branch: 'praxis/main', created: true })
+assert.deepEqual(await ensureBranch(dir), { isRepo: true, branch: 'praxis/main', created: true, files: [] })
 assert.equal(await getCurrentBranch(dir), 'praxis/main')
 
 // ensureBranch when already on a praxis/* branch → keep it, don't recreate
@@ -56,7 +57,8 @@ g('checkout', 'praxis/main')
 assert.deepEqual(await switchBranch(dir, 'feature-y'), {
   isRepo: true,
   branch: 'praxis/feature-y',
-  created: true
+  created: true,
+  files: []
 })
 assert.equal(await getCurrentBranch(dir), 'praxis/feature-y')
 
@@ -64,8 +66,18 @@ assert.equal(await getCurrentBranch(dir), 'praxis/feature-y')
 assert.deepEqual(await switchBranch(dir, 'praxis/main'), {
   isRepo: true,
   branch: 'praxis/main',
-  created: false
+  created: false,
+  files: []
 })
 
+// Switching environments reports manifests in either direction, including deletion.
+g('checkout', 'praxis/feature-y')
+writeFileSync(join(dir, 'package.json'), '{"scripts":{"dev":"vite"}}')
+g('add', '.'); g('commit', '-m', 'framework branch')
+assert.deepEqual((await checkoutBranch(dir, 'main')).files, ['package.json'])
+assert.deepEqual((await switchBranch(dir, 'feature-y')).files, ['package.json'])
+const failed = await checkoutBranch(dir, 'missing-branch')
+assert.ok(failed.error)
+assert.equal(failed.files, undefined)
 rmSync(dir, { recursive: true, force: true })
 console.log('GIT OK — normalize, non-repo, ensure (create/keep), switch (create/existing)')

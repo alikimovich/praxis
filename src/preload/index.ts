@@ -1,5 +1,9 @@
 import { contextBridge, type IpcRendererEvent, ipcRenderer, webUtils } from 'electron'
 import type {
+  ProjectCreateOptions,
+  GitRemoteAction,
+  GitRemoteResult,
+  GitRemoteStatus,
   AgentEvent,
   AgentOptions,
   Annotation,
@@ -153,13 +157,15 @@ const api: PraxisApi = {
     detect: (root: string): Promise<DetectedProject> => ipcRenderer.invoke('project:detect', root),
     icon: (root: string): Promise<ProjectIcon | null> => ipcRenderer.invoke('project:icon', root),
     pickNew: (): Promise<string | null> => ipcRenderer.invoke('project:pick-new'),
-    create: (root: string): Promise<ProjectCreateResult> => ipcRenderer.invoke('project:create', root)
+    create: (root: string, options?: ProjectCreateOptions): Promise<ProjectCreateResult> =>
+      ipcRenderer.invoke('project:create', root, options)
   },
   devServer: {
     start: (opts: {
       root: string
       command: string
       framework?: Framework
+      installDependencies?: boolean
     }): Promise<RunningDevServer> => ipcRenderer.invoke('devserver:start', opts),
     stop: (root: string): Promise<void> => ipcRenderer.invoke('devserver:stop', root),
     isRunning: (root: string): Promise<boolean> => ipcRenderer.invoke('devserver:running', root),
@@ -167,6 +173,8 @@ const api: PraxisApi = {
     onLog: on<string>('devserver:log')
   },
   git: {
+    remoteStatus: (root: string, fetch?: boolean): Promise<GitRemoteStatus> => ipcRenderer.invoke('git:remote-status', root, fetch),
+    remoteUpdate: (root: string, action: GitRemoteAction): Promise<GitRemoteResult> => ipcRenderer.invoke('git:remote-update', root, action),
     ensure: (root: string): Promise<BranchResult> => ipcRenderer.invoke('git:ensure', root),
     set: (root: string, name: string): Promise<BranchResult> =>
       ipcRenderer.invoke('git:set', root, name),
@@ -230,6 +238,7 @@ const api: PraxisApi = {
       ipcRenderer.invoke('layers:move', root, req)
   },
   controls: {
+    onOpen: on('controls:open'),
     get: (root: string, q: { files: string[]; component?: string }): Promise<ResolvedControlPanel[]> =>
       ipcRenderer.invoke('controls:get', root, q),
     list: (root: string): Promise<ControlPanelManifest[]> =>
@@ -246,6 +255,7 @@ const api: PraxisApi = {
     onUpdated: on<{ root: string }, string>('controls:updated', (payload) => payload.root)
   },
   source: {
+    onReveal: on('source:reveal'),
     read: (root: string, source: string): Promise<SourceView | null> =>
       ipcRenderer.invoke('source:read', root, source),
     resolveComponent: (root: string, fromFile: string, name: string): Promise<string | null> =>
@@ -345,8 +355,8 @@ const api: PraxisApi = {
       title: string
     ): Promise<{ ok: boolean; title?: string; error?: string }> =>
       ipcRenderer.invoke('agent:rename-chat', sessionKey, title),
-    send: (text: string, images?: ImageAttachment[]): Promise<void> =>
-      ipcRenderer.invoke('agent:send', text, images),
+    send: (text: string, images?: ImageAttachment[], sessionKey?: string): Promise<void> =>
+      ipcRenderer.invoke('agent:send', text, images, sessionKey),
     saveAttachment: (image: ImageAttachment, name?: string): Promise<string> =>
       ipcRenderer.invoke('attachments:save', image, name),
     setModel: (model: string): Promise<void> => ipcRenderer.invoke('agent:set-model', model),

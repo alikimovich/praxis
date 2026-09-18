@@ -23,16 +23,13 @@ export default function StartupIntro({ children }: { children: ReactNode }): Rea
     }
     const pixels = [...root.querySelectorAll<SVGGraphicsElement>('.pixel')]
     const soften = root.querySelector('feGaussianBlur')
-    // Preserve the supplied animation's single-layer threshold reveal and timings.
-    const animations = pixels.map((pixel, i) => {
-      const start = Math.min(i * 0.018, 0.24)
-      const end = Math.min(0.68 + i * 0.012, 0.96)
-      const frames = Array.from({ length: 101 }, (_, n) => {
-        const progress = n / 100
-        const local = clamp((progress - start) / (end - start))
-        const radius = 16 * (1 + (i % 3) * 0.2083) * (1 - local)
-        return { offset: progress, opacity: local, filter: `blur(${radius}px)` }
-      })
+    // Reveal every contour together, with the same opacity and blur throughout.
+    const frames = Array.from({ length: 101 }, (_, n) => {
+      const progress = n / 100
+      const local = clamp(progress / 0.92)
+      return { offset: progress, opacity: local, filter: `blur(${16 * (1 - local)}px)` }
+    })
+    const animations = pixels.map((pixel) => {
       const animation = pixel.animate(frames, {
         duration: DURATION,
         fill: 'both',

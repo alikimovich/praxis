@@ -53,7 +53,10 @@ transition:
 
 ## Making it tweakable
 
-If the user wants to fiddle with the spring live (sliders for stiffness/damping, or a
-bounce knob), extract the params to named constants and pair this with `define_controls`
-so they can scrub the values from the selection island, then re-run `spring_to_css` with
-their chosen numbers.
+For a live animation tuning panel, follow the sibling
+[animation-controls skill](../animation-controls/SKILL.md). Its controls live in
+the previewed app independently of selection, and must update the actual spring
+rather than only changing constants behind a precomputed CSS curve. Keep an
+existing runtime spring engine when the app already has one. If the user explicitly
+wants selection-inspector controls, use `define_controls` with named parameters
+and ensure derived easing values are regenerated when those parameters change.

@@ -84,6 +84,13 @@ function MarkdownSpan({ node, style, ...props }: MarkdownSpanProps): React.JSX.E
   return <span {...props} style={colorStyle} />
 }
 
+function MarkdownLink({
+  node: _node,
+  ...props
+}: ComponentPropsWithoutRef<'a'> & ExtraProps): React.JSX.Element {
+  return <a {...props} target="_blank" rel="noopener noreferrer" />
+}
+
 /** Renders streamed assistant text as GitHub-flavored markdown with code highlighting. */
 export default function Markdown({ children }: { children: string }): React.JSX.Element {
   return (
@@ -91,7 +98,7 @@ export default function Markdown({ children }: { children: string }): React.JSX.
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={rehypePlugins}
-        components={{ span: MarkdownSpan }}
+        components={{ span: MarkdownSpan, a: MarkdownLink }}
       >
         {children}
       </ReactMarkdown>

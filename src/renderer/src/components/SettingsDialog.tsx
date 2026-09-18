@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ChevronDown } from '../icons'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -8,7 +9,6 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { ProviderConnection } from '../../../shared/api'
 import {
   LAST_USED_VALUE,
@@ -26,7 +26,7 @@ import ProviderForm from './ProviderForm'
 
 /**
  * App settings (Cmd+, from the app menu, or the model picker's "Manage
- * providers…"). Tabbed so more panes can land later. "Models & Providers"
+ * providers…"). "Models & Providers"
  * holds the default-model pick (last-used, or a specific catalog entry) plus
  * the saved `ProviderConnection`s and the add/edit form (ProviderForm) that
  * owns the key-bearing state.
@@ -104,22 +104,23 @@ export default function SettingsDialog(): React.JSX.Element {
 
   return (
     <Dialog open={open && shown} onOpenChange={setOpen}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="flex flex-col gap-0 overflow-hidden p-0 sm:max-w-[620px]">
+        <DialogHeader className="shrink-0 border-b px-6 py-4 pr-12">
           <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>
-            Praxis’s own Claude and Codex seats sign in with your subscription. Pick a default model
-            for new chats, or add a connection to run against another OpenAI-compatible endpoint
-            with your own API key.
+          <DialogDescription className="sr-only">
+            Default model and provider connections for Praxis.
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="models">
-          <TabsList>
-            <TabsTrigger value="models">Models &amp; Providers</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="models" className="flex flex-col gap-3 pt-1 text-sm">
+        <div className="flex min-h-0 flex-col gap-6 overflow-y-auto p-6">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-base font-semibold">Models &amp; Providers</h2>
+            <p className="text-[15px] text-muted-foreground">
+              {editing ? (editing === 'new' ? 'Add a connection' : `Edit ${editing.label}`)
+                : 'Choose how new conversations start.'}
+            </p>
+          </div>
+          <div className="flex flex-col gap-4 text-[15px]">
             {editing ? (
               <ProviderForm
                 // Remount (fresh draft, no leftover key) per connection edited.
@@ -129,45 +130,56 @@ export default function SettingsDialog(): React.JSX.Element {
               />
             ) : (
               <>
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-2 rounded-xl border bg-background/50 p-4">
                   <label htmlFor="preferred-model" className="font-medium">
                     Default model
                   </label>
-                  <select
-                    id="preferred-model"
-                    aria-label="Default model for new chats"
-                    className="h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                    value={preferredSelectValue(preferred)}
-                    onChange={(e) => onPreferredChange(e.target.value)}
-                  >
-                    <option value={LAST_USED_VALUE}>Last used</option>
-                    {providers.map((group) => (
-                      <optgroup key={group.key} label={group.label}>
-                        {group.models.map((c) => (
-                          <option key={c.value} value={c.value}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                  <p className="text-xs text-muted-foreground">
+                  <div className="relative">
+                    <select
+                      id="preferred-model"
+                      aria-label="Default model for new chats"
+                      className="h-8 w-full appearance-none rounded-lg border border-input bg-background py-0 pl-3 pr-9 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={preferredSelectValue(preferred)}
+                      onChange={(e) => onPreferredChange(e.target.value)}
+                    >
+                      <option value={LAST_USED_VALUE}>Last used</option>
+                      {providers.map((group) => (
+                        <optgroup key={group.key} label={group.label}>
+                          {group.models.map((c) => (
+                            <option key={c.value} value={c.value}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2" aria-hidden="true" />
+                  </div>
+                  <p className="text-[15px] leading-snug text-muted-foreground">
                     {preferred.mode === 'fixed'
                       ? 'New chats use this model. Existing chats keep their own.'
                       : 'New chats follow the last model you picked in any chat.'}
                   </p>
                 </div>
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <h3 className="font-semibold">Connections</h3>
+                  <Button variant="outline" size="sm" onClick={() => setEditing('new')}>
+                    Add connection
+                  </Button>
+                </div>
                 {connections.length === 0 ? (
-                  <p className="text-muted-foreground">
-                    No connections yet. The built-in Claude and Codex models stay available either
-                    way.
-                  </p>
+                  <div className="rounded-xl border bg-background/50 p-4">
+                    <p className="font-semibold">Claude and Codex are built in</p>
+                    <p className="mt-1 text-muted-foreground">
+                      Use your subscription, or add another provider with an API key.
+                    </p>
+                  </div>
                 ) : (
                   <ul className="flex flex-col gap-2">
                     {connections.map((c) => (
                       <li
                         key={c.id}
-                        className="flex flex-col gap-2 rounded-md border border-border p-3"
+                        className="flex flex-col gap-2 rounded-xl border bg-background/50 p-4"
                       >
                         <div className="flex items-start gap-2">
                           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -217,15 +229,10 @@ export default function SettingsDialog(): React.JSX.Element {
                   </ul>
                 )}
                 {error && <p className="text-sm text-destructive whitespace-pre-wrap">{error}</p>}
-                <div>
-                  <Button variant="outline" onClick={() => setEditing('new')}>
-                    Add connection
-                  </Button>
-                </div>
               </>
             )}
-          </TabsContent>
-        </Tabs>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   )

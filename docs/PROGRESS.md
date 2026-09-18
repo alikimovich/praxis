@@ -2,6 +2,160 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-17 — Merge and reconcile candidate updates
+
+Integrated remote candidate features while retaining native composer pickers,
+provider-switch synchronization, and the local cat-timer regression fix. Preserved
+both task-log histories, ordered recent progress entries newest-first, and kept
+chat-render's page-error handler failing the test. Updated the remote desktop
+surface regression to exercise the project action menu because composer pickers
+remain native selects.
+
+Type checks and all 144 unit/Electron tests pass; inspected the light-theme menu
+screenshot. The optional spawn-comment live portion self-skipped after no edit
+landed. No provider or simulator implementation was changed during resolution.
+
+## 2026-09-17 — Show exact code from chat
+
+Added `open_code` to Claude's in-process tools and the Codex/custom-endpoint MCP
+bridge. Shared rules route requests to see code into the existing mini editor:
+read the source, specify the repo-relative file and inclusive line range, open it,
+and highlight only those lines. Preview selection is not required or changed.
+
+Main captures the exact source text from the agent checkout and validates file,
+range, size, and symlink boundaries. The renderer scopes requests to the active
+project/chat, verifies the captured text against the live checkout, relocates a
+unique match when lines shift, and retries after landing. Unsaved drafts defer
+navigation until saved/discarded. Detached agents cannot navigate the editor.
+The same event contract is exposed in browser mode.
+
+A real Codex probe also found that its MCP entrypoint was resolved against
+Electron's `app.getAppPath()` (`out/main` in source launches), producing a missing
+`out/main/bin` path. It now resolves the bundled bridge from the compiled main
+module, as the existing plugin/skills paths do. Its headless SDK session explicitly
+allows only the validated `open_code` navigation tool through the documented
+per-tool approval setting; unrelated tool policies are unchanged.
+
+Validation: typecheck/build, exact-range/path unit tests, actual stdio MCP tool
+registration/invocation, and editor UI tests passed. The UI test verifies precise
+highlighting without selection, ignores another chat's request, and preserves an
+unsaved draft before revealing queued code after Undo. A simulated landing also
+verified deferred reveal and relocation. A real Codex turn opened `invoice.js`
+and highlighted exactly the requested function; screenshot inspected. Claude's
+live probe was skipped because its account had reached the session usage limit.
+Full `verify`: 148/154 passed, including all 144 unit/UI checks and the new live
+Codex reveal test. Six other live-provider probes failed during the exhausted
+Claude session; simulator skipped without Xcode. These are recorded as failures,
+not a green full verification run.
+
+## 2026-09-17 — Animation controls independent of selection
+
+Added the bundled `/animation-controls` skill and natural-language routing for
+“surface animation controls.” It builds a development-only DialKit panel inside
+the target project, wired to the existing animation and stable across selection
+changes, clearing selection, and Replay. Existing tuning UI is reused; unsupported
+frameworks can use a small native equivalent. Live values remain distinct from
+saved source defaults. The animation action and spring skill use this workflow;
+explicit selection-inspector requests retain `define_controls`/`open_controls`.
+
+Claude exposes a short portable skill alias; Codex/Gemini discover the same bundled
+skill as a fallback behind project/user skills. DialKit roots and custom panels
+marked `data-praxis-controls` remain interactive while Select mode is armed in
+both native and browser previews.
+
+Validation: typecheck/build, skill validation, provider discovery/precedence,
+rules, docs links, skill-menu UI, and trusted preview selection/control clicks
+passed. Inspected native-preview and skill-menu screenshots. Three real Codex turns
+surfaced the panel with no selection; the stronger test verified changed duration,
+repeatable Replay, retained values after selection changes/clear, and a production
+build with working motion and no tuning panel. Full unit/UI suite: 142/143 passed;
+startup-intro failed its unrelated startup timing check and the focused rerun
+failed the crossfade/native-preview assertion. Browser-mode integration passed.
+The live tier passed the new skill, model switching, both providers’ file edits
+and existing inspector controls, and CSS provenance; simulator skipped without
+Xcode. The tool-invocation probe missed its `line_height` call; the focused
+rerun missed both `check_contrast` and `line_height`. These broader failures
+remain unresolved; no animation/control-specific regression failed.
+
+## 2026-09-17 — Group selection, queued messages, and preview recovery
+
+Shift-click adds/removes explicitly selected DOM objects in desktop and browser
+previews, retaining their outlines and a selection count. Prompts and Delete
+carry every selected object; individual inspector controls retain the most recent
+object as their target. Plain clicks replace the group; clearing drops all picks.
+
+The composer now queues follow-ups per chat, capturing attachments and selection
+context when submitted. FIFO dispatch continues in background chats, preserves
+session identity across attachment saves/project switches, and waits for prior
+landing. Stop/errors pause pending messages, conflict states block dispatch, and
+users can remove items or resume. Cancellation also prevents late sends during
+attachment saving or turn preparation. Queues are in memory and clear on close.
+
+Routine merge notes are removed; Revert attaches to the completed response even
+when a queued turn starts before its merge notification. Chat links open separately,
+desktop renderer navigation cannot replace Praxis, and Back to project restores
+the project's entry URL. Existing preview origin guards remain in force.
+
+Validation: typecheck, build, focused lint, queue/context/cancellation unit tests,
+and docs links pass. The full desktop suite passed 141/143: startup-intro retains
+its documented timeout; agent-multi exposed an interrupt-completion timing assumption.
+That test now awaits the terminal state and passes. All six final-build targeted
+checks pass (chat-render, select-element, preview-iframe-navigation, chat-isolation,
+agent-multi, browser-mode). Inspected composer, grouped selection outlines, and
+preview home-button screenshots. The live tier completed 8/8 with no failures:
+real Claude/Codex edits, model handoff, controls, tools, and style provenance pass;
+the simulator check skipped because Xcode is unavailable. Tool-only completed
+responses also retain Revert without needing a merge note.
+
+## 2026-09-17 — Consistent sidebar hover surfaces
+
+Project headers and the Open/New project actions now share the chat row's
+translucent hover fill. Project headers use the matching 6px radius token, and
+one shared rail-hover stylesheet keeps the three selectors in sync. Existing
+chat selection styling and project action icon behavior remain intact.
+
+Validation: typecheck and sidebar/chat checks pass; inspected project/action/chat
+hover captures in light and dark themes. The full suite passed 140/142; the
+folder-icon animation and comment branch cleanup checks both pass on isolated
+reruns. The inherited 12px regular rail text remains below the
+APCA lookup's size recommendation (approximate opaque hover surfaces: Lc 72 light,
+58 dark); this change preserves the requested chat palette and typography.
+
+## 2026-09-17 — Compact chat composer spacing
+
+The composer now uses 8px content and toolbar insets, with matching space above,
+left of, and below attached files. Send and Stop use the shared 28px size token.
+The draft scrollbar is hidden while long drafts retain wheel/keyboard scrolling
+and the existing six-line height cap. Padding and button dimensions use Tailwind
+utilities rather than the legacy CSS rules.
+
+Validation: typecheck passes; inspected attached-file and narrow-composer captures
+from the passing chat-render check. The full suite passed 140/142: startup-intro
+timed out waiting for its fade phase, and spawn-comment failed a branch-cleanup
+assertion. The isolated spawn-comment rerun passes. The first sandboxed suite could not
+launch Electron; the reported full run used the required desktop access.
+
+## 2026-09-17 — Refresh previews after ordinary local branch switches
+
+The local branch dropdown and named work-branch switch now request an environment
+refresh after successful checkout. Previously these paths only updated the branch
+label, leaving the old server and preview running. Each switch restarts the managed
+preview with fresh framework detection; branch-tip manifest/lockfile differences
+request dependency installation, including files removed by the destination branch.
+An unavailable comparison conservatively requests installation. Failed switches
+leave the preview alone. Attached external servers get a page reload and an explicit
+manual-server-restart message. Custom launch commands remain preserved.
+
+Regression coverage switches back through the ordinary branch menu and verifies
+that the restarted server serves the destination branch. Git unit checks cover
+manifest differences in both directions and failed checkout. Typecheck and focused
+Git logic/UI checks pass. The full suite passed 138/142 initially: the expanded
+Git test needed to wait for the busy remote dialog before closing it, and startup,
+rail-animation, and layers-panel checks failed. After correcting that test wait,
+the final build passes the Git test (including native preview content), rail, and
+layers isolated reruns. The previously recorded startup-intro failure remains
+open. Docs links and diff whitespace checks pass.
+
 ## 2026-09-16 — Harden reduced-motion cat regression
 
 The prior Electron window closure did not reproduce in the original focused
@@ -33,6 +187,72 @@ label's 9px size only worked in caps — lowercase at that size loses too much
 x-height — so it moves to 10px, an existing value in the de facto type scale.
 `bun run typecheck` passes; rail and history-ui Electron screenshots inspected.
 
+## 2026-09-16 — Fetch, pull, and switch remote project branches
+
+The current-branch menu now opens Git updates in desktop and browser mode.
+Fetch discovers/prunes remote branches without changing project files. Pull
+fetches the selected remote and merges its branch into the current branch,
+preserving local commits. Switch creates a tracking branch or opens an existing
+local branch without resetting it. Successful file changes refresh the preview;
+manifest and lockfile changes also request dependency installation.
+
+Repository writes use the existing queue. Updates reject active project agents,
+stale branch selections, dirty project files, and unfinished Git operations.
+Conflicting pulls abort their merge back to the clean starting checkout. Browser
+commands remain scoped to the opened repository. Runtime sidecars do not block
+updates; Git still protects untracked file collisions.
+
+Validation: typecheck/build and real bare-remote unit regressions pass, including
+divergent commits, conflict recovery, dirty/busy guards, remote pruning, existing
+local branch preservation, and an unavailable unrelated remote. The full suite
+passed 141/142 checks; startup-intro failed its existing localhost-only native
+view lookup. A diagnostic rerun accepting all loopback hosts also exposed a
+preview-width failure during the intro fade; this unrelated issue remains open.
+Final targeted Git UI and browser-mode checks cover fetch-only behavior, pull,
+tracking checkout, automatic preview refresh, and repository scope. Inspected
+Git dialog captures at narrow/tablet/desktop widths and the native preview.
+
+## 2026-09-16 — Choose project setup before scaffolding; recover environment previews
+
+New Project now asks how to start before writing application files: use the
+React/TypeScript/Vite defaults, plan Next.js or Svelte, or discuss a custom
+setup. Discussion paths create only an empty Git repository with ignores and
+open the selected provider's chat with the user's preferences. Shared provider
+rules ask about unresolved choices before scaffolding; empty projects avoid
+premature launch errors and token-scaffold offers. Preview startup failures keep
+chat available for repair, and retry preserves the conversation.
+
+Managed web previews now respond to authoritative landed environment changes,
+not the earlier provider terminal event. Manifest/lockfile changes install in
+the live checkout through its repository write queue; config changes restart
+with fresh framework/package-manager detection. Explicit packageManager fields
+win over stale migration lockfiles. Custom launch commands stay intact,
+background projects defer refresh until activated, and cancelled starts cannot
+launch after a dependency install finishes. The first landed HTML app can start
+a previously empty preview too. Instrumentation setup waits for landing before
+verification; failed/parked turns do not restart the preview.
+
+Validation: typecheck/build, new-file lint, scaffold/environment unit checks,
+and all 140 unit/Electron tests pass. Expanded final project-setup regression
+also covers custom-command retries, background deferral, initially broken
+projects, and static recovery. Inspected setup screenshots at 390/768/1440px,
+empty-chat UI, and the native preview capture. The framework-switch regression
+uses local package fixtures to test detection/install/relaunch without network
+framework downloads. Seven live checks pass (real Claude/Codex turns, controls,
+model switching, tool invocation, and style provenance); simulator e2e skips
+because Xcode is unavailable. Existing large-file lint findings match HEAD
+(40 errors in the inspected baseline and working files); new modules lint clean.
+
+## 2026-09-16 — Keep subagent tooltips clear of the preview
+
+Cat tooltips now align to the trigger's right edge and use the chat pane as
+their collision boundary. Their maximum width also respects the available
+space, keeping long operation labels from extending beneath the native preview.
+Extended the rail status regression with long labels and chat-bound checks for
+hover and keyboard focus; visually inspected the captures. Typecheck and the
+full unit/Electron suite pass (138/138). Targeted lint reports the pre-existing
+generic div's aria-label warning in SubagentCats.
+
 ## 2026-09-15 — Fix chat-render and provider-skills-menu regressions
 
 The chat-render timeout hid a renderer exception: its synthetic per-chat settings
@@ -58,6 +278,181 @@ Type checks pass. Full unit/Electron suite: 131/133 passed; remaining failures
 are the previously documented chat-render timeout and provider-skills-menu
 provider assertion. Startup and cat-animation tests pass; inspected the thinking
 cat screenshot. Remote candidate is an ancestor of the combined main history.
+
+## 2026-09-15 — Settings chevron spacing
+
+The default-model field now uses an inset decorative chevron instead of the
+browser-drawn arrow hugging its right edge. The native select retains its
+keyboard and popup behavior; extra right padding keeps long labels clear of the
+icon. Extended desktop-surface captures to show project actions in both themes,
+and wait for Radix's post-animation focus restoration before asserting it.
+Typecheck, build, focused lint/UI checks, and the full suite pass (138/138).
+
+## 2026-09-15 — Desktop dialogs, menus, and settings
+
+Shared Radix dialogs and dropdowns now use quiet opaque surfaces with a fine
+rim, broad shadow, and quick fades (reduced-motion aware). Dialogs use a lighter
+scrim, compact titles and controls, a circular close affordance, and bounded
+scrolling. Dropdowns and submenus share rounded selection rows, inset separators,
+checkmarks, and the same light/dark surface treatment. Surface tokens live in
+`src/renderer/src/components/ui/desktop-surfaces.css` and remain scoped to floating
+UI, preserving the app shell and native preview freeze contract.
+
+Settings is a compact preferences window with a persistent header, grouped
+model/connection controls, and a scrollable form body. Removed the single-tab
+strip and lengthy introductory paragraph. History review now uses the shared
+Radix dialog, gaining focus containment and consistent dismissal while keeping
+its native-preview freeze and session actions.
+
+Added `desktop-surfaces` to the Electron tier: light/dark screenshots, menu
+keyboard focus and Escape restoration, short-window form scrolling, and
+unsaved-key disposal when leaving a connection form. Checked surface-description
+contrast at 15px/500 in both themes (APCA Lc 96.6 and 95.1). Typecheck,
+build, targeted lint, and the full unit/Electron suite pass (138/138).
+
+## 2026-09-15 — Fix chat-render regression fixture
+
+The per-chat model-switch fixtures omitted the required `permissionMode` from
+both stored chats and the active session. Restoring those synthetic settings
+set the permission picker label to undefined, crashing `ComposerSelect` and
+leaving a blank renderer; the visible failure was a timeout waiting for sidebar
+chat rows. Supply `auto` for all three settings objects and report renderer
+`pageerror` stacks in the test log so future crashes expose their cause.
+
+The focused `chat-render` test, `bun run typecheck`, and the complete
+`bun run test` suite pass (137/137). Visually checked the model-switch approval
+screenshot with both peer chats and the Auto picker.
+
+## 2026-09-15 — Persistent sidebar ordering
+
+Project names now drag entire sidebar groups; live chats and History rows reorder
+within their own project/list. Native lifted drag images and before/after lines
+show the destination, edge hovering scrolls long lists, and Escape/outside drops
+cancel without writing an order. Alt+Up/Down reorders focused names, retains
+focus, and announces moves/cancellation. Rename and close remain separate buttons.
+Mounted chat-list unfold animations are settled before dragging so Chromium
+cannot replay them while a project group moves under the pointer.
+
+Manual order lives in a dedicated versioned localStorage store, independently of
+workspace project arrays, sessionKeys, active-session selection, and LRU stamps.
+New chats appear first without disturbing the established order; missing entries
+are filtered. Renderer reloads rehydrate the display order without changing
+provider session ownership or the running preview. History and live sessions
+remain separate groups and cross-project drops are rejected.
+
+Validation: type checks, build, targeted Biome checks, docs links, pure ordering
+cases, and the new Electron regression pass. The native regression covers project,
+chat, and History drops; keyboard focus; cancellation; lifecycle invariants;
+rename; reload persistence; new entries; and edge scrolling. Native drag tests
+keep the window inside the display and sustain the edge hover for macOS input
+delivery. Inspected reordered/drag screenshots and used agent-browser to verify
+keyboard moves and sidebar layouts at 390/768/1440px in light/dark themes. Ghost
+text passes APCA at 15px/600. Full unit/Electron suite: 136/137 passed; the only
+failure is the previously documented chat-render timeout.
+
+## 2026-09-15 — Desktop 3D component inspector
+
+On `candidate`, updated by fast-forward from `main`, the selection toolbar now
+opens an isolated 3D workspace. Paint-only copies of the selected DOM subtree
+separate by nesting depth, with orbit/pan/zoom, separation, front/reset, and a
+keyboard-accessible layer selector. Clicking a surface opens the existing
+inspector against its original live element. Style previews, source commits,
+and undo reuse the established editing path; returning to the page does not
+navigate or remount it.
+
+The workspace stays in the sandboxed preview preload, using a modal shadow root
+and CSS perspective without a new rendering dependency or IPC contract. Text is
+captured once per owning element; SVGs render in inert image context and canvas
+snapshots are bounded. Observers refresh changed surfaces. HMR recovery requires
+an unambiguous ID/source identity; removed or repeated instances cannot redirect
+style edits to a sibling. Capture limits and simplified effects are disclosed.
+`docs/THREE_D.md` documents controls, architecture, and the first-version limits;
+pseudo-elements, clipping/transforms, portals, and browser parity remain follow-ups.
+
+Validation: type checks, build, new-file Biome checks, and documentation links
+pass. Full unit/Electron suite: 134/135 passed; the only failure is the previously
+documented chat-render timeout. The new native regression covers trusted camera
+input, child selection, live style preview/clear, source edit/undo, simulated HMR
+subtree replacement, preserved route/scroll/application state, Escape, capture
+limits, and ambiguous identity protection. Inspected native screenshots and used
+agent-browser at 390/768/1440px, including keyboard separation adjustment. New
+control text passes APCA at its authored 15px/600 sizing.
+
+## 2026-09-14 — Agent-opened controls and authored inspector fields
+
+Claude, Codex, and custom-endpoint agents can now request selection and open the
+Props, Styles, or Custom inspector with `open_controls`. `define_controls` shares
+one validated registration path across harnesses, checks anchors in the private
+worktree, persists to the live root, and requests the Custom tab. The renderer
+uses the real Layers selection path, retries missing targets after landing, avoids
+ambiguous file matches, and cancels pending requests when the project changes.
+Existing selections can be reopened directly. Experimental Gemini retains its
+prop-based fallback; this feature targets the desktop inspector.
+
+Props default to present values and component defaults (including zero, false,
+empty strings, and expressions). Optional absent fields remain under Show all.
+Numeric props use the existing keyboard/pointer scrub control with exact-value
+entry. Styles default to matched stylesheet/inline declarations, with computed
+browser defaults under Show all. Authored field presence is separate from the
+transient value readout so committing an edit cannot hide its row. No new
+animation dependency was added; custom controls expose parameters using the
+project's existing animation implementation.
+
+Validation: type checks and build pass. Full unit/Electron run: 131/134 passed;
+two older inspector assertions assumed always-visible groups/number inputs and
+were updated, with affected tests passing on rerun. The remaining failure is the
+known chat-render timeout. All seven existing live checks passed (simulator
+self-skipped without Xcode), plus a new real Codex control-registration/landing
+regression passed. Inspected native panel screenshots, verified a Scale keyboard
+nudge through agent-browser, and checked panel layouts at 390/768/1440px.
+
+## 2026-09-14 — Required agent-browser workflow
+
+Operating rules v13 require agent-browser for web UI/browser verification when
+available across all providers. Agents check their execution PATH and CLI help,
+use an isolated named session, and test layout changes at phone/tablet/desktop
+sizes with screenshot inspection and interaction checks. Missing CLI/browser
+support requires an honest blocker report and permission before installation.
+Explicit user tool choices still win. A stale preview cannot verify unlanded
+worktree edits; agents must report pending verification and preserve the landing
+lifecycle. README and provider docs describe this prompt-level requirement and
+the need to recreate existing sessions for updated rules.
+
+Type checks and the expanded rule tests pass across provider capability variants.
+Full verification: 139/140 runner passes, with only the previously documented
+chat-render timeout. Real model-switch, Claude/Codex edit, controls, and tool
+invocation checks passed. Simulator e2e self-skipped because Xcode is unavailable.
+
+## 2026-09-14 — Optional agent-browser installation
+
+The installer recommends agent-browser for browser and responsive-layout checks
+and offers an explicit default-No global CLI plus browser install. It reads from
+the controlling terminal so the curl-pipe flow works, skips when the CLI is
+already on PATH or no terminal exists, and prints manual installation commands
+when declined. Optional failures leave Praxis installed. Bun global binaries
+outside PATH can still finish browser setup, with a PATH reminder. README now
+documents the offer.
+
+Shell syntax and type checks pass. Nine mocked full-installer cases pass,
+including piped input with a real pseudo-terminal: accept, decline, empty default,
+unattended, existing CLI, CLI failure, browser failure, npm fallback, and Bun's
+global bin outside PATH. No external packages were installed during these checks.
+Full unit/Electron suite: 130/133 passed; startup-intro, chat-render, and
+layers-panel failed. The first sandboxed run could not bind test servers or
+launch Electron; the reported result is from the rerun with the required access.
+
+## 2026-09-14 — Simultaneous startup cat reveal
+
+Removed contour-order timing and blur variation from the startup cat. All 21
+shapes now share one opacity/blur progression, so the artwork emerges together.
+Preserved the four-second reveal, final sharpening, and 500ms app crossfade.
+
+Type checks and build pass. Verified identical computed opacity and blur on all
+21 contours midway through the reveal and inspected the screenshot. Startup-intro
+passes, including reload preview suppression and reduced motion. Full suite:
+131/133 passed; chat-render hit its known timeout and layers-panel failed its
+focused-text-field undo assertion. The initial sandbox run could not launch
+Electron; the full result above is from the run with the required access.
 
 ## 2026-09-14 — System-accent focus rings
 

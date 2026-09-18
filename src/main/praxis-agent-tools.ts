@@ -3,7 +3,12 @@ import { chmodSync, rmSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import { join } from 'node:path'
 
-export type PraxisAgentToolAction = 'workspace_state' | 'prepare_conflict_resolution'
+export type PraxisAgentToolAction =
+  | 'workspace_state'
+  | 'prepare_conflict_resolution'
+  | 'define_controls'
+  | 'open_controls'
+  | 'open_code'
 
 export interface PraxisAgentToolRegistration {
   socketPath: string
@@ -11,7 +16,7 @@ export interface PraxisAgentToolRegistration {
   dispose: () => void
 }
 
-type ToolHandler = (action: PraxisAgentToolAction) => Promise<unknown>
+type ToolHandler = (action: PraxisAgentToolAction, args?: unknown) => Promise<unknown>
 
 const sessions = new Map<string, ToolHandler>()
 let server: Server | null = null
@@ -36,7 +41,7 @@ const readBody = async (req: import('node:http').IncomingMessage): Promise<strin
   for await (const chunk of req) {
     const part = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
     size += part.length
-    if (size > 8 * 1024) throw new Error('request-too-large')
+    if (size > 40 * 1024) throw new Error('request-too-large')
     chunks.push(part)
   }
   return Buffer.concat(chunks).toString('utf8')
@@ -60,15 +65,18 @@ async function startServer(): Promise<string> {
         return
       }
       try {
-        const parsed = JSON.parse(await readBody(req)) as { action?: unknown }
+        const parsed = JSON.parse(await readBody(req)) as { action?: unknown; args?: unknown }
         if (
           parsed.action !== 'workspace_state' &&
-          parsed.action !== 'prepare_conflict_resolution'
+          parsed.action !== 'prepare_conflict_resolution' &&
+          parsed.action !== 'define_controls' &&
+          parsed.action !== 'open_controls' &&
+          parsed.action !== 'open_code'
         ) {
           json(res, 400, { ok: false, error: 'unknown-action' })
           return
         }
-        json(res, 200, { ok: true, result: await handler(parsed.action) })
+        json(res, 200, { ok: true, result: await handler(parsed.action, parsed.args) })
       } catch (error) {
         json(res, 500, {
           ok: false,

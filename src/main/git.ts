@@ -66,14 +66,34 @@ export async function enclosingRepoRoot(root: string): Promise<string | null> {
   }
 }
 
+async function headRevision(root: string): Promise<string | null> {
+  try {
+    return (await git(root, ['rev-parse', '--verify', 'HEAD'])).stdout.trim()
+  } catch {
+    return null
+  }
+}
+
+async function changedBranchFiles(root: string, before: string | null): Promise<string[] | undefined> {
+  if (!before) return undefined
+  try {
+    return (await git(root, ['diff', '--name-only', '-z', before, 'HEAD'])).stdout
+      .split('\0')
+      .filter(Boolean)
+  } catch {
+    return undefined
+  }
+}
+
 /** Check out an EXISTING branch by its exact name (no praxis/ coercion) — for the
  *  titlebar branch switcher. Carries uncommitted changes across like git does. */
 export async function checkoutBranch(root: string, branch: string): Promise<BranchResult> {
   try {
     // `--` end-of-options so a branch name that happens to start with `-` can't
     // be parsed as a git flag (defense-in-depth; the value comes from the IPC).
+    const before = await headRevision(root)
     await git(root, ['checkout', '--end-of-options', branch])
-    return { isRepo: true, branch, created: false }
+    return { isRepo: true, branch, created: false, files: await changedBranchFiles(root, before) }
   } catch (e) {
     return {
       isRepo: true,
@@ -151,8 +171,9 @@ export async function switchBranch(root: string, requested: string): Promise<Bra
   try {
     // checkout -b carries uncommitted changes onto the new branch (nothing lost);
     // checking out an existing branch can fail if changes conflict — report that.
+    const before = await headRevision(root)
     await git(root, existed ? ['checkout', name] : ['checkout', '-b', name])
-    return { isRepo: true, branch: name, created: !existed }
+    return { isRepo: true, branch: name, created: !existed, files: await changedBranchFiles(root, before) }
   } catch (e) {
     return { isRepo: true, branch: cur, created: false, error: msg(e) }
   }

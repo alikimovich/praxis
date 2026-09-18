@@ -1,13 +1,13 @@
 import { type ChildProcess, spawn } from 'child_process'
 import { app, type BrowserWindow, ipcMain as electronIpcMain } from 'electron'
-import { access, readFile } from 'fs/promises'
+import { access, readFile, readdir } from 'fs/promises'
+import { installProjectDependencies, projectPackageManager } from './project-dependencies'
 import type { Server } from 'http'
 import { basename, join } from 'path'
 import type {
   DetectedProject,
   DevServerInfo,
   Framework,
-  PackageManager,
   PreviewKind,
   RunningDevServer
 } from '../shared/api'
@@ -63,14 +63,6 @@ const exists = (p: string): Promise<boolean> =>
     () => false
   )
 
-async function detectPackageManager(root: string): Promise<PackageManager> {
-  if ((await exists(join(root, 'bun.lockb'))) || (await exists(join(root, 'bun.lock'))))
-    return 'bun'
-  if (await exists(join(root, 'pnpm-lock.yaml'))) return 'pnpm'
-  if (await exists(join(root, 'yarn.lock'))) return 'yarn'
-  return 'npm'
-}
-
 function detectFramework(deps: Record<string, string>): Framework {
   // React Native targets are checked first: an Expo repo also lists `react-native`,
   // and either one means "preview in a simulator", not a web dev server.
@@ -107,13 +99,17 @@ async function detect(root: string): Promise<DetectedProject> {
     // No package.json — a vanilla HTML/CSS/JS site if there's an HTML entry to
     // serve; otherwise there's nothing we know how to launch, so ask for a command.
     if (await findStaticEntry(root)) return staticProject(root)
+    const entries = await readdir(root)
+    if (entries.every((entry) => ['.git', '.gitignore', '.DS_Store', '.praxis'].includes(entry))) {
+      return { ...staticProject(root), framework: 'unknown', setupRequired: true }
+    }
     throw new Error(
       'No package.json or index.html found in that folder. Enter a command to launch this project.'
     )
   }
   const pkg = JSON.parse(await readFile(pkgPath, 'utf8'))
   const scripts: Record<string, string> = pkg.scripts ?? {}
-  const packageManager = await detectPackageManager(root)
+  const packageManager = await projectPackageManager(root)
   const framework = detectFramework({ ...pkg.dependencies, ...pkg.devDependencies })
   const previewKind = previewKindFor(framework)
 
@@ -154,6 +150,7 @@ async function detect(root: string): Promise<DetectedProject> {
 // Single-active behavior is preserved by the renderer stopping the previous
 // project before opening another (until the workspace rail manages many).
 const servers = new Map<string, ChildProcess>()
+const startGenerations = new Map<string, number>()
 
 // Static sites are served in-process (see static-server.ts), so they aren't
 // child processes — track their http.Server separately, keyed the same way.
@@ -202,6 +199,7 @@ function killChild(child: ChildProcess): void {
 /** Stop the dev server for one project (no-op if it isn't running). */
 function stop(root: string): void {
   const key = projectKey(root)
+  startGenerations.set(key, (startGenerations.get(key) ?? 0) + 1)
   const child = servers.get(key)
   if (child) {
     servers.delete(key)
@@ -217,6 +215,7 @@ function stop(root: string): void {
 
 /** Stop every running dev server (app quit). */
 function stopAll(): void {
+  for (const [key, generation] of startGenerations) startGenerations.set(key, generation + 1)
   for (const child of servers.values()) killChild(child)
   servers.clear()
   for (const s of staticServers.values()) s.close()
@@ -238,14 +237,23 @@ function interpretFailure(code: number | null, tail: string): string {
 }
 
 async function start(
-  opts: { root: string; command: string; framework?: Framework },
+  opts: { root: string; command: string; framework?: Framework; installDependencies?: boolean },
   onLog: (line: string) => void
 ): Promise<RunningDevServer> {
   stop(opts.root) // drop a prior server for THIS project (restart); leave others
 
+  const key = projectKey(opts.root)
+  const generation = startGenerations.get(key)
+  if (opts.installDependencies) await installProjectDependencies(opts.root, onLog)
+  if (startGenerations.get(key) !== generation) throw new Error('Preview start was cancelled.')
+
   // Give the preview its own free port (no collisions, no stale attaches).
   // allocatePort reserves it so concurrent starts can't pick the same one.
   const port = await allocatePort()
+  if (startGenerations.get(key) !== generation) {
+    reserved.delete(port)
+    throw new Error('Preview start was cancelled.')
+  }
   onLog(`Assigned free port ${port} (binding ${PREVIEW_HOST}).`)
 
   // Static sites (vanilla HTML/JS) have no command to spawn — serve them from
@@ -415,7 +423,7 @@ export function registerDevServerIpc(
 
   ipcMain.handle(
     'devserver:start',
-    (_e, opts: { root: string; command: string; framework?: Framework }) =>
+    (_e, opts: { root: string; command: string; framework?: Framework; installDependencies?: boolean }) =>
       // The dev server's stdout/stderr `onData` keeps firing after the renderer
       // process is killed (OS display sleep / GPU loss): the window outlives its
       // webContents, so guard isDestroyed() or `.send()` throws an uncaught

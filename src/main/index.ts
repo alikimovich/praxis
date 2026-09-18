@@ -14,7 +14,7 @@ import {
   webContents
 } from 'electron'
 import { join } from 'path'
-import type { RecentMenuEntry } from '../shared/api'
+import type { ProjectCreateOptions, RecentMenuEntry } from '../shared/api'
 // Channel names for the main ⇄ preview-preload conversation. Declared once in
 // shared/ and imported by both ends — see the header there.
 import {
@@ -25,7 +25,8 @@ import {
   PREVIEW_SET_PINS,
   PREVIEW_SET_STATUS
 } from '../shared/preview-channels'
-import { registerAgentIpc } from './agent'
+import { projectHasRunningAgents, registerAgentIpc } from './agent'
+import { registerGitRemoteIpc } from './git-remote'
 import { registerAnnotationsIpc } from './annotations'
 import { registerControlsIpc } from './control-panels'
 import { registerDevServerIpc } from './devserver'
@@ -726,8 +727,13 @@ function createWindow(): void {
 
   // Open external links in the user's browser, never in-app.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    openExternalSafe(url)
     return { action: 'deny' }
+  })
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    event.preventDefault()
+    openExternalSafe(url)
   })
 
   const loadRenderer = (): void => {
@@ -818,7 +824,7 @@ function openEditorWindow(root: string, source: string): void {
   })
   // External links (Cmd+click into a URL, etc.) open in the browser, not in-app.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    openExternalSafe(url)
     return { action: 'deny' }
   })
 
@@ -870,8 +876,7 @@ function registerProjectIpc(): void {
     return res.canceled ? null : (res.filePaths[0] ?? null)
   })
 
-  // New project: a save dialog picks the folder-to-create, then the scaffold
-  // writes a minimal Vite+React app, git-inits it, and installs dependencies.
+  // After the setup choice, pick a folder and create the selected starter.
   ipcMain.handle('project:pick-new', async (): Promise<string | null> => {
     if (!mainWindow) return null
     const res = await dialog.showSaveDialog(mainWindow, {
@@ -883,7 +888,9 @@ function registerProjectIpc(): void {
     })
     return res.canceled ? null : (res.filePath ?? null)
   })
-  ipcMain.handle('project:create', (_e, root: string) => createProject(root))
+  ipcMain.handle('project:create', (_e, root: string, options?: ProjectCreateOptions) =>
+    createProject(root, { template: options?.template ?? 'react' })
+  )
   // The project's own favicon for its rail row. Cheap + cached in main, and
   // read from the source tree rather than the preview, so a project that has
   // never been run still shows its icon.
@@ -1005,6 +1012,7 @@ app.whenReady().then(async () => {
   registerGithubIpc()
   registerTokensIpc()
   registerSetupIpc()
+  registerGitRemoteIpc(ipcMain, projectHasRunningAgents)
   ipcMain.handle('git:ensure', (_e, root: string) => ensureBranch(root))
   ipcMain.handle('git:set', (_e, root: string, name: string) => switchBranch(root, name))
   ipcMain.handle('git:list', (_e, root: string) => listBranches(root))

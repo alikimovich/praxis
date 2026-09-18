@@ -10,12 +10,24 @@ GitHub PR.
 
 ## What it does
 
+- **Choose how a new project starts.** New Project asks whether to use the
+  React/TypeScript/Vite defaults, plan Next.js or Svelte, or discuss your own
+  environment. The discussion paths initialize an empty repository and open chat
+  before creating an app. After environment changes land, Praxis re-detects the
+  framework, installs dependencies in the preview checkout, and restarts the web
+  preview. Custom launch commands are preserved; startup errors keep chat available.
+
 - **Live preview of your repo.** Open a folder → Praxis detects the framework
   and package manager, boots that repo's dev server, and previews it in a
   native `WebContentsView`. It self-heals if the dev server dies and restarts.
   Plain HTML/CSS/JS folders (no package.json or build step) are served by a
   built-in static server with live-reload; anything Praxis can't auto-launch
   prompts for a custom command.
+- **Pull updates and remote branches.** Click the current branch → **Git updates…**
+  to fetch branches from GitHub or another Git remote, merge a selected remote
+  branch into the current branch, or switch to a local tracking branch. Existing
+  local branches are preserved. Pull conflicts restore the clean starting tree;
+  successful updates refresh the preview, including changed dependencies.
 - **Local browser mode.** `praxis serve /path/to/repo` runs the same workspace
   engine and React UI on loopback without opening a desktop window. The preview
   is isolated behind a browser gateway and supports source-aware element selection;
@@ -41,18 +53,49 @@ GitHub PR.
   endpoint's model catalog, and you tick which models to offer in the picker.
   Connections run on the Codex harness; the key is encrypted with the OS
   keychain and never leaves the main process.
+- **Arrange the sidebar.** Drag project names to move their entire groups, or
+  drag chats within their project's live list or History. A lifted row and drop
+  line show the move; Escape cancels and the sidebar scrolls at its edges.
+  Alt+↑/↓ reorders the focused name with the keyboard. Manual order persists
+  across reloads/restarts without changing the active chat or running sessions.
 - **Drag to reorder in the desktop preview.** Select an element, then hold
   Command (Control on Windows/Linux) and drag it among its siblings. An insertion
   line shows the drop position for columns, rows, and grids; nesting stays fixed.
   Escape or releasing the modifier cancels. Moves write source and support undo;
   ambiguous template/data moves prepare a chat prompt.
-- **Click-to-edit.** A **Select** mode maps a clicked element to its source
+- **Queue follow-ups.** Enter during a running turn queues the message for that
+  chat, including its attachments and selected objects. Remove pending messages,
+  or resume after Stop/errors. Queues last for the current app session.
+- **Stay in your project.** Chat links open separately; the preview's home button
+  returns to the managed project's entry page. Successful merges stay quiet,
+  with Revert retained on the response and conflicts shown when action is needed.
+- **Click-to-edit.** Hold **Shift** while clicking to add or remove objects from
+  a selection. Chat requests and Delete include the group; individual property
+  controls target the most recent object. A **Select** mode maps a clicked element to its source
   location (via the `data-praxis-source` stamp — see
   [`docs/DESIGN.md`](docs/DESIGN.md)), then edits its **props** with typed
   controls (react-docgen for React, `svelte/compiler` for Svelte 5), applies
   the repo's **design tokens** (auto-detected from a manifest, Tailwind, or CSS
   vars), and edits text inline. Non-literal text cases run as detached background
   agents without entering the visible chat.
+- **Ask to see the exact code.** Praxis can open its mini code editor in the
+  relevant file and highlight the implementation, without selecting an object.
+  Unsaved editor changes are preserved; available with Claude and Codex.
+- **Surface animation controls in the preview.** Ask “surface animation controls”
+  or use `/animation-controls`. The bundled skill adds a DialKit-style panel to
+  the previewed project, with values wired to the existing animation and Replay.
+  It stays available when nothing is selected or selection changes; live tuning
+  is separate from applying chosen values to source defaults.
+- **Inspect components in 3D (desktop).** Select an element and click the stacked
+  layers icon to isolate its visual structure. Orbit, zoom, spread layers apart,
+  and select a surface to edit it with the existing inspector. **Back to page**
+  returns to the running screen. See [3D inspection](docs/THREE_D.md) for controls
+  and first-version rendering limits.
+- **Controls from chat.** Ask Claude, Codex, or a custom-endpoint model to surface
+  animation controls in the desktop preview. It can select the object and open
+  Props, Styles, or Custom directly. Custom controls include numeric scrubbing,
+  toggles, color pickers, and easing curves. Props and Styles show authored values
+  by default; **Show all** exposes optional props and computed styles.
 - **Review → handoff.** Pin comments/notes to elements and **Publish** a branch
   + GitHub PR. Comments and complex inline text edits can spawn parallel background
   agent sessions (each in its own git worktree).
@@ -83,6 +126,16 @@ and puts a `praxis` command on your `PATH`:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/alikimovich/praxis/main/install.sh | bash
 ```
+
+The installer recommends **agent-browser** for automated browser checks, including
+different screen sizes, and asks whether to install its global CLI and browser.
+It uses Bun (or npm when Bun is unavailable), skips the offer when the CLI is
+already on PATH, and defaults to **No**. Unattended installs skip the prompt.
+An optional browser-install failure does not prevent Praxis installation.
+To install it later: `bun install --global agent-browser && agent-browser install`.
+Praxis's built-in agent instructions require its use when available for web UI
+verification, including phone/tablet/desktop checks for layout changes. Agents
+must report missing browser support or a preview that cannot yet show their edits.
 
 Then authorize the agent once and launch:
 

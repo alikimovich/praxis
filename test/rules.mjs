@@ -17,8 +17,10 @@ const assert = (cond, msg) => {
 const r = praxisRules()
 assert(typeof r === 'string' && r.length > 0, 'rules render to a non-empty string')
 assert(typeof PRAXIS_RULES_VERSION === 'number', 'version is a number')
-assert(PRAXIS_RULES_VERSION === 12, 'version bumped to 12')
+assert(PRAXIS_RULES_VERSION === 17, 'version bumped to 17')
 assert(r.includes(`v${PRAXIS_RULES_VERSION}`), 'rules carry the version marker')
+assert(r.includes('before scaffolding or'), 'new projects ask about unresolved setup choices')
+assert(r.includes('after these files successfully land'), 'environment refresh follows landing')
 // v3 naming — the product is Praxis in the rule text now.
 assert(/praxis/i.test(r), 'names the product Praxis')
 assert(!/\bdsgn operating rules\b/i.test(r), 'no stale "dsgn operating rules" header')
@@ -62,6 +64,23 @@ assert(!/preview_screenshot/.test(r), 'default rendering omits preview_screensho
 assert(praxisRules({ previewTools: true }) === withTools, 'previewTools rendering is deterministic')
 // The agent-browser section survives in both renderings.
 assert(/agent-browser/.test(withTools), 'previewTools: still keeps agent-browser guidance')
+// Browser verification is mandatory across provider capability combinations.
+for (const opts of [{}, { previewTools: true }, { workspaceTools: true }]) {
+  const rules = praxisRules(opts)
+  assert(/MUST use `agent-browser` when available/.test(rules), 'browser: required when available')
+  assert(/command -v agent-browser/.test(rules), 'browser: check the runtime PATH')
+  assert(/agent-browser --help/.test(rules), 'browser: inspect installed CLI capabilities')
+  assert(/CLI is missing, or its browser cannot launch/.test(rules), 'browser: missing binary and launch failure')
+  assert(/Do not install packages without the user's permission/.test(rules), 'browser: no silent installation')
+  assert(/--session praxis-<task-id>/.test(rules), 'browser: isolated task sessions')
+  assert(/Close only your own session/.test(rules), 'browser: preserve other sessions')
+  for (const size of ['390 844', '768 1024', '1440 900']) {
+    assert(rules.includes(`set viewport ${size}`), `browser: responsive coverage at ${size}`)
+  }
+  assert(/capture and inspect a screenshot at each size/.test(rules), 'browser: require visual inspection')
+  assert(/report verification as pending, never passed/.test(rules), 'browser: stale previews cannot prove an edit')
+  assert(/user request for another tool overrides/.test(rules), 'browser: explicit user choice wins')
+}
 // R4 (v10) — custom-controls section rides with the Claude-only in-process tools:
 // define_controls exists only on the praxis SDK server, so backends without
 // previewTools must never be told to call it.
@@ -69,6 +88,9 @@ assert(/define_controls/.test(withTools), 'previewTools: teaches define_controls
 assert(/const STAGGER_MS = /.test(withTools), 'previewTools: shows the ideal anchor shape')
 assert(/\.praxis\//.test(withTools), 'previewTools: forbids writing under .praxis/')
 assert(!/define_controls/.test(r), 'default rendering omits define_controls')
+const codexControls = praxisRules({ controlTools: true })
+assert(/define_controls/.test(codexControls) && /open_controls/.test(codexControls), 'Codex learns both control tools')
+assert(!/spring_to_css/.test(codexControls), 'Codex does not advertise Claude-only calculators')
 // R5 (spring) — spring_to_css rides with the Claude-only in-process tools too.
 assert(/spring_to_css/.test(withTools), 'previewTools: teaches spring_to_css')
 assert(/prefers-reduced-motion/.test(withTools), 'previewTools: spring reduced-motion guidance')

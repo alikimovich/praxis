@@ -1,3 +1,7 @@
+import { useMessageQueue } from '../message-queue';
+import { messageSender } from '../message-send';
+import { QueuedMessages } from './QueuedMessages';
+import { environmentChanges } from "../../../shared/environment-changes";
 import { ComposerSelect } from "./ComposerSelect";
 import { MessageAttachments } from "./MessageAttachments";
 import ModelSwitchDialog from "./ModelSwitchDialog";
@@ -16,7 +20,6 @@ import {
   chatAgentSettingsFromSession,
   describeSelectionForPrompt,
   type ModelSelection,
-  selectionForBubble,
   isAuthError,
   oneLine,
   useAnnotations,
@@ -431,6 +434,8 @@ export default function ChatPanel(): React.JSX.Element {
     useProviders.getState().ensureLoaded();
   }, []);
   const { selected, setSelected } = useSelection();
+  const activeChatKey = useChat((s) => s.activeKey);
+  const queue = useMessageQueue();
   const selectMode = useSelection((s) => s.selectMode);
   const layersOpen = useLayersPanel((s) => s.open);
   const setLayersOpen = useLayersPanel((s) => s.setOpen);
@@ -454,9 +459,9 @@ export default function ChatPanel(): React.JSX.Element {
   // ChatPanel is mounted once for the whole app, so plain local state would just
   // follow the user into whichever chat they switch to. Switching away parks the
   // text; switching back finds it again; a chat never typed in opens blank.
-  const activeChatKey = useChat((s) => s.activeKey);
   const [catCompletion, setCatCompletion] = useState({ key: "", count: 0 });
   const cancelledCatTurns = useRef(new Set<string>());
+  const setupAwaitingLanding = useRef(new Set<string>());
   // Permission/question cards are keyed by the session that raised them (see
   // `PermissionRequest.sessionKey` / `QuestionRequest.sessionKey`) — a backgrounded
   // chat's turn can still hit a gated tool call or AskUserQuestion while another
@@ -590,12 +595,11 @@ export default function ChatPanel(): React.JSX.Element {
   }, [composerSeed]);
 
   // Inline comment-mode (C) sends straight to the agent. If a turn is already
-  // running, prefill instead so the comment is never dropped.
+  // running, queue the comment with its captured context.
   useEffect(() => {
     if (composerSubmit == null) return;
     useComposer.getState().setSubmit(null);
-    if (isRunning) seedPrompt(composerSubmit);
-    else send(composerSubmit);
+    send(composerSubmit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composerSubmit]);
 
@@ -658,6 +662,7 @@ export default function ChatPanel(): React.JSX.Element {
       const key = event.projectKey ?? "";
       const isActive = key === useChat.getState().activeKey;
       if (event.type === "delta") {
+        setupAwaitingLanding.current.delete(key);
         appendDelta(event.text, key);
       } else if (event.type === "title") {
         // Auto-generated chat name (main summarised the conversation) — the rail
@@ -673,6 +678,7 @@ export default function ChatPanel(): React.JSX.Element {
           key,
         );
       } else if (event.type === "error") {
+        setupAwaitingLanding.current.delete(key);
         // A Claude auth failure gets a short line pointing at the (Claude-specific)
         // onboarding banner. Non-Claude backends (Codex/Gemini) have no such banner
         // and emit a descriptive "install the CLI + log in" message — show that as-is
@@ -684,6 +690,7 @@ export default function ChatPanel(): React.JSX.Element {
             ? "⚠️ Not connected to Claude — see the notice above."
             : `⚠️ ${event.message}`;
         appendDelta(`\n\n${note}`, key);
+        useMessageQueue.getState().pause(key, true);
         finish(key);
         // The setup turn failed before wiring — disarm verification so the next
         // unrelated readiness report isn't mistaken for a verdict. Setup state is
@@ -704,16 +711,18 @@ export default function ChatPanel(): React.JSX.Element {
           // the dev server only picks up on a full restart. Arm verification and ask
           // App to restart + reload the preview. Normal chat turns leave it alone.
           if (s.busy) {
-            s.setVerifying(true);
-            s.setRestartRequested(true);
+            if (useChat.getState().byKey[key]?.isolation === "live") {
+              s.setVerifying(true);
+              s.setRestartRequested(true);
+            } else setupAwaitingLanding.current.add(key);
+            s.setBusy(false);
           }
-          s.setBusy(false);
+          // Isolated chats verify on `merged`; no-change turns still leave busy.
         }
       } else if (event.type === "isolation") {
         // v9: this chat's per-turn worktree merge — drives the header chip.
         // 'merged' folds back to the resting 'isolated' state (the chip already
-        // reads "Isolated"; a per-turn merge is the expected happy path, so it
-        // gets a subtle status line rather than a full note).
+        // reads "Isolated"; successful merges stay quiet).
         useChat
           .getState()
           .setIsolation(
@@ -722,17 +731,21 @@ export default function ChatPanel(): React.JSX.Element {
             event.files,
           );
         if (event.state === "merged") {
-          // No active streaming message exists post-`done` (appendStatus needs
-          // one) — a plain note is the subtle line instead. Append it FIRST so the
-          // revert group below lands on this note (now the last assistant message).
-          useChat.getState().appendNote("Merged into your branch", key);
-          // Tag the note — the very last thing in the turn — with the revert group so
-          // the Revert button sits at the END of the AI output; tagging the response
-          // bubble above the note leaves the button buried where it's easy to miss.
-          // Skipped when main marks it non-revertable (pushed via PR).
+          if (setupAwaitingLanding.current.delete(key) && isActive) {
+            const setup = useSetup.getState();
+            setup.setBusy(false);
+            setup.setVerifying(true);
+            if (!environmentChanges(event.files ?? []).restart) setup.setRestartRequested(true);
+          }
+          // Keep undo on the completed response without adding a routine success note.
           if (event.group && event.revertable !== false)
             useChat.getState().tagRevert(key, event.group);
         } else if (event.state === "parked") {
+          setupAwaitingLanding.current.delete(key);
+          if (isActive) {
+            useSetup.getState().setBusy(false);
+            useSetup.getState().setVerifying(false);
+          }
           // The in-chat ConflictCard (driven by `isolation === 'parked'`) now explains
           // this and offers Resolve/Discard — no text note needed. Still refresh the
           // sidebar so the parked chat's badge/record reflects it if it's showing.
@@ -880,11 +893,12 @@ export default function ChatPanel(): React.JSX.Element {
       : selected.classes[0]
         ? `.${selected.classes[0]}`
         : "";
-    appendUser(`Delete the <${selected.tag}${ident}> element`);
+    const group = selected.selectionGroup ?? [selected];
+    appendUser(group.length > 1 ? `Delete the ${group.length} selected objects` : `Delete the <${selected.tag}${ident}> element`);
     startAssistant();
     void window.api.agent.send(
-      describeSelectionForPrompt(selected) +
-        "Delete this element from the source. Remove it cleanly — including any wrappers, imports, or styles that exist only for it.",
+      group.map(describeSelectionForPrompt).join("\n") +
+        "Delete the selected element(s) from the source. Remove it cleanly — including any wrappers, imports, or styles that exist only for it.",
     );
     setSelected(null);
   };
@@ -1021,70 +1035,19 @@ export default function ChatPanel(): React.JSX.Element {
   const send = (raw: string = input): void => {
     if (switchingModel) return;
     const text = raw.trim();
-    if ((!text && attachments.length === 0) || isRunning) return;
-    const imageAtts = attachments.flatMap((a) =>
-      a.kind === "image" ? [a] : [],
-    );
-    const images = imageAtts.map((a) => ({
-      mediaType: a.mediaType,
-      data: a.data,
-    }));
-    const files = attachments.filter((a) => a.kind === "file");
-    // File attachments ride as hidden context (like the selection pill below):
-    // the agent gets each absolute path prepended so it can read the file with
-    // its own tools; the transcript keeps the user's own words.
-    const fileCtx = files.length
-      ? `[Attached files]\n${files.map((f) => f.path).join("\n")}\n\n`
-      : "";
-    // The selection pill rides along as hidden context: the transcript shows
-    // the user's own words; the model gets the element reference prepended so
-    // it knows what it's looking at. (The preview's current page is no longer
-    // silently prepended — the agent has a `preview_location` tool and asks
-    // when the page actually matters.)
-    const ctx = selected ? describeSelectionForPrompt(selected) : "";
-    // Keep display metadata for every attachment alongside the user's words.
-    appendUser(text, undefined, {
-      attachments: attachments.map((a) =>
-        a.kind === "file"
-          ? { id: a.id, kind: "file", name: a.name, path: a.path }
-          : { id: a.id, kind: "image", mediaType: a.mediaType, url: a.url },
-      ),
-      selection: selected ? selectionForBubble(selected) : undefined,
-    });
-    startAssistant();
+    if (!text && attachments.length === 0) return;
+    const key = useChat.getState().activeKey;
+    const run = messageSender(key, text, attachments, selected);
+    setExpandedUserMsgs(new Set());
+    if (useChat.getState().isRunningFor(key) || queue.messages.some((message) => message.key === key)) {
+      queue.add({ key, label: text || `${attachments.length} attachment(s)`, run });
+    } else {
+      queue.pause(key, false);
+      void run().catch(() => {});
+    }
     setInput("");
     setCaret(0);
     setAttachments([]);
-    // A newly-sent ask becomes the pinned message — any previously-expanded
-    // ask should collapse back to its clamp instead of hanging around full-height.
-    setExpandedUserMsgs(new Set());
-    // Images ride as vision blocks, but the agent also needs to know WHERE each
-    // one is: without a path it can see a screenshot and still have to ask the
-    // user to find it before it can copy it into the repo. Dropped images
-    // already have their real path; pasted ones are only clipboard bytes, so
-    // main writes them out first (at send, not at paste — an attachment the user
-    // removes again should never hit the disk). A save that fails just yields no
-    // path, leaving that image vision-only as before.
-    void (async () => {
-      const paths = await Promise.all(
-        imageAtts.map((a) =>
-          a.path
-            ? Promise.resolve(a.path)
-            : window.api.agent
-                .saveAttachment({ mediaType: a.mediaType, data: a.data }, a.name)
-                .catch(() => ""),
-        ),
-      );
-      const imageCtx = paths.some(Boolean)
-        ? `[Attached images — the image(s) in this message are on disk at]\n${paths
-            .filter(Boolean)
-            .join("\n")}\n\n`
-        : "";
-      await window.api.agent.send(
-        fileCtx + imageCtx + ctx + text,
-        images.length ? images : undefined,
-      );
-    })();
     if (selected) setSelected(null);
   };
 
@@ -1095,6 +1058,7 @@ export default function ChatPanel(): React.JSX.Element {
   // successfully", so clearing it stops the incoming `done` from restarting the
   // dev server + arming a (bogus) verdict against half-written config.
   const stop = (): void => {
+    useMessageQueue.getState().pause(useChat.getState().activeKey, true);
     cancelledCatTurns.current.add(useChat.getState().activeKey);
     const s = useSetup.getState();
     if (s.busy) {
@@ -1423,10 +1387,10 @@ export default function ChatPanel(): React.JSX.Element {
                       );
                     })}
                     {m.role === "assistant" &&
-                      m.text &&
+                      (m.text || m.revertGroup) &&
                       !(isRunning && isLast) && (
                         <div className="msg__actions">
-                          <CopyAction text={m.text} />
+                          {m.text && <CopyAction text={m.text} />}
                           {m.revertGroup && projectRoot && (
                             <RevertAction
                               root={projectRoot}
@@ -1525,15 +1489,17 @@ export default function ChatPanel(): React.JSX.Element {
           }}
           onDragLeave={() => setDragOver(false)}
         >
+          <QueuedMessages />
+          {selected?.selectionGroup && selected.selectionGroup.length > 1 && (
+            <div className="w-full px-2 pt-2 text-xs">{selected.selectionGroup.length} objects selected · Shift-click to add or remove</div>
+          )}
           {selected && (
             <Inspector element={selected} onClear={() => setSelected(null)} />
           )}
           {attachments.length > 0 && (
-            /* w-full: the InputGroup is a flex COLUMN with `items-center`, so a
-               shrink-to-fit row would sit centered above the textarea. Full
-               width + the textarea's own 14px left padding lines the chips up
-               with the prompt text (same trick as Inspector's pill row). */
-            <div className="composer__attachments flex w-full flex-wrap gap-1.5 pl-[14px] pr-3 pt-2">
+            /* Full width keeps attachments aligned with the prompt. The textarea
+               supplies the matching 8px gap below the attachment row. */
+            <div className="composer__attachments flex w-full flex-wrap gap-1.5 px-2 pt-2">
               {attachments.map((a) => (
                 <div
                   key={a.id}
@@ -1600,7 +1566,7 @@ export default function ChatPanel(): React.JSX.Element {
           <textarea
             ref={inputRef}
             data-slot="input-group-control"
-            className="composer__input"
+            className="composer__input p-2"
             placeholder="Ask Praxis  (/ for skills)"
             value={input}
             rows={2}
@@ -1609,7 +1575,7 @@ export default function ChatPanel(): React.JSX.Element {
             onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
             onPaste={onPaste}
           />
-          <InputGroupAddon align="block-end" className="gap-1">
+          <InputGroupAddon align="block-end" className="gap-1 px-2 pt-0 pb-2">
             {/* Keep the compact toolbar on one line. The three selectors fit their selected
                 labels and may shrink/truncate, so a long provider or model name never
                 pushes the send button off the edge or wraps under the first row. */}
@@ -1713,11 +1679,16 @@ export default function ChatPanel(): React.JSX.Element {
                 ))}
               </ComposerSelect>
             </div>
+            {isRunning && (input.trim() || attachments.length > 0) && (
+              <Button type="button" size="icon" className="composer__send size-7 shrink-0" onClick={() => send()} aria-label="Queue message" title="Queue message" disabled={switchingModel}>
+                <ArrowUp className="size-4" aria-hidden="true" />
+              </Button>
+            )}
             {isRunning ? (
               <Button
                 type="button"
                 size="icon"
-                className="composer__send composer__send--stop shrink-0"
+                className="composer__send composer__send--stop size-7 shrink-0"
                 onClick={stop}
                 aria-label="Stop"
                 title="Stop"
@@ -1729,7 +1700,7 @@ export default function ChatPanel(): React.JSX.Element {
               <Button
                 type="button"
                 size="icon"
-                className="composer__send shrink-0"
+                className="composer__send size-7 shrink-0"
                 onClick={() => send()}
                 disabled={switchingModel || (!input.trim() && attachments.length === 0)}
                 aria-label="Send message"

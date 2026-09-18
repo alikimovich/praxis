@@ -27,6 +27,8 @@ const ROOT = dirname(TEST_DIR);
 
 // unit = the `bun test/NAME.mjs` group before `electron-vite build` in `test`.
 const UNIT = [
+  'code-reveal',
+  'message-queue',
   'conversation-handoff',
   'pr-body',
   'feedback-body',
@@ -38,10 +40,12 @@ const UNIT = [
   'html-source',
   'project-key',
   'project-create',
+  'environment-changes',
   'project-icon',
   'devserver-net',
   'xcode',
   'git',
+  'git-remote',
   'publish-reconcile',
   'sidecar-migrate',
   'diag-cache',
@@ -55,6 +59,8 @@ const UNIT = [
   'codex-retry-cause',
   'codex-stream',
   'praxis-agent-tools',
+  'control-target',
+  'rail-order',
   'interrupt-escalation',
   'terminal-streams',
   'turn-terminal',
@@ -99,6 +105,8 @@ const UNIT = [
 
 // electron = the `node test/NAME.mjs` group AFTER `electron-vite build` in `test`.
 const ELECTRON = [
+  'git-updates',
+  'project-setup',
   'cat-animations',
   'startup-intro',
   'browser-mode',
@@ -115,6 +123,7 @@ const ELECTRON = [
   'editor-search',
   'rail-chat-overflow',
   'rail-chat-status',
+  'rail-reorder',
   'project-memory-ui',
   'devserver-multi',
   'static-serve',
@@ -124,6 +133,7 @@ const ELECTRON = [
   'agent-history',
   'history-ui',
   'chat-render',
+  'desktop-surfaces',
   'provider-skills-menu',
   'visual-edit-agent',
   'revert-action',
@@ -138,6 +148,7 @@ const ELECTRON = [
   'questions',
   'diagnose-card',
   'select-element',
+  'three-d-inspector',
   'measure-alt',
   'comment-mode',
   'spawn-comment',
@@ -168,10 +179,13 @@ const ELECTRON = [
 
 // live = the tests present in `verify` but not in `test`.
 const LIVE = [
+  'code-reveal-agent',
+  'animation-controls-agent',
   'model-switch-e2e',
   'agent-e2e',
   'codex-e2e',
   'controls-agent',
+  'controls-codex',
   'tool-invocation',
   'sim-e2e',
   'style-provenance',

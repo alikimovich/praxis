@@ -11,6 +11,8 @@ capabilities instead of assuming Claude, Codex, gateways, and Gemini are interch
 | Skills menu before the first turn | Yes | Yes | Yes, through Codex | Yes |
 | Provider-native coding tools | Yes | Yes | Depends on model through Codex | Limited |
 | Praxis preview MCP tools | Yes | No | No | No |
+| Register custom controls / open desktop inspector | Yes | Yes | Yes, through Codex | No |
+| Open mini code editor / highlight exact source | Yes | Yes | Yes, through Codex | No |
 | Praxis worktree control tools | No | Yes | Yes, through Codex | No |
 | Praxis question cards | Yes | No | No | No |
 | Praxis approve/deny cards | Yes | No SDK approval event | No SDK approval event | No |
@@ -24,7 +26,12 @@ never support the feature. Codex and gateway sessions receive a session-scoped l
 server with `workspace_state` and `prepare_conflict_resolution`: the former reads the
 landing coordinator rather than guessing from the private checkout, while the latter
 routes the existing three-way resolver through Praxis's repository queue. It deliberately
-does not expose raw Git or discard/reset operations. Preview tools remain Claude-only;
+does not expose raw Git or discard/reset operations. The same bridge now exposes
+`define_controls` and `open_controls`, including to detached visual-edit children.
+Registration validates anchors in the agent worktree and saves the manifest on the
+live root. Opening is scoped to the active project, uses real preview selection,
+and retries after landing; ambiguous file matches require an exact source stamp.
+Preview observation/calculator tools remain Claude-only;
 question cards, resume, image transport, and background-agent support are separately
 declared because they have different lifecycle and security requirements.
 
@@ -42,6 +49,20 @@ promising unsupported actions in backend-agnostic copy. Open-model connections i
 the Codex harness's strengths and gaps; changing the model id does not grant Claude's
 in-process preview/design tools. It does retain the two Praxis worktree-control tools
 because those belong to the harness, not the selected endpoint model.
+
+## Required browser verification
+
+All providers receive the same built-in agent-browser operating rule. For web UI
+changes and browser testing, agents must check CLI availability in their execution
+environment and use it when available. Responsive/layout checks cover phone,
+tablet, and desktop viewports, with screenshots and interaction checks. Each task
+uses its own named browser session. Missing CLI/browser support is reported;
+installation requires user permission. An explicit user tool choice takes priority.
+
+This is prompt-level enforcement, not a runtime tool-call gate. Existing sessions
+need to be recreated to receive updated rules. A preview still serving code from
+before a private worktree edit cannot verify that edit; the agent must report it as
+pending instead of bypassing Praxis's landing lifecycle or claiming success.
 
 ## Skills menu and Codex runtime
 
@@ -72,3 +93,45 @@ This handoff stays out of the displayed/saved transcript and does not reuse a
 previous provider's SDK session id. Past image bytes and full tool outputs are
 not present in the transcript and are not replayed. Large histories may reach the
 selected model's context limit; Praxis does not silently truncate the conversation.
+
+## New-project setup conversations
+
+New Project offers the deterministic React/Vite starter or an empty Git repository
+for Next.js, Svelte, or a custom environment. Discussion choices submit a short
+planning request to the selected provider. Shared Praxis rules ask for unresolved
+project/environment choices before scaffolding; an explicit choice is not asked
+again. Claude can use its question cards; Codex and gateways ask in ordinary chat.
+The model's conversational behavior remains prompt-guided. Creating the empty
+repository itself does not install packages or choose a framework.
+
+Preview refresh is provider-independent once edits land: manifest/lockfile changes
+install dependencies in the live checkout, framework config changes restart the
+managed web preview, and both re-detect the current launch settings. The provider's
+terminal event alone does not prove that private edits reached the live checkout.
+
+Composer queues are managed by Praxis for every provider. They submit separate
+turns in order, preserving the originating chat, file/image attachments, and
+selection context. They do not depend on provider-native steering support; image
+interpretation remains subject to the capability table above.
+
+The bundled `animation-controls` skill is available to Claude through the local
+plugin and an eager slash-menu alias; Codex/custom endpoints and experimental
+Gemini discover it as a portable fallback after project/user skills. Shared rules
+route natural-language animation-panel requests to its SKILL.md. It instruments
+the previewed app with DialKit (or an equivalent supported dev panel), without
+calling the selection-owned `define_controls`/`open_controls` path. It requires no
+provider-specific preview tools; the existing animation engine remains in place.
+
+`open_code` opens the docked editor at a repo-relative file and an inclusive line
+range. Main validates the file boundary (including symlinks) and captures the exact
+source text from the agent checkout. The active project/chat reveals it only when
+that text exists in the live checkout, retrying after landing. Dirty editor drafts
+defer navigation until saved or discarded. Detached agents cannot navigate the
+editor. The transport also works in browser mode.
+
+The Codex MCP executable path is relative to the compiled main bundle, not
+Electron's app path: direct source launches report `out/main` as the app path.
+
+The SDK session explicitly allows the validated `open_code` navigation tool via
+its per-tool approval configuration, matching Claude's in-process allowlist. Other
+MCP tools and shell approval policy keep their existing configuration.

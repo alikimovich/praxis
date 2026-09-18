@@ -1,4 +1,14 @@
+import { House } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+
+function pagePath(url: string): string {
+  try {
+    const parsed = new URL(url)
+    return parsed.pathname + parsed.search + parsed.hash
+  } catch {
+    return '/'
+  }
+}
 
 /**
  * The preview URL, Figma-style: the full URL is shown, and everything after the
@@ -39,7 +49,7 @@ export default function PreviewUrl({
   }, [origin])
 
   // A project switch changes the base — reset to its root.
-  useEffect(() => setPath('/'), [origin])
+  useEffect(() => setPath(pagePath(base)), [base])
 
   const commit = (): void => {
     const raw = (inputRef.current?.value ?? '').trim()
@@ -50,6 +60,18 @@ export default function PreviewUrl({
 
   return (
     <span className="previewbar__url previewbar__url--editable">
+      <button
+        type="button"
+        className="iconbtn iconbtn--sm"
+        aria-label="Back to project"
+        title="Back to project"
+        onClick={() => {
+          setPath(pagePath(base))
+          onNavigate(base)
+        }}
+      >
+        <House className="size-3.5" aria-hidden="true" />
+      </button>
       <span className="previewbar__origin">{origin}</span>
       <input
         ref={inputRef}

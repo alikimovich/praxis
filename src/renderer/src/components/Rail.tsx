@@ -1,7 +1,9 @@
-import { ChevronRight, Folder, MessageSquare, Plus, X } from '../icons'
 import { Fragment, useEffect, useState } from 'react'
 import type { SessionRecord } from '../../../shared/api'
+import { ChevronRight, Folder, MessageSquare, Plus, X } from '../icons'
+import { orderedIds, orderedItems, railGroup } from '../lib/rail-order'
 import { useProjectIcons } from '../project-icons'
+import { useRailOrder } from '../rail-order'
 import {
   chatTitle,
   shortAgo,
@@ -12,8 +14,9 @@ import {
   useUpdate,
   useWorkspace
 } from '../store'
-import RailProjectActions from './RailProjectActions'
 import RailChatRow, { type ChatStatus } from './RailChatRow'
+import RailProjectActions from './RailProjectActions'
+import { useRailReorder } from './use-rail-reorder'
 
 interface Props {
   /** Close (fully stop) a project. */
@@ -94,6 +97,17 @@ export default function Rail({
   onOpenMemory
 }: Props): React.JSX.Element | null {
   const projects = useWorkspace((s) => s.projects)
+  const orders = useRailOrder(s => s.orders)
+  const reorder = useRailReorder((source, target, after) => {
+    const [kind, key] = JSON.parse(source.group) as [string, string]
+    const currentProjects = useWorkspace.getState().projects
+    const project = currentProjects.find(p => p.key === key)
+    const ids = kind === 'projects' ? currentProjects.map(p => p.key)
+      : kind === 'live' && project ? [...(project.sessionKeys ?? [project.key])].reverse()
+      : kind === 'history' && project ? (useHistory.getState().byKey[key] ?? []).map(rec => rec.id) : []
+    useRailOrder.getState().move(source.group, ids, source.id, target.id, after, kind !== 'projects')
+  })
+  const orderedProjects = orderedItems(projects, p => p.key, orders[railGroup('projects')])
   const activeKey = useWorkspace((s) => s.activeKey)
   const collapsed = useWorkspace((s) => s.collapsed)
   // Re-render on any chat change so the per-project "working" dots stay live.
@@ -151,8 +165,9 @@ export default function Rail({
           lights) — rail__inner's own padding-top leaves this empty, so
           nothing here made it draggable. Sits below rail__inner's own
           buttons in the DOM/paint order, so it never blocks a click. */}
+      <span className="sr-only" role="status" aria-live="polite">{reorder.announcement}</span>
       <div className="rail-drag" aria-hidden="true" />
-      <div className="rail__inner">
+      <div className="rail__inner" {...reorder.scrollProps}>
         {/* Project actions — quiet list items (no dashed CTA borders) — lead the
           rail so opening/creating is always reachable. The "Projects" heading
           sits below them, directly labelling the open-projects list. */}
@@ -178,7 +193,7 @@ export default function Rail({
           <span>Projects</span>
         </div>
         <ul className="rail__list">
-          {projects.map((p) => {
+          {orderedProjects.map((p) => {
             const active = p.key === activeKey
             // Expansion is the project's own persisted state, which the store
             // keeps to one project at a time (the accordion) — normally the
@@ -192,13 +207,14 @@ export default function Rail({
             const anyParked = expanded
               ? sessionKeys.some((sk) => byKey[sk]?.isolation === 'parked')
               : false
-            const past = expanded
+            const rawPast = expanded
               ? (history[p.key] ?? []).filter((r) => !(anyParked && r.id.startsWith('chatpark-')))
               : []
-            // Every live chat is a peer, newest first. Empty chats remain visible:
+            const past = orderedItems(rawPast, rec => rec.id, orders[railGroup('history', p.key)], true)
+            // Every live chat is a peer, newest first until manually reordered. Empty chats remain visible:
             // unlike history, they own a provider context + worktree and are
             // actionable state.
-            const live = expanded ? [...sessionKeys].reverse() : []
+            const live = expanded ? orderedIds([...sessionKeys].reverse(), orders[railGroup('live', p.key)], true) : []
             // Background agents are filed under the sessionKey that launched them.
             // Closing that chat while its agent still runs would otherwise drop the
             // row (and its Cancel ×) out of the rail entirely, so any agent left
@@ -216,8 +232,8 @@ export default function Rail({
             const hiddenPast = past.length - pastVisible.length
             const icon = icons[p.key]
             return (
-              <li key={p.key} className={`rail__item ${active ? 'rail__item--active' : ''}`}>
-                <div className="rail__row group/project">
+              <li key={p.key} data-reorder-item="project" className={`rail__item ${active ? 'rail__item--active' : ''}`}>
+                <div className="rail__row group/project rounded-sm">
                   <div className="rail__open" title={icon ? `${p.root} — ${icon.path}` : p.root}>
                     {/* Project glyph: the project's OWN favicon when it ships one,
                       else the supplied folder, morphing with the expanded state.
@@ -258,6 +274,7 @@ export default function Rail({
                     <button
                       type="button"
                       className="rail__name-btn"
+                      {...reorder.bind({ group: railGroup('projects'), id: p.key, name: p.name })}
                       onClick={() => useWorkspace.getState().toggleChatsCollapsed(p.key)}
                       aria-expanded={expanded}
                     >
@@ -300,6 +317,7 @@ export default function Rail({
                           <Fragment key={sk}>
                             <RailChatRow
                               name={name}
+                              reorder={reorder.bind({ group: railGroup('live', p.key), id: sk, name })}
                               status={status}
                               active={isActiveChat}
                               title={
@@ -354,6 +372,7 @@ export default function Rail({
                                 <RailChatRow
                                   key={rec.id}
                                   name={name}
+                                  reorder={reorder.bind({ group: railGroup('history', p.key), id: rec.id, name })}
                                   status="idle"
                                   title={`${name} — ${rec.filesTouched.length} file(s)`}
                                   onOpen={() => onReview(rec)}

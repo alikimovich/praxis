@@ -203,6 +203,8 @@ export function installWebApi(config: WebConfig): void {
       onLog: on('devserver:log')
     },
     git: {
+      remoteStatus: (root, fetch) => invoke('git:remote-status', root, fetch),
+      remoteUpdate: (root, action) => invoke('git:remote-update', root, action),
       ensure: (root) => invoke('git:ensure', root),
       set: (root, name) => invoke('git:set', root, name),
       list: (root) => invoke('git:list', root),
@@ -246,6 +248,7 @@ export function installWebApi(config: WebConfig): void {
       move: (root, request) => invoke('layers:move', root, request)
     },
     controls: {
+      onOpen: on('controls:open'),
       get: async () => [],
       list: async () => [],
       remove: async () => {},
@@ -256,6 +259,7 @@ export function installWebApi(config: WebConfig): void {
       ) as unknown as PraxisApi['controls']['onUpdated']
     },
     source: {
+      onReveal: on('source:reveal'),
       read: (root, source) => invoke('source:read', root, source),
       resolveComponent: (root, fromFile, name) =>
         invoke('source:resolve-component', root, fromFile, name),
@@ -312,7 +316,7 @@ export function installWebApi(config: WebConfig): void {
         invoke('agent:resume-session', root, recordId, options),
       closeChat: (root, sessionKey) => invoke('agent:close-chat', root, sessionKey),
       renameChat: (sessionKey, title) => invoke('agent:rename-chat', sessionKey, title),
-      send: (text, images) => invoke('agent:send', text, images),
+      send: (text, images, sessionKey) => invoke('agent:send', text, images, sessionKey),
       saveAttachment: (image, name) => invoke('attachments:save', image, name),
       setModel: (model) => invoke('agent:set-model', model),
       setPermissionMode: (mode) => invoke('agent:set-permission-mode', mode),

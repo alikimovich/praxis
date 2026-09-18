@@ -118,3 +118,58 @@ Implementation: `src/main/publish-reconcile.ts`, integrated by
 Model/provider changes keep the selected chat's worktree and require confirmation
 when the chat contains messages. The replacement session receives a one-time
 recorded conversation handoff on its next turn; sibling chats are untouched.
+
+## Environment changes and preview startup
+
+The renderer refreshes a managed web preview after authoritative `isolation:merged`
+or applied `spawn-finished` events containing manifests, lockfiles, or framework
+config changes. A provider's earlier `done` and parked/failed outcomes do not
+trigger this refresh. Background projects retain pending refreshes until activated.
+An empty project can open its chat before it has a dev server or application files.
+
+For dependency changes, the preview runner installs in the live checkout through
+its repository write queue before starting the server. Git does not transfer a
+worktree-local `node_modules` directory. Auto-detected commands/frameworks are
+resolved again; explicit custom launch commands retain their override. Preview
+startup failures leave chat available for repair and expose a retry command.
+This refresh covers landed Git-root work; external file edits and non-isolated
+turns still depend on the framework's own reload behavior or a manual restart.
+
+## Pulling remote updates and switching branches
+
+The branch menu's **Git updates…** panel fetches configured remotes, pulls a
+selected remote-tracking branch into the current branch, or opens a remote branch
+locally. Pull explicitly uses a merge, preserving local commits; it does not
+rebase, force-reset, push, or silently stash. A conflicting merge is aborted back
+to the clean starting tree. New local branches track the selected remote branch;
+existing local branches are switched to without resetting or repointing them.
+Pull afterward to update an existing local branch.
+
+These operations run through the repository write queue and reject active project
+agents, uncommitted project files, in-progress Git operations, and stale current-
+branch selections. Untracked runtime sidecars do not block updates; Git retains
+its own protection against overwriting untracked incoming paths. Fetch is safe
+while agents work and does not alter the checkout. Remote references are refreshed
+and validated before mutations. Browser mode enforces the same opened-root scope.
+
+Successful pull/checkout results update branch metadata and request a preview
+restart, installing dependencies when manifests/lockfiles changed. The next chat
+turn uses the existing live-to-worktree synchronization to pick up the new tree.
+
+Ordinary local-branch switches also restart the managed preview, re-detect the
+framework, and install dependencies when branch-tip manifests or lockfiles differ.
+Attached external servers get a page reload and a manual-restart message.
+
+## Composer message queue
+
+Enter or Queue message during a running turn captures the text, attachments, and
+selected objects for that chat. Each chat drains in FIFO order, including while
+another chat is active. Sends carry an explicit session key; attachment saving
+and the previous turn's landing cannot redirect them to a newly active project.
+The next send waits for the existing landing chain. A conflict pauses dispatch;
+Stop and agent errors pause remaining messages until Resume queue. Pending items
+can be removed. Queues are in memory, cleared on chat close or app reload.
+
+Clean merges add no chat notice. Their Revert action attaches to the completed
+assistant response, even if a queued response has already started. Conflicts and
+failures still surface normally.

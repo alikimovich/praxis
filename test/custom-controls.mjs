@@ -123,76 +123,6 @@ try {
       await new Promise((res) => setTimeout(res, 250))
     }
   }
-  // Tests assume the expanded card (a previous run may have collapsed it).
-  const expandPanel = () =>
-    panelEval(
-      "localStorage.setItem('praxis.proppanel.collapsed','0'); document.querySelector('.proppanel__expand')?.click(); true"
-    )
-  // Open the island on the Custom tab and wait for its rows. Re-asserts
-  // setOpen + the tab click each poll (style-edit.mjs's discipline): a
-  // straggler click from pickElement's retry loop can close the island again,
-  // and the Custom trigger itself only exists once App's controls:get fetch
-  // resolves the canned panel and pushes it through panel:state.
-  const openCustomTab = async () => {
-    const end = Date.now() + 20000
-    for (;;) {
-      await win.evaluate(() => window.__praxisPropsIsland.getState().setOpen(true))
-      await expandPanel()
-      // Radix TabsTrigger activates on mousedown (a bare .click() only fires click).
-      const ok = await panelEval(`(() => {
-        const t = [...document.querySelectorAll('.proppanel__tab')].find((b) => b.textContent.trim() === 'Custom')
-        if (t) {
-          for (const type of ['mousedown', 'mouseup', 'click']) {
-            t.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: 0 }))
-          }
-        }
-        return !!document.querySelector('.custompanel__rows')
-      })()`)
-      if (ok === true) return
-      if (Date.now() > end) throw new Error('the Custom tab never rendered its rows')
-      await new Promise((r) => setTimeout(r, 300))
-    }
-  }
-
-  // Click-select a stamped element in the preview via TRUSTED input events (the
-  // preload rejects synthetic DOM events), retrying until the inspector shows it.
-  const pickElement = async (domId, source) => {
-    const getCenter = `(() => {
-      const el = document.querySelector(${JSON.stringify('#' + domId)})
-      if (!el) return null
-      const b = el.getBoundingClientRect()
-      return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) }
-    })()`
-    for (let i = 0; i < 40; i++) {
-      const result = await app.evaluate(async ({ webContents }, code) => {
-        const wc = webContents
-          .getAllWebContents()
-          .find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
-        if (!wc) return 'no-preview'
-        const c = await wc.executeJavaScript(code, true)
-        if (!c) return 'no-element'
-        wc.focus()
-        wc.sendInputEvent({ type: 'mouseMove', x: c.x, y: c.y })
-        wc.sendInputEvent({ type: 'mouseDown', x: c.x, y: c.y, button: 'left', clickCount: 1 })
-        wc.sendInputEvent({ type: 'mouseUp', x: c.x, y: c.y, button: 'left', clickCount: 1 })
-        return 'clicked'
-      }, getCenter)
-      if (result === 'clicked') {
-        const ok = await win
-          .waitForFunction(
-            (src) => document.querySelector('.inspector__source')?.textContent?.includes(src),
-            source,
-            { timeout: 1000 }
-          )
-          .then(() => true)
-          .catch(() => false)
-        if (ok) return
-      }
-      await new Promise((r) => setTimeout(r, 300))
-    }
-    throw new Error(`inspector never showed ${source} after clicking #${domId}`)
-  }
-
   // Save the island's own pixels (it's a WebContentsView — absent from
   // renderer-page screenshots).
   const shotIsland = async (name) => {
@@ -221,20 +151,13 @@ try {
     { timeout: 60000 }
   )
 
-  // --- Select the stamped element with a real click. ---
-  await win.click('button[aria-label="Select"]')
-  await win.waitForSelector('button[aria-label="Select"][aria-pressed="true"]', { timeout: 5000 })
-  await pickElement('tw-box', TW_SRC)
-
-  // --- The Custom tab TRIGGER appears (only selections that resolve panels
-  // grow the third tab), then its rows render. ---
-  await win.evaluate(() => window.__praxisPropsIsland.getState().setOpen(true))
-  await expandPanel()
-  await waitPanel(
-    "[...document.querySelectorAll('.proppanel__tab')].some((b) => b.textContent.trim() === 'Custom')",
-    20000
-  )
-  await openCustomTab()
+  // Agent request must select and open Custom without a click or manual Props toggle.
+  await app.evaluate(({ BrowserWindow }, request) => {
+    BrowserWindow.getAllWindows()[0].webContents.send('controls:open', request)
+  }, { root: fixture, source: TW_SRC, tab: 'custom', requestId: 'agent-open-test' })
+  await waitPanel("!!document.querySelector('.custompanel__grouptitle')", 20000)
+  const selectedSource = await win.evaluate(() => window.__praxisSelection.getState().selected?.source)
+  if (selectedSource !== TW_SRC) throw new Error('Agent request did not select the requested object')
 
   // --- Rows: fresh values lexed from source for the valid params; the broken
   // anchor renders disabled with its reason + a Regenerate button. ---
@@ -351,6 +274,16 @@ try {
   // Tab hygiene (see prop-edit.mjs): direct `bun run test:*` runs share
   // userData, and Radix unmounts inactive tab content — leave the persisted
   // tab on Props so a stale 'custom' preference can't strand another suite.
+  await app.evaluate(({ BrowserWindow }, request) => {
+    BrowserWindow.getAllWindows()[0].webContents.send('controls:open', request)
+  }, { root: fixture, source: TW_SRC, tab: 'styles', requestId: 'agent-styles-test' })
+  await waitPanel("!!document.querySelector('[role=slider][aria-label=padding]')")
+  const absentOpacity = await panelEval("!document.querySelector('[role=slider][aria-label=opacity]')")
+  if (!absentOpacity) throw new Error('Browser-default opacity should be hidden')
+  await shotIsland('30-authored-styles.png')
+  await panelEval("[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Show all styles').click(); true")
+  await waitPanel("!!document.querySelector('[role=slider][aria-label=opacity]')")
+
   await panelEval("localStorage.setItem('praxis.island.tab', 'props'); true")
 
   console.log(
