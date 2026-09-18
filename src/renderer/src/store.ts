@@ -766,6 +766,8 @@ export const openWithPreviewFreeze = (show: () => void): void => {
  * ~390px cutout used to collapse the phone screen to a sliver).
  */
 interface PanelInsetState {
+  animation: number
+  setAnimation: (width: number) => void
   /** Right-edge strip reserved for the floating PropPanel. */
   inset: number
   /** Bottom strip reserved for the v9 code drawer (shrinks the native view's height). */
@@ -774,6 +776,8 @@ interface PanelInsetState {
   setBottom: (bottom: number) => void
 }
 export const usePanelInset = create<PanelInsetState>((set) => ({
+  animation: 0,
+  setAnimation: (animation) => set({ animation: Math.max(0, animation) }),
   inset: 0,
   bottom: 0,
   setInset: (inset) => set({ inset: Math.max(0, inset) }),

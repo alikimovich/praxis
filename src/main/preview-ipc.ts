@@ -17,6 +17,7 @@
 import { ipcMain, type WebContentsView } from 'electron'
 import type { MoveNodeRequest, SelectedElement, StyleReadResult } from '../shared/api'
 import {
+  ANIMATION_REPLAY,
   LAYERS_CHANGED,
   LAYERS_HOVER,
   LAYERS_READ,
@@ -357,6 +358,10 @@ export function registerPreviewIpc(host: PreviewIpcHost): void {
   ipcMain.on('styles:clear-preview', (e, p?: { prop?: string }) => {
     if (!fromMainOrPanel(e)) return
     toPreview(STYLES_CLEAR_PREVIEW, p)
+  })
+  ipcMain.on('preview:animation-replay', (e, component: unknown) => {
+    if (!fromMainOrPanel(e) || typeof component !== 'string' || component.length > 80) return
+    toPreview(ANIMATION_REPLAY, component)
   })
   ipcMain.on('styles:replay', (e, p: { prop: string; from: string; to: string }) => {
     if (!fromMainOrPanel(e)) return

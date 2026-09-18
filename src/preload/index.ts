@@ -107,6 +107,7 @@ const api: PraxisApi = {
     nativeEdit: (cmd: 'undo' | 'redo'): void => ipcRenderer.send('menu:native-edit', cmd)
   },
   preview: {
+    replayAnimation: (component: string): void => ipcRenderer.send('preview:animation-replay', component),
     setBounds: (bounds: Bounds): void => ipcRenderer.send('preview:set-bounds', bounds),
     load: (url: string): Promise<void> => ipcRenderer.invoke('preview:load', url),
     reset: (): Promise<void> => ipcRenderer.invoke('preview:reset'),

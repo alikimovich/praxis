@@ -143,6 +143,7 @@ export function installWebApi(config: WebConfig): void {
       nativeEdit: () => {}
     },
     preview: {
+      replayAnimation: (component) => postPreview('animation-replay', component),
       setBounds: () => {},
       load: async (url) => {
         const result = await invoke<{ gatewayUrl: string }>('preview:load', url)

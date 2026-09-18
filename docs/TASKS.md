@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Native animation panels (2026-09-17)
+
+- [x] Replace DialKit integration with Praxis's existing control primitives.
+- [x] Persist animation panels independently of selection, with collapse/reopen.
+- [x] Wire targeted Replay and existing source-edit/Undo behavior.
+
 ## Show exact code from chat (2026-09-17)
 
 - [x] Add `open_code` for Claude and Codex/custom endpoints.
@@ -13,7 +19,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 - [x] Bundle `/animation-controls` and route ordinary animation-control requests to it.
 - [x] Make the skill discoverable by Claude, Codex/custom endpoints, and Gemini.
-- [x] Add tuning panels inside the previewed app, independent of Praxis selection.
+- [x] Add selection-independent panels (now native Praxis panels; supersedes the initial project UI approach).
 - [x] Keep native inspector controls distinct and update the animation action prompt.
 
 ## Selection, message queues, and preview navigation (2026-09-17)

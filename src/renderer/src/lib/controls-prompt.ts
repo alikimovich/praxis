@@ -58,7 +58,7 @@ export function controlsPrompt(
 /**
  * The deliberately opt-in animation path. Unlike `controlsPrompt`, this turn
  * is allowed to change runtime behavior: it first creates the requested motion,
- * then opens a selection-independent tuning panel inside the previewed app.
+ * then opens a selection-independent native tuning panel beside the preview.
  */
 export function animationControlsPrompt(
   element: SelectedElement,
@@ -77,11 +77,11 @@ export function animationControlsPrompt(
     hint
       ? `Add this animation to the selected element: "${oneLine(hint, 500)}".`
       : `Add a subtle, appropriate animation to the selected element.`,
-    `Then follow the animation-controls skill to add a live tuning panel inside the previewed app.`,
+    `Then follow the animation-controls skill to surface Praxis native animation controls (manifest.presentation: "animation").`,
     `Use the selection only to identify the animation's source. The panel must remain mounted and`,
     `usable when I select a different object or clear the selection, with controls wired to the`,
     `real animation and Replay for one-shot motion. Preserve unrelated layout and reduced-motion behavior.`,
-    `Do not use define_controls or open_controls for this panel; those open the selection inspector.`,
+    `Use define_controls with literal parameters; do not install DialKit or add tuning UI to the app.`,
     `Never create or edit files under \`.praxis/\`.`
   )
   return lines.join('\n')

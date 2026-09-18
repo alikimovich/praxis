@@ -285,8 +285,8 @@ async function startSession(
           command: process.execPath,
           // Electron's app path is out/main when launched from the compiled entry.
           args: [join(__dirname, '../../bin/praxis-agent-mcp.mjs')],
-          // Source reveal is validated read-only navigation, like Claude's allowlist.
-          tools: { open_code: { approval_mode: 'approve' } },
+          // Match Claude's allowlist for validated source reveal and control registration.
+          tools: { open_code: { approval_mode: 'approve' }, define_controls: { approval_mode: 'approve' } },
           env: {
             ELECTRON_RUN_AS_NODE: '1',
             PRAXIS_AGENT_TOOL_SOCKET: praxisTools.socketPath,

@@ -2,6 +2,8 @@ import { z } from 'zod'
 
 export const defineControlsShape = {
   manifest: z.object({
+    presentation: z.literal('animation').optional().describe('Persistent Praxis panel independent of selection; all params must use literal strategy'),
+    replay: z.boolean().optional().describe('True after wiring praxis:animation-replay, whose detail is the component name, to restart this animation'),
     file: z.string().describe('Repo-relative path of the source file the params live in'),
     component: z.string().describe('The component the panel targets (its exported name)'),
     title: z.string().describe('Panel heading shown to the user (≤80 chars)'),

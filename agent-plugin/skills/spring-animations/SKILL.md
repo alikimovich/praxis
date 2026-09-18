@@ -54,8 +54,8 @@ transition:
 ## Making it tweakable
 
 For a live animation tuning panel, follow the sibling
-[animation-controls skill](../animation-controls/SKILL.md). Its controls live in
-the previewed app independently of selection, and must update the actual spring
+[animation-controls skill](../animation-controls/SKILL.md). Its native controls live in
+Praxis beside the preview independently of selection, and must update the actual spring
 rather than only changing constants behind a precomputed CSS curve. Keep an
 existing runtime spring engine when the app already has one. If the user explicitly
 wants selection-inspector controls, use `define_controls` with named parameters

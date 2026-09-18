@@ -53,3 +53,5 @@ export const LAYERS_HOVER = 'layers:hover' // → preload ({path, fingerprint} |
 export const LAYERS_SET_WATCH = 'layers:set-watch' // → preload (boolean)
 
 export const PREVIEW_MOVE_NODE = 'praxis:preview:move-node' // → main (MoveNodeRequest)
+
+export const ANIMATION_REPLAY = 'praxis:preview:animation-replay' // → preload (component name)

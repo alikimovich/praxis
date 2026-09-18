@@ -51,6 +51,11 @@ const validManifest = (over = {}) => ({
   ...over
 })
 
+const animation = validateManifest(validManifest({ presentation: 'animation', replay: true }))
+assert(!('error' in animation) && animation.presentation === 'animation' && animation.replay, 'native animation metadata survives validation')
+assert('error' in validateManifest(validManifest({ presentation: 'animation', params: [validParam({ apply: { strategy: 'prop', propName: 'delay' } })] })), 'animation controls cannot depend on selection')
+assert('error' in validateManifest(validManifest({ replay: true })), 'replay requires an animation panel')
+
 // A maximal valid manifest — every kind, every strategy, full caps in play.
 const maximal = validManifest({
   params: [

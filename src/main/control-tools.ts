@@ -63,6 +63,7 @@ export async function defineAgentControls(
     root: liveRoot,
     file: manifest.file,
     tab: 'custom',
+    ...(manifest.presentation === 'animation' ? { presentation: 'animation' } : {}),
     requestId: randomUUID()
   })
 

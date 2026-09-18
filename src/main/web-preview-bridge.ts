@@ -158,6 +158,8 @@ export const WEB_PREVIEW_BRIDGE = String.raw`(() => {
   addEventListener('message', (event) => {
     const message = event.data || {}
     if (message.source !== 'praxis-control' || message.token !== token) return
+    if (message.type === 'animation-replay' && typeof message.payload === 'string' && message.payload.length <= 80)
+      window.dispatchEvent(new CustomEvent('praxis:animation-replay', { detail: message.payload }))
     if (message.type === 'set-select-mode') {
       selectMode = !!message.payload
       paint(selectMode ? hovered : null)

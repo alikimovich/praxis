@@ -2,6 +2,34 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-17 — Native animation controls independent of selection
+
+Replaced the bundled animation skill's DialKit integration at the user's request.
+The skill now registers `presentation: "animation"` manifests through
+`define_controls`, using Praxis's existing sliders, toggles, colors, selects, and
+easing editor in a persistent dock beside the preview. No tuning dependency or
+panel UI is installed in the target project. Panels survive selection changes,
+can collapse/reopen, and reserve their own native-preview inset.
+
+Animation parameters must use literal source anchors: selection-dependent prop
+and style strategies are rejected. Changes use the existing source-write, HMR,
+and Undo flow. Optional Replay sends a component-scoped window event through the
+desktop preload or browser bridge; the skill wires the existing animation to it
+with cleanup and reduced-motion behavior intact. Codex explicitly allows the
+validated registration tool, matching Claude's existing allowlist. Gemini's
+tool limitation remains documented rather than falling back to a dependency.
+
+Added deterministic Electron coverage and replaced the DialKit live-agent test
+with native registration, Replay, selection independence, source edits,
+collapse/reopen, Undo, and dependency checks. The real Codex request passed all
+checks, including Replay using the changed duration, with no package dependency
+added. Inspected both deterministic and live-agent panel screenshots. Typecheck,
+build, skill validation, and targeted logic/UI tests passed. Full `verify`:
+153/155 passed; `agent-multi` failed with “This chat is already running” and
+`code-reveal-agent` passed Claude but could not find the Codex provider-menu option.
+Other live controls tests and tool invocation passed. Concurrent setup edits were
+present near the end of the run and are excluded from this change.
+
 ## 2026-09-17 — Git updates dialog above the native preview
 
 Transfer the branch menu's existing preview freeze directly to Git updates.

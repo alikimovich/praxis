@@ -801,6 +801,7 @@ export interface PropInspection {
 
 /** Agent request to select an object and open its desktop inspector. */
 export interface ControlsOpenRequest {
+  presentation?: 'animation'
   root: string
   source?: string
   file?: string
@@ -1001,6 +1002,10 @@ export interface ControlParam {
  * `file` + `component` (regenerating replaces, never duplicates).
  */
 export interface ControlPanelManifest {
+  /** Animation panels are owned by the project, not the current selection. */
+  presentation?: 'animation'
+  /** Project listens for praxis:animation-replay with its component name as detail. */
+  replay?: boolean
   id: string
   /** Repo-relative source file the panel's params live in. */
   file: string
@@ -1244,6 +1249,7 @@ export interface PraxisApi {
     nativeEdit: (cmd: 'undo' | 'redo') => void
   }
   preview: {
+    replayAnimation: (component: string) => void
     setBounds: (bounds: Bounds) => void
     load: (url: string) => Promise<void>
     reset: () => Promise<void>

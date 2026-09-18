@@ -81,11 +81,10 @@ GitHub PR.
 - **Ask to see the exact code.** Praxis can open its mini code editor in the
   relevant file and highlight the implementation, without selecting an object.
   Unsaved editor changes are preserved; available with Claude and Codex.
-- **Surface animation controls in the preview.** Ask “surface animation controls”
-  or use `/animation-controls`. The bundled skill adds a DialKit-style panel to
-  the previewed project, with values wired to the existing animation and Replay.
-  It stays available when nothing is selected or selection changes; live tuning
-  is separate from applying chosen values to source defaults.
+- **Surface native animation controls.** Ask “surface animation controls” or use
+  `/animation-controls`. Praxis shows its own sliders, toggles, and easing controls
+  beside the preview, with Replay and no selection required. Changes save to source
+  through Undo and HMR. No DialKit dependency or control-panel UI is added to the app.
 - **Inspect components in 3D (desktop).** Select an element and click the stacked
   layers icon to isolate its visual structure. Orbit, zoom, spread layers apart,
   and select a surface to edit it with the existing inspector. **Back to page**

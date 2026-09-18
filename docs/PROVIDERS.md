@@ -114,13 +114,15 @@ turns in order, preserving the originating chat, file/image attachments, and
 selection context. They do not depend on provider-native steering support; image
 interpretation remains subject to the capability table above.
 
-The bundled `animation-controls` skill is available to Claude through the local
-plugin and an eager slash-menu alias; Codex/custom endpoints and experimental
-Gemini discover it as a portable fallback after project/user skills. Shared rules
-route natural-language animation-panel requests to its SKILL.md. It instruments
-the previewed app with DialKit (or an equivalent supported dev panel), without
-calling the selection-owned `define_controls`/`open_controls` path. It requires no
-provider-specific preview tools; the existing animation engine remains in place.
+The bundled `animation-controls` skill is available through the skills menu for
+all providers, but native registration requires `define_controls` (Claude,
+Codex/custom endpoints). It uses `manifest.presentation: "animation"` and literal
+parameters to surface Praxis's own persistent project panel, independent of
+selection. Gemini must explain that native registration is unavailable. No tuning
+library or panel UI is installed in the project. Optional Replay dispatches
+`praxis:animation-replay` with the component name as its string detail; project
+code listens for that target and replays only the corresponding animation.
+Controls save source through the existing edit/Undo path, with HMR preview updates.
 
 `open_code` opens the docked editor at a repo-relative file and an inclusive line
 range. Main validates the file boundary (including symlinks) and captures the exact
@@ -132,6 +134,6 @@ editor. The transport also works in browser mode.
 The Codex MCP executable path is relative to the compiled main bundle, not
 Electron's app path: direct source launches report `out/main` as the app path.
 
-The SDK session explicitly allows the validated `open_code` navigation tool via
+The SDK session explicitly allows the validated `open_code` navigation and `define_controls` tools via
 its per-tool approval configuration, matching Claude's in-process allowlist. Other
 MCP tools and shell approval policy keep their existing configuration.

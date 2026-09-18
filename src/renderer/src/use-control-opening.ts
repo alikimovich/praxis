@@ -55,7 +55,7 @@ export function useControlOpening(): void {
       if (++attempts < 12) timer = setTimeout(() => void tryOpen(), 500)
     }
     const offOpen = window.api.controls.onOpen((request) => {
-      if (request.root !== useSession.getState().projectRoot) return
+      if (request.presentation === 'animation' || request.root !== useSession.getState().projectRoot) return
       generation++
       clearTimeout(timer)
       pending = request

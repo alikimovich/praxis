@@ -17,7 +17,7 @@
 import { ANIMATION_CONTROLS_SKILL } from './bundled-skills'
 import { projectMemoryRules } from './project-memory'
 
-export const PRAXIS_RULES_VERSION = 17
+export const PRAXIS_RULES_VERSION = 18
 
 export function praxisRules(opts?: {
   previewTools?: boolean
@@ -48,9 +48,11 @@ export function praxisRules(opts?: {
     `## Animation tuning panels`,
     `When asked to surface animation controls or add a DialKit-style panel, read`,
     `the bundled animation-controls skill at ${JSON.stringify(ANIMATION_CONTROLS_SKILL)}.`,
-    `Build the controls inside the previewed project, independent of element selection.`,
-    `Keep their live values connected to the actual animation and the panel mounted`,
-    `when selection changes or clears. Selection-inspector requests keep their existing workflow.`,
+    opts?.previewTools || opts?.controlTools
+      ? `Use Praxis native controls: define_controls with manifest.presentation set to animation.`
+      : `This provider cannot register native animation panels; explain the limitation.`,
+    `Do not install DialKit or add a tuning UI to the target app. Wire literal source values`,
+    `to the real animation. The native panel stays open across selection changes; edits save to source.`,
     ``,
     `## Scope of an element edit`,
     `A selected element is the ENTRY POINT for a change, not its full scope. Before`,

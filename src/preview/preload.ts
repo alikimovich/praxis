@@ -1,3 +1,4 @@
+import { ANIMATION_REPLAY } from '../shared/preview-channels'
 /**
  * Preview preload — injected into the previewed app's native WebContentsView.
  *
@@ -1815,6 +1816,10 @@ window.addEventListener('load', () => {
   })
   ipcRenderer.on(STYLES_READ, (_e, p: { id?: unknown; props?: unknown }) => {
     readStyles(p?.id, Array.isArray(p?.props) ? (p.props as string[]) : [])
+  })
+  ipcRenderer.on(ANIMATION_REPLAY, (_e, component: unknown) => {
+    if (typeof component === 'string' && component.length <= 80)
+      window.dispatchEvent(new CustomEvent('praxis:animation-replay', { detail: component }))
   })
   ipcRenderer.on(STYLES_REPLAY, (_e, p: { prop?: unknown; from?: unknown; to?: unknown }) => {
     if (typeof p?.prop === 'string' && typeof p?.from === 'string' && typeof p?.to === 'string')

@@ -28,6 +28,7 @@ import ScrubInput from './styles/ScrubInput'
 
 interface Props {
   root: string
+  onReplay?: (component: string) => void
   element: SelectedElement
   inspection: PropInspection | null
   /** The selection's resolved panels (already tombstone-filtered by PanelApp). */
@@ -101,6 +102,7 @@ function shortBezier(b: Bezier): string {
  */
 export default function CustomPanel({
   root,
+  onReplay,
   element,
   inspection,
   panels,
@@ -574,6 +576,11 @@ export default function CustomPanel({
               {panel.manifest.title}
             </h3>
             {panel.params.map((param) => renderParam(panel, param))}
+            {panel.manifest.replay && onReplay && (
+              <Button variant="outline" size="sm" className="mt-2 w-full" onClick={() => onReplay(panel.manifest.component)}>
+                Replay
+              </Button>
+            )}
             <div className="custompanel__groupfoot flex justify-end">
               <button
                 type="button"

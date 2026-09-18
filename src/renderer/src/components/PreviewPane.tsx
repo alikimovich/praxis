@@ -40,7 +40,7 @@ export default function PreviewPane(): React.JSX.Element {
   // Right-edge strip reserved by the floating prop panel: desktop narrows the
   // view; mobile re-centers the whole bezel in what's left (shrinking the
   // ~390px cutout would collapse the phone screen to a sliver).
-  const inset = usePanelInset((s) => s.inset);
+  const inset = usePanelInset((s) => s.inset + s.animation);
   const bottomInset = usePanelInset((s) => s.bottom);
   const [bezel, setBezel] = useState<Rect | null>(null);
   // Where the native view sits, relative to the slot — the freeze <img> matches it.

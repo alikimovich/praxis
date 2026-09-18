@@ -1,3 +1,4 @@
+import AnimationPanel from './components/AnimationPanel'
 import { useCodeOpening } from './use-code-opening'
 import { useEffect, useRef, useState } from 'react'
 import NewProjectDialog from './components/NewProjectDialog'
@@ -179,7 +180,7 @@ export default function App(): React.JSX.Element {
         files,
         component: sel.inspection?.component
       })
-      if (seq === controlsSeqRef.current) setIslandControls(res)
+      if (seq === controlsSeqRef.current) setIslandControls(res.filter(p => p.manifest.presentation !== 'animation'))
     } catch {
       if (seq === controlsSeqRef.current) setIslandControls(null)
     }
@@ -2172,6 +2173,7 @@ export default function App(): React.JSX.Element {
               </div>
               <div className={`previewcard__body ${status.kind === 'error' ? 'previewcard__body--errored' : ''}`}>
                 <PreviewPane />
+                {projectRoot && <AnimationPanel key={projectRoot} root={projectRoot} />}
                 {drawerSource && projectRoot && (
                   <CodeDrawer
                     root={projectRoot}
