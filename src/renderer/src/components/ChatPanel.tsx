@@ -1441,8 +1441,10 @@ export default function ChatPanel(): React.JSX.Element {
             textarea carries data-slot="input-group-control" so the group lights
             up on focus. Native textarea (not InputGroupTextarea) to keep the ref
             for seeding/cursor control on React 18. */}
+        <div className="min-w-0">
+        <QueuedMessages />
         <InputGroup
-          className={`relative rounded-2xl border-[var(--border-prominent)] bg-card ${dragOver ? "ring-2 ring-blue-400" : ""}`}
+          className={`relative rounded-2xl border-[var(--border-prominent)] bg-card dark:bg-card ${dragOver ? "ring-2 ring-blue-400" : ""}`}
           onDrop={onDrop}
           onDragOver={(e) => {
             if (Array.from(e.dataTransfer.types).includes("Files")) {
@@ -1452,7 +1454,6 @@ export default function ChatPanel(): React.JSX.Element {
           }}
           onDragLeave={() => setDragOver(false)}
         >
-          <QueuedMessages />
           {selected?.selectionGroup && selected.selectionGroup.length > 1 && (
             <div className="w-full px-2 pt-2 text-xs">{selected.selectionGroup.length} objects selected · Shift-click to add or remove</div>
           )}
@@ -1635,6 +1636,7 @@ export default function ChatPanel(): React.JSX.Element {
             )}
           </InputGroupAddon>
         </InputGroup>
+        </div>
       </div>
     </div>
   );

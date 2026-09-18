@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-18 — Queued messages above the composer
+
+Queued follow-ups now sit in an inset, rounded card tucked behind the composer,
+with a leading queue icon, single-line label, and accessible trash action. Removed
+the visible count heading for the ordinary running state; paused queues retain
+Resume and multiple rows remain scrollable. The composer is opaque in both themes
+so the overlap does not leak the card border through dark mode.
+
+Validation: typecheck, message-queue logic, and Electron chat-render passed;
+light/dark screenshots inspected. Full suite: 147 passed; only the previously
+recorded agent-multi “This chat is already running” failure remains.
+
 ## 2026-09-18 — Concurrent test execution and trustworthy reports
 
 Replaced the synchronous test loop with bounded subprocess workers: up to four
@@ -49,7 +61,6 @@ check covers replacement and restoration; both screenshots were inspected.
 Validation: typecheck, build, and targeted chat-render passed (also within the
 full suite). Full regression was stopped after stalling in prop-edit-svelte;
 native-animation-controls also failed accessing the native preview.
-
 
 ## 2026-09-18 — Automatic text conflict reconciliation
 

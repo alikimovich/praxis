@@ -16,8 +16,9 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Composer queue action (2026-09-18)
 
-- [x] Replace the running Stop button with Queue while composing a follow-up.
+- [x] Show queued messages in an inset card above the composer, with queue/trash icons.
 
+- [x] Replace the running Stop button with Queue while composing a follow-up.
 
 ## Automatic chat conflict reconciliation (2026-09-18)
 

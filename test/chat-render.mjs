@@ -82,6 +82,23 @@ try {
   await win.waitForSelector('button[aria-label="Stop"]')
   if (await win.locator('.composer__send').count() !== 1) throw new Error('empty running composer must show only Stop')
   await win.locator('.composer').screenshot({ path: join(artifacts, 'queued-message.png') })
+  const queueLayout = await win.evaluate(() => {
+    const queue = document.querySelector('[aria-label="Queued messages"]')
+    const frame = document.querySelector('.composer [data-slot="input-group"]')
+    const row = queue.querySelector('button').getBoundingClientRect()
+    const q = queue.getBoundingClientRect()
+    const f = frame.getBoundingClientRect()
+    return !frame.contains(queue) && q.x > f.x && q.right < f.right && row.bottom <= f.y && q.bottom > f.y
+  })
+  if (!queueLayout) throw new Error('queued card must be inset above and tucked behind the composer')
+  const wasDark = await win.evaluate(() => {
+    const wasDark = document.documentElement.classList.contains('dark')
+    document.documentElement.classList.add('dark')
+    return wasDark
+  })
+  await win.locator('.composer').screenshot({ path: join(artifacts, 'queued-message-dark.png') })
+  await win.evaluate((wasDark) => document.documentElement.classList.toggle('dark', wasDark), wasDark)
+
   await win.click('button[aria-label="Remove queued message: Follow up after this turn"]')
   await win.waitForSelector('[aria-label="Queued messages"]', { state: 'detached' })
 
