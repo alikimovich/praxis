@@ -1772,7 +1772,7 @@ window.addEventListener('pagehide', () => {
 function reportReadiness(): number {
   if (!location.protocol.startsWith('http')) return -1 // skip the placeholder
   const stamps = document.querySelectorAll('[data-praxis-source]').length
-  ipcRenderer.send(READINESS, { stamps })
+  ipcRenderer.send(READINESS, { stamps, url: location.href, documentStartedAt: performance.timeOrigin })
   return stamps
 }
 window.addEventListener('load', () => {

@@ -1,3 +1,4 @@
+import { setupPrompt } from '../lib/setup-prompt'
 import { useMessageQueue } from '../message-queue';
 import { messageSender } from '../message-send';
 import { QueuedMessages } from './QueuedMessages';
@@ -58,7 +59,6 @@ import { parseSlashToken } from "../../../shared/slash-token";
 import type {
   PermissionMode,
   QuestionAnswers,
-  SetupResult,
 } from "../../../shared/api";
 import { rankSlashMatches } from "../../../shared/slash-menu";
 import ConflictCard from "./ConflictCard";
@@ -353,57 +353,6 @@ function RevertAction({
   );
 }
 
-function setupPrompt(res: SetupResult): string | null {
-  const file = res.files?.[0];
-  switch (res.framework) {
-    case "react":
-      return (
-        `Praxis detected a React project and added a dev-only Babel plugin at \`${file}\`. Please: ` +
-        `(1) read the actual vite.config and wire ${file} into the React plugin's Babel config ` +
-        `(\`react({ babel: { plugins: [...] } })\`) FOR DEVELOPMENT ONLY — gate it on the serve/dev ` +
-        `command; if the config shape differs, adapt to the real file or tell me what's blocking ` +
-        `rather than guessing. (2) Add an explicit \`interface Props\` to the components so their ` +
-        `props are editable. Then I'll reload the preview.`
-      );
-    case "react-native":
-      return (
-        `Praxis detected a React Native / Expo project and added a dev-only Babel plugin at ` +
-        `\`${file}\` that stamps \`testID="praxis:path:line:col"\` on elements (the RN analog of ` +
-        `data-praxis-source — iOS surfaces testID as the accessibility id, which Praxis reads from ` +
-        `the simulator's view hierarchy). Please: (1) read babel.config.js (or .babelrc) and add ` +
-        `${file} to the \`plugins\` array FOR DEVELOPMENT ONLY (gate on a dev env check; adapt to ` +
-        `the real config, don't guess its shape). (2) Add an explicit \`interface Props\` to your ` +
-        `components so their props are editable. Then I'll reload the preview.`
-      );
-    case "solid":
-      return (
-        `Praxis detected a Solid project and added a dev-only Babel JSX plugin at \`${file}\`. Please ` +
-        `wire ${file} into the Solid Vite plugin's Babel config for development only (adapt to the ` +
-        `real config), and type each component's props with an explicit \`Props\` type. Then I'll ` +
-        `reload the preview.`
-      );
-    case "svelte": {
-      const typing =
-        res.svelteMajor && res.svelteMajor < 5
-          ? "Type props with typed `export let` declarations (Svelte 4)"
-          : "Type props with `interface Props` + `let { ... }: Props = $props()` (Svelte 5)";
-      return (
-        `Praxis detected a Svelte project and added a dev-only markup preprocessor at \`${file}\`. ` +
-        `Please: (1) read svelte.config.* and add ${file}'s default export to the \`preprocess\` ` +
-        `array FOR DEVELOPMENT ONLY (gate on dev; adapt to the real config, don't guess its shape). ` +
-        `(2) ${typing} so props are editable. Then I'll reload the preview.`
-      );
-    }
-    case "vue":
-      return (
-        `Praxis detected a Vue project. Please add a DEV-ONLY way to map elements to their source as a ` +
-        `\`data-praxis-source="path:line:col"\` attribute (e.g. vite-plugin-vue-inspector, or a small ` +
-        `template transform), and type props with \`defineProps<Props>()\`. Then I'll reload the preview.`
-      );
-    default:
-      return null;
-  }
-}
 
 export default function ChatPanel(): React.JSX.Element {
   const {
@@ -710,9 +659,13 @@ export default function ChatPanel(): React.JSX.Element {
           // App to restart + reload the preview. Normal chat turns leave it alone.
           if (s.busy) {
             if (useChat.getState().byKey[key]?.isolation === "live") {
+              s.setPhase('landed');
               s.setVerifying(true);
               s.setRestartRequested(true);
-            } else setupAwaitingLanding.current.add(key);
+            } else {
+              s.setPhase('awaiting-landing');
+              setupAwaitingLanding.current.add(key);
+            }
             s.setBusy(false);
           }
           // Isolated chats verify on `merged`; no-change turns still leave busy.
@@ -732,6 +685,7 @@ export default function ChatPanel(): React.JSX.Element {
           if (setupAwaitingLanding.current.delete(key) && isActive) {
             const setup = useSetup.getState();
             setup.setBusy(false);
+            setup.setPhase('landed');
             setup.setVerifying(true);
             if (!environmentChanges(event.files ?? []).restart) setup.setRestartRequested(true);
           }
@@ -826,10 +780,12 @@ export default function ChatPanel(): React.JSX.Element {
     try {
       const res = await window.api.setup.scaffold(projectRoot);
       if (!res.ok) {
+        setup.setPhase('failed');
         setup.setStatus(`Setup failed: ${res.error ?? "unknown error"}`);
         setup.setBusy(false);
         return;
       }
+      setup.setPhase('helpers-created');
       const prompt = setupPrompt(res);
       if (!prompt) {
         // Unsupported / undetected framework — stop and say so, never send a
@@ -849,13 +805,16 @@ export default function ChatPanel(): React.JSX.Element {
       // it finishes (see the `done` handler), so a mid-turn dev-server auto-restart
       // can't be mistaken for the verdict.
       startAssistant();
-      void window.api.agent.send(prompt);
+      setup.setPhase('configuring');
+      await window.api.agent.send(prompt);
       setup.setStatus(
-        `Detected ${res.framework}. Asked Praxis to wire it in and type your components — I'll restart the preview and verify automatically when it finishes.`,
+        `Detected ${res.framework}. Asked Praxis to connect source mapping — I'll restart the preview and verify automatically when it finishes.`,
       );
     } catch {
+      setup.setPhase('failed');
       setup.setStatus("Setup could not be started.");
       setup.setBusy(false);
+      finish(activeChatKey);
     }
   };
 

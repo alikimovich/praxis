@@ -1,3 +1,4 @@
+import { previewEvidence } from './preview-evidence'
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
@@ -211,7 +212,7 @@ function lastTurn(transcript: SessionTranscriptEntry[]): SessionTranscriptEntry[
  * `chat:<id>:<turnNo>`, commits the merged files on the live checkout (so the turn is
  * one revertable commit in the user's own history), advances `baseSha`, and unparks. On
  * `parked`, upserts the park record (with the last turn's transcript) for the review UI.
- * `noop` does nothing.
+ * `noop` emits a successful landing acknowledgement without creating a commit.
  */
 export function afterTurn(
   sessionKey: string,
@@ -258,6 +259,9 @@ export function afterTurn(
         } else if (outcome.newBase) {
           st.wt.baseSha = outcome.newBase
           await retireWorktreeBranch(st.wt)
+          // Setup may only restore an excluded helper; config can already be wired.
+          // Acknowledge the no-op so it can restart and verify instead of waiting forever.
+          if (terminal === 'success') emitIsolation(sessionKey, 'merged', st.wt.branch, [])
         }
       })
     )
@@ -749,5 +753,22 @@ export function agentWorkspaceState(sessionKey: string): {
     files: [],
     guidance:
       'This chat is healthy and isolated. Praxis will validate and land its edits when the turn completes.'
+  }
+}
+
+/** Git state and preview observations are distinct: a reachable preview is not
+ * proof that a just-landed revision finished compiling. */
+export async function agentWorkspaceEvidence(sessionKey: string, root: string) {
+  const state = agentWorkspaceState(sessionKey)
+  const st = states.get(sessionKey)
+  const liveRoot = st?.liveRoot ?? root
+  return {
+    ...state,
+    liveRoot,
+    checkout: st?.wt.path ?? root,
+    worktreeBaseRevision: st?.wt.baseSha ?? null,
+    liveRevision: await gitOut(liveRoot, ['rev-parse', 'HEAD']).then(s => s.trim(), () => null),
+    liveDirty: await gitOut(liveRoot, ['status', '--porcelain']).then(s => Boolean(s.trim()), () => null),
+    preview: previewEvidence(liveRoot)
   }
 }

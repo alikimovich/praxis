@@ -137,3 +137,19 @@ Electron's app path: direct source launches report `out/main` as the app path.
 The SDK session explicitly allows the validated `open_code` navigation and `define_controls` tools via
 its per-tool approval configuration, matching Claude's in-process allowlist. Other
 MCP tools and shell approval policy keep their existing configuration.
+
+## Framework setup context
+
+Next setup is separate from generic React/Vite setup. The agent receives the
+installed Next version (or an explicit missing-version state), selected script,
+bundler, router layout, and helper hashes. Helpers are synchronized into the agent
+checkout before the provider receives the turn. Setup asks for config integration,
+not bulk component annotations. A TypeScript checker supplements unresolved
+react-docgen schemas when an individual component is inspected.
+
+Next's development adapter wraps the final config export, preserving functions,
+async exports, existing wrappers and webpack callbacks. Conflicting Turbopack
+rules require deliberate composition. Optional MDX uses a development-only remark
+plugin supplied as an absolute path string. Production leaves the original config
+unchanged; loaders and the remark transform independently disable outside dev.
+Setup waits for landing and new-document stamp observations before reporting success.

@@ -1123,9 +1123,10 @@ export interface FeedbackResult {
 }
 
 /** Result of scaffolding source-stamping into an unprepared project. */
-export type Frontend = 'react' | 'react-native' | 'svelte' | 'vue' | 'solid' | 'unknown'
+export type Frontend = 'next' | 'react' | 'react-native' | 'svelte' | 'vue' | 'solid' | 'unknown'
 /** How praxis instruments source mapping for the detected framework. */
 export type SetupStrategy =
+  | 'next-loader'
   | 'babel-plugin'
   | 'babel-plugin-rn'
   | 'svelte-preprocess'
@@ -1146,7 +1147,18 @@ export interface SetupProbe {
   canInstrument: boolean
 }
 
+export interface NextSetupInfo {
+  version?: string
+  declaredVersion?: string
+  command: string
+  bundler: 'turbopack' | 'webpack' | 'unknown'
+  router: 'app' | 'pages' | 'mixed' | 'unknown'
+}
+
 export interface SetupResult {
+  next?: NextSetupInfo
+  helpers?: Array<{ path: string; sha256: string }>
+
   ok: boolean
   /** The detected UI framework (NOT the build tool) — drives everything. */
   framework?: Frontend
@@ -1278,7 +1290,7 @@ export interface PraxisApi {
     /** Snapshot the live preview as a data URL (freeze-frame under overlay UI). */
     capture: () => Promise<string | null>
     /** Fires after the previewed app loads, reporting source-stamp coverage. */
-    onReadiness: (cb: (info: { stamps: number }) => void) => () => void
+    onReadiness: (cb: (info: { stamps: number; url?: string; documentStartedAt?: number }) => void) => () => void
     /** Fires when the user commits an inline text edit in the preview. */
     onTextEdit: (cb: (edit: { source: string; text: string }) => void) => () => void
     /** Arm/disarm the inline comment (C) or annotation (Y) overlay mode. */

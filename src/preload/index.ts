@@ -133,7 +133,7 @@ const api: PraxisApi = {
     /** Snapshot the live preview (freeze-frame under overlay UI). */
     capture: (): Promise<string | null> => ipcRenderer.invoke('preview:capture'),
     /** Fires after the previewed app loads, with whether it's source-stamped. */
-    onReadiness: on<{ stamps: number }>('preview:readiness'),
+    onReadiness: on<{ stamps: number; url?: string; documentStartedAt?: number }>('preview:readiness'),
     onTextEdit: on<{ source: string; text: string }>('preview:text-edit'),
     setCommentMode: (mode: CommentMode): Promise<void> =>
       ipcRenderer.invoke('preview:set-comment-mode', mode),

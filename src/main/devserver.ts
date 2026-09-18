@@ -1,3 +1,4 @@
+import { previewServers } from './preview-evidence'
 import { type ChildProcess, spawn } from 'child_process'
 import { app, type BrowserWindow, ipcMain as electronIpcMain } from 'electron'
 import { access, readFile, readdir } from 'fs/promises'
@@ -40,8 +41,12 @@ function withPort(command: string, framework: Framework | undefined, port: numbe
     case 'vite':
     case 'sveltekit':
       return `${command} -- --port ${port} --host ${PREVIEW_HOST}`
-    case 'next':
-      return `${command} -- --port ${port} -H ${PREVIEW_HOST}`
+    case 'next': {
+      // npm consumes script flags unless separated; bun/pnpm forward them and
+      // an extra '--' makes Next interpret --port as a project directory.
+      const separator = /^npm\s+(?:run|run-script)\b/.test(command.trim()) && !/\s--(?:\s|$)/.test(command) ? ' --' : ''
+      return `${command}${separator} --port ${port} -H ${PREVIEW_HOST}`
+    }
     default:
       // CRA + unknown/custom commands read PORT/HOST from the env we set instead.
       return command
@@ -161,7 +166,7 @@ const staticServers = new Map<string, Server>()
 // can recover the URL instead of blindly respawning on a fresh port via start().
 // Kept in lockstep with `servers`/`staticServers` — set wherever a server is
 // added, cleared wherever one is dropped.
-const running = new Map<string, RunningDevServer>()
+const running = previewServers
 
 // Ports handed out but not necessarily bound yet. Concurrent starts (e.g. the
 // rail opening several projects at once) would otherwise all probe the same free

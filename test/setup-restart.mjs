@@ -60,8 +60,16 @@ try {
   await win.evaluate(() => {
     const s = window.__praxisSetup.getState()
     s.setVerifying(true)
-    s.setRestartRequested(true)
   })
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0].webContents.send('preview:readiness', {
+      stamps: 999, documentStartedAt: 0
+    })
+  })
+  if (!(await win.evaluate(() => window.__praxisSetup.getState().verifying))) {
+    throw new Error('old-document readiness incorrectly verified new setup')
+  }
+  await win.evaluate(() => window.__praxisSetup.getState().setRestartRequested(true))
 
   // The one-shot flag must be consumed (set back to false) by App's effect.
   await win.waitForFunction(() => window.__praxisSetup.getState().restartRequested === false, {

@@ -1,3 +1,4 @@
+import { observePreview } from './preview-evidence'
 /**
  * Every ipcMain handler that talks to (or about) the native preview: its
  * geometry, its lifecycle, the select/comment/annotate relays, the floating
@@ -404,8 +405,9 @@ export function registerPreviewIpc(host: PreviewIpcHost): void {
   })
 
   // Readiness probe (stamp count) → renderer, to drive the setup offer.
-  ipcMain.on(PREVIEW_READINESS, (e, info: { stamps: number }) => {
+  ipcMain.on(PREVIEW_READINESS, (e, info: { stamps: number; url?: string; documentStartedAt?: number }) => {
     if (!fromPreview(e)) return
+    observePreview({ ...info, url: e.sender.getURL() })
     sendToMain('preview:readiness', info)
   })
 

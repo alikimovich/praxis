@@ -186,7 +186,7 @@ export const WEB_PREVIEW_BRIDGE = String.raw`(() => {
   history.replaceState = (...args) => { originalReplace(...args); announceUrl() }
 
   const ready = () => {
-    send('ready', { stamps: document.querySelectorAll('[data-praxis-source]').length })
+    send('ready', { stamps: document.querySelectorAll('[data-praxis-source]').length, url: location.href, documentStartedAt: performance.timeOrigin })
     announceUrl()
   }
   if (document.readyState === 'loading') addEventListener('DOMContentLoaded', ready, { once: true })

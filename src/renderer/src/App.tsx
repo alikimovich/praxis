@@ -636,12 +636,15 @@ export default function App(): React.JSX.Element {
   // silent success: zero stamps after a setup is a hard warning (fix #4).
   useEffect(
     () =>
-      window.api.preview.onReadiness(({ stamps }) => {
+      window.api.preview.onReadiness(({ stamps, documentStartedAt }) => {
         const s = useSetup.getState()
         if (s.verifying) {
           if (stamps > 0) {
             s.setStatus(`Setup verified — ${stamps} element(s) now mapped to source. You're ready.`)
+          if (documentStartedAt !== undefined && documentStartedAt < s.verificationAfter) return
+          s.setPhase('preview-compiled')
             s.setNeeded(false)
+            s.setPhase('stamps-detected')
           } else {
             s.setStatus(
               'Setup ran but no elements got stamped — the instrumentation did not fire. ' +
@@ -1635,6 +1638,7 @@ export default function App(): React.JSX.Element {
       useSetup.getState().setVerifying(false)
       useSetup.getState().setStatus(`Couldn't restart the preview after setup: ${message}`)
       log.append(message, 'error')
+      useSetup.getState().setPhase('failed')
       await window.api.preview.reset()
       useWorkspace.getState().patchEntry(projectKey(root), { url: null, dependenciesPending: installDependencies })
       setRetry({ root, command: spec.command, installDependencies })

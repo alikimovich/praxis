@@ -135,6 +135,26 @@ startup failures leave chat available for repair and expose a retry command.
 This refresh covers landed Git-root work; external file edits and non-isolated
 turns still depend on the framework's own reload behavior or a manual restart.
 
+## Setup helpers and Next.js validation
+
+Git snapshots continue to exclude `.praxis/`. Before creating an agent session and
+before every clean chat turn, Praxis copies only the setup helper allowlist into
+the private checkout, verifies the copies, and records paths/SHA-256 hashes in
+`.praxis/setup-helpers.json`. This also handles setup started after a chat's
+worktree already exists. Annotations and other sidecar data are not shared.
+
+Next projects provision dependencies inside the worktree using its package manager,
+manifests, and lockfile. They do not receive the shared `node_modules` symlink;
+existing symlinks are removed before installation. A manifest/lockfile fingerprint
+avoids redundant installs and refreshes changed dependency sets. Ordinary projects
+retain the existing runtime symlink policy. No adapter widens Turbopack's root.
+
+`workspace_state` exposes the live checkout/revision/dirty state, worktree base,
+preview URL, and latest stamp observation. `servedRevision: null` and
+`revisionVerified: false` deliberately distinguish those observations from proof
+that a particular commit finished compiling. Exact compiler revision attribution
+remains a separate requirement.
+
 ## Pulling remote updates and switching branches
 
 The branch menu's **Git updates…** panel fetches configured remotes, pulls a

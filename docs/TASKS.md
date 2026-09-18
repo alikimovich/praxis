@@ -3,6 +3,17 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Next.js setup and inspection (2026-09-17)
+
+- [x] Separate Next framework/version/router and script-derived bundler detection.
+- [x] Add development-only Next config/loader adapters and an MDX source transform.
+- [x] Synchronize and hash setup helpers in new and existing agent worktrees.
+- [x] Remove bulk prop-typing prompts; add a TypeScript schema fallback.
+- [x] Provision Next dependencies inside worktrees and refresh changed manifests.
+- [x] Reject stale-document setup verification; expose separate preview/Git evidence.
+- [x] Exercise the Next 15.5.12/16.1.6 fixture matrix and run full regression verification (remaining failures recorded in PROGRESS).
+- [ ] Attribute the exact compiled revision (currently explicitly unverified).
+
 ## Native animation panels (2026-09-17)
 
 - [x] Replace DialKit integration with Praxis's existing control primitives.

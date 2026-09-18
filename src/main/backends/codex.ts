@@ -20,7 +20,7 @@ import {
   type TokenUsage,
   usageDelta
 } from '../../shared/run-stats'
-import { agentWorkspaceState, resolveParkedChat } from '../chat-isolation'
+import { agentWorkspaceEvidence, agentWorkspaceState, resolveParkedChat } from '../chat-isolation'
 import { type RolloutUsageWatch, watchRolloutUsage } from '../codex-usage'
 import { type PraxisAgentToolRegistration, registerPraxisAgentTools } from '../praxis-agent-tools'
 import { resolveConnection } from '../providers'
@@ -258,7 +258,7 @@ async function startSession(
           guidance:
             'This background edit lands automatically. Do not change the parent chat workspace.'
         }
-      if (action === 'workspace_state') return agentWorkspaceState(emitKey)
+      if (action === 'workspace_state') return agentWorkspaceEvidence(emitKey, ctx?.liveRoot ?? root)
       const before = agentWorkspaceState(emitKey)
       if (before.state === 'live' || before.state === 'isolated') {
         return {

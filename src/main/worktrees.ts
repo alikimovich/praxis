@@ -1,3 +1,5 @@
+import { isNextProject, provisionNextDependencies } from './worktree-dependencies'
+import { syncSetupArtifacts } from './setup-artifacts'
 import { execFile } from 'child_process'
 import { mkdir, symlink, writeFile, readFile, rm, readdir, stat } from 'fs/promises'
 import { randomUUID } from 'crypto'
@@ -159,13 +161,23 @@ async function doCreateWorktree(
   // Symlink gitignored runtime deps so the spawn can build (best-effort). Never add
   // an unignored symlink: if `.gitignore` changes during a turn it would become part
   // of the patch (the root cause of issue #203's committed `.env` symlink).
+  const next = await isNextProject(dir)
   for (const name of RUNTIME_DEPS) {
+    if (next && name === 'node_modules') continue
     try {
       await git(repoRoot, ['check-ignore', '-q', '--', name])
       await symlink(join(repoRoot, name), join(dir, name))
     } catch {
       /* absent or already present — fine */
     }
+  }
+  try {
+    await syncSetupArtifacts(repoRoot, dir)
+    await provisionNextDependencies(repoRoot, dir)
+  } catch (error) {
+    await git(repoRoot, ['worktree', 'remove', '--force', dir]).catch(() => {})
+    await git(repoRoot, ['branch', '-D', branch]).catch(() => {})
+    throw error
   }
   return { id, repoRoot, path: dir, branch, baseSha }
 }

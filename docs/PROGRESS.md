@@ -2,6 +2,52 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-17 — Dedicated Next setup and verifiable worktree helpers
+
+Setup now detects Next separately from generic React, including installed version,
+App/Pages/mixed routing, and the bundler selected by the dev script. A local
+source loader and final-config wrapper support Turbopack and webpack without a
+project Babel config or use-client changes. Existing wrappers/functions/async
+exports are retained; overlapping Turbopack rules fail explicitly for composition.
+A development-only remark helper maps MDX to authored Markdown positions. The
+loader preserves directives/maps and carries instance stamps through ordinary
+function components that destructure props without forwarding arbitrary attributes.
+Production config bypasses the adapter and the transforms independently dev-gate.
+Also fixed Next port forwarding: Bun/pnpm must not receive npm's extra `--`.
+
+Traced the missing helper to worktree snapshots deliberately excluding `.praxis/`.
+Setup's allowlisted helpers are now copied and SHA-256-verified before new sessions
+and each existing chat turn, with a checkout-local manifest. No other sidecar data
+is shared. Next worktrees install local dependencies using their package manager;
+manifests/lockfile fingerprints trigger refreshes without broadening Turbopack's
+root. Failed initial provisioning reclaims the new checkout. No-op setup turns
+acknowledge landing so restoring a helper can proceed to verification.
+
+Removed bulk component-typing instructions. Unresolved react-docgen inspection now
+uses the TypeScript JSX signature, covering inline/named/inherited/imported types
+and ComponentProps without editing source. Setup records phases and ignores
+readiness from documents predating its verification window. Workspace tools expose
+live revision/dirty state, checkout/base, URL, and stamp observations separately.
+Exact served-commit attribution remains explicitly unknown, not inferred from HEAD.
+
+Validation: typecheck/build, helper/detection/loader/production/map tests, real
+worktree synchronization and no-op acknowledgement, TypeScript schema tests, and
+worktree/live-commit regressions passed. Real Next 15.5.12 and 16.1.6 fixtures passed
+both bundlers, Server/Client Components, distinct non-forwarding instances, a
+workspace package, authored MDX stamps, inspector edit → HMR → refresh/navigation,
+hydration-error checks, and production stamp absence. Native screenshots inspected.
+Use PRAXIS_NEXT_FIXTURE with a disposable installed copy of test/fixtures/next-app;
+the optional live-tier fixture test otherwise reports SKIP. Canonical paths and
+waiting for HMR before testing persistence avoid alias/navigation races.
+
+The full verify run reported 149/157. Isolated final-build reruns passed setup,
+restart, project setup, chat isolation, history, simulator frame/control, sidebar,
+custom controls, and startup. A temporary preview.load waiting change caused the
+history/control failures and was reverted; navigation remains nonblocking.
+All eight failed checks were rerun in isolation. Seven passed, including live
+Claude/Codex code reveal; agent-multi still failed with “This chat is already
+running,” also recorded before this change. The full run is not reported as green.
+
 ## 2026-09-17 — Native animation controls independent of selection
 
 Replaced the bundled animation skill's DialKit integration at the user's request.

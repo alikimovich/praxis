@@ -179,7 +179,7 @@ Project-memory persistence and Main-context reset are documented in `docs/MEMORY
   in that preload; its inert paint copies reuse selection/style IPC while the
   source component stays mounted. See `docs/THREE_D.md` for rendering limits.
 - **Prop editing is gated** on `PropInspection.hasSchema` (a resolved
-  react-docgen/svelte schema). Unready components are prompt-only; the on-open
+  react-docgen/TypeScript/Svelte schema). Unready components are prompt-only; the on-open
   setup offer instruments them.
 - **Dev CDP**: `bun run dev` opens `--remote-debugging-port` 9222 (override
   `PRAXIS_DEBUG_PORT`; dev-only). Inspect either target via Chrome

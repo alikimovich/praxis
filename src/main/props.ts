@@ -1,3 +1,4 @@
+import { typescriptProps } from './props-typescript'
 import { ipcMain, shell } from 'electron'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
@@ -632,6 +633,8 @@ async function inspectProps(
       }
     }
   }
+
+  if (isComponent && schema.length === 0) schema = typescriptProps(root, loc.file, loc.line, loc.column ?? 0)
 
   const fields = mergeFields(schema, current)
 

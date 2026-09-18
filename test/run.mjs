@@ -27,6 +27,7 @@ const ROOT = dirname(TEST_DIR);
 
 // unit = the `bun test/NAME.mjs` group before `electron-vite build` in `test`.
 const UNIT = [
+  'setup-next',
   'code-reveal',
   'message-queue',
   'conversation-handoff',
@@ -180,6 +181,7 @@ const ELECTRON = [
 
 // live = the tests present in `verify` but not in `test`.
 const LIVE = [
+  'next-integration',
   'code-reveal-agent',
   'animation-controls-agent',
   'model-switch-e2e',

@@ -1,3 +1,5 @@
+import { provisionNextDependencies } from './worktree-dependencies'
+import { syncSetupArtifacts } from './setup-artifacts'
 import { execFile } from 'child_process'
 import { readFile, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
@@ -48,7 +50,7 @@ const git = (
 // of every commit — see RUNTIME_DEPS) AND may not be gitignored in a way that matches
 // the symlink, so a bare `clean -fd` would delete them and break the next build. `-e`
 // re-excludes each so the checkout keeps its node_modules/.env across resets.
-const cleanArgs = (): string[] => ['clean', '-fd', ...RUNTIME_DEPS.flatMap((d) => ['-e', d])]
+const cleanArgs = (): string[] => ['clean', '-fd', ...RUNTIME_DEPS.flatMap((d) => ['-e', d]), '-e', '.praxis/']
 
 /** Binary-safe `git show <ref>:<path>` — `null` when the path didn't exist at that ref. */
 const readBlobAt = async (cwd: string, ref: string, rel: string): Promise<Buffer | null> => {
@@ -115,18 +117,21 @@ export function createChatWorktree(
  * the reset can never conflict. Advances `wt.baseSha` in place to the new fork point.
  */
 export async function syncFromLive(liveRoot: string, wt: Worktree): Promise<{ synced: boolean }> {
+  await syncSetupArtifacts(liveRoot, wt.path)
   const indexFile = join(dirname(wt.path), `.index-sync-${wt.id}`)
   const live = await captureBase(liveRoot, indexFile)
   const liveTree = await revParse(liveRoot, `${live}^{tree}`)
   const wtTree = await revParse(wt.path, 'HEAD^{tree}')
   if (liveTree === wtTree) {
     await attachWorktreeBranch(wt)
+    await provisionNextDependencies(liveRoot, wt.path)
     return { synced: false }
   }
   await git(wt.path, cleanArgs())
   await git(wt.path, ['reset', '--hard', live])
   wt.baseSha = live
   await attachWorktreeBranch(wt)
+  await provisionNextDependencies(liveRoot, wt.path)
   return { synced: true }
 }
 
@@ -255,6 +260,7 @@ export async function stageResolve(liveRoot: string, wt: Worktree): Promise<Reso
   const files = await changedFiles(wt)
   const tip = await revParse(wt.path, 'HEAD') // the parked squash — sole restore point
   const oldBase = wt.baseSha
+  await syncSetupArtifacts(liveRoot, wt.path)
   const indexFile = join(dirname(wt.path), `.index-resolve-${wt.id}`)
   const live = await captureBase(liveRoot, indexFile) // snapshot the user's live tree
   await git(wt.path, cleanArgs())

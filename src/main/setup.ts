@@ -1,3 +1,7 @@
+import { MDX_HELPER, MDX_HELPER_CONTENT } from './setup-mdx'
+import { REACT_HELPER_CONTENT } from './setup-react'
+import { createHash } from 'node:crypto'
+import { detectNext, NEXT_LOADER, NEXT_ADAPTER, NEXT_LOADER_CONTENT, NEXT_ADAPTER_CONTENT } from './setup-next'
 import { ipcMain } from 'electron'
 import { access, mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
@@ -30,56 +34,6 @@ const LEGACY_FILES = [
 
 // React/Solid: a JSX Babel plugin that stamps data-praxis-source. Structurally
 // dev-gated (returns an empty visitor in production — not trust-the-comment).
-const REACT_HELPER_CONTENT = `// Added by Praxis (.praxis/). Stamps data-praxis-source="path:line:col" on JSX elements
-// so Praxis can map a clicked element to its source. Wire into the React Babel
-// plugins for DEVELOPMENT ONLY; it also self-disables in production builds.
-module.exports = function praxisSource({ types: t }) {
-  if (process.env.NODE_ENV === 'production') return { name: 'praxis-source', visitor: {} }
-  const path = require('path')
-  return {
-    name: 'praxis-source',
-    visitor: {
-      JSXOpeningElement(p, state) {
-        const loc = p.node.loc
-        if (!loc) return
-        if (p.node.attributes.some((a) => a.name && a.name.name === 'data-praxis-source')) return
-        const root = state.file.opts.root || process.cwd()
-        const file = path.relative(root, state.file.opts.filename || '')
-        const where = file + ':' + loc.start.line + ':' + loc.start.column
-        // Host stamp: APPEND so the innermost host's own location wins (a forwarded
-        // {...props} value is overwritten by this).
-        p.node.attributes.push(t.jsxAttribute(t.jsxIdentifier('data-praxis-source'), t.stringLiteral(where)))
-        // v8 F3a — component-instance stamp: on COMPONENT tags (Capitalized or a
-        // member like Foo.Bar), UNSHIFT (insert first) so a child's {...props}
-        // spread overwrites it with the OUTER authored instance — the instance call
-        // site wins over the host, letting the inspector edit per-instance props.
-        const name = p.node.name
-        // A component tag is any non-host (React's own test: host iff /^[a-z]/) — a
-        // member like Foo.Bar, or a non-lowercase identifier. Skip Fragment (it
-        // rejects unknown props) to avoid a dev-console warning.
-        const isHost = name && name.type === 'JSXIdentifier' && /^[a-z]/.test(name.name)
-        const isFragment =
-          name &&
-          ((name.type === 'JSXIdentifier' && name.name === 'Fragment') ||
-            (name.type === 'JSXMemberExpression' &&
-              name.property &&
-              name.property.name === 'Fragment'))
-        const isComponent =
-          !isHost &&
-          !isFragment &&
-          name &&
-          (name.type === 'JSXMemberExpression' || name.type === 'JSXIdentifier')
-        if (isComponent) {
-          p.node.attributes.unshift(
-            t.jsxAttribute(t.jsxIdentifier('data-praxis-component-source'), t.stringLiteral(where))
-          )
-        }
-      }
-    }
-  }
-}
-`
-
 // React Native: the data-praxis-source analog. RN host elements have no DOM, so we
 // stamp `testID="praxis:path:line:col"` — which iOS surfaces as the view's
 // accessibilityIdentifier, letting praxis map an idb view-hierarchy hit back to
@@ -208,6 +162,7 @@ interface Detected {
   framework: Frontend
   strategy: SetupStrategy
   svelteMajor?: number
+  next?: SetupResult['next']
 }
 
 /** Detect the UI framework from deps FIRST — never assume React. */
@@ -227,12 +182,12 @@ async function detect(root: string): Promise<Detected> {
   if (has('react-native') || has('expo')) {
     return { framework: 'react-native', strategy: 'babel-plugin-rn' }
   }
+  if (has('next')) return { framework: 'next', strategy: 'next-loader', next: await detectNext(root) }
   // React (incl. the React Vite plugins)
   if (
     has('react') ||
     has('@vitejs/plugin-react') ||
-    has('@vitejs/plugin-react-swc') ||
-    has('next')
+    has('@vitejs/plugin-react-swc')
   ) {
     return { framework: 'react', strategy: 'babel-plugin' }
   }
@@ -269,11 +224,26 @@ async function scaffold(root: string): Promise<SetupResult> {
       await writeFile(abs, content, 'utf8')
       written = true
     }
+    const files = [helper]
+    if (d.framework === 'next') {
+      for (const [file, text] of [[NEXT_LOADER, NEXT_LOADER_CONTENT], [NEXT_ADAPTER, NEXT_ADAPTER_CONTENT], [MDX_HELPER, MDX_HELPER_CONTENT]]) {
+        if (!(await exists(join(root, file)))) {
+          await writeFile(join(root, file), text, 'utf8')
+          written = true
+        }
+        files.push(file)
+      }
+    }
+    const helpers = await Promise.all(files.map(async (path) => ({
+      path, sha256: createHash('sha256').update(await readFile(join(root, path))).digest('hex')
+    })))
     return {
       ok: true,
+      next: d.next,
+      helpers,
       framework: d.framework,
       strategy: d.strategy,
-      files: [helper],
+      files,
       written,
       ...(d.svelteMajor ? { svelteMajor: d.svelteMajor } : {})
     }
@@ -285,7 +255,7 @@ async function scaffold(root: string): Promise<SetupResult> {
 async function uninstall(root: string): Promise<SetupResult> {
   try {
     const removed: string[] = []
-    for (const f of [REACT_HELPER, RN_HELPER, SVELTE_HELPER, ...LEGACY_FILES]) {
+    for (const f of [REACT_HELPER, RN_HELPER, SVELTE_HELPER, NEXT_LOADER, NEXT_ADAPTER, MDX_HELPER, ...LEGACY_FILES]) {
       const abs = join(root, f)
       if (await exists(abs)) {
         await rm(abs)

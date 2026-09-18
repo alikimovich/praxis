@@ -85,6 +85,12 @@ GitHub PR.
   `/animation-controls`. Praxis shows its own sliders, toggles, and easing controls
   beside the preview, with Replay and no selection required. Changes save to source
   through Undo and HMR. No DialKit dependency or control-panel UI is added to the app.
+- **Next.js source mapping.** Setup detects Next separately from React/Vite and
+  provides development-only Turbopack/webpack adapters, with optional MDX mapping.
+  It preserves config wrappers and existing component types, synchronizes helpers
+  into chat worktrees, and verifies stamps after landing and preview restart.
+  Next validation worktrees install their own dependencies instead of linking a
+  `node_modules` directory outside Turbopack's root.
 - **Inspect components in 3D (desktop).** Select an element and click the stacked
   layers icon to isolate its visual structure. Orbit, zoom, spread layers apart,
   and select a surface to edit it with the existing inspector. **Back to page**

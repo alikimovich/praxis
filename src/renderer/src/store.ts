@@ -1567,6 +1567,9 @@ interface SetupState {
   canInstrument: boolean | null
   busy: boolean
   /** A setup was applied; the next readiness report verifies stamps actually fired. */
+  phase: 'idle' | 'helpers-created' | 'configuring' | 'awaiting-landing' | 'landed' | 'preview-compiled' | 'stamps-detected' | 'failed'
+  verificationAfter: number
+  setPhase: (phase: SetupState['phase']) => void
   verifying: boolean
   /**
    * One-shot signal: the setup turn finished, so App should restart the dev
@@ -1590,6 +1593,8 @@ export const useSetup = create<SetupState>((set) => ({
   dismissed: false,
   canInstrument: null,
   busy: false,
+  phase: 'idle',
+  verificationAfter: 0,
   verifying: false,
   restartRequested: false,
   status: null,
@@ -1597,7 +1602,8 @@ export const useSetup = create<SetupState>((set) => ({
   setDismissed: (dismissed) => set({ dismissed }),
   setCanInstrument: (canInstrument) => set({ canInstrument }),
   setBusy: (busy) => set({ busy }),
-  setVerifying: (verifying) => set({ verifying }),
+  setPhase: (phase) => set({ phase }),
+  setVerifying: (verifying) => set({ verifying, verificationAfter: verifying ? Date.now() : 0 }),
   setRestartRequested: (restartRequested) => set({ restartRequested }),
   setStatus: (status) => set({ status }),
   reset: () =>
@@ -1606,6 +1612,8 @@ export const useSetup = create<SetupState>((set) => ({
       dismissed: false,
       canInstrument: null,
       busy: false,
+      phase: 'idle',
+      verificationAfter: 0,
       verifying: false,
       restartRequested: false,
       status: null
