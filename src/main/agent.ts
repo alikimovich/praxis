@@ -1,3 +1,4 @@
+import { conflictResolutionPrompt, ReconciliationCoordinator } from './conflict-resolution'
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, readdirSync, renameSync } from 'node:fs'
@@ -25,6 +26,7 @@ import type { SpawnContext } from './backends/types'
 import {
   adoptSession,
   afterTurn,
+  showParkedChat,
   applyParkedBranch,
   beforeTurn,
   discardParkedBranch,
@@ -172,16 +174,19 @@ const opening = new Map<string, Promise<OpenProjectResult>>()
 // provider terminal events, observed through each backend's `ctx.onEvent` hook
 // (already wired for spawns; extended here to every interactive session). Providers
 // can emit error→done, so `turnTerminals` separately deduplicates finalization. Added on
-// `agent:send`, removed on that session's next `done`/`error`, and swept wherever
+// `agent:send`, retained through landing/reconciliation, and swept wherever
 // a sessionKey leaves the `sessions` map so it can't outlive its session.
 const runningKeys = new Set<string>()
 const preparingTurns = new Map<string, { cancelled: boolean }>()
 const turnTerminals = new TurnTerminalTracker()
-const trackRunning =
-  (sessionKey: string) =>
-  (e: AgentEvent): void => {
-    if (e.type === 'done' || e.type === 'error') runningKeys.delete(sessionKey)
-  }
+const reconciliation = new ReconciliationCoordinator({
+  running: runningKeys,
+  preparations: preparingTurns,
+  currentSession: (key) => sessions.get(key),
+  begin: (key) => turnTerminals.begin(key),
+  land: afterTurn,
+  showParked: showParkedChat
+})
 
 // Chats whose auto-name is currently being generated — guards against a second
 // `done` firing another title call before the first resolves.
@@ -249,16 +254,20 @@ function evaluateProjectMemory(sessionKey: string): void {
 const interactiveEvents =
   (sessionKey: string) =>
   (e: AgentEvent): void => {
-    trackRunning(sessionKey)(e)
     // Providers disagree about terminal sequences: Codex can emit error→done while
     // Claude may emit only error. Claim one outcome. Success may auto-land; failure
     // persists partial work on the chat branch but never writes it into the project.
     if (e.type === 'done' || e.type === 'error') {
+      // Backends forward this same tagged event after the hook. Keep the UI busy
+      // until landing (or the automatic continuation) finishes.
+      if (e.type === 'done') e.landingPending = runningKeys.has(sessionKey)
       const terminal = turnTerminals.claim(sessionKey, e.type)
       if (!terminal) return
-      const transcript = sessions.get(sessionKey)?.record.transcript ?? []
+      if (e.type === 'done') e.landingPending = true
+      const session = sessions.get(sessionKey)
+      const transcript = session?.record.transcript ?? []
       const last = [...transcript].reverse().find((t) => t.role === 'user')?.text
-      afterTurn(sessionKey, firstLine(last ?? 'praxis chat edit'), transcript, terminal)
+      void reconciliation.finish(sessionKey, firstLine(last ?? 'praxis chat edit'), terminal)
       if (terminal === 'success') {
         void maybeGenerateTitle(sessionKey)
         evaluateProjectMemory(sessionKey)
@@ -640,6 +649,8 @@ export function registerAgentIpc(
         sessions.delete(sessionKey)
         memoryRevisionBySession.delete(sessionKey)
         runningKeys.delete(sessionKey)
+        preparingTurns.delete(sessionKey)
+        reconciliation.begin(sessionKey)
         await releaseChat(sessionKey, terminal)
       }
       activeSessionKeyByProject.delete(key)
@@ -738,6 +749,8 @@ export function registerAgentIpc(
         sessions.delete(sk)
         memoryRevisionBySession.delete(sk)
         runningKeys.delete(sk)
+        preparingTurns.delete(sk)
+        reconciliation.begin(sk)
         void releaseChat(sk, terminal) // running partial work parks; idle work tears down
       }
     }
@@ -862,6 +875,8 @@ export function registerAgentIpc(
       closeSession(existing, how.persist)
       memoryRevisionBySession.delete(sessionKey)
       runningKeys.delete(sessionKey)
+      preparingTurns.delete(sessionKey)
+      reconciliation.begin(sessionKey)
       adoptSession(sessionKey, s.record, root)
       if (how.seed) {
         const sdkSessionId = s.record.sdkSessionId
@@ -982,6 +997,8 @@ export function registerAgentIpc(
         sessions.delete(sessionKey)
         memoryRevisionBySession.delete(sessionKey)
         runningKeys.delete(sessionKey)
+        preparingTurns.delete(sessionKey)
+        reconciliation.begin(sessionKey)
         void releaseChat(sessionKey, terminal) // running partial work parks; idle work tears down
       }
       const remaining = sessionKeysForProject(key)
@@ -1095,6 +1112,7 @@ export function registerAgentIpc(
     // never follow a subsequent project or chat switch.
     if (key) {
       runningKeys.add(key)
+      reconciliation.begin(key)
       turnTerminals.begin(key)
     }
     // Turn-start: sync the user's between-turn live edits into this chat's worktree
@@ -1117,7 +1135,6 @@ export function registerAgentIpc(
       const prompt =
         memory.updatedAt !== knownRevision ? projectMemoryUpdate(memory.content, text) : text
       if (key) memoryRevisionBySession.set(key, memory.updatedAt)
-      if (key) preparingTurns.delete(key)
       session.send(prompt, images)
     } catch (error) {
       if (key) {
@@ -1284,15 +1301,7 @@ export function registerAgentIpc(
     if (!activeKey) return { ok: false, conflicted: [] as string[], error: 'no-session' }
     const res = await resolveParkedChat(activeKey)
     if (!res.ok || res.conflicted.length === 0) return { ...res, conflicted: res.conflicted }
-    const list = res.conflicted.join(', ')
-    const prompt =
-      `The changes from this chat overlapped with edits you made to the same files, so I combined ` +
-      `both versions and marked the overlapping spots with conflict markers ` +
-      `(\`<<<<<<<\`, \`=======\`, \`>>>>>>>\`) in: ${list}. ` +
-      `Please open each of those files, reconcile the two sides into the result that was clearly ` +
-      `intended — keeping the recent edits AND the change this chat was making — and remove every ` +
-      `conflict marker. Use your best judgment instead of asking me to choose. When you're done, ` +
-      `briefly say what you reconciled.`
+    const prompt = conflictResolutionPrompt(res.conflicted)
     return { ok: true, conflicted: res.conflicted, prompt }
   })
 
@@ -1466,6 +1475,7 @@ export function registerAgentIpc(
     sessions.clear()
     memoryRevisionBySession.clear()
     runningKeys.clear()
+    preparingTurns.clear()
     activeKey = null
     // v8 F1: stop any in-flight spawns' subprocesses, but LEAVE their checkouts on
     // disk — committing/removing here would race the process exit (work lost, or a

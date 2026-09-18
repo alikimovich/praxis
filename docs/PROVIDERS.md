@@ -161,3 +161,13 @@ rules require deliberate composition. Optional MDX uses a development-only remar
 plugin supplied as an absolute path string. Production leaves the original config
 unchanged; loaders and the remark transform independently disable outside dev.
 Setup waits for landing and new-document stamp observations before reporting success.
+
+## Automatic text reconciliation
+
+Successful interactive turns use the shared landing coordinator to merge independent
+text edits and, for overlapping text, send one reconciliation continuation to the
+same provider session. This applies to Claude, Codex/custom endpoints, and the
+experimental Gemini seam without adding provider-specific tools. The configured
+permissions still apply. Stop, failure, an unavailable session, or unresolved markers
+leave the work recoverable with the manual Resolve/Discard fallback. Detached agents
+retain their existing landing policy.

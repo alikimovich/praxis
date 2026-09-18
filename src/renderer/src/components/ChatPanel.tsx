@@ -608,7 +608,13 @@ export default function ChatPanel(): React.JSX.Element {
       // streaming into its own (a "working" dot in the rail).
       const key = event.projectKey ?? "";
       const isActive = key === useChat.getState().activeKey;
-      if (event.type === "delta") {
+      if (event.type === "reconciliation-started") {
+        useChat.getState().setIsolation(key, "isolated");
+        useChat.getState().startAssistant(key);
+        appendStatus("Combining this chat’s changes with recent project edits…", key);
+      } else if (event.type === "landing-finished") {
+        finish(key);
+      } else if (event.type === "delta") {
         setupAwaitingLanding.current.delete(key);
         appendDelta(event.text, key);
       } else if (event.type === "title") {
@@ -651,7 +657,7 @@ export default function ChatPanel(): React.JSX.Element {
           setCatCompletion((previous) => ({ key, count: previous.count + 1 }));
         }
         cancelledCatTurns.current.delete(key);
-        finish(key);
+        finish(key, event.landingPending);
         if (isActive) {
           const s = useSetup.getState();
           // `busy` set ⟺ this was the setup turn: it edited the build config, which
@@ -1602,12 +1608,7 @@ export default function ChatPanel(): React.JSX.Element {
                 options={PERMISSION_MODES}
               />
             </div>
-            {isRunning && (input.trim() || attachments.length > 0) && (
-              <Button type="button" size="icon" className="composer__send size-7 shrink-0" onClick={() => send()} aria-label="Queue message" title="Queue message" disabled={switchingModel}>
-                <ArrowUp className="size-4" aria-hidden="true" />
-              </Button>
-            )}
-            {isRunning ? (
+            {isRunning && !input.trim() && attachments.length === 0 ? (
               <Button
                 type="button"
                 size="icon"
@@ -1626,7 +1627,8 @@ export default function ChatPanel(): React.JSX.Element {
                 className="composer__send size-7 shrink-0"
                 onClick={() => send()}
                 disabled={switchingModel || (!input.trim() && attachments.length === 0)}
-                aria-label="Send message"
+                aria-label={isRunning ? "Queue message" : "Send message"}
+                title={isRunning ? "Queue message" : "Send message"}
               >
                 <ArrowUp className="size-4" aria-hidden="true" />
               </Button>

@@ -73,6 +73,7 @@ const UNIT = [
   'edit-history',
   'worktrees',
   'chat-worktrees',
+  'auto-reconciliation',
   'live-commit',
   'file-tree',
   'file-ops',
@@ -181,6 +182,7 @@ const ELECTRON = [
 
 // live = the tests present in `verify` but not in `test`.
 const LIVE = [
+  'auto-reconciliation-live',
   'next-integration',
   'code-reveal-agent',
   'animation-controls-agent',

@@ -3,6 +3,13 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Automatic chat conflict reconciliation (2026-09-18)
+
+- [x] Merge independent edits to existing text files without a Resolve click.
+- [x] Try one automatic AI reconciliation for overlapping text in the originating chat.
+- [x] Hold queued messages through landing; preserve Stop and manual recovery.
+- [x] Cover clean/overlapping edits, staged work, bounded retries, and fallback behavior.
+
 ## Open project pages from chat (2026-09-17)
 
 - [x] Add scoped `open_preview` to Claude and Codex/custom endpoints.

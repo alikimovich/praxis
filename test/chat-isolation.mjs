@@ -214,6 +214,27 @@ try {
       'turn pins the ConflictCard (with files) and routes the sidebar history reload'
   )
 
+  // Automatic reconciliation stays busy through landing, hides the fallback card,
+  // and is routed to the originating chat even when another chat is active.
+  const emit = (event) => app.evaluate(
+    ({ BrowserWindow }, ev) => BrowserWindow.getAllWindows()[0].webContents.send('agent:event', ev),
+    { ...event, projectKey: KEY }
+  )
+  await emit({ type: 'reconciliation-started' })
+  await win.waitForFunction(key => window.__praxisStore.getState().byKey[key]?.isRunning, KEY)
+  assert(!(await conflictCardVisible()), 'automatic reconciliation hides the warning card')
+  await emit({ type: 'done', landingPending: true })
+  await sleep(100)
+  assert(await win.evaluate(key => window.__praxisStore.getState().byKey[key]?.isRunning, KEY),
+    'provider completion must not drain queued messages before landing')
+  await win.screenshot({ path: join(root, 'test/artifacts/auto-reconciliation.png') })
+  await emit({ type: 'isolation', state: 'merged', files: ['a.txt'], group: 'reconciled-group' })
+  await emit({ type: 'landing-finished' })
+  await win.waitForFunction(key => !window.__praxisStore.getState().byKey[key]?.isRunning, KEY)
+  assert(!(await conflictCardVisible()), 'successful reconciliation leaves no warning card')
+  assert(await win.evaluate(key => window.__praxisStore.getState().byKey[key].messages.at(-1).revertGroup === 'reconciled-group', KEY),
+    'Revert belongs to the reconciled response even while landing holds the busy gate')
+
   // --- C: closeChat on the real repo's default chat with NO edits made ->
   // the checkout and its praxis/chat-* branch are both gone ---
   const closeRes = await win.evaluate(

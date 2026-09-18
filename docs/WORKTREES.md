@@ -22,7 +22,9 @@ idle (detached worktree, no chat branch)
   → repository landing queue
       → success: validate, write + commit live, detach, delete chat branch
       → failure/interruption: commit partial work only on chat branch, park
-      → live drift/conflict: keep cumulative work on chat branch, park
+      → text drift: three-way merge privately; land clean edits automatically
+      → text overlap: one automatic AI reconciliation, then land or park
+      → other conflicts: keep cumulative work on chat branch, park
 
 parked
   → Resolve (UI or agent tool): rebase both sides into the worktree; AI resolves markers
@@ -66,6 +68,18 @@ A park does not necessarily mean Git found overlapping `<<<<<<<` markers. It mea
 chat's result could not be proven safe to land as one batch. Typical causes are another
 chat or the user changing the same file during the turn, deletion/binary changes that
 need the explicit resolver, or a failed/interrupted provider turn with partial edits.
+
+Successful interactive turns first try a three-way reconciliation for existing regular
+text files. Non-overlapping edits land without another model turn or a warning card.
+Overlapping edits start one reconciliation turn in the same chat/provider, including
+background chats. Markers remain private; the live checkout changes only after the
+normal marker check and landing validation pass. The prompt asks the model to preserve
+both intents, verify the result, and leave genuinely incompatible choices unresolved.
+The provider retains its configured permissions. The busy gate stays held through
+landing, so queued messages cannot race reconciliation; Stop cancels the continuation.
+A failed/stopped reconciliation or further drift falls back to the existing card with
+no automatic retry loop. Failed original turns, binary files, additions, deletions,
+and symlinks retain the explicit review path. Already-parked chats retain Resolve.
 
 The conflict card must therefore reflect the harness's authoritative landing state—not
 the model's opinion about whether its private worktree is clean. A clean worktree can
@@ -189,6 +203,9 @@ and the previous turn's landing cannot redirect them to a newly active project.
 The next send waits for the existing landing chain. A conflict pauses dispatch;
 Stop and agent errors pause remaining messages until Resume queue. Pending items
 can be removed. Queues are in memory, cleared on chat close or app reload.
+
+Provider completion keeps the chat busy until landing finishes. Automatic
+reconciliation shows a short progress status instead of the conflict card.
 
 Clean merges add no chat notice. Their Revert action attaches to the completed
 assistant response, even if a queued response has already started. Conflicts and

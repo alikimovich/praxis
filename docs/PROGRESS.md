@@ -2,6 +2,31 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-18 — Automatic text conflict reconciliation
+
+Successful interactive turns now three-way merge drift in existing regular text
+files inside their private worktree. Independent edits land quietly. Actual text
+overlaps trigger one reconciliation continuation in the originating provider/chat,
+preserving both intents and keeping markers out of the live checkout. Further
+conflicts, failed/stopped turns, binary/add/delete/symlink batches, and existing
+parks retain the manual recovery path. Detached agents are unchanged.
+
+The chat stays busy through landing so queued messages cannot race it. Provider
+responses finish streaming before landing, preserving the correct Revert target.
+Automatic reconciliation has a short progress status; Stop, closed/replaced
+sessions, and failed sends suppress or end the continuation without retry loops.
+The same resolution prompt supports the explicit retry action.
+
+Validation: typecheck/build, real-Git reconciliation and coordinator tests, message
+queue/Revert tests, and Electron isolation/UI checks passed; screenshot inspected.
+A real Codex turn with a competing live edit automatically reconciled both labels,
+committed the result, and never showed the Resolve card. Full verify: 157/158
+passed (including the normal fixture/simulator skips); only the previously recorded
+agent-multi “This chat is already running” failure remains. The new live conflict
+test passed separately. Final typecheck/build and targeted UI/queue tests also
+passed after preserving Revert while the landing gate is held. Existing App.tsx
+edits are unrelated and left out of this commit.
+
 ## 2026-09-17 — Open project pages from chat
 
 Added `open_preview` to Claude's in-process tools and the Codex/custom-endpoint

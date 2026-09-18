@@ -291,7 +291,7 @@ export type AgentEvent = (
    *  `shared/run-stats.ts`). Drives the status line's ↑/↓ counters. `cached` is
    *  the share of `input` served from the prompt cache, not an extra amount. */
   | { type: 'usage'; input: number; output: number; cached: number }
-  | { type: 'done' }
+  | { type: 'done'; landingPending?: boolean }
   | { type: 'error'; message: string }
   /** An auto-generated name for this chat, summarising what the conversation is
    *  about (not its opening words). Emitted once per chat after the first turn
@@ -312,6 +312,9 @@ export type AgentEvent = (
       summary?: string
       files?: string[]
     }
+  /** Main starts one bounded reconciliation turn in the originating chat. */
+  | { type: 'reconciliation-started' }
+  | { type: 'landing-finished' }
   /** Per-chat worktree isolation status (v9). A chat's turn merged back onto the live
    *  checkout ('merged'), a private worktree was forked for the chat ('isolated'), or a
    *  turn parked on its branch after mid-turn drift ('parked'). Routed by `projectKey` =

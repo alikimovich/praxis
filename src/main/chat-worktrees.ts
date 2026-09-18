@@ -1,7 +1,7 @@
 import { provisionNextDependencies } from './worktree-dependencies'
 import { syncSetupArtifacts } from './setup-artifacts'
 import { execFile } from 'child_process'
-import { readFile, writeFile } from 'fs/promises'
+import { lstat, readFile, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import { promisify } from 'util'
 import {
@@ -180,6 +180,29 @@ export async function completeTurn(
   if (edits.length === 0) return { outcome: 'parked', files, edits: [] }
   const newBase = await revParse(wt.path, 'HEAD')
   return { outcome: 'noop', files, edits: [], newBase }
+}
+
+/** Automatic reconciliation only handles existing regular text files. Binary,
+ * add/delete and symlink decisions retain the explicit review path. */
+export async function canReconcileText(
+  liveRoot: string,
+  wt: Worktree,
+  files: string[]
+): Promise<boolean> {
+  if (!files.length) return false
+  for (const rel of files) {
+    const base = await readBlobAt(wt.path, wt.baseSha, rel)
+    if (!base || base.includes(0)) return false
+    for (const root of [liveRoot, wt.path]) {
+      try {
+        if (!(await lstat(join(root, rel))).isFile()) return false
+        if ((await readFile(join(root, rel))).includes(0)) return false
+      } catch {
+        return false
+      }
+    }
+  }
+  return true
 }
 
 export interface ApplyOutcome {

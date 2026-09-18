@@ -190,7 +190,7 @@ interface ChatState {
   appendStatus: (text: string, key?: string) => void
   /** Add one backend `usage` event's token delta to this chat's running totals. */
   addUsage: (delta: TokenUsage, key?: string) => void
-  finish: (key?: string) => void
+  finish: (key?: string, landingPending?: boolean) => void
   /** Is the given project's turn in flight (for the rail's working dot)? */
   isRunningFor: (key: string) => boolean
 }
@@ -400,22 +400,22 @@ export const useChat = create<ChatState>((set, get) => {
         })
       })),
     addUsage: (delta, key) => patch(key, (sl) => ({ ...sl, usage: sumUsage(sl.usage, delta) })),
-    finish: (key) => {
+    finish: (key, landingPending = false) => {
       // A turn that lands on a chat the user isn't looking at is the one worth
       // flagging green in the rail; one that lands on screen was already seen.
       const unseen = key !== undefined && key !== get().activeKey
       patch(key, (sl) => ({
         ...sl,
-        isRunning: false,
+        isRunning: landingPending,
         streamingId: null,
         // Fold the finished turn's elapsed time into the chat's total and stop the
-        // clock — the gap until the next turn is idle time, which doesn't count.
-        workedMs: sl.workedMs + (sl.turnStartedAt ? Date.now() - sl.turnStartedAt : 0),
-        turnStartedAt: null,
+        // clock. Landing still counts as busy, but the response is complete for Revert.
+        workedMs: sl.workedMs + (!landingPending && sl.turnStartedAt ? Date.now() - sl.turnStartedAt : 0),
+        turnStartedAt: landingPending ? sl.turnStartedAt : null,
         // Only a turn that was actually running counts as a completion — the bare
         // `finish()` calls that clear a reopened session's stale running flag must
         // not light the badge.
-        needsReview: sl.needsReview || (unseen && sl.isRunning)
+        needsReview: sl.needsReview || (unseen && sl.isRunning && !landingPending)
       }))
     },
     isRunningFor: (key) => !!get().byKey[key]?.isRunning

@@ -68,7 +68,8 @@ GitHub PR.
   or resume after Stop/errors. Queues last for the current app session.
 - **Stay in your project.** Chat links open separately; the preview's home button
   returns to the managed project's entry page. Successful merges stay quiet,
-  with Revert retained on the response and conflicts shown when action is needed.
+  with Revert retained on the response. Independent text edits merge automatically;
+  overlapping text gets one automatic reconciliation attempt before showing Resolve.
 - **Click-to-edit.** Hold **Shift** while clicking to add or remove objects from
   a selection. Chat requests and Delete include the group; individual property
   controls target the most recent object. A **Select** mode maps a clicked element to its source

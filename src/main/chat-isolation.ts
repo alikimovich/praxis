@@ -10,6 +10,7 @@ import { projectKey } from '../shared/projectKey'
 import {
   applyParked,
   completeTurn,
+  canReconcileText,
   conflictMarkerFiles,
   createChatWorktree,
   discardParked,
@@ -213,23 +214,42 @@ function lastTurn(transcript: SessionTranscriptEntry[]): SessionTranscriptEntry[
  * one revertable commit in the user's own history), advances `baseSha`, and unparks. On
  * `parked`, upserts the park record (with the last turn's transcript) for the review UI.
  * `noop` emits a successful landing acknowledgement without creating a commit.
+ * With reconciliation enabled, stage text drift privately and return marker-bearing
+ * files for one provider continuation; clean three-way results land in this queue.
  */
 export function afterTurn(
   sessionKey: string,
   message: string,
   transcript: SessionTranscriptEntry[] = [],
-  terminal: TurnTerminalOutcome = 'success'
-): void {
+  terminal: TurnTerminalOutcome = 'success',
+  reconcile = false
+): Promise<string[] | null> {
   const st = states.get(sessionKey)
-  if (!st) return
+  if (!st) return Promise.resolve(null)
   const turn = lastTurn(transcript)
-  st.chain = st.chain
+  const task = st.chain
     .then(() =>
       enqueueRepoWrite(st.liveRoot, async () => {
         const turnNo = ++st.turnNo
-        const outcome = await completeTurn(st.liveRoot, st.wt, message, {
+        let outcome = await completeTurn(st.liveRoot, st.wt, message, {
           land: terminal === 'success'
         })
+        let reconcileFiles: string[] | null = null
+        if (
+          reconcile &&
+          terminal === 'success' &&
+          outcome.outcome === 'parked' &&
+          !(await conflictMarkerFiles(st.wt, outcome.files)).length &&
+          (await canReconcileText(st.liveRoot, st.wt, outcome.files))
+        ) {
+          try {
+            const prep = await stageResolve(st.liveRoot, st.wt)
+            if (prep.clean) outcome = await completeTurn(st.liveRoot, st.wt, message)
+            else reconcileFiles = prep.conflicted
+          } catch {
+            /* preserve the recovery branch and surface the fallback */
+          }
+        }
         if (outcome.outcome === 'merged') {
           const group = `chat:${st.wt.id}:${turnNo}`
           for (const e of outcome.edits) {
@@ -255,19 +275,30 @@ export function afterTurn(
           const markers = await conflictMarkerFiles(st.wt, outcome.files)
           st.resolvingFiles = markers.length ? markers : null
           upsertParkRecord(st, outcome.files, turn)
-          emitIsolation(sessionKey, 'parked', st.wt.branch, outcome.files)
+          if (!reconcileFiles) emitIsolation(sessionKey, 'parked', st.wt.branch, outcome.files)
         } else if (outcome.newBase) {
+          st.parked = false
+          st.parkedFiles = []
+          st.resolvingFiles = null
+          dropParkRecord(st)
           st.wt.baseSha = outcome.newBase
           await retireWorktreeBranch(st.wt)
           // Setup may only restore an excluded helper; config can already be wired.
           // Acknowledge the no-op so it can restart and verify instead of waiting forever.
           if (terminal === 'success') emitIsolation(sessionKey, 'merged', st.wt.branch, [])
         }
+        return reconcileFiles
       })
     )
-    .catch(() => {
-      /* a turn's merge failing must never wedge the chain */
-    })
+    .catch(() => null)
+  st.chain = task
+  return task
+}
+
+/** Restore the fallback after an automatic attempt was cancelled or unavailable. */
+export function showParkedChat(sessionKey: string): void {
+  const st = states.get(sessionKey)
+  if (st?.parked) emitIsolation(sessionKey, 'parked', st.wt.branch, st.parkedFiles)
 }
 
 /**
