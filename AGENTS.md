@@ -49,7 +49,7 @@ Tests come in three tiers, defined by the arrays in `test/run.mjs`
 (`node test/run.mjs unit|electron|live|all`) — pick the cheapest that proves
 your change:
 
-1. **Pure-bun logic tests** (`bun test/pr-body.mjs` etc., ~15 files, the `unit`
+1. **Pure-bun logic tests** (`bun test/pr-body.mjs` etc., the `unit`
    tier) — no build, no display, run in seconds. Always run the relevant ones.
 2. **Playwright/Electron UI tests** (`node test/<name>.mjs` after
    `electron-vite build`, or `bun run test:<name>` which builds first) — drive
@@ -58,6 +58,11 @@ your change:
 3. **Live e2e** (`test:agent`, `test:codex`, `test:sim-e2e`) — run a REAL
    provider turn / iOS simulator. They self-SKIP (exit 0) without credentials
    or a sim; they FAIL if the turn ran but didn't produce the edit.
+
+The runner uses bounded unit concurrency and an audited UI allowlist; all other
+UI tests and live tests are exclusive. Use `--serial` for diagnosis, and read
+`docs/TESTING.md` before marking a test parallel-safe. Logs and JSON reports are
+in `test/artifacts/runs/`; SKIP is separate from PASS.
 
 While iterating, run targeted `test:<name>` scripts; before declaring a chunk
 done, run `bun run typecheck && bun run test` (and `verify` when agent/sim

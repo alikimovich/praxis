@@ -2,6 +2,30 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-18 — Concurrent test execution and trustworthy reports
+
+Replaced the synchronous test loop with bounded subprocess workers: up to four
+unit tests and two explicitly audited store-only UI tests. Unreviewed UI tests
+are exclusive barriers; live tests stay serial. Builds run once, including for
+live-only invocations, and a failed build blocks dependent tests. Added exact
+filters, serial mode, per-test timeouts, process-group cleanup, a checkout lock,
+individual logs, and JSON reports with wall time. Legacy skip markers now report
+SKIP separately; partially skipped files never count as fully passing coverage.
+
+Focused checks cover concurrency limits, barriers, stable ordering, skip/failure
+precedence, spawn errors, timeout escalation, stubborn descendant cleanup,
+cancellation, profile cleanup, and checkout locking. Clean unit benchmarks passed
+77/77 in both modes: 35.7s serial versus 11.5s with four workers (about 3.1x).
+Typecheck and full unit/Electron regression ran in a disposable checkout to avoid
+other tasks' shared fixtures/build output: 147/148 passed in 266.8s. The sole
+failure is the previously recorded agent-multi “This chat is already running”
+error. Concurrent remote-indicator/smoke checks passed; screenshots inspected.
+Additional CLI checks passed for build-once behavior, live-only builds, dependent
+blocking after build failure, argument validation, report counts, and lock release.
+
+Documented the runner contract and an optional labeled-log Jev evaluation pilot
+in docs/TESTING.md. No model calls or probabilistic CI gates are introduced.
+
 ## 2026-09-18 — Code access inside exploded view
 
 The 3D workspace hides the normal selection toolbar, which also hid its Code

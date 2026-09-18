@@ -3,6 +3,13 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Test execution and evaluation (2026-09-18)
+
+- [x] Add bounded unit concurrency and an audited Electron allowlist with exclusive barriers.
+- [x] Add per-test logs, JSON reports, timeouts, cleanup, filters, and a checkout lock.
+- [x] Separate skipped coverage from passing tests and benchmark serial versus concurrent units.
+- [ ] Evaluate Jev on labeled failure logs before considering advisory agent-behavior scoring.
+
 ## Code access in exploded view (2026-09-18)
 
 - [x] Keep the selected layer's Code action available inside the 3D workspace.

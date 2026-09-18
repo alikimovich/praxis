@@ -218,6 +218,11 @@ Tests are hand-rolled `.mjs` scripts in three tiers:
   turn / simulator; self-SKIP without credentials.
 
 `bun run test` runs unit + UI; `bun run verify` adds the live e2e tier.
+The runner uses up to four unit workers and two workers for audited UI tests;
+other UI tests and live tests run exclusively. Use `--serial` to compare timing.
+Per-test logs and a JSON summary live under `test/artifacts/runs/`; skipped
+coverage is reported separately from passing tests. See [Testing](docs/TESTING.md)
+for filtering, timeouts, and concurrency rules.
 
 The suite keeps a fresh app/profile per test file and skips the desktop startup
 intro except in `startup-intro`. To skip it in a targeted run too, use

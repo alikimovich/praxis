@@ -1,24 +1,10 @@
 #!/usr/bin/env node
-// Test runner for Praxis. Replaces the old &&-mega-chains in package.json.
-//
-// Usage: node test/run.mjs <tiers...>   where tier ∈ unit | electron | live | all
-//
-//   unit     — pure-bun logic tests (no build, no display). Run with `bun`.
-//   electron — Playwright/Electron UI tests. `electron-vite build` runs ONCE
-//              before the tier, then each test runs with `node`.
-//   live     — agent/codex/sim e2e. Need creds/display; they self-SKIP (exit 0)
-//              without them, which the runner counts as a pass. Run with `node`.
-//   all      — unit + electron + live.
-//
-// Behavior: spawn each test as a subprocess, KEEP GOING on failure, treat
-// exit code 0 as PASS (the e2e self-SKIP convention is exit 0 → pass), print a
-// summary table at the end, and exit non-zero if any test FAILED.
-
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+// Bounded subprocess runner. See docs/TESTING.md for isolation and reporting.
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { availableParallelism } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { acquireRunLock, runCommand, runQueue } from './helpers/test-runner.mjs';
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(TEST_DIR);
@@ -27,6 +13,7 @@ const ROOT = dirname(TEST_DIR);
 
 // unit = the `bun test/NAME.mjs` group before `electron-vite build` in `test`.
 const UNIT = [
+  'test-runner',
   'setup-next',
   'code-reveal',
   'message-queue',
@@ -196,128 +183,95 @@ const LIVE = [
   'style-provenance',
 ];
 
-const TIERS = {
-  unit: { runner: 'bun', build: false, tests: UNIT },
-  electron: { runner: 'node', build: true, tests: ELECTRON },
-  live: { runner: 'node', build: false, tests: LIVE },
-};
-
-const TIER_ORDER = ['unit', 'electron', 'live'];
-
-// --- Arg parsing ---
-
-const args = process.argv.slice(2);
-if (args.length === 0) {
-  console.error('usage: node test/run.mjs <tiers...>  (unit | electron | live | all)');
+// Store-only UI tests: no shared fixture writes, servers, or real provider turns.
+// Everything else is exclusive until its fixture/process ownership is audited.
+const PARALLEL_ELECTRON = new Set(['remote-indicator', 'smoke', 'composer-draft']);
+const TIERS = { unit: UNIT, electron: ELECTRON, live: LIVE };
+const selected = new Set();
+const options = { jobs: Math.min(4, availableParallelism()), 'electron-jobs': 2,
+  'timeout-ms': 600_000, filter: null };
+let serial = false;
+try {
+  for (const arg of process.argv.slice(2)) {
+    if (arg === '--serial') serial = true;
+    else if (arg === 'all') Object.keys(TIERS).forEach(t => selected.add(t));
+    else if (Object.hasOwn(TIERS, arg)) selected.add(arg);
+    else {
+      const match = /^--(jobs|electron-jobs|timeout-ms|filter)=(.+)$/.exec(arg);
+      if (!match) throw new Error(`unknown argument: ${arg}`);
+      const [, key, value] = match;
+      if (key === 'filter') options.filter = new Set(value.split(','));
+      else {
+        const n = Number(value);
+        if (!Number.isSafeInteger(n) || n < 1 || n > 2_147_483_647) throw new Error(`invalid ${key}: ${value}`);
+        options[key] = n;
+      }
+    }
+  }
+  if (!selected.size) throw new Error('select at least one tier');
+  if (options.filter) {
+    const names = [...selected].flatMap(t => TIERS[t]);
+    for (const name of options.filter) if (!names.includes(name)) throw new Error(`test not in selected tiers: ${name}`);
+  }
+} catch (error) {
+  console.error(`${error.message}\nusage: node test/run.mjs <unit|electron|live|all> [--serial] [--jobs=4] [--electron-jobs=2] [--timeout-ms=600000] [--filter=name,name]`);
   process.exit(2);
 }
 
-const selected = new Set();
-for (const arg of args) {
-  if (arg === 'all') {
-    for (const t of TIER_ORDER) selected.add(t);
-  } else if (TIERS[arg]) {
-    selected.add(arg);
-  } else {
-    console.error(`unknown tier: ${arg}  (expected unit | electron | live | all)`);
-    process.exit(2);
-  }
-}
-
-// --- Run ---
-
-function fmtDuration(ms) {
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
-
-function runOne(runner, name) {
-  const file = join(TEST_DIR, `${name}.mjs`);
-  const started = Date.now();
-  // Each Electron test gets its own throwaway userData (main honors
-  // PRAXIS_USER_DATA): persisted state (workspace/recents localStorage) can't leak
-  // between tests — boot restore would otherwise auto-reopen a prior test's
-  // project — and each launch holds its own single-instance lock.
-  const userData = mkdtempSync(join(tmpdir(), `praxis-test-${name}-`));
-  let res;
-  try {
-    res = spawnSync(runner, [file], {
-      cwd: ROOT,
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        PRAXIS_USER_DATA: userData,
-        // Exercise the reveal only in its dedicated test. Preserve other motion
-        // and fresh-process isolation for ordinary UI tests.
-        PRAXIS_TEST_SKIP_INTRO: name === 'startup-intro' ? '0' : '1',
-      },
-    });
-  } finally {
-    rmSync(userData, { recursive: true, force: true });
-  }
-  const duration = Date.now() - started;
-  // spawnSync sets .error on spawn failure (e.g. runner not found) and .signal
-  // when killed by a signal; both are failures. Exit 0 (incl. e2e SKIP) = pass.
-  const ok = !res.error && res.signal == null && res.status === 0;
-  return { name, ok, duration, status: res.status, signal: res.signal, error: res.error };
-}
-
-function build() {
-  console.log('\n=== electron-vite build ===');
-  const res = spawnSync('electron-vite', ['build'], { cwd: ROOT, stdio: 'inherit' });
-  if (res.error || res.signal != null || res.status !== 0) {
-    console.error('electron-vite build FAILED — cannot run electron tier.');
-    return false;
-  }
-  return true;
-}
-
+const artifacts = join(TEST_DIR, 'artifacts', 'runs');
+mkdirSync(artifacts, { recursive: true });
+let releaseLock;
+try { releaseLock = acquireRunLock(join(artifacts, '.runner-lock')); }
+catch (error) { console.error(error.message); process.exit(2); }
+process.once('exit', releaseLock);
+const logs = mkdtempSync(join(artifacts, 'run-'));
+const controller = new AbortController();
+let interrupted;
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => {
+  interrupted = signal;
+  controller.abort();
+});
+const start = Date.now();
 const results = [];
+const builds = [];
+let built = false;
 let buildFailed = false;
-
-for (const tier of TIER_ORDER) {
+const fmt = ms => `${(ms / 1000).toFixed(1)}s`;
+console.log(`Test logs: ${logs}`);
+for (const [tier, members] of Object.entries(TIERS)) {
   if (!selected.has(tier)) continue;
-  const { runner, build: needsBuild, tests } = TIERS[tier];
-
-  console.log(`\n########## tier: ${tier} (${tests.length} tests) ##########`);
-
-  if (needsBuild) {
-    if (!build()) {
-      // Mark every test in this tier as failed and skip running them.
-      buildFailed = true;
-      for (const name of tests) {
-        results.push({ tier, name, ok: false, duration: 0, note: 'build failed' });
-      }
-      continue;
-    }
+  const tests = members.filter(name => !options.filter || options.filter.has(name));
+  if (!tests.length) continue;
+  if (tier !== 'unit' && !built && !buildFailed && !controller.signal.aborted) {
+    console.log('Building Electron once…');
+    const build = await runCommand({ command: join(ROOT, 'node_modules', '.bin', 'electron-vite'),
+      args: ['build'], cwd: ROOT, name: 'build', log: join(logs, 'build.log'),
+      timeoutMs: options['timeout-ms'], signal: controller.signal });
+    builds.push(build);
+    built = build.outcome === 'PASS';
+    buildFailed = !built;
+    console.log(`Build ${build.outcome} ${fmt(build.duration)} — ${build.log}`);
   }
-
-  for (const name of tests) {
-    console.log(`\n--- [${tier}] ${name} ---`);
-    const r = runOne(runner, name);
-    results.push({ tier, ...r });
-  }
+  const jobs = serial || tier === 'live' ? 1 : tier === 'unit' ? options.jobs : options['electron-jobs'];
+  console.log(`\n${tier}: ${tests.length} tests, at most ${jobs} workers`);
+  const items = tests.map(name => ({ name, exclusive: tier === 'electron' && !PARALLEL_ELECTRON.has(name) }));
+  const tierResults = await runQueue(items, jobs, async ({ name }) => {
+    if (tier !== 'unit' && buildFailed) return { name, outcome: 'BLOCKED', duration: 0, note: 'build failed' };
+    console.log(`START [${tier}] ${name}`);
+    const result = await runCommand({ command: tier === 'unit' ? 'bun' : 'node',
+      args: [join(TEST_DIR, `${name}.mjs`)], cwd: ROOT, name,
+      log: join(logs, `${tier}-${name}.log`), timeoutMs: options['timeout-ms'], signal: controller.signal });
+    console.log(`${result.outcome} [${tier}] ${name} ${fmt(result.duration)}${result.note ? ` — ${result.note}` : ''}`);
+    if (!['PASS', 'SKIP'].includes(result.outcome)) console.log(`  Log: ${result.log}`);
+    return result;
+  }, controller.signal);
+  results.push(...tierResults.map(r => ({ tier, ...r })));
 }
-
-// --- Summary ---
-
-const nameWidth = Math.max(...results.map((r) => r.name.length), 4);
-console.log('\n' + '='.repeat(nameWidth + 24));
-console.log('  SUMMARY');
-console.log('='.repeat(nameWidth + 24));
-
-let failed = 0;
-for (const r of results) {
-  const status = r.ok ? 'PASS' : 'FAIL';
-  if (!r.ok) failed++;
-  const dur = r.duration ? fmtDuration(r.duration) : '';
-  const note = r.note ? `  (${r.note})` : '';
-  console.log(`  ${status}  ${r.name.padEnd(nameWidth)}  ${dur.padStart(7)}${note}`);
-}
-
-console.log('='.repeat(nameWidth + 24));
-const total = results.length;
-console.log(`  ${total - failed}/${total} passed, ${failed} failed`);
-console.log('='.repeat(nameWidth + 24) + '\n');
-
-process.exit(failed > 0 || buildFailed ? 1 : 0);
+const duration = Date.now() - start;
+const counts = {};
+for (const r of results) counts[r.outcome] = (counts[r.outcome] || 0) + 1;
+writeFileSync(join(logs, 'summary.json'), JSON.stringify({ duration, counts, builds, results }, null, 2) + '\n');
+console.log(`\nSUMMARY: ${Object.entries(counts).map(([s, n]) => `${n} ${s}`).join(', ')}; wall time ${fmt(duration)}`);
+console.log(`Report: ${join(logs, 'summary.json')}`);
+process.exitCode = interrupted ? (interrupted === 'SIGINT' ? 130 : 143)
+  : buildFailed || results.some(r => !['PASS', 'SKIP'].includes(r.outcome)) ? 1 : 0;
