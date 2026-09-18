@@ -1672,6 +1672,12 @@ function setFrame(on: boolean): void {
 }
 
 const threeD = createThreeDInspector({
+  hasSource: (el) => !!findSource(el),
+  code: (el) => {
+    selectedEl = el
+    ipcRenderer.send(PICKED, describe(el))
+    ipcRenderer.send(TOOLBAR_ACTION, 'code')
+  },
   select: (el, open) => {
     clearStylePreview()
     selectedEl = el

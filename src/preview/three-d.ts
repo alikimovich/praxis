@@ -25,6 +25,8 @@ function identity(el: Element, scope: ParentNode): () => Element | null {
 
 export function createThreeDInspector(options: {
   select: (element: Element, open: boolean) => void
+  hasSource: (element: Element) => boolean
+  code: (element: Element) => void
   lost: () => void
   close: () => void
 }): {
@@ -77,6 +79,15 @@ export function createThreeDInspector(options: {
       return b
     }
     const back = button('Back to page', close)
+    const code = button('Code', () => {
+      const element = resolveSelected?.()
+      if (element && options.hasSource(element)) options.code(element)
+    })
+    code.title = 'View selected layer source'
+    const updateCode = (): void => {
+      code.hidden = !selected || !options.hasSource(selected)
+    }
+    updateCode()
     const stage = document.createElement('div')
     stage.className = 'stage'
     stage.tabIndex = 0
@@ -149,6 +160,7 @@ export function createThreeDInspector(options: {
         node.toggleAttribute('data-selected', i === n)
       })
       options.select(selected, true)
+      updateCode()
     }
     const refresh = (): void => {
       if (disposed) return
@@ -164,6 +176,7 @@ export function createThreeDInspector(options: {
           resolveSelected = null
           options.lost()
         }
+        updateCode()
         return
       }
       root = nextRoot
@@ -173,6 +186,7 @@ export function createThreeDInspector(options: {
         if (selected) options.select(selected, true)
         else options.lost()
       }
+      updateCode()
       const captured = captureSurfaces(root)
       surfaces = captured.surfaces
       const rootRect = root.getBoundingClientRect()
@@ -245,6 +259,7 @@ export function createThreeDInspector(options: {
     header.append(
       back,
       title,
+      code,
       button('Front', () => {
         pitch = 0
         yaw = 0

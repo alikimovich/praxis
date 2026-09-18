@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Code access in exploded view (2026-09-18)
+
+- [x] Keep the selected layer's Code action available inside the 3D workspace.
+
 ## Composer queue action (2026-09-18)
 
 - [x] Replace the running Stop button with Queue while composing a follow-up.

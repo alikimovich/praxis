@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-18 — Code access inside exploded view
+
+The 3D workspace hides the normal selection toolbar, which also hid its Code
+action. Added a Code button to the workspace header for source-backed layers.
+It resolves the current live selection and uses the existing source drawer relay,
+keeping exploded view open alongside the editor. Missing/stale selections cannot
+open code. Documented the action and covered a real child-layer click through IPC.
+
+Validation: typecheck and targeted 3D/code-drawer Electron checks passed; native
+toolbar and renderer drawer screenshots inspected. Full regression: 147 passed;
+only the previously recorded agent-multi failure remains ("This chat is already
+running").
+
 ## 2026-09-18 — One composer action while queueing
 
 A running chat now swaps its spinner/Stop button for Queue when the composer

@@ -136,6 +136,14 @@ try {
   await win.waitForFunction(() => window.__praxisPropsIsland.getState().open, undefined, {
     timeout: 5000
   })
+  // Code remains accessible after the normal selection toolbar is hidden.
+  await click(`[...${shadow}.querySelectorAll('button')].find(e=>e.textContent==='Code')`)
+  await win.waitForSelector('.codedrawer .cm-editor')
+  assert.equal(await win.evaluate(() => window.__praxisCodeDrawer.getState().source), 'src/Styled.tsx:9')
+  await wait(`!!${shadow}?.querySelector('dialog[open]')`)
+  await win.screenshot({ path: join(artifacts, 'three-d-code-drawer.png') })
+  await screenshot('three-d-code-toolbar.png')
+  await win.locator('.codedrawer__close').click()
   await win.evaluate(() => window.api.styles.preview('color', 'rgb(20, 30, 40)'))
   await wait(
     `${shadow}.querySelector('.surface[title="h2#card-title"] > div').style.color === 'rgb(20, 30, 40)'`

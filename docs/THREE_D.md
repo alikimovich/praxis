@@ -7,6 +7,8 @@ focused canvas also accepts arrow keys and +/−. **Separation** spreads the lay
 apart; **Front** assembles them; **Reset view** restores the initial camera.
 
 Click a surface or choose a **Component layer** to open the existing inspector.
+Choose **Code** in the workspace header to open that layer's source in the code
+drawer while keeping the exploded view open. It appears for source-backed layers.
 Props, Styles, and Custom controls still target the original source-backed
 selection. Style previews update the live component and its 3D representation;
 commits and undo use the existing editing engine. **Back to page** or Escape
