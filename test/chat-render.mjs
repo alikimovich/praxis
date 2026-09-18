@@ -70,10 +70,17 @@ try {
   if (await docLink.getAttribute('target') !== '_blank' || !(await docLink.getAttribute('rel')).includes('noopener')) {
     throw new Error('assistant links must open separately without replacing Praxis')
   }
+  await win.waitForSelector('button[aria-label="Stop"]')
   await win.fill('.composer__input', 'Follow up after this turn')
+  if (await win.locator('.composer__send').count() !== 1 || await win.locator('button[aria-label="Stop"]').count()) {
+    throw new Error('queue action must replace the running Stop button')
+  }
+  await win.locator('.composer').screenshot({ path: join(artifacts, 'queue-draft.png') })
   await win.click('button[aria-label="Queue message"]')
   await win.waitForSelector('[aria-label="Queued messages"]')
   if (await win.inputValue('.composer__input')) throw new Error('queueing must clear the draft')
+  await win.waitForSelector('button[aria-label="Stop"]')
+  if (await win.locator('.composer__send').count() !== 1) throw new Error('empty running composer must show only Stop')
   await win.locator('.composer').screenshot({ path: join(artifacts, 'queued-message.png') })
   await win.click('button[aria-label="Remove queued message: Follow up after this turn"]')
   await win.waitForSelector('[aria-label="Queued messages"]', { state: 'detached' })

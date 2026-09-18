@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-18 — One composer action while queueing
+
+A running chat now swaps its spinner/Stop button for Queue when the composer
+contains text or attachments. Submitting or clearing the draft restores Stop in
+the same position, keeping one primary action visible. The Electron chat-render
+check covers replacement and restoration; both screenshots were inspected.
+
+Validation: typecheck, build, and targeted chat-render passed (also within the
+full suite). Full regression was stopped after stalling in prop-edit-svelte;
+native-animation-controls also failed accessing the native preview.
+
+
 ## 2026-09-18 — Automatic text conflict reconciliation
 
 Successful interactive turns now three-way merge drift in existing regular text

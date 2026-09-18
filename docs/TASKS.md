@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Composer queue action (2026-09-18)
+
+- [x] Replace the running Stop button with Queue while composing a follow-up.
+
+
 ## Automatic chat conflict reconciliation (2026-09-18)
 
 - [x] Merge independent edits to existing text files without a Resolve click.
