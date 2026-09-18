@@ -2,6 +2,35 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-17 — Animation controls independent of selection
+
+Added the bundled `/animation-controls` skill and natural-language routing for
+“surface animation controls.” It builds a development-only DialKit panel inside
+the target project, wired to the existing animation and stable across selection
+changes, clearing selection, and Replay. Existing tuning UI is reused; unsupported
+frameworks can use a small native equivalent. Live values remain distinct from
+saved source defaults. The animation action and spring skill use this workflow;
+explicit selection-inspector requests retain `define_controls`/`open_controls`.
+
+Claude exposes a short portable skill alias; Codex/Gemini discover the same bundled
+skill as a fallback behind project/user skills. DialKit roots and custom panels
+marked `data-praxis-controls` remain interactive while Select mode is armed in
+both native and browser previews.
+
+Validation: typecheck/build, skill validation, provider discovery/precedence,
+rules, docs links, skill-menu UI, and trusted preview selection/control clicks
+passed. Inspected native-preview and skill-menu screenshots. Three real Codex turns
+surfaced the panel with no selection; the stronger test verified changed duration,
+repeatable Replay, retained values after selection changes/clear, and a production
+build with working motion and no tuning panel. Full unit/UI suite: 142/143 passed;
+startup-intro failed its unrelated startup timing check and the focused rerun
+failed the crossfade/native-preview assertion. Browser-mode integration passed.
+The live tier passed the new skill, model switching, both providers’ file edits
+and existing inspector controls, and CSS provenance; simulator skipped without
+Xcode. The tool-invocation probe missed its `line_height` call; the focused
+rerun missed both `check_contrast` and `line_height`. These broader failures
+remain unresolved; no animation/control-specific regression failed.
+
 ## 2026-09-17 — Group selection, queued messages, and preview recovery
 
 Shift-click adds/removes explicitly selected DOM objects in desktop and browser

@@ -3,12 +3,14 @@
  * preview's own origin, so it can inspect DOM that the cross-origin Praxis parent
  * cannot, then reports bounded descriptions through postMessage.
  */
+import { CONTROL_OVERLAY_SELECTOR } from '../shared/control-overlay'
 import { SCOPE_CLASS_PATTERN } from '../shared/display-classes'
 
 export const WEB_PREVIEW_BRIDGE = String.raw`(() => {
   const script = document.currentScript
   const params = new URL(script && script.src ? script.src : location.href).searchParams
   const token = params.get('token') || ''
+  const controlsSelector = ${JSON.stringify(CONTROL_OVERLAY_SELECTOR)}
   let selectMode = false
   let hovered = null
   let selected = []
@@ -121,13 +123,13 @@ export const WEB_PREVIEW_BRIDGE = String.raw`(() => {
   addEventListener('pointermove', (event) => {
     if (!selectMode) return
     const element = event.target instanceof Element ? event.target : null
-    if (element && element !== overlay) paint(element)
+    if (element && element !== overlay) paint(element.closest(controlsSelector) ? null : element)
   }, true)
 
   addEventListener('click', (event) => {
     if (!selectMode) return
     const element = event.target instanceof Element ? event.target : null
-    if (!element || element === overlay) return
+    if (!element || element === overlay || element.closest(controlsSelector)) return
     event.preventDefault()
     event.stopImmediatePropagation()
     const picked = sourceElement(element)

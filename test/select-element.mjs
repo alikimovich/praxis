@@ -271,6 +271,33 @@ try {
   await clickPreview('hero-title', false)
   await win.waitForFunction(() => window.__praxisSelection.getState().selected?.id === 'hero-title')
 
+  // Project-owned tuning controls must work without replacing the active pick.
+  for (const marker of ['dialkit-root', 'data-praxis-controls']) {
+    await app.evaluate(async ({ webContents }, marker) => {
+      const wc = webContents.getAllWebContents().find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
+      await wc.executeJavaScript(`(() => {
+        const panel = document.createElement('div')
+        panel.id = 'test-tuning-panel'
+        if (${JSON.stringify(marker)} === 'dialkit-root') panel.className = 'dialkit-root'
+        else panel.setAttribute('data-praxis-controls', '')
+        panel.style.cssText = 'position:fixed;top:20px;right:20px;z-index:999999'
+        const button = document.createElement('button'); button.id = 'test-replay'; button.textContent = 'Replay'
+        button.onclick = () => { window.__tuningClicked = true }
+        panel.append(button); document.body.append(panel)
+      })()`)
+    }, marker)
+    await clickPreview('test-replay', false)
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    const clicked = await app.evaluate(async ({ webContents }) => {
+      const wc = webContents.getAllWebContents().find((w) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+/.test(w.getURL()))
+      return wc.executeJavaScript(`(() => { const clicked = window.__tuningClicked; delete window.__tuningClicked; document.getElementById('test-tuning-panel').remove(); return clicked })()`)
+    })
+    if (!clicked) throw new Error(`${marker} control click swallowed by selection`)
+    if (await win.evaluate(() => window.__praxisSelection.getState().selected?.id) !== 'hero-title') {
+      throw new Error(`${marker} control changed the active selection`)
+    }
+  }
+
   // Clicking Edit-text arms the inline contentEditable on the selected leaf —
   // the discoverable form of the double-click gesture. (Our own overlay button,
   // so a JS .click() drives the same onToolbarButton path a user click does.)

@@ -78,6 +78,11 @@ GitHub PR.
   the repo's **design tokens** (auto-detected from a manifest, Tailwind, or CSS
   vars), and edits text inline. Non-literal text cases run as detached background
   agents without entering the visible chat.
+- **Surface animation controls in the preview.** Ask “surface animation controls”
+  or use `/animation-controls`. The bundled skill adds a DialKit-style panel to
+  the previewed project, with values wired to the existing animation and Replay.
+  It stays available when nothing is selected or selection changes; live tuning
+  is separate from applying chosen values to source defaults.
 - **Inspect components in 3D (desktop).** Select an element and click the stacked
   layers icon to isolate its visual structure. Orbit, zoom, spread layers apart,
   and select a surface to edit it with the existing inspector. **Back to page**

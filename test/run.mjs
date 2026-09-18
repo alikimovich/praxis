@@ -178,6 +178,7 @@ const ELECTRON = [
 
 // live = the tests present in `verify` but not in `test`.
 const LIVE = [
+  'animation-controls-agent',
   'model-switch-e2e',
   'agent-e2e',
   'codex-e2e',

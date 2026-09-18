@@ -3,6 +3,13 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Selection-independent animation controls (2026-09-17)
+
+- [x] Bundle `/animation-controls` and route ordinary animation-control requests to it.
+- [x] Make the skill discoverable by Claude, Codex/custom endpoints, and Gemini.
+- [x] Add tuning panels inside the previewed app, independent of Praxis selection.
+- [x] Keep native inspector controls distinct and update the animation action prompt.
+
 ## Selection, message queues, and preview navigation (2026-09-17)
 
 - [x] Shift-click to add/remove selected objects and send the full group as chat context.

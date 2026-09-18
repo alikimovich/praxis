@@ -24,6 +24,8 @@ import { fluidClamp, fluidScale } from '../fluid'
 import { recordClaudeModels } from '../model-catalog'
 import { oklchScale } from '../oklch'
 import { capturePreview, getPreviewUrl } from '../preview-state'
+import { discoverPortableSkills } from '../bundled-skills'
+import { withSkillReferences } from './skill-menu'
 import { praxisRules } from '../rules'
 import { elevationScale, layeredShadow } from '../shadows'
 import { findPack, SKILL_PACKS } from '../skill-packs'
@@ -1192,12 +1194,20 @@ async function startSession(
   // renderer never touches the filesystem — rank ahead of the SDK's advertised
   // commands, shadowing same-named ones. Either side may resolve first, so both
   // land in this closure and re-emit the merged list.
+  const portableSkills = await discoverPortableSkills()
   let projectSkills: SlashCommandItem[] = []
   let sdkCommandNames: string[] = []
+  const availablePortableSkills = () => portableSkills.filter(
+    (skill) => !projectSkills.some((project) => project.name === skill.name)
+  )
   const emitCommands = (): void => {
-    const merged = mergeSlashCommands(projectSkills, sdkCommandNames)
+    const merged = mergeSlashCommands(
+      [...projectSkills, ...availablePortableSkills()],
+      sdkCommandNames.filter((name) => !portableSkills.some((skill) => name === `praxis:${skill.name}`))
+    )
     if (merged.length) emit({ type: 'commands', commands: merged })
   }
+  emitCommands()
   void discoverProjectSkills(root).then((skills) => {
     if (disposed || !skills.length) return
     projectSkills = skills
@@ -1328,7 +1338,7 @@ async function startSession(
     key,
     root,
     options,
-    send: (text, images) => input.push(text, images),
+    send: (text, images) => input.push(withSkillReferences(text, availablePortableSkills()), images),
     pending,
     pendingQuestions,
     emit,

@@ -14,9 +14,10 @@
  *
  * Bump PRAXIS_RULES_VERSION whenever the rule text changes (so logs/tests can pin it).
  */
+import { ANIMATION_CONTROLS_SKILL } from './bundled-skills'
 import { projectMemoryRules } from './project-memory'
 
-export const PRAXIS_RULES_VERSION = 15
+export const PRAXIS_RULES_VERSION = 16
 
 export function praxisRules(opts?: {
   previewTools?: boolean
@@ -43,6 +44,13 @@ export function praxisRules(opts?: {
     `together. Praxis re-detects the environment, installs dependencies in the live`,
     `checkout, and restarts the preview after these files successfully land. Never`,
     `start a competing dev server. Failed or parked work does not refresh the preview.`,
+    ``,
+    `## Animation tuning panels`,
+    `When asked to surface animation controls or add a DialKit-style panel, read`,
+    `the bundled animation-controls skill at ${JSON.stringify(ANIMATION_CONTROLS_SKILL)}.`,
+    `Build the controls inside the previewed project, independent of element selection.`,
+    `Keep their live values connected to the actual animation and the panel mounted`,
+    `when selection changes or clears. Selection-inspector requests keep their existing workflow.`,
     ``,
     `## Scope of an element edit`,
     `A selected element is the ENTRY POINT for a change, not its full scope. Before`,
@@ -118,12 +126,12 @@ export function praxisRules(opts?: {
   if (opts?.previewTools || opts?.controlTools) {
     lines.push(
       `## Surfacing control panels (define_controls / open_controls)`,
-      `When asked to show controls, call open_controls with the object's source stamp`,
+      `When asked to show selection-inspector controls, call open_controls with the object's source stamp`,
       `(file:line) or source file to select it and open the requested inspector tab.`,
       `define_controls also requests opening the Custom tab. Prefer number controls with`,
       `ranges/steps for animation parameters, toggles for booleans, and select/bezier`,
       `controls for easing. Surface only parameters actually used by the component.`,
-      `When the user asks for sliders / knobs / a control panel to tweak some parameter`,
+      `For selection-inspector sliders / knobs / a control panel to tweak a parameter`,
       `(a stagger delay, a spring config, a magic number), first INSTRUMENT the code so`,
       `each parameter is a tweakable target: extract magic values to named top-level`,
       `constants in the component's OWN file (keeps hot-reload fast), or expose them as`,

@@ -17,6 +17,7 @@ import { ipcRenderer } from 'electron'
 import { createThreeDInspector } from './three-d'
 import { createViewportReadout } from './viewport-readout'
 import type { SelectedElement } from '../shared/api'
+import { CONTROL_OVERLAY_SELECTOR } from '../shared/control-overlay'
 import { isScopeClass } from '../shared/display-classes'
 import { FRAME_DATA_URI, FRAME_INSET } from '../shared/iphone-frame'
 // Channels (preview ⇄ main). The strings live in shared/preview-channels.ts —
@@ -587,9 +588,12 @@ function hideOverlay(): void {
   if (overlayLabel) overlayLabel.style.display = 'none'
 }
 
-/** True for our own overlay nodes — never select or highlight the highlighter. */
+/** Keep our overlay and project-owned tuning panels outside element selection. */
 function isOverlay(el: Element | null): boolean {
-  return !!el && !!overlayHost && (el === overlayHost || overlayHost.contains(el))
+  return !!el && (
+    !!el.closest(CONTROL_OVERLAY_SELECTOR) ||
+    (!!overlayHost && (el === overlayHost || overlayHost.contains(el)))
+  )
 }
 
 // The blue chip that names the element — both the hover label and the selection

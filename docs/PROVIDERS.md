@@ -112,3 +112,11 @@ Composer queues are managed by Praxis for every provider. They submit separate
 turns in order, preserving the originating chat, file/image attachments, and
 selection context. They do not depend on provider-native steering support; image
 interpretation remains subject to the capability table above.
+
+The bundled `animation-controls` skill is available to Claude through the local
+plugin and an eager slash-menu alias; Codex/custom endpoints and experimental
+Gemini discover it as a portable fallback after project/user skills. Shared rules
+route natural-language animation-panel requests to its SKILL.md. It instruments
+the previewed app with DialKit (or an equivalent supported dev panel), without
+calling the selection-owned `define_controls`/`open_controls` path. It requires no
+provider-specific preview tools; the existing animation engine remains in place.

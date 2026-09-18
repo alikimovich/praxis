@@ -58,15 +58,15 @@ export function controlsPrompt(
 /**
  * The deliberately opt-in animation path. Unlike `controlsPrompt`, this turn
  * is allowed to change runtime behavior: it first creates the requested motion,
- * then exposes the meaningful parameters through the same custom-control seam.
+ * then opens a selection-independent tuning panel inside the previewed app.
  */
 export function animationControlsPrompt(
   element: SelectedElement,
   inspection: PropInspection | null,
   hint: string | undefined,
-  provider: string
+  _provider: string
 ): string {
-  const lines: string[] = [describeSelectionForPrompt(element).trim()]
+  const lines: string[] = ['/animation-controls', describeSelectionForPrompt(element).trim()]
   if (element.componentSource && element.componentSource !== element.source) {
     lines.push(`Its owning component instance is at ${oneLine(element.componentSource, 200)}.`)
   }
@@ -77,21 +77,12 @@ export function animationControlsPrompt(
     hint
       ? `Add this animation to the selected element: "${oneLine(hint, 500)}".`
       : `Add a subtle, appropriate animation to the selected element.`,
-    `Then give me a Dialkit-style live control panel for the animation's meaningful parameters.`,
-    ``,
-    `1. Read the element's source and the project's existing animation dependencies and idioms. Use the mechanism the project already uses (CSS/Tailwind, Motion, or another existing library); do not add a new animation dependency when the existing stack can express it.`,
-    `2. Implement the animation without changing unrelated layout or visual styling. Respect existing reduced-motion behavior, or add a prefers-reduced-motion fallback when the component does not have one.`,
-    `3. Extract the useful parameters (for example duration, delay, easing or spring values, distance, scale, stagger, and count) into stable tweakable targets in the component's own file.`
+    `Then follow the animation-controls skill to add a live tuning panel inside the previewed app.`,
+    `Use the selection only to identify the animation's source. The panel must remain mounted and`,
+    `usable when I select a different object or clear the selection, with controls wired to the`,
+    `real animation and Replay for one-shot motion. Preserve unrelated layout and reduced-motion behavior.`,
+    `Do not use define_controls or open_controls for this panel; those open the selection inspector.`,
+    `Never create or edit files under \`.praxis/\`.`
   )
-  if (provider !== 'gemini') {
-    lines.push(
-      `4. Call the \`define_controls\` tool ONCE with those parameters. For a 'literal' param, the anchor must occur exactly once in the file and end immediately before the value. Use \`style\` only for supported pure CSS longhands; use named module constants or typed props for keyframes, Motion configs, springs, and other structured animation values. Give number params sensible min/max/step/unit fields.`
-    )
-  } else {
-    lines.push(
-      `4. Expose the parameters as typed props with literal defaults so the Props panel can surface them when I re-inspect the element.`
-    )
-  }
-  lines.push(`Never create or edit files under \`.praxis/\`.`)
   return lines.join('\n')
 }
