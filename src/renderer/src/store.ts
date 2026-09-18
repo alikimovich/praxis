@@ -1,6 +1,7 @@
 import { useMessageQueue } from './message-queue'
 import { create } from 'zustand'
 import type {
+  CodeRevealRequest,
   Annotation,
   CommentMode,
   Diagnosis,
@@ -785,33 +786,37 @@ export const usePanelInset = create<PanelInsetState>((set) => ({
  * preview (right side) and reserves a bottom inset (usePanelInset).
  */
 interface CodeDrawerState {
+  reveal: CodeRevealRequest | null
+  dirty: boolean
   /** The `data-praxis-source` string of the file open in the drawer, or null. */
   source: string | null
   /** Navigation history (Cmd+click jumps push here); index points at `source`. */
   stack: string[]
   index: number
-  open: (source: string) => void
+  open: (source: string, reveal?: CodeRevealRequest) => void
   back: () => void
   forward: () => void
   close: () => void
 }
 export const useCodeDrawer = create<CodeDrawerState>((set) => ({
+  reveal: null,
+  dirty: false,
   source: null,
   stack: [],
   index: -1,
-  open: (source) =>
+  open: (source, reveal) =>
     set((s) => {
-      if (s.source === source) return {}
+      if (s.source === source && s.reveal === (reveal ?? null)) return {}
       // A new open truncates any forward history (browser semantics).
       const stack = [...s.stack.slice(0, s.index + 1), source]
-      return { source, stack, index: stack.length - 1 }
+      return { source, stack, index: stack.length - 1, reveal: reveal ?? null }
     }),
-  back: () => set((s) => (s.index > 0 ? { index: s.index - 1, source: s.stack[s.index - 1] } : {})),
+  back: () => set((s) => (s.index > 0 ? { index: s.index - 1, source: s.stack[s.index - 1], reveal: null } : {})),
   forward: () =>
     set((s) =>
-      s.index < s.stack.length - 1 ? { index: s.index + 1, source: s.stack[s.index + 1] } : {}
+      s.index < s.stack.length - 1 ? { index: s.index + 1, source: s.stack[s.index + 1], reveal: null } : {}
     ),
-  close: () => set({ source: null, stack: [], index: -1 })
+  close: () => set({ source: null, stack: [], index: -1, reveal: null, dirty: false })
 }))
 
 /**

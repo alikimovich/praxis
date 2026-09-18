@@ -1,3 +1,4 @@
+import { openAgentCode } from '../code-tools'
 import { execFile } from 'node:child_process'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -246,6 +247,10 @@ async function startSession(
           (args as { manifest?: unknown })?.manifest,
           notify
         )
+      if (action === 'open_code')
+        return ctx?.sessionId
+          ? { error: 'Background edits cannot navigate the user editor.' }
+          : openAgentCode(root, ctx?.liveRoot ?? root, emitKey, args, notify)
       if (action === 'open_controls') return openAgentControls(ctx?.liveRoot ?? root, args, notify)
       if (ctx?.sessionId)
         return {
@@ -278,7 +283,10 @@ async function startSession(
       mcp_servers: {
         praxis: {
           command: process.execPath,
-          args: [join(app.getAppPath(), 'bin', 'praxis-agent-mcp.mjs')],
+          // Electron's app path is out/main when launched from the compiled entry.
+          args: [join(__dirname, '../../bin/praxis-agent-mcp.mjs')],
+          // Source reveal is validated read-only navigation, like Claude's allowlist.
+          tools: { open_code: { approval_mode: 'approve' } },
           env: {
             ELECTRON_RUN_AS_NODE: '1',
             PRAXIS_AGENT_TOOL_SOCKET: praxisTools.socketPath,

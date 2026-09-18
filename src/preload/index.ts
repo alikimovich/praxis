@@ -255,6 +255,7 @@ const api: PraxisApi = {
     onUpdated: on<{ root: string }, string>('controls:updated', (payload) => payload.root)
   },
   source: {
+    onReveal: on('source:reveal'),
     read: (root: string, source: string): Promise<SourceView | null> =>
       ipcRenderer.invoke('source:read', root, source),
     resolveComponent: (root: string, fromFile: string, name: string): Promise<string | null> =>

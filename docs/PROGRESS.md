@@ -2,6 +2,39 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-17 — Show exact code from chat
+
+Added `open_code` to Claude's in-process tools and the Codex/custom-endpoint MCP
+bridge. Shared rules route requests to see code into the existing mini editor:
+read the source, specify the repo-relative file and inclusive line range, open it,
+and highlight only those lines. Preview selection is not required or changed.
+
+Main captures the exact source text from the agent checkout and validates file,
+range, size, and symlink boundaries. The renderer scopes requests to the active
+project/chat, verifies the captured text against the live checkout, relocates a
+unique match when lines shift, and retries after landing. Unsaved drafts defer
+navigation until saved/discarded. Detached agents cannot navigate the editor.
+The same event contract is exposed in browser mode.
+
+A real Codex probe also found that its MCP entrypoint was resolved against
+Electron's `app.getAppPath()` (`out/main` in source launches), producing a missing
+`out/main/bin` path. It now resolves the bundled bridge from the compiled main
+module, as the existing plugin/skills paths do. Its headless SDK session explicitly
+allows only the validated `open_code` navigation tool through the documented
+per-tool approval setting; unrelated tool policies are unchanged.
+
+Validation: typecheck/build, exact-range/path unit tests, actual stdio MCP tool
+registration/invocation, and editor UI tests passed. The UI test verifies precise
+highlighting without selection, ignores another chat's request, and preserves an
+unsaved draft before revealing queued code after Undo. A simulated landing also
+verified deferred reveal and relocation. A real Codex turn opened `invoice.js`
+and highlighted exactly the requested function; screenshot inspected. Claude's
+live probe was skipped because its account had reached the session usage limit.
+Full `verify`: 148/154 passed, including all 144 unit/UI checks and the new live
+Codex reveal test. Six other live-provider probes failed during the exhausted
+Claude session; simulator skipped without Xcode. These are recorded as failures,
+not a green full verification run.
+
 ## 2026-09-17 — Animation controls independent of selection
 
 Added the bundled `/animation-controls` skill and natural-language routing for

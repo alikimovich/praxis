@@ -259,6 +259,7 @@ export function installWebApi(config: WebConfig): void {
       ) as unknown as PraxisApi['controls']['onUpdated']
     },
     source: {
+      onReveal: on('source:reveal'),
       read: (root, source) => invoke('source:read', root, source),
       resolveComponent: (root, fromFile, name) =>
         invoke('source:resolve-component', root, fromFile, name),

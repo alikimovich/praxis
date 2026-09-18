@@ -12,6 +12,7 @@ capabilities instead of assuming Claude, Codex, gateways, and Gemini are interch
 | Provider-native coding tools | Yes | Yes | Depends on model through Codex | Limited |
 | Praxis preview MCP tools | Yes | No | No | No |
 | Register custom controls / open desktop inspector | Yes | Yes | Yes, through Codex | No |
+| Open mini code editor / highlight exact source | Yes | Yes | Yes, through Codex | No |
 | Praxis worktree control tools | No | Yes | Yes, through Codex | No |
 | Praxis question cards | Yes | No | No | No |
 | Praxis approve/deny cards | Yes | No SDK approval event | No SDK approval event | No |
@@ -120,3 +121,17 @@ route natural-language animation-panel requests to its SKILL.md. It instruments
 the previewed app with DialKit (or an equivalent supported dev panel), without
 calling the selection-owned `define_controls`/`open_controls` path. It requires no
 provider-specific preview tools; the existing animation engine remains in place.
+
+`open_code` opens the docked editor at a repo-relative file and an inclusive line
+range. Main validates the file boundary (including symlinks) and captures the exact
+source text from the agent checkout. The active project/chat reveals it only when
+that text exists in the live checkout, retrying after landing. Dirty editor drafts
+defer navigation until saved or discarded. Detached agents cannot navigate the
+editor. The transport also works in browser mode.
+
+The Codex MCP executable path is relative to the compiled main bundle, not
+Electron's app path: direct source launches report `out/main` as the app path.
+
+The SDK session explicitly allows the validated `open_code` navigation tool via
+its per-tool approval configuration, matching Claude's in-process allowlist. Other
+MCP tools and shell approval policy keep their existing configuration.

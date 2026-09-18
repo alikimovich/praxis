@@ -17,7 +17,7 @@
 import { ANIMATION_CONTROLS_SKILL } from './bundled-skills'
 import { projectMemoryRules } from './project-memory'
 
-export const PRAXIS_RULES_VERSION = 16
+export const PRAXIS_RULES_VERSION = 17
 
 export function praxisRules(opts?: {
   previewTools?: boolean
@@ -120,6 +120,19 @@ export function praxisRules(opts?: {
       `  visual change you just made, or when the user references what they're looking at.`,
       `Division of labor: these tools OBSERVE the user's own view; \`agent-browser\` (below)`,
       `is your OWN headless copy for interacting/inspecting.`,
+      ``
+    )
+  }
+  if (opts?.previewTools || opts?.controlTools) {
+    lines.push(
+      `## Showing exact code`,
+      `When the user asks to see the exact code, implementation, or a file in Praxis,`,
+      `read the relevant source and call open_code with its repo-relative file and`,
+      `inclusive 1-based startLine/endLine. This opens the mini code editor and`,
+      `highlights that exact range without requiring a preview selection.`,
+      `Choose the smallest useful implementation range; do not guess line numbers`,
+      `or substitute a pasted code block for opening the editor. The request waits`,
+      `for newly edited code to land and preserves unsaved user edits.`,
       ``
     )
   }

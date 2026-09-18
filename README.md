@@ -78,6 +78,9 @@ GitHub PR.
   the repo's **design tokens** (auto-detected from a manifest, Tailwind, or CSS
   vars), and edits text inline. Non-literal text cases run as detached background
   agents without entering the visible chat.
+- **Ask to see the exact code.** Praxis can open its mini code editor in the
+  relevant file and highlight the implementation, without selecting an object.
+  Unsaved editor changes are preserved; available with Claude and Codex.
 - **Surface animation controls in the preview.** Ask “surface animation controls”
   or use `/animation-controls`. The bundled skill adds a DialKit-style panel to
   the previewed project, with values wired to the existing animation and Replay.

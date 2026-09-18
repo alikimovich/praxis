@@ -253,6 +253,50 @@ try {
     throw new Error(`drawer nav history wrong: ${JSON.stringify(nav)}`)
   }
 
+  // Chat opens the exact code range without selecting an object.
+  await win.evaluate(() => window.__praxisSelection.getState().setSelected(null))
+  const key = await win.evaluate(() => window.__praxisStore.getState().activeKey)
+  const reveal = async (startLine, endLine, overrides = {}) => {
+    const request = { root: fixture, key, source: `src/Badge.tsx:${startLine}`, startLine, endLine,
+      code: baseline.split('\n').slice(startLine - 1, endLine).join('\n'), requestId: String(Date.now()), ...overrides }
+    await app.evaluate(({ BrowserWindow }, request) => {
+      BrowserWindow.getAllWindows()[0].webContents.send('source:reveal', request)
+    }, request)
+  }
+  await reveal(1, 3, { key: 'another-chat' })
+  await new Promise(resolve => setTimeout(resolve, 100))
+  if (await win.$('.codedrawer')) throw new Error('another chat hijacked the editor')
+  await reveal(1, 3)
+  await win.waitForFunction(() => document.querySelectorAll('.codedrawer .cm-stamp-line').length === 3)
+  const highlighted = await win.locator('.codedrawer .cm-stamp-line').allTextContents()
+  if (highlighted.join('\n') !== baseline.split('\n').slice(0, 3).join('\n')) throw new Error('wrong source lines highlighted')
+  if (await win.evaluate(() => window.__praxisSelection.getState().selected)) throw new Error('code reveal changed selection')
+  await win.screenshot({ path: join(artifacts, 'code-reveal-exact.png') })
+  await win.locator('.codedrawer .cm-content').click()
+  await win.keyboard.press('End')
+  await win.keyboard.type('unsaved draft')
+  await win.waitForFunction(() => window.__praxisCodeDrawer.getState().dirty)
+  await reveal(5, 6)
+  await new Promise(resolve => setTimeout(resolve, 100))
+  if (!(await win.locator('.codedrawer .cm-content').textContent()).includes('unsaved draft')) throw new Error('agent discarded unsaved code')
+  await win.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z')
+  await win.waitForFunction(() => window.__praxisCodeDrawer.getState().reveal?.startLine === 5)
+  await win.waitForFunction(() => document.querySelectorAll('.codedrawer .cm-stamp-line').length === 2)
+  await win.$eval('.codedrawer__close', el => el.click())
+
+  // A private-worktree reveal waits until that exact text lands in the live file.
+  const landedCode = 'export const justLanded = 42'
+  await reveal(1, 1, { code: landedCode })
+  await new Promise(resolve => setTimeout(resolve, 150))
+  if (await win.$('.codedrawer')) throw new Error('unlanded code opened unrelated source')
+  const landed = await win.evaluate(a => window.api.source.write(a.fixture, a.src, a.baseline, a.baseline + '\n' + a.code + '\n'),
+    { fixture, src: SRC, baseline, code: landedCode })
+  if (!landed.ok) throw new Error('could not simulate source landing')
+  await win.waitForFunction(code => document.querySelector('.codedrawer .cm-stamp-line')?.textContent === code, landedCode)
+  await win.$eval('.codedrawer__close', el => el.click())
+  await win.evaluate(fixture => window.api.edits.undo(fixture), fixture)
+  if (disk() !== baseline) throw new Error('landing test did not restore the file')
+
   console.log('CODE-DRAWER OK — conflict guard + save + undo, drawer mount/inset/close')
 } catch (err) {
   console.error('CODE-DRAWER FAILED:', err?.message ?? err)

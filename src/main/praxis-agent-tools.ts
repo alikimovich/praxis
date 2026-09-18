@@ -8,6 +8,7 @@ export type PraxisAgentToolAction =
   | 'prepare_conflict_resolution'
   | 'define_controls'
   | 'open_controls'
+  | 'open_code'
 
 export interface PraxisAgentToolRegistration {
   socketPath: string
@@ -69,7 +70,8 @@ async function startServer(): Promise<string> {
           parsed.action !== 'workspace_state' &&
           parsed.action !== 'prepare_conflict_resolution' &&
           parsed.action !== 'define_controls' &&
-          parsed.action !== 'open_controls'
+          parsed.action !== 'open_controls' &&
+          parsed.action !== 'open_code'
         ) {
           json(res, 400, { ok: false, error: 'unknown-action' })
           return

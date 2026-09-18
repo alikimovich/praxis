@@ -17,7 +17,7 @@ const assert = (cond, msg) => {
 const r = praxisRules()
 assert(typeof r === 'string' && r.length > 0, 'rules render to a non-empty string')
 assert(typeof PRAXIS_RULES_VERSION === 'number', 'version is a number')
-assert(PRAXIS_RULES_VERSION === 16, 'version bumped to 16')
+assert(PRAXIS_RULES_VERSION === 17, 'version bumped to 17')
 assert(r.includes(`v${PRAXIS_RULES_VERSION}`), 'rules carry the version marker')
 assert(r.includes('before scaffolding or'), 'new projects ask about unresolved setup choices')
 assert(r.includes('after these files successfully land'), 'environment refresh follows landing')

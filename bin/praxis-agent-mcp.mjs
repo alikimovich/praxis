@@ -101,4 +101,14 @@ server.registerTool(
   async (args) => result(await invoke('open_controls', args))
 )
 
+server.registerTool(
+  'open_code',
+  {
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    description: 'Open the mini code editor in the exact project file and highlight inclusive source lines. Read the file first; use when asked to show code or an implementation.',
+    inputSchema: { file: z.string(), startLine: z.number().int().min(1), endLine: z.number().int().min(1).optional() }
+  },
+  async (args) => result(await invoke('open_code', args))
+)
+
 await server.connect(new StdioServerTransport())

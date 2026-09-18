@@ -699,6 +699,18 @@ export interface SourceMedia {
   url: string
 }
 
+/** Request to reveal exact source in the active chat’s mini editor. */
+export interface CodeRevealRequest {
+  root: string
+  key: string
+  source: string
+  startLine: number
+  endLine: number
+  /** Exact source lines, so landing or intervening edits cannot highlight unrelated code. */
+  code: string
+  requestId: string
+}
+
 /**
  * A stamped element's source file, read for the inspector's inline code peek —
  * the whole file (so surrounding context is visible) plus the stamp line and,
@@ -1449,6 +1461,7 @@ export interface PraxisApi {
     onUpdated: (cb: (root: string) => void) => () => void
   }
   source: {
+    onReveal: (cb: (request: CodeRevealRequest) => void) => () => void
     /** Resolve a component tag name to its defining file via imports (Cmd+click). */
     resolveComponent: (root: string, fromFile: string, name: string) => Promise<string | null>
     /** Read the stamped element's source file for the inspector's code peek. */

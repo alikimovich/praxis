@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Show exact code from chat (2026-09-17)
+
+- [x] Add `open_code` for Claude and Codex/custom endpoints.
+- [x] Open the mini editor with exact highlighted source, independent of selection.
+- [x] Scope requests to the active chat/project, wait for landing, and preserve drafts.
+
 ## Selection-independent animation controls (2026-09-17)
 
 - [x] Bundle `/animation-controls` and route ordinary animation-control requests to it.

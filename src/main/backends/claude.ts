@@ -1,3 +1,4 @@
+import { openAgentCode } from '../code-tools'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -85,6 +86,7 @@ const PRAXIS_TOOL_NAMES = new Set([
   ...PREVIEW_TOOL_NAMES,
   'mcp__praxis__define_controls',
   'mcp__praxis__open_controls',
+  'mcp__praxis__open_code',
   // Pure, deterministic spring→CSS calculator. No state, no side effects, so
   // it's auto-allowed like the observers — it never touches disk or the repo.
   'mcp__praxis__spring_to_css',
@@ -592,6 +594,18 @@ async function startSession(
           return {
             content: [{ type: 'image', data: jpeg.toString('base64'), mimeType: 'image/jpeg' }]
           }
+        }
+      ),
+      tool(
+        'open_code',
+        'Open the mini code editor at an exact project file and highlight inclusive source lines. Read the file first; use when asked to show the exact code or implementation.',
+        { file: z.string(), startLine: z.number().int().min(1), endLine: z.number().int().min(1).optional() },
+        async (args) => {
+          const result = ctx?.sessionId
+            ? { error: 'Background edits cannot navigate the user editor.' }
+            : await openAgentCode(root, ctx?.liveRoot ?? root, emitKey, args,
+                (channel, payload) => sendToRenderer(getWindow, channel, payload))
+          return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
         }
       ),
       tool(

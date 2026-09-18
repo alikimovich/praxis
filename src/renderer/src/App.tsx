@@ -1,3 +1,4 @@
+import { useCodeOpening } from './use-code-opening'
 import { useEffect, useRef, useState } from 'react'
 import NewProjectDialog from './components/NewProjectDialog'
 import GitUpdatesDialog from './components/GitUpdatesDialog'
@@ -144,6 +145,7 @@ export default function App(): React.JSX.Element {
   const projectRoot = useSession((s) => s.projectRoot)
   usePreviewReorder(setStatus)
   useControlOpening()
+  useCodeOpening()
   const drawerSource = useCodeDrawer((s) => s.source)
 
   // Custom Controls (v10): the selection's AI-surfaced panels, fetched here

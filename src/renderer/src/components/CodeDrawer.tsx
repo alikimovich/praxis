@@ -1,3 +1,4 @@
+import { locateCodeReveal } from '../../../shared/code-reveal'
 import { css } from '@codemirror/lang-css'
 import { html } from '@codemirror/lang-html'
 import { javascript } from '@codemirror/lang-javascript'
@@ -163,6 +164,8 @@ export default function CodeDrawer({
   // reserves no preview inset, and drops the drawer-only resize handle. The native
   // title bar handles resizing and dragging.
   const isWindow = variant === 'window'
+  const reveal = useCodeDrawer((s) => s.reveal)
+
   const rootRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -175,7 +178,14 @@ export default function CodeDrawer({
   // Set when the opened file isn't text (image/video/audio, or another binary):
   // the media preview replaces CodeMirror entirely for as long as it's showing.
   const [preview, setPreview] = useState<SourceView | null>(null)
-  const [dirty, setDirty] = useState(false)
+  const [dirty, setDirtyState] = useState(false)
+  const setDirty = (next: boolean): void => {
+    if (!isWindow) useCodeDrawer.setState({ dirty: next })
+    setDirtyState(next)
+  }
+  useEffect(() => () => {
+    if (!isWindow) useCodeDrawer.setState({ dirty: false })
+  }, [isWindow])
   const [status, setStatus] = useState<'idle' | 'saving' | 'conflict' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
@@ -313,8 +323,15 @@ export default function CodeDrawer({
       baselineRef.current = view.code
       setMeta({ file: view.file, line: view.line })
 
-      const start = view.elementStart ?? view.line
-      const end = Math.max(view.elementEnd ?? start, start)
+      const exact = !isWindow && reveal ? locateCodeReveal(view.code, reveal) : null
+      if (!isWindow && reveal && !exact) {
+        setStatus('error')
+        setErrorMsg('The requested code changed. Ask Praxis to locate it again.')
+        return
+      }
+      const start = exact?.startLine ?? view.elementStart ?? view.line
+      const end = exact?.endLine ?? Math.max(view.elementEnd ?? start, start)
+      setMeta({ file: view.file, line: start })
       const stampField = StateField.define<DecorationSet>({
         create: (state) => stampDeco(state.doc, start, end),
         update: (deco, tr) => (tr.docChanged ? deco.map(tr.changes) : deco),
@@ -454,7 +471,7 @@ export default function CodeDrawer({
       viewRef.current?.destroy()
       viewRef.current = null
     }
-  }, [root, source])
+  }, [root, source, reveal, isWindow])
 
   // Reload from disk after a conflict (or to discard local edits), re-baselining.
   const reload = async (): Promise<void> => {
