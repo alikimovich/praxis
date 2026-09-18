@@ -31,12 +31,27 @@ try {
   }, project)
   await win.locator('.empty__open').click()
   await win.waitForFunction((path) => window.__praxisSession.getState().projectRoot === path, project)
+  const previewVisible = () => app.evaluate(({ BrowserWindow }) => {
+    const preview = BrowserWindow.getAllWindows()[0].contentView.children.find(
+      (view) => view.webContents && !view.webContents.getURL().includes('praxisPanel')
+    )
+    return preview?.getVisible() ?? null
+  })
+  const expectPreviewVisible = async (expected) => {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      if (await previewVisible() === expected) return
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    assert.equal(await previewVisible(), expected, `native preview visibility should be ${expected}`)
+  }
+  await expectPreviewVisible(true)
   commit('Pulled from GitHub'); git(seed, 'push')
   git(seed, 'checkout', '-b', 'feature/design'); commit('Remote design branch'); git(seed, 'push', '-u', 'origin', 'feature/design')
   await win.locator('button.branch').click()
   await win.getByRole('menuitem', { name: 'Git updates…' }).click()
   const dialog = win.getByRole('dialog', { name: 'Git updates' })
   await dialog.waitFor()
+  await expectPreviewVisible(false)
   await dialog.getByRole('button', { name: 'Fetch updates', exact: true }).click()
   await win.getByRole('status').filter({ hasText: 'Remote branches are up to date' }).waitFor()
   assert.equal(await dialog.getByRole('option', { name: 'origin/feature/design', exact: true }).count(), 1)
@@ -48,11 +63,13 @@ try {
     assert(bounds.x >= 0 && bounds.x + bounds.width <= width + 1, 'Git dialog fits viewport')
     await win.screenshot({ path: join(artifacts, `git-updates-${width}.png`) })
   }
+  await expectPreviewVisible(false)
   await win.screenshot({ path: join(artifacts, 'git-updates.png') })
   await dialog.getByRole('button', { name: 'Pull updates', exact: true }).click()
   await win.getByRole('status').filter({ hasText: 'Pulled origin/main into praxis/main.' }).waitFor()
   await win.waitForFunction(() => window.__praxisLog.getState().lines.some((line) => line.text.includes('Preview restarted at')))
   assert.equal(readFileSync(join(project, 'index.html'), 'utf8'), '<meta name="color-scheme" content="light dark"><h1>Pulled from GitHub</h1>')
+  await expectPreviewVisible(false)
   await dialog.getByRole('combobox', { name: 'Remote branch' }).selectOption('refs/remotes/origin/feature/design')
   await dialog.getByRole('button', { name: 'Switch to branch', exact: true }).click()
   await win.getByRole('status').filter({ hasText: 'Switched to feature/design, tracking origin/feature/design.' }).waitFor()
@@ -61,6 +78,7 @@ try {
   await win.waitForFunction(() => document.querySelector('[role=dialog]')?.getAttribute('aria-busy') === 'false')
   await dialog.getByRole('button', { name: 'Close', exact: true }).click()
   await dialog.waitFor({ state: 'detached' })
+  await expectPreviewVisible(true)
   await win.waitForFunction(() => window.__praxisSession.getState().branch === 'feature/design')
   await win.waitForFunction(() => window.__praxisLog.getState().lines.filter((line) => line.text.includes('Preview restarted at')).length >= 2)
   const url = await win.evaluate(() => window.__praxisWorkspace.getState().projects[0].url)

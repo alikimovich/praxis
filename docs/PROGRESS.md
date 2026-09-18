@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-17 — Git updates dialog above the native preview
+
+Transfer the branch menu's existing preview freeze directly to Git updates.
+Preventing Radix's automatic selection close avoids releasing the shared freeze
+after the dialog has opened, which let the native WebContentsView cover it.
+Closing the dialog still restores the live preview.
+
+The Git updates UI regression now waits for a live native preview and checks
+actual main-process visibility while the dialog is open, after viewport changes
+and a pull/restart, and after closing. It failed on the original code and passes
+with the handoff fix. Typecheck/build passed; inspected desktop and narrow-window
+screenshots. Full unit/UI suite: 140/144 passed; startup-intro, agent-multi,
+spawn-comment, and prop-edit-svelte failed outside the Git updates test. The suite
+ran while concurrent animation-controls edits were present in the shared workspace.
+
 ## 2026-09-17 — Show exact code from chat
 
 Added `open_code` to Claude's in-process tools and the Codex/custom-endpoint MCP

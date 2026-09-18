@@ -2000,7 +2000,14 @@ export default function App(): React.JSX.Element {
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
-                        <DropdownMenuItem onSelect={() => setGitUpdatesRoot(projectRoot)}>
+                        <DropdownMenuItem onSelect={(event) => {
+                          // Transfer the existing freeze to the dialog. Radix's
+                          // automatic close would otherwise release it after
+                          // the dialog has opened and expose the native view.
+                          event.preventDefault()
+                          setBranchMenuOpen(false)
+                          setGitUpdatesRoot(projectRoot)
+                        }}>
                           Git updates…
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />

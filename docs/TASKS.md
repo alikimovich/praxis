@@ -41,6 +41,9 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Git updates and remote branches (2026-09-16)
 
+- [x] Preserve the preview freeze when handing off from the branch menu to Git
+      updates, and verify native visibility through updates and dismissal.
+
 - [x] Add Git updates to the branch menu: fetch remotes, pull a selected remote
       branch into the current branch, and check out remote branches locally.
 - [x] Preserve local branches and commits; reject dirty trees, active agents,
