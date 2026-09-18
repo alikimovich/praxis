@@ -433,6 +433,13 @@ screenshots. Updated the shape-count assertion and waited for the asynchronous
 reduced-motion update before asserting dismissal, fixing the recorded test race.
 Full suite: 130/132 passed. The recorded chat-render timeout remains, and the
 code-drawer drag assertion (300 → 300) also fails in an isolated rerun.
+## 2026-09-16 — Sentence-case rail headings
+
+Dropped the all-caps treatment (and its caps-only letter-spacing) from the
+sidebar's "Projects" heading and the per-project "History" toggle. The history
+label's 9px size only worked in caps — lowercase at that size loses too much
+x-height — so it moves to 10px, an existing value in the de facto type scale.
+`bun run typecheck` passes; rail and history-ui Electron screenshots inspected.
 
 ## 2026-09-11 — Quiet project action icons
 
