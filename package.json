@@ -85,6 +85,7 @@
     "test:controls-agent": "electron-vite build && node test/controls-agent.mjs",
     "test:codex": "electron-vite build && node test/codex-e2e.mjs",
     "test:tokens-scaffold": "electron-vite build && node test/tokens-scaffold.mjs",
+    "pilot:jev": "bun scripts/jev-pilot.mjs",
     "test": "node test/run.mjs unit electron",
     "verify": "node test/run.mjs all",
     "test:props-self": "electron-vite build && node test/prop-svelte-self.mjs",

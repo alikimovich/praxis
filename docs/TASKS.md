@@ -16,7 +16,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Add bounded unit concurrency and an audited Electron allowlist with exclusive barriers.
 - [x] Add per-test logs, JSON reports, timeouts, cleanup, filters, and a checkout lock.
 - [x] Separate skipped coverage from passing tests and benchmark serial versus concurrent units.
-- [ ] Evaluate Jev on labeled failure logs before considering advisory agent-behavior scoring.
+- [x] Build an opt-in Jev failure-triage pilot with curated splits, a baseline, cost limits, redaction, and offline tests.
+- [ ] Run the live Jev pilot after configuring an ignored local TypeSafe credential; independently review labels before broader evaluation.
 
 ## Code access in exploded view (2026-09-18)
 

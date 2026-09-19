@@ -76,13 +76,9 @@ time, and retain both reports. A fast run with missing coverage is not a speedup
 
 ## Optional Jev evaluation pilot
 
-First collect representative failure logs and manually label product regressions,
-timing failures, provider limits, and environment failures, with an unknown class.
-Evaluate Jev on a held-out set; measure confusion by class, confidence calibration,
-latency, and cost. Supply redacted logs and recorded agent actions as evidence.
-Do not send repository content or logs automatically as part of ordinary tests.
-
-Initially keep its labels advisory. Deterministic assertions, exit codes, file
-contents, navigation, and tool-call records remain the test oracle. A second pilot
-can assess whether agent claims are supported by recorded actions. No Jev SDK,
-credentials, network calls, or CI decisions are added by the concurrent runner.
+The opt-in [Jev pilot](JEV_PILOT.md) has curated development/holdout cases,
+a keyword baseline, redacted requests, offline safety/metrics tests, and reports.
+Use `bun run pilot:jev --dry-run` to inspect requests without network access.
+A live run requires `TYPESAFE_API_KEY` in the ignored `.env.local` or environment.
+Normal test runs never call Jev. Its predictions remain advisory and cannot
+change deterministic test outcomes.

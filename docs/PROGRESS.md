@@ -2,6 +2,31 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-18 — Advisory Jev pilot harness
+
+Added an opt-in, dependency-free TypeSafe HTTP pilot, pinned to jev-1.13.0, with
+10 development and 20 holdout cases across five failure categories. Labels are
+agent-authored: 28 cases are synthetic and two are sanitized observed errors.
+The held-out set contains only one observed error, so it is a feasibility check,
+not a production accuracy estimate. Requests exclude labels, rationales, ids,
+and provenance; predictions cannot change test outcomes.
+
+Reports retain dataset/rubric hashes, a fixed keyword baseline, per-class
+confusion, accuracy/Brier/calibration metrics, probability-threshold coverage,
+latency, token usage, and dated price estimates. Calls are sequential, bounded,
+redirect-rejecting, and stop on the first error without automatic retries.
+Keys are loaded from the environment or ignored, owner-only .env.local; headers,
+raw provider responses/errors, and known credential values are excluded from
+reports. No real credential is present in the implementation or committed files.
+
+Validation: offline protocol/redaction/metrics checks and both split dry runs
+passed. The live command correctly reported a missing credential; no Jev call
+or measured accuracy is claimed. A 0600 ignored local credential slot is ready.
+Typecheck passed; full regression finished 148/149 in 240.5s. The sole failure
+is the already recorded agent-multi running-chat error. The UI status screenshot
+was inspected. See docs/JEV_PILOT.md for execution and the limits of the dataset
+and cost estimates.
+
 ## 2026-09-18 — Reconcile candidate before pushing
 
 Merged origin/candidate without rewriting either history. Kept both task-log
