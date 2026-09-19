@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Preview address alignment (2026-09-18)
+
+- [x] Center Home and URL text with consistent spacing in the preview toolbar.
+
 ## Test execution and evaluation (2026-09-18)
 
 - [x] Add bounded unit concurrency and an audited Electron allowlist with exclusive barriers.

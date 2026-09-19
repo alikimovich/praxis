@@ -2256,12 +2256,6 @@ body.is-resizing {
 /* Editable preview URL: full URL shown, everything after the origin editable
    in place (Enter navigates, Escape reverts). Deliberately unhighlighted —
    same muted look as the static URL text. */
-.previewbar__url--editable {
-    display: inline-flex;
-    align-items: baseline;
-    min-width: 0;
-    flex: 1 1 auto;
-}
 .previewbar__origin {
     white-space: nowrap;
     flex: 0 0 auto;

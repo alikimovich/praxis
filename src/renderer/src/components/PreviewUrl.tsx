@@ -59,10 +59,10 @@ export default function PreviewUrl({
   }
 
   return (
-    <span className="previewbar__url previewbar__url--editable">
+    <span className="previewbar__url inline-flex min-w-0 flex-auto items-center">
       <button
         type="button"
-        className="iconbtn iconbtn--sm"
+        className="iconbtn iconbtn--sm mr-2 shrink-0"
         aria-label="Back to project"
         title="Back to project"
         onClick={() => {

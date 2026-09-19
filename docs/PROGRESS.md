@@ -2,6 +2,15 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-18 — Preview address alignment
+
+Centered the Home control and URL vertically instead of baseline-aligning the
+button with text. Added an 8px gap after Home while keeping origin/path adjacent,
+and prevented the Home button from shrinking. Moved the touched layout rule to
+Tailwind utilities. Typecheck, preview navigation, and screenshot verification
+passed. Full suite: 146 passed; agent-multi retained its known running-chat failure,
+and the live spawn-comment check failed to observe comment-branch cleanup.
+
 ## 2026-09-18 — Queued messages above the composer
 
 Queued follow-ups now sit in an inset, rounded card tucked behind the composer,
