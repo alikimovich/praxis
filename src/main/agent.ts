@@ -1,3 +1,5 @@
+import { setProjectUiEnabled, projectUiInstructions } from './project-ui'
+import type { AgentTurnOptions } from '../shared/api'
 import { conflictResolutionPrompt, ReconciliationCoordinator } from './conflict-resolution'
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -648,6 +650,7 @@ export function registerAgentIpc(
         closeSession(existing, sessionKey === currentKey ? 'current' : 'history')
         sessions.delete(sessionKey)
         memoryRevisionBySession.delete(sessionKey)
+        setProjectUiEnabled(sessionKey, false)
         runningKeys.delete(sessionKey)
         preparingTurns.delete(sessionKey)
         reconciliation.begin(sessionKey)
@@ -748,6 +751,7 @@ export function registerAgentIpc(
         closeSession(s, sk === currentSessionKey ? 'current' : 'history')
         sessions.delete(sk)
         memoryRevisionBySession.delete(sk)
+        setProjectUiEnabled(sk, false)
         runningKeys.delete(sk)
         preparingTurns.delete(sk)
         reconciliation.begin(sk)
@@ -874,6 +878,7 @@ export function registerAgentIpc(
       )
       closeSession(existing, how.persist)
       memoryRevisionBySession.delete(sessionKey)
+      setProjectUiEnabled(sessionKey, false)
       runningKeys.delete(sessionKey)
       preparingTurns.delete(sessionKey)
       reconciliation.begin(sessionKey)
@@ -996,6 +1001,7 @@ export function registerAgentIpc(
         closeSession(s, 'history')
         sessions.delete(sessionKey)
         memoryRevisionBySession.delete(sessionKey)
+        setProjectUiEnabled(sessionKey, false)
         runningKeys.delete(sessionKey)
         preparingTurns.delete(sessionKey)
         reconciliation.begin(sessionKey)
@@ -1093,7 +1099,7 @@ export function registerAgentIpc(
     }
   )
 
-  ipcMain.handle('agent:send', async (_e, text: string, images?: ImageAttachment[], requestedKey?: string) => {
+  ipcMain.handle('agent:send', async (_e, text: string, images?: ImageAttachment[], requestedKey?: string, turn?: AgentTurnOptions) => {
     const key = requestedKey ?? activeKey
     const session = key ? sessions.get(key) : null
     if (requestedKey && !session) throw new Error('This chat is closed.')
@@ -1135,7 +1141,12 @@ export function registerAgentIpc(
       const prompt =
         memory.updatedAt !== knownRevision ? projectMemoryUpdate(memory.content, text) : text
       if (key) memoryRevisionBySession.set(key, memory.updatedAt)
-      session.send(prompt, images)
+      const supportsUi = !session.options.provider || ['claude', 'codex'].includes(session.options.provider)
+      const useUi = turn?.projectUi === true && supportsUi
+      if (key) setProjectUiEnabled(key, useUi)
+      const uiNotice = turn?.projectUi === true && !supportsUi
+        ? 'The requested project component composition mode requires Claude or Codex. Explain this limitation for UI requests.\n\n' : ''
+      session.send(projectUiInstructions(useUi) + uiNotice + prompt, images)
     } catch (error) {
       if (key) {
         runningKeys.delete(key)

@@ -10,6 +10,8 @@ export type PraxisAgentToolAction =
   | 'open_controls'
   | 'open_code'
   | 'open_preview'
+  | 'project_ui_catalog'
+  | 'compose_project_ui'
 
 export interface PraxisAgentToolRegistration {
   socketPath: string
@@ -73,7 +75,9 @@ async function startServer(): Promise<string> {
           parsed.action !== 'define_controls' &&
           parsed.action !== 'open_controls' &&
           parsed.action !== 'open_code' &&
-          parsed.action !== 'open_preview'
+          parsed.action !== 'open_preview' &&
+          parsed.action !== 'project_ui_catalog' &&
+          parsed.action !== 'compose_project_ui'
         ) {
           json(res, 400, { ok: false, error: 'unknown-action' })
           return

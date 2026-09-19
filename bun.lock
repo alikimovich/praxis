@@ -11,6 +11,8 @@
         "@codemirror/lang-html": "^6.4.11",
         "@codemirror/lang-javascript": "^6.2.5",
         "@codemirror/search": "^6.7.1",
+        "@json-render/codegen": "^0.21.0",
+        "@json-render/core": "^0.21.0",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@openai/codex-sdk": "^0.154.0",
         "@pierre/trees": "^1.0.0-beta.5",
@@ -256,6 +258,10 @@
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
+
+    "@json-render/codegen": ["@json-render/codegen@0.21.0", "", { "dependencies": { "@json-render/core": "0.21.0" } }, "sha512-audWNOllDNJ2n6VRedf5XFxIz19x+3mgjH5T1J78+RaSTXDV2qmEzx9j9V60uTmRMcJTEnymwByHYSEe664RzA=="],
+
+    "@json-render/core": ["@json-render/core@0.21.0", "", { "dependencies": { "zod": "^4.3.6" } }, "sha512-vysEbTjO1y8mEgAsp0tztRyaWCkNsBrG8MhAqbndGK3qmMXjMRdCNtk21+AQRNKdRelFGVAwBgtUNW8tfjQlsw=="],
 
     "@lezer/common": ["@lezer/common@1.5.2", "", {}, "sha512-sxQE460fPZyU3sdc8lafxiPwJHBzZRy/udNFynGQky1SePYBdhkBl1kOagA9uT3pxR8K09bOrmTUqA9wb/PjSQ=="],
 

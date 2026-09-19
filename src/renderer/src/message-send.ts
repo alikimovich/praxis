@@ -1,3 +1,4 @@
+import { readProjectUiPreference } from './project-ui-preference'
 import type { SelectedElement } from '../../shared/api'
 import type { Attachment } from './composer-drafts'
 import { messageCancellationVersion } from './message-queue'
@@ -10,6 +11,7 @@ export function messageSender(
   attachments: Attachment[],
   selected: SelectedElement | null
 ): () => Promise<void> {
+  const projectUi = readProjectUiPreference()
   const group = selected ? (selected.selectionGroup ?? [selected]) : []
   const context = group.map(describeSelectionForPrompt).join('\n')
   const images = attachments.filter((a) => a.kind === 'image')
@@ -53,7 +55,8 @@ export function messageSender(
       await window.api.agent.send(
         fileContext + imageContext + context + text,
         images.length ? images.map(({ mediaType, data }) => ({ mediaType, data })) : undefined,
-        key
+        key,
+        { projectUi }
       )
     } catch (error) {
       if (useChat.getState().byKey[key]) {

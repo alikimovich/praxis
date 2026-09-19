@@ -1,3 +1,4 @@
+import { runProjectUiTool } from '../project-ui'
 import { openAgentPreview } from '../preview-tools'
 import { openAgentCode } from '../code-tools'
 import { existsSync } from 'node:fs'
@@ -89,6 +90,8 @@ const PRAXIS_TOOL_NAMES = new Set([
   'mcp__praxis__open_controls',
   'mcp__praxis__open_code',
   'mcp__praxis__open_preview',
+  'mcp__praxis__project_ui_catalog',
+  'mcp__praxis__compose_project_ui',
   // Pure, deterministic spring→CSS calculator. No state, no side effects, so
   // it's auto-allowed like the observers — it never touches disk or the repo.
   'mcp__praxis__spring_to_css',
@@ -562,6 +565,34 @@ async function startSession(
     name: 'praxis',
     version: '1.0.0',
     tools: [
+      tool(
+        'project_ui_catalog',
+        'Discover exported React components, literal props and styles for UI composition. Requires Use project components enabled.',
+        {},
+        async () => ({
+          content: [{ type: 'text' as const, text: JSON.stringify(
+            await runProjectUiTool(root, emitKey, 'project_ui_catalog')
+          ) }]
+        })
+      ),
+      tool(
+        'compose_project_ui',
+        'Validate a static json-render spec against project components and return TSX. Does not save files; use ordinary edit tools to apply and integrate it.',
+        {
+          file: z.string(),
+          spec: z.object({
+            root: z.string(),
+            elements: z.record(z.string(), z.object({
+              type: z.string(), props: z.record(z.string(), z.unknown()), children: z.array(z.string())
+            }).strict())
+          }).strict()
+        },
+        async (args) => ({
+          content: [{ type: 'text' as const, text: JSON.stringify(
+            await runProjectUiTool(root, emitKey, 'compose_project_ui', args)
+          ) }]
+        })
+      ),
       tool(
         'preview_location',
         "The page/route currently shown in the user's live preview pane.",

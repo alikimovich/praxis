@@ -352,6 +352,11 @@ export interface ImageAttachment {
   data: string
 }
 
+export interface AgentTurnOptions {
+  /** Opt-in static React composition; captured when the message is submitted. */
+  projectUi?: boolean
+}
+
 export interface AgentOptions {
   /** Model alias ('fable' | 'opus' | 'sonnet' | 'haiku') or undefined for the account default. */
   model?: string
@@ -1632,7 +1637,7 @@ export interface PraxisApi {
       root: string,
       sessionKey: string
     ) => Promise<{ ok: boolean; remaining: string[]; activeSessionKey: string | null }>
-    send: (text: string, images?: ImageAttachment[], sessionKey?: string) => Promise<void>
+    send: (text: string, images?: ImageAttachment[], sessionKey?: string, turn?: AgentTurnOptions) => Promise<void>
     /** Write a pasted image (clipboard bytes, no on-disk origin) into the app's
      *  attachments dir and return its absolute path — so the turn can tell the
      *  agent WHERE the image it can see actually lives. '' if it couldn't be

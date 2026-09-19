@@ -238,3 +238,11 @@ Other UI animations remain enabled.
 | `bun run typecheck` | Type-check all three tsconfig projects |
 | `bun run test` | Build + run unit and Electron UI tests |
 | `bun run verify` | `test` + live-agent/simulator e2e (needs creds + display) |
+
+### Compose UI from project components
+
+Enable **Settings → Use project components** to have Claude or Codex compose React
+UI from the opened project’s components and styles using json-render. This is
+experimental and off by default. The setting is saved on this device and captured
+when you submit a message. Turning it off restores ordinary editing and keeps
+generated source. See [scope and workflow](docs/PROJECT_UI.md).

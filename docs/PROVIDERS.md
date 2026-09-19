@@ -171,3 +171,11 @@ experimental Gemini seam without adding provider-specific tools. The configured
 permissions still apply. Stop, failure, an unavailable session, or unresolved markers
 leave the work recoverable with the manual Resolve/Discard fallback. Detached agents
 retain their existing landing policy.
+
+## Project component composition
+
+Claude and Codex expose the read-only `project_ui_catalog` and `compose_project_ui`
+tools. Main enables them per chat only when a submitted message explicitly opts
+in through Settings → Use project components. Gemini receives a limitation notice.
+The tools use the current worktree and return source for ordinary edits and landing;
+see [PROJECT_UI.md](PROJECT_UI.md).

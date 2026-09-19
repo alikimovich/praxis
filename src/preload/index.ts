@@ -6,6 +6,7 @@ import type {
   GitRemoteStatus,
   AgentEvent,
   AgentOptions,
+  AgentTurnOptions,
   Annotation,
   AnnotationInput,
   BackgroundSpawnOrigin,
@@ -358,8 +359,8 @@ const api: PraxisApi = {
       title: string
     ): Promise<{ ok: boolean; title?: string; error?: string }> =>
       ipcRenderer.invoke('agent:rename-chat', sessionKey, title),
-    send: (text: string, images?: ImageAttachment[], sessionKey?: string): Promise<void> =>
-      ipcRenderer.invoke('agent:send', text, images, sessionKey),
+    send: (text: string, images?: ImageAttachment[], sessionKey?: string, turn?: AgentTurnOptions): Promise<void> =>
+      ipcRenderer.invoke('agent:send', text, images, sessionKey, turn),
     saveAttachment: (image: ImageAttachment, name?: string): Promise<string> =>
       ipcRenderer.invoke('attachments:save', image, name),
     setModel: (model: string): Promise<void> => ipcRenderer.invoke('agent:set-model', model),

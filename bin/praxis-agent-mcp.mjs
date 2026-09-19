@@ -121,4 +121,14 @@ server.registerTool(
   async (args) => result(await invoke('open_preview', args))
 )
 
+server.registerTool('project_ui_catalog', {
+  description: 'Discover exported React components, literal props and styles for UI composition. Requires Use project components enabled.',
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
+}, async () => result(await invoke('project_ui_catalog')))
+server.registerTool('compose_project_ui', {
+  description: 'Validate a static json-render spec against project components and return TSX. Does not save files; use ordinary edit tools to apply and integrate it.',
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  inputSchema: { file: z.string(), spec: z.object({ root: z.string(), elements: z.record(z.string(), z.object({ type: z.string(), props: z.record(z.string(), z.unknown()), children: z.array(z.string()) }).strict()) }).strict() }
+}, async (args) => result(await invoke('compose_project_ui', args)))
+
 await server.connect(new StdioServerTransport())

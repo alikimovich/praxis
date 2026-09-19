@@ -3,6 +3,14 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Project component composition (2026-09-18)
+
+- [x] Add a default-off, persistent Settings toggle captured per submitted message.
+- [x] Discover exported React components and styles, build a json-render catalog, and export validated TSX.
+- [x] Gate Claude/Codex composition tools per chat across desktop and browser transports.
+- [x] Cover source rendering, invalid specs, tool transport, toggle persistence and a live Codex preview flow.
+- [ ] Extend discovery to imported/conditional prop types, custom adapters and other frameworks.
+
 ## Candidate push reconciliation (2026-09-18)
 
 - [x] Integrate remote candidate history and adapt newer tests to native pickers.

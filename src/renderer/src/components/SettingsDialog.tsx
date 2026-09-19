@@ -23,6 +23,7 @@ import {
 import { providerOptions, useProviders } from '../providers-store'
 import { openWithPreviewFreeze, usePreviewFreeze } from '../store'
 import ProviderForm from './ProviderForm'
+import ProjectUiSetting from './ProjectUiSetting'
 
 /**
  * App settings (Cmd+, from the app menu, or the model picker's "Manage
@@ -130,6 +131,7 @@ export default function SettingsDialog(): React.JSX.Element {
               />
             ) : (
               <>
+                <ProjectUiSetting />
                 <div className="flex flex-col gap-2 rounded-xl border bg-background/50 p-4">
                   <label htmlFor="preferred-model" className="font-medium">
                     Default model

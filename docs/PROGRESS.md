@@ -2,6 +2,33 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-18 — Opt-in project component composition
+
+Added Settings → Use project components, off by default and persisted on the
+current device. Each submitted message captures the setting, including queued
+messages; turning it off keeps generated files and returns later messages to
+ordinary editing. Desktop and browser sends carry the same typed turn option.
+
+Claude and Codex now expose chat-gated, read-only catalog/export tools. Bounded
+static React discovery extracts exports, literal prop schemas, children support,
+and stylesheet tokens without executing project source or Babel configuration.
+json-render validates the catalog/spec; a strict exporter rejects broken trees,
+unknown props/variants and unsafe output paths, and returns ordinary TSX importing
+real project components. The agent applies it through existing edits/landing; no
+json-render package is installed in the target repo. Imported/conditional types,
+custom adapters and other frameworks remain follow-up work. See PROJECT_UI.md.
+
+Validation: typecheck and targeted lint passed. Unit checks render exported TSX
+with the real fixture components and cover invalid specs, session isolation and
+opt-out. Real stdio/socket transport, Settings restart persistence, and live Codex
+catalog → export → source → preview checks passed. Settings light/dark and native
+preview screenshots were inspected; explanatory text was sized for readability.
+Full verification: 159 passed, three failed, two skipped. The transport assertion
+was corrected and passed on rerun; remaining failures are the previously recorded
+agent-multi running-chat error and tool-invocation failing to call design tools
+(the latter also failed its targeted rerun). Next's optional fixture and the iOS
+simulator were skipped. The feature's own live generation checks passed.
+
 ## 2026-09-18 — Advisory Jev pilot harness
 
 Added an opt-in, dependency-free TypeSafe HTTP pilot, pinned to jev-1.13.0, with
