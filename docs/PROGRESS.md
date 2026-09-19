@@ -2,6 +2,36 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-18 — Actual Jev UI composition
+
+Added a persisted composition-engine selector under the existing opt-in toggle.
+Each submitted/queued message captures the engine. Claude/Codex prepares concrete
+project-component candidates; Jev selects membership and layout through the pinned
+json-render 0.21.0 experimental composer. Finished trees pass the existing strict
+TSX exporter and ordinary editing/landing flow. Jev failures do not silently fall
+back. Requests are bounded to two evaluations, 24 candidates and 25 seconds;
+interrupt and session teardown cancel composition and close the tool gate.
+
+The Gateway credential stays in the main-process environment; the testing key is
+stored only in an ignored owner-only local file. Setup and explicit Bun environment
+forwarding are documented in PROJECT_UI.md. No key is embedded in code or renderer
+state. The default remains current-chat-model generation, with the whole feature off.
+
+Live evidence: direct Card/Text composition finished in one evaluation (641 ms,
+615 input tokens). A second test correctly omitted irrelevant content and reordered
+candidates in two evaluations (624 ms, 1,502 tokens). A real Codex/Electron turn
+made a successful Jev network call, integrated returned TSX and rendered the native
+preview; its screenshot was inspected. Offline tests exercise the actual composer,
+validation, two-step ordering, unavailable results, cancellation and preferences.
+Settings persistence and light/dark screenshots passed inspection; typecheck and
+targeted lint passed. Full verification finished 161 PASS / 2 FAIL / 3 SKIP:
+startup-intro failed its preview assertion (isolated retry timed out on the startup
+screen), and agent-multi hit its recorded already-running error. The optional Next
+fixture and Xcode simulator skipped; the suite's Jev test skipped without inherited
+credentials, while its separate explicitly credential-enabled run passed as above.
+All other live tests passed, including ordinary composition and tool-invocation.
+The final build and post-change cancellation/ordering tests passed.
+
 ## 2026-09-18 — Opt-in project component composition
 
 Added Settings → Use project components, off by default and persisted on the

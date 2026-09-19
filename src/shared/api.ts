@@ -355,6 +355,7 @@ export interface ImageAttachment {
 export interface AgentTurnOptions {
   /** Opt-in static React composition; captured when the message is submitted. */
   projectUi?: boolean
+  projectUiEngine?: 'agent' | 'jev'
 }
 
 export interface AgentOptions {

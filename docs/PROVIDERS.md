@@ -178,4 +178,7 @@ Claude and Codex expose the read-only `project_ui_catalog` and `compose_project_
 tools. Main enables them per chat only when a submitted message explicitly opts
 in through Settings → Use project components. Gemini receives a limitation notice.
 The tools use the current worktree and return source for ordinary edits and landing;
-see [PROJECT_UI.md](PROJECT_UI.md).
+see [PROJECT_UI.md](PROJECT_UI.md). Settings can select the current chat model or
+Jev as the composition engine. With Jev, Claude/Codex prepares candidate props and
+copy, and a separate Gateway evaluation selects the composition. Jev requires a
+server-side Gateway credential and never silently falls back to another engine.

@@ -23,6 +23,7 @@ try {
   assert.equal(await toggle.isChecked(), false)
   await toggle.check()
   assert.equal(await toggle.isChecked(), true)
+  await win.selectOption('select[aria-label="UI composition engine"]', 'jev')
   console.log('Setting text styles:', await win.locator('#project-ui-description').evaluate((el) => {
     const style = getComputedStyle(el)
     return { color: style.color, size: style.fontSize, weight: style.fontWeight, background: getComputedStyle(el.closest('[role=dialog]')).backgroundColor }
@@ -44,7 +45,9 @@ try {
   win = await launch()
   toggle = win.getByRole('switch', { name: 'Use project components' })
   assert.equal(await toggle.isChecked(), true, 'opt-in survives an app restart')
+  assert.equal(await win.getByLabel('UI composition engine', { exact: true }).inputValue(), 'jev')
   await toggle.uncheck()
+  assert.equal(await win.getByLabel('UI composition engine', { exact: true }).count(), 0)
   await win.screenshot({ path: join(root, 'test/artifacts/project-ui-off.png') })
   await app.close(); app = undefined
   win = await launch()

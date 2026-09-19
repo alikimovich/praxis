@@ -2,14 +2,28 @@ import { dirname, posix } from 'node:path'
 import { z } from 'zod'
 import { discoverProjectUi, type ProjectUiCatalog } from './project-ui-catalog'
 
-const enabledSessions = new Set<string>()
-export function setProjectUiEnabled(key: string, enabled: boolean): void {
-  if (enabled) enabledSessions.add(key)
+export type ProjectUiEngine = 'agent' | 'jev'
+const enabledSessions = new Map<string, ProjectUiEngine>()
+const composing = new Map<string, AbortController>()
+export function cancelProjectUi(key: string): void {
+  enabledSessions.delete(key)
+  composing.get(key)?.abort()
+  composing.delete(key)
+}
+export function setProjectUiEnabled(
+  key: string,
+  enabled: boolean,
+  engine: ProjectUiEngine = 'agent'
+): void {
+  cancelProjectUi(key)
+  if (enabled) enabledSessions.set(key, engine)
   else enabledSessions.delete(key)
 }
 export const projectUiEnabled = (key: string): boolean => enabledSessions.has(key)
 
-export function projectUiInstructions(enabled: boolean): string {
+export function projectUiInstructions(enabled: boolean, engine: ProjectUiEngine = 'agent'): string {
+  if (enabled && engine === 'jev')
+    return `[Praxis UI composition: Jev for this turn]\nFor UI generation, call project_ui_catalog. Read project components and usage, then prepare concrete atomic candidates (id, description, element: {type, props}, optional root:false and resource for mutually exclusive alternatives). Supply actual copy and literal prop values. Call compose_project_ui with file, prompt (the user's UI request), and candidates. Jev MUST choose membership, ordering and layout; do not submit a prebuilt spec or substitute your own layout. Write the returned TSX using ordinary edit tools and integrate with the page, preserving project styles/providers. If Jev fails or is incomplete, report that and do not silently fall back to another engine. Never install json-render in the target. Non-UI requests work normally.\n\n`
   return enabled
     ? `[Praxis UI composition: ON for this turn]\nFor UI generation, call project_ui_catalog, then compose_project_ui with a static json-render spec using the discovered components. Read their source and existing usage to preserve theme, providers, layout and styling conventions. Write the returned TSX in your worktree and integrate it with the requested page using ordinary edit tools. Do not install json-render in the target project. These tools return source, not saved files. Preserve normal application logic; explain unsupported components or frameworks instead of inventing catalog entries. For non-UI requests work normally.\n\n`
     : '[Praxis UI composition: OFF for this turn. Do not use project_ui_catalog or compose_project_ui; use ordinary source editing.]\n\n'
@@ -26,7 +40,7 @@ const specSchema = z
   .object({ root: z.string(), elements: z.record(z.string(), elementSchema) })
   .strict()
 
-async function buildCatalog(project: ProjectUiCatalog) {
+export async function buildCatalog(project: ProjectUiCatalog) {
   const { defineCatalog, defineSchema } = await import('@json-render/core')
   const schema = defineSchema((s) => ({
     spec: s.object({
@@ -39,12 +53,15 @@ async function buildCatalog(project: ProjectUiCatalog) {
         })
       )
     }),
-    catalog: s.object({ components: s.map({ props: s.zod(), description: s.string() }) })
+    catalog: s.object({
+      components: s.map({ props: s.zod(), description: s.string(), slots: s.array(s.string()) })
+    })
   }))
-  const components: Record<string, { props: z.ZodType; description: string }> = {
+  const components: Record<string, { props: z.ZodType; description: string; slots: string[] }> = {
     Text: {
       props: z.object({ text: z.string().max(4000) }).strict(),
-      description: 'Plain text node, no wrapper or children.'
+      description: 'Plain text node, no wrapper or children.',
+      slots: []
     }
   }
   for (const component of project.components) {
@@ -52,10 +69,20 @@ async function buildCatalog(project: ProjectUiCatalog) {
       throw new Error('Component name Text is reserved for literal text.')
     components[component.name] = {
       props: z.object(component.props).strict(),
+      slots: component.children ? ['default'] : [],
       description: `${component.description}. ${component.childrenRequired ? 'Requires children.' : component.children ? 'Accepts children.' : 'No children.'}`
     }
   }
   return defineCatalog(schema, { components })
+}
+
+export function validateProjectUiFile(file: string): void {
+  if (
+    !/^[\w./-]+\.tsx$/.test(file) ||
+    file.startsWith('/') ||
+    file.split('/').some((p) => p === '..' || p.startsWith('.'))
+  )
+    throw new Error('Choose a repo-relative .tsx output file outside hidden directories.')
 }
 
 export async function exportProjectUi(
@@ -66,12 +93,7 @@ export async function exportProjectUi(
     .object({ file: z.string().max(250), spec: specSchema })
     .strict()
     .parse(input)
-  if (
-    !/^[\w./-]+\.tsx$/.test(args.file) ||
-    args.file.startsWith('/') ||
-    args.file.split('/').some((p) => p === '..' || p.startsWith('.'))
-  )
-    throw new Error('Choose a repo-relative .tsx output file outside hidden directories.')
+  validateProjectUiFile(args.file)
   const keys = Object.keys(args.spec.elements)
   if (keys.length > 100) throw new Error('Use at most 100 elements.')
   const catalog = await buildCatalog(project)
@@ -148,10 +170,14 @@ export async function runProjectUiTool(
   if (!projectUiEnabled(key))
     return { error: 'Use project components is off. Enable it in Settings and send a new message.' }
   try {
+    const engine = enabledSessions.get(key)
     const project = await discoverProjectUi(root)
+    if (!projectUiEnabled(key) || enabledSessions.get(key) !== engine)
+      throw new Error('UI composition setting changed. Send a new message.')
     if (action === 'project_ui_catalog') {
       const catalog = await buildCatalog(project)
       return {
+        engine: enabledSessions.get(key),
         prompt: catalog.prompt({
           customRules: [
             'Static compositions only. No actions, state, expressions or dynamic props. Use Text for literal text. Follow each component children constraint.'
@@ -166,7 +192,24 @@ export async function runProjectUiTool(
     }
     if (action !== 'compose_project_ui') throw new Error('Unknown UI composition action.')
     if (!project.components.length) throw new Error(project.warnings.join(' '))
-    return { ...(await exportProjectUi(project, args)), saved: false, warnings: project.warnings }
+    if (enabledSessions.get(key) === 'jev') {
+      if (composing.has(key)) return { error: 'Jev is already composing for this chat.' }
+      const controller = new AbortController()
+      composing.set(key, controller)
+      try {
+        const { composeProjectUiWithJev } = await import('./project-ui-jev')
+        const result = await composeProjectUiWithJev(project, args, { signal: controller.signal })
+        return { ...result, saved: false, warnings: project.warnings }
+      } finally {
+        if (composing.get(key) === controller) composing.delete(key)
+      }
+    }
+    return {
+      ...(await exportProjectUi(project, args)),
+      engine: 'agent',
+      saved: false,
+      warnings: project.warnings
+    }
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) }
   }

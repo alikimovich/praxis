@@ -1,4 +1,4 @@
-import { setProjectUiEnabled, projectUiInstructions } from './project-ui'
+import { setProjectUiEnabled, projectUiInstructions, cancelProjectUi } from './project-ui'
 import type { AgentTurnOptions } from '../shared/api'
 import { conflictResolutionPrompt, ReconciliationCoordinator } from './conflict-resolution'
 import { execFile } from 'node:child_process'
@@ -1143,10 +1143,11 @@ export function registerAgentIpc(
       if (key) memoryRevisionBySession.set(key, memory.updatedAt)
       const supportsUi = !session.options.provider || ['claude', 'codex'].includes(session.options.provider)
       const useUi = turn?.projectUi === true && supportsUi
-      if (key) setProjectUiEnabled(key, useUi)
+      const uiEngine = turn?.projectUiEngine === 'jev' ? 'jev' : 'agent'
+      if (key) setProjectUiEnabled(key, useUi, uiEngine)
       const uiNotice = turn?.projectUi === true && !supportsUi
         ? 'The requested project component composition mode requires Claude or Codex. Explain this limitation for UI requests.\n\n' : ''
-      session.send(projectUiInstructions(useUi) + uiNotice + prompt, images)
+      session.send(projectUiInstructions(useUi, uiEngine) + uiNotice + prompt, images)
     } catch (error) {
       if (key) {
         runningKeys.delete(key)
@@ -1441,6 +1442,7 @@ export function registerAgentIpc(
   })
 
   ipcMain.handle('agent:interrupt', async () => {
+    if (activeKey) cancelProjectUi(activeKey)
     const preparation = activeKey ? preparingTurns.get(activeKey) : undefined
     if (preparation) preparation.cancelled = true
     const session = activeSession()

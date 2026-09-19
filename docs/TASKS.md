@@ -9,6 +9,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Discover exported React components and styles, build a json-render catalog, and export validated TSX.
 - [x] Gate Claude/Codex composition tools per chat across desktop and browser transports.
 - [x] Cover source rendering, invalid specs, tool transport, toggle persistence and a live Codex preview flow.
+- [x] Add selectable Jev composition, bounded Gateway requests and a real Jev-to-preview test.
 - [ ] Extend discovery to imported/conditional prop types, custom adapters and other frameworks.
 
 ## Candidate push reconciliation (2026-09-18)

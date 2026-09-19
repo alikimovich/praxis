@@ -577,15 +577,17 @@ async function startSession(
       ),
       tool(
         'compose_project_ui',
-        'Validate a static json-render spec against project components and return TSX. Does not save files; use ordinary edit tools to apply and integrate it.',
+        'Return project-component TSX. For the current chat model provide file and spec. With Jev selected provide file, prompt and atomic candidates; Jev chooses the composition. Apply returned source with ordinary edit tools. Never silently fall back if Jev fails.',
         {
           file: z.string(),
+          prompt: z.string().optional(),
+          candidates: z.array(z.object({ id: z.string(), description: z.string(), element: z.object({ type: z.string(), props: z.record(z.string(), z.unknown()) }), root: z.boolean().optional(), resource: z.string().optional() })).optional(),
           spec: z.object({
             root: z.string(),
             elements: z.record(z.string(), z.object({
               type: z.string(), props: z.record(z.string(), z.unknown()), children: z.array(z.string())
             }).strict())
-          }).strict()
+          }).strict().optional()
         },
         async (args) => ({
           content: [{ type: 'text' as const, text: JSON.stringify(
