@@ -641,12 +641,12 @@ export default function App(): React.JSX.Element {
       window.api.preview.onReadiness(({ stamps, documentStartedAt }) => {
         const s = useSetup.getState()
         if (s.verifying) {
-          if (stamps > 0) {
-            s.setStatus(`Setup verified — ${stamps} element(s) now mapped to source. You're ready.`)
           if (documentStartedAt !== undefined && documentStartedAt < s.verificationAfter) return
           s.setPhase('preview-compiled')
-            s.setNeeded(false)
+          if (stamps > 0) {
             s.setPhase('stamps-detected')
+            s.setStatus(`Setup verified — ${stamps} element(s) now mapped to source. You're ready.`)
+            s.setNeeded(false)
           } else {
             s.setStatus(
               'Setup ran but no elements got stamped — the instrumentation did not fire. ' +
@@ -1638,9 +1638,9 @@ export default function App(): React.JSX.Element {
       // verification so it doesn't hang waiting for a readiness that won't come.
       const message = err instanceof Error ? err.message : String(err)
       useSetup.getState().setVerifying(false)
+      useSetup.getState().setPhase('failed')
       useSetup.getState().setStatus(`Couldn't restart the preview after setup: ${message}`)
       log.append(message, 'error')
-      useSetup.getState().setPhase('failed')
       await window.api.preview.reset()
       useWorkspace.getState().patchEntry(projectKey(root), { url: null, dependenciesPending: installDependencies })
       setRetry({ root, command: spec.command, installDependencies })
