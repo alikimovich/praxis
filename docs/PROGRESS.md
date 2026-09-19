@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-18 — Reconcile candidate before pushing
+
+Merged origin/candidate without rewriting either history. Kept both task-log
+sections, the remote native composer pickers, and local queue/preview fixes.
+Adapted the two newer animation/code-reveal tests to native provider selects after
+the remote removed the custom-menu helper.
+
+Validation: typecheck passed. Full suite initially passed 146/148, exposing the
+removed test-helper import and the known agent-multi running-chat failure.
+Animation/composer UI checks passed after correcting the imports. The skills-menu
+check passed in the full run, failed once on insertion timing, then passed on retry.
+
 ## 2026-09-18 — Preview address alignment
 
 Centered the Home control and URL vertically instead of baseline-aligning the
@@ -211,6 +223,18 @@ with the handoff fix. Typecheck/build passed; inspected desktop and narrow-windo
 screenshots. Full unit/UI suite: 140/144 passed; startup-intro, agent-multi,
 spawn-comment, and prop-edit-svelte failed outside the Git updates test. The suite
 ran while concurrent animation-controls edits were present in the shared workspace.
+## 2026-09-17 — Merge and reconcile candidate updates
+
+Integrated remote candidate features while retaining native composer pickers,
+provider-switch synchronization, and the local cat-timer regression fix. Preserved
+both task-log histories, ordered recent progress entries newest-first, and kept
+chat-render's page-error handler failing the test. Updated the remote desktop
+surface regression to exercise the project action menu because composer pickers
+remain native selects.
+
+Type checks and all 144 unit/Electron tests pass; inspected the light-theme menu
+screenshot. The optional spawn-comment live portion self-skipped after no edit
+landed. No provider or simulator implementation was changed during resolution.
 
 ## 2026-09-17 — Show exact code from chat
 
@@ -353,6 +377,37 @@ the final build passes the Git test (including native preview content), rail, an
 layers isolated reruns. The previously recorded startup-intro failure remains
 open. Docs links and diff whitespace checks pass.
 
+## 2026-09-16 — Harden reduced-motion cat regression
+
+The prior Electron window closure did not reproduce in the original focused
+run. Replaced its final 31-second sleep with observation of real idle timers:
+normal rest schedules one, reduced-motion completion schedules none, and enabling
+reduced motion during rest cancels the pending timer. Frame timings and the real
+idle-animation check remain unchanged; application code is untouched.
+
+Type checks, focused cat test, and the full unit/Electron suite pass (133/133).
+Inspected the idle screenshot. The optional spawn-comment live portion self-skipped
+after no edit landed. The cause of the earlier window closure remains unconfirmed;
+the revised test removes the long wait where it occurred and strengthens timer
+cleanup coverage.
+
+## 2026-09-16 — Pull latest candidate updates
+
+Merged origin/candidate's sentence-case sidebar headings while preserving local
+main integration and regression fixes. Restored newest-first progress-log order.
+Type checks pass; full unit/Electron suite: 132/133 passed. Cat-animations lost
+its Electron window during a wait; the optional spawn-comment live portion
+self-skipped after no edit landed. Rail/history checks pass; inspected the rail
+screenshot. No merge conflicts.
+
+## 2026-09-16 — Sentence-case rail headings
+
+Dropped the all-caps treatment (and its caps-only letter-spacing) from the
+sidebar's "Projects" heading and the per-project "History" toggle. The history
+label's 9px size only worked in caps — lowercase at that size loses too much
+x-height — so it moves to 10px, an existing value in the de facto type scale.
+`bun run typecheck` passes; rail and history-ui Electron screenshots inspected.
+
 ## 2026-09-16 — Fetch, pull, and switch remote project branches
 
 The current-branch menu now opens Git updates in desktop and browser mode.
@@ -418,6 +473,32 @@ Extended the rail status regression with long labels and chat-bound checks for
 hover and keyboard focus; visually inspected the captures. Typecheck and the
 full unit/Electron suite pass (138/138). Targeted lint reports the pre-existing
 generic div's aria-label warning in SubagentCats.
+
+## 2026-09-15 — Fix chat-render and provider-skills-menu regressions
+
+The chat-render timeout hid a renderer exception: its synthetic per-chat settings
+omitted required permissionMode, passing undefined into the native composer's
+label formatter. Completed all three fixture tuples and report page errors as
+explicit test failures. Application settings already supply this required field.
+The skills-menu test now waits for the provider restart to commit Codex before
+asserting skill discovery, instead of reading the old provider immediately.
+
+Both focused regressions pass; inspected the skills-menu screenshot. Type checks
+pass. Full unit/Electron suite: 132/133 passed, including both repaired tests.
+The unrelated spawn-comment live check raced branch cleanup; its isolated rerun
+passed the real agent edit and branch-deletion assertions. No application code
+changed.
+
+## 2026-09-15 — Reconcile latest remote main
+
+Merged remote focus-ring, cursor, and cat-animation updates with the local
+native composer picker restoration. Preserved both sides of the task-log
+conflict and repaired a silently misaligned progress-log heading/body merge.
+
+Type checks pass. Full unit/Electron suite: 131/133 passed; remaining failures
+are the previously documented chat-render timeout and provider-skills-menu
+provider assertion. Startup and cat-animation tests pass; inspected the thinking
+cat screenshot. Remote candidate is an ancestor of the combined main history.
 
 ## 2026-09-15 — Settings chevron spacing
 
@@ -652,17 +733,16 @@ Full unit/Electron suite: 131/132 passed, with only the previously documented
 chat-render timeout. The initial sandboxed run could not launch Electron or
 bind test servers; reran with the required access.
 
-## 2026-09-12 — Skip startup intro in ordinary test runs
+## 2026-09-12 — Merge local and remote main
 
-The suite now passes PRAXIS_TEST_SKIP_INTRO=1 for ordinary tests and explicitly
-sets it to 0 for startup-intro. Desktop main forwards the switch as a renderer
-query parameter, bypassing the intro wrapper while retaining fresh app/profile
-isolation and all other UI motion. Targeted scripts can opt in with the same
-environment variable; README documents the command.
+Merged origin/main into local main, preserving the native composer pickers and
+remote joined startup contours/test-intro bypass. Git merged without conflict
+markers; reordered the combined recent progress entries newest-first.
 
-Type checks pass. Full unit/Electron suite: 131/132 passed, with only the
-previously documented chat-render timeout. Startup-intro passes with animation
-enabled; smoke asserts the wrapper is bypassed. Inspected its launch screenshot.
+Type checks pass. Full unit/Electron suite: 130/132 passed, with the previously
+documented chat-render timeout and provider-skills-menu provider assertion.
+Startup-intro and smoke pass; inspected the completed startup screenshot.
+The suite required an unsandboxed run for Electron and local test servers.
 
 ## 2026-09-12 — Joined startup cat contours
 
@@ -676,14 +756,31 @@ screenshots. Updated the shape-count assertion and waited for the asynchronous
 reduced-motion update before asserting dismissal, fixing the recorded test race.
 Full suite: 130/132 passed. The recorded chat-render timeout remains, and the
 code-drawer drag assertion (300 → 300) also fails in an isolated rerun.
-## 2026-09-16 — Sentence-case rail headings
 
-Dropped the all-caps treatment (and its caps-only letter-spacing) from the
-sidebar's "Projects" heading and the per-project "History" toggle. The history
-label's 9px size only worked in caps — lowercase at that size loses too much
-x-height — so it moves to 10px, an existing value in the de facto type scale.
-`bun run typecheck` passes; rail and history-ui Electron screenshots inspected.
+## 2026-09-12 — Skip startup intro in ordinary test runs
 
+The suite now passes PRAXIS_TEST_SKIP_INTRO=1 for ordinary tests and explicitly
+sets it to 0 for startup-intro. Desktop main forwards the switch as a renderer
+query parameter, bypassing the intro wrapper while retaining fresh app/profile
+isolation and all other UI motion. Targeted scripts can opt in with the same
+environment variable; README documents the command.
+
+Type checks pass. Full unit/Electron suite: 131/132 passed, with only the
+previously documented chat-render timeout. Startup-intro passes with animation
+enabled; smoke asserts the wrapper is bypassed. Inspected its launch screenshot.
+
+## 2026-09-11 — Correct dropdown scope; restore composer pickers
+
+The user clarified that provider, model, and permission pickers should retain
+their original native menus. Reversed only the composer migration and its test
+adaptations, preserving intervening work. The existing branch, publish, and
+project action menus retain the shared shadcn styling improvements (softer
+corners/shadow and selection checkmarks). Motion remains the next step for
+those menus only.
+
+Type checks pass. Visually verified native composer selects alongside the existing
+project action menu. Full suite: 129/132 passed; code-drawer passes on a separate
+rerun, leaving the documented chat-render and provider-skills-menu failures.
 ## 2026-09-11 — Quiet project action icons
 
 Changed the sidebar project menu and new-chat icons to neutral gray at rest and

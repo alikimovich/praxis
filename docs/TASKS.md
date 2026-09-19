@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Candidate push reconciliation (2026-09-18)
+
+- [x] Integrate remote candidate history and adapt newer tests to native pickers.
+
 ## Preview address alignment (2026-09-18)
 
 - [x] Center Home and URL text with consistent spacing in the preview toolbar.
@@ -52,6 +56,12 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Replace DialKit integration with Praxis's existing control primitives.
 - [x] Persist animation panels independently of selection, with collapse/reopen.
 - [x] Wire targeted Replay and existing source-edit/Undo behavior.
+
+## Candidate merge reconciliation (2026-09-17) — SHIPPED
+
+- [x] **Merge remote updates while retaining native composer pickers and local
+      regression fixes.** Reconcile both logs and check desktop menu behavior on
+      the project action menu.
 
 ## Show exact code from chat (2026-09-17)
 
@@ -184,6 +194,24 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] **Reveal the entire startup cat equally at once.** Synchronize contour
       opacity and blur, preserving the four-second intro and app crossfade.
 
+## Cat animation test reliability (2026-09-16) — SHIPPED
+
+- [x] **Replace the long reduced-motion sleep with idle-timer assertions.** Check
+      suppression and cancellation while retaining real sprite timing coverage.
+
+## Candidate remote sync (2026-09-16) — SHIPPED
+
+- [x] **Pull the latest sentence-case sidebar headings and preserve local commits.**
+
+## Chat regression failures (2026-09-15) — SHIPPED
+
+- [x] **Repair chat-render's incomplete settings fixture and surface renderer errors.**
+- [x] **Wait for the asynchronous provider restart in provider-skills-menu.**
+
+## Sync remote main (2026-09-15) — SHIPPED
+
+- [x] **Merge the latest remote main updates and reconcile both project logs.**
+
 ## System accent focus rings (2026-09-14, user-requested) — SHIPPED
 
 - [x] **Replace the orange/white browser focus outline with a single system-accent
@@ -209,6 +237,11 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] **Use the default arrow on Praxis buttons.** Cover the shell, expandable
       chat messages, and preview-overlay action buttons.
 
+## Merge local and remote main (2026-09-12) — SHIPPED
+
+- [x] **Integrate origin/main while preserving native composer pickers.** Retain
+      remote startup artwork/test changes and reconcile the progress log.
+
 ## Faster test startup (2026-09-12, user-requested) — SHIPPED
 
 - [x] **Skip the desktop intro in ordinary suite runs.** Keep the dedicated
@@ -227,10 +260,11 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## System-style dropdown menus (2026-09-11, user-requested)
 
-- [x] **Use shadcn dropdown menus for the composer provider, model, and permissions.**
-      Keep compact triggers, full option labels, keyboard navigation, checked
-      choices, and preview freeze handling; separate Add new from provider choices.
-- [ ] **Add a quick spring zoom with Motion.** Follow-up after the component migration.
+- [x] **Polish existing branch, publish, and project action dropdowns.** Retain
+      shadcn, softer corners/shadow, and checkmarks for selected choices.
+- [x] **Restore the original provider, model, and permission pickers.** The user
+      prefers their native menus; composer pickers are outside this work's scope.
+- [ ] **Add a quick spring zoom with Motion to the existing action menus.**
 
 ## Supplied icon artwork (2026-09-11, user-requested) — SHIPPED
 

@@ -1,4 +1,3 @@
-import { chooseComposerOption } from './helpers/composer-menu.mjs'
 /** Real providers must use open_code for a natural-language request. */
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
@@ -23,7 +22,7 @@ for (const provider of ['claude', 'codex']) {
       BrowserWindow.getAllWindows()[0].webContents.send('menu:action', 'open-project')
     }, root)
     await win.waitForFunction(() => /http:/.test(document.querySelector('.previewbar__url')?.textContent ?? ''))
-    await chooseComposerOption(win, 'Provider', provider)
+    await win.selectOption('select[aria-label="Provider"]', provider)
     await win.waitForFunction(provider => window.__praxisSession.getState().provider === provider, provider)
     await win.fill('.composer__input', 'Show me the exact code used to calculate the total in invoice.js. Open the mini code editor and highlight the whole total function for me. Do not change any files.')
     await win.click('.composer__send')

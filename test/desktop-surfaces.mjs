@@ -43,8 +43,10 @@ try {
     assert.equal(await win.locator('#provider-key').inputValue(), '', 'leaving the form must discard its unsaved API key')
     await win.keyboard.press('Escape')
     await win.getByRole('dialog').waitFor({ state: 'hidden' })
-    const provider = win.getByRole('button', { name: 'Provider', exact: true })
-    await provider.click()
+    // Composer pickers are native selects; exercise shared menu styling on
+    // the project action menu instead.
+    await win.locator('.rail__row').hover()
+    await win.locator('.rail__project-menu').click()
     await win.getByRole('menu').waitFor()
     await win.keyboard.press('ArrowDown')
     assert(await win.getByRole('menu').evaluate(menu => menu.contains(document.activeElement)), 'keyboard focus must stay in the menu')
@@ -52,7 +54,7 @@ try {
     await win.keyboard.press('Escape')
     await win.getByRole('menu').waitFor({ state: 'hidden' })
     // Radix restores focus after the close animation has unmounted the menu.
-    await win.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Provider', null, { timeout: 5000 })
+    await win.waitForFunction(() => document.activeElement?.classList.contains('rail__project-menu'), null, { timeout: 5000 })
     await win.locator('.rail__row').hover()
     await win.locator('.rail__project-menu').click()
     await win.getByRole('menuitem', { name: 'Memory', exact: true }).waitFor()

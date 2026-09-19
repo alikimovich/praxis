@@ -31,9 +31,28 @@ try {
       name
     )
   await pose('rest')
-  // Control only the randomized idle delay, preserving authored frame timings.
+  // Observe idle timers without changing real frame timings. Checking pending
+  // timers proves reduced motion cancels/suppresses idle playback without a
+  // 31-second sleep (which previously lost its Electron window mid-wait).
   await win.evaluate(() => {
     Math.random = () => 0
+    const schedule = window.setTimeout.bind(window)
+    const cancel = window.clearTimeout.bind(window)
+    const idleTimers = new Set()
+    window.__catIdleTimers = idleTimers
+    window.setTimeout = (callback, delay, ...args) => {
+      if (!(delay >= 15000 && delay <= 30000)) return schedule(callback, delay, ...args)
+      const id = schedule(() => {
+        idleTimers.delete(id)
+        callback(...args)
+      }, delay)
+      idleTimers.add(id)
+      return id
+    }
+    window.clearTimeout = (id) => {
+      idleTimers.delete(id)
+      cancel(id)
+    }
   })
   const start = () => win.evaluate(() => window.__praxisStore.getState().startAssistant())
   const inject = (type, key) =>
@@ -78,6 +97,7 @@ try {
   await win.screenshot({ path: join(artifacts, 'cat-jump.png') })
   await win.waitForTimeout(500)
   await pose('rest')
+  assert.equal(await win.evaluate(() => window.__catIdleTimers.size), 1, 'rest schedules an idle timer')
   await pose('idle')
   await win.screenshot({ path: join(artifacts, 'cat-idle.png') })
   await win.waitForTimeout(1500)
@@ -102,7 +122,13 @@ try {
   assert.equal(await win.locator('[data-animation="run"]').getAttribute('data-frame'), '0')
   await inject('done', key)
   await pose('rest')
-  await win.waitForTimeout(31000)
+  assert.equal(await win.evaluate(() => window.__catIdleTimers.size), 0, 'reduced motion must not schedule idle')
+  // Re-enable motion to prove the observer can see the timer, then disable it
+  // while resting to verify cancellation of an already-scheduled idle animation.
+  await win.emulateMedia({ reducedMotion: 'no-preference' })
+  await win.waitForFunction(() => window.__catIdleTimers.size === 1)
+  await win.emulateMedia({ reducedMotion: 'reduce' })
+  await win.waitForFunction(() => window.__catIdleTimers.size === 0)
   await pose('rest')
   console.log(
     'CAT ANIMATIONS OK — questions, one-shot jump, occasional idle, error/cancel/background and reduced motion'

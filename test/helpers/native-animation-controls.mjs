@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import electronPath from 'electron'
 import { _electron } from 'playwright'
-import { chooseComposerOption } from './composer-menu.mjs'
 
 export async function verifyAnimationControls(live = false) {
   const root = mkdtempSync(join(tmpdir(), 'praxis-native-animation-'))
@@ -37,7 +36,7 @@ replay()
     }, root)
     await win.waitForFunction(() => /http:/.test(document.querySelector('.previewbar__url')?.textContent ?? ''))
     if (live) {
-      await chooseComposerOption(win, 'Provider', 'codex')
+      await win.selectOption('select[aria-label="Provider"]', 'codex')
       await win.fill('.composer__input', 'Surface animation controls for the animated card in motion.js, with Duration in milliseconds (10ms steps) and Distance in pixels, and Replay. Keep the controls available independently of selection. Preserve the existing animation and defaults.')
       await win.click('.composer__send')
       await win.waitForFunction(() => window.__praxisStore.getState().isRunning, null, { timeout: 20000 })
