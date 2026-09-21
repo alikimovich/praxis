@@ -94,7 +94,7 @@ try {
   const projectNames = () => win.locator('.rail__name').allTextContents()
   const chatNames = () =>
     win
-      .locator('.rail__chats [data-reorder-id]')
+      .locator('.rail__chats > .rail__chat-item [data-reorder-id]')
       .evaluateAll((nodes) => nodes.map((n) => n.textContent.trim()))
   const drag = async (source, target) => {
     await source.scrollIntoViewIfNeeded()
@@ -109,7 +109,7 @@ try {
     await win.waitForSelector('[data-reorder-dragging]', { state: 'detached' })
   }
   const project = (name) => win.locator('.rail__name-btn').filter({ hasText: name })
-  const chat = (name) => win.locator('.rail__chats [data-reorder-id]').filter({ hasText: name })
+  const chat = (name) => win.locator('.rail__chats > .rail__chat-item [data-reorder-id]').filter({ hasText: name })
   const before = await win.evaluate(() => {
     const s = window.__praxisWorkspace.getState()
     return {
@@ -130,7 +130,7 @@ try {
   await drag(chat('First chat'), chat('Third chat'))
   await win.waitForFunction(
     () =>
-      document.querySelector('.rail__chats [data-reorder-id]')?.textContent.includes('First chat'),
+      document.querySelector('.rail__chats > .rail__chat-item [data-reorder-id]')?.textContent.includes('First chat'),
     undefined,
     { timeout: 5000 }
   )

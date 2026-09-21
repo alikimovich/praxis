@@ -21,7 +21,7 @@ mkdirSync(artifacts, { recursive: true })
 
 const rows = (win) =>
   win.evaluate(() => ({
-    chats: document.querySelectorAll('.rail__chats .rail__chat-item').length,
+    chats: document.querySelectorAll('.rail__chats > .rail__chat-item').length,
     history: document.querySelectorAll('.rail__history .rail__chat-item').length,
     more:
       document.querySelector('.rail__history .rail__chat--more .rail__chat-name')?.textContent ??
@@ -100,7 +100,7 @@ try {
 
   const clickMore = () =>
     win.evaluate(() => {
-      const b = document.querySelector('.rail__chat--more')
+      const b = document.querySelector('.rail__history .rail__chat--more')
       if (!b) throw new Error('toggle row missing')
       b.click()
     })

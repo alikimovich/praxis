@@ -824,49 +824,6 @@ body.is-fullscreen .sidebar-toggle {
         animation: none;
     }
 }
-.rail__section-label {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 6px 8px 3px 31px;
-    color: var(--text-muted);
-    /* Sentence case, so the label needs the x-height the old all-caps 9px didn't. */
-    font-size: 10px;
-    font-weight: 600;
-}
-.rail__section-label--history {
-    padding-top: 10px;
-}
-.rail__section-count {
-    opacity: 0.65;
-}
-/* A section label that FOLDS its list (History): same label, plus a leading
-   chevron that eats the label's indent. The chevron sits in the SAME 16px slot
-   the status dots and the folder glyph occupy — 8px pad + 2px + 12px chevron +
-   2px — so it centres on that column, and its 5px right margin (+ the label's
-   own 4px gap) still lands the heading text at the names' 31px indent. */
-.rail__section-toggle {
-    width: 100%;
-    padding-left: 8px;
-    border: none;
-    background: none;
-    cursor: default;
-    font: inherit;
-    font-size: 10px;
-    font-weight: 600;
-    text-align: left;
-}
-.rail__section-toggle:hover {
-    color: var(--text);
-}
-.rail__section-chevron {
-    flex: 0 0 auto;
-    margin: 0 5px 0 2px;
-    transition: transform 0.12s ease;
-}
-.rail__section-chevron--open {
-    transform: rotate(90deg);
-}
 .rail__agents,
 .rail__history {
     list-style: none;

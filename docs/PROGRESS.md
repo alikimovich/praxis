@@ -2,6 +2,25 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-21 — History as a chat-list row
+
+Pulled origin/candidate and preserved both task-log entries when resolving the
+merge conflict. History now lives inside the same list as the live chats and
+uses their shared typography, padding and status-icon slot, with the normal 1px
+row gap instead of a separate heading's top padding. Kept the muted gray for
+both label and count and removed the obsolete section-heading CSS.
+
+Validation: typecheck passed. Full suite initially finished 149 pass / 3 fail;
+the two sidebar failures were outdated selectors after nesting History in the
+chat list. Scoped live-row and Show-more selectors; overflow and reorder passed
+on rerun. The remaining failure is the previously recorded agent-multi
+already-running error. The status/geometry probe passed: matching 12px/400 fonts,
+18px line height, 28px rows and a 1px gap in the same list. Inspected the final
+light screenshot (native vibrancy disabled in the probe for readable capture).
+Retained muted colors
+measure APCA Lc 50 (light) / 41 (dark), below guidance for 12px regular text;
+kept the requested lighter gray rather than changing the existing palette.
+
 ## 2026-09-21 — Subagent cat entrance
 
 Subagent cats now play the existing six-frame appear sequence once on mount

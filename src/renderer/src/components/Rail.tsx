@@ -341,79 +341,81 @@ export default function Rail({
                           </Fragment>
                         )
                       })}
-                    </ul>
-
-                    {past.length > 0 && (
-                      <>
-                        <button
-                          type="button"
-                          className="rail__section-label rail__section-label--history rail__section-toggle"
-                          onClick={() =>
-                            setHistoryOpened((prev) => {
-                              const next = new Set(prev)
-                              if (historyOpen) next.delete(p.key)
-                              else next.add(p.key)
-                              return next
-                            })
-                          }
-                          aria-expanded={historyOpen}
-                        >
-                          <ChevronRight
-                            className={`rail__section-chevron size-3 ${historyOpen ? 'rail__section-chevron--open' : ''}`}
-                            aria-hidden="true"
-                          />
-                          History <span className="rail__section-count">{past.length}</span>
-                        </button>
-                        {historyOpen && (
-                          <ul className="rail__history" aria-label={`${p.name}'s chat history`}>
-                            {pastVisible.map((rec) => {
-                              const name = rec.title ?? chatTitle(firstUserText(rec.transcript))
-                              return (
-                                <RailChatRow
-                                  key={rec.id}
-                                  name={name}
-                                  reorder={reorder.bind({ group: railGroup('history', p.key), id: rec.id, name })}
-                                  status="idle"
-                                  title={`${name} — ${rec.filesTouched.length} file(s)`}
-                                  onOpen={() => onReview(rec)}
-                                  onRename={(next) =>
-                                    void useHistory.getState().rename(rec.projectRoot, rec.id, next)
-                                  }
-                                  onClose={() =>
-                                    void useHistory.getState().remove(rec.projectRoot, rec.id)
-                                  }
-                                  closeLabel="Delete chat"
-                                  closeTitle="Delete from history"
-                                >
-                                  <span className="rail__chat-time">{shortAgo(rec.startedAt)}</span>
-                                </RailChatRow>
-                              )
-                            })}
-                            {past.length > MAX_HISTORY_ROWS && (
-                              <li className="rail__chat-item">
-                                <button
-                                  type="button"
-                                  className="rail__chat rail__chat--more"
-                                  onClick={() =>
-                                    setMoreShown((prev) => {
-                                      const next = new Set(prev)
-                                      if (showAllPast) next.delete(p.key)
-                                      else next.add(p.key)
-                                      return next
-                                    })
-                                  }
-                                >
-                                  <span className="rail__chat-status" aria-hidden="true" />
-                                  <span className="rail__chat-name">
-                                    {showAllPast ? 'Show less' : `Show ${hiddenPast} more`}
-                                  </span>
-                                </button>
-                              </li>
-                            )}
+                      {past.length > 0 && (
+                        <li>
+                          <button
+                            type="button"
+                            className="rail__chat rail__chat--more rail__section-toggle w-full"
+                            onClick={() =>
+                              setHistoryOpened((prev) => {
+                                const next = new Set(prev)
+                                if (historyOpen) next.delete(p.key)
+                                else next.add(p.key)
+                                return next
+                              })
+                            }
+                            aria-expanded={historyOpen}
+                          >
+                            <span className="rail__chat-status" aria-hidden="true">
+                              <ChevronRight
+                                className={`rail__section-chevron size-3 transition-transform duration-150 ${historyOpen ? 'rotate-90' : ''}`}
+                              />
+                            </span>
+                            <span>
+                              History <span className="rail__section-count">{past.length}</span>
+                            </span>
+                          </button>
+                          {historyOpen && (
+                            <ul className="rail__history" aria-label={`${p.name}'s chat history`}>
+                              {pastVisible.map((rec) => {
+                                const name = rec.title ?? chatTitle(firstUserText(rec.transcript))
+                                return (
+                                  <RailChatRow
+                                    key={rec.id}
+                                    name={name}
+                                    reorder={reorder.bind({ group: railGroup('history', p.key), id: rec.id, name })}
+                                    status="idle"
+                                    title={`${name} — ${rec.filesTouched.length} file(s)`}
+                                    onOpen={() => onReview(rec)}
+                                    onRename={(next) =>
+                                      void useHistory.getState().rename(rec.projectRoot, rec.id, next)
+                                    }
+                                    onClose={() =>
+                                      void useHistory.getState().remove(rec.projectRoot, rec.id)
+                                    }
+                                    closeLabel="Delete chat"
+                                    closeTitle="Delete from history"
+                                  >
+                                    <span className="rail__chat-time">{shortAgo(rec.startedAt)}</span>
+                                  </RailChatRow>
+                                )
+                              })}
+                              {past.length > MAX_HISTORY_ROWS && (
+                                <li className="rail__chat-item">
+                                  <button
+                                    type="button"
+                                    className="rail__chat rail__chat--more"
+                                    onClick={() =>
+                                      setMoreShown((prev) => {
+                                        const next = new Set(prev)
+                                        if (showAllPast) next.delete(p.key)
+                                        else next.add(p.key)
+                                        return next
+                                      })
+                                    }
+                                  >
+                                    <span className="rail__chat-status" aria-hidden="true" />
+                                    <span className="rail__chat-name">
+                                      {showAllPast ? 'Show less' : `Show ${hiddenPast} more`}
+                                    </span>
+                                  </button>
+                                </li>
+                              )}
                           </ul>
                         )}
-                      </>
+                      </li>
                     )}
+                    </ul>
                   </div>
                 )}
               </li>

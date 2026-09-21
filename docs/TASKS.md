@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## History row styling (2026-09-21)
+
+- [x] Pull candidate updates and place History in the chat list with matching typography and row spacing, retaining muted gray.
+
 ## Subagent cat entrance (2026-09-21)
 
 - [x] Play the existing appearance sprites once before each subagent runs or idles; respect reduced motion.
