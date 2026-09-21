@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Actual portfolio source access (2026-09-21)
+
+- [x] Diagnose the running Next portfolio, install the missing development integration, and verify selection → Code → exact source after navigation and refresh.
+
 ## Project component composition (2026-09-18)
 
 - [x] Add a default-off, persistent Settings toggle captured per submitted message.

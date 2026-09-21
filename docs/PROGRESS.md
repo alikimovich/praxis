@@ -2,6 +2,35 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-21 — Actual Next portfolio source access
+
+Diagnosed the running sibling `lkmv.ch` checkout without replacing its existing
+work. Praxis was running this repository's development app; the portfolio used
+Next 16.3.5 Turbopack through `bun run content:generate && next dev`, owned by
+Praxis. Its migrated Next config had no wrapper and its sidecar had only old
+React/Svelte helpers. The live portfolio contained zero source stamps, so the
+preview correctly hid Code before any source-read IPC occurred.
+
+Used the running app's scaffold API, wrapped the final MDX config with the existing
+Next adapter, enabled the MDX remark helper only in the development phase, and
+made Babel 7 a direct development dependency in the portfolio. Restarted through
+Praxis's setup flow. All four installed helpers matched current source exactly.
+No Praxis implementation change was needed. Production build output has no stamps.
+
+Actual-app checks use trusted preview input and the real Code toolbar relay:
+home/portfolio Server Component headings, nested IntentLink and ThemeSwitcher
+Client Components, navigation and refresh all open the matching on-disk file and
+highlight its authored line. Native preview and drawer screenshots were inspected.
+Evidence and the repeatable probe are in ignored `test/artifacts/portfolio-debug/`.
+Portfolio check, lint, 52 tests and production build passed. Restored missing
+Praxis dependencies with the frozen lockfile; typecheck then passed. Full suite:
+150 PASS / 1 FAIL / 1 SKIP. The existing test-runner test fails under this
+machine's Bun 1.2.2 on missing-command spawn semantics, and passes under Node.
+The live portion of spawn-comment skipped after no provider edit landed.
+Selection, 3D, Code peek/drawer and setup checks passed. Also verified the actual
+portfolio's 3D Code action and an MDX heading at its authored line. MDX selection
+exposes a separate existing props-inspection parser error; Code still works.
+
 ## 2026-09-18 — Actual Jev UI composition
 
 Added a persisted composition-engine selector under the existing opt-in toggle.
