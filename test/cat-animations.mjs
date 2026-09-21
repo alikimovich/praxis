@@ -67,6 +67,60 @@ try {
       { type, key }
     )
   const key = await win.evaluate(() => window.__praxisStore.getState().activeKey)
+  await win.evaluate((key) => {
+    window.__catEntrance = []
+    const record = () => {
+      const cat = document.querySelector('[aria-label="Background agents"] .cat-loader')
+      if (cat) window.__catEntrance.push(`${cat.dataset.animation}:${cat.dataset.frame}`)
+    }
+    new MutationObserver(record).observe(document.querySelector('.chat__status'), {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['data-animation', 'data-frame']
+    })
+    window.__praxisSpawns.getState().add(key, {
+      id: 'entrance',
+      branch: null,
+      label: 'Entrance test',
+      modelLabel: 'Codex',
+      status: 'running'
+    })
+  }, key)
+  await win.waitForFunction(
+    () =>
+      document.querySelector('[aria-label="Background agents"] .cat-loader')?.dataset.animation ===
+      'appear'
+  )
+  await win.waitForFunction(
+    () =>
+      document.querySelector('[aria-label="Background agents"] .cat-loader')?.dataset.frame === '3'
+  )
+  assert.notEqual(
+    await win
+      .locator('[aria-label="Background agents"] .cat-loader')
+      .evaluate((cat) => getComputedStyle(cat).maskImage),
+    'none',
+    'appearance SVG must be a valid CSS mask'
+  )
+  await win.screenshot({ path: join(artifacts, 'cat-subagent-appear.png') })
+  await win.waitForFunction(
+    () =>
+      document.querySelector('[aria-label="Background agents"] .cat-loader')?.dataset.animation ===
+      'run'
+  )
+  const entrance = await win.evaluate(() => [...new Set(window.__catEntrance)])
+  assert.deepEqual(entrance.slice(0, 7), [
+    'appear:0',
+    'appear:1',
+    'appear:2',
+    'appear:3',
+    'appear:4',
+    'appear:5',
+    'run:0'
+  ])
+  await win.screenshot({ path: join(artifacts, 'cat-subagent-run.png') })
+  await win.evaluate((key) => window.__praxisSpawns.getState().remove(key, 'entrance'), key)
   await start()
   await pose('run')
   await win.evaluate(
@@ -97,7 +151,11 @@ try {
   await win.screenshot({ path: join(artifacts, 'cat-jump.png') })
   await win.waitForTimeout(500)
   await pose('rest')
-  assert.equal(await win.evaluate(() => window.__catIdleTimers.size), 1, 'rest schedules an idle timer')
+  assert.equal(
+    await win.evaluate(() => window.__catIdleTimers.size),
+    1,
+    'rest schedules an idle timer'
+  )
   await pose('idle')
   await win.screenshot({ path: join(artifacts, 'cat-idle.png') })
   await win.waitForTimeout(1500)
@@ -122,13 +180,37 @@ try {
   assert.equal(await win.locator('[data-animation="run"]').getAttribute('data-frame'), '0')
   await inject('done', key)
   await pose('rest')
-  assert.equal(await win.evaluate(() => window.__catIdleTimers.size), 0, 'reduced motion must not schedule idle')
+  assert.equal(
+    await win.evaluate(() => window.__catIdleTimers.size),
+    0,
+    'reduced motion must not schedule idle'
+  )
   // Re-enable motion to prove the observer can see the timer, then disable it
   // while resting to verify cancellation of an already-scheduled idle animation.
   await win.emulateMedia({ reducedMotion: 'no-preference' })
   await win.waitForFunction(() => window.__catIdleTimers.size === 1)
   await win.emulateMedia({ reducedMotion: 'reduce' })
   await win.waitForFunction(() => window.__catIdleTimers.size === 0)
+  await win.evaluate(
+    (key) =>
+      window.__praxisSpawns.getState().add(key, {
+        id: 'reduced',
+        branch: null,
+        label: 'Reduced motion',
+        modelLabel: 'Codex',
+        status: 'running'
+      }),
+    key
+  )
+  await win.waitForFunction(
+    () =>
+      document.querySelector('[aria-label="Background agents"] .cat-loader')?.dataset.animation ===
+      'run'
+  )
+  assert.equal(
+    await win.locator('[aria-label="Background agents"] .cat-loader').getAttribute('data-frame'),
+    '0'
+  )
   await pose('rest')
   console.log(
     'CAT ANIMATIONS OK — questions, one-shot jump, occasional idle, error/cancel/background and reduced motion'

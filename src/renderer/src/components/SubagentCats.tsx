@@ -29,7 +29,7 @@ export default function SubagentCats({ sessionKey }: { sessionKey: string }): Re
                 onClick={() => void window.api.agent.spawnInterrupt(agent.id)}
               >
                 <span aria-hidden="true" className="flex pointer-events-none">
-                  <CatLoader running={agent.status === 'running'} small />
+                  <CatLoader running={agent.status === 'running'} small appear />
                 </span>
               </button>
             </TooltipTrigger>

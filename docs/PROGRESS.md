@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-21 — Subagent cat entrance
+
+Subagent cats now play the existing six-frame appear sequence once on mount
+before running or idling. The first render uses the empty entrance frame, and
+status changes do not restart the sequence. Reduced motion skips the entrance;
+unmounting cancels its timer. Quoted SVG data URLs in the CSS mask also fix the
+solid-square rendering exposed by inspecting the entrance screenshot.
+
+Validation: typecheck and targeted animation tests passed, including all six
+entrance frames before the first run frame, valid SVG masks and reduced motion.
+Entrance/run screenshots were inspected. Full regression: 150 pass / 2 fail;
+project-ui-settings passed on isolated retry, leaving the previously documented
+agent-multi already-running error. The final animation test passed again after
+the mask fix. Targeted lint passed for CatLoader, animation assets and the test;
+SubagentCats retains its pre-existing formatting/ARIA lint findings.
+
 ## 2026-09-18 — Actual Jev UI composition
 
 Added a persisted composition-engine selector under the existing opt-in toggle.

@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Subagent cat entrance (2026-09-21)
+
+- [x] Play the existing appearance sprites once before each subagent runs or idles; respect reduced motion.
+
 ## Project component composition (2026-09-18)
 
 - [x] Add a default-off, persistent Settings toggle captured per submitted message.

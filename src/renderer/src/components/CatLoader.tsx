@@ -6,6 +6,7 @@ import { catFrames } from './cat-animations'
 
 const animations = {
   rest: [{ src: idleUrl, duration: 0 }],
+  appear: catFrames('appear'),
   run: [
     { src: run1Url, duration: 130 },
     { src: run2Url, duration: 130 }
@@ -20,11 +21,13 @@ type Pose = keyof typeof animations
 export default function CatLoader({
   running,
   small = false,
+  appear = false,
   questioning = false,
   completion = 0
 }: {
   running: boolean
   small?: boolean
+  appear?: boolean
   questioning?: boolean
   completion?: number
 }): React.JSX.Element {
@@ -38,12 +41,29 @@ export default function CatLoader({
     update()
     return () => media.removeEventListener('change', update)
   }, [])
+  // Entrance owns its timer so queued/running updates cannot restart or cut it short.
+  const [entranceFrame, setEntranceFrame] = useState<number | null>(() =>
+    appear && !reducedMotion ? 0 : null
+  )
+  const appearing = entranceFrame !== null && !reducedMotion
+  useEffect(() => {
+    if (entranceFrame === null) return
+    if (reducedMotion) {
+      setEntranceFrame(null)
+      return
+    }
+    const timer = setTimeout(() => {
+      setEntranceFrame(entranceFrame + 1 < animations.appear.length ? entranceFrame + 1 : null)
+    }, animations.appear[entranceFrame].duration)
+    return () => clearTimeout(timer)
+  }, [entranceFrame, reducedMotion])
   const lastCompletion = useRef(completion)
   const [sprite, setSprite] = useState<{ pose: Pose; frame: number }>({ pose: 'rest', frame: 0 })
 
   useEffect(() => {
     const completed = completion !== lastCompletion.current
     lastCompletion.current = completion
+    if (appearing) return
     let timer: ReturnType<typeof setTimeout>
     const rest = (): void => {
       setSprite({ pose: 'rest', frame: 0 })
@@ -63,9 +83,11 @@ export default function CatLoader({
     else if (completed && !reducedMotion) play('jump')
     else rest()
     return () => clearTimeout(timer)
-  }, [running, questioning, completion, reducedMotion])
+  }, [running, questioning, completion, reducedMotion, appearing])
 
-  const src = animations[sprite.pose][sprite.frame].src
+  const pose = appearing ? 'appear' : sprite.pose
+  const frame = appearing ? entranceFrame : sprite.frame
+  const src = animations[pose][frame].src
   const label = questioning
     ? 'Waiting for your answer'
     : running
@@ -77,13 +99,13 @@ export default function CatLoader({
     <span
       className="cat-loader"
       data-running={running ? '' : undefined}
-      data-animation={sprite.pose}
-      data-frame={sprite.frame}
+      data-animation={pose}
+      data-frame={frame}
       style={{
         width: small ? 20 : undefined,
         height: small ? 20 : undefined,
-        WebkitMaskImage: `url(${src})`,
-        maskImage: `url(${src})`
+        WebkitMaskImage: `url(${JSON.stringify(src)})`,
+        maskImage: `url(${JSON.stringify(src)})`
       }}
       role="img"
       aria-label={label}
