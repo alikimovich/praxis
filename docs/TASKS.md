@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Controls workflow skill and no-key fallback (2026-09-21)
+
+- [x] Bundle surface-controls, expose it in provider skill menus and route natural controls requests through it.
+- [x] Register validated chat-model candidates when Gateway credentials are absent, reporting the engine and fallback explicitly.
+
 ## Jev saved credentials and unavailable content (2026-09-21)
 
 - [x] Reuse the encrypted Settings Gateway key for content, animation and component Jev requests, with deterministic connection selection.

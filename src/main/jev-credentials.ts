@@ -1,5 +1,7 @@
 import type { ProviderStore } from './providers-store'
 
+export class MissingJevCredentialError extends Error {}
+
 /** Main-process only. Never send a custom endpoint's credential to Gateway. */
 export function savedJevKey(store: ProviderStore, connectionId?: string): string | undefined {
   const gateways = store.list().filter((connection) => {
@@ -35,7 +37,7 @@ export async function resolveJevKey(connectionId?: string): Promise<string> {
   const { resolveSavedJevKey } = await import('./providers')
   const key = resolveSavedJevKey(connectionId) ?? process.env.AI_GATEWAY_API_KEY?.trim()
   if (!key)
-    throw new Error(
+    throw new MissingJevCredentialError(
       'Connect Vercel AI Gateway in Settings to use Jev, or set JEV_AI_GATEWAY_API_KEY.'
     )
   return key

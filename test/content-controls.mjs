@@ -1,3 +1,5 @@
+import { selectControlCandidates } from '../src/main/control-selection.ts'
+import { MissingJevCredentialError } from '../src/main/jev-credentials.ts'
 import assert from 'node:assert/strict'
 import { mkdtemp, writeFile, mkdir, symlink, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -50,5 +52,18 @@ try {
   await assert.rejects(chooseControlsWithJev('test', 'Copy', recipe.sections, { evaluate: async ({questions}) => ({ answers: Object.fromEntries(Object.keys(questions).map(key => [key, {type:'choice', choice: 'unavailable'}])) }) }))
   const cancelled = chooseControlsWithJev('cancel', 'Copy', recipe.sections, { evaluate: async () => { cancelControlComposition('cancel'); return { answers: {} } } })
   await assert.rejects(cancelled)
+  for (const engine of ['auto', 'jev']) {
+    const fallback = await selectControlCandidates('missing', recipe.sections, { engine, prompt: 'Copy' }, async () => { throw new MissingJevCredentialError('Missing key') })
+    assert.equal(fallback.engine, 'agent')
+    assert.equal(fallback.controls, recipe.sections)
+    assert.match(fallback.fallback, /Jev was not called/)
+    const selected = await selectControlCandidates('ready', recipe.sections, { engine, prompt: 'Copy' }, async () => [recipe.sections[0]])
+    assert.equal(selected.engine, 'jev')
+    assert.equal(selected.fallback, undefined)
+    for (const error of [new Error('HTTP 401'), new Error('Multiple connections'), new DOMException('Cancelled', 'AbortError')]) {
+      await assert.rejects(selectControlCandidates('error', recipe.sections, { engine, prompt: 'Copy' }, async () => { throw error }), e => e === error)
+    }
+  }
+  assert.equal((await selectControlCandidates('agent', recipe.sections, { engine: 'agent' }, async () => { throw new Error('Must not call Jev') })).engine, 'agent')
   console.log('CONTENT-CONTROLS OK — recipe persistence, validation, paths, corrupt store, Jev selection, failure and cancellation')
 } finally { await rm(root, { recursive: true, force: true }) }

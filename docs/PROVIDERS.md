@@ -187,5 +187,8 @@ wins; otherwise the sole saved Gateway is used. Environment overrides and ambigu
 connection handling are documented in PROJECT_UI.md.
 
 Claude and Codex/custom endpoints expose `content_controls` (catalog/define) and
-optional Jev selection in `define_controls`; experimental Gemini does not. See
+Jev selection in `define_controls`. Their `auto`/`jev` modes fall back to the chat
+model’s validated candidates only when no Gateway key is configured, returning
+the actual engine and fallback reason. The bundled `surface-controls` skill is
+portable across providers; experimental Gemini explains its missing tools. See
 [CONTENT_CONTROLS.md](CONTENT_CONTROLS.md).

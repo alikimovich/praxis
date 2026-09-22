@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const defineControlsShape = {
-  engine: z.enum(['agent', 'jev']).optional(),
+  engine: z.enum(['agent', 'jev', 'auto']).optional(),
   prompt: z.string().max(4000).optional().describe('User request; required when Jev selects and orders prepared params'),
   manifest: z.object({
     presentation: z.literal('animation').optional().describe('Persistent Praxis panel independent of selection; all params must use literal strategy'),

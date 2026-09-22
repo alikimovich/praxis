@@ -2,6 +2,31 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-21 — Surface-controls skill and no-key fallback
+
+Bundled surface-controls routes natural requests for content, component, style and
+animation controls through native Praxis tools. Operating rules v19 require this
+workflow, and portable skill menus expose /surface-controls. It distinguishes app
+end-user UI requests, JSON content editors, existing inspectors and persistent
+animation controls, with source wiring, landing and verification instructions.
+
+Control registration accepts engine:auto to prefer Jev. Both auto and explicit
+jev fall back to the chat model's prepared candidates only when the Gateway key
+is absent. Registration still validates recipes, content and source anchors;
+tool results report engine:agent plus the missing-key reason. Ambiguous/decryption
+errors, failed requests, cancellation and invalid decisions remain errors. Explicit
+agent and the legacy omitted-engine path skip Jev. Project-UI composition keeps
+its separate explicit-engine behavior.
+
+Validation: skill validator, typecheck, build, focused fallback/discovery/rules tests
+passed. Full suite: 153 PASS / 1 existing agent-multi failure. Live no-key test:
+PASS with a plain “Surface controls for the homepage headline” request, no saved
+connection and both Gateway env keys removed. The agent invoked surface-controls,
+reported the fallback, registered the editor, and the harness confirmed source Save
+updates the real preview. Inspected the resulting editor screenshot. The provider
+turn could not use its preview-state observer under its existing approval policy;
+the independent Electron harness completed that verification after landing.
+
 ## 2026-09-21 — Saved Gateway credentials and missing content recovery
 
 Content/animation control selection and project-component composition now reuse

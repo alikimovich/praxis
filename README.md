@@ -250,7 +250,9 @@ Jev with your saved Vercel AI Gateway connection from Settings. See [scope and w
 
 ### Content editors from chat
 
-Ask chat to surface controls for page copy or collections. Praxis uses content-controls
+Ask chat to surface controls for content, components or animations; the bundled
+`surface-controls` skill chooses the appropriate native workflow. Praxis uses content-controls
 editors beside the preview, with drafts, Save to source and Undo. Ask to use Jev to
-choose content sections or animation/component parameters. See [content controls](docs/CONTENT_CONTROLS.md)
+choose content sections or animation/component parameters. Without a Gateway key,
+controls use the chat model automatically and report that fallback. See [content controls](docs/CONTENT_CONTROLS.md)
 for JSON bindings, Gateway setup and current limits.

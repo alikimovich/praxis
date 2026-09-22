@@ -25,7 +25,7 @@ try {
   symlinkSync(join(root, '.agents/skills'), join(root, '.agents/skills/cycle'))
   symlinkSync(join(base, 'missing'), join(root, '.agents/skills/broken'))
   const skills = await discoverProviderSkills(root, 'codex', home, join(home, '.codex'))
-  assert.deepEqual(skills.map(s => s.name).sort(), ['animation-controls', 'builtin', 'design', 'linked', 'shared'])
+  assert.deepEqual(skills.map(s => s.name).sort(), ['animation-controls', 'builtin', 'design', 'linked', 'shared', 'surface-controls'])
   assert.equal(skills.find(s => s.name === 'design').description, 'Project design')
   assert.equal(skills.find(s => s.name === 'shared').source, 'other')
   assert((await discoverProviderSkills(root, 'gemini', home)).some(s => s.name === 'gemini-only'))

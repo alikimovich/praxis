@@ -57,8 +57,11 @@ Requests explicitly about the selection's inspector keep its existing workflow
 
 ## Optional Jev selection
 
-When asked to use Jev, prepare real source-backed params and pass `engine: "jev"`
+Prepare focused, real source-backed params and pass `engine: "auto"`
 and the user request as `prompt` alongside the manifest in `define_controls`. Jev
 selects and orders the controls before registration. Preserve its returned choice;
-report missing credentials or a failed decision instead of silently falling back.
+When no Gateway key is configured, the tool retains your prepared params and reports
+`engine: "agent"` with a fallback reason. Explain that Jev was not used. Other failures
+remain errors; repair the cause without claiming registration succeeded. Use
+`engine: "agent"` when the user explicitly wants the chat model alone.
 Content-copy and collection requests use `content_controls` catalog/define instead.

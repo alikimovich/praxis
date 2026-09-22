@@ -14,10 +14,10 @@
  *
  * Bump PRAXIS_RULES_VERSION whenever the rule text changes (so logs/tests can pin it).
  */
-import { ANIMATION_CONTROLS_SKILL } from './bundled-skills'
+import { ANIMATION_CONTROLS_SKILL, SURFACE_CONTROLS_SKILL } from './bundled-skills'
 import { projectMemoryRules } from './project-memory'
 
-export const PRAXIS_RULES_VERSION = 18
+export const PRAXIS_RULES_VERSION = 19
 
 export function praxisRules(opts?: {
   previewTools?: boolean
@@ -44,6 +44,12 @@ export function praxisRules(opts?: {
     `together. Praxis re-detects the environment, installs dependencies in the live`,
     `checkout, and restarts the preview after these files successfully land. Never`,
     `start a competing dev server. Failed or parked work does not refresh the preview.`,
+    ``,
+    `## Requests to surface controls`,
+    `When asked to surface, show, expose or add controls for content, components or animations,`,
+    `read and follow the bundled surface-controls skill at ${JSON.stringify(SURFACE_CONTROLS_SKILL)}.`,
+    `Use the native Praxis workflow even without a selected element. Do not build controls into`,
+    `the target page unless the user explicitly requests controls for the app's end users.`,
     ``,
     `## Animation tuning panels`,
     `When asked to surface animation controls or add a DialKit-style panel, read`,
@@ -156,11 +162,11 @@ export function praxisRules(opts?: {
       `independently of selection. Do not add editor dependencies to the target project.`,
       `Save writes JSON through Praxis edit history; drafts, collection edits, Undo and Reset`,
       `are provided by the editor. Verify Save updates the actual page through HMR/reload.`,
-      `When Jev is requested, pass engine:jev and the original user request as prompt.`,
+      `Use engine:auto and the original request as prompt to prefer Jev with a configured key; engine:agent skips Jev.`,
       `Prepare focused sections with real bindings; Jev selects/orders sections. For animation`,
-      `or component controls use define_controls with engine:jev and prompt instead; Jev`,
+      `or component controls use define_controls with engine:auto and prompt instead; Jev`,
       `selects/orders the validated params. Never claim Jev was used without a successful tool result.`,
-      `Do not silently fall back after a Jev failure. These tools work independently of project UI composition settings.`,
+      `Missing keys automatically retain the chat model prepared controls; report the returned engine/fallback. Other Jev failures remain errors. These tools work independently of project UI composition settings.`,
       ``,
       `## Surfacing control panels (define_controls / open_controls)`,
       `When asked to show selection-inspector controls, call open_controls with the object's source stamp`,

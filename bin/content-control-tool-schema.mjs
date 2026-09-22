@@ -6,10 +6,10 @@ export const contentControlsShape = {
     .record(z.string(), z.unknown())
     .optional()
     .describe('Version 1 content-controls recipe; call catalog first for the contract and example'),
-  engine: z.enum(['agent', 'jev']).optional(),
+  engine: z.enum(['agent', 'jev', 'auto']).optional(),
   prompt: z
     .string()
     .max(4000)
     .optional()
-    .describe('Original user request; required for Jev section selection')
+    .describe('Original user request; required for auto/Jev section selection')
 }

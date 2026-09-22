@@ -1,6 +1,10 @@
 # Content controls in the preview
 
-Ask chat: “Surface controls for the homepage headline and projects.” Claude and
+Ask chat: “Surface controls for the homepage headline and projects.” The bundled
+`surface-controls` skill is routed from the operating rules for any controls request;
+it is also available as `/surface-controls`. It distinguishes content editors,
+component inspectors and persistent animation panels. Controls intended for the
+app's end users remain ordinary app development. Claude and
 Codex (including custom Codex endpoints) discover the content-controls catalog,
 read the page, and prepare a version-1 recipe bound to a JSON content file. If
 content is inline, chat first extracts it and wires the page to that JSON through
@@ -36,7 +40,7 @@ binding. Gemini does not expose these tools yet.
 
 Ask “Use Jev to choose controls for this content/animation/component.” The chat
 model prepares concrete, source-backed candidates. `content_controls` with
-`action:define`, `engine:jev` and the request as `prompt` lets Jev select and order
+`action:define`, `engine:auto` and the request as `prompt` lets Jev select and order
 recipe sections. Put a field in its own section when it should be independently
 selectable. `define_controls` accepts the same engine/prompt options to select and
 order validated animation/component parameters, retaining their original write
@@ -46,9 +50,14 @@ chooses membership and order from those concrete candidates.
 Jev uses the existing main-process Gateway credential described in
 [PROJECT_UI.md](PROJECT_UI.md). It is independent of the opt-in project-component
 composition setting. Requests have at most two evaluations and a 25-second deadline.
-Interruption cancels active evaluation. Missing credentials, unavailable decisions
-and invalid output fail without registering a substitute panel. No credential
-enters the renderer or target project.
+Interruption cancels active evaluation. With `engine:auto` (or explicit `jev`), a
+missing Gateway key registers the chat model's prepared, validated controls and
+returns `engine:agent` plus a `fallback` explanation. The agent reports that Jev was
+not used. `engine:agent` skips Jev explicitly; omitting the engine preserves that
+legacy behavior. Ambiguous/unreadable credentials, rejected requests, cancellation
+and invalid output remain errors. This fallback applies to control registration;
+project-UI composition retains its explicit-engine contract. No credential enters
+the renderer or target project.
 
 Desktop uses the native-preview inset so editors cannot be obscured by its
 WebContentsView. Browser mode uses the same content editor and root-scoped commands;
