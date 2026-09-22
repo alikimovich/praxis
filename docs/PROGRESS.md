@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-21 — Compact preview address input
+
+Capped the editable preview path at 200px with a Tailwind max-width utility,
+retaining flex shrinking in narrow toolbars. The focused field no longer spans
+the available toolbar space in wide windows.
+
+Validation: typecheck and build passed. An isolated Electron probe measured a
+200px focused input in an 1800px window; inspected its screenshot. Full suite:
+152 PASS / 2 known failures (startup-intro native crossfade and agent-multi
+already-running). The initial sandboxed run could not bind ports or launch
+Electron; the reported full result is the rerun with those permissions enabled.
+
 ## 2026-09-21 — Surface-controls skill and no-key fallback
 
 Bundled surface-controls routes natural requests for content, component, style and

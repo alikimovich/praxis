@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Compact preview address input (2026-09-21)
+
+- [x] Cap the editable preview path at 200px and verify focused width in a wide window.
+
 ## Controls workflow skill and no-key fallback (2026-09-21)
 
 - [x] Bundle surface-controls, expose it in provider skill menus and route natural controls requests through it.

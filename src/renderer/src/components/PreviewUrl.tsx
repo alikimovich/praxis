@@ -75,7 +75,7 @@ export default function PreviewUrl({
       <span className="previewbar__origin">{origin}</span>
       <input
         ref={inputRef}
-        className="previewbar__path"
+        className="previewbar__path max-w-[200px]"
         value={path}
         aria-label="Preview path"
         spellCheck={false}
