@@ -65,8 +65,9 @@ export async function commitEdit(
 
 /**
  * Prop editing is framework-agnostic by dispatch: the source file's extension
- * picks an adapter. `.svelte` → props-svelte.ts; everything else (.tsx/.jsx/.ts/
- * .js) → the React/JSX engine below. Both speak the same `data-praxis-source`
+ * picks an adapter. `.svelte` → props-svelte.ts; JavaScript/TypeScript sources
+ * → the React/JSX engine below. Inspection skips other source formats.
+ * Both speak the same `data-praxis-source`
  * stamp, the same shared helpers (resolveSource, mergeFields, …), and return the
  * same PropInspection / PropEditResult shapes.
  */
@@ -606,13 +607,24 @@ async function inspectProps(
   const loc = resolveSource(root, source)
   if (!loc) return null
   if (loc.file.endsWith('.svelte')) return inspectSvelteProps(root, source, loc, text)
+  // Stamps also come from MDX/HTML. Those authored files are not JavaScript;
+  // selection and source viewing still work without a React prop inspection.
+  if (!/\.(?:[cm]?[jt]sx?)$/i.test(loc.file)) return null
   let code: string
   try {
     code = await readFile(loc.file, 'utf8')
   } catch {
     return null
   }
-  const found = await findElementAtLine(code, loc.line, loc.column)
+  let found: FoundElement | null
+  try {
+    found = await findElementAtLine(code, loc.line, loc.column)
+  } catch (error) {
+    // Babel's errorRecovery cannot recover every syntax error (including an
+    // incomplete edit). Treat this as unavailable inspection, not failed IPC.
+    if (error instanceof SyntaxError) return null
+    throw error
+  }
   if (!found) return null
 
   const current = readAttributes(found.opening)

@@ -13,7 +13,8 @@ import { _electron as electron } from 'playwright'
 import electronPath from 'electron'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const fixture = join(root, 'test', 'fixtures', 'propedit-app')
@@ -36,6 +37,32 @@ try {
   await win.waitForSelector('.empty__open', { timeout: 15000 })
   await win.evaluate(() => window.__praxisWorkspace.getState().openOrActivate('/tmp/praxis-test-project'))
   await win.waitForSelector('.composer__input', { timeout: 15000 })
+
+  // Unsupported stamped sources and incomplete edits must resolve gracefully
+  // through real IPC. Recovery must re-read the repaired file on the next call.
+  const parseFixture = mkdtempSync(join(tmpdir(), 'praxis-props-parse-'))
+  try {
+    for (const [file, code] of [
+      ['page.mdx', '# Heading\n\nfor the next example\n<Badge />'],
+      ['page.html', '<!doctype html><html><body>Hello</body></html>'],
+      ['invalid.tsx', 'export const value = "unfinished'],
+      ['broken.jsx', 'export default () => <div>{</div>']
+    ]) {
+      writeFileSync(join(parseFixture, file), code)
+      const result = await win.evaluate(
+        ({ root, source }) => window.api.props.inspect(root, source),
+        { root: parseFixture, source: `${file}:1` }
+      )
+      if (result !== null) throw new Error(`Expected unavailable inspection for ${file}`)
+    }
+    writeFileSync(join(parseFixture, 'invalid.tsx'), 'export default () => <div title="repaired" />')
+    const repaired = await win.evaluate(
+      (root) => window.api.props.inspect(root, 'invalid.tsx:1'), parseFixture
+    )
+    if (field(repaired, 'title')?.value !== 'repaired') throw new Error('Inspection did not recover')
+  } finally {
+    rmSync(parseFixture, { recursive: true, force: true })
+  }
 
   // The props panel lives in the floating ISLAND (its own webContents,
   // ?praxisPanel=1) — query its DOM there.

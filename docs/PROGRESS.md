@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-21 — Property inspection console errors
+
+The supplied console log repeatedly rejected props:inspect with Babel syntax
+errors. Inspection now skips non-JavaScript/TypeScript sources (such as stamped
+MDX/HTML) and returns unavailable inspection for unrecoverable syntax errors in
+JSX/TSX, including incomplete edits. Other unexpected errors still propagate.
+The log did not identify the source filenames, so the exact offending files
+remain unknown. Source viewing and Svelte dispatch retain their existing paths.
+
+Validation: typecheck and build passed. Real Electron IPC regression covers
+MDX, HTML, malformed JSX/TSX, and successful inspection after repairing the same
+file; existing prop editing and style editing passed. Full suite: 153 PASS /
+1 FAIL, the previously recorded agent-multi “This chat is already running” error.
+Inspected the test's main-window screenshot; the separate inspector panel is
+verified by its existing DOM assertions rather than that capture.
+
 ## 2026-09-21 — Content editors and Jev control decisions
 
 Vendored the local content-controls 0.1 build and exposed its catalog/recipe flow

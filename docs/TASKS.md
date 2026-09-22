@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Property inspection console errors (2026-09-21)
+
+- [x] Skip unsupported source formats during React inspection and handle incomplete source syntax without rejected IPC; verify recovery after repair.
+
 ## Content controls and Jev (2026-09-21)
 
 - [x] Integrate the local content-controls package into persistent preview-area editors.
