@@ -1,3 +1,4 @@
+import { useSavedJevKey } from './saved-jev-key.mjs'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -29,6 +30,7 @@ replay()
   }
   try {
     app = await _electron.launch({ executablePath: electronPath, args: [join(process.cwd(), 'out/main/index.js')] })
+    if (jev) await useSavedJevKey(app)
     if (jev) await app.evaluate(() => {
       const original = globalThis.fetch
       globalThis.__jevSuccesses = 0

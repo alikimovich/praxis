@@ -1,3 +1,4 @@
+import { useSavedJevKey } from './helpers/saved-jev-key.mjs'
 /** Real Codex turn: settings → catalog/export tools → source file → project preview. */
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync, symlinkSync } from 'node:fs'
@@ -20,6 +21,7 @@ try {
   writeFileSync(join(root, 'src/Card.tsx'), `import React from 'react'; export function Card({title, children}: {title: string; children?: React.ReactNode}) {return <section className="project-card"><h1>{title}</h1>{children}</section>}`)
   writeFileSync(join(root, 'src/theme.css'), 'body { margin: 24px; background: #fff; color: #111; font-family: system-ui; } .project-card { padding: 32px; border: 2px solid currentColor; }')
   app = await _electron.launch({ executablePath: electronPath, args: [join(process.cwd(), 'out/main/index.js')], env: { ...process.env, PRAXIS_USER_DATA: profile, PRAXIS_TEST_SKIP_INTRO: '1' } })
+  if (jev) await useSavedJevKey(app)
   if (jev) await app.evaluate(() => {
     const original = globalThis.fetch
     globalThis.__jevCalls = 0

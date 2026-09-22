@@ -2,6 +2,33 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-21 — Saved Gateway credentials and missing content recovery
+
+Content/animation control selection and project-component composition now reuse
+Settings' encrypted Gateway key in main. The selected Gateway connection wins;
+otherwise the sole saved Gateway is used. Multiple connections require selection,
+custom endpoint keys are excluded, and explicit JEV_AI_GATEWAY_API_KEY overrides
+remain supported. Both Claude and Codex tool paths pass their connection identity.
+
+The supplied log repeatedly read writing-order.json while it was absent from the
+live checkout. Missing bound files now return null from content-controls:get; editors
+retry for a bounded interval and retry again on this project's landing events.
+Parked/abandoned bindings show reload/removal guidance, without endless rejected
+IPC. Loaded drafts are retained. Saves still require valid, current source.
+Text editing now falls back to chat for unsupported formats and Babel SyntaxError,
+matching the earlier inspection fix without rewriting malformed source.
+
+Validation: typecheck and build passed. Full suite: 153 PASS / 1 FAIL, the existing
+agent-multi “This chat is already running” failure. Focused Electron checks cover
+missing-file timeout, landing recovery, source saves, browser commands and safe
+MDX/malformed JSX text fallback. Unit checks cover Gateway connection selection,
+origin confinement, unavailable keys, and worktree-to-live content availability.
+Inspected the editor and separate native-preview captures. Targeted live verify:
+3 PASS (content controls, animation controls, project UI composition), using an
+OS-encrypted fixture connection with both Gateway env fallbacks removed from
+Electron. Real Jev requests succeeded; the content test creates its JSON in a Git
+worktree, lands it, surfaces the editor and saves to source.
+
 ## 2026-09-21 — Property inspection console errors
 
 The supplied console log repeatedly rejected props:inspect with Babel syntax

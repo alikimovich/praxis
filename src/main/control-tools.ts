@@ -21,7 +21,7 @@ export async function defineAgentControls(
   liveRoot: string,
   raw: unknown,
   notify: (channel: string, payload: unknown) => void,
-  options: { key?: string; engine?: string; prompt?: string } = {}
+  options: { connectionId?: string; key?: string; engine?: string; prompt?: string } = {}
 ): Promise<unknown> {
   const fail = (error: string): unknown => ({ error })
   if (!raw || typeof raw !== 'object') return fail('manifest is required')
@@ -59,7 +59,7 @@ export async function defineAgentControls(
     }
   }
   if (options.engine === 'jev') {
-    try { manifest.params = await chooseControlsWithJev(options.key ?? root, options.prompt ?? '', manifest.params) }
+    try { manifest.params = await chooseControlsWithJev(options.key ?? root, options.prompt ?? '', manifest.params, { connectionId: options.connectionId }) }
     catch (error) { return fail(error instanceof Error ? error.message : String(error)) }
   } else if (options.engine && options.engine !== 'agent') return fail('Unknown control engine.')
   const saved = await saveManifest(liveRoot, manifest)

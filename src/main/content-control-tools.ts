@@ -6,7 +6,8 @@ export async function runContentControlTool(
   liveRoot: string,
   key: string,
   raw: unknown,
-  notify: (channel: string, payload: unknown) => void
+  notify: (channel: string, payload: unknown) => void,
+  connectionId?: string
 ): Promise<unknown> {
   try {
     const args = raw as {
@@ -31,7 +32,7 @@ export async function runContentControlTool(
     if (args.engine === 'jev')
       recipe = {
         ...recipe,
-        sections: await chooseControlsWithJev(key, args.prompt ?? '', recipe.sections)
+        sections: await chooseControlsWithJev(key, args.prompt ?? '', recipe.sections, { connectionId })
       }
     else if (args.engine && args.engine !== 'agent') throw new Error('Unknown control engine.')
     const panel = await defineContentControls(root, liveRoot, { file: args.file, recipe })

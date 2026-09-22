@@ -594,7 +594,7 @@ async function startSession(
         },
         async (args) => ({
           content: [{ type: 'text' as const, text: JSON.stringify(
-            await runProjectUiTool(root, emitKey, 'compose_project_ui', args)
+            await runProjectUiTool(root, emitKey, 'compose_project_ui', args, options.connectionId)
           ) }]
         })
       ),
@@ -692,7 +692,8 @@ async function startSession(
         async (args) => {
           const result = await runContentControlTool(
             root, ctx?.liveRoot ?? root, emitKey, args,
-            (channel, payload) => sendToRenderer(getWindow, channel, payload)
+            (channel, payload) => sendToRenderer(getWindow, channel, payload),
+            options.connectionId
           )
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result) }],
@@ -716,6 +717,7 @@ async function startSession(
             (channel, payload) => sendToRenderer(getWindow, channel, payload),
             {
               key: emitKey,
+              connectionId: options.connectionId,
               engine: typeof args.engine === 'string' ? args.engine : undefined,
               prompt: typeof args.prompt === 'string' ? args.prompt : undefined
             }

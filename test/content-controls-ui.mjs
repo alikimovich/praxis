@@ -10,7 +10,7 @@ const recipe = { version: 1, id: 'page', title: 'Page content', sections: [
   { id: 'projects', title: 'Projects', collection: { key: 'projects', itemLabelKey: 'title', addLabel: 'Add project', defaults: { title: 'New project', featured: false }, fields: [{ key: 'title', label: 'Project title', type: 'text' }, { key: 'featured', label: 'Featured', type: 'toggle' }] } }
 ] }
 const initial = { title: 'Original headline', hidden: 'keep me', projects: [{id: 'one', title: 'Praxis', featured: true, hidden: 'retain item'}] }
-writeFileSync(join(root, 'content.json'), JSON.stringify(initial, null, 2) + '\n')
+// Source starts in a private checkout; its live copy arrives after registration.
 writeFileSync(join(root, 'index.html'), '<h1></h1><ul></ul><script>async function refresh(){const data=await fetch("/content.json").then(r=>r.json()); document.querySelector("h1").textContent=data.title;document.querySelector("ul").replaceChildren(...data.projects.map(p=>{const li=document.createElement("li");li.textContent=p.title;return li}))}refresh();setInterval(refresh,300)</script>')
 mkdirSync(join(root, '.praxis'))
 writeFileSync(join(root, '.praxis/content-controls.json'), JSON.stringify({ version: 1, panels: [{ id: 'page', file: 'content.json', recipe }] }))
@@ -26,6 +26,11 @@ try {
   const panel = win.getByRole('complementary', { name: 'Preview controls', exact: true })
   await panel.waitFor()
   const headline = panel.getByRole('textbox', {name: 'Headline', exact:true})
+  await panel.getByText('Waiting for content.json to land…', { exact: true }).waitFor()
+  assert.equal(await win.evaluate(root => window.api.contentControls.get(root, 'page'), root), null)
+  await panel.getByText(/The content file is not in the live checkout/).waitFor({ timeout: 35000 })
+  writeFileSync(join(root, 'content.json'), JSON.stringify(initial, null, 2) + '\n')
+  await app.evaluate(({ BrowserWindow }, root) => BrowserWindow.getAllWindows()[0].webContents.send('agent:event', { type: 'landing-finished', projectKey: root }), root)
   await headline.fill('Edited in Praxis')
   await panel.getByRole('button', { name: 'Collapse preview controls' }).click()
   await panel.getByRole('button', { name: 'Show preview controls' }).click()

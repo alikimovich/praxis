@@ -244,16 +244,16 @@ async function startSession(
       const notify = (channel: string, payload: unknown): void =>
         sendToRenderer(getWindow, channel, payload)
       if (action === 'project_ui_catalog' || action === 'compose_project_ui')
-        return runProjectUiTool(root, emitKey, action, args)
+        return runProjectUiTool(root, emitKey, action, args, options.connectionId)
       if (action === 'content_controls')
-        return runContentControlTool(root, ctx?.liveRoot ?? root, emitKey, args, notify)
+        return runContentControlTool(root, ctx?.liveRoot ?? root, emitKey, args, notify, options.connectionId)
       if (action === 'define_controls')
         return defineAgentControls(
           root,
           ctx?.liveRoot ?? root,
           (args as { manifest?: unknown })?.manifest,
           notify,
-          { ...(args as { engine?: string; prompt?: string }), key: emitKey }
+          { ...(args as { engine?: string; prompt?: string }), key: emitKey, connectionId: options.connectionId }
         )
       if (action === 'open_preview')
         return openAgentPreview(ctx?.liveRoot ?? root, emitKey, args, notify, !!ctx?.sessionId)

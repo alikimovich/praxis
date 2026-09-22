@@ -54,6 +54,14 @@ try {
         { root: parseFixture, source: `${file}:1` }
       )
       if (result !== null) throw new Error(`Expected unavailable inspection for ${file}`)
+      if (!file.endsWith('.html')) {
+        const textResult = await win.evaluate(
+          ({ root, source }) => window.api.text.apply(root, { source, text: 'Updated text' }),
+          { root: parseFixture, source: `${file}:1` }
+        )
+        if (!textResult.needsAgent || textResult.applied) throw new Error(`Expected safe text fallback for ${file}`)
+        if (readFileSync(join(parseFixture, file), 'utf8') !== code) throw new Error('Fallback modified source')
+      }
     }
     writeFileSync(join(parseFixture, 'invalid.tsx'), 'export default () => <div title="repaired" />')
     const repaired = await win.evaluate(

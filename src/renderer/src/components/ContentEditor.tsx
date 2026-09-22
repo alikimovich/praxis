@@ -2,6 +2,7 @@ import { RecipePanel } from '@alikimovich/content-controls'
 import { createRecipeStore } from '@alikimovich/content-controls/recipe'
 import { useEffect, useRef, useState } from 'react'
 import type { ContentControlDocument, ContentControlPanel } from '../../../shared/api'
+import { projectKey } from '../../../shared/projectKey'
 import '@alikimovich/content-controls/styles.css'
 import './content-editor.css'
 
@@ -52,23 +53,52 @@ export default function ContentEditor({
   useEffect(() => {
     let disposed = false
     let timer: ReturnType<typeof setTimeout> | undefined
+    let attempts = 0
+    let loaded = false
+    let loading = false
     const load = async (): Promise<void> => {
+      if (disposed || loaded || loading) return
+      loading = true
+      clearTimeout(timer)
       try {
         const next = await window.api.contentControls.get(root, panel.id)
         if (!disposed) {
-          setDocument(next)
-          setError(null)
+          if (next) {
+            loaded = true
+            setDocument(next)
+            setError(null)
+          } else if (++attempts < 20) {
+            timer = setTimeout(() => void load(), 1500)
+          } else {
+            setError(
+              'The content file is not in the live checkout. Finish or apply the chat changes, then reload. You can remove an unused editor.'
+            )
+          }
         }
       } catch (cause) {
         if (!disposed) {
           setError(cause instanceof Error ? cause.message : 'Content is not available yet.')
-          timer = setTimeout(() => void load(), 1500)
         }
+      } finally {
+        loading = false
       }
     }
+    // Landing happens after the provider's done event. Never replace a loaded draft.
+    const key = projectKey(root)
+    const unsubscribe = window.api.agent.onEvent((event) => {
+      if (event.projectKey !== key && !event.projectKey?.startsWith(`${key}#`)) return
+      if (
+        event.type === 'landing-finished' ||
+        event.type === 'spawn-finished' ||
+        event.type === 'isolation' ||
+        event.type === 'done'
+      )
+        void load()
+    })
     void load()
     return () => {
       disposed = true
+      unsubscribe()
       clearTimeout(timer)
     }
   }, [root, panel.id, reload])
@@ -77,7 +107,9 @@ export default function ContentEditor({
       {document ? (
         <LoadedEditor key={`${reload}:${document.revision}`} root={root} document={document} />
       ) : (
-        <p role="status">Waiting for {panel.file} to land…</p>
+        <p role="status">
+          {error ? `Content unavailable: ${panel.file}` : `Waiting for ${panel.file} to land…`}
+        </p>
       )}
       {document && JSON.stringify(document.panel.recipe) !== JSON.stringify(panel.recipe) && (
         <p role="status" className="px-3 py-2 text-sm">

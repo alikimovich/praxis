@@ -1,5 +1,5 @@
 import {
-  getContentControls,
+  getAvailableContentControls,
   listContentControls,
   removeContentControls,
   saveContentControls
@@ -8,7 +8,7 @@ import type { RpcHandlerRegistry } from './rpc-router'
 
 export function registerContentControlsIpc(ipc: RpcHandlerRegistry): void {
   ipc.handle('content-controls:list', (_e, root: string) => listContentControls(root))
-  ipc.handle('content-controls:get', (_e, root: string, id: string) => getContentControls(root, id))
+  ipc.handle('content-controls:get', (_e, root: string, id: string) => getAvailableContentControls(root, id))
   ipc.handle(
     'content-controls:save',
     (_e, root: string, id: string, revision: string, value: unknown) =>

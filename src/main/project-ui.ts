@@ -167,7 +167,8 @@ export async function runProjectUiTool(
   root: string,
   key: string,
   action: string,
-  args?: unknown
+  args?: unknown,
+  connectionId?: string
 ): Promise<unknown> {
   if (!projectUiEnabled(key))
     return { error: 'Use project components is off. Enable it in Settings and send a new message.' }
@@ -200,7 +201,7 @@ export async function runProjectUiTool(
       composing.set(key, controller)
       try {
         const { composeProjectUiWithJev } = await import('./project-ui-jev')
-        const result = await composeProjectUiWithJev(project, args, { signal: controller.signal })
+        const result = await composeProjectUiWithJev(project, args, { signal: controller.signal, connectionId })
         return { ...result, saved: false, warnings: project.warnings }
       } finally {
         if (composing.get(key) === controller) composing.delete(key)

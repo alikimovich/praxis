@@ -32,9 +32,12 @@ json-render's experimental batch composer. It does not generate freeform TSX or
 invent copy. Only a completed, validated tree is exported; errors or incomplete
 results never silently fall back to the chat model.
 
-Set `JEV_AI_GATEWAY_API_KEY` (or `AI_GATEWAY_API_KEY`) in the **Praxis process
-environment**, then restart Praxis. This is a Vercel AI Gateway credential, separate
-from the chat provider login. It stays in main; renderer state and tool results
+Jev reuses the encrypted Vercel AI Gateway key saved in **Settings**. It prefers
+this chat's selected Gateway connection; otherwise it uses the sole saved Gateway
+connection. With multiple saved Gateways, select one for the chat. Custom endpoint
+credentials are never reused. `JEV_AI_GATEWAY_API_KEY` explicitly overrides the
+saved connection; `AI_GATEWAY_API_KEY` is a fallback when none is saved.
+The Gateway credential is separate from a Codex/Claude subscription login. It stays in main; renderer state and tool results
 never contain it. Requests send the UI prompt, prepared component descriptions and
 candidate information to the Gateway. Do not place the credential in a target repo.
 For development with an ignored, owner-only Praxis `.env.local`, Bun can explicitly

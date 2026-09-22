@@ -246,7 +246,7 @@ UI from the opened project’s components and styles using json-render. This is
 experimental and off by default. The setting is saved on this device and captured
 when you submit a message. Turning it off restores ordinary editing and keeps
 generated source. Choose **Jev (experimental)** as the composition engine to try
-Jev with a Vercel AI Gateway key in the Praxis process environment. See [scope and workflow](docs/PROJECT_UI.md).
+Jev with your saved Vercel AI Gateway connection from Settings. See [scope and workflow](docs/PROJECT_UI.md).
 
 ### Content editors from chat
 

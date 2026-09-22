@@ -213,5 +213,8 @@ failures still surface normally.
 
 Content-editor recipes are registered from the chat worktree against its JSON,
 persisted by main to the live sidecar, and become editable after content lands.
+A missing live JSON file returns an unavailable read, with bounded editor retries
+and another read on landing events; existing drafts remain untouched. A parked
+or abandoned binding offers explicit reload/removal instead of endless IPC errors.
 Content Save is serialized with repository writes and checks its loaded revision
 before applying through edit history. See [CONTENT_CONTROLS.md](CONTENT_CONTROLS.md).

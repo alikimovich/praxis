@@ -1,3 +1,4 @@
+import { savedJevKey } from './jev-credentials'
 import { join } from 'node:path'
 import { app, ipcMain as electronIpcMain, safeStorage } from 'electron'
 import type {
@@ -44,7 +45,7 @@ let ipcMain: RpcHandlerRegistry = electronIpcMain
  *
  * KEY DISCIPLINE (see providers-store.ts): plaintext keys never cross IPC and
  * never enter a log line or an error string — the one door to a key is
- * `secretFor()`, used here by `catalog()` and `resolveConnection()` only.
+ * `secretFor()`, used only by main-process catalog, chat and Jev requests.
  */
 
 /**
@@ -417,6 +418,10 @@ export function choices(): ModelChoice[] {
     }
   }
   return out
+}
+
+export function resolveSavedJevKey(connectionId?: string): string | undefined {
+  return savedJevKey(store(), connectionId)
 }
 
 /**

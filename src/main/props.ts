@@ -791,12 +791,19 @@ async function applyTextEdit(
   } catch {
     return { applied: false, error: 'Could not read the source file.' }
   }
-  const found = await findElementAtLine(code, loc.line, loc.column)
   const agentFallback = (): PropEditResult => ({
     applied: false,
     needsAgent: true,
     agentPrompt: textAgentPrompt(edit.source, newText)
   })
+  if (!/\.[cm]?[jt]sx?$/i.test(loc.file)) return agentFallback()
+  let found: Awaited<ReturnType<typeof findElementAtLine>>
+  try {
+    found = await findElementAtLine(code, loc.line, loc.column)
+  } catch (error) {
+    if (error instanceof SyntaxError) return agentFallback()
+    throw error
+  }
   if (!found) return agentFallback()
 
   const elements: BabelNode[] = []

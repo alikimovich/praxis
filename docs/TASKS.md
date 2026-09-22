@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Jev saved credentials and unavailable content (2026-09-21)
+
+- [x] Reuse the encrypted Settings Gateway key for content, animation and component Jev requests, with deterministic connection selection.
+- [x] Bound missing-source retries, recover editors after landing and retain drafts.
+- [x] Fall back to chat for unsupported or malformed source during text editing.
+
 ## Property inspection console errors (2026-09-21)
 
 - [x] Skip unsupported source formats during React inspection and handle incomplete source syntax without rejected IPC; verify recovery after repair.

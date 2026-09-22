@@ -1,3 +1,5 @@
+import assert from 'node:assert/strict'
+import { savedJevKey } from '../src/main/jev-credentials.ts'
 /**
  * ProviderStore unit test (pure — no Electron). The v10 store for user-added
  * model endpoints: create/update round-trip, the "omitted apiKey keeps the stored
@@ -60,6 +62,28 @@ try {
   ok(created.hasKey === true, 'created connection reports hasKey')
   ok(created.baseUrl === 'https://ai-gateway.vercel.sh/v1', 'baseUrl round-trips')
   ok(store.secretFor(created.id) === 'sk-secret-1', 'secretFor decrypts the stored key')
+  assert.equal(savedJevKey(store), 'sk-secret-1')
+  const secondGateway = store.save(draft({ apiKey: 'other-key' }))
+  assert.throws(() => savedJevKey(store), /multiple/)
+  assert.equal(savedJevKey(store, secondGateway.id), 'other-key')
+  assert.equal(savedJevKey(store, created.id), 'sk-secret-1')
+  store.remove(secondGateway.id)
+  const custom = store.save(draft({ preset: 'custom', baseUrl: 'https://custom.example/v1', apiKey: 'custom-key' }))
+  assert.equal(savedJevKey(store, custom.id), 'sk-secret-1')
+  store.remove(custom.id)
+  const fakeStore = (connection, secret = 'must-not-leak') => ({
+    list: () => [connection], secretFor: () => secret
+  })
+  for (const connection of [
+    { ...created, baseUrl: 'https://other.example/v1' },
+    { ...created, baseUrl: 'http://ai-gateway.vercel.sh/v1' },
+    { ...created, baseUrl: 'https://ai-gateway.vercel.sh.evil.example/v1' },
+    { ...created, baseUrl: 'https://user:pass@ai-gateway.vercel.sh/v1' },
+    { ...created, preset: 'custom' },
+    { ...created, hasKey: false }
+  ]) assert.equal(savedJevKey(fakeStore(connection)), undefined)
+  assert.throws(() => savedJevKey(fakeStore(created, null)), /Reconnect/)
+
 
   const updated = store.save(draft({ id: created.id, label: 'Gateway (work)', models: ['a', 'b'] }))
   ok(store.list().length === 1, 'saving with an id updates in place, never duplicates')

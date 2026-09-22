@@ -14,7 +14,10 @@ Undo and Reset operate on drafts. **Save to source** writes the document through
 Praxis edit history, after checking that the loaded revision still matches disk.
 A conflicting save preserves the draft; Reload explicitly discards it. App-level
 Undo reverts saved edits. Switching projects or restarting the app discards unsaved
-drafts. Recipes persist in `.praxis/content-controls.json` and reopen with the project.
+drafts. A new JSON binding waits for its source to land in the live checkout.
+Missing files do not reject IPC: the editor retries for 30 seconds and on chat
+landing events, then offers reload/removal if the source remains unavailable.
+Existing drafts are never replaced by those events. Recipes persist in `.praxis/content-controls.json` and reopen with the project.
 
 Only recipe-owned fields change on Save; unrelated document and existing item
 fields are retained. JSON files must be inside the project, outside hidden paths,
@@ -64,5 +67,6 @@ React 18 instance; the editor and Motion are lazy-loaded.
 - `node test/content-controls-ui.mjs` after build: content/collection editing,
   native preview updates, draft retention, stale-write refusal and Undo.
 - `node test/content-controls-agent.mjs` after build: real Codex registration and
-  source save, with verified Jev requests when Gateway credentials are inherited.
+  worktree landing and source save, with verified Jev requests through an encrypted
+  saved connection when Gateway credentials are available to seed the test.
 - `bun test/praxis-agent-tools.mjs`: actual MCP transport and tool discovery.

@@ -1468,7 +1468,8 @@ export interface PraxisApi {
    *  the repo's `.praxis/control-panels.json`, values resolved fresh per read. */
   contentControls: {
     list(root: string): Promise<ContentControlPanel[]>
-    get(root: string, id: string): Promise<ContentControlDocument>
+    /** Null while the bound JSON is absent from the live checkout. */
+    get(root: string, id: string): Promise<ContentControlDocument | null>
     save(root: string, id: string, revision: string, value: unknown): Promise<ContentControlDocument>
     remove(root: string, id: string): Promise<void>
     onUpdated(cb: (event: { root: string; id: string }) => void): () => void

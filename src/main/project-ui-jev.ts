@@ -1,3 +1,4 @@
+import { resolveJevKey } from './jev-credentials'
 import { z } from 'zod'
 import type {
   Experimental_CompositionEvaluator,
@@ -38,6 +39,7 @@ export async function composeProjectUiWithJev(
     signal?: AbortSignal
     evaluate?: Experimental_CompositionEvaluator
     apiKey?: string
+    connectionId?: string
   } = {}
 ) {
   options.signal?.throwIfAborted()
@@ -59,12 +61,9 @@ export async function composeProjectUiWithJev(
   const { experimental_composeSpec, experimental_createEvaluator } = await import(
     '@json-render/core'
   )
-  const apiKey =
-    options.apiKey ?? process.env.JEV_AI_GATEWAY_API_KEY ?? process.env.AI_GATEWAY_API_KEY
-  if (!options.evaluate && !apiKey?.trim())
-    throw new Error(
-      'Jev needs JEV_AI_GATEWAY_API_KEY or AI_GATEWAY_API_KEY in the Praxis process environment.'
-    )
+  const apiKey = options.evaluate
+    ? undefined
+    : (options.apiKey ?? (await resolveJevKey(options.connectionId)))
   const deadline = AbortSignal.timeout(25_000)
   const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline
   const evaluate =

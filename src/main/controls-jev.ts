@@ -1,3 +1,4 @@
+import { resolveJevKey } from './jev-credentials'
 import type { Experimental_CompositionEvaluator } from '@json-render/core'
 import { z } from 'zod'
 import { buildCatalog } from './project-ui'
@@ -17,6 +18,7 @@ export async function chooseControlsWithJev<T>(
   options: {
     evaluate?: Experimental_CompositionEvaluator
     apiKey?: string
+    connectionId?: string
   } = {}
 ): Promise<T[]> {
   if (!prompt?.trim() || prompt.length > 4000)
@@ -28,16 +30,14 @@ export async function chooseControlsWithJev<T>(
   )
     throw new Error('Provide 1–24 candidates below 28 KB.')
   if (active.has(key)) throw new Error('Jev is already choosing controls for this chat.')
-  const apiKey =
-    options.apiKey ?? process.env.JEV_AI_GATEWAY_API_KEY ?? process.env.AI_GATEWAY_API_KEY
-  if (!options.evaluate && !apiKey?.trim())
-    throw new Error(
-      'Jev needs JEV_AI_GATEWAY_API_KEY or AI_GATEWAY_API_KEY in the Praxis process environment.'
-    )
   const controller = new AbortController()
   active.set(key, controller)
   try {
+    const apiKey = options.evaluate
+      ? undefined
+      : (options.apiKey ?? (await resolveJevKey(options.connectionId)))
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(25_000)])
+    signal.throwIfAborted()
     const { experimental_composeSpec, experimental_createEvaluator } = await import(
       '@json-render/core'
     )

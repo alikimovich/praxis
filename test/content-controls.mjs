@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, writeFile, mkdir, symlink, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { defineContentControls, listContentControls, getContentControls, removeContentControls, validateContentFile } from '../src/main/content-controls.ts'
+import { getAvailableContentControls, defineContentControls, listContentControls, getContentControls, removeContentControls, validateContentFile } from '../src/main/content-controls.ts'
 import { chooseControlsWithJev, cancelControlComposition } from '../src/main/controls-jev.ts'
 const root = await mkdtemp(join(tmpdir(), 'praxis-content-unit-'))
 const recipe = { version: 1, id: 'hero', title: 'Hero content', sections: [{ id: 'copy', title: 'Copy', fields: [{ key: 'title', label: 'Title', type: 'text', required: true }] }] }
@@ -17,6 +17,18 @@ try {
   await defineContentControls(root, root, { file: 'content.json', recipe: { ...recipe, title: 'Updated' } })
   assert.equal((await listContentControls(root)).length, 1)
   assert.notEqual((await getContentControls(root, 'hero')).revision, document.revision, 'recipe changes invalidate old editors')
+  // Registration reads private source; the live editor waits until landing.
+  const privateRoot = await mkdtemp(join(tmpdir(), 'praxis-content-private-'))
+  try {
+    await writeFile(join(privateRoot, 'pending.json'), JSON.stringify({ title: 'Landed' }))
+    await defineContentControls(privateRoot, root, { file: 'pending.json', recipe: { ...recipe, id: 'pending' } })
+    assert.equal(await getAvailableContentControls(root, 'pending'), null)
+    await writeFile(join(root, 'pending.json'), JSON.stringify({ title: 'Landed' }))
+    assert.equal((await getAvailableContentControls(root, 'pending')).value.title, 'Landed')
+    await writeFile(join(root, 'pending.json'), 'invalid')
+    await assert.rejects(getAvailableContentControls(root, 'pending'), SyntaxError)
+    await removeContentControls(root, 'pending')
+  } finally { await rm(privateRoot, { recursive: true, force: true }) }
   for (const path of ['../bad.json', '/bad.json', '.praxis/bad.json', 'node_modules/data.json', 'package.json', 'src/../../bad.json', 'bad.ts']) assert.throws(() => validateContentFile(path))
   await assert.rejects(defineContentControls(root, root, { file: 'content.json', recipe: { ...recipe, sections: [] } }))
   await writeFile(join(root, 'bad.json'), '{"title": 12}')

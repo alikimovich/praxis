@@ -104,6 +104,18 @@ export async function getContentControls(
   if (!panel) throw new Error('Content panel not found.')
   return readContentDocument(root, panel)
 }
+/** A registered worktree binding may not exist in the live checkout yet. */
+export async function getAvailableContentControls(
+  root: string,
+  id: string
+): Promise<ContentControlDocument | null> {
+  try {
+    return await getContentControls(root, id)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+}
 export async function defineContentControls(
   root: string,
   liveRoot: string,
