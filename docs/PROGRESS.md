@@ -2,6 +2,44 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-21 — Content editors and Jev control decisions
+
+Vendored the local content-controls 0.1 build and exposed its catalog/recipe flow
+to Claude and Codex/custom endpoints. Chat binds page content to JSON; persistent
+preview-area editors provide text/textarea, number, toggle/select and collection
+controls with drafts, Undo/Reset and Save to source. Editors share the native
+preview inset with animation panels, lazy-load their runtime, follow both themes,
+and work through root-scoped browser commands. No target editor dependency is
+needed. Registration reads the worktree and persists in the live sidecar.
+
+Saves use the repository writer queue and edit history, preserve unknown document
+and existing collection-item fields, validate recipes/values and real paths, and
+reject stale content or recipe revisions without losing drafts. Corrupt stores
+are not overwritten. JSON bindings and current limits are in CONTENT_CONTROLS.md.
+
+Optional Jev chooses membership/order from prepared content sections or validated
+animation/component parameters. It uses the existing main-process Gateway setup,
+with two evaluations, a 25-second deadline and cancellation; failures register no
+fallback. Verified the reference's catalog/decision approach in the browser.
+
+Validation: typecheck, build, scoped MCP transport, unit checks and targeted lint
+passed. Real Codex content registration made one successful Jev evaluation, then
+saved through the editor. A separate real Jev animation turn passed parameter
+editing, Replay, selection independence, collapse/reopen and source Undo. Browser
+RPC tests cover root isolation, saves, preserved fields and stale revisions.
+Light/dark content UI and native preview/animation screenshots were inspected;
+16px regular editor text passes APCA in both themes (Lc 106 / 96).
+
+Full regression initially finished 150 PASS / 4 FAIL. Fixed this change's MCP
+entry-point startup issue; its real transport passed. Chat-hide launch timeout and
+chat-render slash-selection assertions passed isolated retries. The pre-existing
+agent-multi already-running failure remains. Final content UI passed after adding
+a bounded retry for a transient native capture UnknownVizError (editing assertions
+had already passed). Focused verify finished 12 PASS / 1 capture failure; that
+content UI retry passed. All five live checks passed: content-controls with Jev,
+animation controls with Jev, Claude controls, Codex controls and tool invocation.
+Final typecheck and docs-link checks passed.
+
 ## 2026-09-21 — History as a chat-list row
 
 Pulled origin/candidate and preserved both task-log entries when resolving the

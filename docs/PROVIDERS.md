@@ -182,3 +182,7 @@ see [PROJECT_UI.md](PROJECT_UI.md). Settings can select the current chat model o
 Jev as the composition engine. With Jev, Claude/Codex prepares candidate props and
 copy, and a separate Gateway evaluation selects the composition. Jev requires a
 server-side Gateway credential and never silently falls back to another engine.
+
+Claude and Codex/custom endpoints expose `content_controls` (catalog/define) and
+optional Jev selection in `define_controls`; experimental Gemini does not. See
+[CONTENT_CONTROLS.md](CONTENT_CONTROLS.md).

@@ -1,3 +1,4 @@
+import type { PanelRecipe } from '@alikimovich/content-controls/recipe'
 /**
  * Types shared across the main / preload / renderer boundary. This module is
  * neutral (no electron or node imports) so every tsconfig can include it
@@ -1465,6 +1466,13 @@ export interface PraxisApi {
   }
   /** AI-surfaced custom-control panels (v10) — manifests persisted by main in
    *  the repo's `.praxis/control-panels.json`, values resolved fresh per read. */
+  contentControls: {
+    list(root: string): Promise<ContentControlPanel[]>
+    get(root: string, id: string): Promise<ContentControlDocument>
+    save(root: string, id: string, revision: string, value: unknown): Promise<ContentControlDocument>
+    remove(root: string, id: string): Promise<void>
+    onUpdated(cb: (event: { root: string; id: string }) => void): () => void
+  }
   controls: {
     onOpen: (cb: (request: ControlsOpenRequest) => void) => () => void
     /** Panels matching the selection's candidate files (two-stamp match), with
@@ -1763,3 +1771,6 @@ export interface PraxisApi {
     apply: () => Promise<void>
   }
 }
+
+export interface ContentControlPanel { id: string; file: string; recipe: PanelRecipe }
+export interface ContentControlDocument { panel: ContentControlPanel; value: Record<string, unknown>; revision: string }

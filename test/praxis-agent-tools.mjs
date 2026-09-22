@@ -18,7 +18,7 @@ import {
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const calls = []
 const registration = await registerPraxisAgentTools(async (action, args) => {
-  if (action === 'project_ui_catalog' || action === 'compose_project_ui' || action === 'open_preview' || action === 'open_code' || action === 'open_controls' || action === 'define_controls') return { received: args ?? {} }
+  if (action === 'content_controls' || action === 'project_ui_catalog' || action === 'compose_project_ui' || action === 'open_preview' || action === 'open_code' || action === 'open_controls' || action === 'define_controls') return { received: args ?? {} }
   calls.push(action)
   if (action === 'workspace_state') {
     return { state: 'parked', files: ['src/App.tsx'] }
@@ -114,6 +114,7 @@ try {
   const listed = await request('tools/list')
   assert.deepEqual(listed.result.tools.map((tool) => tool.name).sort(), [
     'compose_project_ui',
+    'content_controls',
     'define_controls',
     'open_code',
     'open_controls',
@@ -123,6 +124,8 @@ try {
     'workspace_state'
   ])
 
+  const content = await request('tools/call', { name: 'content_controls', arguments: { action: 'catalog' } })
+  assert.deepEqual(content.result.structuredContent.received, { action: 'catalog' })
   const catalog = await request('tools/call', { name: 'project_ui_catalog', arguments: {} })
   assert.deepEqual(catalog.result.structuredContent.received, {})
   const composition = { file: 'src/Page.tsx', spec: { root: 'a', elements: { a: { type: 'Card', props: {}, children: [] } } } }

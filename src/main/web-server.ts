@@ -1,3 +1,4 @@
+import { registerContentControlsIpc } from './content-controls-ipc'
 import { projectKey } from '../shared/projectKey'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { createReadStream, realpathSync, statSync } from 'node:fs'
@@ -39,6 +40,10 @@ const MIME: Record<string, string> = {
 }
 
 const ROOT_ARGUMENTS: Record<string, number | 'options'> = {
+  'content-controls:list': 0,
+  'content-controls:get': 0,
+  'content-controls:save': 0,
+  'content-controls:remove': 0,
   'project:detect': 0,
   'project:icon': 0,
   'devserver:start': 'options',
@@ -350,6 +355,7 @@ export async function startBrowserServer(options: BrowserServerOptions): Promise
   registerDevServerIpc(getWindow, router)
   registerAgentIpc(getWindow, router)
   registerTokensIpc(router)
+  registerContentControlsIpc(router)
   router.handle('project:pick', () => root)
   router.handle('project:icon', () => readProjectIcon(root))
   router.handle('menu:set-recents', () => undefined)

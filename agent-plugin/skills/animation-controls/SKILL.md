@@ -54,3 +54,11 @@ If `define_controls` is unavailable, explain that this provider cannot register
 native controls; do not silently install a tuning dependency as a fallback.
 Requests explicitly about the selection's inspector keep its existing workflow
 (omit presentation and use `open_controls` if needed).
+
+## Optional Jev selection
+
+When asked to use Jev, prepare real source-backed params and pass `engine: "jev"`
+and the user request as `prompt` alongside the manifest in `define_controls`. Jev
+selects and orders the controls before registration. Preserve its returned choice;
+report missing credentials or a failed decision instead of silently falling back.
+Content-copy and collection requests use `content_controls` catalog/define instead.

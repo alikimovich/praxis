@@ -1,3 +1,4 @@
+import { chooseControlsWithJev } from './controls-jev'
 import { createHash, randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -19,7 +20,8 @@ export async function defineAgentControls(
   root: string,
   liveRoot: string,
   raw: unknown,
-  notify: (channel: string, payload: unknown) => void
+  notify: (channel: string, payload: unknown) => void,
+  options: { key?: string; engine?: string; prompt?: string } = {}
 ): Promise<unknown> {
   const fail = (error: string): unknown => ({ error })
   if (!raw || typeof raw !== 'object') return fail('manifest is required')
@@ -56,6 +58,10 @@ export async function defineAgentControls(
       )
     }
   }
+  if (options.engine === 'jev') {
+    try { manifest.params = await chooseControlsWithJev(options.key ?? root, options.prompt ?? '', manifest.params) }
+    catch (error) { return fail(error instanceof Error ? error.message : String(error)) }
+  } else if (options.engine && options.engine !== 'agent') return fail('Unknown control engine.')
   const saved = await saveManifest(liveRoot, manifest)
   if ('error' in saved) return fail(saved.error)
   notify('controls:updated', { root: liveRoot })
@@ -69,6 +75,7 @@ export async function defineAgentControls(
 
   return {
     registered: manifest.id,
+    engine: options.engine ?? 'agent',
     message:
       'Controls registered. Opening requested; newly instrumented source becomes available after the turn lands.'
   }

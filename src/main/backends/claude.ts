@@ -1,3 +1,5 @@
+import { runContentControlTool } from '../content-control-tools'
+import { contentControlsShape } from '../../../bin/content-control-tool-schema.mjs'
 import { runProjectUiTool } from '../project-ui'
 import { openAgentPreview } from '../preview-tools'
 import { openAgentCode } from '../code-tools'
@@ -87,6 +89,7 @@ const PREVIEW_TOOL_NAMES = new Set([
 const PRAXIS_TOOL_NAMES = new Set([
   ...PREVIEW_TOOL_NAMES,
   'mcp__praxis__define_controls',
+  'mcp__praxis__content_controls',
   'mcp__praxis__open_controls',
   'mcp__praxis__open_code',
   'mcp__praxis__open_preview',
@@ -682,6 +685,22 @@ async function startSession(
       // the panel isn't stranded when the worktree merges/drops. Failures come
       // back as tool-result text (never a throw) so the model can fix + retry.
       tool(
+        'content_controls',
+        'Discover or surface content editors and collections. Call catalog first, then define ' +
+          'after binding the page to JSON. Optional Jev selects relevant sections.',
+        contentControlsShape,
+        async (args) => {
+          const result = await runContentControlTool(
+            root, ctx?.liveRoot ?? root, emitKey, args,
+            (channel, payload) => sendToRenderer(getWindow, channel, payload)
+          )
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(result) }],
+            isError: !!(result as { error?: string }).error
+          }
+        }
+      ),
+      tool(
         'define_controls',
         'Register a control panel of tweakable parameters (sliders, color pickers, toggles) ' +
           'for a component, after instrumenting its source so each parameter is a clean ' +
@@ -694,7 +713,12 @@ async function startSession(
             root,
             ctx?.liveRoot ?? root,
             args.manifest,
-            (channel, payload) => sendToRenderer(getWindow, channel, payload)
+            (channel, payload) => sendToRenderer(getWindow, channel, payload),
+            {
+              key: emitKey,
+              engine: typeof args.engine === 'string' ? args.engine : undefined,
+              prompt: typeof args.prompt === 'string' ? args.prompt : undefined
+            }
           )
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result) }],

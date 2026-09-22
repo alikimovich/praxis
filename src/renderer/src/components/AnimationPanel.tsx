@@ -1,8 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import type { ResolvedControlPanel, SelectedElement } from '../../../shared/api'
+import type {
+  ContentControlPanel,
+  ResolvedControlPanel,
+  SelectedElement
+} from '../../../shared/api'
 import { useComposer, usePanelInset } from '../store'
 import CustomPanel from './CustomPanel'
+
+const ContentEditor = lazy(() => import('./ContentEditor'))
 
 // Animation manifests only permit literals. This stable empty context lets the
 // shared control renderer run without owning or changing the preview selection.
@@ -21,12 +27,13 @@ const NO_SELECTION: SelectedElement = {
 /** Project-owned native controls; selection changes never remount this panel. */
 export default function AnimationPanel({ root }: { root: string }): React.JSX.Element | null {
   const [panels, setPanels] = useState<ResolvedControlPanel[]>([])
+  const [contentPanels, setContentPanels] = useState<ContentControlPanel[]>([])
   const [collapsed, setCollapsed] = useState(false)
   const [width, setWidth] = useState(280)
   const [error, setError] = useState<string | null>(null)
   const host = useRef<HTMLElement>(null)
   const bottom = usePanelInset((s) => s.bottom)
-  const hasPanels = panels.length > 0
+  const hasPanels = panels.length > 0 || contentPanels.length > 0
 
   useEffect(() => {
     let disposed = false
@@ -53,6 +60,21 @@ export default function AnimationPanel({ root }: { root: string }): React.JSX.El
         busy = false
       }
     }
+    const refreshContent = async (): Promise<void> => {
+      try {
+        const next = await window.api.contentControls.list(root)
+        if (!disposed) setContentPanels(next)
+      } catch {
+        if (!disposed) setError('Could not load content editors.')
+      }
+    }
+    void refreshContent()
+    const offContent = window.api.contentControls.onUpdated((event) => {
+      if (event.root === root) {
+        setCollapsed(false)
+        void refreshContent()
+      }
+    })
     void refresh()
     const offUpdate = window.api.controls.onUpdated((changed) => {
       if (changed === root) void refresh()
@@ -68,6 +90,7 @@ export default function AnimationPanel({ root }: { root: string }): React.JSX.El
     return () => {
       disposed = true
       clearInterval(timer)
+      offContent()
       offUpdate()
       offOpen()
     }
@@ -92,66 +115,91 @@ export default function AnimationPanel({ root }: { root: string }): React.JSX.El
   return (
     <aside
       ref={host}
-      aria-label="Animation controls"
+      aria-label={contentPanels.length ? 'Preview controls' : 'Animation controls'}
       className="animation-panel absolute right-0 top-0 z-10 flex flex-col overflow-hidden border-l bg-background"
       style={{ width: collapsed ? 40 : width, bottom }}
     >
-      {collapsed ? (
+      {collapsed && (
         <Button
           variant="ghost"
           size="icon"
-          aria-label="Show animation controls"
-          title="Show animation controls"
+          aria-label={contentPanels.length ? 'Show preview controls' : 'Show animation controls'}
+          title={contentPanels.length ? 'Show preview controls' : 'Show animation controls'}
           onClick={() => setCollapsed(false)}
         >
           ↔
         </Button>
-      ) : (
-        <>
-          <header className="flex shrink-0 items-center justify-between px-3 py-2">
-            <span className="text-xs font-semibold">Animation controls</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6"
-              aria-label="Collapse animation controls"
-              onClick={() => setCollapsed(true)}
-            >
-              −
-            </Button>
-          </header>
-          <p className="px-3 pb-2 text-[11px] text-muted-foreground">
-            Changes save to source. Use Undo to revert.
-          </p>
-          {error && (
-            <p role="alert" className="px-3 text-xs">
-              {error}
-            </p>
-          )}
-          <CustomPanel
-            root={root}
-            element={NO_SELECTION}
-            inspection={null}
-            panels={panels}
-            onReplay={(component) => window.api.preview.replayAnimation(component)}
-            onSeedPrompt={seed}
-            onApplyAgent={seed}
-            onRegenerate={(id) => {
-              const panel = panels.find((p) => p.manifest.id === id)
-              if (panel)
-                seed(
-                  `/animation-controls\nRepair this native animation panel, preserving presentation: animation and its existing values:\n${JSON.stringify(panel.manifest)}`
-                )
-            }}
-            onRemove={(id) => {
-              void window.api.controls
-                .remove(root, id)
-                .then(() => setPanels((current) => current.filter((p) => p.manifest.id !== id)))
-                .catch(() => setError('Could not remove this panel.'))
-            }}
-          />
-        </>
       )}
+      <div
+        className="min-h-0 flex-1 overflow-y-auto"
+        style={{ display: collapsed ? 'none' : undefined }}
+      >
+        <header className="flex shrink-0 items-center justify-between px-3 py-2">
+          <span className="text-xs font-semibold">
+            {contentPanels.length ? 'Preview controls' : 'Animation controls'}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6"
+            aria-label={
+              contentPanels.length ? 'Collapse preview controls' : 'Collapse animation controls'
+            }
+            onClick={() => setCollapsed(true)}
+          >
+            −
+          </Button>
+        </header>
+        <p className="px-3 pb-2 text-[11px] text-muted-foreground">
+          {contentPanels.length
+            ? 'Content drafts save when you choose Save to source.'
+            : 'Changes save to source. Use Undo to revert.'}
+        </p>
+        {error && (
+          <p role="alert" className="px-3 text-xs">
+            {error}
+          </p>
+        )}
+        <Suspense fallback={<p className="px-3 text-xs">Loading content editors…</p>}>
+          {contentPanels.map((panel) => (
+            <ContentEditor
+              key={panel.id}
+              root={root}
+              panel={panel}
+              onRemove={() => {
+                void window.api.contentControls
+                  .remove(root, panel.id)
+                  .then(() =>
+                    setContentPanels((current) => current.filter((p) => p.id !== panel.id))
+                  )
+                  .catch(() => setError('Could not remove editor.'))
+              }}
+            />
+          ))}
+        </Suspense>
+        <CustomPanel
+          root={root}
+          element={NO_SELECTION}
+          inspection={null}
+          panels={panels}
+          onReplay={(component) => window.api.preview.replayAnimation(component)}
+          onSeedPrompt={seed}
+          onApplyAgent={seed}
+          onRegenerate={(id) => {
+            const panel = panels.find((p) => p.manifest.id === id)
+            if (panel)
+              seed(
+                `/animation-controls\nRepair this native animation panel, preserving presentation: animation and its existing values:\n${JSON.stringify(panel.manifest)}`
+              )
+          }}
+          onRemove={(id) => {
+            void window.api.controls
+              .remove(root, id)
+              .then(() => setPanels((current) => current.filter((p) => p.manifest.id !== id)))
+              .catch(() => setError('Could not remove this panel.'))
+          }}
+        />
+      </div>
     </aside>
   )
 }

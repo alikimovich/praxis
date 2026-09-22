@@ -1,0 +1,9 @@
+.praxis-content-editor .cc-panel {
+  --cc-background: var(--background);
+  --cc-foreground: var(--foreground);
+  --cc-border: var(--border);
+  width: 100%;
+  max-height: none;
+  border-radius: 0;
+  box-shadow: none;
+}

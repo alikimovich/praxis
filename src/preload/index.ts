@@ -241,6 +241,13 @@ const api: PraxisApi = {
     move: (root: string, req: MoveNodeRequest): Promise<MoveNodeResult> =>
       ipcRenderer.invoke('layers:move', root, req)
   },
+  contentControls: {
+    list: (root) => ipcRenderer.invoke('content-controls:list', root),
+    get: (root, id) => ipcRenderer.invoke('content-controls:get', root, id),
+    save: (root, id, revision, value) => ipcRenderer.invoke('content-controls:save', root, id, revision, value),
+    remove: (root, id) => ipcRenderer.invoke('content-controls:remove', root, id),
+    onUpdated: on('content-controls:updated')
+  },
   controls: {
     onOpen: on('controls:open'),
     get: (root: string, q: { files: string[]; component?: string }): Promise<ResolvedControlPanel[]> =>

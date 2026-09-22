@@ -198,7 +198,8 @@
     "use-stick-to-bottom": "^1.1.6",
     "ws": "^8.21.3",
     "zod": "^4.0.0",
-    "zustand": "^5.0.2"
+    "zustand": "^5.0.2",
+    "@alikimovich/content-controls": "file:vendor/content-controls"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.2",

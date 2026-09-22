@@ -210,3 +210,8 @@ reconciliation shows a short progress status instead of the conflict card.
 Clean merges add no chat notice. Their Revert action attaches to the completed
 assistant response, even if a queued response has already started. Conflicts and
 failures still surface normally.
+
+Content-editor recipes are registered from the chat worktree against its JSON,
+persisted by main to the live sidecar, and become editable after content lands.
+Content Save is serialized with repository writes and checks its loaded revision
+before applying through edit history. See [CONTENT_CONTROLS.md](CONTENT_CONTROLS.md).

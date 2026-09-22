@@ -247,3 +247,10 @@ experimental and off by default. The setting is saved on this device and capture
 when you submit a message. Turning it off restores ordinary editing and keeps
 generated source. Choose **Jev (experimental)** as the composition engine to try
 Jev with a Vercel AI Gateway key in the Praxis process environment. See [scope and workflow](docs/PROJECT_UI.md).
+
+### Content editors from chat
+
+Ask chat to surface controls for page copy or collections. Praxis uses content-controls
+editors beside the preview, with drafts, Save to source and Undo. Ask to use Jev to
+choose content sections or animation/component parameters. See [content controls](docs/CONTENT_CONTROLS.md)
+for JSON bindings, Gateway setup and current limits.

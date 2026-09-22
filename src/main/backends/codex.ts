@@ -1,3 +1,4 @@
+import { runContentControlTool } from '../content-control-tools'
 import { runProjectUiTool } from '../project-ui'
 import { openAgentPreview } from '../preview-tools'
 import { openAgentCode } from '../code-tools'
@@ -244,12 +245,15 @@ async function startSession(
         sendToRenderer(getWindow, channel, payload)
       if (action === 'project_ui_catalog' || action === 'compose_project_ui')
         return runProjectUiTool(root, emitKey, action, args)
+      if (action === 'content_controls')
+        return runContentControlTool(root, ctx?.liveRoot ?? root, emitKey, args, notify)
       if (action === 'define_controls')
         return defineAgentControls(
           root,
           ctx?.liveRoot ?? root,
           (args as { manifest?: unknown })?.manifest,
-          notify
+          notify,
+          { ...(args as { engine?: string; prompt?: string }), key: emitKey }
         )
       if (action === 'open_preview')
         return openAgentPreview(ctx?.liveRoot ?? root, emitKey, args, notify, !!ctx?.sessionId)
@@ -292,7 +296,7 @@ async function startSession(
           // Electron's app path is out/main when launched from the compiled entry.
           args: [join(__dirname, '../../bin/praxis-agent-mcp.mjs')],
           // Match Claude's allowlist for validated source reveal and control registration.
-          tools: { project_ui_catalog: { approval_mode: 'approve' }, compose_project_ui: { approval_mode: 'approve' }, open_preview: { approval_mode: 'approve' }, open_code: { approval_mode: 'approve' }, define_controls: { approval_mode: 'approve' } },
+          tools: { content_controls: { approval_mode: 'approve' }, project_ui_catalog: { approval_mode: 'approve' }, compose_project_ui: { approval_mode: 'approve' }, open_preview: { approval_mode: 'approve' }, open_code: { approval_mode: 'approve' }, define_controls: { approval_mode: 'approve' } },
           env: {
             ELECTRON_RUN_AS_NODE: '1',
             PRAXIS_AGENT_TOOL_SOCKET: praxisTools.socketPath,

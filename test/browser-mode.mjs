@@ -7,7 +7,7 @@
  * Run with: bun run test:browser
  */
 import { spawn } from 'node:child_process'
-import { cpSync, existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { request as httpRequest } from 'node:http'
 import { createServer as createTcpServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -196,12 +196,33 @@ try {
   }
 
   for (const [channel, extra] of [
+    ['content-controls:list', []],
+    ['content-controls:get', ['page']],
+    ['content-controls:save', ['page', 'stale', {}]],
+    ['content-controls:remove', ['page']],
     ['git:remote-status', [true]],
     ['git:remote-update', [{ action: 'pull', ref: 'refs/remotes/origin/main', expectedBranch: 'main' }]]
   ]) {
     const outside = await rpc(channel, [root, ...extra])
     if (outside.status !== 400 || outside.body.ok !== false) fail(`${channel} escaped the server root`)
   }
+
+  mkdirSync(join(fixture, '.praxis'), { recursive: true })
+  writeFileSync(join(fixture, 'content.json'), JSON.stringify({ title: 'Before', retained: true }))
+  writeFileSync(join(fixture, '.praxis/content-controls.json'), JSON.stringify({ version: 1, panels: [{
+    id: 'page', file: 'content.json', recipe: { version: 1, id: 'page', title: 'Copy', sections: [{ id: 'copy', title: 'Copy', fields: [{ key: 'title', label: 'Title', type: 'text' }] }] }
+  }] }))
+  const content = await rpc('content-controls:get', [fixture, 'page'])
+  if (!content.body.ok) fail('Browser could not read content editor')
+  const savedContent = await rpc('content-controls:save', [fixture, 'page', content.body.result.revision, { title: 'After', retained: false }])
+  if (!savedContent.body.ok) fail('Browser could not save content editor')
+  const contentOnDisk = JSON.parse(readFileSync(join(fixture, 'content.json'), 'utf8'))
+  if (contentOnDisk.title !== 'After' || contentOnDisk.retained !== true) fail('Browser save lost content or unrelated fields')
+  const staleContent = await rpc('content-controls:save', [fixture, 'page', content.body.result.revision, { title: 'Stale' }])
+  if (staleContent.body.ok) fail('Browser accepted a stale content save')
+  await rpc('content-controls:remove', [fixture, 'page'])
+  const remainingContent = await rpc('content-controls:list', [fixture])
+  if (remainingContent.body.result.length) fail('Browser failed to remove content editor')
 
   const detected = await rpc('project:detect', [fixture])
   if (

@@ -147,6 +147,21 @@ export function praxisRules(opts?: {
   }
   if (opts?.previewTools || opts?.controlTools) {
     lines.push(
+      `## Content editors (content_controls)`,
+      `When asked to surface controls for content (copy, headings, project lists, cards, FAQs),`,
+      `call content_controls action:catalog, read the source, and bind the requested content`,
+      `to a repo-relative JSON object consumed by the actual page. Preserve existing values,`,
+      `unknown fields, stable collection ids, design and behavior. Then call action:define`,
+      `with file and a version-1 recipe. The content-controls editor opens in the preview area`,
+      `independently of selection. Do not add editor dependencies to the target project.`,
+      `Save writes JSON through Praxis edit history; drafts, collection edits, Undo and Reset`,
+      `are provided by the editor. Verify Save updates the actual page through HMR/reload.`,
+      `When Jev is requested, pass engine:jev and the original user request as prompt.`,
+      `Prepare focused sections with real bindings; Jev selects/orders sections. For animation`,
+      `or component controls use define_controls with engine:jev and prompt instead; Jev`,
+      `selects/orders the validated params. Never claim Jev was used without a successful tool result.`,
+      `Do not silently fall back after a Jev failure. These tools work independently of project UI composition settings.`,
+      ``,
       `## Surfacing control panels (define_controls / open_controls)`,
       `When asked to show selection-inspector controls, call open_controls with the object's source stamp`,
       `(file:line) or source file to select it and open the requested inspector tab.`,

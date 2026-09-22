@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { contentControlsShape } from './content-control-tool-schema.mjs'
 import { z } from 'zod'
 import { defineControlsShape } from './control-tool-schema.mjs'
 import { request } from 'node:http'
@@ -77,6 +78,8 @@ server.registerTool(
   },
   async () => result(await invoke('prepare_conflict_resolution'))
 )
+
+server.registerTool('content_controls', { description: 'Discover or surface content editors and collections in the Praxis preview area. Call catalog first, then define after binding page content to JSON; optional Jev selects sections.', inputSchema: contentControlsShape }, async (args) => result(await invoke('content_controls', args)))
 
 server.registerTool(
   'define_controls',

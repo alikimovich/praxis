@@ -1,6 +1,8 @@
 import { z } from 'zod'
 
 export const defineControlsShape = {
+  engine: z.enum(['agent', 'jev']).optional(),
+  prompt: z.string().max(4000).optional().describe('User request; required when Jev selects and orders prepared params'),
   manifest: z.object({
     presentation: z.literal('animation').optional().describe('Persistent Praxis panel independent of selection; all params must use literal strategy'),
     replay: z.boolean().optional().describe('True after wiring praxis:animation-replay, whose detail is the component name, to restart this animation'),

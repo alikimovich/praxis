@@ -1,3 +1,4 @@
+import { registerContentControlsIpc } from './content-controls-ipc'
 import {
   app,
   BrowserWindow,
@@ -1008,6 +1009,7 @@ app.whenReady().then(async () => {
   registerPropsIpc()
   registerStylesIpc()
   registerControlsIpc()
+  registerContentControlsIpc(ipcMain)
   registerAnnotationsIpc()
   registerGithubIpc()
   registerTokensIpc()

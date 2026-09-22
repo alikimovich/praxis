@@ -249,6 +249,13 @@ export function installWebApi(config: WebConfig): void {
       setWatch: (watch) => postPreview('layers-watch', watch),
       move: (root, request) => invoke('layers:move', root, request)
     },
+    contentControls: {
+      list: (root) => invoke('content-controls:list', root),
+      get: (root, id) => invoke('content-controls:get', root, id),
+      save: (root, id, revision, value) => invoke('content-controls:save', root, id, revision, value),
+      remove: (root, id) => invoke('content-controls:remove', root, id),
+      onUpdated: on('content-controls:updated')
+    },
     controls: {
       onOpen: on('controls:open'),
       get: async () => [],

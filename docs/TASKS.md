@@ -3,6 +3,13 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Content controls and Jev (2026-09-21)
+
+- [x] Integrate the local content-controls package into persistent preview-area editors.
+- [x] Expose catalog/registration to Claude and Codex, with JSON source saves, drafts, collections, Undo and stale-write protection.
+- [x] Let Jev choose content sections and animation/component parameters from validated candidates.
+- [x] Complete regression and live Jev verification; retain the recorded unrelated agent-multi failure.
+
 ## History row styling (2026-09-21)
 
 - [x] Pull candidate updates and place History in the chat list with matching typography and row spacing, retaining muted gray.

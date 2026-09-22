@@ -8,6 +8,7 @@ import { _electron } from 'playwright'
 export async function verifyAnimationControls(live = false) {
   const root = mkdtempSync(join(tmpdir(), 'praxis-native-animation-'))
   let app
+  const jev = live && process.env.PRAXIS_TEST_CONTROLS_ENGINE === 'jev'
   const motion = `const DURATION = 300
 const DISTANCE = 60
 const card = document.querySelector('#card')
@@ -28,6 +29,11 @@ replay()
   }
   try {
     app = await _electron.launch({ executablePath: electronPath, args: [join(process.cwd(), 'out/main/index.js')] })
+    if (jev) await app.evaluate(() => {
+      const original = globalThis.fetch
+      globalThis.__jevSuccesses = 0
+      globalThis.fetch = async (...args) => { const response = await original(...args); if (String(args[0]).includes('/v4/ai/evaluation-model') && response.ok) globalThis.__jevSuccesses++; return response }
+    })
     const win = await app.firstWindow()
     await win.waitForSelector('.empty__open')
     await app.evaluate(({ dialog, BrowserWindow }, root) => {
@@ -37,7 +43,7 @@ replay()
     await win.waitForFunction(() => /http:/.test(document.querySelector('.previewbar__url')?.textContent ?? ''))
     if (live) {
       await win.selectOption('select[aria-label="Provider"]', 'codex')
-      await win.fill('.composer__input', 'Surface animation controls for the animated card in motion.js, with Duration in milliseconds (10ms steps) and Distance in pixels, and Replay. Keep the controls available independently of selection. Preserve the existing animation and defaults.')
+      await win.fill('.composer__input', 'Surface animation controls for the animated card in motion.js, with Duration in milliseconds (10ms steps) and Distance in pixels, and Replay. Keep the controls available independently of selection. Preserve the existing animation and defaults.' + (jev ? ' Use define_controls with engine:jev and this request as prompt so Jev selects and orders the params.' : ''))
       await win.click('.composer__send')
       await win.waitForFunction(() => window.__praxisStore.getState().isRunning, null, { timeout: 20000 })
       await win.waitForFunction(() => !window.__praxisStore.getState().isRunning, null, { timeout: 240000 })
@@ -46,6 +52,7 @@ replay()
       writeFileSync('test/artifacts/native-animation-agent.txt', text)
       if (/hit your .*limit|usage limit|not logged in|unauthorized/i.test(text)) { console.log('ANIMATION-CONTROLS SKIP — provider unavailable'); return }
     }
+    if (jev) assert((await app.evaluate(() => globalThis.__jevSuccesses)) > 0, 'real Jev decision must succeed')
     const panel = win.getByRole('complementary', { name: 'Animation controls', exact: true })
     await panel.waitFor()
     assert.equal(await win.evaluate(() => window.__praxisSelection.getState().selected), null)

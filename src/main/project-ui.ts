@@ -1,3 +1,4 @@
+import { cancelControlComposition } from './controls-jev'
 import { dirname, posix } from 'node:path'
 import { z } from 'zod'
 import { discoverProjectUi, type ProjectUiCatalog } from './project-ui-catalog'
@@ -6,6 +7,7 @@ export type ProjectUiEngine = 'agent' | 'jev'
 const enabledSessions = new Map<string, ProjectUiEngine>()
 const composing = new Map<string, AbortController>()
 export function cancelProjectUi(key: string): void {
+  cancelControlComposition(key)
   enabledSessions.delete(key)
   composing.get(key)?.abort()
   composing.delete(key)
