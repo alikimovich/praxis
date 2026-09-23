@@ -26,10 +26,6 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     throw new Error(`Native check timed out: ${code}; ${error || ''}`)
   }
   await wait('!!window.api && !!document.querySelector(".empty__open")')
-  if (process.argv.includes('--live'))
-    await evaluate(
-      `(()=>{window.__praxisSession.getState().setModel('haiku');window.__praxisPermissions.getState().setMode('bypassPermissions');return true})()`
-    )
   if (await evaluate('navigator.userAgent.includes("Electron")'))
     throw new Error('Unexpected Electron renderer')
   await evaluate('document.querySelector(".empty__open").click()')
@@ -124,6 +120,9 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   )
   if (process.argv.includes('--live')) {
     await evaluate(
+      `(()=>{window.__praxisSession.getState().setModel('haiku');window.__praxisPermissions.getState().setMode('bypassPermissions');return true})()`
+    )
+    await evaluate(
       `(()=>{window.__nativeTestEvents=[];window.api.agent.onEvent(e=>window.__nativeTestEvents.push(e));return true})()`
     )
     const prompt =
@@ -141,11 +140,19 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
       180000
     )
     const events = await evaluate('window.__nativeTestEvents')
+    writeFileSync(join(artifacts, 'live-events.json'), JSON.stringify(events, null, 2))
+    const image = await host.request('capture', { view: 'main' })
+    writeFileSync(join(artifacts, 'chat.png'), Buffer.from(image.png, 'base64'))
     const errors = events
       .filter((event: any) => event.type === 'error')
       .map((event: any) => event.message)
       .join('\n')
+    const reply = events
+      .filter((event: any) => event.type === 'delta')
+      .map((event: any) => event.text)
+      .join('')
     if (
+      /^Not logged in\s*[·—-]\s*Please run \/login\s*$/i.test(reply.trim()) ||
       /unauthori[sz]ed|invalid api key|not logged in|authentication|credential|setup-token|please.*login/i.test(
         errors
       )
@@ -160,8 +167,6 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
       `document.querySelector('#native-title')?.textContent === 'NATIVE_AGENT_VERIFIED'`,
       'preview'
     )
-    const image = await host.request('capture', { view: 'main' })
-    writeFileSync(join(artifacts, 'chat.png'), Buffer.from(image.png, 'base64'))
     console.log(
       'NATIVE LIVE PASS — actual chat composer, provider turn, source edit, streamed reply, and preview reload.'
     )

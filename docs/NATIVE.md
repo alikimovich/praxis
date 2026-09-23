@@ -76,8 +76,9 @@ opening the shared code editor in a separate native window.
 `test:native-live` additionally submits an edit through the real composer to the
 configured Claude provider, using a temporary fixture and automatic permissions.
 This sends fixture information to the provider and uses the signed-in account.
-Its execution was blocked by automated approval review in this development
-session; a real native provider turn is not yet verified. The test is registered
+After explicit approval, execution reached the provider SDK but returned
+“Not logged in · Please run /login.” Native AI source editing remains unverified
+until Claude authentication is available. The test is registered
 in the live tier, while the deterministic test is in the desktop tier.
 
 ## Remaining differences

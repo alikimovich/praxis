@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Authorized native live test: Claude login required
+
+With explicit user approval, ran `bun run test:native-live`. The deterministic
+native checks passed, and the actual composer submitted the fixture prompt through
+the shared provider SDK. Claude returned “Not logged in · Please run /login” as
+a text delta followed by done; no source edit occurred. Captured provider events
+and inspected the chat screenshot under `test/artifacts/native/`.
+
+Updated the test to recognize that exact login response as an authentication skip,
+capture events/screenshots before assertions, and set live model/permission options
+after project opening (which restores session settings). No successful native
+model edit is claimed. Claude sign-in is required before rerunning this test.
+Validation: rerun passed the deterministic checks and reported live authentication
+SKIP correctly; native typecheck, docs-links and whitespace checks passed.
+
 ## 2026-09-23 — Shared Praxis app on Bun and system WebKit
 
 `bun run dev:native` now builds and launches the real Praxis UI and shared
