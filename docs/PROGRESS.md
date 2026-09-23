@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-22 — Remove annotations from the selection toolbar
+
+Removed the pin-note action from the preview's selection toolbar. The remaining
+order is Comment, Edit text, Props, 3D, Code and Delete. Existing saved notes and
+the annotation shortcut remain available; this change removes the toolbar entry.
+Updated the selection test's expected buttons and nearby documentation comments.
+
+Validation: typecheck and build passed. Selection and comment-mode Electron tests
+passed; inspected the native preview capture to confirm the shorter toolbar.
+Full suite: 152 PASS / 2 FAIL (known agent-multi already-running failure and a
+spawn-comment branch-cleanup assertion). The isolated spawn-comment rerun passed.
+
 ## 2026-09-22 — Restore each chat's composer model
 
 Existing chat settings no longer merge with the last-used/fixed model preference.

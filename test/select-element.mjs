@@ -181,7 +181,7 @@ try {
     throw new Error(`composer must stay clean of selector text, got: ${composed}`)
   }
   // The element-scoped actions appear as a floating toolbar INSIDE the preview,
-  // adjacent to the selection (comment/annotate/edit/props/code/delete). `edit`
+  // adjacent to the selection (comment/edit/props/3D/code/delete). `edit`
   // is a text-only leaf action; #hero-title (plain-text <h1>) qualifies, so it
   // renders visible here.
   const toolbarShown = await app.evaluate(async ({ webContents }) => {
@@ -202,7 +202,7 @@ try {
       return 'visible:' + kinds + (editShown ? ' edit-shown' : ' edit-hidden')
     })()`)
   })
-  if (!/^visible:comment,annotate,edit,props,three-d,code,delete edit-shown$/.test(toolbarShown)) {
+  if (!/^visible:comment,edit,props,three-d,code,delete edit-shown$/.test(toolbarShown)) {
     throw new Error(`in-preview selection toolbar wrong: ${toolbarShown}`)
   }
   await win.screenshot({ path: join(artifacts, '07-select-handoff.png') })

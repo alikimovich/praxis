@@ -2058,8 +2058,8 @@ export default function App(): React.JSX.Element {
                   {status.kind === 'running' && (
                     <>
                       {/* Element-select moved to the chat composer (Figma Make-style);
-                          comment/annotate are element-scoped actions on the selection
-                          pill now. Keyboard: S select, C comment, Y annotate. */}
+                          comments are element-scoped actions on the selection
+                          pill. Keyboard: S select, C comment, Y annotate. */}
                       {/* Code editor: a stamp-independent way into the drawer + file
                           tree, so vanilla/un-instrumented projects can still edit code. */}
                       {/* Figma-style hide UI: chat + sidebar collapse, only the

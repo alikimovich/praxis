@@ -266,10 +266,6 @@ function ensureOverlay(): void {
       title: 'Comment on this element — runs a parallel agent',
       svg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'
     },
-    annotate: {
-      title: 'Pin a note on this element, no agent',
-      svg: '<path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11l5-5V5a2 2 0 0 0-2-2Z"/><path d="M15 21v-4a2 2 0 0 1 2-2h4"/>'
-    },
     code: {
       title: 'Show the source in the editor',
       svg: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'
@@ -279,7 +275,7 @@ function ensureOverlay(): void {
       svg: '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'
     }
   }
-  // 26×26 icon button. comment/annotate are leading mode-toggles (track a pressed
+  // 26×26 icon button. Comment is the leading mode toggle (tracks a pressed
   // bg via data-pressed); props/code/delete are trailing action icons.
   const makeIcon = (kind: keyof typeof ICONS): HTMLButtonElement => {
     const b = document.createElement('button')
@@ -306,7 +302,6 @@ function ensureOverlay(): void {
   }
 
   const commentBtn = makeIcon('comment')
-  const annotateBtn = makeIcon('annotate')
 
   // Inline input group (State B) — hidden in the icon row, faded/grown in on morph.
   const inputWrap = document.createElement('div')
@@ -349,12 +344,12 @@ function ensureOverlay(): void {
   const codeBtn = makeIcon('code')
   const deleteBtn = makeIcon('delete')
 
-  // DOM order: comment, annotate, [input], edit, props, 3D, code | delete. The divider
+  // DOM order: comment, [input], edit, props, 3D, code | delete. The divider
   // sits before Delete only; the button[data-kind] order the tests assert stays
-  // comment, annotate, edit, props, three-d, code, delete (the separator has no data-kind).
+  // comment, edit, props, three-d, code, delete (the separator has no data-kind).
   // `edit` only renders for plain-text stamped leaves (setEditAction) — the
   // discoverable form of the double-click-to-edit gesture.
-  toolbar.append(commentBtn, annotateBtn, inputWrap, editBtn, propsBtn, threeDBtn, codeBtn, separator, deleteBtn)
+  toolbar.append(commentBtn, inputWrap, editBtn, propsBtn, threeDBtn, codeBtn, separator, deleteBtn)
 
   shadow.append(sel, box, meas, label, pins, hint, toolbar, style)
   document.documentElement.appendChild(host)

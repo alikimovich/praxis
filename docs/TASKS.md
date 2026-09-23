@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Selection toolbar cleanup (2026-09-22)
+
+- [x] Remove the annotation action from the selection toolbar and update the expected action order.
+
 ## Per-chat composer model restoration (2026-09-22)
 
 - [x] Keep last-used Gateway model IDs and connections out of existing chats when restoring their composer settings; cover persisted snapshots and sidebar switching.
