@@ -234,10 +234,19 @@ Other UI animations remain enabled.
 | Command | Description |
 | --- | --- |
 | `bun run dev` | Launch the app with HMR |
+| `bun run dev:native` | Launch the macOS Bun/WebKit prototype (not the full Praxis app yet) |
 | `bun run build` | Build main/preload/preview/renderer to `out/` |
 | `bun run typecheck` | Type-check all three tsconfig projects |
 | `bun run test` | Build + run unit and Electron UI tests |
 | `bun run verify` | `test` + live-agent/simulator e2e (needs creds + display) |
+
+### Native runtime prototype
+
+On macOS, `bun run dev:native` builds and launches the bundled Bun/AppKit/WebKit
+prototype. It requires Xcode command-line tools. This currently opens a fixture
+and element inspector, not Praxis chat or agents. To preview an already-running
+project, use `bun run dev:native --url http://localhost:3000`. The prototype does
+not manage that server. See [prototype details](experimental/native-runtime/README.md).
 
 ### Compose UI from project components
 

@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Praxis runtime fixture</title>
+<style>
+:root { color-scheme: light dark; font: 17px system-ui; }
+body { margin: 0; padding: 64px; background: Canvas; color: CanvasText; }
+main { max-width: 660px; margin: 0 auto; } h1 { font-size: 48px; letter-spacing: -2px; line-height: 1.05; }
+p { line-height: 1.7; } article { border: 1px solid GrayText; border-radius: 16px; padding: 28px; margin: 32px 0; }
+button { font: inherit; padding: 12px 20px; border-radius: 8px; cursor: pointer; }
+small { font-size: 13px; }
+</style></head><body><main>
+<small>BUN + APPKIT + SYSTEM WEBKIT</small>
+<h1 data-praxis-source="fixture/index.html:12:1">A smaller home for Praxis.</h1>
+<p>This page lives in a native WebKit view. Bun serves the project and receives selections from an isolated script.</p>
+<article id="card" data-praxis-source="fixture/index.html:14:1"><h2>Pick something.</h2><p>Click the heading, this card, or the button. The native inspector shows its source stamp, bounds, and styles.</p>
+<button id="demo-button" data-praxis-source="fixture/index.html:15:1" onclick="this.textContent='Button clicked'">Select this button</button></article>
+<p>Edit <code>fixture/index.html</code> and save to see the preview reload. Turn Select off to interact normally.</p>
+</main><script>new EventSource('/events').onmessage = () => location.reload();</script></body></html>

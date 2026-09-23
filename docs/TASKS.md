@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Native runtime development entrypoint (2026-09-23)
+
+- [x] Include the standalone macOS prototype in the repo and expose `bun run dev:native`, forwarding preview URL and integration-test arguments.
+- [ ] Connect the shared Praxis UI and application core to the native host while retaining Electron as the default.
+
 ## Comment agent model routing (2026-09-22)
 
 - [x] Use latest Sonnet for Claude comments, Sol for Codex comments and the exact selected model for Gateway comments, with matching child labels and unchanged parent settings.

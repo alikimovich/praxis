@@ -30,6 +30,7 @@ history as written.
 | Command | What |
 | --- | --- |
 | `bun run dev` | Launch the app (electron-vite, HMR) |
+| `bun run dev:native` | Launch the macOS Bun/WebKit prototype in `experimental/native-runtime/`; the full Praxis app is not wired to it yet |
 | `praxis serve <repo>` | Run the built UI in a local browser (loopback only) |
 | `praxis serve <repo> --remote` | Publish the loopback UI/preview to the private Tailscale network |
 | `bun run build` | Build main/preload/preview/renderer to `out/` |

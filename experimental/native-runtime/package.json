@@ -1,0 +1,10 @@
+{
+  "name": "praxis-runtime-prototype",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun scripts/build.ts",
+    "dev": "bun run build && bun src/main.ts",
+    "test": "bun run build && bun src/main.ts --test"
+  }
+}

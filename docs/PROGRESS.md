@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Native prototype development command
+
+Added `bun run dev:native` and included the standalone Bun/AppKit/WebKit prototype
+under `experimental/native-runtime/`, so the command does not depend on a sibling
+checkout. The launcher forwards arguments, rejects unsupported platforms, and
+identifies itself as a prototype. `bun run dev` remains the complete Electron app;
+the shared Praxis UI/backend integration is still pending.
+
+Validation: all three typecheck projects passed. `bun run dev:native --test`
+passed real WebKit load, isolated source selection, reload reinjection and PNG
+capture; inspected the captured preview. Full regression suite: 154 PASS,
+1 existing startup-intro crossfade assertion FAIL, 1 spawn-comment live SKIP.
+Report: `test/artifacts/runs/run-E55Dkh/summary.json`.
+
 ## 2026-09-22 — Dedicated models for preview comments
 
 Preview comment agents now use the latest Sonnet alias on Claude subscriptions

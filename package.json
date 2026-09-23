@@ -18,6 +18,7 @@
   "scripts": {
     "postinstall": "node scripts/patch-electron.mjs",
     "dev": "electron-vite dev",
+    "dev:native": "bun scripts/dev-native.mjs",
     "build": "electron-vite build",
     "link": "bun link",
     "lint": "biome check src test",
