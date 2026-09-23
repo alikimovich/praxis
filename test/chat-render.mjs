@@ -579,6 +579,13 @@ try {
   if (await win.evaluate(() => window.__praxisSession.getState().model) !== codexValue) {
     throw new Error('failed restart must retain the current model')
   }
+  // Reproduce last-used Gateway preferences after switching another chat.
+  // The older chat uses a bare model ID and has no connection/modelId fields.
+  await win.evaluate(() => localStorage.setItem('praxis:preferred-model', JSON.stringify({
+    mode: 'last-used',
+    lastUsed: { provider: 'codex', model: 'conn:gateway:deepseek', modelId: 'deepseek',
+      connectionId: 'gateway', effort: 'high', permissionMode: 'auto' }
+  })))
   // Chats render newest first; switch to the older peer and back.
   await win.locator('.rail__chat').nth(1).click()
   await win.waitForFunction(
@@ -589,7 +596,16 @@ try {
   const oldPicker = await win.evaluate(() => ({
     provider: window.__praxisSession.getState().provider,
     model: window.__praxisSession.getState().model,
+    modelId: window.__praxisSession.getState().modelId,
+    connectionId: window.__praxisSession.getState().connectionId,
   }))
+  if (oldPicker.modelId !== undefined || oldPicker.connectionId !== undefined) {
+    throw new Error(`old chat inherited Gateway settings: ${JSON.stringify(oldPicker)}`)
+  }
+  if (await win.locator('select[aria-label="Provider"]').inputValue() !== 'claude') {
+    throw new Error('restored composer must show the older chat’s provider')
+  }
+  await win.screenshot({ path: join(artifacts, 'per-chat-model-restored.png') })
   if (oldPicker.provider !== 'claude' || oldPicker.model !== 'sonnet') {
     throw new Error(`old chat picker leaked the new chat model: ${JSON.stringify(oldPicker)}`)
   }

@@ -83,7 +83,12 @@ export const chatAgentSettingsFor = (
   entry: { chatSettings?: Record<string, ChatAgentSettings> },
   sessionKey: string,
   fallback: ChatAgentSettings = defaultChatAgentSettings()
-): ChatAgentSettings => ({ ...fallback, ...entry.chatSettings?.[sessionKey] })
+): ChatAgentSettings => {
+  const stored = entry.chatSettings?.[sessionKey]
+  // Optional modelId/connectionId being absent is meaningful: this chat uses its
+  // bare model ID / built-in provider. Never inherit another chat's last pick.
+  return stored ? { ...defaultChatAgentSettings(), ...stored } : { ...fallback }
+}
 
 /**
  * The model id a turn should actually carry, or undefined for "use the account

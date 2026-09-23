@@ -2,6 +2,23 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-22 — Restore each chat's composer model
+
+Existing chat settings no longer merge with the last-used/fixed model preference.
+That merge supplied a different chat's optional modelId and connectionId when a
+restored main snapshot or persisted chat omitted them, making the composer show
+Gateway while the existing session still ran its original model. Existing chats
+now use their saved settings over neutral defaults; missing chats still inherit
+the preferred model.
+
+Validation: new unit coverage fails against the original implementation and passes
+for Codex, Claude and default-model snapshots with the fix. Extended the Electron
+chat-render test with last-used Gateway preferences and sidebar round trips;
+inspected its screenshot showing the older chat's Claude/Sonnet composer.
+Typecheck/build passed. Full suite: 153 PASS / 1 existing agent-multi failure
+(“This chat is already running”). The initial sandboxed run could not launch
+Electron or bind local ports; these results are from the permitted rerun.
+
 ## 2026-09-21 — Compact preview address input
 
 Capped the editable preview path at 200px with a Tailwind max-width utility,
