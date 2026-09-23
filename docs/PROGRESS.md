@@ -2,6 +2,25 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-22 — Dedicated models for preview comments
+
+Preview comment agents now use the latest Sonnet alias on Claude subscriptions
+and gpt-5.6-sol on Codex subscriptions. Gateway/custom connections retain their
+exact selected model and connection, regardless of harness. A shared pure policy
+is applied in main before queueing and in renderer dispatch/child model metadata.
+The parent chat settings, draft and transcript remain unchanged. Visual-edit
+agents continue to inherit the parent model. Updated docs/PROVIDERS.md.
+
+Confirmed Sol against the bundled Codex runtime's model catalog, and Sonnet's
+rolling alias against https://code.claude.com/docs/en/model-config.
+Validation: typecheck/build passed; unit policy cases cover default/explicit
+providers, connection precedence, visual edits and non-mutation. Electron tests
+exercise actual comment events through renderer dispatch, captured IPC options,
+queued model labels and preserved parent state; inspected the UI capture. A real
+Sonnet comment spawn edited and auto-landed successfully. Full verify: 167 PASS,
+1 known agent-multi already-running failure, 3 SKIP (Gateway test credential,
+external Next fixture, Xcode). All executed live-tier checks passed.
+
 ## 2026-09-22 — Remove annotations from the selection toolbar
 
 Removed the pin-note action from the preview's selection toolbar. The remaining

@@ -1,6 +1,7 @@
 import type { BackgroundSpawnOrigin } from '../../shared/api'
+import { backgroundAgentOptions } from '../../shared/background-model'
 import { projectKey } from '../../shared/projectKey'
-import { chatAgentSettingsFor, chatModelLabel, toAgentOptions, useChat, useComposer, useLog, useSession, useSpawns, useWorkspace } from './store'
+import { chatAgentSettingsFor, chatAgentSettingsFromOptions, chatModelLabel, toAgentOptions, useChat, useComposer, useLog, useSession, useSpawns, useWorkspace } from './store'
 
 /** Dispatch one isolated background agent without touching the visible transcript.
  * Comment mode and complex inline text edits share the same worktree/queue seam;
@@ -20,6 +21,7 @@ export function dispatchBackgroundAgent(opts: {
   const agentSettings = current.projectRoot === opts.root
     ? current
     : chatAgentSettingsFor(project ?? {}, parentSessionKey)
+  const options = backgroundAgentOptions(toAgentOptions(agentSettings), opts.origin)
   // A failed initialization can finish before the IPC response arrives.
   const finished = new Set<string>()
   const unsubscribe = window.api.agent.onEvent((event) => {
@@ -30,7 +32,7 @@ export function dispatchBackgroundAgent(opts: {
       opts.root,
       opts.prompt,
       parentSessionKey,
-      toAgentOptions(agentSettings),
+      options,
       opts.origin
     )
     .then((result) => {
@@ -40,12 +42,7 @@ export function dispatchBackgroundAgent(opts: {
           id: result.spawnId,
           branch: result.branch ?? null,
           label: opts.label,
-          modelLabel: chatModelLabel({
-            model: agentSettings.model,
-            modelId: agentSettings.modelId,
-            provider: agentSettings.provider,
-            connectionId: agentSettings.connectionId
-          }),
+          modelLabel: chatModelLabel(chatAgentSettingsFromOptions(options)),
           status: result.queued ? 'queued' : 'running'
         })
         return

@@ -35,9 +35,12 @@ Preview observation/calculator tools remain Claude-only;
 question cards, resume, image transport, and background-agent support are separately
 declared because they have different lifecycle and security requirements.
 
-Preview comments and committed visual edits inherit the originating chat's
-selected provider/model settings. AI fallbacks from text, props, styles, custom
-controls, and layer moves start detached children immediately on Claude and Codex
+Preview comments use the originating chat's provider: Claude subscriptions run
+the `sonnet` alias (latest Sonnet), Codex subscriptions run `gpt-5.6-sol`, and
+Gateway/custom connections keep the chat's exact model and connection. The choice
+is captured when submitted, including queued comments, without changing the chat.
+Committed visual edits inherit the originating chat's selected provider/model.
+AI fallbacks from text, props, styles, custom controls, and layer moves start detached children immediately on Claude and Codex
 (including custom endpoints). The main draft and transcript stay intact; successful
 results auto-land and refresh the preview. Failed or interrupted results never
 auto-land. A provider without background support or a folder without Git worktree

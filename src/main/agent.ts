@@ -19,6 +19,7 @@ import type {
   WorkspaceSnapshot
 } from '../shared/api'
 import { projectKey } from '../shared/projectKey'
+import { backgroundAgentOptions } from '../shared/background-model'
 import { pruneAttachments, saveImageAttachment } from './attachments'
 import { type ProviderSession, pickProvider } from './backends'
 import { withConversationHandoff } from './backends/conversation-handoff'
@@ -1223,7 +1224,10 @@ export function registerAgentIpc(
         requestedOrigin === 'text-edit' ? 'text-edit' : 'comment'
       // Stable id assigned up front so the rail row survives a queued→running flip.
       const id = randomUUID().slice(0, 8)
-      const q: QueuedSpawn = { id, root, parentKey, parentSessionKey, text, options, origin }
+      const q: QueuedSpawn = {
+        id, root, parentKey, parentSessionKey, text,
+        options: backgroundAgentOptions(options, origin), origin
+      }
       if (runningCount(parentKey) >= MAX_SPAWNS_PER_REPO) {
         spawnQueue.push(q) // a slot will free on the next finalizeSpawn → pumpQueue
         return { ok: true, spawnId: id, queued: true }

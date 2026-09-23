@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Comment agent model routing (2026-09-22)
+
+- [x] Use latest Sonnet for Claude comments, Sol for Codex comments and the exact selected model for Gateway comments, with matching child labels and unchanged parent settings.
+
 ## Selection toolbar cleanup (2026-09-22)
 
 - [x] Remove the annotation action from the selection toolbar and update the expected action order.
