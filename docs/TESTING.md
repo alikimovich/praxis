@@ -1,6 +1,9 @@
 # Running and improving tests
 
 `bun run test` runs unit and Electron tiers. `bun run verify` adds live tests.
+The desktop tier also includes `native-runtime` on macOS with Swift installed;
+it skips on other platforms or without that toolchain. `native-runtime-live` is
+in the live tier and makes an actual provider request against a disposable project.
 The build runs once before the first selected Electron or live tier, including
 when running only `live`. A failed build blocks both tiers; unit failures do not
 stop other tests.

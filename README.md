@@ -234,19 +234,27 @@ Other UI animations remain enabled.
 | Command | Description |
 | --- | --- |
 | `bun run dev` | Launch the app with HMR |
-| `bun run dev:native` | Launch the macOS Bun/WebKit prototype (not the full Praxis app yet) |
+| `bun run dev:native` | Build and launch Praxis on macOS with Bun + system WebKit |
+| `bun run build:native` | Build the native host, backend and shared UI to `out/native/` |
+| `bun run test:native` | Native UI, project/server, selection, editing and isolation checks |
 | `bun run build` | Build main/preload/preview/renderer to `out/` |
 | `bun run typecheck` | Type-check all three tsconfig projects |
 | `bun run test` | Build + run unit and Electron UI tests |
 | `bun run verify` | `test` + live-agent/simulator e2e (needs creds + display) |
 
-### Native runtime prototype
+### Native runtime (macOS, experimental)
 
-On macOS, `bun run dev:native` builds and launches the bundled Bun/AppKit/WebKit
-prototype. It requires Xcode command-line tools. This currently opens a fixture
-and element inspector, not Praxis chat or agents. To preview an already-running
-project, use `bun run dev:native --url http://localhost:3000`. The prototype does
-not manage that server. See [prototype details](experimental/native-runtime/README.md).
+`bun run dev:native` now launches the real Praxis React interface and shared
+application backend, running under Bun with an AppKit/WebKit host. It requires
+macOS 13.3+, Bun, and Xcode command-line tools. Open a project using the normal
+folder picker; Praxis owns its dev server. `--project /path/to/repo` preselects
+the first folder pick. `bun run dev` remains the default Electron version.
+
+Native uses a separate profile, so Electron conversations and saved endpoint keys
+are not automatically imported. Existing provider CLI logins remain available.
+WebKit rendering can differ from Chromium. UI edits require restarting the native
+dev command; self-update/relaunch and some native browser permissions still need
+parity work. See [native architecture, checks and limits](docs/NATIVE.md).
 
 ### Compose UI from project components
 

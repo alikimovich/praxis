@@ -1,0 +1,324 @@
+import { randomBytes, randomUUID } from 'node:crypto'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
+import { tmpdir } from 'node:os'
+import { extname, join, resolve, sep } from 'node:path'
+import { projectHasRunningAgents, registerAgentIpc } from '../main/agent'
+import { registerAnnotationsIpc } from '../main/annotations'
+import { registerContentControlsIpc } from '../main/content-controls-ipc'
+import { registerControlsIpc } from '../main/control-panels'
+import { registerDevServerIpc } from '../main/devserver'
+import { registerDiagnoseIpc } from '../main/diagnose'
+import { registerFeedbackIpc } from '../main/feedback'
+import { createProjectFile, deleteProjectFile, renameProjectFile } from '../main/file-ops'
+import { listProjectFiles } from '../main/file-tree'
+import { checkoutBranch, ensureBranch, listBranches, switchBranch } from '../main/git'
+import { registerGitRemoteIpc } from '../main/git-remote'
+import { registerGithubIpc } from '../main/github'
+import { registerMediaProtocol } from '../main/media'
+import { type PreviewState, registerPreviewIpc } from '../main/preview-ipc'
+import { readProjectIcon } from '../main/project-icon'
+import { registerPropsIpc } from '../main/props'
+import { createProject } from '../main/scaffold'
+import { registerSetupIpc } from '../main/setup'
+import { registerSimulatorIpc } from '../main/simulator'
+import { registerStylesIpc } from '../main/styles'
+import { registerTokensIpc } from '../main/tokens'
+import * as channels from '../shared/preview-channels'
+import { NativeBridge, setBridge } from './bridge'
+import { app, dispatchIPC, ipcMain, NativeView, protocolHandlers, shell, views } from './platform'
+import { runNativeSmoke } from './smoke'
+
+async function main() {
+  const testing = process.argv.includes('--test')
+  const testDir = testing ? mkdtempSync(join(tmpdir(), 'praxis-native-')) : null
+  if (testDir) process.env.PRAXIS_USER_DATA = join(testDir, 'profile')
+  const profile = app.getPath('userData')
+  mkdirSync(profile, { recursive: true })
+  const lock = join(profile, 'native.lock')
+  if (existsSync(lock)) {
+    const pid = Number(readFileSync(lock, 'utf8'))
+    let running = true
+    try {
+      process.kill(pid, 0)
+    } catch (error: any) {
+      running = error.code !== 'ESRCH'
+    }
+    if (running)
+      throw new Error('Praxis Native is already using this profile. Close that instance first.')
+    rmSync(lock)
+  }
+  writeFileSync(lock, String(process.pid), { flag: 'wx' })
+  const projectIndex = process.argv.indexOf('--project')
+  const requestedProject = projectIndex >= 0 ? process.argv[projectIndex + 1] : null
+  if (projectIndex >= 0 && !requestedProject) throw new Error('--project requires a folder')
+  const fixture = testDir ? join(testDir, 'project') : null
+  if (fixture) {
+    mkdirSync(fixture)
+    writeFileSync(
+      join(fixture, 'index.html'),
+      '<!doctype html>\n<html><body>\n<h1 id="native-title" data-praxis-source="index.html:3:1">Native Praxis fixture</h1>\n<p>Bun owns this server.</p></body></html>'
+    )
+  }
+  let pickedRoot = fixture || (requestedProject ? resolve(requestedProject) : null)
+  const root = resolve(__dirname, '../..')
+  const rendererDir = join(__dirname, 'renderer')
+  const secret = randomBytes(24).toString('hex')
+  const mime: Record<string, string> = {
+    '.html': 'text/html',
+    '.js': 'text/javascript',
+    '.css': 'text/css',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.woff2': 'font/woff2'
+  }
+  const server = createServer((request, response) => {
+    try {
+      const path = decodeURIComponent(new URL(request.url || '/', 'http://localhost').pathname)
+      if (!path.startsWith(`/${secret}/`)) {
+        response.writeHead(404).end()
+        return
+      }
+      const file = resolve(rendererDir, path.slice(secret.length + 2))
+      if (!file.startsWith(rendererDir + sep)) {
+        response.writeHead(404).end()
+        return
+      }
+      const body = readFileSync(file)
+      response.writeHead(200, {
+        'content-type': mime[extname(file)] || 'application/octet-stream',
+        'cache-control': 'no-store'
+      })
+      response.end(body)
+    } catch {
+      response.writeHead(404).end()
+    }
+  })
+  let host: NativeBridge | undefined
+  let cleaned = false
+  const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
+    app.emit('before-quit')
+    server.closeAllConnections()
+    server.close()
+    host?.send('quit')
+    rmSync(lock, { force: true })
+    // Profiles are deliberately distinct from Electron until migrations and
+    // cross-runtime locking are implemented. Test profiles are disposable.
+    if (testDir) setTimeout(() => rmSync(testDir, { recursive: true, force: true }), 500).unref()
+  }
+  process.once('exit', cleanup)
+  process.once('SIGINT', () => {
+    cleanup()
+    process.exit(130)
+  })
+  process.once('SIGTERM', () => {
+    cleanup()
+    process.exit(143)
+  })
+  await new Promise<void>((resolveListen, reject) => {
+    server.once('error', reject)
+    server.listen(
+      testing ? 0 : Number(process.env.PRAXIS_NATIVE_PORT || 4188),
+      '127.0.0.1',
+      resolveListen
+    )
+  })
+  const address = server.address() as { port: number }
+  const url = `http://127.0.0.1:${address.port}/${secret}/index.html`
+  const executable = join(__dirname, 'Praxis Native.app/Contents/MacOS/PraxisHost')
+  process.env.PRAXIS_NATIVE_HOST = executable
+  host = new NativeBridge(executable, __dirname, testing ? 'ephemeral' : 'persistent')
+  setBridge(host)
+  const mainView = new NativeView('main')
+  const previewView = new NativeView('preview')
+  const panelView = new NativeView('panel')
+  const window = mainView as unknown as Electron.BrowserWindow
+  const send = (channel: string, ...args: unknown[]) => mainView.webContents.send(channel, ...args)
+  const state: PreviewState = {
+    url: null,
+    retries: 0,
+    bounds: { x: 0, y: 0, width: 0, height: 0, radius: 0 },
+    hiddenByRenderer: false,
+    selectMode: false,
+    commentMode: null,
+    frameMode: false,
+    layersWatch: false,
+    statusText: null,
+    pins: []
+  }
+  registerPreviewIpc({
+    state,
+    ensurePreviewView: () => previewView as any,
+    getPreviewView: () => previewView as any,
+    ensurePanelView: () => panelView as any,
+    getPanelView: () => panelView as any,
+    getMainWindow: () => window,
+    sendToMain: send,
+    placeholderUrl: 'about:blank',
+    isLocalPreviewUrl: (raw) => {
+      try {
+        const u = new URL(raw)
+        return (
+          ['http:', 'https:'].includes(u.protocol) &&
+          ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname) &&
+          u.origin !== new URL(url).origin
+        )
+      } catch {
+        return false
+      }
+    }
+  })
+  registerDevServerIpc(() => window)
+  registerAgentIpc(() => window)
+  registerPropsIpc()
+  registerStylesIpc()
+  registerControlsIpc()
+  registerContentControlsIpc(ipcMain)
+  registerAnnotationsIpc()
+  registerGithubIpc()
+  registerTokensIpc()
+  registerSetupIpc()
+  registerDiagnoseIpc()
+  registerSimulatorIpc(() => window)
+  registerFeedbackIpc(() => window)
+  registerGitRemoteIpc(ipcMain, projectHasRunningAgents)
+  registerMediaProtocol()
+  ipcMain.handle('project:pick', () => {
+    if (pickedRoot) {
+      const first = pickedRoot
+      if (!testing) pickedRoot = null
+      return first
+    }
+    return host!.request('pick', {}, 0x7fffffff)
+  })
+  ipcMain.handle('project:pick-new', () => host!.request('pickNew', {}, 0x7fffffff))
+  ipcMain.handle('project:create', (_e, path, options) => createProject(path, options))
+  ipcMain.handle('project:icon', (_e, path) => readProjectIcon(path))
+  ipcMain.handle('git:ensure', (_e, path) => ensureBranch(path))
+  ipcMain.handle('git:set', (_e, path, name) => switchBranch(path, name))
+  ipcMain.handle('git:list', (_e, path) => listBranches(path))
+  ipcMain.handle('git:checkout', (_e, path, name) => checkoutBranch(path, name))
+  ipcMain.handle('source:tree', (_e, path) => listProjectFiles(path))
+  ipcMain.handle('source:create-file', (_e, path, file) => createProjectFile(path, file))
+  ipcMain.handle('source:rename-file', (_e, path, from, to) => renameProjectFile(path, from, to))
+  ipcMain.handle('source:delete-file', (_e, path, file) =>
+    deleteProjectFile(path, file, shell.trashItem)
+  )
+  ipcMain.handle('source:popout', async (_e, project, source) => {
+    const view = new NativeView(`editor-${randomUUID()}`)
+    await host!.request('editor', { view: view.id })
+    view.webContents.loadURL(
+      `${url}?${new URLSearchParams({ praxisEditor: '1', root: project, source })}`
+    )
+  })
+  ipcMain.handle('source:close-window', (event) => {
+    const view = [...views.values()].find((view) => view.webContents === event.sender)
+    if (view?.id.startsWith('editor-')) host!.send('closeEditor', { view: view.id })
+  })
+  ipcMain.handle('window:is-fullscreen', () => host!.request('fullscreen'))
+  ipcMain.on('menu:native-edit', (_e, action) => host!.send('nativeEdit', { action }))
+  ipcMain.on('menu:set-recents', (_e, recents) => host!.send('recents', { recents }))
+  ipcMain.handle('update:check', () => ({ status: 'idle', behind: 0 }))
+  ipcMain.handle('update:apply', () => {
+    throw new Error('Restart bun run dev:native after updating the checkout.')
+  })
+  host.on('ipc', async ({ view, message }) => {
+    try {
+      const value = await dispatchIPC(view, message)
+      if (message.type === 'invoke')
+        host!.send('deliver', {
+          view,
+          message: {
+            type: 'reply',
+            id: message.id,
+            document: message.document,
+            value: value ?? null
+          }
+        })
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error)
+      if (message?.type === 'invoke')
+        host!.send('deliver', {
+          view,
+          message: { type: 'reply', id: message.id, document: message.document, error: text }
+        })
+      else console.error(`Native ${view} IPC rejected: ${text}`)
+    }
+  })
+  host.on('media', async ({ task, url, headers }) => {
+    try {
+      const handler = protocolHandlers.get('praxis-media')!
+      const response = await handler(new Request(url, { headers }))
+      host!.send('mediaReply', {
+        task,
+        status: response.status,
+        headers: Object.fromEntries(response.headers),
+        data: Buffer.from(await response.arrayBuffer()).toString('base64')
+      })
+    } catch {
+      host!.send('mediaReply', { task, status: 404, data: '' })
+    }
+  })
+  host.on('menu', ({ action }) => send('menu:action', action))
+  host.on('recent', ({ root }) => send('menu:open-recent', root))
+  host.on('view-closed', ({ view }) => {
+    const v = views.get(view)
+    if (v) v.destroyed = true
+    views.delete(view)
+  })
+  host.on('url', ({ view, url }) => {
+    const current = views.get(view)
+    if (current) current.url = url
+    if (view === 'preview' && /^https?:/.test(url)) send('preview:url-changed', url)
+  })
+  host.on('fullscreen', ({ value }) => send('window:fullscreen', value))
+  host.on('external', ({ url }) => {
+    void shell.openExternal(url).catch(console.error)
+  })
+  host.on('load-error', (message) => console.error('Native navigation:', message.message))
+  host.on('loaded', ({ view, url }) => {
+    const current = views.get(view)
+    if (current) current.url = url
+    if (view !== 'preview') return
+    previewView.webContents.send(channels.PREVIEW_SET_MODE, state.selectMode)
+    previewView.webContents.send(channels.PREVIEW_SET_COMMENT_MODE, state.commentMode)
+    previewView.webContents.send(channels.PREVIEW_SET_FRAME, state.frameMode)
+    previewView.webContents.send(channels.PREVIEW_SET_PINS, state.pins)
+    previewView.webContents.send(channels.PREVIEW_SET_STATUS, state.statusText)
+    previewView.webContents.send(channels.LAYERS_SET_WATCH, state.layersWatch)
+    if (url !== 'about:blank') send('preview:url-changed', url)
+  })
+  host.on('closed', () => {
+    cleanup()
+    if (!testing) process.exit(0)
+  })
+  host.on('host-error', (error) => {
+    console.error(error)
+    cleanup()
+    process.exit(1)
+  })
+  host.once('ready', async () => {
+    mainView.webContents.loadURL(`${url}?praxisSkipIntro=1`)
+    panelView.webContents.loadURL(`${url}?praxisPanel=1`)
+    console.log('Praxis Native is running on Bun + system WebKit. Electron is not loaded.')
+    if (testing) {
+      try {
+        await runNativeSmoke(host!, fixture!, root)
+        cleanup()
+        process.exitCode = 0
+      } catch (error) {
+        console.error(error)
+        cleanup()
+        process.exitCode = 1
+      } finally {
+        setTimeout(() => process.exit(process.exitCode || 0), 1000)
+      }
+    }
+  })
+}
+main().catch((error) => {
+  console.error(error)
+  process.exit(1)
+})

@@ -2,6 +2,40 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Shared Praxis app on Bun and system WebKit
+
+`bun run dev:native` now builds and launches the real Praxis UI and shared
+application services on Bun, with a Swift/AppKit/WKWebView host. The native build
+aliases the Electron primitives used by those services to a private adapter;
+the existing Electron entrypoint, renderer and business logic remain shared and
+unchanged. Added `build:native`, `typecheck:native`, native desktop tests and
+`docs/NATIVE.md`. Native state has a separate profile and process lock.
+
+The host supplies windows, menus, folder dialogs, screenshots, media delivery,
+pop-out code editors and Keychain-backed encryption. Preview instrumentation runs
+in an isolated content world with an event allowlist; privileged IPC is denied.
+The app asset server is loopback-only and exposes no backend command API.
+Linux, distribution, profile migration, app-shell HMR and updater parity remain
+future work. Keychain credential round trips and manual pointer interaction have
+not been verified.
+
+Validation: native build and all four typecheck projects passed. Real WKWebView
+integration passed project opening, managed static server startup, selection,
+computed styles, source edits/live reload, undo/redo, image delivery, pop-out
+editor loading, agent workspace access and preview isolation. Inspected both
+main and preview captures under `test/artifacts/native/`. A transient startup
+timeout occurred on one run; subsequent runs reached the checks. The media test
+now uses an image element like the product instead of fetching the custom scheme.
+Regression run: 146 PASS, 1 existing startup-intro crossfade assertion FAIL;
+report `test/artifacts/runs/run-xeTG1A/summary.json`. Ten tests containing agent
+send/spawn paths were excluded, and the live tier was not run. Docs-links and
+diff whitespace checks passed.
+
+The native live-composer fixture test is implemented but not executed: automatic
+approval review rejected sending fixture data to an authenticated external model
+with automatic tool permissions. A real native provider edit remains unverified
+pending explicit approval; no alternate path was used to make that call.
+
 ## 2026-09-23 — Native prototype development command
 
 Added `bun run dev:native` and included the standalone Bun/AppKit/WebKit prototype

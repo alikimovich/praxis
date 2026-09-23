@@ -30,7 +30,9 @@ history as written.
 | Command | What |
 | --- | --- |
 | `bun run dev` | Launch the app (electron-vite, HMR) |
-| `bun run dev:native` | Launch the macOS Bun/WebKit prototype in `experimental/native-runtime/`; the full Praxis app is not wired to it yet |
+| `bun run dev:native` | Build and run the real app on Bun + AppKit/WebKit (macOS, experimental); see `docs/NATIVE.md` |
+| `bun run build:native` | Build native backend, shared renderer/preloads, and Swift host to `out/native/` |
+| `bun run test:native` | Deterministic native desktop integration test; `test:native-live` separately submits a real fixture-edit turn |
 | `praxis serve <repo>` | Run the built UI in a local browser (loopback only) |
 | `praxis serve <repo> --remote` | Publish the loopback UI/preview to the private Tailscale network |
 | `bun run build` | Build main/preload/preview/renderer to `out/` |
@@ -73,6 +75,12 @@ with `capturePage()` or read its URL via
 `electronApp.evaluate(({webContents}) => ...)`.
 
 ## Architecture — four process boundaries
+
+The opt-in native entrypoint is `src/native/index.ts`. Its build aliases Electron
+imports to a private adapter for the shared application services, and reuses the
+same UI and preview preloads. Electron's entrypoint/build stay independent. Native
+profiles are separate until a safe shared migration/locking design is implemented.
+See `docs/NATIVE.md` for the host protocol, isolation checks, and current limits.
 
 ```
 src/

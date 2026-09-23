@@ -99,6 +99,7 @@ const UNIT = [
 
 // electron = the `node test/NAME.mjs` group AFTER `electron-vite build` in `test`.
 const ELECTRON = [
+  'native-runtime',
   'content-controls-ui',
   'project-ui-settings',
   'native-animation-controls',
@@ -177,6 +178,7 @@ const ELECTRON = [
 
 // live = the tests present in `verify` but not in `test`.
 const LIVE = [
+  'native-runtime-live',
   'content-controls-agent',
   'project-ui-agent',
   'project-ui-jev-agent',

@@ -6,7 +6,9 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 ## Native runtime development entrypoint (2026-09-23)
 
 - [x] Include the standalone macOS prototype in the repo and expose `bun run dev:native`, forwarding preview URL and integration-test arguments.
-- [ ] Connect the shared Praxis UI and application core to the native host while retaining Electron as the default.
+- [x] Connect the shared Praxis UI and application core to the native host while retaining Electron as the default.
+- [ ] Verify an authorized live provider turn through the native composer (test implemented; automated approval review blocked execution).
+- [ ] Native parity: shared-profile migration/coordination, app-shell HMR, updater/relaunch, browser permission and download handling.
 
 ## Comment agent model routing (2026-09-22)
 
