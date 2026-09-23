@@ -5,6 +5,7 @@ bun run dev:native
 bun run dev:native --project /absolute/path/to/project
 bun run build:native
 bun run test:native
+PRAXIS_NATIVE_TEST_PROVIDER=codex bun run test:native-live
 ```
 
 The default `bun run dev` remains Electron. The native command builds and launches
@@ -73,12 +74,14 @@ PNG artifacts are written under `test/artifacts/native/`.
 The native check also exercises undo/redo, registered media-file delivery and
 opening the shared code editor in a separate native window.
 
-`test:native-live` additionally submits an edit through the real composer to the
-configured Claude provider, using a temporary fixture and automatic permissions.
+`test:native-live` additionally submits an edit through the real composer to
+Claude by default, or Codex with `PRAXIS_NATIVE_TEST_PROVIDER=codex`, using a
+temporary fixture and automatic permissions. It restarts the backend session with
+the selected provider before submitting, rather than only changing the UI state.
 This sends fixture information to the provider and uses the signed-in account.
-After explicit approval, execution reached the provider SDK but returned
-“Not logged in · Please run /login.” Native AI source editing remains unverified
-until Claude authentication is available. The test is registered
+The authorized Codex run passed the real composer → provider → source edit →
+WebKit preview reload flow. The Claude run returned “Not logged in · Please run
+/login”; successful Claude editing remains unverified. The test is registered
 in the live tier, while the deterministic test is in the desktop tier.
 
 ## Remaining differences

@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Native Codex live edit verified
+
+Added `PRAXIS_NATIVE_TEST_PROVIDER=codex` to the native live test. Corrected the
+test setup to restart the actual backend session with the requested provider and
+options; changing renderer store state alone leaves the opened session unchanged.
+
+The user-authorized Codex run passed: actual composer submission, streamed tool
+and reply events, fixture heading edited on disk to `NATIVE_AGENT_VERIFIED`, and
+the same heading observed after WebKit preview reload. All deterministic native
+checks also passed. Inspected the captured Codex chat and provider events in
+`test/artifacts/native/`. Native typecheck, docs-links and whitespace checks passed.
+Claude remains unverified because its SDK returned the missing-login response.
+
 ## 2026-09-23 — Authorized native live test: Claude login required
 
 With explicit user approval, ran `bun run test:native-live`. The deterministic

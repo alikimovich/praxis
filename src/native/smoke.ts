@@ -119,9 +119,21 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     'NATIVE APP PASS — actual React UI, project open, managed server, WebKit preview, shared source/agent services, isolated layers, denied preview commands, captures.'
   )
   if (process.argv.includes('--live')) {
+    const provider = process.env.PRAXIS_NATIVE_TEST_PROVIDER || 'claude'
+    if (!['claude', 'codex'].includes(provider)) throw new Error('Unsupported native test provider')
+    const model = provider === 'claude' ? 'haiku' : 'default'
     await evaluate(
-      `(()=>{window.__praxisSession.getState().setModel('haiku');window.__praxisPermissions.getState().setMode('bypassPermissions');return true})()`
+      `(()=>{window.__praxisSession.getState().setProvider(${JSON.stringify(provider)});window.__praxisSession.getState().setModel(${JSON.stringify(model)});window.__praxisPermissions.getState().setMode('bypassPermissions');return true})()`
     )
+    const options = {
+      provider,
+      permissionMode: 'bypassPermissions',
+      ...(provider === 'claude' ? { model } : {})
+    }
+    const restarted = await evaluate(
+      `(()=>{const root=${JSON.stringify(fixture)};const entry=window.__praxisWorkspace.getState().projects.find(p=>p.root===root);return window.api.agent.restartChat(root,entry.activeSessionKey??entry.key,${JSON.stringify(options)})})()`
+    )
+    if (!restarted.ok) throw new Error(`Could not start ${provider}: ${restarted.error}`)
     await evaluate(
       `(()=>{window.__nativeTestEvents=[];window.api.agent.onEvent(e=>window.__nativeTestEvents.push(e));return true})()`
     )
