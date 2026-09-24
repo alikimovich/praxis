@@ -192,3 +192,8 @@ native divider spans the window height; the preview has no inset card border.
 Mobile retains its device surround. Native workspace layout updates no longer
 wait 50ms for the sidebar, and changing viewport/insets keeps the WebKit view
 alive rather than briefly setting its size to zero.
+
+The native toolbar reserves room for preview actions down to the 850pt minimum
+window width by shortening the chat title and address first. Projects is removed
+from the toolbar (including overflow) while the sidebar is closed, and restored
+when reopened. Toolbar action symbols use a compact 14pt configuration.

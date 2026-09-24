@@ -5,6 +5,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Keep native preview action groups visible at narrow widths, shrink toolbar icons, and remove Projects while the sidebar is closed.
+
 - [x] Adapt preview domain/branch contrast to page background and remove the duplicate web resize-divider paint.
 
 - [x] Extend preview page background behind the native toolbar, use a lighter full-height divider, and remove delayed/zero-size resize updates.

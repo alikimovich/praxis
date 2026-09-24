@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Compact toolbar with visible preview actions
+
+Preview action groups now have high visibility priority. Chat/header widths
+adapt to the available window width, reserving room for all preview actions;
+the title/address truncate before actions overflow. Toolbar symbols use a 14pt
+configuration in a 16pt image. A native sidebar observer removes Projects from
+the toolbar when collapsed and restores it when reopened, so it cannot remain
+in the overflow menu.
+
+Native integration passed, including action visibility at 850, 1100 and 1320pt,
+Projects absent while collapsed, expand/restore and existing application flows.
+An independent AppKit harness confirmed both groups and Publish visible at all
+three widths. Type checks passed; inspected the native shell capture. No Electron
+tests ran.
+
 ## 2026-09-23 — Preview header contrast and duplicate divider
 
 The domain/branch inherited the app's light appearance even when the preview

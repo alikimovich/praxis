@@ -132,6 +132,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await host.request('shellPerform', { action: 'toggle-sidebar' })
   await new Promise((resolve) => setTimeout(resolve, 500))
   const collapsed = await host.request('shellInspect')
+  if (collapsed.toolbar.includes('projects')) throw new Error('Collapsed sidebar kept Projects in toolbar/overflow')
   await checkChatAlignment()
   if (!collapsed.sidebarCollapsed || collapsed.detailWidth <= shell.detailWidth)
     throw new Error(
@@ -143,6 +144,14 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   mkdirSync(surfaceArtifacts, { recursive: true })
   writeFileSync(join(surfaceArtifacts, 'preview-surface.png'), Buffer.from(await host.request('captureShell'), 'base64'))
   console.log('Native page background, safe-area viewport, full-height divider and expand/restore checks passed.')
+  for (const width of [850, 1100, 1320]) {
+    await host.request('shellPerform', { action: 'window-width', row: String(width) })
+    await new Promise(resolve => setTimeout(resolve, 300))
+    const toolbarState = await host.request('shellInspect')
+    for (const key of ['interaction', 'tools', 'publish']) {
+      if (!toolbarState.visibleToolbar.includes(key)) throw new Error(`Toolbar hid ${key} at width ${width}: ${JSON.stringify(toolbarState.visibleToolbar)}`)
+    }
+  }
   const originalChat = shell.selected
   const waitComposer = async (check: (state: any) => boolean) => {
     for (let i = 0; i < 100; i++) {
