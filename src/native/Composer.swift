@@ -27,6 +27,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
     let sendButton = NSButton()
     let plus = NSPopUpButton(frame: .zero, pullsDown: true)
     let chips = NSStackView()
+    let controls = NSStackView()
     let context = NSButton()
     let attachments = NSPopUpButton(frame: .zero, pullsDown: true)
     let skillList = NSScrollView()
@@ -57,7 +58,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             effect.addSubview(content); content.frame = effect.bounds; content.autoresizingMask = [.width, .height]
             backdrop = effect
         }
-        backdrop.frame = bounds; backdrop.autoresizingMask = [.width, .height]; addSubview(backdrop)
+        backdrop.translatesAutoresizingMaskIntoConstraints = false; addSubview(backdrop)
         text.isRichText = false; text.allowsUndo = true; text.importsGraphics = false; text.drawsBackground = false
         text.font = .systemFont(ofSize: 14); text.textColor = .labelColor; text.insertionPointColor = .labelColor
         text.textContainerInset = NSSize(width: 2, height: 4)
@@ -72,7 +73,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         text.pasteFiles = { [weak self] board in self?.readPasteboard(board) ?? false }
         scroll.documentView = text; scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay
         scroll.borderType = .noBorder
-        let controls = NSStackView(); controls.orientation = .horizontal; controls.spacing = 4
+        controls.orientation = .horizontal; controls.spacing = 4
         plus.addItem(withTitle: ""); plus.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "Attach or select")
         plus.bezelStyle = .roundRect; plus.setAccessibilityLabel("Attachments and tools")
         for (title, action) in [("Attach Files…", "attach"), ("Select Element", "select"), ("Show Layers", "layers")] {
@@ -96,13 +97,13 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         sendButton.bezelStyle = .circular; sendButton.isBordered = true
         sendButton.target = self; sendButton.action = #selector(send(_:))
         let spacer = NSView(); spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        controls.addArrangedSubview(spacer); controls.addArrangedSubview(sendButton)
+        controls.addArrangedSubview(spacer)
         spacer.widthAnchor.constraint(greaterThanOrEqualToConstant: 0).isActive = true
         plus.widthAnchor.constraint(equalToConstant: 30).isActive = true
-        sendButton.widthAnchor.constraint(equalToConstant: 36).isActive = true
-        sendButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
-        sendButton.imageScaling = .scaleProportionallyUpOrDown
-        sendButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
+        sendButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        sendButton.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        sendButton.imageScaling = .scaleNone
+        sendButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
         chips.orientation = .horizontal; chips.spacing = 4
         context.bezelStyle = .roundRect; context.controlSize = .small; context.lineBreakMode = .byTruncatingTail
         context.target = self; context.action = #selector(clearContext(_:))
@@ -115,12 +116,15 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         skillList.wantsLayer = true; skillList.layer?.cornerRadius = 12
         skillList.layer?.borderWidth = 1; skillList.layer?.borderColor = NSColor.separatorColor.cgColor
         skillList.setAccessibilityLabel("Skills and commands"); skillList.isHidden = true
-        for view in [chips, scroll, controls] { view.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(view) }
+        controls.translatesAutoresizingMaskIntoConstraints = false; addSubview(controls)
+        for view in [chips, scroll, sendButton] { view.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(view) }
         chipsHeight = chips.heightAnchor.constraint(equalToConstant: 0)
         NSLayoutConstraint.activate([
+            backdrop.topAnchor.constraint(equalTo: topAnchor), backdrop.leadingAnchor.constraint(equalTo: leadingAnchor), backdrop.trailingAnchor.constraint(equalTo: trailingAnchor), backdrop.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -8),
+            sendButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10), sendButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -10),
             chips.topAnchor.constraint(equalTo: content.topAnchor, constant: 10), chips.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), chips.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -12), chipsHeight,
-            scroll.topAnchor.constraint(equalTo: chips.bottomAnchor, constant: 4), scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), scroll.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -5),
-            controls.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10), controls.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10), controls.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -10), controls.heightAnchor.constraint(equalToConstant: 36)
+            scroll.topAnchor.constraint(equalTo: chips.bottomAnchor, constant: 4), scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), scroll.bottomAnchor.constraint(equalTo: sendButton.topAnchor, constant: -5),
+            controls.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10), controls.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10), controls.bottomAnchor.constraint(equalTo: bottomAnchor), controls.heightAnchor.constraint(equalToConstant: 26)
         ])
         isHidden = true
     }
@@ -284,7 +288,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             item.target = self; item.representedObject = payload; popup.menu?.addItem(item)
         }
     }
-    func inspect() -> [String: Any] { layoutSubtreeIfNeeded(); return ["skillListVisible":!skillList.isHidden, "skillCount":skillEntries.count, "inputTopInset":content.bounds.maxY - scroll.frame.maxY, "sendRightInset":content.bounds.maxX - sendButton.convert(sendButton.bounds, to: content).maxX, "autohidesScrollers":scroll.autohidesScrollers, "contentWidth":content.bounds.width, "inputHeight":scroll.bounds.height, "sendWidth":sendButton.bounds.width, "visible":!isHidden, "glass":glass, "text":text.string, "chat":chat, "enabled":sendButton.isEnabled, "revision":revision, "choices":state["choices"] ?? [], "attachments":state["attachments"] ?? [], "bounds":["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height]] }
+    func inspect() -> [String: Any] { layoutSubtreeIfNeeded(); return ["controlsBelowForm":controls.frame.maxY < content.convert(content.bounds, to: self).minY, "sendInsideForm":sendButton.superview === content, "skillListVisible":!skillList.isHidden, "skillCount":skillEntries.count, "inputTopInset":content.bounds.maxY - scroll.frame.maxY, "sendRightInset":content.bounds.maxX - sendButton.convert(sendButton.bounds, to: content).maxX, "autohidesScrollers":scroll.autohidesScrollers, "contentWidth":content.bounds.width, "inputHeight":scroll.bounds.height, "sendWidth":sendButton.bounds.width, "visible":!isHidden, "glass":glass, "text":text.string, "chat":chat, "enabled":sendButton.isEnabled, "revision":revision, "choices":state["choices"] ?? [], "attachments":state["attachments"] ?? [], "bounds":["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height]] }
     func perform(_ c: [String: Any]) {
         if let value = c["text"] as? String { text.string = value; text.setSelectedRange(NSRange(location: (value as NSString).length, length: 0)); changed() }
         if c["action"] as? String == "send" { send(nil) }

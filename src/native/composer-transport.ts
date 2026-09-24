@@ -138,7 +138,7 @@ export function installComposer(ipc: IPC, rememberPath: (file: File, path: strin
     document.documentElement.classList.add('native-composer')
     const css = document.createElement('style')
     css.textContent =
-      'html.native-composer .composer [data-slot="input-group"]{opacity:0;pointer-events:none;min-height:112px} '
+      'html.native-composer .composer [data-slot="input-group"]{opacity:0;pointer-events:none;min-height:146px} '
     document.head.append(css)
     new MutationObserver(schedule).observe(document.body, {
       subtree: true,

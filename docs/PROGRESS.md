@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Selectors below the native composer
+
+Moved the attachment/tools menu and provider/model/permission selectors to a row
+below the Liquid Glass form, directly on the window surface. The form keeps its
+112-point minimum; the shared hidden layout reserves another 34 points for the
+row and gap. Send/Stop remains inside the lower-right corner as a 30-point native
+button, with a 13-point medium-weight symbol and no image upscaling.
+
+Native integration passed geometry assertions that selectors are below the form
+and Send remains inside at its standard size, plus drafts, permissions, slash
+completion, attachment and editing flows. Native build, all four typechecks,
+docs-links and whitespace checks passed. Inspected the composer capture with the
+existing glass compositing limitation. No Electron tests ran.
+
 ## 2026-09-23 — Domain and branch header
 
 Replaced the separate branch pill and address field with a plain two-line native
