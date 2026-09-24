@@ -74,15 +74,20 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         scroll.documentView = text; scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay
         scroll.borderType = .noBorder
         controls.orientation = .horizontal; controls.spacing = 4
-        plus.addItem(withTitle: ""); plus.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "Attach or select")
-        plus.bezelStyle = .roundRect; plus.setAccessibilityLabel("Attachments and tools")
+        plus.addItem(withTitle: ""); plus.item(at: 0)?.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "Attach or select")
+        plus.isBordered = false; (plus.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow; plus.setAccessibilityLabel("Attachments and tools")
         for (title, action) in [("Attach Files…", "attach"), ("Select Element", "select"), ("Show Layers", "layers")] {
             let item = NSMenuItem(title: title, action: #selector(menuAction(_:)), keyEquivalent: "")
             item.target = self; item.representedObject = ["action":action]; plus.menu?.addItem(item)
         }
         controls.addArrangedSubview(plus)
+        let spacer = NSView(); spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        controls.addArrangedSubview(spacer)
+        spacer.widthAnchor.constraint(greaterThanOrEqualToConstant: 0).isActive = true
         for label in ["Provider", "Model", "Permission mode"] {
             let picker = NSPopUpButton(frame: .zero, pullsDown: false)
+            picker.isBordered = false
+            (picker.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
             picker.menu?.autoenablesItems = false
             picker.cell?.lineBreakMode = .byTruncatingTail
             picker.controlSize = .small; picker.font = .systemFont(ofSize: 11)
@@ -90,15 +95,12 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             picker.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             picker.addItem(withTitle: label); pickers[label] = picker; controls.addArrangedSubview(picker)
             picker.widthAnchor.constraint(greaterThanOrEqualToConstant: 35).isActive = true
-            let width = picker.widthAnchor.constraint(equalToConstant: 70); width.priority = .defaultHigh; width.isActive = true
+            let width = picker.widthAnchor.constraint(equalToConstant: 60); width.priority = .defaultHigh; width.isActive = true
             pickerWidths[label] = width
             picker.setContentHuggingPriority(.required, for: .horizontal)
         }
         sendButton.bezelStyle = .circular; sendButton.isBordered = true
         sendButton.target = self; sendButton.action = #selector(send(_:))
-        let spacer = NSView(); spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        controls.addArrangedSubview(spacer)
-        spacer.widthAnchor.constraint(greaterThanOrEqualToConstant: 0).isActive = true
         plus.widthAnchor.constraint(equalToConstant: 30).isActive = true
         sendButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
         sendButton.heightAnchor.constraint(equalToConstant: 30).isActive = true
@@ -231,9 +233,8 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             picker.isEnabled = !(choice["disabled"] as? Bool ?? false)
             picker.toolTip = picker.titleOfSelectedItem
             let title = picker.titleOfSelectedItem ?? ""
-            let compactTitle = title.count > 10 ? String(title.prefix(10)) + "..." : title
-            let textWidth = (compactTitle as NSString).size(withAttributes: [.font: picker.font ?? NSFont.systemFont(ofSize: 11)]).width
-            pickerWidths[label]?.constant = max(35, ceil(textWidth) + 28)
+            let textWidth = (title as NSString).size(withAttributes: [.font: picker.font ?? NSFont.systemFont(ofSize: 11)]).width
+            pickerWidths[label]?.constant = min(60, max(35, ceil(textWidth) + 12))
         }
         }
         let selected = next["context"] as? String ?? ""
@@ -288,7 +289,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             item.target = self; item.representedObject = payload; popup.menu?.addItem(item)
         }
     }
-    func inspect() -> [String: Any] { layoutSubtreeIfNeeded(); return ["controlsBelowForm":controls.frame.maxY < content.convert(content.bounds, to: self).minY, "sendInsideForm":sendButton.superview === content, "skillListVisible":!skillList.isHidden, "skillCount":skillEntries.count, "inputTopInset":content.bounds.maxY - scroll.frame.maxY, "sendRightInset":content.bounds.maxX - sendButton.convert(sendButton.bounds, to: content).maxX, "autohidesScrollers":scroll.autohidesScrollers, "contentWidth":content.bounds.width, "inputHeight":scroll.bounds.height, "sendWidth":sendButton.bounds.width, "visible":!isHidden, "glass":glass, "text":text.string, "chat":chat, "enabled":sendButton.isEnabled, "revision":revision, "choices":state["choices"] ?? [], "attachments":state["attachments"] ?? [], "bounds":["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height]] }
+    func inspect() -> [String: Any] { layoutSubtreeIfNeeded(); return ["pickerWidths":pickers.mapValues { $0.bounds.width }, "pickersPlain":pickers.values.allSatisfy { !$0.isBordered }, "attachIsPlus":plus.item(at: 0)?.image != nil && (plus.cell as? NSPopUpButtonCell)?.arrowPosition == .noArrow, "controlsBelowForm":controls.frame.maxY < content.convert(content.bounds, to: self).minY, "sendInsideForm":sendButton.superview === content, "skillListVisible":!skillList.isHidden, "skillCount":skillEntries.count, "inputTopInset":content.bounds.maxY - scroll.frame.maxY, "sendRightInset":content.bounds.maxX - sendButton.convert(sendButton.bounds, to: content).maxX, "autohidesScrollers":scroll.autohidesScrollers, "contentWidth":content.bounds.width, "inputHeight":scroll.bounds.height, "sendWidth":sendButton.bounds.width, "visible":!isHidden, "glass":glass, "text":text.string, "chat":chat, "enabled":sendButton.isEnabled, "revision":revision, "choices":state["choices"] ?? [], "attachments":state["attachments"] ?? [], "bounds":["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height]] }
     func perform(_ c: [String: Any]) {
         if let value = c["text"] as? String { text.string = value; text.setSelectedRange(NSRange(location: (value as NSString).length, length: 0)); changed() }
         if c["action"] as? String == "send" { send(nil) }

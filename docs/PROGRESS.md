@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Plain compact composer controls
+
+Made attachment/tools a borderless plus (the image belongs to the popup’s first
+menu item, avoiding its previous chevron-only appearance). A flexible gap keeps
+it on the left and the provider/model/permission menus on the right. Those menus
+are borderless without native arrow chrome, sized from full selected labels up
+to 60 points, with truncation only when constrained. Full names stay in menus
+and tooltips. The empty, context-free form minimum is reduced from 146 to 120
+points including controls; populated forms retain the previous space.
+
+Native build/integration passed, including plain-picker/width/plus assertions and
+existing geometry, drafts, attachment, permission and slash flows. All four
+typechecks, docs-links and whitespace checks passed. Inspected the capture with
+the documented glass compositing limitation. No Electron tests ran.
+
 ## 2026-09-23 — Selectors below the native composer
 
 Moved the attachment/tools menu and provider/model/permission selectors to a row

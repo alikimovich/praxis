@@ -24,6 +24,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Clean up native managed servers on terminal hangup and expose the native window surface through transparent WebKit/chat layers.
 - [x] Stack the branch menu below the editable preview domain and remove the native Home button.
 - [x] Move native composer selectors below the glass form and use a smaller standard Send arrow inside it.
+- [x] Use a plain left-hand plus, text-only selectors capped at 60 points, and a smaller empty native form.
 - [ ] Native composer polish: image thumbnails and attachment error feedback; verify pointer interaction and IME on an unlocked desktop.
 - [ ] Native sidebar parity: inline rename, manual ordering and background-agent rows.
 - [ ] Native parity: shared-profile migration/coordination, app-shell HMR, updater/relaunch, browser permission and download handling.

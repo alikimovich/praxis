@@ -52,11 +52,11 @@ disabled for simulator projects.
 
 Sidebar and composer scroll views use auto-hiding overlay scrollers. The empty
 composer fits its document to the available height, avoiding artificial overflow.
-Its empty chip row collapses, with a 112-point minimum glass form and a separate
-selector row below it (146 points total). Pickers size
-to the selected label (using Electron’s ten-character compact-label rule), with
-full menu titles and tooltips. The attachment/tools and provider/model/permission
-menus sit below the glass on the window surface. Send/Stop stays inside the form
+Its empty chip row collapses. The empty form reserves 120 points including the
+selector row (86 for glass); text or attachments/context restore the 146-point
+minimum. A plain plus opens attachment/tools on the left. Provider/model/permission
+menus sit on the right without bezels or arrow chrome, fitting their selected
+labels up to 60 points before truncating; full menu labels and tooltips remain. Send/Stop stays inside the form
 at the lower right, as a 30-point button with a 13-point symbol. The chat pane, page root and status fade are transparent; the main WKWebView
 also disables its background drawing so AppKit’s window surface is visible.
 Native-mode web chat uses a thin scrollbar without reserving a permanent gutter.
