@@ -2,6 +2,32 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Native navigation and automatic scrollbars
+
+Moved Home, the editable preview address and desktop/mobile switching into the
+AppKit toolbar. The address mirrors actual navigation, preserves edits while
+focused, submits on Enter and reverts on Escape. Navigation stays within the
+project origin; Home uses the project's base URL. Simulator device switching is
+disabled. The running web preview header is removed only in native mode; loading
+and error status remains visible. Publish is the trailing accent-colored native
+button, retaining its separate PR/merge menu without taking the Return shortcut.
+
+The sidebar and composer previously enabled scrollers without auto-hide. Both now
+use auto-hiding overlay scrollers, and the empty text document no longer retains
+an initial height larger than its viewport. Native-mode chat also drops its fixed
+scrollbar gutter and uses a thinner thumb. The project page's scrollbars are not
+modified.
+
+Validation: native integration passed address/query/hash navigation, Home, device
+switching, toolbar order/primary styling configuration, hidden duplicate header,
+automatic scrollers and existing editing/composer/isolation checks. All four
+typechecks passed. Inspected the native toolbar capture; inactive/offscreen glass
+compositing retains the documented visual limitations. The final native run passed
+in isolation after an intermittent WebKit startup evaluation failure during the
+concurrent run. Deterministic regressions: 146 PASS, with native checks separate
+and external agent-send tests excluded. Report:
+`test/artifacts/runs/run-bbHdPw/summary.json`. Docs-links and whitespace checks pass.
+
 ## 2026-09-23 — Preview-focused native toolbar
 
 Moved New Project, Open Project and New Chat into the top of the native sidebar,

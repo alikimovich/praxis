@@ -11,6 +11,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Add a standard macOS project/chat sidebar, split-view divider and toolbar around the shared web content.
 - [x] Add a native multiline composer, actual macOS 26 Liquid Glass, shared draft/action bridge and attachment controls.
 - [x] Move project actions into the sidebar and preview branch/publish/code/expand into the native toolbar, with a leading sidebar toggle.
+- [x] Move Home/address/device controls into the native toolbar, make Publish the trailing primary action, and remove persistent sidebar/composer scrollbar tracks.
 - [ ] Native composer polish: image thumbnails, richer slash suggestions and attachment error feedback; verify pointer interaction and IME on an unlocked desktop.
 - [ ] Native sidebar parity: inline rename, manual ordering and background-agent rows.
 - [ ] Native parity: shared-profile migration/coordination, app-shell HMR, updater/relaunch, browser permission and download handling.

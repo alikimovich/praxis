@@ -14,7 +14,7 @@ final class ShellRow: NSObject {
 
 /// System sidebar, split-view divider and toolbar. Web content uses detail-local
 /// coordinates, so existing preview/inspector geometry remains unchanged.
-final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate, NSToolbarDelegate, NSMenuDelegate {
+final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate, NSToolbarDelegate, NSMenuDelegate, NSTextFieldDelegate {
     let split = NSSplitViewController()
     let outline = NSOutlineView()
     let sidebar = NSViewController()
@@ -30,12 +30,15 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     weak var window: NSWindow?
     private var knownProjects = Set<String>()
     private var toolbarItems: [String: NSToolbarItem] = [:]
-    private let items = ["branch", "publish", "code", "expand"]
-    private let labels = ["branch":"Branch", "publish":"Publish", "code":"Show Code", "expand":"Expand Preview"]
-    private let symbols = ["branch":"arrow.triangle.branch", "publish":"arrow.up.circle", "code":"chevron.left.forwardslash.chevron.right", "expand":"arrow.up.left.and.arrow.down.right"]
+    private let items = ["branch", "home", "address", "device", "code", "expand", "publish"]
+    private let labels = ["home":"Back to Project", "address":"Preview Address", "device":"Switch to Mobile", "branch":"Branch", "publish":"Publish", "code":"Show Code", "expand":"Expand Preview"]
+    private let symbols = ["home":"house", "device":"iphone", "branch":"arrow.triangle.branch", "publish":"arrow.up.circle", "code":"chevron.left.forwardslash.chevron.right", "expand":"arrow.up.left.and.arrow.down.right"]
     private var sidebarButtons: [String: NSButton] = [:]
     private var previewState: [String: Any] = [:]
     private var sidebarBeforeExpand = false
+    private let address = NSTextField()
+    private let publishButton = NSButton()
+    private let publishOptions = NSPopUpButton(frame: .zero, pullsDown: true)
 
     init(window: NSWindow, canvas: NSView) {
         super.init(); self.window = window
@@ -51,7 +54,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         outline.dataSource = self; outline.delegate = self
         outline.setAccessibilityLabel("Projects and chats")
         let menu = NSMenu(); menu.delegate = self; outline.menu = menu
-        let scroll = NSScrollView(); scroll.documentView = outline; scroll.hasVerticalScroller = true
+        let scroll = NSScrollView(); scroll.documentView = outline; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay
         scroll.drawsBackground = false
         let sidebarContainer = NSView()
         let actions = NSStackView(); actions.orientation = .vertical; actions.alignment = .leading; actions.spacing = 6
@@ -92,8 +95,8 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         [.toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace] + items.map { NSToolbarItem.Identifier($0) }
     }
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.toggleSidebar, .sidebarTrackingSeparator, NSToolbarItem.Identifier("branch"), .flexibleSpace,
-         NSToolbarItem.Identifier("publish"), NSToolbarItem.Identifier("code"), NSToolbarItem.Identifier("expand")]
+        [.toggleSidebar, .sidebarTrackingSeparator, NSToolbarItem.Identifier("branch"), NSToolbarItem.Identifier("home"), NSToolbarItem.Identifier("address"), .flexibleSpace,
+         NSToolbarItem.Identifier("device"), NSToolbarItem.Identifier("code"), NSToolbarItem.Identifier("expand"), NSToolbarItem.Identifier("publish")]
     }
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar: Bool) -> NSToolbarItem? {
         let key = identifier.rawValue
@@ -102,9 +105,46 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         item.label = labels[key] ?? key; item.paletteLabel = item.label; item.toolTip = item.label
         item.image = NSImage(systemSymbolName: symbols[key] ?? "circle", accessibilityDescription: item.label)
         if key != "branch" { item.target = self; item.action = #selector(toolbarAction(_:)) }
+        if key == "address" {
+            address.frame = NSRect(x: 0, y: 0, width: 280, height: 26)
+            address.placeholderString = "Preview address"; address.setAccessibilityLabel("Preview address")
+            address.font = .systemFont(ofSize: NSFont.smallSystemFontSize); address.lineBreakMode = .byTruncatingMiddle
+            address.delegate = self; address.target = self; address.action = #selector(navigateAddress(_:))
+            address.translatesAutoresizingMaskIntoConstraints = false
+            let preferredWidth = address.widthAnchor.constraint(equalToConstant: 280); preferredWidth.priority = .defaultLow
+            NSLayoutConstraint.activate([address.widthAnchor.constraint(greaterThanOrEqualToConstant: 160), address.widthAnchor.constraint(lessThanOrEqualToConstant: 420), address.heightAnchor.constraint(equalToConstant: 26), preferredWidth])
+            item.view = address
+        } else if key == "publish" {
+            publishButton.title = "Publish"; publishButton.bezelStyle = .rounded
+            if #available(macOS 26.0, *) { publishButton.bezelStyle = .glass }
+            publishButton.bezelColor = .controlAccentColor
+            publishButton.target = self; publishButton.action = #selector(publishClicked(_:))
+            publishButton.setAccessibilityLabel("Publish")
+            publishOptions.bezelStyle = .rounded; publishOptions.setAccessibilityLabel("Publish settings")
+            publishOptions.widthAnchor.constraint(equalToConstant: 28).isActive = true
+            let group = NSStackView(views: [publishButton, publishOptions]); group.spacing = 2
+            item.view = group; item.visibilityPriority = .high
+        }
         item.autovalidates = false; toolbarItems[key] = item
         updateToolbar()
         return item
+    }
+    @objc func navigateAddress(_ sender: Any?) {
+        let value = address.stringValue
+        window?.makeFirstResponder(nil)
+        emit(["event":"shell-action", "action":"address", "value":value])
+        address.stringValue = previewState["previewURL"] as? String ?? previewState["previewBase"] as? String ?? ""
+    }
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+            address.stringValue = previewState["previewURL"] as? String ?? previewState["previewBase"] as? String ?? ""
+            window?.makeFirstResponder(nil); return true
+        }
+        return false
+    }
+    @objc func publishClicked(_ sender: Any?) {
+        guard let item = toolbarItems["publish"], item.isEnabled else { return }
+        toolbarAction(item)
     }
     @objc func sidebarAction(_ button: NSButton) {
         let action = button.identifier?.rawValue ?? ""
@@ -136,6 +176,13 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             item.isEnabled = key == "branch" ? previewState["branch"] is String : ready
             if key == "publish" { item.isEnabled = ready && !(previewState["publishing"] as? Bool ?? false) }
         }
+        address.isEnabled = ready
+        if address.currentEditor() == nil { address.stringValue = previewState["previewURL"] as? String ?? previewState["previewBase"] as? String ?? "" }
+        toolbarItems["device"]?.isEnabled = previewState["deviceEnabled"] as? Bool ?? false
+        let mobile = previewState["viewport"] as? String == "mobile"
+        toolbarItems["device"]?.label = mobile ? "Switch to Desktop" : "Switch to Mobile"
+        toolbarItems["device"]?.toolTip = toolbarItems["device"]?.label
+        toolbarItems["device"]?.image = NSImage(systemSymbolName: mobile ? "desktopcomputer" : "iphone", accessibilityDescription: toolbarItems["device"]?.label)
         if let item = toolbarItems["branch"] as? NSMenuToolbarItem {
             item.title = previewState["branch"] as? String ?? "Branch"; item.toolTip = item.title
             let menu = NSMenu(); menu.autoenablesItems = false
@@ -159,6 +206,11 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
                 menu.addItem(entry)
             }
             item.menu = menu
+            publishButton.title = item.title; publishButton.setAccessibilityLabel(item.title); publishButton.isEnabled = item.isEnabled
+            publishOptions.menu = menu.copy() as? NSMenu
+            publishOptions.insertItem(withTitle: "", at: 0)
+            publishOptions.isEnabled = item.isEnabled
+            publishOptions.isHidden = item.title == "Connect to GitHub"
         }
         toolbarItems["code"]?.toolTip = previewState["codeOpen"] as? Bool == true ? "Hide Code" : "Show Code"
         toolbarItems["code"]?.label = toolbarItems["code"]?.toolTip ?? "Show Code"
@@ -170,7 +222,9 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         applying = true; defer { applying = false }
         let expanded = Set(rows.filter { outline.isItemExpanded($0) }.map(\.id))
         rows = (state["rows"] as? [[String: Any]] ?? []).map(ShellRow.init)
-        currentProject = state["project"] as? String
+        let nextProject = state["project"] as? String
+        if nextProject != currentProject && address.currentEditor() != nil { window?.makeFirstResponder(nil) }
+        currentProject = nextProject
         selectedID = state["selected"] as? String
         ready = state["previewReady"] as? Bool ?? false
         selecting = state["selectMode"] as? Bool ?? false
@@ -235,7 +289,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
          "sidebarWidth":sidebar.view.bounds.width, "detailWidth":split.splitViewItems[1].viewController.view.bounds.width,
          "outlineRows":outline.numberOfRows, "outlineWidth":outline.bounds.width,
          "toolbar":toolbar.items.map { $0.itemIdentifier.rawValue }, "branch":previewState["branch"] ?? "", "publishLabel":previewState["publishLabel"] ?? "", "codeOpen":previewState["codeOpen"] ?? false,
-         "sidebarActions":sidebarButtons.keys.sorted(), "enabled":toolbarItems.mapValues { $0.isEnabled }]
+         "address":address.stringValue, "viewport":previewState["viewport"] ?? "", "publishPrimary":publishButton.bezelColor == NSColor.controlAccentColor, "sidebarAutohidesScrollers":(outline.enclosingScrollView?.autohidesScrollers ?? false), "sidebarActions":sidebarButtons.keys.sorted(), "enabled":toolbarItems.mapValues { $0.isEnabled }]
     }
     func perform(_ action: String, id: String?) -> Bool {
         if action == "toggle-sidebar" {
@@ -249,6 +303,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             guard index >= 0 else { return false }
             outline.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false); return true
         }
+        if action == "address", let value = id { address.stringValue = value; navigateAddress(nil); return true }
         if ["branch", "publish-mode"].contains(action), let value = id,
            let menu = (toolbarItems[action == "branch" ? "branch" : "publish"] as? NSMenuToolbarItem)?.menu,
            let entry = menu.items.first(where: { ($0.representedObject as? [String: String])?["value"] == value && ($0.representedObject as? [String: String])?["action"] == action }), entry.isEnabled {

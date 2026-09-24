@@ -28,12 +28,22 @@ to live and previous chats. Native selection switches projects/chats; context
 menus offer new chat, project memory and closing. New Project, Open Project and
 New Chat buttons sit above the outline; Settings sits at the bottom. The toolbar
 keeps the sidebar toggle at the far left and provides the current branch menu,
-Publish/Create PR (or Connect to GitHub), Show/Hide Code and Expand/Restore Preview.
+Home, editable preview address, desktop/mobile, Show/Hide Code and Expand/Restore
+Preview. Publish/Create PR (or Connect to GitHub) is an accent-colored native button
+at the far right, with its mode menu beside it.
 Branch switching, new branches and Git Updates reuse the shared handlers; the
 publish menu retains both PR-only and merge modes. Expanding hides chat and the
 native sidebar; restoring returns the sidebar to its previous collapsed state.
-The corresponding web header controls are hidden only in the native build; URL
-and device controls remain next to the preview.
+The running web preview header is hidden only in the native build; startup/error
+status remains visible. The address follows preview navigation without replacing
+an edit in progress. Enter navigates within the project origin, Escape restores
+the current URL, and Home returns to the project's base URL. The device toggle is
+disabled for simulator projects.
+
+Sidebar and composer scroll views use auto-hiding overlay scrollers. The empty
+composer fits its document to the available height, avoiding artificial overflow.
+Native-mode web chat uses a thin scrollbar without reserving a permanent gutter.
+Project-preview scrollbars remain controlled by the page and WebKit.
 
 Chat history, settings, inspectors, code editing and the detailed preview toolbar remain
 React/WebKit. The native build hides the React rail and titlebar drag regions;
@@ -111,7 +121,8 @@ The native check also exercises undo/redo, registered media-file delivery and
 opening the shared code editor in a separate native window.
 It opens the project through the actual AppKit sidebar, switches between real
 chat sessions through the outline view, checks toolbar ordering, code visibility,
-expand/restore, publish-mode selection and sidebar
+expand/restore, address/Home navigation, desktop/mobile, primary Publish placement,
+publish-mode selection, automatic scrollers and sidebar
 collapse, verifies native text/draft restoration, file/image attachment add/remove,
 permission changes, slash completion and modal visibility, and
 captures native controls separately. Full-window offscreen caching

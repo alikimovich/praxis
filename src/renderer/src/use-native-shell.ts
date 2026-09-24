@@ -6,8 +6,10 @@ import {
   useChat,
   useHistory,
   useLog,
+  usePreviewLocation,
   usePublishMode,
   useSelection,
+  useViewport,
   useWorkspace
 } from './store'
 import './native-shell.css'
@@ -15,7 +17,14 @@ import './native-shell.css'
 interface Actions {
   preview: Pick<
     NativeShellState,
-    'previewReady' | 'branch' | 'publishLabel' | 'publishing' | 'publishMode' | 'codeOpen'
+    | 'previewReady'
+    | 'branch'
+    | 'publishLabel'
+    | 'publishing'
+    | 'publishMode'
+    | 'codeOpen'
+    | 'previewBase'
+    | 'deviceEnabled'
   >
   switchBranch: (name: string) => Promise<void>
   createBranch: (name: string) => Promise<void>
@@ -93,9 +102,20 @@ export function useNativeShell(actions: Actions) {
             })
             .catch((error) => useLog.getState().append(String(error), 'error'))
       }
+      const base = current.current.preview.previewBase
+      let previewURL = base
+      try {
+        const location = usePreviewLocation.getState().url
+        if (base && location && new URL(base).origin === new URL(location).origin)
+          previewURL = location
+      } catch {
+        /* Use the project's base until a valid navigation arrives. */
+      }
       const state: NativeShellState = {
         ...current.current.preview,
         branches,
+        previewURL,
+        viewport: useViewport.getState().viewport,
         rows,
         project: active?.key ?? null,
         selected: active ? `chat:${active.activeSessionKey ?? active.key}` : null,
@@ -117,7 +137,9 @@ export function useNativeShell(actions: Actions) {
       useWorkspace.subscribe(schedule),
       useChat.subscribe(schedule),
       useHistory.subscribe(schedule),
-      useSelection.subscribe(schedule)
+      useSelection.subscribe(schedule),
+      usePreviewLocation.subscribe(schedule),
+      useViewport.subscribe(schedule)
     ]
     const off = bridge.onAction((message) => {
       const ws = useWorkspace.getState()
@@ -138,7 +160,26 @@ export function useNativeShell(actions: Actions) {
           (message.value === 'pr' || message.value === 'merge')
         )
           usePublishMode.getState().setMode(message.value)
-        else if (message.action === 'code') await action.code()
+        else if (message.action === 'home' && action.preview.previewBase)
+          await window.api.preview.load(action.preview.previewBase)
+        else if (
+          message.action === 'address' &&
+          message.value !== undefined &&
+          action.preview.previewBase
+        ) {
+          const origin = new URL(action.preview.previewBase).origin
+          const raw = message.value.trim()
+          const target = new URL(
+            raw.startsWith('/') || /^https?:\/\//i.test(raw) ? raw : `/${raw}`,
+            origin
+          )
+          if (target.origin !== origin)
+            throw new Error('The preview address must stay within this project.')
+          await window.api.preview.load(target.href)
+        } else if (message.action === 'device' && action.preview.deviceEnabled) {
+          const viewport = useViewport.getState()
+          viewport.setViewport(viewport.viewport === 'mobile' ? 'desktop' : 'mobile')
+        } else if (message.action === 'code') await action.code()
         else if (message.action === 'expand') ws.toggleChatHidden()
         else if (message.action === 'new-chat') await action.newChat(project.key)
         else if (message.action === 'memory') action.memory(project.root, project.name)

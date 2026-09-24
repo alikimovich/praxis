@@ -59,13 +59,14 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         text.textContainerInset = NSSize(width: 2, height: 4)
         text.isVerticallyResizable = true; text.isHorizontallyResizable = false
         text.frame = NSRect(x: 0, y: 0, width: 400, height: 70)
+        text.minSize = .zero
         text.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         text.autoresizingMask = [.width]; text.textContainer?.widthTracksTextView = true
         text.textContainer?.containerSize = NSSize(width: 400, height: CGFloat.greatestFiniteMagnitude)
         text.delegate = self; text.setAccessibilityLabel("Message to Praxis")
         text.registerForDraggedTypes([.fileURL, .png, .tiff])
         text.pasteFiles = { [weak self] board in self?.readPasteboard(board) ?? false }
-        scroll.documentView = text; scroll.drawsBackground = false; scroll.hasVerticalScroller = true
+        scroll.documentView = text; scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay
         scroll.borderType = .noBorder
         let controls = NSStackView(); controls.orientation = .horizontal; controls.spacing = 4
         plus.addItem(withTitle: ""); plus.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "Attach or select")
@@ -101,6 +102,13 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             controls.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10), controls.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10), controls.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -10), controls.heightAnchor.constraint(equalToConstant: 30)
         ])
         isHidden = true
+    }
+    override func layout() {
+        super.layout()
+        // An empty document must not retain its initial 70pt height in a shorter field.
+        if text.string.isEmpty && scroll.contentSize.height > 0 && text.frame.size != scroll.contentSize {
+            text.setFrameSize(scroll.contentSize)
+        }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     func emitAction(_ action: String, _ extra: [String: Any] = [:]) {
@@ -210,7 +218,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             item.target = self; item.representedObject = payload; popup.menu?.addItem(item)
         }
     }
-    func inspect() -> [String: Any] { layoutSubtreeIfNeeded(); return ["contentWidth":content.bounds.width, "inputHeight":scroll.bounds.height, "sendWidth":sendButton.bounds.width, "visible":!isHidden, "glass":glass, "text":text.string, "chat":chat, "enabled":sendButton.isEnabled, "revision":revision, "choices":state["choices"] ?? [], "attachments":state["attachments"] ?? [], "bounds":["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height]] }
+    func inspect() -> [String: Any] { layoutSubtreeIfNeeded(); return ["autohidesScrollers":scroll.autohidesScrollers, "contentWidth":content.bounds.width, "inputHeight":scroll.bounds.height, "sendWidth":sendButton.bounds.width, "visible":!isHidden, "glass":glass, "text":text.string, "chat":chat, "enabled":sendButton.isEnabled, "revision":revision, "choices":state["choices"] ?? [], "attachments":state["attachments"] ?? [], "bounds":["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height]] }
     func perform(_ c: [String: Any]) {
         if let value = c["text"] as? String { text.string = value; text.setSelectedRange(NSRange(location: (value as NSString).length, length: 0)); changed() }
         if c["action"] as? String == "send" { send(nil) }

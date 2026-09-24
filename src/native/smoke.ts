@@ -43,7 +43,19 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     throw new Error(
       `Native sidebar or toolbar state did not follow project opening: ${JSON.stringify(shell)}`
     )
-  if (shell.toolbar.filter((id: string) => ['branch', 'publish', 'code', 'expand'].includes(id)).join(',') !== 'branch,publish,code,expand' || !shell.toolbar[0].includes('ToggleSidebar')) throw new Error(`Unexpected native toolbar: ${JSON.stringify(shell.toolbar)}`)
+  if (shell.toolbar.filter((id: string) => ['branch', 'home', 'address', 'device', 'code', 'expand', 'publish'].includes(id)).join(',') !== 'branch,home,address,device,code,expand,publish' || !shell.toolbar[0].includes('ToggleSidebar')) throw new Error(`Unexpected native toolbar: ${JSON.stringify(shell.toolbar)}`)
+  if (!shell.publishPrimary || shell.toolbar.at(-1) !== 'publish' || !shell.sidebarAutohidesScrollers) throw new Error('Native primary action or scroller configuration is incorrect')
+  await host.request('shellPerform', { action: 'address', row: '/?native-navigation=1#section' })
+  await wait(`location.search === '?native-navigation=1' && location.hash === '#section'`, 'preview')
+  for (let i = 0; !(await host.request('shellInspect')).address.includes('native-navigation=1') && i < 30; i++) await new Promise(resolve => setTimeout(resolve, 100))
+  if (!(await host.request('shellInspect')).address.includes('native-navigation=1')) throw new Error('Native address did not track navigation')
+  await host.request('shellPerform', { action: 'home' })
+  await wait(`location.pathname === '/' && !location.search && !location.hash`, 'preview')
+  await host.request('shellPerform', { action: 'device' })
+  await wait(`window.__praxisViewport.getState().viewport === 'mobile'`)
+  await host.request('shellPerform', { action: 'device' })
+  await wait(`window.__praxisViewport.getState().viewport === 'desktop'`)
+  await wait(`getComputedStyle(document.querySelector('.previewbar')).display === 'none'`)
   if (shell.sidebarActions.join(',') !== 'new-chat,new-project,open-project,settings') throw new Error('Missing sidebar project actions')
   await host.request('shellPerform', { action: 'code' })
   await wait('!!window.__praxisCodeDrawer.getState().source')
@@ -75,7 +87,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     throw new Error(`Native composer state timed out (${check.toString()}): ${JSON.stringify(await host.request('composerInspect'))}; DOM: ${JSON.stringify(await evaluate(`({key:document.querySelector('.composer__input')?.closest('[data-slot="input-group"]')?.dataset.nativeChat,value:document.querySelector('.composer__input')?.value})`))}`)
   }
   const layout = await waitComposer(state => state.visible)
-  if (layout.contentWidth < 60 || layout.inputHeight < 20 || layout.sendWidth < 20) throw new Error(`Native composer layout invalid: ${JSON.stringify(layout)}`)
+  if (!layout.autohidesScrollers || layout.contentWidth < 60 || layout.inputHeight < 20 || layout.sendWidth < 20) throw new Error(`Native composer layout invalid: ${JSON.stringify(layout)}`)
   await host.request('composerPerform', { text: 'A native draft\nwith a second line' })
   await wait(`document.querySelector('.composer__input').value === 'A native draft\\nwith a second line'`)
   const added = await evaluate(`(async()=>{

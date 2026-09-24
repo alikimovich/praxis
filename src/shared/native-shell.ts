@@ -22,6 +22,10 @@ export interface NativeShellState {
   publishing: boolean
   publishMode: string
   codeOpen: boolean
+  previewBase: string | null
+  previewURL: string | null
+  viewport: string
+  deviceEnabled: boolean
 }
 export interface NativeShellAction {
   action:
@@ -36,6 +40,9 @@ export interface NativeShellAction {
     | 'publish-mode'
     | 'code'
     | 'expand'
+    | 'address'
+    | 'home'
+    | 'device'
   id?: string
   value?: string
   project?: string

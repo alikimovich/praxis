@@ -1704,6 +1704,8 @@ export default function App(): React.JSX.Element {
   useNativeShell({
     preview: {
       previewReady: status.kind === 'running', branch, publishing, publishMode,
+      previewBase: status.kind === 'running' ? status.url : null,
+      deviceEnabled: status.kind === 'running' && previewKind !== 'simulator',
       codeOpen: !!drawerSource,
       publishLabel: githubStatus && !githubStatus.connected
         ? 'Connect to GitHub'

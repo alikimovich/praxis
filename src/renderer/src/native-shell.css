@@ -20,3 +20,15 @@ html.native-shell .previewbar [aria-label="Show UI"],
 html.native-shell .previewbar [aria-label="Hide UI"] {
   display: none !important;
 }
+
+/* Navigation and device controls now belong to the native toolbar. Keep status
+   and error text visible while starting/stopped; hide only the running header. */
+html.native-shell .previewbar:has(.previewbar__url) { display: none; }
+html.native-shell .chat__scroll {
+  scrollbar-gutter: auto !important;
+  scrollbar-width: thin;
+}
+html.native-shell .chat__scroll::-webkit-scrollbar { width: 6px; }
+html.native-shell .chat__scroll::-webkit-scrollbar-track { background: transparent; }
+html.native-shell .chat__scroll::-webkit-scrollbar-thumb { border-width: 1px; }
+html.native-shell .pane--chat { --chat-scrollbar-width: 6px; }
