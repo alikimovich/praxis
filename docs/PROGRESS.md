@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Preview header contrast and duplicate divider
+
+The domain/branch inherited the app's light appearance even when the preview
+painted a dark toolbar. The page-color observer now selects light/dark header
+appearance and explicit contrasting text, including the address editor and
+branch menu title. Native integration checks cover dark-to-light page changes.
+White-on-#111 and black-on-#fafafa domain text pass APCA at 13px bold.
+
+Pixel inspection found a two-pixel web resize handle beside the one-pixel native
+divider below the toolbar. Native CSS now clears its paint while preserving the
+drag target. The native divider has its own layer, pixel-aligned preview edge,
+and lighter opacity. Native integration and type checks passed; no Electron
+suite was run.
+
 ## 2026-09-23 — Full-height native preview surface
 
 Removed native preview card fills/outlines and extended the detail behind the

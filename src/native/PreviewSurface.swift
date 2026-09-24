@@ -6,16 +6,20 @@ import WebKit
 final class PreviewSurface: NSView {
     weak var preview: WKWebView?
     weak var canvas: NSView?
+    var colorChanged: ((NSColor) -> Void)?
     var leading: (() -> CGFloat)?
     private var observations: [NSKeyValueObservation] = []
 
     init(preview: WKWebView, canvas: NSView, container: NSView) {
         self.preview = preview; self.canvas = canvas
         super.init(frame: container.bounds)
+        wantsLayer = true
         autoresizingMask = [.width, .height]
         container.addSubview(self, positioned: .above, relativeTo: canvas)
         observations = [
-            preview.observe(\.underPageBackgroundColor, options: [.new]) { [weak self] _, _ in self?.needsDisplay = true },
+            preview.observe(\.underPageBackgroundColor, options: [.new]) { [weak self] view, _ in
+                self?.needsDisplay = true; self?.colorChanged?(view.underPageBackgroundColor)
+            },
             preview.observe(\.isHidden, options: [.new]) { [weak self] _, _ in self?.needsDisplay = true }
         ]
         preview.postsFrameChangedNotifications = true
@@ -46,8 +50,10 @@ final class PreviewSurface: NSView {
             preview.underPageBackgroundColor.setFill()
             NSRect(x: page.minX, y: content.maxY, width: page.width, height: max(0, bounds.maxY - content.maxY)).fill()
         }
-        NSColor.separatorColor.withAlphaComponent(0.22).setFill()
-        NSRect(x: leading?() ?? page.minX, y: bounds.minY, width: 1 / (window?.backingScaleFactor ?? 2), height: bounds.height).fill()
+        NSColor.separatorColor.withAlphaComponent(0.12).setFill()
+        let scale = window?.backingScaleFactor ?? 2
+        let edge = preview.layer?.cornerRadius == 0 ? page.minX : (leading?() ?? page.minX)
+        NSRect(x: (edge * scale).rounded() / scale, y: bounds.minY, width: 1 / scale, height: bounds.height).fill()
     }
     deinit { NotificationCenter.default.removeObserver(self) }
 }

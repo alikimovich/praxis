@@ -55,6 +55,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     private let chatTitle = NSTextField(labelWithString: "Chat")
     private let chatHistory = NSPopUpButton(frame: .zero, pullsDown: true)
     private var chatHeaderWidth: NSLayoutConstraint!
+    private var previewTextColor = NSColor.labelColor
     private let address = NSTextField()
     private let branchMenu = NSPopUpButton(frame: .zero, pullsDown: true)
 
@@ -133,6 +134,22 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     }
     @objc private func splitResized(_ notification: Notification) {
         DispatchQueue.main.async { [weak self] in self?.alignChatHeader() }
+    }
+    func updatePreviewColor(_ color: NSColor) {
+        guard let rgb = color.usingColorSpace(.sRGB) else { return }
+        func linear(_ value: CGFloat) -> CGFloat { value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4) }
+        let luminance = 0.2126 * linear(rgb.redComponent) + 0.7152 * linear(rgb.greenComponent) + 0.0722 * linear(rgb.blueComponent)
+        let dark = luminance < 0.179
+        previewTextColor = dark ? .white : .black
+        let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        address.superview?.appearance = appearance
+        address.textColor = previewTextColor
+        if let editor = address.currentEditor() as? NSTextView {
+            editor.textColor = previewTextColor; editor.insertionPointColor = previewTextColor
+        }
+        if let first = branchMenu.menu?.items.first {
+            first.attributedTitle = NSAttributedString(string: first.title, attributes: [.foregroundColor:previewTextColor, .font:NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)])
+        }
     }
     var previewLeading: CGFloat { chatHidden ? 0 : CGFloat(previewState["chatWidth"] as? Double ?? 440) }
     func alignChatHeader() {
@@ -323,7 +340,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             for branch in previewState["branches"] as? [String] ?? [] { add(branch, "branch", branch) }
             menu.addItem(.separator()); add("New Branch…", "new-branch")
             menu.insertItem(withTitle: title, action: nil, keyEquivalent: "", at: 0)
-            menu.items.first?.attributedTitle = NSAttributedString(string: title, attributes: [.foregroundColor:NSColor.secondaryLabelColor, .font:NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)])
+            menu.items.first?.attributedTitle = NSAttributedString(string: title, attributes: [.foregroundColor:previewTextColor, .font:NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)])
             branchMenu.menu = menu
         }
         if let item = toolbarItems["publish"] as? NSMenuToolbarItem {
@@ -439,7 +456,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
              return cell.more.convert(cell.more.bounds, to: clip).maxX
          }, "projectIconCount":rows.filter { $0.icon != nil }.count, "outlineClipWidth":outline.enclosingScrollView?.contentSize.width ?? 0, "outlineRows":outline.numberOfRows, "outlineWidth":outline.bounds.width,
          "toolbar":toolbar.items.map { $0.itemIdentifier.rawValue }, "branch":previewState["branch"] ?? "", "publishLabel":previewState["publishLabel"] ?? "", "codeOpen":previewState["codeOpen"] ?? false,
-         "address":previewAddress, "domain":address.stringValue, "viewport":previewState["viewport"] ?? "", "publishStandard":toolbarItems["publish"]?.view == nil, "toolGroup":(toolbar.items.first(where: { $0.itemIdentifier.rawValue == "tools" }) as? NSToolbarItemGroup)?.subitems.map { $0.itemIdentifier.rawValue } ?? [], "sidebarAutohidesScrollers":(outline.enclosingScrollView?.autohidesScrollers ?? false), "sidebarActions":["new-project", "open-project", "settings"], "chatActions":["history", "new-chat"], "historyIDs":chatHistory.menu?.items.compactMap { ($0.representedObject as? [String:String])?["id"] } ?? [], "chatTitle":chatTitle.stringValue, "chatTitlePlain":toolbarItems["chat"]?.action == nil, "chatHeaderWidth":chatHeader.bounds.width, "chatHeaderTrailing":chatHeader.convert(NSPoint(x: chatHeader.bounds.maxX, y: 0), to: nil).x, "detailLeading":split.splitViewItems[1].viewController.view.convert(.zero, to: nil).x, "chatWidth":previewState["chatWidth"] ?? 0, "enabled":toolbarItems.mapValues { $0.isEnabled }]
+         "previewHeaderLightText":previewTextColor == .white, "address":previewAddress, "domain":address.stringValue, "viewport":previewState["viewport"] ?? "", "publishStandard":toolbarItems["publish"]?.view == nil, "toolGroup":(toolbar.items.first(where: { $0.itemIdentifier.rawValue == "tools" }) as? NSToolbarItemGroup)?.subitems.map { $0.itemIdentifier.rawValue } ?? [], "sidebarAutohidesScrollers":(outline.enclosingScrollView?.autohidesScrollers ?? false), "sidebarActions":["new-project", "open-project", "settings"], "chatActions":["history", "new-chat"], "historyIDs":chatHistory.menu?.items.compactMap { ($0.representedObject as? [String:String])?["id"] } ?? [], "chatTitle":chatTitle.stringValue, "chatTitlePlain":toolbarItems["chat"]?.action == nil, "chatHeaderWidth":chatHeader.bounds.width, "chatHeaderTrailing":chatHeader.convert(NSPoint(x: chatHeader.bounds.maxX, y: 0), to: nil).x, "detailLeading":split.splitViewItems[1].viewController.view.convert(.zero, to: nil).x, "chatWidth":previewState["chatWidth"] ?? 0, "enabled":toolbarItems.mapValues { $0.isEnabled }]
     }
     func perform(_ action: String, id: String?) -> Bool {
         if action == "sidebar-width", let id, let width = Double(id), (180...340).contains(width) {

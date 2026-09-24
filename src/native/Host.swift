@@ -82,6 +82,8 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         _ = makeView("main"); _ = makeView("preview"); _ = makeView("panel")
         shell = NativeShell(window: window, canvas: canvas)
         previewSurface = PreviewSurface(preview: views["preview"]!, canvas: canvas, container: canvas.superview!)
+        previewSurface.colorChanged = { [weak self] color in self?.shell.updatePreviewColor(color) }
+        shell.updatePreviewColor(views["preview"]!.underPageBackgroundColor)
         previewSurface.leading = { [weak self] in self?.shell.previewLeading ?? 0 }
         composer = NativeComposer(frame: .zero); canvas.addSubview(composer)
         window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)

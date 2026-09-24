@@ -47,6 +47,10 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     throw new Error(`Preview toolbar did not follow page background: ${JSON.stringify(surface)}`)
   if (surface.toolbarHeight <= 0 || surface.viewportTop > surface.contentTop + 1 || surface.dividerHeight !== surface.surfaceHeight)
     throw new Error(`Incorrect full-height preview surface: ${JSON.stringify(surface)}`)
+  if (!(await host.request('shellInspect')).previewHeaderLightText) throw new Error('Dark preview needs light address/branch text')
+  await evaluate(`(() => { document.documentElement.style.backgroundColor = 'rgb(250, 250, 250)'; })()`, 'preview')
+  for (let i = 0; (await host.request('shellInspect')).previewHeaderLightText && i < 40; i++) await new Promise(resolve => setTimeout(resolve, 100))
+  if ((await host.request('shellInspect')).previewHeaderLightText) throw new Error('Light preview needs dark address/branch text')
   await evaluate(`(() => { document.documentElement.style.removeProperty('background-color'); document.body.style.removeProperty('background-color'); })()`, 'preview')
   // Wait for the debounced renderer snapshot to reach the system sidebar.
   let shell = await host.request('shellInspect')
