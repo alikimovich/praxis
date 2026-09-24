@@ -54,7 +54,8 @@ composer fits its document to the available height, avoiding artificial overflow
 Its empty chip row collapses, with a 112-point minimum form height. Pickers size
 to the selected label (using Electron’s ten-character compact-label rule), with
 full menu titles and tooltips. A flexible gap holds the 36-point Send/Stop button
-at the right edge. The chat pane itself has no separate background fill.
+at the right edge. The chat pane, page root and status fade are transparent; the main WKWebView
+also disables its background drawing so AppKit’s window surface is visible.
 Native-mode web chat uses a thin scrollbar without reserving a permanent gutter.
 Project-preview scrollbars remain controlled by the page and WebKit.
 
@@ -171,3 +172,7 @@ in the live tier, while the deterministic test is in the desktop tier.
   verification. Automated selection uses the actual layer-selection IPC path.
 - System WebKit follows macOS updates and may render projects differently from
   Electron's bundled Chromium.
+
+Terminal shutdown forwards SIGINT, SIGTERM and SIGHUP to the native backend; all
+three run shared server/agent cleanup before exiting. `bun test/native-shutdown.mjs`
+checks that each signal stops a real detached managed dev server.

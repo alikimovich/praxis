@@ -37,3 +37,14 @@ html.native-shell .pane--chat { --chat-scrollbar-width: 6px; }
 html.native-shell .pane--chat {
   background: transparent;
 }
+
+/* Clear every page surface between the chat and the AppKit window. Component
+   cards retain their own fills; the separately hosted preview remains opaque. */
+html.native-shell,
+html.native-shell body,
+html.native-shell #root,
+html.native-shell .app,
+html.native-shell .app .pane--chat,
+html.native-shell .chat__status {
+  background: transparent !important;
+}

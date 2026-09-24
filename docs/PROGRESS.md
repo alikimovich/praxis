@@ -2,6 +2,26 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Terminal cleanup and transparent native chat
+
+Identified and stopped the orphaned lkmv.ch dev-server process group listening on
+7784. Native cleanup handled SIGINT/SIGTERM but omitted terminal hangup (SIGHUP).
+The launcher now forwards SIGHUP and the backend’s shared shutdown hook invokes
+existing server/agent cleanup for all three signals and normal exit. Added a
+pure-Bun regression test against the actual shared dev-server service: each
+signal terminates a spawned detached server. Both regression runs passed.
+
+The black chat remained because transparent pane CSS still exposed the opaque
+page body and WKWebView backing. Cleared the main webview’s background drawing
+and under-page color, plus page/root/chat/status-fade fills, to expose the actual
+AppKit window surface. Preview and component card backgrounds remain scoped.
+
+Native build/integration passed, including explicit transparent body/chat checks
+on the final run; one intermediate retry hit the existing WebKit startup error.
+Inspected the shell capture: chat matches the titlebar surface (other glass
+capture limitations remain). All four typechecks, docs-links and whitespace
+checks passed. No Electron tests ran.
+
 ## 2026-09-23 — Separate native preview toolbar groups
 
 Separated the desktop/mobile toggle from a native NSToolbarItemGroup containing

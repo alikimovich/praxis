@@ -64,7 +64,8 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         if !isolated { config.setURLSchemeHandler(self, forURLScheme: "praxis-media") }
         let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = self; view.uiDelegate = self; view.isInspectable = true
-        view.underPageBackgroundColor = .windowBackgroundColor
+        view.underPageBackgroundColor = id == "main" ? .clear : .windowBackgroundColor
+        if id == "main" { view.setValue(false, forKey: "drawsBackground") }
         views[id] = view; canvas.addSubview(view)
         urlObservers[id] = view.observe(\.url, options: [.new]) { view, _ in
             emit(["event":"url", "view":id, "url":view.url?.absoluteString ?? ""])

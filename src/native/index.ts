@@ -28,6 +28,7 @@ import * as channels from '../shared/preview-channels'
 import { NativeBridge, setBridge } from './bridge'
 import { app, dispatchIPC, ipcMain, NativeView, protocolHandlers, shell, views } from './platform'
 import { runNativeSmoke } from './smoke'
+import { installShutdown } from './shutdown'
 
 async function main() {
   const testing = process.argv.includes('--test')
@@ -108,15 +109,7 @@ async function main() {
     // cross-runtime locking are implemented. Test profiles are disposable.
     if (testDir) setTimeout(() => rmSync(testDir, { recursive: true, force: true }), 500).unref()
   }
-  process.once('exit', cleanup)
-  process.once('SIGINT', () => {
-    cleanup()
-    process.exit(130)
-  })
-  process.once('SIGTERM', () => {
-    cleanup()
-    process.exit(143)
-  })
+  installShutdown(cleanup)
   await new Promise<void>((resolveListen, reject) => {
     server.once('error', reject)
     server.listen(

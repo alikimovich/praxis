@@ -33,6 +33,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await wait('!!document.querySelector("#native-title")', 'preview')
   await wait('!!window.__praxisSession?.getState().projectRoot')
   await wait('getComputedStyle(document.querySelector(".rail")).display === "none"')
+  await wait(`getComputedStyle(document.body).backgroundColor === 'rgba(0, 0, 0, 0)' && getComputedStyle(document.querySelector('.pane--chat')).backgroundColor === 'rgba(0, 0, 0, 0)'`)
   // Wait for the debounced renderer snapshot to reach the system sidebar.
   let shell = await host.request('shellInspect')
   for (let i = 0; (!shell.rows.length || !shell.enabled.code) && i < 40; i++) {
