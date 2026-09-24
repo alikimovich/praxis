@@ -81,7 +81,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1320, height: 860), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = "Praxis · Native"; window.minSize = NSSize(width: 850, height: 550)
         window.contentView = canvas; window.delegate = self
-        _ = makeView("main"); _ = makeView("preview"); _ = makeView("panel")
+        _ = makeView("main"); _ = makeView("preview")
         shell = NativeShell(window: window, canvas: canvas)
         previewSurface = PreviewSurface(preview: views["preview"]!, canvas: canvas, container: canvas.superview!)
         previewSurface.colorChanged = { [weak self] color in self?.shell.updatePreviewColor(color) }
@@ -140,6 +140,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         let name = c["view"] as? String ?? "main"
         let view = views[name]
         switch c["method"] as? String {
+        case "createPanel": if views["panel"] == nil { _ = makeView("panel") }
         case "previewInspector":
             if let action = c["action"] as? String { reply(id, PreviewInspector.perform(action, on: views["preview"])) }
             else { reply(id, PreviewInspector.status(views["preview"])) }

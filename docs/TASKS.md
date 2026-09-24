@@ -5,6 +5,9 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Reduce native idle work and unused renderer memory; verify lazy panel state, composer parity and paired performance measurements.
+- [ ] Validate remaining native platform/provider parity before deciding whether to retire Electron.
+
 - [x] Fix persistent toolbar highlights with explicit momentary segmented controls and exercise their action callback in native checks.
 
 - [x] Animate preview expand/restore, preserve conversation width during clipping, and follow the transition in the native sidebar/header.

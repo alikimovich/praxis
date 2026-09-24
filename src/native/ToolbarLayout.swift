@@ -1,6 +1,10 @@
 import AppKit
 
+private var toolbarSymbolCache: [String: NSImage] = [:]
+
 func toolbarSymbol(_ name: String, _ label: String? = nil) -> NSImage? {
+    let key = name + "|" + (label ?? "")
+    if let cached = toolbarSymbolCache[key] { return cached }
     // Toolbar controls reconfigure SF Symbols to their own standard size.
     // Give AppKit a template bitmap with fixed glyph bounds instead, keeping
     // system tinting and native buttons without the symbol-size override.
@@ -18,6 +22,7 @@ func toolbarSymbol(_ name: String, _ label: String? = nil) -> NSImage? {
     let image = NSImage(size: NSSize(width: 20, height: 20))
     image.addRepresentation(bitmap); image.isTemplate = true
     image.accessibilityDescription = label
+    toolbarSymbolCache[key] = image
     return image
 }
 

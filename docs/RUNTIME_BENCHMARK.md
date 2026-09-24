@@ -1,8 +1,8 @@
 # Native versus Electron — 2026-09-23
 
-Native is smaller on disk and uses less resident memory in this workload.
-Electron starts faster, with more reliable startup in this sample. Neither
-showed an advantage in the simple preview scroll test.
+The original comparison below is a historical snapshot. See the native
+optimization follow-up first: a controlled rerun did not reproduce the earlier
+2.54-second native startup result. Do not use that number as an engine ranking.
 
 Measured on this workspace's Mac mini, Apple M4 Pro (12 cores), 48 GB RAM,
 macOS 26.4.1; Bun 1.3.13 and Electron 43.1.0. Application source: `c9db2e8`.
@@ -23,6 +23,51 @@ Values are medians across successful runs. Native total RSS was 728–737 MiB;
 Electron was 1,020–1,034 MiB. Successful native startup was 2.38–2.70 s versus
 0.56–0.74 s for Electron. CPU varied from 2.82–4.14% native and 0.83–2.65%
 Electron. This small sample does not establish a stable CPU advantage.
+
+## Native optimization follow-up — 2026-09-24
+
+Alternated three baseline native launches (`f4e3ed1`, before these optimizations)
+with three optimized launches on the same machine, using fresh profiles and the
+same fixture and measurement procedure. All six launched successfully. These
+runs used normal local-app permissions; restricted attempts produced blank-page
+WebKit launches and are excluded. This does not prove the cause of every earlier
+startup failure, nor establish a native-versus-Electron startup result.
+
+| Measurement | Native before | Native optimized |
+| --- | ---: | ---: |
+| Launch to ready UI, median | 0.856 s | 0.860 s |
+| Project preview ready, median | 1.033 s | 1.033 s |
+| Idle summed RSS, median | 976 MiB | 898 MiB |
+| Idle CPU, percent of one core, median | 2.16% | 1.82% |
+| Processes after opening the project | 8 | 7 |
+| Median preview frame interval | 33 ms | 33 ms |
+| Successful launches | 3/3 | 3/3 |
+
+Memory fell about 78 MiB (8%). The unused property panel previously loaded the
+whole renderer in its own WebKit process; it now loads on first explicit use
+and remains available for fast reopening. Its memory is needed once opened, so
+the saving applies while that panel has not been used. Startup ranges overlap:
+0.826–1.288 s before, 0.826–0.860 s after. No startup or scrolling speedup is
+claimed. CPU ranges also overlap (1.82–2.66% versus 1.66–2.16%); the lower median
+is encouraging but six-second samples are too short for a battery-life claim.
+
+The composer no longer scans its DOM every 150 ms. React commits, input events,
+relevant DOM changes and resize notifications keep native controls current.
+A follow-up idle probe observed ten composer geometry reads in 1.5 seconds
+before and zero afterward. Unchanged sidebar snapshots reuse rows/favicons, and toolbar symbols reuse their
+rendered images. These changes preserve controls, animations and provider
+prewarming. The Claude helper still accounts for roughly 370 MiB in this workload;
+deferring it would trade first-message latency for idle memory, so that tradeoff
+was not silently introduced. Application disk size is essentially unchanged.
+
+Raw paired data is in the ignored local artifact
+`test/artifacts/runtime-benchmark/paired-results.json`; the final idle probe is
+in `idle-results.json`. Full native integration covers first-use panel state and
+reuse, per-chat drafts, skills, permissions, attachments, project actions,
+preview expansion, source edits, undo/redo, editor pop-outs, Web Inspector and
+preview IPC isolation. No Electron tests or provider prompts ran for this work.
+Electron remains available: native platform/functionality gaps listed in
+`NATIVE.md` still need validation before retiring it.
 
 ## Size accounting
 

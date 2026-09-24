@@ -26,6 +26,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     throw new Error(`Native check timed out: ${code}; ${error || ''}`)
   }
   await wait('!!window.api && !!document.querySelector(".empty__open")')
+  if (views.has('panel')) throw new Error('Property panel must not load before first use')
   if (await evaluate('navigator.userAgent.includes("Electron")'))
     throw new Error('Unexpected Electron renderer')
   if (!(await host.request('shellPerform', { action: 'open-project' })))
@@ -267,6 +268,15 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     `window.api.layers.select(${JSON.stringify(title.path)}, ${JSON.stringify({ tag: title.tag, source: title.source })})`
   )
   await wait(`window.__praxisSelection.getState().selected?.source === 'index.html:3:1'`)
+  await evaluate('window.__praxisPropsIsland.getState().setOpen(true)')
+  await wait('!!document.querySelector(".panelapp")', 'panel')
+  const firstPanel = views.get('panel')
+  if (!firstPanel) throw new Error('Property panel did not load on first selection')
+  await evaluate('window.__praxisPropsIsland.getState().setOpen(false)')
+  await evaluate('window.__praxisPropsIsland.getState().setOpen(true)')
+  await wait('!!document.querySelector(".panelapp")', 'panel')
+  if (views.get('panel') !== firstPanel) throw new Error('Property panel was recreated on reopen')
+  console.log('Lazy property panel first-use state and reuse passed.')
   const styles = await evaluate(`window.api.styles.read(['font-size'])`)
   if (!styles?.values?.['font-size'])
     throw new Error('Selected element computed styles unavailable')

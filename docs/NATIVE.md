@@ -218,3 +218,14 @@ any App Store distribution.
 
 References: [WebKit inspector actions](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/_WKInspectorIBActions.h),
 [Safari inspection setup](https://webkit.org/web-inspector/enabling-web-inspector/).
+
+### Native performance
+
+The property-panel WebKit view is created on first explicit use and reused on
+reopen. The shared panel IPC retains state until its renderer subscribes, so
+lazy creation preserves the initial selection. Composer synchronization is
+event-driven, including a native-only React commit notification for controlled
+field values and restored drafts; there is no periodic composer DOM scan.
+Sidebar rows/favicons and toolbar artwork are reused when unchanged.
+See [the measurements](RUNTIME_BENCHMARK.md#native-optimization-follow-up--2026-09-24)
+for the measured savings and their limits.

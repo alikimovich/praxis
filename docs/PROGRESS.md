@@ -2,6 +2,25 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Reduce native idle work and unused WebKit memory
+
+Created the property-panel view on demand, preserving retained state on first
+open and reusing the view on reopen. Replaced the composer's 150 ms DOM polling
+with React commit, input, mutation and resize notifications. Unchanged native
+sidebar rows retain decoded favicons; toolbar symbols reuse rendered artwork.
+
+Three paired runs against f4e3ed1 reduced median summed RSS from 976 to 898 MiB
+and processes from eight to seven before the panel is opened. Idle CPU medians
+were 2.16% and 1.82% of one core, with overlapping short samples. Startup and
+preview timing stayed approximately 0.86 s and 1.03 s; no speedup is claimed.
+The earlier 2.54 s native startup result did not reproduce in this controlled
+rerun. Restricted blank-page launches were excluded, not called fixed.
+
+Full native integration passed, including new first-use panel/reopen coverage,
+composer skills/drafts/permissions, source editing and Web Inspector. Typechecks
+passed. No Electron tests or live provider prompts ran. Kept Electron pending
+remaining platform and functionality validation; documented measurement limits.
+
 ## 2026-09-24 — Clear native toolbar button highlights
 
 Replaced automatically generated toolbar group controls with explicit momentary

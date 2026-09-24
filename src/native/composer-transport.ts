@@ -141,7 +141,30 @@ export function installComposer(ipc: IPC, rememberPath: (file: File, path: strin
       'html.native-composer .composer [data-slot="input-group"]{opacity:0;pointer-events:none;min-height:146px} ' +
       'html.native-composer .composer [data-slot="input-group"]:has(textarea:placeholder-shown):not(:has(.inspector,.composer__attachments)){min-height:120px} '
     document.head.append(css)
-    new MutationObserver(schedule).observe(document.body, {
+    let observed: Element | null = null
+    const resize = new ResizeObserver(schedule)
+    const refresh = () => {
+      const next = group()
+      if (next !== observed) {
+        resize.disconnect()
+        observed = next ?? null
+        if (observed) resize.observe(observed)
+      }
+      schedule()
+    }
+    new MutationObserver((records) => {
+      const container = group()
+      if (
+        records.some(
+          (record) =>
+            !container ||
+            container.contains(record.target) ||
+            record.type === 'childList' ||
+            (record.target instanceof Element &&
+              record.target.matches('[role="dialog"], [aria-hidden]'))
+        )
+      ) refresh()
+    }).observe(document.body, {
       subtree: true,
       childList: true,
       attributes: true,
@@ -152,9 +175,13 @@ export function installComposer(ipc: IPC, rememberPath: (file: File, path: strin
     document.addEventListener('focusin', (event) => {
       if (event.target === input()) ipc.send('native-composer:focus')
     })
-    // React may update textarea.value without a DOM mutation (draft restore).
-    setInterval(schedule, 150)
-    schedule()
+    // React property assignments (including restored drafts) need an explicit
+    // commit notification, not a perpetual DOM polling loop.
+    window.addEventListener('praxis:composer-commit', refresh)
+    document.addEventListener('selectionchange', () => {
+      if (document.activeElement === input()) schedule()
+    })
+    refresh()
   }
   if (document.readyState === 'loading')
     document.addEventListener('DOMContentLoaded', start, { once: true })

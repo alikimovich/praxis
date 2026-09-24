@@ -9,24 +9,6 @@ final class ChatToolbarView: NSView {
     }
 }
 
-final class ShellRow: NSObject {
-    let id: String, title: String, kind: String, project: String
-    let running: Bool
-    let icon: NSImage?
-    let children: [ShellRow]
-    init(_ data: [String: Any]) {
-        id = data["id"] as? String ?? ""; title = data["title"] as? String ?? ""
-        kind = data["kind"] as? String ?? "chat"; project = data["project"] as? String ?? ""
-        running = data["running"] as? Bool ?? false
-        if let uri = data["icon"] as? String, uri.hasPrefix("data:image/"), let comma = uri.firstIndex(of: ",") {
-            let body = String(uri[uri.index(after: comma)...])
-            let bytes = uri[..<comma].contains(";base64") ? Data(base64Encoded: body) : body.removingPercentEncoding?.data(using: .utf8)
-            icon = bytes.flatMap { NSImage(data: $0) }
-        } else { icon = nil }
-        children = (data["children"] as? [[String: Any]] ?? []).map(ShellRow.init)
-    }
-}
-
 /// System sidebar, split-view divider and toolbar. Web content uses detail-local
 /// coordinates, so existing preview/inspector geometry remains unchanged.
 final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate, NSToolbarDelegate, NSMenuDelegate, NSTextFieldDelegate {
@@ -36,6 +18,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     private let contentCanvas: NSView
     var sidebarItem: NSSplitViewItem!
     var rows: [ShellRow] = []
+    private var rowsSignature = Data()
     var currentProject: String?
     var selectedID: String?
     var applying = false
@@ -367,9 +350,13 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     }
     func update(_ state: [String: Any]) {
         applying = true; defer { applying = false }
-        rows = (state["rows"] as? [[String: Any]] ?? []).map(ShellRow.init)
+        let rowData = state["rows"] as? [[String: Any]] ?? []
+        let signature = (try? JSONSerialization.data(withJSONObject: rowData, options: [.sortedKeys])) ?? Data()
+        let rowsChanged = signature != rowsSignature
+        if rowsChanged { rowsSignature = signature; rows = rowData.map(ShellRow.init) }
         let nextProject = state["project"] as? String
         if nextProject != currentProject && address.currentEditor() != nil { window?.makeFirstResponder(nil) }
+        let projectChanged = nextProject != currentProject
         currentProject = nextProject
         selectedID = state["selected"] as? String
         ready = state["previewReady"] as? Bool ?? false
@@ -385,12 +372,11 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         }
         chatHidden = expandedPreview
         previewState = state
-        outline.reloadData()
-        outline.deselectAll(nil)
+        if rowsChanged || projectChanged { outline.reloadData() }
         if let selected = rows.first(where: { $0.project == currentProject }) {
             let index = outline.row(forItem: selected)
-            if index >= 0 { outline.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false) }
-        }
+            if index >= 0 && outline.selectedRow != index { outline.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false) }
+        } else if outline.selectedRow >= 0 { outline.deselectAll(nil) }
         window?.subtitle = ""
         updateToolbar()
     }

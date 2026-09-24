@@ -127,7 +127,15 @@ async function main() {
   setBridge(host)
   const mainView = new NativeView('main')
   const previewView = new NativeView('preview')
-  const panelView = new NativeView('panel')
+  let panelView: NativeView | undefined
+  const ensurePanelView = () => {
+    if (!panelView) {
+      host!.send('createPanel')
+      panelView = new NativeView('panel')
+      panelView.webContents.loadURL(`${url}?praxisPanel=1`)
+    }
+    return panelView
+  }
   const window = mainView as unknown as Electron.BrowserWindow
   const send = (channel: string, ...args: unknown[]) => mainView.webContents.send(channel, ...args)
   const state: PreviewState = {
@@ -146,7 +154,7 @@ async function main() {
     state,
     ensurePreviewView: () => previewView as any,
     getPreviewView: () => previewView as any,
-    ensurePanelView: () => panelView as any,
+    ensurePanelView: () => ensurePanelView() as any,
     getPanelView: () => panelView as any,
     getMainWindow: () => window,
     sendToMain: send,
@@ -306,7 +314,6 @@ async function main() {
   })
   host.once('ready', async () => {
     mainView.webContents.loadURL(`${url}?praxisSkipIntro=1`)
-    panelView.webContents.loadURL(`${url}?praxisPanel=1`)
     console.log('Praxis Native is running on Bun + system WebKit. Electron is not loaded.')
     if (testing) {
       try {

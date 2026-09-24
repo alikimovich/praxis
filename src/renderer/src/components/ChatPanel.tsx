@@ -357,6 +357,9 @@ function RevertAction({
 
 
 export default function ChatPanel(): React.JSX.Element {
+  useLayoutEffect(() => {
+    if (window.praxisNativeShell) window.dispatchEvent(new Event('praxis:composer-commit'))
+  })
   const {
     messages,
     isRunning,

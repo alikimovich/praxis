@@ -39,3 +39,21 @@ final class ProjectScrollView: NSScrollView {
         }
     }
 }
+
+final class ShellRow: NSObject {
+    let id: String, title: String, kind: String, project: String
+    let running: Bool
+    let icon: NSImage?
+    let children: [ShellRow]
+    init(_ data: [String: Any]) {
+        id = data["id"] as? String ?? ""; title = data["title"] as? String ?? ""
+        kind = data["kind"] as? String ?? "chat"; project = data["project"] as? String ?? ""
+        running = data["running"] as? Bool ?? false
+        if let uri = data["icon"] as? String, uri.hasPrefix("data:image/"), let comma = uri.firstIndex(of: ",") {
+            let body = String(uri[uri.index(after: comma)...])
+            let bytes = uri[..<comma].contains(";base64") ? Data(base64Encoded: body) : body.removingPercentEncoding?.data(using: .utf8)
+            icon = bytes.flatMap { NSImage(data: $0) }
+        } else { icon = nil }
+        children = (data["children"] as? [[String: Any]] ?? []).map(ShellRow.init)
+    }
+}
