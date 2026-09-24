@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Sidebar includes the traffic lights
+
+Enabled full-size native window content and full-height sidebar layout so the
+open sidebar surface extends behind the system window controls. The project list
+uses the sidebar safe area; a detail wrapper keeps the WebKit canvas below the
+toolbar, preserving preview/composer coordinates. Split resize notifications keep
+the chat toolbar aligned when the full-height sidebar collapses or reopens.
+
+Native build/integration passed, including sidebar/window-control containment,
+content safe-area geometry, toolbar alignment, collapse/restore and existing
+composer/editing flows. All four typechecks, docs-links and whitespace checks
+passed. No Electron tests ran. Inspected the sidebar capture; full-window glass
+and WebKit capture limitations still apply.
+
 ## 2026-09-23 — Column-aligned native toolbar
 
 Grouped the AppKit toolbar by its content columns, following the Notes reference.

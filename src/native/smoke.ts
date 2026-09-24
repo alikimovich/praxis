@@ -45,6 +45,8 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     )
   if (shell.toolbar.filter((id: string) => ['branch', 'home', 'address', 'device', 'code', 'expand', 'publish'].includes(id)).join(',') !== 'branch,home,address,device,code,expand,publish' || shell.toolbar[0] !== 'projects' || !shell.toolbar[1].includes('ToggleSidebar')) throw new Error(`Unexpected native toolbar: ${JSON.stringify(shell.toolbar)}`)
   if (!shell.publishPrimary || shell.toolbar.at(-1) !== 'publish' || !shell.sidebarAutohidesScrollers) throw new Error('Native primary action or scroller configuration is incorrect')
+  if (!shell.sidebarContainsTrafficLights || shell.sidebarListTop > shell.contentTop || shell.detailTop > shell.contentTop + 1)
+    throw new Error(`Native sidebar must extend behind traffic lights while content stays below toolbar: ${JSON.stringify(shell)}`)
   const checkChatAlignment = async () => {
     let geometry: any
     for (let i = 0; i < 30; i++) {

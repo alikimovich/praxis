@@ -27,6 +27,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     let split = NSSplitViewController()
     let outline = NSOutlineView()
     let sidebar = NSViewController()
+    private let contentCanvas: NSView
     var sidebarItem: NSSplitViewItem!
     var rows: [ShellRow] = []
     var currentProject: String?
@@ -54,6 +55,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     private let publishOptions = NSPopUpButton(frame: .zero, pullsDown: true)
 
     init(window: NSWindow, canvas: NSView) {
+        contentCanvas = canvas
         super.init(); self.window = window
         split.splitView.isVertical = true
         split.view.frame = window.contentLayoutRect
@@ -76,15 +78,27 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         sidebarButtons["settings"] = settings
         for view in [scroll, settings] { view.translatesAutoresizingMaskIntoConstraints = false; sidebarContainer.addSubview(view) }
         NSLayoutConstraint.activate([
-            scroll.topAnchor.constraint(equalTo: sidebarContainer.topAnchor, constant: 8), scroll.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: settings.topAnchor, constant: -12),
+            scroll.topAnchor.constraint(equalTo: sidebarContainer.safeAreaLayoutGuide.topAnchor, constant: 8), scroll.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: settings.topAnchor, constant: -12),
             settings.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor, constant: 12), settings.bottomAnchor.constraint(equalTo: sidebarContainer.bottomAnchor, constant: -12)
         ])
         sidebar.view = sidebarContainer
         sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebar)
         sidebarItem.minimumThickness = 180; sidebarItem.maximumThickness = 340
+        sidebarItem.allowsFullHeightLayout = true
+        sidebarItem.titlebarSeparatorStyle = .none
         sidebarItem.canCollapse = true
         sidebarItem.collapseBehavior = .preferResizingSiblingsWithFixedSplitView
-        let detail = NSViewController(); detail.view = canvas
+        let detail = NSViewController(); detail.view = NSView()
+        // Full-size content lets the sidebar material surround the window controls.
+        // Keep WebKit's coordinate space below the toolbar, as before.
+        canvas.translatesAutoresizingMaskIntoConstraints = false
+        detail.view.addSubview(canvas)
+        NSLayoutConstraint.activate([
+            canvas.topAnchor.constraint(equalTo: detail.view.safeAreaLayoutGuide.topAnchor),
+            canvas.bottomAnchor.constraint(equalTo: detail.view.bottomAnchor),
+            canvas.leadingAnchor.constraint(equalTo: detail.view.leadingAnchor),
+            canvas.trailingAnchor.constraint(equalTo: detail.view.trailingAnchor)
+        ])
         split.addSplitViewItem(sidebarItem)
         let detailItem = NSSplitViewItem(viewController: detail)
         detailItem.minimumThickness = 500
@@ -95,8 +109,12 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         toolbar.delegate = self; toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false; toolbar.autosavesConfiguration = false
         chatHeader.align = { [weak self] in self?.alignChatHeader() }
+        NotificationCenter.default.addObserver(self, selector: #selector(splitResized(_:)), name: NSSplitView.didResizeSubviewsNotification, object: split.splitView)
         window.titleVisibility = .hidden
         window.toolbar = toolbar; window.toolbarStyle = .unified
+    }
+    @objc private func splitResized(_ notification: Notification) {
+        DispatchQueue.main.async { [weak self] in self?.alignChatHeader() }
     }
     func alignChatHeader() {
         guard chatHeader.window != nil, chatHeaderWidth != nil, !chatHidden else { return }
@@ -345,7 +363,14 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     // Private pipe-only integration checks exercise actual native controls.
     func inspect() -> [String: Any] {
         split.view.layoutSubtreeIfNeeded()
-        return ["rows":allRows.map { ["id":$0.id, "title":$0.title, "kind":$0.kind] }, "selected":selectedID ?? "", "sidebarCollapsed":sidebarItem.isCollapsed,
+        let sidebarFrame = sidebar.view.convert(sidebar.view.bounds, to: nil)
+        let trafficLight = window?.standardWindowButton(.closeButton)
+        let trafficFrame = trafficLight.map { $0.convert($0.bounds, to: nil) } ?? .zero
+        return ["sidebarContainsTrafficLights":sidebarFrame.contains(trafficFrame),
+         "sidebarTop":sidebarFrame.maxY, "contentTop":window?.contentLayoutRect.maxY ?? 0,
+         "detailTop":contentCanvas.convert(contentCanvas.bounds, to: nil).maxY,
+         "sidebarListTop":outline.enclosingScrollView.map { $0.convert($0.bounds, to: nil).maxY } ?? 0,
+         "rows":allRows.map { ["id":$0.id, "title":$0.title, "kind":$0.kind] }, "selected":selectedID ?? "", "sidebarCollapsed":sidebarItem.isCollapsed,
          "sidebarWidth":sidebar.view.bounds.width, "detailWidth":split.splitViewItems[1].viewController.view.bounds.width,
          "outlineRows":outline.numberOfRows, "outlineWidth":outline.bounds.width,
          "toolbar":toolbar.items.map { $0.itemIdentifier.rawValue }, "branch":previewState["branch"] ?? "", "publishLabel":previewState["publishLabel"] ?? "", "codeOpen":previewState["codeOpen"] ?? false,

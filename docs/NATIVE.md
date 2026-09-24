@@ -23,7 +23,9 @@ binary is loaded by the native backend; Bun itself remains a local prerequisite.
 ## Shared code and host boundaries
 
 The macOS shell uses a standard `NSOutlineView` sidebar, `NSSplitViewController`
-divider and `NSToolbar` items with system symbols and appearance. Projects expand
+divider and `NSToolbar` items with system symbols and appearance. The open sidebar
+extends through the titlebar behind the system traffic lights; its list and the
+WebKit content respect the toolbar safe area. Projects expand
 to live and previous chats. Native selection switches projects/chats; context
 menus offer new chat, project memory and closing. The toolbar follows the columns:
 a Projects menu (New Project/Open Project) and sidebar toggle above the sidebar;
