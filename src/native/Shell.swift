@@ -30,9 +30,12 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     weak var window: NSWindow?
     private var knownProjects = Set<String>()
     private var toolbarItems: [String: NSToolbarItem] = [:]
-    private let items = ["open-project", "new-project", "new-chat", "reload", "select", "toggle-chat", "settings"]
-    private let labels = ["open-project":"Open Project", "new-project":"New Project", "new-chat":"New Chat", "reload":"Reload Preview", "select":"Select Element", "toggle-chat":"Hide Chat", "settings":"Settings"]
-    private let symbols = ["open-project":"folder", "new-project":"folder.badge.plus", "new-chat":"square.and.pencil", "reload":"arrow.clockwise", "select":"cursorarrow.rays", "toggle-chat":"bubble.left", "settings":"gearshape"]
+    private let items = ["branch", "publish", "code", "expand"]
+    private let labels = ["branch":"Branch", "publish":"Publish", "code":"Show Code", "expand":"Expand Preview"]
+    private let symbols = ["branch":"arrow.triangle.branch", "publish":"arrow.up.circle", "code":"chevron.left.forwardslash.chevron.right", "expand":"arrow.up.left.and.arrow.down.right"]
+    private var sidebarButtons: [String: NSButton] = [:]
+    private var previewState: [String: Any] = [:]
+    private var sidebarBeforeExpand = false
 
     init(window: NSWindow, canvas: NSView) {
         super.init(); self.window = window
@@ -50,7 +53,25 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         let menu = NSMenu(); menu.delegate = self; outline.menu = menu
         let scroll = NSScrollView(); scroll.documentView = outline; scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
-        sidebar.view = scroll
+        let sidebarContainer = NSView()
+        let actions = NSStackView(); actions.orientation = .vertical; actions.alignment = .leading; actions.spacing = 6
+        for (key, title, symbol) in [("new-project", "New Project", "folder.badge.plus"), ("open-project", "Open Project", "folder"), ("new-chat", "New Chat", "square.and.pencil")] {
+            let button = NSButton(title: title, target: self, action: #selector(sidebarAction(_:)))
+            button.identifier = NSUserInterfaceItemIdentifier(key); button.bezelStyle = .rounded
+            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil); button.imagePosition = .imageLeading
+            sidebarButtons[key] = button; actions.addArrangedSubview(button)
+        }
+        let settings = NSButton(title: "Settings", target: self, action: #selector(sidebarAction(_:)))
+        settings.identifier = NSUserInterfaceItemIdentifier("settings"); settings.bezelStyle = .rounded
+        settings.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil); settings.imagePosition = .imageLeading
+        sidebarButtons["settings"] = settings
+        for view in [actions, scroll, settings] { view.translatesAutoresizingMaskIntoConstraints = false; sidebarContainer.addSubview(view) }
+        NSLayoutConstraint.activate([
+            actions.topAnchor.constraint(equalTo: sidebarContainer.topAnchor, constant: 12), actions.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor, constant: 12), actions.trailingAnchor.constraint(lessThanOrEqualTo: sidebarContainer.trailingAnchor, constant: -12),
+            scroll.topAnchor.constraint(equalTo: actions.bottomAnchor, constant: 12), scroll.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: settings.topAnchor, constant: -12),
+            settings.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor, constant: 12), settings.bottomAnchor.constraint(equalTo: sidebarContainer.bottomAnchor, constant: -12)
+        ])
+        sidebar.view = sidebarContainer
         sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebar)
         sidebarItem.minimumThickness = 180; sidebarItem.maximumThickness = 340
         sidebarItem.canCollapse = true
@@ -62,45 +83,88 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         split.addSplitViewItem(detailItem)
         window.contentViewController = split
         split.splitView.setPosition(230, ofDividerAt: 0)
-        toolbar = NSToolbar(identifier: "PraxisNativeToolbar")
+        toolbar = NSToolbar(identifier: "PraxisNativePreviewToolbar")
         toolbar.delegate = self; toolbar.displayMode = .iconOnly
-        toolbar.allowsUserCustomization = true; toolbar.autosavesConfiguration = true
+        toolbar.allowsUserCustomization = false; toolbar.autosavesConfiguration = false
         window.toolbar = toolbar; window.toolbarStyle = .unified
     }
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.toggleSidebar, .flexibleSpace, .space] + items.map { NSToolbarItem.Identifier($0) }
+        [.toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace] + items.map { NSToolbarItem.Identifier($0) }
     }
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.toggleSidebar, NSToolbarItem.Identifier("open-project"), NSToolbarItem.Identifier("new-project"), NSToolbarItem.Identifier("new-chat"), .flexibleSpace,
-         NSToolbarItem.Identifier("reload"), NSToolbarItem.Identifier("select"), NSToolbarItem.Identifier("toggle-chat"), NSToolbarItem.Identifier("settings")]
+        [.toggleSidebar, .sidebarTrackingSeparator, NSToolbarItem.Identifier("branch"), .flexibleSpace,
+         NSToolbarItem.Identifier("publish"), NSToolbarItem.Identifier("code"), NSToolbarItem.Identifier("expand")]
     }
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar: Bool) -> NSToolbarItem? {
         let key = identifier.rawValue
         guard items.contains(key) else { return nil }
-        let item = NSToolbarItem(itemIdentifier: identifier)
+        let item: NSToolbarItem = ["branch", "publish"].contains(key) ? NSMenuToolbarItem(itemIdentifier: identifier) : NSToolbarItem(itemIdentifier: identifier)
         item.label = labels[key] ?? key; item.paletteLabel = item.label; item.toolTip = item.label
         item.image = NSImage(systemSymbolName: symbols[key] ?? "circle", accessibilityDescription: item.label)
-        item.target = self; item.action = #selector(toolbarAction(_:)); item.autovalidates = false
-        toolbarItems[key] = item
+        if key != "branch" { item.target = self; item.action = #selector(toolbarAction(_:)) }
+        item.autovalidates = false; toolbarItems[key] = item
         updateToolbar()
         return item
     }
-    @objc func toolbarAction(_ item: NSToolbarItem) {
-        let action = item.itemIdentifier.rawValue
+    @objc func sidebarAction(_ button: NSButton) {
+        let action = button.identifier?.rawValue ?? ""
         if action == "new-chat" {
             guard let project = currentProject else { return }
-            emit(["event":"shell-action", "action":"new-chat", "project":project])
+            emit(["event":"shell-action", "action":action, "project":project])
         } else { emit(["event":"menu", "action":action]) }
     }
+    @objc func toolbarAction(_ item: NSToolbarItem) {
+        emit(["event":"shell-action", "action":item.itemIdentifier.rawValue])
+    }
+    @objc func previewMenuAction(_ item: NSMenuItem) {
+        guard let payload = item.representedObject as? [String: String] else { return }
+        if payload["action"] == "new-branch" {
+            guard let window = window else { return }
+            let project = currentProject
+            let alert = NSAlert(); alert.messageText = "New Branch"; alert.addButton(withTitle: "Create"); alert.addButton(withTitle: "Cancel")
+            let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24)); input.placeholderString = "Branch name"; alert.accessoryView = input
+            alert.beginSheetModal(for: window) { [weak self] result in
+                guard result == .alertFirstButtonReturn, !input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, project == self?.currentProject else { return }
+                emit(["event":"shell-action", "action":"new-branch", "value":input.stringValue])
+            }
+            alert.window.makeFirstResponder(input)
+        } else { emit(payload) }
+    }
     func updateToolbar() {
+        sidebarButtons["new-chat"]?.isEnabled = currentProject != nil
         for (key, item) in toolbarItems {
-            item.isEnabled = ["reload", "select"].contains(key) ? ready : (["new-chat", "toggle-chat"].contains(key) ? currentProject != nil : true)
+            item.isEnabled = key == "branch" ? previewState["branch"] is String : ready
+            if key == "publish" { item.isEnabled = ready && !(previewState["publishing"] as? Bool ?? false) }
         }
-        toolbarItems["select"]?.label = selecting ? "Stop Selecting" : "Select Element"
-        toolbarItems["select"]?.toolTip = toolbarItems["select"]?.label
-        toolbarItems["select"]?.image = NSImage(systemSymbolName: selecting ? "cursorarrow.rays" : "cursorarrow", accessibilityDescription: selecting ? "Stop Selecting" : "Select Element")
-        toolbarItems["toggle-chat"]?.label = chatHidden ? "Show Chat" : "Hide Chat"
-        toolbarItems["toggle-chat"]?.toolTip = toolbarItems["toggle-chat"]?.label
+        if let item = toolbarItems["branch"] as? NSMenuToolbarItem {
+            item.title = previewState["branch"] as? String ?? "Branch"; item.toolTip = item.title
+            let menu = NSMenu(); menu.autoenablesItems = false
+            func add(_ title: String, _ action: String, _ value: String = "") {
+                let entry = NSMenuItem(title: title, action: #selector(previewMenuAction(_:)), keyEquivalent: ""); entry.target = self
+                entry.representedObject = ["event":"shell-action", "action":action, "value":value]
+                if action == "branch" { entry.state = value == previewState["branch"] as? String ? .on : .off }
+                menu.addItem(entry)
+            }
+            add("Git Updates…", "git-updates"); menu.addItem(.separator())
+            for branch in previewState["branches"] as? [String] ?? [] { add(branch, "branch", branch) }
+            menu.addItem(.separator()); add("New Branch…", "new-branch"); item.menu = menu
+        }
+        if let item = toolbarItems["publish"] as? NSMenuToolbarItem {
+            item.title = previewState["publishLabel"] as? String ?? "Publish"; item.label = item.title; item.toolTip = item.title
+            let menu = NSMenu(); menu.autoenablesItems = false
+            for (title, value) in [("Create PR and merge to main", "merge"), ("Create PR", "pr")] {
+                let entry = NSMenuItem(title: title, action: #selector(previewMenuAction(_:)), keyEquivalent: ""); entry.target = self
+                entry.representedObject = ["event":"shell-action", "action":"publish-mode", "value":value]
+                entry.state = value == previewState["publishMode"] as? String ? .on : .off; entry.isEnabled = item.isEnabled
+                menu.addItem(entry)
+            }
+            item.menu = menu
+        }
+        toolbarItems["code"]?.toolTip = previewState["codeOpen"] as? Bool == true ? "Hide Code" : "Show Code"
+        toolbarItems["code"]?.label = toolbarItems["code"]?.toolTip ?? "Show Code"
+        toolbarItems["expand"]?.toolTip = chatHidden ? "Restore Layout" : "Expand Preview"
+        toolbarItems["expand"]?.label = toolbarItems["expand"]?.toolTip ?? "Expand Preview"
+        toolbarItems["expand"]?.image = NSImage(systemSymbolName: chatHidden ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right", accessibilityDescription: chatHidden ? "Restore Layout" : "Expand Preview")
     }
     func update(_ state: [String: Any]) {
         applying = true; defer { applying = false }
@@ -110,7 +174,13 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         selectedID = state["selected"] as? String
         ready = state["previewReady"] as? Bool ?? false
         selecting = state["selectMode"] as? Bool ?? false
-        chatHidden = state["chatHidden"] as? Bool ?? false
+        let expandedPreview = state["chatHidden"] as? Bool ?? false
+        if expandedPreview != chatHidden {
+            if expandedPreview { sidebarBeforeExpand = sidebarItem.isCollapsed; sidebarItem.isCollapsed = true }
+            else { sidebarItem.isCollapsed = sidebarBeforeExpand }
+        }
+        chatHidden = expandedPreview
+        previewState = state
         outline.reloadData()
         for row in rows where expanded.contains(row.id) || !knownProjects.contains(row.id) { outline.expandItem(row) }
         knownProjects = Set(rows.map(\.id))
@@ -164,7 +234,8 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         return ["rows":allRows.map { ["id":$0.id, "title":$0.title, "kind":$0.kind] }, "selected":selectedID ?? "", "sidebarCollapsed":sidebarItem.isCollapsed,
          "sidebarWidth":sidebar.view.bounds.width, "detailWidth":split.splitViewItems[1].viewController.view.bounds.width,
          "outlineRows":outline.numberOfRows, "outlineWidth":outline.bounds.width,
-         "enabled":toolbarItems.mapValues { $0.isEnabled }]
+         "toolbar":toolbar.items.map { $0.itemIdentifier.rawValue }, "branch":previewState["branch"] ?? "", "publishLabel":previewState["publishLabel"] ?? "", "codeOpen":previewState["codeOpen"] ?? false,
+         "sidebarActions":sidebarButtons.keys.sorted(), "enabled":toolbarItems.mapValues { $0.isEnabled }]
     }
     func perform(_ action: String, id: String?) -> Bool {
         if action == "toggle-sidebar" {
@@ -178,6 +249,12 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             guard index >= 0 else { return false }
             outline.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false); return true
         }
+        if ["branch", "publish-mode"].contains(action), let value = id,
+           let menu = (toolbarItems[action == "branch" ? "branch" : "publish"] as? NSMenuToolbarItem)?.menu,
+           let entry = menu.items.first(where: { ($0.representedObject as? [String: String])?["value"] == value && ($0.representedObject as? [String: String])?["action"] == action }), entry.isEnabled {
+            previewMenuAction(entry); return true
+        }
+        if let button = sidebarButtons[action], button.isEnabled { sidebarAction(button); return true }
         guard let item = toolbarItems[action], item.isEnabled else { return false }
         toolbarAction(item); return true
     }

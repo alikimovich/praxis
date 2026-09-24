@@ -147,7 +147,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             reply(id, bitmap.representation(using: .png, properties: [:])?.base64EncodedString() ?? "")
         case "captureSidebar":
             shell.split.view.layoutSubtreeIfNeeded()
-            let content = shell.outline
+            let content = shell.sidebar.view
             guard let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { reply(id, error: "Sidebar capture unavailable"); return }
             content.cacheDisplay(in: content.bounds, to: bitmap)
             // Source-list materials are transparent when cached offscreen. Render

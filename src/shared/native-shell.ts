@@ -16,10 +16,28 @@ export interface NativeShellState {
   selectMode: boolean
   previewReady: boolean
   chatHidden: boolean
+  branch: string | null
+  branches: string[]
+  publishLabel: string
+  publishing: boolean
+  publishMode: string
+  codeOpen: boolean
 }
 export interface NativeShellAction {
-  action: 'select' | 'new-chat' | 'close' | 'memory'
+  action:
+    | 'select'
+    | 'new-chat'
+    | 'close'
+    | 'memory'
+    | 'branch'
+    | 'new-branch'
+    | 'git-updates'
+    | 'publish'
+    | 'publish-mode'
+    | 'code'
+    | 'expand'
   id?: string
+  value?: string
   project?: string
 }
 export interface NativeShellBridge {

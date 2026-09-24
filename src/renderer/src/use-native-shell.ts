@@ -1,10 +1,27 @@
 import { useEffect, useRef } from 'react'
 import type { SessionRecord } from '../../shared/api'
 import type { NativeShellRow, NativeShellState } from '../../shared/native-shell'
-import { chatTitle, useChat, useHistory, useLog, useSelection, useWorkspace } from './store'
+import {
+  chatTitle,
+  useChat,
+  useHistory,
+  useLog,
+  usePublishMode,
+  useSelection,
+  useWorkspace
+} from './store'
 import './native-shell.css'
 
 interface Actions {
+  preview: Pick<
+    NativeShellState,
+    'previewReady' | 'branch' | 'publishLabel' | 'publishing' | 'publishMode' | 'codeOpen'
+  >
+  switchBranch: (name: string) => Promise<void>
+  createBranch: (name: string) => Promise<void>
+  gitUpdates: () => void
+  publish: () => void
+  code: () => Promise<void>
   switchProject: (key: string) => Promise<void>
   switchSession: (key: string, session: string) => Promise<void>
   newChat: (key: string) => Promise<void>
@@ -18,11 +35,16 @@ interface Actions {
 export function useNativeShell(actions: Actions) {
   const current = useRef(actions)
   current.current = actions
+  const refresh = useRef(() => {})
+  useEffect(() => refresh.current())
   useEffect(() => {
     const bridge = window.praxisNativeShell
     if (!bridge) return
     document.documentElement.classList.add('native-shell')
+    let disposed = false
     let previous = ''
+    let branchKey = ''
+    let branches: string[] = []
     let rows: NativeShellRow[] = []
     let timer: ReturnType<typeof setTimeout> | undefined
     const sync = () => {
@@ -57,12 +79,27 @@ export function useNativeShell(actions: Actions) {
         ]
       }))
       const active = ws.projects.find((p) => p.key === ws.activeKey)
+      const nextBranchKey = JSON.stringify([active?.root, current.current.preview.branch])
+      if (nextBranchKey !== branchKey) {
+        branchKey = nextBranchKey
+        branches = []
+        if (active)
+          void window.api.git
+            .list(active.root)
+            .then((result) => {
+              if (branchKey !== nextBranchKey) return
+              branches = result.branches
+              schedule()
+            })
+            .catch((error) => useLog.getState().append(String(error), 'error'))
+      }
       const state: NativeShellState = {
+        ...current.current.preview,
+        branches,
         rows,
         project: active?.key ?? null,
         selected: active ? `chat:${active.activeSessionKey ?? active.key}` : null,
         selectMode: useSelection.getState().selectMode,
-        previewReady: !!active?.url,
         chatHidden: ws.chatHidden
       }
       const serialized = JSON.stringify(state)
@@ -72,8 +109,10 @@ export function useNativeShell(actions: Actions) {
       }
     }
     const schedule = () => {
+      if (disposed) return
       timer ??= setTimeout(sync, 50)
     }
+    refresh.current = schedule
     const unsubs = [
       useWorkspace.subscribe(schedule),
       useChat.subscribe(schedule),
@@ -89,7 +128,19 @@ export function useNativeShell(actions: Actions) {
       if (!project) return
       const action = current.current
       const run = async () => {
-        if (message.action === 'new-chat') await action.newChat(project.key)
+        if (message.action === 'branch' && message.value) await action.switchBranch(message.value)
+        else if (message.action === 'new-branch' && message.value)
+          await action.createBranch(message.value)
+        else if (message.action === 'git-updates') action.gitUpdates()
+        else if (message.action === 'publish') action.publish()
+        else if (
+          message.action === 'publish-mode' &&
+          (message.value === 'pr' || message.value === 'merge')
+        )
+          usePublishMode.getState().setMode(message.value)
+        else if (message.action === 'code') await action.code()
+        else if (message.action === 'expand') ws.toggleChatHidden()
+        else if (message.action === 'new-chat') await action.newChat(project.key)
         else if (message.action === 'memory') action.memory(project.root, project.name)
         else if (message.action === 'close' && row?.session)
           await action.closeChat(project.key, row.session)
@@ -108,8 +159,10 @@ export function useNativeShell(actions: Actions) {
     })
     sync()
     return () => {
+      disposed = true
       for (const unsubscribe of unsubs) unsubscribe()
       off()
+      refresh.current = () => {}
       clearTimeout(timer)
       document.documentElement.classList.remove('native-shell')
     }

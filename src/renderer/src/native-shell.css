@@ -9,3 +9,14 @@ html.native-shell .chat-drag {
 html.native-shell .app > .banner:first-child {
   margin-top: 0;
 }
+
+/* Preview actions live in the AppKit toolbar; URL/device controls stay local. */
+html.native-shell .previewbar > .branch,
+html.native-shell .previewbar > .branch__input,
+html.native-shell .previewbar .pubgroup,
+html.native-shell .previewbar__actions > .btn--primary,
+html.native-shell .previewbar [aria-label="Open code editor"],
+html.native-shell .previewbar [aria-label="Show UI"],
+html.native-shell .previewbar [aria-label="Hide UI"] {
+  display: none !important;
+}

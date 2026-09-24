@@ -1702,6 +1702,22 @@ export default function App(): React.JSX.Element {
 
   // Keep the keydown/menu listeners pointed at the current closures.
   useNativeShell({
+    preview: {
+      previewReady: status.kind === 'running', branch, publishing, publishMode,
+      codeOpen: !!drawerSource,
+      publishLabel: githubStatus && !githubStatus.connected
+        ? 'Connect to GitHub'
+        : publishing
+          ? (publishMode === 'merge' ? 'Publishing…' : 'Creating PR…')
+          : (publishMode === 'merge' ? 'Publish' : 'Create PR')
+    },
+    switchBranch: switchToBranch, createBranch: changeBranch,
+    gitUpdates: () => openWithFreeze(() => setGitUpdatesRoot(projectRoot)),
+    publish: () => {
+      if (githubStatus && !githubStatus.connected) useGithub.getState().setConnectOpen(true)
+      else if (!publishing) void publish()
+    },
+    code: toggleCodeDrawer,
     switchProject: switchTo, switchSession, newChat: newChatForProject,
     closeProject: closeProjectFromRail, closeChat: closeChatForProject,
     review: openReview, memory: (root, name) => setMemoryTarget({ root, name })

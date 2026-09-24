@@ -81,7 +81,8 @@ imports to a private adapter for the shared application services, and reuses the
 same UI and preview preloads. Electron's entrypoint/build stay independent. Native
 profiles are separate until a safe shared migration/locking design is implemented.
 See `docs/NATIVE.md` for the host protocol, isolation checks, and current limits.
-`src/native/Shell.swift` owns the system sidebar, split view and toolbar. The
+`src/native/Shell.swift` owns the system sidebar (including project actions),
+split view and preview toolbar (branch/publish/code/expand). The
 optional `use-native-shell.ts` renderer hook mirrors compact workspace snapshots
 and routes native actions through existing App handlers; Electron keeps its rail.
 `src/native/Composer.swift` provides the native text field, controls and macOS 26

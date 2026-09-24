@@ -265,7 +265,7 @@ async function main() {
   ipcMain.on('native-shell:state', (event, state) => {
     if (event.sender === mainView.webContents) host!.send('shellState', { state })
   })
-  host.on('shell-action', ({ action, id, project }) => send('native-shell:action', { action, id, project }))
+  host.on('shell-action', ({ action, id, project, value }) => send('native-shell:action', { action, id, project, value }))
   ipcMain.on('native-composer:state', (event, state) => {
     if (event.sender === mainView.webContents) host!.send('composerState', { state })
   })

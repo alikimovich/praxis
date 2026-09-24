@@ -25,9 +25,15 @@ binary is loaded by the native backend; Bun itself remains a local prerequisite.
 The macOS shell uses a standard `NSOutlineView` sidebar, `NSSplitViewController`
 divider and `NSToolbar` items with system symbols and appearance. Projects expand
 to live and previous chats. Native selection switches projects/chats; context
-menus offer new chat, project memory and closing. Toolbar actions open/create
-projects, start chats, reload the preview, toggle element selection/chat visibility,
-and open settings. The system sidebar button collapses the sidebar.
+menus offer new chat, project memory and closing. New Project, Open Project and
+New Chat buttons sit above the outline; Settings sits at the bottom. The toolbar
+keeps the sidebar toggle at the far left and provides the current branch menu,
+Publish/Create PR (or Connect to GitHub), Show/Hide Code and Expand/Restore Preview.
+Branch switching, new branches and Git Updates reuse the shared handlers; the
+publish menu retains both PR-only and merge modes. Expanding hides chat and the
+native sidebar; restoring returns the sidebar to its previous collapsed state.
+The corresponding web header controls are hidden only in the native build; URL
+and device controls remain next to the preview.
 
 Chat history, settings, inspectors, code editing and the detailed preview toolbar remain
 React/WebKit. The native build hides the React rail and titlebar drag regions;
@@ -103,8 +109,9 @@ preview cannot access the privileged bridge and cannot invoke source-read IPC.
 PNG artifacts are written under `test/artifacts/native/`.
 The native check also exercises undo/redo, registered media-file delivery and
 opening the shared code editor in a separate native window.
-It opens the project through the actual AppKit toolbar, switches between real
-chat sessions through the outline view, checks selection/chat controls and sidebar
+It opens the project through the actual AppKit sidebar, switches between real
+chat sessions through the outline view, checks toolbar ordering, code visibility,
+expand/restore, publish-mode selection and sidebar
 collapse, verifies native text/draft restoration, file/image attachment add/remove,
 permission changes, slash completion and modal visibility, and
 captures native controls separately. Full-window offscreen caching

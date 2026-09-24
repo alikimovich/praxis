@@ -2,6 +2,31 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Preview-focused native toolbar
+
+Moved New Project, Open Project and New Chat into the top of the native sidebar,
+with Settings at the bottom. The toolbar now has a leading sidebar toggle/tracking
+separator, current branch menu, Publish/Create PR (or Connect to GitHub), code and
+expand/restore controls. Removed their duplicate web preview-header controls only
+in the native build. URL and device controls remain local to the preview.
+
+Extended the typed shell bridge to call existing App handlers for branch changes,
+Git Updates, publishing and code editing. Native branch creation uses a sheet;
+publish mode is a native dropdown. Disabled/busy labels mirror the shared state.
+Expand hides both chat and native sidebar, then restores the sidebar's previous
+collapse state. Replaced the old persisted toolbar configuration so existing native
+profiles receive the new arrangement.
+
+Validation: native build and integration passed sidebar project opening, toolbar
+order, code toggling, expand/restore, publish-mode selection and existing composer,
+editing and preview-isolation checks. Inspected sidebar and toolbar captures;
+offscreen WebKit/vibrancy compositing still has the previously documented limits.
+All four typechecks, docs-links and whitespace checks passed. No publish operation
+was performed. Deterministic regressions: 145 PASS, one startup crossfade failure,
+which passed on isolated rerun. Native tests ran separately; external agent sends
+were excluded. Reports: `test/artifacts/runs/run-W73Vyn/summary.json` and
+`test/artifacts/runs/run-k7do9M/summary.json`.
+
 ## 2026-09-23 — Native Liquid Glass composer
 
 Added an AppKit multiline chat composer using Apple's `NSGlassEffectView` on
