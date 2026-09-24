@@ -5,6 +5,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Adjust compact toolbar icons to approximately 20% below their original rendered size.
+
 - [x] Enforce smaller rendered toolbar glyphs using fixed-size template artwork; verify actual screenshot pixel bounds.
 
 - [x] Keep native preview action groups visible at narrow widths, shrink toolbar icons, and remove Projects while the sidebar is closed.

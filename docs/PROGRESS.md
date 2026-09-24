@@ -2,6 +2,13 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Moderate toolbar icon reduction
+
+Increased fixed toolbar glyph bounds from 28 to 36 pixels within the same 40px
+2x template. This targets roughly 20% smaller than the original icons instead
+of the previous ~38% reduction, preserving button sizes and toolbar layout.
+Native build passed.
+
 ## 2026-09-23 — Enforce rendered toolbar icon size
 
 The earlier SF Symbol configuration did not reduce the displayed toolbar glyphs:

@@ -11,7 +11,7 @@ func toolbarSymbol(_ name: String, _ label: String? = nil) -> NSImage? {
             colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
         let context = NSGraphicsContext(bitmapImageRep: bitmap) else { return nil }
     NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = context
-    let scale = 28 / max(symbol.size.width, symbol.size.height)
+    let scale = 36 / max(symbol.size.width, symbol.size.height)
     let size = NSSize(width: symbol.size.width * scale, height: symbol.size.height * scale)
     symbol.draw(in: NSRect(x: (40 - size.width) / 2, y: (40 - size.height) / 2, width: size.width, height: size.height))
     NSGraphicsContext.restoreGraphicsState()
