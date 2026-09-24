@@ -1970,7 +1970,7 @@ export default function App(): React.JSX.Element {
               preview follows the freed space via PreviewPane's ResizeObserver. */}
           <section
             className={`pane pane--chat ${chatHidden ? 'pane--chat-hidden' : ''}`}
-            style={{ width: chatHidden ? 0 : chatWidth }}
+            style={{ width: chatHidden ? 0 : chatWidth, '--native-chat-width': `${chatWidth}px` } as React.CSSProperties}
             aria-hidden={chatHidden}
           >
             {/* Window-drag strip across the chat's top edge — the one top-of-window

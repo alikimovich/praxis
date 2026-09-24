@@ -5,6 +5,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Animate preview expand/restore, preserve conversation width during clipping, and follow the transition in the native sidebar/header.
+
 - [x] Expose native preview Web Inspector, Console shortcuts, and WebKit Inspect Element context menu.
 
 - [x] Make toolbar action groups momentary and bundle/set the Praxis icon for the native app.

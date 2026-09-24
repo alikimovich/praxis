@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Animate native preview expansion
+
+Native chat width now transitions over 240ms, with matching sidebar easing and
+toolbar alignment following the measured width. The conversation retains its
+layout width while clipped, avoiding temporary text reflow and scrollbar overflow.
+Divider dragging remains immediate; Reduce Motion disables the transition.
+
+All TypeScript checks and native build passed. Native integration verified
+intermediate expansion widths, stable conversation width, sidebar restoration,
+toolbar alignment and composer typing/drafts. Inspected the shell capture. The
+full run subsequently failed waiting for the composer slash-command skill list
+with concurrent composer transport edits present. No Electron tests ran.
+
 ## 2026-09-23 — Native preview Web Inspector
 
 Added a Develop menu with preview Web Inspector (Option-Command-I) and JavaScript

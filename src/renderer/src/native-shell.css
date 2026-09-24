@@ -36,6 +36,15 @@ html.native-shell .pane--chat { --chat-scrollbar-width: 6px; }
 /* Let the chat share the surrounding shell surface. */
 html.native-shell .pane--chat {
   background: transparent;
+  overflow: clip;
+  transition: width 240ms cubic-bezier(0.2, 0, 0, 1);
+}
+/* Clip a stable conversation instead of reflowing it down to zero width (which
+   creates transient overflow and flashes the scrollbar on every toggle). */
+html.native-shell .pane--chat > .chat { width: var(--native-chat-width); }
+html.native-shell body.is-resizing .pane--chat { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  html.native-shell .pane--chat { transition: none; }
 }
 
 /* Clear every page surface between the chat and the AppKit window. Component

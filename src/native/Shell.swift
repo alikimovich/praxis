@@ -154,9 +154,9 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             first.attributedTitle = NSAttributedString(string: first.title, attributes: [.foregroundColor:previewTextColor, .font:NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)])
         }
     }
-    var previewLeading: CGFloat { chatHidden ? 0 : CGFloat(previewState["chatWidth"] as? Double ?? 440) }
+    var previewLeading: CGFloat { CGFloat(previewState["chatWidth"] as? Double ?? 440) }
     func alignChatHeader() {
-        guard chatHeader.window != nil, chatHeaderWidth != nil, !chatHidden else { return }
+        guard chatHeader.window != nil, chatHeaderWidth != nil else { return }
         let detail = split.splitViewItems[1].viewController.view
         let target = detail.convert(.zero, to: nil).x + (previewState["chatWidth"] as? Double ?? 440)
         let leading = chatHeader.convert(.zero, to: nil).x
@@ -306,8 +306,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         chatTitle.stringValue = allRows.first(where: { $0.id == selectedID })?.title ?? "Chat"
         chatTitle.toolTip = chatTitle.stringValue
         if chatHeaderWidth != nil {
-            if chatHidden { chatHeaderWidth.constant = 100 }
-            else { alignChatHeader() }
+            alignChatHeader()
         }
         chatTitle.isHidden = chatHidden
         let chatMenu = NSMenu(); chatMenu.autoenablesItems = false
@@ -378,8 +377,12 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         selecting = state["selectMode"] as? Bool ?? false
         let expandedPreview = state["chatHidden"] as? Bool ?? false
         if expandedPreview != chatHidden {
-            if expandedPreview { sidebarBeforeExpand = sidebarItem.isCollapsed; sidebarItem.isCollapsed = true }
-            else { sidebarItem.isCollapsed = sidebarBeforeExpand }
+            if expandedPreview { sidebarBeforeExpand = sidebarItem.isCollapsed }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.24
+                context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0, 0, 1)
+                sidebarItem.animator().isCollapsed = expandedPreview || sidebarBeforeExpand
+            }
         }
         chatHidden = expandedPreview
         previewState = state

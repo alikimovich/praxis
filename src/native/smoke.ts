@@ -99,7 +99,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await checkChatAlignment()
   for (const width of [360, 480, 440]) {
     await evaluate(`document.querySelector('.pane--chat').style.width = '${width}px'`)
-    await new Promise(resolve => setTimeout(resolve, 200))
+    await new Promise(resolve => setTimeout(resolve, 350))
     await checkChatAlignment()
   }
   await host.request('shellPerform', { action: 'address', row: '/?native-navigation=1#section' })
@@ -122,9 +122,24 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await wait('!!window.__praxisCodeDrawer.getState().source')
   await host.request('shellPerform', { action: 'code' })
   await wait('!window.__praxisCodeDrawer.getState().source')
+  await evaluate(`(() => {
+    window.__nativeExpansionSamples = [];
+    window.__nativeExpansionTimer = setInterval(() => {
+      const pane = document.querySelector('.pane--chat');
+      window.__nativeExpansionSamples.push([pane.getBoundingClientRect().width, pane.querySelector('.chat').getBoundingClientRect().width]);
+    }, 10);
+  })()`)
   await host.request('shellPerform', { action: 'expand' })
   await wait('window.__praxisWorkspace.getState().chatHidden')
-  await new Promise(resolve => setTimeout(resolve, 150))
+  await new Promise(resolve => setTimeout(resolve, 350))
+  const expansion = await evaluate(`(() => {
+    clearInterval(window.__nativeExpansionTimer);
+    return { samples: window.__nativeExpansionSamples, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches };
+  })()`)
+  if (!expansion.reduced && !expansion.samples.some(([width, content]: number[]) => width > 1 && width < content - 1))
+    throw new Error('Native expansion skipped intermediate widths')
+  if (expansion.samples.some(([, content]: number[]) => content < 320))
+    throw new Error('Native expansion squeezed the conversation and its scrollbar')
   if (!(await host.request('shellInspect')).sidebarCollapsed) throw new Error('Expand did not hide the native sidebar')
   await host.request('shellPerform', { action: 'expand' })
   await wait('!window.__praxisWorkspace.getState().chatHidden')
