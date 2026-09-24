@@ -36,3 +36,49 @@ final class ToolbarLayout {
         }
     }
 }
+
+/// Use an explicit momentary control: selectionMode on a group assembled from
+/// subitems does not configure AppKit's automatically created segmented view.
+final class MomentaryToolbarGroup: NSToolbarItemGroup {
+    private let control: NSSegmentedControl
+    init(identifier: NSToolbarItem.Identifier, items: [NSToolbarItem]) {
+        control = NSSegmentedControl(images: items.map { $0.image ?? NSImage() }, trackingMode: .momentary, target: nil, action: nil)
+        super.init(itemIdentifier: identifier)
+        subitems = items; selectionMode = .momentary
+        control.segmentStyle = .texturedRounded
+        for index in items.indices { control.setWidth(32, forSegment: index) }
+        view = control
+        target = self; action = #selector(activate(_:))
+        control.target = self; control.action = #selector(activate(_:))
+        refresh()
+    }
+    func refresh() {
+        for (index, item) in subitems.enumerated() {
+            control.setImage(item.image, forSegment: index)
+            control.setEnabled(item.isEnabled, forSegment: index)
+            control.setToolTip(item.toolTip ?? item.label, forSegment: index)
+        }
+    }
+    var hasMomentaryControl: Bool {
+        (control.cell as? NSSegmentedCell)?.trackingMode == .momentary && control.selectedSegment == -1
+    }
+    func clickSegment(_ identifier: String) -> Bool {
+        guard let index = subitems.firstIndex(where: { $0.itemIdentifier.rawValue == identifier }), subitems[index].isEnabled else { return false }
+        // Momentary cells only expose selection during mouse tracking. Simulate
+        // that transient selection for the automation action, then restore it.
+        guard let cell = control.cell as? NSSegmentedCell else { return false }
+        cell.trackingMode = .selectOne
+        defer { cell.trackingMode = .momentary }
+        control.selectedSegment = index
+        control.sendAction(control.action, to: control.target)
+        return true
+    }
+    @objc private func activate(_ sender: NSSegmentedControl) {
+        let index = sender.selectedSegment
+        guard subitems.indices.contains(index) else { return }
+        let item = subitems[index]
+        if item.isEnabled, let action = item.action { NSApp.sendAction(action, to: item.target, from: item) }
+        // Clear immediately, independent of later renderer state updates.
+        sender.setSelected(false, forSegment: index)
+    }
+}

@@ -200,8 +200,10 @@ when reopened. Toolbar action symbols use fixed-size 2x template artwork so AppK
 override their glyph sizing; native tinting and button behavior remain intact.
 
 The native app bundle includes the existing Praxis ICNS resource and sets its
-Dock icon at launch. Toolbar action groups use momentary highlighting; Expand
-does not retain a selection highlight after activation.
+Dock icon at launch. Toolbar action groups use explicit momentary segmented
+controls; their highlight clears immediately after activation. The automation
+actions dispatch through the segmented control callback, and inspection checks
+the actual cell tracking mode and selection.
 
 ### Preview Web Inspector
 

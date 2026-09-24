@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Clear native toolbar button highlights
+
+Replaced automatically generated toolbar group controls with explicit momentary
+NSSegmentedControls. Setting selectionMode on manually assembled subitems had
+not configured the rendered control, so its last-clicked segment stayed selected.
+Actions now clear transient selection immediately and refresh enabled states,
+images and tooltips from their existing toolbar items. Native automation invokes
+the group callback and checks the actual segmented cell's tracking/selection.
+
+Build and TypeScript checks passed. Native integration passed selection, device,
+code and expand/restore toolbar checks, including the residual-selection assertion;
+inspected the shell capture. The full run later timed out initializing the property
+panel with concurrent lazy-panel changes present. No Electron tests ran.
+
 ## 2026-09-24 — Animate native preview expansion
 
 Native chat width now transitions over 240ms, with matching sidebar easing and
