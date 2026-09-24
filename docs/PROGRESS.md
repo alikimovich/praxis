@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Preserve native sidebar projects across launches
+
+Native now saves workspace JSON atomically in its own profile, independent of
+WebKit localhost storage. Restore retains every saved project, including those
+without a live process, and reopens the last selected project through the existing
+suspended-project path. Explicit closes remain persisted. Existing localStorage
+is the migration fallback; Electron's restore policy remains unchanged.
+
+Native workspace tests cover disk reopen, empty-list persistence, invalid writes,
+and cold-launch retention/selection. Both tests, all TypeScript checks and the
+full native integration suite passed. No Electron tests ran.
+
+
 ## 2026-09-24 — Reduce native idle work and unused WebKit memory
 
 Created the property-panel view on demand, preserving retained state on first

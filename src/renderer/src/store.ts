@@ -1117,9 +1117,9 @@ export interface PersistedWorkspace {
   activeKey: string | null
 }
 
-export const readPersistedWorkspace = (): PersistedWorkspace | null => {
+export const readPersistedWorkspace = (saved?: string | null): PersistedWorkspace | null => {
   try {
-    const raw = localStorage.getItem(WORKSPACE_KEY)
+    const raw = saved ?? localStorage.getItem(WORKSPACE_KEY)
     if (!raw) return null
     const v = JSON.parse(raw) as PersistedWorkspace
     if (!v || !Array.isArray(v.projects)) return null
@@ -1134,10 +1134,9 @@ export const readPersistedWorkspace = (): PersistedWorkspace | null => {
 
 const writePersistedWorkspace = (ws: WorkspaceState): void => {
   try {
-    localStorage.setItem(
-      WORKSPACE_KEY,
-      JSON.stringify({ projects: ws.projects, activeKey: ws.activeKey })
-    )
+    const raw = JSON.stringify({ projects: ws.projects, activeKey: ws.activeKey })
+    window.praxisNativeShell?.writeWorkspace(raw)
+    localStorage.setItem(WORKSPACE_KEY, raw)
   } catch {
     /* private mode / no storage — keep it in memory only */
   }

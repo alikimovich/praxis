@@ -5,6 +5,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Preserve native sidebar projects and active selection across launches in profile-owned workspace storage.
+
 - [x] Reduce native idle work and unused renderer memory; verify lazy panel state, composer parity and paired performance measurements.
 - [ ] Validate remaining native platform/provider parity before deciding whether to retire Electron.
 

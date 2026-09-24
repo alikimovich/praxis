@@ -14,6 +14,7 @@ const ROOT = dirname(TEST_DIR);
 // unit = the `bun test/NAME.mjs` group before `electron-vite build` in `test`.
 const UNIT = [
   'native-shutdown',
+  'native-workspace',
   'content-controls',
   'project-ui',
   'project-ui-jev',

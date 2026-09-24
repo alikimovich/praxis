@@ -229,3 +229,11 @@ field values and restored drafts; there is no periodic composer DOM scan.
 Sidebar rows/favicons and toolbar artwork are reused when unchanged.
 See [the measurements](RUNTIME_BENCHMARK.md#native-optimization-follow-up--2026-09-24)
 for the measured savings and their limits.
+
+### Workspace persistence
+
+Native saves open sidebar projects and the selected project in `workspace.json`
+in its profile directory. All projects remain listed after relaunch; the selected
+project reopens through the existing suspended-project flow. Closing a project
+removes it from the saved list. Existing WebKit workspace storage is used as a
+fallback on the first launch after upgrading.

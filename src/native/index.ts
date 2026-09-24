@@ -29,6 +29,7 @@ import { NativeBridge, setBridge } from './bridge'
 import { app, dispatchIPC, ipcMain, NativeView, protocolHandlers, shell, views } from './platform'
 import { runNativeSmoke } from './smoke'
 import { installShutdown } from './shutdown'
+import { workspaceStorage } from './workspace'
 
 async function main() {
   const testing = process.argv.includes('--test')
@@ -59,7 +60,7 @@ async function main() {
     writeFileSync(join(fixture, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="red"/></svg>')
     writeFileSync(
       join(fixture, 'index.html'),
-      '<!doctype html>\n<html><body>\n<h1 id="native-title" data-praxis-source="index.html:3:1">Native Praxis fixture</h1>\n<p>Bun owns this server.</p></body></html>'
+      '<!doctype html>\n<html><body>\n<h1 id="native-title" data-praxis-source="index.html:3:1">Native Praxis fixture</h1>\n<p>Bun owns this server.</p><script>window.previewInputs=[];for(const type of ["keydown","keyup","keypress","pointerdown","mousedown","click","dblclick","wheel","input"])window.addEventListener(type,event=>window.previewInputs.push(event.type),true)</script></body></html>'
     )
   }
   let pickedRoot = fixture || (requestedProject ? resolve(requestedProject) : null)
@@ -126,6 +127,14 @@ async function main() {
   host = new NativeBridge(executable, __dirname, testing ? 'ephemeral' : 'persistent')
   setBridge(host)
   const mainView = new NativeView('main')
+  const workspace = workspaceStorage(profile)
+  ipcMain.handle('native-workspace:read', event => {
+    if (event.sender !== mainView.webContents) throw new Error('Workspace is main-view only')
+    return workspace.read()
+  })
+  ipcMain.on('native-workspace:write', (event, raw) => {
+    if (event.sender === mainView.webContents) workspace.write(raw)
+  })
   const previewView = new NativeView('preview')
   let panelView: NativeView | undefined
   const ensurePanelView = () => {

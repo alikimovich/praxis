@@ -69,7 +69,12 @@ export async function restoreWorkspace(deps: RestoreDeps): Promise<void> {
   if (started) return
   started = true
 
-  const persisted = readPersistedWorkspace()
+  const native = window.praxisNativeShell
+  let saved: string | null = null
+  try { saved = await native?.readWorkspace() ?? null } catch (error) {
+    useLog.getState().append(`Couldn't read saved workspace: ${String(error)}`, 'error')
+  }
+  const persisted = readPersistedWorkspace(saved)
   if (!persisted || persisted.projects.length === 0) return // nothing to restore → Welcome
 
   const log = useLog.getState()
@@ -118,6 +123,14 @@ export async function restoreWorkspace(deps: RestoreDeps): Promise<void> {
       [...persisted.projects].sort((a, b) => (b.touchedAt || 0) - (a.touchedAt || 0))[0]
     const activeIsLive = !!activePersisted && live.has(activePersisted.key)
 
+    // Native sidebar projects remain available even when their processes stopped.
+    // applyProject already reopens suspended agents and restarts their previews.
+    if (native) {
+      for (const project of persisted.projects) {
+        if (!live.has(project.key)) restored.push(project)
+      }
+    }
+
     // 2a. Put the live set (minus the dead, persisted-but-not-live projects) into
     //     the rail. Active is claimed only when it's live; otherwise the reopen
     //     below (attempt) claims it.
@@ -143,6 +156,8 @@ export async function restoreWorkspace(deps: RestoreDeps): Promise<void> {
         }
       }
       await deps.applyProject(entry)
+    } else if (native && activePersisted) {
+      await deps.applyProject(activePersisted)
     } else if (activePersisted && activePersisted.launchSpec) {
       // Real relaunch (main empty) — only auto-reopen a project praxis OWNS the launch
       // of (a persisted launchSpec). Attached-server / never-launched entries can't
@@ -165,7 +180,7 @@ export async function restoreWorkspace(deps: RestoreDeps): Promise<void> {
     const message = err instanceof Error ? err.message : String(err)
     log.append(`Couldn't restore the previous workspace: ${message}`, 'error')
     try {
-      useWorkspace.getState().reset()
+      if (!native) useWorkspace.getState().reset()
     } catch {
       /* best effort */
     }

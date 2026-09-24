@@ -74,6 +74,8 @@ export const contextBridge = {
       !location.search.includes('praxisEditor=')
     ) {
       const shell: NativeShellBridge = {
+        readWorkspace: () => ipcRenderer.invoke('native-workspace:read') as Promise<string | null>,
+        writeWorkspace: raw => ipcRenderer.send('native-workspace:write', raw),
         update: (state) => ipcRenderer.send('native-shell:state', state),
         onAction: (callback) => {
           const listener: Listener = (_event, action) => callback(action as NativeShellAction)

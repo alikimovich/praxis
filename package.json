@@ -163,6 +163,7 @@
     "test:shadows": "bun test/shadows.mjs",
     "test:type-metrics": "bun test/type-metrics.mjs",
     "test:skills-install": "bun test/skills-install.mjs",
+    "test:native-workspace": "bun test/native-workspace.mjs",
     "test:restore": "electron-vite build && node test/restore-reload.mjs",
     "test:tool-invocation": "electron-vite build && node test/tool-invocation.mjs"
   },

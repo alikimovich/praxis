@@ -52,6 +52,8 @@ export interface NativeShellAction {
   project?: string
 }
 export interface NativeShellBridge {
+  readWorkspace: () => Promise<string | null>
+  writeWorkspace: (raw: string) => void
   update: (state: NativeShellState) => void
   onAction: (callback: (action: NativeShellAction) => void) => () => void
 }
