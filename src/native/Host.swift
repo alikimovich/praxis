@@ -41,6 +41,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var window: NSWindow!
     var shell: NativeShell!
     var composer: NativeComposer!
+    var previewSurface: PreviewSurface!
     let canvas = Canvas()
     var views: [String: WKWebView] = [:]
     var targets: [String: URL] = [:]
@@ -64,7 +65,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         if !isolated { config.setURLSchemeHandler(self, forURLScheme: "praxis-media") }
         let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = self; view.uiDelegate = self; view.isInspectable = true
-        view.underPageBackgroundColor = id == "main" ? .clear : .windowBackgroundColor
+        if id != "preview" { view.underPageBackgroundColor = id == "main" ? .clear : .windowBackgroundColor }
         if id == "main" { view.setValue(false, forKey: "drawsBackground") }
         views[id] = view; canvas.addSubview(view)
         urlObservers[id] = view.observe(\.url, options: [.new]) { view, _ in
@@ -80,6 +81,8 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         window.contentView = canvas; window.delegate = self
         _ = makeView("main"); _ = makeView("preview"); _ = makeView("panel")
         shell = NativeShell(window: window, canvas: canvas)
+        previewSurface = PreviewSurface(preview: views["preview"]!, canvas: canvas, container: canvas.superview!)
+        previewSurface.leading = { [weak self] in self?.shell.previewLeading ?? 0 }
         composer = NativeComposer(frame: .zero); canvas.addSubview(composer)
         window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
         installMenus()
@@ -140,6 +143,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             reply(id, bitmap.representation(using: .png, properties: [:])?.base64EncodedString() ?? "")
         case "shellState": shell.update(c["state"] as? [String: Any] ?? [:])
         case "shellInspect": reply(id, shell.inspect())
+        case "previewSurfaceInspect": reply(id, previewSurface.inspect())
         case "shellPerform": reply(id, shell.perform(c["action"] as? String ?? "", id: c["row"] as? String))
         case "captureShell":
             let content = window.contentView?.superview ?? shell.split.view
@@ -185,7 +189,10 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             guard values.allSatisfy({ $0.isFinite && abs($0) < 100000 }) else { return }
             view.frame = NSRect(x: values[0], y: values[1], width: max(0, values[2]), height: max(0, values[3]))
         case "visible": view?.isHidden = !(c["visible"] as? Bool ?? false)
-        case "radius": view?.layer?.cornerRadius = CGFloat(c["radius"] as? Double ?? 0); view?.layer?.masksToBounds = true
+        case "radius":
+            let radius = CGFloat(c["radius"] as? Double ?? 0)
+            view?.layer?.cornerRadius = radius; view?.layer?.masksToBounds = true
+            if name == "preview" { view?.autoresizingMask = radius == 0 && view?.frame.isEmpty == false ? [.width, .height] : []; previewSurface.needsDisplay = true }
         case "deliver":
             guard let message = c["message"], let data = try? JSONSerialization.data(withJSONObject: message), let json = String(data: data, encoding: .utf8) else { return }
             view?.evaluateJavaScript("globalThis.__praxisNativeDispatch?.(\(json))", in: nil, in: name == "preview" ? world : .page) { _ in }

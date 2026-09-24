@@ -182,3 +182,13 @@ in the live tier, while the deterministic test is in the desktop tier.
 Terminal shutdown forwards SIGINT, SIGTERM and SIGHUP to the native backend; all
 three run shared server/agent cleanup before exiting. `bun test/native-shutdown.mjs`
 checks that each signal stops a real detached managed dev server.
+
+### Preview surface
+
+Desktop preview background extends behind the transparent native toolbar using
+WebKit's observed `underPageBackgroundColor`, derived from the page's html/body
+background. The actual web viewport stays below the toolbar safe area. One light
+native divider spans the window height; the preview has no inset card border.
+Mobile retains its device surround. Native workspace layout updates no longer
+wait 50ms for the sidebar, and changing viewport/insets keeps the WebKit view
+alive rather than briefly setting its size to zero.

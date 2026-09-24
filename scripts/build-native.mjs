@@ -78,6 +78,7 @@ const result = Bun.spawnSync(
     join(out, 'main.swift'),
     join(root, 'src/native/Shell.swift'),
     join(root, 'src/native/ProjectCell.swift'),
+    join(root, 'src/native/PreviewSurface.swift'),
     join(root, 'src/native/Composer.swift'),
     '-o',
     join(contents, 'MacOS/PraxisHost'),

@@ -89,7 +89,7 @@ profiles are separate until a safe shared migration/locking design is implemente
 See `docs/NATIVE.md` for the host protocol, isolation checks, and current limits.
 `src/native/Shell.swift` owns the system sidebar (including project actions),
 split view and column-aligned toolbar: project actions, chat title/actions, and
-preview controls (branch, Home/address, viewport, code, expand, Publish). The
+preview controls (domain/branch, selection, viewport, code, layers, expand, Publish). The
 optional `use-native-shell.ts` renderer hook mirrors compact workspace snapshots
 and routes native actions through existing App handlers; Electron keeps its rail.
 `src/native/Composer.swift` provides the native text field, controls and macOS 26

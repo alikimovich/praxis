@@ -2,6 +2,27 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Full-height native preview surface
+
+Removed native preview card fills/outlines and extended the detail behind the
+transparent titlebar. A hit-test-transparent AppKit surface observes WebKit's
+page-derived underPageBackgroundColor (html/body blend), paints the desktop
+preview's toolbar backing, and draws one lighter full-height left divider.
+The web view still begins below the toolbar safe area; mobile keeps its surround.
+Removed the separate chat-header separator.
+
+Expand/restore previously combined an immediate web layout with a 50ms-delayed
+native sidebar collapse. Workspace snapshots now sync immediately, other layout
+snapshots coalesce without that delay, and desktop WebKit follows canvas resizing.
+Geometry effect cleanup also sent zero-sized frames when insets/viewport changed;
+only unmount now clears the native view. Empty views do not autoresize back open.
+
+Native build, all TypeScript checks, and full native integration passed, including
+live html/body background changes, safe-area/divider geometry, expand/restore,
+editing, undo/redo and bridge isolation. Inspected shell capture: flush preview,
+continuous divider, content below toolbar. Offscreen glass capture limitations
+remain; animation smoothness was not measured. No Electron tests ran.
+
 ## 2026-09-23 — Sidebar row fit and project favicons
 
 The source-list document could remain wider than its scroll viewport, clipping

@@ -135,7 +135,7 @@ export function useNativeShell(actions: Actions) {
     }
     const schedule = () => {
       if (disposed) return
-      timer ??= setTimeout(sync, 50)
+      timer ??= setTimeout(sync, 0)
     }
     const resize = new ResizeObserver(schedule)
     let observed: Element | null = null
@@ -150,7 +150,11 @@ export function useNativeShell(actions: Actions) {
     }
     refresh.current = observeChat
     const unsubs = [
-      useWorkspace.subscribe(schedule),
+      useWorkspace.subscribe(() => {
+        // Collapse the native sidebar before the next web layout report.
+        if (timer !== undefined) clearTimeout(timer)
+        sync()
+      }),
       useProjectIcons.subscribe(schedule),
       useChat.subscribe(schedule),
       useHistory.subscribe(schedule),

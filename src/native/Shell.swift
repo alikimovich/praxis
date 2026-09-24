@@ -117,6 +117,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         split.addSplitViewItem(sidebarItem)
         let detailItem = NSSplitViewItem(viewController: detail)
         detailItem.minimumThickness = 500
+        detailItem.allowsFullHeightLayout = true
         split.addSplitViewItem(detailItem)
         window.contentViewController = split
         split.splitView.setPosition(230, ofDividerAt: 0)
@@ -125,12 +126,15 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         toolbar.allowsUserCustomization = false; toolbar.autosavesConfiguration = false
         chatHeader.align = { [weak self] in self?.alignChatHeader() }
         NotificationCenter.default.addObserver(self, selector: #selector(splitResized(_:)), name: NSSplitView.didResizeSubviewsNotification, object: split.splitView)
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
         window.titleVisibility = .hidden
         window.toolbar = toolbar; window.toolbarStyle = .unified
     }
     @objc private func splitResized(_ notification: Notification) {
         DispatchQueue.main.async { [weak self] in self?.alignChatHeader() }
     }
+    var previewLeading: CGFloat { chatHidden ? 0 : CGFloat(previewState["chatWidth"] as? Double ?? 440) }
     func alignChatHeader() {
         guard chatHeader.window != nil, chatHeaderWidth != nil, !chatHidden else { return }
         let detail = split.splitViewItems[1].viewController.view
@@ -184,7 +188,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             sidebarButtons["new-chat"] = newChat
             chatHistory.bezelStyle = .texturedRounded; chatHistory.setAccessibilityLabel("Chat History"); chatHistory.toolTip = "Chat History"
             (chatHistory.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
-            let separator = NSBox(); separator.boxType = .separator
+            let separator = NSView() // The preview surface owns the continuous divider.
             for view in [chatTitle, newChat, chatHistory, separator] { view.translatesAutoresizingMaskIntoConstraints = false; chatHeader.addSubview(view) }
             NSLayoutConstraint.activate([
                 chatHeaderWidth, chatHeader.heightAnchor.constraint(equalToConstant: 32),

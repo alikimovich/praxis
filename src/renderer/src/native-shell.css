@@ -48,3 +48,14 @@ html.native-shell .app .pane--chat,
 html.native-shell .chat__status {
   background: transparent !important;
 }
+
+/* Native WebKit supplies the page surface; AppKit draws its one full-height
+   divider. No inset card outline or competing web background. */
+html.native-shell .pane--preview,
+html.native-shell .previewcard,
+html.native-shell .previewcard__body {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}

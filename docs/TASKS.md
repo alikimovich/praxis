@@ -5,6 +5,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Extend preview page background behind the native toolbar, use a lighter full-height divider, and remove delayed/zero-size resize updates.
+
 - [x] Include the standalone macOS prototype in the repo and expose `bun run dev:native`, forwarding preview URL and integration-test arguments.
 - [x] Connect the shared Praxis UI and application core to the native host while retaining Electron as the default.
 - [x] Verify a successful live provider edit through the native composer (Codex source edit and WebKit preview reload passed; Claude still requires login).

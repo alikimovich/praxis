@@ -34,6 +34,20 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await wait('!!window.__praxisSession?.getState().projectRoot')
   await wait('getComputedStyle(document.querySelector(".rail")).display === "none"')
   await wait(`getComputedStyle(document.body).backgroundColor === 'rgba(0, 0, 0, 0)' && getComputedStyle(document.querySelector('.pane--chat')).backgroundColor === 'rgba(0, 0, 0, 0)'`)
+  // Page-derived background must follow live html/body changes without moving
+  // page content into the toolbar's safe area.
+  await evaluate(`(() => { document.documentElement.style.backgroundColor = 'rgb(40, 80, 120)'; document.body.style.backgroundColor = 'transparent'; })()`, 'preview')
+  let surface: any
+  for (let i = 0; i < 40; i++) {
+    surface = await host.request('previewSurfaceInspect')
+    if (Math.abs(surface.red - 40 / 255) < 0.02) break
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+  if (Math.abs(surface.red - 40 / 255) > 0.02 || Math.abs(surface.green - 80 / 255) > 0.02 || Math.abs(surface.blue - 120 / 255) > 0.02)
+    throw new Error(`Preview toolbar did not follow page background: ${JSON.stringify(surface)}`)
+  if (surface.toolbarHeight <= 0 || surface.viewportTop > surface.contentTop + 1 || surface.dividerHeight !== surface.surfaceHeight)
+    throw new Error(`Incorrect full-height preview surface: ${JSON.stringify(surface)}`)
+  await evaluate(`(() => { document.documentElement.style.removeProperty('background-color'); document.body.style.removeProperty('background-color'); })()`, 'preview')
   // Wait for the debounced renderer snapshot to reach the system sidebar.
   let shell = await host.request('shellInspect')
   for (let i = 0; (!shell.rows.length || !shell.enabled.code) && i < 40; i++) {
@@ -121,6 +135,10 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     )
   await host.request('shellPerform', { action: 'toggle-sidebar' })
   await new Promise((resolve) => setTimeout(resolve, 500))
+  const surfaceArtifacts = join(root, 'test/artifacts/native')
+  mkdirSync(surfaceArtifacts, { recursive: true })
+  writeFileSync(join(surfaceArtifacts, 'preview-surface.png'), Buffer.from(await host.request('captureShell'), 'base64'))
+  console.log('Native page background, safe-area viewport, full-height divider and expand/restore checks passed.')
   const originalChat = shell.selected
   const waitComposer = async (check: (state: any) => boolean) => {
     for (let i = 0; i < 100; i++) {
