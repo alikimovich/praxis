@@ -371,13 +371,13 @@ const api: PraxisApi = {
     saveAttachment: (image: ImageAttachment, name?: string): Promise<string> =>
       ipcRenderer.invoke('attachments:save', image, name),
     setModel: (model: string): Promise<void> => ipcRenderer.invoke('agent:set-model', model),
-    setPermissionMode: (mode: PermissionMode): Promise<void> =>
-      ipcRenderer.invoke('agent:set-permission-mode', mode),
+    setPermissionMode: (mode: PermissionMode, sessionKey?: string): Promise<void> =>
+      ipcRenderer.invoke('agent:set-permission-mode', mode, sessionKey),
     respondPermission: (id: string, behavior: 'allow' | 'deny'): Promise<void> =>
       ipcRenderer.invoke('agent:respond-permission', id, behavior),
     respondQuestion: (id: string, answers: QuestionAnswers | null): Promise<void> =>
       ipcRenderer.invoke('agent:respond-question', id, answers),
-    interrupt: (): Promise<void> => ipcRenderer.invoke('agent:interrupt'),
+    interrupt: (sessionKey?: string): Promise<void> => ipcRenderer.invoke('agent:interrupt', sessionKey),
     tagSession: (root: string, tag: { branch?: string; prUrl?: string }): Promise<void> =>
       ipcRenderer.invoke('agent:tag-session', root, tag),
     spawnComment: (
@@ -404,9 +404,9 @@ const api: PraxisApi = {
       recordId: string
     ): Promise<{ ok: boolean; prUrl?: string; error?: string }> =>
       ipcRenderer.invoke('agent:spawn-pr', root, branch, title, recordId),
-    resolveConflict: (): Promise<{ ok: boolean; conflicted: string[]; prompt?: string; error?: string }> =>
-      ipcRenderer.invoke('agent:resolve-conflict'),
-    discardConflict: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('agent:discard-conflict'),
+    resolveConflict: (sessionKey?: string): Promise<{ ok: boolean; conflicted: string[]; prompt?: string; error?: string }> =>
+      ipcRenderer.invoke('agent:resolve-conflict', sessionKey),
+    discardConflict: (sessionKey?: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('agent:discard-conflict', sessionKey),
     onEvent: on<AgentEvent>('agent:event'),
     workspaceSnapshot: (): Promise<WorkspaceSnapshot> =>
       ipcRenderer.invoke('agent:workspace-snapshot')

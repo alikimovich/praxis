@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import type { NativeBridge } from './bridge'
 import { dispatchIPC, views } from './platform'
 import { checkNativeChat } from './smoke-chat'
+import { nativeChat } from './chat-runtime'
 
 export async function runNativeSmoke(host: NativeBridge, fixture: string, root: string) {
   const evaluate = async (code: string, view = 'main', isolated = false) => {
@@ -183,6 +184,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   const layout = await waitComposer(state => state.visible)
   if (!layout.pickersPlain || !layout.attachIsPlus || Object.values(layout.pickerWidths).some(width => Number(width) > 60.5)) throw new Error('Native composer selectors must be plain, compact, and accompanied by a plus')
   if (!layout.autohidesScrollers || layout.contentWidth < 60 || layout.inputHeight < 20 || layout.sendWidth !== 30 || !layout.controlsBelowForm || !layout.sendInsideForm || Math.abs(layout.sendRightInset - 10) > 1 || layout.inputTopInset > 15) throw new Error(`Native composer layout invalid: ${JSON.stringify(layout)}`)
+  for (const text of ['A', 'A native', 'A native draft']) await host.request('composerPerform', { text })
   await host.request('composerPerform', { text: 'A native draft\nwith a second line' })
   await waitComposer(state => state.text === 'A native draft\nwith a second line')
   const added = await evaluate(`(async()=>{
@@ -219,14 +221,14 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await waitComposer(state => state.choices.some((choice: any) => choice.label === permission.label && choice.value === alternative.value))
   await host.request('composerPerform', { label: permission.label, value: permission.value })
   await waitComposer(state => state.choices.some((choice: any) => choice.label === permission.label && choice.value === permission.value))
-  const originalCommands = await evaluate(`window.__praxisSession.getState().slashCommands`)
-  await evaluate(`window.__praxisSession.setState({slashCommands:[{name:'native-fixture',description:'Native keyboard test'}]})`)
+  const originalCommands = nativeChat.get(nativeChat.active).commands
+  nativeChat.event({ type: 'commands', projectKey: nativeChat.active, commands: [{name: 'native-fixture', description: 'Native keyboard test', source: 'project'}] })
   await host.request('composerPerform', { text: '/native' })
   await waitComposer(state => state.skillListVisible && state.skillCount > 0)
   await host.request('composerPerform', { key: 'Tab' })
   await waitComposer(state => state.text === '/native-fixture ')
   await host.request('composerPerform', { text: '' })
-  await evaluate(`window.__praxisSession.setState({slashCommands:${JSON.stringify(originalCommands)}})`)
+  nativeChat.event({ type: 'commands', projectKey: nativeChat.active, commands: originalCommands })
   await evaluate(`window.__praxisProviders.getState().setSettingsOpen(true)`)
   await waitComposer(state => !state.visible)
   await evaluate(`window.__praxisProviders.getState().setSettingsOpen(false)`)

@@ -30,6 +30,7 @@ import { app, dispatchIPC, ipcMain, NativeView, protocolHandlers, shell, views }
 import { runNativeSmoke } from './smoke'
 import { installShutdown } from './shutdown'
 import { workspaceStorage } from './workspace'
+import { installNativeChat } from './chat-runtime'
 
 async function main() {
   const testing = process.argv.includes('--test')
@@ -277,14 +278,7 @@ async function main() {
     if (event.sender === mainView.webContents) host!.send('shellState', { state })
   })
   host.on('shell-action', ({ action, id, project, value }) => send('native-shell:action', { action, id, project, value }))
-  ipcMain.on('native-composer:state', (event, state) => {
-    if (event.sender === mainView.webContents) host!.send('composerState', { state })
-  })
-  host.on('composer-action', message => send('native-composer:action', message))
-  ipcMain.on('native-chat:state', (event, state) => {
-    if (event.sender === mainView.webContents) host!.send('chatState', { state })
-  })
-  host.on('chat-action', message => send('native-chat:action', message))
+  installNativeChat(host!, mainView)
   ipcMain.on('native-composer:focus', event => {
     if (event.sender === mainView.webContents) host!.send('composerFocus')
   })

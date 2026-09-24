@@ -94,8 +94,11 @@ optional `use-native-shell.ts` renderer hook mirrors compact workspace snapshots
 and routes native actions through existing App handlers; Electron keeps its rail.
 `src/native/Composer.swift` provides the native text field, controls and macOS 26
 Liquid Glass container. The native chat renders in SwiftUI (`src/native/Chat.swift`) and the composer
-receives typed state/actions; no hidden React chat/form is mounted. Shared
-ChatPanel controller logic still owns session behavior. See `docs/NATIVE.md`.
+receives typed state/actions; no hidden React chat/form is mounted. Bun owns native
+drafts, streaming, queues, model/permission choices and chat actions
+through `src/native/chat-controller.ts`; React ChatPanel is not mounted in native.
+The main WebKit view still supplies workspace context/layout and remaining panels.
+See `docs/NATIVE.md`.
 
 ```
 src/

@@ -1654,14 +1654,14 @@ export interface PraxisApi {
      *  written; a dropped image needs no call (it already has a path). */
     saveAttachment: (image: ImageAttachment, name?: string) => Promise<string>
     setModel: (model: string) => Promise<void>
-    /** Change the permission posture live (drives the SDK's setPermissionMode). */
-    setPermissionMode: (mode: PermissionMode) => Promise<void>
+    /** Change permission posture for the given chat, or the active chat when omitted. */
+    setPermissionMode: (mode: PermissionMode, sessionKey?: string) => Promise<void>
     /** Answer a pending approve/deny card. */
     respondPermission: (id: string, behavior: 'allow' | 'deny') => Promise<void>
     /** Answer a pending agent question (AskUserQuestion). `answers` maps each
      *  question's text to the chosen option label(s); `null` dismisses it. */
     respondQuestion: (id: string, answers: QuestionAnswers | null) => Promise<void>
-    interrupt: () => Promise<void>
+    interrupt: (sessionKey?: string) => Promise<void>
     /** Tag the live session with branch / PR metadata for its history record. */
     tagSession: (root: string, tag: { branch?: string; prUrl?: string }) => Promise<void>
     /** Spawn a detached agent in its own git worktree — runs in the background
@@ -1702,14 +1702,14 @@ export interface PraxisApi {
      *  with both sides 3-way merged; `conflicted` lists the files with real overlap and
      *  `prompt` is the resolution turn the renderer should `send`. An empty `conflicted`
      *  means the sides merged cleanly and were already applied (no turn to run). */
-    resolveConflict: () => Promise<{
+    resolveConflict: (sessionKey?: string) => Promise<{
       ok: boolean
       conflicted: string[]
       prompt?: string
       error?: string
     }>
     /** v9 conflict card — "Discard changes" on the ACTIVE parked chat (drop its work). */
-    discardConflict: () => Promise<{ ok: boolean }>
+    discardConflict: (sessionKey?: string) => Promise<{ ok: boolean }>
     onEvent: (cb: (event: AgentEvent) => void) => () => void
     /** Everything still live in main (open projects, their live chats + in-progress
      *  transcripts) — used to reattach the renderer after a reload without tearing

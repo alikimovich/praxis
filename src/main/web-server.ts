@@ -1,5 +1,6 @@
 import { registerContentControlsIpc } from './content-controls-ipc'
 import { projectKey } from '../shared/projectKey'
+import { assertChatCommandScope } from '../shared/chat-command-scope'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { createReadStream, realpathSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -92,12 +93,7 @@ export class WebCommandRouter implements RpcHandlerRegistry {
     const handler = this.handlers.get(channel)
     if (!handler) throw new Error(`Unsupported browser command: ${channel}`)
     this.assertRootScope(channel, args)
-    if (channel === 'agent:send' && args[2] !== undefined) {
-      const key = projectKey(this.root)
-      if (typeof args[2] !== 'string' || (args[2] !== key && !args[2].startsWith(`${key}#`))) {
-        throw new Error('That chat is outside the opened repository.')
-      }
-    }
+    assertChatCommandScope(projectKey(this.root), channel, args)
     return handler({}, ...args)
   }
 

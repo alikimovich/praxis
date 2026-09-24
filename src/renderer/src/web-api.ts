@@ -328,10 +328,10 @@ export function installWebApi(config: WebConfig): void {
       send: (text, images, sessionKey, turn) => invoke('agent:send', text, images, sessionKey, turn),
       saveAttachment: (image, name) => invoke('attachments:save', image, name),
       setModel: (model) => invoke('agent:set-model', model),
-      setPermissionMode: (mode) => invoke('agent:set-permission-mode', mode),
+      setPermissionMode: (mode, key) => invoke('agent:set-permission-mode', mode, ...(key === undefined ? [] : [key])),
       respondPermission: (id, behavior) => invoke('agent:respond-permission', id, behavior),
       respondQuestion: (id, answers) => invoke('agent:respond-question', id, answers),
-      interrupt: () => invoke('agent:interrupt'),
+      interrupt: (key) => invoke('agent:interrupt', ...(key === undefined ? [] : [key])),
       tagSession: (root, tag) => invoke('agent:tag-session', root, tag),
       spawnComment: (root, text, parent, options, origin) =>
         invoke('agent:spawn-comment', root, text, parent, options, origin),
@@ -340,8 +340,8 @@ export function installWebApi(config: WebConfig): void {
       spawnDiscard: (root, branch) => invoke('agent:spawn-discard', root, branch),
       spawnPr: (root, branch, title, recordId) =>
         invoke('agent:spawn-pr', root, branch, title, recordId),
-      resolveConflict: () => invoke('agent:resolve-conflict'),
-      discardConflict: () => invoke('agent:discard-conflict'),
+      resolveConflict: (key) => invoke('agent:resolve-conflict', ...(key === undefined ? [] : [key])),
+      discardConflict: (key) => invoke('agent:discard-conflict', ...(key === undefined ? [] : [key])),
       onEvent: on('agent:event'),
       workspaceSnapshot: () => invoke('agent:workspace-snapshot')
     },

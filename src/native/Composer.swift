@@ -204,7 +204,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             frame = NSRect(x: x, y: y, width: max(0, width), height: max(0, height))
         }
         let nextChat = next["chat"] as? String ?? ""
-        if chat != nextChat { text.undoManager?.removeAllActions(); chat = nextChat; revision = 0 }
+        if chat != nextChat { text.undoManager?.removeAllActions(); chat = nextChat; revision = next["revision"] as? Int ?? 0 }
         if (next["revision"] as? Int ?? 0) >= revision && !text.hasMarkedText() {
             let value = next["text"] as? String ?? ""
             if text.string != value {

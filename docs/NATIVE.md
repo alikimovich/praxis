@@ -89,12 +89,16 @@ typed actions instead of clicking hidden DOM buttons. `NativeChatSurface.tsx`
 mounts only a geometry placeholder; the React transcript and form are not mounted.
 The obsolete DOM composer adapter has been removed.
 
-This is a UI migration, not yet a React-free application. ChatPanel still runs
-shared agent-event/session/draft/model/queue logic; its native branch publishes
-snapshots and handles typed actions through the existing application APIs. The
-main WKWebView still owns workspace layout and other panels. Moving this remaining
-controller/state ownership to Bun is separate follow-up work. Electron keeps its
-existing chat interface. Native Markdown currently supports inline formatting,
+`src/native/chat-controller.ts` now owns native drafts, skill completion, streaming,
+queues, model/permission choices, attachments, card actions and service calls in Bun.
+Swift actions reach it directly; the native build does not mount React ChatPanel.
+`native-chat-shell.ts` is a temporary adapter for workspace/selection context and
+read-only conversation mirrors used by the shared toolbar and history. Layout,
+project/session navigation, settings, inspectors and code panels still use the main
+WKWebView. Removing that web shell remains necessary for a fully React-free native
+application. Electron keeps its existing chat controller and UI.
+
+Native Markdown currently supports inline formatting,
 links, headings and fenced code; full table layout/syntax highlighting and the
 animated cat/sticky user-bubble treatment remain parity work.
 
@@ -250,7 +254,10 @@ project reopens through the existing suspended-project flow. Closing a project
 removes it from the saved list. Existing WebKit workspace storage is used as a
 fallback on the first launch after upgrading.
 
-Native integration checks assert the React chat DOM is absent and exercise Swift
-stream updates, permissions and questions. `PRAXIS_NATIVE_BACKGROUND_TEST=1`
+`bun run test:native-chat-controller` tests the Bun controller without a DOM or React,
+including drafts, queues, stream routing, restores, cancellation, model switches,
+permission/question responses and close/reopen races. Native integration checks
+assert React chat DOM is absent, disable renderer event delivery, and exercise
+Swift Send, queues, stream updates, permissions and questions directly through Bun. `PRAXIS_NATIVE_BACKGROUND_TEST=1`
 explicitly skips real preview input and animation sampling when the test desktop
 is occluded; that mode does not count as full visual/input verification.

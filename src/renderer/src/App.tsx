@@ -13,6 +13,7 @@ import { dispatchBackgroundAgent, dispatchVisualEdit } from './background-edits'
 import { usePreviewReorder } from './use-preview-reorder'
 import { usePreviewResize } from './use-preview-resize'
 import ChatPanel from './components/ChatPanel'
+import NativeChatSurface from './components/NativeChatSurface'
 import CatLoader from './components/CatLoader'
 import ConsolePanel from './components/ConsolePanel'
 import DiagnoseCard from './components/DiagnoseCard'
@@ -1978,7 +1979,7 @@ export default function App(): React.JSX.Element {
                 previewbar are). Absolute + low z-index so it adds no layout and
                 stays below the pinned ask (z 6) and the top fade (z 5). */}
             <div className="chat-drag" aria-hidden="true" />
-            <ChatPanel />
+            {window.praxisNativeChat ? <NativeChatSurface /> : <ChatPanel />}
           </section>
           {!chatHidden && (
             <div

@@ -24,6 +24,8 @@ export const app = Object.assign(new EventEmitter(), {
 })
 type Handler = (event: any, ...args: any[]) => any
 const requests = new Map<string, Handler>()
+/** Trusted in-process observation; preview IPC cannot emit these events. */
+export const serviceEvents = new EventEmitter()
 export const ipcMain = Object.assign(new EventEmitter(), {
   handle(channel: string, handler: Handler) {
     if (requests.has(channel)) throw new Error(`Duplicate native IPC handler: ${channel}`)
@@ -62,7 +64,9 @@ export async function dispatchIPC(view: string, message: any) {
   if (message.type === 'invoke') {
     const handler = requests.get(message.channel)
     if (!handler) throw new Error(`Unsupported native command: ${message.channel}`)
-    return await handler(event, ...args)
+    const result = await handler(event, ...args)
+    serviceEvents.emit('command', message.channel, args, result)
+    return result
   }
   ipcMain.emit(message.channel, event, ...args)
 }
@@ -136,8 +140,10 @@ export class NativeView {
     this.webContents = {
       isDestroyed: () => this.destroyed,
       getURL: () => this.url,
-      send: (channel: string, ...args: unknown[]) =>
-        bridge().send('deliver', { view: id, message: { type: 'event', channel, args } }),
+      send: (channel: string, ...args: unknown[]) => {
+        if (id === 'main') serviceEvents.emit('event', channel, ...args)
+        bridge().send('deliver', { view: id, message: { type: 'event', channel, args } })
+      },
       loadURL: (url: string) => {
         this.url = url
         bridge().send('load', { view: id, url })

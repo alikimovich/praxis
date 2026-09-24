@@ -1061,8 +1061,8 @@ export function registerAgentIpc(
     session.options.model = model
   })
 
-  ipcMain.handle('agent:set-permission-mode', async (_e, mode: PermissionMode) => {
-    const session = activeSession()
+  ipcMain.handle('agent:set-permission-mode', async (_e, mode: PermissionMode, sessionKey?: string) => {
+    const session = sessionKey === undefined ? activeSession() : sessions.get(sessionKey)
     if (!session) return
     // Apply to the backend first; only commit our copy if it took (keeps the
     // toolbar and the live agent in agreement).
@@ -1313,18 +1313,18 @@ export function registerAgentIpc(
   // return the conflicted files + a resolution PROMPT for the renderer to run as a normal
   // turn (its `afterTurn` merges + unparks). If they merged cleanly, `resolveParkedChat`
   // already committed + merged + unparked — nothing more to send (`conflicted: []`).
-  ipcMain.handle('agent:resolve-conflict', async () => {
-    if (!activeKey) return { ok: false, conflicted: [] as string[], error: 'no-session' }
-    const res = await resolveParkedChat(activeKey)
+  ipcMain.handle('agent:resolve-conflict', async (_e, sessionKey = activeKey) => {
+    if (!sessionKey) return { ok: false, conflicted: [] as string[], error: 'no-session' }
+    const res = await resolveParkedChat(sessionKey)
     if (!res.ok || res.conflicted.length === 0) return { ...res, conflicted: res.conflicted }
     const prompt = conflictResolutionPrompt(res.conflicted)
     return { ok: true, conflicted: res.conflicted, prompt }
   })
 
   // v9 conflict card — "Discard changes". Drop the active parked chat's unmerged work.
-  ipcMain.handle('agent:discard-conflict', async () => {
-    if (!activeKey) return { ok: false }
-    return discardParkedChat(activeKey)
+  ipcMain.handle('agent:discard-conflict', async (_e, sessionKey = activeKey) => {
+    if (!sessionKey) return { ok: false }
+    return discardParkedChat(sessionKey)
   })
 
   // PR: push the spawn's branch + open a PR from it (no checkout — the work is already
@@ -1445,18 +1445,18 @@ export function registerAgentIpc(
     return { projects: [...byProject.values()], activeRoot }
   })
 
-  ipcMain.handle('agent:interrupt', async () => {
-    if (activeKey) cancelProjectUi(activeKey)
-    const preparation = activeKey ? preparingTurns.get(activeKey) : undefined
+  ipcMain.handle('agent:interrupt', async (_e, requestedKey?: string) => {
+    const sessionKey = requestedKey === undefined ? activeKey : requestedKey
+    if (sessionKey) cancelProjectUi(sessionKey)
+    const preparation = sessionKey ? preparingTurns.get(sessionKey) : undefined
     if (preparation) preparation.cancelled = true
-    const session = activeSession()
+    const session = sessionKey ? sessions.get(sessionKey) : undefined
     if (!session)
       return // Release any open prompts (interrupt may not abort their per-call signal),
       // so cards don't orphan and the backend callbacks unblock.
     ;[...session.pending.keys()].forEach((id) => resolvePending(session, id, 'deny'))
     if (session.pendingQuestions)
       [...session.pendingQuestions.keys()].forEach((id) => resolveQuestion(session, id, null))
-    const sessionKey = activeKey
     const root = session.root
     // A stop that lands after the turn already finished/aborted makes the SDK
     // throw "Operation aborted" — treat it as the no-op it is.

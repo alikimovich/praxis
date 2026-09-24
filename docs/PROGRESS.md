@@ -2,6 +2,26 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Move native chat behavior into Bun
+
+Native no longer mounts React ChatPanel. A Bun controller owns per-chat drafts,
+attachments, skill completion, streamed messages, queues, model changes and native
+card actions. Swift talks directly to it. Pure provider/settings/setup mappings
+are shared with Electron; workspace context, layout and other panels remain web
+based, so the application is not yet fully React-free. Conversation mirrors are
+sent to the shell only when changed and replayed on renderer reattach.
+
+Stop, permission and conflict operations now accept an explicit session target;
+existing active-chat callers retain their behavior, and browser RPC validates the
+new targets against its repository scope. Closing a chat cancels queued/preparing
+submissions. Fixed AppKit draft revisions when returning to a previously edited chat.
+
+Validation: controller and relevant pure-unit tests, all TypeScript checks, native
+build and background integration. Integration disables renderer event delivery
+while exercising Swift Send, queues, streaming and permission/question replies.
+Inspected the native conversation capture. Background mode explicitly skips real
+preview mouse input and animation sampling. No Electron or live provider tests ran.
+
 ## 2026-09-24 — Render native chat in Swift
 
 Added SwiftUI conversation rendering with selectable inline Markdown, fenced code,

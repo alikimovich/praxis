@@ -6,7 +6,6 @@ export interface NativeChatMessage {
   selection?: { tag: string; ident: string; source: string | null }
   revertGroup?: string
 }
-import type { NativeComposerAction } from './native-composer'
 
 export interface NativeChatCard {
   id: string
@@ -31,8 +30,7 @@ export interface NativeChatState {
 export type NativeChatAction = { chat: string; action: string; id?: string; value?: string; answers?: Record<string, string> | null }
 export interface NativeChatBridge {
   focusComposer: () => void
-  update: (state: NativeChatState & { visible: boolean; bounds: { x: number; y: number; width: number; height: number } }) => void
-  onAction: (callback: (action: NativeChatAction) => void) => () => void
-  onComposer: (callback: (action: NativeComposerAction) => void) => () => void
+  command: (command: import('./native-chat-controller').NativeChatCommand) => void
+  onEffect: (callback: (effect: import('./native-chat-controller').NativeChatEffect) => void) => () => void
 }
 declare global { interface Window { praxisNativeChat?: NativeChatBridge } }
