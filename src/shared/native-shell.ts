@@ -2,6 +2,7 @@
 export interface NativeShellRow {
   id: string
   title: string
+  icon?: string
   kind: 'project' | 'chat' | 'history'
   project: string
   session?: string

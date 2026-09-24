@@ -58,6 +58,17 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   if (!shell.publishStandard || shell.toolbar.at(-1) !== 'publish' || !shell.sidebarAutohidesScrollers) throw new Error('Native primary action or scroller configuration is incorrect')
   if (!shell.sidebarContainsTrafficLights || shell.sidebarListTop > shell.contentTop || shell.detailTop > shell.contentTop + 1)
     throw new Error(`Native sidebar must extend behind traffic lights while content stays below toolbar: ${JSON.stringify(shell)}`)
+  for (let i = 0; !(await host.request('shellInspect')).projectIconCount && i < 40; i++) await new Promise(resolve => setTimeout(resolve, 100))
+  const projectLayout = await host.request('shellInspect')
+  if (!projectLayout.projectIconCount || projectLayout.outlineWidth > projectLayout.outlineClipWidth + 1)
+    throw new Error(`Project favicon or sidebar fit failed: ${JSON.stringify(projectLayout)}`)
+  for (const width of [180, 300, 230]) {
+    await host.request('shellPerform', { action: 'sidebar-width', row: String(width) })
+    await new Promise(resolve => setTimeout(resolve, 150))
+    const layout = await host.request('shellInspect')
+    if (layout.outlineWidth > layout.outlineClipWidth + 1 || layout.projectMoreRightEdges.some((right: number) => right > layout.outlineClipWidth))
+      throw new Error(`Project actions clipped at sidebar width ${width}: ${JSON.stringify(layout)}`)
+  }
   const checkChatAlignment = async () => {
     let geometry: any
     for (let i = 0; i < 30; i++) {

@@ -2,6 +2,24 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Sidebar row fit and project favicons
+
+The source-list document could remain wider than its scroll viewport, clipping
+selection highlights and the trailing More control. A native scroll-view subclass
+now fits document/column width when the viewport changes. Project text can
+compress instead of displacing its controls. Native rows receive project icons
+from the same cached resolver as the React rail, decode data-URI images including
+SVG, and retain a folder fallback for absent/unreadable icons.
+
+Added native integration checks for an SVG fixture and row/action bounds at
+sidebar divider widths 180, 300 and 230. Full-app attempts failed before UI load
+with the existing WebKit startup unsupported-result error. Independently compiled
+and ran the actual AppKit shell: SVG decoding succeeded; document widths matched
+viewports (180, 292, 222), and More ended 20 points inside each viewport. Inspected
+a capture, with the existing offscreen compositing limits. Native build, all four
+typechecks, project-icon unit tests, docs-links and whitespace checks passed.
+No Electron tests ran.
+
 ## 2026-09-23 — Select Object beside device switching
 
 Moved Select Object from the composer attachment menu into a native toolbar

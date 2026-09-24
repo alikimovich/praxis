@@ -20,3 +20,22 @@ final class ProjectCell: NSTableCellView {
     private func updateVisibility() { more.alphaValue = hovered || selected || backgroundStyle == .emphasized ? 1 : 0 }
 }
 
+
+/// Keep the source-list document and column inside their actual clip viewport.
+final class ProjectScrollView: NSScrollView {
+    override func tile() {
+        super.tile()
+        fitRows()
+    }
+    override func layout() {
+        super.layout()
+        fitRows()
+    }
+    private func fitRows() {
+        guard let table = documentView as? NSTableView, contentSize.width > 0 else { return }
+        if abs(table.frame.width - contentSize.width) > 0.5 {
+            table.setFrameSize(NSSize(width: contentSize.width, height: table.frame.height))
+            table.sizeLastColumnToFit()
+        }
+    }
+}

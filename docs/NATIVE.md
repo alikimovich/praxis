@@ -25,7 +25,10 @@ binary is loaded by the native backend; Bun itself remains a local prerequisite.
 The macOS shell uses a standard `NSOutlineView` sidebar, `NSSplitViewController`
 divider and `NSToolbar` items with system symbols and appearance. The open sidebar
 extends through the titlebar behind the system traffic lights; its list and the
-WebKit content respect the toolbar safe area. The sidebar lists projects only.
+WebKit content respect the toolbar safe area. The sidebar lists projects only. Its outline is fitted to the scroll viewport so
+row highlights and trailing actions remain inside the sidebar when resized.
+Project rows use the shared project-favicon lookup (including SVG), falling back
+to the system folder icon if an image is missing or cannot be decoded.
 A More menu on each hovered or selected project offers Project Memory and Close
 Project; right-click provides the same actions. The toolbar follows the columns:
 a Projects menu (New Project/Open Project) and sidebar toggle above the sidebar;

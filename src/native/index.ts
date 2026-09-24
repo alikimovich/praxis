@@ -56,6 +56,7 @@ async function main() {
   const fixture = testDir ? join(testDir, 'project') : null
   if (fixture) {
     mkdirSync(fixture)
+    writeFileSync(join(fixture, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="red"/></svg>')
     writeFileSync(
       join(fixture, 'index.html'),
       '<!doctype html>\n<html><body>\n<h1 id="native-title" data-praxis-source="index.html:3:1">Native Praxis fixture</h1>\n<p>Bun owns this server.</p></body></html>'

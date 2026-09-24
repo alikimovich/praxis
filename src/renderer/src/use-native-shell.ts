@@ -15,6 +15,7 @@ import {
   useWorkspace
 } from './store'
 import './native-shell.css'
+import { useProjectIcons } from './project-icons'
 
 interface Actions {
   preview: Pick<
@@ -66,6 +67,7 @@ export function useNativeShell(actions: Actions) {
         id: `project:${p.key}`,
         project: p.key,
         title: p.name,
+        icon: useProjectIcons.getState().byKey[p.key]?.dataUrl,
         kind: 'project',
         children: [
           ...(p.sessionKeys ?? [p.key]).map((session) => ({
@@ -149,6 +151,7 @@ export function useNativeShell(actions: Actions) {
     refresh.current = observeChat
     const unsubs = [
       useWorkspace.subscribe(schedule),
+      useProjectIcons.subscribe(schedule),
       useChat.subscribe(schedule),
       useHistory.subscribe(schedule),
       useSelection.subscribe(schedule),

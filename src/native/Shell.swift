@@ -12,11 +12,17 @@ final class ChatToolbarView: NSView {
 final class ShellRow: NSObject {
     let id: String, title: String, kind: String, project: String
     let running: Bool
+    let icon: NSImage?
     let children: [ShellRow]
     init(_ data: [String: Any]) {
         id = data["id"] as? String ?? ""; title = data["title"] as? String ?? ""
         kind = data["kind"] as? String ?? "chat"; project = data["project"] as? String ?? ""
         running = data["running"] as? Bool ?? false
+        if let uri = data["icon"] as? String, uri.hasPrefix("data:image/"), let comma = uri.firstIndex(of: ",") {
+            let body = String(uri[uri.index(after: comma)...])
+            let bytes = uri[..<comma].contains(";base64") ? Data(base64Encoded: body) : body.removingPercentEncoding?.data(using: .utf8)
+            icon = bytes.flatMap { NSImage(data: $0) }
+        } else { icon = nil }
         children = (data["children"] as? [[String: Any]] ?? []).map(ShellRow.init)
     }
 }
@@ -68,7 +74,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         outline.dataSource = self; outline.delegate = self
         outline.setAccessibilityLabel("Projects")
         let menu = NSMenu(); menu.delegate = self; outline.menu = menu
-        let scroll = NSScrollView(); scroll.documentView = outline; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay
+        let scroll = ProjectScrollView(); scroll.documentView = outline; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay
         scroll.drawsBackground = false
         let sidebarContainer = NSView()
         let settings = NSButton(title: "", target: self, action: #selector(sidebarAction(_:)))
@@ -370,7 +376,9 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         text.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
         text.lineBreakMode = .byTruncatingTail
         let symbol = row.kind == "project" ? "folder" : row.kind == "history" ? "clock" : "bubble.left"
-        let icon = NSImageView(image: NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!)
+        let icon = NSImageView(image: row.icon ?? NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!)
+        icon.imageScaling = .scaleProportionallyDown
+        text.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let more = cell.more
         more.bezelStyle = .inline; more.setAccessibilityLabel("Actions for " + row.title)
         (more.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
@@ -421,11 +429,18 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
          "sidebarListTop":outline.enclosingScrollView.map { $0.convert($0.bounds, to: nil).maxY } ?? 0,
          "rows":allRows.map { ["id":$0.id, "title":$0.title, "kind":$0.kind] }, "selected":selectedID ?? "", "sidebarCollapsed":sidebarItem.isCollapsed,
          "sidebarWidth":sidebar.view.bounds.width, "detailWidth":split.splitViewItems[1].viewController.view.bounds.width,
-         "outlineRows":outline.numberOfRows, "outlineWidth":outline.bounds.width,
+         "projectMoreRightEdges":(0..<outline.numberOfRows).compactMap { index -> CGFloat? in
+             guard let cell = outline.view(atColumn: 0, row: index, makeIfNecessary: true) as? ProjectCell, let clip = outline.enclosingScrollView?.contentView else { return nil }
+             cell.layoutSubtreeIfNeeded()
+             return cell.more.convert(cell.more.bounds, to: clip).maxX
+         }, "projectIconCount":rows.filter { $0.icon != nil }.count, "outlineClipWidth":outline.enclosingScrollView?.contentSize.width ?? 0, "outlineRows":outline.numberOfRows, "outlineWidth":outline.bounds.width,
          "toolbar":toolbar.items.map { $0.itemIdentifier.rawValue }, "branch":previewState["branch"] ?? "", "publishLabel":previewState["publishLabel"] ?? "", "codeOpen":previewState["codeOpen"] ?? false,
          "address":previewAddress, "domain":address.stringValue, "viewport":previewState["viewport"] ?? "", "publishStandard":toolbarItems["publish"]?.view == nil, "toolGroup":(toolbar.items.first(where: { $0.itemIdentifier.rawValue == "tools" }) as? NSToolbarItemGroup)?.subitems.map { $0.itemIdentifier.rawValue } ?? [], "sidebarAutohidesScrollers":(outline.enclosingScrollView?.autohidesScrollers ?? false), "sidebarActions":["new-project", "open-project", "settings"], "chatActions":["history", "new-chat"], "historyIDs":chatHistory.menu?.items.compactMap { ($0.representedObject as? [String:String])?["id"] } ?? [], "chatTitle":chatTitle.stringValue, "chatTitlePlain":toolbarItems["chat"]?.action == nil, "chatHeaderWidth":chatHeader.bounds.width, "chatHeaderTrailing":chatHeader.convert(NSPoint(x: chatHeader.bounds.maxX, y: 0), to: nil).x, "detailLeading":split.splitViewItems[1].viewController.view.convert(.zero, to: nil).x, "chatWidth":previewState["chatWidth"] ?? 0, "enabled":toolbarItems.mapValues { $0.isEnabled }]
     }
     func perform(_ action: String, id: String?) -> Bool {
+        if action == "sidebar-width", let id, let width = Double(id), (180...340).contains(width) {
+            split.splitView.setPosition(width, ofDividerAt: 0); split.view.layoutSubtreeIfNeeded(); return true
+        }
         if action == "toggle-sidebar" {
             // No animation in the pipe test: an occluded/locked desktop can pause
             // AppKit animations even though the collapsed state already changed.

@@ -26,6 +26,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Move native composer selectors below the glass form and use a smaller standard Send arrow inside it.
 - [x] Use a plain left-hand plus, text-only selectors capped at 60 points, and a smaller empty native form.
 - [x] Move Select Object from the composer menu into the native toolbar group with desktop/mobile.
+- [x] Fit native project rows and hover actions inside the sidebar and display available project favicons.
 - [ ] Native composer polish: image thumbnails and attachment error feedback; verify pointer interaction and IME on an unlocked desktop.
 - [ ] Native sidebar parity: inline rename, manual ordering and background-agent rows.
 - [ ] Native parity: shared-profile migration/coordination, app-shell HMR, updater/relaunch, browser permission and download handling.
