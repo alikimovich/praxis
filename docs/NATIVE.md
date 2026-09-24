@@ -35,8 +35,8 @@ using native Liquid Glass on macOS 26 and a circular system bezel on older macOS
 tracks the web pane’s measured width, including resizing and sidebar collapse,
 and compacts when the preview is expanded. History lists the current project’s
 open and saved chats, marks the active chat, and uses the existing switch/review
-handlers. The preview section provides the current branch menu,
-Home and the editable preview address. Desktop/mobile is a separate button;
+handlers. The preview section stacks the editable domain above a smaller, muted
+branch menu, without a separate Home button. Desktop/mobile is a separate button;
 Code, Layers and Expand/Restore form one native toolbar group. Publish/Create PR
 (or Connect to GitHub) is a separate standard native button at the far right,
 retaining its PR/merge mode menu.
@@ -46,7 +46,8 @@ native sidebar; restoring returns the sidebar to its previous collapsed state.
 The running web preview header is hidden only in the native build; startup/error
 status remains visible. The address follows preview navigation without replacing
 an edit in progress. Enter navigates within the project origin, Escape restores
-the current URL, and Home returns to the project's base URL. The device toggle is
+the current URL. The idle field shows host/port; focusing reveals the full URL,
+and entering `/` navigates to the origin root. The device toggle is
 disabled for simulator projects.
 
 Sidebar and composer scroll views use auto-hiding overlay scrollers. The empty
@@ -137,7 +138,7 @@ The native check also exercises undo/redo, registered media-file delivery and
 opening the shared code editor in a separate native window.
 It opens the project through the actual AppKit sidebar, switches between real
 chat sessions through the native History menu, checks toolbar ordering, code visibility,
-expand/restore, address/Home navigation, desktop/mobile, primary Publish placement,
+expand/restore, address/root navigation, desktop/mobile, separate Publish placement,
 publish-mode selection, automatic scrollers and sidebar
 collapse, verifies native text/draft restoration, file/image attachment add/remove,
 permission changes, slash completion and modal visibility, and

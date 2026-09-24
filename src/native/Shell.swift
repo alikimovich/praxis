@@ -39,7 +39,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     var toolbar: NSToolbar!
     weak var window: NSWindow?
     private var toolbarItems: [String: NSToolbarItem] = [:]
-    private let items = ["projects", "chat", "branch", "home", "address", "device", "tools", "code", "layers", "expand", "publish"]
+    private let items = ["projects", "chat", "address", "device", "tools", "code", "layers", "expand", "publish"]
     private let labels = ["layers":"Show Layers", "home":"Back to Project", "address":"Preview Address", "device":"Switch to Mobile", "branch":"Branch", "publish":"Publish", "code":"Show Code", "expand":"Expand Preview"]
     private let symbols = ["layers":"square.3.layers.3d", "home":"house", "device":"iphone", "branch":"arrow.triangle.branch", "publish":"arrow.up.circle", "code":"chevron.left.forwardslash.chevron.right", "expand":"arrow.up.left.and.arrow.down.right"]
     private var sidebarButtons: [String: NSButton] = [:]
@@ -50,6 +50,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     private let chatHistory = NSPopUpButton(frame: .zero, pullsDown: true)
     private var chatHeaderWidth: NSLayoutConstraint!
     private let address = NSTextField()
+    private let branchMenu = NSPopUpButton(frame: .zero, pullsDown: true)
 
     init(window: NSWindow, canvas: NSView) {
         contentCanvas = canvas
@@ -136,7 +137,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         [.toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .space] + items.map { NSToolbarItem.Identifier($0) }
     }
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [NSToolbarItem.Identifier("projects"), .toggleSidebar, .sidebarTrackingSeparator, NSToolbarItem.Identifier("chat"), NSToolbarItem.Identifier("branch"), NSToolbarItem.Identifier("home"), NSToolbarItem.Identifier("address"), .flexibleSpace,
+        [NSToolbarItem.Identifier("projects"), .toggleSidebar, .sidebarTrackingSeparator, NSToolbarItem.Identifier("chat"), NSToolbarItem.Identifier("address"), .flexibleSpace,
          NSToolbarItem.Identifier("device"), .space, NSToolbarItem.Identifier("tools"), .space, NSToolbarItem.Identifier("publish")]
     }
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar: Bool) -> NSToolbarItem? {
@@ -155,7 +156,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         item.label = labels[key] ?? key; item.paletteLabel = item.label; item.toolTip = item.label
         item.image = NSImage(systemSymbolName: symbols[key] ?? "circle", accessibilityDescription: item.label)
         // Menu-only items let AppKit open the menu from the entire control.
-        if !["branch", "projects", "chat"].contains(key) { item.target = self; item.action = #selector(toolbarAction(_:)) }
+        if !["branch", "projects", "chat", "address"].contains(key) { item.target = self; item.action = #selector(toolbarAction(_:)) }
         if key == "projects", let menuItem = item as? NSMenuToolbarItem {
             menuItem.label = "Projects"; menuItem.toolTip = "Projects"
             menuItem.image = NSImage(systemSymbolName: "folder.badge.plus", accessibilityDescription: "Projects")
@@ -188,14 +189,20 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             ])
             item.view = chatHeader; item.isBordered = false; item.visibilityPriority = .high
         } else if key == "address" {
-            address.frame = NSRect(x: 0, y: 0, width: 280, height: 26)
-            address.placeholderString = "Preview address"; address.setAccessibilityLabel("Preview address")
-            address.font = .systemFont(ofSize: NSFont.smallSystemFontSize); address.lineBreakMode = .byTruncatingMiddle
+            address.placeholderString = "Preview"; address.setAccessibilityLabel("Preview address")
+            address.font = .boldSystemFont(ofSize: NSFont.systemFontSize); address.lineBreakMode = .byTruncatingMiddle
+            address.isBordered = false; address.drawsBackground = false
             address.delegate = self; address.target = self; address.action = #selector(navigateAddress(_:))
-            address.translatesAutoresizingMaskIntoConstraints = false
-            let preferredWidth = address.widthAnchor.constraint(equalToConstant: 280); preferredWidth.priority = .defaultLow
-            NSLayoutConstraint.activate([address.widthAnchor.constraint(greaterThanOrEqualToConstant: 160), address.widthAnchor.constraint(lessThanOrEqualToConstant: 420), address.heightAnchor.constraint(equalToConstant: 26), preferredWidth])
-            item.view = address
+            branchMenu.isBordered = false; branchMenu.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+            branchMenu.setAccessibilityLabel("Branch"); branchMenu.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            branchMenu.cell?.lineBreakMode = .byTruncatingMiddle
+            let header = NSStackView(views: [address, branchMenu]); header.orientation = .vertical; header.alignment = .leading; header.spacing = 0
+            header.translatesAutoresizingMaskIntoConstraints = false
+            address.translatesAutoresizingMaskIntoConstraints = false; branchMenu.translatesAutoresizingMaskIntoConstraints = false
+            let width = header.widthAnchor.constraint(equalToConstant: 240); width.priority = .defaultLow
+            NSLayoutConstraint.activate([header.widthAnchor.constraint(greaterThanOrEqualToConstant: 120), header.widthAnchor.constraint(lessThanOrEqualToConstant: 320), width,
+                address.widthAnchor.constraint(equalTo: header.widthAnchor), branchMenu.widthAnchor.constraint(lessThanOrEqualTo: header.widthAnchor)])
+            item.view = header; item.isBordered = false
         } else if key == "publish" {
             item.image = nil
             item.isBordered = true; item.visibilityPriority = .high
@@ -208,11 +215,26 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         let value = address.stringValue
         window?.makeFirstResponder(nil)
         emit(["event":"shell-action", "action":"address", "value":value])
-        address.stringValue = previewState["previewURL"] as? String ?? previewState["previewBase"] as? String ?? ""
+        showAddress()
+    }
+    private var previewAddress: String { previewState["previewURL"] as? String ?? previewState["previewBase"] as? String ?? "" }
+    private func showAddress() {
+        let url = URL(string: previewAddress)
+        address.stringValue = url?.host.map { $0 + (url?.port.map { ":\($0)" } ?? "") } ?? ""
+        address.toolTip = previewAddress
+    }
+    func controlTextDidBeginEditing(_ notification: Notification) {
+        guard let editor = address.currentEditor() else { return }
+        editor.string = previewAddress; editor.selectAll(nil)
+    }
+    func controlTextDidEndEditing(_ notification: Notification) {
+        DispatchQueue.main.async { [weak self] in
+            if self?.address.currentEditor() == nil { self?.showAddress() }
+        }
     }
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
-            address.stringValue = previewState["previewURL"] as? String ?? previewState["previewBase"] as? String ?? ""
+            showAddress()
             window?.makeFirstResponder(nil); return true
         }
         return false
@@ -267,14 +289,15 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         }
         chatHistory.menu = chatMenu; chatHistory.isEnabled = currentProject != nil && chatMenu.items.count > 1
         address.isEnabled = ready
-        if address.currentEditor() == nil { address.stringValue = previewState["previewURL"] as? String ?? previewState["previewBase"] as? String ?? "" }
+        if address.currentEditor() == nil { showAddress() }
         toolbarItems["device"]?.isEnabled = previewState["deviceEnabled"] as? Bool ?? false
         let mobile = previewState["viewport"] as? String == "mobile"
         toolbarItems["device"]?.label = mobile ? "Switch to Desktop" : "Switch to Mobile"
         toolbarItems["device"]?.toolTip = toolbarItems["device"]?.label
         toolbarItems["device"]?.image = NSImage(systemSymbolName: mobile ? "desktopcomputer" : "iphone", accessibilityDescription: toolbarItems["device"]?.label)
-        if let item = toolbarItems["branch"] as? NSMenuToolbarItem {
-            item.title = previewState["branch"] as? String ?? "Branch"; item.toolTip = item.title
+        do {
+            let title = previewState["branch"] as? String ?? "Branch"
+            branchMenu.toolTip = title; branchMenu.isEnabled = previewState["branch"] is String
             let menu = NSMenu(); menu.autoenablesItems = false
             func add(_ title: String, _ action: String, _ value: String = "") {
                 let entry = NSMenuItem(title: title, action: #selector(previewMenuAction(_:)), keyEquivalent: ""); entry.target = self
@@ -284,7 +307,10 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             }
             add("Git Updates…", "git-updates"); menu.addItem(.separator())
             for branch in previewState["branches"] as? [String] ?? [] { add(branch, "branch", branch) }
-            menu.addItem(.separator()); add("New Branch…", "new-branch"); item.menu = menu
+            menu.addItem(.separator()); add("New Branch…", "new-branch")
+            menu.insertItem(withTitle: title, action: nil, keyEquivalent: "", at: 0)
+            menu.items.first?.attributedTitle = NSAttributedString(string: title, attributes: [.foregroundColor:NSColor.secondaryLabelColor, .font:NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)])
+            branchMenu.menu = menu
         }
         if let item = toolbarItems["publish"] as? NSMenuToolbarItem {
             item.title = previewState["publishLabel"] as? String ?? "Publish"; item.label = item.title; item.toolTip = item.title
@@ -393,7 +419,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
          "sidebarWidth":sidebar.view.bounds.width, "detailWidth":split.splitViewItems[1].viewController.view.bounds.width,
          "outlineRows":outline.numberOfRows, "outlineWidth":outline.bounds.width,
          "toolbar":toolbar.items.map { $0.itemIdentifier.rawValue }, "branch":previewState["branch"] ?? "", "publishLabel":previewState["publishLabel"] ?? "", "codeOpen":previewState["codeOpen"] ?? false,
-         "address":address.stringValue, "viewport":previewState["viewport"] ?? "", "publishStandard":toolbarItems["publish"]?.view == nil, "toolGroup":(toolbar.items.first(where: { $0.itemIdentifier.rawValue == "tools" }) as? NSToolbarItemGroup)?.subitems.map { $0.itemIdentifier.rawValue } ?? [], "sidebarAutohidesScrollers":(outline.enclosingScrollView?.autohidesScrollers ?? false), "sidebarActions":["new-project", "open-project", "settings"], "chatActions":["history", "new-chat"], "historyIDs":chatHistory.menu?.items.compactMap { ($0.representedObject as? [String:String])?["id"] } ?? [], "chatTitle":chatTitle.stringValue, "chatTitlePlain":toolbarItems["chat"]?.action == nil, "chatHeaderWidth":chatHeader.bounds.width, "chatHeaderTrailing":chatHeader.convert(NSPoint(x: chatHeader.bounds.maxX, y: 0), to: nil).x, "detailLeading":split.splitViewItems[1].viewController.view.convert(.zero, to: nil).x, "chatWidth":previewState["chatWidth"] ?? 0, "enabled":toolbarItems.mapValues { $0.isEnabled }]
+         "address":previewAddress, "domain":address.stringValue, "viewport":previewState["viewport"] ?? "", "publishStandard":toolbarItems["publish"]?.view == nil, "toolGroup":(toolbar.items.first(where: { $0.itemIdentifier.rawValue == "tools" }) as? NSToolbarItemGroup)?.subitems.map { $0.itemIdentifier.rawValue } ?? [], "sidebarAutohidesScrollers":(outline.enclosingScrollView?.autohidesScrollers ?? false), "sidebarActions":["new-project", "open-project", "settings"], "chatActions":["history", "new-chat"], "historyIDs":chatHistory.menu?.items.compactMap { ($0.representedObject as? [String:String])?["id"] } ?? [], "chatTitle":chatTitle.stringValue, "chatTitlePlain":toolbarItems["chat"]?.action == nil, "chatHeaderWidth":chatHeader.bounds.width, "chatHeaderTrailing":chatHeader.convert(NSPoint(x: chatHeader.bounds.maxX, y: 0), to: nil).x, "detailLeading":split.splitViewItems[1].viewController.view.convert(.zero, to: nil).x, "chatWidth":previewState["chatWidth"] ?? 0, "enabled":toolbarItems.mapValues { $0.isEnabled }]
     }
     func perform(_ action: String, id: String?) -> Bool {
         if action == "toggle-sidebar" {
@@ -413,7 +439,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
            let entry = menu.items.first(where: { ($0.representedObject as? [String: String])?["action"] == action }) { contextAction(entry); return true }
         if action == "address", let value = id { address.stringValue = value; navigateAddress(nil); return true }
         if ["branch", "publish-mode"].contains(action), let value = id,
-           let menu = (toolbarItems[action == "branch" ? "branch" : "publish"] as? NSMenuToolbarItem)?.menu,
+           let menu = action == "branch" ? branchMenu.menu : (toolbarItems["publish"] as? NSMenuToolbarItem)?.menu,
            let entry = menu.items.first(where: { ($0.representedObject as? [String: String])?["value"] == value && ($0.representedObject as? [String: String])?["action"] == action }), entry.isEnabled {
             previewMenuAction(entry); return true
         }

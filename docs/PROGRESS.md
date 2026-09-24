@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Domain and branch header
+
+Replaced the separate branch pill and address field with a plain two-line native
+header: bold preview host/port above a smaller muted branch menu. Removed Home.
+The address reveals the full URL on editing, preserves existing origin-scoped
+navigation, and returns to its compact domain display afterward. The branch menu
+retains branch switching, Git Updates and New Branch. Entering `/` returns to the
+preview origin root.
+
+Native build/integration passed twice, including domain display, toolbar order,
+query/hash and root navigation plus existing native flows. All four typechecks,
+docs-links and whitespace checks passed. Inspected the toolbar capture with the
+existing offscreen compositing limits. No Electron tests ran.
+
 ## 2026-09-23 — Terminal cleanup and transparent native chat
 
 Identified and stopped the orphaned lkmv.ch dev-server process group listening on

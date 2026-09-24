@@ -22,6 +22,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Replace the native slash dropdown with a visible skill list above the composer, including descriptions and keyboard completion.
 - [x] Separate the native device button, group Code/Layers/Expand, and use a standard standalone Publish button.
 - [x] Clean up native managed servers on terminal hangup and expose the native window surface through transparent WebKit/chat layers.
+- [x] Stack the branch menu below the editable preview domain and remove the native Home button.
 - [ ] Native composer polish: image thumbnails and attachment error feedback; verify pointer interaction and IME on an unlocked desktop.
 - [ ] Native sidebar parity: inline rename, manual ordering and background-agent rows.
 - [ ] Native parity: shared-profile migration/coordination, app-shell HMR, updater/relaunch, browser permission and download handling.
