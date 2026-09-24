@@ -1,5 +1,17 @@
 # Running and improving tests
 
+## Native development
+
+For native-runtime work, run `bun run typecheck`, `bun run typecheck:native`, and
+`bun run test:native`; add relevant pure-unit tests as needed. The native test
+builds the Bun/Swift/WebKit app directly and does not build or launch Electron.
+Do not run the Electron or full regression suites for native work, including
+shared-renderer changes made for native mode. Electron tests are reserved for
+work explicitly targeting Electron or an explicit user request. Authorized live
+provider verification uses `test:native-live` separately.
+
+## Full suites
+
 `bun run test` runs unit and Electron tiers. `bun run verify` adds live tests.
 The desktop tier also includes `native-runtime` on macOS with Swift installed;
 it skips on other platforms or without that toolchain. `native-runtime-live` is

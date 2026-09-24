@@ -32,3 +32,10 @@ html.native-shell .chat__scroll::-webkit-scrollbar { width: 6px; }
 html.native-shell .chat__scroll::-webkit-scrollbar-track { background: transparent; }
 html.native-shell .chat__scroll::-webkit-scrollbar-thumb { border-width: 1px; }
 html.native-shell .pane--chat { --chat-scrollbar-width: 6px; }
+
+/* Use the content surface behind chat, not the Electron shell's gray fill.
+   Rebind --bg here so the status fade and scrollbar edges match in both themes. */
+html.native-shell .pane--chat {
+  --bg: var(--background);
+  background: var(--bg);
+}

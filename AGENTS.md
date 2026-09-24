@@ -67,9 +67,15 @@ UI tests and live tests are exclusive. Use `--serial` for diagnosis, and read
 `docs/TESTING.md` before marking a test parallel-safe. Logs and JSON reports are
 in `test/artifacts/runs/`; SKIP is separate from PASS.
 
-While iterating, run targeted `test:<name>` scripts; before declaring a chunk
-done, run `bun run typecheck && bun run test` (and `verify` when agent/sim
-behavior changed). Note: the preview is a native `WebContentsView` — a
+While iterating, run targeted `test:<name>` scripts.
+**For native-runtime work, do not run Electron tests or the full `bun run test` /
+`verify` suites.** Use `bun run typecheck`, `bun run typecheck:native` and
+`bun run test:native`, plus relevant pure-unit tests when needed. Use the native
+live test only when provider behavior needs validation and the call is authorized.
+This applies to shared renderer files changed for native behavior too. Run Electron
+tests only for work explicitly targeting Electron or when the user requests them.
+For other work, before declaring a chunk done, run `bun run typecheck && bun run test`
+(and `verify` when agent/sim behavior changed). Note: the preview is a native `WebContentsView` — a
 separate CDP target that does NOT appear in renderer screenshots; capture it
 with `capturePage()` or read its URL via
 `electronApp.evaluate(({webContents}) => ...)`.

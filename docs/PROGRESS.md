@@ -2,6 +2,17 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Remove native chat's gray fill
+
+Scoped the native chat pane to the existing theme content-background token,
+replacing the inherited Electron shell gray. Rebound its local `--bg` token so
+the status fade and scrollbar edges match the new surface in light and dark mode.
+The Liquid Glass composer and Electron appearance retain their existing styling.
+Native integration/build and all four typechecks passed. Updated AGENTS and TESTING
+per the user's preference: native work uses native checks and relevant unit tests,
+without running Electron suites, including when native changes touch shared UI.
+No Electron tests ran for this change.
+
 ## 2026-09-23 — Native navigation and automatic scrollbars
 
 Moved Home, the editable preview address and desktop/mobile switching into the
