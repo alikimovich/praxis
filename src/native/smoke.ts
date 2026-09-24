@@ -44,6 +44,8 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
       `Native sidebar or toolbar state did not follow project opening: ${JSON.stringify(shell)}`
     )
   if (shell.toolbar.filter((id: string) => ['branch', 'home', 'address', 'device', 'code', 'expand', 'publish'].includes(id)).join(',') !== 'branch,home,address,device,code,expand,publish' || shell.toolbar[0] !== 'projects' || !shell.toolbar[1].includes('ToggleSidebar')) throw new Error(`Unexpected native toolbar: ${JSON.stringify(shell.toolbar)}`)
+  if (shell.outlineRows !== shell.rows.filter((row: any) => row.kind === 'project').length || !shell.chatTitlePlain || shell.chatActions.join(',') !== 'history,new-chat')
+    throw new Error('Native project-only sidebar or chat header is incorrect')
   if (!shell.projectsMenuOnly) throw new Error("Projects must open its menu from the whole button")
   if (!shell.publishPrimary || shell.toolbar.at(-1) !== 'publish' || !shell.sidebarAutohidesScrollers) throw new Error('Native primary action or scroller configuration is incorrect')
   if (!shell.sidebarContainsTrafficLights || shell.sidebarListTop > shell.contentTop || shell.detailTop > shell.contentTop + 1)
@@ -117,13 +119,13 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     return result.sessionKey;
   })()`)
   await new Promise((resolve) => setTimeout(resolve, 150))
-  if (!(await host.request('shellPerform', { action: 'select-row', row: `chat:${added}` })))
-    throw new Error('Native chat row not selectable')
+  if (!(await host.request('shellPerform', { action: 'history-select', row: `chat:${added}` })))
+    throw new Error('Native chat history entry not selectable')
   await wait(
     `window.__praxisWorkspace.getState().projects.some(p=>p.activeSessionKey===${JSON.stringify(added)})`
   )
   await waitComposer(state => state.chat === added && state.text === '')
-  await host.request('shellPerform', { action: 'select-row', row: originalChat })
+  await host.request('shellPerform', { action: 'history-select', row: originalChat })
   await wait(
     `window.__praxisWorkspace.getState().projects.some(p=>'chat:'+p.activeSessionKey===${JSON.stringify(originalChat)})`
   )

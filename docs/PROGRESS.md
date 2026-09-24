@@ -2,6 +2,25 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Project sidebar and chat history toolbar
+
+The native sidebar now lists projects only, selecting the active project rather
+than its chat. Each row has a hover More menu with Project Memory and Close
+Project; it also stays visible on the selected row, and right-click offers the
+same actions. The outline uses standard column autosizing with no tree indentation. Chat rows remain in the transport snapshot for history and routing.
+
+The chat header has a plain, non-actionable title on the left and History then
+New Chat on the right. History lists the current project’s open and saved chats,
+marks the active chat, and reuses the existing switch/review handlers. Removed
+the old header options menu. Native integration verifies project-only row counts,
+header configuration, and history-based chat switching with draft restoration,
+plus existing native flows on the first run. The final build, all four typechecks,
+docs-links and whitespace checks passed. Follow-up integration runs after row
+sizing/selected-row visibility adjustments failed before UI initialization with
+the known WebKit unsupported-result startup error; those final adjustments were
+not verified end to end. No Electron tests ran. Offscreen captures retain the
+existing glass/WebKit compositing limitations.
+
 ## 2026-09-23 — Projects button opens from its icon
 
 Removed the generic toolbar action from the Projects NSMenuToolbarItem. AppKit

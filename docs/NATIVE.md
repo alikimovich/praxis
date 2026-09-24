@@ -25,15 +25,16 @@ binary is loaded by the native backend; Bun itself remains a local prerequisite.
 The macOS shell uses a standard `NSOutlineView` sidebar, `NSSplitViewController`
 divider and `NSToolbar` items with system symbols and appearance. The open sidebar
 extends through the titlebar behind the system traffic lights; its list and the
-WebKit content respect the toolbar safe area. Projects expand
-to live and previous chats. Native selection switches projects/chats; context
-menus offer new chat, project memory and closing. The toolbar follows the columns:
+WebKit content respect the toolbar safe area. The sidebar lists projects only.
+A More menu on each hovered or selected project offers Project Memory and Close
+Project; right-click provides the same actions. The toolbar follows the columns:
 a Projects menu (New Project/Open Project) and sidebar toggle above the sidebar;
-the current chat title, New Chat and chat options above the chat; preview actions
+the plain current chat title on the left, History and New Chat on the right; preview actions
 above the preview. Settings stays at the bottom of the sidebar. The chat header
 tracks the web pane’s measured width, including resizing and sidebar collapse,
-and compacts when the preview is expanded. Chat options offer Project Memory and
-Close Chat. The preview section provides the current branch menu,
+and compacts when the preview is expanded. History lists the current project’s
+open and saved chats, marks the active chat, and uses the existing switch/review
+handlers. The preview section provides the current branch menu,
 Home, editable preview address, desktop/mobile, Show/Hide Code and Expand/Restore
 Preview. Publish/Create PR (or Connect to GitHub) is an accent-colored native button
 at the far right, with its mode menu beside it.
@@ -126,7 +127,7 @@ PNG artifacts are written under `test/artifacts/native/`.
 The native check also exercises undo/redo, registered media-file delivery and
 opening the shared code editor in a separate native window.
 It opens the project through the actual AppKit sidebar, switches between real
-chat sessions through the outline view, checks toolbar ordering, code visibility,
+chat sessions through the native History menu, checks toolbar ordering, code visibility,
 expand/restore, address/Home navigation, desktop/mobile, primary Publish placement,
 publish-mode selection, automatic scrollers and sidebar
 collapse, verifies native text/draft restoration, file/image attachment add/remove,

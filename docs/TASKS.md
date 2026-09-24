@@ -16,6 +16,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Align native toolbar actions with the sidebar, chat and preview columns, following chat resizing and sidebar collapse.
 - [x] Extend the open native sidebar through the titlebar to include the traffic lights, keeping content below the toolbar.
 - [x] Make the entire Projects toolbar button open its menu, including the folder icon.
+- [x] Show projects only in the native sidebar with hover actions; move chat history beside the plain chat title and New Chat button.
 - [ ] Native composer polish: image thumbnails, richer slash suggestions and attachment error feedback; verify pointer interaction and IME on an unlocked desktop.
 - [ ] Native sidebar parity: inline rename, manual ordering and background-agent rows.
 - [ ] Native parity: shared-profile migration/coordination, app-shell HMR, updater/relaunch, browser permission and download handling.
