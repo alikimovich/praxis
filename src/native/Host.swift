@@ -76,6 +76,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         return view
     }
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let path = Bundle.main.path(forResource: "Praxis", ofType: "icns"), let icon = NSImage(contentsOfFile: path) { NSApp.applicationIconImage = icon }
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1320, height: 860), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = "Praxis · Native"; window.minSize = NSSize(width: 850, height: 550)
         window.contentView = canvas; window.delegate = self

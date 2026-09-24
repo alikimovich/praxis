@@ -198,3 +198,7 @@ window width by shortening the chat title and address first. Projects is removed
 from the toolbar (including overflow) while the sidebar is closed, and restored
 when reopened. Toolbar action symbols use fixed-size 2x template artwork so AppKit cannot
 override their glyph sizing; native tinting and button behavior remain intact.
+
+The native app bundle includes the existing Praxis ICNS resource and sets its
+Dock icon at launch. Toolbar action groups use momentary highlighting; Expand
+does not retain a selection highlight after activation.

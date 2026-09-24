@@ -132,6 +132,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await host.request('shellPerform', { action: 'toggle-sidebar' })
   await new Promise((resolve) => setTimeout(resolve, 500))
   const collapsed = await host.request('shellInspect')
+  if (!collapsed.toolbarGroupsMomentary) throw new Error('Toolbar action group retained selection after expand/restore')
   if (collapsed.toolbar.includes('projects')) throw new Error('Collapsed sidebar kept Projects in toolbar/overflow')
   await checkChatAlignment()
   if (!collapsed.sidebarCollapsed || collapsed.detailWidth <= shell.detailWidth)

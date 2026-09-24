@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Momentary toolbar actions and native app icon
+
+Native toolbar groups now use momentary selection and clear residual selection
+when applying state, preventing Expand from staying highlighted after use.
+The native bundle includes the existing build/icon.icns as Resources/Praxis.icns,
+references it through CFBundleIconFile, and sets the application Dock icon on
+launch. Toolbar glyphs retain aspect ratios; the current fitting normalizes their
+maximum dimension rather than applying one identical scale to every SF Symbol.
+
+Native integration (including unselected groups after expand/restore), native
+build and all TypeScript checks passed. Verified the bundled icon matches the
+source resource and its plist entry. No Electron tests ran.
+
 ## 2026-09-23 — Native/Electron runtime comparison
 
 Measured current builds on the local M4 Pro with isolated profiles and the same

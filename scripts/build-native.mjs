@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
@@ -11,6 +11,8 @@ const root = fileURLToPath(new URL('../', import.meta.url))
 const out = join(root, 'out/native')
 const contents = join(out, 'Praxis Native.app/Contents')
 mkdirSync(join(contents, 'MacOS'), { recursive: true })
+mkdirSync(join(contents, 'Resources'), { recursive: true })
+copyFileSync(join(root, 'build/icon.icns'), join(contents, 'Resources/Praxis.icns'))
 const alias = (file) => ({
   name: 'praxis-native-transport',
   setup(build) {
@@ -58,6 +60,7 @@ writeFileSync(
 <plist version="1.0"><dict>
 <key>CFBundleIdentifier</key><string>dev.praxis.native</string>
 <key>CFBundleName</key><string>Praxis Native</string>
+<key>CFBundleIconFile</key><string>Praxis.icns</string>
 <key>CFBundleExecutable</key><string>PraxisHost</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleVersion</key><string>1</string>
