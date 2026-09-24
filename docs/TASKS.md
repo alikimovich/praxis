@@ -5,6 +5,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Compare current native/Electron build size, startup, resident memory, idle CPU and preview frame timing; document failures and measurement limits.
+
 - [x] Adjust compact toolbar icons to approximately 20% below their original rendered size.
 
 - [x] Enforce smaller rendered toolbar glyphs using fixed-size template artwork; verify actual screenshot pixel bounds.

@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Native/Electron runtime comparison
+
+Measured current builds on the local M4 Pro with isolated profiles and the same
+200-card static preview. Native runtime/application files (excluding external
+packages) measured 63.7 MiB vs Electron 309.0 MiB. Successful-run median summed
+RSS was 732 vs 1,022 MiB including the automatically started Claude helper;
+launch-to-ready was 2.54 vs 0.66 seconds. Two of four native attempts failed
+readiness; all three Electron attempts completed. See RUNTIME_BENCHMARK.md for
+methodology, ranges and limitations. Local raw data lives in
+`test/artifacts/runtime-benchmark/`. All recorded benchmark processes exited.
+No product code changes; no broad Electron test suite was run.
+
 ## 2026-09-23 — Moderate toolbar icon reduction
 
 Increased fixed toolbar glyph bounds from 28 to 36 pixels within the same 40px
