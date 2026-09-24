@@ -13,7 +13,7 @@ the real Praxis interface, not the earlier fixture-only prototype. The old
 prototype remains in `experimental/native-runtime/` as a minimal reference; run
 its own `bun run dev` there if needed.
 
-Requires macOS 13.3+, Bun, Xcode command-line tools and the normal Praxis
+Requires macOS 13.3+, Bun, command-line tools with the macOS 26 SDK, and the normal Praxis
 dependencies (`bun install`). `build:native` emits `out/native/index.cjs`, the
 renderer/preload bundles and `Praxis Native.app`. Start through the Bun command:
 the internal app bundle is a host subprocess, not a standalone distributable.
@@ -29,12 +29,28 @@ menus offer new chat, project memory and closing. Toolbar actions open/create
 projects, start chats, reload the preview, toggle element selection/chat visibility,
 and open settings. The system sidebar button collapses the sidebar.
 
-Chat, settings, inspectors, code editing and the detailed preview toolbar remain
+Chat history, settings, inspectors, code editing and the detailed preview toolbar remain
 React/WebKit. The native build hides the React rail and titlebar drag regions;
 Electron still renders them. A native-only bridge mirrors compact workspace
 snapshots and calls the existing renderer actions. Streamed text does not rebuild
 the native sidebar unless its displayed state changes. Inline chat renaming,
 manual row ordering and background-agent rows are not yet in the native sidebar.
+
+The composer uses `NSGlassEffectView` on macOS 26+, with a native multiline
+`NSTextView`, attachment/tools menu, provider/model/permission popups and send/stop
+button. Older macOS versions use `NSVisualEffectView`. Enter submits; Shift+Enter
+inserts a newline. Selected-element context, attachment removal and slash-command
+choices use native controls. Files from the picker or native drop retain their
+paths; PNG/TIFF clipboard images are passed as PNG. Image transfer is limited to
+10 MiB per file. Oversized or unreadable images are currently skipped.
+
+`src/native/composer-transport.ts` mirrors the existing React composer's state and
+geometry, and forwards native actions into its existing handlers. Drafts, queues,
+provider/model confirmation and agent submission therefore retain the shared
+behavior. The web form stays mounted but hidden in the native build; Electron
+keeps its existing form. Keep the adapter's DOM selectors aligned with ChatPanel.
+The overlay hides for web dialogs. Native image thumbnails and a richer command
+suggestion presentation remain follow-up work.
 
 `scripts/build-native.mjs` bundles `src/native/index.ts` and the existing
 application services. It aliases `electron` to the private `src/native/platform.ts`
@@ -89,9 +105,13 @@ The native check also exercises undo/redo, registered media-file delivery and
 opening the shared code editor in a separate native window.
 It opens the project through the actual AppKit toolbar, switches between real
 chat sessions through the outline view, checks selection/chat controls and sidebar
-collapse, and captures native controls separately. Full-window offscreen caching
+collapse, verifies native text/draft restoration, file/image attachment add/remove,
+permission changes, slash completion and modal visibility, and
+captures native controls separately. Full-window offscreen caching
 does not reliably composite WebKit and vibrancy layers; use the separate sidebar,
-main and preview captures for QA. Pointer interactions still need manual checking.
+main and preview captures for QA. Liquid Glass composer captures are currently
+blank despite valid control geometry, so its visual appearance and pointer
+interactions still need an unlocked-desktop check.
 
 `test:native-live` additionally submits an edit through the real composer to
 Claude by default, or Codex with `PRAXIS_NATIVE_TEST_PROVIDER=codex`, using a
@@ -109,7 +129,8 @@ in the live tier, while the deterministic test is in the desktop tier.
   wired. Project preview HMR/live reload still comes from its managed dev server.
 - In-app updater/relaunch is disabled with an explicit error; update the checkout
   and restart the native command.
-- File attachments use bytes; WebKit does not reveal a dropped File's disk path.
+- Files dropped directly onto web content still lack local paths; use the native
+  composer or its attachment picker for path-based files.
 - Linux, signing, distributable Bun bundling, browser download UI and broader
   permission handling are not implemented.
 - iOS Simulator handlers are shared but have not been tested in this native host.

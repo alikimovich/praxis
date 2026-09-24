@@ -8,7 +8,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     try {
       return await host.request('evaluate', { view, code, isolated })
     } catch (error) {
-      throw new Error(`Native evaluation failed in ${view}: ${code}`, { cause: error })
+      throw new Error(`Native evaluation failed in ${view}: ${code}: ${String(error)}`, { cause: error })
     }
   }
   const wait = async (code: string, view = 'main', timeout = 30000) => {
@@ -61,6 +61,18 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await host.request('shellPerform', { action: 'toggle-sidebar' })
   await new Promise((resolve) => setTimeout(resolve, 500))
   const originalChat = shell.selected
+  const waitComposer = async (check: (state: any) => boolean) => {
+    for (let i = 0; i < 100; i++) {
+      const state = await host.request('composerInspect')
+      if (check(state)) return state
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    throw new Error(`Native composer state timed out (${check.toString()}): ${JSON.stringify(await host.request('composerInspect'))}; DOM: ${JSON.stringify(await evaluate(`({key:document.querySelector('.composer__input')?.closest('[data-slot="input-group"]')?.dataset.nativeChat,value:document.querySelector('.composer__input')?.value})`))}`)
+  }
+  const layout = await waitComposer(state => state.visible)
+  if (layout.contentWidth < 60 || layout.inputHeight < 20 || layout.sendWidth < 20) throw new Error(`Native composer layout invalid: ${JSON.stringify(layout)}`)
+  await host.request('composerPerform', { text: 'A native draft\nwith a second line' })
+  await wait(`document.querySelector('.composer__input').value === 'A native draft\\nwith a second line'`)
   const added = await evaluate(`(async()=>{
     const ws=window.__praxisWorkspace.getState();const p=ws.projects.find(p=>p.key===ws.activeKey);
     const result=await window.api.agent.newChat(p.root);
@@ -74,10 +86,40 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await wait(
     `window.__praxisWorkspace.getState().projects.some(p=>p.activeSessionKey===${JSON.stringify(added)})`
   )
+  await waitComposer(state => state.chat === added && state.text === '')
   await host.request('shellPerform', { action: 'select-row', row: originalChat })
   await wait(
     `window.__praxisWorkspace.getState().projects.some(p=>'chat:'+p.activeSessionKey===${JSON.stringify(originalChat)})`
   )
+  const composer = await waitComposer(state => state.text === 'A native draft\nwith a second line')
+  console.log(`Native composer: ${composer.glass ? 'NSGlassEffectView Liquid Glass' : 'legacy visual-effect fallback'}; typing and per-chat drafts passed.`)
+  await host.request('composerPerform', { text: '' })
+  await wait(`document.querySelector('.composer__input').value === ''`)
+  writeFileSync(join(fixture, 'attachment.txt'), 'Native attachment fixture')
+  await host.request('composerPerform', { files: [join(fixture, 'attachment.txt')] })
+  await waitComposer(state => state.attachments.length === 1)
+  await host.request('composerPerform', { remove: 0 })
+  await waitComposer(state => state.attachments.length === 0)
+  const choices = (await host.request('composerInspect')).choices
+  const permission = choices.find((choice: any) => choice.label === 'Permission mode')
+  const alternative = permission.options.find((option: any) => option.value !== permission.value && !option.disabled)
+  await host.request('composerPerform', { label: permission.label, value: alternative.value })
+  await waitComposer(state => state.choices.some((choice: any) => choice.label === permission.label && choice.value === alternative.value))
+  await host.request('composerPerform', { label: permission.label, value: permission.value })
+  await waitComposer(state => state.choices.some((choice: any) => choice.label === permission.label && choice.value === permission.value))
+  const originalCommands = await evaluate(`window.__praxisSession.getState().slashCommands`)
+  await evaluate(`window.__praxisSession.setState({slashCommands:[{name:'native-fixture',description:'Native keyboard test'}]})`)
+  await host.request('composerPerform', { text: '/native' })
+  await wait(`!!document.querySelector('.slash__item')`)
+  await host.request('composerPerform', { key: 'Tab' })
+  await waitComposer(state => state.text === '/native-fixture ')
+  await host.request('composerPerform', { text: '' })
+  await evaluate(`window.__praxisSession.setState({slashCommands:${JSON.stringify(originalCommands)}})`)
+  await evaluate(`window.__praxisProviders.getState().setSettingsOpen(true)`)
+  await waitComposer(state => !state.visible)
+  await evaluate(`window.__praxisProviders.getState().setSettingsOpen(false)`)
+  await waitComposer(state => state.visible)
+  console.log('Native composer permission picker, slash completion, and modal visibility passed.')
   console.log('Native toolbar actions, project/chat sidebar, and split-view collapse passed.')
   const detected = await evaluate(`window.api.project.detect(${JSON.stringify(fixture)})`)
   if (detected.framework !== 'static')
@@ -140,6 +182,11 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
       'base64'
     )
   )
+  await host.request('composerPerform', { files: [join(fixture, 'native-image.png')] })
+  await waitComposer(state => state.attachments.length === 1)
+  await wait(`!!document.querySelector('.composer__attachments img')`)
+  await host.request('composerPerform', { remove: 0 })
+  await waitComposer(state => state.attachments.length === 0)
   const media = await evaluate(
     `window.api.source.read(${JSON.stringify(fixture)}, 'native-image.png:1:0')`
   )
@@ -156,6 +203,8 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   console.log('Native undo/redo, media scheme, and pop-out editor passed.')
   const artifacts = join(root, 'test/artifacts/native')
   mkdirSync(artifacts, { recursive: true })
+  writeFileSync(join(artifacts, 'composer-content.png'), Buffer.from(await host.request('captureComposer', { contentOnly: true }), 'base64'))
+  writeFileSync(join(artifacts, 'composer.png'), Buffer.from(await host.request('captureComposer'), 'base64'))
   writeFileSync(
     join(artifacts, 'shell.png'),
     Buffer.from(await host.request('captureShell'), 'base64')
@@ -195,13 +244,12 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     )
     const prompt =
       'Edit index.html in this temporary test project. Replace only the heading text "Edited through Praxis Native" with "NATIVE_AGENT_VERIFIED". Make the edit now, then reply briefly.'
-    await evaluate(
-      `(()=>{const input=document.querySelector('.composer__input');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,${JSON.stringify(prompt)});input.dispatchEvent(new Event('input',{bubbles:true}));return true})()`
-    )
+    await host.request('composerPerform', { text: prompt })
     await wait(
       `!!document.querySelector('.composer__send') && !document.querySelector('.composer__send').disabled`
     )
-    await evaluate(`document.querySelector('.composer__send').click()`)
+    await waitComposer(state => state.enabled && state.text === prompt)
+    await host.request('composerPerform', { action: 'send' })
     await wait(
       `window.__nativeTestEvents.some(e=>e.type==='done'||e.type==='error')`,
       'main',

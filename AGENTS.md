@@ -84,6 +84,9 @@ See `docs/NATIVE.md` for the host protocol, isolation checks, and current limits
 `src/native/Shell.swift` owns the system sidebar, split view and toolbar. The
 optional `use-native-shell.ts` renderer hook mirrors compact workspace snapshots
 and routes native actions through existing App handlers; Electron keeps its rail.
+`src/native/Composer.swift` provides the native text field, controls and macOS 26
+Liquid Glass container. The native-only composer transport forwards actions to
+the existing React composer; keep its selectors in sync when changing ChatPanel.
 
 ```
 src/

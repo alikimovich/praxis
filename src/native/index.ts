@@ -266,6 +266,13 @@ async function main() {
     if (event.sender === mainView.webContents) host!.send('shellState', { state })
   })
   host.on('shell-action', ({ action, id, project }) => send('native-shell:action', { action, id, project }))
+  ipcMain.on('native-composer:state', (event, state) => {
+    if (event.sender === mainView.webContents) host!.send('composerState', { state })
+  })
+  host.on('composer-action', message => send('native-composer:action', message))
+  ipcMain.on('native-composer:focus', event => {
+    if (event.sender === mainView.webContents) host!.send('composerFocus')
+  })
   host.on('recent', ({ root }) => send('menu:open-recent', root))
   host.on('view-closed', ({ view }) => {
     const v = views.get(view)

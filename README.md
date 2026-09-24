@@ -245,9 +245,11 @@ Other UI animations remain enabled.
 ### Native runtime (macOS, experimental)
 
 `bun run dev:native` launches a standard macOS project/chat sidebar and toolbar,
-with the existing React chat, inspectors and preview controls inside WebKit.
+plus a native chat composer using Apple Liquid Glass on macOS 26+. Chat history,
+inspectors and preview controls remain in WebKit.
 The shared application backend runs under Bun. It requires
-macOS 13.3+, Bun, and Xcode command-line tools. Open a project using the normal
+macOS 13.3+, Bun, and command-line tools with the macOS 26 SDK to build. Older
+macOS versions use a visual-effect fallback. Open a project using the normal
 folder picker; Praxis owns its dev server. `--project /path/to/repo` preselects
 the first folder pick. `bun run dev` remains the default Electron version.
 

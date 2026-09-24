@@ -1,6 +1,8 @@
 // Bundled in place of Electron's preload primitives for WKWebView only.
 // The full PraxisApi and preview tools remain the shared preloads.
 import type { NativeShellAction, NativeShellBridge } from '../shared/native-shell'
+import { installComposer } from './composer-transport'
+const filePaths = new WeakMap<File, string>()
 
 type Listener = (event: object, ...args: unknown[]) => void
 const listeners = new Map<string, Set<Listener>>()
@@ -80,8 +82,9 @@ export const contextBridge = {
         }
       }
       Object.defineProperty(globalThis, 'praxisNativeShell', { value: shell, writable: false })
+      installComposer(ipcRenderer, (file, path) => filePaths.set(file, path))
     }
   }
 }
-// WebKit does not expose a local File's disk path; attachments still use bytes.
-export const webUtils = { getPathForFile: () => '' }
+// Native picker/drop actions associate their File objects with trusted local paths.
+export const webUtils = { getPathForFile: (file: File) => filePaths.get(file) ?? '' }

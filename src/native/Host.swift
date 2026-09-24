@@ -40,6 +40,7 @@ final class Canvas: NSView { override var isFlipped: Bool { true } }
 final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate, WKURLSchemeHandler {
     var window: NSWindow!
     var shell: NativeShell!
+    var composer: NativeComposer!
     let canvas = Canvas()
     var views: [String: WKWebView] = [:]
     var targets: [String: URL] = [:]
@@ -78,6 +79,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         window.contentView = canvas; window.delegate = self
         _ = makeView("main"); _ = makeView("preview"); _ = makeView("panel")
         shell = NativeShell(window: window, canvas: canvas)
+        composer = NativeComposer(frame: .zero); canvas.addSubview(composer)
         window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
         installMenus()
         DispatchQueue.global().async { [weak self] in
@@ -125,6 +127,16 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         let name = c["view"] as? String ?? "main"
         let view = views[name]
         switch c["method"] as? String {
+        case "composerState": composer.update(c["state"] as? [String: Any] ?? [:])
+        case "composerInspect": reply(id, composer.inspect())
+        case "composerPerform": composer.perform(c); reply(id)
+        case "composerFocus": window.makeFirstResponder(composer.text)
+        case "captureComposer":
+            composer.layoutSubtreeIfNeeded()
+            let target: NSView = c["contentOnly"] as? Bool == true ? composer.content : composer
+            guard let bitmap = target.bitmapImageRepForCachingDisplay(in: target.bounds) else { reply(id, error: "Composer capture unavailable"); return }
+            target.cacheDisplay(in: target.bounds, to: bitmap)
+            reply(id, bitmap.representation(using: .png, properties: [:])?.base64EncodedString() ?? "")
         case "shellState": shell.update(c["state"] as? [String: Any] ?? [:])
         case "shellInspect": reply(id, shell.inspect())
         case "shellPerform": reply(id, shell.perform(c["action"] as? String ?? "", id: c["row"] as? String))
@@ -178,8 +190,13 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             view?.evaluateJavaScript("globalThis.__praxisNativeDispatch?.(\(json))", in: nil, in: name == "preview" ? world : .page) { _ in }
         case "evaluate":
             guard let view = view, let code = c["code"] as? String else { reply(id, error: "Missing evaluation target"); return }
-            view.callAsyncJavaScript("return await (\(code));", arguments: [:], in: nil, in: c["isolated"] as? Bool == true ? world : .page) { result in
-                switch result { case .success(let value): self.reply(id, value); case .failure(let error): self.reply(id, error: (error as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String ?? error.localizedDescription) }
+            view.callAsyncJavaScript("return JSON.stringify((await (\(code))) ?? null) ?? 'null';", arguments: [:], in: nil, in: c["isolated"] as? Bool == true ? world : .page) { result in
+                switch result {
+                case .success(let value):
+                    guard let json = value as? String, let data = json.data(using: .utf8), let decoded = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) else { self.reply(id, error: "Invalid JSON evaluation result"); return }
+                    self.reply(id, decoded)
+                case .failure(let error): self.reply(id, error: (error as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String ?? error.localizedDescription)
+                }
             }
         case "capture":
             view?.takeSnapshot(with: nil) { image, error in

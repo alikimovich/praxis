@@ -9,6 +9,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Connect the shared Praxis UI and application core to the native host while retaining Electron as the default.
 - [x] Verify a successful live provider edit through the native composer (Codex source edit and WebKit preview reload passed; Claude still requires login).
 - [x] Add a standard macOS project/chat sidebar, split-view divider and toolbar around the shared web content.
+- [x] Add a native multiline composer, actual macOS 26 Liquid Glass, shared draft/action bridge and attachment controls.
+- [ ] Native composer polish: image thumbnails, richer slash suggestions and attachment error feedback; verify pointer interaction and IME on an unlocked desktop.
 - [ ] Native sidebar parity: inline rename, manual ordering and background-agent rows.
 - [ ] Native parity: shared-profile migration/coordination, app-shell HMR, updater/relaunch, browser permission and download handling.
 

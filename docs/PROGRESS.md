@@ -2,6 +2,40 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Native Liquid Glass composer
+
+Added an AppKit multiline chat composer using Apple's `NSGlassEffectView` on
+macOS 26+, with a visual-effect fallback on older systems. Standard native
+controls handle attachments, provider/model/permission choices, context clearing,
+slash-command choices and send/stop. PNG/TIFF clipboard images and local file
+paths pass through the existing attachment handlers. Build now needs the macOS
+26 SDK while retaining the macOS 13.3 deployment target.
+
+The native-only DOM adapter mirrors geometry/state and dispatches into the shared
+React composer, keeping its draft, queue, model confirmation and agent semantics.
+Electron keeps its original composer. Native input revisions prevent delayed
+snapshots from overwriting typing, and background synchronization uses timers
+because animation frames can stop in occluded WebKit windows. Undo is enabled in
+the native text field and cleared between chats.
+
+Validation: native build and all four typecheck projects passed. Native typing,
+per-chat draft restoration, file/image attachment add/remove, permission changes,
+slash completion, modal visibility and host geometry checks passed. WebKit
+reported unsupported evaluation result types during later startup checks; explicit
+JSON result conversion in the private evaluation helper resolved that run, and
+the full native integration check passed again. The authorized live Codex test submitted through the native send button,
+streamed a response, edited the fixture and verified the result in WebKit.
+Offscreen Liquid Glass/content captures are blank despite valid control geometry;
+visual appearance, pointer interaction and IME still need an unlocked-desktop
+check. Image thumbnails, richer slash suggestions and attachment error feedback
+remain follow-up work.
+
+Deterministic regressions: 145 PASS, one startup-intro animation timeout; that
+test passed on an isolated rerun. Native checks ran separately and ten external
+agent-send tests were excluded. Reports: `test/artifacts/runs/run-tnkZlZ/summary.json`
+and `test/artifacts/runs/run-THWLnA/summary.json`. Docs-links and whitespace checks
+passed.
+
 ## 2026-09-23 — System macOS sidebar and toolbar
 
 Added an AppKit source-list outline for projects/live and previous chats, a system

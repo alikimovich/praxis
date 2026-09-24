@@ -1446,6 +1446,7 @@ export default function ChatPanel(): React.JSX.Element {
         <div className="min-w-0">
         <QueuedMessages />
         <InputGroup
+          data-native-chat={activeChatKey}
           className={`relative rounded-2xl border-[var(--border-prominent)] bg-card dark:bg-card ${dragOver ? "ring-2 ring-blue-400" : ""}`}
           onDrop={onDrop}
           onDragOver={(e) => {
