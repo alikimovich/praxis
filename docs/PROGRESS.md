@@ -2,6 +2,16 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Projects button opens from its icon
+
+Removed the generic toolbar action from the Projects NSMenuToolbarItem. AppKit
+was treating it as a split button, sending an unhandled action from the icon and
+opening the menu only from the chevron. It is now menu-only, like the Branch
+control, so the entire button opens New Project/Open Project. Native integration
+asserts the menu-only configuration and still exercises Open Project through its
+menu entry. Native build/integration and all four typechecks passed; no Electron
+tests ran.
+
 ## 2026-09-23 — Sidebar includes the traffic lights
 
 Enabled full-size native window content and full-height sidebar layout so the

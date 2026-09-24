@@ -137,7 +137,8 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         let item: NSToolbarItem = ["projects", "branch", "publish"].contains(key) ? NSMenuToolbarItem(itemIdentifier: identifier) : NSToolbarItem(itemIdentifier: identifier)
         item.label = labels[key] ?? key; item.paletteLabel = item.label; item.toolTip = item.label
         item.image = NSImage(systemSymbolName: symbols[key] ?? "circle", accessibilityDescription: item.label)
-        if key != "branch" { item.target = self; item.action = #selector(toolbarAction(_:)) }
+        // Menu-only items let AppKit open the menu from the entire control.
+        if !["branch", "projects"].contains(key) { item.target = self; item.action = #selector(toolbarAction(_:)) }
         if key == "projects", let menuItem = item as? NSMenuToolbarItem {
             menuItem.label = "Projects"; menuItem.toolTip = "Projects"
             menuItem.image = NSImage(systemSymbolName: "folder.badge.plus", accessibilityDescription: "Projects")
@@ -367,6 +368,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         let trafficLight = window?.standardWindowButton(.closeButton)
         let trafficFrame = trafficLight.map { $0.convert($0.bounds, to: nil) } ?? .zero
         return ["sidebarContainsTrafficLights":sidebarFrame.contains(trafficFrame),
+         "projectsMenuOnly":toolbarItems["projects"]?.action == nil,
          "sidebarTop":sidebarFrame.maxY, "contentTop":window?.contentLayoutRect.maxY ?? 0,
          "detailTop":contentCanvas.convert(contentCanvas.bounds, to: nil).maxY,
          "sidebarListTop":outline.enclosingScrollView.map { $0.convert($0.bounds, to: nil).maxY } ?? 0,

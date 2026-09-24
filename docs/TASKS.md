@@ -15,6 +15,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Remove the extra gray chat-pane fill in native mode and align its fades with the theme content background.
 - [x] Align native toolbar actions with the sidebar, chat and preview columns, following chat resizing and sidebar collapse.
 - [x] Extend the open native sidebar through the titlebar to include the traffic lights, keeping content below the toolbar.
+- [x] Make the entire Projects toolbar button open its menu, including the folder icon.
 - [ ] Native composer polish: image thumbnails, richer slash suggestions and attachment error feedback; verify pointer interaction and IME on an unlocked desktop.
 - [ ] Native sidebar parity: inline rename, manual ordering and background-agent rows.
 - [ ] Native parity: shared-profile migration/coordination, app-shell HMR, updater/relaunch, browser permission and download handling.

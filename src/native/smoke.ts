@@ -44,6 +44,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
       `Native sidebar or toolbar state did not follow project opening: ${JSON.stringify(shell)}`
     )
   if (shell.toolbar.filter((id: string) => ['branch', 'home', 'address', 'device', 'code', 'expand', 'publish'].includes(id)).join(',') !== 'branch,home,address,device,code,expand,publish' || shell.toolbar[0] !== 'projects' || !shell.toolbar[1].includes('ToggleSidebar')) throw new Error(`Unexpected native toolbar: ${JSON.stringify(shell.toolbar)}`)
+  if (!shell.projectsMenuOnly) throw new Error("Projects must open its menu from the whole button")
   if (!shell.publishPrimary || shell.toolbar.at(-1) !== 'publish' || !shell.sidebarAutohidesScrollers) throw new Error('Native primary action or scroller configuration is incorrect')
   if (!shell.sidebarContainsTrafficLights || shell.sidebarListTop > shell.contentTop || shell.detailTop > shell.contentTop + 1)
     throw new Error(`Native sidebar must extend behind traffic lights while content stays below toolbar: ${JSON.stringify(shell)}`)
