@@ -44,11 +44,16 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     throw new Error(
       `Native sidebar or toolbar state did not follow project opening: ${JSON.stringify(shell)}`
     )
-  if (shell.toolbar.filter((id: string) => ['address', 'device', 'tools', 'publish'].includes(id)).join(',') !== 'address,device,tools,publish' || shell.toolbar[0] !== 'projects' || !shell.toolbar[1].includes('ToggleSidebar')) throw new Error(`Unexpected native toolbar: ${JSON.stringify(shell.toolbar)}`)
+  if (shell.toolbar.filter((id: string) => ['address', 'interaction', 'tools', 'publish'].includes(id)).join(',') !== 'address,interaction,tools,publish' || shell.toolbar[0] !== 'projects' || !shell.toolbar[1].includes('ToggleSidebar')) throw new Error(`Unexpected native toolbar: ${JSON.stringify(shell.toolbar)}`)
   if (shell.outlineRows !== shell.rows.filter((row: any) => row.kind === 'project').length || !shell.chatTitlePlain || shell.chatActions.join(',') !== 'history,new-chat')
     throw new Error('Native project-only sidebar or chat header is incorrect')
   if (shell.toolGroup.join(',') !== 'code,layers,expand') throw new Error('Incorrect native tools group')
   if (shell.toolbar.includes('home') || shell.toolbar.includes('branch') || shell.domain !== new URL(shell.address).host) throw new Error('Expected stacked domain and branch header without Home')
+  if (shell.interactionGroup.join(',') !== 'select-object,device') throw new Error('Select Object must share a group with the device toggle')
+  await host.request('shellPerform', { action: 'select-object' })
+  await wait('window.__praxisSelection.getState().selectMode')
+  await host.request('shellPerform', { action: 'select-object' })
+  await wait('!window.__praxisSelection.getState().selectMode')
   if (!shell.projectsMenuOnly) throw new Error("Projects must open its menu from the whole button")
   if (!shell.publishStandard || shell.toolbar.at(-1) !== 'publish' || !shell.sidebarAutohidesScrollers) throw new Error('Native primary action or scroller configuration is incorrect')
   if (!shell.sidebarContainsTrafficLights || shell.sidebarListTop > shell.contentTop || shell.detailTop > shell.contentTop + 1)

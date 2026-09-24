@@ -10,6 +10,7 @@ import {
   usePreviewLocation,
   usePublishMode,
   useSelection,
+  useUiActions,
   useViewport,
   useWorkspace
 } from './store'
@@ -189,6 +190,8 @@ export function useNativeShell(actions: Actions) {
           if (target.origin !== origin)
             throw new Error('The preview address must stay within this project.')
           await window.api.preview.load(target.href)
+        } else if (message.action === 'select-object') {
+          useUiActions.getState().toggleSelect()
         } else if (message.action === 'device' && action.preview.deviceEnabled) {
           const viewport = useViewport.getState()
           viewport.setViewport(viewport.viewport === 'mobile' ? 'desktop' : 'mobile')

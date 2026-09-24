@@ -36,7 +36,7 @@ tracks the web pane’s measured width, including resizing and sidebar collapse,
 and compacts when the preview is expanded. History lists the current project’s
 open and saved chats, marks the active chat, and uses the existing switch/review
 handlers. The preview section stacks the editable domain above a smaller, muted
-branch menu, without a separate Home button. Desktop/mobile is a separate button;
+branch menu, without a separate Home button. Select Object and desktop/mobile share one native toolbar group;
 Code, Layers and Expand/Restore form one native toolbar group. Publish/Create PR
 (or Connect to GitHub) is a separate standard native button at the far right,
 retaining its PR/merge mode menu.
@@ -54,7 +54,7 @@ Sidebar and composer scroll views use auto-hiding overlay scrollers. The empty
 composer fits its document to the available height, avoiding artificial overflow.
 Its empty chip row collapses. The empty form reserves 120 points including the
 selector row (86 for glass); text or attachments/context restore the 146-point
-minimum. A plain plus opens attachment/tools on the left. Provider/model/permission
+minimum. A plain plus opens attachments/layers on the left; Select Object lives in the top toolbar. Provider/model/permission
 menus sit on the right without bezels or arrow chrome, fitting their selected
 labels up to 60 points before truncating; full menu labels and tooltips remain. Send/Stop stays inside the form
 at the lower right, as a 30-point button with a 13-point symbol. The chat pane, page root and status fade are transparent; the main WKWebView

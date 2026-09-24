@@ -2,6 +2,17 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Select Object beside device switching
+
+Moved Select Object from the composer attachment menu into a native toolbar
+group with the phone/desktop toggle. The action routes through the existing
+shared toggleSelect handler, and its tooltip/icon reflect selection mode while
+remaining in the group. Code/Layers/Expand retain their separate group.
+
+Native integration passed group membership and selection on/off checks plus
+existing flows. Final native build, all four typechecks, docs-links and whitespace
+checks passed. No Electron tests ran.
+
 ## 2026-09-23 — Plain compact composer controls
 
 Made attachment/tools a borderless plus (the image belongs to the popup’s first

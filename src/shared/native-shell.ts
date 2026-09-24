@@ -45,6 +45,7 @@ export interface NativeShellAction {
     | 'address'
     | 'home'
     | 'device'
+    | 'select-object'
   id?: string
   value?: string
   project?: string

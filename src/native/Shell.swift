@@ -39,9 +39,9 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     var toolbar: NSToolbar!
     weak var window: NSWindow?
     private var toolbarItems: [String: NSToolbarItem] = [:]
-    private let items = ["projects", "chat", "address", "device", "tools", "code", "layers", "expand", "publish"]
-    private let labels = ["layers":"Show Layers", "home":"Back to Project", "address":"Preview Address", "device":"Switch to Mobile", "branch":"Branch", "publish":"Publish", "code":"Show Code", "expand":"Expand Preview"]
-    private let symbols = ["layers":"square.3.layers.3d", "home":"house", "device":"iphone", "branch":"arrow.triangle.branch", "publish":"arrow.up.circle", "code":"chevron.left.forwardslash.chevron.right", "expand":"arrow.up.left.and.arrow.down.right"]
+    private let items = ["projects", "chat", "address", "interaction", "select-object", "device", "tools", "code", "layers", "expand", "publish"]
+    private let labels = ["select-object":"Select Object", "layers":"Show Layers", "home":"Back to Project", "address":"Preview Address", "device":"Switch to Mobile", "branch":"Branch", "publish":"Publish", "code":"Show Code", "expand":"Expand Preview"]
+    private let symbols = ["select-object":"cursorarrow", "layers":"square.3.layers.3d", "home":"house", "device":"iphone", "branch":"arrow.triangle.branch", "publish":"arrow.up.circle", "code":"chevron.left.forwardslash.chevron.right", "expand":"arrow.up.left.and.arrow.down.right"]
     private var sidebarButtons: [String: NSButton] = [:]
     private var previewState: [String: Any] = [:]
     private var sidebarBeforeExpand = false
@@ -138,15 +138,16 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     }
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [NSToolbarItem.Identifier("projects"), .toggleSidebar, .sidebarTrackingSeparator, NSToolbarItem.Identifier("chat"), NSToolbarItem.Identifier("address"), .flexibleSpace,
-         NSToolbarItem.Identifier("device"), .space, NSToolbarItem.Identifier("tools"), .space, NSToolbarItem.Identifier("publish")]
+         NSToolbarItem.Identifier("interaction"), .space, NSToolbarItem.Identifier("tools"), .space, NSToolbarItem.Identifier("publish")]
     }
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar: Bool) -> NSToolbarItem? {
         let key = identifier.rawValue
         guard items.contains(key) else { return nil }
-        if key == "tools" {
+        if key == "tools" || key == "interaction" {
             let group = NSToolbarItemGroup(itemIdentifier: identifier)
-            group.label = "Preview Tools"
-            group.subitems = ["code", "layers", "expand"].compactMap {
+            group.label = key == "tools" ? "Preview Tools" : "Preview Interaction"
+            let actions = key == "tools" ? ["code", "layers", "expand"] : ["select-object", "device"]
+            group.subitems = actions.compactMap {
                 self.toolbar(toolbar, itemForItemIdentifier: NSToolbarItem.Identifier($0), willBeInsertedIntoToolbar: willBeInsertedIntoToolbar)
             }
             group.isBordered = true
@@ -291,6 +292,9 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         address.isEnabled = ready
         if address.currentEditor() == nil { showAddress() }
         toolbarItems["device"]?.isEnabled = previewState["deviceEnabled"] as? Bool ?? false
+        toolbarItems["select-object"]?.label = selecting ? "Stop Selecting" : "Select Object"
+        toolbarItems["select-object"]?.toolTip = toolbarItems["select-object"]?.label
+        toolbarItems["select-object"]?.image = NSImage(systemSymbolName: selecting ? "cursorarrow.rays" : "cursorarrow", accessibilityDescription: toolbarItems["select-object"]?.label)
         let mobile = previewState["viewport"] as? String == "mobile"
         toolbarItems["device"]?.label = mobile ? "Switch to Desktop" : "Switch to Mobile"
         toolbarItems["device"]?.toolTip = toolbarItems["device"]?.label
@@ -411,7 +415,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         let trafficLight = window?.standardWindowButton(.closeButton)
         let trafficFrame = trafficLight.map { $0.convert($0.bounds, to: nil) } ?? .zero
         return ["sidebarContainsTrafficLights":sidebarFrame.contains(trafficFrame),
-         "projectsMenuOnly":toolbarItems["projects"]?.action == nil,
+         "interactionGroup":(toolbar.items.first(where: { $0.itemIdentifier.rawValue == "interaction" }) as? NSToolbarItemGroup)?.subitems.map { $0.itemIdentifier.rawValue } ?? [], "selectMode":selecting, "projectsMenuOnly":toolbarItems["projects"]?.action == nil,
          "sidebarTop":sidebarFrame.maxY, "contentTop":window?.contentLayoutRect.maxY ?? 0,
          "detailTop":contentCanvas.convert(contentCanvas.bounds, to: nil).maxY,
          "sidebarListTop":outline.enclosingScrollView.map { $0.convert($0.bounds, to: nil).maxY } ?? 0,
