@@ -2,6 +2,16 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Enforce rendered toolbar icon size
+
+The earlier SF Symbol configuration did not reduce the displayed toolbar glyphs:
+AppKit applied its own symbol sizing. Toolbar symbols are now rasterized into
+2x template artwork with explicit glyph bounds, preserving native tint and
+controls without symbol reconfiguration. Inspected actual before/after shell
+captures and measured dark glyph pixels: Layers height fell from 39px to 24px;
+device from 37px to 23px. All native integration checks and type checks passed.
+No Electron tests ran.
+
 ## 2026-09-23 — Compact toolbar with visible preview actions
 
 Preview action groups now have high visibility priority. Chat/header widths

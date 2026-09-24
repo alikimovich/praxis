@@ -1,9 +1,23 @@
 import AppKit
 
 func toolbarSymbol(_ name: String, _ label: String? = nil) -> NSImage? {
-    let image = NSImage(systemSymbolName: name, accessibilityDescription: label)?
-        .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 14, weight: .regular))
-    image?.size = NSSize(width: 16, height: 16)
+    // Toolbar controls reconfigure SF Symbols to their own standard size.
+    // Give AppKit a template bitmap with fixed glyph bounds instead, keeping
+    // system tinting and native buttons without the symbol-size override.
+    guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: label)?
+        .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)),
+        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 40, pixelsHigh: 40,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+        let context = NSGraphicsContext(bitmapImageRep: bitmap) else { return nil }
+    NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = context
+    let scale = 28 / max(symbol.size.width, symbol.size.height)
+    let size = NSSize(width: symbol.size.width * scale, height: symbol.size.height * scale)
+    symbol.draw(in: NSRect(x: (40 - size.width) / 2, y: (40 - size.height) / 2, width: size.width, height: size.height))
+    NSGraphicsContext.restoreGraphicsState()
+    let image = NSImage(size: NSSize(width: 20, height: 20))
+    image.addRepresentation(bitmap); image.isTemplate = true
+    image.accessibilityDescription = label
     return image
 }
 

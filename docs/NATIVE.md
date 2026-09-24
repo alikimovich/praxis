@@ -196,4 +196,5 @@ alive rather than briefly setting its size to zero.
 The native toolbar reserves room for preview actions down to the 850pt minimum
 window width by shortening the chat title and address first. Projects is removed
 from the toolbar (including overflow) while the sidebar is closed, and restored
-when reopened. Toolbar action symbols use a compact 14pt configuration.
+when reopened. Toolbar action symbols use fixed-size 2x template artwork so AppKit cannot
+override their glyph sizing; native tinting and button behavior remain intact.
