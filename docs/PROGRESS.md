@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Circular glass Settings button
+
+Replaced the sidebar’s labeled Settings control with an icon-only 36-point circle.
+On macOS 26 it uses NSGlassEffectView with an 18-point radius around the native
+gear button; older macOS uses a circular system bezel. The Settings tooltip,
+accessibility label and existing action remain available.
+
+Native compilation/build and all four typechecks passed, as did docs-links and
+whitespace checks. Native integration again failed before UI initialization with
+the existing WebKit unsupported-result startup error, so the final appearance and
+click interaction were not verified in the running UI. No Electron tests ran.
+
 ## 2026-09-23 — Project sidebar and chat history toolbar
 
 The native sidebar now lists projects only, selecting the active project rather

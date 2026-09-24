@@ -67,19 +67,29 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         outline.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         outline.indentationPerLevel = 0; outline.allowsEmptySelection = true
         outline.dataSource = self; outline.delegate = self
-        outline.setAccessibilityLabel("Projects and chats")
+        outline.setAccessibilityLabel("Projects")
         let menu = NSMenu(); menu.delegate = self; outline.menu = menu
         let scroll = NSScrollView(); scroll.documentView = outline; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay
         scroll.drawsBackground = false
         let sidebarContainer = NSView()
-        let settings = NSButton(title: "Settings", target: self, action: #selector(sidebarAction(_:)))
-        settings.identifier = NSUserInterfaceItemIdentifier("settings"); settings.bezelStyle = .rounded
-        settings.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil); settings.imagePosition = .imageLeading
+        let settings = NSButton(title: "", target: self, action: #selector(sidebarAction(_:)))
+        settings.identifier = NSUserInterfaceItemIdentifier("settings"); settings.bezelStyle = .circular
+        settings.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil); settings.imagePosition = .imageOnly
+        settings.toolTip = "Settings"; settings.setAccessibilityLabel("Settings")
+        settings.frame = NSRect(x: 0, y: 0, width: 36, height: 36)
+        let settingsSurface: NSView
+        if #available(macOS 26.0, *) {
+            let glass = NSGlassEffectView(frame: settings.frame)
+            glass.cornerRadius = 18
+            settings.isBordered = false; settings.autoresizingMask = [.width, .height]
+            glass.contentView = settings; settingsSurface = glass
+        } else { settingsSurface = settings }
         sidebarButtons["settings"] = settings
-        for view in [scroll, settings] { view.translatesAutoresizingMaskIntoConstraints = false; sidebarContainer.addSubview(view) }
+        for view in [scroll, settingsSurface] { view.translatesAutoresizingMaskIntoConstraints = false; sidebarContainer.addSubview(view) }
         NSLayoutConstraint.activate([
-            scroll.topAnchor.constraint(equalTo: sidebarContainer.safeAreaLayoutGuide.topAnchor, constant: 8), scroll.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: settings.topAnchor, constant: -12),
-            settings.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor, constant: 12), settings.bottomAnchor.constraint(equalTo: sidebarContainer.bottomAnchor, constant: -12)
+            scroll.topAnchor.constraint(equalTo: sidebarContainer.safeAreaLayoutGuide.topAnchor, constant: 8), scroll.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: settingsSurface.topAnchor, constant: -12),
+            settingsSurface.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor, constant: 12), settingsSurface.bottomAnchor.constraint(equalTo: sidebarContainer.bottomAnchor, constant: -12),
+            settingsSurface.widthAnchor.constraint(equalToConstant: 36), settingsSurface.heightAnchor.constraint(equalToConstant: 36)
         ])
         sidebar.view = sidebarContainer
         sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebar)

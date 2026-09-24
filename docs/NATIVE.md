@@ -30,7 +30,8 @@ A More menu on each hovered or selected project offers Project Memory and Close
 Project; right-click provides the same actions. The toolbar follows the columns:
 a Projects menu (New Project/Open Project) and sidebar toggle above the sidebar;
 the plain current chat title on the left, History and New Chat on the right; preview actions
-above the preview. Settings stays at the bottom of the sidebar. The chat header
+above the preview. Settings stays at the bottom of the sidebar as a 36-point circular gear button,
+using native Liquid Glass on macOS 26 and a circular system bezel on older macOS. The chat header
 tracks the web pane’s measured width, including resizing and sidebar collapse,
 and compacts when the preview is expanded. History lists the current project’s
 open and saved chats, marks the active chat, and uses the existing switch/review
