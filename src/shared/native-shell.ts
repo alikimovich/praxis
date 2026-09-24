@@ -15,6 +15,7 @@ export interface NativeShellState {
   project: string | null
   selectMode: boolean
   previewReady: boolean
+  chatWidth: number
   chatHidden: boolean
   branch: string | null
   branches: string[]

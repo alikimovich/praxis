@@ -120,6 +120,7 @@ export function useNativeShell(actions: Actions) {
         project: active?.key ?? null,
         selected: active ? `chat:${active.activeSessionKey ?? active.key}` : null,
         selectMode: useSelection.getState().selectMode,
+        chatWidth: document.querySelector('.pane--chat')?.getBoundingClientRect().width ?? 0,
         chatHidden: ws.chatHidden
       }
       const serialized = JSON.stringify(state)
@@ -132,7 +133,18 @@ export function useNativeShell(actions: Actions) {
       if (disposed) return
       timer ??= setTimeout(sync, 50)
     }
-    refresh.current = schedule
+    const resize = new ResizeObserver(schedule)
+    let observed: Element | null = null
+    const observeChat = () => {
+      const pane = document.querySelector('.pane--chat')
+      if (pane !== observed) {
+        resize.disconnect()
+        observed = pane
+        if (pane) resize.observe(pane)
+      }
+      schedule()
+    }
+    refresh.current = observeChat
     const unsubs = [
       useWorkspace.subscribe(schedule),
       useChat.subscribe(schedule),
@@ -198,9 +210,11 @@ export function useNativeShell(actions: Actions) {
       }
       void run().catch((error) => useLog.getState().append(String(error), 'error'))
     })
+    observeChat()
     sync()
     return () => {
       disposed = true
+      resize.disconnect()
       for (const unsubscribe of unsubs) unsubscribe()
       off()
       refresh.current = () => {}

@@ -25,9 +25,13 @@ binary is loaded by the native backend; Bun itself remains a local prerequisite.
 The macOS shell uses a standard `NSOutlineView` sidebar, `NSSplitViewController`
 divider and `NSToolbar` items with system symbols and appearance. Projects expand
 to live and previous chats. Native selection switches projects/chats; context
-menus offer new chat, project memory and closing. New Project, Open Project and
-New Chat buttons sit above the outline; Settings sits at the bottom. The toolbar
-keeps the sidebar toggle at the far left and provides the current branch menu,
+menus offer new chat, project memory and closing. The toolbar follows the columns:
+a Projects menu (New Project/Open Project) and sidebar toggle above the sidebar;
+the current chat title, New Chat and chat options above the chat; preview actions
+above the preview. Settings stays at the bottom of the sidebar. The chat header
+tracks the web pane’s measured width, including resizing and sidebar collapse,
+and compacts when the preview is expanded. Chat options offer Project Memory and
+Close Chat. The preview section provides the current branch menu,
 Home, editable preview address, desktop/mobile, Show/Hide Code and Expand/Restore
 Preview. Publish/Create PR (or Connect to GitHub) is an accent-colored native button
 at the far right, with its mode menu beside it.

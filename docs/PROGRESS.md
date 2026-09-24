@@ -2,6 +2,23 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Column-aligned native toolbar
+
+Grouped the AppKit toolbar by its content columns, following the Notes reference.
+The Projects menu and sidebar toggle sit before the sidebar tracking separator;
+the chat title, New Chat and options (Project Memory/Close Chat) occupy the chat
+section; branch, navigation, device, code, expand and trailing primary Publish
+remain in the preview section. Removed duplicate project/chat buttons above the
+sidebar outline; Settings stays below it. Hiding chat compacts its toolbar group.
+
+A renderer ResizeObserver mirrors the actual chat pane width; AppKit measures in
+window coordinates to align the header’s separator with the web divider. Native
+integration verifies alignment at 360, 480 and 440 points and after sidebar
+collapse, plus existing navigation, draft, editing and isolation flows. Native
+build/integration and all four typechecks passed; docs-links and whitespace checks
+passed. No Electron tests ran. Inspected the native capture, whose offscreen
+WebKit/glass compositing still limits visual verification.
+
 ## 2026-09-23 — Remove native chat's gray fill
 
 Scoped the native chat pane to the existing theme content-background token,

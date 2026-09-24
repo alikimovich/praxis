@@ -43,8 +43,23 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     throw new Error(
       `Native sidebar or toolbar state did not follow project opening: ${JSON.stringify(shell)}`
     )
-  if (shell.toolbar.filter((id: string) => ['branch', 'home', 'address', 'device', 'code', 'expand', 'publish'].includes(id)).join(',') !== 'branch,home,address,device,code,expand,publish' || !shell.toolbar[0].includes('ToggleSidebar')) throw new Error(`Unexpected native toolbar: ${JSON.stringify(shell.toolbar)}`)
+  if (shell.toolbar.filter((id: string) => ['branch', 'home', 'address', 'device', 'code', 'expand', 'publish'].includes(id)).join(',') !== 'branch,home,address,device,code,expand,publish' || shell.toolbar[0] !== 'projects' || !shell.toolbar[1].includes('ToggleSidebar')) throw new Error(`Unexpected native toolbar: ${JSON.stringify(shell.toolbar)}`)
   if (!shell.publishPrimary || shell.toolbar.at(-1) !== 'publish' || !shell.sidebarAutohidesScrollers) throw new Error('Native primary action or scroller configuration is incorrect')
+  const checkChatAlignment = async () => {
+    let geometry: any
+    for (let i = 0; i < 30; i++) {
+      geometry = await host.request('shellInspect')
+      if (Math.abs(geometry.chatHeaderTrailing - geometry.detailLeading - geometry.chatWidth) < 2) return
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    throw new Error(`Chat toolbar missed its column boundary: ${JSON.stringify(geometry)}`)
+  }
+  await checkChatAlignment()
+  for (const width of [360, 480, 440]) {
+    await evaluate(`document.querySelector('.pane--chat').style.width = '${width}px'`)
+    await new Promise(resolve => setTimeout(resolve, 200))
+    await checkChatAlignment()
+  }
   await host.request('shellPerform', { action: 'address', row: '/?native-navigation=1#section' })
   await wait(`location.search === '?native-navigation=1' && location.hash === '#section'`, 'preview')
   for (let i = 0; !(await host.request('shellInspect')).address.includes('native-navigation=1') && i < 30; i++) await new Promise(resolve => setTimeout(resolve, 100))
@@ -56,7 +71,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await host.request('shellPerform', { action: 'device' })
   await wait(`window.__praxisViewport.getState().viewport === 'desktop'`)
   await wait(`getComputedStyle(document.querySelector('.previewbar')).display === 'none'`)
-  if (shell.sidebarActions.join(',') !== 'new-chat,new-project,open-project,settings') throw new Error('Missing sidebar project actions')
+  if (shell.sidebarActions.join(',') !== 'new-project,open-project,settings') throw new Error('Missing sidebar project actions')
   await host.request('shellPerform', { action: 'code' })
   await wait('!!window.__praxisCodeDrawer.getState().source')
   await host.request('shellPerform', { action: 'code' })
@@ -71,6 +86,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await host.request('shellPerform', { action: 'toggle-sidebar' })
   await new Promise((resolve) => setTimeout(resolve, 500))
   const collapsed = await host.request('shellInspect')
+  await checkChatAlignment()
   if (!collapsed.sidebarCollapsed || collapsed.detailWidth <= shell.detailWidth)
     throw new Error(
       `Native sidebar did not collapse and release detail space: ${JSON.stringify({ before: shell, after: collapsed })}`
