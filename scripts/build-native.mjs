@@ -85,6 +85,9 @@ const result = Bun.spawnSync(
     join(root, 'src/native/ToolbarLayout.swift'),
     join(root, 'src/native/Inspector.swift'),
     join(root, 'src/native/Composer.swift'),
+    join(root, 'src/native/Chat.swift'),
+    join(root, 'src/native/ChatMarkdown.swift'),
+    join(root, 'src/native/ChatQuestion.swift'),
     '-o',
     join(contents, 'MacOS/PraxisHost'),
     '-framework',
@@ -102,5 +105,5 @@ if (result.exitCode) process.exit(result.exitCode)
 if (/require\(["']electron["']\)/.test(readFileSync(join(out, 'index.cjs'), 'utf8')))
   throw new Error('Native backend still imports Electron')
 console.log(
-  'Built Praxis Native: shared React UI, shared application services, Bun backend, WebKit host.'
+  'Built Praxis Native: Swift chat, shared web panels and services, Bun backend, WebKit preview.'
 )

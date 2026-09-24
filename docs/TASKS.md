@@ -5,6 +5,9 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Render native chat and interactive cards in SwiftUI; replace hidden React form forwarding with typed composer actions.
+- [ ] Move the remaining shared chat/session controller out of React into Bun; finish native Markdown/table and chat visual parity.
+
 - [x] Preserve native sidebar projects and active selection across launches in profile-owned workspace storage.
 
 - [x] Reduce native idle work and unused renderer memory; verify lazy panel state, composer parity and paired performance measurements.

@@ -244,11 +244,11 @@ Other UI animations remain enabled.
 
 ### Native runtime (macOS, experimental)
 
-`bun run dev:native` launches a macOS project/chat sidebar with project actions
-and a preview toolbar for branch, Home/address, desktop/mobile, code, expand and
-primary Publish,
-plus a native chat composer using Apple Liquid Glass on macOS 26+. Chat history,
-inspectors and preview controls remain in WebKit.
+`bun run dev:native` launches a macOS project sidebar, chat history menu, preview
+toolbar, SwiftUI conversation and AppKit composer using Apple Liquid Glass on
+macOS 26+. Native chat uses typed state/actions without a hidden React transcript
+or form. Shared chat controller logic, settings and inspectors still use the main
+WebKit view; this is not yet a React-free build.
 The shared application backend runs under Bun. It requires
 macOS 13.3+, Bun, and command-line tools with the macOS 26 SDK to build. Older
 macOS versions use a visual-effect fallback. Open a project using the normal

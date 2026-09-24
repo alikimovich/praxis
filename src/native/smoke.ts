@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { NativeBridge } from './bridge'
 import { dispatchIPC, views } from './platform'
+import { checkNativeChat } from './smoke-chat'
 
 export async function runNativeSmoke(host: NativeBridge, fixture: string, root: string) {
   const evaluate = async (code: string, view = 'main', isolated = false) => {
@@ -71,6 +72,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   if (shell.interactionGroup.join(',') !== 'select-object,device') throw new Error('Select Object must share a group with the device toggle')
   await host.request('shellPerform', { action: 'select-object' })
   await wait('window.__praxisSelection.getState().selectMode')
+  if (process.env.PRAXIS_NATIVE_BACKGROUND_TEST === '1') console.log('SKIP real preview input and animation sampling: explicit PRAXIS_NATIVE_BACKGROUND_TEST')
   await host.request('shellPerform', { action: 'select-object' })
   await wait('!window.__praxisSelection.getState().selectMode')
   if (!shell.projectsMenuOnly) throw new Error("Projects must open its menu from the whole button")
@@ -137,7 +139,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     clearInterval(window.__nativeExpansionTimer);
     return { samples: window.__nativeExpansionSamples, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches };
   })()`)
-  if (!expansion.reduced && !expansion.samples.some(([width, content]: number[]) => width > 1 && width < content - 1))
+  if (process.env.PRAXIS_NATIVE_BACKGROUND_TEST !== '1' && !expansion.reduced && !expansion.samples.some(([width, content]: number[]) => width > 1 && width < content - 1))
     throw new Error('Native expansion skipped intermediate widths')
   if (expansion.samples.some(([, content]: number[]) => content < 320))
     throw new Error('Native expansion squeezed the conversation and its scrollbar')
@@ -182,7 +184,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   if (!layout.pickersPlain || !layout.attachIsPlus || Object.values(layout.pickerWidths).some(width => Number(width) > 60.5)) throw new Error('Native composer selectors must be plain, compact, and accompanied by a plus')
   if (!layout.autohidesScrollers || layout.contentWidth < 60 || layout.inputHeight < 20 || layout.sendWidth !== 30 || !layout.controlsBelowForm || !layout.sendInsideForm || Math.abs(layout.sendRightInset - 10) > 1 || layout.inputTopInset > 15) throw new Error(`Native composer layout invalid: ${JSON.stringify(layout)}`)
   await host.request('composerPerform', { text: 'A native draft\nwith a second line' })
-  await wait(`document.querySelector('.composer__input').value === 'A native draft\\nwith a second line'`)
+  await waitComposer(state => state.text === 'A native draft\nwith a second line')
   const added = await evaluate(`(async()=>{
     const ws=window.__praxisWorkspace.getState();const p=ws.projects.find(p=>p.key===ws.activeKey);
     const result=await window.api.agent.newChat(p.root);
@@ -204,7 +206,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   const composer = await waitComposer(state => state.text === 'A native draft\nwith a second line')
   console.log(`Native composer: ${composer.glass ? 'NSGlassEffectView Liquid Glass' : 'legacy visual-effect fallback'}; typing and per-chat drafts passed.`)
   await host.request('composerPerform', { text: '' })
-  await wait(`document.querySelector('.composer__input').value === ''`)
+  await waitComposer(state => state.text === '')
   writeFileSync(join(fixture, 'attachment.txt'), 'Native attachment fixture')
   await host.request('composerPerform', { files: [join(fixture, 'attachment.txt')] })
   await waitComposer(state => state.attachments.length === 1)
@@ -220,7 +222,6 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   const originalCommands = await evaluate(`window.__praxisSession.getState().slashCommands`)
   await evaluate(`window.__praxisSession.setState({slashCommands:[{name:'native-fixture',description:'Native keyboard test'}]})`)
   await host.request('composerPerform', { text: '/native' })
-  await wait(`!!document.querySelector('.slash__item')`)
   await waitComposer(state => state.skillListVisible && state.skillCount > 0)
   await host.request('composerPerform', { key: 'Tab' })
   await waitComposer(state => state.text === '/native-fixture ')
@@ -308,7 +309,6 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   )
   await host.request('composerPerform', { files: [join(fixture, 'native-image.png')] })
   await waitComposer(state => state.attachments.length === 1)
-  await wait(`!!document.querySelector('.composer__attachments img')`)
   await host.request('composerPerform', { remove: 0 })
   await waitComposer(state => state.attachments.length === 0)
   const media = await evaluate(
@@ -342,6 +342,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     const image = await host.request('capture', { view })
     writeFileSync(join(artifacts, `${view}.png`), Buffer.from(image.png, 'base64'))
   }
+  await checkNativeChat(host, join(artifacts, 'swift-chat.png'))
   const snapshot = await evaluate('window.api.agent.workspaceSnapshot()')
   if (!snapshot) throw new Error('Shared agent backend did not answer')
   if (!(await host.request('previewInspector', { action: 'show' }))) throw new Error('Native Web Inspector unavailable')
@@ -356,7 +357,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await host.request('previewInspector', { action: 'close' })
   console.log('Native preview Web Inspector opened and closed successfully.')
   console.log(
-    'NATIVE APP PASS — actual React UI, project open, managed server, WebKit preview, shared source/agent services, isolated layers, denied preview commands, captures.'
+    `${process.env.PRAXIS_NATIVE_BACKGROUND_TEST === '1' ? 'NATIVE BACKGROUND CHECKS PASS (preview input/animation skipped)' : 'NATIVE APP PASS'} — Swift chat, shared web panels, managed server, source/agent services, isolated layers and captures.`
   )
   if (process.argv.includes('--live')) {
     const provider = process.env.PRAXIS_NATIVE_TEST_PROVIDER || 'claude'
@@ -380,9 +381,6 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     const prompt =
       'Edit index.html in this temporary test project. Replace only the heading text "Edited through Praxis Native" with "NATIVE_AGENT_VERIFIED". Make the edit now, then reply briefly.'
     await host.request('composerPerform', { text: prompt })
-    await wait(
-      `!!document.querySelector('.composer__send') && !document.querySelector('.composer__send').disabled`
-    )
     await waitComposer(state => state.enabled && state.text === prompt)
     await host.request('composerPerform', { action: 'send' })
     await wait(

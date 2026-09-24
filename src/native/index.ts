@@ -281,6 +281,10 @@ async function main() {
     if (event.sender === mainView.webContents) host!.send('composerState', { state })
   })
   host.on('composer-action', message => send('native-composer:action', message))
+  ipcMain.on('native-chat:state', (event, state) => {
+    if (event.sender === mainView.webContents) host!.send('chatState', { state })
+  })
+  host.on('chat-action', message => send('native-chat:action', message))
   ipcMain.on('native-composer:focus', event => {
     if (event.sender === mainView.webContents) host!.send('composerFocus')
   })
@@ -331,6 +335,11 @@ async function main() {
         process.exitCode = 0
       } catch (error) {
         console.error(error)
+        try {
+          writeFileSync(join(root, 'test/artifacts/native/failure.png'), Buffer.from(await host!.request('captureShell'), 'base64'))
+          console.error('Native chat state:', await host!.request('chatInspect'))
+          console.error('Native geometry:', await host!.request('evaluate', { view: 'main', code: `({native:!!window.praxisNativeChat, placeholder:document.querySelector('.native-chat-surface')?.getBoundingClientRect().toJSON(), chat:document.querySelector('.chat')?.outerHTML.slice(0,500), visibility:document.visibilityState})` }))
+        } catch { /* preserve original failure */ }
         cleanup()
         process.exitCode = 1
       } finally {

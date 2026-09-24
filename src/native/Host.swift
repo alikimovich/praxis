@@ -41,6 +41,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var window: NSWindow!
     var shell: NativeShell!
     var composer: NativeComposer!
+    var chat: NativeChat!
     var previewSurface: PreviewSurface!
     let canvas = Canvas()
     var views: [String: WKWebView] = [:]
@@ -87,6 +88,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         previewSurface.colorChanged = { [weak self] color in self?.shell.updatePreviewColor(color) }
         shell.updatePreviewColor(views["preview"]!.underPageBackgroundColor)
         previewSurface.leading = { [weak self] in self?.shell.previewLeading ?? 0 }
+        chat = NativeChat(); canvas.addSubview(chat)
         composer = NativeComposer(frame: .zero); canvas.addSubview(composer)
         window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
         installMenus()
@@ -144,6 +146,9 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "previewInspector":
             if let action = c["action"] as? String { reply(id, PreviewInspector.perform(action, on: views["preview"])) }
             else { reply(id, PreviewInspector.status(views["preview"])) }
+        case "chatState": chat.update(c["state"] as? [String: Any] ?? [:], composer: composer)
+        case "chatInspect": reply(id, chat.inspect())
+        case "chatPerform": chat.model.action(c["action"] as? String ?? "", id: c["card"] as? String, value: c["value"] as? String, answers: c["answers"] as? [String: String]); reply(id)
         case "composerState": composer.update(c["state"] as? [String: Any] ?? [:])
         case "composerInspect": reply(id, composer.inspect())
         case "composerPerform": composer.perform(c); reply(id)

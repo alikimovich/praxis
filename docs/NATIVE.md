@@ -62,11 +62,11 @@ menus sit on the right without bezels or arrow chrome, fitting their selected
 labels up to 60 points before truncating; full menu labels and tooltips remain. Send/Stop stays inside the form
 at the lower right, as a 30-point button with a 13-point symbol. The chat pane, page root and status fade are transparent; the main WKWebView
 also disables its background drawing so AppKit’s window surface is visible.
-Native-mode web chat uses a thin scrollbar without reserving a permanent gutter.
+The native conversation uses a SwiftUI scroll view with selectable text and native disclosure controls.
 Project-preview scrollbars remain controlled by the page and WebKit.
 
-Chat history, settings, inspectors, code editing and the detailed preview toolbar remain
-React/WebKit. The native build hides the React rail and titlebar drag regions;
+Settings, inspectors and code editing remain React/WebKit. The native conversation
+and its cards render in SwiftUI; the composer remains AppKit. The native build hides the React rail and titlebar drag regions;
 Electron still renders them. A native-only bridge mirrors compact workspace
 snapshots and calls the existing renderer actions. Streamed text does not rebuild
 the native sidebar unless its displayed state changes. Inline chat renaming,
@@ -82,13 +82,24 @@ Arrow keys and Enter/Tab; filtering and completion reuse the shared handlers. Fi
 paths; PNG/TIFF clipboard images are passed as PNG. Image transfer is limited to
 10 MiB per file. Oversized or unreadable images are currently skipped.
 
-`src/native/composer-transport.ts` mirrors the existing React composer's state and
-geometry, and forwards native actions into its existing handlers. Drafts, queues,
-provider/model confirmation and agent submission therefore retain the shared
-behavior. The web form stays mounted but hidden in the native build; Electron
-keeps its existing form. Keep the adapter's DOM selectors aligned with ChatPanel.
-The composer and skill list hide for web dialogs. Native image thumbnails remain
-follow-up work.
+`src/native/Chat.swift`, `ChatMarkdown.swift`, and `ChatQuestion.swift` render the
+conversation, Markdown/code blocks, tool disclosures, attachments, permissions,
+questions, setup/conflict/queue cards and response actions. Native controls use
+typed actions instead of clicking hidden DOM buttons. `NativeChatSurface.tsx`
+mounts only a geometry placeholder; the React transcript and form are not mounted.
+The obsolete DOM composer adapter has been removed.
+
+This is a UI migration, not yet a React-free application. ChatPanel still runs
+shared agent-event/session/draft/model/queue logic; its native branch publishes
+snapshots and handles typed actions through the existing application APIs. The
+main WKWebView still owns workspace layout and other panels. Moving this remaining
+controller/state ownership to Bun is separate follow-up work. Electron keeps its
+existing chat interface. Native Markdown currently supports inline formatting,
+links, headings and fenced code; full table layout/syntax highlighting and the
+animated cat/sticky user-bubble treatment remain parity work.
+
+The composer and skill list hide for web dialogs. Native sent-image thumbnails
+are supported; draft attachments are listed in the native attachments menu.
 
 `scripts/build-native.mjs` bundles `src/native/index.ts` and the existing
 application services. It aliases `electron` to the private `src/native/platform.ts`
@@ -224,8 +235,9 @@ References: [WebKit inspector actions](https://github.com/WebKit/WebKit/blob/mai
 The property-panel WebKit view is created on first explicit use and reused on
 reopen. The shared panel IPC retains state until its renderer subscribes, so
 lazy creation preserves the initial selection. Composer synchronization is
-event-driven, including a native-only React commit notification for controlled
-field values and restored drafts; there is no periodic composer DOM scan.
+event-driven through typed snapshots/actions; no hidden composer form or periodic
+DOM scan is involved. Geometry updates are coalesced with a short timer so they do
+not wait for WebKit animation frames when its view is occluded.
 Sidebar rows/favicons and toolbar artwork are reused when unchanged.
 See [the measurements](RUNTIME_BENCHMARK.md#native-optimization-follow-up--2026-09-24)
 for the measured savings and their limits.
@@ -237,3 +249,8 @@ in its profile directory. All projects remain listed after relaunch; the selecte
 project reopens through the existing suspended-project flow. Closing a project
 removes it from the saved list. Existing WebKit workspace storage is used as a
 fallback on the first launch after upgrading.
+
+Native integration checks assert the React chat DOM is absent and exercise Swift
+stream updates, permissions and questions. `PRAXIS_NATIVE_BACKGROUND_TEST=1`
+explicitly skips real preview input and animation sampling when the test desktop
+is occluded; that mode does not count as full visual/input verification.

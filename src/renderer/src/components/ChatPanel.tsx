@@ -1,5 +1,7 @@
 import { setupPrompt } from '../lib/setup-prompt'
-import { useMessageQueue } from '../message-queue';
+import NativeChatSurface from './NativeChatSurface'
+import type { NativeChatCard, NativeChatState } from '../../../shared/native-chat'
+import { drainMessages, useMessageQueue } from '../message-queue';
 import { messageSender } from '../message-send';
 import { QueuedMessages } from './QueuedMessages';
 import { environmentChanges } from "../../../shared/environment-changes";
@@ -357,9 +359,6 @@ function RevertAction({
 
 
 export default function ChatPanel(): React.JSX.Element {
-  useLayoutEffect(() => {
-    if (window.praxisNativeShell) window.dispatchEvent(new Event('praxis:composer-commit'))
-  })
   const {
     messages,
     isRunning,
@@ -388,6 +387,12 @@ export default function ChatPanel(): React.JSX.Element {
   const { selected, setSelected } = useSelection();
   const activeChatKey = useChat((s) => s.activeKey);
   const queue = useMessageQueue();
+  const nativeRevision = useRef({ chat: '', value: 0 });
+  const allChats = useChat(s => s.byKey);
+  const backgroundAgents = useSpawns(s => s.byKey[activeChatKey]);
+  useEffect(() => {
+    if (window.praxisNativeChat) drainMessages(allChats);
+  }, [allChats, queue.messages, queue.paused]);
   const selectMode = useSelection((s) => s.selectMode);
   const layersOpen = useLayersPanel((s) => s.open);
   const setLayersOpen = useLayersPanel((s) => s.setOpen);
@@ -537,6 +542,11 @@ export default function ChatPanel(): React.JSX.Element {
     if (composerSeed == null) return;
     setInput((cur) => (cur.trim() ? `${composerSeed} ${cur}` : composerSeed));
     useComposer.getState().setSeed(null);
+    if (window.praxisNativeChat) {
+      setCaret(useComposerDrafts.getState().byKey[activeChatKey]?.text.length ?? 0);
+      window.praxisNativeChat.focusComposer();
+      return;
+    }
     requestAnimationFrame(() => {
       const el = inputRef.current;
       if (!el) return;
@@ -762,6 +772,7 @@ export default function ChatPanel(): React.JSX.Element {
     setInput(next);
     setCaret(nextCaret);
     setMenuDismissed(true);
+    if (window.praxisNativeChat) { window.praxisNativeChat.focusComposer(); return; }
     requestAnimationFrame(() => {
       const el = inputRef.current;
       if (!el) return;
@@ -773,6 +784,10 @@ export default function ChatPanel(): React.JSX.Element {
   // Seed the composer with `text` and drop the cursor at the end.
   const seedPrompt = (text: string): void => {
     setInput((cur) => (cur.trim() ? `${text} ${cur}` : text));
+    if (window.praxisNativeChat) {
+      setCaret(useComposerDrafts.getState().byKey[activeChatKey]?.text.length ?? 0);
+      window.praxisNativeChat.focusComposer(); return;
+    }
     requestAnimationFrame(() => {
       const el = inputRef.current;
       if (!el) return;
@@ -1240,6 +1255,86 @@ export default function ChatPanel(): React.JSX.Element {
     else turns[turns.length - 1].push(m);
   }
   const lastMessageId = messages[messages.length - 1]?.id;
+
+  if (window.praxisNativeChat) {
+    const stopMode = isRunning && !input.trim() && attachments.length === 0;
+    const cards: NativeChatCard[] = [];
+    if (modelSwitchError) cards.push({ id: 'model-error', title: 'Model switch failed', detail: modelSwitchError, actions: [] });
+    if (pendingModel) cards.push({ id: 'model-confirm', title: 'Change model for this chat?', detail: 'The conversation will be preserved and the agent restarted with the selected model.', actions: [{ label: 'Cancel', action: 'model-cancel' }, { label: 'Change model', action: 'model-confirm' }] });
+    if (setup.needed && !setup.dismissed) cards.push({ id: 'setup', title: 'Connect this project to Praxis', detail: setup.status || 'Set up source mapping and component inspection for the preview.', actions: [{ label: 'Not now', action: 'setup-dismiss', disabled: setup.busy }, { label: setup.busy ? 'Stop' : 'Set up', action: setup.busy ? 'stop' : 'setup' }] });
+    if (!setup.needed && tokens.offerNeeded && !tokens.offerDismissed) cards.push({ id: 'tokens', title: 'Add a starter design-token palette?', detail: 'Create editable colors, spacing, and radii in .praxis/tokens.json.', actions: [{ label: 'Not now', action: 'tokens-dismiss', disabled: tokens.scaffolding }, { label: 'Add tokens', action: 'tokens', disabled: tokens.scaffolding }] });
+    if (isolation === 'parked') cards.push({ id: 'conflict', title: 'These edits need reconciliation', detail: (isolationFiles ?? []).join('\n'), actions: [{ label: 'Discard', action: 'discard', disabled: !!conflictBusy }, { label: 'Resolve', action: 'resolve', disabled: isRunning || !!conflictBusy }] });
+    for (const request of pending) cards.push({ id: request.id, title: request.title, detail: request.detail, actions: [{ label: 'Deny', action: 'permission', value: 'deny' }, { label: 'Allow', action: 'permission', value: 'allow' }] });
+    for (const note of notes) cards.push({ id: note.id, title: 'Note', detail: note.text, actions: [{ label: 'Remove', action: 'remove-note' }] });
+    if (notes.length) cards.push({ id: 'notes-publish', title: publishMsg?.text ?? 'Publish notes as a PR', actions: [{ label: 'Publish PR', action: 'publish-notes', disabled: publishing }] });
+    for (const message of queue.messages.filter(message => message.key === activeChatKey)) cards.push({ id: `queued-${message.id}`, title: 'Queued message', detail: message.label, actions: [{ label: 'Remove', action: 'queue-remove' }] });
+    for (const agent of backgroundAgents ?? []) cards.push({ id: agent.id, title: agent.status === 'queued' ? 'Queued agent' : 'Background agent', detail: agent.label, actions: [{ label: 'Cancel', action: 'spawn-stop' }] });
+    if (queue.paused[activeChatKey]) cards.push({ id: 'queue-paused', title: 'Queue paused', actions: [{ label: 'Resume', action: 'queue-resume' }] });
+    const login = connectionId ? undefined : HARNESS_LOGIN[provider];
+    if (codexAuthNeeded && login?.login) cards.push({ id: 'login', title: login.blurb, detail: `Run ${login.login} to connect, then try again.`, actions: [] });
+    const stats = useChat.getState().byKey[activeChatKey];
+    const state: NativeChatState = {
+      chat: activeChatKey, messages, running: isRunning, cards, questions,
+      status: stats ? `↑ ${stats.usage.input}  ↓ ${stats.usage.output}` : '',
+      composer: {
+        text: input, caret, revision: nativeRevision.current.chat === activeChatKey ? nativeRevision.current.value : 0,
+        stop: stopMode, enabled: stopMode || (!switchingModel && (!!input.trim() || attachments.length > 0)),
+        sendLabel: stopMode ? 'Stop' : isRunning ? 'Queue message' : 'Send message',
+        context: selected ? `${selected.tag ?? 'Selected element'}` : '',
+        attachments: attachments.map(a => a.kind === 'image' ? 'Remove image' : `Remove ${a.name}`),
+        suggestions: menuOpen ? matches.map((command, index) => ({ title: `/${command.name}`, description: command.description ?? '', active: index === menuActive })) : [],
+        choices: [
+          { label: 'Provider', value: selection.option?.key ?? provider, disabled: isRunning || switchingModel, options: providers.length ? providers.map(p => ({ value: p.key, label: p.label })) : [{ value: provider, label: providerFallback }] },
+          { label: 'Model', value: selection.choice?.value ?? model, disabled: isRunning || switchingModel, options: selection.option?.models.map(c => ({ value: c.value, label: c.label })) ?? [{ value: model, label: agentModelId({ model, modelId }) ?? 'Default' }] },
+          { label: 'Permission mode', value: permissionMode, disabled: false, options: PERMISSION_MODES.map(m => ({ value: m.value, label: m.label })) }
+        ]
+      }
+    };
+    return <div className="chat flex h-full flex-col">
+      {projectRoot && <LayersPanel />}
+      <NativeChatSurface state={state} onAction={action => {
+        if (action.action === 'permission' && pending.some(p => p.id === action.id) && (action.value === 'allow' || action.value === 'deny')) respondPermission(action.id!, action.value);
+        else if (action.action === 'question' && questions.some(q => q.id === action.id)) respondQuestion(action.id!, action.answers ?? null);
+        else if (action.action === 'model-cancel') setPendingModel(null);
+        else if (action.action === 'model-confirm' && pendingModel) { applySelection(pendingModel); setPendingModel(null); }
+        else if (action.action === 'setup') void acceptSetup();
+        else if (action.action === 'setup-dismiss') { setup.setDismissed(true); setup.setNeeded(false); }
+        else if (action.action === 'tokens') void acceptTokenScaffold();
+        else if (action.action === 'tokens-dismiss') { tokens.setOfferDismissed(true); tokens.setOfferNeeded(false); }
+        else if (action.action === 'resolve') void resolveConflict();
+        else if (action.action === 'discard') void discardConflict();
+        else if (action.action === 'stop') stop();
+        else if (action.action === 'remove-note' && action.id) void removeNote(action.id);
+        else if (action.action === 'publish-notes') void publish();
+        else if (action.action === 'queue-remove' && action.id) queue.remove(action.id.replace(/^queued-/, ''));
+        else if (action.action === 'spawn-stop' && backgroundAgents?.some(agent => agent.id === action.id)) void window.api.agent.spawnInterrupt(action.id!);
+        else if (action.action === 'queue-resume') queue.pause(activeChatKey, false);
+        else if (action.action === 'revert' && projectRoot) {
+          const message = messages.find(m => m.id === action.id);
+          if (message?.revertGroup) void window.api.edits.revert(projectRoot, message.revertGroup).then(result => {
+            if (!result.ok) appendNote('Unable to revert edits because files have changed since this turn.');
+          });
+        }
+      }} onComposer={action => {
+        if (action.action === 'input') { nativeRevision.current = { chat: activeChatKey, value: action.revision }; onInputChange(action.text, action.caret); }
+        else if (action.action === 'key') onKeyDown({ key: action.key, shiftKey: false, preventDefault() {} } as React.KeyboardEvent<HTMLTextAreaElement>);
+        else if (action.action === 'send') { if (stopMode) stop(); else send(); }
+        else if (action.action === 'choice') {
+          if (action.label === 'Provider') onProviderChange(action.value);
+          else if (action.label === 'Model') onModelChange(action.value);
+          else if (action.label === 'Permission mode' && PERMISSION_MODES.some(m => m.value === action.value)) onPermissionModeChange(action.value);
+        } else if (action.action === 'suggestion' && matches[action.index]) pickCommand(matches[action.index].name);
+        else if (action.action === 'context') setSelected(null);
+        else if (action.action === 'layers') setLayersOpen(!layersOpen);
+        else if (action.action === 'remove') setAttachments(list => list.filter((_, index) => index !== action.index));
+        else if (action.action === 'files') setAttachments(list => [...list, ...action.files.map(file => file.type.startsWith('image/') ? {
+          id: `native-${crypto.randomUUID()}`, kind: 'image' as const, mediaType: file.type, data: file.data, url: `data:${file.type};base64,${file.data}`, name: file.name, path: file.path
+        } : { id: `native-${crypto.randomUUID()}`, kind: 'file' as const, name: file.name, path: file.path })]);
+      }} />
+    </div>;
+  }
+
+
 
   return (
     <div className="chat flex h-full flex-col" ref={chatRootRef}>

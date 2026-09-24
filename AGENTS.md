@@ -93,8 +93,9 @@ preview controls (domain/branch, selection, viewport, code, layers, expand, Publ
 optional `use-native-shell.ts` renderer hook mirrors compact workspace snapshots
 and routes native actions through existing App handlers; Electron keeps its rail.
 `src/native/Composer.swift` provides the native text field, controls and macOS 26
-Liquid Glass container. The native-only composer transport forwards actions to
-the existing React composer; keep its selectors in sync when changing ChatPanel.
+Liquid Glass container. The native chat renders in SwiftUI (`src/native/Chat.swift`) and the composer
+receives typed state/actions; no hidden React chat/form is mounted. Shared
+ChatPanel controller logic still owns session behavior. See `docs/NATIVE.md`.
 
 ```
 src/

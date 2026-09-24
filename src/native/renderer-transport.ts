@@ -1,7 +1,8 @@
 // Bundled in place of Electron's preload primitives for WKWebView only.
 // The full PraxisApi and preview tools remain the shared preloads.
 import type { NativeShellAction, NativeShellBridge } from '../shared/native-shell'
-import { installComposer } from './composer-transport'
+import type { NativeChatBridge, NativeChatAction } from '../shared/native-chat'
+import type { NativeComposerAction } from '../shared/native-composer'
 const filePaths = new WeakMap<File, string>()
 
 type Listener = (event: object, ...args: unknown[]) => void
@@ -84,7 +85,21 @@ export const contextBridge = {
         }
       }
       Object.defineProperty(globalThis, 'praxisNativeShell', { value: shell, writable: false })
-      installComposer(ipcRenderer, (file, path) => filePaths.set(file, path))
+      const chat: NativeChatBridge = {
+        focusComposer: () => ipcRenderer.send('native-composer:focus'),
+        update: state => ipcRenderer.send('native-chat:state', state),
+        onAction: callback => {
+          const listener: Listener = (_event, value) => callback(value as NativeChatAction)
+          ipcRenderer.on('native-chat:action', listener)
+          return () => ipcRenderer.removeListener('native-chat:action', listener)
+        },
+        onComposer: callback => {
+          const listener: Listener = (_event, value) => callback(value as NativeComposerAction)
+          ipcRenderer.on('native-composer:action', listener)
+          return () => ipcRenderer.removeListener('native-composer:action', listener)
+        }
+      }
+      Object.defineProperty(globalThis, 'praxisNativeChat', { value: chat, writable: false })
     }
   }
 }

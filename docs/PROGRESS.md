@@ -2,6 +2,26 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Render native chat in Swift
+
+Added SwiftUI conversation rendering with selectable inline Markdown, fenced code,
+headings, tool disclosures, sent attachments, copy/revert actions and native
+permission/question/setup/conflict/queue cards. AppKit composer controls now use
+typed state/actions instead of a hidden web form; deleted the DOM composer adapter.
+NativeChatSurface reserves geometry only. Drafts, models, permissions, skills,
+queues and provider submission reuse the shared controller. That controller and
+other application panels still use React; removing its runtime is not completed.
+
+Native build and all typechecks passed. Explicit background integration passed
+composer/history drafts, attachments, skills, typed Send/queue removal with a stubbed
+provider, streamed text/tool activity, permission/question responses and absence
+of React chat DOM. Inspected the Swift conversation capture. Normal-mode checks
+could not verify preview mouse input/animation with WebKit reporting the test
+window hidden; background mode explicitly skips these checks. No live provider
+calls or Electron tests ran. Native table layout, code highlighting and animated
+cat/sticky user-bubble parity remain follow-up work.
+
+
 ## 2026-09-24 — Preserve native sidebar projects across launches
 
 Native now saves workspace JSON atomically in its own profile, independent of
