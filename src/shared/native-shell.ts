@@ -40,6 +40,7 @@ export interface NativeShellAction {
     | 'publish'
     | 'publish-mode'
     | 'code'
+    | 'layers'
     | 'expand'
     | 'address'
     | 'home'

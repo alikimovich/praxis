@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Separate native preview toolbar groups
+
+Separated the desktop/mobile toggle from a native NSToolbarItemGroup containing
+Code, Layers and Expand, with fixed toolbar spaces between groups. Layers uses
+the shared panel store. Replaced the custom accent-colored Publish stack with a
+standard NSMenuToolbarItem, retaining its action and PR/merge menu as a separate
+trailing control.
+
+Native integration passed group membership, Layers open/close, navigation,
+code/expand, publish mode and existing composer/editing flows. Native build and
+all four typechecks passed, as did docs-links and whitespace checks. The first
+build collided with another build updating generated Swift input; the retry
+passed. Inspected the toolbar capture with its existing offscreen compositing
+limitations. No Electron tests ran.
+
 ## 2026-09-23 — Inline native skill list
 
 Replaced the Skills/commands popup chip with an automatically shown, scrollable

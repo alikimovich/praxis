@@ -36,9 +36,10 @@ tracks the web pane’s measured width, including resizing and sidebar collapse,
 and compacts when the preview is expanded. History lists the current project’s
 open and saved chats, marks the active chat, and uses the existing switch/review
 handlers. The preview section provides the current branch menu,
-Home, editable preview address, desktop/mobile, Show/Hide Code and Expand/Restore
-Preview. Publish/Create PR (or Connect to GitHub) is an accent-colored native button
-at the far right, with its mode menu beside it.
+Home and the editable preview address. Desktop/mobile is a separate button;
+Code, Layers and Expand/Restore form one native toolbar group. Publish/Create PR
+(or Connect to GitHub) is a separate standard native button at the far right,
+retaining its PR/merge mode menu.
 Branch switching, new branches and Git Updates reuse the shared handlers; the
 publish menu retains both PR-only and merge modes. Expanding hides chat and the
 native sidebar; restoring returns the sidebar to its previous collapsed state.

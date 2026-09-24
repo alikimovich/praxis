@@ -43,11 +43,12 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     throw new Error(
       `Native sidebar or toolbar state did not follow project opening: ${JSON.stringify(shell)}`
     )
-  if (shell.toolbar.filter((id: string) => ['branch', 'home', 'address', 'device', 'code', 'expand', 'publish'].includes(id)).join(',') !== 'branch,home,address,device,code,expand,publish' || shell.toolbar[0] !== 'projects' || !shell.toolbar[1].includes('ToggleSidebar')) throw new Error(`Unexpected native toolbar: ${JSON.stringify(shell.toolbar)}`)
+  if (shell.toolbar.filter((id: string) => ['branch', 'home', 'address', 'device', 'tools', 'publish'].includes(id)).join(',') !== 'branch,home,address,device,tools,publish' || shell.toolbar[0] !== 'projects' || !shell.toolbar[1].includes('ToggleSidebar')) throw new Error(`Unexpected native toolbar: ${JSON.stringify(shell.toolbar)}`)
   if (shell.outlineRows !== shell.rows.filter((row: any) => row.kind === 'project').length || !shell.chatTitlePlain || shell.chatActions.join(',') !== 'history,new-chat')
     throw new Error('Native project-only sidebar or chat header is incorrect')
+  if (shell.toolGroup.join(',') !== 'code,layers,expand') throw new Error('Incorrect native tools group')
   if (!shell.projectsMenuOnly) throw new Error("Projects must open its menu from the whole button")
-  if (!shell.publishPrimary || shell.toolbar.at(-1) !== 'publish' || !shell.sidebarAutohidesScrollers) throw new Error('Native primary action or scroller configuration is incorrect')
+  if (!shell.publishStandard || shell.toolbar.at(-1) !== 'publish' || !shell.sidebarAutohidesScrollers) throw new Error('Native primary action or scroller configuration is incorrect')
   if (!shell.sidebarContainsTrafficLights || shell.sidebarListTop > shell.contentTop || shell.detailTop > shell.contentTop + 1)
     throw new Error(`Native sidebar must extend behind traffic lights while content stays below toolbar: ${JSON.stringify(shell)}`)
   const checkChatAlignment = async () => {
@@ -77,6 +78,10 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await wait(`window.__praxisViewport.getState().viewport === 'desktop'`)
   await wait(`getComputedStyle(document.querySelector('.previewbar')).display === 'none'`)
   if (shell.sidebarActions.join(',') !== 'new-project,open-project,settings') throw new Error('Missing sidebar project actions')
+  await host.request('shellPerform', { action: 'layers' })
+  await wait('window.__praxisLayersPanel.getState().open')
+  await host.request('shellPerform', { action: 'layers' })
+  await wait('!window.__praxisLayersPanel.getState().open')
   await host.request('shellPerform', { action: 'code' })
   await wait('!!window.__praxisCodeDrawer.getState().source')
   await host.request('shellPerform', { action: 'code' })

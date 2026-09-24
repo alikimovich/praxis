@@ -39,9 +39,9 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     var toolbar: NSToolbar!
     weak var window: NSWindow?
     private var toolbarItems: [String: NSToolbarItem] = [:]
-    private let items = ["projects", "chat", "branch", "home", "address", "device", "code", "expand", "publish"]
-    private let labels = ["home":"Back to Project", "address":"Preview Address", "device":"Switch to Mobile", "branch":"Branch", "publish":"Publish", "code":"Show Code", "expand":"Expand Preview"]
-    private let symbols = ["home":"house", "device":"iphone", "branch":"arrow.triangle.branch", "publish":"arrow.up.circle", "code":"chevron.left.forwardslash.chevron.right", "expand":"arrow.up.left.and.arrow.down.right"]
+    private let items = ["projects", "chat", "branch", "home", "address", "device", "tools", "code", "layers", "expand", "publish"]
+    private let labels = ["layers":"Show Layers", "home":"Back to Project", "address":"Preview Address", "device":"Switch to Mobile", "branch":"Branch", "publish":"Publish", "code":"Show Code", "expand":"Expand Preview"]
+    private let symbols = ["layers":"square.3.layers.3d", "home":"house", "device":"iphone", "branch":"arrow.triangle.branch", "publish":"arrow.up.circle", "code":"chevron.left.forwardslash.chevron.right", "expand":"arrow.up.left.and.arrow.down.right"]
     private var sidebarButtons: [String: NSButton] = [:]
     private var previewState: [String: Any] = [:]
     private var sidebarBeforeExpand = false
@@ -50,8 +50,6 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     private let chatHistory = NSPopUpButton(frame: .zero, pullsDown: true)
     private var chatHeaderWidth: NSLayoutConstraint!
     private let address = NSTextField()
-    private let publishButton = NSButton()
-    private let publishOptions = NSPopUpButton(frame: .zero, pullsDown: true)
 
     init(window: NSWindow, canvas: NSView) {
         contentCanvas = canvas
@@ -135,15 +133,24 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         if abs(chatHeaderWidth.constant - width) > 0.5 { chatHeaderWidth.constant = width }
     }
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace] + items.map { NSToolbarItem.Identifier($0) }
+        [.toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .space] + items.map { NSToolbarItem.Identifier($0) }
     }
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [NSToolbarItem.Identifier("projects"), .toggleSidebar, .sidebarTrackingSeparator, NSToolbarItem.Identifier("chat"), NSToolbarItem.Identifier("branch"), NSToolbarItem.Identifier("home"), NSToolbarItem.Identifier("address"), .flexibleSpace,
-         NSToolbarItem.Identifier("device"), NSToolbarItem.Identifier("code"), NSToolbarItem.Identifier("expand"), NSToolbarItem.Identifier("publish")]
+         NSToolbarItem.Identifier("device"), .space, NSToolbarItem.Identifier("tools"), .space, NSToolbarItem.Identifier("publish")]
     }
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar: Bool) -> NSToolbarItem? {
         let key = identifier.rawValue
         guard items.contains(key) else { return nil }
+        if key == "tools" {
+            let group = NSToolbarItemGroup(itemIdentifier: identifier)
+            group.label = "Preview Tools"
+            group.subitems = ["code", "layers", "expand"].compactMap {
+                self.toolbar(toolbar, itemForItemIdentifier: NSToolbarItem.Identifier($0), willBeInsertedIntoToolbar: willBeInsertedIntoToolbar)
+            }
+            group.isBordered = true
+            return group
+        }
         let item: NSToolbarItem = ["projects", "branch", "publish"].contains(key) ? NSMenuToolbarItem(itemIdentifier: identifier) : NSToolbarItem(itemIdentifier: identifier)
         item.label = labels[key] ?? key; item.paletteLabel = item.label; item.toolTip = item.label
         item.image = NSImage(systemSymbolName: symbols[key] ?? "circle", accessibilityDescription: item.label)
@@ -190,15 +197,8 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             NSLayoutConstraint.activate([address.widthAnchor.constraint(greaterThanOrEqualToConstant: 160), address.widthAnchor.constraint(lessThanOrEqualToConstant: 420), address.heightAnchor.constraint(equalToConstant: 26), preferredWidth])
             item.view = address
         } else if key == "publish" {
-            publishButton.title = "Publish"; publishButton.bezelStyle = .rounded
-            if #available(macOS 26.0, *) { publishButton.bezelStyle = .glass }
-            publishButton.bezelColor = .controlAccentColor
-            publishButton.target = self; publishButton.action = #selector(publishClicked(_:))
-            publishButton.setAccessibilityLabel("Publish")
-            publishOptions.bezelStyle = .rounded; publishOptions.setAccessibilityLabel("Publish settings")
-            publishOptions.widthAnchor.constraint(equalToConstant: 28).isActive = true
-            let group = NSStackView(views: [publishButton, publishOptions]); group.spacing = 2
-            item.view = group; item.visibilityPriority = .high
+            item.image = nil
+            item.isBordered = true; item.visibilityPriority = .high
         }
         item.autovalidates = false; toolbarItems[key] = item
         updateToolbar()
@@ -216,10 +216,6 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             window?.makeFirstResponder(nil); return true
         }
         return false
-    }
-    @objc func publishClicked(_ sender: Any?) {
-        guard let item = toolbarItems["publish"], item.isEnabled else { return }
-        toolbarAction(item)
     }
     @objc func sidebarAction(_ button: NSButton) {
         let action = button.identifier?.rawValue ?? ""
@@ -300,11 +296,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
                 menu.addItem(entry)
             }
             item.menu = menu
-            publishButton.title = item.title; publishButton.setAccessibilityLabel(item.title); publishButton.isEnabled = item.isEnabled
-            publishOptions.menu = menu.copy() as? NSMenu
-            publishOptions.insertItem(withTitle: "", at: 0)
-            publishOptions.isEnabled = item.isEnabled
-            publishOptions.isHidden = item.title == "Connect to GitHub"
+
         }
         toolbarItems["code"]?.toolTip = previewState["codeOpen"] as? Bool == true ? "Hide Code" : "Show Code"
         toolbarItems["code"]?.label = toolbarItems["code"]?.toolTip ?? "Show Code"
@@ -401,7 +393,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
          "sidebarWidth":sidebar.view.bounds.width, "detailWidth":split.splitViewItems[1].viewController.view.bounds.width,
          "outlineRows":outline.numberOfRows, "outlineWidth":outline.bounds.width,
          "toolbar":toolbar.items.map { $0.itemIdentifier.rawValue }, "branch":previewState["branch"] ?? "", "publishLabel":previewState["publishLabel"] ?? "", "codeOpen":previewState["codeOpen"] ?? false,
-         "address":address.stringValue, "viewport":previewState["viewport"] ?? "", "publishPrimary":publishButton.bezelColor == NSColor.controlAccentColor, "sidebarAutohidesScrollers":(outline.enclosingScrollView?.autohidesScrollers ?? false), "sidebarActions":["new-project", "open-project", "settings"], "chatActions":["history", "new-chat"], "historyIDs":chatHistory.menu?.items.compactMap { ($0.representedObject as? [String:String])?["id"] } ?? [], "chatTitle":chatTitle.stringValue, "chatTitlePlain":toolbarItems["chat"]?.action == nil, "chatHeaderWidth":chatHeader.bounds.width, "chatHeaderTrailing":chatHeader.convert(NSPoint(x: chatHeader.bounds.maxX, y: 0), to: nil).x, "detailLeading":split.splitViewItems[1].viewController.view.convert(.zero, to: nil).x, "chatWidth":previewState["chatWidth"] ?? 0, "enabled":toolbarItems.mapValues { $0.isEnabled }]
+         "address":address.stringValue, "viewport":previewState["viewport"] ?? "", "publishStandard":toolbarItems["publish"]?.view == nil, "toolGroup":(toolbar.items.first(where: { $0.itemIdentifier.rawValue == "tools" }) as? NSToolbarItemGroup)?.subitems.map { $0.itemIdentifier.rawValue } ?? [], "sidebarAutohidesScrollers":(outline.enclosingScrollView?.autohidesScrollers ?? false), "sidebarActions":["new-project", "open-project", "settings"], "chatActions":["history", "new-chat"], "historyIDs":chatHistory.menu?.items.compactMap { ($0.representedObject as? [String:String])?["id"] } ?? [], "chatTitle":chatTitle.stringValue, "chatTitlePlain":toolbarItems["chat"]?.action == nil, "chatHeaderWidth":chatHeader.bounds.width, "chatHeaderTrailing":chatHeader.convert(NSPoint(x: chatHeader.bounds.maxX, y: 0), to: nil).x, "detailLeading":split.splitViewItems[1].viewController.view.convert(.zero, to: nil).x, "chatWidth":previewState["chatWidth"] ?? 0, "enabled":toolbarItems.mapValues { $0.isEnabled }]
     }
     func perform(_ action: String, id: String?) -> Bool {
         if action == "toggle-sidebar" {

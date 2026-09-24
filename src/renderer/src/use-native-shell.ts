@@ -6,6 +6,7 @@ import {
   useChat,
   useHistory,
   useLog,
+  useLayersPanel,
   usePreviewLocation,
   usePublishMode,
   useSelection,
@@ -191,6 +192,9 @@ export function useNativeShell(actions: Actions) {
         } else if (message.action === 'device' && action.preview.deviceEnabled) {
           const viewport = useViewport.getState()
           viewport.setViewport(viewport.viewport === 'mobile' ? 'desktop' : 'mobile')
+        } else if (message.action === 'layers') {
+          const layers = useLayersPanel.getState()
+          layers.setOpen(!layers.open)
         } else if (message.action === 'code') await action.code()
         else if (message.action === 'expand') ws.toggleChatHidden()
         else if (message.action === 'new-chat') await action.newChat(project.key)
