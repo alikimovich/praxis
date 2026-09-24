@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Native preview Web Inspector
+
+Added a Develop menu with preview Web Inspector (Option-Command-I) and JavaScript
+Console (Option-Command-C). Preview-only developer extras enable WebKit's native
+Inspect Element context-menu action. Guarded private inspector selectors stay
+in Inspector.swift, with a Safari Develop-menu explanation if unavailable; the
+preview's application IPC permissions are unchanged.
+
+Native integration opened the real preview inspector, invoked its console, and
+closed it successfully. Full native integration, build and type checks passed.
+No Electron tests ran.
+
 ## 2026-09-23 — Momentary toolbar actions and native app icon
 
 Native toolbar groups now use momentary selection and clear residual selection

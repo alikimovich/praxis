@@ -319,6 +319,17 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   }
   const snapshot = await evaluate('window.api.agent.workspaceSnapshot()')
   if (!snapshot) throw new Error('Shared agent backend did not answer')
+  if (!(await host.request('previewInspector', { action: 'show' }))) throw new Error('Native Web Inspector unavailable')
+  let inspector: any
+  for (let i = 0; i < 50; i++) {
+    inspector = await host.request('previewInspector')
+    if (inspector.visible) break
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+  if (!inspector?.visible || !inspector.inspectable) throw new Error('Preview Web Inspector did not open')
+  await host.request('previewInspector', { action: 'showConsole' })
+  await host.request('previewInspector', { action: 'close' })
+  console.log('Native preview Web Inspector opened and closed successfully.')
   console.log(
     'NATIVE APP PASS — actual React UI, project open, managed server, WebKit preview, shared source/agent services, isolated layers, denied preview commands, captures.'
   )

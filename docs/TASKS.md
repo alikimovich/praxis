@@ -5,6 +5,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Expose native preview Web Inspector, Console shortcuts, and WebKit Inspect Element context menu.
+
 - [x] Make toolbar action groups momentary and bundle/set the Praxis icon for the native app.
 
 - [x] Compare current native/Electron build size, startup, resident memory, idle CPU and preview frame timing; document failures and measurement limits.

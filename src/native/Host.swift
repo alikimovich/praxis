@@ -56,6 +56,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     func makeView(_ id: String) -> WKWebView {
         let config = WKWebViewConfiguration()
         let isolated = id == "preview"
+        if isolated { PreviewInspector.enable(config.preferences) }
         config.websiteDataStore = isolated || ephemeral ? .nonPersistent() : .default()
         let contentWorld: WKContentWorld = isolated ? world : .page
         config.userContentController.add(self, contentWorld: contentWorld, name: "praxis")
@@ -121,6 +122,11 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         for (label, key, action) in [("Reload Preview", "r", "reload"), ("Toggle Logs", "l", "logs"), ("Toggle UI", ".", "toggle-chat")] {
             let item = NSMenuItem(title: label, action: #selector(menuAction(_:)), keyEquivalent: key); item.target = self; item.representedObject = action; actions.addItem(item)
         }
+        let develop = submenu("Develop")
+        for (title, key, action) in [("Show Preview Web Inspector", "i", "show"), ("Show Preview JavaScript Console", "c", "showConsole")] {
+            let item = NSMenuItem(title: title, action: #selector(showPreviewInspector(_:)), keyEquivalent: key)
+            item.target = self; item.representedObject = action; item.keyEquivalentModifierMask = [.command, .option]; develop.addItem(item)
+        }
         NSApp.mainMenu = menu
     }
     @objc func menuAction(_ item: NSMenuItem) { emit(["event":"menu", "action":item.representedObject as? String ?? ""]) }
@@ -134,6 +140,9 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         let name = c["view"] as? String ?? "main"
         let view = views[name]
         switch c["method"] as? String {
+        case "previewInspector":
+            if let action = c["action"] as? String { reply(id, PreviewInspector.perform(action, on: views["preview"])) }
+            else { reply(id, PreviewInspector.status(views["preview"])) }
         case "composerState": composer.update(c["state"] as? [String: Any] ?? [:])
         case "composerInspect": reply(id, composer.inspect())
         case "composerPerform": composer.perform(c); reply(id)

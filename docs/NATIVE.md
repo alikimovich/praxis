@@ -202,3 +202,17 @@ override their glyph sizing; native tinting and button behavior remain intact.
 The native app bundle includes the existing Praxis ICNS resource and sets its
 Dock icon at launch. Toolbar action groups use momentary highlighting; Expand
 does not retain a selection highlight after activation.
+
+### Preview Web Inspector
+
+Use **Develop → Show Preview Web Inspector** (⌥⌘I), **Show Preview JavaScript
+Console** (⌥⌘C), or right-click the preview and choose **Inspect Element**.
+Developer extras are enabled only for the project preview. Direct presentation
+uses guarded WebKit SPI isolated in `src/native/Inspector.swift`; it is not
+exposed through the untrusted page's IPC allowlist. If the SPI is unavailable,
+the menu explains how to inspect through Safari's Develop menu using the public
+`isInspectable` support. This experimental integration should be reviewed before
+any App Store distribution.
+
+References: [WebKit inspector actions](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/_WKInspectorIBActions.h),
+[Safari inspection setup](https://webkit.org/web-inspector/enabling-web-inspector/).
