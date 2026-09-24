@@ -41,7 +41,6 @@ window hidden; background mode explicitly skips these checks. No live provider
 calls or Electron tests ran. Native table layout, code highlighting and animated
 cat/sticky user-bubble parity remain follow-up work.
 
-
 ## 2026-09-24 — Preserve native sidebar projects across launches
 
 Native now saves workspace JSON atomically in its own profile, independent of
@@ -54,6 +53,18 @@ Native workspace tests cover disk reopen, empty-list persistence, invalid writes
 and cold-launch retention/selection. Both tests, all TypeScript checks and the
 full native integration suite passed. No Electron tests ran.
 
+## 2026-09-24 — Isolate selection input from the native preview app
+
+Selection now stops page keyboard, pointer and editing event handlers at window
+capture. Inline text editing retains WebKit's caret, typing and clipboard defaults;
+Praxis handles Enter/Escape before suppressing propagation. Inspection scrolling
+and overlay controls remain available. Native preload installation now runs at
+document start so project capture listeners cannot run first.
+
+Added native regression coverage with parser-registered page capture listeners,
+real mouse/keyboard input, caret movement, typing, cancel/commit and restored
+interaction after leaving selection mode. Native integration and all TypeScript
+checks passed; inspected the native shell capture. No Electron tests ran.
 
 ## 2026-09-24 — Reduce native idle work and unused WebKit memory
 

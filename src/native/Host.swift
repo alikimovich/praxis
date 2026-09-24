@@ -63,7 +63,8 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         config.userContentController.add(self, contentWorld: contentWorld, name: "praxis")
         let file = directory + (isolated ? "/preview.js" : "/preload.js")
         let script = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
-        config.userContentController.addUserScript(WKUserScript(source: script, injectionTime: isolated ? .atDocumentEnd : .atDocumentStart, forMainFrameOnly: true, in: contentWorld))
+        // Selection must intercept input before the project's capture listeners.
+        config.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: contentWorld))
         if !isolated { config.setURLSchemeHandler(self, forURLScheme: "praxis-media") }
         let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = self; view.uiDelegate = self; view.isInspectable = true
@@ -224,6 +225,22 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
                 case .failure(let error): self.reply(id, error: (error as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String ?? error.localizedDescription)
                 }
             }
+        case "previewInput":
+            guard ephemeral, let preview = views["preview"] else { reply(id, error: "Test preview unavailable"); return }
+            if let key = c["key"] as? String {
+                let code: UInt16 = key == "ArrowRight" ? 124 : key == "Escape" ? 53 : key == "Enter" ? 36 : 0
+                let chars = key == "ArrowRight" ? "\u{F703}" : key == "Escape" ? "\u{1B}" : key == "Enter" ? "\r" : key
+                for type in [NSEvent.EventType.keyDown, .keyUp] {
+                    if let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: chars, charactersIgnoringModifiers: chars, isARepeat: false, keyCode: code) { window.sendEvent(event) }
+                }
+            } else {
+                let y = c["y"] as? Double ?? 20
+                let point = preview.convert(NSPoint(x: c["x"] as? Double ?? 20, y: preview.isFlipped ? y : preview.bounds.height - y), to: nil)
+                for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                    if let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: c["clicks"] as? Int ?? 1, pressure: 1) { window.sendEvent(event) }
+                }
+            }
+            reply(id)
         case "capture":
             view?.takeSnapshot(with: nil) { image, error in
                 guard let image = image, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff), let png = bitmap.representation(using: .png, properties: [:]) else { self.reply(id, error: error?.localizedDescription ?? "Snapshot unavailable"); return }

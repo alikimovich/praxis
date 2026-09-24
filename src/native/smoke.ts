@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { NativeBridge } from './bridge'
 import { dispatchIPC, views } from './platform'
+import { checkSelectionInput } from './smoke-input'
 import { checkNativeChat } from './smoke-chat'
 import { nativeChat } from './chat-runtime'
 
@@ -74,6 +75,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await host.request('shellPerform', { action: 'select-object' })
   await wait('window.__praxisSelection.getState().selectMode')
   if (process.env.PRAXIS_NATIVE_BACKGROUND_TEST === '1') console.log('SKIP real preview input and animation sampling: explicit PRAXIS_NATIVE_BACKGROUND_TEST')
+  else await checkSelectionInput(host)
   await host.request('shellPerform', { action: 'select-object' })
   await wait('!window.__praxisSelection.getState().selectMode')
   if (!shell.projectsMenuOnly) throw new Error("Projects must open its menu from the whole button")

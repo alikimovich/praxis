@@ -1533,6 +1533,18 @@ function setCommentMode(next: CommentMode, fromRenderer = false): void {
 
 function onKey(e: KeyboardEvent): void {
   if (threeD.active()) return
+  // Stop page shortcuts at window capture, but retain the browser's editing
+  // defaults (caret movement, selection, typing, clipboard and IME).
+  if (blockPageInput(e)) {
+    if (inputEl && e.composedPath().includes(inputEl)) {
+      if (e.isTrusted) onInputKey(e)
+      return
+    }
+    if (editing) {
+      if (e.isTrusted) onEditKey(e)
+      return
+    }
+  }
   if (!e.isTrusted || editing) return
   if (commenting) return // the open composer owns keys (its handler manages them)
   if (e.key === 'Escape') {
@@ -1567,11 +1579,26 @@ function onKey(e: KeyboardEvent): void {
 /** Releasing Option (or losing the key entirely on window blur) ends the
  *  measurement — nothing else in the overlay is keyed to it. */
 function onKeyUp(e: KeyboardEvent): void {
+  blockPageInput(e)
   if (!altHeld) return
   if (e.key === 'Alt' || !e.altKey) {
     altHeld = false
     clearMeasure()
   }
+}
+
+/** Run after our gesture handlers, before the preview application's handlers. */
+function blockPageInput(e: Event): boolean {
+  if ((!active && !editing) || threeD.active()) return false
+  const target = e.target instanceof Element ? e.target : null
+  const overlayKey = target === overlayHost && e instanceof KeyboardEvent
+  if (isOverlay(target) && !overlayKey) return false
+  const inEditor = !!editing && !!target && editing.contains(target)
+  e.stopImmediatePropagation()
+  // Scrolling remains useful for inspecting a long page. Inside the inline
+  // editor only propagation is blocked, so native text editing still works.
+  if (!inEditor && !overlayKey && e.type !== 'wheel') e.preventDefault()
+  return true
 }
 
 function setActive(next: boolean): void {
@@ -1716,6 +1743,14 @@ window.addEventListener('click', onClick, true)
 window.addEventListener('dblclick', onDblClick, true)
 window.addEventListener('keydown', onKey, true)
 window.addEventListener('keyup', onKeyUp, true)
+for (const type of [
+  'keypress', 'pointerdown', 'pointerup', 'pointermove', 'mousedown', 'mouseup',
+  'mousemove', 'click', 'dblclick', 'auxclick', 'contextmenu', 'dragstart',
+  'touchstart', 'touchmove', 'touchend', 'wheel', 'beforeinput', 'input',
+  'compositionstart', 'compositionupdate', 'compositionend', 'paste', 'cut', 'copy'
+]) {
+  window.addEventListener(type, blockPageInput, { capture: true, passive: false })
+}
 // A window switch (Cmd+Tab) swallows the Option keyup — drop the measurement
 // rather than leave it stuck on when focus comes back.
 window.addEventListener('blur', () => {

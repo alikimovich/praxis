@@ -10,6 +10,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [ ] Move workspace/session navigation and layout into native/Bun; replace remaining web panels and remove the main UI WebView/React bundle.
 - [ ] Finish native Markdown/table and chat visual parity.
 
+- [x] Block preview app input during selection and inline editing, preserving caret movement and verifying native WebKit event isolation.
 - [x] Preserve native sidebar projects and active selection across launches in profile-owned workspace storage.
 
 - [x] Reduce native idle work and unused renderer memory; verify lazy panel state, composer parity and paired performance measurements.
