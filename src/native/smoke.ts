@@ -28,9 +28,57 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await wait('!!window.api && !!document.querySelector(".empty__open")')
   if (await evaluate('navigator.userAgent.includes("Electron")'))
     throw new Error('Unexpected Electron renderer')
-  await evaluate('document.querySelector(".empty__open").click()')
+  if (!(await host.request('shellPerform', { action: 'open-project' })))
+    throw new Error('Native open toolbar unavailable')
   await wait('!!document.querySelector("#native-title")', 'preview')
   await wait('!!window.__praxisSession?.getState().projectRoot')
+  await wait('getComputedStyle(document.querySelector(".rail")).display === "none"')
+  // Wait for the debounced renderer snapshot to reach the system sidebar.
+  let shell = await host.request('shellInspect')
+  for (let i = 0; (!shell.rows.length || !shell.enabled.reload) && i < 40; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    shell = await host.request('shellInspect')
+  }
+  if (!shell.rows.some((row: any) => row.kind === 'project') || !shell.enabled.reload)
+    throw new Error(
+      `Native sidebar or toolbar state did not follow project opening: ${JSON.stringify(shell)}`
+    )
+  await host.request('shellPerform', { action: 'select' })
+  await wait('window.__praxisSelection.getState().selectMode')
+  await host.request('shellPerform', { action: 'select' })
+  await wait('!window.__praxisSelection.getState().selectMode')
+  await host.request('shellPerform', { action: 'toggle-chat' })
+  await wait('window.__praxisWorkspace.getState().chatHidden')
+  await host.request('shellPerform', { action: 'toggle-chat' })
+  await wait('!window.__praxisWorkspace.getState().chatHidden')
+  await host.request('shellPerform', { action: 'toggle-sidebar' })
+  await new Promise((resolve) => setTimeout(resolve, 500))
+  const collapsed = await host.request('shellInspect')
+  if (!collapsed.sidebarCollapsed || collapsed.detailWidth <= shell.detailWidth)
+    throw new Error(
+      `Native sidebar did not collapse and release detail space: ${JSON.stringify({ before: shell, after: collapsed })}`
+    )
+  await host.request('shellPerform', { action: 'toggle-sidebar' })
+  await new Promise((resolve) => setTimeout(resolve, 500))
+  const originalChat = shell.selected
+  const added = await evaluate(`(async()=>{
+    const ws=window.__praxisWorkspace.getState();const p=ws.projects.find(p=>p.key===ws.activeKey);
+    const result=await window.api.agent.newChat(p.root);
+    if(!result.ok) throw new Error(result.error);
+    ws.patchEntry(p.key,{sessionKeys:[...(p.sessionKeys??[p.key]),result.sessionKey]});
+    return result.sessionKey;
+  })()`)
+  await new Promise((resolve) => setTimeout(resolve, 150))
+  if (!(await host.request('shellPerform', { action: 'select-row', row: `chat:${added}` })))
+    throw new Error('Native chat row not selectable')
+  await wait(
+    `window.__praxisWorkspace.getState().projects.some(p=>p.activeSessionKey===${JSON.stringify(added)})`
+  )
+  await host.request('shellPerform', { action: 'select-row', row: originalChat })
+  await wait(
+    `window.__praxisWorkspace.getState().projects.some(p=>'chat:'+p.activeSessionKey===${JSON.stringify(originalChat)})`
+  )
+  console.log('Native toolbar actions, project/chat sidebar, and split-view collapse passed.')
   const detected = await evaluate(`window.api.project.detect(${JSON.stringify(fixture)})`)
   if (detected.framework !== 'static')
     throw new Error(`Unexpected project detection: ${JSON.stringify(detected)}`)
@@ -108,6 +156,14 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   console.log('Native undo/redo, media scheme, and pop-out editor passed.')
   const artifacts = join(root, 'test/artifacts/native')
   mkdirSync(artifacts, { recursive: true })
+  writeFileSync(
+    join(artifacts, 'shell.png'),
+    Buffer.from(await host.request('captureShell'), 'base64')
+  )
+  writeFileSync(
+    join(artifacts, 'sidebar.png'),
+    Buffer.from(await host.request('captureSidebar'), 'base64')
+  )
   writeFileSync(join(artifacts, 'layers.json'), JSON.stringify(layers, null, 2))
   for (const view of ['main', 'preview']) {
     const image = await host.request('capture', { view })

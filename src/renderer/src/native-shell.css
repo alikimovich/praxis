@@ -1,0 +1,11 @@
+/* AppKit owns the sidebar and titlebar in the native host. Keep the React rail
+   mounted for its history subscriptions, while removing it from layout/focus. */
+html.native-shell .rail,
+html.native-shell .sidebar-toggle,
+html.native-shell .rail-drag,
+html.native-shell .chat-drag {
+  display: none !important;
+}
+html.native-shell .app > .banner:first-child {
+  margin-top: 0;
+}

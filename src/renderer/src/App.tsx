@@ -78,6 +78,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Check, ChevronDown } from './icons'
 import Rail from './components/Rail'
+import { useNativeShell } from './use-native-shell'
 import type {
   CommentMode,
   Framework,
@@ -1700,6 +1701,12 @@ export default function App(): React.JSX.Element {
   }
 
   // Keep the keydown/menu listeners pointed at the current closures.
+  useNativeShell({
+    switchProject: switchTo, switchSession, newChat: newChatForProject,
+    closeProject: closeProjectFromRail, closeChat: closeChatForProject,
+    review: openReview, memory: (root, name) => setMemoryTarget({ root, name })
+  })
+
   actionsRef.current = {
     toggleSelect,
     stop: () => void stop(),

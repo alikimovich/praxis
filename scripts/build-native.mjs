@@ -65,6 +65,7 @@ writeFileSync(
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>`
 )
+writeFileSync(join(out, 'main.swift'), readFileSync(join(root, 'src/native/Host.swift')))
 const result = Bun.spawnSync(
   [
     'xcrun',
@@ -74,7 +75,8 @@ const result = Bun.spawnSync(
     `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx13.3`,
     '-module-cache-path',
     join(out, 'module-cache'),
-    join(root, 'src/native/Host.swift'),
+    join(out, 'main.swift'),
+    join(root, 'src/native/Shell.swift'),
     '-o',
     join(contents, 'MacOS/PraxisHost'),
     '-framework',

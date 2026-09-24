@@ -1,5 +1,7 @@
 // Bundled in place of Electron's preload primitives for WKWebView only.
 // The full PraxisApi and preview tools remain the shared preloads.
+import type { NativeShellAction, NativeShellBridge } from '../shared/native-shell'
+
 type Listener = (event: object, ...args: unknown[]) => void
 const listeners = new Map<string, Set<Listener>>()
 const pending = new Map<
@@ -30,13 +32,26 @@ nativeGlobal.__praxisNativeDispatch = (message: Delivery) => {
 }
 export const ipcRenderer = {
   send(channel: string, ...args: unknown[]) {
-    host.postMessage({ type: 'send', channel, args, document: documentId })
+    host.postMessage({
+      type: 'send',
+      channel,
+      args,
+      undefinedArgs: args.flatMap((value, index) => (value === undefined ? [index] : [])),
+      document: documentId
+    })
   },
   invoke(channel: string, ...args: unknown[]) {
     const id = ++sequence
     return new Promise((resolve, reject) => {
       pending.set(id, { resolve, reject })
-      host.postMessage({ type: 'invoke', id, channel, args, document: documentId })
+      host.postMessage({
+        type: 'invoke',
+        id,
+        channel,
+        args,
+        undefinedArgs: args.flatMap((value, index) => (value === undefined ? [index] : [])),
+        document: documentId
+      })
     })
   },
   on(channel: string, listener: Listener) {
@@ -51,6 +66,21 @@ export const ipcRenderer = {
 export const contextBridge = {
   exposeInMainWorld(key: string, value: unknown) {
     Object.defineProperty(globalThis, key, { value, writable: false })
+    if (
+      key === 'api' &&
+      !location.search.includes('praxisPanel=') &&
+      !location.search.includes('praxisEditor=')
+    ) {
+      const shell: NativeShellBridge = {
+        update: (state) => ipcRenderer.send('native-shell:state', state),
+        onAction: (callback) => {
+          const listener: Listener = (_event, action) => callback(action as NativeShellAction)
+          ipcRenderer.on('native-shell:action', listener)
+          return () => ipcRenderer.removeListener('native-shell:action', listener)
+        }
+      }
+      Object.defineProperty(globalThis, 'praxisNativeShell', { value: shell, writable: false })
+    }
   }
 }
 // WebKit does not expose a local File's disk path; attachments still use bytes.

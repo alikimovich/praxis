@@ -22,6 +22,20 @@ binary is loaded by the native backend; Bun itself remains a local prerequisite.
 
 ## Shared code and host boundaries
 
+The macOS shell uses a standard `NSOutlineView` sidebar, `NSSplitViewController`
+divider and `NSToolbar` items with system symbols and appearance. Projects expand
+to live and previous chats. Native selection switches projects/chats; context
+menus offer new chat, project memory and closing. Toolbar actions open/create
+projects, start chats, reload the preview, toggle element selection/chat visibility,
+and open settings. The system sidebar button collapses the sidebar.
+
+Chat, settings, inspectors, code editing and the detailed preview toolbar remain
+React/WebKit. The native build hides the React rail and titlebar drag regions;
+Electron still renders them. A native-only bridge mirrors compact workspace
+snapshots and calls the existing renderer actions. Streamed text does not rebuild
+the native sidebar unless its displayed state changes. Inline chat renaming,
+manual row ordering and background-agent rows are not yet in the native sidebar.
+
 `scripts/build-native.mjs` bundles `src/native/index.ts` and the existing
 application services. It aliases `electron` to the private `src/native/platform.ts`
 adapter only for that build. The existing renderer, `PraxisApi` preload, and full
@@ -73,6 +87,11 @@ preview cannot access the privileged bridge and cannot invoke source-read IPC.
 PNG artifacts are written under `test/artifacts/native/`.
 The native check also exercises undo/redo, registered media-file delivery and
 opening the shared code editor in a separate native window.
+It opens the project through the actual AppKit toolbar, switches between real
+chat sessions through the outline view, checks selection/chat controls and sidebar
+collapse, and captures native controls separately. Full-window offscreen caching
+does not reliably composite WebKit and vibrancy layers; use the separate sidebar,
+main and preview captures for QA. Pointer interactions still need manual checking.
 
 `test:native-live` additionally submits an edit through the real composer to
 Claude by default, or Codex with `PRAXIS_NATIVE_TEST_PROVIDER=codex`, using a

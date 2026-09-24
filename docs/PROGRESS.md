@@ -2,6 +2,36 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — System macOS sidebar and toolbar
+
+Added an AppKit source-list outline for projects/live and previous chats, a system
+split-view divider/sidebar toggle, and standard toolbar items for opening/creating
+projects, new chats, reload, selection, chat visibility and settings. Context menus
+reuse the existing project-memory and close actions. Chat, inspectors, settings,
+code editing and detailed preview controls remain in WebKit. Electron retains its
+React rail and window controls.
+
+The native-only renderer hook subscribes to workspace state, sends changed compact
+snapshots and routes native actions through the current App closures. Sidebar
+collapse preserves detail-local preview coordinates. Added shared bridge types
+and preserved undefined optional IPC arguments across JSON serialization; the new
+multi-chat check exposed null defeating shared-handler default options.
+
+Validation: all four typecheck projects and native build passed. Native checks
+passed toolbar project opening, selection/chat toggles, sidebar collapse, real
+chat-session switching, source editing/live reload, undo/redo, image delivery,
+pop-out editors and preview isolation. Authorized Codex fixture editing also
+passed through the new shell. Inspected native sidebar/toolbar and separate web
+captures; offscreen vibrancy/WebKit compositing is limited, documented in NATIVE.
+Pointer interaction and missing sidebar parity (rename/order/background agents)
+remain manual/future work.
+
+Deterministic regression run: 144 PASS, two animation failures (startup-intro
+timing and rail-collapse icon morph), with native checks run separately and ten
+agent-send tests excluded. Both failures passed on an isolated serial rerun.
+Reports: `test/artifacts/runs/run-xsVFmE/summary.json` and
+`test/artifacts/runs/run-Lo2sAf/summary.json`. Docs-links and whitespace checks pass.
+
 ## 2026-09-23 — Native Codex live edit verified
 
 Added `PRAXIS_NATIVE_TEST_PROVIDER=codex` to the native live test. Corrected the

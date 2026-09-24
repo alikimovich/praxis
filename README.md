@@ -244,8 +244,9 @@ Other UI animations remain enabled.
 
 ### Native runtime (macOS, experimental)
 
-`bun run dev:native` now launches the real Praxis React interface and shared
-application backend, running under Bun with an AppKit/WebKit host. It requires
+`bun run dev:native` launches a standard macOS project/chat sidebar and toolbar,
+with the existing React chat, inspectors and preview controls inside WebKit.
+The shared application backend runs under Bun. It requires
 macOS 13.3+, Bun, and Xcode command-line tools. Open a project using the normal
 folder picker; Praxis owns its dev server. `--project /path/to/repo` preselects
 the first folder pick. `bun run dev` remains the default Electron version.

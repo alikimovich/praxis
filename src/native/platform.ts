@@ -53,12 +53,18 @@ export async function dispatchIPC(view: string, message: any) {
   const sender = views.get(view)?.webContents
   if (!sender) throw new Error('Unknown IPC sender')
   const event = { sender }
+  // JSON otherwise changes omitted optional arguments into null, defeating JS
+  // default parameters in the shared handlers (for example newChat(root)).
+  const undefinedArgs = new Set(Array.isArray(message.undefinedArgs) ? message.undefinedArgs : [])
+  const args = message.args.map((value: unknown, index: number) =>
+    undefinedArgs.has(index) ? undefined : value
+  )
   if (message.type === 'invoke') {
     const handler = requests.get(message.channel)
     if (!handler) throw new Error(`Unsupported native command: ${message.channel}`)
-    return await handler(event, ...message.args)
+    return await handler(event, ...args)
   }
-  ipcMain.emit(message.channel, event, ...message.args)
+  ipcMain.emit(message.channel, event, ...args)
 }
 
 const run = promisify(execFile)

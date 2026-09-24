@@ -8,6 +8,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Include the standalone macOS prototype in the repo and expose `bun run dev:native`, forwarding preview URL and integration-test arguments.
 - [x] Connect the shared Praxis UI and application core to the native host while retaining Electron as the default.
 - [x] Verify a successful live provider edit through the native composer (Codex source edit and WebKit preview reload passed; Claude still requires login).
+- [x] Add a standard macOS project/chat sidebar, split-view divider and toolbar around the shared web content.
+- [ ] Native sidebar parity: inline rename, manual ordering and background-agent rows.
 - [ ] Native parity: shared-profile migration/coordination, app-shell HMR, updater/relaunch, browser permission and download handling.
 
 ## Comment agent model routing (2026-09-22)

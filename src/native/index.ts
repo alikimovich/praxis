@@ -262,6 +262,10 @@ async function main() {
     }
   })
   host.on('menu', ({ action }) => send('menu:action', action))
+  ipcMain.on('native-shell:state', (event, state) => {
+    if (event.sender === mainView.webContents) host!.send('shellState', { state })
+  })
+  host.on('shell-action', ({ action, id, project }) => send('native-shell:action', { action, id, project }))
   host.on('recent', ({ root }) => send('menu:open-recent', root))
   host.on('view-closed', ({ view }) => {
     const v = views.get(view)

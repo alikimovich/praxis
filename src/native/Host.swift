@@ -39,6 +39,7 @@ if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--crypto" {
 final class Canvas: NSView { override var isFlipped: Bool { true } }
 final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate, WKURLSchemeHandler {
     var window: NSWindow!
+    var shell: NativeShell!
     let canvas = Canvas()
     var views: [String: WKWebView] = [:]
     var targets: [String: URL] = [:]
@@ -76,6 +77,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         window.title = "Praxis · Native"; window.minSize = NSSize(width: 850, height: 550)
         window.contentView = canvas; window.delegate = self
         _ = makeView("main"); _ = makeView("preview"); _ = makeView("panel")
+        shell = NativeShell(window: window, canvas: canvas)
         window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
         installMenus()
         DispatchQueue.global().async { [weak self] in
@@ -123,6 +125,28 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         let name = c["view"] as? String ?? "main"
         let view = views[name]
         switch c["method"] as? String {
+        case "shellState": shell.update(c["state"] as? [String: Any] ?? [:])
+        case "shellInspect": reply(id, shell.inspect())
+        case "shellPerform": reply(id, shell.perform(c["action"] as? String ?? "", id: c["row"] as? String))
+        case "captureShell":
+            let content = window.contentView?.superview ?? shell.split.view
+            guard let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { reply(id, error: "Shell capture unavailable"); return }
+            content.cacheDisplay(in: content.bounds, to: bitmap)
+            reply(id, bitmap.representation(using: .png, properties: [:])?.base64EncodedString() ?? "")
+        case "captureSidebar":
+            shell.split.view.layoutSubtreeIfNeeded()
+            let content = shell.outline
+            guard let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { reply(id, error: "Sidebar capture unavailable"); return }
+            content.cacheDisplay(in: content.bounds, to: bitmap)
+            // Source-list materials are transparent when cached offscreen. Render
+            // the cached native cells over the system background for readable QA.
+            let image = NSImage(size: content.bounds.size); image.lockFocus()
+            NSColor.windowBackgroundColor.setFill(); NSRect(origin: .zero, size: content.bounds.size).fill()
+            let cells = NSImage(size: content.bounds.size); cells.addRepresentation(bitmap)
+            cells.draw(in: NSRect(origin: .zero, size: content.bounds.size), from: .zero, operation: .sourceOver, fraction: 1)
+            image.unlockFocus()
+            let png = image.tiffRepresentation.flatMap { NSBitmapImageRep(data: $0)?.representation(using: .png, properties: [:]) }
+            reply(id, png?.base64EncodedString() ?? "")
         case "editor":
             let editor = editorWindows[name] ?? NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1000, height: 760), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
             if editorWindows[name] == nil {
@@ -155,7 +179,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "evaluate":
             guard let view = view, let code = c["code"] as? String else { reply(id, error: "Missing evaluation target"); return }
             view.callAsyncJavaScript("return await (\(code));", arguments: [:], in: nil, in: c["isolated"] as? Bool == true ? world : .page) { result in
-                switch result { case .success(let value): self.reply(id, value); case .failure(let error): self.reply(id, error: error.localizedDescription) }
+                switch result { case .success(let value): self.reply(id, value); case .failure(let error): self.reply(id, error: (error as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String ?? error.localizedDescription) }
             }
         case "capture":
             view?.takeSnapshot(with: nil) { image, error in
