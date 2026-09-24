@@ -2,6 +2,23 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Native composer spacing and compact controls
+
+Removed the chat pane’s separate background/token override so it shares the shell
+surface. The composer’s excessive top space came from an always-reserved 22-point
+chip row plus a forced 152-point form minimum. Empty chips now collapse and the
+form minimum is 112 points; populated context/attachment/suggestion rows remain.
+Send/Stop is 36 points with a larger symbol and a flexible spacer keeping it at
+the right. Pickers measure selected labels rather than their longest menu option,
+using Electron ComposerSelect’s ten-character compact rule; full labels remain
+in menus/tooltips and controls can shrink on narrow layouts.
+
+Native integration passed twice, including final geometry assertions for the
+empty input’s top inset and Send’s size/right inset, plus drafts, history,
+attachments, permissions and editing flows. Build, all four typechecks, docs-links
+and whitespace checks passed. Inspected the composer content capture; offscreen
+glass compositing still has the documented limits. No Electron tests ran.
+
 ## 2026-09-23 — Circular glass Settings button
 
 Replaced the sidebar’s labeled Settings control with an icon-only 36-point circle.

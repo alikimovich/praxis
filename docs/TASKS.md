@@ -18,6 +18,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Make the entire Projects toolbar button open its menu, including the folder icon.
 - [x] Show projects only in the native sidebar with hover actions; move chat history beside the plain chat title and New Chat button.
 - [x] Use an icon-only circular Liquid Glass Settings button at the bottom of the sidebar.
+- [x] Remove the chat fill, collapse empty composer chip spacing, compact selectors to their labels, and enlarge/right-align Send.
 - [ ] Native composer polish: image thumbnails, richer slash suggestions and attachment error feedback; verify pointer interaction and IME on an unlocked desktop.
 - [ ] Native sidebar parity: inline rename, manual ordering and background-agent rows.
 - [ ] Native parity: shared-profile migration/coordination, app-shell HMR, updater/relaunch, browser permission and download handling.

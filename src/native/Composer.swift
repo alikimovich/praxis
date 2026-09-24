@@ -37,6 +37,8 @@ final class NativeComposer: NSView, NSTextViewDelegate {
     var applying = false
     var glass = false
     var choicesSignature = Data()
+    var chipsHeight: NSLayoutConstraint!
+    var pickerWidths: [String: NSLayoutConstraint] = [:]
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -79,16 +81,26 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         for label in ["Provider", "Model", "Permission mode"] {
             let picker = NSPopUpButton(frame: .zero, pullsDown: false)
             picker.menu?.autoenablesItems = false
+            picker.cell?.lineBreakMode = .byTruncatingTail
             picker.controlSize = .small; picker.font = .systemFont(ofSize: 11)
             picker.setAccessibilityLabel(label); picker.target = self; picker.action = #selector(pick(_:))
             picker.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             picker.addItem(withTitle: label); pickers[label] = picker; controls.addArrangedSubview(picker)
             picker.widthAnchor.constraint(greaterThanOrEqualToConstant: 35).isActive = true
+            let width = picker.widthAnchor.constraint(equalToConstant: 70); width.priority = .defaultHigh; width.isActive = true
+            pickerWidths[label] = width
+            picker.setContentHuggingPriority(.required, for: .horizontal)
         }
         sendButton.bezelStyle = .circular; sendButton.isBordered = true
         sendButton.target = self; sendButton.action = #selector(send(_:))
-        controls.addArrangedSubview(sendButton)
-        for button in [plus, sendButton] { button.widthAnchor.constraint(equalToConstant: 30).isActive = true }
+        let spacer = NSView(); spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        controls.addArrangedSubview(spacer); controls.addArrangedSubview(sendButton)
+        spacer.widthAnchor.constraint(greaterThanOrEqualToConstant: 0).isActive = true
+        plus.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        sendButton.widthAnchor.constraint(equalToConstant: 36).isActive = true
+        sendButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        sendButton.imageScaling = .scaleProportionallyUpOrDown
+        sendButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
         chips.orientation = .horizontal; chips.spacing = 4
         context.bezelStyle = .roundRect; context.controlSize = .small; context.lineBreakMode = .byTruncatingTail
         context.target = self; context.action = #selector(clearContext(_:))
@@ -96,10 +108,11 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         chips.addArrangedSubview(context); chips.addArrangedSubview(attachments); chips.addArrangedSubview(suggestions)
         attachments.controlSize = .small; suggestions.controlSize = .small
         for view in [chips, scroll, controls] { view.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(view) }
+        chipsHeight = chips.heightAnchor.constraint(equalToConstant: 0)
         NSLayoutConstraint.activate([
-            chips.topAnchor.constraint(equalTo: content.topAnchor, constant: 10), chips.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), chips.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -12), chips.heightAnchor.constraint(equalToConstant: 22),
+            chips.topAnchor.constraint(equalTo: content.topAnchor, constant: 10), chips.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), chips.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -12), chipsHeight,
             scroll.topAnchor.constraint(equalTo: chips.bottomAnchor, constant: 4), scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), scroll.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -5),
-            controls.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10), controls.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10), controls.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -10), controls.heightAnchor.constraint(equalToConstant: 30)
+            controls.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10), controls.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10), controls.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -10), controls.heightAnchor.constraint(equalToConstant: 36)
         ])
         isHidden = true
     }
@@ -204,12 +217,18 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             }
             picker.isEnabled = !(choice["disabled"] as? Bool ?? false)
             picker.toolTip = picker.titleOfSelectedItem
+            let title = picker.titleOfSelectedItem ?? ""
+            let compactTitle = title.count > 10 ? String(title.prefix(10)) + "..." : title
+            let textWidth = (compactTitle as NSString).size(withAttributes: [.font: picker.font ?? NSFont.systemFont(ofSize: 11)]).width
+            pickerWidths[label]?.constant = max(35, ceil(textWidth) + 28)
         }
         }
         let selected = next["context"] as? String ?? ""
         context.isHidden = selected.isEmpty; context.title = selected; context.toolTip = "Clear selected element: " + selected
         configure(attachments, title: "Attachments", entries: (next["attachments"] as? [String] ?? []).enumerated().map { ($0.element, ["action":"remove", "index":$0.offset]) })
         configure(suggestions, title: "Skills / commands", entries: (next["suggestions"] as? [[String: Any]] ?? []).enumerated().map { ($0.element["title"] as? String ?? "", ["action":"suggestion", "index":$0.offset]) })
+        let hasChips = !context.isHidden || !attachments.isHidden || !suggestions.isHidden
+        chips.isHidden = !hasChips; chipsHeight.constant = hasChips ? 22 : 0
     }
     func configure(_ popup: NSPopUpButton, title: String, entries: [(String, [String: Any])]) {
         popup.isHidden = entries.isEmpty; popup.removeAllItems(); popup.addItem(withTitle: title)
@@ -218,7 +237,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             item.target = self; item.representedObject = payload; popup.menu?.addItem(item)
         }
     }
-    func inspect() -> [String: Any] { layoutSubtreeIfNeeded(); return ["autohidesScrollers":scroll.autohidesScrollers, "contentWidth":content.bounds.width, "inputHeight":scroll.bounds.height, "sendWidth":sendButton.bounds.width, "visible":!isHidden, "glass":glass, "text":text.string, "chat":chat, "enabled":sendButton.isEnabled, "revision":revision, "choices":state["choices"] ?? [], "attachments":state["attachments"] ?? [], "bounds":["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height]] }
+    func inspect() -> [String: Any] { layoutSubtreeIfNeeded(); return ["inputTopInset":content.bounds.maxY - scroll.frame.maxY, "sendRightInset":content.bounds.maxX - sendButton.convert(sendButton.bounds, to: content).maxX, "autohidesScrollers":scroll.autohidesScrollers, "contentWidth":content.bounds.width, "inputHeight":scroll.bounds.height, "sendWidth":sendButton.bounds.width, "visible":!isHidden, "glass":glass, "text":text.string, "chat":chat, "enabled":sendButton.isEnabled, "revision":revision, "choices":state["choices"] ?? [], "attachments":state["attachments"] ?? [], "bounds":["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height]] }
     func perform(_ c: [String: Any]) {
         if let value = c["text"] as? String { text.string = value; text.setSelectedRange(NSRange(location: (value as NSString).length, length: 0)); changed() }
         if c["action"] as? String == "send" { send(nil) }
