@@ -68,7 +68,9 @@ The composer uses `NSGlassEffectView` on macOS 26+, with a native multiline
 `NSTextView`, attachment/tools menu, provider/model/permission popups and send/stop
 button. Older macOS versions use `NSVisualEffectView`. Enter submits; Shift+Enter
 inserts a newline. Selected-element context, attachment removal and slash-command
-choices use native controls. Files from the picker or native drop retain their
+choices use native controls. Typing `/` opens a scrollable list above the composer
+with names, descriptions and the active keyboard choice. Click a row or use
+Arrow keys and Enter/Tab; filtering and completion reuse the shared handlers. Files from the picker or native drop retain their
 paths; PNG/TIFF clipboard images are passed as PNG. Image transfer is limited to
 10 MiB per file. Oversized or unreadable images are currently skipped.
 
@@ -77,8 +79,8 @@ geometry, and forwards native actions into its existing handlers. Drafts, queues
 provider/model confirmation and agent submission therefore retain the shared
 behavior. The web form stays mounted but hidden in the native build; Electron
 keeps its existing form. Keep the adapter's DOM selectors aligned with ChatPanel.
-The overlay hides for web dialogs. Native image thumbnails and a richer command
-suggestion presentation remain follow-up work.
+The composer and skill list hide for web dialogs. Native image thumbnails remain
+follow-up work.
 
 `scripts/build-native.mjs` bundles `src/native/index.ts` and the existing
 application services. It aliases `electron` to the private `src/native/platform.ts`

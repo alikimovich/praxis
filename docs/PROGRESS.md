@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-23 — Inline native skill list
+
+Replaced the Skills/commands popup chip with an automatically shown, scrollable
+native list above the composer. Rows display command names and descriptions,
+highlight the active keyboard choice, and are clickable without leaving focus
+away from the editor. The list follows composer geometry, caps at 240 points,
+and hides with the composer or when matches close. Existing React filtering,
+Arrow/Enter/Tab handling and completion remain authoritative.
+
+Native build/integration passed, including visible-list and slash-completion
+checks plus existing draft, modal, editing and isolation checks. All four
+typechecks, docs-links and whitespace checks passed; no Electron tests ran.
+
 ## 2026-09-23 — Native composer spacing and compact controls
 
 Removed the chat pane’s separate background/token override so it shares the shell

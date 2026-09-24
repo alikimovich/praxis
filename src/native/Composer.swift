@@ -29,7 +29,9 @@ final class NativeComposer: NSView, NSTextViewDelegate {
     let chips = NSStackView()
     let context = NSButton()
     let attachments = NSPopUpButton(frame: .zero, pullsDown: true)
-    let suggestions = NSPopUpButton(frame: .zero, pullsDown: true)
+    let skillList = NSScrollView()
+    let skillRows = NSView()
+    var skillEntries: [[String: Any]] = []
     var pickers: [String: NSPopUpButton] = [:]
     var state: [String: Any] = [:]
     var chat = ""
@@ -105,8 +107,14 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         context.bezelStyle = .roundRect; context.controlSize = .small; context.lineBreakMode = .byTruncatingTail
         context.target = self; context.action = #selector(clearContext(_:))
         context.widthAnchor.constraint(lessThanOrEqualToConstant: 160).isActive = true
-        chips.addArrangedSubview(context); chips.addArrangedSubview(attachments); chips.addArrangedSubview(suggestions)
-        attachments.controlSize = .small; suggestions.controlSize = .small
+        chips.addArrangedSubview(context); chips.addArrangedSubview(attachments)
+        attachments.controlSize = .small
+        skillList.documentView = skillRows; skillList.hasVerticalScroller = true
+        skillList.autohidesScrollers = true; skillList.scrollerStyle = .overlay
+        skillList.backgroundColor = .windowBackgroundColor
+        skillList.wantsLayer = true; skillList.layer?.cornerRadius = 12
+        skillList.layer?.borderWidth = 1; skillList.layer?.borderColor = NSColor.separatorColor.cgColor
+        skillList.setAccessibilityLabel("Skills and commands"); skillList.isHidden = true
         for view in [chips, scroll, controls] { view.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(view) }
         chipsHeight = chips.heightAnchor.constraint(equalToConstant: 0)
         NSLayoutConstraint.activate([
@@ -118,6 +126,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
     }
     override func layout() {
         super.layout()
+        layoutSkills()
         // An empty document must not retain its initial 70pt height in a shorter field.
         if text.string.isEmpty && scroll.contentSize.height > 0 && text.frame.size != scroll.contentSize {
             text.setFrameSize(scroll.contentSize)
@@ -226,9 +235,47 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         let selected = next["context"] as? String ?? ""
         context.isHidden = selected.isEmpty; context.title = selected; context.toolTip = "Clear selected element: " + selected
         configure(attachments, title: "Attachments", entries: (next["attachments"] as? [String] ?? []).enumerated().map { ($0.element, ["action":"remove", "index":$0.offset]) })
-        configure(suggestions, title: "Skills / commands", entries: (next["suggestions"] as? [[String: Any]] ?? []).enumerated().map { ($0.element["title"] as? String ?? "", ["action":"suggestion", "index":$0.offset]) })
-        let hasChips = !context.isHidden || !attachments.isHidden || !suggestions.isHidden
+        let hasChips = !context.isHidden || !attachments.isHidden
         chips.isHidden = !hasChips; chipsHeight.constant = hasChips ? 22 : 0
+        skillEntries = next["suggestions"] as? [[String: Any]] ?? []
+        rebuildSkills()
+    }
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        if let superview { superview.addSubview(skillList); layoutSkills() }
+        else { skillList.removeFromSuperview() }
+    }
+    private func layoutSkills() {
+        let height = min(240, CGFloat(skillEntries.count * 48), max(0, frame.minY - 6))
+        skillList.frame = NSRect(x: frame.minX, y: max(0, frame.minY - height - 6), width: frame.width, height: height)
+        skillList.isHidden = isHidden || skillEntries.isEmpty || height == 0
+        skillRows.frame = NSRect(x: 0, y: 0, width: skillList.contentSize.width, height: CGFloat(skillEntries.count * 48))
+        for (index, row) in skillRows.subviews.enumerated() {
+            row.frame = NSRect(x: 6, y: CGFloat((skillEntries.count - index - 1) * 48), width: max(0, skillList.contentSize.width - 12), height: 48)
+        }
+    }
+    private func rebuildSkills() {
+        skillRows.subviews.forEach { $0.removeFromSuperview() }
+        for (index, entry) in skillEntries.enumerated() {
+            let button = NSButton(title: "", target: self, action: #selector(chooseSkill(_:)))
+            button.tag = index; button.isBordered = false; button.alignment = .left
+            let title = entry["title"] as? String ?? ""
+            let description = entry["description"] as? String ?? ""
+            let label = NSMutableAttributedString(string: title, attributes: [.font:NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor:NSColor.labelColor])
+            if !description.isEmpty { label.append(NSAttributedString(string: "\n" + description, attributes: [.font:NSFont.systemFont(ofSize: 11), .foregroundColor:NSColor.secondaryLabelColor])) }
+            button.attributedTitle = label; button.cell?.wraps = false; button.cell?.lineBreakMode = .byTruncatingTail
+            button.setAccessibilityLabel(title + " " + description)
+            button.wantsLayer = true; button.layer?.cornerRadius = 6
+            if entry["active"] as? Bool == true { button.layer?.backgroundColor = NSColor.selectedContentBackgroundColor.withAlphaComponent(0.25).cgColor }
+            skillRows.addSubview(button)
+        }
+        layoutSkills()
+        if let index = skillEntries.firstIndex(where: { $0["active"] as? Bool == true }), index < skillRows.subviews.count {
+            skillRows.scrollToVisible(skillRows.subviews[index].frame)
+        }
+    }
+    @objc private func chooseSkill(_ button: NSButton) {
+        emitAction("suggestion", ["index":button.tag]); window?.makeFirstResponder(text)
     }
     func configure(_ popup: NSPopUpButton, title: String, entries: [(String, [String: Any])]) {
         popup.isHidden = entries.isEmpty; popup.removeAllItems(); popup.addItem(withTitle: title)
@@ -237,7 +284,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             item.target = self; item.representedObject = payload; popup.menu?.addItem(item)
         }
     }
-    func inspect() -> [String: Any] { layoutSubtreeIfNeeded(); return ["inputTopInset":content.bounds.maxY - scroll.frame.maxY, "sendRightInset":content.bounds.maxX - sendButton.convert(sendButton.bounds, to: content).maxX, "autohidesScrollers":scroll.autohidesScrollers, "contentWidth":content.bounds.width, "inputHeight":scroll.bounds.height, "sendWidth":sendButton.bounds.width, "visible":!isHidden, "glass":glass, "text":text.string, "chat":chat, "enabled":sendButton.isEnabled, "revision":revision, "choices":state["choices"] ?? [], "attachments":state["attachments"] ?? [], "bounds":["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height]] }
+    func inspect() -> [String: Any] { layoutSubtreeIfNeeded(); return ["skillListVisible":!skillList.isHidden, "skillCount":skillEntries.count, "inputTopInset":content.bounds.maxY - scroll.frame.maxY, "sendRightInset":content.bounds.maxX - sendButton.convert(sendButton.bounds, to: content).maxX, "autohidesScrollers":scroll.autohidesScrollers, "contentWidth":content.bounds.width, "inputHeight":scroll.bounds.height, "sendWidth":sendButton.bounds.width, "visible":!isHidden, "glass":glass, "text":text.string, "chat":chat, "enabled":sendButton.isEnabled, "revision":revision, "choices":state["choices"] ?? [], "attachments":state["attachments"] ?? [], "bounds":["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height]] }
     func perform(_ c: [String: Any]) {
         if let value = c["text"] as? String { text.string = value; text.setSelectedRange(NSRange(location: (value as NSString).length, length: 0)); changed() }
         if c["action"] as? String == "send" { send(nil) }

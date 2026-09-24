@@ -61,6 +61,7 @@ export function installComposer(ipc: IPC, rememberPath: (file: File, path: strin
       suggestions: [...(container?.querySelectorAll<HTMLButtonElement>('.slash__item') ?? [])].map(
         (button) => ({
           title: button.querySelector('.slash__name')?.textContent ?? '',
+          description: button.querySelector('.slash__desc')?.textContent ?? '',
           active: button.classList.contains('is-active')
         })
       )

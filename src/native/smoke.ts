@@ -149,6 +149,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await evaluate(`window.__praxisSession.setState({slashCommands:[{name:'native-fixture',description:'Native keyboard test'}]})`)
   await host.request('composerPerform', { text: '/native' })
   await wait(`!!document.querySelector('.slash__item')`)
+  await waitComposer(state => state.skillListVisible && state.skillCount > 0)
   await host.request('composerPerform', { key: 'Tab' })
   await waitComposer(state => state.text === '/native-fixture ')
   await host.request('composerPerform', { text: '' })
