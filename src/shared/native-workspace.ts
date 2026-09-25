@@ -27,6 +27,7 @@ export type NativeWorkspaceCommand =
   | { type: 'restart'; key: string; command?: string }
 export interface NativeWorkspaceBridge {
   command(command: NativeWorkspaceCommand): Promise<void>
+  onProjection(callback: (value: { chatHidden: boolean; viewport: string; selectMode: boolean }) => void): () => void
   onState(callback: (state: NativeWorkspaceSnapshot) => void): () => void
 }
 declare global { interface Window { praxisNativeWorkspace?: NativeWorkspaceBridge } }

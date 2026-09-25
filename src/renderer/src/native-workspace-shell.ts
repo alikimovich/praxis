@@ -6,6 +6,11 @@ import { useAnnotations, useChat, useGithub, useHistory, useLog, useRecents, use
 export function connectNativeWorkspace(apply: (state: NativeWorkspaceSnapshot) => void) {
   const bridge = window.praxisNativeWorkspace!
   let revision = -1, active = '', lastError = '', disposed = false
+  const offProjection = bridge.onProjection(value => {
+    useWorkspace.setState({ chatHidden: value.chatHidden })
+    useViewport.getState().setViewport(value.viewport === 'mobile' ? 'mobile' : 'desktop')
+    useSelection.getState().setSelectMode(value.selectMode)
+  })
   const off = bridge.onState(state => {
     if (state.revision < revision) return
     revision = state.revision
@@ -41,5 +46,5 @@ export function connectNativeWorkspace(apply: (state: NativeWorkspaceSnapshot) =
     apply(state)
   })
   void bridge.command({ type: 'attach', legacy: localStorage.getItem('praxis:workspace'), preferred: preferredChatAgentSettings() }).catch(error => useLog.getState().append(String(error), 'error'))
-  return () => { disposed = true; off() }
+  return () => { disposed = true; off(); offProjection() }
 }

@@ -85,6 +85,7 @@ final class WorkspaceLayout {
         let right = min(max(0, panels["right"] ?? 0), max(0, bounds.width - leading - 120))
         let bottom = min(max(0, panels["bottom"] ?? 0), bounds.height * 0.8)
         let available = NSRect(x: leading, y: 0, width: max(0, bounds.width - leading - right), height: max(0, bounds.height - bottom))
+        host.previewStatus.frame = available
         var page = available
         let mobile = shellState["viewport"] as? String == "mobile"
         device.isHidden = !mobile || !previewVisible

@@ -767,6 +767,7 @@ export default function App(): React.JSX.Element {
   // Keep the preview's pins in sync with the notes.
   const notes = useAnnotations((s) => s.list)
   useEffect(() => {
+    if (window.praxisNativeContext) return
     window.api.preview.setAnnotations(notes.map((n) => ({ id: n.id, selector: n.selector })))
   }, [notes])
 
@@ -1763,7 +1764,7 @@ export default function App(): React.JSX.Element {
 
   // S inside the focused preview toggles select mode — same handler as the
   // app-side shortcut/menu (via the ref, so it sees current closures).
-  useEffect(() => window.api.preview.onToggleSelect(() => actionsRef.current.toggleSelect()), [])
+  useEffect(() => window.api.preview.onToggleSelect(() => { if (!window.praxisNativeShell) actionsRef.current.toggleSelect() }), [])
 
   // Boot: reattach to surviving main-process state (renderer reload) or auto-reopen
   // the last project (real relaunch). Runs exactly once; restore.ts self-guards a

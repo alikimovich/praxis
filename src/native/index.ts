@@ -33,10 +33,10 @@ import { parsePreferredModelState, resolvePreferredSettings } from '../shared/pr
 import { nativePreferences } from './preferences'
 import { workspaceStorage } from './workspace'
 import { installNativeChat } from './chat-runtime'
+import { NativeShellController } from './shell-controller'
 import { NativeSupportSheets } from './support-sheets'
 import { NativeGitController } from './git-controller'
 import { environmentChanges } from '../shared/environment-changes'
-import type { NativeShellState } from '../shared/native-shell'
 import { NativeContextController } from './context-controller'
 import { NativeReviewController } from './review-controller'
 import { NativeActivityController } from './activity-controller'
@@ -315,12 +315,12 @@ async function main() {
     }
   })
   host.on('menu', ({ action }) => { if (!['open-project', 'new-project', 'settings', 'logs', 'feedback', 'diagnose'].includes(action)) send('menu:action', action) })
-  let lastShellState: NativeShellState | null = null
-  const renderShell = () => { if (lastShellState) host!.send('shellState', { state: gitController.decorate(lastShellState) }) }
+  let shellController: NativeShellController | undefined
+  const renderShell = () => shellController?.render()
   ipcMain.on('native-shell:state', (event, state) => {
-    if (event.sender === mainView.webContents) { lastShellState = state; renderShell() }
+    if (event.sender === mainView.webContents && shellController) { shellController.codeOpen = !!state.codeOpen; shellController.schedule() }
   })
-  host.on('shell-action', action => { if (!workspaceOwnsAction(action) && !['memory', 'branch', 'new-branch', 'git-updates', 'publish', 'publish-mode'].includes(action.action) && !(action.action === 'select' && action.id?.startsWith('history:'))) send('native-shell:action', action) })
+  host.on('shell-action', action => { if (!workspaceOwnsAction(action) && !['memory', 'branch', 'new-branch', 'git-updates', 'publish', 'publish-mode', 'expand', 'device', 'select-object', 'address', 'home'].includes(action.action) && !(action.action === 'select' && action.id?.startsWith('history:'))) send('native-shell:action', action) })
   const activityController = new NativeActivityController((method, data) => host!.send(method, data))
   host.on('activity-action', ({ action }) => activityController.action(action))
   host.on('menu', ({ action }) => { if (action === 'logs') activityController.action('toggle') })
@@ -346,7 +346,7 @@ async function main() {
   })
   const chatController = installNativeChat(host!, mainView)
   const workspaceController = installNativeWorkspace(host!, mainView, workspace, chatController, preferences)
-  const contextController = new NativeContextController(workspaceController, chatController, () => ({ projectUi: preferences.get('praxis:project-ui:v1') === 'true', projectUiEngine: preferences.get('praxis:project-ui-engine:v1') === 'jev' ? 'jev' : 'agent' }))
+  const contextController = new NativeContextController(workspaceController, chatController, () => ({ projectUi: preferences.get('praxis:project-ui:v1') === 'true', projectUiEngine: preferences.get('praxis:project-ui-engine:v1') === 'jev' ? 'jev' : 'agent' }), (channel, ...args) => dispatchIPC('main', { type: 'send', channel, args }))
   workspaceController.services.activate = entry => contextController.activate(entry)
   const projectEffect = chatController.services.effect
   chatController.services.effect = effect => {
@@ -370,6 +370,21 @@ async function main() {
   ipcMain.on('native-context:selection', (event, value) => { if (event.sender === mainView.webContents) contextController.selection(value) })
   const sheetController = new NativeSheetController(host!, workspaceController, chatController)
   const gitController = new NativeGitController(sheetController, activityController, preferences, renderShell)
+  shellController = new NativeShellController(workspaceController, chatController, gitController, preferences,
+    state => host!.send('shellState', { state }), value => send('native-shell:projection', value))
+  const renderWorkspace = workspaceController.services.render
+  workspaceController.services.render = state => { renderWorkspace(state); shellController!.schedule(); send('native-shell:action', { action: 'chat-resize', value: preferences.get('praxis:native-chat-width') ?? '440' }) }
+  const renderChatEffect = chatController.services.effect
+  chatController.services.effect = effect => { renderChatEffect(effect); if (effect.type === 'mirror') shellController!.schedule() }
+  host.on('shell-action', action => {
+    if (['expand', 'device', 'select-object', 'address', 'home'].includes(action.action)) void shellController!.action(action).catch(error => activityController.append(String(error), 'error'))
+  })
+  serviceEvents.on('event', (channel, value) => {
+    if (channel === 'preview:url-changed') { shellController!.location = value; shellController!.schedule() }
+    if (channel === 'preview:toggle-select') void shellController!.action({ action: 'select-object' }).catch(error => activityController.append(String(error), 'error'))
+    if (channel === 'preview:select-cancelled') { shellController!.selecting = false; shellController!.schedule() }
+  })
+  serviceEvents.on('command', (channel, args) => { if (channel === 'preview:set-select-mode') { shellController!.selecting = !!args[0]; shellController!.schedule() } })
   const activateContext = workspaceController.services.activate
   workspaceController.services.activate = async entry => { await activateContext(entry); if (entry) void gitController.refresh(entry.root).catch(error => activityController.append(String(error), 'error')) }
   host.on('shell-action', action => {
@@ -399,6 +414,12 @@ async function main() {
   }
   host.on('menu', ({ action }) => { if (['new-project', 'settings', 'feedback', 'diagnose'].includes(action)) openSheet(action) })
   host.on('shell-action', action => { if (action.action === 'select' && action.id?.startsWith('history:')) openSheet('review', action.id.slice(8)); if (action.action === 'memory') openSheet('memory', action.project ?? workspaceController.state.activeKey ?? undefined) })
+  host.on('native-preview-action', action => {
+    if (workspaceController.state.activeKey !== action.project) return
+    if (action.action === 'logs') activityController.action('show')
+    else if (action.action === 'diagnose') openSheet('diagnose')
+    else if (action.action === 'run') void workspaceController.command({ type: 'restart', key: action.project, ...(action.command?.trim() ? { command: action.command.trim() } : {}) }).catch(error => activityController.append(String(error), 'error'))
+  })
   ipcMain.on('native-sheet:open', (event, kind, key) => { if (event.sender === mainView.webContents) openSheet(kind, key) })
 
   ipcMain.on('native-composer:focus', event => {
@@ -444,6 +465,7 @@ async function main() {
   host.once('ready', async () => {
     host!.send('preferences', { values: preferences.snapshot() })
     host!.send('layoutWidth', { width: Number(preferences.get('praxis:native-chat-width')) || 440 })
+    shellController!.render()
     mainView.webContents.loadURL(`${url}?praxisSkipIntro=1`)
     console.log('Praxis Native is running on Bun + system WebKit. Electron is not loaded.')
     if (testing) {

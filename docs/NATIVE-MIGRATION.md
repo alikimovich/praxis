@@ -24,8 +24,8 @@ benefit to this UI migration. Electron keeps its renderer and runtime.
 
 | Area | Current owner | Remaining dependency |
 | --- | --- | --- |
-| Sidebar and toolbar | AppKit | Actions and state route through use-native-shell.ts and App.tsx |
-| Welcome/loading and cat | SwiftUI | Busy state, recents and project actions still come through React |
+| Sidebar and toolbar | AppKit + Bun | Legacy code/layers actions still open web editing tools |
+| Welcome/loading and cat | SwiftUI + Bun | None for native welcome/preview status |
 | Chat and composer | SwiftUI/AppKit + Bun | DOM geometry and temporary mirrors for remaining panels |
 | Workspace persistence | Bun controller and profile files | Shell projection and residual editing actions still use renderer adapters |
 | Chat/preview layout | AppKit | Legacy tools supply desired insets; shell presentation still uses a renderer adapter |

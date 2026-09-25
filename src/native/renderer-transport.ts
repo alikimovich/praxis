@@ -125,6 +125,7 @@ export const contextBridge = {
       Object.defineProperty(globalThis, 'praxisNativeSheets', { value: { open: (kind: string, key?: string) => ipcRenderer.send('native-sheet:open', kind, key) }, writable: false })
       const workspace: NativeWorkspaceBridge = {
         command: command => ipcRenderer.invoke('native-workspace:command', command) as Promise<void>,
+        onProjection: (callback: (value: any) => void) => { const listener: Listener = (_event, value) => callback(value); ipcRenderer.on('native-shell:projection', listener); return () => ipcRenderer.removeListener('native-shell:projection', listener) },
         onState: callback => {
           const listener: Listener = (_event, state) => callback(state as import('../shared/native-workspace').NativeWorkspaceSnapshot)
           ipcRenderer.on('native-workspace:state', listener)

@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Native shell state and preview recovery
+
+Bun now constructs project/history rows, favicons, chat titles, toolbar state and
+preview location directly. Selection/device/expand/address actions no longer run
+through App.tsx; a temporary projection keeps the remaining web tools aligned.
+Swift owns preview loading, setup, failure and retry surfaces. Annotation pins
+and selection clearing now use the event-only preview bridge directly.
+
+Validation: shell navigation/origin/persistence tests and context tests passed,
+as did typechecks and native background integration. Native resize also runs
+with renderer event delivery disabled. Main WebView creation and React editing
+panels remain until their replacements are complete.
+
 ## 2026-09-24 — AppKit-owned workspace geometry
 
 AppKit now places the chat/composer, preview, mobile device artwork, divider and

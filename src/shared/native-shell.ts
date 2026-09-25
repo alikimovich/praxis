@@ -11,6 +11,7 @@ export interface NativeShellRow {
   children?: NativeShellRow[]
 }
 export interface NativeShellState {
+  previewStatus?: import('./native-workspace').NativeProjectStatus
   homeState: { visible: boolean; busy: boolean; label: string; recents: { root: string; name: string }[]; blocked?: boolean }
   rows: NativeShellRow[]
   selected: string | null

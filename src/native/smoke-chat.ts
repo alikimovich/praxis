@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs'
 import type { NativeBridge } from './bridge'
 import { views, serviceEvents } from './platform'
+import { nativeWorkspace } from './workspace-runtime'
 import { nativeChat } from './chat-runtime'
 
 /** Deterministic stream/card coverage without calling a paid provider. */
@@ -19,6 +20,7 @@ export async function checkNativeChat(host: NativeBridge, screenshot: string) {
   const send = (event: object) => views.get('main')!.webContents.send('agent:event', { ...event, projectKey: state.chat })
   // Disable renderer event delivery: Swift input, streaming and queues must
   // continue through Bun without the web UI participating.
+  const priorError = nativeWorkspace.state.error
   const originalInvoke = nativeChat.services.invoke
   const sent: unknown[][] = []
   nativeChat.services.invoke = async (channel, ...args) => {
@@ -43,6 +45,7 @@ export async function checkNativeChat(host: NativeBridge, screenshot: string) {
     await wait(state => state.messages.some((message: any) => message.role === 'user' && message.text === 'Render this conversation in Swift.'))
     if (sent.length !== 1) throw new Error('Native Send did not reach Bun service')
     if (nativeChat.get(state.chat).context?.selection) throw new Error('Native Send did not clear selection context')
+    if (nativeWorkspace.state.error !== priorError) throw new Error('Native context effect failed: ' + nativeWorkspace.state.error)
     const runningCat = await wait(state => state.catPose === 'run' && state.catArtwork)
     await wait(state => state.catPose === 'run' && state.catFrame !== runningCat.catFrame)
     await host.request('composerPerform', { text: 'A queued native message' })

@@ -9,6 +9,7 @@ interface ProjectContext {
   setup: NativeChatContext['setup']
   tokens: NativeChatContext['tokens']
   notes: NativeChatContext['notes']
+  pins: { id: string; selector: string }[]
   canInstrument?: boolean
   stamps?: number
   verifyingAfter?: number
@@ -17,11 +18,11 @@ interface ProjectContext {
 export class NativeContextController {
   readonly projects = new Map<string, ProjectContext>()
   readonly spawns = new Map<string, NativeChatContext['spawns']>()
-  constructor(readonly workspace: NativeWorkspaceController, readonly chat: NativeChatController, readonly turn: () => NativeChatContext['turn']) {}
+  constructor(readonly workspace: NativeWorkspaceController, readonly chat: NativeChatController, readonly turn: () => NativeChatContext['turn'], readonly send: (channel: string, ...args: any[]) => Promise<any> = workspace.services.invoke) {}
   private get invoke() { return this.workspace.services.invoke }
   private project(root: string) {
     let state = this.projects.get(root)
-    if (!state) { state = { selection: null, setup: { needed: false, dismissed: false, status: null }, tokens: { needed: false, dismissed: false }, notes: [] }; this.projects.set(root, state) }
+    if (!state) { state = { selection: null, setup: { needed: false, dismissed: false, status: null }, tokens: { needed: false, dismissed: false }, notes: [], pins: [] }; this.projects.set(root, state) }
     return state
   }
   private context(root: string | null, key: string): NativeChatContext {
@@ -41,6 +42,7 @@ export class NativeContextController {
     const state = this.project(entry.root)
     if (!state.loading) state.loading = this.load(entry.root)
     await state.loading
+    if (this.workspace.active?.root === entry.root) await this.send('preview:set-annotations', state.pins)
   }
   private async load(root: string) {
     const state = this.project(root)
@@ -48,7 +50,7 @@ export class NativeContextController {
     if (this.projects.get(root) !== state) return
     if (results[0].status === 'fulfilled') state.canInstrument = results[0].value.canInstrument
     if (results[1].status === 'fulfilled') state.tokens.needed = results[1].value.source === 'none'
-    if (results[2].status === 'fulfilled') state.notes = results[2].value.map((n: any) => ({ id: n.id, text: n.text }))
+    if (results[2].status === 'fulfilled') { state.notes = results[2].value.map((n: any) => ({ id: n.id, text: n.text })); state.pins = results[2].value.map((n: any) => ({ id: n.id, selector: n.selector })) }
     if (state.stamps === 0 && state.canInstrument && !state.setup.dismissed) state.setup.needed = true
     this.changed(root)
   }
@@ -80,7 +82,7 @@ export class NativeContextController {
   async effect(effect: NativeChatEffect) {
     if (effect.type === 'selection-clear') {
       const root = this.chat.chats.get(effect.chat)?.context?.root
-      if (root && this.project(root).selection?.prompt === effect.prompt) { this.project(root).selection = null; this.changed(root); if (this.workspace.active?.root === root) await this.invoke('preview:clear-selected') }
+      if (root && this.project(root).selection?.prompt === effect.prompt) { this.project(root).selection = null; this.changed(root); if (this.workspace.active?.root === root) await this.send('preview:clear-selected') }
     } else if (effect.type === 'setup') {
       const root = this.chat.chats.get(effect.chat)?.context?.root
       if (!root) return
@@ -111,7 +113,8 @@ export class NativeContextController {
   async notes(root: string) {
     const state = this.project(root), notes = await this.invoke('annotations:list', root)
     if (this.projects.get(root) !== state) return
-    state.notes = notes.map((n: any) => ({ id: n.id, text: n.text })); this.changed(root)
+    state.notes = notes.map((n: any) => ({ id: n.id, text: n.text })); state.pins = notes.map((n: any) => ({ id: n.id, selector: n.selector })); this.changed(root)
+    if (this.workspace.active?.root === root) await this.send('preview:set-annotations', state.pins)
   }
   queued(key: string, id: string, label: string, queued: boolean) {
     const list = this.spawns.get(key) ?? []

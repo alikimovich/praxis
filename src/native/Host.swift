@@ -43,6 +43,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var composer: NativeComposer!
     var chat: NativeChat!
     var welcome: NativeWelcome!
+    var previewStatus: NativePreviewStatus!
     var sheets: NativeSheets!
     let activity = NativeActivity()
     var chatDivider: NativeChatDivider!
@@ -105,6 +106,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         previewSurface.colorChanged = { [weak self] color in self?.shell.updatePreviewColor(color) }
         shell.updatePreviewColor(views["preview"]!.underPageBackgroundColor)
         previewSurface.leading = { [weak self] in self?.shell.previewLeading ?? 0 }
+        previewStatus = NativePreviewStatus(); canvas.addSubview(previewStatus)
         chatColumn.wantsLayer = true; chatColumn.layer?.masksToBounds = true; canvas.addSubview(chatColumn)
         chat = NativeChat(); chatColumn.addSubview(chat)
         composer = NativeComposer(frame: .zero); chatColumn.addSubview(composer)
@@ -216,7 +218,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             reply(id, bitmap.representation(using: .png, properties: [:])?.base64EncodedString() ?? "")
         case "shellState":
             let state = c["state"] as? [String: Any] ?? [:]
-            shell.update(state); nativeLayout.update(state)
+            shell.update(state); previewStatus.update(state); nativeLayout.update(state)
             if let home = state["homeState"] as? [String: Any] { welcome.update(home) }
         case "shellInspect": reply(id, shell.inspect())
         case "previewSurfaceInspect": reply(id, previewSurface.inspect())

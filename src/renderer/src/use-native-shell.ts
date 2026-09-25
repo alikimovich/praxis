@@ -128,7 +128,7 @@ export function useNativeShell(actions: Actions) {
         project: active?.key ?? null,
         selected: active ? `chat:${active.activeSessionKey ?? active.key}` : null,
         selectMode: useSelection.getState().selectMode,
-        chatWidth: document.querySelector('.pane--chat')?.getBoundingClientRect().width ?? 0,
+        chatWidth: 0, // Native geometry never reads this legacy snapshot.
         chatHidden: ws.chatHidden
       }
       const serialized = JSON.stringify(state)
