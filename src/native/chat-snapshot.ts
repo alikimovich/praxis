@@ -43,7 +43,7 @@ export function snapshot(chat: Chat, choices: ModelChoice[]): NativeChatState {
   return {
     activity: currentActivity, streamingId: chat.streamingId,
     chat: chat.chat, messages: chat.messages, running: chat.isRunning, cards, questions: chat.questions,
-    status: `Chat total · ↑ ${formatTokens(chat.usage.input)}  ↓ ${formatTokens(chat.usage.output)}`,
+    status: `↑ ${formatTokens(chat.usage.input)}  ↓ ${formatTokens(chat.usage.output)}`,
     statusDetail: `Cumulative tokens across this chat’s model calls, not current context size.\nInput: ${chat.usage.input.toLocaleString('en-US')}\nCached input (included above): ${chat.usage.cached.toLocaleString('en-US')}\nOutput: ${chat.usage.output.toLocaleString('en-US')}`,
     composer: {
       queue: chat.queue.map(q => ({ id: `queued-${q.id}`, text: q.text, attachments: q.attachments.length })),

@@ -21,6 +21,8 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Remove the Chat total prefix from the token footer.
+
 - [x] Add native project drag reordering with persistent order and remove Move Up/Down menu actions.
 
 - [x] Use plain folder/plus sidebar actions and stable animal emoji for projects without favicons.

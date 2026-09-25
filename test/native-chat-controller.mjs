@@ -181,7 +181,7 @@ const { snapshot: usageSnapshot } = await import('../src/native/chat-snapshot.ts
 const usageChat = [...controller.chats.values()][0]
 usageChat.usage = { input: 1389777, output: 3491, cached: 1200000 }
 const usageView = usageSnapshot(usageChat, [])
-assert.equal(usageView.status, 'Chat total · ↑ 1.4M  ↓ 3.5k')
+assert.equal(usageView.status, '↑ 1.4M  ↓ 3.5k')
 assert.match(usageView.statusDetail, /not current context size/)
 assert.match(usageView.statusDetail, /Input: 1,389,777/)
 assert.match(usageView.statusDetail, /Cached input \(included above\): 1,200,000/)

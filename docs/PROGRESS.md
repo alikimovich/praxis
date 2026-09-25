@@ -2,6 +2,15 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Compact token footer
+
+Remove “Chat total ·” from the footer; show only input/output arrows and counts.
+Keep the detailed usage tooltip. Updated the existing snapshot assertion.
+
+Validation: typechecks, chat controller checks, native build and background native
+integration passed (reduced pointer/animation coverage). Full native integration
+hit the known preview style-edit timeout. Inspected the generated chat capture.
+
 ## 2026-09-25 — Native sidebar project drag reordering
 
 Register local project-row drags in the native outline with move semantics and
