@@ -1,3 +1,4 @@
+import type {} from '../shared/native-layout'
 // Bundled in place of Electron's preload primitives for WKWebView only.
 // The full PraxisApi and preview tools remain the shared preloads.
 import type { NativeShellAction, NativeShellBridge } from '../shared/native-shell'
@@ -114,6 +115,10 @@ export const contextBridge = {
         }
       }
       Object.defineProperty(globalThis, 'praxisNativeShell', { value: shell, writable: false })
+      Object.defineProperty(globalThis, 'praxisNativeLayout', { value: {
+        panels: (panels: unknown) => ipcRenderer.send('native-layout:panels', panels),
+        onFrame: (callback: (frame: unknown) => void) => { const listener: Listener = (_event, frame) => callback(frame); ipcRenderer.on('native-layout:frame', listener); return () => ipcRenderer.removeListener('native-layout:frame', listener) }
+      } })
       Object.defineProperty(globalThis, 'praxisNativeContext', { value: { selection: (value: unknown) => ipcRenderer.send('native-context:selection', value) } })
       Object.defineProperty(globalThis, 'praxisNativeGit', { value: { action: (action: string, value?: string) => ipcRenderer.send('native-git:action', { action, value }) } })
       Object.defineProperty(globalThis, 'praxisNativeActivity', { value: { append: (text: string, kind: string) => ipcRenderer.send('native-activity:command', { action: 'append', text, kind }), action: (action: string) => ipcRenderer.send('native-activity:command', { action }) } })

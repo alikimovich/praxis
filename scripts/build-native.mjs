@@ -15,6 +15,8 @@ mkdirSync(join(contents, 'MacOS'), { recursive: true })
 mkdirSync(join(contents, 'Resources'), { recursive: true })
 copyFileSync(join(root, 'build/icon.icns'), join(contents, 'Resources/Praxis.icns'))
 writeFileSync(join(contents, 'Resources/cat.json'), JSON.stringify(nativeCatAssets(root)))
+const device = readFileSync(join(root, 'src/shared/iphone-frame.ts'), 'utf8').match(/FRAME_DATA_URI = '([^']+)'/)[1]
+writeFileSync(join(out, 'device.png'), Buffer.from(device.split(',')[1], 'base64'))
 const alias = (file) => ({
   name: 'praxis-native-transport',
   setup(build) {
@@ -92,6 +94,7 @@ const result = Bun.spawnSync(
     join(root, 'src/native/Welcome.swift'),
     join(root, 'src/native/Sheets.swift'),
     join(root, 'src/native/Activity.swift'),
+    join(root, 'src/native/WorkspaceLayout.swift'),
     join(root, 'src/native/ChatDivider.swift'),
     join(root, 'src/native/ChatMarkdown.swift'),
     join(root, 'src/native/ChatQuestion.swift'),

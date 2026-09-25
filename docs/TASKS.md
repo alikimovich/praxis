@@ -24,6 +24,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
   - [x] Service-owned native chat context, setup/token offers, annotations and background-agent state.
   - [x] Native branch/publish orchestration and landed environment refresh.
 - [ ] Native migration 2: authoritative AppKit layout and preview presentation.
+  - [x] AppKit frames, column clipping, mobile artwork and persisted divider width; remove native DOM rectangle observers.
 - [ ] Native migration 3: core workflows without the main UI WebView.
 - [ ] Native migration 4: native settings, project/Git sheets, review and activity screens.
   - [x] Native New Project, project memory, Settings and provider connection forms.

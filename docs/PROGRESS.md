@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — AppKit-owned workspace geometry
+
+AppKit now places the chat/composer, preview, mobile device artwork, divider and
+legacy property-panel view. Column clipping retains the conversation's text width
+during expand/restore. Native chat and preview no longer receive DOM rectangles;
+remaining web tools report only desired panel insets. Native widths persist in the
+profile. Shell state and editing panels are still transitional renderer clients.
+
+Validation: all typechecks and native background integration passed, including
+repeat divider drags, expansion, toolbar alignment, mobile and panel operations.
+Background captures were inspected, but system glass content capture is incomplete;
+foreground pointer/animation/visual checks remain required before final parity.
+
 ## 2026-09-24 — Native Git workflows and environment refresh
 
 Bun now owns native branch switching/creation, publish mode and publishing,

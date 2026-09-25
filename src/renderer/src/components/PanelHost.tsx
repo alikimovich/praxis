@@ -85,6 +85,11 @@ export default function PanelHost({
       window.api.panel.hide()
       return
     }
+    if (window.praxisNativeLayout) {
+      window.api.panel.show({ x: 0, y: 0, width: size.width, height: size.height })
+      const off = window.praxisNativeLayout.onFrame(frame => setMaxHeight(Math.max(120, frame.height - PAD.top - PAD.bottom - GAP)))
+      return off
+    }
     const body = document.querySelector('.previewcard__body')
     if (!body) return
     const place = (): void => {

@@ -48,6 +48,10 @@ export default function PreviewPane(): React.JSX.Element {
   const [freezeImg, setFreezeImg] = useState<string | null>(null);
   const [browserUrl, setBrowserUrl] = useState<string | null>(null);
 
+  useEffect(() => window.praxisNativeLayout?.onFrame(frame => {
+    setViewRect({ left: frame.x - frame.leading, top: frame.y, width: frame.width, height: frame.height, radius: frame.radius })
+  }), [])
+
   useEffect(() => {
     if (!browserMode) return;
     const receive = (event: Event): void => {
@@ -60,7 +64,7 @@ export default function PreviewPane(): React.JSX.Element {
 
   useEffect(() => {
     const el = slotRef.current;
-    if (!el) return;
+    if (!el || window.praxisNativeLayout) return;
 
     const report = (): void => {
       if (!startupVisible && !browserMode) {
@@ -138,7 +142,7 @@ export default function PreviewPane(): React.JSX.Element {
   // Only unmounting removes the view. Geometry changes must not send an
   // intermediate zero-sized frame across the native process boundary.
   useEffect(() => () => {
-    window.api.preview.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+    if (!window.praxisNativeLayout) window.api.preview.setBounds({ x: 0, y: 0, width: 0, height: 0 });
   }, []);
 
   // Freeze under overlays: capture FIRST (identical pixels); unfreeze restores

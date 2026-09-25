@@ -152,6 +152,7 @@ async function main() {
       projectUiEngine: values['praxis:project-ui-engine:v1'] === 'jev' ? 'jev' : 'agent'
     }
     host!.send('preferences', { values })
+    host!.send('layoutWidth', { width: Number(values['praxis:native-chat-width']) || 440 })
     for (const [name, view] of views) if (name !== 'preview') view.webContents.send('native-preferences:changed', values)
   }
   ipcMain.on('native-preferences:set', (event, key, value, imported) => {
@@ -329,6 +330,20 @@ async function main() {
     if (command?.action === 'append') activityController.append(command.text, command.kind)
     else activityController.action(command?.action)
   })
+  host.on('native-layout-width', ({ width }) => {
+    if (!Number.isFinite(width) || width < 320 || width > 760) return
+    preferences.set('praxis:native-chat-width', String(width))
+    send('native-shell:action', { action: 'chat-resize', value: String(width) })
+  })
+  host.on('native-layout-frame', ({ frame }) => {
+    void dispatchIPC('main', { type: 'send', channel: 'preview:set-bounds', args: [frame] })
+    send('native-layout:frame', frame)
+  })
+  ipcMain.on('native-layout:panels', (event, panels) => {
+    if (event.sender !== mainView.webContents) return
+    const safe = Object.fromEntries(['right', 'bottom', 'layers'].map(key => [key, Number.isFinite(panels?.[key]) ? Math.max(0, Math.min(2000, panels[key])) : 0]))
+    host!.send('layoutPanels', { panels: safe })
+  })
   const chatController = installNativeChat(host!, mainView)
   const workspaceController = installNativeWorkspace(host!, mainView, workspace, chatController, preferences)
   const contextController = new NativeContextController(workspaceController, chatController, () => ({ projectUi: preferences.get('praxis:project-ui:v1') === 'true', projectUiEngine: preferences.get('praxis:project-ui-engine:v1') === 'jev' ? 'jev' : 'agent' }))
@@ -428,6 +443,7 @@ async function main() {
   })
   host.once('ready', async () => {
     host!.send('preferences', { values: preferences.snapshot() })
+    host!.send('layoutWidth', { width: Number(preferences.get('praxis:native-chat-width')) || 440 })
     mainView.webContents.loadURL(`${url}?praxisSkipIntro=1`)
     console.log('Praxis Native is running on Bun + system WebKit. Electron is not loaded.')
     if (testing) {

@@ -46,6 +46,9 @@ final class NativeChat: NSHostingView<ChatConversation> {
             model.snapshot = snapshot; model.revision += 1
         }
         model.cat.show(!isHidden)
+        place(state, composer: composer)
+    }
+    func place(_ state: [String: Any], composer: NativeComposer) {
         guard let bounds = state["bounds"] as? [String: Double] else { return }
         let x = bounds["x"] ?? 0, y = bounds["y"] ?? 0, width = bounds["width"] ?? 0, height = bounds["height"] ?? 0
         guard [x,y,width,height].allSatisfy({ $0.isFinite && abs($0) < 100000 }) else { return }

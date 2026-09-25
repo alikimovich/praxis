@@ -27,6 +27,14 @@ export async function checkNativeChat(host: NativeBridge, screenshot: string) {
   }
   await evaluate(`(() => { window.__nativeOriginalDispatch = window.__praxisNativeDispatch; window.__praxisNativeDispatch = () => {}; return true })()`)
   try {
+    const before = await host.request('layoutInspect')
+    if (!before.native) throw new Error('Native layout unavailable')
+    for (const delta of [-20, 20]) {
+      await host.request('dividerPerform', { delta })
+      await new Promise(resolve => setTimeout(resolve, 80))
+    }
+    const after = await host.request('layoutInspect')
+    if (Math.abs(before.width - after.width) > 1) throw new Error('Native divider needs renderer delivery')
     serviceEvents.emit('event', 'preview:element-picked', { tag: 'button', id: 'native-context', classes: [], selector: '#native-context', text: 'Native context', source: 'index.html:3:1' })
     if (!nativeChat.get(state.chat).context?.selection?.prompt.includes('#native-context')) throw new Error('Preview selection still depends on renderer delivery')
     await host.request('composerPerform', { text: 'Render this conversation in Swift.' })

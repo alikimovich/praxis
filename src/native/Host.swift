@@ -36,7 +36,7 @@ if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--crypto" {
     } catch { exit(1) }
 }
 
-final class Canvas: NSView { override var isFlipped: Bool { true } }
+final class Canvas: NSView { var changed: (() -> Void)?; override var isFlipped: Bool { true }; override func layout() { super.layout(); changed?() } }
 final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate, WKURLSchemeHandler {
     var window: NSWindow!
     var shell: NativeShell!
@@ -46,8 +46,10 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var sheets: NativeSheets!
     let activity = NativeActivity()
     var chatDivider: NativeChatDivider!
+    var nativeLayout: WorkspaceLayout!
     var previewSurface: PreviewSurface!
     let canvas = Canvas()
+    let chatColumn = Canvas()
     var views: [String: WKWebView] = [:]
     var targets: [String: URL] = [:]
     var editorWindows: [String: NSWindow] = [:]
@@ -103,12 +105,15 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         previewSurface.colorChanged = { [weak self] color in self?.shell.updatePreviewColor(color) }
         shell.updatePreviewColor(views["preview"]!.underPageBackgroundColor)
         previewSurface.leading = { [weak self] in self?.shell.previewLeading ?? 0 }
-        chat = NativeChat(); canvas.addSubview(chat)
-        composer = NativeComposer(frame: .zero); canvas.addSubview(composer)
+        chatColumn.wantsLayer = true; chatColumn.layer?.masksToBounds = true; canvas.addSubview(chatColumn)
+        chat = NativeChat(); chatColumn.addSubview(chat)
+        composer = NativeComposer(frame: .zero); chatColumn.addSubview(composer)
         chatDivider = NativeChatDivider(); chatDivider.isHidden = true; canvas.addSubview(chatDivider)
-        chatDivider.changed = { width in emit(["event":"shell-action", "action":"chat-resize", "value":String(Double(width))]) }
+        chatDivider.changed = { [weak self] width in self?.nativeLayout.resized(width) }
         welcome = NativeWelcome(); welcome.frame = canvas.bounds; canvas.addSubview(welcome)
         sheets = NativeSheets(parent: window); activity.parent = window
+        nativeLayout = WorkspaceLayout(host: self)
+        canvas.changed = { [weak self] in self?.nativeLayout.layout() }
         window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
         installMenus()
         DispatchQueue.global().async { [weak self] in
@@ -170,7 +175,11 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             else { reply(id, PreviewInspector.status(views["preview"])) }
         case "chatState":
             let state = c["state"] as? [String: Any] ?? [:]
-            chat.update(state, composer: composer); chatDivider.update(state)
+            nativeLayout.chatState = state
+            chat.update(nativeLayout.nativeChatState(), composer: composer); nativeLayout.layout()
+        case "layoutPanels": nativeLayout.panels = c["panels"] as? [String: Double] ?? [:]; nativeLayout.layout()
+        case "layoutWidth": nativeLayout.desiredWidth = CGFloat(c["width"] as? Double ?? 440); nativeLayout.layout()
+        case "layoutInspect": reply(id, nativeLayout.inspect())
         case "activityState": activity.update(c)
         case "activityInspect": reply(id, ["visible":activity.window?.isVisible ?? false, "count":activity.count])
         case "sheetState": sheets.update(c["state"] as? [String: Any] ?? [:])
@@ -207,7 +216,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             reply(id, bitmap.representation(using: .png, properties: [:])?.base64EncodedString() ?? "")
         case "shellState":
             let state = c["state"] as? [String: Any] ?? [:]
-            shell.update(state)
+            shell.update(state); nativeLayout.update(state)
             if let home = state["homeState"] as? [String: Any] { welcome.update(home) }
         case "shellInspect": reply(id, shell.inspect())
         case "previewSurfaceInspect": reply(id, previewSurface.inspect())
@@ -261,12 +270,18 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             targets[name] = url
             view.load(URLRequest(url: url))
         case "bounds":
+            if name == "preview" { nativeLayout.layout(); return }
+            if name == "panel", let b = c["bounds"] as? [String: Double] { nativeLayout.panelSize = NSSize(width: b["width"] ?? 316, height: b["height"] ?? 300); nativeLayout.layout(); return }
             guard let b = c["bounds"] as? [String: Double], let view = view else { return }
             let values = [b["x"] ?? 0, b["y"] ?? 0, b["width"] ?? 0, b["height"] ?? 0]
             guard values.allSatisfy({ $0.isFinite && abs($0) < 100000 }) else { return }
             view.frame = NSRect(x: values[0], y: values[1], width: max(0, values[2]), height: max(0, values[3]))
-        case "visible": view?.isHidden = !(c["visible"] as? Bool ?? false)
+        case "visible":
+            if name == "preview" { nativeLayout.previewVisible = c["visible"] as? Bool ?? false; nativeLayout.layout() }
+            else if name == "panel" { nativeLayout.panelVisible = c["visible"] as? Bool ?? false; nativeLayout.layout() }
+            else { view?.isHidden = !(c["visible"] as? Bool ?? false) }
         case "radius":
+            if name == "preview" { nativeLayout.layout(); return }
             let radius = CGFloat(c["radius"] as? Double ?? 0)
             view?.layer?.cornerRadius = radius; view?.layer?.masksToBounds = true
             if name == "preview" { view?.autoresizingMask = radius == 0 && view?.frame.isEmpty == false ? [.width, .height] : []; previewSurface.needsDisplay = true }

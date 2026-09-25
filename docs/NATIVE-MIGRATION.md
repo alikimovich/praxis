@@ -28,8 +28,8 @@ benefit to this UI migration. Electron keeps its renderer and runtime.
 | Welcome/loading and cat | SwiftUI | Busy state, recents and project actions still come through React |
 | Chat and composer | SwiftUI/AppKit + Bun | DOM geometry and temporary mirrors for remaining panels |
 | Workspace persistence | Bun controller and profile files | Shell projection and residual editing actions still use renderer adapters |
-| Chat/preview layout | Mixed | AppKit receives DOM rectangles; resize input is native but width returns through React |
-| Preview | WKWebView | React PreviewPane drives geometry, device framing, overlays and visibility |
+| Chat/preview layout | AppKit | Legacy tools supply desired insets; shell presentation still uses a renderer adapter |
+| Preview | WKWebView + AppKit layout/device frame | Legacy web overlay visibility/freeze remains |
 | Settings and project dialogs | SwiftUI/Bun for settings, connections, new project and memory | Update/relaunch presentation remains |
 | Editing tools | React + preview script | Layers, properties, styles/tokens, custom controls, animation UI |
 | Source/file tools | React/CodeMirror | File tree, code drawer, source navigation, search, media and pop-out editing |

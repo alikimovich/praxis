@@ -137,6 +137,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             first.attributedTitle = NSAttributedString(string: first.title, attributes: [.foregroundColor:previewTextColor, .font:NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)])
         }
     }
+    func setChatGeometry(_ width: CGFloat) { previewState["chatWidth"] = Double(width); alignChatHeader() }
     var previewLeading: CGFloat { CGFloat(previewState["chatWidth"] as? Double ?? 440) }
     func alignChatHeader() {
         guard chatHeader.window != nil, chatHeaderWidth != nil else { return }
