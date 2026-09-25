@@ -13,7 +13,7 @@ struct WelcomeContent: View {
     @ObservedObject var model: WelcomeModel
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            Color(nsColor: .windowBackgroundColor)
+            Color.clear
             VStack(spacing: 20) {
                 if model.busy {
                     NativeCat(animator: model.cat).scaleEffect(1.5).padding(12)

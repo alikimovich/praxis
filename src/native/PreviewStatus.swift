@@ -12,7 +12,7 @@ struct PreviewStatusContent: View {
     @ObservedObject var model: PreviewStatusModel
     var body: some View {
         ZStack {
-            Color(nsColor: .windowBackgroundColor)
+            Color.clear
             VStack(spacing: 18) {
                 NativeCat(animator: model.cat).scaleEffect(1.5).padding(12)
                 Text(model.message).multilineTextAlignment(.center).textSelection(.enabled)

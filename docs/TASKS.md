@@ -17,6 +17,8 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Remove solid welcome/preview-status backgrounds so the native window surface shows through.
+
 Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md).
 
 - [x] Native migration 1: Bun project/chat navigation, preferences, shell state, branch/publish and chat context.

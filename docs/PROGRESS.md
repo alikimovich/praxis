@@ -2,6 +2,15 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Let the native window surface show through
+
+Removed the explicit windowBackgroundColor fill from the welcome and preview
+loading/setup/error views. These SwiftUI surfaces now stay transparent, like the
+chat, so the main area inherits the native window surface instead of painting a
+separate dark rectangle. Buttons and the cat retain their native presentation.
+
+Validation: rebuilt Swift and ran the native-only integration checks.
+
 ## 2026-09-24 — Complete native UI migration; remove the React runtime
 
 The native build now compiles Bun services, Swift/AppKit/SwiftUI surfaces and the
