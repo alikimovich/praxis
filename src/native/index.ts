@@ -312,7 +312,7 @@ async function main() {
   host.on('menu', ({ action }) => {
     const root = workspaceController.active?.root
     if (action === 'toggle-chat') void shellController!.action({ action: 'expand' })
-    else if (action === 'reload' && workspaceController.active?.url) void workspaceController.services.invoke('preview:load', workspaceController.active.url)
+    else if (action === 'reload' && workspaceController.active?.url) host!.send('reload', { view: 'preview' })
     else if (['undo', 'redo'].includes(action) && root) void workspaceController.services.invoke(`edit:${action}`, root).then(result => { if (result.conflict) activityController.append('The file changed on disk; undo/redo refused to overwrite it.', 'error'); void inspectorController.refresh() }).catch(error => activityController.append(String(error), 'error'))
   })
   const renderChatEffect = chatController.services.effect

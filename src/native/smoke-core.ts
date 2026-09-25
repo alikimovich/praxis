@@ -26,6 +26,16 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   await host.request('shellPerform',{action:'open-project'})
   await wait(()=>nativeWorkspace.state.status.kind==='running','project running',30000)
   await wait(()=>page('!!document.querySelector("#native-title")'),'fixture loaded')
+  // Reload must use WebKit's current document, including History API navigation.
+  const originalURL = await page('location.href')
+  writeFileSync(join(fixture, 'about.html'), readFileSync(join(fixture, 'index.html')))
+  const route = new URL('/about.html?tab=details#section', originalURL).href
+  await page(`(() => { history.pushState({}, '', ${JSON.stringify(route)}); window.reloadSentinel = true; return true })()`)
+  host.emit('menu', { action: 'reload' })
+  await wait(()=>page('!!document.querySelector("#native-title") && !window.reloadSentinel'),'reload completes')
+  assert.equal(await page('location.href'), route, 'Reload preserves the current path, query and fragment')
+  await page(`history.replaceState({}, '', ${JSON.stringify(originalURL)})`)
+  console.log('Native reload preserves History API route, query and fragment.')
   await wait(()=>nativeChat.chats.get(nativeChat.active)?.ready,'native chat ready',30000)
   await inspect('composerInspect', s => s.welcomedChat)
   writeFileSync(join(artifacts,'composer-ready-beam.png'),Buffer.from(await host.request('captureComposer'),'base64'))

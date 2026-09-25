@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Reload the current preview page
+
+Route Reload Preview / Command-R to WKWebView.reload() instead of loading the
+workspace's base URL. WebKit retains the current route, query and fragment,
+including History API navigation that does not replace the original load target.
+
+Validation: typechecks, shell controller checks and native build passed. Added
+native regression coverage that pushes /about.html?tab=details#section, dispatches
+the reload menu event, verifies a fresh document and asserts the unchanged URL.
+This passed in both native runs. Background integration passed with reduced
+pointer/animation coverage; the full suite later hit the known preview style-edit
+timeout.
+
 ## 2026-09-25 — Keep the preview page URL visible
 
 Show the complete current preview URL in the unfocused address field instead of

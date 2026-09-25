@@ -323,6 +323,9 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             guard let raw = c["url"] as? String, let url = URL(string: raw), let view = view else { return }
             targets[name] = url
             view.load(URLRequest(url: url))
+        case "reload":
+            view?.reload()
+            reply(id)
         case "bounds":
             if name == "preview" { nativeLayout.layout(); return }
             guard let b = c["bounds"] as? [String: Double], let view = view else { return }

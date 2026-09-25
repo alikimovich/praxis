@@ -21,6 +21,8 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Reload the current preview page without resetting its route, query or fragment.
+
 - [x] Show the full current preview URL when the address field is not being edited.
 
 - [x] Add 8 points of bottom padding below composer selectors.
