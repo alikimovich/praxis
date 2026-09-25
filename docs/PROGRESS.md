@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Grouped chat toolbar actions
+
+Combine History and New Chat in a momentary segmented control with the same
+symbol sizing and rounded glass capsule treatment as the preview controls.
+Preserve the chat-column alignment and title. History opens immediately on click;
+its menu keeps chat selection, rename and close actions. New Chat keeps its
+existing project-scoped action. Older macOS uses the native segmented fallback.
+
+Validation: native builds, typechecks, shell controller and docs-link checks
+passed. Final background native integration passed with reduced pointer/animation
+coverage; the full run hit the known preview style-edit timeout. Visually checked
+the shared capsule and verified one-click History, menu selection and New Chat
+in a separate provider-free native fixture.
+
 ## 2026-09-25 — Compact token footer
 
 Remove “Chat total ·” from the footer; show only input/output arrows and counts.

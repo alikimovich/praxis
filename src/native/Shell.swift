@@ -37,7 +37,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     private var sidebarBeforeExpand = false
     private let chatHeader = ChatToolbarView()
     private let chatTitle = NSTextField(labelWithString: "Chat")
-    private let chatHistory = NSPopUpButton(frame: .zero, pullsDown: true)
+    private let chatActions = ChatToolbarActions(frame: .zero)
     private var addressWidth: NSLayoutConstraint?
     private var chatHeaderWidth: NSLayoutConstraint!
     private var previewTextColor = NSColor.labelColor
@@ -200,20 +200,18 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             chatTitle.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
             chatTitle.lineBreakMode = .byTruncatingTail
             chatTitle.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            let newChat = NSButton(image: toolbarSymbol("square.and.pencil", "New Chat", size: 22)!, target: self, action: #selector(sidebarAction(_:)))
-            newChat.identifier = NSUserInterfaceItemIdentifier("new-chat"); newChat.bezelStyle = .texturedRounded; newChat.toolTip = "New Chat"
-            sidebarButtons["new-chat"] = newChat
-            chatHistory.bezelStyle = .texturedRounded; chatHistory.setAccessibilityLabel("Chat History"); chatHistory.toolTip = "Chat History"
-            (chatHistory.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
-            let separator = NSView() // The preview surface owns the continuous divider.
-            for view in [chatTitle, newChat, chatHistory, separator] { view.translatesAutoresizingMaskIntoConstraints = false; chatHeader.addSubview(view) }
+            chatActions.onNewChat = { [weak self] in
+                guard let project = self?.currentProject else { return }
+                emit(["event":"shell-action", "action":"new-chat", "project":project])
+            }
+            for view in [chatTitle, chatActions] { view.translatesAutoresizingMaskIntoConstraints = false; chatHeader.addSubview(view) }
             NSLayoutConstraint.activate([
                 chatHeaderWidth, chatHeader.widthAnchor.constraint(greaterThanOrEqualToConstant: 100), chatHeader.heightAnchor.constraint(equalToConstant: 32),
                 chatTitle.leadingAnchor.constraint(equalTo: chatHeader.leadingAnchor, constant: 4), chatTitle.centerYAnchor.constraint(equalTo: chatHeader.centerYAnchor),
-                chatTitle.trailingAnchor.constraint(lessThanOrEqualTo: chatHistory.leadingAnchor, constant: -8),
-                chatHistory.trailingAnchor.constraint(equalTo: newChat.leadingAnchor, constant: -4), newChat.centerYAnchor.constraint(equalTo: chatHeader.centerYAnchor),
-                newChat.trailingAnchor.constraint(equalTo: separator.leadingAnchor, constant: -12), chatHistory.centerYAnchor.constraint(equalTo: chatHeader.centerYAnchor), chatHistory.widthAnchor.constraint(equalToConstant: 36),
-                separator.trailingAnchor.constraint(equalTo: chatHeader.trailingAnchor), separator.widthAnchor.constraint(equalToConstant: 1), separator.topAnchor.constraint(equalTo: chatHeader.topAnchor), separator.bottomAnchor.constraint(equalTo: chatHeader.bottomAnchor)
+                chatTitle.trailingAnchor.constraint(lessThanOrEqualTo: chatActions.leadingAnchor, constant: -8),
+                chatActions.trailingAnchor.constraint(equalTo: chatHeader.trailingAnchor, constant: -12),
+                chatActions.centerYAnchor.constraint(equalTo: chatHeader.centerYAnchor),
+                chatActions.widthAnchor.constraint(equalToConstant: 76), chatActions.heightAnchor.constraint(equalToConstant: 36)
             ])
             item.view = chatHeader; item.isBordered = false; item.visibilityPriority = .high
         } else if key == "address" {
@@ -293,7 +291,6 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     }
     func updateToolbar() {
         defer { for group in toolbar.items.compactMap({ $0 as? MomentaryToolbarGroup }) { group.refresh() } }
-        sidebarButtons["new-chat"]?.isEnabled = currentProject != nil
         for (key, item) in toolbarItems {
             item.isEnabled = key == "chat" ? true : key == "branch" ? previewState["branch"] is String : ready
             if key == "publish" { item.isEnabled = ready && !(previewState["publishing"] as? Bool ?? false) }
@@ -305,9 +302,6 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         }
         chatTitle.isHidden = currentProject == nil || chatHidden || (chatHeaderWidth?.constant ?? 0) < 150
         let chatMenu = NSMenu(); chatMenu.autoenablesItems = false
-        let historyIcon = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        historyIcon.image = toolbarSymbol("clock.arrow.circlepath", "Chat History", size: 22)
-        chatMenu.addItem(historyIcon)
         for row in rows.first(where: { $0.project == currentProject })?.children ?? [] {
             let entry = NSMenuItem(title: row.title + (row.running ? " · Working" : ""), action: #selector(contextAction(_:)), keyEquivalent: "")
             entry.target = self; entry.representedObject = ["event":"shell-action", "action":"select", "id":row.id, "project":row.project]
@@ -322,7 +316,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             let close = NSMenuItem(title: "Close current chat", action: #selector(contextAction(_:)), keyEquivalent: "")
             close.target = self; close.representedObject = ["event":"shell-action", "action":"close", "id":selectedID]; chatMenu.addItem(close)
         }
-        chatHistory.menu = chatMenu; chatHistory.isEnabled = currentProject != nil && chatMenu.items.count > 1
+        chatActions.historyMenu = chatMenu; chatActions.updateEnabled(project: currentProject != nil, history: currentProject != nil && !chatMenu.items.isEmpty)
         address.isEnabled = ready
         if address.currentEditor() == nil { showAddress() }
         toolbarItems["device"]?.isEnabled = previewState["deviceEnabled"] as? Bool ?? false
@@ -480,7 +474,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
              return cell.more.convert(cell.more.bounds, to: clip).maxX
          }, "projectIconCount":rows.filter { $0.icon != nil }.count, "outlineClipWidth":outline.enclosingScrollView?.contentSize.width ?? 0, "outlineRows":outline.numberOfRows, "outlineWidth":outline.bounds.width,
          "toolbar":toolbar.items.map { $0.itemIdentifier.rawValue }, "branch":previewState["branch"] ?? "", "publishLabel":previewState["publishLabel"] ?? "", "codeOpen":previewState["codeOpen"] ?? false,
-         "toolbarGroupsMomentary":toolbar.items.compactMap { $0 as? NSToolbarItemGroup }.allSatisfy { ($0 as? MomentaryToolbarGroup)?.hasMomentaryControl == true }, "visibleToolbar":toolbar.visibleItems?.map { $0.itemIdentifier.rawValue } ?? [], "previewHeaderLightText":previewTextColor == .white, "address":previewAddress, "domain":address.stringValue, "viewport":previewState["viewport"] ?? "", "publishStandard":toolbarItems["publish"]?.view == nil, "toolGroup":(toolbar.items.first(where: { $0.itemIdentifier.rawValue == "tools" }) as? NSToolbarItemGroup)?.subitems.map { $0.itemIdentifier.rawValue } ?? [], "sidebarAutohidesScrollers":(outline.enclosingScrollView?.autohidesScrollers ?? false), "sidebarActions":["new-project", "open-project", "settings"], "chatActions":["history", "new-chat"], "historyIDs":chatHistory.menu?.items.compactMap { ($0.representedObject as? [String:String])?["id"] } ?? [], "chatTitle":chatTitle.stringValue, "chatTitlePlain":toolbarItems["chat"]?.action == nil, "chatHeaderWidth":chatHeader.bounds.width, "chatHeaderTrailing":chatHeader.convert(NSPoint(x: chatHeader.bounds.maxX, y: 0), to: nil).x, "detailLeading":split.splitViewItems[1].viewController.view.convert(.zero, to: nil).x, "chatWidth":previewState["chatWidth"] ?? 0, "enabled":toolbarItems.mapValues { $0.isEnabled }]
+         "toolbarGroupsMomentary":toolbar.items.compactMap { $0 as? NSToolbarItemGroup }.allSatisfy { ($0 as? MomentaryToolbarGroup)?.hasMomentaryControl == true }, "visibleToolbar":toolbar.visibleItems?.map { $0.itemIdentifier.rawValue } ?? [], "previewHeaderLightText":previewTextColor == .white, "address":previewAddress, "domain":address.stringValue, "viewport":previewState["viewport"] ?? "", "publishStandard":toolbarItems["publish"]?.view == nil, "toolGroup":(toolbar.items.first(where: { $0.itemIdentifier.rawValue == "tools" }) as? NSToolbarItemGroup)?.subitems.map { $0.itemIdentifier.rawValue } ?? [], "sidebarAutohidesScrollers":(outline.enclosingScrollView?.autohidesScrollers ?? false), "sidebarActions":["new-project", "open-project", "settings"], "chatActions":["history", "new-chat"], "historyIDs":chatActions.historyMenu?.items.compactMap { ($0.representedObject as? [String:String])?["id"] } ?? [], "chatTitle":chatTitle.stringValue, "chatTitlePlain":toolbarItems["chat"]?.action == nil, "chatHeaderWidth":chatHeader.bounds.width, "chatHeaderTrailing":chatHeader.convert(NSPoint(x: chatHeader.bounds.maxX, y: 0), to: nil).x, "detailLeading":split.splitViewItems[1].viewController.view.convert(.zero, to: nil).x, "chatWidth":previewState["chatWidth"] ?? 0, "enabled":toolbarItems.mapValues { $0.isEnabled }]
     }
     func perform(_ action: String, id: String?) -> Bool {
         if action == "window-width", let width = Double(id ?? ""), let window, width >= 850 && width <= 2000 { var frame = window.frame; frame.size.width = width; window.setFrame(frame, display: true); return true }
@@ -492,7 +486,8 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             // AppKit animations even though the collapsed state already changed.
             sidebarItem.isCollapsed.toggle(); split.view.layoutSubtreeIfNeeded(); return true
         }
-        if action == "history-select", let entry = chatHistory.menu?.items.first(where: { ($0.representedObject as? [String:String])?["id"] == id }) {
+        if action == "new-chat", currentProject != nil { chatActions.onNewChat?(); return true }
+        if action == "history-select", let entry = chatActions.historyMenu?.items.first(where: { ($0.representedObject as? [String:String])?["id"] == id }) {
             contextAction(entry); return true
         }
         if action == "select-row", let row = rows.first(where: { $0.id == id }) {
