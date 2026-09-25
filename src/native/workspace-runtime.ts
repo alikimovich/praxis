@@ -19,7 +19,7 @@ export function installNativeWorkspace(host: NativeBridge, view: NativeView, sto
       const key = entry?.activeSessionKey ?? ''
       const previous = chat.chats.get(key)?.context
       await chat.command({ type: 'context', context: {
-        chat: key, root: entry?.root ?? null, selection: null, turn: {},
+        chat: key, root: entry?.root ?? null, selection: null, turn: { projectUi: preferences.get('praxis:project-ui:v1') === 'true', projectUiEngine: preferences.get('praxis:project-ui-engine:v1') === 'jev' ? 'jev' : 'agent' },
         setup: { needed: false, dismissed: false, status: null },
         tokens: { needed: false, dismissed: false }, notes: [], spawns: [],
         ...(previous?.root === entry?.root ? previous : {})

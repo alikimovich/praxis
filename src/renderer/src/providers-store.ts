@@ -1,3 +1,4 @@
+import '../../shared/native-sheet'
 import { create } from 'zustand'
 import type { ModelChoice, ProviderConnection } from '../../shared/api'
 
@@ -40,7 +41,10 @@ export const useProviders = create<ProvidersState>((set, get) => ({
   loaded: false,
   loading: false,
   settingsOpen: false,
-  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setSettingsOpen: (settingsOpen) => {
+    if (settingsOpen && window.praxisNativeSheets) { window.praxisNativeSheets.open('settings'); return }
+    set({ settingsOpen })
+  },
   refresh: async () => {
     set({ loading: true })
     try {

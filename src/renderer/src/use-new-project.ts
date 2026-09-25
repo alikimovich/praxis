@@ -1,3 +1,4 @@
+import '../../shared/native-sheet'
 import { useState } from 'react'
 import type { ProjectSetup } from './components/NewProjectDialog'
 import type { ProjectStatus } from './project-status'
@@ -19,6 +20,7 @@ export function useNewProject(
   }
 
   const createNewProject = (): void => {
+    if (window.praxisNativeSheets) { window.praxisNativeSheets.open('new-project'); return }
     openWithPreviewFreeze(() => setNewProjectOpen(true))
   }
 

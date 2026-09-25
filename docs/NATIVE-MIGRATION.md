@@ -1,6 +1,6 @@
 # Native UI migration plan
 
-Status: planned, 2026-09-24. Based on the current native build on candidate.
+Status: in progress, 2026-09-24. Based on the current native build on candidate.
 This plan preserves Electron support and shared application services.
 
 ## Target
@@ -27,10 +27,10 @@ benefit to this UI migration. Electron keeps its renderer and runtime.
 | Sidebar and toolbar | AppKit | Actions and state route through use-native-shell.ts and App.tsx |
 | Welcome/loading and cat | SwiftUI | Busy state, recents and project actions still come through React |
 | Chat and composer | SwiftUI/AppKit + Bun | Geometry, active project, selection/setup context and some effects use native-chat-shell.ts |
-| Workspace persistence | Bun file storage | Restore, project/session transitions and several preferences still use renderer stores |
+| Workspace persistence | Bun controller and profile files | Branch/publish and editing context still use renderer adapters |
 | Chat/preview layout | Mixed | AppKit receives DOM rectangles; resize input is native but width returns through React |
 | Preview | WKWebView | React PreviewPane drives geometry, device framing, overlays and visibility |
-| Settings and project dialogs | React | Provider connections/defaults, new project, memory, GitHub, Git updates, feedback |
+| Settings and project dialogs | SwiftUI/Bun for settings, connections, new project and memory | GitHub, Git updates and feedback remain React |
 | Editing tools | React + preview script | Layers, properties, styles/tokens, custom controls, animation UI |
 | Source/file tools | React/CodeMirror | File tree, code drawer, source navigation, search, media and pop-out editing |
 | Supporting screens | React | Activity log, diagnosis, session review, update notices |

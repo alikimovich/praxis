@@ -5,6 +5,7 @@ import { dispatchIPC, views } from './platform'
 import { checkSelectionInput } from './smoke-input'
 import { checkNativeChat } from './smoke-chat'
 import { nativeChat } from './chat-runtime'
+import { checkNativeSheets } from './smoke-sheets'
 import { nativeWorkspace } from './workspace-runtime'
 
 export async function runNativeSmoke(host: NativeBridge, fixture: string, root: string) {
@@ -43,6 +44,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     throw new Error('Native open toolbar unavailable')
   await wait('!!document.querySelector("#native-title")', 'preview')
   await wait('!!window.__praxisSession?.getState().projectRoot')
+  await checkNativeSheets(host, nativeWorkspace.state.activeKey!, join(root, 'test/artifacts/native'))
   await wait('getComputedStyle(document.querySelector(".rail")).display === "none"')
   await wait(`getComputedStyle(document.body).backgroundColor === 'rgba(0, 0, 0, 0)' && getComputedStyle(document.querySelector('.pane--chat')).backgroundColor === 'rgba(0, 0, 0, 0)'`)
   // Page-derived background must follow live html/body changes without moving
@@ -200,7 +202,7 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await host.request('composerPerform', { text: 'A native draft\nwith a second line' })
   await waitComposer(state => state.text === 'A native draft\nwith a second line')
   const projectKey = nativeWorkspace.state.activeKey!
-  await evaluate('window.__workspaceDispatch = window.__praxisNativeDispatch; window.__praxisNativeDispatch = () => {}')
+  await evaluate('(() => { window.__workspaceDispatch = window.__praxisNativeDispatch; window.__praxisNativeDispatch = () => {}; return true })()')
   let added: string
   try {
     await nativeWorkspace.command({ type: 'new-chat', key: projectKey })
@@ -247,10 +249,11 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   await host.request('composerPerform', { text: '' })
   nativeChat.event({ type: 'commands', projectKey: nativeChat.active, commands: originalCommands })
   await evaluate(`window.__praxisProviders.getState().setSettingsOpen(true)`)
-  await waitComposer(state => !state.visible)
-  await evaluate(`window.__praxisProviders.getState().setSettingsOpen(false)`)
+  for (let i = 0; !(await host.request('sheetInspect')).visible && i < 60; i++) await new Promise(resolve => setTimeout(resolve, 50))
+  if ((await host.request('sheetInspect')).title !== 'Settings') throw new Error('Settings is not a native sheet')
+  await host.request('sheetPerform', { action: 'cancel' })
   await waitComposer(state => state.visible)
-  console.log('Native composer permission picker, slash completion, and modal visibility passed.')
+  console.log('Native composer permission picker, slash completion, and native settings sheet passed.')
   console.log('Native preview toolbar, sidebar project actions, code toggle, expand/restore and split-view collapse passed.')
   if (!(await host.request('shellPerform', { action: 'publish-mode', row: 'pr' }))) throw new Error('Native publish mode unavailable')
   for (let i = 0; (await host.request('shellInspect')).publishLabel !== 'Create PR' && i < 30; i++) await new Promise(resolve => setTimeout(resolve, 100))

@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Native project and provider sheets
+
+New Project, project memory, Settings and provider connection management now use
+SwiftUI sheets backed by Bun controllers. Provider catalog selection, manual IDs,
+saved-key preservation and delete confirmation reuse the existing services.
+Canceled asynchronous requests cannot reopen a dismissed sheet. Native New Chat
+also passed with renderer event delivery disabled; React remains a projection
+for the panels and layout that have not migrated yet.
+
+Validation: sheet/settings controller tests, all typechecks and native background
+integration passed. Inspected native sheet captures. Real preview input and
+animation sampling were skipped by background mode; no Electron tests ran.
+
 ## 2026-09-24 — Plan Jev-composed native chat islands
 
 Added CHAT-ISLANDS.md and staged roadmap items for on-demand interactive UI inside

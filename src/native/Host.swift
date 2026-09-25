@@ -43,6 +43,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var composer: NativeComposer!
     var chat: NativeChat!
     var welcome: NativeWelcome!
+    var sheets: NativeSheets!
     var chatDivider: NativeChatDivider!
     var previewSurface: PreviewSurface!
     let canvas = Canvas()
@@ -106,6 +107,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         chatDivider = NativeChatDivider(); chatDivider.isHidden = true; canvas.addSubview(chatDivider)
         chatDivider.changed = { width in emit(["event":"shell-action", "action":"chat-resize", "value":String(Double(width))]) }
         welcome = NativeWelcome(); welcome.frame = canvas.bounds; canvas.addSubview(welcome)
+        sheets = NativeSheets(parent: window)
         window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
         installMenus()
         DispatchQueue.global().async { [weak self] in
@@ -168,6 +170,19 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "chatState":
             let state = c["state"] as? [String: Any] ?? [:]
             chat.update(state, composer: composer); chatDivider.update(state)
+        case "sheetState": sheets.update(c["state"] as? [String: Any] ?? [:])
+        case "sheetClose": sheets.close(c["id"] as? String ?? "")
+        case "sheetInspect": reply(id, sheets.inspect())
+        case "captureSheet":
+            guard let content = sheets.panel?.contentView?.superview else { reply(id, error: "No native sheet"); return }
+            content.layoutSubtreeIfNeeded(); content.displayIfNeeded()
+            guard let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { reply(id, error: "No native sheet"); return }
+            content.cacheDisplay(in: content.bounds, to: bitmap)
+            reply(id, bitmap.representation(using: .png, properties: [:])?.base64EncodedString() ?? "")
+        case "sheetPerform":
+            guard ephemeral else { reply(id, false); return }
+            if let values = c["values"] as? [String: String] { sheets.model.values.merge(values) { _, new in new } }
+            sheets.model.perform(c["action"] as? String ?? ""); reply(id, true)
         case "welcomeInspect": reply(id, welcome.inspect())
         case "dividerInspect": reply(id, ["visible":!chatDivider.isHidden, "width":chatDivider.width, "dragging":chatDivider.dragging, "frame":NSStringFromRect(chatDivider.frame), "hitTarget":canvas.hitTest(NSPoint(x: chatDivider.frame.midX, y: chatDivider.frame.midY)) === chatDivider])
         case "dividerPerform":
@@ -282,10 +297,10 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "pick", "pickNew":
             if c["method"] as? String == "pick" {
                 let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
-                panel.beginSheetModal(for: window) { result in self.reply(id, result == .OK ? panel.url?.path as Any? ?? NSNull() : NSNull()) }
+                panel.beginSheetModal(for: sheets.panel ?? window) { result in self.reply(id, result == .OK ? panel.url?.path as Any? ?? NSNull() : NSNull()) }
             } else {
                 let panel = NSSavePanel(); panel.nameFieldStringValue = "my-app"; panel.canCreateDirectories = true
-                panel.beginSheetModal(for: window) { result in self.reply(id, result == .OK ? panel.url?.path as Any? ?? NSNull() : NSNull()) }
+                panel.beginSheetModal(for: sheets.panel ?? window) { result in self.reply(id, result == .OK ? panel.url?.path as Any? ?? NSNull() : NSNull()) }
             }
         case "trash":
             do { try FileManager.default.trashItem(at: URL(fileURLWithPath: c["path"] as? String ?? ""), resultingItemURL: nil); reply(id) }

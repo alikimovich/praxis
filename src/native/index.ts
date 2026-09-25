@@ -33,6 +33,8 @@ import { parsePreferredModelState, resolvePreferredSettings } from '../shared/pr
 import { nativePreferences } from './preferences'
 import { workspaceStorage } from './workspace'
 import { installNativeChat } from './chat-runtime'
+import { NativeSettingsController } from './settings-controller'
+import { NativeSheetController } from './sheets-runtime'
 import { installNativeWorkspace, workspaceOwnsAction } from './workspace-runtime'
 
 async function main() {
@@ -133,15 +135,22 @@ async function main() {
   const mainView = new NativeView('main')
   const workspace = workspaceStorage(profile)
   const preferences = nativePreferences(profile)
+  const refreshPreferences = () => {
+    const values = preferences.snapshot()
+    let preferred: unknown
+    try { preferred = JSON.parse(values['praxis:preferred-model'] ?? 'null') } catch {}
+    workspaceController.preferred = resolvePreferredSettings(parsePreferredModelState(preferred))
+    for (const chat of chatController.chats.values()) if (chat.context) chat.context.turn = {
+      ...chat.context.turn, projectUi: values['praxis:project-ui:v1'] === 'true',
+      projectUiEngine: values['praxis:project-ui-engine:v1'] === 'jev' ? 'jev' : 'agent'
+    }
+    host!.send('preferences', { values })
+    for (const [name, view] of views) if (name !== 'preview') view.webContents.send('native-preferences:changed', values)
+  }
   ipcMain.on('native-preferences:set', (event, key, value, imported) => {
     if (event.sender === views.get('preview')?.webContents) return
-    try {
-      preferences.set(key, value, imported === true)
-      if (key === 'praxis:preferred-model') workspaceController.preferred = resolvePreferredSettings(parsePreferredModelState(value ? JSON.parse(value) : null))
-      const values = preferences.snapshot()
-      host!.send('preferences', { values })
-      for (const [name, view] of views) if (name !== 'preview') view.webContents.send('native-preferences:changed', values)
-    } catch (error) { console.error('Native preference write failed:', error) }
+    try { preferences.set(key, value, imported === true); refreshPreferences() }
+    catch (error) { console.error('Native preference write failed:', error) }
   })
   ipcMain.handle('native-workspace:read', event => {
     if (event.sender !== mainView.webContents) throw new Error('Workspace is main-view only')
@@ -297,12 +306,26 @@ async function main() {
       host!.send('mediaReply', { task, status: 404, data: '' })
     }
   })
-  host.on('menu', ({ action }) => { if (action !== 'open-project') send('menu:action', action) })
+  host.on('menu', ({ action }) => { if (!['open-project', 'new-project', 'settings'].includes(action)) send('menu:action', action) })
   ipcMain.on('native-shell:state', (event, state) => {
     if (event.sender === mainView.webContents) host!.send('shellState', { state })
   })
-  host.on('shell-action', action => { if (!workspaceOwnsAction(action)) send('native-shell:action', action) })
-  const workspaceController = installNativeWorkspace(host!, mainView, workspace, installNativeChat(host!, mainView), preferences)
+  host.on('shell-action', action => { if (!workspaceOwnsAction(action) && action.action !== 'memory') send('native-shell:action', action) })
+  const chatController = installNativeChat(host!, mainView)
+  const workspaceController = installNativeWorkspace(host!, mainView, workspace, chatController, preferences)
+  const sheetController = new NativeSheetController(host!, workspaceController, chatController)
+  const settingsController = new NativeSettingsController(sheetController, preferences, refreshPreferences)
+  host.on('sheet-action', action => { void sheetController.action(action) })
+  const openSheet = (kind: string, key?: string) => {
+    if (sheetController.current?.state.busy) return
+    if (kind === 'settings') void settingsController.open().catch(error => workspaceController.reportError(error))
+    else if (kind === 'new-project') sheetController.newProject()
+    else if (kind === 'memory' && key) void sheetController.memory(key).catch(error => workspaceController.reportError(error))
+  }
+  host.on('menu', ({ action }) => { if (['new-project', 'settings'].includes(action)) openSheet(action) })
+  host.on('shell-action', action => { if (action.action === 'memory') openSheet('memory', action.project ?? workspaceController.state.activeKey ?? undefined) })
+  ipcMain.on('native-sheet:open', (event, kind, key) => { if (event.sender === mainView.webContents) openSheet(kind, key) })
+
   ipcMain.on('native-composer:focus', event => {
     if (event.sender === mainView.webContents) host!.send('composerFocus')
   })

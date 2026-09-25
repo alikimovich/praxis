@@ -114,6 +114,7 @@ export const contextBridge = {
         }
       }
       Object.defineProperty(globalThis, 'praxisNativeShell', { value: shell, writable: false })
+      Object.defineProperty(globalThis, 'praxisNativeSheets', { value: { open: (kind: string, key?: string) => ipcRenderer.send('native-sheet:open', kind, key) }, writable: false })
       const workspace: NativeWorkspaceBridge = {
         command: command => ipcRenderer.invoke('native-workspace:command', command) as Promise<void>,
         onState: callback => {

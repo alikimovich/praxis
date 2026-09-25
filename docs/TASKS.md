@@ -24,6 +24,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 - [ ] Native migration 2: authoritative AppKit layout and preview presentation.
 - [ ] Native migration 3: core workflows without the main UI WebView.
 - [ ] Native migration 4: native settings, project/Git sheets, review and activity screens.
+  - [x] Native New Project, project memory, Settings and provider connection forms.
 - [ ] Native migration 5: native layers, properties, styles/tokens and editing controls.
 - [ ] Native migration 6: native source editor and remaining chat/sidebar parity.
 - [ ] Native migration 7: remove native React build/assets and validate release parity.
