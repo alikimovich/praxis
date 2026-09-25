@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { assertChatCommandScope } from '../src/shared/chat-command-scope.ts'
 import { NativeChatController } from '../src/native/chat-controller.ts'
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0))
@@ -116,16 +115,6 @@ await input('Fail this'); await send(); await tick()
 assert.equal(controller.get('restored').isRunning, false)
 assert.match(controller.get('restored').messages.at(-1).text, /Provider unavailable/)
 console.log('Native Bun chat controller: drafts, skills, restore, stream isolation, queues, cancellation, permissions, questions, models, context and errors passed.')
-
-// Adding explicit chat targets must not widen the browser server's root scope.
-for (const [channel, index] of [['agent:send', 2], ['agent:set-permission-mode', 1], ['agent:interrupt', 0], ['agent:resolve-conflict', 0], ['agent:discard-conflict', 0]]) {
-  const args = Array(index).fill('unused')
-  assert.doesNotThrow(() => assertChatCommandScope('/fixture', channel, args))
-  assert.doesNotThrow(() => assertChatCommandScope('/fixture', channel, [...args, '/fixture#peer']))
-  for (const key of ['/another', '/fixture-elsewhere#peer', null, 2]) {
-    assert.throws(() => assertChatCommandScope('/fixture', channel, [...args, key]), /outside/)
-  }
-}
 
 // Stop during clipboard materialization must prevent the provider call.
 let resolveAttachment

@@ -14,13 +14,12 @@ copyFileSync(join(root, 'build/icon.icns'), join(contents, 'Resources/Praxis.icn
 writeFileSync(join(contents, 'Resources/cat.json'), JSON.stringify(nativeCatAssets(root)))
 const device = readFileSync(join(root, 'src/shared/iphone-frame.ts'), 'utf8').match(/FRAME_DATA_URI = '([^']+)'/)[1]
 writeFileSync(join(out, 'device.png'), Buffer.from(device.split(',')[1], 'base64'))
-const alias = (file) => ({
+const recipeModule = {
   name: 'praxis-native-transport',
   setup(build) {
     build.onResolve({ filter: /^@alikimovich\/content-controls\/recipe$/ }, () => ({ path: join(root, 'node_modules/@alikimovich/content-controls/dist/recipe.js') }))
-    build.onResolve({ filter: /^electron$/ }, () => ({ path: join(root, 'src/native', file) }))
   }
-})
+}
 const backend = await bundle({
   metafile: true,
   entryPoints: [join(root, 'src/native/index.ts')],
@@ -30,12 +29,12 @@ const backend = await bundle({
   target: 'es2022',
   format: 'cjs',
   packages: 'external',
-  plugins: [alias('platform.ts')],
+  plugins: [recipeModule],
   sourcemap: true
 })
 const inputs = Object.keys(backend.metafile.inputs)
 const externalImports = Object.values(backend.metafile.outputs).flatMap(output => output.imports).filter(item => item.external).map(item => item.path)
-if (inputs.some(path => /src\/renderer\//.test(path)) || externalImports.some(path => /^(react|react-dom|@codemirror)(\/|$)/.test(path))) throw new Error('Native build unexpectedly depends on the application React renderer')
+if (inputs.some(path => /src\/renderer\//.test(path)) || externalImports.some(path => /^(electron|electron-vite|react|react-dom|@codemirror)(\/|$)/.test(path))) throw new Error('Native build unexpectedly depends on a retired application runtime')
 writeFileSync(join(out, 'build-inputs.json'), JSON.stringify({ inputs, externalImports }, null, 2))
 for (const [input, output] of [
   ['src/preview/preload.ts', 'preview.js']
@@ -46,8 +45,7 @@ for (const [input, output] of [
     bundle: true,
     platform: 'browser',
     target: 'safari16.4',
-    format: 'iife',
-    plugins: [alias('preview-transport.ts')]
+    format: 'iife'
   })
 }
 // Remove stale application UI artifacts from earlier hybrid builds.

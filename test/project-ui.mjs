@@ -3,7 +3,6 @@ import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { discoverProjectUi } from '../src/main/project-ui-catalog.ts'
 import { exportProjectUi, runProjectUiTool, setProjectUiEnabled, projectUiInstructions } from '../src/main/project-ui.ts'
-import { readProjectUiPreference, writeProjectUiPreference } from '../src/renderer/src/project-ui-preference.ts'
 import { renderToStaticMarkup } from 'react-dom/server'
 import React from 'react'
 
@@ -64,11 +63,6 @@ export default function Button({ label, disabled = false }: { label: string; dis
   assert.match((await runProjectUiTool(root, 'a', 'compose_project_ui', { file: 'Page.tsx', spec })).error, /off/)
   assert.match(projectUiInstructions(false), /OFF/)
   assert.match(projectUiInstructions(true), /project_ui_catalog/)
-  const storage = new Map()
-  globalThis.localStorage = { getItem: (k) => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v) }
-  assert.equal(readProjectUiPreference(), false)
-  writeProjectUiPreference(true); assert.equal(readProjectUiPreference(), true)
-  writeProjectUiPreference(false); assert.equal(readProjectUiPreference(), false)
   console.log('PROJECT-UI OK: discovery, actual component rendering, strict export, session isolation and opt-out')
 } finally {
   setProjectUiEnabled('a', false)

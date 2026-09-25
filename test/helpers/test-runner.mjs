@@ -45,8 +45,7 @@ export async function runCommand({ command, args, cwd, name, log, timeoutMs, sig
     fd = openSync(log, 'w')
     child = spawn(command, args, {
       cwd, detached: process.platform !== 'win32', stdio: ['ignore', fd, fd],
-      env: { ...process.env, PRAXIS_USER_DATA: profile,
-        PRAXIS_TEST_SKIP_INTRO: name === 'startup-intro' ? '0' : '1' }
+      env: { ...process.env, PRAXIS_USER_DATA: profile }
     })
     signal?.addEventListener('abort', abort, { once: true })
     if (signal?.aborted) abort()

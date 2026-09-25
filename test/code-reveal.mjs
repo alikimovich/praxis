@@ -3,7 +3,6 @@ import { mkdtemp, writeFile, symlink, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openAgentCode } from '../src/main/code-tools.ts'
-import { locateCodeReveal } from '../src/shared/code-reveal.ts'
 const root = await mkdtemp(join(tmpdir(), 'praxis-code-reveal-'))
 const outside = await mkdtemp(join(tmpdir(), 'praxis-code-outside-'))
 try {
@@ -18,9 +17,6 @@ try {
   assert.equal(request.root, '/live/project')
   assert.equal(request.key, 'chat-key')
   assert.equal(request.code, 'function replay() {\n  animate(duration)\n}')
-  assert.deepEqual(locateCodeReveal('// shifted\nconst duration = 300\n' + request.code, request), { startLine: 3, endLine: 5 })
-  assert.equal(locateCodeReveal('unrelated', request), null)
-  assert.equal(locateCodeReveal(request.code + '\n' + request.code, { ...request, startLine: 20 }), null)
   for (const args of [
     { file: 'escape.ts', startLine: 1 }, { file: '../outside.ts', startLine: 1 },
     { file: join(outside, 'private.ts'), startLine: 1 }, { file: 'motion.ts', startLine: 0 },

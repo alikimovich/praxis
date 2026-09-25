@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron'
+import type { NativeView } from '../../native/platform'
 import type {
   AgentEvent,
   AgentOptions,
@@ -142,7 +142,7 @@ export interface ModelProvider {
   startSession: (
     root: string,
     options: AgentOptions,
-    getWindow: () => BrowserWindow | null,
+    getWindow: () => NativeView | null,
     /** Present for a detached comment spawn (v8 F1) OR an additional/resumed
      *  interactive chat (v9 resume/multi-chat); absent for the plain default
      *  single-session-per-project case. A provider that doesn't support these can

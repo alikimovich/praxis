@@ -24,7 +24,7 @@ import {
   parseCssNumber,
   snapBezierPreset,
   stylePropMeta
-} from '../src/renderer/src/lib/css-values.ts'
+} from '../src/shared/css-values.ts'
 // Cross-module regression (finding: options were Tailwind family names, not
 // CSS): the select options must be committable through the S1 class path.
 import { tailwindClassFor } from '../src/main/tw-styles.ts'

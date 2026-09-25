@@ -40,6 +40,6 @@ support evaluation; the experimental Gemini CLI backend currently does not.
 
 Implementation: `src/main/project-memory.ts`, `src/main/agent.ts`,
 `src/main/backends/memory.ts`, `src/main/rules.ts`,
-`src/renderer/src/components/ProjectMemoryDialog.tsx`. Regression coverage:
+`src/native/Sheets.swift` and `src/native/sheets-runtime.ts`. Regression coverage:
 `test/project-memory.mjs`, `test/project-memory-evaluation.mjs`,
-`test/project-memory-ui.mjs`, `test/rules.mjs`.
+`test/native-sheets.mjs`, `test/rules.mjs`.

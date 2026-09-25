@@ -1,5 +1,5 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
-import type { BrowserWindow } from 'electron'
+import type { NativeView } from '../../native/platform'
 import type { AgentEvent, AgentOptions } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
 import { praxisRules } from '../rules'
@@ -67,7 +67,7 @@ function mapEvent(ev: unknown): AgentEvent | null {
 async function startSession(
   root: string,
   options: AgentOptions,
-  getWindow: () => BrowserWindow | null,
+  getWindow: () => NativeView | null,
   // v9 resume/multi-chat: Gemini has no resume primitive here (headless `-p` runs
   // don't carry a session id at all yet) — accept the context and no-op the resume;
   // `emitKey` is still honored so an additional live chat routes to its own slice.

@@ -18,7 +18,7 @@ import {
   defaultChatAgentSettings,
   resumeChatSettings,
   toAgentOptions
-} from '../src/renderer/src/chat-settings.ts'
+} from '../src/shared/chat-settings.ts'
 
 let failed = 0
 const ok = (cond, msg) => {

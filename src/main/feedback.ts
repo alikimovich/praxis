@@ -1,6 +1,6 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { app, ipcMain, type BrowserWindow } from 'electron'
+import { app, ipcMain, type NativeView } from '../native/platform'
 import type { FeedbackInput, FeedbackResult } from '../shared/api'
 import { buildFeedbackBody, buildFeedbackTitle } from '../shared/feedback-body'
 
@@ -33,7 +33,7 @@ const run = (cmd: string, args: string[], cwd: string): Promise<{ stdout: string
   }) as Promise<{ stdout: string }>
 
 /** Downscale + re-encode a full-window capture so its data URI stays small. */
-async function captureWindow(win: BrowserWindow | null): Promise<string | null> {
+async function captureWindow(win: NativeView | null): Promise<string | null> {
   if (!win) return null
   try {
     const img = await win.webContents.capturePage()
@@ -108,7 +108,7 @@ async function submitFeedback(
  * Register the feedback IPC. `getWindow` yields the main window (for the
  * screenshot capture); the issue is filed against Praxis's own checkout.
  */
-export function registerFeedbackIpc(getWindow: () => BrowserWindow | null): void {
+export function registerFeedbackIpc(getWindow: () => NativeView | null): void {
   const repoRoot = app.getAppPath()
   ipcMain.handle('feedback:capture', () => captureWindow(getWindow()))
   ipcMain.handle('feedback:submit', (_e, input: FeedbackInput) =>

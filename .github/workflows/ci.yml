@@ -26,9 +26,5 @@ jobs:
       - name: Unit tests
         run: node test/run.mjs unit
 
-  # NOTE: The `electron` (Playwright/Electron UI) and `live`
-  # (agent-e2e / codex-e2e / sim-e2e) tiers are intentionally NOT run here.
-  # They require a display server and/or provider credentials. A self-hosted
-  # macOS runner can add them later, e.g.:
-  #   - node test/run.mjs electron
-  #   - node test/run.mjs live
+  # Native desktop and live provider tiers require a macOS display and credentials.
+  # Run separately on a suitable Mac: node test/run.mjs native or live.

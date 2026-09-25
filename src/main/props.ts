@@ -1,5 +1,5 @@
 import { typescriptProps } from './props-typescript'
-import { ipcMain, shell } from 'electron'
+import { ipcMain, shell } from '../native/platform'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { readFile, stat, writeFile } from 'fs/promises'

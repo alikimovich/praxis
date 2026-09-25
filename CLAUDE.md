@@ -1,6 +1,6 @@
 # CLAUDE.md — working guide for Praxis
 
-Praxis is an Electron app: an AI chat on the left that edits a user's repo, with
+Praxis is a native macOS app (Swift/AppKit/SwiftUI with Bun services): an AI chat on the left that edits a user's repo, with
 that repo's dev server live-previewed on the right. Distributed as source
 (clone + `bun install` + `bun run dev`); each user authenticates with their own
 provider subscription (`claude setup-token` / `claude login`; Codex and Gemini
@@ -29,56 +29,55 @@ history as written.
 
 | Command | What |
 | --- | --- |
-| `bun run dev` | Launch the app (electron-vite, HMR) |
-| `bun run build` | Build main/preload/preview/renderer to `out/` |
-| `bun run typecheck` | Type-check all three tsconfig projects (node, web, preview). Run after every change |
+| `bun run dev` | Build and launch the native app |
+| `bun run build` | Build Swift host, Bun services and preview to `out/native/` |
+| `bun run typecheck` | Type-check native/backend/shared code and isolated preview. Run after every change |
 | `bun run test:<name>` | One test (see package.json for ~40 aliases) |
-| `bun run test` | Unit + Electron UI tiers (via `test/run.mjs`) |
+| `bun run test` | Unit + native UI tiers (via `test/run.mjs`) |
 | `bun run verify` | Everything incl. live-agent e2e (needs display + creds) |
 | `bun run lint` | Biome lint over `src` + `test` |
 
-Use **bun**, not npm/yarn. Node 22 (`.nvmrc`). `postinstall` runs
-`scripts/patch-electron.mjs` (macOS-only, idempotent): it rebrands the dev
-Electron.app bundle to Praxis — the dev bundle IS the product.
+Use **bun**, not npm/yarn. Node 22 (`.nvmrc`) remains available for tooling.
+Native builds require macOS 13.3+ and command-line tools with the macOS 26 SDK.
+The `dev:native`, `build:native`, and `typecheck:native` aliases remain supported.
 
 ## Verify your own work WITHOUT asking the user
 
-Tests come in three tiers, defined by the arrays in `test/run.mjs`
-(`node test/run.mjs unit|electron|live|all`) — pick the cheapest that proves
-your change:
+The runner tiers are `unit`, `native`, `live`, and `all`. Run relevant unit tests,
+`bun run typecheck`, `bun run typecheck:native` and `bun run test:native` for native
+changes. `bun run test` combines unit and native checks. Live provider calls
+(`test:native-live` / `verify`) require authorization. Unit jobs are bounded;
+native/live jobs are serial, use disposable profiles, and distinguish SKIP from
+PASS. See `docs/TESTING.md` for filtering, logs, timeouts and isolation rules.
 
-1. **Pure-bun logic tests** (`bun test/pr-body.mjs` etc., ~15 files, the `unit`
-   tier) — no build, no display, run in seconds. Always run the relevant ones.
-2. **Playwright/Electron UI tests** (`node test/<name>.mjs` after
-   `electron-vite build`, or `bun run test:<name>` which builds first) — drive
-   the built app, screenshot to `test/artifacts/`. **Read the PNGs** to see
-   the actual UI; that's how you confirm work visually without a human.
-3. **Live e2e** (`test:agent`, `test:codex`, `test:sim-e2e`) — run a REAL
-   provider turn / iOS simulator. They self-SKIP (exit 0) without credentials
-   or a sim; they FAIL if the turn ran but didn't produce the edit.
+Read captured PNGs to verify UI. Offscreen AppKit captures cannot reliably paint
+Liquid Glass. `PRAXIS_NATIVE_BACKGROUND_TEST=1` skips real pointer gestures and
+animation timing; report that reduced coverage. No Electron tests remain.
 
-While iterating, run targeted `test:<name>` scripts; before declaring a chunk
-done, run `bun run typecheck && bun run test` (and `verify` when agent/sim
-behavior changed). Note: the preview is a native `WebContentsView` — a
-separate CDP target that does NOT appear in renderer screenshots; capture it
-with `capturePage()` or read its URL via
-`electronApp.evaluate(({webContents}) => ...)`.
+> Electron and browser/Tailscale mode are retired. Old user profiles are preserved,
+> not implicitly imported or deleted. See `docs/NATIVE.md`.
 
-## Architecture — four process boundaries
+## Architecture — Swift host, Bun services and isolated project WebKit
 
 ```
 src/
-  main/           Electron main (CJS, Node)
-    index.ts        window + native WebContentsView preview (IPC geometry sync).
-                    Owns the VIEWS: creates/raises/hides them, and owns the
-                    untrusted preview's guards — its own session partition with
-                    every permission denied, and a will-navigate/will-redirect
-                    policy pinned to the origin main itself loaded
+  native/         Swift/AppKit/SwiftUI UI + Bun controllers
+    index.ts        service registration, project lifecycle and host bridge
+    Host.swift      AppKit application and JSON pipe protocol
+    Shell.swift     sidebar, toolbar and project/chat navigation
+    Chat.swift / Composer.swift   native conversation and text input
+    WorkspaceLayout.swift        authoritative view/divider geometry
+    SourceEditor.swift / Layers.swift / EditingInspector.swift / ContentWindow.swift
+                    native source, layers, inspector and content editing
+    platform.ts     direct native service imports, Keychain, event routing
+    preview-transport.ts   restricted isolated WKContentWorld transport
+    assets/cat/     native animation artwork
+  main/           Backend services (CJS bundle, Bun); historical directory name
     preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
                     bounds/load/reset/capture, the select + comment relays, the
                     prop-panel island's plumbing, Styles reads, Layers. Owns no
-                    view — index.ts hands it a `PreviewIpcHost` (accessors +
-                    the shared `PreviewState`, which index.ts's did-finish-load
+                    view — native/index.ts hands it a `PreviewIpcHost` (accessors +
+                    the shared `PreviewState`, which native/index.ts's load
                     re-arm reads). The sandboxed preload can only be READ by a
                     request/reply round trip; `requestReply` is that pattern
                     once, shared by styles:read and layers:read
@@ -86,7 +85,7 @@ src/
     static-server.ts in-process static file server for vanilla HTML/JS projects
                     (framework 'static': no package.json/dev command; live-reload)
     file-tree.ts    list a project's files (git ls-files / fs-walk) for the
-                    pop-out editor's @pierre/trees sidecar (source:tree IPC)
+                    native source editor's file tree (source:tree IPC)
     project-icon.ts the project's own favicon for its rail row (project:icon) —
                     a declared <link rel="icon"> first, else the conventional
                     paths; inlined as a data: URL, mtime-revalidated. Reads the
@@ -157,7 +156,7 @@ src/
                     parentNode back-references)
     control-manifest.ts / control-panels.ts   AI-surfaced control panels:
                     validate + anchor-lex + render literals (pure) and the
-                    main-owned .dsgn/control-panels.json store + controls:* IPC
+                    main-owned .praxis/control-panels.json store + controls:* IPC
     tokens.ts       design-token detection/scaffold   annotations.ts  comments → PR
     spring.ts       pure spring→CSS linear() engine (vendored from ~/dev/spring2css);
                     powers the spring_to_css agent tool in backends/claude.ts
@@ -184,11 +183,8 @@ src/
     setup.ts, scaffold.ts, xcode.ts
     diagnose.ts, diag-cache.ts, diag-rules.ts         sessions-store.ts, edit-history.ts
     update.ts       self-update detection (pure: fetch + rev-list behind-count)
-    update-ipc.ts   update:* IPC + relaunch; "apply" shells out to bin/praxis.mjs
-  preload/index.ts  contextBridge → window.api (contextIsolation on, sandboxed)
-  preview/preload.ts  SECOND preload, injected into the PREVIEWED app's
-                    WebContentsView: element select/hover, comments, annotations.
-                    Own tsconfig (tsconfig.preview.json)
+  preview/preload.ts  isolated WKWebView instrumentation: selection, comments,
+                    annotations; own tsconfig (tsconfig.preview.json)
   preview/layers.ts DOM tree walk + child-index-path node resolution for the
                     Layers panel (bulk read, panel-driven select/hover, the
                     structural MutationObserver watch) — split out of preload.ts,
@@ -215,28 +211,11 @@ src/
                     (re-validating a pick) and the island (chips + picker)
   shared/run-stats.ts  the chat status line's numbers: main normalizes each
                     provider's usage payload + dedupes its repeated cumulative
-                    readings into `usage` event deltas, the renderer sums and
-                    formats them (RunStats.tsx, next to the cat)
+                    readings into `usage` event deltas, native chat state accumulates them for the Swift status line
   shared/style-props.ts  the Styles panel's v1 editable CSS-property allowlist
                     (the `StyleProp` union). main/styles.ts derives its
                     `STYLE_PROPS` from it (the actual write-time boundary);
-                    renderer/src/lib/css-values.ts's `STYLE_PROP_META` is
-                    `satisfies`-checked against it, so the two can't drift
-                    apart by hand again
-  renderer/src/     React 18 UI: App.tsx, components/ (ChatPanel, PreviewPane,
-                    PropPanel, CodeDrawer, Rail, LayersPanel + LayersTree, …),
-                    zustand store.ts, shadcn ui/
-                    components/styles/  the Styles tab's rows + controls
-                    (ScrubInput, ColorControl, BezierEditor, TokenPicker)
-                    SettingsDialog.tsx + ProviderForm.tsx  the v10 Settings dialog
-                    (Models & Providers): default model (last-used or a fixed pick),
-                    add a connection, probe its catalog, tick models.
-                    preferred-model.ts is the pure last-used/fixed resolver (kept
-                    OUT of store.ts). providers-store.ts is the connections slice.
-                    composer-drafts.ts  the composer's unsent text + attachments,
-                    keyed by chat (ChatPanel is mounted once for the whole app, so
-                    component state would follow the user into the next chat)
-  ../bin/praxis.mjs the `praxis` CLI (launch + `--update`); owns the update
+                    ../bin/praxis.mjs the `praxis` CLI (launch + `--update`); owns the update
                     sequence (git pull + bun install + build). ../install.sh boots it.
 test/             hand-rolled .mjs tests + fixtures/ + artifacts/ (PNGs, gitignored)
 docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec)
@@ -244,11 +223,11 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
 
 - **Lifecycle:** `install.sh` (curl one-liner) clones to `~/.praxis`, builds, and
   puts `praxis` on PATH. `praxis` launches the built app; `praxis --update` pulls
-  + rebuilds. The app checks its git remote in the background (`update-ipc.ts`)
-  and offers an in-app "Update & Restart" that runs `praxis --update` and relaunches.
+  + rebuilds. Native Settings uses `src/native/update-controller.ts` to guard
+  unsaved work, check/pull/install/build, and restart.
 
 - The chat runs in `main` via provider SDKs; output streams over `agent:*` IPC
-  into the zustand store. The store is the seam between transport and UI.
+  into Bun chat controllers, which send typed state to Swift.
 - Praxis **owns** the dev-server lifecycle of the target repo (never run the
   target's `dev` manually); it's killed on app quit.
 
@@ -256,9 +235,8 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
 - **Agent core = SDK in-process** (not ACP/subprocess): the product's custom
   tools (select element → edit props → annotate → PR) are wired to the renderer
   and need in-process SDK tools.
-- **Preview = native `WebContentsView`, not an iframe**: so a preload can be
-  injected into the previewed app for element selection (a cross-origin iframe
-  couldn't).
+- **Preview = system `WKWebView`**: isolated instrumentation selects elements
+  and talks to Bun through a view-identity-checked message allowlist.
 - **Prop editing is hybrid**: simple literals splice straight into source (instant
   HMR); complex/expression values fall back to the agent. React and Svelte have
   separate engines because their ASTs differ; selection/tokens are framework-
@@ -266,52 +244,30 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
 
 ## Conventions
 
-- **Tailwind CSS v4 + shadcn/ui** in the renderer (decision reversed from
-  plain-CSS on 2026-06-26). Legacy custom-property CSS still lives in
-  `renderer/src/styles.css`; prefer Tailwind utilities + shadcn primitives for
-  new UI, and migrate legacy rules out of styles.css when you touch them.
-- **Never invent a new font-size or line-height** — reuse one already in use,
-  unless the user explicitly asks for a new one. There's no formal type-scale
-  token (no `--text-sm`/`--text-base` CSS vars); the de facto scale is
-  whichever `text-[Npx]` values already recur across `components/` — as of
-  this writing: `9px, 10px, 10.5px, 11px, 11.5px, 12px, 12.5px, 13px` (plus
-  the standard Tailwind `text-sm`/`text-base`/etc. for normal body text).
-  Before adding a small/muted label, grep for the closest existing sibling
-  (e.g. `.proppanel__source`, `.notes__where`) and match its exact class
-  string rather than picking a new number. Line-height is simpler: always
-  Tailwind's named scale (`leading-none`, `leading-snug`, `leading-5`, …),
-  never an arbitrary `leading-[Npx]` — grep confirms no component uses one.
+- Application UI is Swift/AppKit/SwiftUI. Reuse existing system font sizes,
+  line heights and native controls rather than introducing arbitrary scales.
+  Tailwind support remains in source-editing tools for the user's projects.
 - The Claude Agent SDK is **ESM-only** — `main` is CJS, so it's loaded via
   dynamic `import()` in `agent.ts`/`backends/` (never static/`require`).
-- All cross-process types go in `src/shared/api.ts`; keep `PraxisApi`, the
-  preload bridge, and the ipcMain handlers in sync — a change to one is a
-  change to all three.
+- All cross-process types go in `src/shared/api.ts`; keep service handlers, Bun controllers, preview transport
+  and Swift state/action contracts in sync.
 - New test = new `.mjs` in `test/` **plus** its name in the right tier array in
-  `test/run.mjs` (`unit` / `electron` / `live`). `bun run test` and `verify`
+  `test/run.mjs` (`unit` / `native` / `live`). `bun run test` and `verify`
   dispatch through the runner — don't hand-edit `&&` chains.
-- Keep files under ~500 lines; extract instead of appending to `App.tsx`,
-  `store.ts`, or `styles.css` (already oversized — see `docs/TASKS.md`).
+- Keep files under ~500 lines; extract modules instead of growing oversized files.
 - Auth is per-user at runtime; never commit secrets. Nothing sensitive in-repo.
   The two built-in seats use subscription login (Claude `setup-token` / Codex
   sign-in-with-ChatGPT). A v10 *connection* is the one path that uses an API key —
   the user's own, encrypted with `safeStorage` under userData and confined to main.
   It must never reach the renderer, argv, a log line, or an error string; the
-  renderer only ever observes `hasKey`.
+  UI only ever observes `hasKey`.
 - Commit in small, focused commits with the Co-Authored-By trailer.
 
 ## Gotchas (hard-won — read before debugging these areas)
 
-- **Native menu accelerators beat renderer keydown — and tests can't see it.**
-  A menu item's accelerator (incl. every `role:` item's built-in one)
-  intercepts the PHYSICAL keystroke in the main process; a renderer
-  `window.addEventListener('keydown')` for the same combo never fires. But
-  synthetic/CDP-injected key events (Playwright, `sendInputEvent`) BYPASS menu
-  accelerators, so a test of that keydown handler passes while a real keyboard
-  is broken. This shipped a dead Cmd+Z source-undo behind `role: 'editMenu'`
-  for weeks. Rule: any app shortcut that a menu (or a role) also claims must be
-  handled via the menu item's `click` → `menu:action`, not a renderer keydown;
-  and Edit→Undo/Redo route by focus (`buildAppMenu`'s `editCommand` +
-  App.tsx's menu-action handler + `menu:native-edit` for focused text fields).
+- **Native shortcuts must route through AppKit menus/responders.** Preserve
+  focus-based Undo/Redo and validate physical shortcuts; synthetic actions alone
+  cannot prove menu/responder behavior.
 - **The Agent SDK's `interrupt()` can never return, so Stop must not just await it.**
   It's a CONTROL REQUEST: the SDK resolves it only when the CLI subprocess sends a
   matching `control_response`, and there is no timeout anywhere in that path. A
@@ -323,33 +279,12 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   `backends/interrupt.ts`, and report `hardStopped` so agent.ts rebuilds the dead
   session. Codex was always safe here (its cancel is a local AbortController);
   Gemini had no `interrupt` at all, so Stop silently did nothing.
-- **Never run an Electron test directly — it uses your REAL app state.**
-  `node test/chat-render.mjs` launches against the live `userData`, so if any
-  project is currently open there the empty state (`openCount === 0`) never
-  renders and the test dies on `waitForSelector('.empty__open')` after 15s.
-  `test/run.mjs` gives every test a fresh `PRAXIS_USER_DATA` temp dir, which is
-  why the same test passes through `bun run test:<name>` / `bun run test`. This
-  trap cost real time twice: it produced three separate TASKS notes claiming
-  "the Electron tier can't launch a window on this machine, confirmed at HEAD"
-  (all wrong, all corrected 2026-08-07) and it makes stash-and-compare baselines
-  meaningless, since both sides fail for the same bogus reason. If you must run
-  one by hand: `PRAXIS_USER_DATA=$(mktemp -d) node test/<name>.mjs`. Note the
-  runner also spawns bare `electron-vite`, so it needs `node_modules/.bin` on
-  PATH — invoke it via `bun run test`, not `node test/run.mjs`.
 - **ESM/CJS**: the Agent SDK is ESM-only, `main` is CJS → dynamic `import()`
   only, never static/`require`.
-- **The preview `WebContentsView` is a separate CDP target** — not in renderer
-  page screenshots (use `capturePage()`), and it eats mouse events (hidden
-  during resize drag). Drive it from a test via the main process
-  (`webContents.executeJavaScript`), as `test/select-element.mjs` does.
-- **A renderer DOM panel can't float *above* the native preview** (native views
-  render over the page). Panels reserve a strip instead, shrinking the native
-  bounds via `usePanelInset`: the prop panel takes the **right** edge, the v9
-  code drawer the **bottom**.
-- **The preview overlay preload is sandboxed** — only `ipcRenderer` (no Node, no
-  contextBridge), shares the page DOM via a `pointer-events:none` shadow root,
-  and re-runs on every navigation, so `main` re-sends the current select-mode on
-  `did-finish-load`.
+- **The preview is the only WebKit view.** Do not reintroduce an application
+  renderer. AppKit owns geometry and native inspectors reserve their own space.
+- **Preview instrumentation is isolated.** Keep the WKContentWorld and restricted
+  message allowlist; re-send select/style/layer state after navigation.
 - **Prop editing is gated** on `PropInspection.hasSchema` (a resolved
   react-docgen/svelte schema). Unready components are prompt-only; the on-open
   setup offer instruments them.
@@ -362,13 +297,10 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   An element with no class and no `style` is SUPPOSED to cost an agent turn.
   (Note S1 has the mirror-image gap: it can only rewrite an existing class
   string, never add one, so Tailwind projects pay that turn too.)
-- **Dev CDP**: `bun run dev` opens `--remote-debugging-port` 9222 (override
-  `PRAXIS_DEBUG_PORT`; dev-only). Inspect either target via Chrome
-  `chrome://inspect#devices`; Playwright's `_electron` still can't reach the
-  preview as a page target. On Chrome 111+ attach failures, add
-  `app.commandLine.appendSwitch('remote-allow-origins', 'devtools://devtools')`.
-- **bun blocks postinstall for untrusted deps** — `electron`/`esbuild` are in
-  `package.json#trustedDependencies` so their binaries install.
+- **Inspect WebKit through its native Web Inspector.** There is no Electron CDP
+  port. Use the native host test protocol for deterministic integration checks.
+- **Bun blocks postinstall for untrusted dependencies.** `esbuild` remains in
+  `package.json#trustedDependencies` for its binary.
 - **The agent is denied writes under a target repo's `.praxis/` (and legacy `.dsgn/`)** (annotations,
   scaffolded instrumentation, and control-panel manifests live there). The
   `define_controls` tool exists precisely because of this: the agent hands main

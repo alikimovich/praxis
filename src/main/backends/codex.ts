@@ -12,7 +12,7 @@ import type {
   ThreadItem,
   ThreadOptions
 } from '@openai/codex-sdk'
-import { app, type BrowserWindow } from 'electron'
+import { app, type NativeView } from '../../native/platform'
 import type { AgentEvent, AgentOptions } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
 import {
@@ -161,7 +161,7 @@ const oneLine = (s: string, n = 120): string => s.replace(/\s+/g, ' ').trim().sl
 async function startSession(
   root: string,
   options: AgentOptions,
-  getWindow: () => BrowserWindow | null,
+  getWindow: () => NativeView | null,
   // v9 resume/multi-chat: Codex has no confirmed resume primitive — accept the
   // context (for the shared ModelProvider signature) and no-op it. `emitKey`
   // (used for an additional live chat) is honored so its events still route to
@@ -293,12 +293,11 @@ async function startSession(
       mcp_servers: {
         praxis: {
           command: process.execPath,
-          // Electron's app path is out/main when launched from the compiled entry.
+          // The MCP helper is relative to the compiled Bun entry in out/native.
           args: [join(__dirname, '../../bin/praxis-agent-mcp.mjs')],
           // Match Claude's allowlist for validated source reveal and control registration.
           tools: { content_controls: { approval_mode: 'approve' }, project_ui_catalog: { approval_mode: 'approve' }, compose_project_ui: { approval_mode: 'approve' }, open_preview: { approval_mode: 'approve' }, open_code: { approval_mode: 'approve' }, define_controls: { approval_mode: 'approve' } },
           env: {
-            ELECTRON_RUN_AS_NODE: '1',
             PRAXIS_AGENT_TOOL_SOCKET: praxisTools.socketPath,
             PRAXIS_AGENT_TOOL_TOKEN: praxisTools.token
           }

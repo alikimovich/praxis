@@ -2,7 +2,7 @@
  * Channel names for the main ⇄ preview-preload conversation.
  *
  * These are the ONLY IPC channels that don't go through `shared/api.ts`'s typed
- * `PraxisApi` bridge: the preview preload is sandboxed (bare `ipcRenderer`, no
+ * application service bridge: the preview preload is sandboxed (bare `ipcRenderer`, no
  * contextBridge), so main and `src/preview/preload.ts` talk in raw channel
  * strings. Both sides used to hand-declare their own copy of every string —
  * twenty-odd literals mirrored by eye, where a single typo silently disables a

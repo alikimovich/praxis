@@ -1,5 +1,5 @@
 import { createHash } from 'crypto'
-import { protocol } from 'electron'
+import { protocol } from '../native/platform'
 import { createReadStream } from 'fs'
 import { stat } from 'fs/promises'
 import { Readable } from 'stream'

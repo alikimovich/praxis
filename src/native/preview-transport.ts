@@ -1,5 +1,5 @@
 // Preview-only IPC transport, injected exclusively into the isolated WKContentWorld.
-type Listener = (event: object, ...args: unknown[]) => void
+type Listener = (event: object, ...args: any[]) => void
 const listeners = new Map<string, Set<Listener>>()
 const pending = new Map<
   number,

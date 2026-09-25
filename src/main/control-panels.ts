@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { views, ipcMain } from '../native/platform'
 import { mkdir, readFile, rename, stat, writeFile } from 'fs/promises'
 import { isAbsolute, join, normalize } from 'path'
 import type {
@@ -270,7 +270,7 @@ export function registerControlsIpc(): void {
     // panel locally, so main's cached panel state and the renderer's fetched
     // list both keep the deleted panel — it would come back on the next island
     // reload and could still be picked as a Regenerate target.
-    for (const w of BrowserWindow.getAllWindows())
+    for (const w of [...views.values()].filter(view => view.id !== 'preview'))
       if (!w.webContents.isDestroyed()) w.webContents.send('controls:updated', { root })
     return panels
   })

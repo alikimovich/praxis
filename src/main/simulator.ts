@@ -1,4 +1,4 @@
-import { app, ipcMain, type BrowserWindow } from 'electron'
+import { app, ipcMain, type NativeView } from '../native/platform'
 import { spawn, execFile, type ChildProcess } from 'child_process'
 import { randomBytes } from 'crypto'
 import { createServer, type Server, type ServerResponse, type IncomingMessage } from 'http'
@@ -17,7 +17,7 @@ import type { RunningSimulator, SimDevice, SimPreflight } from '../shared/api'
  * stands up a tiny local "sim bridge": an HTTP server that captures the booted
  * device's screen (via `xcrun simctl io … screenshot`) and serves it as an
  * MJPEG stream behind a one-`<img>` page. The renderer then points the existing
- * preview `WebContentsView` at that page — so the simulator is "just another
+ * preview `NativeView` at that page — so the simulator is "just another
  * local URL" and every geometry/load/retry seam is reused unchanged.
  *
  * macOS-only: `preflight()` gates everything and returns a human `reason` (never
@@ -533,7 +533,7 @@ interface Interaction {
 // Set by the renderer's Select toggle (sim path); read by the live interaction.
 let simSelectMode = false
 // The window to emit picks to, set in registerSimulatorIpc.
-let getWin: () => BrowserWindow | null = () => null
+let getWin: () => NativeView | null = () => null
 // Send to the renderer, guarding a destroyed webContents: the window can outlive
 // its renderer process (OS kills it on display sleep), and async sources here —
 // the sim launch's socket `onData`, the bridge server — keep emitting during that
@@ -1147,7 +1147,7 @@ async function startTestBridge(interactive = false): Promise<{ url: string }> {
   return { url: `http://${HOST}:${port}/?praxisSim=1` }
 }
 
-export function registerSimulatorIpc(getWindow: () => BrowserWindow | null): void {
+export function registerSimulatorIpc(getWindow: () => NativeView | null): void {
   getWin = getWindow
   const log = simLog
   ipcMain.handle('simulator:preflight', () => preflight())

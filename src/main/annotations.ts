@@ -1,5 +1,5 @@
 import { execFile } from 'child_process'
-import { ipcMain } from 'electron'
+import { ipcMain } from '../native/platform'
 import { mkdir, readFile, rename, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { promisify } from 'util'

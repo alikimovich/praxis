@@ -1,4 +1,4 @@
-import { app, ipcMain } from 'electron'
+import { app, ipcMain } from '../native/platform'
 import type { Diagnosis, DiagStep } from '../shared/api'
 import { recall, remember, setStatus, signatureFor } from './diag-cache'
 import { matchKnownError } from './diag-rules'

@@ -2,7 +2,7 @@ import { inspectContent } from '@alikimovich/content-controls/recipe'
 import type { ContentControlDocument } from '../shared/api'
 import type { NativeInspectorAction, NativeInspectorField, NativeInspectorState } from '../shared/native-inspector'
 type Session = { document: ContentControlDocument; draft: Record<string, any>; generation: number; root: string; visible: boolean; busy: boolean; error: string; dirty: boolean; undo: Record<string, any>[]; lastField: string | null; actions: Map<string, () => void>; fields: Map<string, { target: Record<string, any>; key: string; type: string }> }
-/** Recipe validation and revision checking stay in the same shared backend as Electron. */
+/** Recipe validation and revision checking are owned by backend services. */
 export class NativeContentController {
   readonly sessions = new Map<string, Session>()
   private sequence = 0

@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url'
 
 if (process.platform !== 'darwin') {
-  console.error('The native runtime currently requires macOS. Use bun run dev for Electron.')
+  console.error('Praxis requires macOS 13.3 or later.')
   process.exit(1)
 }
 

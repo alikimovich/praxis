@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, readdirSync, renameSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
-import { app, type BrowserWindow, ipcMain as electronIpcMain } from 'electron'
+import { app, type NativeView, ipcMain as nativeIpcMain } from '../native/platform'
 import type {
   AgentEvent,
   AgentOptions,
@@ -73,7 +73,7 @@ import {
 } from './worktrees'
 
 const execFileP = promisify(execFile)
-let ipcMain: RpcHandlerRegistry = electronIpcMain
+let ipcMain: RpcHandlerRegistry = nativeIpcMain
 const git = (root: string, args: string[]): Promise<{ stdout: string }> =>
   execFileP('git', args, { cwd: root, timeout: 20000 }) as Promise<{ stdout: string }>
 
@@ -473,13 +473,13 @@ async function finalizeSpawn(id: string, status: 'done' | 'error'): Promise<void
 
 // finalizeSpawn runs outside registerAgentIpc's closure, so it needs the window
 // accessor. Captured when IPC is registered.
-let getWindow_: () => BrowserWindow | null = () => null
+let getWindow_: () => NativeView | null = () => null
 
 // Agent events stream from async SDK callbacks that keep firing after the
 // renderer process is killed (OS display sleep / GPU loss): the window outlives
 // its webContents, so a bare `.send()` throws an uncaught "Object has been
 // destroyed". Guard isDestroyed() to make a late emit a safe no-op.
-function safeSend(get: () => BrowserWindow | null, channel: string, payload: unknown): void {
+function safeSend(get: () => NativeView | null, channel: string, payload: unknown): void {
   const wc = get()?.webContents
   if (wc && !wc.isDestroyed()) wc.send(channel, payload)
 }
@@ -621,8 +621,8 @@ function resolveQuestion(s: ProviderSession, id: string, answers: QuestionAnswer
 }
 
 export function registerAgentIpc(
-  getWindow: () => BrowserWindow | null,
-  router: RpcHandlerRegistry = electronIpcMain
+  getWindow: () => NativeView | null,
+  router: RpcHandlerRegistry = nativeIpcMain
 ): void {
   ipcMain = router
   getWindow_ = getWindow // share with finalizeSpawn (runs outside this closure)

@@ -19,7 +19,7 @@ GitHub PR.
 
 - **Live preview of your repo.** Open a folder → Praxis detects the framework
   and package manager, boots that repo's dev server, and previews it in a
-  native `WebContentsView`. It self-heals if the dev server dies and restarts.
+  system WebKit `WKWebView`. It self-heals if the dev server dies and restarts.
   Plain HTML/CSS/JS folders (no package.json or build step) are served by a
   built-in static server with live-reload; anything Praxis can't auto-launch
   prompts for a custom command.
@@ -28,14 +28,6 @@ GitHub PR.
   branch into the current branch, or switch to a local tracking branch. Existing
   local branches are preserved. Pull conflicts restore the clean starting tree;
   successful updates refresh the preview, including changed dependencies.
-- **Local browser mode.** `praxis serve /path/to/repo` runs the same workspace
-  engine and React UI on loopback without opening a desktop window. The preview
-  is isolated behind a browser gateway and supports source-aware element selection;
-  native editing-tool parity is still in progress. See
-  [`docs/BROWSER.md`](docs/BROWSER.md).
-- **Secure access from another machine.** Add `--remote` to publish the loopback-only
-  control UI and isolated preview through Tailscale Serve. Praxis prints a single-use
-  pairing URL for a browser on the same tailnet and removes its routes on shutdown.
 - **AI chat that edits the running app.** A persistent multi-turn agent session
   streams over IPC and edits source with hot-reload. Backends are pluggable —
   Claude (via the Agent SDK), Codex, and Gemini behind one provider seam
@@ -59,7 +51,7 @@ GitHub PR.
   Alt+↑/↓ reorders the focused name with the keyboard. Manual order persists
   across reloads/restarts without changing the active chat or running sessions.
 - **Drag to reorder in the desktop preview.** Select an element, then hold
-  Command (Control on Windows/Linux) and drag it among its siblings. An insertion
+  Command and drag it among its siblings. An insertion
   line shows the drop position for columns, rows, and grids; nesting stays fixed.
   Escape or releasing the modifier cancels. Moves write source and support undo;
   ambiguous template/data moves prepare a chat prompt.
@@ -121,8 +113,8 @@ GitHub PR.
 - A provider subscription for the agent (e.g. Claude Pro/Max), authorized
   per-user (below) — or your own API key for a third-party endpoint, added in
   Settings. Either way it is per-user; there is no shared secret.
-- macOS is the primary target (the postinstall step rebrands the dev Electron
-  bundle to Praxis and is macOS-only; it no-ops elsewhere).
+- **macOS 13.3+**, Xcode command-line tools with the **macOS 26 SDK**.
+  Liquid Glass requires macOS 26; older releases use native fallback materials.
 
 ## Install
 
@@ -135,7 +127,7 @@ curl -fsSL https://raw.githubusercontent.com/alikimovich/praxis/main/install.sh 
 
 The installer recommends **agent-browser** for automated browser checks, including
 different screen sizes, and asks whether to install its global CLI and browser.
-It uses Bun (or npm when Bun is unavailable), skips the offer when the CLI is
+It uses Bun, skips the offer when the CLI is
 already on PATH, and defaults to **No**. Unattended installs skip the prompt.
 An optional browser-install failure does not prevent Praxis installation.
 To install it later: `bun install --global agent-browser && agent-browser install`.
@@ -148,8 +140,7 @@ Then authorize the agent once and launch:
 ```bash
 claude setup-token   # one-time: authorize the agent with your own subscription
 praxis               # launch the app (builds on first run)
-praxis serve ./my-app # or run the local-browser UI for one repo
-praxis serve ./my-app --remote # open it from another device on your Tailscale network
+praxis --project ./my-app # open a project directly
 ```
 
 In the app, click **Open project…**, pick a repo with a `dev`/`start` script,
@@ -163,9 +154,8 @@ error banner offers a custom-command retry for monorepos / odd setups).
 praxis --update      # git pull + bun install + rebuild
 ```
 
-The app also checks its git remote in the background and shows an
-"Update available" banner with an **Update & Restart** button that runs the same
-sequence and relaunches. There's no signed app or auto-download — updates are
+The native Settings update workflow checks the remote, guards unsaved work,
+then pulls, installs, rebuilds and restarts. There's no signed app or auto-download — updates are
 always a git pull of your checkout.
 
 ## Develop on Praxis itself
@@ -175,90 +165,58 @@ Contributors work in the checkout directly instead of the installed copy:
 ```bash
 git clone https://github.com/alikimovich/praxis.git
 cd praxis
-bun install          # runs scripts/patch-electron.mjs (macOS: brands the dev app)
-bun run dev          # electron-vite, HMR
+bun install
+bun run dev          # build and launch the native app
 bun link             # optional: expose the `praxis` command from this checkout
 ```
 
 ## Architecture
 
-Four process boundaries (details in [`CLAUDE.md`](CLAUDE.md)):
+Praxis has a Swift/AppKit/SwiftUI interface, a Bun service process, and one
+WebKit view for the user's project. See [Native architecture](docs/NATIVE.md).
 
-```
-Electron
-├─ main            agent session · dev-server runner · provider backends · iOS sim
-│                  · prop/text/token edit engines · annotations→PR · git/worktrees
-├─ preload         typed contextBridge → window.api      (types in src/shared/api.ts)
-├─ preview/preload injected into the PREVIEWED app: element select, comments, tokens
-└─ renderer        React 18 + Tailwind v4 + shadcn/ui: chat (left) + preview (right)
-```
+- **Swift** owns chat, composer, sidebar, toolbar, sheets and inspectors.
+- **Bun** owns provider sessions, Git/worktrees, files, source editing, persistence
+  and managed project servers. Services in `src/main/` are retained backend code;
+  that directory name does not imply an Electron runtime.
+- **Preview** runs in `WKWebView` with an isolated selection/editing script.
+- **Transport** is JSON over pipes between Swift and Bun; preview messages are
+  checked against a restricted allowlist.
 
-Local browser mode keeps the same main-process services but swaps preload IPC for
-scoped HTTP commands and WebSocket events. Its project preview runs in a sandboxed
-iframe on a separate loopback origin; see [`docs/BROWSER.md`](docs/BROWSER.md).
-
-- **Preview** is a native `WebContentsView`, not an iframe, so a second preload
-  is injected into the previewed app for element selection.
-- **Chat** streams over `agent:*` IPC into a zustand store (the seam between
-  transport and UI). Claude loads the opened repo's `CLAUDE.md` + skills via
-  `settingSources`; other backends keep their own instruction/tool behavior.
-- **Conventions travel with the opened repo** — its `CLAUDE.md`, skills, and
-  `DESIGN.md` describe how Praxis should edit it.
+Electron and the old React application UI have been removed. Browser/Tailscale
+mode (`praxis serve`) is retired; the CLI reports that explicitly. The native
+profile stays separate from old Electron profiles, which are not deleted or
+silently migrated. Existing provider CLI logins remain available.
 
 ## Testing
 
-Tests are hand-rolled `.mjs` scripts in three tiers:
+Tests are `.mjs` scripts in three tiers: `unit` (Bun backend/controller logic),
+`native` (Swift/AppKit integration with a disposable profile), and `live`
+(real provider edits, requiring credentials). Native tests skip on unsupported
+hosts; skips remain distinct from passes. Native and live tests run serially.
 
-- **Unit** (pure Bun, no display): `bun test/<name>.mjs` — fast, always run the
-  relevant ones.
-- **UI** (Playwright + Electron against the built app): `bun run test:<name>` —
-  drives the app and screenshots to `test/artifacts/`; **read the PNGs** to
-  confirm UI visually.
-- **Live e2e** (`test:agent`, `test:codex`, `test:sim-e2e`): run a real provider
-  turn / simulator; self-SKIP without credentials.
-
-`bun run test` runs unit + UI; `bun run verify` adds the live e2e tier.
-The runner uses up to four unit workers and two workers for audited UI tests;
-other UI tests and live tests run exclusively. Use `--serial` to compare timing.
-Per-test logs and a JSON summary live under `test/artifacts/runs/`; skipped
-coverage is reported separately from passing tests. See [Testing](docs/TESTING.md)
-for filtering, timeouts, and concurrency rules.
-
-The suite keeps a fresh app/profile per test file and skips the desktop startup
-intro except in `startup-intro`. To skip it in a targeted run too, use
-`PRAXIS_TEST_SKIP_INTRO=1 bun run test:smoke` (or another UI test script).
-Other UI animations remain enabled.
+`bun run test` runs unit and native checks. `bun run verify` adds live checks;
+run live provider calls only when authorized. Logs and JSON summaries are written
+to `test/artifacts/runs/`. Read captured PNGs to verify UI changes; offscreen
+Liquid Glass captures have limitations. See [Testing](docs/TESTING.md).
 
 ## Scripts
 
 | Command | Description |
 | --- | --- |
-| `bun run dev` | Launch the app with HMR |
-| `bun run dev:native` | Build and launch Praxis on macOS with Bun + system WebKit |
-| `bun run build:native` | Build the Swift UI/host, Bun backend and isolated preview script to `out/native/` |
-| `bun run test:native` | Native UI, project/server, selection, editing and isolation checks |
-| `bun run build` | Build main/preload/preview/renderer to `out/` |
-| `bun run typecheck` | Type-check all three tsconfig projects |
-| `bun run test` | Build + run unit and Electron UI tests |
-| `bun run verify` | `test` + live-agent/simulator e2e (needs creds + display) |
+| `bun run dev` | Build and launch the native app |
+| `bun run build` | Build Swift, Bun backend and isolated preview to `out/native/` |
+| `bun run start` | Launch the existing native build |
+| `bun run typecheck` | Check backend/native/shared code and preview code |
+| `bun run test` | Unit and native integration checks |
+| `bun run test:native` | Native integration only |
+| `bun run test:native-live` | Real provider fixture edit (credentials required) |
+| `bun run verify` | All tiers, including real provider calls |
 
-### Native runtime (macOS, experimental)
-
-`bun run dev:native` launches the Swift/AppKit/SwiftUI application UI with Bun
-services and a system WebKit project preview. Chat, settings, inspectors, source
-editing and content windows are native; the native build contains no Praxis React
-renderer. The original animated cat and native Liquid Glass composer are included.
-
-The shared application backend runs under Bun. It requires
-macOS 13.3+, Bun, and command-line tools with the macOS 26 SDK to build. Older
-macOS versions use a visual-effect fallback. Open a project using the normal
-folder picker; Praxis owns its dev server. `--project /path/to/repo` opens that project directly. `bun run dev` remains the default Electron version.
-
-Native uses a separate profile, so Electron conversations and saved endpoint keys
-are not automatically imported. Existing provider CLI logins remain available.
-WebKit rendering can differ from Chromium. Swift UI edits require restarting the native
-dev command. Native update/relaunch, downloads and camera/microphone prompts are implemented; older macOS releases and iOS Simulator still need
-release validation. See [native architecture, checks and limits](docs/NATIVE.md).
+The `dev:native`, `build:native` and `typecheck:native` aliases remain supported.
+Swift changes require rebuilding/restarting; there is no application HMR server.
+WebKit rendering may differ from Chromium. Older macOS releases and iOS Simulator
+still need release validation; see [current limits](docs/NATIVE.md).
 
 ### Compose UI from project components
 

@@ -63,7 +63,8 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 - [x] Preserve native sidebar projects and active selection across launches in profile-owned workspace storage.
 
 - [x] Reduce native idle work and unused renderer memory; verify lazy panel state, composer parity and paired performance measurements.
-- [ ] Validate remaining native platform/provider parity before deciding whether to retire Electron.
+- [x] Retire Electron, its React UI/browser mode, build pipeline and unused dependencies; review remaining native backend ownership.
+- [ ] Validate remaining native platform/provider parity, older macOS releases and iOS Simulator for release.
 
 - [x] Fix persistent toolbar highlights with explicit momentary segmented controls and exercise their action callback in native checks.
 

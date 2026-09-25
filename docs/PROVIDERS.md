@@ -135,15 +135,15 @@ defer navigation until saved or discarded. Detached agents cannot navigate the
 editor. The transport also works in browser mode.
 
 `open_preview` accepts a project-root path with optional query/hash for Claude
-and Codex/custom endpoints. It uses the existing desktop/browser preview navigation
+and Codex/custom endpoints. It uses the native preview navigation
 and waits for the active turn's landing and a running web preview. Requests are
 scoped to the active project/chat and discarded on a switch, failed turn, or parked
 landing; detached agents cannot navigate. External origins and simulator routes
 are unsupported. The tool reports a request, not proof that the page loaded.
 Gemini does not expose this tool.
 
-The Codex MCP executable path is relative to the compiled main bundle, not
-Electron's app path: direct source launches report `out/main` as the app path.
+The Codex MCP executable path is relative to the compiled Bun backend in
+`out/native/`; it does not depend on an Electron app path.
 
 The SDK session explicitly allows the validated `open_preview`, `open_code` navigation and `define_controls` tools via
 its per-tool approval configuration, matching Claude's in-process allowlist. Other

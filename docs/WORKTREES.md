@@ -135,7 +135,7 @@ recorded conversation handoff on its next turn; sibling chats are untouched.
 
 ## Environment changes and preview startup
 
-The renderer refreshes a managed web preview after authoritative `isolation:merged`
+The native workspace controller refreshes a managed web preview after authoritative `isolation:merged`
 or applied `spawn-finished` events containing manifests, lockfiles, or framework
 config changes. A provider's earlier `done` and parked/failed outcomes do not
 trigger this refresh. Background projects retain pending refreshes until activated.

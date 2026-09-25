@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import type { BrowserWindow } from 'electron'
+import type { NativeView } from '../../native/platform'
 import { z } from 'zod'
 import type {
   AgentEvent,
@@ -512,7 +512,7 @@ function formatAnswers(questions: QuestionSpec[], answers: QuestionAnswers): str
 async function startSession(
   root: string,
   options: AgentOptions,
-  getWindow: () => BrowserWindow | null,
+  getWindow: () => NativeView | null,
   ctx?: SpawnContext
 ): Promise<ProviderSession> {
   const key = projectKey(root)
@@ -553,7 +553,7 @@ async function startSession(
   }
 
   // In-process SDK MCP server bundling Praxis's own agent tools: read-only views
-  // of the user's live preview (the native WebContentsView that index.ts owns,
+  // of the user's live preview (the native NativeView that index.ts owns,
   // reached via the preview-state registry) which OBSERVE what the user sees
   // (agent-browser is the agent's own headless copy for interaction),
   // define_controls (v10 Custom Controls), a family of pure design-system

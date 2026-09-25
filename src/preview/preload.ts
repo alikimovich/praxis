@@ -14,7 +14,7 @@ import { ANIMATION_REPLAY } from '../shared/preview-channels'
  * shadow root with `pointer-events:none` so it can never clash with or swallow
  * events from the previewed app.
  */
-import { ipcRenderer } from 'electron'
+import { ipcRenderer } from '../native/preview-transport'
 import { createThreeDInspector } from './three-d'
 import { createViewportReadout } from './viewport-readout'
 import type { SelectedElement } from '../shared/api'

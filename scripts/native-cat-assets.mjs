@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 // Preserve the original pixel art and animation timings, without an SVG/WebKit renderer.
 export function nativeCatAssets(root) {
-  const base = join(root, 'src/renderer/src/assets/cat')
+  const base = join(root, 'src/native/assets/cat')
   const frame = (file, duration) => {
     const svg = readFileSync(join(base, file), 'utf8')
     if (/<(?:path|circle|polygon|ellipse)\b/.test(svg)) throw new Error(`Unsupported native cat artwork: ${file}`)

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
-import type { BrowserWindow } from 'electron'
+import type { NativeView } from '../native/platform'
 import type { AgentEvent, SessionRecord, SessionTranscriptEntry } from '../shared/api'
 import { projectKey } from '../shared/projectKey'
 import {
@@ -86,7 +86,7 @@ interface ChatState {
 interface Deps {
   worktreesDir: () => string
   store: () => SessionStore
-  getWindow: () => BrowserWindow | null
+  getWindow: () => NativeView | null
 }
 
 let deps: Deps | null = null

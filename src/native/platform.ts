@@ -1,6 +1,4 @@
-/** Private adapter for the Electron primitives used by Praxis services.
- * Only the native build aliases `electron` here; Electron builds are untouched.
- */
+/** Native application services and the isolated WebKit message boundary. */
 
 import { execFile, spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -22,7 +20,8 @@ export const app = Object.assign(new EventEmitter(), {
   },
   getAppPath: () => resolve(__dirname, '../..')
 })
-type Handler = (event: any, ...args: any[]) => any
+export interface NativeIpcEvent { sender: NativeWebContents }
+type Handler = (event: NativeIpcEvent, ...args: any[]) => any
 const requests = new Map<string, Handler>()
 /** Trusted in-process observation; preview IPC cannot emit these events. */
 export const serviceEvents = new EventEmitter()
@@ -120,21 +119,30 @@ export class NativeImage {
   toPNG() {
     return Buffer.from(this.result.png, 'base64')
   }
-  toJPEG() {
+  toJPEG(_quality?: number) {
     return Buffer.from(this.result.jpeg, 'base64')
   }
   toDataURL() {
     return `data:image/png;base64,${this.result.png}`
   }
   // Swift generates a bounded JPEG alongside the full PNG for agent/feedback use.
-  resize() {
+  resize(_options?: { width?: number; height?: number }) {
     return this
   }
 }
 export class NativeView {
   url = ''
   destroyed = false
-  webContents: any
+  webContents: {
+    isDestroyed: () => boolean
+    getURL: () => string
+    send: (channel: string, ...args: any[]) => void
+    loadURL: (url: string) => void
+    capturePage: () => Promise<NativeImage>
+    executeJavaScript: (code: string) => Promise<any>
+    insertCSS: (css: string) => Promise<string>
+    removeInsertedCSS: (key: string) => Promise<any>
+  }
   constructor(readonly id: string) {
     views.set(id, this)
     this.webContents = {
@@ -178,13 +186,11 @@ export class NativeView {
   }
 }
 export const views = new Map<string, NativeView>()
-export const BrowserWindow = {
-  getAllWindows: () => [...views.values()].filter((view) => view.id !== 'preview')
-}
+export type NativeWebContents = NativeView['webContents']
 
 export const protocolHandlers = new Map<string, (request: Request) => Promise<Response>>()
 export const protocol = {
-  registerSchemesAsPrivileged() {},
+  registerSchemesAsPrivileged(_schemes: unknown[]) {},
   handle(scheme: string, handler: (request: Request) => Promise<Response>) {
     protocolHandlers.set(scheme, handler)
   }

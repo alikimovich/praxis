@@ -9,7 +9,6 @@ import { spawn } from 'node:child_process'
 import { request as httpRequest } from 'node:http'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import electronPath from 'electron'
 import {
   registerPraxisAgentTools,
   shutdownPraxisAgentTools
@@ -55,11 +54,10 @@ assert.equal(
   'another session token cannot operate this chat'
 )
 
-const child = spawn(electronPath, [join(root, 'bin', 'praxis-agent-mcp.mjs')], {
+const child = spawn(process.execPath, [join(root, 'bin', 'praxis-agent-mcp.mjs')], {
   cwd: root,
   env: {
     ...process.env,
-    ELECTRON_RUN_AS_NODE: '1',
     PRAXIS_AGENT_TOOL_SOCKET: registration.socketPath,
     PRAXIS_AGENT_TOOL_TOKEN: registration.token
   },

@@ -12,7 +12,7 @@
  * and defensive: any failure returns `{ ok: false, error }` rather than throwing.
  */
 import { execFile } from 'child_process'
-import { ipcMain } from 'electron'
+import { ipcMain } from '../native/platform'
 import { basename } from 'path'
 import { promisify } from 'util'
 import type { GithubConnectOptions, GithubConnectResult, GithubStatus } from '../shared/api'

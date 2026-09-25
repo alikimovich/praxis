@@ -10,7 +10,7 @@ bun run test:native
 The native application UI is Swift/AppKit/SwiftUI. It does not build or load the
 Praxis React renderer. WebKit is used only for the user's project preview and
 Web Inspector. Bun runs the shared agent, Git, filesystem and project-server
-services. `bun run dev` still launches Electron with its existing React UI.
+services. `bun run dev` now launches this native runtime; Electron has been removed.
 
 Requires macOS 13.3+, Bun, command-line tools with the macOS 26 SDK, and
 `bun install`. Liquid Glass requires macOS 26; older systems use native visual
@@ -67,7 +67,7 @@ Syntax coloring is deliberately lightweight; it is not a language server.
 Native inspectors retain source/schema validation, token references, live style
 scrubbing and post-HMR reconciliation. Linked margin/padding writes share an undo
 group. Custom controls support repair/removal and animation Replay. Content
-windows use the same recipe validator and revision-checked saves as Electron;
+windows use the shared recipe validator and revision-checked saves;
 collection IDs, extra JSON fields and draft undo are retained.
 
 ## Build and transport
@@ -79,9 +79,8 @@ its dependency graph against application renderer/React imports and records
 `out/native/build-inputs.json`. There is no Vite/Tailwind application build or
 loopback renderer asset server in native mode. `PRAXIS_NATIVE_PORT` is obsolete.
 
-The private Electron adapter (`src/native/platform.ts`) supports shared backend
-services; it is not a general Electron implementation. Its `main` object is a
-trusted service sender, not a hidden browser. Swift refuses creation of any
+The native platform (`src/native/platform.ts`) is imported directly by backend
+services. Its `main` object is a trusted service sender, not a hidden browser. Swift refuses creation of any
 application WebView other than `preview`.
 
 Swift and Bun exchange JSON over subprocess pipes. AppKit actions go directly to

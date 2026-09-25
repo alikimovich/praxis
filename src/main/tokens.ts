@@ -1,12 +1,7 @@
 // Namespace import (not `{ ipcMain }`) so this module — and `style-tokens.ts`,
 // which imports `detectTokens` from here for its OWN pure re-validation logic
 // — can be loaded under plain bun for unit testing (see test/style-tokens.mjs).
-// Outside Electron, the `electron` package's CJS export is just a path string;
-// a named `{ ipcMain }` import fails to LINK at all (a bun/Node ESM error, not
-// a runtime one), whereas `ipcMain` only needs to resolve when
-// `registerTokensIpc` actually runs — i.e. inside the real Electron process,
-// where `electron`'s exports are the real API object either way.
-import * as electron from 'electron'
+import * as platform from '../native/platform'
 import { mkdir, readFile, readdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 import type { Token, TokenGroup, TokenScaffoldResult, TokenSet } from '../shared/api'
@@ -325,7 +320,7 @@ async function scaffoldManifest(root: string): Promise<TokenScaffoldResult> {
 }
 
 export function registerTokensIpc(
-  router: RpcHandlerRegistry = electron.ipcMain as unknown as RpcHandlerRegistry
+  router: RpcHandlerRegistry = platform.ipcMain as unknown as RpcHandlerRegistry
 ): void {
   router.handle('tokens:detect', (_e, root: string) => detectTokens(root))
   router.handle('tokens:scaffold', (_e, root: string) => scaffoldManifest(root))

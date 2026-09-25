@@ -8,17 +8,19 @@ if ! command -v git >/dev/null 2>&1; then
   exit 1
 fi
 
-if command -v bun >/dev/null 2>&1; then
-  PM="bun"
-elif command -v npm >/dev/null 2>&1; then
-  echo "bun not found on PATH; falling back to npm."
-  echo "(For faster installs, consider:  curl -fsSL https://bun.sh/install | bash)"
-  PM="npm"
-else
-  echo "Error: neither bun nor npm was found on PATH." >&2
-  echo "Install bun with:  curl -fsSL https://bun.sh/install | bash" >&2
+if [ "$(uname -s)" != "Darwin" ]; then
+  echo "Error: Praxis requires macOS 13.3 or later." >&2
   exit 1
 fi
+if ! xcrun --find swiftc >/dev/null 2>&1; then
+  echo "Error: install Xcode command-line tools and the macOS 26 SDK first." >&2
+  exit 1
+fi
+if ! command -v bun >/dev/null 2>&1; then
+  echo "Error: Bun is required. Install it from https://bun.sh." >&2
+  exit 1
+fi
+PM="bun"
 
 PRAXIS_HOME="${PRAXIS_HOME:-$HOME/.praxis}"
 

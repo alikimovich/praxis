@@ -15,7 +15,7 @@ import { detectNext, NEXT_LOADER_CONTENT, NEXT_ADAPTER_CONTENT } from '../src/ma
 import { REACT_HELPER_CONTENT } from '../src/main/setup-react.ts'
 import { syncSetupArtifacts } from '../src/main/setup-artifacts.ts'
 import { provisionNextDependencies } from '../src/main/worktree-dependencies.ts'
-import { setupPrompt } from '../src/renderer/src/lib/setup-prompt.ts'
+import { setupPrompt } from '../src/shared/setup-prompt.ts'
 import { typescriptProps } from '../src/main/props-typescript.ts'
 const require = createRequire(import.meta.url)
 const root = await mkdtemp(join(tmpdir(), 'praxis-next-unit-'))

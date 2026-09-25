@@ -1,4 +1,4 @@
-import { build } from 'esbuild'
+import { build, stop } from 'esbuild'
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -11,10 +11,9 @@ const dead = pid => { try { process.kill(pid, 0); return false } catch { return 
 let child
 let serverPID
 try {
-  writeFileSync(join(dir, 'electron.ts'), `import { EventEmitter } from 'node:events'; export const app = new EventEmitter(); export const handlers = new Map(); export const ipcMain = { handle: (name, fn) => handlers.set(name, fn) };`)
   writeFileSync(join(dir, 'server.mjs'), `import { writeFileSync } from 'node:fs'; const server = Bun.serve({hostname:'127.0.0.1',port:Number(process.env.PORT),fetch:()=>new Response('ok')}); writeFileSync(process.env.TEST_PID, String(process.pid)); console.log('http://127.0.0.1:'+server.port);`)
-  writeFileSync(join(dir, 'main.ts'), `import { app, handlers } from './electron'; import { registerDevServerIpc } from ${JSON.stringify(join(root,'src/main/devserver.ts'))}; import { installShutdown } from ${JSON.stringify(join(root,'src/native/shutdown.ts'))}; registerDevServerIpc(()=>null); installShutdown(()=>app.emit('before-quit')); await handlers.get('devserver:start')({}, {root:${JSON.stringify(dir)},command:'bun server.mjs'}); console.log('READY');`)
-  await build({entryPoints:[join(dir,'main.ts')],outfile:join(dir,'run.mjs'),bundle:true,platform:'node',format:'esm',packages:'external',alias:{electron:join(dir,'electron.ts')}})
+  writeFileSync(join(dir, 'main.ts'), `import { app } from ${JSON.stringify(join(root,'src/native/platform.ts'))}; const handlers = new Map(); import { registerDevServerIpc } from ${JSON.stringify(join(root,'src/main/devserver.ts'))}; import { installShutdown } from ${JSON.stringify(join(root,'src/native/shutdown.ts'))}; registerDevServerIpc(()=>null,{handle:(name,fn)=>handlers.set(name,fn)}); installShutdown(()=>app.emit('before-quit')); await handlers.get('devserver:start')({}, {root:${JSON.stringify(dir)},command:'bun server.mjs'}); console.log('READY');`)
+  await build({entryPoints:[join(dir,'main.ts')],outfile:join(dir,'run.mjs'),bundle:true,platform:'node',format:'esm',packages:'external'})
   for (const signal of ['SIGINT','SIGTERM','SIGHUP']) {
     const pidFile = join(dir, signal)
     child = Bun.spawn([process.execPath, join(dir,'run.mjs')], {stdout:'pipe',stderr:'inherit',env:{...process.env,TEST_PID:pidFile}})
@@ -32,6 +31,7 @@ try {
     serverPID = undefined; child = undefined
   }
 } finally {
+  stop()
   child?.kill('SIGTERM')
   if (serverPID && !dead(serverPID)) process.kill(serverPID,'SIGTERM')
   rmSync(dir,{recursive:true,force:true})

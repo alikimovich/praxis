@@ -1,6 +1,6 @@
 import { savedJevKey } from './jev-credentials'
 import { join } from 'node:path'
-import { app, ipcMain as electronIpcMain, safeStorage } from 'electron'
+import { app, ipcMain as nativeIpcMain, safeStorage } from '../native/platform'
 import type {
   ModelCatalogInput,
   ModelCatalogResult,
@@ -27,7 +27,7 @@ import {
 } from './providers-store'
 import type { RpcHandlerRegistry } from './rpc-router'
 
-let ipcMain: RpcHandlerRegistry = electronIpcMain
+let ipcMain: RpcHandlerRegistry = nativeIpcMain
 
 /**
  * Main-owned wiring for user-added model endpoints (v10) — the Electron half of
@@ -448,7 +448,7 @@ export function resolveConnection(
  */
 export function registerProviderIpc(
   dataDirFn: () => string,
-  router: RpcHandlerRegistry = electronIpcMain
+  router: RpcHandlerRegistry = nativeIpcMain
 ): void {
   ipcMain = router
   getDataDir = dataDirFn

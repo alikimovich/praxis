@@ -1,6 +1,6 @@
 import { previewServers } from './preview-evidence'
 import { type ChildProcess, spawn } from 'child_process'
-import { app, type BrowserWindow, ipcMain as electronIpcMain } from 'electron'
+import { app, type NativeView, ipcMain as nativeIpcMain } from '../native/platform'
 import { access, readFile, readdir } from 'fs/promises'
 import { installProjectDependencies, projectPackageManager } from './project-dependencies'
 import type { Server } from 'http'
@@ -25,7 +25,7 @@ import { migrateLegacySidecar } from './sidecar-migrate'
 import { findStaticEntry, startStaticServer } from './static-server'
 import type { RpcHandlerRegistry } from './rpc-router'
 
-let ipcMain: RpcHandlerRegistry = electronIpcMain
+let ipcMain: RpcHandlerRegistry = nativeIpcMain
 
 // The preview always runs on a free port we pick (from this base) bound to IPv4
 // loopback — so it never collides with the framework default (5173/3000), never
@@ -415,8 +415,8 @@ function spawnDevServer(
 }
 
 export function registerDevServerIpc(
-  getWindow: () => BrowserWindow | null,
-  router: RpcHandlerRegistry = electronIpcMain
+  getWindow: () => NativeView | null,
+  router: RpcHandlerRegistry = nativeIpcMain
 ): void {
   ipcMain = router
   ipcMain.handle('project:detect', async (_e, root: string) => {

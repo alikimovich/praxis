@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain } from '../native/platform'
 import { readFile } from 'fs/promises'
 import type { PropEditResult, StyleEdit, StyleEditResult } from '../shared/api'
 import { STYLE_PROPS as STYLE_PROP_LIST } from '../shared/style-props'

@@ -1,8 +1,8 @@
-import type { NativeImage } from 'electron'
+import type { NativeImage } from '../native/platform'
 
 /**
  * A tiny registry that lets any main-process module read the live preview's
- * state without importing `index.ts` (which owns the `WebContentsView`) — that
+ * state without importing `index.ts` (which owns the `NativeView`) — that
  * would be a cycle, since `index.ts` already pulls in the agent/backends. The
  * preview owner registers a source once (see `registerPreviewIpc` in
  * `index.ts`); the in-process `praxis` SDK tools (backends/claude.ts) read it.

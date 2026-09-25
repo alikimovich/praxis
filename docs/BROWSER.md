@@ -1,3 +1,6 @@
+> **Retired:** Browser and Tailscale modes were removed with Electron. This document
+> records the previous architecture; these commands are no longer available.
+
 # Browser and hosted Praxis
 
 Status: mode 1 local-browser foundation implemented, 2026-09-03. A secure,

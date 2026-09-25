@@ -96,48 +96,27 @@ try {
   assert.equal(await skipReason(marker, 'worktrees'), null)
   writeFileSync(marker, 'AUTO-RECONCILIATION LIVE SKIP — unavailable\n')
   assert.match(await skipReason(marker, 'auto-reconciliation-live'), /unavailable/)
-  // Exercise the actual CLI with a tiny checkout and a fake build executable.
-  // This proves live-only builds, one build across tiers, build blocking, and reports.
-  if (process.platform !== 'win32') {
-    const cli = join(root, 'cli')
-    mkdirSync(join(cli, 'test/helpers'), { recursive: true })
-    mkdirSync(join(cli, 'node_modules/.bin'), { recursive: true })
-    writeFileSync(join(cli, 'test/run.mjs'), readFileSync(new URL('./run.mjs', import.meta.url)))
-    writeFileSync(join(cli, 'test/helpers/test-runner.mjs'), readFileSync(new URL('./helpers/test-runner.mjs', import.meta.url)))
-    writeFileSync(join(cli, 'test/smoke.mjs'), "console.log('SMOKE OK')")
-    writeFileSync(join(cli, 'test/next-integration.mjs'), "console.log('SKIP real Next fixture')")
-    const build = join(cli, 'node_modules/.bin/electron-vite')
-    writeFileSync(build, '#!/usr/bin/env node\n' +
-      'require("node:fs").appendFileSync("builds.txt", "build\\n"); process.exitCode = Number(process.env.PRAXIS_RUNNER_FAIL_BUILD || 0)')
-    chmodSync(build, 0o755)
-    const invoke = (args, failBuild = false) => spawnSync('node', [join(cli, 'test/run.mjs'), ...args], {
-      cwd: cli, encoding: 'utf8', timeout: 10000,
-      env: { ...process.env, PRAXIS_RUNNER_FAIL_BUILD: failBuild ? '1' : '0' }
-    })
-    const report = result => {
-      assert.equal(result.error, undefined)
-      const path = /^Report: (.+)$/m.exec(result.stdout)?.[1]
-      assert(path, result.stdout + result.stderr)
-      assert.equal(existsSync(join(cli, 'test/artifacts/runs/.runner-lock')), false)
-      return JSON.parse(readFileSync(path))
-    }
-    const success = invoke(['electron', 'live', '--filter=smoke,next-integration'])
-    assert.equal(success.status, 0, success.stderr)
-    const successfulReport = report(success)
-    assert.deepEqual(successfulReport.counts, { PASS: 1, SKIP: 1 })
-    assert.equal(readFileSync(join(cli, 'builds.txt'), 'utf8'), 'build\n')
-    const blocked = invoke(['electron', 'live', '--filter=smoke,next-integration'], true)
-    assert.equal(blocked.status, 1)
-    assert.deepEqual(report(blocked).counts, { BLOCKED: 2 })
-    assert.equal(readFileSync(join(cli, 'builds.txt'), 'utf8'), 'build\nbuild\n')
-    const liveOnly = invoke(['live', '--filter=next-integration'])
-    assert.equal(liveOnly.status, 0)
-    assert.equal(report(liveOnly).builds.length, 1)
-    assert.equal(report(liveOnly).counts.SKIP, 1)
-    for (const args of [['unit', '--jobs=0'], ['unit', '--filter=missing'], ['constructor']]) {
-      assert.equal(invoke(args).status, 2)
-    }
+  const cli = join(root, 'cli')
+  mkdirSync(join(cli, 'test/helpers'), { recursive: true })
+  writeFileSync(join(cli, 'test/run.mjs'), readFileSync(new URL('./run.mjs', import.meta.url)))
+  writeFileSync(join(cli, 'test/helpers/test-runner.mjs'), readFileSync(new URL('./helpers/test-runner.mjs', import.meta.url)))
+  writeFileSync(join(cli, 'test/native-runtime.mjs'), "console.log('NATIVE-RUNTIME PASS')")
+  writeFileSync(join(cli, 'test/native-runtime-live.mjs'), "console.log('NATIVE-RUNTIME-LIVE SKIP — no credentials')")
+  const invoke = args => spawnSync('node', [join(cli, 'test/run.mjs'), ...args], { cwd: cli, encoding: 'utf8', timeout: 10000 })
+  const report = result => {
+    const path = /^Report: (.+)$/m.exec(result.stdout)?.[1]
+    assert(path, result.stdout + result.stderr)
+    assert.equal(existsSync(join(cli, 'test/artifacts/runs/.runner-lock')), false)
+    return JSON.parse(readFileSync(path))
   }
+  const success = invoke(['native', 'live'])
+  assert.equal(success.status, 0, success.stderr)
+  assert.deepEqual(report(success).counts, { PASS: 1, SKIP: 1 })
+  writeFileSync(join(cli, 'test/native-runtime.mjs'), 'process.exit(1)')
+  const failure = invoke(['native'])
+  assert.equal(failure.status, 1)
+  assert.equal(report(failure).counts.FAIL, 1)
+  for (const args of [['unit', '--jobs=0'], ['unit', '--filter=missing'], ['constructor']]) assert.equal(invoke(args).status, 2)
   console.log('TEST-RUNNER OK — bounded concurrency, barriers, outcomes, timeout, cancellation, cleanup')
 } finally {
   rmSync(root, { recursive: true, force: true })

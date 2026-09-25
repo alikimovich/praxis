@@ -2,10 +2,6 @@ import assert from 'node:assert/strict'
 import { z } from 'zod'
 import { setProjectUiEnabled, cancelProjectUi, projectUiEnabled } from '../src/main/project-ui.ts'
 import { composeProjectUiWithJev } from '../src/main/project-ui-jev.ts'
-import {
-  readProjectUiEngine,
-  writeProjectUiEngine
-} from '../src/renderer/src/project-ui-preference.ts'
 const project = {
   components: [
     {
@@ -128,13 +124,8 @@ await assert.rejects(
   /abort/i
 )
 assert.equal(calls, 1)
-const storage = new Map()
-globalThis.localStorage = { getItem: (k) => storage.get(k), setItem: (k, v) => storage.set(k, v) }
-assert.equal(readProjectUiEngine(), 'agent')
-writeProjectUiEngine('jev')
-assert.equal(readProjectUiEngine(), 'jev')
 console.log(
-  'PROJECT-UI-JEV OK — real composer, validated candidates, unavailable, cancellation, preference'
+  'PROJECT-UI-JEV OK — real composer, validated candidates, unavailable, cancellation'
 )
 
 setProjectUiEnabled('jev-cancel-test', true, 'jev')

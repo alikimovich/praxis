@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron'
+import type { NativeView } from '../../native/platform'
 
 /**
  * Send an IPC message to the main renderer, guarding a destroyed webContents.
@@ -10,7 +10,7 @@ import type { BrowserWindow } from 'electron'
  * wake. `isDestroyed()` makes a late emit a safe no-op.
  */
 export function sendToRenderer(
-  getWindow: () => BrowserWindow | null,
+  getWindow: () => NativeView | null,
   channel: string,
   payload: unknown
 ): void {

@@ -91,8 +91,8 @@ async function main() {
     app.emit('before-quit')
     host?.send('quit')
     rmSync(lock, { force: true })
-    // Profiles are deliberately distinct from Electron until migrations and
-    // cross-runtime locking are implemented. Test profiles are disposable.
+    // Keep the native profile separate from retired Electron installations.
+    // Test profiles are disposable.
     if (testDir) setTimeout(() => rmSync(testDir, { recursive: true, force: true }), 500).unref()
   }
   installShutdown(cleanup)
@@ -116,7 +116,7 @@ async function main() {
     host!.send('layoutWidth', { width: Number(values['praxis:native-chat-width']) || 440 })
   }
   const previewView = new NativeView('preview')
-  const window = mainView as unknown as Electron.BrowserWindow
+  const window = mainView
   const send = (channel: string, ...args: unknown[]) => mainView.webContents.send(channel, ...args)
   const state: PreviewState = {
     url: null,
@@ -132,10 +132,8 @@ async function main() {
   }
   registerPreviewIpc({
     state,
-    ensurePreviewView: () => previewView as any,
-    getPreviewView: () => previewView as any,
-    ensurePanelView: () => { throw new Error('Native inspectors do not use WebViews') },
-    getPanelView: () => null,
+    ensurePreviewView: () => previewView,
+    getPreviewView: () => previewView,
     getMainWindow: () => window,
     sendToMain: send,
     placeholderUrl: 'about:blank',
@@ -417,7 +415,7 @@ async function main() {
     await workspaceController.command({ type: 'attach', preferred: resolvePreferredSettings(parsePreferredModelState(preferred)) })
     await chatController.command({ type: 'attach' })
     if (requestedProject && !testing) await workspaceController.command({ type: 'open', root: resolve(requestedProject) })
-    console.log('Praxis Native is running on Bun + system WebKit. Electron is not loaded.')
+    console.log('Praxis Native is running on Bun + system WebKit. ')
     if (testing) {
       try {
         await runNativeCoreSmoke(host!, fixture!, root)

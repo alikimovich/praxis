@@ -2,6 +2,30 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Retire Electron and audit unused application code
+
+Made Swift/AppKit/SwiftUI + Bun the default and only application runtime. Removed
+Electron entrypoints/preloads, the React app, browser/Tailscale mode, application
+UI dependencies and obsolete tests. Services import native platform types and
+routing directly; isolated WebKit instrumentation retains its restricted message
+boundary. Removed dead web-panel/window.api bridges and renderer port/MCP flags.
+
+Moved native cat artwork out of the renderer, retained source parsers/provider
+SDKs, and preserved generator tests with React as a development fixture. The MCP
+stdio test now runs under Bun. CLI, source installer, updates, scripts, typechecks,
+test tiers and current guides now target native. Existing user profiles are untouched.
+
+The review is in ELECTRON-REMOVAL.md, including retained dependencies, coverage
+limits, the unused UI exports still shipped by the vendor package, and the separate
+native prototype. Thirty-two direct dependency declarations were removed.
+
+Validation: 96 retained unit tests passed, including the new native build-boundary
+check and Bun MCP helper. Backend/native/preview typechecks, frozen-lockfile
+installation and native background integration passed. Native captures were
+inspected. Background mode skips real pointer gestures/animation timing; no live
+provider calls or claims of full former Electron/Simulator parity were made.
+
+
 ## 2026-09-24 — In-app preview server recovery
 
 Added Running Servers to the native preview error screen and Actions menu. The
@@ -29,7 +53,6 @@ button hit areas unchanged.
 Validation: native typecheck, build and background integration passed; inspected
 the enlarged chat glyphs in a fresh capture. General typecheck failed on preview
 listener signatures being changed by the concurrent migration.
-
 
 ## 2026-09-24 — Match chat toolbar glyph sizes to the sidebar toggle
 
