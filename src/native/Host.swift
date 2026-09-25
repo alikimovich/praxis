@@ -143,7 +143,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         }
         let find = NSMenuItem(title: "Find…", action: #selector(NSTextView.performFindPanelAction(_:)), keyEquivalent: "f"); find.tag = NSTextFinder.Action.showFindInterface.rawValue; edit.addItem(find)
         let actions = submenu("Actions")
-        for (label, key, action) in [("Reload Preview", "r", "reload"), ("Toggle Logs", "l", "logs"), ("Toggle UI", ".", "toggle-chat"), ("Content Editors", "", "content"), ("Check for Updates…", "", "updates"), ("Diagnose Preview…", "", "diagnose"), ("Send Feedback…", "", "feedback")] {
+        for (label, key, action) in [("Reload Preview", "r", "reload"), ("Toggle Logs", "l", "logs"), ("Toggle UI", ".", "toggle-chat"), ("Content Editors", "", "content"), ("Check for Updates…", "", "updates"), ("Diagnose Preview…", "", "diagnose"), ("Running Servers…", "", "servers"), ("Send Feedback…", "", "feedback")] {
             let item = NSMenuItem(title: label, action: #selector(menuAction(_:)), keyEquivalent: key); item.target = self; item.representedObject = action; actions.addItem(item)
         }
         let develop = submenu("Develop")

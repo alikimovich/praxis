@@ -17,6 +17,8 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Add local Running Servers inspection and confirmed Stop & Retry recovery to native preview errors and Actions.
+
 - [x] Fix native sidebar switching between open projects and cover repeated project/chat/preview transitions.
 
 - [x] Enable native composer Paste for clipboard images and copied files, with AppKit validation and attachment regression coverage.

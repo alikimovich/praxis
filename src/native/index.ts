@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { NativeUpdateController } from './update-controller'
 import { installNativeInspector } from './inspector-runtime'
+import { NativePreviewRecovery } from './preview-recovery'
 import { NativeLayersController } from './layers-controller'
 import { agentOptionsFor } from '../shared/chat-settings'
 import { NativeEditorController } from './editor-controller'
@@ -346,6 +347,8 @@ async function main() {
   host.on('download-error', ({ message }) => activityController.append(`Download failed: ${message}`, 'error'))
   host.on('download-finished', () => activityController.append('Download finished.', 'success'))
   const supportSheets = new NativeSupportSheets(sheetController, () => host!.request('captureFeedback'), url => shell.openExternal(url))
+  const previewRecovery = new NativePreviewRecovery(sheetController)
+  host.on('menu', ({ action }) => { if (action === 'servers' && workspaceController.state.activeKey) previewRecovery.open(workspaceController.state.activeKey) })
   const reviewController = new NativeReviewController(sheetController, url => shell.openExternal(url))
   const settingsController = new NativeSettingsController(sheetController, preferences, refreshPreferences)
   host.on('sheet-action', action => { void sheetController.action(action) })
@@ -363,6 +366,7 @@ async function main() {
   host.on('native-preview-action', action => {
     if (workspaceController.state.activeKey !== action.project) return
     if (action.action === 'logs') activityController.action('show')
+    else if (action.action === 'servers') previewRecovery.open(action.project)
     else if (action.action === 'diagnose') openSheet('diagnose')
     else if (action.action === 'run') void workspaceController.command({ type: 'restart', key: action.project, ...(action.command?.trim() ? { command: action.command.trim() } : {}) }).catch(error => activityController.append(String(error), 'error'))
   })

@@ -11,6 +11,11 @@ export async function checkNativeSheets(host: NativeBridge, key: string, artifac
     }
     throw new Error('Native sheet did not reach expected state')
   }
+  host.emit('menu', { action: 'servers' })
+  await wait(state => state.visible && state.title === 'Running servers' && !state.busy)
+  writeFileSync(join(artifacts, 'running-servers.png'), Buffer.from(await host.request('captureSheet'), 'base64'))
+  await host.request('sheetPerform', { action: 'cancel' })
+  await wait(state => !state.visible)
   await host.request('shellPerform', { action: 'new-project' })
   await wait(state => state.visible && state.title === 'New project')
   await new Promise(resolve => setTimeout(resolve, 250))

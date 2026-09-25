@@ -2,6 +2,23 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — In-app preview server recovery
+
+Added Running Servers to the native preview error screen and Actions menu. The
+local inspector lists this user's TCP listeners whose working directory matches
+the selected project, including address, PID, command and start time. Stop & Retry
+shows a confirmation, revalidates the process identity and project ownership,
+sends SIGTERM, waits for the listener to stop and retries through Praxis's normal
+workspace lifecycle. Other projects and changed/reused PIDs are refused. Errors
+stay in the sheet with Refresh/Retry available; no provider login is required.
+Long preview errors now scroll so the recovery controls remain reachable.
+
+Validation: current TypeScript targets and native recovery tests passed. Native
+background integration and screenshot inspection passed from an isolated source
+snapshot because a concurrent task was removing Electron/build inputs. Tests cover
+real listener discovery, unrelated-process isolation, changed process identities,
+confirmation/cancellation, stale project actions and restart routing.
+
 ## 2026-09-24 — Correct undersized chat toolbar icons
 
 The previous change misread the size discrepancy and made History/New Chat

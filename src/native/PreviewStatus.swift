@@ -15,12 +15,15 @@ struct PreviewStatusContent: View {
             Color.clear
             VStack(spacing: 18) {
                 NativeCat(animator: model.cat).scaleEffect(1.5).padding(12)
-                Text(model.message).multilineTextAlignment(.center).textSelection(.enabled)
+                ScrollView { Text(model.message).multilineTextAlignment(.center).textSelection(.enabled).frame(maxWidth: .infinity) }.frame(maxHeight: 260)
                 if model.kind == "setup" || model.kind == "error" {
                     TextField("Dev command (optional)", text: $model.command).textFieldStyle(.roundedBorder).frame(maxWidth: 360)
                     HStack {
                         Button(model.command.isEmpty ? "Retry" : "Run") { model.action("run") }
                         if model.kind == "error" { Button("Diagnose…") { model.action("diagnose") }; Button("Activity") { model.action("logs") } }
+                    }
+                    if model.kind == "error" {
+                        Button("Running Servers…") { model.action("servers") }
                     }
                 }
             }.padding(30).frame(maxWidth: 520)
