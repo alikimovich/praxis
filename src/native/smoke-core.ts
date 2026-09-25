@@ -92,7 +92,7 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   assert.ok(grownComposer.documentHeight <= grownComposer.inputHeight + 1, 'Uncapped draft fits without scrolling, including trailing newline')
   await host.request('composerPerform', { text: Array(80).fill('A long draft line').join('\n') })
   const cappedComposer = await inspect('composerInspect', s => s.bounds.height > grownComposer.bounds.height && s.documentHeight > s.inputHeight + 100)
-  assert.ok(cappedComposer.bounds.height <= 360 && cappedComposer.bounds.height > grownComposer.bounds.height)
+  assert.ok(cappedComposer.bounds.height <= 368 && cappedComposer.bounds.height > grownComposer.bounds.height)
   writeFileSync(join(artifacts, 'composer-expanded.png'), Buffer.from(await host.request('captureComposer', { contentOnly: true }), 'base64'))
   await host.request('composerPerform', { text: 'wrap text '.repeat(20) })
   const wrappedComposer = await inspect('composerInspect', s => s.bounds.height > compactComposer.bounds.height && s.bounds.height < cappedComposer.bounds.height)

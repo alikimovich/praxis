@@ -2,6 +2,16 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Composer selector bottom inset
+
+Add 8 points below the provider/model/permission selector row. Increase compact
+and capped composer heights by the same amount to preserve the text entry area.
+Update the existing native maximum-height assertion from 360 to 368 points.
+
+Validation: typechecks, chat controller checks, native build and background native
+integration passed (reduced pointer/animation coverage). Full native integration
+hit the known preview style-edit timeout. Inspected the generated chat capture.
+
 ## 2026-09-25 — Grouped chat toolbar actions
 
 Combine History and New Chat in a momentary segmented control with the same

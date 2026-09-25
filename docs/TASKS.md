@@ -21,6 +21,8 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Add 8 points of bottom padding below composer selectors.
+
 - [x] Group History and New Chat in a shared rounded native toolbar control.
 
 - [x] Remove the Chat total prefix from the token footer.
