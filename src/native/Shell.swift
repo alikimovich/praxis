@@ -54,7 +54,8 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         outline.frame = NSRect(x: 0, y: 0, width: 230, height: 600)
         outline.autoresizingMask = [.width]
         outline.addTableColumn(column); outline.outlineTableColumn = column
-        outline.headerView = nil; outline.rowSizeStyle = .default; outline.style = .sourceList
+        outline.headerView = nil; outline.rowSizeStyle = .custom; outline.style = .sourceList
+        outline.rowHeight = SidebarRowStyle.height
         outline.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         outline.indentationPerLevel = 0; outline.allowsEmptySelection = true
         outline.dataSource = self; outline.delegate = self
@@ -73,7 +74,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             button.setAccessibilityLabel(title)
             projectActions.addArrangedSubview(button)
             button.widthAnchor.constraint(equalTo: projectActions.widthAnchor).isActive = true
-            button.heightAnchor.constraint(equalToConstant: 32).isActive = true
+            button.heightAnchor.constraint(equalToConstant: SidebarRowStyle.height).isActive = true
             sidebarButtons[action] = button
         }
         let settings = NSButton(title: "", target: self, action: #selector(sidebarAction(_:)))
@@ -92,8 +93,8 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         for view in [projectActions, scroll, settingsSurface] { view.translatesAutoresizingMaskIntoConstraints = false; sidebarContainer.addSubview(view) }
         NSLayoutConstraint.activate([
             projectActions.topAnchor.constraint(equalTo: sidebarContainer.safeAreaLayoutGuide.topAnchor, constant: 8),
-            projectActions.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor, constant: 12),
-            projectActions.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor, constant: -12),
+            projectActions.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor, constant: 10),
+            projectActions.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor, constant: -10),
             scroll.topAnchor.constraint(equalTo: projectActions.bottomAnchor, constant: 16), scroll.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: settingsSurface.topAnchor, constant: -12),
             settingsSurface.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor, constant: 12), settingsSurface.bottomAnchor.constraint(equalTo: sidebarContainer.bottomAnchor, constant: -12),
             settingsSurface.widthAnchor.constraint(equalToConstant: 36), settingsSurface.heightAnchor.constraint(equalToConstant: 36)
@@ -413,11 +414,12 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         let row = item as! ShellRow
         let cell = ProjectCell(); cell.selected = row.project == currentProject
         let text = NSTextField(labelWithString: row.title + (row.running ? " · Working" : ""))
-        text.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        text.font = SidebarRowStyle.font
         text.lineBreakMode = .byTruncatingTail
         let symbol = row.kind == "project" ? "folder" : row.kind == "history" ? "clock" : "bubble.left"
         let icon = NSImageView(image: row.icon ?? NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!)
         icon.imageScaling = .scaleProportionallyDown
+        icon.contentTintColor = .labelColor
         text.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let more = cell.more
         more.bezelStyle = .inline; more.setAccessibilityLabel("Actions for " + row.title)

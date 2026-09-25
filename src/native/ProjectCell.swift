@@ -1,5 +1,10 @@
 import AppKit
 
+enum SidebarRowStyle {
+    static let height: CGFloat = 28
+    static let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+}
+
 /// Keep project selection on the row and its actions on a separate hover control.
 final class ProjectCell: NSTableCellView {
     let more = NSPopUpButton(frame: .zero, pullsDown: true)
@@ -17,7 +22,12 @@ final class ProjectCell: NSTableCellView {
     }
     override func mouseEntered(with event: NSEvent) { hovered = true; updateVisibility() }
     override func mouseExited(with event: NSEvent) { hovered = false; updateVisibility() }
-    private func updateVisibility() { more.alphaValue = hovered || selected || backgroundStyle == .emphasized ? 1 : 0 }
+    private func updateVisibility() {
+        let emphasized = backgroundStyle == .emphasized
+        more.alphaValue = hovered || selected || emphasized ? 1 : 0
+        imageView?.contentTintColor = emphasized ? .alternateSelectedControlTextColor : .labelColor
+        more.contentTintColor = emphasized ? .alternateSelectedControlTextColor : .labelColor
+    }
 }
 
 
@@ -60,21 +70,39 @@ final class ShellRow: NSObject {
 
 /// Full-width actions with the same regular label and icon rhythm as project rows.
 final class SidebarProjectButton: NSButton {
+    private let label = NSTextField(labelWithString: "")
+    private let symbol = NSImageView()
+
+    override var title: String { didSet { label.stringValue = title } }
+    override var image: NSImage? { didSet { symbol.image = image } }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        label.font = SidebarRowStyle.font
+        label.textColor = .labelColor
+        label.lineBreakMode = .byTruncatingTail
+        symbol.imageScaling = .scaleProportionallyDown
+        symbol.contentTintColor = .labelColor
+        for view in [symbol, label] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(view)
+        }
+        NSLayoutConstraint.activate([
+            symbol.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            symbol.centerYAnchor.constraint(equalTo: centerYAnchor),
+            symbol.widthAnchor.constraint(equalToConstant: 16),
+            symbol.heightAnchor.constraint(equalToConstant: 16),
+            label.leadingAnchor.constraint(equalTo: symbol.trailingAnchor, constant: 7),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func hitTest(_ point: NSPoint) -> NSView? { super.hitTest(point) == nil ? nil : self }
     override func draw(_ dirtyRect: NSRect) {
         if isHighlighted {
             NSColor.quaternaryLabelColor.setFill()
             NSBezierPath(roundedRect: bounds, xRadius: 7, yRadius: 7).fill()
         }
-        let iconRect = NSRect(x: 6, y: (bounds.height - 16) / 2, width: 16, height: 16)
-        if let symbol = image?.withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [.labelColor])), symbol.size.width > 0, symbol.size.height > 0 {
-            // SF Symbols have different intrinsic aspect ratios; drawing directly
-            // into the square slot stretches their artwork.
-            let scale = min(iconRect.width / symbol.size.width, iconRect.height / symbol.size.height)
-            let size = NSSize(width: symbol.size.width * scale, height: symbol.size.height * scale)
-            symbol.draw(in: NSRect(x: iconRect.midX - size.width / 2, y: iconRect.midY - size.height / 2, width: size.width, height: size.height))
-        }
-        let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: NSFont.systemFontSize), .foregroundColor: NSColor.labelColor]
-        let text = NSAttributedString(string: title, attributes: attributes)
-        text.draw(in: NSRect(x: 29, y: (bounds.height - text.size().height) / 2, width: bounds.width - 39, height: text.size().height))
     }
 }

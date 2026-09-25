@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Consistent sidebar action rows
+
+Use the same explicit 28-point row height and system font for Open/New Project
+and project entries. Replace custom-painted action text and symbols with the
+same native label/image views used by projects, align their leading edges and
+use label-color symbol tint with selected-row contrast. Project favicons keep
+their original artwork.
+
+Validation: native build, typechecks, shell controller and docs-link checks
+passed. Background native integration passed with reduced pointer/animation
+coverage; the full suite again timed out at the existing preview style-edit
+check. Verified the actual sidebar in a separate provider-free native window;
+labels and icon columns align, and action rows match project row height.
+
 ## 2026-09-25 — Pixel cat in live chat activity
 
 Move the animated cat from the token footer into the live response status row,
