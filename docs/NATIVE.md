@@ -100,7 +100,13 @@ application. Electron keeps its existing chat controller and UI.
 
 Native Markdown currently supports inline formatting,
 links, headings and fenced code; full table layout/syntax highlighting and the
-animated cat/sticky user-bubble treatment remain parity work.
+sticky user-bubble treatment remain parity work.
+
+The startup/loading and empty workspace screen now render in SwiftUI, including
+recent-project actions. The original pixel cat is bundled as rectangle animation
+frames and drawn natively for idle, running, waiting and completion states. Timers
+pause when hidden and respect Reduce Motion. AppKit owns the chat divider gesture
+above the native surfaces; web layout still receives its width through the bridge.
 
 The composer and skill list hide for web dialogs. Native sent-image thumbnails
 are supported; draft attachments are listed in the native attachments menu.

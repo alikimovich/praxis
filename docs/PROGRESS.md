@@ -2,6 +2,27 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Native welcome, animated cat and reliable chat resizing
+
+Moved startup/loading and empty workspace presentation into SwiftUI, with native
+Open/New/recent-project controls. Bundled the original pixel artwork and animation
+timings as rectangles for native drawing. The cat returns to the conversation
+footer with running, waiting, idle and completion poses; hidden views pause timers
+and Reduce Motion disables animation.
+
+The black toolbar crescent was a clipped “C” from the empty Chat title. The chat
+toolbar item now exists only with a visible chat, and narrow titles hide rather
+than showing a sliver. AppKit owns divider input above the native chat/preview
+surfaces, so resizing cannot cover the next drag target. Manual resize updates
+disable the expand/collapse CSS transition. Workspace geometry, navigation and
+remaining panels still depend on the web shell; this is not yet React-free.
+
+Validation: TypeScript checks, pure cat artwork/controller tests, native build and
+background integration passed. Added three consecutive divider drags and native
+hit-target checks, empty-toolbar/welcome checks, and running/waiting cat checks.
+Inspected welcome and Swift chat captures. Background mode skips actual preview
+mouse input and preview-animation sampling; no Electron or live provider tests ran.
+
 ## 2026-09-24 — Move native chat behavior into Bun
 
 Native no longer mounts React ChatPanel. A Bun controller owns per-chat drafts,

@@ -16,6 +16,7 @@ const UNIT = [
   'native-shutdown',
   'native-workspace',
   'native-chat-controller',
+  'native-cat-assets',
   'content-controls',
   'project-ui',
   'project-ui-jev',

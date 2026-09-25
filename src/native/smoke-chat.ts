@@ -32,6 +32,8 @@ export async function checkNativeChat(host: NativeBridge, screenshot: string) {
     await host.request('composerPerform', { action: 'send' })
     await wait(state => state.messages.some((message: any) => message.role === 'user' && message.text === 'Render this conversation in Swift.'))
     if (sent.length !== 1) throw new Error('Native Send did not reach Bun service')
+    const runningCat = await wait(state => state.catPose === 'run' && state.catArtwork)
+    await wait(state => state.catPose === 'run' && state.catFrame !== runningCat.catFrame)
     await host.request('composerPerform', { text: 'A queued native message' })
     // Allow the input action and its controlled state to cross the bridge.
     for (let i = 0; i < 100; i++) {
@@ -55,7 +57,7 @@ export async function checkNativeChat(host: NativeBridge, screenshot: string) {
     await host.request('chatPerform', { action: 'permission', card: 'native-permission', value: 'deny' })
     await wait(state => !state.cards.includes('native-permission'))
     send({ type: 'question-request', request: { id: 'native-question', sessionKey: state.chat, questions: [{ header: 'Layout', question: 'Which layout?', options: [{ label: 'Compact', description: 'Less spacing' }, { label: 'Roomy' }], multiSelect: false }] } })
-    await wait(state => state.questionCount === 1)
+    await wait(state => state.questionCount === 1 && state.catPose === 'think')
     writeFileSync(screenshot, Buffer.from(await host.request('captureShell'), 'base64'))
     await host.request('chatPerform', { action: 'question', card: 'native-question', answers: { 'Which layout?': 'Compact' } })
     await wait(state => state.questionCount === 0)

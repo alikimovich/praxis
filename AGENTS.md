@@ -97,7 +97,9 @@ Liquid Glass container. The native chat renders in SwiftUI (`src/native/Chat.swi
 receives typed state/actions; no hidden React chat/form is mounted. Bun owns native
 drafts, streaming, queues, model/permission choices and chat actions
 through `src/native/chat-controller.ts`; React ChatPanel is not mounted in native.
-The main WebKit view still supplies workspace context/layout and remaining panels.
+SwiftUI also owns startup/empty workspace UI and the animated pixel cat; AppKit
+owns chat divider input. The main WebKit view still supplies workspace context/layout
+and remaining panels.
 See `docs/NATIVE.md`.
 
 ```

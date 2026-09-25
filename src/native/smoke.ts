@@ -28,7 +28,13 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     }
     throw new Error(`Native check timed out: ${code}; ${error || ''}`)
   }
-  await wait('!!window.api && !!document.querySelector(".empty__open")')
+  await wait('!!window.api && !!document.querySelector(".native-empty-placeholder")')
+  const welcome: any = await host.request('welcomeInspect')
+  if (!welcome.visible || welcome.catFrames < 10) throw new Error('Native welcome/cat missing')
+  const emptyShell: any = await host.request('shellInspect')
+  if (emptyShell.visibleToolbar.includes('chat')) throw new Error('Empty chat toolbar remains')
+  mkdirSync(join(root, 'test/artifacts/native'), { recursive: true })
+  writeFileSync(join(root, 'test/artifacts/native/welcome.png'), Buffer.from(await host.request('captureShell'), 'base64'))
   if (views.has('panel')) throw new Error('Property panel must not load before first use')
   if (await evaluate('navigator.userAgent.includes("Electron")'))
     throw new Error('Unexpected Electron renderer')
@@ -103,8 +109,11 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
     throw new Error(`Chat toolbar missed its column boundary: ${JSON.stringify(geometry)}`)
   }
   await checkChatAlignment()
-  for (const width of [360, 480, 440]) {
-    await evaluate(`document.querySelector('.pane--chat').style.width = '${width}px'`)
+  for (const delta of [-80, 60, 20]) {
+    const before: any = await host.request('dividerInspect')
+    if (!before.visible || !before.hitTarget) throw new Error('Native resize handle is covered')
+    await host.request('dividerPerform', { delta })
+    await wait(`Math.abs(document.querySelector('.pane--chat').getBoundingClientRect().width - ${before.width + delta}) < 2`)
     await new Promise(resolve => setTimeout(resolve, 350))
     await checkChatAlignment()
   }

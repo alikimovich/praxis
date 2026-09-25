@@ -42,6 +42,8 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var shell: NativeShell!
     var composer: NativeComposer!
     var chat: NativeChat!
+    var welcome: NativeWelcome!
+    var chatDivider: NativeChatDivider!
     var previewSurface: PreviewSurface!
     let canvas = Canvas()
     var views: [String: WKWebView] = [:]
@@ -91,6 +93,9 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         previewSurface.leading = { [weak self] in self?.shell.previewLeading ?? 0 }
         chat = NativeChat(); canvas.addSubview(chat)
         composer = NativeComposer(frame: .zero); canvas.addSubview(composer)
+        chatDivider = NativeChatDivider(); chatDivider.isHidden = true; canvas.addSubview(chatDivider)
+        chatDivider.changed = { width in emit(["event":"shell-action", "action":"chat-resize", "value":String(Double(width))]) }
+        welcome = NativeWelcome(); welcome.frame = canvas.bounds; canvas.addSubview(welcome)
         window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
         installMenus()
         DispatchQueue.global().async { [weak self] in
@@ -147,7 +152,16 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "previewInspector":
             if let action = c["action"] as? String { reply(id, PreviewInspector.perform(action, on: views["preview"])) }
             else { reply(id, PreviewInspector.status(views["preview"])) }
-        case "chatState": chat.update(c["state"] as? [String: Any] ?? [:], composer: composer)
+        case "chatState":
+            let state = c["state"] as? [String: Any] ?? [:]
+            chat.update(state, composer: composer); chatDivider.update(state)
+        case "welcomeInspect": reply(id, welcome.inspect())
+        case "dividerInspect": reply(id, ["visible":!chatDivider.isHidden, "width":chatDivider.width, "dragging":chatDivider.dragging, "frame":NSStringFromRect(chatDivider.frame), "hitTarget":canvas.hitTest(NSPoint(x: chatDivider.frame.midX, y: chatDivider.frame.midY)) === chatDivider])
+        case "dividerPerform":
+            guard ephemeral else { reply(id, false); return }
+            chatDivider.begin(at: .zero)
+            chatDivider.drag(to: NSPoint(x: (c["delta"] as? Double ?? 0), y: 0)); chatDivider.end()
+            reply(id, true)
         case "chatInspect": reply(id, chat.inspect())
         case "chatPerform": chat.model.action(c["action"] as? String ?? "", id: c["card"] as? String, value: c["value"] as? String, answers: c["answers"] as? [String: String]); reply(id)
         case "composerState": composer.update(c["state"] as? [String: Any] ?? [:])
@@ -160,7 +174,10 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             guard let bitmap = target.bitmapImageRepForCachingDisplay(in: target.bounds) else { reply(id, error: "Composer capture unavailable"); return }
             target.cacheDisplay(in: target.bounds, to: bitmap)
             reply(id, bitmap.representation(using: .png, properties: [:])?.base64EncodedString() ?? "")
-        case "shellState": shell.update(c["state"] as? [String: Any] ?? [:])
+        case "shellState":
+            let state = c["state"] as? [String: Any] ?? [:]
+            shell.update(state)
+            if let home = state["homeState"] as? [String: Any] { welcome.update(home) }
         case "shellInspect": reply(id, shell.inspect())
         case "previewSurfaceInspect": reply(id, previewSurface.inspect())
         case "shellPerform": reply(id, shell.perform(c["action"] as? String ?? "", id: c["row"] as? String))

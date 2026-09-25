@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import { nativeCatAssets } from './native-cat-assets.mjs'
 import { build as bundle } from 'esbuild'
 import { build as viteBuild } from 'vite'
 
@@ -13,6 +14,7 @@ const contents = join(out, 'Praxis Native.app/Contents')
 mkdirSync(join(contents, 'MacOS'), { recursive: true })
 mkdirSync(join(contents, 'Resources'), { recursive: true })
 copyFileSync(join(root, 'build/icon.icns'), join(contents, 'Resources/Praxis.icns'))
+writeFileSync(join(contents, 'Resources/cat.json'), JSON.stringify(nativeCatAssets(root)))
 const alias = (file) => ({
   name: 'praxis-native-transport',
   setup(build) {
@@ -86,6 +88,9 @@ const result = Bun.spawnSync(
     join(root, 'src/native/Inspector.swift'),
     join(root, 'src/native/Composer.swift'),
     join(root, 'src/native/Chat.swift'),
+    join(root, 'src/native/Cat.swift'),
+    join(root, 'src/native/Welcome.swift'),
+    join(root, 'src/native/ChatDivider.swift'),
     join(root, 'src/native/ChatMarkdown.swift'),
     join(root, 'src/native/ChatQuestion.swift'),
     '-o',

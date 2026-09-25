@@ -11,6 +11,7 @@ export interface NativeShellRow {
   children?: NativeShellRow[]
 }
 export interface NativeShellState {
+  homeState: { visible: boolean; busy: boolean; label: string; recents: { root: string; name: string }[]; blocked?: boolean }
   rows: NativeShellRow[]
   selected: string | null
   project: string | null
@@ -31,6 +32,7 @@ export interface NativeShellState {
 }
 export interface NativeShellAction {
   action:
+    | 'chat-resize'
     | 'select'
     | 'new-chat'
     | 'close'

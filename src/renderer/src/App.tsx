@@ -1703,7 +1703,9 @@ export default function App(): React.JSX.Element {
 
   // Keep the keydown/menu listeners pointed at the current closures.
   useNativeShell({
+    resizeChat: setChatWidth,
     preview: {
+      homeState: { visible: openCount === 0, busy: status.kind === 'busy', label: status.kind === 'busy' ? log || status.label : status.kind === 'error' ? status.message : '', recents },
       previewReady: status.kind === 'running', branch, publishing, publishMode,
       previewBase: status.kind === 'running' ? status.url : null,
       deviceEnabled: status.kind === 'running' && previewKind !== 'simulator',
@@ -1901,7 +1903,7 @@ export default function App(): React.JSX.Element {
 
       <DiagnoseCard onApply={applyFix} onDismiss={dismissFix} />
 
-      {openCount === 0 ? (
+      {openCount === 0 ? (window.praxisNativeShell ? <div className="native-empty-placeholder" /> : (
         // Nothing open yet: no chat/preview panes — just an Open-project call to
         // action in the middle and the cat loafing in the corner (it runs while a
         // project is starting up).
@@ -1954,7 +1956,7 @@ export default function App(): React.JSX.Element {
             )}
           </div>
         </div>
-      ) : (
+      )) : (
         <div className={`panes ${chatHidden ? 'panes--chat-hidden' : ''}`}>
           <Rail
             onClose={(key) => void closeProjectFromRail(key)}

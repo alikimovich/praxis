@@ -20,6 +20,7 @@ import { useProjectIcons } from './project-icons'
 interface Actions {
   preview: Pick<
     NativeShellState,
+    | 'homeState'
     | 'previewReady'
     | 'branch'
     | 'publishLabel'
@@ -29,6 +30,7 @@ interface Actions {
     | 'previewBase'
     | 'deviceEnabled'
   >
+  resizeChat: (width: number) => void
   switchBranch: (name: string) => Promise<void>
   createBranch: (name: string) => Promise<void>
   gitUpdates: () => void
@@ -54,6 +56,7 @@ export function useNativeShell(actions: Actions) {
     if (!bridge) return
     document.documentElement.classList.add('native-shell')
     let disposed = false
+    let resizeEnd: ReturnType<typeof setTimeout> | undefined
     let previous = ''
     let branchKey = ''
     let branches: string[] = []
@@ -117,6 +120,7 @@ export function useNativeShell(actions: Actions) {
       }
       const state: NativeShellState = {
         ...current.current.preview,
+        homeState: { ...current.current.preview.homeState, blocked: !!document.querySelector('[role="dialog"], .diag') },
         branches,
         previewURL,
         viewport: useViewport.getState().viewport,
@@ -148,6 +152,8 @@ export function useNativeShell(actions: Actions) {
       }
       schedule()
     }
+    const mutations = new MutationObserver(schedule)
+    mutations.observe(document.body, { childList: true, subtree: true })
     refresh.current = observeChat
     const unsubs = [
       useWorkspace.subscribe(() => {
@@ -163,6 +169,16 @@ export function useNativeShell(actions: Actions) {
       useViewport.subscribe(schedule)
     ]
     const off = bridge.onAction((message) => {
+      if (message.action === 'chat-resize') {
+        const width = Number(message.value)
+        if (Number.isFinite(width)) {
+          document.body.classList.add('is-resizing')
+          current.current.resizeChat(Math.max(320, Math.min(760, width)))
+          clearTimeout(resizeEnd)
+          resizeEnd = setTimeout(() => document.body.classList.remove('is-resizing'), 250)
+        }
+        return
+      }
       const ws = useWorkspace.getState()
       const row = rows.flatMap((p) => [p, ...(p.children ?? [])]).find((r) => r.id === message.id)
       const project = ws.projects.find(
@@ -229,10 +245,13 @@ export function useNativeShell(actions: Actions) {
     return () => {
       disposed = true
       resize.disconnect()
+      mutations.disconnect()
       for (const unsubscribe of unsubs) unsubscribe()
       off()
       refresh.current = () => {}
       clearTimeout(timer)
+      clearTimeout(resizeEnd)
+      document.body.classList.remove('is-resizing')
       document.documentElement.classList.remove('native-shell')
     }
   }, [])

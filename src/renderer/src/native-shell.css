@@ -69,5 +69,8 @@ html.native-shell .previewcard__body {
   background: transparent !important;
 }
 
-/* Keep the web resize handle interactive, but let AppKit paint the only line. */
+/* Keep divider layout space; AppKit paints the only line and owns input. */
 html.native-shell .panes > .divider { background: transparent; }
+
+/* AppKit owns resize input above the native conversation and preview. */
+.native-shell .panes > .divider { pointer-events: none; }

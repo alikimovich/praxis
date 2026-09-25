@@ -145,18 +145,20 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         let leading = chatHeader.convert(.zero, to: nil).x
         let width = min(max(100, target - leading), max(100, (window?.frame.width ?? 1320) - leading - 500))
         addressWidth?.constant = min(180, max(80, (window?.frame.width ?? 1320) - leading - width - 400))
+        chatTitle.isHidden = currentProject == nil || chatHidden || width < 150
         if abs(chatHeaderWidth.constant - width) > 0.5 { chatHeaderWidth.constant = width }
     }
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [.toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .space] + items.map { NSToolbarItem.Identifier($0) }
     }
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [NSToolbarItem.Identifier("projects"), .toggleSidebar, .sidebarTrackingSeparator, NSToolbarItem.Identifier("chat"), NSToolbarItem.Identifier("address"), .flexibleSpace,
+        [NSToolbarItem.Identifier("projects"), .toggleSidebar, .sidebarTrackingSeparator, NSToolbarItem.Identifier("address"), .flexibleSpace,
          NSToolbarItem.Identifier("interaction"), .space, NSToolbarItem.Identifier("tools"), .space, NSToolbarItem.Identifier("publish")]
     }
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar: Bool) -> NSToolbarItem? {
         let key = identifier.rawValue
         guard items.contains(key) else { return nil }
+        if key == "chat", let existing = toolbarItems[key] { return existing }
         if key == "tools" || key == "interaction" {
             let actions = key == "tools" ? ["code", "layers", "expand"] : ["select-object", "device"]
             let children = actions.compactMap {
@@ -290,7 +292,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         if chatHeaderWidth != nil {
             alignChatHeader()
         }
-        chatTitle.isHidden = chatHidden
+        chatTitle.isHidden = currentProject == nil || chatHidden || (chatHeaderWidth?.constant ?? 0) < 150
         let chatMenu = NSMenu(); chatMenu.autoenablesItems = false
         let historyIcon = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         historyIcon.image = toolbarSymbol("clock.arrow.circlepath", "Chat History")
@@ -372,6 +374,14 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         }
         chatHidden = expandedPreview
         previewState = state
+        let chatIndex = toolbar.items.firstIndex { $0.itemIdentifier.rawValue == "chat" }
+        let showChat = currentProject != nil && !chatHidden && (state["chatWidth"] as? Double ?? 0) > 60
+        if !showChat, let index = chatIndex { toolbar.removeItem(at: index) }
+        else if showChat && chatIndex == nil {
+            let index = toolbar.items.firstIndex { $0.itemIdentifier.rawValue == "address" } ?? 0
+            toolbar.insertItem(withItemIdentifier: NSToolbarItem.Identifier("chat"), at: index)
+        }
+
         if rowsChanged || projectChanged { outline.reloadData() }
         if let selected = rows.first(where: { $0.project == currentProject }) {
             let index = outline.row(forItem: selected)

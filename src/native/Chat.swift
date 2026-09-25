@@ -18,6 +18,7 @@ struct ChatSnapshot: Decodable {
     let questions: [ChatQuestionRequest]; let status: String
 }
 final class ChatModel: ObservableObject {
+    let cat = CatAnimator()
     @Published var snapshot: ChatSnapshot?
     @Published var revision = 0
     func action(_ name: String, id: String? = nil, value: String? = nil, answers: [String: String]? = nil) {
@@ -40,8 +41,11 @@ final class NativeChat: NSHostingView<ChatConversation> {
         lastState = state
         isHidden = !(state["visible"] as? Bool ?? false)
         if let data = try? JSONSerialization.data(withJSONObject: state), let snapshot = try? JSONDecoder().decode(ChatSnapshot.self, from: data) {
+            let completed = model.snapshot?.chat == snapshot.chat && model.snapshot?.running == true && !snapshot.running && !(snapshot.messages.last?.text.contains("⚠️") ?? false)
+            model.cat.update(running: snapshot.running, questioning: !snapshot.questions.isEmpty || snapshot.cards.contains { $0.actions.contains { $0.action == "permission" } }, completed: completed)
             model.snapshot = snapshot; model.revision += 1
         }
+        model.cat.show(!isHidden)
         guard let bounds = state["bounds"] as? [String: Double] else { return }
         let x = bounds["x"] ?? 0, y = bounds["y"] ?? 0, width = bounds["width"] ?? 0, height = bounds["height"] ?? 0
         guard [x,y,width,height].allSatisfy({ $0.isFinite && abs($0) < 100000 }) else { return }
@@ -56,7 +60,7 @@ final class NativeChat: NSHostingView<ChatConversation> {
         composer.update(input)
     }
     func inspect() -> [String: Any] {
-        ["frame":NSStringFromRect(frame), "native":true, "visible":!isHidden, "chat":model.snapshot?.chat ?? "", "messageCount":model.snapshot?.messages.count ?? 0,
+        ["catPose":model.cat.pose, "catFrame":model.cat.frame, "catArtwork":!CatArtwork.frames.isEmpty, "frame":NSStringFromRect(frame), "native":true, "visible":!isHidden, "chat":model.snapshot?.chat ?? "", "messageCount":model.snapshot?.messages.count ?? 0,
          "messages":model.snapshot?.messages.map { ["id":$0.id,"role":$0.role,"text":$0.text] } ?? [],
          "cards":model.snapshot?.cards.map(\.id) ?? [], "questionCount":model.snapshot?.questions.count ?? 0]
     }
@@ -84,7 +88,7 @@ struct ChatConversation: View {
                                 }
                                 ForEach(snapshot.cards) { card in NativeChatCard(card: card, model: model) }
                                 ForEach(snapshot.questions) { request in NativeQuestionCard(request: request, model: model) }
-                                if snapshot.running { ProgressView().controlSize(.small).accessibilityLabel("Praxis is working") }
+
                             }
                             Color.clear.frame(height: 1).id("bottom")
                                 .background(GeometryReader { geometry in Color.clear.preference(key: BottomPosition.self, value: geometry.frame(in: .named("chatScroll")).maxY) })
@@ -98,8 +102,12 @@ struct ChatConversation: View {
                     }
                 }
             }
-            if let snapshot = model.snapshot, !snapshot.status.isEmpty {
-                Text(snapshot.status).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.vertical, 6)
+            if let snapshot = model.snapshot {
+                HStack(alignment: .bottom, spacing: 8) {
+                    NativeCat(animator: model.cat)
+                    Text(snapshot.status).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                    Spacer()
+                }.padding(.horizontal, 18).padding(.vertical, 6)
             }
         }.background(Color.clear)
     }
