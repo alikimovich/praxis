@@ -202,3 +202,7 @@ model’s validated candidates only when no Gateway key is configured, returning
 the actual engine and fallback reason. The bundled `surface-controls` skill is
 portable across providers; experimental Gemini explains its missing tools. See
 [CONTENT_CONTROLS.md](CONTENT_CONTROLS.md).
+
+Codex's routine skill-description context-budget advisory is omitted from chat
+activity. Skill availability and provider context limits are unchanged. Other
+item-level warnings remain visible with their full text, once per item per turn.

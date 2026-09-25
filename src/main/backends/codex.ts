@@ -32,7 +32,7 @@ import { scrubSecret } from '../providers-store'
 import { defineAgentControls, openAgentControls } from '../control-tools'
 import { praxisRules } from '../rules'
 import { createRetryCause } from './codex-retry'
-import { createItemTracker } from './codex-stream'
+import { createItemTracker, codexItemWarning } from './codex-stream'
 import { parseProjectMemoryEvaluation, projectMemoryEvaluationPrompt } from './memory'
 import { createRecordCapture } from './record'
 import { describeTool, sendToRenderer } from './tools'
@@ -410,7 +410,8 @@ async function startSession(
       }
       case 'error': {
         // A non-fatal item-level error — surface it as a status, not a turn failure.
-        emit({ type: 'status', text: `⚠ ${oneLine(item.message)}` })
+        const warning = codexItemWarning(item.message)
+        if (warning && items.first(item.id)) emit({ type: 'status', text: warning })
         break
       }
     }

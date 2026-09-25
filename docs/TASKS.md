@@ -21,6 +21,8 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Filter recurring Codex skill-budget advice from new chat activity and preserve complete actionable warnings.
+
 - [x] Open the inspector sidebar only from the selection toolbar, preserving explicit visibility across picks.
 
 - [x] Grow the native composer with wrapped/multiline drafts up to a bounded height, then scroll.

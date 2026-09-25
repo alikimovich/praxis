@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Keep routine Codex skill-budget advice out of chat
+
+Suppress the SDK's recurring “Skill descriptions were shortened” advisory in
+new chat activity. This does not alter skill discovery or the provider's context
+budget. Other item-level warnings now retain their full multiline text instead
+of being cut off at 120 characters, and repeat events for an item appear once.
+Previously saved activity remains unchanged.
+
+Validation: Codex stream regressions, all typechecks and native background
+integration passed. Background mode skips pointer/animation checks; no live
+provider call was made.
+
+
 ## 2026-09-24 — Open the inspector only from the selection toolbar
 
 Element picking updates inspection data without opening the right sidebar.
