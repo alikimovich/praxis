@@ -1,3 +1,6 @@
+import { NativeLayersController } from './layers-controller'
+import { agentOptionsFor } from '../shared/chat-settings'
+import { NativeEditorController } from './editor-controller'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -15,7 +18,7 @@ import { listProjectFiles } from '../main/file-tree'
 import { checkoutBranch, ensureBranch, listBranches, switchBranch } from '../main/git'
 import { registerGitRemoteIpc } from '../main/git-remote'
 import { registerGithubIpc } from '../main/github'
-import { registerMediaProtocol } from '../main/media'
+import { nativeMediaPath, registerMediaProtocol } from '../main/media'
 import { type PreviewState, registerPreviewIpc } from '../main/preview-ipc'
 import { readProjectIcon } from '../main/project-icon'
 import { registerPropsIpc } from '../main/props'
@@ -259,17 +262,6 @@ async function main() {
   ipcMain.handle('source:delete-file', (_e, path, file) =>
     deleteProjectFile(path, file, shell.trashItem)
   )
-  ipcMain.handle('source:popout', async (_e, project, source) => {
-    const view = new NativeView(`editor-${randomUUID()}`)
-    await host!.request('editor', { view: view.id })
-    view.webContents.loadURL(
-      `${url}?${new URLSearchParams({ praxisEditor: '1', root: project, source })}`
-    )
-  })
-  ipcMain.handle('source:close-window', (event) => {
-    const view = [...views.values()].find((view) => view.webContents === event.sender)
-    if (view?.id.startsWith('editor-')) host!.send('closeEditor', { view: view.id })
-  })
   ipcMain.handle('window:is-fullscreen', () => host!.request('fullscreen'))
   ipcMain.on('menu:native-edit', (_e, action) => host!.send('nativeEdit', { action }))
   ipcMain.on('menu:set-recents', (_e, recents) => host!.send('recents', { recents }))
@@ -318,9 +310,9 @@ async function main() {
   let shellController: NativeShellController | undefined
   const renderShell = () => shellController?.render()
   ipcMain.on('native-shell:state', (event, state) => {
-    if (event.sender === mainView.webContents && shellController) { shellController.codeOpen = !!state.codeOpen; shellController.schedule() }
+    if (event.sender === mainView.webContents && shellController) { shellController.schedule() }
   })
-  host.on('shell-action', action => { if (!workspaceOwnsAction(action) && !['memory', 'branch', 'new-branch', 'git-updates', 'publish', 'publish-mode', 'expand', 'device', 'select-object', 'address', 'home'].includes(action.action) && !(action.action === 'select' && action.id?.startsWith('history:'))) send('native-shell:action', action) })
+  host.on('shell-action', action => { if (!workspaceOwnsAction(action) && !['memory', 'branch', 'new-branch', 'git-updates', 'publish', 'publish-mode', 'expand', 'device', 'select-object', 'address', 'home', 'code', 'layers'].includes(action.action) && !(action.action === 'select' && action.id?.startsWith('history:'))) send('native-shell:action', action) })
   const activityController = new NativeActivityController((method, data) => host!.send(method, data))
   host.on('activity-action', ({ action }) => activityController.action(action))
   host.on('menu', ({ action }) => { if (action === 'logs') activityController.action('toggle') })
@@ -347,11 +339,52 @@ async function main() {
   const chatController = installNativeChat(host!, mainView)
   const workspaceController = installNativeWorkspace(host!, mainView, workspace, chatController, preferences)
   const contextController = new NativeContextController(workspaceController, chatController, () => ({ projectUi: preferences.get('praxis:project-ui:v1') === 'true', projectUiEngine: preferences.get('praxis:project-ui-engine:v1') === 'jev' ? 'jev' : 'agent' }), (channel, ...args) => dispatchIPC('main', { type: 'send', channel, args }))
-  workspaceController.services.activate = entry => contextController.activate(entry)
+  const visualEdit = async (root: string, prompt: string) => {
+    const entry = workspaceController.state.projects.find(p => p.root === root)
+    if (!entry || !prompt.trim()) return
+    const chat = chatController.chats.get(entry.activeSessionKey)
+    const result = await workspaceController.services.invoke('agent:spawn-comment', root, prompt, entry.activeSessionKey, chat ? agentOptionsFor(chat.settings) : {}, 'text-edit').catch(() => null)
+    if (!result?.ok) { await chatController.command({ type: 'seed', chat: entry.activeSessionKey, text: prompt }); activityController.append('Could not start the visual edit in the background; the instruction is in the composer.', 'error') }
+  }
+  const layersController = new NativeLayersController(workspaceController.services.invoke, (channel, ...args) => dispatchIPC('main', { type: 'send', channel, args }), state => host!.send('layersState', { state }), visualEdit)
+  host.on('layers-action', action => { void layersController.action(action).catch(error => activityController.append(String(error), 'error')) })
+  host.on('shell-action', action => { if (action.action === 'layers') void layersController.toggle() })
+  serviceEvents.on('event', (channel, value) => {
+    if (channel === 'layers:changed' || channel === 'preview:url-changed') void layersController.refresh()
+    if (channel === 'layers:move-request') void layersController.move(value).catch(error => activityController.append(String(error), 'error'))
+  })
+  const editorController = new NativeEditorController(workspaceController.services.invoke, state => {
+    host!.send('sourceState', { state: { ...state, mediaPath: state.document?.media ? nativeMediaPath(state.document.media.url) : undefined } })
+    if (shellController && workspaceController.active?.root === state.root) { shellController.codeOpen = state.visible; shellController.schedule() }
+  })
+  const openSource = (source?: string, popped?: boolean) => { const root = workspaceController.active?.root; if (root) void editorController.open(root, source, popped) }
+  const editorAction = (action: any) => { if (workspaceController.state.projects.some(p => p.root === action.root)) void editorController.action(action) }
+  host.on('source-action', editorAction)
+  ipcMain.on('native-editor:open', (event, source) => { if (event.sender === mainView.webContents) openSource(source) })
+  ipcMain.on('native-editor:close', () => { const root = workspaceController.active?.root; if (root) editorAction({ root, action: 'hide' }) })
+  ipcMain.handle('source:popout', (_event, root, source) => editorController.open(root, source, true))
+  ipcMain.handle('source:close-window', () => { const root = workspaceController.active?.root; if (root) return editorController.action({ root, action: 'hide' }) })
+  host.on('shell-action', action => {
+    if (action.action !== 'code') return
+    const root = workspaceController.active?.root
+    if (!root) return
+    if (editorController.session(root).state.visible) editorAction({ root, action: 'hide' })
+    else openSource(contextController.projects.get(root)?.selection?.bubble.source ?? undefined)
+  })
+  serviceEvents.on('event', (channel, value) => {
+    if (channel === 'source:reveal' && value.root === workspaceController.active?.root) openSource(`${value.source}:${value.startLine}`)
+  })
+  workspaceController.services.activate = async entry => {
+    host!.send('sourceActive', { root: entry?.root ?? '' })
+    void layersController.activate(entry?.root ?? '')
+    if (shellController) { shellController.codeOpen = entry ? editorController.session(entry.root).state.visible : false; shellController.schedule() }
+    await contextController.activate(entry)
+  }
   const projectEffect = chatController.services.effect
   chatController.services.effect = effect => {
     void contextController.effect(effect).catch(error => workspaceController.reportError(error))
-    projectEffect(effect)
+    if (effect.type === 'layers') void layersController.toggle()
+    else projectEffect(effect)
   }
   serviceEvents.on('event', (channel, value) => {
     if (channel === 'preview:element-picked') contextController.selection(value)

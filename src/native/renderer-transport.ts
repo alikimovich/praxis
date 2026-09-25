@@ -1,3 +1,4 @@
+import type {} from '../shared/native-editor'
 import type {} from '../shared/native-layout'
 // Bundled in place of Electron's preload primitives for WKWebView only.
 // The full PraxisApi and preview tools remain the shared preloads.
@@ -123,6 +124,7 @@ export const contextBridge = {
       Object.defineProperty(globalThis, 'praxisNativeGit', { value: { action: (action: string, value?: string) => ipcRenderer.send('native-git:action', { action, value }) } })
       Object.defineProperty(globalThis, 'praxisNativeActivity', { value: { append: (text: string, kind: string) => ipcRenderer.send('native-activity:command', { action: 'append', text, kind }), action: (action: string) => ipcRenderer.send('native-activity:command', { action }) } })
       Object.defineProperty(globalThis, 'praxisNativeSheets', { value: { open: (kind: string, key?: string) => ipcRenderer.send('native-sheet:open', kind, key) }, writable: false })
+      Object.defineProperty(globalThis, 'praxisNativeEditor', { value: { open: (source: string) => ipcRenderer.send('native-editor:open', source), close: () => ipcRenderer.send('native-editor:close') } })
       const workspace: NativeWorkspaceBridge = {
         command: command => ipcRenderer.invoke('native-workspace:command', command) as Promise<void>,
         onProjection: (callback: (value: any) => void) => { const listener: Listener = (_event, value) => callback(value); ipcRenderer.on('native-shell:projection', listener); return () => ipcRenderer.removeListener('native-shell:projection', listener) },

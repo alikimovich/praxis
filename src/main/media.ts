@@ -49,6 +49,11 @@ export function mediaUrl(absPath: string): string {
   return `${MEDIA_SCHEME}://f/${token}`
 }
 
+/** Trusted native UI only: resolve an already-issued opaque media capability. */
+export function nativeMediaPath(url: string): string | undefined {
+  try { const parsed = new URL(url); return parsed.protocol === `${MEDIA_SCHEME}:` && parsed.hostname === 'f' ? files.get(parsed.pathname.slice(1)) : undefined } catch { return undefined }
+}
+
 /**
  * Must run BEFORE app ready (privileged schemes are fixed at that point).
  * `stream` is what lets a <video> pull the body progressively; `supportFetchAPI`

@@ -21,7 +21,7 @@ const UNIT = [
   'native-settings',
   'native-chat-controller',
   'native-context',
-  'native-shell-controller',
+  'native-layers', 'native-editor', 'native-shell-controller',
   'native-git',
   'native-support-sheets',
   'native-cat-assets',

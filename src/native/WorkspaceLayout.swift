@@ -57,7 +57,7 @@ final class WorkspaceLayout {
     func nativeChatState() -> [String: Any] {
         guard let host else { return chatState }
         var state = chatState
-        let top = min(max(0, panels["layers"] ?? 0), host.canvas.bounds.height * 0.6)
+        let top: CGFloat = host.layers.isHidden ? 0 : min(260, host.canvas.bounds.height * 0.45)
         let full = width(), shown = full * fraction
         let visible = shellState["project"] is String && shown > 60 && host.canvas.bounds.height > 30
         state["visible"] = visible
@@ -71,6 +71,8 @@ final class WorkspaceLayout {
         let leading: CGFloat = shellState["project"] is String ? width() * fraction : 0
         host.shell.setChatGeometry(leading)
         let state = nativeChatState()
+        host.layers.frame = NSRect(x: 0, y: 0, width: leading, height: host.layers.isHidden ? 0 : min(260, bounds.height * 0.45))
+        host.canvas.addSubview(host.layers, positioned: .above, relativeTo: host.chatColumn)
         host.chat.place(state, composer: host.composer)
         host.chat.isHidden = !(state["visible"] as? Bool ?? false)
         host.composer.isHidden = host.chat.isHidden
@@ -83,7 +85,8 @@ final class WorkspaceLayout {
         host.chatDivider.update(dividerState)
         host.chatDivider.isHidden = host.chat.isHidden || fraction < 1
         let right = min(max(0, panels["right"] ?? 0), max(0, bounds.width - leading - 120))
-        let bottom = min(max(0, panels["bottom"] ?? 0), bounds.height * 0.8)
+        let bottom = host.dockedSource != nil ? min(380, bounds.height * 0.65) : 0
+        host.dockedSource?.frame = NSRect(x: leading, y: bounds.height - bottom, width: max(0, bounds.width - leading), height: bottom)
         let available = NSRect(x: leading, y: 0, width: max(0, bounds.width - leading - right), height: max(0, bounds.height - bottom))
         host.previewStatus.frame = available
         var page = available

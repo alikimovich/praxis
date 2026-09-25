@@ -90,8 +90,8 @@ See `docs/NATIVE.md` for the host protocol, isolation checks, and current limits
 `src/native/Shell.swift` owns the system sidebar (including project actions),
 split view and column-aligned toolbar: project actions, chat title/actions, and
 preview controls (domain/branch, selection, viewport, code, layers, expand, Publish). The
-optional `use-native-shell.ts` renderer hook mirrors compact workspace snapshots
-and routes native actions through existing App handlers; Electron keeps its rail.
+Bun `src/native/shell-controller.ts` constructs workspace toolbar/sidebar state
+and handles navigation directly; Electron keeps its rail.
 `src/native/Composer.swift` provides the native text field, controls and macOS 26
 Liquid Glass container. The native chat renders in SwiftUI (`src/native/Chat.swift`) and the composer
 receives typed state/actions; no hidden React chat/form is mounted. Bun owns native
@@ -99,7 +99,8 @@ drafts, streaming, queues, model/permission choices and chat actions
 through `src/native/chat-controller.ts`; React ChatPanel is not mounted in native.
 SwiftUI also owns startup/empty workspace UI and the animated pixel cat; AppKit
 owns chat divider input and view geometry through `src/native/WorkspaceLayout.swift`.
-The main WebKit view still supplies shell presentation and remaining editing panels. `src/native/Sheets.swift` renders native New Project, memory,
+AppKit source editing (`src/native/SourceEditor.swift`) and layers (`src/native/Layers.swift`)
+use direct Bun controllers. The main WebKit view still supplies remaining property/custom/content panels. `src/native/Sheets.swift` renders native New Project, memory,
 Settings and provider forms; Bun sheet controllers own their service operations.
 See `docs/NATIVE.md`.
 

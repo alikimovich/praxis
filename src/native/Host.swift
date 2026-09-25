@@ -45,7 +45,11 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var welcome: NativeWelcome!
     var previewStatus: NativePreviewStatus!
     var sheets: NativeSheets!
+    let layers = NativeLayers()
     let activity = NativeActivity()
+    var sourceEditors: [String: NativeSourceEditor] = [:]
+    var sourceRoot = ""
+    var dockedSource: NativeSourceEditor? { sourceEditors[sourceRoot].flatMap { $0.state["visible"] as? Bool == true && $0.state["popped"] as? Bool != true ? $0 : nil } }
     var chatDivider: NativeChatDivider!
     var nativeLayout: WorkspaceLayout!
     var previewSurface: PreviewSurface!
@@ -107,6 +111,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         shell.updatePreviewColor(views["preview"]!.underPageBackgroundColor)
         previewSurface.leading = { [weak self] in self?.shell.previewLeading ?? 0 }
         previewStatus = NativePreviewStatus(); canvas.addSubview(previewStatus)
+        canvas.addSubview(layers)
         chatColumn.wantsLayer = true; chatColumn.layer?.masksToBounds = true; canvas.addSubview(chatColumn)
         chat = NativeChat(); chatColumn.addSubview(chat)
         composer = NativeComposer(frame: .zero); chatColumn.addSubview(composer)
@@ -146,6 +151,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         for (label, key, selector) in [("Cut", "x", "cut:"), ("Copy", "c", "copy:"), ("Paste", "v", "paste:"), ("Select All", "a", "selectAll:")] {
             edit.addItem(withTitle: label, action: Selector(selector), keyEquivalent: key)
         }
+        let find = NSMenuItem(title: "Find…", action: #selector(NSTextView.performFindPanelAction(_:)), keyEquivalent: "f"); find.tag = NSTextFinder.Action.showFindInterface.rawValue; edit.addItem(find)
         let actions = submenu("Actions")
         for (label, key, action) in [("Reload Preview", "r", "reload"), ("Toggle Logs", "l", "logs"), ("Toggle UI", ".", "toggle-chat"), ("Diagnose Preview…", "", "diagnose"), ("Send Feedback…", "", "feedback")] {
             let item = NSMenuItem(title: label, action: #selector(menuAction(_:)), keyEquivalent: key); item.target = self; item.representedObject = action; actions.addItem(item)
@@ -182,6 +188,32 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "layoutPanels": nativeLayout.panels = c["panels"] as? [String: Double] ?? [:]; nativeLayout.layout()
         case "layoutWidth": nativeLayout.desiredWidth = CGFloat(c["width"] as? Double ?? 440); nativeLayout.layout()
         case "layoutInspect": reply(id, nativeLayout.inspect())
+        case "layersState": layers.update(c["state"] as? [String: Any] ?? [:]); nativeLayout.layout()
+        case "layersInspect": reply(id, ["native":true, "visible":!layers.isHidden, "count":layers.nodes.count])
+        case "sourceActive":
+            sourceRoot = c["root"] as? String ?? ""
+            for (root, editor) in sourceEditors where editor.state["popped"] as? Bool != true { editor.isHidden = root != sourceRoot || editor.state["visible"] as? Bool != true }
+            nativeLayout.layout()
+        case "sourceState":
+            let state = c["state"] as? [String: Any] ?? [:], root = state["root"] as? String ?? ""
+            let editor = sourceEditors[root] ?? NativeSourceEditor(); sourceEditors[root] = editor
+            editor.update(state)
+            if state["popped"] as? Bool == true {
+                if editor.popout == nil { let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false); panel.isReleasedWhenClosed = false; panel.delegate = editor; panel.title = "Praxis · Code"; panel.center(); editor.popout = panel }
+                if editor.popout?.contentView !== editor { editor.removeFromSuperview(); editor.popout?.contentView = editor }
+                editor.isHidden = false
+                if state["visible"] as? Bool == true { if editor.popout?.isVisible != true { editor.popout?.makeKeyAndOrderFront(nil) } } else { editor.popout?.orderOut(nil) }
+            } else {
+                editor.popout?.orderOut(nil)
+                if editor.superview !== canvas { editor.popout?.contentView = NSView(); editor.removeFromSuperview(); canvas.addSubview(editor) }
+                editor.isHidden = root != sourceRoot || state["visible"] as? Bool != true
+            }
+            nativeLayout.layout()
+        case "sourceInspect":
+            let editor = sourceEditors[c["root"] as? String ?? sourceRoot]
+            reply(id, ["native":true, "visible":editor?.state["visible"] as? Bool ?? false, "source":editor?.source ?? "", "text":editor?.code.string ?? "", "popped":editor?.popout?.isVisible ?? false, "dirty":editor?.state["dirty"] as? Bool ?? false, "error":editor?.state["error"] as? String ?? ""])
+        case "sourcePerform":
+            guard ephemeral else { return }; emit((c["action"] as? [String: Any] ?? [:]).merging(["event":"source-action"]) { _, new in new }); reply(id)
         case "activityState": activity.update(c)
         case "activityInspect": reply(id, ["visible":activity.window?.isVisible ?? false, "count":activity.count])
         case "sheetState": sheets.update(c["state"] as? [String: Any] ?? [:])

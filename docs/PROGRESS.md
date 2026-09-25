@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — AppKit source editing and layers
+
+Native source editing now uses NSTextView with line numbers, native find/replace,
+syntax coloring, file filtering/create/rename/trash, component navigation, native
+media display and reusable dock/pop-out windows. Bun retains per-file drafts and
+baseline-checked saves; clean documents refresh when reopened. Source WebViews
+are no longer created. Layers now uses NSOutlineView, including hover/selection,
+source-backed drag reordering and background-agent fallback. React duplicate
+reorder handlers are disabled in native mode.
+
+Validation: editor race/conflict/draft and layers scope/cancellation tests passed,
+as did typechecks and native background integration. The integration saved a real
+file through the native editor and exercised dock/pop-out reuse. Foreground drag,
+find/replace, IME, large-file responsiveness and visual verification remain; the
+property/custom/content panels and main renderer are still pending migration.
+
 ## 2026-09-24 — Native shell state and preview recovery
 
 Bun now constructs project/history rows, favicons, chat titles, toolbar state and

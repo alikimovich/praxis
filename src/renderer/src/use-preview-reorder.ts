@@ -9,6 +9,7 @@ export function usePreviewReorder(
   useEffect(
     () =>
       window.api.layers.onMoveRequest((request) => {
+        if (window.praxisNativeShell) return
         const root = useSession.getState().projectRoot
         if (!root) return
         void window.api.layers
