@@ -36,6 +36,7 @@ export function snapshot(chat: Chat, choices: ModelChoice[]): NativeChatState {
     statusDetail: `Cumulative tokens across this chat’s model calls, not current context size.\nInput: ${chat.usage.input.toLocaleString('en-US')}\nCached input (included above): ${chat.usage.cached.toLocaleString('en-US')}\nOutput: ${chat.usage.output.toLocaleString('en-US')}`,
     composer: {
       text: chat.text, caret: chat.caret, revision: chat.revision, stop,
+      ready: chat.ready && !chat.switching, running: chat.isRunning,
       enabled: chat.ready && (stop || (!chat.switching && (!!chat.text.trim() || !!chat.attachments.length))),
       sendLabel: stop ? 'Stop' : chat.isRunning ? 'Queue message' : 'Send message',
       context: context?.selection?.label ?? '', attachments: chat.attachments.map(a => `Remove ${a.name || 'image'}`),

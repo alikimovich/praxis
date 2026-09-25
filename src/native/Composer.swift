@@ -34,6 +34,9 @@ final class NativeComposer: NSView, NSTextViewDelegate {
     let content = NSView()
     let scroll = NSScrollView()
     let sendButton = NSButton()
+    let buttonBeam = ComposerBeamHost()
+    let readyBeam = ComposerBeamHost()
+    var welcomedChats = Set<String>()
     let plus = NSPopUpButton(frame: .zero, pullsDown: true)
     let chips = NSStackView()
     let controls = NSStackView()
@@ -137,6 +140,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             scroll.topAnchor.constraint(equalTo: chips.bottomAnchor, constant: 4), scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), scroll.bottomAnchor.constraint(equalTo: sendButton.topAnchor, constant: -5),
             controls.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10), controls.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10), controls.bottomAnchor.constraint(equalTo: bottomAnchor), controls.heightAnchor.constraint(equalToConstant: 26)
         ])
+        for overlay in [readyBeam, buttonBeam] { addSubview(overlay) }
         isHidden = true
     }
     /// Measure using the same TextKit wrapping, padding and font as the editor.
@@ -157,6 +161,8 @@ final class NativeComposer: NSView, NSTextViewDelegate {
     }
     override func layout() {
         super.layout()
+        readyBeam.frame = content.convert(content.bounds, to: self).insetBy(dx: -8, dy: -8)
+        buttonBeam.frame = sendButton.convert(sendButton.bounds, to: self).insetBy(dx: -8, dy: -8)
         layoutSkills()
         // An empty document must not retain its initial 70pt height in a shorter field.
         if text.string.isEmpty && scroll.contentSize.height > 0 && text.frame.size != scroll.contentSize {
@@ -255,7 +261,17 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             frame = NSRect(x: x, y: y, width: max(0, width), height: max(0, height))
         }
         let nextChat = next["chat"] as? String ?? ""
-        if chat != nextChat { text.undoManager?.removeAllActions(); chat = nextChat; revision = next["revision"] as? Int ?? 0 }
+        if chat != nextChat {
+            readyBeam.show(false, radius: 24)
+            buttonBeam.show(false, radius: 15)
+            text.undoManager?.removeAllActions(); chat = nextChat; revision = next["revision"] as? Int ?? 0
+        }
+        buttonBeam.show(!isHidden && next["running"] as? Bool == true, radius: 15)
+        if isHidden { readyBeam.show(false, radius: 24) }
+        else if next["ready"] as? Bool == true && !chat.isEmpty && welcomedChats.insert(chat).inserted {
+            readyBeam.show(true, radius: 24, once: true)
+        }
+        needsLayout = true
         if (next["revision"] as? Int ?? 0) >= revision && !text.hasMarkedText() {
             let value = next["text"] as? String ?? ""
             if text.string != value {
@@ -340,7 +356,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             item.target = self; item.representedObject = payload; popup.menu?.addItem(item)
         }
     }
-    func inspect() -> [String: Any] { layoutSubtreeIfNeeded(); return ["pickerWidths":pickers.mapValues { $0.bounds.width }, "pickersPlain":pickers.values.allSatisfy { !$0.isBordered }, "attachIsPlus":plus.item(at: 0)?.image != nil && (plus.cell as? NSPopUpButtonCell)?.arrowPosition == .noArrow, "controlsBelowForm":controls.frame.maxY < content.convert(content.bounds, to: self).minY, "sendInsideForm":sendButton.superview === content, "skillListVisible":!skillList.isHidden, "skillCount":skillEntries.count, "inputTopInset":content.bounds.maxY - scroll.frame.maxY, "sendRightInset":content.bounds.maxX - sendButton.convert(sendButton.bounds, to: content).maxX, "autohidesScrollers":scroll.autohidesScrollers, "contentWidth":content.bounds.width, "inputHeight":scroll.bounds.height, "documentHeight":text.bounds.height, "sendWidth":sendButton.bounds.width, "visible":!isHidden, "glass":glass, "text":text.string, "chat":chat, "enabled":sendButton.isEnabled, "revision":revision, "choices":state["choices"] ?? [], "attachments":state["attachments"] ?? [], "bounds":["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height]] }
+    func inspect() -> [String: Any] { layoutSubtreeIfNeeded(); return ["buttonBeam":buttonBeam.active, "readyBeam":readyBeam.active, "welcomedChat":welcomedChats.contains(chat), "pickerWidths":pickers.mapValues { $0.bounds.width }, "pickersPlain":pickers.values.allSatisfy { !$0.isBordered }, "attachIsPlus":plus.item(at: 0)?.image != nil && (plus.cell as? NSPopUpButtonCell)?.arrowPosition == .noArrow, "controlsBelowForm":controls.frame.maxY < content.convert(content.bounds, to: self).minY, "sendInsideForm":sendButton.superview === content, "skillListVisible":!skillList.isHidden, "skillCount":skillEntries.count, "inputTopInset":content.bounds.maxY - scroll.frame.maxY, "sendRightInset":content.bounds.maxX - sendButton.convert(sendButton.bounds, to: content).maxX, "autohidesScrollers":scroll.autohidesScrollers, "contentWidth":content.bounds.width, "inputHeight":scroll.bounds.height, "documentHeight":text.bounds.height, "sendWidth":sendButton.bounds.width, "visible":!isHidden, "glass":glass, "text":text.string, "chat":chat, "enabled":sendButton.isEnabled, "revision":revision, "choices":state["choices"] ?? [], "attachments":state["attachments"] ?? [], "bounds":["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height]] }
     func perform(_ c: [String: Any]) {
         if let value = c["text"] as? String { text.string = value; text.setSelectedRange(NSRange(location: (value as NSString).length, length: 0)); changed() }
         if c["action"] as? String == "send" { send(nil) }

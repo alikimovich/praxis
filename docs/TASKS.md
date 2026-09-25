@@ -21,6 +21,8 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Add a native border beam to running Stop/Queue buttons and a one-time chat-ready sweep on the composer.
+
 - [x] Improve chat typography with a shared regular body font, relaxed line/paragraph spacing and monospaced activity rows.
 
 - [x] Clarify cumulative chat token totals with compact counts and a cached-input breakdown.

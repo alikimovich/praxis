@@ -46,6 +46,8 @@ export async function checkNativeChat(host: NativeBridge, screenshot: string) {
     if (nativeWorkspace.state.error !== priorError) throw new Error('Native context effect failed: ' + nativeWorkspace.state.error)
     const runningCat = await wait(state => state.catPose === 'run' && state.catArtwork)
     await wait(state => state.catPose === 'run' && state.catFrame !== runningCat.catFrame)
+    if (!(await host.request('composerInspect')).buttonBeam) throw new Error('Running Stop button has no beam')
+    writeFileSync(screenshot.replace('.png', '-beam-stop.png'), Buffer.from(await host.request('captureComposer'), 'base64'))
     await host.request('composerPerform', { text: 'A queued native message' })
     // Allow the input action and its controlled state to cross the bridge.
     for (let i = 0; i < 100; i++) {
@@ -53,6 +55,8 @@ export async function checkNativeChat(host: NativeBridge, screenshot: string) {
       await new Promise(resolve => setTimeout(resolve, 50))
     }
     await new Promise(resolve => setTimeout(resolve, 100))
+    if (!(await host.request('composerInspect')).buttonBeam) throw new Error('Drafting a queued message stopped the beam')
+    writeFileSync(screenshot.replace('.png', '-beam-queue.png'), Buffer.from(await host.request('captureComposer'), 'base64'))
     await host.request('composerPerform', { action: 'send' })
     const queued = await wait(state => state.cards.some((id: string) => id.startsWith('queued-')))
     const id = queued.cards.find((id: string) => id.startsWith('queued-'))
@@ -64,6 +68,7 @@ export async function checkNativeChat(host: NativeBridge, screenshot: string) {
     send({ type: 'delta', text: '\n\nStreaming continued after tool activity.' })
     send({ type: 'landing-finished' })
     await wait(state => state.messages.some((message: any) => message.text.includes('Streaming continued after tool activity.')))
+    if ((await host.request('composerInspect')).buttonBeam) throw new Error('Completed turn retained its beam')
     send({ type: 'permission-request', request: { id: 'native-permission', sessionKey: state.chat, title: 'Allow fixture command?', detail: 'Read the test project' } })
     await wait(state => state.cards.includes('native-permission'))
     await host.request('chatPerform', { action: 'permission', card: 'native-permission', value: 'deny' })

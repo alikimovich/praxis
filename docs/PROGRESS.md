@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Native composer border beam
+
+Add a SwiftUI border beam inspired by libraries.dev/beam, using a colored angular
+gradient, highlight and soft bloom over the existing Liquid Glass composer. The
+Stop/Queue button loops throughout the active turn, preserving its phase when a
+draft changes the icon. Each chat gets one three-second readiness sweep per app
+launch; switching back does not replay it. Reduce Motion uses a still highlight,
+and idle/hidden overlays remove their animation timelines. No Metal dependency.
+
+Validation: native build, all typechecks, chat-controller and docs-link checks
+passed. Native integration covered readiness expiry, chat switching, Stop/Queue
+continuity and completion cleanup. Full integration hit the previously recorded
+preview content-editable pointer timeout; the background rerun passed with real
+pointer/animation timing skipped. Inspected generated beam captures and the
+visible Liquid Glass composer in a disposable native fixture. No provider calls.
+
 ## 2026-09-25 — Relax native chat typography
 
 Use a shared 13-point regular body font with 4 points of extra line spacing for
