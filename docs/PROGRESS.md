@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Correct undersized chat toolbar icons
+
+The previous change misread the size discrepancy and made History/New Chat
+smaller. Increase both custom-control images from 16 to 22 points, above their
+original 20-point size; retain the sidebar toggle as the reference and leave
+button hit areas unchanged.
+
+Validation: native typecheck, build and background integration passed; inspected
+the enlarged chat glyphs in a fresh capture. General typecheck failed on preview
+listener signatures being changed by the concurrent migration.
+
+
 ## 2026-09-24 — Match chat toolbar glyph sizes to the sidebar toggle
 
 History and New Chat now use 16-point template images in their custom controls,

@@ -20,7 +20,7 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 - [x] Fix native sidebar switching between open projects and cover repeated project/chat/preview transitions.
 
 - [x] Enable native composer Paste for clipboard images and copied files, with AppKit validation and attachment regression coverage.
-- [x] Match History and New Chat glyph sizes to the native sidebar toggle.
+- [x] Enlarge History and New Chat glyphs to correct the previous size reduction; keep the sidebar toggle unchanged.
 - [x] Align sidebar action labels/icons with project rows and preserve symbol aspect ratios.
 - [x] Put Open Project and New Project in the native sidebar with neutral text, distinct icons and spacing before projects.
 
