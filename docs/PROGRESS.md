@@ -2,6 +2,17 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Keep the preview page URL visible
+
+Show the complete current preview URL in the unfocused address field instead of
+reducing it to host and port. Editing, blur and Escape now retain the same URL;
+existing middle truncation and the full-URL tooltip handle long addresses.
+
+Validation: typechecks, shell controller checks, native build and background native
+integration passed (reduced pointer/animation coverage). Full native integration
+hit the known preview style-edit timeout. Visually verified /about is displayed
+before focusing the address field in a separate provider-free native fixture.
+
 ## 2026-09-25 — Composer selector bottom inset
 
 Add 8 points below the provider/model/permission selector row. Increase compact

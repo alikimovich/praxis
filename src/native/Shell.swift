@@ -245,8 +245,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     }
     private var previewAddress: String { previewState["previewURL"] as? String ?? previewState["previewBase"] as? String ?? "" }
     private func showAddress() {
-        let url = URL(string: previewAddress)
-        address.stringValue = url?.host.map { $0 + (url?.port.map { ":\($0)" } ?? "") } ?? ""
+        address.stringValue = previewAddress
         address.toolTip = previewAddress
     }
     func controlTextDidBeginEditing(_ notification: Notification) {
