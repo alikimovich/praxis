@@ -5,6 +5,7 @@ import type { NativeBridge } from './bridge'
 import { dispatchIPC, serviceEvents } from './platform'
 import { nativeWorkspace } from './workspace-runtime'
 import { nativeChat } from './chat-runtime'
+import { checkProjectSwitching } from './smoke-projects'
 import { checkNativeSheets } from './smoke-sheets'
 import { checkNativeChat } from './smoke-chat'
 import { checkSelectionInput } from './smoke-input'
@@ -26,6 +27,7 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   await wait(()=>nativeWorkspace.state.status.kind==='running','project running',30000)
   await wait(()=>page('!!document.querySelector("#native-title")'),'fixture loaded')
   await wait(()=>nativeChat.chats.get(nativeChat.active)?.ready,'native chat ready',30000)
+  await checkProjectSwitching(host, fixture, artifacts)
   await checkNativeSheets(host,nativeWorkspace.state.activeKey!,artifacts)
   await geometry('sheets')
   const shell=await inspect('shellInspect',s=>s.enabled.code)

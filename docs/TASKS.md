@@ -17,6 +17,8 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Fix native sidebar switching between open projects and cover repeated project/chat/preview transitions.
+
 - [x] Enable native composer Paste for clipboard images and copied files, with AppKit validation and attachment regression coverage.
 - [x] Put Open Project and New Project in the native sidebar with neutral text, distinct icons and spacing before projects.
 

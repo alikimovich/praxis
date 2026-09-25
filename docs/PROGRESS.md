@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Restore native sidebar project switching
+
+Native outline selection sends a `project:` row ID without a separate project
+field. Workspace routing previously fell back to the active project, so clicking
+another open project simply reselected the current one. Resolve project actions
+from their row ID before falling back to the explicit or active project.
+
+Added a native integration regression that opens two static projects and selects
+first/second/first through the AppKit outline callback, checking the active
+workspace, chat and preview at every step. Confirmed it fails before the fix.
+
+Validation: all TypeScript targets, workspace-controller unit checks, docs links
+and native background integration passed. Foreground runs passed switching but
+timed out at the later style edit after pointer-selection checks; background mode
+skips those real pointer gestures. Inspected the project-switching capture.
+
 ## 2026-09-24 — Native chat clipboard attachments
 
 The plain AppKit composer now advertises file URL, PNG and TIFF pasteboard types

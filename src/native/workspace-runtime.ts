@@ -46,7 +46,8 @@ export function installNativeWorkspace(host: NativeBridge, view: NativeView, sto
   host.on('recent', ({ root }) => run({ type: 'open', root }))
   host.on('menu', ({ action }) => { if (action === 'open-project') run({ type: 'open' }) })
   host.on('shell-action', (action: NativeShellAction) => {
-    const key = action.project ?? nativeWorkspace.state.activeKey
+    // Outline selection supplies the destination row ID, not a project field.
+    const key = action.id?.startsWith('project:') ? action.id.slice(8) : action.project ?? nativeWorkspace.state.activeKey
     if (!key) return
     if (action.action === 'project-up' || action.action === 'project-down') {
       const projects = nativeWorkspace.state.projects, index = projects.findIndex(p => p.key === key), next = index + (action.action === 'project-up' ? -1 : 1)
