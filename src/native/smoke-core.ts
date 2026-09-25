@@ -70,6 +70,23 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   await wait(()=>page(`document.querySelector('#native-title')?.textContent==='Edited through Praxis Native'`),'managed reload')
   assert.ok((await invoke('edit:undo',fixture)).ok);assert.ok((await invoke('edit:redo',fixture)).ok)
   assert.deepEqual(await host.request('composerIMECheck'), { marked: true, swallowed: false })
+  await host.request('composerPerform', { text: '' })
+  await inspect('composerInspect', s => s.text === '')
+  for (const clipboard of [{ image: 'png' }, { image: 'tiff' }, { paths: [join(fixture, 'index.html'), join(fixture, 'native-style.tsx')] }]) {
+    assert.deepEqual(await host.request('composerPasteCheck', clipboard), { enabled: true, dispatched: true })
+    const count = 'paths' in clipboard ? 2 : 1
+    await inspect('composerInspect', s => s.attachments.length === count && s.enabled && s.text === '')
+    const attached = nativeChat.get(nativeChat.active).attachments
+    if ('paths' in clipboard) assert.deepEqual(attached.map(a => a.path), clipboard.paths)
+    else { assert.equal(attached[0].type, 'image/png'); assert.ok(attached[0].data.length > 0) }
+    writeFileSync(join(artifacts, `paste-${'image' in clipboard ? clipboard.image : 'files'}.png`), Buffer.from(await host.request('captureShell'), 'base64'))
+    for (let i = 0; i < count; i++) await host.request('composerPerform', { remove: 0 })
+    await inspect('composerInspect', s => s.attachments.length === 0)
+  }
+  assert.deepEqual(await host.request('composerPasteCheck', { text: 'Pasted text に' }), { enabled: true, dispatched: true })
+  await inspect('composerInspect', s => s.text === 'Pasted text に' && s.attachments.length === 0)
+  await host.request('composerPerform', { text: '' })
+  assert.deepEqual(await host.request('composerPasteCheck'), { enabled: false, dispatched: false })
   await host.request('composerPerform',{text:'Native draft'})
   await inspect('composerInspect',s=>s.text==='Native draft')
   const firstChat=nativeChat.active

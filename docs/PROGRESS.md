@@ -2,6 +2,26 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Native chat clipboard attachments
+
+The plain AppKit composer now advertises file URL, PNG and TIFF pasteboard types
+and routes AppKit selection reads into the existing attachment handler. Previously,
+AppKit disabled Paste for image-only clipboards before the custom paste handler
+could run. Copied files and images now use the same attachment path as the picker.
+
+Added native regression checks for Paste menu validation/responder dispatch,
+PNG/TIFF attachments, multiple file URLs, removal, Unicode text fallback and an
+empty clipboard. The check preserves and restores clipboard contents and is only
+available to the ephemeral integration profile. The image Paste assertion was
+confirmed failing before the fix.
+
+Validation: all TypeScript targets, native chat-controller tests, docs links and
+native background integration passed. Integration ran from an isolated snapshot
+because another task was editing/building the same native files; that task's
+unfinished project-switching check was excluded. Screenshot captures were read,
+but offscreen Liquid Glass does not paint the composer reliably; attachment state
+and Paste dispatch were asserted directly. No paid provider turns were run.
+
 ## 2026-09-24 — Project actions in the native sidebar
 
 Replaced the toolbar project menu with full-width Open Project and New Project

@@ -3,6 +3,15 @@ import UniformTypeIdentifiers
 
 final class ComposerTextView: NSTextView {
     var pasteFiles: ((NSPasteboard) -> Bool)?
+    // Plain NSTextView disables Paste for non-text clipboard contents unless
+    // these types are advertised, so paste(_:) alone never receives Cmd-V.
+    override var readablePasteboardTypes: [NSPasteboard.PasteboardType] {
+        [.fileURL, .png, .tiff] + super.readablePasteboardTypes
+    }
+    override func readSelection(from board: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
+        if [.fileURL, .png, .tiff].contains(type), pasteFiles?(board) == true { return true }
+        return super.readSelection(from: board, type: type)
+    }
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         if string.isEmpty && !hasMarkedText() {
@@ -197,6 +206,31 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         }
         if let data, data.count > 10 * 1024 * 1024 { emitAction("attachment-error", ["message":"The pasted image exceeds the 10 MiB attachment limit."]); return true }
         return false
+    }
+    // Integration-only caller in Host requires an ephemeral test profile.
+    func checkPaste(_ fixture: [String: Any]) -> [String: Any] {
+        let board = NSPasteboard.general
+        let saved = (board.pasteboardItems ?? []).map { item -> NSPasteboardItem in
+            let copy = NSPasteboardItem()
+            for type in item.types { if let data = item.data(forType: type) { copy.setData(data, forType: type) } }
+            return copy
+        }
+        defer { board.clearContents(); board.writeObjects(saved) }
+        board.clearContents()
+        if let paths = fixture["paths"] as? [String] {
+            board.writeObjects(paths.map { NSURL(fileURLWithPath: $0) })
+        } else if let value = fixture["text"] as? String {
+            board.setString(value, forType: .string)
+        } else if let type = fixture["image"] as? String {
+            let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 2, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+            board.setData(bitmap.representation(using: type == "png" ? .png : .tiff, properties: [:])!, forType: type == "png" ? .png : .tiff)
+        }
+        window?.makeFirstResponder(text)
+        let item = NSMenuItem(title: "Paste", action: #selector(NSTextView.paste(_:)), keyEquivalent: "v")
+        let enabled = text.validateMenuItem(item)
+        // Background integration windows are deliberately not the key window.
+        let dispatched = enabled && NSApp.sendAction(item.action!, to: window?.firstResponder, from: item)
+        return ["enabled":enabled, "dispatched":dispatched]
     }
     func update(_ next: [String: Any]) {
         applying = true; defer { applying = false }

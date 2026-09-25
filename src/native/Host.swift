@@ -264,6 +264,9 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             let swallowed = composer.textView(composer.text, doCommandBy: NSSelectorFromString("insertNewline:"))
             composer.text.unmarkText(); composer.text.string = old
             reply(id, ["marked":marked, "swallowed":swallowed])
+        case "composerPasteCheck":
+            guard ephemeral else { reply(id, error: "Test profile required"); return }
+            reply(id, composer.checkPaste(c))
         case "composerPerform": composer.perform(c); reply(id)
         case "composerFocus": window.makeFirstResponder(composer.text)
         case "captureComposer":
