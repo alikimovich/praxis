@@ -2,6 +2,17 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Align sidebar actions and preserve symbol proportions
+
+Moved action labels and icon slots four points left to align
+with the project rows. SF Symbols now fit proportionally inside their 16-point
+slots instead of stretching into squares, preserving folder-plus and plus-square
+artwork proportions.
+
+Validation: all TypeScript targets, native background integration and direct
+sidebar action dispatch passed. Inspected the final sidebar capture; pointer
+gestures/animation timing were skipped by the background integration mode.
+
 ## 2026-09-24 — Restore native sidebar project switching
 
 Native outline selection sends a `project:` row ID without a separate project
