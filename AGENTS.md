@@ -53,6 +53,7 @@ timing and must be reported as reduced coverage. No Electron tests remain.
   Services import it directly; there is no Electron alias or dependency.
 - `src/native/bridge.ts`: JSON pipe protocol to the Swift subprocess.
 - `src/native/Host.swift`: AppKit app lifecycle and host protocol.
+- `src/native/ProjectCell.swift`: sidebar row rendering and native project drag reordering.
 - `src/native/Shell.swift`: sidebar/project actions, split view and column-aligned
   toolbar (sidebar toggle, chat actions, preview controls, Publish).
 - `src/native/Chat.swift` / `src/native/Composer.swift`: native chat and text input.

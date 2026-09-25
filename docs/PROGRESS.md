@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Native sidebar project drag reordering
+
+Register local project-row drags in the native outline with move semantics and
+between-row insertion targets. Send the dragged key and destination key to Bun;
+the workspace controller validates the destination, persists the new order and
+leaves active sessions untouched. Remove Move Up/Down from project menus and the
+bridge action type. Correct README's outdated chat-drag and keyboard claims.
+
+Validation: native build, typechecks, workspace/shell controller and docs-link
+checks passed. Added controller coverage for moving both directions, persistence,
+invalid/no-op destinations and no provider/preview calls. Background native
+integration passed with reduced pointer/animation coverage. Full native testing
+hit the preview text-selection timeout. A separate visible fixture rendered
+correctly, but automated drag gestures did not deliver a drop event; real pointer
+drag verification remains unconfirmed in this environment.
+
 ## 2026-09-25 — Simple sidebar symbols and animal project icons
 
 Open Project now uses a plain folder and New Project a plain plus. Projects

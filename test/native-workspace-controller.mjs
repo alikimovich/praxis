@@ -78,3 +78,21 @@ assert.equal(controller.state.activeKey, '/two')
 assert.equal(JSON.parse(saved).activeKey, '/two')
 assert.equal(renders.at(-1).activeKey, '/two')
 console.log('Native workspace: project/chat commands, stale opening, close during startup, repair chat and persistence passed')
+
+const order = controller.state.projects.map(project => project.key)
+assert.ok(order.length >= 2)
+const activeBeforeReorder = controller.state.activeKey
+const sessionsBeforeReorder = controller.state.projects.map(project => [project.key, [...project.sessionKeys]])
+const serviceCalls = calls.length
+controller.reorderProject(order[0], null)
+assert.deepEqual(controller.state.projects.map(project => project.key), [...order.slice(1), order[0]])
+assert.deepEqual(JSON.parse(saved).projects.map(project => project.key), [...order.slice(1), order[0]])
+controller.reorderProject(order[0], order[1])
+assert.deepEqual(controller.state.projects.map(project => project.key), order)
+const revision = controller.state.revision
+for (const [key, before] of [[order[0], order[0]], ['/missing', null], [order[0], '/missing'], [order[0], order[1]]]) controller.reorderProject(key, before)
+assert.equal(controller.state.revision, revision, 'invalid and unchanged drops are ignored')
+assert.equal(controller.state.activeKey, activeBeforeReorder)
+assert.deepEqual(controller.state.projects.map(project => [project.key, [...project.sessionKeys]]), sessionsBeforeReorder)
+assert.equal(calls.length, serviceCalls, 'reordering must not restart providers or previews')
+console.log('Native project reordering: both directions, persistence, invalid drops and session preservation passed')

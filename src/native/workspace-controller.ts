@@ -30,6 +30,17 @@ export class NativeWorkspaceController {
     this.services.write(JSON.stringify({ projects: this.state.projects, activeKey: this.state.activeKey, recents: this.state.recents }))
     this.services.render(structuredClone(this.state))
   }
+  reorderProject(key: string, before: string | null) {
+    const projects = this.state.projects
+    const from = projects.findIndex(project => project.key === key)
+    if (from < 0 || before === key || (before !== null && !projects.some(project => project.key === before))) return
+    const next = projects.filter(project => project.key !== key)
+    const to = before === null ? next.length : next.findIndex(project => project.key === before)
+    next.splice(to, 0, projects[from])
+    if (next.every((project, index) => project === projects[index])) return
+    this.state.projects = next
+    this.changed()
+  }
   private find(key: string) {
     const entry = this.state.projects.find(p => p.key === key)
     if (!entry || this.closing.has(key)) throw new Error('Project is no longer open')

@@ -60,6 +60,8 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         outline.indentationPerLevel = 0; outline.allowsEmptySelection = true
         outline.dataSource = self; outline.delegate = self
         outline.setAccessibilityLabel("Projects")
+        outline.registerForDraggedTypes([.praxisProject])
+        outline.setDraggingSourceOperationMask(.move, forLocal: true)
         let menu = NSMenu(); menu.delegate = self; outline.menu = menu
         let scroll = ProjectScrollView(); scroll.documentView = outline; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay
         scroll.drawsBackground = false
@@ -451,7 +453,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     }
     private func projectMenu(_ row: ShellRow) -> NSMenu {
         let menu = NSMenu(); menu.autoenablesItems = false
-        for (title, action) in [("Project Memory…", "memory"), ("Move Up", "project-up"), ("Move Down", "project-down"), ("Close Project", "close")] {
+        for (title, action) in [("Project Memory…", "memory"), ("Close Project", "close")] {
             let item = NSMenuItem(title: title, action: #selector(contextAction(_:)), keyEquivalent: "")
             item.target = self; item.representedObject = ["event":"shell-action", "action":action, "id":row.id, "project":row.project]; menu.addItem(item)
         }

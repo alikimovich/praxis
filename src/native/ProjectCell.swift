@@ -123,3 +123,31 @@ final class SidebarProjectButton: NSButton {
         }
     }
 }
+
+extension NSPasteboard.PasteboardType {
+    static let praxisProject = NSPasteboard.PasteboardType("dev.praxis.project-row")
+}
+
+extension NativeShell {
+    func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
+        guard let row = item as? ShellRow, row.kind == "project" else { return nil }
+        let pasteboard = NSPasteboardItem()
+        pasteboard.setString(row.project, forType: .praxisProject)
+        return pasteboard
+    }
+    func outlineView(_ outlineView: NSOutlineView, validateDrop info: NSDraggingInfo, proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
+        guard let source = info.draggingSource as? NSOutlineView, source === outlineView,
+              item == nil, index >= 0, index <= rows.count,
+              let key = info.draggingPasteboard.string(forType: .praxisProject),
+              let from = rows.firstIndex(where: { $0.project == key }),
+              index != from, index != from + 1 else { return [] }
+        return .move
+    }
+    func outlineView(_ outlineView: NSOutlineView, acceptDrop info: NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
+        guard self.outlineView(outlineView, validateDrop: info, proposedItem: item, proposedChildIndex: index) == .move,
+              let key = info.draggingPasteboard.string(forType: .praxisProject) else { return false }
+        emit(["event":"shell-action", "action":"project-reorder", "project":key,
+              "value":index < rows.count ? rows[index].project : ""])
+        return true
+    }
+}

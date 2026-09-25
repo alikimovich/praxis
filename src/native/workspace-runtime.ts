@@ -49,9 +49,9 @@ export function installNativeWorkspace(host: NativeBridge, view: NativeView, sto
     // Outline selection supplies the destination row ID, not a project field.
     const key = action.id?.startsWith('project:') ? action.id.slice(8) : action.project ?? nativeWorkspace.state.activeKey
     if (!key) return
-    if (action.action === 'project-up' || action.action === 'project-down') {
-      const projects = nativeWorkspace.state.projects, index = projects.findIndex(p => p.key === key), next = index + (action.action === 'project-up' ? -1 : 1)
-      if (index >= 0 && next >= 0 && next < projects.length) { [projects[index], projects[next]] = [projects[next], projects[index]]; nativeWorkspace.changed() }; return
+    if (action.action === 'project-reorder') {
+      nativeWorkspace.reorderProject(key, action.value || null)
+      return
     }
     if (action.action === 'new-chat') run({ type: 'new-chat', key })
     else if (action.action === 'select' && action.id?.startsWith('project:')) run({ type: 'select', key })
