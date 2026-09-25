@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Provider preview observation (2026-09-24)
+
+- [x] Wire live preview location and MCP screenshot image results into Codex and custom endpoint sessions.
+
 ## On-demand native chat islands (2026-09-24)
 
 Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).

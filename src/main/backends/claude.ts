@@ -28,7 +28,7 @@ import { defineAgentControls, openAgentControls } from '../control-tools'
 import { fluidClamp, fluidScale } from '../fluid'
 import { recordClaudeModels } from '../model-catalog'
 import { oklchScale } from '../oklch'
-import { capturePreview, getPreviewUrl } from '../preview-state'
+import { observeAgentPreview } from '../preview-observation-tools'
 import { discoverPortableSkills } from '../bundled-skills'
 import { withSkillReferences } from './skill-menu'
 import { praxisRules } from '../rules'
@@ -602,37 +602,13 @@ async function startSession(
         'preview_location',
         "The page/route currently shown in the user's live preview pane.",
         {},
-        async () => {
-          const url = getPreviewUrl()
-          if (!url) return { content: [{ type: 'text', text: 'No project preview is open.' }] }
-          let text = `The preview is currently showing ${url}.`
-          try {
-            const u = new URL(url)
-            text += ` (path: ${u.pathname}${u.search}${u.hash})`
-          } catch {
-            /* non-parseable URL — the full string above is enough */
-          }
-          return { content: [{ type: 'text', text }] }
-        }
+        async () => observeAgentPreview('preview_location')
       ),
       tool(
         'preview_screenshot',
         'A screenshot of exactly what the user sees in their preview pane right now (their route, viewport, simulator included).',
         {},
-        async () => {
-          const img = await capturePreview()
-          if (!img || img.isEmpty()) {
-            return { content: [{ type: 'text', text: 'No project preview is open.' }] }
-          }
-          // Downscale like feedback.ts's captureWindow so the base64 payload
-          // stays reasonable; 1200px keeps UI legible for verification.
-          const { width } = img.getSize()
-          const scaled = width > 1200 ? img.resize({ width: 1200 }) : img
-          const jpeg = scaled.toJPEG(70)
-          return {
-            content: [{ type: 'image', data: jpeg.toString('base64'), mimeType: 'image/jpeg' }]
-          }
-        }
+        async () => observeAgentPreview('preview_screenshot')
       ),
       tool(
         'open_preview',

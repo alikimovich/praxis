@@ -1,3 +1,4 @@
+import { observeAgentPreview } from '../preview-observation-tools'
 import { runContentControlTool } from '../content-control-tools'
 import { runProjectUiTool } from '../project-ui'
 import { openAgentPreview } from '../preview-tools'
@@ -243,6 +244,8 @@ async function startSession(
     praxisTools = await registerPraxisAgentTools(async (action, args) => {
       const notify = (channel: string, payload: unknown): void =>
         sendToRenderer(getWindow, channel, payload)
+      if (action === 'preview_location' || action === 'preview_screenshot')
+        return observeAgentPreview(action)
       if (action === 'project_ui_catalog' || action === 'compose_project_ui')
         return runProjectUiTool(root, emitKey, action, args, options.connectionId)
       if (action === 'content_controls')
@@ -296,7 +299,7 @@ async function startSession(
           // The MCP helper is relative to the compiled Bun entry in out/native.
           args: [join(__dirname, '../../bin/praxis-agent-mcp.mjs')],
           // Match Claude's allowlist for validated source reveal and control registration.
-          tools: { content_controls: { approval_mode: 'approve' }, project_ui_catalog: { approval_mode: 'approve' }, compose_project_ui: { approval_mode: 'approve' }, open_preview: { approval_mode: 'approve' }, open_code: { approval_mode: 'approve' }, define_controls: { approval_mode: 'approve' } },
+          tools: { preview_location: { approval_mode: 'approve' }, preview_screenshot: { approval_mode: 'approve' }, content_controls: { approval_mode: 'approve' }, project_ui_catalog: { approval_mode: 'approve' }, compose_project_ui: { approval_mode: 'approve' }, open_preview: { approval_mode: 'approve' }, open_code: { approval_mode: 'approve' }, define_controls: { approval_mode: 'approve' } },
           env: {
             PRAXIS_AGENT_TOOL_SOCKET: praxisTools.socketPath,
             PRAXIS_AGENT_TOOL_TOKEN: praxisTools.token
@@ -501,10 +504,10 @@ async function startSession(
     key,
     root,
     options,
-    // Codex CLI is text-only here; images (paste/drop) are ignored for now.
+    // Composer image attachments are not wired yet; MCP screenshot results are images.
     send: (text, _images) => {
       const prompt = firstTurn
-        ? `${praxisRules({ controlTools: true, workspaceTools: !ctx?.sessionId, projectMemory: ctx?.projectMemory })}\n\n---\n\n${text}`
+        ? `${praxisRules({ previewObservationTools: true, controlTools: true, workspaceTools: !ctx?.sessionId, projectMemory: ctx?.projectMemory })}\n\n---\n\n${text}`
         : text
       firstTurn = false
       chain = chain.then(() => runTurn(prompt))

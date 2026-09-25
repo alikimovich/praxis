@@ -10,7 +10,7 @@ capabilities instead of assuming Claude, Codex, gateways, and Gemini are interch
 | Repository instruction discovery | `CLAUDE.md` + Claude skills | Codex-native instructions + Praxis rules | Same as Codex | Limited |
 | Skills menu before the first turn | Yes | Yes | Yes, through Codex | Yes |
 | Provider-native coding tools | Yes | Yes | Depends on model through Codex | Limited |
-| Praxis preview MCP tools | Yes | No | No | No |
+| Praxis preview location/screenshots | Yes | Yes | Yes, image support depends on endpoint | No |
 | Register custom controls / open desktop inspector | Yes | Yes | Yes, through Codex | No |
 | Open mini code editor / highlight exact source | Yes | Yes | Yes, through Codex | No |
 | Praxis worktree control tools | No | Yes | Yes, through Codex | No |
@@ -31,7 +31,8 @@ does not expose raw Git or discard/reset operations. The same bridge now exposes
 Registration validates anchors in the agent worktree and saves the manifest on the
 live root. Opening is scoped to the active project, uses real preview selection,
 and retries after landing; ambiguous file matches require an exact source stamp.
-Preview observation/calculator tools remain Claude-only;
+Preview location and screenshot tools share the native capture implementation across
+Claude and Codex; screenshots are returned as MCP image content. Design calculators remain Claude-only;
 question cards, resume, image transport, and background-agent support are separately
 declared because they have different lifecycle and security requirements.
 
@@ -50,7 +51,8 @@ The rail always shows the harness/model the child actually received.
 Until capability negotiation exists in `src/shared/api.ts`, the product should avoid
 promising unsupported actions in backend-agnostic copy. Open-model connections inherit
 the Codex harness's strengths and gaps; changing the model id does not grant Claude's
-in-process preview/design tools. It does retain the two Praxis worktree-control tools
+design calculators. Preview observation is available through the shared MCP bridge,
+but image understanding depends on the endpoint model. It also retains Praxis worktree-control tools
 because those belong to the harness, not the selected endpoint model.
 
 ## Required browser verification
@@ -61,6 +63,11 @@ environment and use it when available. Responsive/layout checks cover phone,
 tablet, and desktop viewports, with screenshots and interaction checks. Each task
 uses its own named browser session. Missing CLI/browser support is reported;
 installation requires user permission. An explicit user tool choice takes priority.
+
+Preview observation is on demand and shows the current user view, not necessarily
+the calling chat’s private worktree. Codex screenshot tool output is separate from
+composer image attachments, which remain unwired. Restart existing provider sessions
+to pick up the new tool configuration and instructions.
 
 This is prompt-level enforcement, not a runtime tool-call gate. Existing sessions
 need to be recreated to receive updated rules. A preview still serving code from

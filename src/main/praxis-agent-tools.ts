@@ -11,6 +11,8 @@ export type PraxisAgentToolAction =
   | 'open_controls'
   | 'open_code'
   | 'open_preview'
+  | 'preview_location'
+  | 'preview_screenshot'
   | 'project_ui_catalog'
   | 'compose_project_ui'
 
@@ -78,6 +80,8 @@ async function startServer(): Promise<string> {
           parsed.action !== 'open_controls' &&
           parsed.action !== 'open_code' &&
           parsed.action !== 'open_preview' &&
+          parsed.action !== 'preview_location' &&
+          parsed.action !== 'preview_screenshot' &&
           parsed.action !== 'project_ui_catalog' &&
           parsed.action !== 'compose_project_ui'
         ) {

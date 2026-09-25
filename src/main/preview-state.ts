@@ -5,7 +5,7 @@ import type { NativeImage } from '../native/platform'
  * state without importing `index.ts` (which owns the `NativeView`) — that
  * would be a cycle, since `index.ts` already pulls in the agent/backends. The
  * preview owner registers a source once (see `registerPreviewIpc` in
- * `index.ts`); the in-process `praxis` SDK tools (backends/claude.ts) read it.
+ * `index.ts`); the shared Claude/Codex preview observation tools read it.
  *
  * Both accessors are null/absent-safe: before a source registers (or when no
  * preview is open) they report "nothing to see" rather than throwing.

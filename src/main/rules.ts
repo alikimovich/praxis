@@ -8,8 +8,8 @@
  * - Claude — appended to the `claude_code` preset (`systemPrompt.append`), with
  *   `{ previewTools: true }` so it learns the in-process `preview_*` SDK tools.
  * - Codex / Gemini (subprocess, no system-prompt arg) — prepended to the first
- *   turn's prompt, WITHOUT previewTools (those tools are Claude-only). Codex
- *   separately opts into workspaceTools for its local Praxis MCP bridge; Gemini
+ *   turn's prompt. Codex opts into previewObservationTools, controlTools and
+ *   workspaceTools for its local Praxis MCP bridge; Gemini
  *   must not see either section because it cannot call them.
  *
  * Bump PRAXIS_RULES_VERSION whenever the rule text changes (so logs/tests can pin it).
@@ -17,10 +17,11 @@
 import { ANIMATION_CONTROLS_SKILL, SURFACE_CONTROLS_SKILL } from './bundled-skills'
 import { projectMemoryRules } from './project-memory'
 
-export const PRAXIS_RULES_VERSION = 19
+export const PRAXIS_RULES_VERSION = 20
 
 export function praxisRules(opts?: {
   previewTools?: boolean
+  previewObservationTools?: boolean
   workspaceTools?: boolean
   controlTools?: boolean
   projectMemory?: string
@@ -115,7 +116,7 @@ export function praxisRules(opts?: {
 
   lines.push(...projectMemoryRules(opts?.projectMemory ?? ''))
 
-  if (opts?.previewTools) {
+  if (opts?.previewTools || opts?.previewObservationTools) {
     lines.push(
       ``,
       `## Seeing the user's preview`,

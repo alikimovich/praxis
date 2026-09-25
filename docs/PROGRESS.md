@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Codex live preview observation
+
+Added preview_location and preview_screenshot to the session-scoped Codex MCP
+bridge, including custom endpoint sessions. The stdio helper preserves MCP image
+content rather than wrapping screenshots in JSON text. Claude and Codex now share
+one native preview observation helper, with safe unavailable/empty capture results.
+Codex receives observer instructions without advertising Claude-only calculators.
+
+Validation: real Bun MCP subprocess/socket test passed for tool discovery, route
+query/hash, JPEG content transport, capture failure/absence, and token isolation.
+Rules, native boundary, Codex streaming, docs links and backend/preview/native
+typechecks and the native build passed. No live provider calls were run; custom endpoints still need
+image-capable models. Existing sessions must restart to load new tools/rules.
+
+
 ## 2026-09-24 — Retire Electron and audit unused application code
 
 Made Swift/AppKit/SwiftUI + Bun the default and only application runtime. Removed

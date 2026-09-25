@@ -86,6 +86,10 @@ Praxis **owns** target dev-server lifetimes: never run the target's `dev` manual
 The app kills managed servers on quit and terminal shutdown. Swift edits require
 rebuild/restart; the user's project retains its own HMR.
 
+Claude and Codex share on-demand preview location/screenshot observation. The Codex
+MCP helper must preserve screenshot image content, not JSON-stringify it. These
+observe the current user view; they do not prove private worktree edits have landed.
+
 Provider SDKs remain in process in Bun. Source editing still uses JavaScript
 parsers (TypeScript/Babel/React Docgen/Svelte/parse5); React-related names do not
 imply a remaining application renderer. React/React DOM are development-only

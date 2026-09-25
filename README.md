@@ -89,6 +89,11 @@ GitHub PR.
   and select a surface to edit it with the existing inspector. **Back to page**
   returns to the running screen. See [3D inspection](docs/THREE_D.md) for controls
   and first-version rendering limits.
+- **Preview observation.** Claude and Codex can request the current preview route
+  and a screenshot. Codex-based custom endpoints expose the same tools; viewing
+  screenshots requires an image-capable model. Browser interaction and responsive
+  checks use agent-browser when available.
+
 - **Controls from chat.** Ask Claude, Codex, or a custom-endpoint model to surface
   animation controls in the desktop preview. It can select the object and open
   Props, Styles, or Custom directly. Custom controls include numeric scrubbing,

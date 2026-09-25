@@ -124,6 +124,18 @@ server.registerTool(
   async (args) => result(await invoke('open_preview', args))
 )
 
+// Observation results already contain MCP content blocks. Preserve images as images.
+for (const [name, description] of [
+  ['preview_location', "Read the page/route currently shown in the user's live preview pane."],
+  ['preview_screenshot', "Capture exactly what the user sees in their preview pane right now. Observes the current view; does not confirm private worktree edits have landed."]
+]) {
+  server.registerTool(name, {
+    description,
+    inputSchema: {},
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
+  }, async () => invoke(name))
+}
+
 server.registerTool('project_ui_catalog', {
   description: 'Discover exported React components, literal props and styles for UI composition. Requires Use project components enabled.',
   annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
