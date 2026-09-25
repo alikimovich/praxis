@@ -1,3 +1,4 @@
+import { installNativeInspector } from './inspector-runtime'
 import { NativeLayersController } from './layers-controller'
 import { agentOptionsFor } from '../shared/chat-settings'
 import { NativeEditorController } from './editor-controller'
@@ -401,6 +402,7 @@ async function main() {
     if (channel === 'agent:close-project') contextController.projects.delete(args[0])
   })
   ipcMain.on('native-context:selection', (event, value) => { if (event.sender === mainView.webContents) contextController.selection(value) })
+  const inspectorController = installNativeInspector(host!, workspaceController, chatController, contextController, visualEdit, openSource, error => activityController.append(String(error), 'error'))
   const sheetController = new NativeSheetController(host!, workspaceController, chatController)
   const gitController = new NativeGitController(sheetController, activityController, preferences, renderShell)
   shellController = new NativeShellController(workspaceController, chatController, gitController, preferences,

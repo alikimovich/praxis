@@ -425,6 +425,7 @@ export default function App(): React.JSX.Element {
       useSelection.getState().setCommentMode(m)
     )
     const offComment = window.api.preview.onComment((c: PreviewComment) => {
+      if (window.praxisNativeShell) return
       if (c.kind === 'comment') {
         // The element ref is page-derived (sanitized in describeSelectionForPrompt);
         // the comment is the user's own text — cap it so it can't bloat the prompt.
@@ -714,6 +715,7 @@ export default function App(): React.JSX.Element {
   useEffect(
     () =>
       window.api.preview.onTextEdit((edit) => {
+        if (window.praxisNativeShell) return
         const root = useSession.getState().projectRoot
         if (!root) return
         const fallbackPrompt = `In ${edit.source}, change only the selected element's text to “${edit.text}”. Make the smallest source edit needed.`
@@ -2228,7 +2230,7 @@ export default function App(): React.JSX.Element {
               </div>
               <div className={`previewcard__body ${status.kind === 'error' ? 'previewcard__body--errored' : ''}`}>
                 <PreviewPane />
-                {projectRoot && <AnimationPanel key={projectRoot} root={projectRoot} />}
+                {!window.praxisNativeShell && projectRoot && <AnimationPanel key={projectRoot} root={projectRoot} />}
                 {drawerSource && projectRoot && (
                   <CodeDrawer
                     root={projectRoot}
@@ -2302,7 +2304,7 @@ export default function App(): React.JSX.Element {
           preview (native view above it, driven by PanelHost): editable fields
           when a schema resolved, the readiness message otherwise. Collapsible
           to a chip inside the island itself. */}
-      {selected && projectRoot && propsIslandOpen && (
+      {!window.praxisNativeShell && selected && projectRoot && propsIslandOpen && (
         <PanelHost
           root={projectRoot}
           element={selected}

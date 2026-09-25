@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Native visual inspector and content forms
+
+Selection now opens SwiftUI property/style/custom controls without a property
+WebView. Shared CSS metadata and control prompts are extracted from React. Native
+controls include sliders, color/token pickers, Bézier handles, literal/prop/style
+writes, reset and animation replay. Bun routes inline text, comments and annotation
+creation directly. Recipe-driven native content windows preserve drafts, extra
+JSON fields, collection IDs/order, and revision-checked saves. The pure recipe
+validator is bundled because its package export cannot be required from CJS.
+
+Validation: inspector targeting/token/schema/stale-action tests, recipe validation
+and save-conflict tests, shared CSS tests, all typechecks and native background
+integration passed. The integration verifies no property WebView is created.
+Foreground controls/scrubbing and full content-form visual checks remain pending.
+The main React view/build are the next removal step.
+
 ## 2026-09-24 — AppKit source editing and layers
 
 Native source editing now uses NSTextView with line numbers, native find/replace,

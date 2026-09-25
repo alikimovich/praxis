@@ -45,8 +45,10 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var welcome: NativeWelcome!
     var previewStatus: NativePreviewStatus!
     var sheets: NativeSheets!
+    let editingInspector = NativeEditingInspector()
     let layers = NativeLayers()
     let activity = NativeActivity()
+    var contentWindows: [String: NativeContentWindow] = [:]
     var sourceEditors: [String: NativeSourceEditor] = [:]
     var sourceRoot = ""
     var dockedSource: NativeSourceEditor? { sourceEditors[sourceRoot].flatMap { $0.state["visible"] as? Bool == true && $0.state["popped"] as? Bool != true ? $0 : nil } }
@@ -111,6 +113,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         shell.updatePreviewColor(views["preview"]!.underPageBackgroundColor)
         previewSurface.leading = { [weak self] in self?.shell.previewLeading ?? 0 }
         previewStatus = NativePreviewStatus(); canvas.addSubview(previewStatus)
+        canvas.addSubview(editingInspector)
         canvas.addSubview(layers)
         chatColumn.wantsLayer = true; chatColumn.layer?.masksToBounds = true; canvas.addSubview(chatColumn)
         chat = NativeChat(); chatColumn.addSubview(chat)
@@ -153,7 +156,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         }
         let find = NSMenuItem(title: "Find…", action: #selector(NSTextView.performFindPanelAction(_:)), keyEquivalent: "f"); find.tag = NSTextFinder.Action.showFindInterface.rawValue; edit.addItem(find)
         let actions = submenu("Actions")
-        for (label, key, action) in [("Reload Preview", "r", "reload"), ("Toggle Logs", "l", "logs"), ("Toggle UI", ".", "toggle-chat"), ("Diagnose Preview…", "", "diagnose"), ("Send Feedback…", "", "feedback")] {
+        for (label, key, action) in [("Reload Preview", "r", "reload"), ("Toggle Logs", "l", "logs"), ("Toggle UI", ".", "toggle-chat"), ("Content Editors", "", "content"), ("Diagnose Preview…", "", "diagnose"), ("Send Feedback…", "", "feedback")] {
             let item = NSMenuItem(title: label, action: #selector(menuAction(_:)), keyEquivalent: key); item.target = self; item.representedObject = action; actions.addItem(item)
         }
         let develop = submenu("Develop")
@@ -188,6 +191,12 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "layoutPanels": nativeLayout.panels = c["panels"] as? [String: Double] ?? [:]; nativeLayout.layout()
         case "layoutWidth": nativeLayout.desiredWidth = CGFloat(c["width"] as? Double ?? 440); nativeLayout.layout()
         case "layoutInspect": reply(id, nativeLayout.inspect())
+        case "contentState":
+            let key = c["documentID"] as? String ?? "", controller = contentWindows[c["documentID"] as? String ?? ""] ?? NativeContentWindow(id: c["documentID"] as? String ?? "")
+            contentWindows[key] = controller; controller.update(c["state"] as? [String: Any] ?? [:])
+        case "inspectorState": editingInspector.update(c["state"] as? [String: Any] ?? [:]); nativeLayout.layout()
+        case "inspectorInspect": reply(id, ["native":true, "visible":!editingInspector.isHidden, "fields":editingInspector.model.state?.fields.count ?? 0, "generation":editingInspector.model.state?.generation ?? 0])
+        case "inspectorPerform": guard ephemeral else { return }; emit((c["action"] as? [String: Any] ?? [:]).merging(["event":"inspector-action"]) { _, new in new }); reply(id)
         case "layersState": layers.update(c["state"] as? [String: Any] ?? [:]); nativeLayout.layout()
         case "layersInspect": reply(id, ["native":true, "visible":!layers.isHidden, "count":layers.nodes.count])
         case "sourceActive":

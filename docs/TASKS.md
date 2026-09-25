@@ -34,6 +34,8 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
   - [x] Native feedback attachments and propose-first diagnosis/retry sheets.
 - [ ] Native migration 5: native layers, properties, styles/tokens and editing controls.
   - [x] Native layers tree, preview hover/selection and source-backed reorder routing.
+  - [x] Native property/style/token/custom controls and recipe-driven content windows.
+  - [ ] Foreground editing/scrubbing, animation and content-form verification.
 - [ ] Native migration 6: native source editor and remaining chat/sidebar parity.
   - [x] AppKit source editor, scoped drafts/conflict-safe saves, file operations and reusable pop-out.
   - [ ] Foreground editor input/search/navigation/large-file and chat parity validation.

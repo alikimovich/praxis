@@ -20,6 +20,7 @@ writeFileSync(join(out, 'device.png'), Buffer.from(device.split(',')[1], 'base64
 const alias = (file) => ({
   name: 'praxis-native-transport',
   setup(build) {
+    build.onResolve({ filter: /^@alikimovich\/content-controls\/recipe$/ }, () => ({ path: join(root, 'node_modules/@alikimovich/content-controls/dist/recipe.js') }))
     build.onResolve({ filter: /^electron$/ }, () => ({ path: join(root, 'src/native', file) }))
   }
 })
@@ -96,6 +97,8 @@ const result = Bun.spawnSync(
     join(root, 'src/native/Activity.swift'),
     join(root, 'src/native/SourceEditor.swift'),
     join(root, 'src/native/Layers.swift'),
+    join(root, 'src/native/EditingInspector.swift'),
+    join(root, 'src/native/ContentWindow.swift'),
     join(root, 'src/native/WorkspaceLayout.swift'),
     join(root, 'src/native/PreviewStatus.swift'),
     join(root, 'src/native/ChatDivider.swift'),

@@ -84,9 +84,10 @@ final class WorkspaceLayout {
         dividerState["bounds"] = ["x":0, "y":0, "width":Double(leading), "height":Double(bounds.height)]
         host.chatDivider.update(dividerState)
         host.chatDivider.isHidden = host.chat.isHidden || fraction < 1
-        let right = min(max(0, panels["right"] ?? 0), max(0, bounds.width - leading - 120))
+        let right: CGFloat = host.editingInspector.isHidden ? 0 : min(300, max(200, bounds.width - leading - 120))
         let bottom = host.dockedSource != nil ? min(380, bounds.height * 0.65) : 0
         host.dockedSource?.frame = NSRect(x: leading, y: bounds.height - bottom, width: max(0, bounds.width - leading), height: bottom)
+        host.editingInspector.frame = NSRect(x: bounds.width - right, y: 0, width: right, height: max(0, bounds.height - bottom))
         let available = NSRect(x: leading, y: 0, width: max(0, bounds.width - leading - right), height: max(0, bounds.height - bottom))
         host.previewStatus.frame = available
         var page = available

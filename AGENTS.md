@@ -100,7 +100,9 @@ through `src/native/chat-controller.ts`; React ChatPanel is not mounted in nativ
 SwiftUI also owns startup/empty workspace UI and the animated pixel cat; AppKit
 owns chat divider input and view geometry through `src/native/WorkspaceLayout.swift`.
 AppKit source editing (`src/native/SourceEditor.swift`) and layers (`src/native/Layers.swift`)
-use direct Bun controllers. The main WebKit view still supplies remaining property/custom/content panels. `src/native/Sheets.swift` renders native New Project, memory,
+use direct Bun controllers. SwiftUI also owns the property/style/custom inspector and
+recipe-driven content windows. The main WebKit view remains only as a transitional
+compatibility client pending startup/build removal. `src/native/Sheets.swift` renders native New Project, memory,
 Settings and provider forms; Bun sheet controllers own their service operations.
 See `docs/NATIVE.md`.
 

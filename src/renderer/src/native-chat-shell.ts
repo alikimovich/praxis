@@ -61,15 +61,6 @@ export function connectNativeChat(bridge: NativeChatBridge) {
     if (value.seed != null) { useComposer.getState().setSeed(null); bridge.command({ type: 'seed', chat, text: value.seed }) }
     if (value.submit != null) { useComposer.getState().setSubmit(null); bridge.command({ type: 'submit', chat, text: value.submit }) }
   }))
-  subscriptions.push(window.api.preview.onToolbarAction(kind => {
-    const selected = useSelection.getState().selected
-    if (!selected) return
-    if (kind === 'delete') bridge.command({ type: 'submit', chat: useChat.getState().activeKey, text: 'Delete the selected element(s) from the source. Remove wrappers, imports, and styles that exist only for them.' })
-    else if (kind === 'code' && selected.source) {
-      const drawer = useCodeDrawer.getState()
-      if (drawer.source === selected.source) drawer.close(); else drawer.open(selected.source)
-    } else if (kind === 'props') usePropsIsland.getState().setOpen(!usePropsIsland.getState().open)
-  }))
   bridge.command({ type: 'attach' })
   return () => subscriptions.forEach(off => off())
 }
