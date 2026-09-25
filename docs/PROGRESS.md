@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Clean exit for unsupported host launches
+
+The reported crash came from the disposable /tmp/Praxis Sidebar Check.app visual
+fixture launched without Bun arguments. Replace the startup fatalError with a
+clear stderr message and exit code 64, preventing a Swift trap and Crash Reporter
+popup. Remove the inactive disposable app. Normal Bun-launched startup is unchanged.
+
+Validation: typechecks, native boundary and docs-link checks, native build and
+background integration passed (reduced pointer/animation coverage). Native runtime
+now checks zero- and one-argument direct launches: both exit 64, no signal, with
+the expected message. Full integration later hit the known preview style-edit
+timeout; direct-launch regression checks passed independently of that failure.
+
 ## 2026-09-25 — Reload the current preview page
 
 Route Reload Preview / Command-R to WKWebView.reload() instead of loading the

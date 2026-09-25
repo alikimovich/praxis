@@ -454,7 +454,10 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
-guard CommandLine.arguments.count >= 3 else { fatalError("Launch through bun run dev:native") }
+guard CommandLine.arguments.count >= 3 else {
+    fputs("PraxisHost requires the Bun service launcher. Start Praxis with bun run dev:native.\n", stderr)
+    exit(64)
+}
 let application = NSApplication.shared
 let host = Host(directory: CommandLine.arguments[1], ephemeral: CommandLine.arguments[2] == "ephemeral")
 application.setActivationPolicy(.regular); application.delegate = host; application.run()
