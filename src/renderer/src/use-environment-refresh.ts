@@ -12,6 +12,7 @@ export function useEnvironmentRefresh(restart: (install: boolean) => Promise<voi
   useEffect(
     () =>
       window.api.agent.onEvent((event) => {
+        if (window.praxisNativeWorkspace) return
         const files =
           event.type === 'isolation' && event.state === 'merged'
             ? event.files
@@ -33,6 +34,7 @@ export function useEnvironmentRefresh(restart: (install: boolean) => Promise<voi
     []
   )
   useEffect(() => {
+    if (window.praxisNativeWorkspace) return
     const project = projects.find((entry) => entry.root === root)
     if (!project?.environmentRevision || busy.current) return
     busy.current = true

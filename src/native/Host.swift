@@ -108,7 +108,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         chatDivider = NativeChatDivider(); chatDivider.isHidden = true; canvas.addSubview(chatDivider)
         chatDivider.changed = { width in emit(["event":"shell-action", "action":"chat-resize", "value":String(Double(width))]) }
         welcome = NativeWelcome(); welcome.frame = canvas.bounds; canvas.addSubview(welcome)
-        sheets = NativeSheets(parent: window)
+        sheets = NativeSheets(parent: window); activity.parent = window
         window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
         installMenus()
         DispatchQueue.global().async { [weak self] in
@@ -140,7 +140,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             edit.addItem(withTitle: label, action: Selector(selector), keyEquivalent: key)
         }
         let actions = submenu("Actions")
-        for (label, key, action) in [("Reload Preview", "r", "reload"), ("Toggle Logs", "l", "logs"), ("Toggle UI", ".", "toggle-chat")] {
+        for (label, key, action) in [("Reload Preview", "r", "reload"), ("Toggle Logs", "l", "logs"), ("Toggle UI", ".", "toggle-chat"), ("Diagnose Preview…", "", "diagnose"), ("Send Feedback…", "", "feedback")] {
             let item = NSMenuItem(title: label, action: #selector(menuAction(_:)), keyEquivalent: key); item.target = self; item.representedObject = action; actions.addItem(item)
         }
         let develop = submenu("Develop")
@@ -212,6 +212,16 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "shellInspect": reply(id, shell.inspect())
         case "previewSurfaceInspect": reply(id, previewSurface.inspect())
         case "shellPerform": reply(id, shell.perform(c["action"] as? String ?? "", id: c["row"] as? String))
+        case "captureFeedback":
+            let content = window.contentView?.superview ?? shell.split.view
+            guard let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { reply(id, NSNull()); return }
+            content.cacheDisplay(in: content.bounds, to: bitmap)
+            let image = NSImage(size: content.bounds.size); image.addRepresentation(bitmap)
+            let size = NSSize(width: 900, height: 900 * content.bounds.height / max(1, content.bounds.width))
+            let scaled = NSImage(size: size)
+            scaled.lockFocus(); image.draw(in: NSRect(origin: .zero, size: size)); scaled.unlockFocus()
+            if let tiff = scaled.tiffRepresentation, let result = NSBitmapImageRep(data: tiff)?.representation(using: .jpeg, properties: [.compressionFactor:0.6]) { reply(id, "data:image/jpeg;base64," + result.base64EncodedString()) }
+            else { reply(id, NSNull()) }
         case "captureShell":
             let content = window.contentView?.superview ?? shell.split.view
             guard let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { reply(id, error: "Shell capture unavailable"); return }

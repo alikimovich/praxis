@@ -251,6 +251,7 @@ export default function App(): React.JSX.Element {
   // Rename / switch the working branch (name is coerced to praxis/<…> in main).
   const changeBranch = async (name: string): Promise<void> => {
     setEditingBranch(false)
+    if (window.praxisNativeGit) { window.praxisNativeGit.action('new-branch', name); return }
     const root = useSession.getState().projectRoot
     if (!root || !name.trim() || name.trim() === branch) return
     const res = await window.api.git.set(root, name.trim())
@@ -285,6 +286,7 @@ export default function App(): React.JSX.Element {
   }
   // Check out an EXISTING branch by exact name (the dropdown) — no praxis/ coercion.
   const switchToBranch = async (b: string): Promise<void> => {
+    if (window.praxisNativeGit) { window.praxisNativeGit.action('branch', b); return }
     const root = useSession.getState().projectRoot
     if (!root || b === branch) return
     setSelected(null)
@@ -772,6 +774,7 @@ export default function App(): React.JSX.Element {
 
   // Propose-first: on a failure, recall a cached fix or ask the AI, then show a card.
   const proposeFix = (root: string, error: string, context: string): void => {
+    if (window.praxisNativeSheets) { window.praxisNativeSheets.open('diagnose'); return }
     diagRoot.current = root
     const d = useDiagnosis.getState()
     d.setCurrent(null)
@@ -1124,6 +1127,7 @@ export default function App(): React.JSX.Element {
   // Main builds the commit/PR/merge description from the actual branch commits
   // and changed files. Chat is deliberately not sent as PR copy.
   const publish = async (): Promise<void> => {
+    if (window.praxisNativeGit) { window.praxisNativeGit.action('publish'); return }
     const root = useSession.getState().projectRoot
     if (!root || publishing) return
     setPublishing(true)
@@ -1571,6 +1575,7 @@ export default function App(): React.JSX.Element {
   // won't apply the new source-stamping plugin). The post-restart readiness report
   // is what verifies the stamps actually fired (see the readiness effect).
   const restartPreview = async (installDependencies = false): Promise<void> => {
+    if (window.praxisNativeWorkspace && useWorkspace.getState().activeKey) { await window.praxisNativeWorkspace.command({ type: 'restart', key: useWorkspace.getState().activeKey! }); return }
     let spec = launchSpec.current
     if (!spec) {
       const project = useWorkspace.getState().projects.find(

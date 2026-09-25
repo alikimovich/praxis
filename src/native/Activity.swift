@@ -1,11 +1,12 @@
 import AppKit
 
 final class NativeActivity: NSObject, NSWindowDelegate {
+    weak var parent: NSWindow?
     var window: NSWindow?
     let text = NSTextView()
     var count = 0
     func update(_ state: [String: Any]) {
-        guard state["visible"] as? Bool == true else { window?.orderOut(nil); return }
+        guard state["visible"] as? Bool == true else { let wasVisible = window?.isVisible == true; window?.orderOut(nil); if wasVisible { parent?.makeKeyAndOrderFront(nil) }; return }
         if window == nil {
             let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 420), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
             panel.title = "Activity"; panel.isReleasedWhenClosed = false; panel.delegate = self

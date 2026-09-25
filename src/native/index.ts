@@ -33,6 +33,10 @@ import { parsePreferredModelState, resolvePreferredSettings } from '../shared/pr
 import { nativePreferences } from './preferences'
 import { workspaceStorage } from './workspace'
 import { installNativeChat } from './chat-runtime'
+import { NativeSupportSheets } from './support-sheets'
+import { NativeGitController } from './git-controller'
+import { environmentChanges } from '../shared/environment-changes'
+import type { NativeShellState } from '../shared/native-shell'
 import { NativeContextController } from './context-controller'
 import { NativeReviewController } from './review-controller'
 import { NativeActivityController } from './activity-controller'
@@ -165,7 +169,7 @@ async function main() {
       const incoming = JSON.parse(raw)
       for (const patch of incoming.projects ?? []) {
         const entry = workspaceController.state.projects.find(p => p.key === patch.key)
-        if (entry) for (const field of ['viewport', 'branch', 'environmentRevision', 'dependenciesPending', 'chatSettings'] as const) {
+        if (entry) for (const field of ['viewport', 'chatSettings'] as const) {
           if (patch[field] !== undefined) (entry as any)[field] = patch[field]
         }
       }
@@ -309,11 +313,13 @@ async function main() {
       host!.send('mediaReply', { task, status: 404, data: '' })
     }
   })
-  host.on('menu', ({ action }) => { if (!['open-project', 'new-project', 'settings', 'logs'].includes(action)) send('menu:action', action) })
+  host.on('menu', ({ action }) => { if (!['open-project', 'new-project', 'settings', 'logs', 'feedback', 'diagnose'].includes(action)) send('menu:action', action) })
+  let lastShellState: NativeShellState | null = null
+  const renderShell = () => { if (lastShellState) host!.send('shellState', { state: gitController.decorate(lastShellState) }) }
   ipcMain.on('native-shell:state', (event, state) => {
-    if (event.sender === mainView.webContents) host!.send('shellState', { state })
+    if (event.sender === mainView.webContents) { lastShellState = state; renderShell() }
   })
-  host.on('shell-action', action => { if (!workspaceOwnsAction(action) && action.action !== 'memory' && !(action.action === 'select' && action.id?.startsWith('history:'))) send('native-shell:action', action) })
+  host.on('shell-action', action => { if (!workspaceOwnsAction(action) && !['memory', 'branch', 'new-branch', 'git-updates', 'publish', 'publish-mode'].includes(action.action) && !(action.action === 'select' && action.id?.startsWith('history:'))) send('native-shell:action', action) })
   const activityController = new NativeActivityController((method, data) => host!.send(method, data))
   host.on('activity-action', ({ action }) => activityController.action(action))
   host.on('menu', ({ action }) => { if (action === 'logs') activityController.action('toggle') })
@@ -335,6 +341,11 @@ async function main() {
   serviceEvents.on('event', (channel, value) => {
     if (channel === 'preview:element-picked') contextController.selection(value)
     else if (channel === 'preview:readiness') contextController.readiness(value)
+    else if (channel === 'agent:event') {
+      const files = value.type === 'isolation' && value.state === 'merged' ? value.files : value.type === 'spawn-finished' && value.outcome === 'applied' ? value.files : undefined
+      const entry = workspaceController.state.projects.find(p => p.key === value.projectKey || p.sessionKeys.includes(value.projectKey))
+      if (files && entry && (environmentChanges(files).restart || !entry.url)) void workspaceController.refreshEnvironment(entry.key, files).catch(error => activityController.append(String(error), 'error'))
+    }
   })
   serviceEvents.on('command', (channel, args, result) => {
     if (channel === 'agent:spawn-comment' && result?.ok) contextController.queued(args[2], result.spawnId, args[1].slice(0, 70), !!result.queued)
@@ -343,17 +354,35 @@ async function main() {
   })
   ipcMain.on('native-context:selection', (event, value) => { if (event.sender === mainView.webContents) contextController.selection(value) })
   const sheetController = new NativeSheetController(host!, workspaceController, chatController)
+  const gitController = new NativeGitController(sheetController, activityController, preferences, renderShell)
+  const activateContext = workspaceController.services.activate
+  workspaceController.services.activate = async entry => { await activateContext(entry); if (entry) void gitController.refresh(entry.root).catch(error => activityController.append(String(error), 'error')) }
+  host.on('shell-action', action => {
+    const key = action.project ?? workspaceController.state.activeKey
+    if (action.action === 'publish-mode') { gitController.setMode(action.value); refreshPreferences(); return }
+    if (!key) return
+    const operation = action.action === 'branch' ? gitController.branch(key, action.value ?? '') : action.action === 'new-branch' ? gitController.branch(key, action.value ?? '', true) : action.action === 'publish' ? gitController.publish(key) : action.action === 'git-updates' ? gitController.updates(key) : null
+    void operation?.catch(error => activityController.append(String(error), 'error'))
+  })
+  ipcMain.on('native-git:action', (event, action) => {
+    if (event.sender !== mainView.webContents) return
+    if (action.action === 'connect' && workspaceController.state.activeKey) void gitController.connect(workspaceController.state.activeKey).catch(error => activityController.append(String(error), 'error'))
+    else if (['publish', 'branch', 'new-branch', 'git-updates'].includes(action.action)) host!.emit('shell-action', action)
+  })
+  const supportSheets = new NativeSupportSheets(sheetController, () => host!.request('captureFeedback'), url => shell.openExternal(url))
   const reviewController = new NativeReviewController(sheetController, url => shell.openExternal(url))
   const settingsController = new NativeSettingsController(sheetController, preferences, refreshPreferences)
   host.on('sheet-action', action => { void sheetController.action(action) })
   const openSheet = (kind: string, key?: string) => {
     if (sheetController.current?.state.busy) return
     if (kind === 'settings') void settingsController.open().catch(error => workspaceController.reportError(error))
+    else if (kind === 'feedback') void supportSheets.feedback().catch(error => activityController.append(String(error), 'error'))
+    else if (kind === 'diagnose' && workspaceController.state.activeKey) supportSheets.diagnose(workspaceController.state.activeKey)
     else if (kind === 'review' && key) void reviewController.open(key).catch(error => workspaceController.reportError(error))
     else if (kind === 'new-project') sheetController.newProject()
     else if (kind === 'memory' && key) void sheetController.memory(key).catch(error => workspaceController.reportError(error))
   }
-  host.on('menu', ({ action }) => { if (['new-project', 'settings'].includes(action)) openSheet(action) })
+  host.on('menu', ({ action }) => { if (['new-project', 'settings', 'feedback', 'diagnose'].includes(action)) openSheet(action) })
   host.on('shell-action', action => { if (action.action === 'select' && action.id?.startsWith('history:')) openSheet('review', action.id.slice(8)); if (action.action === 'memory') openSheet('memory', action.project ?? workspaceController.state.activeKey ?? undefined) })
   ipcMain.on('native-sheet:open', (event, kind, key) => { if (event.sender === mainView.webContents) openSheet(kind, key) })
 

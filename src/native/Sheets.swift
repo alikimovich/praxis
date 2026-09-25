@@ -37,7 +37,9 @@ struct SheetContent: View {
                         ForEach(state.fields) { field in
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(field.label).font(.headline)
-                                if field.kind == "readonly" {
+                                if field.kind == "image", let data = Data(base64Encoded: field.value.components(separatedBy: ",").last ?? ""), let image = NSImage(data: data) {
+                                    Image(nsImage: image).resizable().scaledToFit().frame(maxHeight: 160)
+                                } else if field.kind == "readonly" {
                                     Text(field.value).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
                                 } else if field.kind == "multiline" {
                                     TextEditor(text: binding(field)).font(.system(size: 13, design: .monospaced)).frame(minHeight: 220).accessibilityLabel(field.label)

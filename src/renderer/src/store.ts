@@ -1388,7 +1388,7 @@ interface FeedbackState {
 }
 export const useFeedback = create<FeedbackState>((set) => ({
   open: false,
-  setOpen: (open) => set({ open })
+  setOpen: (open) => { if (open && window.praxisNativeSheets) { window.praxisNativeSheets.open('feedback'); return }; set({ open }) }
 }))
 
 /**
@@ -1408,7 +1408,7 @@ export const useGithub = create<GithubState>((set) => ({
   status: null,
   connectOpen: false,
   setStatus: (status) => set({ status }),
-  setConnectOpen: (connectOpen) => set({ connectOpen })
+  setConnectOpen: (connectOpen) => { if (connectOpen && window.praxisNativeGit) { window.praxisNativeGit.action('connect'); return }; set({ connectOpen }) }
 }))
 
 /** Render a chat slice as a plain-text transcript for a feedback attachment. */

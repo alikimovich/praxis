@@ -1,3 +1,4 @@
+import { environmentChanges } from '../shared/environment-changes'
 import { projectKey } from '../shared/projectKey'
 import { agentOptionsFor, chatAgentSettingsFromOptions, defaultChatAgentSettings, resumeChatSettings, type ChatAgentSettings } from '../shared/chat-settings'
 import type { WorkspaceSnapshot } from '../shared/api'
@@ -43,6 +44,18 @@ export class NativeWorkspaceController {
     this.jobs.set(key, job)
     try { await job } finally { if (this.jobs.get(key) === job) this.jobs.delete(key) }
   }
+  async transact(key: string, work: (entry: ProjectEntry) => Promise<void>) {
+    await this.serialize(key, async () => { const entry = this.find(key); await work(entry) })
+  }
+  async refreshEnvironment(key: string, files?: string[]) {
+    const entry = this.state.projects.find(p => p.key === key)
+    if (!entry) return
+    const changes = files ? environmentChanges(files) : { restart: true, install: true }
+    entry.environmentRevision = (entry.environmentRevision ?? 0) + 1
+    entry.dependenciesPending = entry.dependenciesPending || changes.install
+    this.changed()
+    if (this.active?.key === key) await this.command({ type: 'restart', key })
+  }
   async command(command: NativeWorkspaceCommand) {
     if (command.type === 'attach') {
       if (command.preferred) this.preferred = command.preferred
@@ -57,8 +70,16 @@ export class NativeWorkspaceController {
     if (command.type === 'select') return this.select(command.key)
     if (command.type === 'close') return this.close(command.key)
     if (command.type === 'restart') {
-      const entry = this.find(command.key)
-      await this.services.invoke(entry.previewKind === 'simulator' ? 'simulator:stop' : 'devserver:stop', entry.root)
+      const entry = this.find(command.key), intent = this.intent
+      if (this.active?.key !== entry.key) return
+      if (entry.url && !entry.launchSpec && !command.command) {
+        await this.services.invoke('preview:load', entry.url)
+        return
+      }
+      await this.serialize(entry.key, async () => {
+        await this.services.invoke(entry.previewKind === 'simulator' ? 'simulator:stop' : 'devserver:stop', entry.root)
+      })
+      if (this.intent !== intent || this.closing.has(entry.key)) return
       return this.select(entry.key, command.command, true)
     }
     const entry = this.find(command.key), intent = ++this.intent
@@ -170,10 +191,12 @@ export class NativeWorkspaceController {
           // The simulator is shared; a stale project must never take it from the active one.
           if (entry.previewKind === 'simulator' && !current()) return
           const info = entry.previewKind === 'simulator' ? null : await this.services.invoke('devserver:info', entry.root)
-          const server = !restart && !command && info?.running ? info.server
+          if ((restart || entry.environmentRevision) && info?.running) await this.services.invoke('devserver:stop', entry.root)
+          const server = !restart && !entry.environmentRevision && !command && info?.running ? info.server
             : entry.previewKind === 'simulator' ? await this.services.invoke('simulator:start', { root: entry.root, ...(spec.customCommand ? { command: spec.command } : {}) })
-            : await this.services.invoke('devserver:start', spec)
+            : await this.services.invoke('devserver:start', { ...spec, installDependencies: !!entry.dependenciesPending })
           entry.url = server.url; entry.launchSpec = server.attached ? null : spec
+          entry.environmentRevision = 0; entry.dependenciesPending = false
         }
         this.state.history[key] = await this.services.invoke('sessions:list', entry.root)
         this.state.recents = [{ root: entry.root, name: entry.name, at: Date.now() }, ...this.state.recents.filter(p => p.root !== entry.root)].slice(0, 10)

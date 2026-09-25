@@ -2,6 +2,23 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Native Git workflows and environment refresh
+
+Bun now owns native branch switching/creation, publish mode and publishing,
+including conflict/recovery output. Git updates and GitHub connection use native
+sheets. Feedback now previews optional screenshot/conversation attachments in a
+native sheet; diagnosis offers a repo-only draft for review before sending. Git mutations share the project's operation queue; results stay scoped
+to their original root when the active project changes. Native landed environment
+changes restart the managed preview through Bun, including dependency installs.
+Closing Activity restores the main window's focus (a background-color integration
+check exposed the missing restoration).
+
+Validation: Git workflow/scope/conflict tests and workspace tests passed, as did
+all typechecks and native background integration after the focus fix. Feedback
+attachment opt-outs and diagnosis draft scoping also passed pure tests; native
+feedback/diagnosis presentation was exercised without submitting. Live GitHub
+creation/publishing was not executed; those operations use service stubs in tests.
+
 ## 2026-09-24 — Bun-owned native chat context
 
 Native selected-object prompt context, setup/token offers, annotations, background
