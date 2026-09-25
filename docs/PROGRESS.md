@@ -2,6 +2,31 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Streamed word reveals and live thinking status
+
+Halve the composer beam cycle/readiness sweep to 1.5 seconds and separate active
+generation from turn bookkeeping: idle drafts, approval/question waits, stopping
+and landing completed changes have no button beam. Show one live activity row
+below the active response, with the Libraries.dev SwiftUI Thinking Orb and a
+shimmering label that swaps with a short vertical blur. Thinking, writing, latest
+tool activity, waiting, stopping and applying are derived from actual events.
+
+Batch delta-only updates at 33 ms; status and terminal events flush immediately.
+New prose words resolve through a 350 ms fade/1-point blur on macOS 15+, preserving
+native text layout, Markdown, links and selection. Existing text stays still;
+older systems and Reduce Motion show text immediately. Hidden activity pauses;
+completed responses remove the orb. Vendored MIT orb sources retain attribution
+and match the recorded upstream revision. Motion references: Transitions.dev
+Thinking states and Streaming text.
+
+Validation: native build, all typechecks, docs-link and chat-controller tests
+passed, including render batching/final flush, close cancellation, idle drafts,
+permission/question waits, stopping and landing. Background native integration
+passed with pointer/animation timing skipped. Full integration passed pointer
+checks then timed out at the separate native style source-edit assertion. Inspected
+thinking/streaming captures and a visible native streaming fixture with Liquid
+Glass, word wrapping, bold text, orb states and status swaps. No provider calls.
+
 ## 2026-09-25 — Native composer border beam
 
 Add a SwiftUI border beam inspired by libraries.dev/beam, using a colored angular

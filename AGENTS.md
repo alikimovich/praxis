@@ -58,6 +58,8 @@ timing and must be reported as reduced coverage. No Electron tests remain.
 - `src/native/Chat.swift` / `src/native/Composer.swift`: native chat and text input.
   Bun `src/native/chat-controller.ts` owns drafts, streaming, queues, model and
   permission choices. `src/native/shell-controller.ts` owns workspace navigation.
+- `src/native/ChatActivity.swift`, `StreamingText.swift`: live activity and native word reveal.
+  `src/native/vendor/thinking-orbs/` contains the MIT-licensed SwiftUI orb port.
 - `src/native/WorkspaceLayout.swift`: geometry and AppKit divider input.
 - `src/native/SourceEditor.swift`, `src/native/Layers.swift`,
   `src/native/EditingInspector.swift`, `src/native/ContentWindow.swift`:

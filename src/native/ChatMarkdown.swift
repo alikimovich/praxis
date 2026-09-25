@@ -11,6 +11,7 @@ enum ChatTypography {
 /// Block layout stays native; Foundation renders inline Markdown and links.
 struct ChatMarkdown: View {
     let source: String
+    var streaming = false
     private struct Block: Identifiable {
         let id: Int
         let text: String
@@ -59,7 +60,7 @@ struct ChatMarkdown: View {
                         }.padding(10)
                     }.background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
                 } else {
-                    Text((try? AttributedString(markdown: block.text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(block.text))
+                    StreamingText(source: block.text, streaming: streaming && block.id == blocks.last?.id)
                         .font(block.kind == "heading" ? .system(size: 16, weight: .semibold) : ChatTypography.body)
                         .lineSpacing(ChatTypography.lineSpacing)
                         .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)

@@ -13,8 +13,8 @@ struct ComposerBeam: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { timeline in
             let elapsed = max(0, timeline.date.timeIntervalSince(started))
-            let progress = elapsed / 3
-            let fade = once ? min(1, elapsed / 0.3) * min(1, max(0, (3 - elapsed) / 0.6)) : min(1, elapsed / 0.25)
+            let progress = elapsed / 1.5
+            let fade = once ? min(1, elapsed / 0.15) * min(1, max(0, (1.5 - elapsed) / 0.3)) : min(1, elapsed / 0.25)
             let angle = reduceMotion ? 45 : progress * 360
             let gradient = AngularGradient(stops: [
                 .init(color: .clear, location: 0),
@@ -60,7 +60,7 @@ final class ComposerBeamHost: NSHostingView<AnyView> {
         if visible && once {
             let work = DispatchWorkItem { [weak self] in self?.show(false, radius: radius) }
             expiry = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
         }
     }
     override func viewDidMoveToWindow() {

@@ -20,6 +20,7 @@ export class NativeChatController {
   active = ''
   choices: ModelChoice[] = []
   layout: NativeChatLayout = { visible: false, bounds: { x: 0, y: 0, width: 0, height: 0 } }
+  private streamUpdates = new Map<string, ReturnType<typeof setTimeout>>()
   private mirrors = new Map<string, string>()
   readonly closed = new Set<string>()
   private loading = new Map<string, { chat: Chat; promise: Promise<void> }>()
@@ -31,6 +32,7 @@ export class NativeChatController {
   }
   changed(chat = this.get(this.active)) {
     if (this.chats.get(chat.chat) !== chat) return
+    clearTimeout(this.streamUpdates.get(chat.chat)); this.streamUpdates.delete(chat.chat)
     const state = mirror(chat), signature = JSON.stringify(state)
     if (signature !== this.mirrors.get(chat.chat)) {
       this.mirrors.set(chat.chat, signature)
@@ -119,6 +121,7 @@ export class NativeChatController {
       ? event.request.sessionKey : event.projectKey
     if (!key || this.closed.has(key)) return
     const chat = this.get(key)
+    const priorPhase = chat.phase
     reduce(chat, event)
     if (event.type === 'error' || (event.type === 'isolation' && event.state === 'parked')) {
       if (chat.setup || chat.awaitingLanding) this.services.effect({ type: 'setup', chat: key, phase: 'failed' })
@@ -133,7 +136,9 @@ export class NativeChatController {
       chat.awaitingLanding = false; this.services.effect({ type: 'setup', chat: key, phase: 'landed' })
     }
     if (!chat.isRunning && key !== this.active) chat.needsReview = true
-    this.changed(chat)
+    if (event.type === 'delta' && priorPhase === 'writing') {
+      if (!this.streamUpdates.has(key)) this.streamUpdates.set(key, setTimeout(() => this.changed(chat), 33))
+    } else this.changed(chat)
     // Let paired terminal/error/isolation events settle before draining.
     if (event.type === 'done' || event.type === 'landing-finished') queueMicrotask(() => void this.drain(chat))
   }
@@ -199,6 +204,7 @@ export class NativeChatController {
     this.changed(chat)
   }
   async run(chat: Chat, submission: Submission) {
+    chat.phase = 'thinking'; chat.activityDetail = ''; chat.stopping = false
     chat.sending = true; chat.isRunning = true; chat.turnStartedAt = Date.now(); chat.streamingId = null
     const cancellation = chat.cancellation
     const { text, attachments, selection, turn } = submission
@@ -223,7 +229,8 @@ export class NativeChatController {
     if (next) await this.run(chat, next)
   }
   async stop(chat: Chat) {
-    chat.paused = true; chat.cancellation++
+    chat.paused = true; chat.cancellation++; chat.stopping = true
+    this.changed(chat)
     if (chat.setup || chat.awaitingLanding) this.services.effect({ type: 'setup', chat: chat.chat, phase: 'failed', status: 'Setup cancelled.' })
     chat.setup = false; chat.awaitingLanding = false
     await this.services.invoke('agent:interrupt', chat.chat)
@@ -268,6 +275,7 @@ export class NativeChatController {
   }
   close(key: string) {
     const chat = this.chats.get(key)
+    clearTimeout(this.streamUpdates.get(key)); this.streamUpdates.delete(key)
     this.closed.add(key)
     this.mirrors.delete(key)
     if (chat) { chat.cancellation++; chat.queue = []; this.chats.delete(key) }

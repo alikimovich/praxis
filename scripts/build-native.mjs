@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { readdirSync, copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { nativeCatAssets } from './native-cat-assets.mjs'
@@ -86,6 +86,9 @@ const result = Bun.spawnSync(
     join(root, 'src/native/Composer.swift'),
     join(root, 'src/native/ComposerBeam.swift'),
     join(root, 'src/native/Chat.swift'),
+    join(root, 'src/native/ChatActivity.swift'),
+    join(root, 'src/native/StreamingText.swift'),
+    ...readdirSync(join(root, 'src/native/vendor/thinking-orbs')).filter(name => name.endsWith('.swift')).sort().map(name => join(root, 'src/native/vendor/thinking-orbs', name)),
     join(root, 'src/native/Cat.swift'),
     join(root, 'src/native/Welcome.swift'),
     join(root, 'src/native/Sheets.swift'),

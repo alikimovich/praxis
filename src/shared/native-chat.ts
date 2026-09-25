@@ -13,7 +13,14 @@ export interface NativeChatCard {
   detail?: string
   actions: { label: string; action: string; value?: string; disabled?: boolean }[]
 }
+export interface NativeChatActivity {
+  label: string
+  kind: 'thinking' | 'writing' | 'working' | 'applying' | 'waiting' | 'stopping'
+  animated: boolean
+}
 export interface NativeChatState {
+  activity: NativeChatActivity | null
+  streamingId: string | null
   chat: string
   messages: NativeChatMessage[]
   running: boolean
@@ -22,7 +29,7 @@ export interface NativeChatState {
   status: string
   statusDetail?: string
   composer: {
-    ready: boolean; running: boolean
+    ready: boolean; running: boolean; thinking: boolean
     text: string; caret: number; revision: number; stop: boolean; enabled: boolean; sendLabel: string
     context: string; attachments: string[]
     suggestions: { title: string; description: string; active: boolean }[]

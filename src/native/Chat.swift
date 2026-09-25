@@ -14,6 +14,7 @@ struct ChatQuestionOption: Decodable { let label: String; let description: Strin
 struct ChatQuestion: Decodable { let header: String; let question: String; let options: [ChatQuestionOption]; let multiSelect: Bool }
 struct ChatQuestionRequest: Decodable, Identifiable { let id: String; let questions: [ChatQuestion] }
 struct ChatSnapshot: Decodable {
+    let activity: ChatActivityState?; let streamingId: String?
     let chat: String; let messages: [ChatMessage]; let running: Bool; let cards: [ChatCard]
     let questions: [ChatQuestionRequest]; let status: String; let statusDetail: String?
 }
@@ -21,6 +22,7 @@ final class ChatModel: ObservableObject {
     let cat = CatAnimator()
     @Published var snapshot: ChatSnapshot?
     @Published var revision = 0
+    @Published var visible = false
     func action(_ name: String, id: String? = nil, value: String? = nil, answers: [String: String]? = nil) {
         guard let chat = snapshot?.chat else { return }
         var message: [String: Any] = ["event":"chat-action", "chat":chat, "action":name]
@@ -40,6 +42,7 @@ final class NativeChat: NSHostingView<ChatConversation> {
     func update(_ state: [String: Any], composer: NativeComposer) {
         lastState = state
         isHidden = !(state["visible"] as? Bool ?? false)
+        model.visible = !isHidden
         if let data = try? JSONSerialization.data(withJSONObject: state), let snapshot = try? JSONDecoder().decode(ChatSnapshot.self, from: data) {
             let completed = model.snapshot?.chat == snapshot.chat && model.snapshot?.running == true && !snapshot.running && !(snapshot.messages.last?.text.contains("⚠️") ?? false)
             model.cat.update(running: snapshot.running, questioning: !snapshot.questions.isEmpty || snapshot.cards.contains { $0.actions.contains { $0.action == "permission" } }, completed: completed)
@@ -49,6 +52,8 @@ final class NativeChat: NSHostingView<ChatConversation> {
         place(state, composer: composer)
     }
     func place(_ state: [String: Any], composer: NativeComposer) {
+        let visible = state["visible"] as? Bool ?? false
+        if model.visible != visible { model.visible = visible }
         guard let bounds = state["bounds"] as? [String: Double] else { return }
         let x = bounds["x"] ?? 0, y = bounds["y"] ?? 0, width = bounds["width"] ?? 0, height = bounds["height"] ?? 0
         guard [x,y,width,height].allSatisfy({ $0.isFinite && abs($0) < 100000 }) else { return }
@@ -64,6 +69,7 @@ final class NativeChat: NSHostingView<ChatConversation> {
     func inspect() -> [String: Any] {
         ["catPose":model.cat.pose, "catFrame":model.cat.frame, "catArtwork":!CatArtwork.frames.isEmpty, "frame":NSStringFromRect(frame), "native":true, "visible":!isHidden, "chat":model.snapshot?.chat ?? "", "messageCount":model.snapshot?.messages.count ?? 0,
          "messages":model.snapshot?.messages.map { ["id":$0.id,"role":$0.role,"text":$0.text] } ?? [],
+         "activity":model.snapshot?.activity?.label ?? "", "activityKind":model.snapshot?.activity?.kind ?? "", "activityAnimated":model.snapshot?.activity?.animated ?? false,
          "cards":model.snapshot?.cards.map(\.id) ?? [], "questionCount":model.snapshot?.questions.count ?? 0]
     }
 }
@@ -91,8 +97,11 @@ struct ChatConversation: View {
                                         .foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 28)
                                 }
                                 ForEach(snapshot.messages) { message in
-                                    NativeMessageRow(message: message, running: snapshot.running && message.id == snapshot.messages.last?.id, model: model).id(message.id)
+                                    NativeMessageRow(message: message, running: snapshot.running && message.id == snapshot.streamingId, activity: message.id == snapshot.streamingId ? snapshot.activity : nil, model: model).id(message.id)
                                         .background(GeometryReader { geometry in Color.clear.preference(key: UserPositions.self, value: message.role == "user" ? [message.id:geometry.frame(in: .named("chatScroll")).maxY] : [:]) })
+                                }
+                                if let activity = snapshot.activity, !snapshot.messages.contains(where: { $0.id == snapshot.streamingId }) {
+                                    ChatActivity(activity: activity, visible: model.visible)
                                 }
                                 ForEach(snapshot.cards) { card in NativeChatCard(card: card, model: model) }
                                 ForEach(snapshot.questions) { request in NativeQuestionCard(request: request, model: model) }
@@ -133,6 +142,7 @@ struct ChatConversation: View {
 private struct NativeMessageRow: View {
     let message: ChatMessage
     let running: Bool
+    let activity: ChatActivityState?
     @ObservedObject var model: ChatModel
     var body: some View {
         HStack(alignment: .top) {
@@ -147,9 +157,10 @@ private struct NativeMessageRow: View {
                         } label: { Text(segment.statuses?.last ?? "Activity").font(ChatTypography.activity).lineLimit(1).foregroundStyle(.secondary) }
                     } else if let text = segment.text {
                         if message.role == "user" { Text(text).textSelection(.enabled).font(ChatTypography.body).lineSpacing(ChatTypography.lineSpacing).fixedSize(horizontal: false, vertical: true) }
-                        else { ChatMarkdown(source: text) }
+                        else { ChatMarkdown(source: text, streaming: running) }
                     }
                 }
+                if let activity { ChatActivity(activity: activity, visible: model.visible) }
                 if !running && message.role == "assistant" {
                     HStack {
                         Button { copyChatText(message.text) } label: { Image(systemName: "doc.on.doc") }.help("Copy response")

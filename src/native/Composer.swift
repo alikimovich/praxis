@@ -266,7 +266,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             buttonBeam.show(false, radius: 15)
             text.undoManager?.removeAllActions(); chat = nextChat; revision = next["revision"] as? Int ?? 0
         }
-        buttonBeam.show(!isHidden && next["running"] as? Bool == true, radius: 15)
+        buttonBeam.show(!isHidden && next["thinking"] as? Bool == true, radius: 15)
         if isHidden { readyBeam.show(false, radius: 24) }
         else if next["ready"] as? Bool == true && !chat.isEmpty && welcomedChats.insert(chat).inserted {
             readyBeam.show(true, radius: 24, once: true)

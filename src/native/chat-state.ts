@@ -10,6 +10,9 @@ export interface Submission {
   selection: NativeChatContext['selection']; turn: NativeChatContext['turn']
 }
 export interface Chat extends NativeChatMirror {
+  phase: 'thinking' | 'writing' | 'working' | 'applying'
+  activityDetail: string
+  stopping: boolean
   root: string
   ready: boolean
   version: number
@@ -26,6 +29,7 @@ export interface Chat extends NativeChatMirror {
 }
 export function newChat(chat: string): Chat {
   return {
+    phase: 'thinking', activityDetail: '', stopping: false,
     chat, root: '', ready: false, version: 0, messages: [], isRunning: false, streamingId: null,
     isolation: 'live', usage: { input: 0, output: 0, cached: 0 }, workedMs: 0,
     turnStartedAt: null, needsReview: false,
@@ -69,6 +73,9 @@ export function hydrate(chat: Chat, transcript: SessionTranscriptEntry[]) {
 }
 export function finish(chat: Chat, landing = false) {
   chat.isRunning = landing
+  chat.phase = landing ? 'applying' : 'thinking'
+  chat.activityDetail = ''
+  if (!landing) chat.stopping = false
   if (!landing) {
     if (chat.turnStartedAt) chat.workedMs += Date.now() - chat.turnStartedAt
     chat.turnStartedAt = null
@@ -78,8 +85,10 @@ export function finish(chat: Chat, landing = false) {
 export function reduce(chat: Chat, event: AgentEvent) {
   chat.version++
   switch (event.type) {
-    case 'delta': append(chat, event.text); break
-    case 'status': append(chat, event.text, true); break
+    case 'delta':
+      chat.phase = 'writing'; chat.activityDetail = ''; append(chat, event.text); break
+    case 'status':
+      chat.phase = 'working'; chat.activityDetail = event.text; append(chat, event.text, true); break
     case 'title': chat.title = event.title; break
     case 'commands': chat.commands = event.commands; break
     case 'usage':
@@ -89,7 +98,7 @@ export function reduce(chat: Chat, event: AgentEvent) {
     case 'done': finish(chat, event.landingPending); break
     case 'landing-finished': finish(chat); break
     case 'reconciliation-started':
-      chat.isolation = 'isolated'; chat.isRunning = true
+      chat.isolation = 'isolated'; chat.isRunning = true; chat.phase = 'applying'
       append(chat, 'Combining this chat’s changes with recent project edits…', true); break
     case 'isolation':
       chat.isolation = event.state === 'parked' ? 'parked' : 'isolated'
