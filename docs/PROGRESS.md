@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Expand the native composer with its draft
+
+Measure composer text using TextKit with the editor's font, wrapping width,
+padding and trailing empty line. Include the full control/chip spacing in the
+height calculation so short multiline drafts fit instead of scrolling early.
+The composer grows upward to 360 points or half the available chat height,
+whichever is smaller, then scrolls internally; clearing returns to compact size.
+
+Validation: typechecks and isolated native background integration passed, including
+anchored growth, trailing newlines, soft wraps, the height cap, overflow and shrink.
+Inspected the content-only expanded composer capture; offscreen Liquid Glass is
+not faithfully captured. Background mode skips real pointer/animation checks.
+
 ## 2026-09-24 — Codex live preview observation
 
 Added preview_location and preview_screenshot to the session-scoped Codex MCP

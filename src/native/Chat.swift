@@ -54,9 +54,8 @@ final class NativeChat: NSHostingView<ChatConversation> {
         guard [x,y,width,height].allSatisfy({ $0.isFinite && abs($0) < 100000 }) else { return }
         var input = state["composer"] as? [String: Any] ?? [:]
         let value = input["text"] as? String ?? ""
-        let measured = (value as NSString).boundingRect(with: NSSize(width: max(40, width - 52), height: 10000), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font:NSFont.systemFont(ofSize: 14)]).height
         let hasContext = !(input["context"] as? String ?? "").isEmpty || !(input["attachments"] as? [String] ?? []).isEmpty
-        let composerHeight = min(height, max(120, min(220, Double(measured) + 78)) + (hasContext ? 24 : 0))
+        let composerHeight = Double(composer.preferredHeight(for: value, width: max(0, width - 20), availableHeight: height, hasContext: hasContext))
         frame = NSRect(x: x, y: y, width: width, height: max(0, height - composerHeight))
         input["chat"] = state["chat"]; input["visible"] = !isHidden && !(state["chat"] as? String ?? "").isEmpty
         input["bounds"] = ["x":x + 10, "y":y + max(0, height - composerHeight), "width":max(0, width - 20), "height":composerHeight]

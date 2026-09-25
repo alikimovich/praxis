@@ -139,6 +139,22 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         ])
         isHidden = true
     }
+    /// Measure using the same TextKit wrapping, padding and font as the editor.
+    func preferredHeight(for value: String, width: CGFloat, availableHeight: CGFloat, hasContext: Bool) -> CGFloat {
+        let storage = NSTextStorage(string: value, attributes: [.font: text.font ?? NSFont.systemFont(ofSize: 14)])
+        let manager = NSLayoutManager()
+        let container = NSTextContainer(size: NSSize(width: max(1, width - 24 - text.textContainerInset.width * 2), height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = text.textContainer?.lineFragmentPadding ?? 5
+        storage.addLayoutManager(manager); manager.addTextContainer(container)
+        manager.ensureLayout(for: container)
+        // The extra fragment includes the caret's empty line after a trailing newline.
+        let used = max(manager.usedRect(for: container).maxY, manager.extraLineFragmentRect.maxY)
+        let textHeight = ceil(max(manager.defaultLineHeight(for: text.font ?? NSFont.systemFont(ofSize: 14)), used) + text.textContainerInset.height * 2)
+        // 26 controls + 8 gap + 14 top + 30 send + 10 bottom + 5 text/send gap.
+        let desired = max(120, textHeight + 93 + (hasContext ? 22 : 0))
+        let limit = min(360, max(120, availableHeight * 0.5))
+        return min(availableHeight, desired, limit)
+    }
     override func layout() {
         super.layout()
         layoutSkills()
@@ -324,7 +340,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             item.target = self; item.representedObject = payload; popup.menu?.addItem(item)
         }
     }
-    func inspect() -> [String: Any] { layoutSubtreeIfNeeded(); return ["pickerWidths":pickers.mapValues { $0.bounds.width }, "pickersPlain":pickers.values.allSatisfy { !$0.isBordered }, "attachIsPlus":plus.item(at: 0)?.image != nil && (plus.cell as? NSPopUpButtonCell)?.arrowPosition == .noArrow, "controlsBelowForm":controls.frame.maxY < content.convert(content.bounds, to: self).minY, "sendInsideForm":sendButton.superview === content, "skillListVisible":!skillList.isHidden, "skillCount":skillEntries.count, "inputTopInset":content.bounds.maxY - scroll.frame.maxY, "sendRightInset":content.bounds.maxX - sendButton.convert(sendButton.bounds, to: content).maxX, "autohidesScrollers":scroll.autohidesScrollers, "contentWidth":content.bounds.width, "inputHeight":scroll.bounds.height, "sendWidth":sendButton.bounds.width, "visible":!isHidden, "glass":glass, "text":text.string, "chat":chat, "enabled":sendButton.isEnabled, "revision":revision, "choices":state["choices"] ?? [], "attachments":state["attachments"] ?? [], "bounds":["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height]] }
+    func inspect() -> [String: Any] { layoutSubtreeIfNeeded(); return ["pickerWidths":pickers.mapValues { $0.bounds.width }, "pickersPlain":pickers.values.allSatisfy { !$0.isBordered }, "attachIsPlus":plus.item(at: 0)?.image != nil && (plus.cell as? NSPopUpButtonCell)?.arrowPosition == .noArrow, "controlsBelowForm":controls.frame.maxY < content.convert(content.bounds, to: self).minY, "sendInsideForm":sendButton.superview === content, "skillListVisible":!skillList.isHidden, "skillCount":skillEntries.count, "inputTopInset":content.bounds.maxY - scroll.frame.maxY, "sendRightInset":content.bounds.maxX - sendButton.convert(sendButton.bounds, to: content).maxX, "autohidesScrollers":scroll.autohidesScrollers, "contentWidth":content.bounds.width, "inputHeight":scroll.bounds.height, "documentHeight":text.bounds.height, "sendWidth":sendButton.bounds.width, "visible":!isHidden, "glass":glass, "text":text.string, "chat":chat, "enabled":sendButton.isEnabled, "revision":revision, "choices":state["choices"] ?? [], "attachments":state["attachments"] ?? [], "bounds":["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height]] }
     func perform(_ c: [String: Any]) {
         if let value = c["text"] as? String { text.string = value; text.setSelectedRange(NSRange(location: (value as NSString).length, length: 0)); changed() }
         if c["action"] as? String == "send" { send(nil) }
