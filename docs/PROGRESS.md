@@ -2,6 +2,17 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Match chat toolbar glyph sizes to the sidebar toggle
+
+History and New Chat now use 16-point template images in their custom controls,
+matching the smaller system sidebar toggle visually. Other toolbar symbols keep
+their existing size, and button hit areas are unchanged. The symbol cache includes
+image size so callers cannot accidentally share differently sized artwork.
+
+Validation: all TypeScript targets and native background integration passed.
+Inspected the rebuilt chat toolbar capture; offscreen glass prevents a reliable
+full-toolbar capture, and the live inspector resolved to the existing app.
+
 ## 2026-09-24 — Align sidebar actions and preserve symbol proportions
 
 Moved action labels and icon slots four points left to align

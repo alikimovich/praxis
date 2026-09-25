@@ -197,7 +197,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             chatTitle.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
             chatTitle.lineBreakMode = .byTruncatingTail
             chatTitle.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            let newChat = NSButton(image: toolbarSymbol("square.and.pencil", "New Chat")!, target: self, action: #selector(sidebarAction(_:)))
+            let newChat = NSButton(image: toolbarSymbol("square.and.pencil", "New Chat", size: 16)!, target: self, action: #selector(sidebarAction(_:)))
             newChat.identifier = NSUserInterfaceItemIdentifier("new-chat"); newChat.bezelStyle = .texturedRounded; newChat.toolTip = "New Chat"
             sidebarButtons["new-chat"] = newChat
             chatHistory.bezelStyle = .texturedRounded; chatHistory.setAccessibilityLabel("Chat History"); chatHistory.toolTip = "Chat History"
@@ -303,7 +303,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         chatTitle.isHidden = currentProject == nil || chatHidden || (chatHeaderWidth?.constant ?? 0) < 150
         let chatMenu = NSMenu(); chatMenu.autoenablesItems = false
         let historyIcon = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        historyIcon.image = toolbarSymbol("clock.arrow.circlepath", "Chat History")
+        historyIcon.image = toolbarSymbol("clock.arrow.circlepath", "Chat History", size: 16)
         chatMenu.addItem(historyIcon)
         for row in rows.first(where: { $0.project == currentProject })?.children ?? [] {
             let entry = NSMenuItem(title: row.title + (row.running ? " · Working" : ""), action: #selector(contextAction(_:)), keyEquivalent: "")

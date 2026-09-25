@@ -2,8 +2,8 @@ import AppKit
 
 private var toolbarSymbolCache: [String: NSImage] = [:]
 
-func toolbarSymbol(_ name: String, _ label: String? = nil) -> NSImage? {
-    let key = name + "|" + (label ?? "")
+func toolbarSymbol(_ name: String, _ label: String? = nil, size: CGFloat = 20) -> NSImage? {
+    let key = name + "|" + (label ?? "") + "|" + String(Double(size))
     if let cached = toolbarSymbolCache[key] { return cached }
     // Toolbar controls reconfigure SF Symbols to their own standard size.
     // Give AppKit a template bitmap with fixed glyph bounds instead, keeping
@@ -16,10 +16,10 @@ func toolbarSymbol(_ name: String, _ label: String? = nil) -> NSImage? {
         let context = NSGraphicsContext(bitmapImageRep: bitmap) else { return nil }
     NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = context
     let scale = 36 / max(symbol.size.width, symbol.size.height)
-    let size = NSSize(width: symbol.size.width * scale, height: symbol.size.height * scale)
-    symbol.draw(in: NSRect(x: (40 - size.width) / 2, y: (40 - size.height) / 2, width: size.width, height: size.height))
+    let glyphSize = NSSize(width: symbol.size.width * scale, height: symbol.size.height * scale)
+    symbol.draw(in: NSRect(x: (40 - glyphSize.width) / 2, y: (40 - glyphSize.height) / 2, width: glyphSize.width, height: glyphSize.height))
     NSGraphicsContext.restoreGraphicsState()
-    let image = NSImage(size: NSSize(width: 20, height: 20))
+    let image = NSImage(size: NSSize(width: size, height: size))
     image.addRepresentation(bitmap); image.isTemplate = true
     image.accessibilityDescription = label
     toolbarSymbolCache[key] = image
