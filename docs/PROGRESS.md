@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Plan Jev-composed native chat islands
+
+Added CHAT-ISLANDS.md and staged roadmap items for on-demand interactive UI inside
+assistant messages. The plan separates agent-discovered bindings, Jev block/group
+composition, Bun state/source transactions and native SwiftUI rendering. Includes
+follow-up revisions, durable history, landing/stale-source behavior, engine failure
+handling and tween/spring/combined-animation plus typography acceptance scenarios.
+Initial controls commit on release through HMR; runtime-live preview adapters are
+a later extension. Planning only; no island implementation or live model call.
+Validation: all TypeScript projects including native, existing documentation-link
+check and diff whitespace check passed. No runtime suites ran for this docs change.
+
 ## 2026-09-24 — Plan remaining native migration
 
 Audited current host/build, workspace actions, chat context adapter, DOM geometry

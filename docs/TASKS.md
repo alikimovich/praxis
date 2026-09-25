@@ -3,6 +3,18 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## On-demand native chat islands (2026-09-24)
+
+Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
+
+- [x] Define the product direction and staged plan for Jev-composed native chat islands.
+- [ ] Islands 1: versioned contracts, native catalog and constrained Jev composition spike.
+- [ ] Islands 2: inline SwiftUI rendering, typed interactions and durable history restoration.
+- [ ] Islands 3: revision-checked source bindings, grouped Undo/Reset, Replay and landing lifecycle.
+- [ ] Islands 4: provider tools, on-demand Jev composition and follow-up island revisions.
+- [ ] Islands 5: Bézier/spring editors, combined animations and typography acceptance scenarios.
+- [ ] Islands later: runtime preview adapters, retained prop/style targets and timeline/keyframe blocks.
+
 ## Native runtime development entrypoint (2026-09-23)
 
 Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md).
