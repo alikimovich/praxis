@@ -40,7 +40,7 @@ export class NativeInspectorController {
   async activate(root: string) { this.clearReconciles(); this.state.root = root; this.requestedFile = null; this.element = null; this.state.visible = false; ++this.state.generation; await this.refresh() }
   async select(element: SelectedElement | null) {
     this.clearReconciles(); await this.send('styles:clear-preview', {})
-    this.state.busy = false; this.element = element; this.state.visible = !!element; ++this.state.generation
+    this.state.busy = false; this.element = element; this.state.visible = this.state.visible && !!element; ++this.state.generation
     this.inspection = null; this.styles = null; this.controls = []; this.state.error = ''; this.build(); this.publish()
     if (element) await this.refresh()
   }
@@ -63,7 +63,6 @@ export class NativeInspectorController {
     const controls = await this.invoke('controls:get', root, { files: [...new Set([...files, ...animationFiles])] }).catch(() => [])
     if (generation !== this.sequence || element !== this.element || root !== this.state.root) return
     this.controls = controls
-    if (!element && controls.some((p: ResolvedControlPanel) => p.manifest.presentation === 'animation')) { this.state.visible = true; this.state.tab = 'custom' }
     this.build(); this.publish()
   }
   build() {

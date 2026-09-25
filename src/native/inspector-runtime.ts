@@ -52,7 +52,7 @@ export function installNativeInspector(host: NativeBridge, workspace: NativeWork
       }
     } else if (channel === 'controls:updated' && (value?.root ?? value) === entry.root || channel === 'agent:event' && ['done', 'landing-finished', 'spawn-finished'].includes(value.type)) { void controller.refresh().catch(report); void openContent(entry.root).catch(report) }
     else if (channel === 'controls:open' && value.root === entry.root) {
-      controller.requestedFile = value.file ?? null; controller.state.visible = true; controller.state.tab = value.tab; controller.publish(); void controller.refresh().catch(report)
+      controller.requestedFile = value.file ?? null; controller.state.tab = value.tab; controller.publish(); void controller.refresh().catch(report)
     }
   })
   return { inspector: controller, content }

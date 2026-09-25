@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Open the inspector only from the selection toolbar
+
+Element picking updates inspection data without opening the right sidebar.
+The selection toolbar's Properties action toggles it; an already-open inspector
+continues following selection, while Close remains closed on subsequent picks.
+Clearing selection or switching projects hides it. Animation-control discovery
+and generated-control notifications no longer open the sidebar implicitly.
+
+Validation: inspector unit tests, all typechecks and native background integration
+passed, including hidden selection and explicit toolbar open/close. Background
+mode skips real pointer gestures/animation timing.
+
+
 ## 2026-09-24 — Expand the native composer with its draft
 
 Measure composer text using TextKit with the editor's font, wrapping width,

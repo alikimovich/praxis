@@ -21,6 +21,8 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Open the inspector sidebar only from the selection toolbar, preserving explicit visibility across picks.
+
 - [x] Grow the native composer with wrapped/multiline drafts up to a bounded height, then scroll.
 
 - [x] Add local Running Servers inspection and confirmed Stop & Retry recovery to native preview errors and Actions.

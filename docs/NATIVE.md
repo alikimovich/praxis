@@ -64,6 +64,9 @@ reveal, native find/replace, undo, dirty/conflict state, save, external-editor
 opening and reusable pop-out windows. Drafts survive file navigation and docking.
 Syntax coloring is deliberately lightweight; it is not a language server.
 
+The inspector sidebar opens from the selection toolbar only. Picking elements
+updates an open inspector without reopening a closed one.
+
 Native inspectors retain source/schema validation, token references, live style
 scrubbing and post-HMR reconciliation. Linked margin/padding writes share an undo
 group. Custom controls support repair/removal and animation Replay. Content
