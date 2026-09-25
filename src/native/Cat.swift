@@ -49,6 +49,7 @@ private extension Array {
 }
 struct NativeCat: View {
     @ObservedObject var animator: CatAnimator
+    var size: CGFloat = 32
     var body: some View {
         SwiftUI.Canvas { context, size in
             var path = Path()
@@ -56,7 +57,7 @@ struct NativeCat: View {
                 path.addRect(CGRect(x: pixel[0] * size.width / 32, y: pixel[1] * size.height / 32, width: pixel[2] * size.width / 32, height: pixel[3] * size.height / 32))
             }
             context.fill(path, with: .color(.secondary))
-        }.frame(width: 32, height: 32).accessibilityLabel(animator.label)
+        }.frame(width: size, height: size).accessibilityLabel(animator.label)
             .onAppear { animator.show(true) }.onDisappear { animator.show(false) }
     }
 }

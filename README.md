@@ -243,9 +243,9 @@ for JSON bindings, Gateway setup and current limits.
 
 ### Native chat motion
 
-The active response shows a [Libraries.dev Thinking Orb](https://libraries.dev/orbs)
-and a status line for thinking, writing, tool work and user waits. The SwiftUI orb
-sources are bundled under their MIT license. New prose words softly resolve on
+The active response shows a 20-point animated pixel cat beside the status line
+for thinking, writing, tool work and user waits. Token totals stay in the footer.
+New prose words softly resolve on
 macOS 15+; older systems show text immediately. Reduce Motion disables the reveal
 and status animation. The composer button beam runs only during active generation,
 not idle drafts, approval waits, stopping or applying completed changes.

@@ -21,6 +21,8 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Move the footer cat into live activity, replacing the thinking orb at 20 points.
+
 - [x] Move queued messages into compact stacked rows behind the composer, with removal, copy and paused-queue resume.
 
 - [x] Speed up the beam, restrict it to active generation, and add a native thinking orb, live status transitions and streamed word reveals.

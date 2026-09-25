@@ -4,26 +4,21 @@ struct ChatActivityState: Decodable {
     let label: String
     let kind: String
     let animated: Bool
-    var orb: OrbState {
-        switch kind {
-        case "writing": return .composing
-        case "working", "applying": return .working
-        default: return .breathing
-        }
-    }
+
 }
 
 /// One live status at the tail of the active response, never in past messages.
 struct ChatActivity: View {
     let activity: ChatActivityState
     let visible: Bool
+    let cat: CatAnimator
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var onscreen = false
     private var animating: Bool { visible && onscreen && activity.animated && !reduceMotion }
 
     var body: some View {
         HStack(alignment: .center, spacing: 7) {
-            ThinkingOrb(state: activity.orb, size: .px20, paused: !animating)
+            NativeCat(animator: cat, size: 20)
                 .accessibilityHidden(true)
             ZStack(alignment: .leading) {
             TimelineView(.animation(minimumInterval: 1 / 30, paused: !animating)) { timeline in

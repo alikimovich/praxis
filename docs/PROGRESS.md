@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Pixel cat in live chat activity
+
+Move the animated cat from the token footer into the live response status row,
+replacing the thinking orb at the same 20-point size. Keep the existing running
+and waiting poses, status text and Reduce Motion behavior. Other cat surfaces
+retain their default 32-point size; the footer now contains token totals only.
+
+Validation: native build, both typechecks, chat controller and docs-link checks
+passed. Background native integration passed, including animated cat frames and
+permission/question states (reduced pointer/animation coverage). Inspected the
+streaming capture to confirm the small cat below output and no footer cat. Full
+native integration hit the existing unrelated preview style source-edit timeout.
+No provider calls.
+
 ## 2026-09-25 — Queue messages behind the composer
 
 Move queued messages out of conversation cards into a rounded native stack
