@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs'
 import type { NativeBridge } from './bridge'
-import { views } from './platform'
+import { views, serviceEvents } from './platform'
 import { nativeChat } from './chat-runtime'
 
 /** Deterministic stream/card coverage without calling a paid provider. */
@@ -27,11 +27,14 @@ export async function checkNativeChat(host: NativeBridge, screenshot: string) {
   }
   await evaluate(`(() => { window.__nativeOriginalDispatch = window.__praxisNativeDispatch; window.__praxisNativeDispatch = () => {}; return true })()`)
   try {
+    serviceEvents.emit('event', 'preview:element-picked', { tag: 'button', id: 'native-context', classes: [], selector: '#native-context', text: 'Native context', source: 'index.html:3:1' })
+    if (!nativeChat.get(state.chat).context?.selection?.prompt.includes('#native-context')) throw new Error('Preview selection still depends on renderer delivery')
     await host.request('composerPerform', { text: 'Render this conversation in Swift.' })
     for (let i = 0; i < 100 && !(await host.request('composerInspect')).enabled; i++) await new Promise(resolve => setTimeout(resolve, 50))
     await host.request('composerPerform', { action: 'send' })
     await wait(state => state.messages.some((message: any) => message.role === 'user' && message.text === 'Render this conversation in Swift.'))
     if (sent.length !== 1) throw new Error('Native Send did not reach Bun service')
+    if (nativeChat.get(state.chat).context?.selection) throw new Error('Native Send did not clear selection context')
     const runningCat = await wait(state => state.catPose === 'run' && state.catArtwork)
     await wait(state => state.catPose === 'run' && state.catFrame !== runningCat.catFrame)
     await host.request('composerPerform', { text: 'A queued native message' })

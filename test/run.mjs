@@ -20,6 +20,7 @@ const UNIT = [
   'native-support', 'native-sheets',
   'native-settings',
   'native-chat-controller',
+  'native-context',
   'native-cat-assets',
   'content-controls',
   'project-ui',

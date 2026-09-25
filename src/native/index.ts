@@ -33,6 +33,7 @@ import { parsePreferredModelState, resolvePreferredSettings } from '../shared/pr
 import { nativePreferences } from './preferences'
 import { workspaceStorage } from './workspace'
 import { installNativeChat } from './chat-runtime'
+import { NativeContextController } from './context-controller'
 import { NativeReviewController } from './review-controller'
 import { NativeActivityController } from './activity-controller'
 import { NativeSettingsController } from './settings-controller'
@@ -324,6 +325,23 @@ async function main() {
   })
   const chatController = installNativeChat(host!, mainView)
   const workspaceController = installNativeWorkspace(host!, mainView, workspace, chatController, preferences)
+  const contextController = new NativeContextController(workspaceController, chatController, () => ({ projectUi: preferences.get('praxis:project-ui:v1') === 'true', projectUiEngine: preferences.get('praxis:project-ui-engine:v1') === 'jev' ? 'jev' : 'agent' }))
+  workspaceController.services.activate = entry => contextController.activate(entry)
+  const projectEffect = chatController.services.effect
+  chatController.services.effect = effect => {
+    void contextController.effect(effect).catch(error => workspaceController.reportError(error))
+    projectEffect(effect)
+  }
+  serviceEvents.on('event', (channel, value) => {
+    if (channel === 'preview:element-picked') contextController.selection(value)
+    else if (channel === 'preview:readiness') contextController.readiness(value)
+  })
+  serviceEvents.on('command', (channel, args, result) => {
+    if (channel === 'agent:spawn-comment' && result?.ok) contextController.queued(args[2], result.spawnId, args[1].slice(0, 70), !!result.queued)
+    if (channel === 'annotations:add' || channel === 'annotations:remove') void contextController.notes(args[0]).catch(error => workspaceController.reportError(error))
+    if (channel === 'agent:close-project') contextController.projects.delete(args[0])
+  })
+  ipcMain.on('native-context:selection', (event, value) => { if (event.sender === mainView.webContents) contextController.selection(value) })
   const sheetController = new NativeSheetController(host!, workspaceController, chatController)
   const reviewController = new NativeReviewController(sheetController, url => shell.openExternal(url))
   const settingsController = new NativeSettingsController(sheetController, preferences, refreshPreferences)

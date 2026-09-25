@@ -114,6 +114,7 @@ export const contextBridge = {
         }
       }
       Object.defineProperty(globalThis, 'praxisNativeShell', { value: shell, writable: false })
+      Object.defineProperty(globalThis, 'praxisNativeContext', { value: { selection: (value: unknown) => ipcRenderer.send('native-context:selection', value) } })
       Object.defineProperty(globalThis, 'praxisNativeActivity', { value: { append: (text: string, kind: string) => ipcRenderer.send('native-activity:command', { action: 'append', text, kind }), action: (action: string) => ipcRenderer.send('native-activity:command', { action }) } })
       Object.defineProperty(globalThis, 'praxisNativeSheets', { value: { open: (kind: string, key?: string) => ipcRenderer.send('native-sheet:open', kind, key) }, writable: false })
       const workspace: NativeWorkspaceBridge = {

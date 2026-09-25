@@ -45,3 +45,5 @@ export type NativeChatCommand =
   | { type: 'layout'; layout: NativeChatLayout }
   | { type: 'seed' | 'submit'; chat: string; text: string }
 export type NativeChatSnapshot = NativeChatState & NativeChatLayout
+
+declare global { interface Window { praxisNativeContext?: { selection(value: import('./api').SelectedElement | null): void } } }

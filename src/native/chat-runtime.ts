@@ -17,7 +17,7 @@ export function installNativeChat(host: NativeBridge, view: NativeView) {
   host.on('composer-action', action => { void nativeChat.composer(action) })
   host.on('chat-action', action => { void nativeChat.action(action) })
   ipcMain.on('native-chat:command', (event, command) => {
-    if (event.sender === view.webContents) void nativeChat.command(command).catch(console.error)
+    if (event.sender === view.webContents && command?.type !== 'context') void nativeChat.command(command).catch(console.error)
   })
   serviceEvents.on('event', (channel: string, event: AgentEvent) => {
     if (channel === 'agent:event') nativeChat.event(event)

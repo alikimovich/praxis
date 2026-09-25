@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Bun-owned native chat context
+
+Native selected-object prompt context, setup/token offers, annotations, background
+spawn state and history refresh now come from Bun service events. React no longer
+publishes whole chat contexts or chooses the native active chat. Remaining visual
+panels temporarily forward selection changes only. Setup completion restarts the
+active native project and verifies source stamps. Shared selection formatting is
+extracted for both runtimes.
+
+Validation: context race/scope tests, native chat tests, all typechecks and native
+background integration passed. The desktop check disables renderer delivery,
+injects preview selection, sends via Swift and verifies selection is cleared.
+Branch/publish and window geometry still need migration; no Electron tests ran.
+
 ## 2026-09-24 — Native activity and session review
 
 Moved activity presentation to a selectable AppKit window with Copy All/Clear,

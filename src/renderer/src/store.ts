@@ -1280,7 +1280,7 @@ export const useSelection = create<SelectionState>((set) => ({
   // Select and comment/annotate are mutually exclusive overlay modes.
   setSelectMode: (selectMode) => set({ selectMode, ...(selectMode ? { commentMode: null } : {}) }),
   setCommentMode: (commentMode) => set({ commentMode, ...(commentMode ? { selectMode: false } : {}) }),
-  setSelected: (selected) => set({ selected: selected?.selectionGroup?.length === 0 ? null : selected, inspection: null, inspecting: false }),
+  setSelected: (selected) => { window.praxisNativeContext?.selection(selected); set({ selected: selected?.selectionGroup?.length === 0 ? null : selected, inspection: null, inspecting: false }) },
   setInspection: (inspection) => set({ inspection }),
   setInspecting: (inspecting) => set({ inspecting })
 }))
@@ -1341,17 +1341,7 @@ export const useQuestions = create<QuestionState>((set) => ({
   clearPending: () => set({ pending: [] })
 }))
 
-// A picked element's fields come from the (only semi-trusted) previewed page.
-// Collapse to a single line (no control chars / newlines, so an injected value
-// can't masquerade as a new instruction paragraph) and cap by code point
-// (surrogate-safe). The source is additionally validated to a `path:line` shape.
-export const oneLine = (s: string, max: number): string =>
-  Array.from(s.replace(new RegExp("[\\u0000-\\u001F\\u007F]+", "g"), " "))
-    .slice(0, max)
-    .join('')
-    .trim()
-
-const SOURCE_RE = /^[\w./@-]+:\d+(:\d+)?$/
+export { oneLine, describeSelectionForPrompt, selectionForBubble } from '../../shared/selection-context'
 
 /**
  * One-shot composer signals from App-level surfaces:
@@ -1666,29 +1656,6 @@ export const useDiagnosis = create<DiagnosisState>((set) => ({
   setCurrent: (current) => set({ current }),
   setBusy: (busy) => set({ busy })
 }))
-
-/** Build the chat prompt prefix that anchors the agent to a picked element. */
-export const describeSelectionForPrompt = (el: SelectedElement): string => {
-  const id = el.id ? oneLine(el.id, 64) : ''
-  const cls = el.classes[0] ? oneLine(el.classes[0], 64) : ''
-  const ident = id ? `#${id}` : cls ? `.${cls}` : ''
-  const source = el.source && SOURCE_RE.test(el.source) ? el.source : null
-  const where = source ? ` in ${source}` : ` (selector: ${oneLine(el.selector, 200)})`
-  const text = el.text ? ` with text “${oneLine(el.text, 40)}”` : ''
-  return `In the preview I selected the <${oneLine(el.tag, 32)}${ident}> element${where}${text}. `
-}
-
-/**
- * A display-only snapshot of a selection for the sent message bubble — the same
- * tag + `#id`/`.class` identifier the composer's Inspector pill shows, plus the
- * source ref. Kept alongside the message so the bubble can render the pill after
- * the selection is cleared from the composer.
- */
-export const selectionForBubble = (el: SelectedElement): MsgSelection => ({
-  tag: el.tag,
-  ident: el.id ? `#${el.id}` : el.classes[0] ? `.${el.classes[0]}` : '',
-  source: el.source ?? null
-})
 
 /**
  * The preview's real current location (link clicks, SPA route changes, initial

@@ -1,36 +1,11 @@
 import type { NativeChatBridge } from '../../shared/native-chat'
-import type { NativeChatContext, NativeChatEffect } from '../../shared/native-chat-controller'
-import { describeSelectionForPrompt, selectionForBubble, useAnnotations, useChat, useCodeDrawer, useComposer, useHistory, useLayersPanel, usePermissions, usePropsIsland, useSelection, useSession, useSetup, useSpawns, useTokens, useWorkspace } from './store'
+import type { NativeChatEffect } from '../../shared/native-chat-controller'
+import { describeSelectionForPrompt, useAnnotations, useChat, useCodeDrawer, useComposer, useHistory, useLayersPanel, usePermissions, usePropsIsland, useSelection, useSession, useSetup, useSpawns, useTokens, useWorkspace } from './store'
 import { recordLastUsedSettings } from './preferred-model'
-import { readProjectUiEngine, readProjectUiPreference } from './project-ui-preference'
 
 /** Temporary shell adapter. Bun owns conversation state; this mirrors it for
  * toolbar/history badges and forwards workspace context, never native input. */
 export function connectNativeChat(bridge: NativeChatBridge) {
-  let last = ''
-  const context = (): NativeChatContext => {
-    const chat = useChat.getState().activeKey
-    const project = useWorkspace.getState().projects.find(p => p.key === chat || p.sessionKeys?.includes(chat))
-    const selected = useSelection.getState().selected
-    const group = selected ? selected.selectionGroup ?? [selected] : []
-    const setup = useSetup.getState(), tokens = useTokens.getState()
-    return {
-      chat, root: project?.root ?? null,
-      selection: selected ? { label: group.length > 1 ? `${group.length} objects` : selected.tag,
-        prompt: group.map(describeSelectionForPrompt).join('\n'),
-        bubble: group.length > 1 ? { tag: `${group.length} objects`, ident: '', source: null } : selectionForBubble(selected) } : null,
-      turn: { projectUi: readProjectUiPreference(), projectUiEngine: readProjectUiEngine() },
-      setup: { needed: setup.needed, dismissed: setup.dismissed, status: setup.status },
-      tokens: { needed: tokens.offerNeeded, dismissed: tokens.offerDismissed },
-      notes: useAnnotations.getState().list.map(n => ({ id: n.id, text: n.text })),
-      spawns: (useSpawns.getState().byKey[chat] ?? []).map(s => ({ id: s.id, label: s.label, status: s.status }))
-    }
-  }
-  const sync = () => {
-    const value = context(), serialized = JSON.stringify(value)
-    if (serialized === last) return
-    last = serialized; bridge.command({ type: 'context', context: value })
-  }
   const effect = async (event: NativeChatEffect) => {
     if (event.type === 'spawn') {
       const spawn = event.event
@@ -54,7 +29,7 @@ export function connectNativeChat(bridge: NativeChatBridge) {
       }
       recordLastUsedSettings(event.settings)
     } else if (event.type === 'selection-clear') {
-      if (event.chat === useChat.getState().activeKey && context().selection?.prompt === event.prompt) useSelection.getState().setSelected(null)
+      if (event.chat === useChat.getState().activeKey && (useSelection.getState().selected ? (useSelection.getState().selected!.selectionGroup ?? [useSelection.getState().selected!]).map(describeSelectionForPrompt).join('\n') : undefined) === event.prompt) useSelection.getState().setSelected(null)
     } else if (event.type === 'focus') bridge.focusComposer()
     else if (event.type === 'layers') useLayersPanel.getState().setOpen(!useLayersPanel.getState().open)
     else if (event.type === 'history') {
@@ -67,7 +42,7 @@ export function connectNativeChat(bridge: NativeChatBridge) {
         setup.setPhase(event.phase)
         setup.setBusy(event.phase === 'configuring')
         setup.setVerifying(event.phase === 'landed')
-        if (event.phase === 'landed') setup.setRestartRequested(true)
+        // Bun owns preview restart after native setup.
         if (event.status) setup.setStatus(event.status)
       }
     } else if (event.type === 'tokens' && event.root === useSession.getState().projectRoot) {
@@ -79,7 +54,7 @@ export function connectNativeChat(bridge: NativeChatBridge) {
       if (event.root === useSession.getState().projectRoot) useAnnotations.getState().setList(notes)
     }
   }
-  const subscriptions = [useChat, useWorkspace, useSelection, useSetup, useTokens, useAnnotations, useSpawns].map(store => store.subscribe(sync))
+  const subscriptions: (() => void)[] = []
   subscriptions.push(bridge.onEffect(event => { void effect(event).catch(console.error) }))
   subscriptions.push(useComposer.subscribe(value => {
     const chat = useChat.getState().activeKey
@@ -96,6 +71,5 @@ export function connectNativeChat(bridge: NativeChatBridge) {
     } else if (kind === 'props') usePropsIsland.getState().setOpen(!usePropsIsland.getState().open)
   }))
   bridge.command({ type: 'attach' })
-  sync()
   return () => subscriptions.forEach(off => off())
 }

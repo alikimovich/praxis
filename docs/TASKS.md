@@ -21,6 +21,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 
 - [ ] Native migration 1: finish Bun workspace ownership (branch/publish and editing context remain).
   - [x] Bun project/chat navigation, restore, warm-project lifetime and profile-owned preferences.
+  - [x] Service-owned native chat context, setup/token offers, annotations and background-agent state.
 - [ ] Native migration 2: authoritative AppKit layout and preview presentation.
 - [ ] Native migration 3: core workflows without the main UI WebView.
 - [ ] Native migration 4: native settings, project/Git sheets, review and activity screens.
