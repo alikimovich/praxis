@@ -31,7 +31,7 @@ history as written.
 | --- | --- |
 | `bun run dev` | Launch the app (electron-vite, HMR) |
 | `bun run dev:native` | Build and run the real app on Bun + AppKit/WebKit (macOS, experimental); see `docs/NATIVE.md` |
-| `bun run build:native` | Build native backend, shared renderer/preloads, and Swift host to `out/native/` |
+| `bun run build:native` | Build native backend, isolated preview preload, and Swift host to `out/native/` |
 | `bun run test:native` | Deterministic native desktop integration test; `test:native-live` separately submits a real fixture-edit turn |
 | `praxis serve <repo>` | Run the built UI in a local browser (loopback only) |
 | `praxis serve <repo> --remote` | Publish the loopback UI/preview to the private Tailscale network |
@@ -83,8 +83,7 @@ with `capturePage()` or read its URL via
 ## Architecture — four process boundaries
 
 The opt-in native entrypoint is `src/native/index.ts`. Its build aliases Electron
-imports to a private adapter for the shared application services, and reuses the
-same UI and preview preloads. Electron's entrypoint/build stay independent. Native
+imports to a private adapter for the shared application services, and retains only the isolated project-preview preload. Its application UI is Swift/AppKit/SwiftUI, without a main UI WebView or React build. Electron's entrypoint/build stay independent. Native
 profiles are separate until a safe shared migration/locking design is implemented.
 See `docs/NATIVE.md` for the host protocol, isolation checks, and current limits.
 `src/native/Shell.swift` owns the system sidebar (including project actions),
@@ -101,8 +100,7 @@ SwiftUI also owns startup/empty workspace UI and the animated pixel cat; AppKit
 owns chat divider input and view geometry through `src/native/WorkspaceLayout.swift`.
 AppKit source editing (`src/native/SourceEditor.swift`) and layers (`src/native/Layers.swift`)
 use direct Bun controllers. SwiftUI also owns the property/style/custom inspector and
-recipe-driven content windows. The main WebKit view remains only as a transitional
-compatibility client pending startup/build removal. `src/native/Sheets.swift` renders native New Project, memory,
+recipe-driven content windows. Only the project preview creates a WebKit view. `src/native/Sheets.swift` renders native New Project, memory,
 Settings and provider forms; Bun sheet controllers own their service operations.
 See `docs/NATIVE.md`.
 

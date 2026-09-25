@@ -142,13 +142,13 @@ export class NativeView {
       getURL: () => this.url,
       send: (channel: string, ...args: unknown[]) => {
         if (id === 'main') serviceEvents.emit('event', channel, ...args)
-        bridge().send('deliver', { view: id, message: { type: 'event', channel, args } })
+        else bridge().send('deliver', { view: id, message: { type: 'event', channel, args } })
       },
       loadURL: (url: string) => {
         this.url = url
         bridge().send('load', { view: id, url })
       },
-      capturePage: async () => new NativeImage(await bridge().request('capture', { view: id })),
+      capturePage: async () => new NativeImage(id === 'main' ? await bridge().request('captureShellImage') : await bridge().request('capture', { view: id })),
       executeJavaScript: (code: string) => bridge().request('evaluate', { view: id, code }),
       insertCSS: async (css: string) => {
         const key = randomUUID()

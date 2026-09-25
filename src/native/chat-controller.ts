@@ -165,6 +165,7 @@ export class NativeChatController {
           else await this.submit(chat)
           break
         case 'choice': await this.choice(chat, action.label, action.value); break
+        case 'attachment-error': chat.error = action.message; break
         case 'files': chat.attachments.push(...action.files.map(file => ({ ...file, id: crypto.randomUUID() }))); break
         case 'remove': chat.attachments = chat.attachments.filter((_, index) => index !== action.index); break
         case 'context': this.clearSelection(chat); break

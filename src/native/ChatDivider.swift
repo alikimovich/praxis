@@ -28,9 +28,19 @@ final class NativeChatDivider: NSView {
         frame.origin.x = origin + width - 4
         changed?(width)
     }
-    func end() { dragging = false }
+    func end() { dragging = false; changed?(width) }
     override func mouseDown(with event: NSEvent) { begin(at: event.locationInWindow) }
     override func mouseDragged(with event: NSEvent) { drag(to: event.locationInWindow) }
     override func mouseUp(with event: NSEvent) { end() }
     override func viewDidMoveToWindow() { if window == nil { end() } }
+}
+
+final class NativePanelDivider: NSView {
+    var vertical = false
+    var changed: ((CGFloat) -> Void)?
+    private var previous: NSPoint?
+    override func resetCursorRects() { addCursorRect(bounds, cursor: vertical ? .resizeLeftRight : .resizeUpDown) }
+    override func mouseDown(with event: NSEvent) { previous = event.locationInWindow }
+    override func mouseDragged(with event: NSEvent) { guard let previous else { return }; self.previous = event.locationInWindow; changed?(vertical ? event.locationInWindow.x - previous.x : event.locationInWindow.y - previous.y) }
+    override func mouseUp(with event: NSEvent) { previous = nil }
 }

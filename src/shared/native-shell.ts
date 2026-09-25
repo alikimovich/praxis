@@ -33,6 +33,9 @@ export interface NativeShellState {
 }
 export interface NativeShellAction {
   action:
+    | 'rename-chat'
+    | 'project-up'
+    | 'project-down'
     | 'chat-resize'
     | 'select'
     | 'new-chat'

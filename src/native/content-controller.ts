@@ -1,7 +1,7 @@
 import { inspectContent } from '@alikimovich/content-controls/recipe'
 import type { ContentControlDocument } from '../shared/api'
 import type { NativeInspectorAction, NativeInspectorField, NativeInspectorState } from '../shared/native-inspector'
-type Session = { document: ContentControlDocument; draft: Record<string, any>; generation: number; root: string; visible: boolean; busy: boolean; error: string; dirty: boolean; actions: Map<string, () => void>; fields: Map<string, { target: Record<string, any>; key: string; type: string }> }
+type Session = { document: ContentControlDocument; draft: Record<string, any>; generation: number; root: string; visible: boolean; busy: boolean; error: string; dirty: boolean; undo: Record<string, any>[]; lastField: string | null; actions: Map<string, () => void>; fields: Map<string, { target: Record<string, any>; key: string; type: string }> }
 /** Recipe validation and revision checking stay in the same shared backend as Electron. */
 export class NativeContentController {
   readonly sessions = new Map<string, Session>()
@@ -12,11 +12,11 @@ export class NativeContentController {
     if (existing && !reload) { existing.visible = true; this.publish(key, existing); return }
     const document: ContentControlDocument | null = await this.invoke('content-controls:get', root, id)
     if (!document) throw new Error('This content file has not landed in the live checkout yet. Try again after the change finishes.')
-    const session: Session = { document, root, draft: structuredClone(document.value), generation: ++this.sequence, visible: true, busy: false, error: '', dirty: false, actions: new Map(), fields: new Map() }
+    const session: Session = { document, root, draft: structuredClone(document.value), generation: ++this.sequence, visible: true, busy: false, error: '', dirty: false, undo: [], lastField: null, actions: new Map(), fields: new Map() }
     this.sessions.set(key, session); this.publish(key, session)
   }
   publish(key: string, session: Session) {
-    const fields: NativeInspectorField[] = [], actions = [{id:'save',label:'Save to source'}, {id:'reload',label:'Reload (discard draft)'}, {id:'remove',label:'Remove editor'}, {id:'close',label:'Close'}]
+    const fields: NativeInspectorField[] = [], actions = [...(session.undo.length ? [{id:'undo',label:'Undo draft change'}] : []), {id:'save',label:'Save to source'}, {id:'reload',label:'Reload (discard draft)'}, {id:'remove',label:'Remove editor'}, {id:'close',label:'Close'}]
     session.fields.clear(); session.actions.clear()
     const addFields = (recipes: any[], target: Record<string, any>, group: string, prefix: string) => {
       for (const recipe of recipes) {
@@ -51,6 +51,7 @@ export class NativeContentController {
       if (action.action === 'close') { session.visible = false; this.publish(key,session); return }
       if (action.action === 'reload') { await this.open(session.root,session.document.panel.id,true); return }
       if (action.action === 'remove') { await this.invoke('content-controls:remove',session.root,session.document.panel.id); session.visible=false; this.publish(key,session); this.sessions.delete(key); return }
+      if (action.action === 'undo') { const previous = session.undo.pop(); if (previous) { session.draft = previous; session.dirty = JSON.stringify(previous) !== JSON.stringify(session.document.value); session.lastField = null; session.generation=++this.sequence; this.publish(key,session) }; return }
       if (action.action === 'save') {
         const issues = inspectContent(session.document.panel.recipe, session.draft)
         if (issues.length) throw new Error(issues.map(issue=>`${issue.path}: ${issue.message}`).join('\n'))
@@ -58,16 +59,18 @@ export class NativeContentController {
         session.document=await this.invoke('content-controls:save',session.root,session.document.panel.id,session.document.revision,session.draft)
         session.dirty=false; session.error=''
       } else if (session.actions.has(action.action)) {
-        session.actions.get(action.action)!(); session.dirty=true; session.generation=++this.sequence
+        session.undo.push(structuredClone(session.draft)); session.undo = session.undo.slice(-30); session.lastField = null; session.actions.get(action.action)!(); session.dirty=true; session.generation=++this.sequence
       } else {
         const field=session.fields.get(action.field ?? '')
         if (!field || !['draft','apply'].includes(action.action)) return
+        const firstEdit = session.lastField !== action.field
+        if (firstEdit) { session.undo.push(structuredClone(session.draft)); session.undo = session.undo.slice(-30); session.lastField = action.field ?? null }
         const raw=action.value ?? ''
         if (field.type==='number') { const number=Number(raw); field.target[field.key] = !raw.trim() || !Number.isFinite(number) ? raw : number }
         else field.target[field.key]=field.type==='toggle' ? raw==='true' : raw
         session.dirty=true; session.error=''
         // Do not round-trip a whole form on each text keystroke.
-        if(action.action==='draft') return
+        if(action.action==='draft') { if (firstEdit) this.publish(key,session); return }
       }
     } catch(error) { session.error=String(error) }
     finally { session.busy=false }

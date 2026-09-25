@@ -1,12 +1,12 @@
+import { spawn } from 'node:child_process'
+import { NativeUpdateController } from './update-controller'
 import { installNativeInspector } from './inspector-runtime'
 import { NativeLayersController } from './layers-controller'
 import { agentOptionsFor } from '../shared/chat-settings'
 import { NativeEditorController } from './editor-controller'
-import { randomBytes, randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
-import { extname, join, resolve, sep } from 'node:path'
+import { join, resolve } from 'node:path'
 import { projectHasRunningAgents, registerAgentIpc } from '../main/agent'
 import { registerAnnotationsIpc } from '../main/annotations'
 import { registerContentControlsIpc } from '../main/content-controls-ipc'
@@ -31,7 +31,7 @@ import { registerTokensIpc } from '../main/tokens'
 import * as channels from '../shared/preview-channels'
 import { NativeBridge, setBridge } from './bridge'
 import { app, dispatchIPC, ipcMain, NativeView, protocolHandlers, shell, views, serviceEvents } from './platform'
-import { runNativeSmoke } from './smoke'
+import { runNativeCoreSmoke } from './smoke-core'
 import { installShutdown } from './shutdown'
 import { parsePreferredModelState, resolvePreferredSettings } from '../shared/preferred-model'
 import { nativePreferences } from './preferences'
@@ -46,7 +46,7 @@ import { NativeReviewController } from './review-controller'
 import { NativeActivityController } from './activity-controller'
 import { NativeSettingsController } from './settings-controller'
 import { NativeSheetController } from './sheets-runtime'
-import { installNativeWorkspace, workspaceOwnsAction } from './workspace-runtime'
+import { installNativeWorkspace } from './workspace-runtime'
 
 async function main() {
   const testing = process.argv.includes('--test')
@@ -82,46 +82,12 @@ async function main() {
   }
   let pickedRoot = fixture || (requestedProject ? resolve(requestedProject) : null)
   const root = resolve(__dirname, '../..')
-  const rendererDir = join(__dirname, 'renderer')
-  const secret = randomBytes(24).toString('hex')
-  const mime: Record<string, string> = {
-    '.html': 'text/html',
-    '.js': 'text/javascript',
-    '.css': 'text/css',
-    '.svg': 'image/svg+xml',
-    '.png': 'image/png',
-    '.woff2': 'font/woff2'
-  }
-  const server = createServer((request, response) => {
-    try {
-      const path = decodeURIComponent(new URL(request.url || '/', 'http://localhost').pathname)
-      if (!path.startsWith(`/${secret}/`)) {
-        response.writeHead(404).end()
-        return
-      }
-      const file = resolve(rendererDir, path.slice(secret.length + 2))
-      if (!file.startsWith(rendererDir + sep)) {
-        response.writeHead(404).end()
-        return
-      }
-      const body = readFileSync(file)
-      response.writeHead(200, {
-        'content-type': mime[extname(file)] || 'application/octet-stream',
-        'cache-control': 'no-store'
-      })
-      response.end(body)
-    } catch {
-      response.writeHead(404).end()
-    }
-  })
   let host: NativeBridge | undefined
   let cleaned = false
   const cleanup = () => {
     if (cleaned) return
     cleaned = true
     app.emit('before-quit')
-    server.closeAllConnections()
-    server.close()
     host?.send('quit')
     rmSync(lock, { force: true })
     // Profiles are deliberately distinct from Electron until migrations and
@@ -129,16 +95,6 @@ async function main() {
     if (testDir) setTimeout(() => rmSync(testDir, { recursive: true, force: true }), 500).unref()
   }
   installShutdown(cleanup)
-  await new Promise<void>((resolveListen, reject) => {
-    server.once('error', reject)
-    server.listen(
-      testing ? 0 : Number(process.env.PRAXIS_NATIVE_PORT || 4188),
-      '127.0.0.1',
-      resolveListen
-    )
-  })
-  const address = server.address() as { port: number }
-  const url = `http://127.0.0.1:${address.port}/${secret}/index.html`
   const executable = join(__dirname, 'Praxis Native.app/Contents/MacOS/PraxisHost')
   process.env.PRAXIS_NATIVE_HOST = executable
   host = new NativeBridge(executable, __dirname, testing ? 'ephemeral' : 'persistent')
@@ -157,40 +113,8 @@ async function main() {
     }
     host!.send('preferences', { values })
     host!.send('layoutWidth', { width: Number(values['praxis:native-chat-width']) || 440 })
-    for (const [name, view] of views) if (name !== 'preview') view.webContents.send('native-preferences:changed', values)
   }
-  ipcMain.on('native-preferences:set', (event, key, value, imported) => {
-    if (event.sender === views.get('preview')?.webContents) return
-    try { preferences.set(key, value, imported === true); refreshPreferences() }
-    catch (error) { console.error('Native preference write failed:', error) }
-  })
-  ipcMain.handle('native-workspace:read', event => {
-    if (event.sender !== mainView.webContents) throw new Error('Workspace is main-view only')
-    return workspace.read()
-  })
-  ipcMain.on('native-workspace:write', (event, raw) => {
-    // Native workspace commands own persistence. Legacy panel metadata is mirrored below.
-    if (event.sender === mainView.webContents) {
-      const incoming = JSON.parse(raw)
-      for (const patch of incoming.projects ?? []) {
-        const entry = workspaceController.state.projects.find(p => p.key === patch.key)
-        if (entry) for (const field of ['viewport', 'chatSettings'] as const) {
-          if (patch[field] !== undefined) (entry as any)[field] = patch[field]
-        }
-      }
-      workspace.write(JSON.stringify({ projects: workspaceController.state.projects, activeKey: workspaceController.state.activeKey, recents: workspaceController.state.recents }))
-    }
-  })
   const previewView = new NativeView('preview')
-  let panelView: NativeView | undefined
-  const ensurePanelView = () => {
-    if (!panelView) {
-      host!.send('createPanel')
-      panelView = new NativeView('panel')
-      panelView.webContents.loadURL(`${url}?praxisPanel=1`)
-    }
-    return panelView
-  }
   const window = mainView as unknown as Electron.BrowserWindow
   const send = (channel: string, ...args: unknown[]) => mainView.webContents.send(channel, ...args)
   const state: PreviewState = {
@@ -209,8 +133,8 @@ async function main() {
     state,
     ensurePreviewView: () => previewView as any,
     getPreviewView: () => previewView as any,
-    ensurePanelView: () => ensurePanelView() as any,
-    getPanelView: () => panelView as any,
+    ensurePanelView: () => { throw new Error('Native inspectors do not use WebViews') },
+    getPanelView: () => null,
     getMainWindow: () => window,
     sendToMain: send,
     placeholderUrl: 'about:blank',
@@ -219,8 +143,7 @@ async function main() {
         const u = new URL(raw)
         return (
           ['http:', 'https:'].includes(u.protocol) &&
-          ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname) &&
-          u.origin !== new URL(url).origin
+          ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)
         )
       } catch {
         return false
@@ -266,10 +189,6 @@ async function main() {
   ipcMain.handle('window:is-fullscreen', () => host!.request('fullscreen'))
   ipcMain.on('menu:native-edit', (_e, action) => host!.send('nativeEdit', { action }))
   ipcMain.on('menu:set-recents', (_e, recents) => host!.send('recents', { recents }))
-  ipcMain.handle('update:check', () => ({ status: 'idle', behind: 0 }))
-  ipcMain.handle('update:apply', () => {
-    throw new Error('Restart bun run dev:native after updating the checkout.')
-  })
   host.on('ipc', async ({ view, message }) => {
     try {
       const value = await dispatchIPC(view, message)
@@ -307,35 +226,20 @@ async function main() {
       host!.send('mediaReply', { task, status: 404, data: '' })
     }
   })
-  host.on('menu', ({ action }) => { if (!['open-project', 'new-project', 'settings', 'logs', 'feedback', 'diagnose'].includes(action)) send('menu:action', action) })
+
   let shellController: NativeShellController | undefined
   const renderShell = () => shellController?.render()
-  ipcMain.on('native-shell:state', (event, state) => {
-    if (event.sender === mainView.webContents && shellController) { shellController.schedule() }
-  })
-  host.on('shell-action', action => { if (!workspaceOwnsAction(action) && !['memory', 'branch', 'new-branch', 'git-updates', 'publish', 'publish-mode', 'expand', 'device', 'select-object', 'address', 'home', 'code', 'layers'].includes(action.action) && !(action.action === 'select' && action.id?.startsWith('history:'))) send('native-shell:action', action) })
   const activityController = new NativeActivityController((method, data) => host!.send(method, data))
   host.on('activity-action', ({ action }) => activityController.action(action))
   host.on('menu', ({ action }) => { if (action === 'logs') activityController.action('toggle') })
   serviceEvents.on('event', (channel, line) => { if (channel === 'devserver:log' || channel === 'simulator:log') activityController.append(line, 'server') })
-  ipcMain.on('native-activity:command', (event, command) => {
-    if (event.sender !== mainView.webContents) return
-    if (command?.action === 'append') activityController.append(command.text, command.kind)
-    else activityController.action(command?.action)
-  })
   host.on('native-layout-width', ({ width }) => {
     if (!Number.isFinite(width) || width < 320 || width > 760) return
     preferences.set('praxis:native-chat-width', String(width))
-    send('native-shell:action', { action: 'chat-resize', value: String(width) })
   })
+  host.on('native-layout-sizes', sizes => { if (['source','layers','inspector'].every(key => Number.isFinite(sizes[key]))) preferences.set('praxis:native-panel-sizes', JSON.stringify({ source:sizes.source, layers:sizes.layers, inspector:sizes.inspector })) })
   host.on('native-layout-frame', ({ frame }) => {
     void dispatchIPC('main', { type: 'send', channel: 'preview:set-bounds', args: [frame] })
-    send('native-layout:frame', frame)
-  })
-  ipcMain.on('native-layout:panels', (event, panels) => {
-    if (event.sender !== mainView.webContents) return
-    const safe = Object.fromEntries(['right', 'bottom', 'layers'].map(key => [key, Number.isFinite(panels?.[key]) ? Math.max(0, Math.min(2000, panels[key])) : 0]))
-    host!.send('layoutPanels', { panels: safe })
   })
   const chatController = installNativeChat(host!, mainView)
   const workspaceController = installNativeWorkspace(host!, mainView, workspace, chatController, preferences)
@@ -361,8 +265,6 @@ async function main() {
   const openSource = (source?: string, popped?: boolean) => { const root = workspaceController.active?.root; if (root) void editorController.open(root, source, popped) }
   const editorAction = (action: any) => { if (workspaceController.state.projects.some(p => p.root === action.root)) void editorController.action(action) }
   host.on('source-action', editorAction)
-  ipcMain.on('native-editor:open', (event, source) => { if (event.sender === mainView.webContents) openSource(source) })
-  ipcMain.on('native-editor:close', () => { const root = workspaceController.active?.root; if (root) editorAction({ root, action: 'hide' }) })
   ipcMain.handle('source:popout', (_event, root, source) => editorController.open(root, source, true))
   ipcMain.handle('source:close-window', () => { const root = workspaceController.active?.root; if (root) return editorController.action({ root, action: 'hide' }) })
   host.on('shell-action', action => {
@@ -401,14 +303,19 @@ async function main() {
     if (channel === 'annotations:add' || channel === 'annotations:remove') void contextController.notes(args[0]).catch(error => workspaceController.reportError(error))
     if (channel === 'agent:close-project') contextController.projects.delete(args[0])
   })
-  ipcMain.on('native-context:selection', (event, value) => { if (event.sender === mainView.webContents) contextController.selection(value) })
-  const inspectorController = installNativeInspector(host!, workspaceController, chatController, contextController, visualEdit, openSource, error => activityController.append(String(error), 'error'))
+  const { inspector: inspectorController, content: contentController } = installNativeInspector(host!, workspaceController, chatController, contextController, visualEdit, openSource, error => activityController.append(String(error), 'error'))
   const sheetController = new NativeSheetController(host!, workspaceController, chatController)
   const gitController = new NativeGitController(sheetController, activityController, preferences, renderShell)
   shellController = new NativeShellController(workspaceController, chatController, gitController, preferences,
-    state => host!.send('shellState', { state }), value => send('native-shell:projection', value))
+    state => host!.send('shellState', { state }), () => {})
   const renderWorkspace = workspaceController.services.render
-  workspaceController.services.render = state => { renderWorkspace(state); shellController!.schedule(); send('native-shell:action', { action: 'chat-resize', value: preferences.get('praxis:native-chat-width') ?? '440' }) }
+  workspaceController.services.render = state => { renderWorkspace(state); shellController!.schedule(); host!.send('recents', { recents: state.recents }) }
+  host.on('menu', ({ action }) => {
+    const root = workspaceController.active?.root
+    if (action === 'toggle-chat') void shellController!.action({ action: 'expand' })
+    else if (action === 'reload' && workspaceController.active?.url) void workspaceController.services.invoke('preview:load', workspaceController.active.url)
+    else if (['undo', 'redo'].includes(action) && root) void workspaceController.services.invoke(`edit:${action}`, root).then(result => { if (result.conflict) activityController.append('The file changed on disk; undo/redo refused to overwrite it.', 'error'); void inspectorController.refresh() }).catch(error => activityController.append(String(error), 'error'))
+  })
   const renderChatEffect = chatController.services.effect
   chatController.services.effect = effect => { renderChatEffect(effect); if (effect.type === 'mirror') shellController!.schedule() }
   host.on('shell-action', action => {
@@ -429,11 +336,15 @@ async function main() {
     const operation = action.action === 'branch' ? gitController.branch(key, action.value ?? '') : action.action === 'new-branch' ? gitController.branch(key, action.value ?? '', true) : action.action === 'publish' ? gitController.publish(key) : action.action === 'git-updates' ? gitController.updates(key) : null
     void operation?.catch(error => activityController.append(String(error), 'error'))
   })
-  ipcMain.on('native-git:action', (event, action) => {
-    if (event.sender !== mainView.webContents) return
-    if (action.action === 'connect' && workspaceController.state.activeKey) void gitController.connect(workspaceController.state.activeKey).catch(error => activityController.append(String(error), 'error'))
-    else if (['publish', 'branch', 'new-branch', 'git-updates'].includes(action.action)) host!.emit('shell-action', action)
-  })
+  const updates = new NativeUpdateController(sheetController, root, () => {
+    const project = workspaceController.active?.root
+    cleanup()
+    const processNext = spawn(process.execPath, [join(root, 'out/native/index.cjs'), ...(project ? ['--project', project] : [])], { cwd: root, detached: true, stdio: 'ignore', env: process.env })
+    processNext.on('error', error => { console.error('Could not restart Praxis Native:', error); process.exit(1) }); processNext.once('spawn', () => { processNext.unref(); process.exit(0) })
+  }, undefined, undefined, () => [...chatController.chats.values()].some(chat => chat.isRunning || chat.text || chat.attachments.length) ? 'Finish running chats and send or clear your drafts before restarting.' : [...editorController.sessions.values()].some(session => [...session.documents.values()].some(doc => doc.text !== doc.baseline)) ? 'Save source editor drafts before restarting.' : [...contentController.sessions.values()].some(session => session.dirty || session.busy) ? 'Save content editor drafts before restarting.' : null)
+  host.on('menu', ({ action }) => { if (action === 'updates') void updates.open().catch(error => activityController.append(String(error), 'error')) })
+  host.on('download-error', ({ message }) => activityController.append(`Download failed: ${message}`, 'error'))
+  host.on('download-finished', () => activityController.append('Download finished.', 'success'))
   const supportSheets = new NativeSupportSheets(sheetController, () => host!.request('captureFeedback'), url => shell.openExternal(url))
   const reviewController = new NativeReviewController(sheetController, url => shell.openExternal(url))
   const settingsController = new NativeSettingsController(sheetController, preferences, refreshPreferences)
@@ -448,17 +359,12 @@ async function main() {
     else if (kind === 'memory' && key) void sheetController.memory(key).catch(error => workspaceController.reportError(error))
   }
   host.on('menu', ({ action }) => { if (['new-project', 'settings', 'feedback', 'diagnose'].includes(action)) openSheet(action) })
-  host.on('shell-action', action => { if (action.action === 'select' && action.id?.startsWith('history:')) openSheet('review', action.id.slice(8)); if (action.action === 'memory') openSheet('memory', action.project ?? workspaceController.state.activeKey ?? undefined) })
+  host.on('shell-action', action => { if (action.action === 'rename-chat' && action.id && workspaceController.state.activeKey) sheetController.renameChat(action.id, workspaceController.state.activeKey); if (action.action === 'select' && action.id?.startsWith('history:')) openSheet('review', action.id.slice(8)); if (action.action === 'memory') openSheet('memory', action.project ?? workspaceController.state.activeKey ?? undefined) })
   host.on('native-preview-action', action => {
     if (workspaceController.state.activeKey !== action.project) return
     if (action.action === 'logs') activityController.action('show')
     else if (action.action === 'diagnose') openSheet('diagnose')
     else if (action.action === 'run') void workspaceController.command({ type: 'restart', key: action.project, ...(action.command?.trim() ? { command: action.command.trim() } : {}) }).catch(error => activityController.append(String(error), 'error'))
-  })
-  ipcMain.on('native-sheet:open', (event, kind, key) => { if (event.sender === mainView.webContents) openSheet(kind, key) })
-
-  ipcMain.on('native-composer:focus', event => {
-    if (event.sender === mainView.webContents) host!.send('composerFocus')
   })
 
   host.on('view-closed', ({ view }) => {
@@ -475,7 +381,7 @@ async function main() {
   host.on('external', ({ url }) => {
     void shell.openExternal(url).catch(console.error)
   })
-  host.on('load-error', (message) => console.error('Native navigation:', message.message))
+  host.on('load-error', message => { activityController.append(message.message, 'error'); if (message.view === 'preview' && workspaceController.active) { workspaceController.state.status = { kind: 'error', message: message.message }; workspaceController.changed() } })
   host.on('loaded', ({ view, url }) => {
     const current = views.get(view)
     if (current) current.url = url
@@ -500,12 +406,17 @@ async function main() {
   host.once('ready', async () => {
     host!.send('preferences', { values: preferences.snapshot() })
     host!.send('layoutWidth', { width: Number(preferences.get('praxis:native-chat-width')) || 440 })
+    try { host!.send('layoutSizes', { sizes: JSON.parse(preferences.get('praxis:native-panel-sizes') ?? '{}') }) } catch {}
     shellController!.render()
-    mainView.webContents.loadURL(`${url}?praxisSkipIntro=1`)
+    let preferred: unknown
+    try { preferred = JSON.parse(preferences.get('praxis:preferred-model') ?? 'null') } catch {}
+    await workspaceController.command({ type: 'attach', preferred: resolvePreferredSettings(parsePreferredModelState(preferred)) })
+    await chatController.command({ type: 'attach' })
+    if (requestedProject && !testing) await workspaceController.command({ type: 'open', root: resolve(requestedProject) })
     console.log('Praxis Native is running on Bun + system WebKit. Electron is not loaded.')
     if (testing) {
       try {
-        await runNativeSmoke(host!, fixture!, root)
+        await runNativeCoreSmoke(host!, fixture!, root)
         cleanup()
         process.exitCode = 0
       } catch (error) {
@@ -513,7 +424,7 @@ async function main() {
         try {
           writeFileSync(join(root, 'test/artifacts/native/failure.png'), Buffer.from(await host!.request('captureShell'), 'base64'))
           console.error('Native chat state:', await host!.request('chatInspect'))
-          console.error('Native geometry:', await host!.request('evaluate', { view: 'main', code: `({native:!!window.praxisNativeChat, placeholder:document.querySelector('.native-chat-surface')?.getBoundingClientRect().toJSON(), chat:document.querySelector('.chat')?.outerHTML.slice(0,500), visibility:document.visibilityState})` }))
+          console.error('Native geometry:', await host!.request('layoutInspect'))
         } catch { /* preserve original failure */ }
         cleanup()
         process.exitCode = 1

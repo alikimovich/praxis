@@ -15,7 +15,7 @@ export function installNativeInspector(host: NativeBridge, workspace: NativeWork
     if (!entry) return
     if (submit) await chat.command({ type: 'submit', chat: entry.activeSessionKey, text: prompt })
     else await visualEdit(root, prompt)
-  }, () => chat.action({ chat: chat.active, action: 'setup' }))
+  }, () => chat.action({ chat: chat.active, action: 'setup' }), () => chat.chats.get(chat.active)?.settings.provider ?? 'claude')
   const content = new NativeContentController(workspace.services.invoke, (documentID, state) => host.send('contentState', { documentID, state }))
   const openContent = async (root: string) => {
     const panels = await workspace.services.invoke('content-controls:list', root)
@@ -28,8 +28,9 @@ export function installNativeInspector(host: NativeBridge, workspace: NativeWork
   workspace.services.activate = async entry => { void controller.activate(entry?.root ?? '').catch(report); if (entry) void openContent(entry.root).catch(report); await activate(entry) }
   const effect = chat.services.effect
   chat.services.effect = value => {
+    const selection = chat.chats.get(chat.active)?.context?.selection
     effect(value)
-    if (value.type === 'selection-clear' && value.chat === chat.active) void controller.select(null).catch(report)
+    if (value.type === 'selection-clear' && value.chat === chat.active && selection?.prompt === value.prompt) void controller.select(null).catch(report)
   }
   serviceEvents.on('event', (channel, value) => {
     const entry = workspace.active
@@ -49,10 +50,10 @@ export function installNativeInspector(host: NativeBridge, workspace: NativeWork
         const prompt = describeSelectionForPrompt(value.el) + oneLine(value.text, 2000), current = chat.chats.get(entry.activeSessionKey)
         void workspace.services.invoke('agent:spawn-comment', entry.root, prompt, entry.activeSessionKey, backgroundAgentOptions(current ? agentOptionsFor(current.settings) : {}, 'comment'), 'comment').then(result => { if (!result.ok) return chat.command({ type: 'submit', chat: entry.activeSessionKey, text: prompt }) }).catch(report)
       }
-    } else if (channel === 'controls:updated' && (value?.root ?? value) === entry.root || channel === 'agent:event' && ['done', 'landing-finished', 'spawn-finished'].includes(value.type)) void controller.refresh().catch(report)
+    } else if (channel === 'controls:updated' && (value?.root ?? value) === entry.root || channel === 'agent:event' && ['done', 'landing-finished', 'spawn-finished'].includes(value.type)) { void controller.refresh().catch(report); void openContent(entry.root).catch(report) }
     else if (channel === 'controls:open' && value.root === entry.root) {
-      controller.state.visible = true; controller.state.tab = value.tab; controller.publish(); void controller.refresh().catch(report)
+      controller.requestedFile = value.file ?? null; controller.state.visible = true; controller.state.tab = value.tab; controller.publish(); void controller.refresh().catch(report)
     }
   })
-  return controller
+  return { inspector: controller, content }
 }

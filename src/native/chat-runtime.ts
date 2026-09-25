@@ -2,7 +2,7 @@ import { chatAgentSettingsFromOptions } from '../shared/chat-settings'
 import type { AgentEvent } from '../shared/api'
 import type { NativeBridge } from './bridge'
 import { NativeChatController } from './chat-controller'
-import { dispatchIPC, ipcMain, serviceEvents, type NativeView } from './platform'
+import { dispatchIPC, serviceEvents, type NativeView } from './platform'
 
 export let nativeChat: NativeChatController
 export function installNativeChat(host: NativeBridge, view: NativeView) {
@@ -11,14 +11,10 @@ export function installNativeChat(host: NativeBridge, view: NativeView) {
     render: state => host.send('chatState', { state }),
     effect: effect => {
       if (effect.type === 'focus') host.send('composerFocus')
-      else view.webContents.send('native-chat:effect', effect)
     }
   })
   host.on('composer-action', action => { void nativeChat.composer(action) })
   host.on('chat-action', action => { void nativeChat.action(action) })
-  ipcMain.on('native-chat:command', (event, command) => {
-    if (event.sender === view.webContents && command?.type !== 'context') void nativeChat.command(command).catch(console.error)
-  })
   serviceEvents.on('event', (channel: string, event: AgentEvent) => {
     if (channel === 'agent:event') nativeChat.event(event)
   })

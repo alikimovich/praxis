@@ -48,30 +48,30 @@ final class SourceLineRuler: NSRulerView {
     }
 }
 
-final class NativeSourceEditor: NSView, NSTextViewDelegate, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate, NSWindowDelegate {
+final class NativeSourceEditor: NSView, NSTextViewDelegate, NSSearchFieldDelegate, NSWindowDelegate {
     var root = "", source = "", revision = 0, state: [String: Any] = [:]
     var files: [String] = [], filtered: [String] = []
-    let code = SourceTextView(), scroll = NSScrollView(), tree = NSTableView(), search = NSSearchField()
+    let code = SourceTextView(), scroll = NSScrollView(), tree = SourceFileTree(), search = NSSearchField()
     let status = NSTextField(labelWithString: ""), filename = NSTextField(labelWithString: "")
     let image = NSImageView(), player = AVPlayerView(), binary = NSTextField(labelWithString: "")
     var popout: NSWindow?, updating = false
     var highlightWork: DispatchWorkItem?
     var dock: (() -> Void)?
     var controls: [String: NSButton] = [:]
-    var documentKey = ""
+    var documentKey = "", reveal = -1
     init() {
         super.init(frame: .zero); wantsLayer = true; layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         let header = NSStackView(); header.orientation = .horizontal; header.spacing = 6
         filename.lineBreakMode = .byTruncatingMiddle; filename.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         header.addArrangedSubview(filename)
-        for (name, label) in [("save", "Save"), ("reload", "Reload"), ("external", "Open in Editor"), ("popout", "Pop Out"), ("hide", "Close")] {
+        for (name, label) in [("back", "←"), ("forward", "→"), ("save", "Save"), ("reload", "Reload"), ("external", "Open in Editor"), ("popout", "Pop Out"), ("hide", "Close")] {
             let button = NSButton(title: label, target: self, action: #selector(buttonAction(_:))); button.identifier = NSUserInterfaceItemIdentifier(name); button.controlSize = .small; header.addArrangedSubview(button); controls[name] = button
         }
         let split = NSSplitView(); split.isVertical = true; split.dividerStyle = .thin
         let sidebar = NSView(), content = NSView(); split.addArrangedSubview(sidebar); split.addArrangedSubview(content)
         search.placeholderString = "Filter files"; search.delegate = self
         let treeScroll = NSScrollView(); treeScroll.hasVerticalScroller = true; treeScroll.autohidesScrollers = true
-        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("file")); column.resizingMask = .autoresizingMask; tree.addTableColumn(column); tree.headerView = nil; tree.dataSource = self; tree.delegate = self; tree.rowHeight = 23
+        tree.open = { [weak self] source in self?.send("open", ["source":source]) }
         treeScroll.documentView = tree
         let operations = NSStackView(); operations.spacing = 6
         for (name, label) in [("create", "+"), ("rename", "Rename"), ("delete", "Trash")] { let b = NSButton(title: label, target: self, action: #selector(buttonAction(_:))); b.identifier = NSUserInterfaceItemIdentifier(name); b.controlSize = .small; operations.addArrangedSubview(b) }
@@ -81,6 +81,7 @@ final class NativeSourceEditor: NSView, NSTextViewDelegate, NSTableViewDataSourc
         code.font = .monospacedSystemFont(ofSize: 12, weight: .regular); code.textColor = .labelColor; code.textContainerInset = NSSize(width: 8, height: 10)
         code.minSize = NSSize(width: 0, height: 0); code.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         code.isVerticallyResizable = true; code.isHorizontallyResizable = false; code.autoresizingMask = [.width]; code.textContainer?.widthTracksTextView = true
+        code.layoutManager?.allowsNonContiguousLayout = true
         code.delegate = self; scroll.documentView = code
         scroll.verticalRulerView = SourceLineRuler(scroll: scroll, text: code); scroll.hasVerticalRuler = true; scroll.rulersVisible = true
         code.save = { [weak self] in self?.send("save") }; code.component = { [weak self] name in self?.send("component", ["name":name]) }
@@ -94,7 +95,7 @@ final class NativeSourceEditor: NSView, NSTextViewDelegate, NSTableViewDataSourc
             header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10), header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10), header.topAnchor.constraint(equalTo: topAnchor, constant: 6), header.heightAnchor.constraint(equalToConstant: 28),
             split.leadingAnchor.constraint(equalTo: leadingAnchor), split.trailingAnchor.constraint(equalTo: trailingAnchor), split.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 6), split.bottomAnchor.constraint(equalTo: status.topAnchor, constant: -4),
             status.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10), status.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10), status.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5), status.heightAnchor.constraint(equalToConstant: 16),
-            sidebar.widthAnchor.constraint(greaterThanOrEqualToConstant: 120), sidebar.widthAnchor.constraint(lessThanOrEqualToConstant: 360),
+            sidebar.widthAnchor.constraint(greaterThanOrEqualToConstant: 180), sidebar.widthAnchor.constraint(lessThanOrEqualToConstant: 360),
             search.leadingAnchor.constraint(equalTo: sidebar.leadingAnchor, constant: 6), search.trailingAnchor.constraint(equalTo: sidebar.trailingAnchor, constant: -6), search.topAnchor.constraint(equalTo: sidebar.topAnchor, constant: 4),
             treeScroll.topAnchor.constraint(equalTo: search.bottomAnchor, constant: 4), treeScroll.leadingAnchor.constraint(equalTo: sidebar.leadingAnchor), treeScroll.trailingAnchor.constraint(equalTo: sidebar.trailingAnchor), treeScroll.bottomAnchor.constraint(equalTo: operations.topAnchor, constant: -4),
             operations.leadingAnchor.constraint(equalTo: sidebar.leadingAnchor, constant: 6), operations.bottomAnchor.constraint(equalTo: sidebar.bottomAnchor, constant: -4)
@@ -122,6 +123,8 @@ final class NativeSourceEditor: NSView, NSTextViewDelegate, NSTableViewDataSourc
         filename.stringValue = source + (value["dirty"] as? Bool == true ? " •" : "")
         let error = value["error"] as? String ?? ""; status.stringValue = !error.isEmpty ? error : value["busy"] as? Bool == true ? "Working…" : "⌘S Save · ⌘F Find · ⌘Click component to navigate"
         status.toolTip = status.stringValue; status.textColor = error.isEmpty ? .secondaryLabelColor : .systemRed
+        controls["back"]?.isEnabled = value["canBack"] as? Bool == true
+        controls["forward"]?.isEnabled = value["canForward"] as? Bool == true
         controls["save"]?.isEnabled = value["busy"] as? Bool != true && value["dirty"] as? Bool == true
         controls["popout"]?.title = value["popped"] as? Bool == true ? "Dock" : "Pop Out"
         let document = value["document"] as? [String: Any] ?? [:], incoming = value["text"] as? String ?? "", nextRevision = value["revision"] as? Int ?? 0
@@ -131,12 +134,19 @@ final class NativeSourceEditor: NSView, NSTextViewDelegate, NSTableViewDataSourc
             if changed { code.undoManager?.removeAllActions(); documentKey = key; let line = document["line"] as? Int ?? 1; let pieces = incoming.split(separator: "\n", omittingEmptySubsequences: false); let offset = pieces.prefix(max(0, line - 1)).reduce(0) { $0 + ($1 as NSString).length + 1 }; code.setSelectedRange(NSRange(location: min(offset, (incoming as NSString).length), length: 0)); code.scrollRangeToVisible(code.selectedRange()) }
             highlight()
         }
+        if let nextReveal = value["reveal"] as? Int, nextReveal != reveal {
+            reveal = nextReveal
+            let line = max(1, document["line"] as? Int ?? 1)
+            let pieces = incoming.split(separator: "\n", omittingEmptySubsequences: false)
+            let offset = pieces.prefix(line - 1).reduce(0) { $0 + ($1 as NSString).length + 1 }
+            code.setSelectedRange(NSRange(location: min(offset, (incoming as NSString).length), length: 0)); code.scrollRangeToVisible(code.selectedRange())
+        }
         revision = max(changed ? 0 : revision, nextRevision)
         let media = document["media"] as? [String: Any], isBinary = document["binary"] as? Bool == true
         scroll.isHidden = media != nil || isBinary; image.isHidden = true; player.isHidden = true; binary.isHidden = !isBinary
         binary.stringValue = "Binary file · \(document["bytes"] as? Int ?? 0) bytes"
         if let path = value["mediaPath"] as? String, let media { if media["kind"] as? String == "image" { image.isHidden = false; image.image = NSImage(contentsOfFile: path) } else { player.isHidden = false; if changed { player.player?.pause(); player.player = AVPlayer(url: URL(fileURLWithPath: path)) } } } else { player.player?.pause() }
-        updating = true; if let index = filtered.firstIndex(of: source) { tree.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false) }; updating = false
+        tree.selectFile(source)
     }
     func textDidChange(_ notification: Notification) { guard !updating else { return }; revision += 1; send("edit", ["text":code.string, "revision":revision]); highlight() }
     func highlight() {
@@ -154,10 +164,7 @@ final class NativeSourceEditor: NSView, NSTextViewDelegate, NSTableViewDataSourc
         }
         highlightWork = work; DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
     }
-    func filter() { let query = search.stringValue.lowercased(); filtered = files.filter { query.isEmpty || $0.lowercased().contains(query) }; tree.reloadData() }
+    func filter() { tree.update(files, query: search.stringValue) }
     func controlTextDidChange(_ obj: Notification) { filter() }
-    func numberOfRows(in tableView: NSTableView) -> Int { filtered.count }
-    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? { let label = NSTextField(labelWithString: filtered[row]); label.font = .systemFont(ofSize: 11); label.lineBreakMode = .byTruncatingMiddle; label.toolTip = filtered[row]; return label }
-    func tableViewSelectionDidChange(_ notification: Notification) { if !updating, tree.selectedRow >= 0, tree.selectedRow < filtered.count { send("open", ["source":filtered[tree.selectedRow]]) } }
     func windowShouldClose(_ sender: NSWindow) -> Bool { send("hide"); return false }
 }

@@ -52,7 +52,7 @@ struct InspectorFieldView: View {
                     if field.kind == "color" {
                         ColorPicker("Color", selection: Binding(get: { Color(nsColor: editorColor(value)) }, set: { color in let c = NSColor(color).usingColorSpace(.deviceRGB) ?? .black; value = String(format: "rgba(%d, %d, %d, %.3f)", Int(c.redComponent * 255), Int(c.greenComponent * 255), Int(c.blueComponent * 255), c.alphaComponent); model.send("preview", field: field.id, value: value) })).labelsHidden()
                     }
-                    Button { apply() } label: { Image(systemName: "checkmark") }.buttonStyle(.borderless).help("Apply value")
+                    Button { apply() } label: { Image(systemName: "checkmark") }.buttonStyle(.borderless).accessibilityLabel("Apply " + field.label).help("Apply value")
                 }
                 if field.kind == "number", let minimum = field.min, let maximum = field.max, maximum > minimum, let number = Double(value) {
                     Slider(value: Binding(get: { Swift.min(maximum, Swift.max(minimum, Double(value) ?? number)) }, set: { value = String($0); model.send("preview", field: field.id, value: value) }), in: minimum...maximum, step: field.step ?? 1, onEditingChanged: { editing in if !editing { apply() } }).accessibilityLabel(field.label)
@@ -104,7 +104,7 @@ struct EditingInspectorContent: View {
         if let state = model.state {
             VStack(alignment: .leading, spacing: 10) {
                 HStack { Text(state.title).font(.headline).lineLimit(1); Spacer(); Menu { ForEach(state.actions) { action in Button(action.label) { model.send(action.id) } } } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).fixedSize(); Button { model.send("close") } label: { Image(systemName: "xmark") }.buttonStyle(.plain) }
-                if state.tab != "content" { Picker("Inspector section", selection: Binding(get: { state.tab }, set: { model.send("tab", value: $0) })) { Text("Props").tag("props"); Text("Styles").tag("styles"); Text("Custom").tag("custom") }.pickerStyle(.segmented) }
+                if state.tab != "content" { Picker("Inspector section", selection: Binding(get: { state.tab }, set: { model.send("tab", value: $0) })) { Text("Props").tag("props"); Text("Styles").tag("styles"); Text("Custom").tag("custom") }.pickerStyle(.segmented).labelsHidden() }
                 if state.busy { ProgressView().controlSize(.small) }
                 if !state.error.isEmpty { Text(state.error).foregroundStyle(.red).font(.caption).textSelection(.enabled) }
                 ScrollView {
@@ -121,7 +121,7 @@ struct EditingInspectorContent: View {
 }
 final class NativeEditingInspector: NSHostingView<EditingInspectorContent> {
     let model = InspectorModel()
-    init() { super.init(rootView: EditingInspectorContent(model: model)); isHidden = true }
+    init() { super.init(rootView: EditingInspectorContent(model: model)); sizingOptions = []; isHidden = true }
     required init(rootView: EditingInspectorContent) { fatalError() }
     required init?(coder: NSCoder) { fatalError() }
     func update(_ value: [String: Any]) { guard let data = try? JSONSerialization.data(withJSONObject: value), let state = try? JSONDecoder().decode(InspectorState.self, from: data) else { return }; model.state = state; isHidden = !state.visible }

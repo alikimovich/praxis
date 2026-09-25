@@ -5,273 +5,138 @@ bun run dev:native
 bun run dev:native --project /absolute/path/to/project
 bun run build:native
 bun run test:native
-PRAXIS_NATIVE_TEST_PROVIDER=codex bun run test:native-live
 ```
 
-The default `bun run dev` remains Electron. The native command builds and launches
-the real Praxis interface, not the earlier fixture-only prototype. The old
-prototype remains in `experimental/native-runtime/` as a minimal reference; run
-its own `bun run dev` there if needed.
+The native application UI is Swift/AppKit/SwiftUI. It does not build or load the
+Praxis React renderer. WebKit is used only for the user's project preview and
+Web Inspector. Bun runs the shared agent, Git, filesystem and project-server
+services. `bun run dev` still launches Electron with its existing React UI.
 
-Requires macOS 13.3+, Bun, command-line tools with the macOS 26 SDK, and the normal Praxis
-dependencies (`bun install`). `build:native` emits `out/native/index.cjs`, the
-renderer/preload bundles and `Praxis Native.app`. Start through the Bun command:
-the internal app bundle is a host subprocess, not a standalone distributable.
-The selected architecture follows the local machine. No Electron or Chromium
-binary is loaded by the native backend; Bun itself remains a local prerequisite.
+Requires macOS 13.3+, Bun, command-line tools with the macOS 26 SDK, and
+`bun install`. Liquid Glass requires macOS 26; older systems use native visual
+effect materials. This migration was verified on macOS 26.4.1, not every supported
+OS version. Start through Bun: the internal `Praxis Native.app` is a host
+subprocess, not a standalone installer.
 
-## Shared code and host boundaries
+## Native ownership
 
-The macOS shell uses a standard `NSOutlineView` sidebar, `NSSplitViewController`
-divider and `NSToolbar` items with system symbols and appearance. The open sidebar
-extends through the titlebar behind the system traffic lights; its list and the
-WebKit content respect the toolbar safe area. The sidebar lists projects only. Its outline is fitted to the scroll viewport so
-row highlights and trailing actions remain inside the sidebar when resized.
-Project rows use the shared project-favicon lookup (including SVG), falling back
-to the system folder icon if an image is missing or cannot be decoded.
-A More menu on each hovered or selected project offers Project Memory and Close
-Project; right-click provides the same actions. The toolbar follows the columns:
-a Projects menu (New Project/Open Project) and sidebar toggle above the sidebar;
-the plain current chat title on the left, History and New Chat on the right; preview actions
-above the preview. Settings stays at the bottom of the sidebar as a 36-point circular gear button,
-using native Liquid Glass on macOS 26 and a circular system bezel on older macOS. The chat header
-tracks the web pane’s measured width, including resizing and sidebar collapse,
-and compacts when the preview is expanded. History lists the current project’s
-open and saved chats, marks the active chat, and uses the existing switch/review
-handlers. The preview section stacks the editable domain above a smaller, muted
-branch menu, without a separate Home button. Select Object and desktop/mobile share one native toolbar group;
-Code, Layers and Expand/Restore form one native toolbar group. Publish/Create PR
-(or Connect to GitHub) is a separate standard native button at the far right,
-retaining its PR/merge mode menu.
-Branch switching, new branches and Git Updates reuse the shared handlers; the
-publish menu retains both PR-only and merge modes. Expanding hides chat and the
-native sidebar; restoring returns the sidebar to its previous collapsed state.
-The running web preview header is hidden only in the native build; startup/error
-status remains visible. The address follows preview navigation without replacing
-an edit in progress. Enter navigates within the project origin, Escape restores
-the current URL. The idle field shows host/port; focusing reveals the full URL,
-and entering `/` navigates to the origin root. The device toggle is
-disabled for simulator projects.
+| Surface | Implementation |
+| --- | --- |
+| Window, toolbar, sidebar, split views | AppKit |
+| Welcome, loading/errors, animated pixel cat | SwiftUI |
+| Conversation, Markdown tables/code, cards/questions | SwiftUI |
+| Composer, attachments and slash completion | AppKit NSTextView and native controls |
+| Settings/providers, new project, memory, Git/publish, review, feedback | SwiftUI sheets with Bun controllers |
+| Activity | AppKit selectable log, bounded buffer |
+| Source files, search/replace, media, pop-outs | AppKit outline/NSTextView/AVKit |
+| Layers | AppKit outline with selection and drag reordering |
+| Properties, styles, tokens, custom/animation/content controls | SwiftUI with shared editing services |
+| Project website and DOM instrumentation | WKWebView with isolated preview script |
 
-Sidebar and composer scroll views use auto-hiding overlay scrollers. The empty
-composer fits its document to the available height, avoiding artificial overflow.
-Its empty chip row collapses. The empty form reserves 120 points including the
-selector row (86 for glass); text or attachments/context restore the 146-point
-minimum. A plain plus opens attachments/layers on the left; Select Object lives in the top toolbar. Provider/model/permission
-menus sit on the right without bezels or arrow chrome, fitting their selected
-labels up to 60 points before truncating; full menu labels and tooltips remain. Send/Stop stays inside the form
-at the lower right, as a 30-point button with a 13-point symbol. The chat pane, page root and status fade are transparent; the main WKWebView
-also disables its background drawing so AppKit’s window surface is visible.
-The native conversation uses a SwiftUI scroll view with selectable text and native disclosure controls.
-Project-preview scrollbars remain controlled by the page and WebKit.
+The sidebar contains only projects, with project favicons and a More menu for
+memory, ordering and closing. History above the chat provides open/saved sessions,
+rename and review/resume. Background runs appear as actionable chat cards. Project
+and chat state persists in the native profile. The toolbar keeps project, chat
+and preview actions aligned with their columns. Preview controls include domain
+and branch, selection/device, code/layers/expand, and Publish.
 
-Settings, inspectors and code editing remain React/WebKit. The native conversation
-and its cards render in SwiftUI; the composer remains AppKit. The native build hides the React rail and titlebar drag regions;
-Electron still renders them. A native-only bridge mirrors compact workspace
-snapshots and calls the existing renderer actions. Streamed text does not rebuild
-the native sidebar unless its displayed state changes. Inline chat renaming,
-manual row ordering and background-agent rows are not yet in the native sidebar.
+AppKit owns all geometry; no DOM rectangle observer controls native layout.
+Repeated divider drags, collapse/restore and window resizing retain the native
+surfaces. The chat and panel sizes persist. The preview background extends behind
+the toolbar with a single full-height divider and adaptive toolbar contrast.
+The actual project viewport stays below the toolbar. Mobile mode adds native
+phone artwork around that viewport.
 
-The composer uses `NSGlassEffectView` on macOS 26+, with a native multiline
-`NSTextView`, attachment/tools menu, provider/model/permission popups and send/stop
-button. Older macOS versions use `NSVisualEffectView`. Enter submits; Shift+Enter
-inserts a newline. Selected-element context, attachment removal and slash-command
-choices use native controls. Typing `/` opens a scrollable list above the composer
-with names, descriptions and the active keyboard choice. Click a row or use
-Arrow keys and Enter/Tab; filtering and completion reuse the shared handlers. Files from the picker or native drop retain their
-paths; PNG/TIFF clipboard images are passed as PNG. Image transfer is limited to
-10 MiB per file. Oversized or unreadable images are currently skipped.
+The composer uses native Liquid Glass, a multiline text view, a plus menu and
+unbordered provider/model/permission selectors below the field. Labels size to
+content up to 60 points. Enter submits, Shift+Enter inserts a newline, and marked
+IME text bypasses submission. Slash completion supports keyboard and pointer
+selection. Readable image attachments are limited to 10 MiB; failed image reads
+and oversized pasted images show an actionable chat error. Sent images display
+native thumbnails. The original cat animates for idle/running/question/completion
+states, pauses when hidden and respects Reduce Motion.
 
-`src/native/Chat.swift`, `ChatMarkdown.swift`, and `ChatQuestion.swift` render the
-conversation, Markdown/code blocks, tool disclosures, attachments, permissions,
-questions, setup/conflict/queue cards and response actions. Native controls use
-typed actions instead of clicking hidden DOM buttons. `NativeChatSurface.tsx`
-mounts only a geometry placeholder; the React transcript and form are not mounted.
-The obsolete DOM composer adapter has been removed.
+Chat has selectable text, native disclosure controls, fenced-code coloring,
+Markdown tables, bottom-following and a sticky request when scrolling through a
+response. Source editing provides a folder tree, back/forward navigation, line
+reveal, native find/replace, undo, dirty/conflict state, save, external-editor
+opening and reusable pop-out windows. Drafts survive file navigation and docking.
+Syntax coloring is deliberately lightweight; it is not a language server.
 
-`src/native/chat-controller.ts` now owns native drafts, skill completion, streaming,
-queues, model/permission choices, attachments, card actions and service calls in Bun.
-Swift actions reach it directly; the native build does not mount React ChatPanel.
-`native-chat-shell.ts` is a temporary adapter for workspace/selection context and
-read-only conversation mirrors used by the shared toolbar and history. Project/session navigation now runs through workspace-controller.ts in Bun; a
-temporary native-workspace-shell.ts projection updates remaining panels. Layout,
-branch/publish orchestration, editing context, settings, inspectors and code panels still use the main
-WKWebView. Removing that web shell remains necessary for a fully React-free native
-application. Electron keeps its existing chat controller and UI.
+Native inspectors retain source/schema validation, token references, live style
+scrubbing and post-HMR reconciliation. Linked margin/padding writes share an undo
+group. Custom controls support repair/removal and animation Replay. Content
+windows use the same recipe validator and revision-checked saves as Electron;
+collection IDs, extra JSON fields and draft undo are retained.
 
-Native Markdown currently supports inline formatting,
-links, headings and fenced code; full table layout/syntax highlighting and the
-sticky user-bubble treatment remain parity work.
+## Build and transport
 
-The startup/loading and empty workspace screen now render in SwiftUI, including
-recent-project actions. The original pixel cat is bundled as rectangle animation
-frames and drawn natively for idle, running, waiting and completion states. Timers
-pause when hidden and respect Reduce Motion. AppKit owns the chat divider gesture
-above the native surfaces; web layout still receives its width through the bridge.
+`scripts/build-native.mjs` bundles the Bun entrypoint and isolated preview preload,
+compiles the Swift host and copies its native image/cat assets. It removes stale
+`out/native/renderer` and `preload.js` from older hybrid builds. The build audits
+its dependency graph against application renderer/React imports and records
+`out/native/build-inputs.json`. There is no Vite/Tailwind application build or
+loopback renderer asset server in native mode. `PRAXIS_NATIVE_PORT` is obsolete.
 
-The composer and skill list hide for web dialogs. Native sent-image thumbnails
-are supported; draft attachments are listed in the native attachments menu.
+The private Electron adapter (`src/native/platform.ts`) supports shared backend
+services; it is not a general Electron implementation. Its `main` object is a
+trusted service sender, not a hidden browser. Swift refuses creation of any
+application WebView other than `preview`.
 
-`scripts/build-native.mjs` bundles `src/native/index.ts` and the existing
-application services. It aliases `electron` to the private `src/native/platform.ts`
-adapter only for that build. The existing renderer, `PraxisApi` preload, and full
-preview instrumentation are reused. This is a deliberately bounded compatibility
-layer for Praxis's own dependencies, not a general Electron implementation.
+Swift and Bun exchange JSON over subprocess pipes. AppKit actions go directly to
+Bun controllers. Preview messages are stamped by their actual WebView and limited
+to allowed selection/comment/style/layer events. The preview cannot invoke agent,
+filesystem or application commands. Its script runs in a named isolated
+WKContentWorld, and preview storage is ephemeral. Main-frame navigation stays on
+the assigned project origin; external clicked HTTP(S) links open the browser.
 
-Bun owns agents, Git, files, source editing, session storage and project dev
-servers. Swift owns AppKit windows, folder dialogs, trash, menus, screenshots,
-Keychain encryption and WKWebView surfaces. Main UI, preview, inspector and
-pop-out editors use separate webviews. Main-renderer screenshots exclude the
-overlaid preview surface, just as in Electron; capture both surfaces when testing.
+WebKit downloads use a native save sheet. Camera/microphone requests from the
+assigned origin ask through a native permission sheet; they are never silently
+granted. Develop → Show Preview Web Inspector (⌥⌘I) and JavaScript Console (⌥⌘C)
+use the system inspector. Opening it programmatically uses guarded WebKit SPI in
+`src/native/Inspector.swift`; the context-menu inspector remains available.
+Repeated WebKit process failures stop automatic reload and show a retry surface.
 
-The host and backend exchange JSON over private subprocess pipes. Swift stamps
-message source identity from the actual webview. The preview gets its bridge only
-in a named isolated WKContentWorld and may send only the existing selection,
-comment, style-read and layer-result events; it cannot invoke app commands. The
-main application loads only its own generated assets. Preview main-frame
-navigation stays on the origin assigned by Bun; preview storage is ephemeral.
-Camera/microphone permission requests are denied. The media URL scheme is
-installed only in trusted views and uses the shared opaque-file-token registry.
+## Profiles and lifecycle
 
-The renderer asset server binds to loopback port 4188, with an unguessable path
-prefix and no backend HTTP command API. Set `PRAXIS_NATIVE_PORT` to change it;
-changing the port also changes the renderer's browser-storage origin. Tests use
-an ephemeral port and WebKit store. App-shell navigation cannot leave its own
-asset page. External HTTP(S) links from the trusted UI open in the default browser.
+Backend state lives in `~/Library/Application Support/Praxis Native`, separately
+from Electron. A profile lock prevents concurrent native writers. Workspace state
+lives in `workspace.json`; versioned native UI preferences live in
+`preferences.json`. Earlier hybrid builds imported legacy native browser values
+once; the React-free build retains those files and no longer creates a WebView to
+read browser storage. It does not import Electron history or custom endpoints.
+Existing provider CLI sign-ins can be reused.
 
-## Profiles and credentials
+Custom endpoint keys use AES-GCM with the encryption key in macOS Keychain. Values
+reach the cipher helper through stdin, not argv. No real credentials are written
+by the integration tests.
 
-Native backend state lives under `~/Library/Application Support/Praxis Native`.
-It is deliberately separate from Electron's profile. A process lock prevents two
-native instances from writing that profile. Native UI preferences live in profile-owned preferences.json with legacy browser
-values imported once per key. Workspace state lives in workspace.json. Legacy renderer storage lives in the
-native app's WebKit store. Existing provider CLI sign-ins can be reused, but
-saved custom endpoints and conversation history are not imported from Electron.
-
-Custom endpoint keys are encrypted with AES-GCM. The random encryption key is
-stored in macOS Keychain; plaintext values pass to the native cipher helper through
-stdin, never argv. Cipher errors fail closed. The integration test does not create
-Keychain entries or save actual credentials; that path still needs an interactive
-credential round-trip check.
+Praxis owns project servers. Quit, terminal SIGINT/SIGTERM/SIGHUP, and host pipe
+closure run cleanup; native sheets are dismissed during host shutdown. Updates
+use the current tracked branch, require a clean checkout and no running chat or
+unsaved source/content/composer drafts, fast-forward, install with Bun, rebuild native and
+restart. Failures remain in a native sheet. Updates never discard work or switch
+branches automatically.
 
 ## Verification
 
-`test:native` starts a real WKWebView window with the production React build and
-a disposable profile/project. It opens the project through the renderer, starts
-Praxis's managed static server, reads and selects a stamped layer, checks computed
-styles, applies a real HTML source edit, and verifies live reload. It checks the
-preview cannot access the privileged bridge and cannot invoke source-read IPC.
-PNG artifacts are written under `test/artifacts/native/`.
-The native check also exercises undo/redo, registered media-file delivery and
-opening the shared code editor in a separate native window.
-It opens the project through the actual AppKit sidebar, switches between real
-chat sessions through the native History menu, checks toolbar ordering, code visibility,
-expand/restore, address/root navigation, desktop/mobile, separate Publish placement,
-publish-mode selection, automatic scrollers and sidebar
-collapse, verifies native text/draft restoration, file/image attachment add/remove,
-permission changes, slash completion and modal visibility, and
-captures native controls separately. Full-window offscreen caching
-does not reliably composite WebKit and vibrancy layers; use the separate sidebar,
-main and preview captures for QA. Liquid Glass composer captures are currently
-blank despite valid control geometry, so its visual appearance and pointer
-interactions still need an unlocked-desktop check.
+Use `bun run typecheck`, `bun run typecheck:native`, relevant `test/native-*.mjs`
+controller checks, and `bun run test:native`. Do not run Electron suites during
+native-only work. `PRAXIS_NATIVE_BACKGROUND_TEST=1` skips pointer/animation checks;
+it is partial UI evidence. Native integration asserts that only the preview
+WebView exists throughout project navigation, sheets, editing, chat and Inspector.
+The test drives native commands and service results, without renderer evaluation.
+It includes queued/streaming chat, permission/question cards, marked-text input,
+style/source edits, undo/redo, source pop-out/dock geometry and preview bridge isolation. Artifacts are in
+`test/artifacts/native/`.
 
-`test:native-live` additionally submits an edit through the real composer to
-Claude by default, or Codex with `PRAXIS_NATIVE_TEST_PROVIDER=codex`, using a
-temporary fixture and automatic permissions. It restarts the backend session with
-the selected provider before submitting, rather than only changing the UI state.
-This sends fixture information to the provider and uses the signed-in account.
-The authorized Codex run passed the real composer → provider → source edit →
-WebKit preview reload flow. The Claude run returned “Not logged in · Please run
-/login”; successful Claude editing remains unverified. The test is registered
-in the live tier, while the deterministic test is in the desktop tier.
+Foreground checks separately cover native composer input/Unicode paste, source
+tree/navigation/find, repeated divider drags, selection-driven inspectors and
+download cancellation. Controller tests cover conflicts, stale actions, provider
+forms, recipes, token writes, workspace restore and update failure paths. Real
+publishing, update pulls, credential writes and paid provider turns are not part
+of deterministic verification. `PRAXIS_NATIVE_TEST_PROVIDER=codex bun run
+test:native-live` opts into a real fixture edit. iOS Simulator integration and
+older-macOS visual behavior still require platform-specific release testing.
 
-## Remaining differences
-
-- Native app-shell edits rebuild on launch; frontend HMR for Praxis itself is not
-  wired. Project preview HMR/live reload still comes from its managed dev server.
-- In-app updater/relaunch is disabled with an explicit error; update the checkout
-  and restart the native command.
-- Files dropped directly onto web content still lack local paths; use the native
-  composer or its attachment picker for path-based files.
-- Linux, signing, distributable Bun bundling, browser download UI and broader
-  permission handling are not implemented.
-- iOS Simulator handlers are shared but have not been tested in this native host.
-- Real pointer interaction and full macOS permission behavior still need manual
-  verification. Automated selection uses the actual layer-selection IPC path.
-- System WebKit follows macOS updates and may render projects differently from
-  Electron's bundled Chromium.
-
-Terminal shutdown forwards SIGINT, SIGTERM and SIGHUP to the native backend; all
-three run shared server/agent cleanup before exiting. `bun test/native-shutdown.mjs`
-checks that each signal stops a real detached managed dev server.
-
-### Preview surface
-
-Desktop preview background extends behind the transparent native toolbar using
-WebKit's observed `underPageBackgroundColor`, derived from the page's html/body
-background. The actual web viewport stays below the toolbar safe area. One light
-native divider spans the window height; the preview has no inset card border.
-Mobile retains its device surround. Native workspace layout updates no longer
-wait 50ms for the sidebar, and changing viewport/insets keeps the WebKit view
-alive rather than briefly setting its size to zero.
-
-The native toolbar reserves room for preview actions down to the 850pt minimum
-window width by shortening the chat title and address first. Projects is removed
-from the toolbar (including overflow) while the sidebar is closed, and restored
-when reopened. Toolbar action symbols use fixed-size 2x template artwork so AppKit cannot
-override their glyph sizing; native tinting and button behavior remain intact.
-
-The native app bundle includes the existing Praxis ICNS resource and sets its
-Dock icon at launch. Toolbar action groups use explicit momentary segmented
-controls; their highlight clears immediately after activation. The automation
-actions dispatch through the segmented control callback, and inspection checks
-the actual cell tracking mode and selection.
-
-### Preview Web Inspector
-
-Use **Develop → Show Preview Web Inspector** (⌥⌘I), **Show Preview JavaScript
-Console** (⌥⌘C), or right-click the preview and choose **Inspect Element**.
-Developer extras are enabled only for the project preview. Direct presentation
-uses guarded WebKit SPI isolated in `src/native/Inspector.swift`; it is not
-exposed through the untrusted page's IPC allowlist. If the SPI is unavailable,
-the menu explains how to inspect through Safari's Develop menu using the public
-`isInspectable` support. This experimental integration should be reviewed before
-any App Store distribution.
-
-References: [WebKit inspector actions](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/_WKInspectorIBActions.h),
-[Safari inspection setup](https://webkit.org/web-inspector/enabling-web-inspector/).
-
-### Native performance
-
-The property-panel WebKit view is created on first explicit use and reused on
-reopen. The shared panel IPC retains state until its renderer subscribes, so
-lazy creation preserves the initial selection. Composer synchronization is
-event-driven through typed snapshots/actions; no hidden composer form or periodic
-DOM scan is involved. Geometry updates are coalesced with a short timer so they do
-not wait for WebKit animation frames when its view is occluded.
-Sidebar rows/favicons and toolbar artwork are reused when unchanged.
-See [the measurements](RUNTIME_BENCHMARK.md#native-optimization-follow-up--2026-09-24)
-for the measured savings and their limits.
-
-### Workspace persistence
-
-Native saves open sidebar projects and the selected project in `workspace.json`
-in its profile directory. All projects remain listed after relaunch; the selected
-project reopens through the existing suspended-project flow. Closing a project
-removes it from the saved list. Existing WebKit workspace storage is used as a
-fallback on the first launch after upgrading.
-
-`bun run test:native-chat-controller` tests the Bun controller without a DOM or React,
-including drafts, queues, stream routing, restores, cancellation, model switches,
-permission/question responses and close/reopen races. Native integration checks
-assert React chat DOM is absent, disable renderer event delivery, and exercise
-Swift Send, queues, stream updates, permissions and questions directly through Bun. `PRAXIS_NATIVE_BACKGROUND_TEST=1`
-explicitly skips real preview input and animation sampling when the test desktop
-is occluded; that mode does not count as full visual/input verification.
-
-## Remaining migration
-
-See [Native migration plan](NATIVE-MIGRATION.md) for the current dependency
-inventory, implementation order and checks required to remove the Praxis React
-renderer while retaining Electron support.
+See [migration scope](NATIVE-MIGRATION.md) and [measurements](RUNTIME_BENCHMARK.md).

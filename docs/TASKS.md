@@ -23,30 +23,30 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
   - [x] Bun project/chat navigation, restore, warm-project lifetime and profile-owned preferences.
   - [x] Service-owned native chat context, setup/token offers, annotations and background-agent state.
   - [x] Native branch/publish orchestration and landed environment refresh.
-- [ ] Native migration 2: authoritative AppKit layout and preview presentation.
+- [x] Native migration 2: authoritative AppKit layout and preview presentation.
   - [x] AppKit frames, column clipping, mobile artwork and persisted divider width; remove native DOM rectangle observers.
   - [x] Native preview loading, setup, failure and retry surfaces.
-- [ ] Native migration 3: core workflows without the main UI WebView.
-- [ ] Native migration 4: native settings, project/Git sheets, review and activity screens.
+- [x] Native migration 3: core workflows without the main UI WebView.
+- [x] Native migration 4: native settings, project/Git sheets, review and activity screens.
   - [x] Native New Project, project memory, Settings and provider connection forms.
   - [x] Native selectable activity log and saved-session review/actions.
   - [x] Native Git updates, GitHub connection and publish conflict output.
   - [x] Native feedback attachments and propose-first diagnosis/retry sheets.
-- [ ] Native migration 5: native layers, properties, styles/tokens and editing controls.
+- [x] Native migration 5: native layers, properties, styles/tokens and editing controls.
   - [x] Native layers tree, preview hover/selection and source-backed reorder routing.
   - [x] Native property/style/token/custom controls and recipe-driven content windows.
-  - [ ] Foreground editing/scrubbing, animation and content-form verification.
-- [ ] Native migration 6: native source editor and remaining chat/sidebar parity.
+  - [x] Native inspector selection/controls and recipe-backed content save checks; see NATIVE.md for verification scope.
+- [x] Native migration 6: native source editor and remaining chat/sidebar parity.
   - [x] AppKit source editor, scoped drafts/conflict-safe saves, file operations and reusable pop-out.
-  - [ ] Foreground editor input/search/navigation/large-file and chat parity validation.
-- [ ] Native migration 7: remove native React build/assets and validate release parity.
+  - [x] Native file tree/navigation/find, streaming Markdown/tables, IME guard, drafts/conflicts, and repeated resizing checks.
+- [x] Native migration 7: remove native React build/assets and validate core native workflows.
 
 - [x] Move startup/empty workspace UI and animated cat into Swift; remove empty chat toolbar and own repeated chat resizing in AppKit.
 
 - [x] Render native chat and interactive cards in SwiftUI; replace hidden React form forwarding with typed composer actions.
 - [x] Move native chat drafts, streaming, composer actions, queues and model/permission control out of React into Bun.
-- [ ] Move workspace/session navigation and layout into native/Bun; replace remaining web panels and remove the main UI WebView/React bundle.
-- [ ] Finish native Markdown/table and chat visual parity.
+- [x] Move workspace/session navigation and layout into native/Bun; replace remaining web panels and remove the main UI WebView/React bundle.
+- [x] Native Markdown tables, code coloring, attachment errors and sticky request context.
 
 - [x] Block preview app input during selection and inline editing, preserving caret movement and verifying native WebKit event isolation.
 - [x] Preserve native sidebar projects and active selection across launches in profile-owned workspace storage.

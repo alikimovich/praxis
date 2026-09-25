@@ -24,7 +24,7 @@ export class NativeSheetController {
   async action(action: NativeSheetAction) {
     const sheet = this.current
     if (!sheet || action.id !== sheet.state.id) return
-    if (action.action === 'cancel') { this.close(); return }
+    if (action.action === 'cancel') { if (sheet.state.actions.length) this.close(); return }
     if (sheet.state.busy) return
     if (!sheet.state.actions.some(a => a.id === action.action)) return
     sheet.state.busy = true; sheet.state.message = undefined
@@ -34,6 +34,20 @@ export class NativeSheetController {
     finally {
       if (this.current === sheet) { sheet.state.busy = false; this.host.send('sheetState', { state: sheet.state }) }
     }
+  }
+  renameChat(id: string, key: string) {
+    const entry = this.workspace.state.projects.find(p => p.key === key)
+    if (!entry) return
+    const live = id.startsWith('chat:'), session = id.slice(live ? 5 : 8)
+    const title = live ? this.chat.chats.get(session)?.title : this.workspace.state.history[key]?.find(r => r.id === session)?.title
+    this.present({ title: 'Rename chat', detail: '', fields: [{ id: 'title', label: 'Name', kind: 'text', value: title || 'New chat' }], actions: [{ id: 'cancel', label: 'Cancel' }, { id: 'rename', label: 'Rename', primary: true }] }, async action => {
+      const result = await this.invoke(live ? 'agent:rename-chat' : 'sessions:rename', session, action.values.title)
+      if (!result.ok) throw new Error(result.error || 'Could not rename chat.')
+      if (live) { const chat = this.chat.chats.get(session); if (chat) chat.title = result.title }
+      this.workspace.state.history[key] = await this.invoke('sessions:list', entry.root)
+      this.workspace.changed()
+      if (this.current?.state.id === action.id) this.close()
+    })
   }
   async memory(key: string) {
     const project = this.workspace.state.projects.find(p => p.key === key)

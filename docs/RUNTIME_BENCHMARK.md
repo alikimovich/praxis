@@ -1,7 +1,7 @@
 # Native versus Electron — 2026-09-23
 
 The original comparison below is a historical snapshot. See the native
-optimization follow-up first: a controlled rerun did not reproduce the earlier
+React-free follow-up and optimization follow-up first: a controlled rerun did not reproduce the earlier
 2.54-second native startup result. Do not use that number as an engine ranking.
 
 Measured on this workspace's Mac mini, Apple M4 Pro (12 cores), 48 GB RAM,
@@ -23,6 +23,39 @@ Values are medians across successful runs. Native total RSS was 728–737 MiB;
 Electron was 1,020–1,034 MiB. Successful native startup was 2.38–2.70 s versus
 0.56–0.74 s for Electron. CPU varied from 2.82–4.14% native and 0.83–2.65%
 Electron. This small sample does not establish a stable CPU advantage.
+
+## React-free native follow-up — 2026-09-24
+
+After migrating the application UI to Swift, three fresh-profile native launches
+completed successfully with the same 200-card static fixture. Electron was not
+rerun during this native-only work. These are a new snapshot, not a paired
+comparison with either historical build above.
+
+| Measurement | React-free native median |
+| --- | ---: |
+| Launch to native ready UI | 0.606 s |
+| Open project to ready preview | 0.676 s |
+| Settled total process RSS | 787 MiB |
+| RSS excluding the Claude helper | 411 MiB |
+| Idle CPU, percent of one core | 1.43% |
+| Processes with project open | 6 |
+| Native application files | 3.98 MiB |
+| Application files plus Bun | 64.13 MiB |
+
+The only application-owned WebView was the project preview. All measured app and
+WebKit helper processes exited after cleanup. Startup ranged 0.572–0.634 s;
+preview readiness 0.657–0.739 s; RSS 704–788 MiB; idle CPU 1.14–2.42%.
+The native-ready checkpoint now uses native state rather than a React DOM, so
+startup values are not strictly interchangeable with the earlier readiness test.
+No scrolling or transition frame-rate claim is made for this follow-up.
+
+As before, RSS sums shared pages, includes provider prewarming, and comes from
+four seconds of settling followed by six seconds of samples. Disk size excludes
+external dependencies, system WebKit, caches, source maps and generated build
+intermediates. The development installation still has shared dependencies used
+by Electron; these figures are not the size of the entire repository.
+Raw local artifacts: `test/artifacts/runtime-benchmark/react-free-results.json`
+and `react-free-size.json`.
 
 ## Native optimization follow-up — 2026-09-24
 

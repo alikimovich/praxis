@@ -1,11 +1,8 @@
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import tailwindcss from '@tailwindcss/vite'
-import react from '@vitejs/plugin-react'
 import { nativeCatAssets } from './native-cat-assets.mjs'
 import { build as bundle } from 'esbuild'
-import { build as viteBuild } from 'vite'
 
 if (process.platform !== 'darwin') throw new Error('The native runtime currently requires macOS.')
 const root = fileURLToPath(new URL('../', import.meta.url))
@@ -24,7 +21,8 @@ const alias = (file) => ({
     build.onResolve({ filter: /^electron$/ }, () => ({ path: join(root, 'src/native', file) }))
   }
 })
-await bundle({
+const backend = await bundle({
+  metafile: true,
   entryPoints: [join(root, 'src/native/index.ts')],
   outfile: join(out, 'index.cjs'),
   bundle: true,
@@ -35,8 +33,11 @@ await bundle({
   plugins: [alias('platform.ts')],
   sourcemap: true
 })
+const inputs = Object.keys(backend.metafile.inputs)
+const externalImports = Object.values(backend.metafile.outputs).flatMap(output => output.imports).filter(item => item.external).map(item => item.path)
+if (inputs.some(path => /src\/renderer\//.test(path)) || externalImports.some(path => /^(react|react-dom|@codemirror)(\/|$)/.test(path))) throw new Error('Native build unexpectedly depends on the application React renderer')
+writeFileSync(join(out, 'build-inputs.json'), JSON.stringify({ inputs, externalImports }, null, 2))
 for (const [input, output] of [
-  ['src/preload/index.ts', 'preload.js'],
   ['src/preview/preload.ts', 'preview.js']
 ]) {
   await bundle({
@@ -46,19 +47,12 @@ for (const [input, output] of [
     platform: 'browser',
     target: 'safari16.4',
     format: 'iife',
-    plugins: [alias('renderer-transport.ts')]
+    plugins: [alias('preview-transport.ts')]
   })
 }
-await viteBuild({
-  configFile: false,
-  root: join(root, 'src/renderer'),
-  base: './',
-  resolve: {
-    alias: { '@renderer': join(root, 'src/renderer/src'), '@': join(root, 'src/renderer/src') }
-  },
-  plugins: [react(), tailwindcss()],
-  build: { outDir: join(out, 'renderer'), emptyOutDir: true }
-})
+// Remove stale application UI artifacts from earlier hybrid builds.
+rmSync(join(out, 'renderer'), { recursive: true, force: true })
+rmSync(join(out, 'preload.js'), { force: true })
 writeFileSync(
   join(contents, 'Info.plist'),
   `<?xml version="1.0" encoding="UTF-8"?>
@@ -71,6 +65,8 @@ writeFileSync(
 <key>CFBundleVersion</key><string>1</string>
 <key>LSMinimumSystemVersion</key><string>13.3</string>
 <key>NSHighResolutionCapable</key><true/>
+<key>NSCameraUsageDescription</key><string>Allow your local project preview to test camera features when you approve.</string>
+<key>NSMicrophoneUsageDescription</key><string>Allow your local project preview to test microphone features when you approve.</string>
 </dict></plist>`
 )
 writeFileSync(join(out, 'main.swift'), readFileSync(join(root, 'src/native/Host.swift')))
@@ -96,9 +92,11 @@ const result = Bun.spawnSync(
     join(root, 'src/native/Sheets.swift'),
     join(root, 'src/native/Activity.swift'),
     join(root, 'src/native/SourceEditor.swift'),
+    join(root, 'src/native/SourceFileTree.swift'),
     join(root, 'src/native/Layers.swift'),
     join(root, 'src/native/EditingInspector.swift'),
     join(root, 'src/native/ContentWindow.swift'),
+    join(root, 'src/native/PreviewPlatform.swift'),
     join(root, 'src/native/WorkspaceLayout.swift'),
     join(root, 'src/native/PreviewStatus.swift'),
     join(root, 'src/native/ChatDivider.swift'),
@@ -123,5 +121,5 @@ if (result.exitCode) process.exit(result.exitCode)
 if (/require\(["']electron["']\)/.test(readFileSync(join(out, 'index.cjs'), 'utf8')))
   throw new Error('Native backend still imports Electron')
 console.log(
-  'Built Praxis Native: Swift chat, shared web panels and services, Bun backend, WebKit preview.'
+  'Built Praxis Native: Swift/AppKit UI, Bun services, isolated WebKit project preview.'
 )

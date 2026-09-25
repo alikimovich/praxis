@@ -1,5 +1,6 @@
-/** Private native composer events. Only the trusted main webview receives these. */
+/** Private native composer events. Delivered directly from AppKit to the Bun chat controller. */
 export type NativeComposerAction = { chat: string } & (
+  | { action: 'attachment-error'; message: string }
   | { action: 'input'; text: string; caret: number; revision: number }
   | { action: 'key'; key: string }
   | { action: 'send' | 'context' | 'layers' }

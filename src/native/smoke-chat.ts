@@ -6,7 +6,6 @@ import { nativeChat } from './chat-runtime'
 
 /** Deterministic stream/card coverage without calling a paid provider. */
 export async function checkNativeChat(host: NativeBridge, screenshot: string) {
-  const evaluate = (code: string) => host.request('evaluate', { view: 'main', code })
   const wait = async (check: (state: any) => boolean) => {
     for (let i = 0; i < 100; i++) {
       const state = await host.request('chatInspect')
@@ -16,7 +15,7 @@ export async function checkNativeChat(host: NativeBridge, screenshot: string) {
     throw new Error('Swift chat state did not update')
   }
   const state = await wait(state => state.visible && state.chat)
-  if (await evaluate(`!!document.querySelector('.composer__input, .chat__messages, .msg')`)) throw new Error('React chat DOM is still mounted')
+  if (JSON.stringify(await host.request('webViews')) !== JSON.stringify(['preview'])) throw new Error('Unexpected application WebView')
   const send = (event: object) => views.get('main')!.webContents.send('agent:event', { ...event, projectKey: state.chat })
   // Disable renderer event delivery: Swift input, streaming and queues must
   // continue through Bun without the web UI participating.
@@ -27,7 +26,6 @@ export async function checkNativeChat(host: NativeBridge, screenshot: string) {
     if (channel === 'agent:send') { sent.push(args); return }
     return originalInvoke(channel, ...args)
   }
-  await evaluate(`(() => { window.__nativeOriginalDispatch = window.__praxisNativeDispatch; window.__praxisNativeDispatch = () => {}; return true })()`)
   try {
     const before = await host.request('layoutInspect')
     if (!before.native) throw new Error('Native layout unavailable')
@@ -61,7 +59,7 @@ export async function checkNativeChat(host: NativeBridge, screenshot: string) {
     await host.request('chatPerform', { action: 'queue-remove', card: id })
     await wait(state => !state.cards.includes(id))
     if (sent.length !== 1) throw new Error('Queued message bypassed the active turn')
-    send({ type: 'delta', text: '# Native conversation\n\nThis response is **Swift-rendered** with [a link](https://example.com).\n\n```swift\nlet native = true\n```' })
+    send({ type: 'delta', text: '# Native conversation\n\nThis response is **Swift-rendered** with [a link](https://example.com).\n\n```swift\nlet native = true\n```\n\n| Surface | Owner |\n| --- | --- |\n| Chat | SwiftUI |\n| Preview | WebKit |' })
     send({ type: 'status', text: 'Reading project files…' })
     send({ type: 'delta', text: '\n\nStreaming continued after tool activity.' })
     send({ type: 'landing-finished' })
@@ -81,7 +79,6 @@ export async function checkNativeChat(host: NativeBridge, screenshot: string) {
     send({ type: 'permission-resolved', id: 'other-chat-permission' })
   } finally {
     nativeChat.services.invoke = originalInvoke
-    await evaluate('window.__praxisNativeDispatch = window.__nativeOriginalDispatch')
   }
-  console.log('Swift/Bun chat with renderer delivery disabled: Send, queue, streamed Markdown, permissions and questions passed.')
+  console.log('Swift/Bun chat without an application WebView: Send, queue, streamed Markdown, permissions and questions passed.')
 }

@@ -47,6 +47,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var sheets: NativeSheets!
     let editingInspector = NativeEditingInspector()
     let layers = NativeLayers()
+    let downloads = PreviewDownloads()
     let activity = NativeActivity()
     var contentWindows: [String: NativeContentWindow] = [:]
     var sourceEditors: [String: NativeSourceEditor] = [:]
@@ -59,17 +60,8 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     let chatColumn = Canvas()
     var views: [String: WKWebView] = [:]
     var targets: [String: URL] = [:]
-    var editorWindows: [String: NSWindow] = [:]
     var urlObservers: [String: NSKeyValueObservation] = [:]
     var preferences: [String: Any] = [:]
-    func installPreferences(_ view: WKWebView) {
-        guard let data = try? JSONSerialization.data(withJSONObject: preferences), let json = String(data: data, encoding: .utf8) else { return }
-        let controller = view.configuration.userContentController
-        controller.removeAllUserScripts()
-        let preload = (try? String(contentsOfFile: directory + "/preload.js", encoding: .utf8)) ?? ""
-        controller.addUserScript(WKUserScript(source: "globalThis.__praxisPreferences = " + json + ";", injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        controller.addUserScript(WKUserScript(source: preload, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-    }
     var recentMenu = NSMenu(title: "Open Recent")
     var mediaTasks: [String: WKURLSchemeTask] = [:]
     let world = WKContentWorld.world(name: "PraxisPreview")
@@ -78,27 +70,22 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     init(directory: String, ephemeral: Bool) { self.directory = directory; self.ephemeral = ephemeral; super.init() }
     func makeView(_ id: String) -> WKWebView {
         let config = WKWebViewConfiguration()
-        let isolated = id == "preview"
-        if isolated { PreviewInspector.enable(config.preferences) }
-        config.websiteDataStore = isolated || ephemeral ? .nonPersistent() : .default()
-        let contentWorld: WKContentWorld = isolated ? world : .page
+        precondition(id == "preview", "Only the project preview may create a WebView")
+        PreviewInspector.enable(config.preferences)
+        config.websiteDataStore = .nonPersistent()
+        let contentWorld = world
         config.userContentController.add(self, contentWorld: contentWorld, name: "praxis")
-        let file = directory + (isolated ? "/preview.js" : "/preload.js")
+        let file = directory + "/preview.js"
         let script = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
         // Selection must intercept input before the project's capture listeners.
         config.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: contentWorld))
-        if !isolated { config.setURLSchemeHandler(self, forURLScheme: "praxis-media") }
         let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = self; view.uiDelegate = self; view.isInspectable = true
-        if id != "preview" { view.underPageBackgroundColor = id == "main" ? .clear : .windowBackgroundColor }
-        if id == "main" { view.setValue(false, forKey: "drawsBackground") }
-        if !isolated { installPreferences(view) }
         views[id] = view; canvas.addSubview(view)
         urlObservers[id] = view.observe(\.url, options: [.new]) { view, _ in
             emit(["event":"url", "view":id, "url":view.url?.absoluteString ?? ""])
         }
-        if id == "main" { view.frame = canvas.bounds; view.autoresizingMask = [.width, .height] }
-        else { view.isHidden = true; view.wantsLayer = true }
+        view.isHidden = true; view.wantsLayer = true
         return view
     }
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -106,7 +93,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1320, height: 860), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = "Praxis · Native"; window.minSize = NSSize(width: 850, height: 550)
         window.contentView = canvas; window.delegate = self
-        _ = makeView("main"); _ = makeView("preview")
+        _ = makeView("preview")
         shell = NativeShell(window: window, canvas: canvas)
         previewSurface = PreviewSurface(preview: views["preview"]!, canvas: canvas, container: canvas.superview!)
         previewSurface.colorChanged = { [weak self] color in self?.shell.updatePreviewColor(color) }
@@ -121,7 +108,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         chatDivider = NativeChatDivider(); chatDivider.isHidden = true; canvas.addSubview(chatDivider)
         chatDivider.changed = { [weak self] width in self?.nativeLayout.resized(width) }
         welcome = NativeWelcome(); welcome.frame = canvas.bounds; canvas.addSubview(welcome)
-        sheets = NativeSheets(parent: window); activity.parent = window
+        sheets = NativeSheets(parent: window); activity.parent = window; downloads.parent = window
         nativeLayout = WorkspaceLayout(host: self)
         canvas.changed = { [weak self] in self?.nativeLayout.layout() }
         window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
@@ -131,7 +118,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
                 guard let data = line.data(using: .utf8), let c = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
                 DispatchQueue.main.async { self?.command(c) }
             }
-            DispatchQueue.main.async { NSApp.terminate(nil) }
+            DispatchQueue.main.async { self?.terminateHost() }
         }
         emit(["event":"ready"])
     }
@@ -156,7 +143,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         }
         let find = NSMenuItem(title: "Find…", action: #selector(NSTextView.performFindPanelAction(_:)), keyEquivalent: "f"); find.tag = NSTextFinder.Action.showFindInterface.rawValue; edit.addItem(find)
         let actions = submenu("Actions")
-        for (label, key, action) in [("Reload Preview", "r", "reload"), ("Toggle Logs", "l", "logs"), ("Toggle UI", ".", "toggle-chat"), ("Content Editors", "", "content"), ("Diagnose Preview…", "", "diagnose"), ("Send Feedback…", "", "feedback")] {
+        for (label, key, action) in [("Reload Preview", "r", "reload"), ("Toggle Logs", "l", "logs"), ("Toggle UI", ".", "toggle-chat"), ("Content Editors", "", "content"), ("Check for Updates…", "", "updates"), ("Diagnose Preview…", "", "diagnose"), ("Send Feedback…", "", "feedback")] {
             let item = NSMenuItem(title: label, action: #selector(menuAction(_:)), keyEquivalent: key); item.target = self; item.representedObject = action; actions.addItem(item)
         }
         let develop = submenu("Develop")
@@ -166,7 +153,13 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         }
         NSApp.mainMenu = menu
     }
-    @objc func menuAction(_ item: NSMenuItem) { emit(["event":"menu", "action":item.representedObject as? String ?? ""]) }
+    @objc func menuAction(_ item: NSMenuItem) {
+        let action = item.representedObject as? String ?? ""
+        if ["undo", "redo"].contains(action), let text = NSApp.keyWindow?.firstResponder as? NSTextView {
+            if action == "undo" { text.undoManager?.undo() } else { text.undoManager?.redo() }; return
+        }
+        emit(["event":"menu", "action":action])
+    }
     @objc func recentAction(_ item: NSMenuItem) { emit(["event":"recent", "root":item.representedObject as? String ?? ""]) }
     func reply(_ id: Int, _ value: Any = NSNull(), error: String? = nil) {
         if let error = error { emit(["event":"reply", "id":id, "error":error]) }
@@ -179,8 +172,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         switch c["method"] as? String {
         case "preferences":
             preferences = c["values"] as? [String: Any] ?? [:]
-            for (key, view) in views where key != "preview" { installPreferences(view) }
-        case "createPanel": if views["panel"] == nil { _ = makeView("panel") }
+        case "webViews": reply(id, views.keys.sorted())
         case "previewInspector":
             if let action = c["action"] as? String { reply(id, PreviewInspector.perform(action, on: views["preview"])) }
             else { reply(id, PreviewInspector.status(views["preview"])) }
@@ -188,14 +180,18 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             let state = c["state"] as? [String: Any] ?? [:]
             nativeLayout.chatState = state
             chat.update(nativeLayout.nativeChatState(), composer: composer); nativeLayout.layout()
-        case "layoutPanels": nativeLayout.panels = c["panels"] as? [String: Double] ?? [:]; nativeLayout.layout()
+        case "layoutSizes": nativeLayout.restoreSizes(c["sizes"] as? [String: Double] ?? [:])
         case "layoutWidth": nativeLayout.desiredWidth = CGFloat(c["width"] as? Double ?? 440); nativeLayout.layout()
         case "layoutInspect": reply(id, nativeLayout.inspect())
         case "contentState":
             let key = c["documentID"] as? String ?? "", controller = contentWindows[c["documentID"] as? String ?? ""] ?? NativeContentWindow(id: c["documentID"] as? String ?? "")
             contentWindows[key] = controller; controller.update(c["state"] as? [String: Any] ?? [:])
+        case "contentInspect": reply(id, contentWindows.map { key, controller in ["id":key, "visible":controller.window.isVisible, "generation":controller.editor.model.state?.generation ?? 0, "fields":controller.editor.model.state?.fields.count ?? 0] as [String: Any] })
+        case "captureContent":
+            guard let content = contentWindows[c["documentID"] as? String ?? ""]?.window.contentView, let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { reply(id, error: "No content editor"); return }
+            content.cacheDisplay(in: content.bounds, to: bitmap); reply(id, bitmap.representation(using: .png, properties: [:])?.base64EncodedString() ?? "")
         case "inspectorState": editingInspector.update(c["state"] as? [String: Any] ?? [:]); nativeLayout.layout()
-        case "inspectorInspect": reply(id, ["native":true, "visible":!editingInspector.isHidden, "fields":editingInspector.model.state?.fields.count ?? 0, "generation":editingInspector.model.state?.generation ?? 0])
+        case "inspectorInspect": reply(id, ["native":true, "visible":!editingInspector.isHidden, "fields":editingInspector.model.state?.fields.count ?? 0, "error":editingInspector.model.state?.error ?? "", "generation":editingInspector.model.state?.generation ?? 0])
         case "inspectorPerform": guard ephemeral else { return }; emit((c["action"] as? [String: Any] ?? [:]).merging(["event":"inspector-action"]) { _, new in new }); reply(id)
         case "layersState": layers.update(c["state"] as? [String: Any] ?? [:]); nativeLayout.layout()
         case "layersInspect": reply(id, ["native":true, "visible":!layers.isHidden, "count":layers.nodes.count])
@@ -209,12 +205,23 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             editor.update(state)
             if state["popped"] as? Bool == true {
                 if editor.popout == nil { let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false); panel.isReleasedWhenClosed = false; panel.delegate = editor; panel.title = "Praxis · Code"; panel.center(); editor.popout = panel }
-                if editor.popout?.contentView !== editor { editor.removeFromSuperview(); editor.popout?.contentView = editor }
+                if let container = editor.popout?.contentView, editor.superview !== container {
+                    editor.removeFromSuperview()
+                    editor.translatesAutoresizingMaskIntoConstraints = true
+                    editor.autoresizingMask = [.width, .height]
+                    editor.frame = container.bounds
+                    container.addSubview(editor)
+                }
                 editor.isHidden = false
                 if state["visible"] as? Bool == true { if editor.popout?.isVisible != true { editor.popout?.makeKeyAndOrderFront(nil) } } else { editor.popout?.orderOut(nil) }
             } else {
                 editor.popout?.orderOut(nil)
-                if editor.superview !== canvas { editor.popout?.contentView = NSView(); editor.removeFromSuperview(); canvas.addSubview(editor) }
+                if editor.superview !== canvas {
+                    editor.removeFromSuperview()
+                    editor.translatesAutoresizingMaskIntoConstraints = true
+                    editor.autoresizingMask = []
+                    canvas.addSubview(editor)
+                }
                 editor.isHidden = root != sourceRoot || state["visible"] as? Bool != true
             }
             nativeLayout.layout()
@@ -249,6 +256,14 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "chatPerform": chat.model.action(c["action"] as? String ?? "", id: c["card"] as? String, value: c["value"] as? String, answers: c["answers"] as? [String: String]); reply(id)
         case "composerState": composer.update(c["state"] as? [String: Any] ?? [:])
         case "composerInspect": reply(id, composer.inspect())
+        case "composerIMECheck":
+            guard ephemeral else { reply(id, error: "Test profile required"); return }
+            let old = composer.text.string
+            composer.text.setMarkedText("に", selectedRange: NSRange(location: 1, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+            let marked = composer.text.hasMarkedText()
+            let swallowed = composer.textView(composer.text, doCommandBy: NSSelectorFromString("insertNewline:"))
+            composer.text.unmarkText(); composer.text.string = old
+            reply(id, ["marked":marked, "swallowed":swallowed])
         case "composerPerform": composer.perform(c); reply(id)
         case "composerFocus": window.makeFirstResponder(composer.text)
         case "captureComposer":
@@ -274,11 +289,13 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             scaled.lockFocus(); image.draw(in: NSRect(origin: .zero, size: size)); scaled.unlockFocus()
             if let tiff = scaled.tiffRepresentation, let result = NSBitmapImageRep(data: tiff)?.representation(using: .jpeg, properties: [.compressionFactor:0.6]) { reply(id, "data:image/jpeg;base64," + result.base64EncodedString()) }
             else { reply(id, NSNull()) }
-        case "captureShell":
+        case "captureShell", "captureShellImage":
             let content = window.contentView?.superview ?? shell.split.view
             guard let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { reply(id, error: "Shell capture unavailable"); return }
             content.cacheDisplay(in: content.bounds, to: bitmap)
-            reply(id, bitmap.representation(using: .png, properties: [:])?.base64EncodedString() ?? "")
+            if c["method"] as? String == "captureShellImage" {
+                reply(id, ["png":bitmap.representation(using: .png, properties: [:])?.base64EncodedString() ?? "", "jpeg":bitmap.representation(using: .jpeg, properties: [.compressionFactor:0.65])?.base64EncodedString() ?? "", "width":bitmap.pixelsWide, "height":bitmap.pixelsHigh])
+            } else { reply(id, bitmap.representation(using: .png, properties: [:])?.base64EncodedString() ?? "") }
         case "captureSidebar":
             shell.split.view.layoutSubtreeIfNeeded()
             let content = shell.sidebar.view
@@ -293,15 +310,6 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             image.unlockFocus()
             let png = image.tiffRepresentation.flatMap { NSBitmapImageRep(data: $0)?.representation(using: .png, properties: [:]) }
             reply(id, png?.base64EncodedString() ?? "")
-        case "editor":
-            let editor = editorWindows[name] ?? NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1000, height: 760), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-            if editorWindows[name] == nil {
-                let content = makeView(name); content.removeFromSuperview(); content.isHidden = false
-                editor.contentView = content; editor.delegate = self; editor.isReleasedWhenClosed = false
-                editor.title = "Praxis · Code"; editor.center(); editorWindows[name] = editor
-            }
-            editor.makeKeyAndOrderFront(nil); reply(id)
-        case "closeEditor": editorWindows[name]?.close()
         case "recents":
             recentMenu.removeAllItems()
             for entry in (c["recents"] as? [[String: String]] ?? []).prefix(8) {
@@ -314,14 +322,12 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             view.load(URLRequest(url: url))
         case "bounds":
             if name == "preview" { nativeLayout.layout(); return }
-            if name == "panel", let b = c["bounds"] as? [String: Double] { nativeLayout.panelSize = NSSize(width: b["width"] ?? 316, height: b["height"] ?? 300); nativeLayout.layout(); return }
             guard let b = c["bounds"] as? [String: Double], let view = view else { return }
             let values = [b["x"] ?? 0, b["y"] ?? 0, b["width"] ?? 0, b["height"] ?? 0]
             guard values.allSatisfy({ $0.isFinite && abs($0) < 100000 }) else { return }
             view.frame = NSRect(x: values[0], y: values[1], width: max(0, values[2]), height: max(0, values[3]))
         case "visible":
             if name == "preview" { nativeLayout.previewVisible = c["visible"] as? Bool ?? false; nativeLayout.layout() }
-            else if name == "panel" { nativeLayout.panelVisible = c["visible"] as? Bool ?? false; nativeLayout.layout() }
             else { view?.isHidden = !(c["visible"] as? Bool ?? false) }
         case "radius":
             if name == "preview" { nativeLayout.layout(); return }
@@ -383,7 +389,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             let data = Data(base64Encoded: c["data"] as? String ?? "") ?? Data()
             task.didReceive(HTTPURLResponse(url: url, statusCode: c["status"] as? Int ?? 500, httpVersion: "HTTP/1.1", headerFields: c["headers"] as? [String: String])!)
             task.didReceive(data); task.didFinish()
-        case "quit": NSApp.terminate(nil)
+        case "quit": terminateHost()
         default: reply(id, error: "Unsupported native host command")
         }
     }
@@ -397,10 +403,16 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         guard let name = views.first(where: { $0.value === webView })?.key else { return }
         emit(["event":"loaded", "view":name, "url":webView.url?.absoluteString ?? ""])
     }
+    var recentCrashes: [TimeInterval] = []
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         emit(["event":"load-error", "view":views.first(where: { $0.value === webView })?.key ?? "", "message":error.localizedDescription])
     }
-    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { webView.reload() }
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        let now = Date.timeIntervalSinceReferenceDate
+        recentCrashes = recentCrashes.filter { now - $0 < 30 }; recentCrashes.append(now)
+        if recentCrashes.count <= 2 { webView.reload() }
+        else { emit(["event":"load-error", "view":"preview", "message":"The preview stopped repeatedly. Use Run to restart it, or inspect the activity log."]) }
+    }
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let name = views.first(where: { $0.value === webView })?.key, let target = targets[name], let url = action.request.url else { decisionHandler(.cancel); return }
         // The app shell stays on its own URL. The preview's main frame stays on
@@ -408,13 +420,18 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         if action.targetFrame?.isMainFrame == false { decisionHandler(name == "preview" ? .allow : .cancel); return }
         let sameOrigin = url.scheme == target.scheme && url.host == target.host && url.port == target.port
         let allowed = name == "preview" ? (sameOrigin || url.absoluteString == "about:blank") : (sameOrigin && url.path == target.path)
-        if allowed && action.targetFrame != nil { decisionHandler(.allow) }
+        if allowed && action.shouldPerformDownload { decisionHandler(.download) }
+        else if allowed && action.targetFrame != nil { decisionHandler(.allow) }
         else {
-            if name != "preview" && ["https", "http"].contains(url.scheme ?? "") { emit(["event":"external", "url":url.absoluteString]) }
+            if action.navigationType == .linkActivated && ["https", "http"].contains(url.scheme ?? "") { emit(["event":"external", "url":url.absoluteString]) }
             decisionHandler(.cancel)
         }
     }
-    func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) { decisionHandler(.deny) }
+    func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+        guard let target = targets["preview"], origin.host == target.host, origin.protocol == target.scheme, origin.port == (target.port ?? (target.scheme == "https" ? 443 : 80)) else { decisionHandler(.deny); return }
+        let alert = NSAlert(); alert.messageText = "Allow this preview to use \(type == .camera ? "your camera" : type == .microphone ? "your microphone" : "your camera and microphone")?"; alert.informativeText = "\(origin.protocol)://\(origin.host):\(origin.port)"; alert.addButton(withTitle: "Allow Once"); alert.addButton(withTitle: "Don’t Allow")
+        alert.beginSheetModal(for: window) { response in decisionHandler(response == .alertFirstButtonReturn ? .grant : .deny) }
+    }
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
         let key = UUID().uuidString; mediaTasks[key] = urlSchemeTask
         emit(["event":"media", "task":key, "url":urlSchemeTask.request.url!.absoluteString, "headers":urlSchemeTask.request.allHTTPHeaderFields ?? [:]])
@@ -424,10 +441,10 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     func windowDidExitFullScreen(_ notification: Notification) { emit(["event":"fullscreen", "value":false]) }
     func windowWillClose(_ notification: Notification) {
         if let closed = notification.object as? NSWindow, closed === window { NSApp.terminate(nil); return }
-        if let key = editorWindows.first(where: { $0.value === notification.object as? NSWindow })?.key {
-            editorWindows.removeValue(forKey: key); views.removeValue(forKey: key); targets.removeValue(forKey: key); urlObservers.removeValue(forKey: key)
-            emit(["event":"view-closed", "view":key])
-        }
+    }
+    func terminateHost() {
+        for window in NSApp.windows { if let sheet = window.attachedSheet { window.endSheet(sheet); sheet.orderOut(nil) } }
+        NSApp.terminate(nil)
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }

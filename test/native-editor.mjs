@@ -33,3 +33,7 @@ await action('rename', { name: 'renamed.ts' }); assert.equal(states.at(-1).sourc
 await action('popout'); await action('hide'); await controller.open('/fixture'); assert.equal(states.at(-1).popped, true); assert.equal(states.at(-1).text, 'newer draft')
 await controller.open('/other', 'b.ts'); assert.equal(controller.session('/fixture').state.text, 'newer draft')
 console.log('Native editor: scoped drafts, stale revisions, drift conflicts, in-flight edits, rename and pop-out reuse passed')
+
+await controller.open('/other', 'a.ts:1:0')
+await action('back'); assert.ok(states.at(-1).canForward)
+await action('forward'); assert.ok(states.at(-1).reveal > 0)

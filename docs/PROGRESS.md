@@ -2,6 +2,51 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Complete native UI migration; remove the React runtime
+
+The native build now compiles Bun services, Swift/AppKit/SwiftUI surfaces and the
+isolated project-preview script only. Removed the native Vite/React/Tailwind
+build, main/panel/editor WebViews, app asset server and obsolete renderer bridge.
+A build-input audit rejects application renderer dependencies and deletes stale
+hybrid assets. Electron keeps its independent build and shared service APIs.
+
+Finished native source file tree/history, panel resizing/persistence, chat tables
+and code coloring, sticky request context, attachment errors, chat rename/close
+and project ordering. Added content draft undo, linked spacing controls, HMR style
+reconciliation, native update/restart with dirty-work guards, downloads/media
+permission prompts and bounded WebKit crash recovery. The cat/loading surfaces
+remain Swift-owned. Bun stays as the shared backend; WebKit is only the project
+preview and its Inspector.
+
+Native geometry checks exposed an AppKit bug: assigning the source editor itself
+as a pop-out window content view let its window-sizing behavior follow it back
+into the workspace and collapse the main window. A dedicated pop-out container
+keeps that ownership separate. Regression checks preserve the 828-point window
+and 776-point canvas after docking; full-size chat captures show Markdown,
+tables, code and question cards correctly. Offscreen AppKit image caching does
+not capture Liquid Glass materials faithfully; those require visible checks.
+
+Validation: all four TypeScript targets, native controller tests, docs links and
+native integration passed. Integration asserts exactly one project-preview
+WebView throughout; verifies native sheets, source/content/style writes, conflict
+and revision handling, queue/stream/question/permission behavior, marked-text
+input, cat frames and repeated resize/dock paths. Terminal shutdown checks pass
+SIGINT/SIGTERM/SIGHUP. Foreground checks covered Unicode paste, source tree/find,
+repeated chat divider drags, selection inspector, source pop-out/dock and download cancellation.
+A missing-style snapshot exposed by the foreground fixture now defaults to empty
+computed values instead of opening Activity with an exception; regression covered.
+A transient computed-style read on one integration rerun also exposed a test
+readiness assumption; that check now waits for the asynchronous selection result.
+No Electron tests, real update pulls, publishing, credential writes or paid
+provider turns were run. Broader IME, accessibility, large-project and older
+macOS/iOS Simulator release testing remain separate verification work.
+
+Three fresh-profile native benchmark launches passed: median 0.606 s to native
+ready, 0.676 s to preview, 787 MiB total process RSS (411 MiB without the provider
+helper), 1.43% of one core idle, six processes. Application files are 3.98 MiB,
+64.13 MiB including Bun, excluding dependencies and system WebKit. This is a new
+snapshot, not a paired Electron comparison; see RUNTIME_BENCHMARK.md for limits.
+
 ## 2026-09-24 — Native visual inspector and content forms
 
 Selection now opens SwiftUI property/style/custom controls without a property

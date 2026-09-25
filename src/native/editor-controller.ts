@@ -1,22 +1,23 @@
 import type { SourceView, SourceWriteResult } from '../shared/api'
 import type { NativeEditorAction, NativeEditorState } from '../shared/native-editor'
 type Document = { view: SourceView; baseline: string; text: string; revision: number; conflict: boolean }
-type Session = { state: NativeEditorState; documents: Map<string, Document>; generation: number; saving: Set<string> }
+type Session = { state: NativeEditorState; documents: Map<string, Document>; generation: number; saving: Set<string>; history: string[]; cursor: number }
 /** Per-project drafts survive file navigation and window docking. Saves always compare disk baseline. */
 export class NativeEditorController {
   readonly sessions = new Map<string, Session>()
   constructor(readonly invoke: (channel: string, ...args: any[]) => Promise<any>, readonly render: (state: NativeEditorState) => void) {}
   session(root: string) {
     let session = this.sessions.get(root)
-    if (!session) { session = { state: { root, visible: false, popped: false, files: [], source: '', document: null, text: '', revision: 0, dirty: false, busy: false, error: '', conflict: false }, documents: new Map(), generation: 0, saving: new Set() }; this.sessions.set(root, session) }
+    if (!session) { session = { state: { root, visible: false, popped: false, files: [], source: '', document: null, text: '', revision: 0, dirty: false, busy: false, error: '', conflict: false }, documents: new Map(), generation: 0, saving: new Set(), history: [], cursor: -1 }; this.sessions.set(root, session) }
     return session
   }
   publish(session: Session) {
     const doc = session.documents.get(session.state.source)
     Object.assign(session.state, { document: doc?.view ?? null, text: doc?.text ?? '', revision: doc?.revision ?? 0, dirty: !!doc && doc.text !== doc.baseline, conflict: doc?.conflict ?? false })
+    session.state.canBack = session.cursor > 0; session.state.canForward = session.cursor < session.history.length - 1
     this.render({ ...session.state })
   }
-  async open(root: string, source?: string, popped?: boolean) {
+  async open(root: string, source?: string, popped?: boolean, navigating = false) {
     const session = this.session(root), generation = ++session.generation
     session.state.visible = true; session.state.error = ''; session.state.busy = true
     if (popped !== undefined) session.state.popped = popped
@@ -25,13 +26,18 @@ export class NativeEditorController {
       session.state.files = await this.invoke('source:tree', root)
       if (generation !== session.generation) return
       source ||= session.state.source || session.state.files.find(f => /\.(tsx?|jsx?|svelte|html|css)$/.test(f)) || session.state.files[0]
-      if (source) await this.read(session, source, generation)
+      if (source) {
+        await this.read(session, source, generation)
+        if (generation !== session.generation) return
+        if (!navigating && session.history[session.cursor] !== source) { session.history.splice(session.cursor + 1); session.history.push(source); session.cursor = session.history.length - 1 }
+        session.state.reveal = (session.state.reveal ?? 0) + 1
+      }
     } catch (error) { if (generation === session.generation) session.state.error = String(error) }
     finally { if (generation === session.generation) { session.state.busy = false; this.publish(session) } }
   }
   async read(session: Session, source: string, generation: number, reload = false) {
     const file = source.replace(/:\d+(?::\d+)?$/, '')
-    if (session.documents.get(file)?.text !== session.documents.get(file)?.baseline && session.documents.has(file) && !reload) { session.state.source = file; return }
+    if (session.documents.get(file)?.text !== session.documents.get(file)?.baseline && session.documents.has(file) && !reload) { session.state.source = file; const line = source.match(/:(\d+)(?::\d+)?$/)?.[1]; if (line) session.documents.get(file)!.view.line = Number(line); return }
     const view: SourceView | null = await this.invoke('source:read', session.state.root, /:\d+(?::\d+)?$/.test(source) ? source : `${source}:1:0`)
     if (generation !== session.generation) return
     if (!view) throw new Error('This source file is not available.')
@@ -57,6 +63,10 @@ export class NativeEditorController {
     const session = this.session(action.root)
     try {
       switch (action.action) {
+        case 'back': case 'forward': {
+          const cursor = session.cursor + (action.action === 'back' ? -1 : 1)
+          if (cursor >= 0 && cursor < session.history.length) { session.cursor = cursor; await this.open(action.root, session.history[cursor], undefined, true) }; return
+        }
         case 'open': await this.open(action.root, action.source); return
         case 'edit': {
           const doc = session.documents.get(action.source ?? session.state.source)

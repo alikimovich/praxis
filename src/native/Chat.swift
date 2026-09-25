@@ -30,7 +30,7 @@ final class ChatModel: ObservableObject {
     }
 }
 
-/// A native view tree; the main WKWebView contains only its geometry placeholder.
+/// Native conversation; AppKit owns its geometry and the composer below it.
 final class NativeChat: NSHostingView<ChatConversation> {
     let model = ChatModel()
     var lastState: [String: Any] = [:]
@@ -72,9 +72,14 @@ private struct BottomPosition: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
+private struct UserPositions: PreferenceKey {
+    static var defaultValue: [String: CGFloat] = [:]
+    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) { value.merge(nextValue()) { _, new in new } }
+}
 struct ChatConversation: View {
     @ObservedObject var model: ChatModel
     @State private var follows = true
+    @State private var sticky: String?
     var body: some View {
         VStack(spacing: 0) {
             GeometryReader { viewport in
@@ -87,7 +92,8 @@ struct ChatConversation: View {
                                         .foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 28)
                                 }
                                 ForEach(snapshot.messages) { message in
-                                    NativeMessageRow(message: message, running: snapshot.running && message.id == snapshot.messages.last?.id, model: model)
+                                    NativeMessageRow(message: message, running: snapshot.running && message.id == snapshot.messages.last?.id, model: model).id(message.id)
+                                        .background(GeometryReader { geometry in Color.clear.preference(key: UserPositions.self, value: message.role == "user" ? [message.id:geometry.frame(in: .named("chatScroll")).maxY] : [:]) })
                                 }
                                 ForEach(snapshot.cards) { card in NativeChatCard(card: card, model: model) }
                                 ForEach(snapshot.questions) { request in NativeQuestionCard(request: request, model: model) }
@@ -97,9 +103,19 @@ struct ChatConversation: View {
                                 .background(GeometryReader { geometry in Color.clear.preference(key: BottomPosition.self, value: geometry.frame(in: .named("chatScroll")).maxY) })
                         }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
                     }.coordinateSpace(name: "chatScroll")
-                    .onPreferenceChange(BottomPosition.self) { bottom in follows = bottom <= viewport.size.height + 48 }
+                    .onPreferenceChange(UserPositions.self) { positions in
+                        sticky = model.snapshot?.messages.last(where: { $0.role == "user" && (positions[$0.id] ?? 1) < 0 })?.id
+                    }
+                    .overlay(alignment: .top) {
+                        if let sticky, let message = model.snapshot?.messages.first(where: { $0.id == sticky }) {
+                            Button { follows = false; proxy.scrollTo(sticky, anchor: .top) } label: { Text(message.text).font(.caption).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading).padding(8) }.buttonStyle(.plain).background(.regularMaterial).help("Scroll to this request")
+                        }
+                    }
+                    .onPreferenceChange(BottomPosition.self) { bottom in
+                        if let event = NSApp.currentEvent, [.scrollWheel, .leftMouseDragged, .keyDown].contains(event.type) { follows = bottom <= viewport.size.height + 48 }
+                    }
                     .onChange(of: model.revision) { _ in if follows { proxy.scrollTo("bottom", anchor: .bottom) } }
-                    .onChange(of: model.snapshot?.chat) { _ in follows = true; proxy.scrollTo("bottom", anchor: .bottom) }
+                    .onChange(of: model.snapshot?.chat) { _ in follows = true; sticky = nil; proxy.scrollTo("bottom", anchor: .bottom) }
                     .overlay(alignment: .bottomTrailing) {
                         if !follows { Button { follows = true; proxy.scrollTo("bottom", anchor: .bottom) } label: { Image(systemName: "arrow.down") }.help("Scroll to latest message").padding(12) }
                     }

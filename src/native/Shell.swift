@@ -305,6 +305,13 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             entry.image = NSImage(systemSymbolName: row.kind == "history" ? "clock" : "bubble.left", accessibilityDescription: nil)
             chatMenu.addItem(entry)
         }
+        if let selectedID, currentProject != nil {
+            chatMenu.addItem(.separator())
+            let rename = NSMenuItem(title: "Rename current chat…", action: #selector(contextAction(_:)), keyEquivalent: "")
+            rename.target = self; rename.representedObject = ["event":"shell-action", "action":"rename-chat", "id":selectedID]; chatMenu.addItem(rename)
+            let close = NSMenuItem(title: "Close current chat", action: #selector(contextAction(_:)), keyEquivalent: "")
+            close.target = self; close.representedObject = ["event":"shell-action", "action":"close", "id":selectedID]; chatMenu.addItem(close)
+        }
         chatHistory.menu = chatMenu; chatHistory.isEnabled = currentProject != nil && chatMenu.items.count > 1
         address.isEnabled = ready
         if address.currentEditor() == nil { showAddress() }
@@ -434,7 +441,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     }
     private func projectMenu(_ row: ShellRow) -> NSMenu {
         let menu = NSMenu(); menu.autoenablesItems = false
-        for (title, action) in [("Project Memory…", "memory"), ("Close Project", "close")] {
+        for (title, action) in [("Project Memory…", "memory"), ("Move Up", "project-up"), ("Move Down", "project-down"), ("Close Project", "close")] {
             let item = NSMenuItem(title: title, action: #selector(contextAction(_:)), keyEquivalent: "")
             item.target = self; item.representedObject = ["event":"shell-action", "action":action, "id":row.id, "project":row.project]; menu.addItem(item)
         }

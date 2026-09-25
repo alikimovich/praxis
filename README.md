@@ -235,7 +235,7 @@ Other UI animations remain enabled.
 | --- | --- |
 | `bun run dev` | Launch the app with HMR |
 | `bun run dev:native` | Build and launch Praxis on macOS with Bun + system WebKit |
-| `bun run build:native` | Build the native host, backend and shared UI to `out/native/` |
+| `bun run build:native` | Build the Swift UI/host, Bun backend and isolated preview script to `out/native/` |
 | `bun run test:native` | Native UI, project/server, selection, editing and isolation checks |
 | `bun run build` | Build main/preload/preview/renderer to `out/` |
 | `bun run typecheck` | Type-check all three tsconfig projects |
@@ -244,22 +244,21 @@ Other UI animations remain enabled.
 
 ### Native runtime (macOS, experimental)
 
-`bun run dev:native` launches a macOS project sidebar, chat history menu, preview
-toolbar, SwiftUI conversation and AppKit composer using Apple Liquid Glass on
-macOS 26+. Native chat uses typed state/actions without a hidden React transcript
-or form. Shared chat controller logic, settings and inspectors still use the main
-WebKit view; this is not yet a React-free build.
+`bun run dev:native` launches the Swift/AppKit/SwiftUI application UI with Bun
+services and a system WebKit project preview. Chat, settings, inspectors, source
+editing and content windows are native; the native build contains no Praxis React
+renderer. The original animated cat and native Liquid Glass composer are included.
+
 The shared application backend runs under Bun. It requires
 macOS 13.3+, Bun, and command-line tools with the macOS 26 SDK to build. Older
 macOS versions use a visual-effect fallback. Open a project using the normal
-folder picker; Praxis owns its dev server. `--project /path/to/repo` preselects
-the first folder pick. `bun run dev` remains the default Electron version.
+folder picker; Praxis owns its dev server. `--project /path/to/repo` opens that project directly. `bun run dev` remains the default Electron version.
 
 Native uses a separate profile, so Electron conversations and saved endpoint keys
 are not automatically imported. Existing provider CLI logins remain available.
-WebKit rendering can differ from Chromium. UI edits require restarting the native
-dev command; self-update/relaunch and some native browser permissions still need
-parity work. See [native architecture, checks and limits](docs/NATIVE.md).
+WebKit rendering can differ from Chromium. Swift UI edits require restarting the native
+dev command. Native update/relaunch, downloads and camera/microphone prompts are implemented; older macOS releases and iOS Simulator still need
+release validation. See [native architecture, checks and limits](docs/NATIVE.md).
 
 ### Compose UI from project components
 

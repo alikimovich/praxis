@@ -18,6 +18,7 @@ final class SheetModel: ObservableObject {
     }
     func perform(_ action: String) {
         guard let state, !state.busy || action == "cancel" else { return }
+        if action == "cancel" && state.actions.isEmpty { return }
         emit(["event":"sheet-action", "id":state.id, "action":action, "values":values])
     }
 }

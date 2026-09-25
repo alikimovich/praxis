@@ -1,17 +1,15 @@
 import AppKit
 
-/// Owns native frames. Transitional web tools report desired insets, never rectangles.
+/// AppKit owns all application frames; WebKit only receives the preview viewport.
 final class WorkspaceLayout {
     weak var host: Host?
     var shellState: [String: Any] = [:]
     var chatState: [String: Any] = [:]
-    var panels: [String: Double] = [:]
     var desiredWidth: CGFloat = 440
     var fraction: CGFloat = 1
     var previewVisible = false
-    var panelVisible = false
-    var panelSize = NSSize(width: 316, height: 300)
-    var panelFrame = NSRect.zero
+    let sourceDivider = NativePanelDivider(), layersDivider = NativePanelDivider(), inspectorDivider = NativePanelDivider()
+    var sourceHeight: CGFloat = 380, layersHeight: CGFloat = 260, inspectorWidth: CGFloat = 300
     let device = NSImageView()
     let readout = NSTextField(labelWithString: "")
     private var animation: Timer?
@@ -20,12 +18,21 @@ final class WorkspaceLayout {
     private var lastLeading: CGFloat = -1
     init(host: Host) {
         self.host = host
+        for divider in [sourceDivider, layersDivider, inspectorDivider] { divider.isHidden = true; host.canvas.addSubview(divider) }
+        sourceDivider.changed = { [weak self] delta in guard let self else { return }; self.sourceHeight = max(160, min((self.host?.canvas.bounds.height ?? 700) * 0.8, self.sourceHeight + delta)); self.layout(); self.saveSizes() }
+        layersDivider.changed = { [weak self] delta in guard let self else { return }; self.layersHeight = max(100, min((self.host?.canvas.bounds.height ?? 700) * 0.7, self.layersHeight - delta)); self.layout(); self.saveSizes() }
+        inspectorDivider.vertical = true
+        inspectorDivider.changed = { [weak self] delta in guard let self else { return }; self.inspectorWidth = max(220, min(500, self.inspectorWidth - delta)); self.layout(); self.saveSizes() }
         device.image = NSImage(contentsOfFile: host.directory + "/device.png")
         device.imageScaling = .scaleProportionallyUpOrDown
         device.isHidden = true; readout.isHidden = true
         readout.font = .systemFont(ofSize: 11); readout.textColor = .secondaryLabelColor
         host.canvas.addSubview(device, positioned: .below, relativeTo: host.views["preview"])
         host.canvas.addSubview(readout, positioned: .above, relativeTo: host.views["preview"])
+    }
+    func saveSizes() { emit(["event":"native-layout-sizes", "source":Double(sourceHeight), "layers":Double(layersHeight), "inspector":Double(inspectorWidth)]) }
+    func restoreSizes(_ values: [String: Double]) {
+        sourceHeight = min(1500, max(160, values["source"] ?? 380)); layersHeight = min(1500, max(100, values["layers"] ?? 260)); inspectorWidth = min(500, max(220, values["inspector"] ?? 300)); layout()
     }
     func width() -> CGFloat { min(desiredWidth, max(320, min(760, (host?.canvas.bounds.width ?? 1080) - 624))) }
     func update(_ state: [String: Any]) {
@@ -57,7 +64,7 @@ final class WorkspaceLayout {
     func nativeChatState() -> [String: Any] {
         guard let host else { return chatState }
         var state = chatState
-        let top: CGFloat = host.layers.isHidden ? 0 : min(260, host.canvas.bounds.height * 0.45)
+        let top: CGFloat = host.layers.isHidden ? 0 : min(layersHeight, host.canvas.bounds.height * 0.7)
         let full = width(), shown = full * fraction
         let visible = shellState["project"] is String && shown > 60 && host.canvas.bounds.height > 30
         state["visible"] = visible
@@ -71,7 +78,7 @@ final class WorkspaceLayout {
         let leading: CGFloat = shellState["project"] is String ? width() * fraction : 0
         host.shell.setChatGeometry(leading)
         let state = nativeChatState()
-        host.layers.frame = NSRect(x: 0, y: 0, width: leading, height: host.layers.isHidden ? 0 : min(260, bounds.height * 0.45))
+        host.layers.frame = NSRect(x: 0, y: 0, width: leading, height: host.layers.isHidden ? 0 : min(layersHeight, bounds.height * 0.7))
         host.canvas.addSubview(host.layers, positioned: .above, relativeTo: host.chatColumn)
         host.chat.place(state, composer: host.composer)
         host.chat.isHidden = !(state["visible"] as? Bool ?? false)
@@ -84,8 +91,8 @@ final class WorkspaceLayout {
         dividerState["bounds"] = ["x":0, "y":0, "width":Double(leading), "height":Double(bounds.height)]
         host.chatDivider.update(dividerState)
         host.chatDivider.isHidden = host.chat.isHidden || fraction < 1
-        let right: CGFloat = host.editingInspector.isHidden ? 0 : min(300, max(200, bounds.width - leading - 120))
-        let bottom = host.dockedSource != nil ? min(380, bounds.height * 0.65) : 0
+        let right: CGFloat = host.editingInspector.isHidden ? 0 : min(inspectorWidth, max(200, bounds.width - leading - 120))
+        let bottom = host.dockedSource != nil ? min(sourceHeight, bounds.height * 0.8) : 0
         host.dockedSource?.frame = NSRect(x: leading, y: bounds.height - bottom, width: max(0, bounds.width - leading), height: bottom)
         host.editingInspector.frame = NSRect(x: bounds.width - right, y: 0, width: right, height: max(0, bounds.height - bottom))
         let available = NSRect(x: leading, y: 0, width: max(0, bounds.width - leading - right), height: max(0, bounds.height - bottom))
@@ -105,10 +112,10 @@ final class WorkspaceLayout {
             preview.layer?.masksToBounds = mobile
             preview.isHidden = !previewVisible || page.width <= 0 || page.height <= 0
         }
-        if let panel = host.views["panel"] {
-            panelFrame = NSRect(x: bounds.width - panelSize.width + 18, y: 0, width: panelSize.width, height: min(panelSize.height, available.height))
-            panel.frame = panelFrame; panel.isHidden = !panelVisible
-        }
+        sourceDivider.isHidden = bottom == 0; sourceDivider.frame = NSRect(x: leading, y: bounds.height - bottom - 3, width: bounds.width - leading, height: 6)
+        layersDivider.isHidden = host.layers.isHidden; layersDivider.frame = NSRect(x: 0, y: host.layers.frame.maxY - 3, width: leading, height: 6)
+        inspectorDivider.isHidden = right == 0; inspectorDivider.frame = NSRect(x: bounds.width - right - 3, y: 0, width: 6, height: bounds.height - bottom)
+        for divider in [sourceDivider, layersDivider, inspectorDivider] { host.canvas.addSubview(divider, positioned: .above, relativeTo: nil); divider.window?.invalidateCursorRects(for: divider) }
         readout.stringValue = "\(Int(page.width.rounded()))px × \(Int(page.height.rounded()))px"
         readout.sizeToFit(); readout.frame.origin = NSPoint(x: max(leading, available.maxX - readout.frame.width - 10), y: 8)
         readout.isHidden = !previewVisible || !host.chatDivider.dragging
@@ -118,5 +125,5 @@ final class WorkspaceLayout {
             emit(["event":"native-layout-frame", "frame":["x":Double(page.minX), "y":Double(page.minY), "width":Double(page.width), "height":Double(page.height), "radius":mobile ? Double(page.width * 0.12) : 0, "leading":Double(leading)]])
         }
     }
-    func inspect() -> [String: Any] { ["native":true, "width":Double(width()), "fraction":Double(fraction), "preview":NSStringFromRect(host?.views["preview"]?.frame ?? .zero), "panel":NSStringFromRect(panelFrame)] }
+    func inspect() -> [String: Any] { ["native":true, "windowHeight":Double(host?.window.frame.height ?? 0), "canvasHeight":Double(host?.canvas.bounds.height ?? 0), "captureHeight":Double(host?.window.contentView?.superview?.bounds.height ?? 0), "width":Double(width()), "fraction":Double(fraction), "preview":NSStringFromRect(host?.views["preview"]?.frame ?? .zero), "panel":NSStringFromRect(host?.editingInspector.frame ?? .zero)] }
 }

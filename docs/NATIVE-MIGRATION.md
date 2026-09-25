@@ -1,6 +1,9 @@
 # Native UI migration plan
 
-Status: in progress, 2026-09-24. Based on the current native build on candidate.
+Status: application UI migration implemented, 2026-09-24, on candidate.
+The native build has no Praxis React renderer or application WebViews. Final
+verification and measurement evidence is recorded in NATIVE.md, PROGRESS.md and
+RUNTIME_BENCHMARK.md; older-macOS/iOS Simulator release testing remains separate.
 This plan preserves Electron support and shared application services.
 
 ## Target
@@ -20,25 +23,25 @@ renderer, including property-panel and pop-out editor entrypoints. Bun stays;
 rewriting the shared backend in Swift is a separate project with little direct
 benefit to this UI migration. Electron keeps its renderer and runtime.
 
-## Current inventory
+## Completed inventory
 
-| Area | Current owner | Remaining dependency |
-| --- | --- | --- |
-| Sidebar and toolbar | AppKit + Bun | Legacy code/layers actions still open web editing tools |
-| Welcome/loading and cat | SwiftUI + Bun | None for native welcome/preview status |
-| Chat and composer | SwiftUI/AppKit + Bun | DOM geometry and temporary mirrors for remaining panels |
-| Workspace persistence | Bun controller and profile files | Shell projection and residual editing actions still use renderer adapters |
-| Chat/preview layout | AppKit | Legacy tools supply desired insets; shell presentation still uses a renderer adapter |
-| Preview | WKWebView + AppKit layout/device frame | Legacy web overlay visibility/freeze remains |
-| Settings and project dialogs | SwiftUI/Bun for settings, connections, new project and memory | Update/relaunch presentation remains |
-| Editing tools | React + preview script | Layers, properties, styles/tokens, custom controls, animation UI |
-| Source/file tools | React/CodeMirror | File tree, code drawer, source navigation, search, media and pop-out editing |
-| Supporting screens | AppKit activity and SwiftUI review | Update notices/relaunch remain |
+| Area | Owner |
+| --- | --- |
+| Sidebar, toolbar, file tree, layers, source editor | AppKit + Bun |
+| Chat, loading/cat, settings, review, feedback | SwiftUI + Bun |
+| Properties/styles/tokens, custom/animation/content tools | SwiftUI + shared source services |
+| Composer, layout, media, downloads and permission prompts | AppKit/WebKit platform APIs |
+| Workspace/session persistence and update/relaunch | Bun controllers with native presentation |
+| User's website, DOM selection and Web Inspector | The sole WKWebView and isolated preview script |
 
-The important dependency files are src/renderer/src/App.tsx, store.ts,
-native-chat-shell.ts, use-native-shell.ts, components/NativeChatSurface.tsx,
-components/PreviewPane.tsx and components/PanelHost.tsx. The native build still
-runs Vite over src/renderer in scripts/build-native.mjs.
+The native build no longer runs Vite over `src/renderer`. The build audits its
+input graph and removes stale hybrid renderer assets. Core integration asserts
+that no main, panel or editor WebView exists. Electron retains its independent
+React build and API; Bun continues sharing the backend services.
+
+The stages below document the migration scope and acceptance criteria. Native
+controller/integration checks and foreground interaction checks are recorded with
+their limits rather than implying every OS/provider combination was exercised.
 
 ## Implementation order
 
@@ -163,9 +166,8 @@ on the same fixture and account for WebKit helper processes.
 ## Delivery and validation
 
 Ship one stage in reviewable slices, keeping the native app usable throughout.
-First implementation slice: Bun workspace commands and snapshots, direct native
-project/chat navigation, and restore tests. Then remove geometry dependence.
-Do not spend the next iteration polishing a React panel that is due for removal.
+The implementation now covers all seven stages. Broader platform/provider
+release coverage does not reintroduce a React dependency.
 
 Use pure controller tests and native integration after each slice. Native tests
 must progressively stop depending on renderer DOM/state test hooks. Exercise

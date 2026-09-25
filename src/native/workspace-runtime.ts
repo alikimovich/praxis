@@ -3,7 +3,7 @@ import type { nativePreferences } from './preferences'
 import type { NativeBridge } from './bridge'
 import type { NativeChatController } from './chat-controller'
 import { NativeWorkspaceController } from './workspace-controller'
-import { dispatchIPC, ipcMain, type NativeView } from './platform'
+import { dispatchIPC, type NativeView } from './platform'
 import type { NativeWorkspaceCommand } from '../shared/native-workspace'
 import type { NativeShellAction } from '../shared/native-shell'
 
@@ -42,16 +42,16 @@ export function installNativeWorkspace(host: NativeBridge, view: NativeView, sto
     }
     originalEffect(effect)
   }
-    ipcMain.handle('native-workspace:command', async (event, command: NativeWorkspaceCommand) => {
-    if (event.sender !== view.webContents) throw new Error('Workspace commands require the main UI')
-    await nativeWorkspace.command(command)
-  })
   const run = (command: NativeWorkspaceCommand) => { void nativeWorkspace.command(command).catch(error => nativeWorkspace.reportError(error)) }
   host.on('recent', ({ root }) => run({ type: 'open', root }))
   host.on('menu', ({ action }) => { if (action === 'open-project') run({ type: 'open' }) })
   host.on('shell-action', (action: NativeShellAction) => {
     const key = action.project ?? nativeWorkspace.state.activeKey
     if (!key) return
+    if (action.action === 'project-up' || action.action === 'project-down') {
+      const projects = nativeWorkspace.state.projects, index = projects.findIndex(p => p.key === key), next = index + (action.action === 'project-up' ? -1 : 1)
+      if (index >= 0 && next >= 0 && next < projects.length) { [projects[index], projects[next]] = [projects[next], projects[index]]; nativeWorkspace.changed() }; return
+    }
     if (action.action === 'new-chat') run({ type: 'new-chat', key })
     else if (action.action === 'select' && action.id?.startsWith('project:')) run({ type: 'select', key })
     else if (action.action === 'select' && action.id?.startsWith('chat:')) run({ type: 'chat', key, session: action.id.slice(5) })
