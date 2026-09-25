@@ -137,16 +137,16 @@ private struct NativeMessageRow: View {
     var body: some View {
         HStack(alignment: .top) {
             if message.role == "user" { Spacer(minLength: 30) }
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 14) {
                 if let selection = message.selection { Text(selection.tag + selection.ident).font(.caption.monospaced()).foregroundStyle(.secondary) }
                 ForEach(message.attachments ?? []) { attachment in NativeAttachment(attachment: attachment) }
                 ForEach(Array(message.segments.enumerated()), id: \.offset) { _, segment in
                     if segment.kind == "tools" {
                         DisclosureGroup {
-                            ForEach(Array((segment.statuses ?? []).enumerated()), id: \.offset) { _, status in Text(status).font(.system(size: 11, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
-                        } label: { Text(segment.statuses?.last ?? "Activity").font(.caption).lineLimit(1).foregroundStyle(.secondary) }
+                            ForEach(Array((segment.statuses ?? []).enumerated()), id: \.offset) { _, status in Text(status).font(ChatTypography.activity).lineSpacing(3).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
+                        } label: { Text(segment.statuses?.last ?? "Activity").font(ChatTypography.activity).lineLimit(1).foregroundStyle(.secondary) }
                     } else if let text = segment.text {
-                        if message.role == "user" { Text(text).textSelection(.enabled).font(.system(size: 14)).fixedSize(horizontal: false, vertical: true) }
+                        if message.role == "user" { Text(text).textSelection(.enabled).font(ChatTypography.body).lineSpacing(ChatTypography.lineSpacing).fixedSize(horizontal: false, vertical: true) }
                         else { ChatMarkdown(source: text) }
                     }
                 }

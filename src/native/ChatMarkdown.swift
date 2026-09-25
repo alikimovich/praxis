@@ -1,5 +1,13 @@
 import SwiftUI
 
+/// Shared rhythm for user text and assistant prose, independent of control fonts.
+enum ChatTypography {
+    static let body = Font.system(size: 13, weight: .regular)
+    static let activity = Font.system(size: 11, weight: .regular, design: .monospaced)
+    static let lineSpacing: CGFloat = 4
+    static let paragraphSpacing: CGFloat = 12
+}
+
 /// Block layout stays native; Foundation renders inline Markdown and links.
 struct ChatMarkdown: View {
     let source: String
@@ -31,7 +39,7 @@ struct ChatMarkdown: View {
         return result
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: ChatTypography.paragraphSpacing) {
             ForEach(blocks) { block in
                 if block.kind == "code" {
                     VStack(alignment: .trailing, spacing: 4) {
@@ -52,7 +60,8 @@ struct ChatMarkdown: View {
                     }.background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
                 } else {
                     Text((try? AttributedString(markdown: block.text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(block.text))
-                        .font(block.kind == "heading" ? .system(size: 16, weight: .semibold) : .system(size: 14))
+                        .font(block.kind == "heading" ? .system(size: 16, weight: .semibold) : ChatTypography.body)
+                        .lineSpacing(ChatTypography.lineSpacing)
                         .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }

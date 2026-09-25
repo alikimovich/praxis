@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Relax native chat typography
+
+Use a shared 13-point regular body font with 4 points of extra line spacing for
+user and assistant prose. Increase paragraph separation to 12 points and segment
+separation to 14; collapsed and expanded tool activity use consistent 11-point
+monospaced text, keeping commands visually secondary to the conversation.
+
+Validation: all typechecks, native build, chat-controller and docs-link checks
+passed. Inspected narrow light/dark typography renders and the native chat capture.
+Full native integration stopped at the preview content-editable pointer check;
+the background rerun passed, with pointer/animation timing coverage skipped.
+No real provider calls were made.
+
 ## 2026-09-25 — Explain cumulative chat token usage
 
 Label the native footer as Chat total and reuse compact token formatting instead
