@@ -267,3 +267,9 @@ assert React chat DOM is absent, disable renderer event delivery, and exercise
 Swift Send, queues, stream updates, permissions and questions directly through Bun. `PRAXIS_NATIVE_BACKGROUND_TEST=1`
 explicitly skips real preview input and animation sampling when the test desktop
 is occluded; that mode does not count as full visual/input verification.
+
+## Remaining migration
+
+See [Native migration plan](NATIVE-MIGRATION.md) for the current dependency
+inventory, implementation order and checks required to remove the Praxis React
+renderer while retaining Electron support.

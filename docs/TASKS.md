@@ -5,6 +5,16 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Native runtime development entrypoint (2026-09-23)
 
+Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md).
+
+- [ ] Native migration 1: Bun workspace/session controller and profile-owned preferences.
+- [ ] Native migration 2: authoritative AppKit layout and preview presentation.
+- [ ] Native migration 3: core workflows without the main UI WebView.
+- [ ] Native migration 4: native settings, project/Git sheets, review and activity screens.
+- [ ] Native migration 5: native layers, properties, styles/tokens and editing controls.
+- [ ] Native migration 6: native source editor and remaining chat/sidebar parity.
+- [ ] Native migration 7: remove native React build/assets and validate release parity.
+
 - [x] Move startup/empty workspace UI and animated cat into Swift; remove empty chat toolbar and own repeated chat resizing in AppKit.
 
 - [x] Render native chat and interactive cards in SwiftUI; replace hidden React form forwarding with typed composer actions.

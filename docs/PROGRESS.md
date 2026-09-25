@@ -2,6 +2,15 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Plan remaining native migration
+
+Audited current host/build, workspace actions, chat context adapter, DOM geometry
+and remaining web panels. Added NATIVE-MIGRATION.md with seven ordered stages and
+exit checks: Bun workspace ownership, AppKit layout, main-WebView removal, native
+sheets, editing tools, source/chat parity, and build cleanup. Preserve Electron
+and Bun services; retain WebKit for project content and inspection. This entry
+records planning only; no runtime migration or benchmark was performed.
+
 ## 2026-09-24 — Native welcome, animated cat and reliable chat resizing
 
 Moved startup/loading and empty workspace presentation into SwiftUI, with native
