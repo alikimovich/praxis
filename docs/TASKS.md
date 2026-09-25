@@ -21,6 +21,8 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Use plain folder/plus sidebar actions and stable animal emoji for projects without favicons.
+
 - [x] Match sidebar project actions and project rows in height, typography and symbol color.
 
 - [x] Move the footer cat into live activity, replacing the thinking orb at 20 points.

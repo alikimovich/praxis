@@ -66,7 +66,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         let sidebarContainer = NSView()
         let projectActions = NSStackView()
         projectActions.orientation = .vertical; projectActions.alignment = .leading; projectActions.spacing = 2
-        for (title, symbol, action) in [("Open Project…", "folder.badge.plus", "open-project"), ("New Project…", "plus.square", "new-project")] {
+        for (title, symbol, action) in [("Open Project…", "folder", "open-project"), ("New Project…", "plus", "new-project")] {
             let button = SidebarProjectButton(title: title, target: self, action: #selector(sidebarAction(_:)))
             button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
             button.identifier = NSUserInterfaceItemIdentifier(action)
@@ -417,9 +417,10 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         text.font = SidebarRowStyle.font
         text.lineBreakMode = .byTruncatingTail
         let symbol = row.kind == "project" ? "folder" : row.kind == "history" ? "clock" : "bubble.left"
-        let icon = NSImageView(image: row.icon ?? NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!)
+        let artwork = row.icon ?? (row.kind == "project" ? ProjectAnimal.image(for: row.project.isEmpty ? row.id : row.project) : NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!)
+        let icon = NSImageView(image: artwork)
         icon.imageScaling = .scaleProportionallyDown
-        icon.contentTintColor = .labelColor
+        icon.contentTintColor = artwork.isTemplate ? .labelColor : nil
         text.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let more = cell.more
         more.bezelStyle = .inline; more.setAccessibilityLabel("Actions for " + row.title)

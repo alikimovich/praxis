@@ -5,6 +5,22 @@ enum SidebarRowStyle {
     static let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
 }
 
+/// Stable, varied animal artwork for projects that have no favicon.
+enum ProjectAnimal {
+    private static let animals = ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐧", "🐦", "🦉", "🦋", "🐢", "🐙", "🦀", "🐳", "🐬"]
+    static func image(for project: String) -> NSImage {
+        // Swift's Hasher is randomized each launch; use a stable path hash instead.
+        let hash = project.utf8.reduce(UInt64(14695981039346656037)) { ($0 ^ UInt64($1)) &* 1099511628211 }
+        let emoji = NSAttributedString(string: animals[Int(hash % UInt64(animals.count))],
+            attributes: [.font: NSFont.systemFont(ofSize: 16)])
+        return NSImage(size: NSSize(width: 20, height: 20), flipped: false) { bounds in
+            let size = emoji.size()
+            emoji.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
+            return true
+        }
+    }
+}
+
 /// Keep project selection on the row and its actions on a separate hover control.
 final class ProjectCell: NSTableCellView {
     let more = NSPopUpButton(frame: .zero, pullsDown: true)
@@ -25,7 +41,8 @@ final class ProjectCell: NSTableCellView {
     private func updateVisibility() {
         let emphasized = backgroundStyle == .emphasized
         more.alphaValue = hovered || selected || emphasized ? 1 : 0
-        imageView?.contentTintColor = emphasized ? .alternateSelectedControlTextColor : .labelColor
+        imageView?.contentTintColor = imageView?.image?.isTemplate == true
+            ? (emphasized ? .alternateSelectedControlTextColor : .labelColor) : nil
         more.contentTintColor = emphasized ? .alternateSelectedControlTextColor : .labelColor
     }
 }

@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Simple sidebar symbols and animal project icons
+
+Open Project now uses a plain folder and New Project a plain plus. Projects
+without a favicon use an animal emoji selected by a stable project-path hash,
+so their identity survives refreshes and launches. Favicon and emoji artwork
+remain untinted in selected and unselected rows.
+
+Validation: native build, typechecks, shell controller and docs-link checks
+passed. Background native integration passed with reduced pointer/animation
+coverage. Full native integration timed out in preview text-selection input.
+Visually checked plain action icons and two different animal fallbacks in a
+separate provider-free native window.
+
 ## 2026-09-25 — Consistent sidebar action rows
 
 Use the same explicit 28-point row height and system font for Open/New Project
