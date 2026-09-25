@@ -20,6 +20,7 @@ export interface NativeChatState {
   cards: NativeChatCard[]
   questions: QuestionRequest[]
   status: string
+  statusDetail?: string
   composer: {
     text: string; caret: number; revision: number; stop: boolean; enabled: boolean; sendLabel: string
     context: string; attachments: string[]

@@ -152,3 +152,14 @@ await second
 assert.equal(racing.get('a').ready, true)
 assert.deepEqual(racing.get('a').messages, [])
 console.log('Native controller: root scoping, clipboard cancellation, renderer reattach and close/reopen race passed.')
+
+// Usage is a cumulative total; cached input is a subset, not additional usage.
+const { snapshot: usageSnapshot } = await import('../src/native/chat-snapshot.ts')
+const usageChat = [...controller.chats.values()][0]
+usageChat.usage = { input: 1389777, output: 3491, cached: 1200000 }
+const usageView = usageSnapshot(usageChat, [])
+assert.equal(usageView.status, 'Chat total · ↑ 1.4M  ↓ 3.5k')
+assert.match(usageView.statusDetail, /not current context size/)
+assert.match(usageView.statusDetail, /Input: 1,389,777/)
+assert.match(usageView.statusDetail, /Cached input \(included above\): 1,200,000/)
+assert.match(usageView.statusDetail, /Output: 3,491/)

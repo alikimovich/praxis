@@ -15,7 +15,7 @@ struct ChatQuestion: Decodable { let header: String; let question: String; let o
 struct ChatQuestionRequest: Decodable, Identifiable { let id: String; let questions: [ChatQuestion] }
 struct ChatSnapshot: Decodable {
     let chat: String; let messages: [ChatMessage]; let running: Bool; let cards: [ChatCard]
-    let questions: [ChatQuestionRequest]; let status: String
+    let questions: [ChatQuestionRequest]; let status: String; let statusDetail: String?
 }
 final class ChatModel: ObservableObject {
     let cat = CatAnimator()
@@ -123,7 +123,7 @@ struct ChatConversation: View {
             if let snapshot = model.snapshot {
                 HStack(alignment: .bottom, spacing: 8) {
                     NativeCat(animator: model.cat)
-                    Text(snapshot.status).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                    Text(snapshot.status).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).help(snapshot.statusDetail ?? snapshot.status)
                     Spacer()
                 }.padding(.horizontal, 18).padding(.vertical, 6)
             }

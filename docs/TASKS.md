@@ -21,6 +21,8 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Clarify cumulative chat token totals with compact counts and a cached-input breakdown.
+
 - [x] Filter recurring Codex skill-budget advice from new chat activity and preserve complete actionable warnings.
 
 - [x] Open the inspector sidebar only from the selection toolbar, preserving explicit visibility across picks.

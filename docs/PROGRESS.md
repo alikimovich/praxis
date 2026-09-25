@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Explain cumulative chat token usage
+
+Label the native footer as Chat total and reuse compact token formatting instead
+of showing ungrouped seven-digit input counts. Hover exposes exact input, cached
+input (a subset of input), and output, explicitly distinguishing accumulated model
+call usage from current context size. Token accounting itself is unchanged.
+
+Validation: native chat-controller and Codex usage tests, all typechecks and
+native build passed; inspected the footer capture. Native background integration
+failed twice at the existing soft-wrapped-composer-fit assertion, not usage.
+
+
 ## 2026-09-24 — Keep routine Codex skill-budget advice out of chat
 
 Suppress the SDK's recurring “Skill descriptions were shortened” advisory in

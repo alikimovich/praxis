@@ -1,3 +1,4 @@
+import { formatTokens } from '../shared/run-stats'
 import type { ModelChoice } from '../shared/api'
 import type { NativeChatCard, NativeChatState } from '../shared/native-chat'
 import { providerOptions, resolveSelection } from '../shared/provider-choices'
@@ -31,7 +32,8 @@ export function snapshot(chat: Chat, choices: ModelChoice[]): NativeChatState {
   const stop = chat.isRunning && !chat.text.trim() && !chat.attachments.length
   return {
     chat: chat.chat, messages: chat.messages, running: chat.isRunning, cards, questions: chat.questions,
-    status: `↑ ${chat.usage.input}  ↓ ${chat.usage.output}`,
+    status: `Chat total · ↑ ${formatTokens(chat.usage.input)}  ↓ ${formatTokens(chat.usage.output)}`,
+    statusDetail: `Cumulative tokens across this chat’s model calls, not current context size.\nInput: ${chat.usage.input.toLocaleString('en-US')}\nCached input (included above): ${chat.usage.cached.toLocaleString('en-US')}\nOutput: ${chat.usage.output.toLocaleString('en-US')}`,
     composer: {
       text: chat.text, caret: chat.caret, revision: chat.revision, stop,
       enabled: chat.ready && (stop || (!chat.switching && (!!chat.text.trim() || !!chat.attachments.length))),
