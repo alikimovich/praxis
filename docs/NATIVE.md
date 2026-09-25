@@ -56,6 +56,9 @@ selection. Readable image attachments are limited to 10 MiB; failed image reads
 and oversized pasted images show an actionable chat error. Sent images display
 native thumbnails. The original cat animates for idle/running/question/completion
 states, pauses when hidden and respects Reduce Motion.
+Queued messages appear in a rounded stack tucked behind the composer, with
+one-line previews, attachment counts, copy/remove actions and Resume when paused.
+The stack shows up to three rows before scrolling; queue order stays unchanged.
 
 Chat has selectable text, native disclosure controls, fenced-code coloring,
 Markdown tables, bottom-following and a sticky request when scrolling through a

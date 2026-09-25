@@ -21,6 +21,8 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Move queued messages into compact stacked rows behind the composer, with removal, copy and paused-queue resume.
+
 - [x] Speed up the beam, restrict it to active generation, and add a native thinking orb, live status transitions and streamed word reveals.
 
 - [x] Add a native border beam to running Stop/Queue buttons and a one-time chat-ready sweep on the composer.

@@ -2,6 +2,25 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Queue messages behind the composer
+
+Move queued messages out of conversation cards into a rounded native stack
+behind the glass composer, following the supplied screenshot: measured ~33-point
+rows snap to 34 points, with 14-point side insets and 16-point overlap. Each row
+has a single-line preview, link styling for web URLs, attachment count, delete
+and copy menu. Three rows fit before scrolling; paused queues show Resume.
+Composer height includes the stack without shrinking the text entry area, and
+removing the last row restores the original compact form. Queue ordering and
+provider behavior are unchanged; no unsupported Steer action is added.
+
+Validation: native build, all typechecks, controller and docs-link checks passed.
+Background native integration passed, including stack geometry, removal and no
+duplicate conversation cards (reduced pointer/animation coverage). Full native
+integration again timed out at the separate preview style source-edit check.
+Inspected captures and the visible two-link stack plus a five-item paused queue;
+verified the 130-point height cap, scroll area and unchanged editor height.
+No provider calls.
+
 ## 2026-09-25 — Streamed word reveals and live thinking status
 
 Halve the composer beam cycle/readiness sweep to 1.5 seconds and separate active

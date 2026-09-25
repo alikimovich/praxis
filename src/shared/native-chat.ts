@@ -29,6 +29,8 @@ export interface NativeChatState {
   status: string
   statusDetail?: string
   composer: {
+    queue: { id: string; text: string; attachments: number }[]
+    queuePaused: boolean
     ready: boolean; running: boolean; thinking: boolean
     text: string; caret: number; revision: number; stop: boolean; enabled: boolean; sendLabel: string
     context: string; attachments: string[]

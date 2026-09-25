@@ -70,6 +70,8 @@ assert.equal(renders.at(-1).composer.stop, false)
 assert.equal(renders.at(-1).composer.thinking, true)
 await send()
 assert.equal(controller.get('a').queue.length, 1)
+assert.equal(renders.at(-1).composer.queue[0].text, 'Second')
+assert.ok(!renders.at(-1).cards.some(card => card.id.startsWith('queued-')))
 await controller.command({ type: 'context', context: context('b') })
 emit({ type: 'done', landingPending: true }); await tick()
 assert.equal(calls.filter(c => c[0] === 'agent:send').length, 1)
@@ -237,3 +239,17 @@ const closedRenders = batchedRenders.length
 await new Promise(resolve => setTimeout(resolve, 50))
 assert.equal(batchedRenders.length, closedRenders, 'Closed chat cannot receive a pending render')
 console.log('Native streaming: bounded render batches, lossless final flush and cancellation passed.')
+
+phaseChat.paused = true
+phaseChat.queue = [
+  { id: 'one', text: 'First queued message', attachments: [], selection: null, turn: {} },
+  { id: 'two', text: '', attachments: [{ id: 'file', name: 'image.png' }], selection: null, turn: {} }
+]
+const stacked = viewState(phaseChat, [])
+assert.deepEqual(stacked.composer.queue, [
+  { id: 'queued-one', text: 'First queued message', attachments: 0 },
+  { id: 'queued-two', text: '', attachments: 1 }
+])
+assert.equal(stacked.composer.queuePaused, true)
+assert.ok(!stacked.cards.some(card => card.id === 'queue-paused' || card.id.startsWith('queued-')))
+console.log('Native composer queue: ordered previews, attachment counts and paused state passed.')

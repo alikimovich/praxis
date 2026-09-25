@@ -36,8 +36,6 @@ export function snapshot(chat: Chat, choices: ModelChoice[]): NativeChatState {
   for (const p of chat.permissions) cards.push({ id: p.id, title: p.title, detail: p.detail, actions: [{ label: 'Deny', action: 'permission', value: 'deny' }, { label: 'Allow', action: 'permission', value: 'allow' }] })
   for (const n of context?.notes ?? []) cards.push({ id: n.id, title: 'Note', detail: n.text, actions: [{ label: 'Remove', action: 'remove-note' }] })
   if (context?.notes.length) cards.push({ id: 'notes-publish', title: 'Publish notes as a PR', actions: [{ label: 'Publish PR', action: 'publish-notes' }] })
-  for (const q of chat.queue) cards.push({ id: `queued-${q.id}`, title: 'Queued message', detail: q.text || `${q.attachments.length} attachment(s)`, actions: [{ label: 'Remove', action: 'queue-remove' }] })
-  if (chat.paused && chat.queue.length) cards.push({ id: 'queue-paused', title: 'Queue paused', actions: [{ label: 'Resume', action: 'queue-resume' }] })
   for (const spawn of context?.spawns ?? []) cards.push({ id: spawn.id, title: spawn.status === 'queued' ? 'Queued agent' : 'Background agent', detail: spawn.label, actions: [{ label: 'Cancel', action: 'spawn-stop' }] })
   const currentActivity = activity(chat)
   const thinking = !!currentActivity?.animated && currentActivity.kind !== 'applying'
@@ -48,6 +46,8 @@ export function snapshot(chat: Chat, choices: ModelChoice[]): NativeChatState {
     status: `Chat total · ↑ ${formatTokens(chat.usage.input)}  ↓ ${formatTokens(chat.usage.output)}`,
     statusDetail: `Cumulative tokens across this chat’s model calls, not current context size.\nInput: ${chat.usage.input.toLocaleString('en-US')}\nCached input (included above): ${chat.usage.cached.toLocaleString('en-US')}\nOutput: ${chat.usage.output.toLocaleString('en-US')}`,
     composer: {
+      queue: chat.queue.map(q => ({ id: `queued-${q.id}`, text: q.text, attachments: q.attachments.length })),
+      queuePaused: chat.paused,
       text: chat.text, caret: chat.caret, revision: chat.revision, stop,
       ready: chat.ready && !chat.switching, running: chat.isRunning, thinking,
       enabled: chat.ready && (stop || (!chat.switching && (!!chat.text.trim() || !!chat.attachments.length))),

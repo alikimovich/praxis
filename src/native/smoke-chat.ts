@@ -60,10 +60,19 @@ export async function checkNativeChat(host: NativeBridge, screenshot: string) {
     if (!(await host.request('composerInspect')).buttonBeam) throw new Error('Drafting a queued message stopped the beam')
     writeFileSync(screenshot.replace('.png', '-beam-queue.png'), Buffer.from(await host.request('captureComposer'), 'base64'))
     await host.request('composerPerform', { action: 'send' })
-    const queued = await wait(state => state.cards.some((id: string) => id.startsWith('queued-')))
-    const id = queued.cards.find((id: string) => id.startsWith('queued-'))
+    let queue: any
+    for (let i = 0; i < 100; i++) {
+      queue = await host.request('composerInspect')
+      if (queue.queueCount === 1) break
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+    if (queue.queueCount !== 1 || queue.queueHeight !== 34 || queue.queueInset !== 14 || Math.abs(queue.queueOverlap - 16) > 1) throw new Error('Composer queue stack geometry incorrect')
+    if ((await host.request('chatInspect')).cards.some((id: string) => id.startsWith('queued-'))) throw new Error('Queue duplicated in conversation')
+    writeFileSync(screenshot.replace('.png', '-queue-stack.png'), Buffer.from(await host.request('captureShell'), 'base64'))
+    const id = queue.queue[0].id
     await host.request('chatPerform', { action: 'queue-remove', card: id })
-    await wait(state => !state.cards.includes(id))
+    for (let i = 0; i < 100 && (await host.request('composerInspect')).queueCount; i++) await new Promise(resolve => setTimeout(resolve, 50))
+    if ((await host.request('composerInspect')).queueCount) throw new Error('Removed queue row remained visible')
     if (sent.length !== 1) throw new Error('Queued message bypassed the active turn')
     send({ type: 'delta', text: '# Native conversation\n\nThis response is **Swift-rendered** with [a link](https://example.com).\n\n```swift\nlet native = true\n```\n\n| Surface | Owner |\n| --- | --- |\n| Chat | SwiftUI |\n| Preview | WebKit |' })
     send({ type: 'status', text: 'Reading project files…' })

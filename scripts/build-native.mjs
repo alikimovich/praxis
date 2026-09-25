@@ -84,6 +84,7 @@ const result = Bun.spawnSync(
     join(root, 'src/native/ToolbarLayout.swift'),
     join(root, 'src/native/Inspector.swift'),
     join(root, 'src/native/Composer.swift'),
+    join(root, 'src/native/ComposerQueue.swift'),
     join(root, 'src/native/ComposerBeam.swift'),
     join(root, 'src/native/Chat.swift'),
     join(root, 'src/native/ChatActivity.swift'),
