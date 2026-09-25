@@ -79,6 +79,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Check, ChevronDown } from './icons'
 import Rail from './components/Rail'
+import { connectNativeWorkspace } from './native-workspace-shell'
 import { useNativeShell } from './use-native-shell'
 import type {
   CommentMode,
@@ -813,6 +814,7 @@ export default function App(): React.JSX.Element {
     commandOverride?: string,
     keepWarm = false
   ): Promise<void> => {
+    if (window.praxisNativeWorkspace) return window.praxisNativeWorkspace.command({ type: 'open', root, command: commandOverride })
     let attemptedCommand = commandOverride ?? ''
     // The previously-open project (if any) — captured before the reset clears it.
     // Opening another project tears the previous down UNLESS keepWarm (the rail's
@@ -1324,6 +1326,7 @@ export default function App(): React.JSX.Element {
   // (url / previewKind / branch / launchSpec) is kept current in its entry as it
   // changes (open / restart / branch rename), so no snapshot is needed here.
   const switchTo = async (key: string): Promise<void> => {
+    if (window.praxisNativeWorkspace) return window.praxisNativeWorkspace.command({ type: 'select', key })
     const ws = useWorkspace.getState()
     if (key === ws.activeKey) return
     const target = ws.projects.find((p) => p.key === key)
@@ -1337,6 +1340,7 @@ export default function App(): React.JSX.Element {
   // fresh session alongside the existing one(s) (agent:new-chat does NOT tear
   // the current session down) and switch the visible chat to it.
   const newChatForProject = async (key: string): Promise<void> => {
+    if (window.praxisNativeWorkspace) return window.praxisNativeWorkspace.command({ type: 'new-chat', key })
     const entry = useWorkspace.getState().projects.find((p) => p.key === key)
     if (!entry) return
     // Any empty chat already IS a "new chat" — switch to it instead of stacking
@@ -1383,6 +1387,7 @@ export default function App(): React.JSX.Element {
   // backgrounded project's chat brings that project forward too (record the
   // choice on the entry first — applyProject opens whichever chat it names).
   const switchSession = async (key: string, sessionKey: string): Promise<void> => {
+    if (window.praxisNativeWorkspace) return window.praxisNativeWorkspace.command({ type: 'chat', key, session: sessionKey })
     const ws = useWorkspace.getState()
     const entry = ws.projects.find((p) => p.key === key)
     if (!entry) return
@@ -1406,6 +1411,7 @@ export default function App(): React.JSX.Element {
   // the record may belong to a backgrounded one — resuming then brings its project
   // forward too, rather than reviving a chat nothing on screen can show.
   const resumeRecord = async (record: SessionRecord): Promise<void> => {
+    if (window.praxisNativeWorkspace) { await window.praxisNativeWorkspace.command({ type: 'resume', key: projectKey(record.projectRoot), record: record.id }); setReviewing(null); return }
     const key = projectKey(record.projectRoot)
     // A resumed chat runs with the choices on screen (forced back to Claude — see
     // resumeChatSettings). Hand them to main so the session's real posture is the
@@ -1450,6 +1456,7 @@ export default function App(): React.JSX.Element {
   // Rail ×: fully close a project (stop its server + agent, drop it). If it was
   // active, fall through to another open project or go idle.
   const closeProjectFromRail = async (key: string): Promise<void> => {
+    if (window.praxisNativeWorkspace) return window.praxisNativeWorkspace.command({ type: 'close', key })
     const ws = useWorkspace.getState()
     const entry = ws.projects.find((p) => p.key === key)
     if (!entry) return
@@ -1478,6 +1485,7 @@ export default function App(): React.JSX.Element {
   // session and reports a peer survivor; we drop the slice + rewire the entry, switching
   // the visible chat only when the closed one was the active chat on screen.
   const closeChatForProject = async (key: string, sessionKey: string): Promise<void> => {
+    if (window.praxisNativeWorkspace) return window.praxisNativeWorkspace.command({ type: 'close-chat', key, session: sessionKey })
     const entry = useWorkspace.getState().projects.find((p) => p.key === key)
     if (!entry) return
     const sessionKeys = entry.sessionKeys ?? [key]
@@ -1756,6 +1764,13 @@ export default function App(): React.JSX.Element {
   // the last project (real relaunch). Runs exactly once; restore.ts self-guards a
   // StrictMode double-mount. The deps ref is populated during render (above).
   useEffect(() => {
+    if (window.praxisNativeWorkspace) return connectNativeWorkspace(state => {
+      setStatus(state.status)
+      const active = state.projects.find(p => p.key === state.activeKey)
+      setPreviewKind(active?.previewKind ?? 'web')
+      launchSpec.current = active?.launchSpec ?? null
+      setRetry(state.status.kind === 'error' && active ? { root: active.root, command: active.launchSpec?.command ?? '' } : null)
+    })
     if (restoreDepsRef.current) void restoreWorkspace(restoreDepsRef.current)
   }, [])
 

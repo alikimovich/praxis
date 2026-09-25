@@ -15,6 +15,8 @@ const ROOT = dirname(TEST_DIR);
 const UNIT = [
   'native-shutdown',
   'native-workspace',
+  'native-workspace-controller',
+  'native-preferences',
   'native-chat-controller',
   'native-cat-assets',
   'content-controls',

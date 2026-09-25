@@ -1,3 +1,4 @@
+import { preferenceStorage } from '../preference-storage'
 import { useEffect, useRef, useState } from 'react'
 import type { PanelState } from '../../../shared/api'
 import { SlidersHorizontal } from '../icons'
@@ -18,9 +19,9 @@ const COLLAPSED_KEY = 'praxis.proppanel.collapsed'
  */
 export default function PanelApp(): React.JSX.Element | null {
   const [state, setState] = useState<PanelState | null>(null)
-  const [collapsed, setCollapsedRaw] = useState(() => localStorage.getItem(COLLAPSED_KEY) === '1')
+  const [collapsed, setCollapsedRaw] = useState(() => preferenceStorage.getItem(COLLAPSED_KEY) === '1')
   const setCollapsed = (c: boolean): void => {
-    localStorage.setItem(COLLAPSED_KEY, c ? '1' : '0')
+    preferenceStorage.setItem(COLLAPSED_KEY, c ? '1' : '0')
     setCollapsedRaw(c)
   }
   const ref = useRef<HTMLDivElement>(null)
@@ -52,7 +53,7 @@ export default function PanelApp(): React.JSX.Element | null {
   const openRequestId = state?.openRequest?.requestId
   useEffect(() => {
     if (!openRequestId) return
-    localStorage.setItem(COLLAPSED_KEY, '0')
+    preferenceStorage.setItem(COLLAPSED_KEY, '0')
     setCollapsedRaw(false)
   }, [openRequestId])
 

@@ -93,8 +93,9 @@ The obsolete DOM composer adapter has been removed.
 queues, model/permission choices, attachments, card actions and service calls in Bun.
 Swift actions reach it directly; the native build does not mount React ChatPanel.
 `native-chat-shell.ts` is a temporary adapter for workspace/selection context and
-read-only conversation mirrors used by the shared toolbar and history. Layout,
-project/session navigation, settings, inspectors and code panels still use the main
+read-only conversation mirrors used by the shared toolbar and history. Project/session navigation now runs through workspace-controller.ts in Bun; a
+temporary native-workspace-shell.ts projection updates remaining panels. Layout,
+branch/publish orchestration, editing context, settings, inspectors and code panels still use the main
 WKWebView. Removing that web shell remains necessary for a fully React-free native
 application. Electron keeps its existing chat controller and UI.
 
@@ -142,7 +143,8 @@ asset page. External HTTP(S) links from the trusted UI open in the default brows
 
 Native backend state lives under `~/Library/Application Support/Praxis Native`.
 It is deliberately separate from Electron's profile. A process lock prevents two
-native instances from writing that profile. Renderer preferences live in the
+native instances from writing that profile. Native UI preferences live in profile-owned preferences.json with legacy browser
+values imported once per key. Workspace state lives in workspace.json. Legacy renderer storage lives in the
 native app's WebKit store. Existing provider CLI sign-ins can be reused, but
 saved custom endpoints and conversation history are not imported from Electron.
 

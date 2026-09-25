@@ -1,3 +1,4 @@
+import { preferenceStorage } from './preference-storage'
 import { useMessageQueue } from './message-queue'
 import { create } from 'zustand'
 import type {
@@ -581,59 +582,8 @@ export const useSession = create<SessionState>((set) => ({
  * land (see docs/TASKS.md "v5"). Projects are identified by `projectKey(root)`.
  */
 /** How to relaunch a project's preview (used to restart it after a config edit). */
-export interface LaunchSpec {
-  /** Preserve user-entered commands; auto-detected launches are re-detected. */
-  customCommand?: boolean
-  root: string
-  command: string
-  framework?: Framework
-  previewKind: PreviewKind
-}
-
-export interface ProjectEntry {
-  environmentRevision?: number
-  dependenciesPending?: boolean
-  /** Absolute repo root as opened. */
-  root: string
-  /** Canonical key (`projectKey(root)`) — the dedupe + map identity. */
-  key: string
-  /** Display name (folder basename, overridable). */
-  name: string
-  // Per-project display snapshot, restored on switch (chat lives in useChat byKey;
-  // tokens/annotations are re-detected on switch).
-  url: string | null
-  previewKind: PreviewKind
-  branch: string | null
-  launchSpec: LaunchSpec | null
-  /** Preview viewport for THIS project — each remembers its own; restored on
-   *  switch (a global viewport leaked one project's Mobile into the next). */
-  viewport?: Viewport
-  /** Rail: hide this project's chat list. The rail is an ACCORDION — at most one
-   *  project's chats are unfolded at a time. Project headers toggle only the
-   *  list; selecting a chat activates its project. `activate`/`openOrActivate`
-   *  and both header buttons unfold exclusively (see `foldOthers`). Folding
-   *  still doesn't deactivate a project — its dev server/preview stay live either
-   *  way, only the list is hidden. Persisted with the entry, so a relaunch
-   *  restores the same single open project.
-   *  Defaults to expanded (undefined = false). */
-  chatsCollapsed?: boolean
-  /** Monotonic recency stamp (bumped on activate) — drives LRU warm-server eviction. */
-  touchedAt: number
-  /**
-   * v9 resume/multi-chat — this project's live `sessionKey`s (mirrors `agent.ts`'s
-   * map): `key` itself for the default chat, plus `` `${key}#…` `` for any
-   * additional (`agent:new-chat`) or resumed (`agent:resume-session`) ones.
-   * Defaults to just `[key]` — untouched by projects that never open a second chat.
-   */
-  sessionKeys: string[]
-  /** Which of `sessionKeys` is the one currently shown (mirrors `agent.ts`'s
-   *  per-project `activeSessionKeyByProject`, kept in sync by whoever switches/
-   *  creates/resumes a chat while this project is active). Defaults to `key`. */
-  activeSessionKey: string
-  /** Model/backend choices for each live chat. Missing entries are legacy
-   * workspace data and safely use the defaults. */
-  chatSettings?: Record<string, ChatAgentSettings>
-}
+export type { LaunchSpec, ProjectEntry } from '../../shared/workspace'
+import type { LaunchSpec, ProjectEntry } from '../../shared/workspace'
 
 export const chatAgentSettingsFromSession = (
   session: Pick<SessionState, 'model' | 'modelId' | 'effort' | 'provider' | 'connectionId'>
@@ -835,7 +785,7 @@ export interface RecentProject {
 const RECENTS_KEY = 'praxis:recent-projects'
 const readRecents = (): RecentProject[] => {
   try {
-    const v = JSON.parse(localStorage.getItem(RECENTS_KEY) ?? '[]') as RecentProject[]
+    const v = JSON.parse(preferenceStorage.getItem(RECENTS_KEY) ?? '[]') as RecentProject[]
     return Array.isArray(v)
       ? v.filter((r) => r && typeof r.root === 'string' && typeof r.name === 'string')
       : []
@@ -845,7 +795,7 @@ const readRecents = (): RecentProject[] => {
 }
 const writeRecents = (recents: RecentProject[]): void => {
   try {
-    localStorage.setItem(RECENTS_KEY, JSON.stringify(recents))
+    preferenceStorage.setItem(RECENTS_KEY, JSON.stringify(recents))
   } catch {
     /* private mode / no storage — keep in memory only */
   }
@@ -890,7 +840,7 @@ export type PublishMode = 'merge' | 'pr'
 const PUBLISH_MODE_KEY = 'praxis:publish-mode'
 const readPublishMode = (): PublishMode => {
   try {
-    return localStorage.getItem(PUBLISH_MODE_KEY) === 'pr' ? 'pr' : 'merge'
+    return preferenceStorage.getItem(PUBLISH_MODE_KEY) === 'pr' ? 'pr' : 'merge'
   } catch {
     return 'merge'
   }
@@ -903,7 +853,7 @@ export const usePublishMode = create<PublishModeState>((set) => ({
   mode: readPublishMode(),
   setMode: (mode) => {
     try {
-      localStorage.setItem(PUBLISH_MODE_KEY, mode)
+      preferenceStorage.setItem(PUBLISH_MODE_KEY, mode)
     } catch {
       /* private mode / no storage — keep it in memory only */
     }
@@ -920,7 +870,7 @@ export const usePublishMode = create<PublishModeState>((set) => ({
 const UPDATE_DISMISSED_KEY = 'praxis:update-dismissed-subject'
 const readDismissed = (): string | null => {
   try {
-    return localStorage.getItem(UPDATE_DISMISSED_KEY)
+    return preferenceStorage.getItem(UPDATE_DISMISSED_KEY)
   } catch {
     return null
   }
@@ -950,7 +900,7 @@ export const useUpdate = create<UpdateState>((set, get) => ({
   dismiss: () => {
     const subject = get().subject ?? ''
     try {
-      localStorage.setItem(UPDATE_DISMISSED_KEY, subject)
+      preferenceStorage.setItem(UPDATE_DISMISSED_KEY, subject)
     } catch {
       /* private mode / no storage — keep it in memory only */
     }
@@ -972,7 +922,7 @@ const RAIL_KEY = 'praxis:rail-collapsed'
 const CHAT_KEY = 'praxis:chat-hidden'
 const readFlag = (key: string): boolean => {
   try {
-    return localStorage.getItem(key) === '1'
+    return preferenceStorage.getItem(key) === '1'
   } catch {
     return false
   }
@@ -1010,7 +960,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     set((s) => {
       const collapsed = !s.collapsed
       try {
-        localStorage.setItem(RAIL_KEY, collapsed ? '1' : '0')
+        preferenceStorage.setItem(RAIL_KEY, collapsed ? '1' : '0')
       } catch {
         /* private mode / no storage — keep it in memory only */
       }
@@ -1021,7 +971,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     set((s) => {
       const chatHidden = !s.chatHidden
       try {
-        localStorage.setItem(CHAT_KEY, chatHidden ? '1' : '0')
+        preferenceStorage.setItem(CHAT_KEY, chatHidden ? '1' : '0')
       } catch {
         /* private mode / no storage — keep it in memory only */
       }
@@ -1119,7 +1069,7 @@ export interface PersistedWorkspace {
 
 export const readPersistedWorkspace = (saved?: string | null): PersistedWorkspace | null => {
   try {
-    const raw = saved ?? localStorage.getItem(WORKSPACE_KEY)
+    const raw = saved ?? preferenceStorage.getItem(WORKSPACE_KEY)
     if (!raw) return null
     const v = JSON.parse(raw) as PersistedWorkspace
     if (!v || !Array.isArray(v.projects)) return null
@@ -1136,7 +1086,7 @@ const writePersistedWorkspace = (ws: WorkspaceState): void => {
   try {
     const raw = JSON.stringify({ projects: ws.projects, activeKey: ws.activeKey })
     window.praxisNativeShell?.writeWorkspace(raw)
-    localStorage.setItem(WORKSPACE_KEY, raw)
+    preferenceStorage.setItem(WORKSPACE_KEY, raw)
   } catch {
     /* private mode / no storage — keep it in memory only */
   }
@@ -1508,14 +1458,14 @@ const LAYERS_HEIGHT_DEFAULT = 220
 
 const readLayersOpen = (): boolean => {
   try {
-    return localStorage.getItem(LAYERS_OPEN_KEY) === '1'
+    return preferenceStorage.getItem(LAYERS_OPEN_KEY) === '1'
   } catch {
     return false
   }
 }
 const readLayersHeight = (): number => {
   try {
-    const n = Number(localStorage.getItem(LAYERS_HEIGHT_KEY))
+    const n = Number(preferenceStorage.getItem(LAYERS_HEIGHT_KEY))
     return Number.isFinite(n) && n >= LAYERS_HEIGHT_MIN && n <= LAYERS_HEIGHT_MAX
       ? n
       : LAYERS_HEIGHT_DEFAULT
@@ -1536,7 +1486,7 @@ export const useLayersPanel = create<LayersPanelState>((set) => ({
   height: readLayersHeight(),
   setOpen: (open) => {
     try {
-      localStorage.setItem(LAYERS_OPEN_KEY, open ? '1' : '0')
+      preferenceStorage.setItem(LAYERS_OPEN_KEY, open ? '1' : '0')
     } catch {
       /* private mode / no storage — keep it in memory only */
     }
@@ -1545,7 +1495,7 @@ export const useLayersPanel = create<LayersPanelState>((set) => ({
   setHeight: (height) => {
     const clamped = Math.min(LAYERS_HEIGHT_MAX, Math.max(LAYERS_HEIGHT_MIN, height))
     try {
-      localStorage.setItem(LAYERS_HEIGHT_KEY, String(clamped))
+      preferenceStorage.setItem(LAYERS_HEIGHT_KEY, String(clamped))
     } catch {
       /* private mode / no storage — keep it in memory only */
     }

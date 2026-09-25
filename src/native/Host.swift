@@ -50,6 +50,15 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var targets: [String: URL] = [:]
     var editorWindows: [String: NSWindow] = [:]
     var urlObservers: [String: NSKeyValueObservation] = [:]
+    var preferences: [String: Any] = [:]
+    func installPreferences(_ view: WKWebView) {
+        guard let data = try? JSONSerialization.data(withJSONObject: preferences), let json = String(data: data, encoding: .utf8) else { return }
+        let controller = view.configuration.userContentController
+        controller.removeAllUserScripts()
+        let preload = (try? String(contentsOfFile: directory + "/preload.js", encoding: .utf8)) ?? ""
+        controller.addUserScript(WKUserScript(source: "globalThis.__praxisPreferences = " + json + ";", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        controller.addUserScript(WKUserScript(source: preload, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+    }
     var recentMenu = NSMenu(title: "Open Recent")
     var mediaTasks: [String: WKURLSchemeTask] = [:]
     let world = WKContentWorld.world(name: "PraxisPreview")
@@ -72,6 +81,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         view.navigationDelegate = self; view.uiDelegate = self; view.isInspectable = true
         if id != "preview" { view.underPageBackgroundColor = id == "main" ? .clear : .windowBackgroundColor }
         if id == "main" { view.setValue(false, forKey: "drawsBackground") }
+        if !isolated { installPreferences(view) }
         views[id] = view; canvas.addSubview(view)
         urlObservers[id] = view.observe(\.url, options: [.new]) { view, _ in
             emit(["event":"url", "view":id, "url":view.url?.absoluteString ?? ""])
@@ -148,6 +158,9 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         let name = c["view"] as? String ?? "main"
         let view = views[name]
         switch c["method"] as? String {
+        case "preferences":
+            preferences = c["values"] as? [String: Any] ?? [:]
+            for (key, view) in views where key != "preview" { installPreferences(view) }
         case "createPanel": if views["panel"] == nil { _ = makeView("panel") }
         case "previewInspector":
             if let action = c["action"] as? String { reply(id, PreviewInspector.perform(action, on: views["preview"])) }

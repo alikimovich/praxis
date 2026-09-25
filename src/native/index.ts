@@ -29,8 +29,11 @@ import { NativeBridge, setBridge } from './bridge'
 import { app, dispatchIPC, ipcMain, NativeView, protocolHandlers, shell, views } from './platform'
 import { runNativeSmoke } from './smoke'
 import { installShutdown } from './shutdown'
+import { parsePreferredModelState, resolvePreferredSettings } from '../shared/preferred-model'
+import { nativePreferences } from './preferences'
 import { workspaceStorage } from './workspace'
 import { installNativeChat } from './chat-runtime'
+import { installNativeWorkspace, workspaceOwnsAction } from './workspace-runtime'
 
 async function main() {
   const testing = process.argv.includes('--test')
@@ -129,12 +132,33 @@ async function main() {
   setBridge(host)
   const mainView = new NativeView('main')
   const workspace = workspaceStorage(profile)
+  const preferences = nativePreferences(profile)
+  ipcMain.on('native-preferences:set', (event, key, value, imported) => {
+    if (event.sender === views.get('preview')?.webContents) return
+    try {
+      preferences.set(key, value, imported === true)
+      if (key === 'praxis:preferred-model') workspaceController.preferred = resolvePreferredSettings(parsePreferredModelState(value ? JSON.parse(value) : null))
+      const values = preferences.snapshot()
+      host!.send('preferences', { values })
+      for (const [name, view] of views) if (name !== 'preview') view.webContents.send('native-preferences:changed', values)
+    } catch (error) { console.error('Native preference write failed:', error) }
+  })
   ipcMain.handle('native-workspace:read', event => {
     if (event.sender !== mainView.webContents) throw new Error('Workspace is main-view only')
     return workspace.read()
   })
   ipcMain.on('native-workspace:write', (event, raw) => {
-    if (event.sender === mainView.webContents) workspace.write(raw)
+    // Native workspace commands own persistence. Legacy panel metadata is mirrored below.
+    if (event.sender === mainView.webContents) {
+      const incoming = JSON.parse(raw)
+      for (const patch of incoming.projects ?? []) {
+        const entry = workspaceController.state.projects.find(p => p.key === patch.key)
+        if (entry) for (const field of ['viewport', 'branch', 'environmentRevision', 'dependenciesPending', 'chatSettings'] as const) {
+          if (patch[field] !== undefined) (entry as any)[field] = patch[field]
+        }
+      }
+      workspace.write(JSON.stringify({ projects: workspaceController.state.projects, activeKey: workspaceController.state.activeKey, recents: workspaceController.state.recents }))
+    }
   })
   const previewView = new NativeView('preview')
   let panelView: NativeView | undefined
@@ -273,16 +297,16 @@ async function main() {
       host!.send('mediaReply', { task, status: 404, data: '' })
     }
   })
-  host.on('menu', ({ action }) => send('menu:action', action))
+  host.on('menu', ({ action }) => { if (action !== 'open-project') send('menu:action', action) })
   ipcMain.on('native-shell:state', (event, state) => {
     if (event.sender === mainView.webContents) host!.send('shellState', { state })
   })
-  host.on('shell-action', ({ action, id, project, value }) => send('native-shell:action', { action, id, project, value }))
-  installNativeChat(host!, mainView)
+  host.on('shell-action', action => { if (!workspaceOwnsAction(action)) send('native-shell:action', action) })
+  const workspaceController = installNativeWorkspace(host!, mainView, workspace, installNativeChat(host!, mainView), preferences)
   ipcMain.on('native-composer:focus', event => {
     if (event.sender === mainView.webContents) host!.send('composerFocus')
   })
-  host.on('recent', ({ root }) => send('menu:open-recent', root))
+
   host.on('view-closed', ({ view }) => {
     const v = views.get(view)
     if (v) v.destroyed = true
@@ -320,6 +344,7 @@ async function main() {
     process.exit(1)
   })
   host.once('ready', async () => {
+    host!.send('preferences', { values: preferences.snapshot() })
     mainView.webContents.loadURL(`${url}?praxisSkipIntro=1`)
     console.log('Praxis Native is running on Bun + system WebKit. Electron is not loaded.')
     if (testing) {

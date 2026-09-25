@@ -1,3 +1,4 @@
+import { preferenceStorage } from './preference-storage'
 import { create } from 'zustand'
 import { moveId, orderedIds } from './lib/rail-order'
 
@@ -5,7 +6,7 @@ const KEY = 'praxis.rail-order.v1'
 type Orders = Record<string, string[]>
 function read(): Orders {
   try {
-    const value: unknown = JSON.parse(localStorage.getItem(KEY) ?? '{}')
+    const value: unknown = JSON.parse(preferenceStorage.getItem(KEY) ?? '{}')
     if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
     return Object.fromEntries(
       Object.entries(value)
@@ -40,7 +41,7 @@ export const useRailOrder = create<{
       if (next === ids || next.every((id, i) => id === ids[i])) return state
       const orders = { ...state.orders, [group]: next }
       try {
-        localStorage.setItem(KEY, JSON.stringify(orders))
+        preferenceStorage.setItem(KEY, JSON.stringify(orders))
       } catch {
         /* keep session order */
       }

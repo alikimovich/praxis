@@ -14,6 +14,24 @@ a later extension. Planning only; no island implementation or live model call.
 Validation: all TypeScript projects including native, existing documentation-link
 check and diff whitespace check passed. No runtime suites ran for this docs change.
 
+## 2026-09-24 — Bun workspace navigation and native preference storage
+
+Added a Bun workspace controller for open/select/close, restore, history loading,
+new/switch/close/resume chat and warm-project eviction. Native sidebar/menu
+navigation calls it directly. React receives a temporary projection for the
+remaining panels; branch/publish, editing context and some metadata effects still
+need migration. Per-project operations serialize; stale opens cannot reclaim the
+active screen and a close waits for startup before stopping its resources.
+
+Native UI preferences now use a versioned profile file with legacy per-key import,
+deletion tombstones and trusted-view bootstrap. Shared model-preference and
+workspace types are independent of the renderer. Electron retains browser storage.
+
+Validation: workspace lifecycle/race tests, preference restore/import tests,
+preferred-model and rail-order tests, all typechecks, and native background
+integration passed. Native-only work; no Electron tests or live provider calls.
+The next integration run also disables renderer delivery during New Chat.
+
 ## 2026-09-24 — Plan remaining native migration
 
 Audited current host/build, workspace actions, chat context adapter, DOM geometry

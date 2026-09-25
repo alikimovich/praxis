@@ -1,6 +1,8 @@
 // Bundled in place of Electron's preload primitives for WKWebView only.
 // The full PraxisApi and preview tools remain the shared preloads.
 import type { NativeShellAction, NativeShellBridge } from '../shared/native-shell'
+import type { NativePreferencesBridge } from '../shared/native-preferences'
+import type { NativeWorkspaceBridge } from '../shared/native-workspace'
 import type { NativeChatBridge } from '../shared/native-chat'
 const filePaths = new WeakMap<File, string>()
 
@@ -68,6 +70,34 @@ export const ipcRenderer = {
 export const contextBridge = {
   exposeInMainWorld(key: string, value: unknown) {
     Object.defineProperty(globalThis, key, { value, writable: false })
+    if (key === 'api') {
+      const cache = () => (globalThis as any).__praxisPreferences ??= {}
+      const update = (key: string, value: string | null, imported = false) => {
+        cache()[key] = value
+        ipcRenderer.send('native-preferences:set', key, value, imported)
+      }
+      const preferences: NativePreferencesBridge = {
+        getItem: key => {
+          if (!Object.hasOwn(cache(), key)) {
+            let legacy: string | null = null
+            try { legacy = localStorage.getItem(key) } catch {}
+            update(key, legacy, true)
+          }
+          return cache()[key] ?? null
+        },
+        setItem: (key, value) => update(key, value),
+        removeItem: key => update(key, null)
+      }
+      ipcRenderer.on('native-preferences:changed', (_event, values) => { (globalThis as any).__praxisPreferences = values })
+      Object.defineProperty(globalThis, 'praxisNativePreferences', { value: preferences, writable: false })
+      try {
+        for (const key of Object.keys(localStorage)) {
+          if (/^praxis[:.]/.test(key) && key !== 'praxis:workspace' && !Object.hasOwn(cache(), key)) update(key, localStorage.getItem(key), true)
+        }
+      } catch {}
+
+    }
+
     if (
       key === 'api' &&
       !location.search.includes('praxisPanel=') &&
@@ -84,6 +114,16 @@ export const contextBridge = {
         }
       }
       Object.defineProperty(globalThis, 'praxisNativeShell', { value: shell, writable: false })
+      const workspace: NativeWorkspaceBridge = {
+        command: command => ipcRenderer.invoke('native-workspace:command', command) as Promise<void>,
+        onState: callback => {
+          const listener: Listener = (_event, state) => callback(state as import('../shared/native-workspace').NativeWorkspaceSnapshot)
+          ipcRenderer.on('native-workspace:state', listener)
+          return () => ipcRenderer.removeListener('native-workspace:state', listener)
+        }
+      }
+      Object.defineProperty(globalThis, 'praxisNativeWorkspace', { value: workspace, writable: false })
+
       const chat: NativeChatBridge = {
         focusComposer: () => ipcRenderer.send('native-composer:focus'),
         command: command => ipcRenderer.send('native-chat:command', command),

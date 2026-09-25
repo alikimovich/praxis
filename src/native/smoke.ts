@@ -5,6 +5,7 @@ import { dispatchIPC, views } from './platform'
 import { checkSelectionInput } from './smoke-input'
 import { checkNativeChat } from './smoke-chat'
 import { nativeChat } from './chat-runtime'
+import { nativeWorkspace } from './workspace-runtime'
 
 export async function runNativeSmoke(host: NativeBridge, fixture: string, root: string) {
   const evaluate = async (code: string, view = 'main', isolated = false) => {
@@ -198,13 +199,18 @@ export async function runNativeSmoke(host: NativeBridge, fixture: string, root: 
   for (const text of ['A', 'A native', 'A native draft']) await host.request('composerPerform', { text })
   await host.request('composerPerform', { text: 'A native draft\nwith a second line' })
   await waitComposer(state => state.text === 'A native draft\nwith a second line')
-  const added = await evaluate(`(async()=>{
-    const ws=window.__praxisWorkspace.getState();const p=ws.projects.find(p=>p.key===ws.activeKey);
-    const result=await window.api.agent.newChat(p.root);
-    if(!result.ok) throw new Error(result.error);
-    ws.patchEntry(p.key,{sessionKeys:[...(p.sessionKeys??[p.key]),result.sessionKey]});
-    return result.sessionKey;
-  })()`)
+  const projectKey = nativeWorkspace.state.activeKey!
+  await evaluate('window.__workspaceDispatch = window.__praxisNativeDispatch; window.__praxisNativeDispatch = () => {}')
+  let added: string
+  try {
+    await nativeWorkspace.command({ type: 'new-chat', key: projectKey })
+    added = nativeWorkspace.active!.activeSessionKey
+    await waitComposer(state => state.chat === added && state.text === '')
+  } finally {
+    await evaluate('window.__praxisNativeDispatch = window.__workspaceDispatch')
+    await nativeWorkspace.command({ type: 'attach' })
+  }
+  if (added === originalChat.slice(5)) throw new Error('New Chat reused an unsent draft')
   await new Promise((resolve) => setTimeout(resolve, 150))
   if (!(await host.request('shellPerform', { action: 'history-select', row: `chat:${added}` })))
     throw new Error('Native chat history entry not selectable')

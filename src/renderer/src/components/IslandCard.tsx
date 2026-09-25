@@ -1,3 +1,4 @@
+import { preferenceStorage } from '../preference-storage'
 import { Minimize2 } from '../icons'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -55,12 +56,12 @@ export default function IslandCard({
   onControls
 }: Props): React.JSX.Element {
   const [tab, setTabRaw] = useState<IslandTab>(() => {
-    const stored = localStorage.getItem(TAB_KEY)
+    const stored = preferenceStorage.getItem(TAB_KEY)
     return isIslandTab(stored) ? stored : 'props'
   })
   const setTab = (t: string): void => {
     const next: IslandTab = isIslandTab(t) ? t : 'props'
-    localStorage.setItem(TAB_KEY, next)
+    preferenceStorage.setItem(TAB_KEY, next)
     setTabRaw(next)
   }
   const requestId = openRequest?.requestId

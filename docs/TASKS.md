@@ -19,7 +19,8 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md).
 
-- [ ] Native migration 1: Bun workspace/session controller and profile-owned preferences.
+- [ ] Native migration 1: finish Bun workspace ownership (branch/publish and editing context remain).
+  - [x] Bun project/chat navigation, restore, warm-project lifetime and profile-owned preferences.
 - [ ] Native migration 2: authoritative AppKit layout and preview presentation.
 - [ ] Native migration 3: core workflows without the main UI WebView.
 - [ ] Native migration 4: native settings, project/Git sheets, review and activity screens.

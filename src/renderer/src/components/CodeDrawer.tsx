@@ -1,3 +1,4 @@
+import { preferenceStorage } from '../preference-storage'
 import { locateCodeReveal } from '../../../shared/code-reveal'
 import { css } from '@codemirror/lang-css'
 import { html } from '@codemirror/lang-html'
@@ -192,7 +193,7 @@ export default function CodeDrawer({
   // Pop-out only: the file-tree sidebar width, drag-adjustable and persisted.
   const [treeWidth, setTreeWidth] = useState(() => {
     if (typeof window === 'undefined') return TREE_W_DEFAULT
-    const saved = Number(window.localStorage.getItem(TREE_W_KEY))
+    const saved = Number(preferenceStorage.getItem(TREE_W_KEY))
     return Number.isFinite(saved) && saved > 0 ? clampTreeW(saved) : TREE_W_DEFAULT
   })
   // Explicit height set by dragging the top edge. null = follow expand/collapse.
@@ -527,7 +528,7 @@ export default function CodeDrawer({
       window.removeEventListener('pointerup', onUp)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
-      window.localStorage.setItem(TREE_W_KEY, String(last))
+      preferenceStorage.setItem(TREE_W_KEY, String(last))
     }
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
@@ -538,7 +539,7 @@ export default function CodeDrawer({
   const nudgeTree = (delta: number): void => {
     setTreeWidth((w) => {
       const next = clampTreeW(w + delta)
-      window.localStorage.setItem(TREE_W_KEY, String(next))
+      preferenceStorage.setItem(TREE_W_KEY, String(next))
       return next
     })
   }
