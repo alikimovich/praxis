@@ -87,7 +87,7 @@ imports to a private adapter for the shared application services, and retains on
 profiles are separate until a safe shared migration/locking design is implemented.
 See `docs/NATIVE.md` for the host protocol, isolation checks, and current limits.
 `src/native/Shell.swift` owns the system sidebar (including project actions),
-split view and column-aligned toolbar: project actions, chat title/actions, and
+split view and column-aligned toolbar: sidebar toggle, chat title/actions, and
 preview controls (domain/branch, selection, viewport, code, layers, expand, Publish). The
 Bun `src/native/shell-controller.ts` constructs workspace toolbar/sidebar state
 and handles navigation directly; Electron keeps its rail.

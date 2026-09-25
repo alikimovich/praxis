@@ -57,3 +57,18 @@ final class ShellRow: NSObject {
         children = (data["children"] as? [[String: Any]] ?? []).map(ShellRow.init)
     }
 }
+
+/// Full-width actions with the same regular label and icon rhythm as project rows.
+final class SidebarProjectButton: NSButton {
+    override func draw(_ dirtyRect: NSRect) {
+        if isHighlighted {
+            NSColor.quaternaryLabelColor.setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: 7, yRadius: 7).fill()
+        }
+        let iconRect = NSRect(x: 10, y: (bounds.height - 16) / 2, width: 16, height: 16)
+        image?.withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [.labelColor]))?.draw(in: iconRect)
+        let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: NSFont.systemFontSize), .foregroundColor: NSColor.labelColor]
+        let text = NSAttributedString(string: title, attributes: attributes)
+        text.draw(in: NSRect(x: 33, y: (bounds.height - text.size().height) / 2, width: bounds.width - 43, height: text.size().height))
+    }
+}

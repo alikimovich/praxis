@@ -29,7 +29,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     private var toolbarLayout: ToolbarLayout!
     weak var window: NSWindow?
     private var toolbarItems: [String: NSToolbarItem] = [:]
-    private let items = ["projects", "chat", "address", "interaction", "select-object", "device", "tools", "code", "layers", "expand", "publish"]
+    private let items = [ "chat", "address", "interaction", "select-object", "device", "tools", "code", "layers", "expand", "publish"]
     private let labels = ["select-object":"Select Object", "layers":"Show Layers", "home":"Back to Project", "address":"Preview Address", "device":"Switch to Mobile", "branch":"Branch", "publish":"Publish", "code":"Show Code", "expand":"Expand Preview"]
     private let symbols = ["select-object":"cursorarrow", "layers":"square.3.layers.3d", "home":"house", "device":"iphone", "branch":"arrow.triangle.branch", "publish":"arrow.up.circle", "code":"chevron.left.forwardslash.chevron.right", "expand":"arrow.up.left.and.arrow.down.right"]
     private var sidebarButtons: [String: NSButton] = [:]
@@ -63,6 +63,19 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         let scroll = ProjectScrollView(); scroll.documentView = outline; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay
         scroll.drawsBackground = false
         let sidebarContainer = NSView()
+        let projectActions = NSStackView()
+        projectActions.orientation = .vertical; projectActions.alignment = .leading; projectActions.spacing = 2
+        for (title, symbol, action) in [("Open Project…", "folder.badge.plus", "open-project"), ("New Project…", "plus.square", "new-project")] {
+            let button = SidebarProjectButton(title: title, target: self, action: #selector(sidebarAction(_:)))
+            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+            button.identifier = NSUserInterfaceItemIdentifier(action)
+            button.isBordered = false; button.setButtonType(.momentaryChange)
+            button.setAccessibilityLabel(title)
+            projectActions.addArrangedSubview(button)
+            button.widthAnchor.constraint(equalTo: projectActions.widthAnchor).isActive = true
+            button.heightAnchor.constraint(equalToConstant: 32).isActive = true
+            sidebarButtons[action] = button
+        }
         let settings = NSButton(title: "", target: self, action: #selector(sidebarAction(_:)))
         settings.identifier = NSUserInterfaceItemIdentifier("settings"); settings.bezelStyle = .circular
         settings.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil); settings.imagePosition = .imageOnly
@@ -76,9 +89,12 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             glass.contentView = settings; settingsSurface = glass
         } else { settingsSurface = settings }
         sidebarButtons["settings"] = settings
-        for view in [scroll, settingsSurface] { view.translatesAutoresizingMaskIntoConstraints = false; sidebarContainer.addSubview(view) }
+        for view in [projectActions, scroll, settingsSurface] { view.translatesAutoresizingMaskIntoConstraints = false; sidebarContainer.addSubview(view) }
         NSLayoutConstraint.activate([
-            scroll.topAnchor.constraint(equalTo: sidebarContainer.safeAreaLayoutGuide.topAnchor, constant: 8), scroll.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: settingsSurface.topAnchor, constant: -12),
+            projectActions.topAnchor.constraint(equalTo: sidebarContainer.safeAreaLayoutGuide.topAnchor, constant: 8),
+            projectActions.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor, constant: 12),
+            projectActions.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor, constant: -12),
+            scroll.topAnchor.constraint(equalTo: projectActions.bottomAnchor, constant: 16), scroll.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: settingsSurface.topAnchor, constant: -12),
             settingsSurface.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor, constant: 12), settingsSurface.bottomAnchor.constraint(equalTo: sidebarContainer.bottomAnchor, constant: -12),
             settingsSurface.widthAnchor.constraint(equalToConstant: 36), settingsSurface.heightAnchor.constraint(equalToConstant: 36)
         ])
@@ -153,7 +169,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         [.toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .space] + items.map { NSToolbarItem.Identifier($0) }
     }
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [NSToolbarItem.Identifier("projects"), .toggleSidebar, .sidebarTrackingSeparator, NSToolbarItem.Identifier("address"), .flexibleSpace,
+        [.toggleSidebar, .sidebarTrackingSeparator, NSToolbarItem.Identifier("address"), .flexibleSpace,
          NSToolbarItem.Identifier("interaction"), .space, NSToolbarItem.Identifier("tools"), .space, NSToolbarItem.Identifier("publish")]
     }
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar: Bool) -> NSToolbarItem? {
@@ -170,21 +186,12 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             group.isBordered = true; group.visibilityPriority = .high
             return group
         }
-        let item: NSToolbarItem = ["projects", "branch", "publish"].contains(key) ? NSMenuToolbarItem(itemIdentifier: identifier) : NSToolbarItem(itemIdentifier: identifier)
+        let item: NSToolbarItem = ["branch", "publish"].contains(key) ? NSMenuToolbarItem(itemIdentifier: identifier) : NSToolbarItem(itemIdentifier: identifier)
         item.label = labels[key] ?? key; item.paletteLabel = item.label; item.toolTip = item.label
         item.image = toolbarSymbol(symbols[key] ?? "circle", item.label)
         // Menu-only items let AppKit open the menu from the entire control.
-        if !["branch", "projects", "chat", "address"].contains(key) { item.target = self; item.action = #selector(toolbarAction(_:)) }
-        if key == "projects", let menuItem = item as? NSMenuToolbarItem {
-            menuItem.label = "Projects"; menuItem.toolTip = "Projects"
-            menuItem.image = toolbarSymbol("folder.badge.plus", "Projects")
-            let menu = NSMenu(); menu.autoenablesItems = false
-            for (title, action) in [("New Project…", "new-project"), ("Open Project…", "open-project")] {
-                let entry = NSMenuItem(title: title, action: #selector(contextAction(_:)), keyEquivalent: "")
-                entry.target = self; entry.representedObject = ["event":"menu", "action":action]; menu.addItem(entry)
-            }
-            menuItem.menu = menu
-        } else if key == "chat" {
+        if !["branch", "chat", "address"].contains(key) { item.target = self; item.action = #selector(toolbarAction(_:)) }
+        if key == "chat" {
             chatHeader.translatesAutoresizingMaskIntoConstraints = false
             chatHeaderWidth = chatHeader.widthAnchor.constraint(equalToConstant: 400)
             chatTitle.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
@@ -285,7 +292,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         defer { for group in toolbar.items.compactMap({ $0 as? MomentaryToolbarGroup }) { group.refresh() } }
         sidebarButtons["new-chat"]?.isEnabled = currentProject != nil
         for (key, item) in toolbarItems {
-            item.isEnabled = ["projects", "chat"].contains(key) ? true : key == "branch" ? previewState["branch"] is String : ready
+            item.isEnabled = key == "chat" ? true : key == "branch" ? previewState["branch"] is String : ready
             if key == "publish" { item.isEnabled = ready && !(previewState["publishing"] as? Bool ?? false) }
         }
         chatTitle.stringValue = allRows.first(where: { $0.id == selectedID })?.title ?? "Chat"

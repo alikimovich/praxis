@@ -33,10 +33,11 @@ subprocess, not a standalone installer.
 | Properties, styles, tokens, custom/animation/content controls | SwiftUI with shared editing services |
 | Project website and DOM instrumentation | WKWebView with isolated preview script |
 
-The sidebar contains only projects, with project favicons and a More menu for
+The sidebar starts with Open Project and New Project buttons, separated by a gap
+from projects with project favicons and a More menu for
 memory, ordering and closing. History above the chat provides open/saved sessions,
 rename and review/resume. Background runs appear as actionable chat cards. Project
-and chat state persists in the native profile. The toolbar keeps project, chat
+and chat state persists in the native profile. The toolbar keeps the sidebar toggle, chat
 and preview actions aligned with their columns. Preview controls include domain
 and branch, selection/device, code/layers/expand, and Publish.
 

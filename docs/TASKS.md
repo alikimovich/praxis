@@ -17,6 +17,8 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Put Open Project and New Project in the native sidebar with neutral text, distinct icons and spacing before projects.
+
 - [x] Remove solid welcome/preview-status backgrounds so the native window surface shows through.
 
 Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md).

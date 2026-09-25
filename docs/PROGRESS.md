@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Project actions in the native sidebar
+
+Replaced the toolbar project menu with full-width Open Project and New Project
+sidebar buttons. Regular system-label text and distinct folder-plus/plus-square
+icons match the project rows, with a 16-point gap before the project list.
+Both buttons use the existing project action handlers.
+
+Validation: TypeScript/native typechecks, isolated native build, direct button
+action dispatch and sidebar image inspection passed. The full native integration
+run stopped in a concurrently added project-switching check, outside this change.
+
+
 ## 2026-09-24 — Let the native window surface show through
 
 Removed the explicit windowBackgroundColor fill from the welcome and preview
