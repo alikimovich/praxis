@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { NativeBridge } from './bridge'
-import { dispatchIPC } from './platform'
+import { dispatchIPC, serviceEvents } from './platform'
 export async function checkNativeSheets(host: NativeBridge, key: string, artifacts: string) {
   const wait = async (check: (state: any) => boolean) => {
     for (let i = 0; i < 80; i++) {
@@ -44,5 +44,14 @@ export async function checkNativeSheets(host: NativeBridge, key: string, artifac
   await wait(state => state.title === 'Add provider' && state.fields.includes('key'))
   await host.request('sheetPerform', { action: 'cancel' })
   await wait(state => !state.visible)
+  serviceEvents.emit('event', 'devserver:log', 'Native activity fixture')
+  host.emit('menu', { action: 'logs' })
+  await new Promise(resolve => setTimeout(resolve, 150))
+  const activity = await host.request('activityInspect')
+  if (!activity.visible || activity.count < 1) throw new Error('Native activity did not receive server logs')
+  host.emit('activity-action', { action: 'clear' })
+  await new Promise(resolve => setTimeout(resolve, 100))
+  if ((await host.request('activityInspect')).count !== 0) throw new Error('Native activity clear failed')
+  host.emit('activity-action', { action: 'hide' })
   console.log('Native New Project and project-memory sheets: presentation, cancel and saved memory passed.')
 }

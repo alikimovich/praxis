@@ -44,6 +44,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var chat: NativeChat!
     var welcome: NativeWelcome!
     var sheets: NativeSheets!
+    let activity = NativeActivity()
     var chatDivider: NativeChatDivider!
     var previewSurface: PreviewSurface!
     let canvas = Canvas()
@@ -170,6 +171,8 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "chatState":
             let state = c["state"] as? [String: Any] ?? [:]
             chat.update(state, composer: composer); chatDivider.update(state)
+        case "activityState": activity.update(c)
+        case "activityInspect": reply(id, ["visible":activity.window?.isVisible ?? false, "count":activity.count])
         case "sheetState": sheets.update(c["state"] as? [String: Any] ?? [:])
         case "sheetClose": sheets.close(c["id"] as? String ?? "")
         case "sheetInspect": reply(id, sheets.inspect())

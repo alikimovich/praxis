@@ -1637,7 +1637,8 @@ let logSeq = 0
 export const useLog = create<LogState>((set) => ({
   lines: [],
   open: false,
-  append: (text, kind = 'info') =>
+  append: (text, kind = 'info') => {
+    if (window.praxisNativeActivity) { if (kind !== 'server') window.praxisNativeActivity.append(text, kind); return }
     set((s) => {
       const d = new Date()
       const time = d.toTimeString().slice(0, 8)
@@ -1645,9 +1646,10 @@ export const useLog = create<LogState>((set) => ({
       const lines = [...s.lines, { id: ++logSeq, time, text, kind }].slice(-500)
       // An error auto-opens the console so the failure is visible.
       return kind === 'error' ? { lines, open: true } : { lines }
-    }),
-  clear: () => set({ lines: [] }),
-  setOpen: (open) => set({ open })
+    })
+  },
+  clear: () => { window.praxisNativeActivity?.action('clear'); set({ lines: [] }) },
+  setOpen: (open) => { if (window.praxisNativeActivity) { window.praxisNativeActivity.action(open ? 'show' : 'hide'); return }; set({ open }) }
 }))
 
 /** AI fix proposal for the current open/launch failure (propose-first). */

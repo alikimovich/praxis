@@ -33,7 +33,7 @@ benefit to this UI migration. Electron keeps its renderer and runtime.
 | Settings and project dialogs | SwiftUI/Bun for settings, connections, new project and memory | GitHub, Git updates and feedback remain React |
 | Editing tools | React + preview script | Layers, properties, styles/tokens, custom controls, animation UI |
 | Source/file tools | React/CodeMirror | File tree, code drawer, source navigation, search, media and pop-out editing |
-| Supporting screens | React | Activity log, diagnosis, session review, update notices |
+| Supporting screens | AppKit activity and SwiftUI review | Diagnosis, feedback and update notices remain React |
 
 The important dependency files are src/renderer/src/App.tsx, store.ts,
 native-chat-shell.ts, use-native-shell.ts, components/NativeChatSurface.tsx,

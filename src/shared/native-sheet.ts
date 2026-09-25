@@ -1,7 +1,7 @@
 export interface NativeSheetField {
   id: string
   label: string
-  kind: 'text' | 'multiline' | 'secure' | 'choice' | 'multichoice'
+  kind: 'text' | 'multiline' | 'secure' | 'choice' | 'multichoice' | 'readonly'
   value: string
   choices?: { value: string; label: string }[]
 }
@@ -16,5 +16,7 @@ export interface NativeSheetState {
 }
 export interface NativeSheetAction { id: string; action: string; values: Record<string, string> }
 
-export interface NativeSheetsBridge { open(kind: 'new-project' | 'memory' | 'settings', key?: string): void }
+export interface NativeSheetsBridge { open(kind: 'new-project' | 'memory' | 'settings' | 'review', key?: string): void }
 declare global { interface Window { praxisNativeSheets?: NativeSheetsBridge } }
+
+declare global { interface Window { praxisNativeActivity?: { append(text: string, kind: string): void; action(action: string): void } } }

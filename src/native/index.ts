@@ -26,13 +26,15 @@ import { registerStylesIpc } from '../main/styles'
 import { registerTokensIpc } from '../main/tokens'
 import * as channels from '../shared/preview-channels'
 import { NativeBridge, setBridge } from './bridge'
-import { app, dispatchIPC, ipcMain, NativeView, protocolHandlers, shell, views } from './platform'
+import { app, dispatchIPC, ipcMain, NativeView, protocolHandlers, shell, views, serviceEvents } from './platform'
 import { runNativeSmoke } from './smoke'
 import { installShutdown } from './shutdown'
 import { parsePreferredModelState, resolvePreferredSettings } from '../shared/preferred-model'
 import { nativePreferences } from './preferences'
 import { workspaceStorage } from './workspace'
 import { installNativeChat } from './chat-runtime'
+import { NativeReviewController } from './review-controller'
+import { NativeActivityController } from './activity-controller'
 import { NativeSettingsController } from './settings-controller'
 import { NativeSheetController } from './sheets-runtime'
 import { installNativeWorkspace, workspaceOwnsAction } from './workspace-runtime'
@@ -306,24 +308,35 @@ async function main() {
       host!.send('mediaReply', { task, status: 404, data: '' })
     }
   })
-  host.on('menu', ({ action }) => { if (!['open-project', 'new-project', 'settings'].includes(action)) send('menu:action', action) })
+  host.on('menu', ({ action }) => { if (!['open-project', 'new-project', 'settings', 'logs'].includes(action)) send('menu:action', action) })
   ipcMain.on('native-shell:state', (event, state) => {
     if (event.sender === mainView.webContents) host!.send('shellState', { state })
   })
-  host.on('shell-action', action => { if (!workspaceOwnsAction(action) && action.action !== 'memory') send('native-shell:action', action) })
+  host.on('shell-action', action => { if (!workspaceOwnsAction(action) && action.action !== 'memory' && !(action.action === 'select' && action.id?.startsWith('history:'))) send('native-shell:action', action) })
+  const activityController = new NativeActivityController((method, data) => host!.send(method, data))
+  host.on('activity-action', ({ action }) => activityController.action(action))
+  host.on('menu', ({ action }) => { if (action === 'logs') activityController.action('toggle') })
+  serviceEvents.on('event', (channel, line) => { if (channel === 'devserver:log' || channel === 'simulator:log') activityController.append(line, 'server') })
+  ipcMain.on('native-activity:command', (event, command) => {
+    if (event.sender !== mainView.webContents) return
+    if (command?.action === 'append') activityController.append(command.text, command.kind)
+    else activityController.action(command?.action)
+  })
   const chatController = installNativeChat(host!, mainView)
   const workspaceController = installNativeWorkspace(host!, mainView, workspace, chatController, preferences)
   const sheetController = new NativeSheetController(host!, workspaceController, chatController)
+  const reviewController = new NativeReviewController(sheetController, url => shell.openExternal(url))
   const settingsController = new NativeSettingsController(sheetController, preferences, refreshPreferences)
   host.on('sheet-action', action => { void sheetController.action(action) })
   const openSheet = (kind: string, key?: string) => {
     if (sheetController.current?.state.busy) return
     if (kind === 'settings') void settingsController.open().catch(error => workspaceController.reportError(error))
+    else if (kind === 'review' && key) void reviewController.open(key).catch(error => workspaceController.reportError(error))
     else if (kind === 'new-project') sheetController.newProject()
     else if (kind === 'memory' && key) void sheetController.memory(key).catch(error => workspaceController.reportError(error))
   }
   host.on('menu', ({ action }) => { if (['new-project', 'settings'].includes(action)) openSheet(action) })
-  host.on('shell-action', action => { if (action.action === 'memory') openSheet('memory', action.project ?? workspaceController.state.activeKey ?? undefined) })
+  host.on('shell-action', action => { if (action.action === 'select' && action.id?.startsWith('history:')) openSheet('review', action.id.slice(8)); if (action.action === 'memory') openSheet('memory', action.project ?? workspaceController.state.activeKey ?? undefined) })
   ipcMain.on('native-sheet:open', (event, kind, key) => { if (event.sender === mainView.webContents) openSheet(kind, key) })
 
   ipcMain.on('native-composer:focus', event => {

@@ -91,6 +91,7 @@ const result = Bun.spawnSync(
     join(root, 'src/native/Cat.swift'),
     join(root, 'src/native/Welcome.swift'),
     join(root, 'src/native/Sheets.swift'),
+    join(root, 'src/native/Activity.swift'),
     join(root, 'src/native/ChatDivider.swift'),
     join(root, 'src/native/ChatMarkdown.swift'),
     join(root, 'src/native/ChatQuestion.swift'),

@@ -37,7 +37,9 @@ struct SheetContent: View {
                         ForEach(state.fields) { field in
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(field.label).font(.headline)
-                                if field.kind == "multiline" {
+                                if field.kind == "readonly" {
+                                    Text(field.value).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+                                } else if field.kind == "multiline" {
                                     TextEditor(text: binding(field)).font(.system(size: 13, design: .monospaced)).frame(minHeight: 220).accessibilityLabel(field.label)
                                 } else if field.kind == "choice" {
                                     Picker(field.label, selection: binding(field)) {
@@ -62,7 +64,7 @@ struct SheetContent: View {
                             }
                         }
                     }.padding(2).disabled(state.busy)
-                }.frame(maxHeight: state.fields.contains { $0.kind == "multiline" || $0.kind == "multichoice" } ? 360 : 180)
+                }.frame(maxHeight: state.fields.contains { $0.kind == "multiline" || $0.kind == "multichoice" || $0.kind == "readonly" } ? 360 : 180)
                 if let message = state.message, !message.isEmpty {
                     Text(message).foregroundStyle(.secondary).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 }
@@ -77,7 +79,7 @@ struct SheetContent: View {
                         }
                     }
                 }
-            }.padding(24).frame(width: 540, height: state.fields.contains { $0.kind == "multiline" || $0.kind == "multichoice" } ? 520 : 400).background(Color(nsColor: .windowBackgroundColor))
+            }.padding(24).frame(width: 540, height: state.fields.contains { $0.kind == "multiline" || $0.kind == "multichoice" || $0.kind == "readonly" } ? 520 : 400).background(Color(nsColor: .windowBackgroundColor))
                 .onExitCommand { model.perform("cancel") }
         }
     }

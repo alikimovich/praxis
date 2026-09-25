@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-24 — Native activity and session review
+
+Moved activity presentation to a selectable AppKit window with Copy All/Clear,
+direct Bun server-event ingestion, capped buffering and throttled repaint. Saved
+session review now uses a native sheet with transcript/files, resume, apply,
+PR actions and confirmed discard. Electron retains its existing surfaces.
+
+Validation: all typechecks, bounded-buffer/review lifecycle tests and native
+background integration passed. Native activity show/clear/hide was exercised.
+Review operations used service stubs; no live PR or provider call was made.
+Background mode still skips actual preview mouse/animation verification.
+
 ## 2026-09-24 — Native project and provider sheets
 
 New Project, project memory, Settings and provider connection management now use

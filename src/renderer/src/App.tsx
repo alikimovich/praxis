@@ -235,10 +235,10 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     if (!reviewing) usePreviewFreeze.getState().setFrozen(false)
   }, [reviewing])
-  const openReview = (record: SessionRecord): void =>
-    openWithFreeze((open) => {
-      if (open) setReviewing(record)
-    })
+  const openReview = (record: SessionRecord): void => {
+    if (window.praxisNativeSheets) { window.praxisNativeSheets.open('review', record.id); return }
+    openWithFreeze((open) => { if (open) setReviewing(record) })
+  }
   // The code drawer holds one project's source stamp — close it when the active
   // project changes so it can't read a stale path against the new root.
   useEffect(() => {

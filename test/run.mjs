@@ -17,7 +17,7 @@ const UNIT = [
   'native-workspace',
   'native-workspace-controller',
   'native-preferences',
-  'native-sheets',
+  'native-support', 'native-sheets',
   'native-settings',
   'native-chat-controller',
   'native-cat-assets',
