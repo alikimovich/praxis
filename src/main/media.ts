@@ -54,20 +54,6 @@ export function nativeMediaPath(url: string): string | undefined {
   try { const parsed = new URL(url); return parsed.protocol === `${MEDIA_SCHEME}:` && parsed.hostname === 'f' ? files.get(parsed.pathname.slice(1)) : undefined } catch { return undefined }
 }
 
-/**
- * Must run BEFORE app ready (privileged schemes are fixed at that point).
- * `stream` is what lets a <video> pull the body progressively; `supportFetchAPI`
- * lets the handler answer with a streaming Response.
- */
-export function registerMediaScheme(): void {
-  protocol.registerSchemesAsPrivileged([
-    {
-      scheme: MEDIA_SCHEME,
-      privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true }
-    }
-  ])
-}
-
 const notFound = (): Response => new Response('Not found', { status: 404 })
 
 async function serve(request: Request): Promise<Response> {

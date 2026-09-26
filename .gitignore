@@ -11,3 +11,7 @@ test/artifacts/
 # Unpublished content-controls runtime distributed with Praxis.
 !vendor/content-controls/dist/
 !vendor/content-controls/dist/**
+
+# Local output from the retired standalone prototype.
+experimental/native-runtime/build/
+experimental/native-runtime/artifacts/

@@ -190,7 +190,6 @@ export type NativeWebContents = NativeView['webContents']
 
 export const protocolHandlers = new Map<string, (request: Request) => Promise<Response>>()
 export const protocol = {
-  registerSchemesAsPrivileged(_schemes: unknown[]) {},
   handle(scheme: string, handler: (request: Request) => Promise<Response>) {
     protocolHandlers.set(scheme, handler)
   }

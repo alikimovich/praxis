@@ -61,7 +61,6 @@ timing and must be reported as reduced coverage. No Electron tests remain.
   permission choices. `src/native/shell-controller.ts` owns workspace navigation.
 - `src/native/ChatActivity.swift`, `StreamingText.swift`: live activity with a 20-point
   pixel cat from `Cat.swift`, and native word reveal.
-  `src/native/vendor/thinking-orbs/` contains the MIT-licensed SwiftUI orb port.
 - `src/native/WorkspaceLayout.swift`: geometry and AppKit divider input.
 - `src/native/SourceEditor.swift`, `src/native/Layers.swift`,
   `src/native/EditingInspector.swift`, `src/native/ContentWindow.swift`:
@@ -98,7 +97,7 @@ Provider SDKs remain in process in Bun. Source editing still uses JavaScript
 parsers (TypeScript/Babel/React Docgen/Svelte/parse5); React-related names do not
 imply a remaining application renderer. React/React DOM are development-only
 fixtures for generated project component tests. The vendored content-controls
-package also distributes optional web UI alongside its used recipe/API modules.
+package contains only its used recipe/API modules and supporting declarations.
 
 ## Conventions and hard-won constraints
 

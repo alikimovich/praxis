@@ -5,10 +5,8 @@ import type {
   PropEditResult,
   PropField,
   PropInspection,
-  PropKind,
-  TokenEdit
+  PropKind
 } from '../shared/api'
-import { swapTailwindClass } from './tw-classes'
 import { pickInstance, type SvelteUsage } from './svelte-instance'
 import {
   agentPromptFor,
@@ -666,42 +664,4 @@ export async function applySvelteTextEdit(
   const trail = allWs ? '' : (raw.match(/\s*$/)?.[0] ?? '')
   const next = code.slice(0, start) + lead + edit.text + trail + code.slice(end)
   return commitEdit(root, loc.file, code, next, `${edit.source}:text`)
-}
-
-/**
- * Direct token application for `.svelte` — currently the Tailwind color-class swap
- * (the JSX T2 counterpart): a tailwind color token, an element with a literal
- * `class="…"` whose single color utility is swapped to the token. Inline-style
- * (`style="…"`) and component-prop (enum) token cases route to the agent for now.
- */
-export async function applySvelteTokenEdit(
-  root: string,
-  edit: TokenEdit,
-  loc: ResolvedSource
-): Promise<PropEditResult> {
-  const toAgent = (): PropEditResult => ({
-    applied: false,
-    needsAgent: true,
-    agentPrompt: `Apply the ${edit.group} token "${edit.token.name}" (${edit.token.value}) to the selected element${edit.source ? ` in ${edit.source}` : ''}.`
-  })
-  if (edit.tokenSource !== 'tailwind') return toAgent()
-  let code: string
-  try {
-    code = await readFile(loc.file, 'utf8')
-  } catch {
-    return { applied: false, error: 'Could not read the source file.' }
-  }
-  const ast = await parseSvelte(code)
-  if (!ast) return toAgent()
-  const el = findElement(ast, code, loc.line, loc.column)
-  if (!el) return toAgent()
-
-  // The `class` attribute, read as a single literal string (`class="…"`).
-  const classAttr = readAttributes(el).find((a) => a.name === 'class')
-  if (!classAttr || classAttr.kind !== 'string' || classAttr.expression) return toAgent()
-  const swapped = swapTailwindClass(String(classAttr.value ?? ''), edit.group, edit.token.name)
-  if (swapped == null) return toAgent()
-  // readAttributes gives the WHOLE attribute span (`class="…"`); rewrite it.
-  const next = `${code.slice(0, classAttr.start)}class="${swapped}"${code.slice(classAttr.end)}`
-  return commitEdit(root, loc.file, code, next, `${edit.source}:token`)
 }

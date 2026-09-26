@@ -1,27 +1,10 @@
 {
   "name": "@alikimovich/content-controls",
   "version": "0.1.0",
-  "description": "On-demand content editing primitives for local websites and agent tools.",
+  "description": "Recipe validation and agent API subset vendored for native Praxis",
   "type": "module",
   "license": "UNLICENSED",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./core": {
-      "types": "./dist/core.d.ts",
-      "import": "./dist/core.js"
-    },
-    "./styles.css": "./dist/styles.css",
-    "./mount": {
-      "types": "./dist/mount.d.ts",
-      "import": "./dist/mount.js"
-    },
-    "./react": {
-      "types": "./dist/react.d.ts",
-      "import": "./dist/react.js"
-    },
     "./recipe": {
       "types": "./dist/recipe.d.ts",
       "import": "./dist/recipe.js"
@@ -30,12 +13,5 @@
       "types": "./dist/api.d.ts",
       "import": "./dist/api.js"
     }
-  },
-  "peerDependencies": {
-    "react": "^18.2.0 || ^19.0.0",
-    "react-dom": "^18.2.0 || ^19.0.0"
-  },
-  "dependencies": {
-    "motion": "^12.0.0"
   }
 }

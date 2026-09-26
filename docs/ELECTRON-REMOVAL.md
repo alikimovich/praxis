@@ -60,21 +60,17 @@ The root manifest changed from 38 runtime / 11 development declarations to
 13 runtime / 5 development declarations. TypeScript moved to runtime because the
 source-editing backend imports it, while React/React DOM moved to development.
 
-## Remaining cleanup candidates
+## Follow-up cleanup
 
-- The vendored `content-controls` distribution exports web/React UI as well as
-  the recipe/API modules Praxis uses. Its manifest still pulls `motion` and
-  React peers even though those UI entrypoints are not loaded by native Praxis.
-  A recipe/API-only distribution would remove that remaining transitive UI
-  baggage. The vendor package's public exports were preserved rather than
-  silently changing the bundled third-party distribution during app retirement.
-- `experimental/native-runtime/` is the original standalone prototype. It is
-  not part of the app build; retained as an explicitly separate reference.
-- Historical roadmap, migration, benchmark and progress documents still mention
-  Electron. PROGRESS history is intentionally unchanged. BROWSER is marked
-  retired; README, active guides, testing, native and lifecycle docs were updated.
-- Ignored old `out/`, screenshots and local installed dependency caches are not
-  product source. No user data or running app was deleted during cleanup.
+Removed the unused thinking-orb Swift vendor code, standalone native prototype,
+renderer freeze-frame handlers/state, privileged media-scheme registration shim,
+and uncalled props token-edit endpoint/adapters. Active native screenshots, media
+serving and style/token editing remain. The content-controls vendor now contains
+only recipe/API code and supporting types, without web UI or Motion dependencies.
+
+Experimental Gemini remains opt-in and reachable. Unused shared helpers are retained
+for separate review; tests alone do not establish application usage. Historical
+PROGRESS entries and migration documentation remain historical records.
 
 ## Checks
 

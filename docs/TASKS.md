@@ -3,6 +3,16 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## PR descriptions (2026-09-25)
+
+- [x] Analyze the committed PR diff with Luna and generate short descriptions instead of reusing chat-derived commit subjects.
+
+## Retirement cleanup (2026-09-25)
+
+- [x] Remove unused orb/prototype, renderer freeze-frame and media registration, old token-edit endpoint, and vendored content-controls web distribution.
+- [x] Document retained uncalled helpers and current alternatives in [helper review](UNUSED-HELPERS.md).
+- [ ] Decide whether to remove or reconnect the retained helpers after review.
+
 ## Provider preview observation (2026-09-24)
 
 - [x] Wire live preview location and MCP screenshot image results into Codex and custom endpoint sessions.
@@ -1230,8 +1240,8 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       extended `tw-styles.mjs` / `tokens.mjs` / `style-edit.mjs`. See PROGRESS 2026-07-28.
       Deliberately NOT planned (dropped 2026-07-30, user call): Svelte
       scoped-`<style>` editing (token picks there keep seeding the agent),
-      "save this value as a token", and deleting the dead `props:applyToken`
-      path (dead-but-harmless; only `test/prop-edit*.mjs` exercise it).
+      "save this value as a token", and deleting the dead token-apply path (that earlier keep decision was
+      superseded by the authorized 2026-09-25 retirement cleanup).
 
 ## Vanilla HTML / static sites (2026-07-09, user-requested) — SHIPPED
 

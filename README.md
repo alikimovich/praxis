@@ -234,7 +234,9 @@ Jev with your saved Vercel AI Gateway connection from Settings. See [scope and w
 
 Ask chat to surface controls for content, components or animations; the bundled
 `surface-controls` skill chooses the appropriate native workflow. Praxis uses content-controls
-editors beside the preview, with drafts, Save to source and Undo. Ask to use Jev to
+recipes in native SwiftUI editors beside the preview, with drafts, Save to source
+and Undo. The vendored package contains only recipe/API code; its upstream web UI
+and Motion dependency are omitted. Ask to use Jev to
 choose content sections or animation/component parameters. Without a Gateway key,
 controls use the chat model automatically and report that fallback. See [content controls](docs/CONTENT_CONTROLS.md)
 for JSON bindings, Gateway setup and current limits.

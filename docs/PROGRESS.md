@@ -2,6 +2,44 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Short PR descriptions from the code diff
+
+Publish now uses a separate read-only Codex/Luna turn to analyze the committed
+merge-base diff after remote reconciliation. Generated titles are limited to 72
+characters and bodies to 120 words; no chat or commit subjects are supplied.
+Handoff and comment-agent PRs share the generator. Existing PR update errors now
+surface instead of silently retaining stale descriptions. Generation has a
+60-second timeout and explicit retry errors; Codex sign-in is required.
+
+Validation: typecheck and publish-description, publish-message, publish-reconcile
+and docs-link checks passed. Regression coverage uses real Git histories and a
+stubbed model, checking committed/reconciled code, exclusion of unpublished edits
+and chat-derived subjects, invalid output, and provider failure. No live provider
+calls ran.
+
+## 2026-09-25 — Remove confirmed native retirement leftovers
+
+Remove the unused thinking-orb vendor/build inputs, standalone runtime prototype,
+renderer freeze-frame handlers/state, obsolete privileged media registration, and
+uncalled props token-edit endpoint with its private React/Svelte adapters. Keep
+active style/token editing, native media, provider screenshots and migration paths.
+Trim vendored content-controls to recipe/API entrypoints plus supporting types;
+remove Motion and four transitive packages from the lockfile. Existing ignored
+prototype build artifacts remain ignored rather than deleting local output.
+
+Retain experimental Gemini because its opt-in path remains reachable. Preserve all
+reviewed shared helpers at the user's request; docs/UNUSED-HELPERS.md explains their
+purpose, missing consumers and current alternatives. Update active architecture
+and retirement docs; historical progress entries remain untouched.
+
+Validation: both typechecks and all 97 unit checks passed. Initial sandbox-only
+socket failures passed when rerun with local listener access. Frozen offline Bun
+install passed. Native build passed; full integration passed islands and selection
+before the previously documented native style-source-edit timeout. Inspected the
+failure capture. Reduced-coverage retry could not build because another concurrent
+build modified out/native/main.swift; no background pass is claimed. Concurrent
+composer and other unrelated workspace edits are excluded from this commit.
+
 ## 2026-09-25 — Native chat islands with Jev-selected blocks
 
 Added scoped chat_island catalog/define/read tools for Claude and Codex, a versioned

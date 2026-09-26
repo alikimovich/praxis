@@ -12,20 +12,16 @@ import type {
   PropInspection,
   PropKind,
   SourceView,
-  SourceWriteResult,
-  TokenEdit
+  SourceWriteResult
 } from '../shared/api'
 import {
   applySvelteEdit,
   applySvelteTextEdit,
-  applySvelteTokenEdit,
   inspectSvelteProps,
   removeSvelteProp
 } from './props-svelte'
 import { looksBinary, mediaTypeFor } from './media-types'
 import { mediaUrl } from './media'
-import { tokenReference } from '../shared/token-match'
-import { swapTailwindClass } from './tw-classes'
 import { spliceHtmlText } from './html-source'
 import {
   recordEdit,
@@ -839,99 +835,6 @@ async function applyTextEdit(
   return commitEdit(root, loc.file, code, next, `${edit.source}:text`)
 }
 
-// --- v6: direct (agent-free) token application -----------------------------
-
-// Main runs in Node (no CSS.supports), so family checks are regex-based.
-const NAMED_COLORS = new Set([
-  'red',
-  'blue',
-  'green',
-  'black',
-  'white',
-  'gray',
-  'grey',
-  'orange',
-  'purple',
-  'pink',
-  'yellow',
-  'teal',
-  'cyan',
-  'magenta',
-  'transparent',
-  'currentcolor',
-  'inherit'
-])
-function isColorValue(v: string): boolean {
-  const s = v.trim().toLowerCase()
-  if (/gradient\(/.test(s)) return true
-  if (/^(#|rgb|rgba|hsl|hsla|oklch|oklab|lab|lch|color\(|var\()/.test(s)) return true
-  return NAMED_COLORS.has(s)
-}
-function isLengthValue(v: string): boolean {
-  const s = v.trim()
-  // Require a unit/% (a bare number is fontWeight/lineHeight/opacity/zIndex, not a
-  // length). var(...) is allowed but T3 also gates on the property name.
-  return /^-?\d*\.?\d+(px|rem|em|%|vh|vw|vmin|vmax|pt|ch|ex)$/.test(s) || /^var\(/.test(s)
-}
-
-// T3 only swaps a style property when BOTH the property NAME and the VALUE belong
-// to the token's family — otherwise a color token could land in fontSize, etc.
-const COLOR_STYLE_PROPS = new Set([
-  'color',
-  'background',
-  'backgroundColor',
-  'borderColor',
-  'borderTopColor',
-  'borderRightColor',
-  'borderBottomColor',
-  'borderLeftColor',
-  'outlineColor',
-  'fill',
-  'stroke',
-  'caretColor',
-  'textDecorationColor',
-  'columnRuleColor'
-])
-const LENGTH_STYLE_PROPS = new Set([
-  'width',
-  'height',
-  'minWidth',
-  'maxWidth',
-  'minHeight',
-  'maxHeight',
-  'padding',
-  'paddingTop',
-  'paddingRight',
-  'paddingBottom',
-  'paddingLeft',
-  'margin',
-  'marginTop',
-  'marginRight',
-  'marginBottom',
-  'marginLeft',
-  'gap',
-  'rowGap',
-  'columnGap',
-  'fontSize',
-  'lineHeight',
-  'borderRadius',
-  'top',
-  'right',
-  'bottom',
-  'left',
-  'letterSpacing',
-  'borderWidth'
-])
-
-/** The static key name of a style ObjectProperty (null for computed/spread). */
-function stylePropKey(p: BabelNode): string | null {
-  if (p.type !== 'ObjectProperty' || (p as { computed?: boolean }).computed) return null
-  const k = p.key as BabelNode | undefined
-  if (k?.type === 'Identifier') return (k as { name?: string }).name ?? null
-  if (k?.type === 'StringLiteral') return (k as unknown as { value?: string }).value ?? null
-  return null
-}
-
 /** The literal-string AST node behind a className attr value (`"…"` or `{'…'}`),
  * or null for an expression/dynamic className we must not rewrite. */
 export function classNameStringNode(v: BabelNode | null | undefined): BabelNode | null {
@@ -942,140 +845,6 @@ export function classNameStringNode(v: BabelNode | null | undefined): BabelNode 
     if (inner?.type === 'StringLiteral') return inner
   }
   return null
-}
-
-/** How to write a token reference into source: css vars stay var(--name); other
- * sources splice the resolved value (a manifest hex, a Tailwind scale value, …). */
-function tokenRef(edit: TokenEdit): string {
-  return tokenReference(edit.tokenSource, edit.token)
-}
-
-function tokenAgentPrompt(edit: TokenEdit): string {
-  return `Apply the ${edit.group} token "${edit.token.name}" (${edit.token.value}) to the selected element${edit.source ? ` in ${edit.source}` : ''}.`
-}
-
-/** Resolve a component's prop schema (same-file → cross-file import), for T1. */
-async function resolveSchema(
-  root: string,
-  file: string,
-  code: string,
-  found: FoundElement
-): Promise<PropField[]> {
-  if (!/^[A-Z]/.test(found.name)) return []
-  let schema = await schemaFor(code, found.name)
-  if (schema.length === 0) {
-    const def = await resolveComponentFile(root, file, found.ast, found.name)
-    if (def) {
-      try {
-        schema = await schemaFor(await readFile(def.file, 'utf8'), def.exportName)
-      } catch {
-        /* unreadable — no schema */
-      }
-    }
-  }
-  return schema
-}
-
-/**
- * Apply a design token directly when it maps to an *existing literal*, else hand
- * to the agent. Two unambiguous direct paths (first match wins):
- *  - T1 schema-enum swap: the component has an enum prop whose options include the
- *    token name → set that prop to the token name.
- *  - T3 inline-style swap: the element has a literal `style={{…}}` with exactly one
- *    property whose value is a string literal in the token's family → replace it.
- * Anything ambiguous (no stamp, add-new, multiple candidates) → needsAgent.
- */
-async function applyTokenEdit(root: string, edit: TokenEdit): Promise<PropEditResult> {
-  const toAgent = (): PropEditResult => ({
-    applied: false,
-    needsAgent: true,
-    agentPrompt: tokenAgentPrompt(edit)
-  })
-  if (!edit.source) return toAgent()
-  const loc = resolveSource(root, edit.source)
-  if (!loc) return { applied: false, error: 'Could not resolve the source location.' }
-  // `.svelte` → the Svelte adapter (Tailwind class swap; other cases → agent).
-  if (loc.file.endsWith('.svelte')) return applySvelteTokenEdit(root, edit, loc)
-  let code: string
-  try {
-    code = await readFile(loc.file, 'utf8')
-  } catch {
-    return { applied: false, error: 'Could not read the source file.' }
-  }
-  const found = await findElementAtLine(code, loc.line, loc.column)
-  if (!found) return toAgent()
-
-  // T1 — schema enum swap (the token name IS a valid enum option). If more than
-  // one enum prop lists it, it's ambiguous → let the agent decide.
-  const schema = await resolveSchema(root, loc.file, code, found)
-  const enumFields = schema.filter((f) => f.kind === 'enum' && f.options?.includes(edit.token.name))
-  if (enumFields.length === 1) {
-    return applyPropEdit(root, {
-      source: edit.source,
-      name: enumFields[0].name,
-      kind: 'enum',
-      value: edit.token.name
-    })
-  }
-
-  const isColorGroup = /colou?r/i.test(edit.group)
-
-  // T2 — Tailwind utility class swap: for a tailwind token on an element with a
-  // literal className that has EXACTLY ONE utility of the token's family (color /
-  // radius / spacing), swap that utility's scale to the token (e.g. `text-gray-500`
-  // + 'primary' → `text-primary`). Zero/multiple matches, or a dynamic className →
-  // fall through.
-  if (edit.tokenSource === 'tailwind') {
-    const classAttr = (found.opening.attributes ?? []).find(
-      (a) => a.type === 'JSXAttribute' && (a.name as { name?: string })?.name === 'className'
-    )
-    const strNode = classNameStringNode(classAttr?.value as BabelNode | null | undefined)
-    if (strNode) {
-      const swapped = swapTailwindClass(
-        String((strNode as unknown as { value: string }).value),
-        edit.group,
-        edit.token.name
-      )
-      if (swapped != null) {
-        const next =
-          code.slice(0, strNode.start) + JSON.stringify(swapped) + code.slice(strNode.end)
-        return commitEdit(root, loc.file, code, next, `${edit.source}:token`)
-      }
-    }
-  }
-
-  // T3 — inline-style single-property swap, gated on BOTH the property name and
-  // the value family (so a color token can't land in fontSize, etc.).
-  const propSet = isColorGroup ? COLOR_STYLE_PROPS : LENGTH_STYLE_PROPS
-  const valueInFamily = (v: string): boolean => (isColorGroup ? isColorValue(v) : isLengthValue(v))
-  const styleAttr = (found.opening.attributes ?? []).find(
-    (a) => a.type === 'JSXAttribute' && (a.name as { name?: string })?.name === 'style'
-  )
-  const styleExpr = unwrapExpr(
-    (styleAttr?.value as BabelNode | undefined)?.expression as BabelNode | undefined
-  )
-  if (styleExpr?.type === 'ObjectExpression') {
-    const matches = ((styleExpr as { properties?: BabelNode[] }).properties ?? []).filter((p) => {
-      const key = stylePropKey(p)
-      const val = p.value as BabelNode | undefined
-      return (
-        key != null &&
-        propSet.has(key) &&
-        val?.type === 'StringLiteral' &&
-        valueInFamily(String((val as unknown as { value: string }).value))
-      )
-    })
-    if (matches.length === 1) {
-      const valNode = matches[0].value as BabelNode
-      const next =
-        code.slice(0, valNode.start) + JSON.stringify(tokenRef(edit)) + code.slice(valNode.end)
-      return commitEdit(root, loc.file, code, next, `${edit.source}:token`)
-    }
-  }
-
-  // Ambiguous (add-new property/class, className expression, multiple candidates,
-  // host element with no schema + no inline style) → the agent decides.
-  return toAgent()
 }
 
 // --- code peek: read the stamped file / jump to it in the user's editor ------
@@ -1313,9 +1082,6 @@ export function registerPropsIpc(): void {
     inspectProps(root, source, text)
   )
   ipcMain.handle('props:apply', (_e, root: string, edit: PropEdit) => applyPropEdit(root, edit))
-  ipcMain.handle('props:applyToken', (_e, root: string, edit: TokenEdit) =>
-    applyTokenEdit(root, edit)
-  )
   ipcMain.handle('props:remove', (_e, root: string, source: string, name: string) =>
     removeProp(root, source, name)
   )

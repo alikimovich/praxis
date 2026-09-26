@@ -65,7 +65,6 @@ export interface PreviewState {
   /** Renderer's last-reported preview slot rect, in CSS pixels (== DIP). */
   bounds: { x: number; y: number; width: number; height: number; radius: number }
   /** Renderer asked the view hidden beneath a freeze-frame overlay. */
-  hiddenByRenderer: boolean
   selectMode: boolean
   commentMode: 'comment' | 'annotate' | null
   frameMode: boolean
@@ -205,12 +204,7 @@ export function registerPreviewIpc(host: PreviewIpcHost): void {
     state.url = url
     state.retries = 0
     const view = host.ensurePreviewView()
-    // Recover from any LEAKED hide (a renderer bug) — a fresh load should be
-    // visible. But an ACTIVE hide (state.hiddenByRenderer: the review modal /
-    // a dropdown's freeze-frame is up) must win, or a load completing under it
-    // pops the native view over the open overlay; set-dragging(false) restores
-    // visibility when the overlay closes.
-    if (!state.hiddenByRenderer) view.setVisible(true)
+    view.setVisible(true)
     view.webContents.loadURL(url)
   })
 
@@ -227,34 +221,6 @@ export function registerPreviewIpc(host: PreviewIpcHost): void {
     state.layersWatch = false
     state.pins = []
     host.ensurePreviewView().webContents.loadURL(host.placeholderUrl)
-  })
-
-  // Hide the native view beneath a renderer freeze-frame overlay; remember the
-  // intent so preview:load respects it.
-  ipcMain.on('preview:set-dragging', (_e, active: boolean) => {
-    state.hiddenByRenderer = active
-    host.getPreviewView()?.setVisible(!active)
-  })
-
-  // Freeze-frame support: snapshot the live preview so renderer UI (e.g. the
-  // branch dropdown) can overlay a pixel-identical <img> while the native view
-  // hides beneath it — the preview appears to stay put, but the DOM wins.
-  ipcMain.handle('preview:capture', async (): Promise<string | null> => {
-    const wc = previewWc()
-    let readoutStyle: string | undefined
-    try {
-      // The renderer owns the size label over snapshots. Avoid baking a stale
-      // label into the image if the preview resizes while an overlay is open.
-      readoutStyle = await wc?.insertCSS('[data-praxis-viewport-size] { display: none !important; }')
-      const img = await wc?.capturePage()
-      return img && !img.isEmpty() ? img.toDataURL() : null
-    } catch {
-      return null
-    } finally {
-      if (readoutStyle && wc && !wc.isDestroyed()) {
-        await wc.removeInsertedCSS(readoutStyle).catch(() => {})
-      }
-    }
   })
 
   // v2 select mode: renderer → preview (arm/disarm the overlay).
