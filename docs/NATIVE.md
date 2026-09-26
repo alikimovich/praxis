@@ -26,7 +26,7 @@ subprocess, not a standalone installer.
 | Welcome, loading/errors, animated pixel cat | SwiftUI |
 | Conversation, Markdown tables/code, cards/questions | SwiftUI |
 | Composer, attachments and slash completion | AppKit NSTextView and native controls |
-| Settings/providers, new project, memory, Git/publish, review, feedback | SwiftUI sheets with Bun controllers |
+| Settings/providers, new project, memory, Git/publish, review, feedback | SwiftUI forms in standalone AppKit windows with Bun controllers |
 | Activity | AppKit selectable log, bounded buffer |
 | Source files, search/replace, media, pop-outs | AppKit outline/NSTextView/AVKit |
 | Layers | AppKit outline with selection and drag reordering |
@@ -118,10 +118,10 @@ reach the cipher helper through stdin, not argv. No real credentials are written
 by the integration tests.
 
 Praxis owns project servers. Quit, terminal SIGINT/SIGTERM/SIGHUP, and host pipe
-closure run cleanup; native sheets are dismissed during host shutdown. Updates
+closure run cleanup; native dialog windows are dismissed during host shutdown. Updates
 use the current tracked branch, require a clean checkout and no running chat or
 unsaved source/content/composer drafts, fast-forward, install with Bun, rebuild native and
-restart. Failures remain in a native sheet. Updates never discard work or switch
+restart. Failures remain in a native dialog window. Updates never discard work or switch
 branches automatically.
 
 ## Verification
@@ -146,3 +146,9 @@ test:native-live` opts into a real fixture edit. iOS Simulator integration and
 older-macOS visual behavior still require platform-specific release testing.
 
 See [migration scope](NATIVE-MIGRATION.md) and [measurements](RUNTIME_BENCHMARK.md).
+
+App forms use titled, closable, minimizable and resizable native windows. Content
+scrolls above a fixed action bar: auxiliary actions on the left, Cancel and the
+primary action on the right. Return invokes nondestructive primary actions;
+Escape, Command-W and the close traffic light dismiss through the Bun controller.
+System file pickers and permission alerts retain their standard AppKit presentation.

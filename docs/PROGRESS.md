@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Native dialog windows and conventional actions
+
+Move app forms from attached sheets into titled, closable, minimizable and
+resizable AppKit windows. Keep instructions and fields in a scrolling body with
+a fixed bottom action bar: auxiliary actions left, Cancel before the primary
+action on the right. Route traffic-light/Command-W dismissal through Bun, keep
+non-dismissible operations protected, and remove Return shortcuts from destructive
+confirmations. System file pickers and permission alerts retain AppKit behavior.
+
+Validation: full/native typechecks, native build and six focused unit checks pass.
+Direct disposable-host window checks cover native chrome and traffic-light dismissal;
+inspected short and long form captures. Full native integration still stops at the
+previously recorded soft-wrapped composer sizing assertion before dialog checks.
+No real provider calls ran.
+
 ## 2026-09-25 — Rotate the button energy highlight
 
 Rotate the active button gradient every 2.4 seconds while preserving its full

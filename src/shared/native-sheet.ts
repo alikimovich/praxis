@@ -10,7 +10,7 @@ export interface NativeSheetState {
   title: string
   detail: string
   fields: NativeSheetField[]
-  actions: { id: string; label: string; primary?: boolean }[]
+  actions: { id: string; label: string; primary?: boolean; destructive?: boolean }[]
   busy: boolean
   message?: string
 }

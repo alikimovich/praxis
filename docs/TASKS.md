@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Native dialog windows (2026-09-25)
+
+- [x] Present app forms in standalone native windows with traffic lights, scrolling content and a fixed, conventionally ordered action bar.
+- [x] Route close controls through controller dismissal and remove destructive Return shortcuts.
+
 ## Composer glow refinement (2026-09-25)
 
 - [x] Give the Stop/Send button a thin full-perimeter glow, stronger at 135°, with uneven smooth energy pulses.

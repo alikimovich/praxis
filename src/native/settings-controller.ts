@@ -51,7 +51,7 @@ export class NativeSettingsController {
       if (action.action === 'edit') this.edit(connection)
       else this.sheets.present({
         title: 'Delete ' + connection.label + '?', detail: 'This removes the saved endpoint and its API key. Chats using its models fall back to their default.',
-        fields: [], actions: [{ id: 'back', label: 'Back' }, { id: 'delete', label: 'Delete', primary: true }]
+        fields: [], actions: [{ id: 'back', label: 'Back' }, { id: 'delete', label: 'Delete', primary: true, destructive: true }]
       }, async action => {
         if (action.action === 'delete') await this.invoke('providers:remove', connection.id)
         if (this.sheets.current?.state.id === action.id) await this.connections()

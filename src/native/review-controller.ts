@@ -24,7 +24,7 @@ export class NativeReviewController {
       if (action.action === 'rename') { const project = this.sheets.workspace.state.projects.find(p => p.root === record.projectRoot); if (project) this.sheets.renameChat('history:' + record.id, project.key); return }
       if (action.action === 'view-pr' && record.prUrl) { await this.openExternal(record.prUrl); return }
       if (action.action === 'remove-record') {
-        this.sheets.present({ title: 'Delete this saved conversation?', detail: 'This removes only its history record. Project files are retained.', fields: [], actions: [{ id: 'back', label: 'Back' }, { id: 'delete', label: 'Delete', primary: true }] }, async confirmation => {
+        this.sheets.present({ title: 'Delete this saved conversation?', detail: 'This removes only its history record. Project files are retained.', fields: [], actions: [{ id: 'back', label: 'Back' }, { id: 'delete', label: 'Delete', primary: true, destructive: true }] }, async confirmation => {
           if (confirmation.action === 'back') { this.show(record); return }
           await this.sheets.invoke('sessions:remove', record.id)
           const project = this.sheets.workspace.state.projects.find(p => p.root === record.projectRoot)
@@ -33,7 +33,7 @@ export class NativeReviewController {
         }); return
       }
       if (action.action === 'discard') {
-        this.sheets.present({ title: 'Discard this run?', detail: 'Delete its saved branch and conversation record. Applied changes in your working tree are retained.', fields: [], actions: [{ id: 'back', label: 'Back' }, { id: 'discard', label: 'Discard', primary: true }] }, async confirmation => {
+        this.sheets.present({ title: 'Discard this run?', detail: 'Delete its saved branch and conversation record. Applied changes in your working tree are retained.', fields: [], actions: [{ id: 'back', label: 'Back' }, { id: 'discard', label: 'Discard', primary: true, destructive: true }] }, async confirmation => {
           if (confirmation.action === 'back') { this.show(record); return }
           const result = await this.sheets.invoke('agent:spawn-discard', record.projectRoot, record.branch)
           if (!result.ok) throw new Error(result.error || 'Could not discard this run.')

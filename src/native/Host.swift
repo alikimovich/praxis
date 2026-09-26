@@ -135,6 +135,8 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             let item = NSMenuItem(title: label, action: #selector(menuAction(_:)), keyEquivalent: key); item.target = self; item.representedObject = action; file.addItem(item)
         }
         let recent = NSMenuItem(title: "Open Recent", action: nil, keyEquivalent: ""); recent.submenu = recentMenu; file.addItem(recent)
+        file.addItem(.separator())
+        file.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         let edit = submenu("Edit")
         let undo = NSMenuItem(title: "Undo", action: #selector(menuAction(_:)), keyEquivalent: "z"); undo.target = self; undo.representedObject = "undo"; edit.addItem(undo)
         let redo = NSMenuItem(title: "Redo", action: #selector(menuAction(_:)), keyEquivalent: "z"); redo.target = self; redo.representedObject = "redo"; redo.keyEquivalentModifierMask = [.command, .shift]; edit.addItem(redo)
@@ -244,7 +246,9 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "sheetPerform":
             guard ephemeral else { reply(id, false); return }
             if let values = c["values"] as? [String: String] { sheets.model.values.merge(values) { _, new in new } }
-            sheets.model.perform(c["action"] as? String ?? ""); reply(id, true)
+            if c["action"] as? String == "closeWindow" { sheets.panel?.performClose(nil) }
+            else { sheets.model.perform(c["action"] as? String ?? "") }
+            reply(id, true)
         case "welcomeInspect": reply(id, welcome.inspect())
         case "dividerInspect": reply(id, ["visible":!chatDivider.isHidden, "width":chatDivider.width, "dragging":chatDivider.dragging, "frame":NSStringFromRect(chatDivider.frame), "hitTarget":canvas.hitTest(NSPoint(x: chatDivider.frame.midX, y: chatDivider.frame.midY)) === chatDivider])
         case "dividerPerform":

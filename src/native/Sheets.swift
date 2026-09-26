@@ -3,7 +3,7 @@ import SwiftUI
 
 struct SheetChoice: Decodable, Identifiable { let value: String; let label: String; var id: String { value } }
 struct SheetField: Decodable, Identifiable { let id: String; let label: String; let kind: String; let value: String; let choices: [SheetChoice]? }
-struct SheetAction: Decodable, Identifiable { let id: String; let label: String; let primary: Bool? }
+struct SheetAction: Decodable, Identifiable { let id: String; let label: String; let primary: Bool?; let destructive: Bool? }
 struct SheetState: Decodable { let id: String; let title: String; let detail: String; let fields: [SheetField]; let actions: [SheetAction]; let busy: Bool; let message: String? }
 final class SheetModel: ObservableObject {
     @Published var state: SheetState?
@@ -28,13 +28,20 @@ struct SheetContent: View {
         Binding(get: { model.values[field.id] ?? field.value }, set: { model.values[field.id] = $0 })
     }
     func selected(_ field: SheetField) -> Set<String> { Set((model.values[field.id] ?? field.value).components(separatedBy: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ","))).filter { !$0.isEmpty }) }
+    @ViewBuilder func button(_ action: SheetAction, busy: Bool) -> some View {
+        if action.primary == true && action.destructive != true {
+            Button(action.label) { model.perform(action.id) }.keyboardShortcut(.defaultAction).disabled(busy)
+        } else {
+            Button(action.label, role: action.destructive == true ? .destructive : nil) { model.perform(action.id) }
+                .disabled(busy && action.id != "cancel")
+        }
+    }
     var body: some View {
         if let state = model.state {
-            VStack(alignment: .leading, spacing: 16) {
-                Text(state.title).font(.title2.bold())
-                if !state.detail.isEmpty { Text(state.detail).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+            VStack(spacing: 0) {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if !state.detail.isEmpty { Text(state.detail).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
                         ForEach(state.fields) { field in
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(field.label).font(.headline)
@@ -66,49 +73,61 @@ struct SheetContent: View {
                                 }
                             }
                         }
-                    }.padding(2).disabled(state.busy)
-                }.frame(maxHeight: state.fields.contains { $0.kind == "multiline" || $0.kind == "multichoice" || $0.kind == "readonly" } ? 360 : 180)
-                if let message = state.message, !message.isEmpty {
-                    Text(message).foregroundStyle(.secondary).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                }
-                HStack {
-                    if state.busy { ProgressView().controlSize(.small) }
-                    Spacer()
-                    ForEach(state.actions) { action in
-                        if action.primary == true {
-                            Button(action.label) { model.perform(action.id) }.keyboardShortcut(.defaultAction).disabled(state.busy)
-                        } else {
-                            Button(action.label) { model.perform(action.id) }.disabled(state.busy && action.id != "cancel")
+                        if let message = state.message, !message.isEmpty {
+                            Text(message).foregroundStyle(.secondary).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                         }
-                    }
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(24).disabled(state.busy)
                 }
-            }.padding(24).frame(width: 540, height: state.fields.contains { $0.kind == "multiline" || $0.kind == "multichoice" || $0.kind == "readonly" } ? 520 : 400).background(Color(nsColor: .windowBackgroundColor))
+                Divider()
+                HStack(spacing: 12) {
+                    ForEach(state.actions.filter { $0.id != "cancel" && $0.primary != true }) { button($0, busy: state.busy) }
+                    if state.busy { ProgressView().controlSize(.small).accessibilityLabel("Working") }
+                    Spacer(minLength: 24)
+                    ForEach(state.actions.filter { $0.id == "cancel" }) { button($0, busy: state.busy) }
+                    ForEach(state.actions.filter { $0.id != "cancel" && $0.primary == true }) { button($0, busy: state.busy) }
+                }.padding(20)
+            }.frame(minWidth: 540, minHeight: 200).background(Color(nsColor: .windowBackgroundColor))
                 .onExitCommand { model.perform("cancel") }
         }
     }
 }
-final class NativeSheets: NSObject {
+final class NativeSheets: NSObject, NSWindowDelegate {
     let model = SheetModel()
     weak var parent: NSWindow?
-    var panel: NSPanel?
+    var panel: NSWindow?
     init(parent: NSWindow) { self.parent = parent }
     func update(_ raw: [String: Any]) {
         guard let data = try? JSONSerialization.data(withJSONObject: raw), let state = try? JSONDecoder().decode(SheetState.self, from: data) else { return }
         model.update(state)
         if panel == nil {
-            let sheet = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 590, height: 440), styleMask: [.titled], backing: .buffered, defer: false)
+            let large = state.fields.contains { ["multiline", "multichoice", "readonly", "image"].contains($0.kind) }
+            let height = large ? 560 : min(500, max(220, 160 + state.fields.count * 76))
+            let sheet = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: height), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
             sheet.isReleasedWhenClosed = false; sheet.animationBehavior = .none
+            sheet.delegate = self; sheet.tabbingMode = .disallowed
+            sheet.contentMinSize = NSSize(width: 600, height: 220)
+            sheet.collectionBehavior = [.fullScreenAuxiliary]
             sheet.contentViewController = NSHostingController(rootView: SheetContent(model: model))
+            sheet.setContentSize(NSSize(width: 600, height: height))
             panel = sheet
-            parent?.beginSheet(sheet)
+            if let parent {
+                sheet.setFrameOrigin(NSPoint(x: parent.frame.midX - sheet.frame.width / 2, y: parent.frame.midY - sheet.frame.height / 2))
+            } else { sheet.center() }
+            sheet.makeKeyAndOrderFront(nil)
         }
         panel?.title = state.title
+        panel?.standardWindowButton(.closeButton)?.isEnabled = !state.actions.isEmpty
     }
     func close(_ id: String) {
         guard model.state?.id == id else { return }
-        if let panel { parent?.endSheet(panel); panel.orderOut(nil) }
+        panel?.close()
         panel = nil; model.state = nil; model.values = [:]; model.filters = [:]
         parent?.makeKeyAndOrderFront(nil)
     }
-    func inspect() -> [String: Any] { ["visible":panel != nil, "id":model.state?.id ?? "", "title":model.state?.title ?? "", "busy":model.state?.busy ?? false, "fields":model.state?.fields.map(\.id) ?? []] }
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard sender.attachedSheet == nil else { return false }
+        model.perform("cancel")
+        return false // Bun owns dismissal, including stale-action and busy-operation guards.
+    }
+    func inspect() -> [String: Any] { ["visible":panel?.isVisible ?? false, "attached":panel?.sheetParent != nil, "closable":panel?.styleMask.contains(.closable) ?? false, "resizable":panel?.styleMask.contains(.resizable) ?? false, "id":model.state?.id ?? "", "title":model.state?.title ?? "", "busy":model.state?.busy ?? false, "fields":model.state?.fields.map(\.id) ?? []] }
 }
