@@ -58,6 +58,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## On-demand native chat islands (2026-09-24)
 
+- [x] Apply throttled slider/point/curve changes during dragging, serialize overlapping updates, and preserve gesture Undo and external-edit guards.
+
 Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 - [x] Define the product direction and staged plan for Jev-composed native chat islands.

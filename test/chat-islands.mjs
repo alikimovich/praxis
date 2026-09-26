@@ -34,6 +34,23 @@ try {
   assert.match(await readFile(join(root, 'shadow.js'), 'utf8'), /EASE = \[0.1, -0.2, 0.8, 1.2\]/)
   await islands.interact(command('reset'))
   assert.equal(await readFile(join(root, 'shadow.js'), 'utf8'), code)
+  // Native slider bursts arrive before earlier disk writes/snapshots complete.
+  const burst = [.2, .4, .6, .8].map(x => ({ ...command('commit', { x }), gesture: 'drag-1' }))
+  await Promise.all(burst.map(c => islands.interact(c)))
+  assert.match(await readFile(join(root, 'shadow.js'), 'utf8'), /LIGHT_X = 0.8/)
+  await islands.interact(command('undo'))
+  assert.equal(await readFile(join(root, 'shadow.js'), 'utf8'), code, 'One Undo restores the whole drag')
+  // Rebasing queued controls must never bless an unrelated source write.
+  let unblock
+  const held = enqueueRepoWrite(root, () => new Promise(r => { unblock = r }))
+  await new Promise(r => setTimeout(r, 0))
+  const racing = [.3, .7].map(x => islands.interact(command('commit', { x })))
+  const rejected = Promise.all(racing.map(p => assert.rejects(p, /Source changed/)))
+  await writeFile(join(root, 'shadow.js'), code + '// concurrent editor change\n')
+  unblock(); await held; await rejected
+  assert.equal(await readFile(join(root, 'shadow.js'), 'utf8'), code + '// concurrent editor change\n')
+  await writeFile(join(root, 'shadow.js'), code)
+  await islands.refresh('chat')
   const before = await readFile(join(root, 'shadow.js'), 'utf8')
   await assert.rejects(islands.interact(command('commit', { x: .9, unknown: 'bad' })), /Unknown/)
   assert.equal(await readFile(join(root, 'shadow.js'), 'utf8'), before, 'Invalid batch must not partially write')

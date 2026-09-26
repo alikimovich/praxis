@@ -15,7 +15,9 @@ stages follow below; the current implementation is deliberately bounded.
   the prepared layout and report the actual agent engine.
 - Up to 12 literal fields in one source file; points batch x/y into one queued,
   revision-checked write and undo group. Reset, Reload and instrumented Replay are
-  supported. HMR/reload follows commits; dragging is local, not runtime-live preview.
+  supported. Sliders, points and curves write at most once per 120 ms during dragging,
+  plus the final value on release; project HMR/reload updates the website. Pending
+  writes run in order, and one gesture remains one Undo step.
 - Profile-owned records attach to a durable session record and user-turn ordinal,
   independent of regenerated message IDs. Revisions update the same island. A
   pending replacement disables that island until landing; keeping the previous
@@ -184,9 +186,10 @@ and make a multi-binding gesture one undo unit. On drift, preserve the user's
 draft and offer reload/rebind; never overwrite silently. Existing literal apply
 helpers must be audited rather than assumed to provide this entire transaction.
 
-The initial release gives immediate native value/curve feedback during a drag,
-then writes source on release (or field commit), using project HMR. Report save
-and preview errors separately. Do not claim runtime-live scrubbing in this slice.
+Native value/curve feedback is immediate. Throttled source writes during a drag
+and a final release write use project HMR; refresh speed depends on the project.
+Queued updates advance only through this batch’s own successful source revisions,
+never through external edits. This is source-backed tuning, not a runtime adapter.
 Add throttled ephemeral preview updates later for explicitly supported adapters;
 clear overrides on cancel, navigation and source commit. Pointer-frequency events
 never call Jev, the coding agent, or the filesystem.

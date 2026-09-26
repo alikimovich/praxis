@@ -28,6 +28,18 @@ struct NativeChatIsland: View {
     @ObservedObject var model: ChatModel
     @State private var drafts: [String: IslandValue] = [:]
     @State private var dragging = false
+    @State private var gesture = UUID().uuidString
+    @State private var lastUpdate = Date.distantPast
+    private func live(_ values: [String: IslandValue], ended: Bool = false) {
+        drafts.merge(values) { _, next in next }
+        guard ended || Date().timeIntervalSince(lastUpdate) >= 0.12 else { return }
+        lastUpdate = Date()
+        guard let chat = model.snapshot?.chat else { return }
+        emit(["event":"island-action", "chat":chat, "id":island.id, "revision":island.revision,
+              "sourceRevision":island.sourceRevision, "operation":UUID().uuidString,
+              "gesture":gesture, "action":"commit", "values":values.mapValues(\.object)])
+        if ended { gesture = UUID().uuidString; lastUpdate = .distantPast }
+    }
     private func value(_ field: IslandField) -> IslandValue { drafts[field.id] ?? field.value ?? .text("") }
     private func action(_ name: String, values: [String: IslandValue] = [:]) {
         model.islandAction(island, action: name, values: values.mapValues(\.object))
@@ -47,7 +59,7 @@ struct NativeChatIsland: View {
                             label: block.title, change: { x, y, ended in
                                 dragging = !ended
                                 drafts[fields[0].id] = .number(x); drafts[fields[1].id] = .number(y)
-                                if ended { action("commit", values: [fields[0].id:.number(x), fields[1].id:.number(y)]) }
+                                live([fields[0].id:.number(x), fields[1].id:.number(y)], ended: ended)
                             })
                     }
                     ForEach(fields) { field in
@@ -77,14 +89,17 @@ struct NativeChatIsland: View {
                 ForEach(field.options ?? [], id: \.self) { Text($0).tag($0) }
             }
         case "bezier":
-            IslandBezier(label: field.label, value: value(field).text) { commit(field, .text($0)) }
+            IslandBezier(label: field.label, value: value(field).text) { text, ended in
+                dragging = !ended
+                live([field.id: .text(text)], ended: ended)
+            }
         case "number":
             VStack(alignment: .leading, spacing: 4) {
                 IslandInput(label: field.label + (field.unit.map { " (\($0))" } ?? ""), value: value(field).text, numeric: true) { if let n = Double($0), n.isFinite { commit(field, .number(n)) } }
                 if let lower = field.min, let upper = field.max, lower < upper {
-                    Slider(value: Binding(get: { Swift.min(upper, Swift.max(lower, value(field).number)) }, set: { drafts[field.id] = .number($0) }), in: lower...upper, step: field.step ?? (upper-lower)/1000, onEditingChanged: { editing in
+                    Slider(value: Binding(get: { Swift.min(upper, Swift.max(lower, value(field).number)) }, set: { live([field.id: .number($0)]) }), in: lower...upper, step: field.step ?? (upper-lower)/1000, onEditingChanged: { editing in
                         dragging = editing
-                        if !editing { commit(field, value(field)) }
+                        if !editing { live([field.id: value(field)], ended: true) }
                     }).accessibilityLabel(field.label)
                 }
             }
@@ -126,7 +141,7 @@ private struct IslandPoint: View {
     }
 }
 private struct IslandBezier: View {
-    let label: String; let value: String; let commit: (String) -> Void
+    let label: String; let value: String; let commit: (String, Bool) -> Void
     @State private var points: [Double] = [0.25, 0.1, 0.25, 1]
     @State private var dragging = false
     private func load() {
@@ -134,7 +149,7 @@ private struct IslandBezier: View {
         let numbers = regex.matches(in: value, range: NSRange(value.startIndex..., in: value)).compactMap { Range($0.range, in: value).flatMap { Double(value[$0]) } }
         if numbers.count == 4 { points = numbers }
     }
-    private func save() { commit("cubic-bezier(\(points.map { String(format: "%.4g", $0) }.joined(separator: ", ")))") }
+    private func save(ended: Bool = true) { commit("cubic-bezier(\(points.map { String(format: "%.4g", $0) }.joined(separator: ", ")))", ended) }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label).font(.callout)
@@ -149,7 +164,7 @@ private struct IslandBezier: View {
                     ForEach(0..<2) { i in
                         Circle().fill(.tint).frame(width: 14, height: 14).position(i == 0 ? c : d)
                             .gesture(DragGesture(coordinateSpace: .named("curve-" + label)).onChanged { v in
-                                dragging = true; points[i*2] = min(1, max(0, (v.location.x-12)/w)); points[i*2+1] = min(2, max(-1, 1-(v.location.y-12)/h))
+                                dragging = true; points[i*2] = min(1, max(0, (v.location.x-12)/w)); points[i*2+1] = min(2, max(-1, 1-(v.location.y-12)/h)); save(ended: false)
                             }.onEnded { _ in dragging = false; save() })
                     }
                 }.coordinateSpace(name: "curve-" + label)
@@ -159,7 +174,7 @@ private struct IslandBezier: View {
                 Button("Ease") { points = [0.25,0.1,0.25,1]; save() }
                 Button("Ease out") { points = [0,0,0.58,1]; save() }
             }.controlSize(.small)
-            IslandInput(label: "Coordinates", value: value, numeric: false, commit: commit)
+            IslandInput(label: "Coordinates", value: value, numeric: false) { commit($0, true) }
         }.onAppear(perform: load).onChange(of: value) { _ in if !dragging { load() } }
     }
 }

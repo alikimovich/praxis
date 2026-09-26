@@ -10,6 +10,7 @@ import { cancelControlComposition } from './controls-jev'
 interface Session {
   root: string; file: string; records: IslandRecord[]; views: Map<string, IslandView>
   turn: () => number; undo: Map<string, string>; busy: boolean; composing: boolean; epoch: number; terminal: number
+  pending?: Promise<void>; revisions: Map<string, string>
 }
 export class ChatIslands {
   readonly sessions = new Map<string, Session>()
@@ -31,7 +32,7 @@ export class ChatIslands {
         records.push({ ...raw, ...definition, status: raw.status === 'ready' ? 'ready' : 'unavailable', initial: raw.initial ?? {} })
       }
     } catch { /* Missing/old history cannot prevent opening a chat. */ }
-    this.sessions.set(chat, { root, file, records, views: new Map(), turn, undo: new Map(), busy: false, composing: false, epoch: 0, terminal: 0 })
+    this.sessions.set(chat, { root, file, records, views: new Map(), turn, undo: new Map(), busy: false, composing: false, epoch: 0, terminal: 0, revisions: new Map() })
     void this.refresh(chat)
   }
   close(chat: string) { cancelControlComposition(`island:${chat}`); this.sessions.delete(chat) }
@@ -117,6 +118,22 @@ export class ChatIslands {
   }
   async interact(command: IslandCommand) {
     const session = this.sessions.get(command.chat)
+    if (!session) throw new Error('Island is unavailable. Reopen this chat.')
+    const previous = session.pending
+    const run = (async () => {
+      if (previous) await previous
+      if (this.sessions.get(command.chat) !== session) throw new Error('This island changed or closed.')
+      // Only advance through writes from this in-flight batch, never external edits.
+      const expected = session.revisions.get(command.sourceRevision) ?? command.sourceRevision
+      await this.apply({ ...command, sourceRevision: expected })
+    })()
+    session.pending = run
+    try { await run } finally {
+      if (session.pending === run) { session.pending = undefined; session.revisions.clear() }
+    }
+  }
+  private async apply(command: IslandCommand) {
+    const session = this.sessions.get(command.chat)
     if (!session || session.busy || session.composing) throw new Error('Island is unavailable or busy.')
     const record = session.records.find(r => r.id === command.id)
     if (!record || record.revision !== command.revision) throw new Error('Island changed. Reload its controls.')
@@ -129,9 +146,17 @@ export class ChatIslands {
         const group = session.undo.get(record.id)
         if (!group) throw new Error('No edit from this island is available to undo.')
         await undoIsland(session.root, group, guard); session.undo.delete(record.id)
+        session.revisions.clear()
       } else if (command.action === 'commit' || command.action === 'reset') {
-        const group = await writeIsland(session.root, record, command.sourceRevision, command.action === 'reset' ? record.initial : command.values!, guard)
-        if (group) session.undo.set(record.id, group)
+        const result = await writeIsland(session.root, record, command.sourceRevision, command.action === 'reset' ? record.initial : command.values!, guard, command.gesture ? `island:${record.id}:${command.gesture}` : undefined)
+        if (result) {
+          session.undo.set(record.id, result.group)
+          for (const [before, after] of session.revisions) {
+            if (after === command.sourceRevision) session.revisions.set(before, result.revision)
+          }
+          session.revisions.set(command.sourceRevision, result.revision)
+          session.revisions.delete(result.revision)
+        }
       } else throw new Error('Unknown island action.')
       // Other islands may expose the same source values.
       await Promise.all([...this.sessions].filter(([, s]) => s.root === session.root).map(([key]) => this.refresh(key)))

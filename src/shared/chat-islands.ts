@@ -37,6 +37,7 @@ export interface IslandCommand {
   id: string
   revision: number
   sourceRevision: string
+  gesture?: string
   operation: string
   action: 'commit' | 'reset' | 'undo' | 'reload' | 'replay'
   values?: Record<string, IslandValue>

@@ -21,7 +21,7 @@ export async function islandSource(root: string, record: IslandRecord) {
   return { file, code, values, revision: sourceHash(code) }
 }
 /** One file/gesture = one validated write and undo group. All participants share repo queue. */
-export function writeIsland(root: string, record: IslandRecord, expected: string, values: Record<string, IslandValue>, guard: () => boolean) {
+export function writeIsland(root: string, record: IslandRecord, expected: string, values: Record<string, IslandValue>, guard: () => boolean, gestureGroup?: string) {
   return enqueueRepoWrite(root, async () => {
     if (!guard()) throw new Error('This island changed or closed. Reload its controls.')
     const source = await islandSource(root, record)
@@ -48,9 +48,9 @@ export function writeIsland(root: string, record: IslandRecord, expected: string
     // Protect external edits observed during validation too.
     if (!guard() || await readFile(source.file, 'utf8') !== source.code) throw new Error('Source changed before the edit could be saved.')
     await writeFile(source.file, next, 'utf8')
-    const group = `island:${randomUUID()}`
-    recordEdit(root, source.file, source.code, next, group, group)
-    return group
+    const group = gestureGroup ?? `island:${randomUUID()}`
+    recordEdit(root, source.file, source.code, next, group, group, gestureGroup ? Infinity : undefined)
+    return { group, revision: sourceHash(next) }
   })
 }
 export function undoIsland(root: string, group: string, guard: () => boolean) {

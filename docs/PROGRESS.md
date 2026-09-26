@@ -2,6 +2,24 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Apply chat controls while dragging
+
+Apply slider, point and Bézier changes through throttled source writes during a
+native drag, with a final write on release. Serialize overlapping island commands
+instead of rejecting them as busy; advance queued revisions only through successful
+writes in that pending batch. External source changes still fail closed. Keep a
+continuous gesture in one Undo group, including pauses between adjustments.
+Move the native island check ahead of unrelated composer checks.
+
+Validation: full/native typechecks, native build, chat-island/edit-history/chat-
+controller/docs-link checks pass. Regression coverage includes overlapping slider
+updates, grouped Undo and concurrent external edits. The native island source/Undo
+check passes and its PNG was inspected. A disposable Next 16.3.5 Webpack fixture
+confirms source controls and Undo reach WebKit through Fast Refresh without page
+reload. Full native integration still fails the existing soft-wrapped composer
+sizing assertion. Pointer-driven continuous scrubbing was not exercised; no real
+provider calls ran. Refresh latency remains dependent on the project's dev server.
+
 ## 2026-09-25 — Float the composer over a fading conversation
 
 Extend the native conversation viewport through the full chat column. Mask its

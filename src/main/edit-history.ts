@@ -53,13 +53,14 @@ export function recordEdit(
   before: string,
   after: string,
   key?: string,
-  group?: string
+  group?: string,
+  coalesceMs = COALESCE_MS
 ): void {
   if (before === after) return
   const { undo: undoStack, redo: redoStack } = stacksFor(root)
   redoStack.length = 0 // a fresh edit invalidates the redo branch
   const last = undoStack[undoStack.length - 1]
-  if (last && key && last.key === key && last.file === file && Date.now() - last.at < COALESCE_MS) {
+  if (last && key && last.key === key && last.file === file && last.after === before && Date.now() - last.at < coalesceMs) {
     // Coalesce: keep the ORIGINAL before (so one undo reverts the whole burst),
     // advance to the latest after.
     last.after = after
