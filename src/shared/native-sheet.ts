@@ -11,6 +11,8 @@ export interface NativeSheetState {
   detail: string
   fields: NativeSheetField[]
   actions: { id: string; label: string; primary?: boolean; destructive?: boolean }[]
+  autosave?: boolean
+  dismissible?: boolean
   busy: boolean
   message?: string
 }

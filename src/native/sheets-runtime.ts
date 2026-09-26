@@ -1,3 +1,4 @@
+import { SheetAutosave } from './sheet-autosave'
 import { randomUUID } from 'node:crypto'
 import type { NativeSheetAction, NativeSheetState } from '../shared/native-sheet'
 import type { NativeBridge } from './bridge'
@@ -8,12 +9,21 @@ import { dispatchIPC } from './platform'
 /** Trusted app sheets use fixed operations, never renderer-supplied IPC names. */
 export class NativeSheetController {
   generation = 0
-  current: { state: NativeSheetState; handle(action: NativeSheetAction): Promise<void> } | null = null
+  current: { state: NativeSheetState; autosave?: SheetAutosave; handle(action: NativeSheetAction): Promise<void> } | null = null
   constructor(readonly host: Pick<NativeBridge, 'send'>, readonly workspace: NativeWorkspaceController, readonly chat: NativeChatController, readonly invoke = (channel: string, ...args: any[]) => dispatchIPC('main', { type: 'invoke', channel, args })) {}
   present(state: Omit<NativeSheetState, 'id' | 'busy'>, handle: (action: NativeSheetAction) => Promise<void>) {
     this.generation++
     if (this.current) this.host.send('sheetClose', { id: this.current.state.id })
-    const value = { state: { ...state, id: randomUUID(), busy: false }, handle }
+    const value: NonNullable<NativeSheetController['current']> = {
+      state: { ...state, dismissible: state.dismissible ?? (state.actions.length > 0 || !!state.autosave),
+        actions: state.actions.filter(action => !(action.id === 'cancel' && action.label === 'Close')),
+        id: randomUUID(), busy: false }, handle
+    }
+    if (state.autosave) value.autosave = new SheetAutosave(
+      Object.fromEntries(state.fields.map(field => [field.id, field.value])),
+      values => handle({ id: value.state.id, action: 'save', values }),
+      message => { if (this.current === value) { value.state.message = message; this.host.send('sheetState', { state: value.state }) } }
+    )
     this.current = value; this.host.send('sheetState', { state: value.state })
   }
   close() {
@@ -24,7 +34,12 @@ export class NativeSheetController {
   async action(action: NativeSheetAction) {
     const sheet = this.current
     if (!sheet || action.id !== sheet.state.id) return
-    if (action.action === 'cancel') { if (sheet.state.actions.length) this.close(); return }
+    if (sheet.autosave) {
+      if (!['change', 'save', 'cancel'].includes(action.action) && !sheet.state.actions.some(a => a.id === action.action)) return
+      const saved = await sheet.autosave.enqueue(action.values)
+      if (this.current !== sheet || !saved || action.action === 'change' || action.action === 'save') return
+    }
+    if (action.action === 'cancel') { if (sheet.state.dismissible) this.close(); return }
     if (sheet.state.busy) return
     if (!sheet.state.actions.some(a => a.id === action.action)) return
     sheet.state.busy = true; sheet.state.message = undefined
@@ -59,7 +74,7 @@ export class NativeSheetController {
       title: project.name + ' memory',
       detail: 'Durable decisions shared with this project’s chats and background agents. Stored locally outside the repository.',
       fields: [{ id: 'content', label: 'Project memory', kind: 'multiline', value: memory.content }],
-      actions: [{ id: 'cancel', label: 'Close' }, { id: 'save', label: 'Save', primary: true }]
+      autosave: true, actions: []
     }, async action => {
       const content = action.values.content ?? ''
       if (content.length > 16000) throw new Error('Project memory is limited to 16,000 characters.')

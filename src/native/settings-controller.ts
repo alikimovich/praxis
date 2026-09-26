@@ -21,7 +21,7 @@ export class NativeSettingsController {
         { id: 'projectUi', label: 'Project UI', kind: 'choice', value: this.preferences.get('praxis:project-ui:v1') ?? 'false', choices: [{ value: 'false', label: 'Off' }, { value: 'true', label: 'On' }] },
         { id: 'engine', label: 'Project UI engine', kind: 'choice', value: this.preferences.get('praxis:project-ui-engine:v1') ?? 'agent', choices: [{ value: 'agent', label: 'Agent' }, { value: 'jev', label: 'Jev' }] }
       ],
-      actions: [{ id: 'cancel', label: 'Close' }, { id: 'connections', label: 'Connections…' }, { id: 'save', label: 'Save', primary: true }]
+      autosave: true, actions: [{ id: 'connections', label: 'Connections…' }]
     }, async action => {
       if (action.action === 'connections') { await this.connections(); return }
       const choice = choices.find(c => c.value === action.values.default)
@@ -68,7 +68,7 @@ export class NativeSettingsController {
         { id: 'key', label: connection?.hasKey ? 'API key (leave blank to keep saved key)' : 'API key', kind: 'secure', value: '' },
         { id: 'models', label: 'Models', kind: 'multiline', value: connection?.models.join('\n') ?? '' }
       ],
-      actions: [{ id: 'back', label: 'Back' }, { id: 'connect', label: 'Connect' }, { id: 'save', label: 'Save', primary: true }]
+      actions: [{ id: 'back', label: 'Back' }, { id: 'connect', label: 'Connect' }, { id: 'save', label: connection ? 'Update provider' : 'Add provider', primary: true }]
     }, async action => {
       if (action.action === 'back') { await this.connections(); return }
       const { values } = action

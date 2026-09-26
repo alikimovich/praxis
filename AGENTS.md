@@ -67,7 +67,8 @@ timing and must be reported as reduced coverage. No Electron tests remain.
   native source, layers, property/style and recipe-driven content editing.
 - `src/native/Sheets.swift`: New Project, memory, settings and provider forms;
   Bun controllers own service operations. Forms use standalone titled, resizable
-  windows with traffic lights and a fixed bottom action bar. Swift owns welcome/status/cat surfaces.
+  windows with traffic lights and an action bar only when needed. Settings and
+  project memory autosave; close/navigation waits for their latest write. Swift owns welcome/status/cat surfaces.
 - `src/native/assets/cat`: original animation assets consumed by the native build.
 - `src/main/`: retained backend services (the directory name is historical).
   Agent/provider sessions, dev servers, Git/worktrees, setup, source parsers,

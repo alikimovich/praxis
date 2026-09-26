@@ -4,7 +4,7 @@ import SwiftUI
 struct SheetChoice: Decodable, Identifiable { let value: String; let label: String; var id: String { value } }
 struct SheetField: Decodable, Identifiable { let id: String; let label: String; let kind: String; let value: String; let choices: [SheetChoice]? }
 struct SheetAction: Decodable, Identifiable { let id: String; let label: String; let primary: Bool?; let destructive: Bool? }
-struct SheetState: Decodable { let id: String; let title: String; let detail: String; let fields: [SheetField]; let actions: [SheetAction]; let busy: Bool; let message: String? }
+struct SheetState: Decodable { let id: String; let title: String; let detail: String; let fields: [SheetField]; let actions: [SheetAction]; let busy: Bool; let autosave: Bool?; let dismissible: Bool?; let message: String? }
 final class SheetModel: ObservableObject {
     @Published var state: SheetState?
     @Published var filters: [String: String] = [:]
@@ -16,16 +16,20 @@ final class SheetModel: ObservableObject {
         }
         state = next
     }
+    func setValue(_ key: String, _ value: String) {
+        values[key] = value
+        if state?.autosave == true { perform("change") }
+    }
     func perform(_ action: String) {
         guard let state, !state.busy || action == "cancel" else { return }
-        if action == "cancel" && state.actions.isEmpty { return }
+        if action == "cancel" && !(state.dismissible ?? !state.actions.isEmpty) { return }
         emit(["event":"sheet-action", "id":state.id, "action":action, "values":values])
     }
 }
 struct SheetContent: View {
     @ObservedObject var model: SheetModel
     func binding(_ field: SheetField) -> Binding<String> {
-        Binding(get: { model.values[field.id] ?? field.value }, set: { model.values[field.id] = $0 })
+        Binding(get: { model.values[field.id] ?? field.value }, set: { model.setValue(field.id, $0) })
     }
     func selected(_ field: SheetField) -> Set<String> { Set((model.values[field.id] ?? field.value).components(separatedBy: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ","))).filter { !$0.isEmpty }) }
     @ViewBuilder func button(_ action: SheetAction, busy: Bool) -> some View {
@@ -62,7 +66,7 @@ struct SheetContent: View {
                                             Toggle(choice.label, isOn: Binding(get: { selected(field).contains(choice.value) }, set: { enabled in
                                                 var values = selected(field)
                                                 if enabled { values.insert(choice.value) } else { values.remove(choice.value) }
-                                                model.values[field.id] = values.sorted().joined(separator: "\n")
+                                                model.setValue(field.id, values.sorted().joined(separator: "\n"))
                                             })).toggleStyle(.checkbox)
                                         }
                                     }
@@ -78,6 +82,7 @@ struct SheetContent: View {
                         }
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(24).disabled(state.busy)
                 }
+                if !state.actions.isEmpty || state.busy {
                 Divider()
                 HStack(spacing: 12) {
                     ForEach(state.actions.filter { $0.id != "cancel" && $0.primary != true }) { button($0, busy: state.busy) }
@@ -86,6 +91,7 @@ struct SheetContent: View {
                     ForEach(state.actions.filter { $0.id == "cancel" }) { button($0, busy: state.busy) }
                     ForEach(state.actions.filter { $0.id != "cancel" && $0.primary == true }) { button($0, busy: state.busy) }
                 }.padding(20)
+                }
             }.frame(minWidth: 540, minHeight: 200).background(Color(nsColor: .windowBackgroundColor))
                 .onExitCommand { model.perform("cancel") }
         }
@@ -116,7 +122,7 @@ final class NativeSheets: NSObject, NSWindowDelegate {
             sheet.makeKeyAndOrderFront(nil)
         }
         panel?.title = state.title
-        panel?.standardWindowButton(.closeButton)?.isEnabled = !state.actions.isEmpty
+        panel?.standardWindowButton(.closeButton)?.isEnabled = state.dismissible ?? !state.actions.isEmpty
     }
     func close(_ id: String) {
         guard model.state?.id == id else { return }

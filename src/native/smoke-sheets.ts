@@ -25,7 +25,7 @@ export async function checkNativeSheets(host: NativeBridge, key: string, artifac
   await wait(state => !state.visible)
   host.emit('shell-action', { action: 'memory', project: key })
   await wait(state => state.visible && state.fields.includes('content'))
-  await host.request('sheetPerform', { values: { content: '# Decisions\n\nUse native UI.' }, action: 'save' })
+  await host.request('sheetPerform', { values: { content: '# Decisions\n\nUse native UI.' }, action: 'change' })
   await wait(state => !state.busy)
   let saved: any
   for (let i = 0; i < 80; i++) {
@@ -42,7 +42,7 @@ export async function checkNativeSheets(host: NativeBridge, key: string, artifac
   await wait(state => state.visible && state.title === 'Settings')
   await new Promise(resolve => setTimeout(resolve, 250))
   writeFileSync(join(artifacts, 'settings.png'), Buffer.from(await host.request('captureSheet'), 'base64'))
-  await host.request('sheetPerform', { action: 'save', values: { default: 'last-used', projectUi: 'false', engine: 'agent' } })
+  await host.request('sheetPerform', { action: 'change', values: { default: 'last-used', projectUi: 'false', engine: 'agent' } })
   await wait(state => !state.busy)
   await host.request('sheetPerform', { action: 'connections' })
   await wait(state => state.title === 'Provider connections')

@@ -178,7 +178,8 @@ bun link             # optional: expose the `praxis` command from this checkout
 Praxis has a Swift/AppKit/SwiftUI interface, a Bun service process, and one
 WebKit view for the user's project. See [Native architecture](docs/NATIVE.md).
 
-- **Swift** owns chat, composer, sidebar, toolbar, native dialog windows and inspectors.
+- **Swift** owns chat, composer, sidebar, toolbar, native dialog windows and inspectors. Settings and project memory
+  save automatically; dialog windows use traffic lights instead of redundant Close buttons.
 - **Bun** owns provider sessions, Git/worktrees, files, source editing, persistence
   and managed project servers. Services in `src/main/` are retained backend code;
   that directory name does not imply an Electron runtime.

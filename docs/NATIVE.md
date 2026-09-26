@@ -152,3 +152,9 @@ scrolls above a fixed action bar: auxiliary actions on the left, Cancel and the
 primary action on the right. Return invokes nondestructive primary actions;
 Escape, Command-W and the close traffic light dismiss through the Bun controller.
 System file pickers and permission alerts retain their standard AppKit presentation.
+
+Settings and project memory save automatically after edits, coalescing typing and
+serializing writes. Closing or navigating within the form waits for the latest
+draft; a failed save keeps it open with an error. Close-only buttons are omitted
+and actionless windows omit the footer. Provider credentials, source commits,
+creation and destructive operations retain explicit actions.

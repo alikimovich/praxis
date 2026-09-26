@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Autosave routine dialog edits
+
+Remove redundant Close actions from app forms and omit empty action bars. Settings
+and project memory autosave with coalesced, serialized writes; closing or navigating
+within the form waits for the latest draft. Failed writes retain the open draft and
+show an error. Keep provider credential changes explicit with Add/Update provider,
+and preserve confirmation actions for creation, source commits and destructive work.
+
+Validation: full/native typechecks, native build and six focused unit checks pass,
+including delayed-write/close races, failed-save retention and actionless dismissal.
+A disposable native host verifies automatic persistence and the final edit on
+traffic-light close; inspected its button-free memory capture. Full native integration
+still stops at the existing soft-wrapped composer sizing assertion. No provider calls.
+
 ## 2026-09-25 — Native dialog windows and conventional actions
 
 Move app forms from attached sheets into titled, closable, minimizable and
