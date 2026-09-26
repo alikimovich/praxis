@@ -5,7 +5,6 @@ import { runProjectUiTool } from '../project-ui'
 import { openAgentPreview } from '../preview-tools'
 import { openAgentCode } from '../code-tools'
 import { execFile } from 'node:child_process'
-import { join } from 'node:path'
 import { promisify } from 'node:util'
 import type {
   CodexOptions,
@@ -31,6 +30,7 @@ import { type PraxisAgentToolRegistration, registerPraxisAgentTools } from '../p
 import { resolveConnection } from '../providers'
 import { scrubSecret } from '../providers-store'
 import { praxisRules } from '../rules'
+import { praxisMcpConfig, verifyPraxisMcp } from './codex-mcp'
 import { createRetryCause } from './codex-retry'
 import { createItemTracker, codexItemWarning } from './codex-stream'
 import { parseProjectMemoryEvaluation, projectMemoryEvaluationPrompt } from './memory'
@@ -284,21 +284,8 @@ async function startSession(
           : `Praxis could not prepare the conflict: ${prepared.error ?? 'unknown error'}`
       }
     })
-    const mcpConfig = {
-      mcp_servers: {
-        praxis: {
-          command: process.execPath,
-          // The MCP helper is relative to the compiled Bun entry in out/native.
-          args: [join(__dirname, '../../bin/praxis-agent-mcp.mjs')],
-          // Match Claude's allowlist for validated source reveal and control registration.
-          tools: { chat_island: { approval_mode: 'approve' }, preview_location: { approval_mode: 'approve' }, preview_screenshot: { approval_mode: 'approve' }, content_controls: { approval_mode: 'approve' }, project_ui_catalog: { approval_mode: 'approve' }, compose_project_ui: { approval_mode: 'approve' }, open_preview: { approval_mode: 'approve' }, open_code: { approval_mode: 'approve' } },
-          env: {
-            PRAXIS_AGENT_TOOL_SOCKET: praxisTools.socketPath,
-            PRAXIS_AGENT_TOOL_TOKEN: praxisTools.token
-          }
-        }
-      }
-    }
+    const mcpConfig = praxisMcpConfig(app.getAppPath(), praxisTools)
+    await verifyPraxisMcp(mcpConfig)
     const threadOptions: ThreadOptions = {
       workingDirectory: root,
       skipGitRepoCheck: true,

@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Detect missing Codex tool connections before chat starts
+
+Extract the session MCP configuration, root its helper/cwd at the Praxis install,
+and mark the server required for every Codex turn/resume. Check the real MCP tool
+inventory and authenticated workspace socket before creating a provider thread;
+failures surface as connection errors rather than starting a tool-less session.
+
+Validation: native build, full/native typechecks and all four targeted unit checks
+pass. The new unit test runs the real Codex CLI with an isolated home and unrelated checkout,
+verifies inline-control/preview/workspace inventory, and rejects missing helpers
+and invalid credentials without model calls. The quoted failure was not reproduced;
+its originating app/session remains unconfirmed. No live provider calls ran.
+
 ## 2026-09-25 — Diagnose stale Next previews and verify the Webpack fallback
 
 Reproduced missing client updates in the affected Next 16.3.5 project despite a

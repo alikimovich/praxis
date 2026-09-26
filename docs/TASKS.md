@@ -13,6 +13,11 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Document retained uncalled helpers and current alternatives in [helper review](UNUSED-HELPERS.md).
 - [ ] Decide whether to remove or reconnect the retained helpers after review.
 
+## Provider tool connection (2026-09-25)
+
+- [x] Verify the real Codex MCP inventory/socket before chat startup and require the bridge on subsequent turns.
+- [ ] Identify the origin of the reported tool-less session and confirm controls there after updating.
+
 ## Provider preview observation (2026-09-24)
 
 - [x] Wire live preview location and MCP screenshot image results into Codex and custom endpoint sessions.

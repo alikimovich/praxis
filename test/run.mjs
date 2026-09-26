@@ -15,6 +15,7 @@ const ROOT = dirname(TEST_DIR);
 const UNIT = [
   "native-boundary",
   "praxis-agent-tools",
+  "codex-mcp",
   "native-shutdown",
   "native-preview-recovery",
   "native-workspace",

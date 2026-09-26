@@ -155,8 +155,13 @@ landing; detached agents cannot navigate. External origins and simulator routes
 are unsupported. The tool reports a request, not proof that the page loaded.
 Gemini does not expose this tool.
 
-The Codex MCP executable path is relative to the compiled Bun backend in
-`out/native/`; it does not depend on an Electron app path.
+The Codex MCP helper uses an absolute path and working directory rooted at the
+Praxis installation, independent of the target checkout. Before starting a session,
+Praxis checks the real helper’s tool inventory and authenticated workspace socket.
+The server is required on every Codex turn/resume, so initialization failures stop
+the turn instead of silently dropping inline controls and preview tools. This check
+does not call a model. These session-scoped tools are not installed into separate
+Codex or Claude application chats.
 
 The SDK session explicitly allows the validated `open_preview`, `open_code` navigation and `chat_island` tools via
 its per-tool approval configuration, matching Claude's in-process allowlist. Other
