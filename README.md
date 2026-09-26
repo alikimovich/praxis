@@ -75,7 +75,8 @@ GitHub PR.
 - **Surface controls in chat.** Ask for animation or shadow controls, or use
   `/surface-controls`. Praxis embeds native sliders, inputs, toggles, point and
   easing editors in the conversation. Controls bind to source with Undo, Reset
-  and optional Replay; changes update the project through HMR.
+  and optional Replay; changes update the project through HMR. A disabled draft
+  appears while Jev arranges the prepared controls; editing activates after landing.
 - **Next.js source mapping.** Setup detects Next separately from React/Vite and
   provides development-only Turbopack/webpack adapters, with optional MDX mapping.
   It preserves config wrappers and existing component types, synchronizes helpers
@@ -246,7 +247,10 @@ for JSON bindings, Gateway setup and current limits.
 ### Native chat motion
 
 The active response shows a text-only status line for thinking, writing, tool
-work and user waits. Token totals stay in the footer.
+work and user waits. Completed responses show “Worked for…” elapsed time, including
+waits and landing; hover over a message or commentary block for its timestamp.
+New turn timings survive history restoration; legacy durations remain absent.
+Token totals stay in the footer.
 New prose words softly resolve on
 macOS 15+; older systems show text immediately. Reduce Motion disables the reveal
 and status animation. The composer button beam runs only during active generation,

@@ -11,11 +11,12 @@ import { cancelControlComposition } from './controls-jev'
 interface Session {
   root: string; file: string; records: IslandRecord[]; views: Map<string, IslandView>
   turn: () => number; undo: Map<string, string>; busy: boolean; composing: boolean; epoch: number; terminal: number
+  preview?: { turn: number; view: IslandView }
   pending?: Promise<void>; revisions: Map<string, string>
 }
 export class ChatIslands {
   readonly sessions = new Map<string, Session>()
-  constructor(readonly directory: string, readonly changed: (chat: string) => void) {}
+  constructor(readonly directory: string, readonly changed: (chat: string) => void, readonly select = selectControlCandidates) {}
   register(chat: string, root: string, recordId: string, turn: () => number) {
     const existing = this.sessions.get(chat)
     const file = join(this.directory, createHash('sha256').update(root + '\0' + recordId).digest('hex') + '.json')
@@ -74,7 +75,10 @@ export class ChatIslands {
   }
   attachments(chat: string) {
     const session = this.sessions.get(chat)
-    return session?.records.map(r => ({ turn: r.turn, view: session.views.get(r.id) })).filter(r => r.view) ?? []
+    if (!session) return []
+    const attachments = session.records.filter(r => r.id !== session.preview?.view.id).map(r => ({ turn: r.turn, view: session.views.get(r.id) })).filter(r => r.view)
+    if (session.preview) attachments.push(session.preview)
+    return attachments
   }
   async tool(chat: string, sourceRoot: string, raw: any, connectionId?: string) {
     try {
@@ -99,7 +103,14 @@ export class ChatIslands {
         const record: IslandRecord = { version: 1, id: prior?.id ?? randomUUID(), revision: (prior?.revision ?? 0) + 1,
           turn: prior?.turn ?? Math.max(1, session.turn()), ...definition, engine: 'agent', status: 'waiting', initial: {} }
         const source = await islandSource(sourceRoot, record)
-        const selection = await selectControlCandidates(`island:${chat}`, definition.blocks, { engine: raw.engine ?? 'auto', prompt: raw.prompt ?? 'Choose useful controls for ' + record.manifest.title, connectionId })
+        session.preview = { turn: record.turn, view: {
+          id: record.id, revision: record.revision, title: record.manifest.title, blocks: record.blocks,
+          fields: record.manifest.params.map(p => ({ ...p, value: source.values[p.id] ?? null })),
+          sourceRevision: source.revision, status: 'waiting', engine: 'preparing', replay: false,
+          detail: 'Preparing layout. Controls activate after this turn’s changes land.'
+        } }
+        this.changed(chat)
+        const selection = await this.select(`island:${chat}`, definition.blocks, { engine: raw.engine ?? 'auto', prompt: raw.prompt ?? 'Choose useful controls for ' + record.manifest.title, connectionId })
         if (this.sessions.get(chat) !== session || session.terminal !== terminal) throw new Error('Chat closed or turn finished during composition.')
         record.blocks = selection.controls
         const included = new Set(record.blocks.flatMap(b => b.params))
@@ -116,7 +127,7 @@ export class ChatIslands {
         try { this.save(session) } catch (error) { session.records = previous; throw error }
         await this.refresh(chat)
         return { id: record.id, revision: record.revision, engine: record.engine, fallback: record.fallback, message: 'Island attached to this chat. Controls activate after successful landing.' }
-      } finally { session.composing = false }
+      } finally { session.composing = false; session.preview = undefined; if (this.sessions.get(chat) === session) this.changed(chat) }
     } catch (error) { return { error: error instanceof Error ? error.message : String(error) } }
   }
   async interact(command: IslandCommand) {

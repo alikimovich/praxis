@@ -24,6 +24,35 @@ try {
   const blockKinds = chatIslandShape.blocks.unwrap().element.shape.kind.options
   assert.deepEqual(catalog.blocks, blockKinds, 'Catalog must not advertise unrenderable block types')
   await writeFile(join(root, 'shadow.js'), code)
+  // Publish a disabled draft before a slow Jev response; do not persist drafts.
+  let releaseSelection
+  const staged = new ChatIslands(storage, () => {}, async (_key, candidates) => {
+    await new Promise(resolve => { releaseSelection = resolve })
+    return { controls: candidates, engine: 'jev' }
+  })
+  staged.register('slow', root, 'slow-record', () => 1)
+  const pending = staged.tool('slow', root, request)
+  while (!releaseSelection) await new Promise(resolve => setTimeout(resolve, 1))
+  const draft = staged.attachments('slow')[0].view
+  assert.equal(draft.engine, 'preparing')
+  assert.equal(draft.status, 'waiting')
+  assert.equal(draft.fields[0].value, 0)
+  assert.equal(staged.sessions.get('slow').records.length, 0)
+  await assert.rejects(staged.interact({chat:'slow',id:draft.id,revision:draft.revision,sourceRevision:draft.sourceRevision,action:'commit',values:{x:.5}}), /busy/)
+  releaseSelection()
+  assert.ok((await pending).id)
+  assert.equal(staged.attachments('slow').length, 1)
+  assert.equal(staged.attachments('slow')[0].view.engine, 'jev')
+  const cancelledDraft = staged.tool('slow', root, request)
+  releaseSelection = undefined
+  while (!releaseSelection) await new Promise(resolve => setTimeout(resolve, 1))
+  await staged.settle('slow', false)
+  releaseSelection()
+  assert.match((await cancelledDraft).error, /turn finished/)
+  assert.equal(staged.sessions.get('slow').preview, undefined)
+  assert.equal(staged.sessions.get('slow').records.length, 1, 'Cancelled drafts never persist')
+  staged.close('slow')
+
   islands.register('chat', root, 'durable-session', () => 1)
   const made = await islands.tool('chat', root, request)
   assert.ok(made.id, JSON.stringify(made))

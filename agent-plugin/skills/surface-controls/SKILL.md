@@ -9,6 +9,16 @@ Requested controls must appear as an interactive island in the conversation.
 Use `chat_island`; do not open a separate inspector/content panel or install a
 control-panel dependency in the target project. Selection is optional context.
 
+## Keep the path short
+
+For existing controls, inspect only the relevant implementation and define a small
+useful panel promptly, before lengthy checks. Jev arranges prepared bindings; it
+does not inspect source or implement effects. Do not add effect variants unless
+the user asked for them. A controls-only definition without source edits does not
+need unrelated refactors or redundant production builds. Follow required project
+checks when changing code. Pending controls are visible while Jev arranges them;
+source writes stay disabled until the turn lands.
+
 ## Inspect and bind
 
 1. Call `chat_island` with `action: "catalog"`. Apply its `guidance` and

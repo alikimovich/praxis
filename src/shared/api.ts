@@ -489,6 +489,8 @@ export interface ModelChoice {
 
 /** One line of a recorded agent session's transcript (v5-D history). */
 export interface SessionTranscriptEntry {
+  /** Turn completion, including landing; stored on the initiating user entry. */
+  completedAt?: number
   role: 'user' | 'assistant' | 'status'
   text: string
   at: number

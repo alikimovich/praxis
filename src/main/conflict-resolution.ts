@@ -42,6 +42,8 @@ export class ReconciliationCoordinator {
       d.showParked(key)
       d.running.delete(key)
       d.preparations.delete(key)
+      const turn = [...(session?.record.transcript ?? [])].reverse().find(entry => entry.role === 'user')
+      if (turn && turn.completedAt == null) turn.completedAt = Date.now()
       session?.emit({ type: 'landing-finished' })
     }
     try {

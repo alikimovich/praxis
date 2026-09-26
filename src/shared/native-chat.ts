@@ -1,7 +1,8 @@
 import type { QuestionRequest } from './api'
 export interface NativeChatMessage {
+  at?: number; workedMs?: number
   id: string; role: 'user' | 'assistant'; text: string
-  segments: ({ kind: 'text'; text: string } | { kind: 'tools'; statuses: string[] } | { kind: 'island'; island: import('./chat-islands').IslandView })[]
+  segments: ({ kind: 'text'; text: string; at?: number } | { kind: 'tools'; statuses: string[] } | { kind: 'island'; island: import('./chat-islands').IslandView })[]
   attachments?: { id: string; kind?: 'image' | 'file'; name?: string; path?: string; url?: string }[]
   selection?: { tag: string; ident: string; source: string | null }
   revertGroup?: string

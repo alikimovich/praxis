@@ -2,6 +2,25 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Earlier control panels and visible chat timing
+
+Publish validated, disabled control drafts before Jev selection completes; retain
+landing gates and discard cancelled/failed drafts. Tighten shared rules (v23) and
+surface-controls guidance to bind existing behavior promptly, avoid unrequested
+effect work and skip redundant builds for definitions without source changes.
+Jev still arranges bindings; this does not remove source discovery or landing time.
+
+Show per-turn “Worked for…” duration and native hover timestamps for messages and
+commentary. Persist completion on user transcript entries, preserve first-chunk
+assistant timestamps, and leave unknown legacy durations absent. Include landing
+and waits in elapsed time; ignore duplicate terminal timing updates.
+
+Validation: full/native typechecks, native rebuild/test command, chat-controller,
+chat-islands, rules, reconciliation, comment-agent, provider-skills and docs-link
+checks pass. Skill validation passes. Native chat-scroll integration passes and its
+PNG visibly shows “Worked for 1m 44s”. No real provider/Jev latency benchmark or
+provider calls; tooltip rendering was not pointer-tested.
+
 ## 2026-09-25 — Remove the cat from chat activity
 
 Make the live thinking/writing/tool status line text-only, retaining its shimmer,

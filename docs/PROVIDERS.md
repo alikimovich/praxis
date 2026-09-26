@@ -244,3 +244,19 @@ Native interactions call Bun source services directly and do not invoke a model.
 Current values and island revisions enter the next provider turn as application
 context, separately from the visible user transcript. See [CHAT-ISLANDS.md](CHAT-ISLANDS.md)
 for the catalog, limits and verification status.
+
+## Chat timing and control preparation
+
+The shared transcript captures assistant timestamps at their first streamed chunk
+and turn completion on the initiating user entry after landing/reconciliation.
+Native chat shows elapsed turn time and message/commentary timestamp tooltips;
+legacy records without completion metadata omit duration.
+
+Control surfacing publishes a disabled source-validated draft before Jev finishes
+selecting/ordering its blocks. Drafts are ephemeral and removed on failure or
+cancellation; only completed definitions persist. Controls still activate after
+successful landing. Operating rules v23 and the surface-controls skill prioritize
+existing bindings and early definition, without inventing unrequested effects or
+running redundant builds when no source was changed. Required project checks still
+apply to code changes. Existing provider sessions need fresh instructions to pick
+up these guidance changes.

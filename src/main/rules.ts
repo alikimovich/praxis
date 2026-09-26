@@ -18,7 +18,7 @@ import { chatIslandGuidance } from '../shared/chat-island-guidance'
 import { SURFACE_CONTROLS_SKILL } from './bundled-skills'
 import { projectMemoryRules } from './project-memory'
 
-export const PRAXIS_RULES_VERSION = 22
+export const PRAXIS_RULES_VERSION = 23
 
 export function praxisRules(opts?: {
   previewTools?: boolean

@@ -41,13 +41,13 @@ export function newChat(chat: string): Chat {
 export function assistant(chat: Chat) {
   let message = chat.messages.find(message => message.id === chat.streamingId)
   if (!message) {
-    message = { id: crypto.randomUUID(), role: 'assistant', text: '', segments: [], statuses: [] }
+    message = { id: crypto.randomUUID(), role: 'assistant', at: Date.now(), text: '', segments: [], statuses: [] }
     chat.messages.push(message)
     chat.streamingId = message.id
   }
   return message
 }
-export function append(chat: Chat, text: string, status = false) {
+export function append(chat: Chat, text: string, status = false, at = Date.now()) {
   const message = assistant(chat)
   const last = message.segments.at(-1)
   if (status) {
@@ -57,19 +57,27 @@ export function append(chat: Chat, text: string, status = false) {
   } else {
     message.text += text
     if (last?.kind === 'text') last.text += text
-    else message.segments.push({ kind: 'text', text })
+    else message.segments.push({ kind: 'text', text, at })
   }
 }
 export function hydrate(chat: Chat, transcript: SessionTranscriptEntry[]) {
   chat.messages = []
   chat.streamingId = null
+  let turn: SessionTranscriptEntry | undefined
   for (const entry of transcript) {
     if (entry.role === 'user') {
+      turn = entry
       chat.streamingId = null
-      chat.messages.push({ id: crypto.randomUUID(), role: 'user', text: entry.text, statuses: [], segments: [{ kind: 'text', text: entry.text }] })
-    } else append(chat, entry.text, entry.role === 'status')
+      chat.messages.push({ id: crypto.randomUUID(), role: 'user', at: entry.at, text: entry.text, statuses: [], segments: [{ kind: 'text', text: entry.text, at: entry.at }] })
+    } else {
+      append(chat, entry.text, entry.role === 'status', entry.at)
+      const message = assistant(chat)
+      message.at = message.segments.find(s => s.kind === 'text')?.at ?? entry.at
+      if (turn?.completedAt != null) message.workedMs = Math.max(0, turn.completedAt - turn.at)
+    }
   }
   if (!chat.isRunning) chat.streamingId = null
+  else if (turn && turn.completedAt == null) chat.turnStartedAt = turn.at
 }
 export function finish(chat: Chat, landing = false) {
   chat.isRunning = landing
@@ -77,7 +85,12 @@ export function finish(chat: Chat, landing = false) {
   chat.activityDetail = ''
   if (!landing) chat.stopping = false
   if (!landing) {
-    if (chat.turnStartedAt) chat.workedMs += Date.now() - chat.turnStartedAt
+    if (chat.turnStartedAt != null) {
+      const elapsed = Math.max(0, Date.now() - chat.turnStartedAt)
+      chat.workedMs += elapsed
+      const message = chat.messages.find(m => m.id === chat.streamingId)
+      if (message) message.workedMs = elapsed
+    }
     chat.turnStartedAt = null
     chat.streamingId = null
   }

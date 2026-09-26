@@ -1,11 +1,12 @@
 import AppKit
 import SwiftUI
 
-struct ChatSegment: Decodable { let kind: String; let text: String?; let statuses: [String]?; let island: IslandView? }
+struct ChatSegment: Decodable { let kind: String; let text: String?; let at: Double?; let statuses: [String]?; let island: IslandView? }
 struct ChatAttachment: Decodable, Identifiable { let id: String; let kind: String?; let name: String?; let path: String?; let url: String? }
 struct ChatSelection: Decodable { let tag: String; let ident: String; let source: String? }
 struct ChatMessage: Decodable, Identifiable {
     let id: String; let role: String; let text: String; let segments: [ChatSegment]
+    let at: Double?; let workedMs: Double?
     let attachments: [ChatAttachment]?; let selection: ChatSelection?; let revertGroup: String?
 }
 struct ChatAction: Decodable { let label: String; let action: String; let value: String?; let disabled: Bool? }
@@ -171,6 +172,10 @@ private struct NativeMessageRow: View {
         HStack(alignment: .top) {
             if message.role == "user" { Spacer(minLength: 30) }
             VStack(alignment: .leading, spacing: 14) {
+                if !running, let elapsed = message.workedMs {
+                    Text(workedDuration(elapsed)).font(.caption).foregroundStyle(.secondary)
+                        .help("Elapsed time for this turn, including checks, waits and applying changes.")
+                }
                 if let selection = message.selection { Text(selection.tag + selection.ident).font(.caption.monospaced()).foregroundStyle(.secondary) }
                 ForEach(message.attachments ?? []) { attachment in NativeAttachment(attachment: attachment) }
                 ForEach(Array(message.segments.enumerated()), id: \.offset) { _, segment in
@@ -181,7 +186,7 @@ private struct NativeMessageRow: View {
                         } label: { Text(segment.statuses?.last ?? "Activity").font(ChatTypography.activity).lineLimit(1).foregroundStyle(.secondary) }
                     } else if let text = segment.text {
                         if message.role == "user" { Text(text).textSelection(.enabled).font(ChatTypography.body).lineSpacing(ChatTypography.lineSpacing).fixedSize(horizontal: false, vertical: true) }
-                        else { ChatMarkdown(source: text, streaming: running) }
+                        else { ChatMarkdown(source: text, streaming: running).help(messageTime(segment.at ?? message.at)) }
                     }
                 }
                 if let activity { ChatActivity(activity: activity, visible: model.visible) }
@@ -195,6 +200,7 @@ private struct NativeMessageRow: View {
                 .background { if message.role == "user" { RoundedRectangle(cornerRadius: 14).fill(.quaternary) } }
             if message.role == "assistant" { Spacer(minLength: 0) }
         }.frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
+            .help(messageTime(message.at))
     }
 }
 private struct ChatActionButtonStyle: ButtonStyle {
@@ -239,4 +245,15 @@ private struct NativeChatCard: View {
             }
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
     }
+}
+
+private func messageTime(_ milliseconds: Double?) -> String {
+    guard let milliseconds, milliseconds.isFinite else { return "" }
+    return Date(timeIntervalSince1970: milliseconds / 1000).formatted(date: .abbreviated, time: .standard)
+}
+private func workedDuration(_ milliseconds: Double) -> String {
+    let seconds = max(0, Int(milliseconds / 1000))
+    let hours = seconds / 3600, minutes = (seconds % 3600) / 60
+    let parts = [hours > 0 ? "\(hours)h" : nil, minutes > 0 ? "\(minutes)m" : nil, "\(seconds % 60)s"].compactMap { $0 }
+    return "Worked for " + parts.joined(separator: " ")
 }

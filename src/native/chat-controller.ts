@@ -119,7 +119,7 @@ export class NativeChatController {
             : outcome === 'no-change' ? 'Comment finished without changes.'
             : event.branch ? 'Comment finished — changes are ready for review.' : 'Comment finished without a confirmed result.'
           const text = title + (event.branch && (outcome === 'failed' || outcome === 'cancelled') ? ' Partial changes are saved for review.' : '') + (event.summary ? `\n\n${event.summary}` : '')
-          chat.messages.push({ id: crypto.randomUUID(), role: 'assistant', text, statuses: [], segments: [{ kind: 'text', text }], ...(outcome === 'applied' ? { revertGroup: `comment:${event.sessionId}` } : {}) })
+          chat.messages.push({ id: crypto.randomUUID(), role: 'assistant', at: Date.now(), text, statuses: [], segments: [{ kind: 'text', text }], ...(outcome === 'applied' ? { revertGroup: `comment:${event.sessionId}` } : {}) })
           if (chat.chat !== this.active) chat.needsReview = true
           this.changed(chat)
         }
@@ -217,7 +217,7 @@ export class NativeChatController {
     chat.sending = true; chat.isRunning = true; chat.turnStartedAt = Date.now(); chat.streamingId = null
     const cancellation = chat.cancellation
     const { text, attachments, selection, turn } = submission
-    chat.messages.push({ id: crypto.randomUUID(), role: 'user', text, statuses: [], segments: text ? [{ kind: 'text', text }] : [],
+    chat.messages.push({ id: crypto.randomUUID(), role: 'user', at: Date.now(), text, statuses: [], segments: text ? [{ kind: 'text', text }] : [],
       selection: selection?.bubble, attachments: attachments.map(a => ({ id: a.id, kind: a.type.startsWith('image/') ? 'image' : 'file', name: a.name, path: a.path, ...(a.type.startsWith('image/') ? { url: `data:${a.type};base64,${a.data}` } : {}) })) })
     assistant(chat); this.changed(chat)
     try {

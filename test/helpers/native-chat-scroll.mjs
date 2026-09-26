@@ -62,6 +62,8 @@ try {
         send(); await delay(20)
       }
       await visible(state.streamingId)
+      state.messages[state.messages.length - 1].workedMs = 104000
+      state.messages[state.messages.length - 1].at = Date.now()
       state.running = false; state.activity = null
       state.composer.thinking = false; state.composer.stop = false
       send(); await visible(state.streamingId)

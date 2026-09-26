@@ -266,3 +266,41 @@ for (const [outcome, branch, expected] of [
   assert.equal(message.text, expected)
   assert.equal(message.revertGroup, outcome === 'applied' ? 'comment:outcome-test' : undefined)
 }
+
+// Timing belongs to a turn, not the lifetime of a chat; waits/landing are included.
+const { newChat: timingChat, append: timingAppend, finish: timingFinish, hydrate: timingHydrate } = await import('../src/native/chat-state.ts')
+const timed = timingChat('timed')
+timed.isRunning = true
+timed.turnStartedAt = Date.now() - 104000
+timingAppend(timed, 'Commentary', false, 1000)
+timingAppend(timed, 'Read file', true)
+timingAppend(timed, 'Result', false, 2000)
+timingFinish(timed, true)
+assert.equal(timed.messages[0].workedMs, undefined, 'Landing must not freeze elapsed time early')
+timingFinish(timed)
+assert(timed.messages[0].workedMs >= 104000)
+const elapsed = timed.messages[0].workedMs
+timingFinish(timed)
+assert.equal(timed.messages[0].workedMs, elapsed, 'Duplicate completion must not overwrite timing')
+assert.equal(timed.messages[0].segments[0].at, 1000)
+assert.equal(timed.messages[0].segments[2].at, 2000)
+timingHydrate(timed, [{role:'user',text:'Do it',at:1000,completedAt:105000}, {role:'assistant',text:'Done',at:90000}, {role:'user',text:'Old history',at:200000}, {role:'assistant',text:'Legacy',at:210000}])
+assert.equal(timed.messages[1].workedMs, 104000)
+assert.equal(timed.messages[1].segments[0].at, 90000)
+assert.equal(timed.messages[3].workedMs, undefined, 'Do not invent duration for legacy history')
+console.log('Native timing: landing, duplicate terminal, segment timestamps and persisted history passed.')
+
+const { createRecordCapture } = await import('../src/main/backends/record.ts')
+const capture = createRecordCapture('/tmp/timing', 'timing')
+const actualNow = Date.now
+try {
+  Date.now = () => 1000
+  capture.appendAssistant('First comment')
+  Date.now = () => 5000
+  capture.noteTool('Read', {path:'file.ts'})
+  Date.now = () => 9000
+  capture.appendAssistant('Final comment')
+  Date.now = () => 10000
+  capture.finalize()
+  assert.deepEqual(capture.record.transcript.map(entry => entry.at), [1000,5000,9000])
+} finally { Date.now = actualNow }

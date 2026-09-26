@@ -1,5 +1,6 @@
 /** Shared by provider instructions and the on-demand tool catalog. */
 export const chatIslandGuidance = [
+  'For requests to surface existing controls, read the relevant implementation, prepare a small binding set and call define with engine auto promptly. Jev selects/orders prepared blocks; it does not inspect source or implement effects. Do not add new effect variants unless explicitly requested. If no source changes are needed, avoid unrelated refactors and redundant full builds; obey required project checks when code changes. Define controls before long checks so the pending panel is visible.',
   'Choose controls by the meaning of the implemented value, not its name alone. Read how each value reaches the rendered style, animation or canvas loop; extract literals only when necessary and preserve existing behavior.',
   'Use bounded number fields with explicit units and useful steps for scalar values; integer steps for counts and pixel blocks, fractional steps for opacity or smoothing. Use toggle for booleans, select for implemented alternatives, and text/color for strings/colors.',
   'Use a point only for two meaningfully related bounded numbers, such as light direction or position. Group by user purpose (geometry, trail, response), keep coupled bindings together, and expose a small useful set rather than every constant.',

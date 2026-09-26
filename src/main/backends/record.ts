@@ -36,16 +36,18 @@ export function createRecordCapture(root: string, projectKey: string): RecordCap
   }
   const touched = new Set<string>()
   let assistantBuf = ''
+  let assistantAt: number | undefined
 
   const flushAssistant = (): void => {
     const text = assistantBuf.trim()
-    if (text) record.transcript.push({ role: 'assistant', text, at: Date.now() })
-    assistantBuf = ''
+    if (text) record.transcript.push({ role: 'assistant', text, at: assistantAt ?? Date.now() })
+    assistantBuf = ''; assistantAt = undefined
   }
 
   return {
     record,
     appendAssistant: (text) => {
+      if (!assistantBuf) assistantAt = Date.now()
       assistantBuf += text
     },
     noteTool: (name, input) => {

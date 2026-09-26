@@ -47,7 +47,7 @@ struct NativeChatIsland: View {
     private func commit(_ field: IslandField, _ value: IslandValue) { drafts[field.id] = value; action("commit", values: [field.id:value]) }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack { Text(island.title).font(.headline); Spacer(); Text(island.engine == "jev" ? "Jev" : "Agent").font(.caption).foregroundStyle(.secondary) }
+            HStack { Text(island.title).font(.headline); Spacer(); Text(island.engine == "preparing" ? "Preparing…" : island.engine == "jev" ? "Jev" : "Agent").font(.caption).foregroundStyle(.secondary) }
             if !island.detail.isEmpty { Text(island.detail).font(.caption).fixedSize(horizontal: false, vertical: true) }
             ForEach(island.blocks) { block in
                 VStack(alignment: .leading, spacing: 10) {
