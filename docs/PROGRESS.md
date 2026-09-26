@@ -2,6 +2,23 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Float the composer over a fading conversation
+
+Extend the native conversation viewport through the full chat column. Mask its
+lower edge with a progressive gradient into the window surface as messages scroll
+behind the composer, replacing the hard cutoff above the form. Keep token totals
+above the input, and reserve scrollable clearance for the composer, footer and
+fade so the final response/actions stay readable. Growing drafts update clearance
+and keep following the latest response when already following it.
+
+Validation: full/native typechecks, native build and chat-controller/workspace/
+docs-link checks pass. A disposable native-host probe checks full-height chat,
+bottom alignment and clearance for compact and grown drafts. Inspected native
+captures and visible scrolling in a separate temporary app: text fades smoothly,
+token totals stay clear and the final response remains readable at the bottom.
+Full native integration still stops at the existing soft-wrapped-draft sizing
+assertion. No real provider calls ran.
+
 ## 2026-09-25 — Clearer dialog copy
 
 Rewrite app dialog instructions, field labels, action names and errors around what

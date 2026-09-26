@@ -23,6 +23,8 @@ final class ChatModel: ObservableObject {
     @Published var snapshot: ChatSnapshot?
     @Published var revision = 0
     @Published var visible = false
+    @Published var composerHeight: CGFloat = 0
+    var bottomInset: CGFloat { composerHeight + ChatComposerFade.footerHeight + ChatComposerFade.transitionHeight }
     func islandAction(_ island: IslandView, action: String, values: [String: Any] = [:]) {
         guard let chat = snapshot?.chat else { return }
         emit(["event":"island-action", "chat":chat, "id":island.id, "revision":island.revision,
@@ -37,7 +39,7 @@ final class ChatModel: ObservableObject {
     }
 }
 
-/// Native conversation; AppKit owns its geometry and the composer below it.
+/// Native conversation extends behind the composer; AppKit owns both frames.
 final class NativeChat: NSHostingView<ChatConversation> {
     let model = ChatModel()
     var lastState: [String: Any] = [:]
@@ -67,13 +69,14 @@ final class NativeChat: NSHostingView<ChatConversation> {
         let hasContext = !(input["context"] as? String ?? "").isEmpty
         let queueHeight = ComposerQueueHost.height(count: (input["queue"] as? [Any] ?? []).count, paused: input["queuePaused"] as? Bool ?? false)
         let composerHeight = Double(composer.preferredHeight(for: value, width: max(0, width - 20), availableHeight: height, hasContext: hasContext, hasAttachments: !(input["attachments"] as? [Any] ?? []).isEmpty, queueHeight: queueHeight))
-        frame = NSRect(x: x, y: y, width: width, height: max(0, height - composerHeight))
+        frame = NSRect(x: x, y: y, width: width, height: max(0, height))
+        if model.composerHeight != composerHeight { model.composerHeight = composerHeight }
         input["chat"] = state["chat"]; input["visible"] = !isHidden && !(state["chat"] as? String ?? "").isEmpty
         input["bounds"] = ["x":x + 10, "y":y + max(0, height - composerHeight), "width":max(0, width - 20), "height":composerHeight]
         composer.update(input)
     }
     func inspect() -> [String: Any] {
-        ["catPose":model.cat.pose, "catFrame":model.cat.frame, "catArtwork":!CatArtwork.frames.isEmpty, "frame":NSStringFromRect(frame), "native":true, "visible":!isHidden, "chat":model.snapshot?.chat ?? "", "messageCount":model.snapshot?.messages.count ?? 0,
+        ["composerInset":model.bottomInset, "height":bounds.height, "catPose":model.cat.pose, "catFrame":model.cat.frame, "catArtwork":!CatArtwork.frames.isEmpty, "frame":NSStringFromRect(frame), "native":true, "visible":!isHidden, "chat":model.snapshot?.chat ?? "", "messageCount":model.snapshot?.messages.count ?? 0,
          "messages":model.snapshot?.messages.map { ["id":$0.id,"role":$0.role,"text":$0.text] } ?? [],
          "activity":model.snapshot?.activity?.label ?? "", "activityKind":model.snapshot?.activity?.kind ?? "", "activityAnimated":model.snapshot?.activity?.animated ?? false,
          "islands":model.snapshot?.messages.flatMap { $0.segments.compactMap { $0.island }.map { ["id":$0.id,"revision":$0.revision,"status":$0.status,"title":$0.title,"blocks":$0.blocks.count,"fields":$0.fields.count] as [String: Any] } } ?? [],
@@ -97,27 +100,34 @@ struct ChatConversation: View {
             GeometryReader { viewport in
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 20) {
-                            if let snapshot = model.snapshot {
-                                if snapshot.messages.isEmpty && snapshot.cards.isEmpty {
-                                    Text("Ask for a change, or open a project to preview it on the right.")
-                                        .foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 28)
-                                }
-                                ForEach(snapshot.messages) { message in
-                                    NativeMessageRow(message: message, running: snapshot.running && message.id == snapshot.streamingId, activity: message.id == snapshot.streamingId ? snapshot.activity : nil, model: model).id(message.id)
-                                        .background(GeometryReader { geometry in Color.clear.preference(key: UserPositions.self, value: message.role == "user" ? [message.id:geometry.frame(in: .named("chatScroll")).maxY] : [:]) })
-                                }
-                                if let activity = snapshot.activity, !snapshot.messages.contains(where: { $0.id == snapshot.streamingId }) {
-                                    ChatActivity(activity: activity, visible: model.visible, cat: model.cat)
-                                }
-                                ForEach(snapshot.cards) { card in NativeChatCard(card: card, model: model) }
-                                ForEach(snapshot.questions) { request in NativeQuestionCard(request: request, model: model) }
+                        VStack(spacing: 0) {
+                            LazyVStack(alignment: .leading, spacing: 20) {
+                                if let snapshot = model.snapshot {
+                                    if snapshot.messages.isEmpty && snapshot.cards.isEmpty {
+                                        Text("Ask for a change, or open a project to preview it on the right.")
+                                            .foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 28)
+                                    }
+                                    ForEach(snapshot.messages) { message in
+                                        NativeMessageRow(message: message, running: snapshot.running && message.id == snapshot.streamingId, activity: message.id == snapshot.streamingId ? snapshot.activity : nil, model: model).id(message.id)
+                                            .background(GeometryReader { geometry in Color.clear.preference(key: UserPositions.self, value: message.role == "user" ? [message.id:geometry.frame(in: .named("chatScroll")).maxY] : [:]) })
+                                    }
+                                    if let activity = snapshot.activity, !snapshot.messages.contains(where: { $0.id == snapshot.streamingId }) {
+                                        ChatActivity(activity: activity, visible: model.visible, cat: model.cat)
+                                    }
+                                    ForEach(snapshot.cards) { card in NativeChatCard(card: card, model: model) }
+                                    ForEach(snapshot.questions) { request in NativeQuestionCard(request: request, model: model) }
 
-                            }
-                            Color.clear.frame(height: 1).id("bottom")
+                                }
+                            }.padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            // Scrollable clearance keeps the final response above the floating
+                            // controls, while older messages can travel beneath them.
+                            Color.clear.frame(height: model.bottomInset).id("bottom")
                                 .background(GeometryReader { geometry in Color.clear.preference(key: BottomPosition.self, value: geometry.frame(in: .named("chatScroll")).maxY) })
-                        }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
-                    }.coordinateSpace(name: "chatScroll")
+                        }
+                    }
+                    .mask(ChatComposerFade(composerHeight: model.composerHeight))
+                    .coordinateSpace(name: "chatScroll")
                     .onPreferenceChange(UserPositions.self) { positions in
                         sticky = model.snapshot?.messages.last(where: { $0.role == "user" && (positions[$0.id] ?? 1) < 0 })?.id
                     }
@@ -129,18 +139,21 @@ struct ChatConversation: View {
                     .onPreferenceChange(BottomPosition.self) { bottom in
                         if let event = NSApp.currentEvent, [.scrollWheel, .leftMouseDragged, .keyDown].contains(event.type) { follows = bottom <= viewport.size.height + 48 }
                     }
+                    .onChange(of: model.composerHeight) { _ in if follows { proxy.scrollTo("bottom", anchor: .bottom) } }
                     .onChange(of: model.revision) { _ in if follows { proxy.scrollTo("bottom", anchor: .bottom) } }
                     .onChange(of: model.snapshot?.chat) { _ in follows = true; sticky = nil; proxy.scrollTo("bottom", anchor: .bottom) }
+                    .overlay(alignment: .bottomLeading) {
+                        Text(model.snapshot?.status ?? "")
+                            .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                            .lineLimit(1).help(model.snapshot?.statusDetail ?? model.snapshot?.status ?? "")
+                            .padding(.horizontal, 18).frame(height: ChatComposerFade.footerHeight)
+                            .padding(.bottom, model.composerHeight)
+                            .allowsHitTesting(false)
+                    }
                     .overlay(alignment: .bottomTrailing) {
-                        if !follows { Button { follows = true; proxy.scrollTo("bottom", anchor: .bottom) } label: { Image(systemName: "arrow.down") }.help("Scroll to latest message").padding(12) }
+                        if !follows { Button { follows = true; proxy.scrollTo("bottom", anchor: .bottom) } label: { Image(systemName: "arrow.down") }.help("Scroll to latest message").padding(12).padding(.bottom, model.bottomInset) }
                     }
                 }
-            }
-            if let snapshot = model.snapshot {
-                HStack(alignment: .bottom, spacing: 8) {
-                    Text(snapshot.status).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).help(snapshot.statusDetail ?? snapshot.status)
-                    Spacer()
-                }.padding(.horizontal, 18).padding(.vertical, 6)
             }
         }.background(Color.clear)
     }

@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Floating chat composer (2026-09-25)
+
+- [x] Extend the conversation behind the composer with a progressive gradient fade, readable token footer, and dynamic bottom clearance for growing drafts.
+
 ## Terminal shutdown (2026-09-25)
 
 - [x] Await managed server shutdown, escalate surviving process groups, and cover terminal-group signals and launcher exit.
