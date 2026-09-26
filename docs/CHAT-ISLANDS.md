@@ -154,6 +154,9 @@ restore it without duplicate islands. Persist after creation and successful edit
 do not restore an unfinished drag as a source write. Unknown versions render a
 readable unavailable entry with regeneration/recovery actions.
 
+See [DialKit review and control-selection lessons](DIALKIT-REVIEW.md) for the
+reference inventory, current gaps and recommended acceptance criteria.
+
 ## First native block catalog
 
 | Block | Behavior |

@@ -58,6 +58,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## On-demand native chat islands (2026-09-24)
 
+- [x] Review DialKit controls and purposes; record [selection lessons and Praxis gaps](DIALKIT-REVIEW.md).
+
 - [x] Apply throttled slider/point/curve changes during dragging, serialize overlapping updates, and preserve gesture Undo and external-edit guards.
 
 Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).

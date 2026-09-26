@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Review DialKit control purposes
+
+Review DialKit's official control examples, API reference and timeline guide,
+and inspect the rendered examples/accessibility tree. Record the inventory,
+control-selection rules, Praxis gaps and proposed priorities in DIALKIT-REVIEW.md;
+link it from the chat-island plan. Apply the lessons to the pixel-reveal example,
+especially real binding consumption, scalar-versus-spring semantics and replay.
+
+Validation: documentation-only review; checked local capabilities against Swift
+rendering, shared contracts and island schema. No runtime changes, dependency
+installation or provider calls. Browser inspection was not a full gesture test.
+
 ## 2026-09-25 — Apply chat controls while dragging
 
 Apply slider, point and Bézier changes through throttled source writes during a
