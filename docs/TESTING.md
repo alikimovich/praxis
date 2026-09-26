@@ -16,8 +16,8 @@ bun run test:native
 ```
 
 `bun run test` runs unit and native tiers. `bun run verify` adds live provider
-turns; those require explicit authorization and credentials. Native test scripts
-perform their own build and skip on non-macOS hosts or without Swift tooling.
+turns; those require explicit authorization and credentials. The native-runtime test
+builds the app; focused native checks reuse that build and skip when unavailable.
 Electron/Playwright application tests were removed when the runtime was retired.
 Their historical coverage is not claimed as native parity.
 
@@ -27,6 +27,12 @@ source/content/style writes, window geometry, docking, preview input isolation a
 that exactly one WebKit view exists. `PRAXIS_NATIVE_BACKGROUND_TEST=1` skips real
 pointer gestures/animation timing, which must be reported as reduced coverage.
 `test:native-live` separately submits a real provider turn against a fixture.
+
+`node test/native-chat-scroll.mjs` uses a disposable native host with fixture
+snapshots to check that sent questions and streamed responses remain visible
+above the floating composer across short/long histories and shrinking drafts.
+It requires an existing native build and makes no provider calls. Captures are
+written to `test/artifacts/native/chat-scroll/`.
 
 `node test/native-next-hmr.mjs` checks Next.js 16.3.5 in Webpack mode through
 Praxis's managed dev server and system WebKit. It installs dependencies into a

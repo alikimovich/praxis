@@ -5,6 +5,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Floating chat composer (2026-09-25)
 
+- [x] Move the follow target into the message stack and cover visible sent/streamed rows across history and draft sizes.
+
 - [x] Extend the conversation behind the composer with a progressive gradient fade, readable token footer, and dynamic bottom clearance for growing drafts.
 
 ## Terminal shutdown (2026-09-25)

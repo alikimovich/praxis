@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Keep chat scrolling anchored to message content
+
+Remove the eager wrapper and detached blank scroll target introduced with the
+composer fade. Keep a one-point anchor in the lazy message stack, reserve input
+clearance as bottom padding, and align follow/jump actions to the readable area
+above the composer. Expose visible row geometry for native regression checks.
+
+Add a native-tier fixture test covering 12 send/stream sequences across empty,
+short and long histories, an oversized pasted message, and one/eight/80-line
+drafts that shrink on send. The exact reported blank viewport did not reproduce
+before the change, so the detached anchor is a suspected cause, not a confirmed
+reproduction. The new checks pass and the sending/streamed captures retain text.
+Full/native typechecks, build and three focused unit checks pass. Full native
+integration still stops at its existing soft-wrapped composer sizing assertion.
+No real provider calls ran.
+
 ## 2026-09-25 — Review DialKit control purposes
 
 Review DialKit's official control examples, API reference and timeline guide,
