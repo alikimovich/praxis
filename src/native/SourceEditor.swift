@@ -108,11 +108,11 @@ final class NativeSourceEditor: NSView, NSTextViewDelegate, NSSearchFieldDelegat
         let action = sender.identifier?.rawValue ?? ""
         if action == "popout" { send(state["popped"] as? Bool == true ? "dock" : "popout"); return }
         if action == "reload" && state["dirty"] as? Bool == true || action == "delete" {
-            let alert = NSAlert(); alert.messageText = action == "delete" ? "Move this file to Trash?" : "Discard this file’s unsaved draft?"; alert.informativeText = source; alert.addButton(withTitle: action == "delete" ? "Move to Trash" : "Reload"); alert.addButton(withTitle: "Cancel")
+            let alert = NSAlert(); alert.messageText = action == "delete" ? "Move this file to Trash?" : "Discard unsaved changes?"; alert.informativeText = action == "delete" ? source : "Reload \(source) from disk. Your unsaved edits will be lost."; alert.addButton(withTitle: action == "delete" ? "Move to Trash" : "Discard and reload"); alert.addButton(withTitle: "Cancel")
             guard let window else { return }; alert.beginSheetModal(for: window) { [weak self] response in if response == .alertFirstButtonReturn { self?.send(action) } }; return
         }
         if action == "create" || action == "rename" {
-            let alert = NSAlert(); alert.messageText = action == "create" ? "New file" : "Rename file"; alert.informativeText = "Path relative to the project"; let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 340, height: 24)); input.stringValue = action == "rename" ? source : ""; alert.accessoryView = input; alert.addButton(withTitle: action == "create" ? "Create" : "Rename"); alert.addButton(withTitle: "Cancel")
+            let alert = NSAlert(); alert.messageText = action == "create" ? "New file" : "Rename file"; alert.informativeText = "Enter a file path within this project, for example src/Button.tsx."; let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 340, height: 24)); input.stringValue = action == "rename" ? source : ""; alert.accessoryView = input; alert.addButton(withTitle: action == "create" ? "Create" : "Rename"); alert.addButton(withTitle: "Cancel")
             guard let window else { return }; alert.beginSheetModal(for: window) { [weak self] response in if response == .alertFirstButtonReturn { self?.send(action, ["name":input.stringValue]) } }; return
         }
         send(action)

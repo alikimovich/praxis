@@ -8,18 +8,18 @@ export class NativeSupportSheets {
     const conversation = chat?.messages.filter(m => m.text.trim()).map(m => `${m.role === 'user' ? 'You' : 'Praxis'}: ${m.text.trim()}`).join('\n\n') ?? ''
     const screenshot = await this.capture().catch(() => null)
     if (generation !== this.sheets.generation) return
-    this.sheets.present({ title: 'Send feedback', detail: 'File a GitHub issue on the Praxis repository. Choose whether to include the current window and conversation.',
+    this.sheets.present({ title: 'Send feedback', detail: 'Post feedback as an issue on the Praxis GitHub repository.' + (screenshot || conversation ? ' Review the attachments below before including them.' : ''),
       fields: [
-        { id: 'body', label: 'Feedback', kind: 'multiline', value: '' },
-        ...(screenshot ? [{ id: 'preview', label: 'Screenshot preview', kind: 'image' as const, value: screenshot }, { id: 'screenshot', label: 'Attach screenshot', kind: 'choice' as const, value: 'yes', choices: [{ value: 'yes', label: 'Include' }, { value: 'no', label: 'Do not include' }] }] : []),
-        ...(conversation ? [{ id: 'conversation', label: 'Attach current conversation', kind: 'choice' as const, value: 'yes', choices: [{ value: 'yes', label: 'Include' }, { value: 'no', label: 'Do not include' }] }, { id: 'transcript', label: 'Conversation preview', kind: 'readonly' as const, value: conversation }] : [])
-      ], actions: [{ id: 'cancel', label: 'Cancel' }, { id: 'send', label: 'Send feedback', primary: true }]
+        { id: 'body', label: 'What happened, or what could be better?', kind: 'multiline', value: '' },
+        ...(screenshot ? [{ id: 'preview', label: 'Screenshot preview', kind: 'image' as const, value: screenshot }, { id: 'screenshot', label: 'Include screenshot', kind: 'choice' as const, value: 'yes', choices: [{ value: 'yes', label: 'Include' }, { value: 'no', label: 'Do not include' }] }] : []),
+        ...(conversation ? [{ id: 'conversation', label: 'Include current chat', kind: 'choice' as const, value: 'yes', choices: [{ value: 'yes', label: 'Include' }, { value: 'no', label: 'Do not include' }] }, { id: 'transcript', label: 'Chat preview', kind: 'readonly' as const, value: conversation }] : [])
+      ], actions: [{ id: 'cancel', label: 'Cancel' }, { id: 'send', label: 'Post feedback', primary: true }]
     }, async action => {
-      if (!action.values.body?.trim()) throw new Error('Describe your feedback first.')
+      if (!action.values.body?.trim()) throw new Error('Write your feedback before posting.')
       const result = await this.sheets.invoke('feedback:submit', { body: action.values.body, screenshot: action.values.screenshot === 'yes' ? screenshot : null, conversation: action.values.conversation === 'yes' ? conversation : null })
       if (!result.ok) throw new Error(result.error ?? 'Could not send feedback.')
       if (this.sheets.current?.state.id !== action.id) return
-      this.sheets.present({ title: 'Feedback sent', detail: 'Your feedback was filed on GitHub.', fields: [], actions: [{ id: 'cancel', label: 'Close' }, ...(result.url ? [{ id: 'view', label: 'View issue' }] : [])] }, async () => { if (result.url) await this.openExternal(result.url) })
+      this.sheets.present({ title: 'Feedback sent', detail: 'Your issue is now on GitHub.', fields: [], actions: [{ id: 'cancel', label: 'Close' }, ...(result.url ? [{ id: 'view', label: 'View issue' }] : [])] }, async () => { if (result.url) await this.openExternal(result.url) })
     })
   }
   diagnose(key: string) {
@@ -27,14 +27,14 @@ export class NativeSupportSheets {
     if (!entry) return
     const status = this.sheets.workspace.state.status
     const error = status.kind === 'error' ? status.message : 'The preview is not working as expected.'
-    this.sheets.present({ title: 'Preview problem', detail: error, fields: [], actions: [{ id: 'cancel', label: 'Close' }, { id: 'retry', label: 'Retry' }, { id: 'diagnose', label: 'Diagnose…', primary: true }] }, async action => {
+    this.sheets.present({ title: 'Preview problem', detail: error, fields: [], actions: [{ id: 'cancel', label: 'Close' }, { id: 'retry', label: 'Restart preview' }, { id: 'diagnose', label: 'Find a fix…', primary: true }] }, async action => {
       if (action.action === 'retry') { await this.sheets.workspace.command({ type: 'restart', key }); if (this.sheets.current?.state.id === action.id) this.sheets.close(); return }
       const diagnosis: Diagnosis | null = await this.sheets.invoke('diagnose:run', entry.root, error, entry.launchSpec?.command ?? '')
       if (this.sheets.current?.state.id !== action.id) return
-      if (!diagnosis) throw new Error('No diagnosis is available. Check your provider login or review Activity for the original error.')
-      this.sheets.present({ title: 'Suggested fix', detail: diagnosis.summary,
-        fields: [{ id: 'steps', label: 'Proposed changes', kind: 'readonly', value: [diagnosis.detail, ...diagnosis.steps.map(s => `${s.scope}: ${s.text}${s.command ? '\n' + s.command : ''}`)].filter(Boolean).join('\n\n') }],
-        actions: [{ id: 'dismiss', label: 'Dismiss' }, ...(diagnosis.steps.some(s => s.scope === 'repo') ? [{ id: 'apply', label: 'Prepare repo fix', primary: true }] : [])]
+      if (!diagnosis) throw new Error('Could not find a fix. Check your AI provider sign-in or open Activity for error details.')
+      this.sheets.present({ title: 'Suggested fix', detail: diagnosis.summary + (diagnosis.steps.some(s => s.scope === 'repo') ? '\n\nAdd the project steps to a chat draft, then review and send it to make the changes.' : ''),
+        fields: [{ id: 'steps', label: 'Suggested steps', kind: 'readonly', value: [diagnosis.detail, ...diagnosis.steps.map(s => `${s.scope === 'repo' ? 'Project' : 'Your Mac'}: ${s.text}${s.command ? '\n' + s.command : ''}`)].filter(Boolean).join('\n\n') }],
+        actions: [{ id: 'dismiss', label: 'Not now' }, ...(diagnosis.steps.some(s => s.scope === 'repo') ? [{ id: 'apply', label: 'Draft fix in chat', primary: true }] : [])]
       }, async choice => {
         if (choice.action === 'apply') {
           if (!this.sheets.workspace.state.projects.includes(entry)) throw new Error('Reopen this project before preparing its fix.')

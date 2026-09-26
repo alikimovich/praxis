@@ -75,12 +75,12 @@ export class NativeGitController {
     status ??= await this.invoke('github:status', entry.root)
     if (generation !== this.sheets.generation) return
     const ready = status!.gh === 'ok', owners = [status!.login, ...(status!.orgs ?? [])].filter((x): x is string => !!x)
-    this.sheets.present({ title: 'Connect to GitHub', detail: ready ? 'Create a repository, connect this project and push its current work.' : status!.gh === 'missing' ? 'Install the GitHub CLI (gh), then check again.' : 'Run gh auth login in your terminal, then check again.',
+    this.sheets.present({ title: 'Connect to GitHub', detail: ready ? 'Create a GitHub repository and upload this project. Choose who owns it and who can see it.' : status!.gh === 'missing' ? 'Install the GitHub CLI (gh), then check again.' : 'Run gh auth login in your terminal, then check again.',
       fields: ready ? [
         { id: 'name', label: 'Repository name', kind: 'text', value: status!.suggestedName },
-        { id: 'owner', label: 'Owner', kind: 'choice', value: owners[0] ?? '', choices: owners.map(value => ({ value, label: value })) },
+        { id: 'owner', label: 'Account or organization', kind: 'choice', value: owners[0] ?? '', choices: owners.map(value => ({ value, label: value })) },
         { id: 'visibility', label: 'Visibility', kind: 'choice', value: 'private', choices: [{ value: 'private', label: 'Private' }, { value: 'public', label: 'Public' }] }
-      ] : [], actions: [{ id: 'cancel', label: 'Cancel' }, { id: ready ? 'connect' : 'refresh', label: ready ? 'Create and connect' : 'Check again', primary: true }]
+      ] : [], actions: [{ id: 'cancel', label: 'Cancel' }, { id: ready ? 'connect' : 'refresh', label: ready ? 'Create repository' : 'Check again', primary: true }]
     }, async action => {
       if (action.action === 'refresh') { await this.connect(key); return }
       if (!owners.includes(action.values.owner) || !['private', 'public'].includes(action.values.visibility)) throw new Error('Choose an owner and visibility.')
@@ -99,9 +99,9 @@ export class NativeGitController {
     const generation = this.sheets.generation
     const status: GitRemoteStatus = await this.invoke('git:remote-status', entry.root, fetch)
     if (generation !== this.sheets.generation) return
-    this.sheets.present({ title: 'Git updates', detail: `Current branch: ${status.current ?? 'Detached HEAD'}. ${status.remotes.length ? 'Choose a remote branch to bring into this project.' : 'No Git remote is connected.'}`,
+    this.sheets.present({ title: 'Git updates', detail: `Current branch: ${status.current ?? 'No branch selected'}. ${status.remotes.length ? 'Choose a remote branch. Pull merges it into your current branch; switching opens that branch instead.' : 'Connect this project to a Git remote to get updates.'}`,
       fields: status.remotes.length ? [{ id: 'ref', label: 'Remote branch', kind: 'choice', value: status.upstream ?? status.branches[0]?.ref ?? '', choices: status.branches.map(b => ({ value: b.ref, label: b.label })) }] : [],
-      actions: [{ id: 'cancel', label: 'Close' }, { id: 'fetch', label: 'Fetch updates' }, ...(status.current && status.branches.length ? [{ id: 'pull', label: 'Pull into current branch' }, { id: 'checkout', label: 'Check out branch' }] : [])]
+      actions: [{ id: 'cancel', label: 'Close' }, { id: 'fetch', label: 'Fetch updates' }, ...(status.current && status.branches.length ? [{ id: 'pull', label: 'Pull into current branch' }, { id: 'checkout', label: 'Switch to branch' }] : [])]
     }, async action => {
       if (action.action === 'fetch') { await this.updates(key, true); return }
       if (!status.branches.some(b => b.ref === action.values.ref)) throw new Error('Choose an available remote branch.')

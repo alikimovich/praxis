@@ -45,7 +45,7 @@ export async function checkNativeSheets(host: NativeBridge, key: string, artifac
   await host.request('sheetPerform', { action: 'change', values: { default: 'last-used', projectUi: 'false', engine: 'agent' } })
   await wait(state => !state.busy)
   await host.request('sheetPerform', { action: 'connections' })
-  await wait(state => state.title === 'Provider connections')
+  await wait(state => state.title === 'AI providers')
   await host.request('sheetPerform', { action: 'add' })
   await wait(state => state.title === 'Add provider' && state.fields.includes('key'))
   await host.request('sheetPerform', { action: 'cancel' })

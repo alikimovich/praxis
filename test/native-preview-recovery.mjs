@@ -17,7 +17,7 @@ const act = (action, values = {}) => sheets.action({ id: sheets.current.state.id
 recovery.open('a'); await settled()
 assert.equal(sheets.current.state.title, 'Running servers')
 await act('stop', { server: '999' }); assert.match(sheets.current.state.message, /Select a server/)
-await act('stop', { server: '456' }); assert.equal(sheets.current.state.title, 'Stop this server?')
+await act('stop', { server: '456' }); assert.equal(sheets.current.state.title, 'Stop and restart the preview?')
 assert.equal(calls.length, 0)
 await act('cancel'); assert.equal(calls.length, 0)
 recovery.open('a'); await settled(); await act('stop', { server: '456' })

@@ -10,21 +10,21 @@ export class NativeReviewController {
   }
   private show(record: SessionRecord) {
     const comment = record.kind === 'comment' && !!record.branch
-    this.sheets.present({ title: record.projectName, detail: [record.title, record.branch, new Date(record.startedAt).toLocaleString()].filter(Boolean).join(' · '),
+    this.sheets.present({ title: record.title || 'Saved chat', detail: [record.projectName, record.branch, new Date(record.startedAt).toLocaleString()].filter(Boolean).join(' · '),
       fields: [
         ...(record.filesTouched.length ? [{ id: 'files', label: 'Files changed', kind: 'readonly' as const, value: record.filesTouched.join('\n') }] : []),
-        { id: 'transcript', label: 'Conversation', kind: 'readonly', value: record.transcript.map(t => `${t.role}\n${t.text}`).join('\n\n') || 'No transcript recorded.' }
+        { id: 'transcript', label: 'Chat history', kind: 'readonly', value: record.transcript.map(t => `${t.role === 'user' ? 'You' : t.role === 'assistant' ? 'Praxis' : t.role}\n${t.text}`).join('\n\n') || 'No messages were saved for this chat.' }
       ],
       actions: [{ id: 'cancel', label: 'Close' }, { id: 'rename', label: 'Rename…' }, ...(!comment ? [{ id: 'remove-record', label: 'Delete history…' }] : []), ...(record.prUrl ? [{ id: 'view-pr', label: 'View PR' }] : []),
-        ...(comment ? [{ id: 'apply', label: 'Apply' }, ...(!record.prUrl ? [{ id: 'pr', label: 'Open PR' }] : []), { id: 'discard', label: 'Discard…' }] : []),
-        ...(record.sdkSessionId ? [{ id: 'resume', label: 'Resume', primary: true }] : [])]
+        ...(comment ? [{ id: 'apply', label: 'Apply' }, ...(!record.prUrl ? [{ id: 'pr', label: 'Create PR' }] : []), { id: 'discard', label: 'Discard…' }] : []),
+        ...(record.sdkSessionId ? [{ id: 'resume', label: 'Continue chat', primary: true }] : [])]
     }, async action => {
       const current = () => this.sheets.current?.state.id === action.id
       const title = record.transcript.find(t => t.role === 'user')?.text.slice(0, 70) || 'Praxis comment edit'
       if (action.action === 'rename') { const project = this.sheets.workspace.state.projects.find(p => p.root === record.projectRoot); if (project) this.sheets.renameChat('history:' + record.id, project.key); return }
       if (action.action === 'view-pr' && record.prUrl) { await this.openExternal(record.prUrl); return }
       if (action.action === 'remove-record') {
-        this.sheets.present({ title: 'Delete this saved conversation?', detail: 'This removes only its history record. Project files are retained.', fields: [], actions: [{ id: 'back', label: 'Back' }, { id: 'delete', label: 'Delete', primary: true, destructive: true }] }, async confirmation => {
+        this.sheets.present({ title: 'Delete this chat from history?', detail: 'This removes the saved messages from history. It does not change your project files.', fields: [], actions: [{ id: 'back', label: 'Back' }, { id: 'delete', label: 'Delete chat', primary: true, destructive: true }] }, async confirmation => {
           if (confirmation.action === 'back') { this.show(record); return }
           await this.sheets.invoke('sessions:remove', record.id)
           const project = this.sheets.workspace.state.projects.find(p => p.root === record.projectRoot)
@@ -33,10 +33,10 @@ export class NativeReviewController {
         }); return
       }
       if (action.action === 'discard') {
-        this.sheets.present({ title: 'Discard this run?', detail: 'Delete its saved branch and conversation record. Applied changes in your working tree are retained.', fields: [], actions: [{ id: 'back', label: 'Back' }, { id: 'discard', label: 'Discard', primary: true, destructive: true }] }, async confirmation => {
+        this.sheets.present({ title: 'Discard this saved work?', detail: 'Delete the saved branch and chat history. Any changes already applied to your project will stay.', fields: [], actions: [{ id: 'back', label: 'Back' }, { id: 'discard', label: 'Discard', primary: true, destructive: true }] }, async confirmation => {
           if (confirmation.action === 'back') { this.show(record); return }
           const result = await this.sheets.invoke('agent:spawn-discard', record.projectRoot, record.branch)
-          if (!result.ok) throw new Error(result.error || 'Could not discard this run.')
+          if (!result.ok) throw new Error(result.error || 'Could not discard this saved work.')
           await this.sheets.invoke('sessions:remove', record.id)
           const project = this.sheets.workspace.state.projects.find(p => p.root === record.projectRoot)
           if (project) { this.sheets.workspace.state.history[project.key] = await this.sheets.invoke('sessions:list', record.projectRoot); this.sheets.workspace.changed() }
@@ -57,7 +57,7 @@ export class NativeReviewController {
       if (!result.ok) throw new Error(result.error || 'The operation failed.')
       if (!current()) return
       if (result.prUrl) { record.prUrl = result.prUrl; this.show(record) }
-      else this.sheets.current!.state.message = 'Applied to your working tree. The preview will refresh.'
+      else this.sheets.current!.state.message = 'Applied to your project. The preview will refresh.'
     })
   }
 }

@@ -9,6 +9,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Native dialog windows (2026-09-25)
 
+- [x] Simplify dialog copy and make action labels, autosave behavior, feedback destination and destructive outcomes clear.
+
 - [x] Remove redundant Close buttons and autosave settings/project memory, preserving explicit consequential actions and failed drafts.
 
 - [x] Present app forms in standalone native windows with traffic lights, scrolling content and a fixed, conventionally ordered action bar.

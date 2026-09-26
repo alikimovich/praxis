@@ -45,7 +45,7 @@ export class NativeSheetController {
     sheet.state.busy = true; sheet.state.message = undefined
     this.host.send('sheetState', { state: sheet.state })
     try { await sheet.handle(action) }
-    catch (error) { sheet.state.message = String(error) }
+    catch (error) { sheet.state.message = error instanceof Error ? error.message : String(error) }
     finally {
       if (this.current === sheet) { sheet.state.busy = false; this.host.send('sheetState', { state: sheet.state }) }
     }
@@ -71,9 +71,9 @@ export class NativeSheetController {
     const memory = await this.invoke('project-memory:get', project.root)
     if (generation !== this.generation) return
     this.present({
-      title: project.name + ' memory',
-      detail: 'Durable decisions shared with this project’s chats and background agents. Stored locally outside the repository.',
-      fields: [{ id: 'content', label: 'Project memory', kind: 'multiline', value: memory.content }],
+      title: 'Project memory — ' + project.name,
+      detail: 'Add preferences and decisions Praxis should remember for this project. Changes save automatically and take effect with the next message.',
+      fields: [{ id: 'content', label: 'What should Praxis remember?', kind: 'multiline', value: memory.content }],
       autosave: true, actions: []
     }, async action => {
       const content = action.values.content ?? ''
@@ -86,13 +86,13 @@ export class NativeSheetController {
     if (this.current?.state.busy) return
     this.present({
       title: 'New project',
-      detail: 'Choose a starting point, then a folder for your project.',
+      detail: 'Start with a React app, or plan a project with Praxis. Next, choose where to save it.',
       fields: [
         { id: 'setup', label: 'Starting point', kind: 'choice', value: 'react', choices: [
-          { value: 'react', label: 'React' }, { value: 'next', label: 'Plan a Next.js project' },
-          { value: 'svelte', label: 'Plan a Svelte project' }, { value: 'custom', label: 'Choose with Praxis' }
+          { value: 'react', label: 'React starter app' }, { value: 'next', label: 'Plan with Next.js' },
+          { value: 'svelte', label: 'Plan with Svelte' }, { value: 'custom', label: 'Help me choose' }
         ] },
-        { id: 'details', label: 'What would you like to build?', kind: 'multiline', value: '' }
+        { id: 'details', label: 'What would you like to build? (optional)', kind: 'multiline', value: '' }
       ],
       actions: [{ id: 'cancel', label: 'Cancel' }, { id: 'create', label: 'Choose folder…', primary: true }]
     }, async action => {

@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Clearer dialog copy
+
+Rewrite app dialog instructions, field labels, action names and errors around what
+users need to do. Explain automatic saving and when changes take effect; distinguish
+React scaffolding from planning; name provider model loading, chat-draft preparation,
+PR creation and branch switching accurately. Clarify feedback destination, destructive
+outcomes and file paths. Simplify update/recovery wording and omit redundant Error:
+prefixes. Provider model labels follow manual-entry versus catalog selection mode.
+
+Validation: full/native typechecks, native build and eight focused unit checks pass.
+Inspected five native captures covering Settings, provider setup, memory, New Project
+and feedback. Full native integration still stops at the existing soft-wrapped composer
+sizing assertion. No real provider calls ran.
+
 ## 2026-09-25 — Await managed dev-server shutdown
 
 Reproduce a managed server surviving SIGINT because it ignores the single SIGTERM

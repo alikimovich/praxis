@@ -279,7 +279,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         if payload["action"] == "new-branch" {
             guard let window = window else { return }
             let project = currentProject
-            let alert = NSAlert(); alert.messageText = "New Branch"; alert.addButton(withTitle: "Create"); alert.addButton(withTitle: "Cancel")
+            let alert = NSAlert(); alert.messageText = "New branch"; alert.informativeText = "Create a branch from the current one and switch to it."; alert.addButton(withTitle: "Create branch"); alert.addButton(withTitle: "Cancel")
             let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24)); input.placeholderString = "Branch name"; alert.accessoryView = input
             alert.beginSheetModal(for: window) { [weak self] result in
                 guard result == .alertFirstButtonReturn, !input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, project == self?.currentProject else { return }

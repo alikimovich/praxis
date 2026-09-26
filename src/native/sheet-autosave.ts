@@ -30,7 +30,7 @@ export class SheetAutosave {
         this.report('Saved automatically.')
       } catch (error) {
         ok = false
-        this.report(`Could not save: ${String(error)}. Your changes remain here; edit them to retry.`)
+        this.report(`Could not save: ${error instanceof Error ? error.message : String(error)}. Your draft is still here. Edit it or try closing again to retry.`)
       }
     }
     return ok
