@@ -245,8 +245,8 @@ for JSON bindings, Gateway setup and current limits.
 
 ### Native chat motion
 
-The active response shows a 20-point animated pixel cat beside the status line
-for thinking, writing, tool work and user waits. Token totals stay in the footer.
+The active response shows a text-only status line for thinking, writing, tool
+work and user waits. Token totals stay in the footer.
 New prose words softly resolve on
 macOS 15+; older systems show text immediately. Reduce Motion disables the reveal
 and status animation. The composer button beam runs only during active generation,

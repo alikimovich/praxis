@@ -115,7 +115,7 @@ struct ChatConversation: View {
                                         .background(GeometryReader { geometry in Color.clear.preference(key: MessagePositions.self, value: [message.id:geometry.frame(in: .named("chatScroll"))]) })
                                 }
                                 if let activity = snapshot.activity, !snapshot.messages.contains(where: { $0.id == snapshot.streamingId }) {
-                                    ChatActivity(activity: activity, visible: model.visible, cat: model.cat)
+                                    ChatActivity(activity: activity, visible: model.visible)
                                 }
                                 ForEach(snapshot.cards) { card in NativeChatCard(card: card, model: model) }
                                 ForEach(snapshot.questions) { request in NativeQuestionCard(request: request, model: model) }
@@ -184,7 +184,7 @@ private struct NativeMessageRow: View {
                         else { ChatMarkdown(source: text, streaming: running) }
                     }
                 }
-                if let activity { ChatActivity(activity: activity, visible: model.visible, cat: model.cat) }
+                if let activity { ChatActivity(activity: activity, visible: model.visible) }
                 if !running && message.role == "assistant" {
                     HStack {
                         Button { copyChatText(message.text) } label: { Image(systemName: "doc.on.doc") }.help("Copy response")

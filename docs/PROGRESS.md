@@ -2,6 +2,16 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Remove the cat from chat activity
+
+Make the live thinking/writing/tool status line text-only, retaining its shimmer,
+label transitions and accessibility label. Remove the unused animator input from
+both chat activity call sites; keep cats on other app surfaces. Update README
+and the working guide.
+
+Validation: full/native typechecks, native-chat-controller, docs-links and
+`bun run test:native` pass, including the native rebuild. No provider calls.
+
 ## 2026-09-25 — Verify live controls on an imperative website effect
 
 Reproduce the reload-only pixelation update on lkmv.ch: source writes and Fast

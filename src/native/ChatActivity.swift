@@ -11,16 +11,12 @@ struct ChatActivityState: Decodable {
 struct ChatActivity: View {
     let activity: ChatActivityState
     let visible: Bool
-    let cat: CatAnimator
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var onscreen = false
     private var animating: Bool { visible && onscreen && activity.animated && !reduceMotion }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 7) {
-            NativeCat(animator: cat, size: 20)
-                .accessibilityHidden(true)
-            ZStack(alignment: .leading) {
+        ZStack(alignment: .leading) {
             TimelineView(.animation(minimumInterval: 1 / 30, paused: !animating)) { timeline in
                 let phase = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2) / 2
                 Text(activity.label).foregroundStyle(.secondary)
@@ -42,8 +38,7 @@ struct ChatActivity: View {
             .transition(reduceMotion ? .identity : .asymmetric(
                 insertion: .modifier(active: ActivitySwap(offset: 8, blur: 2, opacity: 0), identity: ActivitySwap()),
                 removal: .modifier(active: ActivitySwap(offset: -8, blur: 2, opacity: 0), identity: ActivitySwap())))
-            }.animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: activity.label)
-        }
+        }.animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: activity.label)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(activity.label)
         .onAppear { onscreen = true }

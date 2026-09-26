@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Chat activity (2026-09-25)
+
+- [x] Remove the cat from the live status line while retaining text animation.
+
 ## Live website controls (2026-09-25)
 
 - [x] Reproduce stale imperative hover callbacks, fix the website lifecycle, and cover source commit/Undo without reload in native WebKit.

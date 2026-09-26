@@ -59,8 +59,8 @@ timing and must be reported as reduced coverage. No Electron tests remain.
 - `src/native/Chat.swift` / `src/native/Composer.swift`: native chat and text input.
   Bun `src/native/chat-controller.ts` owns drafts, streaming, queues, model and
   permission choices. `src/native/shell-controller.ts` owns workspace navigation.
-- `src/native/ChatActivity.swift`, `StreamingText.swift`: live activity with a 20-point
-  pixel cat from `Cat.swift`, and native word reveal.
+- `src/native/ChatActivity.swift`, `StreamingText.swift`: text-only live activity and native
+  word reveal. `Cat.swift` supplies cats for other app surfaces.
 - `src/native/WorkspaceLayout.swift`: geometry and AppKit divider input.
 - `src/native/SourceEditor.swift`, `src/native/Layers.swift`,
   `src/native/EditingInspector.swift`, `src/native/ContentWindow.swift`:
