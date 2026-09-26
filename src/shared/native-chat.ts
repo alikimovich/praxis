@@ -33,7 +33,7 @@ export interface NativeChatState {
     queuePaused: boolean
     ready: boolean; running: boolean; thinking: boolean
     text: string; caret: number; revision: number; stop: boolean; enabled: boolean; sendLabel: string
-    context: string; attachments: string[]
+    context: string; attachments: { id: string; name: string; type: string; data: string }[]
     suggestions: { title: string; description: string; active: boolean }[]
     choices: { label: string; value: string; disabled: boolean; options: { value: string; label: string }[] }[]
   }

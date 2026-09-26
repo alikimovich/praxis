@@ -2,6 +2,23 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Visual composer attachment previews
+
+Replace the attachment-name menu with a horizontal strip of rounded image
+thumbnails and named file cards. Each tile has an accessible remove button;
+images open a larger, aspect-preserving popover. ImageIO bounds decoded image
+sizes and tiles remain cached across draft/stream updates. Composer sizing reserves
+the full strip height without shrinking the draft, and restores the compact form
+when the last attachment is removed.
+
+Validation: typechecks, native build, chat-controller, native boundary and docs-link
+checks passed. Native integration verified PNG/TIFF paste, mixed images/files,
+horizontal overflow, targeted removal and height restoration before encountering
+the existing style-inspector source-edit timeout. Background native integration
+passed with reduced pointer/animation coverage. Inspected a visible native fixture
+capture to verify thumbnails, labels and remove controls; offscreen Liquid Glass
+captures remain incomplete. No real provider calls ran.
+
 ## 2026-09-25 — Short PR descriptions from the code diff
 
 Publish now uses a separate read-only Codex/Luna turn to analyze the committed

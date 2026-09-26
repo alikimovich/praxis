@@ -52,7 +52,7 @@ export function snapshot(chat: Chat, choices: ModelChoice[]): NativeChatState {
       ready: chat.ready && !chat.switching, running: chat.isRunning, thinking,
       enabled: chat.ready && (stop || (!chat.switching && (!!chat.text.trim() || !!chat.attachments.length))),
       sendLabel: stop ? 'Stop' : chat.isRunning ? 'Queue message' : 'Send message',
-      context: context?.selection?.label ?? '', attachments: chat.attachments.map(a => `Remove ${a.name || 'image'}`),
+      context: context?.selection?.label ?? '', attachments: chat.attachments.map(a => ({ id: a.id, name: a.name || 'Image', type: a.type, data: a.data })),
       suggestions: matches(chat).map((command, index) => ({ title: `/${command.name}`, description: command.description ?? '', active: index === chat.menuIndex })),
       choices: [
         { label: 'Provider', value: selection.option?.key ?? provider, disabled: !chat.ready || chat.isRunning || chat.switching, options: providers.length ? providers.map(p => ({ value: p.key, label: p.label })) : [{ value: provider, label: provider === 'codex' ? 'Codex' : 'Claude' }] },

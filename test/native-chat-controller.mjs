@@ -146,6 +146,7 @@ const invokeBeforeAttachment = controller.services.invoke
 failSend = false
 controller.services.invoke = (channel, ...args) => channel === 'attachments:save' ? attachmentReady : invokeBeforeAttachment(channel, ...args)
 await controller.composer({ chat: 'restored', action: 'files', files: [{ name: 'clipboard.png', path: '', type: 'image/png', data: 'AA==' }] })
+assert.deepEqual(renders.at(-1).composer.attachments, [{ id: controller.get('restored').attachments[0].id, name: 'clipboard.png', type: 'image/png', data: 'AA==' }])
 await input('Clipboard'); await send()
 const sendCount = calls.filter(c => c[0] === 'agent:send').length
 await controller.action({ chat: 'restored', action: 'stop' })

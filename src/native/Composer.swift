@@ -43,7 +43,8 @@ final class NativeComposer: NSView, NSTextViewDelegate {
     let chips = NSStackView()
     let controls = NSStackView()
     let context = NSButton()
-    let attachments = NSPopUpButton(frame: .zero, pullsDown: true)
+    let attachments = ComposerAttachments()
+    var attachmentsHeight: NSLayoutConstraint!
     let skillList = NSScrollView()
     let skillRows = NSView()
     var skillEntries: [[String: Any]] = []
@@ -131,8 +132,8 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         context.bezelStyle = .roundRect; context.controlSize = .small; context.lineBreakMode = .byTruncatingTail
         context.target = self; context.action = #selector(clearContext(_:))
         context.widthAnchor.constraint(lessThanOrEqualToConstant: 160).isActive = true
-        chips.addArrangedSubview(context); chips.addArrangedSubview(attachments)
-        attachments.controlSize = .small
+        chips.addArrangedSubview(context)
+        attachments.remove = { [weak self] index in self?.emitAction("remove", ["index":index]) }
         skillList.documentView = skillRows; skillList.hasVerticalScroller = true
         skillList.autohidesScrollers = true; skillList.scrollerStyle = .overlay
         skillList.backgroundColor = .windowBackgroundColor
@@ -140,22 +141,24 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         skillList.layer?.borderWidth = 1; skillList.layer?.borderColor = NSColor.separatorColor.cgColor
         skillList.setAccessibilityLabel("Skills and commands"); skillList.isHidden = true
         controls.translatesAutoresizingMaskIntoConstraints = false; addSubview(controls)
-        for view in [chips, scroll, sendButton] { view.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(view) }
+        for view in [chips, attachments, scroll, sendButton] { view.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(view) }
         chipsHeight = chips.heightAnchor.constraint(equalToConstant: 0)
+        attachmentsHeight = attachments.heightAnchor.constraint(equalToConstant: 0)
         formTop = backdrop.topAnchor.constraint(equalTo: topAnchor)
         NSLayoutConstraint.activate([
             queuedMessages.topAnchor.constraint(equalTo: topAnchor), queuedMessages.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14), queuedMessages.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14), queuedMessages.bottomAnchor.constraint(equalTo: backdrop.topAnchor, constant: 16),
             formTop, backdrop.leadingAnchor.constraint(equalTo: leadingAnchor), backdrop.trailingAnchor.constraint(equalTo: trailingAnchor), backdrop.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -8),
             sendButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10), sendButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -10),
             chips.topAnchor.constraint(equalTo: content.topAnchor, constant: 10), chips.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), chips.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -12), chipsHeight,
-            scroll.topAnchor.constraint(equalTo: chips.bottomAnchor, constant: 4), scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), scroll.bottomAnchor.constraint(equalTo: sendButton.topAnchor, constant: -5),
+            attachments.topAnchor.constraint(equalTo: chips.bottomAnchor), attachments.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), attachments.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), attachmentsHeight,
+            scroll.topAnchor.constraint(equalTo: attachments.bottomAnchor, constant: 4), scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), scroll.bottomAnchor.constraint(equalTo: sendButton.topAnchor, constant: -5),
             controls.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10), controls.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10), controls.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8), controls.heightAnchor.constraint(equalToConstant: 26)
         ])
         for overlay in [readyBeam, buttonBeam] { addSubview(overlay) }
         isHidden = true
     }
     /// Measure using the same TextKit wrapping, padding and font as the editor.
-    func preferredHeight(for value: String, width: CGFloat, availableHeight: CGFloat, hasContext: Bool, queueHeight: CGFloat = 0) -> CGFloat {
+    func preferredHeight(for value: String, width: CGFloat, availableHeight: CGFloat, hasContext: Bool, hasAttachments: Bool = false, queueHeight: CGFloat = 0) -> CGFloat {
         let storage = NSTextStorage(string: value, attributes: [.font: text.font ?? NSFont.systemFont(ofSize: 14)])
         let manager = NSLayoutManager()
         let container = NSTextContainer(size: NSSize(width: max(1, width - 24 - text.textContainerInset.width * 2), height: .greatestFiniteMagnitude))
@@ -166,7 +169,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         let used = max(manager.usedRect(for: container).maxY, manager.extraLineFragmentRect.maxY)
         let textHeight = ceil(max(manager.defaultLineHeight(for: text.font ?? NSFont.systemFont(ofSize: 14)), used) + text.textContainerInset.height * 2)
         // 8 footer inset + 26 controls + 8 gap + 14 top + 30 send + 10 bottom + 5 text/send gap.
-        let desired = max(128, textHeight + 101 + (hasContext ? 22 : 0))
+        let desired = max(128, textHeight + 101 + (hasContext ? 22 : 0)) + (hasAttachments ? ComposerAttachments.rowHeight : 0)
         let limit = min(368, max(128, availableHeight * 0.5))
         return min(availableHeight, min(desired, limit) + queueHeight)
     }
@@ -321,9 +324,9 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         }
         let selected = next["context"] as? String ?? ""
         context.isHidden = selected.isEmpty; context.title = selected; context.toolTip = "Clear selected element: " + selected
-        configure(attachments, title: "Attachments", entries: (next["attachments"] as? [String] ?? []).enumerated().map { ($0.element, ["action":"remove", "index":$0.offset]) })
-        let hasChips = !context.isHidden || !attachments.isHidden
-        chips.isHidden = !hasChips; chipsHeight.constant = hasChips ? 22 : 0
+        attachments.update(next["attachments"] as? [[String: Any]] ?? [])
+        attachmentsHeight.constant = attachments.count > 0 ? ComposerAttachments.rowHeight : 0
+        chips.isHidden = context.isHidden; chipsHeight.constant = context.isHidden ? 0 : 22
         skillEntries = next["suggestions"] as? [[String: Any]] ?? []
         rebuildSkills()
     }
@@ -371,7 +374,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
             item.target = self; item.representedObject = payload; popup.menu?.addItem(item)
         }
     }
-    func inspect() -> [String: Any] { layoutSubtreeIfNeeded(); return ["queueCount":queuedMessages.count, "queue":state["queue"] ?? [], "queuePaused":state["queuePaused"] ?? false, "queueHeight":formTop.constant, "queueInset":queuedMessages.frame.minX, "queueOverlap":content.convert(content.bounds, to: self).maxY - queuedMessages.frame.minY, "buttonBeam":buttonBeam.active, "readyBeam":readyBeam.active, "welcomedChat":welcomedChats.contains(chat), "pickerWidths":pickers.mapValues { $0.bounds.width }, "pickersPlain":pickers.values.allSatisfy { !$0.isBordered }, "attachIsPlus":plus.item(at: 0)?.image != nil && (plus.cell as? NSPopUpButtonCell)?.arrowPosition == .noArrow, "controlsBelowForm":controls.frame.maxY < content.convert(content.bounds, to: self).minY, "sendInsideForm":sendButton.superview === content, "skillListVisible":!skillList.isHidden, "skillCount":skillEntries.count, "inputTopInset":content.bounds.maxY - scroll.frame.maxY, "sendRightInset":content.bounds.maxX - sendButton.convert(sendButton.bounds, to: content).maxX, "autohidesScrollers":scroll.autohidesScrollers, "contentWidth":content.bounds.width, "inputHeight":scroll.bounds.height, "documentHeight":text.bounds.height, "sendWidth":sendButton.bounds.width, "visible":!isHidden, "glass":glass, "text":text.string, "chat":chat, "enabled":sendButton.isEnabled, "revision":revision, "choices":state["choices"] ?? [], "attachments":state["attachments"] ?? [], "bounds":["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height]] }
+    func inspect() -> [String: Any] { layoutSubtreeIfNeeded(); return ["attachmentPreviews":attachments.inspect(), "queueCount":queuedMessages.count, "queue":state["queue"] ?? [], "queuePaused":state["queuePaused"] ?? false, "queueHeight":formTop.constant, "queueInset":queuedMessages.frame.minX, "queueOverlap":content.convert(content.bounds, to: self).maxY - queuedMessages.frame.minY, "buttonBeam":buttonBeam.active, "readyBeam":readyBeam.active, "welcomedChat":welcomedChats.contains(chat), "pickerWidths":pickers.mapValues { $0.bounds.width }, "pickersPlain":pickers.values.allSatisfy { !$0.isBordered }, "attachIsPlus":plus.item(at: 0)?.image != nil && (plus.cell as? NSPopUpButtonCell)?.arrowPosition == .noArrow, "controlsBelowForm":controls.frame.maxY < content.convert(content.bounds, to: self).minY, "sendInsideForm":sendButton.superview === content, "skillListVisible":!skillList.isHidden, "skillCount":skillEntries.count, "inputTopInset":content.bounds.maxY - scroll.frame.maxY, "sendRightInset":content.bounds.maxX - sendButton.convert(sendButton.bounds, to: content).maxX, "autohidesScrollers":scroll.autohidesScrollers, "contentWidth":content.bounds.width, "inputHeight":scroll.bounds.height, "documentHeight":text.bounds.height, "sendWidth":sendButton.bounds.width, "visible":!isHidden, "glass":glass, "text":text.string, "chat":chat, "enabled":sendButton.isEnabled, "revision":revision, "choices":state["choices"] ?? [], "attachments":state["attachments"] ?? [], "bounds":["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height]] }
     func perform(_ c: [String: Any]) {
         if let value = c["text"] as? String { text.string = value; text.setSelectedRange(NSRange(location: (value as NSString).length, length: 0)); changed() }
         if c["action"] as? String == "send" { send(nil) }
@@ -379,6 +382,6 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         if let label = c["label"] as? String, let value = c["value"] as? String, let picker = pickers[label], picker.isEnabled,
            let item = picker.itemArray.first(where: { $0.representedObject as? String == value }) { picker.select(item); pick(picker) }
         if let paths = c["files"] as? [String] { attach(paths.map { URL(fileURLWithPath: $0) }) }
-        if let index = c["remove"] as? Int { emitAction("remove", ["index":index]) }
+        if let index = c["remove"] as? Int { attachments.removeAt(index) }
     }
 }

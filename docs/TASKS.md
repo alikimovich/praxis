@@ -33,6 +33,10 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 - [ ] Islands 5: Bézier/spring editors, combined animations and typography acceptance scenarios.
 - [ ] Islands later: runtime preview adapters, retained prop/style targets and timeline/keyframe blocks.
 
+## Native attachment previews (2026-09-25)
+
+- [x] Replace the composer attachment menu with image thumbnails, larger click previews, file cards, individual removal and horizontal overflow.
+
 ## Native runtime development entrypoint (2026-09-23)
 
 - [x] Exit cleanly when the Swift host is launched without Bun startup arguments.

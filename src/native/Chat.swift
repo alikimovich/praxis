@@ -64,9 +64,9 @@ final class NativeChat: NSHostingView<ChatConversation> {
         guard [x,y,width,height].allSatisfy({ $0.isFinite && abs($0) < 100000 }) else { return }
         var input = state["composer"] as? [String: Any] ?? [:]
         let value = input["text"] as? String ?? ""
-        let hasContext = !(input["context"] as? String ?? "").isEmpty || !(input["attachments"] as? [String] ?? []).isEmpty
+        let hasContext = !(input["context"] as? String ?? "").isEmpty
         let queueHeight = ComposerQueueHost.height(count: (input["queue"] as? [Any] ?? []).count, paused: input["queuePaused"] as? Bool ?? false)
-        let composerHeight = Double(composer.preferredHeight(for: value, width: max(0, width - 20), availableHeight: height, hasContext: hasContext, queueHeight: queueHeight))
+        let composerHeight = Double(composer.preferredHeight(for: value, width: max(0, width - 20), availableHeight: height, hasContext: hasContext, hasAttachments: !(input["attachments"] as? [Any] ?? []).isEmpty, queueHeight: queueHeight))
         frame = NSRect(x: x, y: y, width: width, height: max(0, height - composerHeight))
         input["chat"] = state["chat"]; input["visible"] = !isHidden && !(state["chat"] as? String ?? "").isEmpty
         input["bounds"] = ["x":x + 10, "y":y + max(0, height - composerHeight), "width":max(0, width - 20), "height":composerHeight]
