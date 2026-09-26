@@ -1,3 +1,4 @@
+import { trackDevServer, stopDevServer } from './devserver-processes'
 import { previewServers } from './preview-evidence'
 import { type ChildProcess, spawn } from 'child_process'
 import { app, type NativeView, ipcMain as nativeIpcMain } from '../native/platform'
@@ -192,13 +193,7 @@ function allocatePort(): Promise<number> {
 }
 
 function killChild(child: ChildProcess): void {
-  if (!child.pid) return
-  try {
-    // Negative pid kills the whole process group (shell + dev server).
-    process.kill(-child.pid, 'SIGTERM')
-  } catch {
-    child.kill('SIGTERM')
-  }
+  void stopDevServer(child)
 }
 
 /** Stop the dev server for one project (no-op if it isn't running). */
@@ -330,6 +325,7 @@ function spawnDevServer(
       detached: true, // new process group so we can kill the whole tree
       env: opts.env
     })
+    trackDevServer(child)
     const key = projectKey(opts.root)
     servers.set(key, child)
     // Keep the map + reserved ports honest if the server dies on its own.

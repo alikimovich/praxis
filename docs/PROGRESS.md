@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Await managed dev-server shutdown
+
+Reproduce a managed server surviving SIGINT because it ignores the single SIGTERM
+sent by the old cleanup. Track owned process groups beyond shell exit, wait one
+second for graceful termination, then SIGKILL survivors. Await cleanup before
+backend exit, terminal exit and update restart; repeated signals share the
+same shutdown. Explicit process.exit retains a synchronous forced-stop fallback.
+
+Validation: full/native typechecks, native build and four focused unit checks pass.
+Expanded native-shutdown covers all three terminal signals, bun script wrappers,
+process-group delivery, signal-resistant descendants, shell death, explicit exit,
+closed listener ports and an unrelated server remaining available. Full native
+integration still stops at the existing soft-wrapped composer sizing assertion.
+No real provider calls ran; the failing reproduction's fixture was cleaned up.
+
 ## 2026-09-25 — Autosave routine dialog edits
 
 Remove redundant Close actions from app forms and omit empty action bars. Settings

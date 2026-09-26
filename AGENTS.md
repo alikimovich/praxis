@@ -88,7 +88,8 @@ Native profiles remain separate from historical Electron profiles; do not delete
 or implicitly migrate existing user data. See `docs/NATIVE.md`.
 
 Praxis **owns** target dev-server lifetimes: never run the target's `dev` manually.
-The app kills managed servers on quit and terminal shutdown. Swift edits require
+The app awaits managed process-group cleanup on quit and terminal shutdown,
+force-stopping survivors after a one-second grace period. Swift edits require
 rebuild/restart; the user's project retains its own HMR.
 
 Claude and Codex share on-demand preview location/screenshot observation. The Codex

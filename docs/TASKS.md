@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Terminal shutdown (2026-09-25)
+
+- [x] Await managed server shutdown, escalate surviving process groups, and cover terminal-group signals and launcher exit.
+
 ## Native dialog windows (2026-09-25)
 
 - [x] Remove redundant Close buttons and autosave settings/project memory, preserving explicit consequential actions and failed drafts.

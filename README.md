@@ -147,7 +147,8 @@ praxis --project ./my-app # open a project directly
 ```
 
 In the app, click **Open project…**, pick a repo with a `dev`/`start` script,
-and chat on the left. Praxis **owns the dev server** — don't also run `dev`
+and chat on the left. Praxis **owns the dev server** — quitting or pressing Ctrl-C stops its managed
+process groups, force-stopping survivors after a short grace period. Don't also run `dev`
 manually for a project you open here, or you'll hit a port/lock conflict (the
 error banner offers a custom-command retry for monorepos / odd setups).
 

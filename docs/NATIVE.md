@@ -118,7 +118,10 @@ reach the cipher helper through stdin, not argv. No real credentials are written
 by the integration tests.
 
 Praxis owns project servers. Quit, terminal SIGINT/SIGTERM/SIGHUP, and host pipe
-closure run cleanup; native dialog windows are dismissed during host shutdown. Updates
+closure await managed process-group cleanup: SIGTERM, a one-second grace period,
+then SIGKILL for survivors. Ownership survives shell exit; explicit process exit
+has a synchronous forced-stop fallback. Repeated terminal signals share one cleanup.
+Native dialog windows are dismissed during host shutdown. Updates
 use the current tracked branch, require a clean checkout and no running chat or
 unsaved source/content/composer drafts, fast-forward, install with Bun, rebuild native and
 restart. Failures remain in a native dialog window. Updates never discard work or switch

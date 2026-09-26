@@ -241,3 +241,10 @@ comments expose their grouped Undo action. Finalizer errors retire the running c
 and retain the recovery checkout. Late start responses cannot revive completed
 cards. The repository busy slot stays occupied through landing and cleanup, and
 comment snapshots and finalization use the shared repository writer.
+
+## Managed preview shutdown
+
+Preview processes belong to the app, independently of chat worktrees. Terminal
+interrupts and app quit await termination of each owned process group, escalating
+to SIGKILL after one second. Shell exit does not release ownership while descendants
+survive. Shutdown does not land or discard worktree edits or target unrelated servers.

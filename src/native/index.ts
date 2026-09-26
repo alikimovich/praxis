@@ -12,6 +12,7 @@ import { projectHasRunningAgents, registerAgentIpc } from '../main/agent'
 import { registerAnnotationsIpc } from '../main/annotations'
 import { registerContentControlsIpc } from '../main/content-controls-ipc'
 import { registerControlsIpc } from '../main/control-panels'
+import { drainDevServers, forceStopDevServers } from '../main/devserver-processes'
 import { registerDevServerIpc } from '../main/devserver'
 import { registerDiagnoseIpc } from '../main/diagnose'
 import { registerFeedbackIpc } from '../main/feedback'
@@ -84,18 +85,22 @@ async function main() {
   let pickedRoot = fixture || (requestedProject ? resolve(requestedProject) : null)
   const root = resolve(__dirname, '../..')
   let host: NativeBridge | undefined
-  let cleaned = false
-  const cleanup = () => {
-    if (cleaned) return
-    cleaned = true
-    app.emit('before-quit')
-    host?.send('quit')
-    rmSync(lock, { force: true })
-    // Keep the native profile separate from retired Electron installations.
-    // Test profiles are disposable.
-    if (testDir) setTimeout(() => rmSync(testDir, { recursive: true, force: true }), 500).unref()
+  let cleaning: Promise<void> | undefined
+  const cleanup = (): Promise<void> => {
+    if (cleaning) return cleaning
+    // Publish the promise before emitting quit: the host can close during cleanup.
+    cleaning = Promise.resolve().then(async () => {
+      app.emit('before-quit')
+      host?.send('quit')
+      rmSync(lock, { force: true })
+      // Keep the native profile separate from retired Electron installations.
+      // Test profiles are disposable.
+      await drainDevServers()
+      if (testDir) rmSync(testDir, { recursive: true, force: true })
+    })
+    return cleaning
   }
-  installShutdown(cleanup)
+  installShutdown(cleanup, forceStopDevServers)
   const executable = join(__dirname, 'Praxis Native.app/Contents/MacOS/PraxisHost')
   process.env.PRAXIS_NATIVE_HOST = executable
   host = new NativeBridge(executable, __dirname, testing ? 'ephemeral' : 'persistent')
@@ -334,9 +339,9 @@ async function main() {
     const operation = action.action === 'branch' ? gitController.branch(key, action.value ?? '') : action.action === 'new-branch' ? gitController.branch(key, action.value ?? '', true) : action.action === 'publish' ? gitController.publish(key) : action.action === 'git-updates' ? gitController.updates(key) : null
     void operation?.catch(error => activityController.append(String(error), 'error'))
   })
-  const updates = new NativeUpdateController(sheetController, root, () => {
+  const updates = new NativeUpdateController(sheetController, root, async () => {
     const project = workspaceController.active?.root
-    cleanup()
+    await cleanup()
     const processNext = spawn(process.execPath, [join(root, 'out/native/index.cjs'), ...(project ? ['--project', project] : [])], { cwd: root, detached: true, stdio: 'ignore', env: process.env })
     processNext.on('error', error => { console.error('Could not restart Praxis Native:', error); process.exit(1) }); processNext.once('spawn', () => { processNext.unref(); process.exit(0) })
   }, undefined, undefined, () => [...chatController.chats.values()].some(chat => chat.isRunning || chat.text || chat.attachments.length) ? 'Finish running chats and send or clear your drafts before restarting.' : [...editorController.sessions.values()].some(session => [...session.documents.values()].some(doc => doc.text !== doc.baseline)) ? 'Save source editor drafts before restarting.' : [...contentController.sessions.values()].some(session => session.dirty || session.busy) ? 'Save content editor drafts before restarting.' : null)
@@ -395,13 +400,14 @@ async function main() {
     previewView.webContents.send(channels.LAYERS_SET_WATCH, state.layersWatch)
     if (url !== 'about:blank') send('preview:url-changed', url)
   })
-  host.on('closed', () => {
-    cleanup()
+  host.on('closed', async () => {
+    if (cleaning) return
+    await cleanup()
     if (!testing) process.exit(0)
   })
-  host.on('host-error', (error) => {
+  host.on('host-error', async (error) => {
     console.error(error)
-    cleanup()
+    await cleanup()
     process.exit(1)
   })
   host.once('ready', async () => {
@@ -418,7 +424,7 @@ async function main() {
     if (testing) {
       try {
         await runNativeCoreSmoke(host!, fixture!, root)
-        cleanup()
+        await cleanup()
         process.exitCode = 0
       } catch (error) {
         console.error(error)
@@ -427,7 +433,7 @@ async function main() {
           console.error('Native chat state:', await host!.request('chatInspect'))
           console.error('Native geometry:', await host!.request('layoutInspect'))
         } catch { /* preserve original failure */ }
-        cleanup()
+        await cleanup()
         process.exitCode = 1
       } finally {
         setTimeout(() => process.exit(process.exitCode || 0), 1000)
