@@ -12,7 +12,11 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 - [x] Define the product direction and staged plan for Jev-composed native chat islands.
-- [ ] Islands 1: versioned contracts, native catalog and constrained Jev composition spike.
+- [x] Ship the first chat-island slice: scoped tools, Jev block selection, SwiftUI groups/points/curves, source transactions, restoration and next-turn context.
+- [x] Verify a 2D light control changes real multilayer shadows through source/HMR and undoes the coordinate batch.
+- [ ] Complete flexible nested composition, previous-revision retention, rich color/spring editors and visible gesture/accessibility acceptance.
+- [ ] Add repeatable shadow-layer groups with add/remove/reorder and supported runtime-live preview adapters.
+- [x] Islands 1: versioned contracts, native catalog and constrained Jev composition spike.
 - [ ] Islands 2: inline SwiftUI rendering, typed interactions and durable history restoration.
 - [ ] Islands 3: revision-checked source bindings, grouped Undo/Reset, Replay and landing lifecycle.
 - [ ] Islands 4: provider tools, on-demand Jev composition and follow-up island revisions.

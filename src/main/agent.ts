@@ -1,3 +1,4 @@
+import { chatIslandContext } from './chat-islands'
 import { setProjectUiEnabled, projectUiInstructions, cancelProjectUi } from './project-ui'
 import type { AgentTurnOptions } from '../shared/api'
 import { conflictResolutionPrompt, ReconciliationCoordinator } from './conflict-resolution'
@@ -1148,7 +1149,9 @@ export function registerAgentIpc(
       if (key) setProjectUiEnabled(key, useUi, uiEngine)
       const uiNotice = turn?.projectUi === true && !supportsUi
         ? 'The requested project component composition mode requires Claude or Codex. Explain this limitation for UI requests.\n\n' : ''
-      session.send(projectUiInstructions(useUi, uiEngine) + uiNotice + prompt, images)
+      const islandContext = key ? await chatIslandContext(key) : ''
+      if (preparation.cancelled || key && sessions.get(key) !== session) throw new Error('Message cancelled before sending.')
+      session.send(projectUiInstructions(useUi, uiEngine) + uiNotice + islandContext + prompt, images)
     } catch (error) {
       if (key) {
         runningKeys.delete(key)

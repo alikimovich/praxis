@@ -1,3 +1,4 @@
+import { runChatIslandTool } from '../chat-islands'
 import { observeAgentPreview } from '../preview-observation-tools'
 import { runContentControlTool } from '../content-control-tools'
 import { runProjectUiTool } from '../project-ui'
@@ -250,6 +251,7 @@ async function startSession(
         return runProjectUiTool(root, emitKey, action, args, options.connectionId)
       if (action === 'content_controls')
         return runContentControlTool(root, ctx?.liveRoot ?? root, emitKey, args, notify, options.connectionId)
+      if (action === 'chat_island') return ctx?.sessionId ? { error: 'Background edits cannot create chat islands.' } : runChatIslandTool(emitKey, root, args, options.connectionId)
       if (action === 'define_controls')
         return defineAgentControls(
           root,
@@ -299,7 +301,7 @@ async function startSession(
           // The MCP helper is relative to the compiled Bun entry in out/native.
           args: [join(__dirname, '../../bin/praxis-agent-mcp.mjs')],
           // Match Claude's allowlist for validated source reveal and control registration.
-          tools: { preview_location: { approval_mode: 'approve' }, preview_screenshot: { approval_mode: 'approve' }, content_controls: { approval_mode: 'approve' }, project_ui_catalog: { approval_mode: 'approve' }, compose_project_ui: { approval_mode: 'approve' }, open_preview: { approval_mode: 'approve' }, open_code: { approval_mode: 'approve' }, define_controls: { approval_mode: 'approve' } },
+          tools: { chat_island: { approval_mode: 'approve' }, preview_location: { approval_mode: 'approve' }, preview_screenshot: { approval_mode: 'approve' }, content_controls: { approval_mode: 'approve' }, project_ui_catalog: { approval_mode: 'approve' }, compose_project_ui: { approval_mode: 'approve' }, open_preview: { approval_mode: 'approve' }, open_code: { approval_mode: 'approve' }, define_controls: { approval_mode: 'approve' } },
           env: {
             PRAXIS_AGENT_TOOL_SOCKET: praxisTools.socketPath,
             PRAXIS_AGENT_TOOL_TOKEN: praxisTools.token

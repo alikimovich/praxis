@@ -8,6 +8,29 @@ Limit the live chat activity label to one line and truncate long paths at the
 tail. The complete label remains available in its tooltip.
 
 Validation: `bun run typecheck` passed.
+## 2026-09-25 — Native chat islands with Jev-selected blocks
+
+Added scoped chat_island catalog/define/read tools for Claude and Codex, a versioned
+profile store, turn-associated inline SwiftUI rendering, grouped controls, 2D light
+position and Bézier editors. Jev chooses/orders prepared blocks; missing credentials
+retain the agent layout with explicit reporting. Provider-only next-turn context
+includes current values. Source writes are bounded literal edits in one file, with
+revision checks, repository serialization, grouped Undo/Reset and landing gates.
+Closing/stopping a chat cancels pending composition. Follow-up definitions revise
+the same island; pending revisions disable it until landing.
+
+Validation: typechecks; composition, source batches, drift/closed guards, undo,
+restoration and existing controls/controller/provider-skill tests; real MCP transport;
+native build and background integration passed. Swift actions changed both light
+coordinates and the fixture's real multilayer shadow via managed reload. Inspected
+the native capture. Full native run passed island/selection checks, then hit the
+previously recorded style-inspector source-edit timeout. Background coverage skips
+real preview pointer/animation checks. No live provider/Jev network calls ran.
+
+This is the first working slice, not completion of every plan stage: arbitrary
+nested Jev layouts, native dynamic shadow-layer collections, specialized spring
+samples, runtime-live scrubbing and full visible gesture/accessibility acceptance
+remain tracked. Refreshed the plan for the now native-only application.
 
 ## 2026-09-25 — Clean exit for unsupported host launches
 

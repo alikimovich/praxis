@@ -24,6 +24,7 @@ const UNIT = [
   "native-sheets",
   "native-settings",
   "native-chat-controller",
+  "chat-islands",
   "native-context",
   "native-updates",
   "native-content",

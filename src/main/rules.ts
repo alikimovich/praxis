@@ -56,7 +56,7 @@ export function praxisRules(opts?: {
     `When asked to surface animation controls or add a DialKit-style panel, read`,
     `the bundled animation-controls skill at ${JSON.stringify(ANIMATION_CONTROLS_SKILL)}.`,
     opts?.previewTools || opts?.controlTools
-      ? `Use Praxis native controls: define_controls with manifest.presentation set to animation.`
+      ? `For on-demand chat controls use chat_island. For an explicitly requested inspector panel use define_controls with manifest.presentation set to animation.`
       : `This provider cannot register native animation panels; explain the limitation.`,
     `Do not install DialKit or add a tuning UI to the target app. Wire literal source values`,
     `to the real animation. The native panel stays open across selection changes; edits save to source.`,
@@ -165,9 +165,18 @@ export function praxisRules(opts?: {
       `are provided by the editor. Verify Save updates the actual page through HMR/reload.`,
       `Use engine:auto and the original request as prompt to prefer Jev with a configured key; engine:agent skips Jev.`,
       `Prepare focused sections with real bindings; Jev selects/orders sections. For animation`,
-      `or component controls use define_controls with engine:auto and prompt instead; Jev`,
+      `or component controls in chat use chat_island with engine:auto and prompt; Jev`,
       `selects/orders the validated params. Never claim Jev was used without a successful tool result.`,
       `Missing keys automatically retain the chat model prepared controls; report the returned engine/fallback. Other Jev failures remain errors. These tools work independently of project UI composition settings.`,
+      ``,
+      `## Interactive islands inside chat (chat_island)`,
+      `For on-demand controls in chat, call chat_island action:catalog, inspect source, expose`,
+      `literal parameters consumed by the project, then action:define with manifest, blocks,`,
+      `engine:auto and prompt. Jev selects/orders prepared groups; point blocks bind bounded x/y numbers.`,
+      `Use groups for springs, tweens, typography or shadow layers; use point for light direction.`,
+      `The project must compute shadows from light coordinates deterministically. Never add a tuning UI to it.`,
+      `Use action:read and the returned id/revision when revising an island. Keep compatible bindings.`,
+      `Controls appear in this conversation and activate only after successful source landing.`,
       ``,
       `## Surfacing control panels (define_controls / open_controls)`,
       `When asked to show selection-inspector controls, call open_controls with the object's source stamp`,

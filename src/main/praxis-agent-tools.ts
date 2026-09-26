@@ -7,6 +7,7 @@ export type PraxisAgentToolAction =
   | 'workspace_state'
   | 'prepare_conflict_resolution'
   | 'content_controls'
+  | 'chat_island'
   | 'define_controls'
   | 'open_controls'
   | 'open_code'
@@ -76,6 +77,7 @@ async function startServer(): Promise<string> {
           parsed.action !== 'workspace_state' &&
           parsed.action !== 'prepare_conflict_resolution' &&
           parsed.action !== 'content_controls' &&
+          parsed.action !== 'chat_island' &&
           parsed.action !== 'define_controls' &&
           parsed.action !== 'open_controls' &&
           parsed.action !== 'open_code' &&

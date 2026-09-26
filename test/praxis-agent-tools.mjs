@@ -21,7 +21,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const calls = []
 const registration = await registerPraxisAgentTools(async (action, args) => {
   if (action === 'preview_location' || action === 'preview_screenshot') return observeAgentPreview(action)
-  if (action === 'content_controls' || action === 'project_ui_catalog' || action === 'compose_project_ui' || action === 'open_preview' || action === 'open_code' || action === 'open_controls' || action === 'define_controls') return { received: args ?? {} }
+  if (action === 'chat_island' || action === 'content_controls' || action === 'project_ui_catalog' || action === 'compose_project_ui' || action === 'open_preview' || action === 'open_code' || action === 'open_controls' || action === 'define_controls') return { received: args ?? {} }
   calls.push(action)
   if (action === 'workspace_state') {
     return { state: 'parked', files: ['src/App.tsx'] }
@@ -115,6 +115,7 @@ try {
 
   const listed = await request('tools/list')
   assert.deepEqual(listed.result.tools.map((tool) => tool.name).sort(), [
+    'chat_island',
     'compose_project_ui',
     'content_controls',
     'define_controls',
@@ -154,6 +155,9 @@ try {
   assert.equal((await previewCall('preview_screenshot')).result.content[0].type, 'text')
   assert.equal(await bridgeCall('wrong', 'preview_screenshot'), 401)
 
+  const island = await request('tools/call', { name: 'chat_island', arguments: { action: 'catalog' } })
+  assert.deepEqual(island.result.structuredContent.received, { action: 'catalog' })
+  assert.equal(await bridgeCall('wrong', 'chat_island'), 401)
   const content = await request('tools/call', { name: 'content_controls', arguments: { action: 'catalog' } })
   assert.deepEqual(content.result.structuredContent.received, { action: 'catalog' })
   const catalog = await request('tools/call', { name: 'project_ui_catalog', arguments: {} })

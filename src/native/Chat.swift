@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-struct ChatSegment: Decodable { let kind: String; let text: String?; let statuses: [String]? }
+struct ChatSegment: Decodable { let kind: String; let text: String?; let statuses: [String]?; let island: IslandView? }
 struct ChatAttachment: Decodable, Identifiable { let id: String; let kind: String?; let name: String?; let path: String?; let url: String? }
 struct ChatSelection: Decodable { let tag: String; let ident: String; let source: String? }
 struct ChatMessage: Decodable, Identifiable {
@@ -23,6 +23,11 @@ final class ChatModel: ObservableObject {
     @Published var snapshot: ChatSnapshot?
     @Published var revision = 0
     @Published var visible = false
+    func islandAction(_ island: IslandView, action: String, values: [String: Any] = [:]) {
+        guard let chat = snapshot?.chat else { return }
+        emit(["event":"island-action", "chat":chat, "id":island.id, "revision":island.revision,
+              "sourceRevision":island.sourceRevision, "operation":UUID().uuidString, "action":action, "values":values])
+    }
     func action(_ name: String, id: String? = nil, value: String? = nil, answers: [String: String]? = nil) {
         guard let chat = snapshot?.chat else { return }
         var message: [String: Any] = ["event":"chat-action", "chat":chat, "action":name]
@@ -71,6 +76,7 @@ final class NativeChat: NSHostingView<ChatConversation> {
         ["catPose":model.cat.pose, "catFrame":model.cat.frame, "catArtwork":!CatArtwork.frames.isEmpty, "frame":NSStringFromRect(frame), "native":true, "visible":!isHidden, "chat":model.snapshot?.chat ?? "", "messageCount":model.snapshot?.messages.count ?? 0,
          "messages":model.snapshot?.messages.map { ["id":$0.id,"role":$0.role,"text":$0.text] } ?? [],
          "activity":model.snapshot?.activity?.label ?? "", "activityKind":model.snapshot?.activity?.kind ?? "", "activityAnimated":model.snapshot?.activity?.animated ?? false,
+         "islands":model.snapshot?.messages.flatMap { $0.segments.compactMap { $0.island }.map { ["id":$0.id,"revision":$0.revision,"status":$0.status,"title":$0.title,"blocks":$0.blocks.count,"fields":$0.fields.count] as [String: Any] } } ?? [],
          "cards":model.snapshot?.cards.map(\.id) ?? [], "questionCount":model.snapshot?.questions.count ?? 0]
     }
 }
@@ -151,7 +157,8 @@ private struct NativeMessageRow: View {
                 if let selection = message.selection { Text(selection.tag + selection.ident).font(.caption.monospaced()).foregroundStyle(.secondary) }
                 ForEach(message.attachments ?? []) { attachment in NativeAttachment(attachment: attachment) }
                 ForEach(Array(message.segments.enumerated()), id: \.offset) { _, segment in
-                    if segment.kind == "tools" {
+                    if let island = segment.island { NativeChatIsland(island: island, model: model) }
+                    else if segment.kind == "tools" {
                         DisclosureGroup {
                             ForEach(Array((segment.statuses ?? []).enumerated()), id: \.offset) { _, status in Text(status).font(ChatTypography.activity).lineSpacing(3).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
                         } label: { Text(segment.statuses?.last ?? "Activity").font(ChatTypography.activity).lineLimit(1).foregroundStyle(.secondary) }
