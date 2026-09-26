@@ -11,7 +11,6 @@ final class WorkspaceLayout {
     let sourceDivider = NativePanelDivider(), layersDivider = NativePanelDivider(), inspectorDivider = NativePanelDivider()
     var sourceHeight: CGFloat = 380, layersHeight: CGFloat = 260, inspectorWidth: CGFloat = 300
     let device = NSImageView()
-    let readout = NSTextField(labelWithString: "")
     private var animation: Timer?
     private var layingOut = false
     private var lastFrame = NSRect.zero
@@ -25,10 +24,8 @@ final class WorkspaceLayout {
         inspectorDivider.changed = { [weak self] delta in guard let self else { return }; self.inspectorWidth = max(220, min(500, self.inspectorWidth - delta)); self.layout(); self.saveSizes() }
         device.image = NSImage(contentsOfFile: host.directory + "/device.png")
         device.imageScaling = .scaleProportionallyUpOrDown
-        device.isHidden = true; readout.isHidden = true
-        readout.font = .systemFont(ofSize: 11); readout.textColor = .secondaryLabelColor
+        device.isHidden = true
         host.canvas.addSubview(device, positioned: .below, relativeTo: host.views["preview"])
-        host.canvas.addSubview(readout, positioned: .above, relativeTo: host.views["preview"])
     }
     func saveSizes() { emit(["event":"native-layout-sizes", "source":Double(sourceHeight), "layers":Double(layersHeight), "inspector":Double(inspectorWidth)]) }
     func restoreSizes(_ values: [String: Double]) {
@@ -116,9 +113,7 @@ final class WorkspaceLayout {
         layersDivider.isHidden = host.layers.isHidden; layersDivider.frame = NSRect(x: 0, y: host.layers.frame.maxY - 3, width: leading, height: 6)
         inspectorDivider.isHidden = right == 0; inspectorDivider.frame = NSRect(x: bounds.width - right - 3, y: 0, width: 6, height: bounds.height - bottom)
         for divider in [sourceDivider, layersDivider, inspectorDivider] { host.canvas.addSubview(divider, positioned: .above, relativeTo: nil); divider.window?.invalidateCursorRects(for: divider) }
-        readout.stringValue = "\(Int(page.width.rounded()))px × \(Int(page.height.rounded()))px"
-        readout.sizeToFit(); readout.frame.origin = NSPoint(x: max(leading, available.maxX - readout.frame.width - 10), y: 8)
-        readout.isHidden = !previewVisible || !host.chatDivider.dragging
+        // The isolated preview owns the single readout, using CSS viewport pixels.
         host.previewSurface.needsDisplay = true
         if page != lastFrame || leading != lastLeading {
             lastFrame = page; lastLeading = leading

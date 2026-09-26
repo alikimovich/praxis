@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Viewport resize feedback (2026-09-25)
+
+- [x] Remove the duplicate AppKit dimensions and verify the single CSS viewport badge.
+- [ ] Reproduce the brief page shift with visible frame timing and verify WebKit paint synchronization during divider drags.
+
 ## Island placement and scrolling (2026-09-25)
 
 - [x] Create a fresh island for later-turn revisions without overwriting historical definitions.

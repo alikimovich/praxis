@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Single viewport dimension readout
+
+Remove the AppKit drag readout that overlapped the isolated preview's CSS-pixel
+badge. Keep the page badge for all viewport resizes and its one-second expiry.
+The reported transient page shift is consistent with asynchronous WebKit painting
+after the native frame moves; no width rollback was found. Paint synchronization
+remains unverified and is not changed by this fix.
+
+Validation: full/native typechecks, native-shell-controller, docs-links and
+`bun run test:native` pass. A disposable WebKit fixture verifies one badge with
+matching CSS dimensions across four resizes and expiry; inspected its PNG.
+Native-boundary fails on the existing undeclared MCP SDK runtime dependency.
+No provider calls or pointer-driven animation verification.
+
 ## 2026-09-25 — Keep revised islands with their response and preserve scroll
 
 A define call targeting an earlier turn now creates a fresh island ID on the

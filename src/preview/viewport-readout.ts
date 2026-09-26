@@ -1,4 +1,4 @@
-/** Shared by the native preview and its renderer-side resize snapshot. */
+/** The preview's sole dimension badge, measured in CSS viewport pixels. */
 export function createViewportReadout(
   parent: HTMLElement,
   fixed = false
