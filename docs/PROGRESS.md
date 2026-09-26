@@ -2,6 +2,13 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Keep live activity labels on one line
+
+Limit the live chat activity label to one line and truncate long paths at the
+tail. The complete label remains available in its tooltip.
+
+Validation: `bun run typecheck` passed.
+
 ## 2026-09-25 — Clean exit for unsupported host launches
 
 The reported crash came from the disposable /tmp/Praxis Sidebar Check.app visual

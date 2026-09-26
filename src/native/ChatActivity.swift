@@ -37,7 +37,7 @@ struct ChatActivity: View {
                         }
                     }
             }
-            .font(.system(size: 12)).lineLimit(2).help(activity.label)
+            .font(.system(size: 12)).lineLimit(1).truncationMode(.tail).help(activity.label)
             .id(activity.label)
             .transition(reduceMotion ? .identity : .asymmetric(
                 insertion: .modifier(active: ActivitySwap(offset: 8, blur: 2, opacity: 0), identity: ActivitySwap()),
