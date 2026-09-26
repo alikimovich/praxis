@@ -25,6 +25,8 @@ Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 ## Native runtime development entrypoint (2026-09-23)
 
+- [x] Keep live chat activity labels on one truncated line.
+
 - [x] Exit cleanly when the Swift host is launched without Bun startup arguments.
 
 - [x] Reload the current preview page without resetting its route, query or fragment.

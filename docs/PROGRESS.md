@@ -2,6 +2,12 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Keep live activity labels on one line
+
+Limit the live chat activity label to one line and truncate long paths at the
+tail. The complete label remains available in its tooltip.
+
+Validation: `bun run typecheck` passed.
 ## 2026-09-25 — Native chat islands with Jev-selected blocks
 
 Added scoped chat_island catalog/define/read tools for Claude and Codex, a versioned
