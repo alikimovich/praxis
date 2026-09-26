@@ -22,6 +22,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).
 
 - [x] Define the product direction and staged plan for Jev-composed native chat islands.
+- [x] Retire agent panel tools and the animation-controls skill; route all requested tuning through inline chat islands.
 - [x] Ship the first chat-island slice: scoped tools, Jev block selection, SwiftUI groups/points/curves, source transactions, restoration and next-turn context.
 - [x] Verify a 2D light control changes real multilayer shadows through source/HMR and undoes the coordinate batch.
 - [ ] Complete flexible nested composition, previous-revision retention, rich color/spring editors and visible gesture/accessibility acceptance.
@@ -298,7 +299,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 
 ## Selection-independent animation controls (2026-09-17)
 
-- [x] Bundle `/animation-controls` and route ordinary animation-control requests to it.
+- [x] Bundle animation tuning guidance (superseded by `/surface-controls` and inline chat islands).
 - [x] Make the skill discoverable by Claude, Codex/custom endpoints, and Gemini.
 - [x] Add selection-independent panels (now native Praxis panels; supersedes the initial project UI approach).
 - [x] Keep native inspector controls distinct and update the animation action prompt.

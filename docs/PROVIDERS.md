@@ -12,7 +12,6 @@ capabilities instead of assuming Claude, Codex, gateways, and Gemini are interch
 | Provider-native coding tools | Yes | Yes | Depends on model through Codex | Limited |
 | Praxis preview location/screenshots | Yes | Yes | Yes, image support depends on endpoint | No |
 | On-demand native chat islands (`chat_island`) | Yes | Yes | Yes, through Codex | No |
-| Register custom controls / open desktop inspector | Yes | Yes | Yes, through Codex | No |
 | Open mini code editor / highlight exact source | Yes | Yes | Yes, through Codex | No |
 | Praxis worktree control tools | No | Yes | Yes, through Codex | No |
 | Praxis question cards | Yes | No | No | No |
@@ -27,11 +26,11 @@ never support the feature. Codex and gateway sessions receive a session-scoped l
 server with `workspace_state` and `prepare_conflict_resolution`: the former reads the
 landing coordinator rather than guessing from the private checkout, while the latter
 routes the existing three-way resolver through Praxis's repository queue. It deliberately
-does not expose raw Git or discard/reset operations. The same bridge now exposes
-`define_controls` and `open_controls`, including to detached visual-edit children.
-Registration validates anchors in the agent worktree and saves the manifest on the
-live root. Opening is scoped to the active project, uses real preview selection,
-and retries after landing; ambiguous file matches require an exact source stamp.
+does not expose raw Git or discard/reset operations. Interactive tuning uses
+`chat_island`, scoped to the originating chat and assistant turn. The legacy
+`define_controls` and `open_controls` tools are no longer registered; the socket
+bridge rejects those actions. Islands validate source anchors in the agent's
+checkout and become editable after the source lands in the live project.
 Preview location and screenshot tools share the native capture implementation across
 Claude and Codex; screenshots are returned as MCP image content. Design calculators remain Claude-only;
 question cards, resume, image transport, and background-agent support are separately
@@ -125,15 +124,13 @@ turns in order, preserving the originating chat, file/image attachments, and
 selection context. They do not depend on provider-native steering support; image
 interpretation remains subject to the capability table above.
 
-The bundled `animation-controls` skill is available through the skills menu for
-all providers, but native registration requires `define_controls` (Claude,
-Codex/custom endpoints). It uses `manifest.presentation: "animation"` and literal
-parameters to surface Praxis's own persistent project panel, independent of
-selection. Gemini must explain that native registration is unavailable. No tuning
-library or panel UI is installed in the project. Optional Replay dispatches
-`praxis:animation-replay` with the component name as its string detail; project
-code listens for that target and replays only the corresponding animation.
-Controls save source through the existing edit/Undo path, with HMR preview updates.
+The bundled `surface-controls` skill requires `chat_island` for on-demand tuning
+controls inside the conversation. Claude and Codex/custom endpoints support this
+route; Gemini must explain that native registration is unavailable. Existing
+literal constants can be bound directly without rewriting the project. Optional
+Replay dispatches `praxis:animation-replay` with the component name as its string
+detail. Source edits use island Undo/Reset and HMR; a separate inspector or project
+panel is not a substitute for a requested chat island.
 
 `open_code` opens the docked editor at a repo-relative file and an inclusive line
 range. Main validates the file boundary (including symlinks) and captures the exact
@@ -153,7 +150,7 @@ Gemini does not expose this tool.
 The Codex MCP executable path is relative to the compiled Bun backend in
 `out/native/`; it does not depend on an Electron app path.
 
-The SDK session explicitly allows the validated `open_preview`, `open_code` navigation and `define_controls` tools via
+The SDK session explicitly allows the validated `open_preview`, `open_code` navigation and `chat_island` tools via
 its per-tool approval configuration, matching Claude's in-process allowlist. Other
 MCP tools and shell approval policy keep their existing configuration.
 
@@ -198,7 +195,7 @@ wins; otherwise the sole saved Gateway is used. Environment overrides and ambigu
 connection handling are documented in PROJECT_UI.md.
 
 Claude and Codex/custom endpoints expose `content_controls` (catalog/define) and
-Jev selection in `define_controls`. Their `auto`/`jev` modes fall back to the chat
+Jev selection in `chat_island`. Their `auto`/`jev` modes fall back to the chat
 model’s validated candidates only when no Gateway key is configured, returning
 the actual engine and fallback reason. The bundled `surface-controls` skill is
 portable across providers; experimental Gemini explains its missing tools. See

@@ -17,7 +17,7 @@ const assert = (cond, msg) => {
 const r = praxisRules()
 assert(typeof r === 'string' && r.length > 0, 'rules render to a non-empty string')
 assert(typeof PRAXIS_RULES_VERSION === 'number', 'version is a number')
-assert(PRAXIS_RULES_VERSION === 20, 'version bumped to 20')
+assert(PRAXIS_RULES_VERSION === 21, 'version bumped to 21')
 assert(r.includes(`v${PRAXIS_RULES_VERSION}`), 'rules carry the version marker')
 assert(r.includes('before scaffolding or'), 'new projects ask about unresolved setup choices')
 assert(r.includes('after these files successfully land'), 'environment refresh follows landing')
@@ -81,15 +81,16 @@ for (const opts of [{}, { previewTools: true }, { workspaceTools: true }]) {
   assert(/report verification as pending, never passed/.test(rules), 'browser: stale previews cannot prove an edit')
   assert(/user request for another tool overrides/.test(rules), 'browser: explicit user choice wins')
 }
-// R4 (v10) — custom-controls section rides with the Claude-only in-process tools:
-// define_controls exists only on the praxis SDK server, so backends without
-// previewTools must never be told to call it.
-assert(/define_controls/.test(withTools), 'previewTools: teaches define_controls')
-assert(/const STAGGER_MS = /.test(withTools), 'previewTools: shows the ideal anchor shape')
-assert(/\.praxis\//.test(withTools), 'previewTools: forbids writing under .praxis/')
-assert(!/define_controls/.test(r), 'default rendering omits define_controls')
+// Chat controls have one destination and no competing panel tool.
+assert(/chat_island/.test(withTools), 'previewTools: teaches chat islands')
+assert(/const STAGGER_MS = /.test(withTools), 'previewTools: shows literal anchor shape')
+assert(/\.praxis\//.test(withTools), 'previewTools: forbids sidecar writes')
+assert(!/chat_island/.test(r), 'unsupported providers omit island tool')
 const codexControls = praxisRules({ controlTools: true })
-assert(/define_controls/.test(codexControls) && /open_controls/.test(codexControls), 'Codex learns both control tools')
+for (const rules of [withTools, codexControls]) {
+  assert(!/define_controls|open_controls|animation-controls/.test(rules), 'No legacy panel instructions')
+  assert(/Never substitute a separate panel/.test(rules), 'Chat is the required control destination')
+}
 assert(!/spring_to_css/.test(codexControls), 'Codex does not advertise Claude-only calculators')
 // R5 (spring) — spring_to_css rides with the Claude-only in-process tools too.
 assert(/spring_to_css/.test(withTools), 'previewTools: teaches spring_to_css')

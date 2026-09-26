@@ -30,7 +30,6 @@ import { type RolloutUsageWatch, watchRolloutUsage } from '../codex-usage'
 import { type PraxisAgentToolRegistration, registerPraxisAgentTools } from '../praxis-agent-tools'
 import { resolveConnection } from '../providers'
 import { scrubSecret } from '../providers-store'
-import { defineAgentControls, openAgentControls } from '../control-tools'
 import { praxisRules } from '../rules'
 import { createRetryCause } from './codex-retry'
 import { createItemTracker, codexItemWarning } from './codex-stream'
@@ -252,21 +251,12 @@ async function startSession(
       if (action === 'content_controls')
         return runContentControlTool(root, ctx?.liveRoot ?? root, emitKey, args, notify, options.connectionId)
       if (action === 'chat_island') return ctx?.sessionId ? { error: 'Background edits cannot create chat islands.' } : runChatIslandTool(emitKey, root, args, options.connectionId)
-      if (action === 'define_controls')
-        return defineAgentControls(
-          root,
-          ctx?.liveRoot ?? root,
-          (args as { manifest?: unknown })?.manifest,
-          notify,
-          { ...(args as { engine?: string; prompt?: string }), key: emitKey, connectionId: options.connectionId }
-        )
       if (action === 'open_preview')
         return openAgentPreview(ctx?.liveRoot ?? root, emitKey, args, notify, !!ctx?.sessionId)
       if (action === 'open_code')
         return ctx?.sessionId
           ? { error: 'Background edits cannot navigate the user editor.' }
           : openAgentCode(root, ctx?.liveRoot ?? root, emitKey, args, notify)
-      if (action === 'open_controls') return openAgentControls(ctx?.liveRoot ?? root, args, notify)
       if (ctx?.sessionId)
         return {
           ok: false,
@@ -301,7 +291,7 @@ async function startSession(
           // The MCP helper is relative to the compiled Bun entry in out/native.
           args: [join(__dirname, '../../bin/praxis-agent-mcp.mjs')],
           // Match Claude's allowlist for validated source reveal and control registration.
-          tools: { chat_island: { approval_mode: 'approve' }, preview_location: { approval_mode: 'approve' }, preview_screenshot: { approval_mode: 'approve' }, content_controls: { approval_mode: 'approve' }, project_ui_catalog: { approval_mode: 'approve' }, compose_project_ui: { approval_mode: 'approve' }, open_preview: { approval_mode: 'approve' }, open_code: { approval_mode: 'approve' }, define_controls: { approval_mode: 'approve' } },
+          tools: { chat_island: { approval_mode: 'approve' }, preview_location: { approval_mode: 'approve' }, preview_screenshot: { approval_mode: 'approve' }, content_controls: { approval_mode: 'approve' }, project_ui_catalog: { approval_mode: 'approve' }, compose_project_ui: { approval_mode: 'approve' }, open_preview: { approval_mode: 'approve' }, open_code: { approval_mode: 'approve' } },
           env: {
             PRAXIS_AGENT_TOOL_SOCKET: praxisTools.socketPath,
             PRAXIS_AGENT_TOOL_TOKEN: praxisTools.token

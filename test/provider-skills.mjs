@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs'
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { discoverProviderSkills, withSkillReferences, withSkillMenu } from '../src/main/backends/skill-menu.ts'
+
+// Both provider registries and bundled routing must retire the competing panel path.
+for (const file of ['src/main/backends/claude.ts', 'src/main/backends/codex.ts',
+  'agent-plugin/skills/surface-controls/SKILL.md', 'agent-plugin/skills/spring-animations/SKILL.md']) {
+  const source = readFileSync(new URL('../' + file, import.meta.url), 'utf8')
+  assert(!/define_controls|open_controls|animation-controls/.test(source), file + ' has no legacy panel route')
+  assert(source.includes('chat_island'), file + ' routes tuning through chat islands')
+}
 
 const base = mkdtempSync(join(tmpdir(), 'praxis-provider-skills-'))
 const root = join(base, 'project')
@@ -25,17 +33,17 @@ try {
   symlinkSync(join(root, '.agents/skills'), join(root, '.agents/skills/cycle'))
   symlinkSync(join(base, 'missing'), join(root, '.agents/skills/broken'))
   const skills = await discoverProviderSkills(root, 'codex', home, join(home, '.codex'))
-  assert.deepEqual(skills.map(s => s.name).sort(), ['animation-controls', 'builtin', 'design', 'linked', 'shared', 'surface-controls'])
+  assert.deepEqual(skills.map(s => s.name).sort(), ['builtin', 'design', 'linked', 'shared', 'surface-controls'])
   assert.equal(skills.find(s => s.name === 'design').description, 'Project design')
   assert.equal(skills.find(s => s.name === 'shared').source, 'other')
   assert((await discoverProviderSkills(root, 'gemini', home)).some(s => s.name === 'gemini-only'))
-  const bundled = skills.find(s => s.name === 'animation-controls')
-  assert(bundled.path.endsWith('agent-plugin/skills/animation-controls/SKILL.md'))
-  assert(withSkillReferences('/animation-controls tune motion', skills).includes(JSON.stringify(bundled.path)))
-  skill(join(root, '.agents/skills'), 'animation-controls', 'Project override')
+  const bundled = skills.find(s => s.name === 'surface-controls')
+  assert(bundled.path.endsWith('agent-plugin/skills/surface-controls/SKILL.md'))
+  assert(withSkillReferences('/surface-controls tune motion', skills).includes(JSON.stringify(bundled.path)))
+  skill(join(root, '.agents/skills'), 'surface-controls', 'Project override')
   const overridden = await discoverProviderSkills(root, 'codex', home, join(home, '.codex'))
-  assert.equal(overridden.filter(s => s.name === 'animation-controls').length, 1)
-  assert.equal(overridden.find(s => s.name === 'animation-controls').description, 'Project override')
+  assert.equal(overridden.filter(s => s.name === 'surface-controls').length, 1)
+  assert.equal(overridden.find(s => s.name === 'surface-controls').description, 'Project override')
   const prompt = withSkillReferences('Please use /design and /shared', skills)
   assert(prompt.includes(JSON.stringify(join(root, '.claude/skills/design/SKILL.md'))))
   assert(prompt.includes(JSON.stringify(join(home, '.agents/skills/shared/SKILL.md'))))

@@ -25,8 +25,6 @@ import type {
 import { projectKey } from '../../shared/projectKey'
 import { addUsage, emptyUsage, isEmptyUsage, readUsage, usageDelta } from '../../shared/run-stats'
 import { checkContrast, suggestAccessible } from '../apca'
-import { defineControlsShape } from '../../../bin/control-tool-schema.mjs'
-import { defineAgentControls, openAgentControls } from '../control-tools'
 import { fluidClamp, fluidScale } from '../fluid'
 import { recordClaudeModels } from '../model-catalog'
 import { oklchScale } from '../oklch'
@@ -83,17 +81,13 @@ const PREVIEW_TOOL_NAMES = new Set([
   'mcp__praxis__preview_location',
   'mcp__praxis__preview_screenshot'
 ])
-// All in-process `praxis` tools — the observers above plus `define_controls`
-// (v10 Custom Controls). define_controls DOES persist state, but only through
-// main's own validated `saveManifest` path (main stays the sole `.praxis/`
-// writer), so it's equally safe to auto-allow: allowedTools + the canUseTool
-// short-circuit both use this set.
+// Validated in-process tools are auto-allowed by both allowedTools and
+// canUseTool. Chat islands persist through the island service; main remains
+// the sole writer of app state under `.praxis/`.
 const PRAXIS_TOOL_NAMES = new Set([
   ...PREVIEW_TOOL_NAMES,
-  'mcp__praxis__define_controls',
   'mcp__praxis__chat_island',
   'mcp__praxis__content_controls',
-  'mcp__praxis__open_controls',
   'mcp__praxis__open_code',
   'mcp__praxis__open_preview',
   'mcp__praxis__project_ui_catalog',
@@ -559,13 +553,13 @@ async function startSession(
   // of the user's live preview (the native NativeView that index.ts owns,
   // reached via the preview-state registry) which OBSERVE what the user sees
   // (agent-browser is the agent's own headless copy for interaction),
-  // define_controls (v10 Custom Controls), a family of pure design-system
+  // chat_island, a family of pure design-system
   // calculators — spring_to_css, check_contrast, fluid_clamp, color_scale,
   // layered_shadow, line_height — and the skill-pack tools (list_recommended_skills
   // pure; install_skills side-effecting). The observers, calculators and
   // list_recommended_skills are auto-allowed (see allowedTools + canUseTool) so they
-  // never prompt — all are side-effect-free, and define_controls persists only
-  // through main's validated saveManifest path. install_skills is NOT auto-allowed:
+  // never prompt — all are side-effect-free, and chat_island persists only
+  // through the validated chat-island service. install_skills is NOT auto-allowed:
   // it writes files + hits the network, so it surfaces a normal permission card.
   const previewServer = createSdkMcpServer({
     name: 'praxis',
@@ -637,33 +631,6 @@ async function startSession(
         }
       ),
       tool(
-        'open_controls',
-        'Select an object by its source stamp or source file and open its Props, Styles, or Custom inspector. Use when asked to show controls.',
-        {
-          source: z.string().optional(),
-          file: z.string().optional(),
-          tab: z.enum(['props', 'styles', 'custom']).optional()
-        },
-        async (args) => ({
-          content: [
-            {
-              type: 'text' as const,
-              text: JSON.stringify(
-                openAgentControls(ctx?.liveRoot ?? root, args, (channel, payload) =>
-                  sendToRenderer(getWindow, channel, payload)
-                )
-              )
-            }
-          ]
-        })
-      ),
-      // v10 Custom Controls: register an AI-surfaced control panel. The manifest
-      // is UNTRUSTED — main re-validates structure, checks every literal anchor
-      // against the file the agent just wrote (this session's cwd, which may be
-      // a per-chat worktree), and persists to the LIVE root (ctx.liveRoot) so
-      // the panel isn't stranded when the worktree merges/drops. Failures come
-      // back as tool-result text (never a throw) so the model can fix + retry.
-      tool(
         'content_controls',
         'Discover or surface content editors and collections. Call catalog first, then define ' +
           'after binding the page to JSON. Optional Jev selects relevant sections.',
@@ -684,33 +651,6 @@ async function startSession(
         const result = ctx?.sessionId ? { error: 'Background edits cannot create chat islands.' } : await runChatIslandTool(emitKey, root, args, options.connectionId)
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], isError: !!(result as { error?: string }).error }
       }),
-      tool(
-        'define_controls',
-        'Register a control panel of tweakable parameters (sliders, color pickers, toggles) ' +
-          'for a component, after instrumenting its source so each parameter is a clean ' +
-          'target: a named top-level constant in the component file (literal strategy), a ' +
-          'typed prop with a literal default (prop strategy), or a CSS property (style ' +
-          'strategy). The user tweaks these live in the Praxis island.',
-        defineControlsShape,
-        async (args) => {
-          const result = await defineAgentControls(
-            root,
-            ctx?.liveRoot ?? root,
-            args.manifest,
-            (channel, payload) => sendToRenderer(getWindow, channel, payload),
-            {
-              key: emitKey,
-              connectionId: options.connectionId,
-              engine: typeof args.engine === 'string' ? args.engine : undefined,
-              prompt: typeof args.prompt === 'string' ? args.prompt : undefined
-            }
-          )
-          return {
-            content: [{ type: 'text' as const, text: JSON.stringify(result) }],
-            isError: !!(result as { error?: string }).error
-          }
-        }
-      ),
       // Pure spring→CSS calculator. LLMs can't reliably integrate a spring in
       // their head, so this computes the EXACT `linear()` easing + duration the
       // agent should paste into the target repo's CSS. No state, no disk, no
@@ -1133,12 +1073,12 @@ async function startSession(
         preset: 'claude_code',
         append: praxisRules({ previewTools: true, projectMemory: ctx?.projectMemory })
       },
-      // The praxis MCP server (preview_location / preview_screenshot / define_controls /
+      // The praxis MCP server (preview_location / preview_screenshot / chat_island /
       // spring_to_css / check_contrast / fluid_clamp / color_scale / layered_shadow /
       // line_height / list_recommended_skills / install_skills). All but install_skills
       // are auto-allowed here so they never surface a permission card (canUseTool also
       // short-circuits them, belt-and-suspenders) — main validates everything
-      // define_controls persists, and install_skills prompts (writes files + network).
+      // chat_island persists, and install_skills prompts (writes files + network).
       mcpServers: { praxis: previewServer },
       allowedTools: [...PRAXIS_TOOL_NAMES],
       // The bundled Praxis skill plugin (only when present in this build).
@@ -1195,8 +1135,8 @@ async function startSession(
           })
         }
         // The in-process praxis tools are auto-allowed: the preview pair are
-        // read-only observers of the user's own view, and define_controls only
-        // persists through main's validated saveManifest path. They're also in
+        // read-only observers of the user's own view, and chat_island only
+        // persists through the validated chat-island service. They're also in
         // allowedTools, but guard here too so a canUseTool call for them can
         // never reach a prompt.
         if (PRAXIS_TOOL_NAMES.has(toolName)) {

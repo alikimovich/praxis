@@ -105,7 +105,7 @@ References for the intended interaction:
 | `src/main/controls-jev.ts` | Existing bounded/cancellable Jev call selects a flat Panel → Control list. Add a separate nested composition adapter and verify the installed experimental API's grouping behavior. |
 | `src/main/control-selection.ts` | Retain explicit engine reporting and missing-credential fallback behavior. |
 | `src/main/control-manifest.ts`, `control-panels.ts` | Reuse literal validation, Bézier serialization and edit services; add revision-checked transactions and explicit retained targets where needed. |
-| `src/main/control-tools.ts` | Existing registration validates worktree source but opens preview-area controls. Add session/message-scoped island delivery. |
+| `src/main/chat-islands.ts` | Registers controls against worktree source and delivers islands to the originating chat turn. Legacy agent panel tools are retired. |
 | `src/shared/native-chat.ts` | Add a typed island message segment and typed interaction payloads. Current text/tool segments and string-valued actions are insufficient. |
 | `src/native/chat-controller.ts`, `chat-snapshot.ts`, `chat-state.ts` | Own lifecycle, pending state, message association, history rehydration and model-context summaries in Bun. |
 | `src/native/Chat.swift` | Render island segments at their actual conversation position through a separate native registry. |

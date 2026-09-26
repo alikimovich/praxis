@@ -21,7 +21,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const calls = []
 const registration = await registerPraxisAgentTools(async (action, args) => {
   if (action === 'preview_location' || action === 'preview_screenshot') return observeAgentPreview(action)
-  if (action === 'chat_island' || action === 'content_controls' || action === 'project_ui_catalog' || action === 'compose_project_ui' || action === 'open_preview' || action === 'open_code' || action === 'open_controls' || action === 'define_controls') return { received: args ?? {} }
+  if (action === 'chat_island' || action === 'content_controls' || action === 'project_ui_catalog' || action === 'compose_project_ui' || action === 'open_preview' || action === 'open_code') return { received: args ?? {} }
   calls.push(action)
   if (action === 'workspace_state') {
     return { state: 'parked', files: ['src/App.tsx'] }
@@ -118,9 +118,7 @@ try {
     'chat_island',
     'compose_project_ui',
     'content_controls',
-    'define_controls',
     'open_code',
-    'open_controls',
     'open_preview',
     'prepare_conflict_resolution',
     'preview_location',
@@ -177,8 +175,11 @@ try {
   })
   assert.equal(prepared.result.structuredContent.state, 'resolving')
   assert.deepEqual(calls, ['workspace_state', 'prepare_conflict_resolution'])
-  const opened = await request('tools/call', { name: 'open_controls', arguments: { source: 'src/App.tsx:10', tab: 'styles' } })
-  assert.deepEqual(opened.result.structuredContent.received, { source: 'src/App.tsx:10', tab: 'styles' })
+  for (const name of ['define_controls', 'open_controls']) {
+    const removed = await request('tools/call', { name, arguments: {} })
+    assert.ok(removed.error || removed.result?.isError, 'Removed panel tool cannot execute')
+    assert.equal(await bridgeCall(registration.token, name), 400, 'Legacy socket action is rejected')
+  }
   const revealed = await request('tools/call', { name: 'open_code', arguments: { file: 'src/App.tsx', startLine: 10, endLine: 14 } })
   assert.deepEqual(revealed.result.structuredContent.received, { file: 'src/App.tsx', startLine: 10, endLine: 14 })
   const navigated = await request('tools/call', { name: 'open_preview', arguments: { path: '/work/article?view=full#intro' } })
@@ -186,8 +187,8 @@ try {
   const manifest = { file: 'src/App.tsx', component: 'App', title: 'Motion', params: [
     { id: 'delay', label: 'Delay', kind: 'number', min: 0, max: 1000, step: 10, unit: 'ms', apply: { strategy: 'literal', anchor: 'const DELAY = ' } }
   ] }
-  const registered = await request('tools/call', { name: 'define_controls', arguments: { manifest } })
-  assert.deepEqual(registered.result.structuredContent.received, { manifest }, 'manifest arguments survive the stdio/socket bridge')
+  const registered = await request('tools/call', { name: 'chat_island', arguments: { action: 'define', manifest, blocks: [{ id: 'motion', title: 'Motion', kind: 'group', params: ['delay'] }] } })
+  assert.deepEqual(registered.result.structuredContent.received, { action: 'define', manifest, blocks: [{ id: 'motion', title: 'Motion', kind: 'group', params: ['delay'] }] }, 'Island definition survives the stdio/socket bridge')
 
 } finally {
   registration.dispose()

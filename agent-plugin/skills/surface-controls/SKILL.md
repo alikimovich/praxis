@@ -1,78 +1,60 @@
 ---
 name: surface-controls
-description: Surface native Praxis controls for page content, collections, component properties, styling or animations. Use when asked to show, expose, add or surface editing or tuning controls. Excludes controls explicitly intended for the target app's end users.
+description: Generate interactive controls inside the Praxis chat for animations, shadows, typography, styling and component values. Use when asked to show, expose, add or surface editing or tuning controls. Excludes controls intended for the target app's end users.
 ---
 
-# Surface controls in Praxis
+# Surface controls inside chat
 
-Read the requested content or component's actual source first. Selection is helpful
-context, not a prerequisite. Preserve existing values and behavior. Use Praxis's
-controls tools; never implement an editor UI or install a tuning dependency in the
-target project to satisfy a request for Praxis controls.
+Requested controls must appear as an interactive island in the conversation.
+Use `chat_island`; do not open a separate inspector/content panel or install a
+control-panel dependency in the target project. Selection is optional context.
 
-## Interactive islands in chat
+## Inspect and bind
 
-For controls requested in the conversation, prefer `chat_island`. Call
-`action: "catalog"`, inspect the actual source, expose literal constants consumed
-by the project, then `action: "define"` with `manifest`, `blocks`, `engine: "auto"`
-and the original `prompt`. A `group` lists parameter IDs; a `point` block requires
-exactly two bounded number IDs (x/y), useful for light direction. Groups may expose
-spring physics, tween easing, typography or individual shadow-layer values.
-For shadow lighting, implement the deterministic mapping from light coordinates
-to the project's shadow values; the island never evaluates arbitrary code.
-Jev chooses and orders whole prepared blocks, preserving compound bindings.
+1. Call `chat_island` with `action: "catalog"`.
+2. Read the implementation. Preserve its behavior and reuse existing tunable
+   constants. If necessary, extract clean literals in one source file and wire
+   them into the actual implementation. Do not invent unused parameters.
+3. Prepare `manifest` with file, component, title and literal params, and `blocks`
+   with id, title, kind and parameter IDs. A group bundles related fields; a point
+   takes exactly two bounded numbers for x/y. Parameters must have unique anchors
+   ending immediately before their values, e.g. `const SHADOW_ELEVATION = `.
+4. Call `chat_island` with `action: "define"`, the manifest/blocks, `engine: "auto"`
+   and the user's original request as `prompt`. Require a successful result with
+   an island ID. The host attaches it to this chat and enables it after landing.
 
-Read an existing island with `action: "read"`, then pass its `id` and `revision`
-when updating it. Controls write on gesture release/field commit, have Reset/Undo,
-and wait for successful landing. Dynamic layer add/remove and runtime-live preview
-scrubbing are not available yet; expose fixed layer groups or revise them through
-a follow-up agent edit. Preserve the current behavior and explain engine fallback.
-The inspector workflow below remains for explicit inspector/persistent-panel requests.
+## Match the implementation
 
-## Choose the binding
+- Springs expose the engine's actual stiffness/damping/mass or duration/bounce.
+  Changing constants behind a precomputed curve is not a working spring control.
+- Tweens expose duration/delay and a Bézier field; combined motion uses groups
+  for its individual tracks and shared parameters.
+- Shadows can expose elevation, opacity, softness and light angle, or a 2D light
+  point. The project must deterministically compute actual multilayer shadows
+  from those values. Reuse parameters already exposed by an earlier agent turn.
+- Typography and style controls use literals consumed by the selected component.
+- Layer add/remove, timelines and arbitrary expressions are not supported by the
+  first island catalog. Explain the limit; use supported fields and follow-up
+  source edits. Do not substitute a separate editor for the requested chat island.
 
-- **Copy and collections:** call `content_controls` with `action: "catalog"` for the
-  live recipe contract. Bind a repo-relative JSON object consumed by the page.
-  If the content is inline, extract it and wire the consumer before registration.
-  Preserve unrelated fields and stable item IDs. Call `action: "define"` with the
-  file and a version-1 recipe. A scalar uses a field; a list uses a collection.
-- **Animation tuning:** read [animation-controls](../animation-controls/SKILL.md).
-  Wire literal parameters into the actual motion and use `define_controls` with
-  `manifest.presentation: "animation"`. Add scoped Replay only where appropriate.
-- **Component properties and styles:** use `define_controls` with source-backed
-  parameters. Choose numeric ranges/steps, toggles, colors, selects or easing to
-  match the value. Use literal bindings when possible; prop/style bindings require
-  a resolvable element. For an existing selection inspector, call `open_controls`
-  with its source stamp or source file and the desired tab instead of duplicating it.
+Keep all controls in Praxis. Do not add motion, change animation engines or alter
+reduced-motion behavior unless requested. Never write `.praxis/` yourself.
 
-For mixed requests, register the appropriate separate panels. Reuse recipe IDs or
-file/component identities when updating existing controls. The tools persist
-manifests; never write `.praxis/` yourself. If a binding cannot be represented,
-explain the unsupported part and surface the supported controls without inventing
-nonfunctional controls. If this provider lacks the tools, explain that limitation.
+## Updates, Replay and verification
 
-## Jev and the no-key fallback
+Use `action: "read"` to inspect existing islands, then pass the returned `id` and
+`revision` when updating one. Preserve compatible parameter IDs and current values.
+Jev selects and orders prepared blocks. Missing Gateway credentials retain the
+prepared layout and report `engine: "agent"` plus a fallback reason. Report the
+actual engine; network/authentication/invalid-output errors require repair or retry.
 
-Prepare a focused set of useful controls with complete, valid bindings. Pass
-`engine: "auto"` and the original request as `prompt` to either registration tool.
-Jev selects and orders the prepared candidates when a Gateway key is configured.
-Without a key, the tool registers your prepared controls with `engine: "agent"`
-and a `fallback` reason. No extra key or permission is needed for this fallback.
-Report the actual engine; never claim Jev ran when the tool used the chat model.
-Use `engine: "agent"` if the user explicitly requests that engine or no Jev call.
-`engine: "jev"` also supports the missing-key fallback. Authentication failures,
-ambiguous connections, timeouts and invalid Jev output remain actionable errors;
-do not conceal them as successful Jev results.
+For Replay, wire a `praxis:animation-replay` CustomEvent listener whose detail
+matches this component; preserve unrelated state and clean it up on unmount/HMR.
+Then set manifest presentation to animation and replay to true. Omit Replay when
+no valid target exists.
 
-## Finish the workflow
-
-Require a successful registration result. Repair invalid recipes or anchors and
-retry; do not call a failed registration complete. Source created in a private
-worktree becomes editable after it lands. A missing live file is a waiting state,
-not a reason to create duplicate panels. If changes are parked, explain that they
-must be applied before the panel can edit them.
-
-Verify the control changes the source and actual preview, and that Undo works.
-Content editors keep drafts until Save; parameter controls write through the
-existing edit flow. Preserve unsaved drafts. Praxis owns the dev server, so do not
-start another server. Report what was surfaced and any verification still pending.
+Controls commit source on release/field commit; dragging does not call a model.
+Verify source and preview changes plus Undo. Source created in a worktree waits
+for successful landing; parked/failed changes do not activate. If this provider
+lacks `chat_island`, explain that limitation rather than invoking an older panel
+tool. Praxis owns the dev server; do not start another server.

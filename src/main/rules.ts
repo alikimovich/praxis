@@ -14,10 +14,10 @@
  *
  * Bump PRAXIS_RULES_VERSION whenever the rule text changes (so logs/tests can pin it).
  */
-import { ANIMATION_CONTROLS_SKILL, SURFACE_CONTROLS_SKILL } from './bundled-skills'
+import { SURFACE_CONTROLS_SKILL } from './bundled-skills'
 import { projectMemoryRules } from './project-memory'
 
-export const PRAXIS_RULES_VERSION = 20
+export const PRAXIS_RULES_VERSION = 21
 
 export function praxisRules(opts?: {
   previewTools?: boolean
@@ -51,15 +51,6 @@ export function praxisRules(opts?: {
     `read and follow the bundled surface-controls skill at ${JSON.stringify(SURFACE_CONTROLS_SKILL)}.`,
     `Use the native Praxis workflow even without a selected element. Do not build controls into`,
     `the target page unless the user explicitly requests controls for the app's end users.`,
-    ``,
-    `## Animation tuning panels`,
-    `When asked to surface animation controls or add a DialKit-style panel, read`,
-    `the bundled animation-controls skill at ${JSON.stringify(ANIMATION_CONTROLS_SKILL)}.`,
-    opts?.previewTools || opts?.controlTools
-      ? `For on-demand chat controls use chat_island. For an explicitly requested inspector panel use define_controls with manifest.presentation set to animation.`
-      : `This provider cannot register native animation panels; explain the limitation.`,
-    `Do not install DialKit or add a tuning UI to the target app. Wire literal source values`,
-    `to the real animation. The native panel stays open across selection changes; edits save to source.`,
     ``,
     `## Scope of an element edit`,
     `A selected element is the ENTRY POINT for a change, not its full scope. Before`,
@@ -178,24 +169,13 @@ export function praxisRules(opts?: {
       `Use action:read and the returned id/revision when revising an island. Keep compatible bindings.`,
       `Controls appear in this conversation and activate only after successful source landing.`,
       ``,
-      `## Surfacing control panels (define_controls / open_controls)`,
-      `When asked to show selection-inspector controls, call open_controls with the object's source stamp`,
-      `(file:line) or source file to select it and open the requested inspector tab.`,
-      `define_controls also requests opening the Custom tab. Prefer number controls with`,
-      `ranges/steps for animation parameters, toggles for booleans, and select/bezier`,
-      `controls for easing. Surface only parameters actually used by the component.`,
-      `For selection-inspector sliders / knobs / a control panel to tweak a parameter`,
-      `(a stagger delay, a spring config, a magic number), first INSTRUMENT the code so`,
-      `each parameter is a tweakable target: extract magic values to named top-level`,
-      `constants in the component's OWN file (keeps hot-reload fast), or expose them as`,
-      `typed props with literal defaults. Keep behavior identical. Then call the`,
-      `\`define_controls\` tool with a manifest describing the params. For a 'literal'`,
-      `param, the anchor is a substring of the file that occurs exactly once and ends`,
-      `immediately before the literal — ideal shape: \`const STAGGER_MS = \`. Strategy`,
-      `choice: \`prop\` = per-instance values, \`literal\` = module constants, \`style\` =`,
-      `pure CSS properties. For number params, give a sensible min/max/step/unit (those`,
-      `fields are only valid on kind 'number'). Never write under \`.praxis/\` yourself —`,
-      `the tool persists the manifest for you.`,
+      `Use chat_island for all requested tuning controls, including shadows, springs, easing,`,
+      `typography and styling. These belong inside the conversation. Never substitute a separate panel.`,
+      `Expose named constants consumed by the implementation; a literal anchor must occur exactly once`,
+      `and end before its value, e.g. const STAGGER_MS = . Do not write .praxis/ yourself.`,
+      `When the user already has instrumented values, reuse those constants and define an island.`,
+      `If the requested control is unsupported, explain it and expose supported fields in chat;`,
+      `do not route the request to a content editor or create a target-project tuning UI.`,
       ``
     )
   }

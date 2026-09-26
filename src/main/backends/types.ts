@@ -72,7 +72,7 @@ export interface SpawnContext {
   resumeSessionId?: string
   /** The REAL project root when the session's cwd is a per-chat worktree
    *  (`isolatedCwd`). Tool callbacks that persist app state (e.g.
-   *  `define_controls` writing `.praxis/control-panels.json`) must write under
+   *  chat-island persistence) must write under
    *  this root, not the worktree — a worktree write would be stranded when the
    *  worktree is merged/dropped. Absent ⇒ cwd IS the live root. */
   liveRoot?: string

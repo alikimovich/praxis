@@ -53,10 +53,8 @@ transition:
 
 ## Making it tweakable
 
-For a live animation tuning panel, follow the sibling
-[animation-controls skill](../animation-controls/SKILL.md). Its native controls live in
-Praxis beside the preview independently of selection, and must update the actual spring
-rather than only changing constants behind a precomputed CSS curve. Keep an
-existing runtime spring engine when the app already has one. If the user explicitly
-wants selection-inspector controls, use `define_controls` with named parameters
-and ensure derived easing values are regenerated when those parameters change.
+For interactive animation controls, follow the sibling
+[surface-controls skill](../surface-controls/SKILL.md) and use `chat_island`.
+Sliders, inputs and easing editors belong inside the conversation. Bind them to
+parameters that update the actual spring, including regenerating any derived
+curve. Keep an existing runtime spring engine when the app already has one.

@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Route requested controls exclusively into chat
+
+Remove the legacy define_controls/open_controls provider registrations and socket
+actions, delete their unused implementation and retire the animation-controls
+skill. Surface-controls and spring guidance now require chat_island, reuse existing
+literal constants, and prohibit substituting a separate panel for chat controls.
+Provider rules v21 and README/capability docs reflect the single route.
+
+Validation: typechecks, rules, provider-skills, MCP transport/rejection, chat-island
+and docs-link checks passed. Background native integration passed, including
+inline rendering, typed light-point source edits, preview update and Undo. Inspected
+the generated chat-island screenshot. Real pointer/animation checks were skipped
+in background mode; no live provider calls ran.
+
 ## 2026-09-25 — Visual composer attachment previews
 
 Replace the attachment-name menu with a horizontal strip of rounded image
