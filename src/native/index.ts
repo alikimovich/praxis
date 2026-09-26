@@ -310,7 +310,9 @@ async function main() {
   const sheetController = new NativeSheetController(host!, workspaceController, chatController)
   const gitController = new NativeGitController(sheetController, activityController, preferences, renderShell)
   shellController = new NativeShellController(workspaceController, chatController, gitController, preferences,
-    state => host!.send('shellState', { state }), () => {})
+    state => host!.send('shellState', { state }), ({ viewport }) => {
+      previewView.webContents.send(channels.PREVIEW_HIDE_SCROLLBARS, viewport === 'mobile')
+    })
   const renderWorkspace = workspaceController.services.render
   workspaceController.services.render = state => { renderWorkspace(state); shellController!.schedule(); host!.send('recents', { recents: state.recents }) }
   host.on('menu', ({ action }) => {
@@ -395,6 +397,7 @@ async function main() {
     previewView.webContents.send(channels.PREVIEW_SET_MODE, state.selectMode)
     previewView.webContents.send(channels.PREVIEW_SET_COMMENT_MODE, state.commentMode)
     previewView.webContents.send(channels.PREVIEW_SET_FRAME, state.frameMode)
+    previewView.webContents.send(channels.PREVIEW_HIDE_SCROLLBARS, workspaceController.active?.viewport === 'mobile')
     previewView.webContents.send(channels.PREVIEW_SET_PINS, state.pins)
     previewView.webContents.send(channels.PREVIEW_SET_STATUS, state.statusText)
     previewView.webContents.send(channels.LAYERS_SET_WATCH, state.layersWatch)

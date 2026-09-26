@@ -41,6 +41,7 @@ import {
   PREVIEW_READINESS as READINESS,
   PREVIEW_SET_COMMENT_MODE as SET_COMMENT_MODE,
   PREVIEW_SET_FRAME as SET_FRAME,
+  PREVIEW_HIDE_SCROLLBARS,
   PREVIEW_SET_MODE as SET_MODE,
   PREVIEW_SET_PINS as SET_PINS,
   PREVIEW_SET_STATUS as SET_STATUS,
@@ -1648,7 +1649,7 @@ function positionFrame(): void {
 
 let frameStyle: HTMLStyleElement | null = null
 
-function setFrame(on: boolean): void {
+function hideScrollbars(on: boolean): void {
   // Phones don't show persistent scrollbars — hide them inside the bezel (the
   // desktop-style bar drew right over the frame's edge otherwise).
   if (on && !frameStyle) {
@@ -1656,12 +1657,16 @@ function setFrame(on: boolean): void {
     frameStyle.setAttribute('data-praxis-frame-style', '')
     frameStyle.textContent =
       '::-webkit-scrollbar{display:none !important;width:0 !important;height:0 !important}' +
-      'html,body{scrollbar-width:none !important}'
+      '*,*::before,*::after{scrollbar-width:none !important}'
     document.documentElement.appendChild(frameStyle)
   } else if (!on && frameStyle) {
     frameStyle.remove()
     frameStyle = null
   }
+}
+
+function setFrame(on: boolean): void {
+  hideScrollbars(on)
   if (!on) {
     frameHost?.remove()
     frameHost = null
@@ -1832,6 +1837,7 @@ window.addEventListener('load', () => {
     buildPins()
   })
   ipcRenderer.on(SET_FRAME, (_e, on: boolean) => setFrame(on))
+  ipcRenderer.on(PREVIEW_HIDE_SCROLLBARS, (_e, on: boolean) => hideScrollbars(on))
   // The renderer cleared the selection (pill ×, message sent, delete) — drop the
   // element-scoped toolbar + persistent outlines with it.
   ipcRenderer.on(CLEAR_SELECTED, () => {

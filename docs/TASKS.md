@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Mobile preview scrollbars (2026-09-25)
+
+- [x] Hide page/nested scrollbars in native mobile mode, preserve scrolling through navigation, and restore desktop defaults.
+
 ## Floating chat composer (2026-09-25)
 
 - [x] Move the follow target into the message stack and cover visible sent/streamed rows across history and draft sizes.

@@ -27,6 +27,18 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   await host.request('shellPerform',{action:'open-project'})
   await wait(()=>nativeWorkspace.state.status.kind==='running','project running',30000)
   await wait(()=>page('!!document.querySelector("#native-title")'),'fixture loaded')
+  await host.request('shellPerform', { action: 'device' })
+  await wait(() => page(`getComputedStyle(document.documentElement).scrollbarWidth === 'none'`), 'mobile scrollbars hidden')
+  assert.equal(await page(`!!document.querySelector('[data-praxis-frame]')`), false, 'Native mobile must not inject a second phone frame')
+  await page(`(() => {
+    const scroller = document.createElement('div'); scroller.id = 'scrollbar-check';
+    scroller.style.cssText = 'height:60px;overflow:scroll';
+    scroller.innerHTML = '<div style="height:400px">Scrollable fixture</div>';
+    document.body.append(scroller); scroller.scrollTop = 80;
+  })()`)
+  assert.equal(await page(`getComputedStyle(document.querySelector('#scrollbar-check')).scrollbarWidth`), 'none')
+  assert.equal(await page(`document.querySelector('#scrollbar-check').scrollTop`), 80, 'Hiding scrollbars preserves scrolling')
+  writeFileSync(join(artifacts, 'mobile-scrollbars.png'), Buffer.from(await host.request('captureShell'), 'base64'))
   // Reload must use WebKit's current document, including History API navigation.
   const originalURL = await page('location.href')
   writeFileSync(join(fixture, 'about.html'), readFileSync(join(fixture, 'index.html')))
@@ -37,6 +49,10 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   assert.equal(await page('location.href'), route, 'Reload preserves the current path, query and fragment')
   await page(`history.replaceState({}, '', ${JSON.stringify(originalURL)})`)
   console.log('Native reload preserves History API route, query and fragment.')
+  await wait(() => page(`getComputedStyle(document.documentElement).scrollbarWidth === 'none'`), 'mobile scrollbar policy restored after navigation')
+  await host.request('shellPerform', { action: 'device' })
+  await wait(() => page(`!document.querySelector('[data-praxis-frame-style]')`), 'desktop scrollbar policy restored')
+  console.log('Native mobile hides document/nested scrollbars, preserves scrolling and survives navigation.')
   await wait(()=>nativeChat.chats.get(nativeChat.active)?.ready,'native chat ready',30000)
   await checkChatIslands(host, fixture, artifacts)
   await inspect('composerInspect', s => s.welcomedChat)

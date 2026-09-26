@@ -34,6 +34,7 @@ export const PREVIEW_COMMENT_MODE = 'praxis:preview:comment-mode' // → main (k
 export const PREVIEW_COMMENT = 'praxis:preview:comment' // → main (submitted)
 
 // ── Chrome drawn inside the preview ────────────────────────────────────────
+export const PREVIEW_HIDE_SCROLLBARS = 'praxis:preview:hide-scrollbars' // → preload (native mobile preview)
 export const PREVIEW_SET_FRAME = 'praxis:preview:set-frame' // → preload (mobile bezel)
 export const PREVIEW_SET_STATUS = 'praxis:preview:set-status' // → preload (launch pill)
 

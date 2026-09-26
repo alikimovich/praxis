@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Hide scrollbars in the native mobile preview
+
+Decouple preview scrollbar suppression from the retired in-page bezel. Send the
+mobile policy on native shell updates and replay it after navigation; hide page
+and nested scrollbars without disabling overflow or injecting another phone frame.
+Desktop mode removes the injected style and restores the project's scrollbar CSS.
+
+Validation: full/native typechecks, native build, shell-controller and docs-link
+checks pass. Native integration verifies page/nested scrollbar CSS, actual scroll
+movement, reload persistence, desktop restoration and absence of a second bezel;
+inspected its mobile capture. The suite then reaches the existing soft-wrapped
+composer sizing assertion. No real provider calls ran.
+
 ## 2026-09-25 — Keep chat scrolling anchored to message content
 
 Remove the eager wrapper and detached blank scroll target introduced with the
