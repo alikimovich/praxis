@@ -87,6 +87,12 @@ failure capture. Reduced-coverage retry could not build because another concurre
 build modified out/native/main.swift; no background pass is claimed. Concurrent
 composer and other unrelated workspace edits are excluded from this commit.
 
+## 2026-09-25 — Keep live activity labels on one line
+
+Limit the live chat activity label to one line and truncate long paths at the
+tail. The complete label remains available in its tooltip.
+
+Validation: `bun run typecheck` passed.
 ## 2026-09-25 — Native chat islands with Jev-selected blocks
 
 Added scoped chat_island catalog/define/read tools for Claude and Codex, a versioned
