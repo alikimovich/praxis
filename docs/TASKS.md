@@ -17,6 +17,11 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 - [x] Wire live preview location and MCP screenshot image results into Codex and custom endpoint sessions.
 
+## Preview HMR (2026-09-25)
+
+- [x] Reproduce the affected Next preview, verify a per-project Webpack workaround, and cover source/control/Undo Fast Refresh in native WebKit.
+- [ ] Recheck Turbopack after upstream Next PR #98215 ships before removing the affected project's custom command.
+
 ## On-demand native chat islands (2026-09-24)
 
 Implementation sequence and exit checks: [Chat islands plan](CHAT-ISLANDS.md).

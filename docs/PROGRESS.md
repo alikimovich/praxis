@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Diagnose stale Next previews and verify the Webpack fallback
+
+Reproduced missing client updates in the affected Next 16.3.5 project despite a
+connected HMR socket and serverComponentChanges messages. Rebuilding the dev cache
+did not fix it. The symptom matches upstream Next PR #98215's client subscription
+race (still unmerged when checked). Saved `bun run dev --webpack` as this project's
+Praxis custom launch command; other projects and source scripts are unchanged.
+Verified the same iPhone source edit and its restoration update immediately while
+a page sentinel remains intact. Restored all source probes and the original cache.
+
+Added a native-tier Next/WebKit test for component edits, chat-island literal
+commits and Undo without full-page reload. Its managed-server fixture passes in
+Webpack mode; simple Turbopack fixtures also passed, so this is a scoped workaround,
+not a claim to have repaired Turbopack. Full/native typechecks, docs links and the
+native runner entry passed. No real provider calls ran.
+
 ## 2026-09-25 — Route requested controls exclusively into chat
 
 Remove the legacy define_controls/open_controls provider registrations and socket

@@ -28,6 +28,14 @@ that exactly one WebKit view exists. `PRAXIS_NATIVE_BACKGROUND_TEST=1` skips rea
 pointer gestures/animation timing, which must be reported as reduced coverage.
 `test:native-live` separately submits a real provider turn against a fixture.
 
+`node test/native-next-hmr.mjs` checks Next.js 16.3.5 in Webpack mode through
+Praxis's managed dev server and system WebKit. It installs dependencies into a
+disposable copy of the Next fixture (registry access/cache required), checks
+ordinary component edits plus chat-island commits and Undo, and asserts that the
+page is never reloaded. It needs an existing native build and runs in the native
+tier after `native-runtime`. No provider calls are made. Static-site live reload
+coverage alone does not verify framework Fast Refresh.
+
 Read screenshots in `test/artifacts/native/` for UI verification. Offscreen
 AppKit captures do not faithfully paint Liquid Glass; visible inspection may be
 necessary. Never start the target project server manually alongside Praxis.

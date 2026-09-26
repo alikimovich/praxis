@@ -113,7 +113,7 @@ const UNIT = [
   "praxis-cli"
 ];
 
-const NATIVE = ['native-runtime'];
+const NATIVE = ['native-runtime', 'native-next-hmr'];
 const LIVE = ['native-runtime-live'];
 const TIERS = { unit: UNIT, native: NATIVE, live: LIVE };
 const selected = new Set();
