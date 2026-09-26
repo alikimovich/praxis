@@ -47,8 +47,12 @@ export function installNativeInspector(host: NativeBridge, workspace: NativeWork
     } else if (channel === 'preview:comment') {
       if (value.kind === 'annotate') void workspace.services.invoke('annotations:add', entry.root, { source: value.el.source, selector: value.el.selector, tag: value.el.tag, text: value.text }).catch(report)
       else {
-        const prompt = describeSelectionForPrompt(value.el) + oneLine(value.text, 2000), current = chat.chats.get(entry.activeSessionKey)
-        void workspace.services.invoke('agent:spawn-comment', entry.root, prompt, entry.activeSessionKey, backgroundAgentOptions(current ? agentOptionsFor(current.settings) : {}, 'comment'), 'comment').then(result => { if (!result.ok) return chat.command({ type: 'submit', chat: entry.activeSessionKey, text: prompt }) }).catch(report)
+        const parent = entry.activeSessionKey
+        const prompt = describeSelectionForPrompt(value.el) + oneLine(value.text, 2000), current = chat.chats.get(parent)
+        void workspace.services.invoke('agent:spawn-comment', entry.root, prompt, parent, backgroundAgentOptions(current ? agentOptionsFor(current.settings) : {}, 'comment'), 'comment').then(result => {
+          if (!result.ok && ['not-a-repo', 'unsupported-backend'].includes(result.reason)) return chat.command({ type: 'submit', chat: parent, text: prompt })
+          if (!result.ok) report(result.reason ?? 'Could not start the comment agent.')
+        }).catch(report)
       }
     } else if (channel === 'controls:updated' && (value?.root ?? value) === entry.root || channel === 'agent:event' && ['done', 'landing-finished', 'spawn-finished'].includes(value.type)) { void controller.refresh().catch(report); void openContent(entry.root).catch(report) }
     else if (channel === 'controls:open' && value.root === entry.root) {

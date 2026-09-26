@@ -112,8 +112,15 @@ export class NativeChatController {
         this.services.effect({ type: 'history' })
         if (event.origin !== 'text-edit' && event.projectKey && !this.closed.has(event.projectKey)) {
           const chat = this.get(event.projectKey)
-          const text = (event.branch ? 'Comment finished — changes are ready for review.' : 'Comment applied.') + (event.summary ? `\n\n${event.summary}` : '')
-          chat.messages.push({ id: crypto.randomUUID(), role: 'assistant', text, statuses: [], segments: [{ kind: 'text', text }] })
+          const outcome = event.outcome
+          const title = outcome === 'applied' ? 'Comment applied.'
+            : outcome === 'cancelled' ? 'Comment cancelled.'
+            : outcome === 'failed' ? 'Comment failed.'
+            : outcome === 'no-change' ? 'Comment finished without changes.'
+            : event.branch ? 'Comment finished — changes are ready for review.' : 'Comment finished without a confirmed result.'
+          const text = title + (event.branch && (outcome === 'failed' || outcome === 'cancelled') ? ' Partial changes are saved for review.' : '') + (event.summary ? `\n\n${event.summary}` : '')
+          chat.messages.push({ id: crypto.randomUUID(), role: 'assistant', text, statuses: [], segments: [{ kind: 'text', text }], ...(outcome === 'applied' ? { revertGroup: `comment:${event.sessionId}` } : {}) })
+          if (chat.chat !== this.active) chat.needsReview = true
           this.changed(chat)
         }
       }

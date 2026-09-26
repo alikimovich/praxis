@@ -36,7 +36,7 @@ export function snapshot(chat: Chat, choices: ModelChoice[]): NativeChatState {
   for (const p of chat.permissions) cards.push({ id: p.id, title: p.title, detail: p.detail, actions: [{ label: 'Deny', action: 'permission', value: 'deny' }, { label: 'Allow', action: 'permission', value: 'allow' }] })
   for (const n of context?.notes ?? []) cards.push({ id: n.id, title: 'Note', detail: n.text, actions: [{ label: 'Remove', action: 'remove-note' }] })
   if (context?.notes.length) cards.push({ id: 'notes-publish', title: 'Publish notes as a PR', actions: [{ label: 'Publish PR', action: 'publish-notes' }] })
-  for (const spawn of context?.spawns ?? []) cards.push({ id: spawn.id, title: spawn.status === 'queued' ? 'Queued agent' : 'Background agent', detail: spawn.label, actions: [{ label: 'Cancel', action: 'spawn-stop' }] })
+  for (const spawn of context?.spawns ?? []) cards.push({ id: spawn.id, title: spawn.status === 'queued' ? 'Queued agent' : 'Background agent', detail: [spawn.label, spawn.activity].filter(Boolean).join('\n\n'), actions: [{ label: 'Cancel', action: 'spawn-stop' }] })
   const currentActivity = activity(chat)
   const thinking = !!currentActivity?.animated && currentActivity.kind !== 'applying'
   const stop = chat.isRunning && !chat.text.trim() && !chat.attachments.length

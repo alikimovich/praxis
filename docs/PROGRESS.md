@@ -2,6 +2,26 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Chat action feedback and comment-agent lifecycle checks
+
+Add explicit hover/pressed backgrounds to response Copy/Revert buttons. Show
+background tool activity, preserve comment labels, distinguish applied/no-change/
+failed/cancelled/review outcomes, and attach the actual comment Undo group.
+Ignore late start responses after completion. Surface finalizer failures while
+preserving recovery worktrees; serialize comment snapshots/landing through the
+repository writer and retain the busy slot until landing finishes. Startup failures
+no longer silently resubmit into a potentially different interactive chat.
+
+Validation: full/native typechecks and eight focused unit checks pass. New tests
+use real temporary Git repos with a stub provider to cover successful/concurrent
+landing, the three-agent cap, queued/running cancellation, duplicate terminals,
+no-change, failed edits and finalizer failure. Background native integration passes;
+inspected its chat capture. Pointer/animation checks remain skipped while the Mac
+is locked. Native-boundary still fails on the pre-existing undeclared runtime
+import @modelcontextprotocol/sdk/client/index.js. No real provider calls ran.
+The user's slow comments eventually completed; available local records could not
+be matched to those runs, so no exact latency cause or speed improvement is claimed.
+
 ## 2026-09-25 — Detect missing Codex tool connections before chat starts
 
 Extract the session MCP configuration, root its helper/cwd at the Praxis install,

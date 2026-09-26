@@ -78,6 +78,7 @@ const UNIT = [
   "chat-title",
   "chat-settings",
   "background-model",
+  "comment-agents",
   "run-stats",
   "codex-usage",
   "edit-history",

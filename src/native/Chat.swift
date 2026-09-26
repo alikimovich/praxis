@@ -172,12 +172,30 @@ private struct NativeMessageRow: View {
                     HStack {
                         Button { copyChatText(message.text) } label: { Image(systemName: "doc.on.doc") }.help("Copy response")
                         if message.revertGroup != nil { Button { model.action("revert", id: message.id) } label: { Image(systemName: "arrow.uturn.backward") }.help("Revert this turn's edits") }
-                    }.buttonStyle(.borderless).foregroundStyle(.secondary)
+                    }.buttonStyle(ChatActionButtonStyle())
                 }
             }.padding(message.role == "user" ? 12 : 0)
                 .background { if message.role == "user" { RoundedRectangle(cornerRadius: 14).fill(.quaternary) } }
             if message.role == "assistant" { Spacer(minLength: 0) }
         }.frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
+    }
+}
+private struct ChatActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        ChatActionButton(configuration: configuration)
+    }
+    private struct ChatActionButton: View {
+        let configuration: ButtonStyle.Configuration
+        @Environment(\.isEnabled) private var enabled
+        @State private var hovered = false
+        var body: some View {
+            configuration.label
+                .frame(width: 28, height: 28)
+                .foregroundStyle(enabled && (hovered || configuration.isPressed) ? Color.primary : Color.secondary)
+                .background(Color.primary.opacity(enabled ? (configuration.isPressed ? 0.16 : hovered ? 0.08 : 0) : 0), in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(RoundedRectangle(cornerRadius: 6))
+                .onHover { hovered = $0 }
+        }
     }
 }
 private struct NativeAttachment: View {

@@ -254,3 +254,15 @@ assert.deepEqual(stacked.composer.queue, [
 assert.equal(stacked.composer.queuePaused, true)
 assert.ok(!stacked.cards.some(card => card.id === 'queue-paused' || card.id.startsWith('queued-')))
 console.log('Native composer queue: ordered previews, attachment counts and paused state passed.')
+controller.closed.delete('a')
+for (const [outcome, branch, expected] of [
+  ['applied', null, 'Comment applied.'], ['failed', null, 'Comment failed.'],
+  ['cancelled', null, 'Comment cancelled.'], ['no-change', null, 'Comment finished without changes.'],
+  ['review', 'praxis/comment-test', 'Comment finished — changes are ready for review.'],
+  ['failed', 'praxis/comment-test', 'Comment failed. Partial changes are saved for review.']
+]) {
+  controller.event({ type: 'spawn-finished', projectKey: 'a', sessionId: 'outcome-test', outcome, branch, origin: 'comment' })
+  const message = controller.get('a').messages.at(-1)
+  assert.equal(message.text, expected)
+  assert.equal(message.revertGroup, outcome === 'applied' ? 'comment:outcome-test' : undefined)
+}

@@ -11,7 +11,7 @@ export interface NativeChatContext {
   setup: { needed: boolean; dismissed: boolean; status: string | null }
   tokens: { needed: boolean; dismissed: boolean }
   notes: { id: string; text: string }[]
-  spawns: { id: string; label: string; status: string }[]
+  spawns: { id: string; label: string; status: string; activity?: string }[]
 }
 export interface NativeChatLayout {
   visible: boolean

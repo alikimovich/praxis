@@ -232,3 +232,12 @@ or a changed/closed island rejects the write. Controls never follow current DOM
 selection. The next chat turn picks up committed live values through normal
 worktree synchronization and a compact provider-only context summary. Full runtime
 scrubbing and multi-file island transactions are not supported by the first slice.
+
+## Comment completion feedback
+
+Native comment cards display the latest provider tool status. Their final messages
+distinguish applied, no-change, cancelled, failed and review outcomes; applied
+comments expose their grouped Undo action. Finalizer errors retire the running card
+and retain the recovery checkout. Late start responses cannot revive completed
+cards. The repository busy slot stays occupied through landing and cleanup, and
+comment snapshots and finalization use the shared repository writer.

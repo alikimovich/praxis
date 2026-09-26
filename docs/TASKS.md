@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Chat actions and comment agents (2026-09-25)
+
+- [x] Add response Copy/Revert hover and pressed states.
+- [x] Show background comment activity and truthful outcomes; cover concurrent landing, cancellation and finalizer failure without provider calls.
+- [ ] Verify pointer states on an unlocked Mac and capture timing for a slow real comment run.
+
 ## PR descriptions (2026-09-25)
 
 - [x] Analyze the committed PR diff with Luna and generate short descriptions instead of reusing chat-derived commit subjects.

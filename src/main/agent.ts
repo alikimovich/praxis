@@ -50,6 +50,7 @@ import {
 import { clearHistory, recordEdit } from './edit-history'
 import { isRepoRoot } from './git'
 import { commitLiveTurn } from './live-commit'
+import { enqueueRepoWrite } from './repo-write-queue'
 import {
   createProjectMemoryStore,
   createProjectMemoryUpdateQueue,
@@ -293,6 +294,8 @@ interface Spawn {
   text: string
   origin: BackgroundSpawnOrigin
   cancelled?: boolean
+  finalizing?: boolean
+  error?: string
 }
 const spawns = new Map<string, Spawn>()
 // v8 F1 Phase 3: bound concurrent spawns per project; the rest queue (FIFO) and start
@@ -400,77 +403,86 @@ function closeSession(
  */
 async function finalizeSpawn(id: string, status: 'done' | 'error'): Promise<void> {
   const spawn = spawns.get(id)
-  if (!spawn) return
-  spawns.delete(id)
+  if (!spawn || spawn.finalizing) return
+  spawn.finalizing = true
   const { session, wt, parentKey, parentSessionKey, parentRoot, text, origin } = spawn
-  try {
-    closeSession(session) // finalize + persist the record (removed below if we auto-apply)
-    // The agent's closing message → a chat notification the user can reply to.
-    const summary = [...session.record.transcript]
-      .reverse()
-      .find((t) => t.role === 'assistant')?.text
-    const { committed, files } = await commitWorktree(wt, firstLine(text))
-    let auto: { applied: boolean; edits: { file: string; before: string; after: string }[] } = {
-      applied: false,
-      edits: []
-    }
-    if (status === 'done' && !spawn.cancelled && committed && files.length) {
-      try {
-        auto = await autoApplyWorktree(parentRoot, wt, files)
-      } catch {
-        auto = { applied: false, edits: [] }
+  await enqueueRepoWrite(parentRoot, async () => {
+    try {
+      closeSession(session) // finalize + persist the record (removed below if we auto-apply)
+      // The agent's closing message → a chat notification the user can reply to.
+      const summary = spawn.error ?? [...session.record.transcript]
+        .reverse()
+        .find((t) => t.role === 'assistant')?.text
+      const { committed, files } = await commitWorktree(wt, firstLine(text))
+      let auto: { applied: boolean; edits: { file: string; before: string; after: string }[] } = {
+        applied: false,
+        edits: []
       }
-    }
-    if (auto.applied) {
-      // Land it on the working branch + make the whole task ONE Cmd+Z (shared
-      // group). Then drop the branch and un-persist the record so the rail clears.
-      const group = `${origin}:${id}`
-      for (const e of auto.edits)
-        recordEdit(parentRoot, e.file, e.before, e.after, undefined, group)
-      // …and as one commit on the live checkout, like an interactive chat's turn, so
-      // the spawn shows up in `git log` and can be reverted on its own.
-      await commitLiveTurn(parentRoot, files, {
-        title: firstLine(text),
-        body: origin === 'text-edit' ? 'Praxis background text edit.' : 'Praxis comment spawn.'
-      })
-      await removeWorktree(parentRoot, wt, { keepBranch: false })
-      try {
-        store().remove(session.record.id)
-      } catch {
-        /* history is non-critical */
+      if (status === 'done' && !spawn.cancelled && committed && files.length) {
+        try {
+          auto = await autoApplyWorktree(parentRoot, wt, files)
+        } catch {
+          auto = { applied: false, edits: [] }
+        }
       }
+      if (auto.applied) {
+        // Land it on the working branch + make the whole task ONE Cmd+Z (shared
+        // group). Then drop the branch and un-persist the record so the rail clears.
+        const group = `${origin}:${id}`
+        for (const e of auto.edits)
+          recordEdit(parentRoot, e.file, e.before, e.after, undefined, group)
+        // …and as one commit on the live checkout, like an interactive chat's turn, so
+        // the spawn shows up in `git log` and can be reverted on its own.
+        await commitLiveTurn(parentRoot, files, {
+          title: firstLine(text),
+          body: origin === 'text-edit' ? 'Praxis background text edit.' : 'Praxis comment spawn.'
+        })
+        await removeWorktree(parentRoot, wt, { keepBranch: false })
+        try {
+          store().remove(session.record.id)
+        } catch {
+          /* history is non-critical */
+        }
+        safeSend(getWindow_, 'agent:event', {
+          type: 'spawn-finished',
+          projectKey: parentSessionKey,
+          sessionId: id,
+          branch: null,
+          origin,
+          ...(summary ? { summary } : {}),
+          outcome: 'applied',
+          files: auto.edits.map((e) => basename(e.file))
+        } satisfies AgentEvent)
+      } else {
+        // Fallback: keep the branch + record for the manual review modal.
+        if (committed) {
+          session.record.filesTouched = files // git's staged list beats the heuristic
+          session.record.endedAt = session.record.endedAt ?? Date.now()
+          store().save(session.record)
+        }
+        await removeWorktree(parentRoot, wt, { keepBranch: committed })
+        safeSend(getWindow_, 'agent:event', {
+          type: 'spawn-finished',
+          projectKey: parentSessionKey,
+          sessionId: id,
+          branch: committed ? wt.branch : null,
+          origin,
+          ...(summary ? { summary } : {}),
+          outcome: spawn.cancelled ? 'cancelled' : status === 'error' ? 'failed' : committed ? 'review' : 'no-change',
+          files: committed ? files.map((f) => basename(f)) : []
+        } satisfies AgentEvent)
+      }
+    } catch (error) {
+      // Keep the checkout for recovery, but always retire the running card.
+      console.error('Background agent finalization failed:', error)
       safeSend(getWindow_, 'agent:event', {
-        type: 'spawn-finished',
-        projectKey: parentSessionKey,
-        sessionId: id,
-        branch: null,
-        origin,
-        ...(summary ? { summary } : {}),
-        outcome: 'applied',
-        files: auto.edits.map((e) => basename(e.file))
-      } satisfies AgentEvent)
-    } else {
-      // Fallback: keep the branch + record for the manual review modal.
-      if (committed) {
-        session.record.filesTouched = files // git's staged list beats the heuristic
-        session.record.endedAt = session.record.endedAt ?? Date.now()
-        store().save(session.record)
-      }
-      await removeWorktree(parentRoot, wt, { keepBranch: committed })
-      safeSend(getWindow_, 'agent:event', {
-        type: 'spawn-finished',
-        projectKey: parentSessionKey,
-        sessionId: id,
-        branch: committed ? wt.branch : null,
-        origin,
-        ...(summary ? { summary } : {}),
-        outcome: spawn.cancelled ? 'cancelled' : status === 'error' ? 'failed' : committed ? 'review' : 'no-change',
-        files: committed ? files.map((f) => basename(f)) : []
+        type: 'spawn-finished', projectKey: parentSessionKey, sessionId: id,
+        branch: wt.branch, origin, outcome: 'failed',
+        summary: 'Could not finish saving the background edit. Its worktree has been kept for recovery.'
       } satisfies AgentEvent)
     }
-  } catch {
-    // Never let spawn teardown break the app; the worktree may linger for prune.
-  }
+  })
+  spawns.delete(id)
   void pumpQueue(parentKey) // a slot just freed — start the next queued spawn
 }
 
@@ -499,17 +511,23 @@ async function startSpawn(q: QueuedSpawn): Promise<string | null> {
   // exactly once (the success path releases it right after `spawns.set`
   // takes over counting it; both failure paths release before returning).
   reserveSpawnSlot(q.parentKey)
+  let slotReserved = true
+  const releaseSlot = () => {
+    if (!slotReserved) return
+    slotReserved = false
+    releaseSpawnSlot(q.parentKey)
+  }
   let wt: Worktree
   try {
-    wt = await createWorktree(q.root, worktreesDir(), { label: q.text, id: q.id })
+    wt = await enqueueRepoWrite(q.root, () => createWorktree(q.root, worktreesDir(), { label: q.text, id: q.id }))
   } catch {
-    releaseSpawnSlot(q.parentKey)
+    releaseSlot()
     safeSend(getWindow_, 'agent:event', {
       type: 'spawn-finished',
       projectKey: q.parentSessionKey,
       sessionId: q.id,
       branch: null,
-      origin: q.origin
+      origin: q.origin, outcome: 'failed'
     } satisfies AgentEvent)
     void pumpQueue(q.parentKey)
     return null
@@ -526,7 +544,11 @@ async function startSpawn(q: QueuedSpawn): Promise<string | null> {
         liveRoot: q.root,
         onEvent: (e) => {
           if (e.type === 'done') void finalizeSpawn(wt.id, 'done')
-          else if (e.type === 'error') void finalizeSpawn(wt.id, 'error')
+          else if (e.type === 'error') {
+            const spawn = spawns.get(wt.id)
+            if (spawn) spawn.error = e.message
+            void finalizeSpawn(wt.id, 'error')
+          }
         }
       })
     )
@@ -550,18 +572,19 @@ async function startSpawn(q: QueuedSpawn): Promise<string | null> {
     })
     // Now counted via `spawns` itself — release the reservation so it isn't
     // double-counted by `runningCount`.
-    releaseSpawnSlot(q.parentKey)
+    releaseSlot()
     s.send(q.text)
     return wt.branch
   } catch {
-    releaseSpawnSlot(q.parentKey)
+    spawns.delete(wt.id)
+    releaseSlot()
     await removeWorktree(q.root, wt, { keepBranch: false })
     safeSend(getWindow_, 'agent:event', {
       type: 'spawn-finished',
       projectKey: q.parentSessionKey,
       sessionId: q.id,
       branch: null,
-      origin: q.origin
+      origin: q.origin, outcome: 'failed'
     } satisfies AgentEvent)
     void pumpQueue(q.parentKey)
     return null

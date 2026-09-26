@@ -48,6 +48,10 @@ Preview comments use the originating chat's provider: Claude subscriptions run
 the `sonnet` alias (latest Sonnet), Codex subscriptions run `gpt-5.6-sol`, and
 Gateway/custom connections keep the chat's exact model and connection. The choice
 is captured when submitted, including queued comments, without changing the chat.
+Comments inherit reasoning effort and start a fresh provider session in an isolated
+worktree. Native cards expose provider status; startup failures are reported instead
+of silently retrying in the main chat. Non-repositories and unsupported backends
+retain the interactive fallback, pinned to the originating chat.
 Committed visual edits inherit the originating chat's selected provider/model.
 AI fallbacks from text, props, styles, custom controls, and layer moves start detached children immediately on Claude and Codex
 (including custom endpoints). The main draft and transcript stay intact; successful

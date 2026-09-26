@@ -18,6 +18,7 @@ interface ProjectContext {
 export class NativeContextController {
   readonly projects = new Map<string, ProjectContext>()
   readonly spawns = new Map<string, NativeChatContext['spawns']>()
+  private readonly finishedSpawns = new Set<string>()
   constructor(readonly workspace: NativeWorkspaceController, readonly chat: NativeChatController, readonly turn: () => NativeChatContext['turn'], readonly send: (channel: string, ...args: any[]) => Promise<any> = workspace.services.invoke) {}
   private get invoke() { return this.workspace.services.invoke }
   private project(root: string) {
@@ -117,6 +118,7 @@ export class NativeContextController {
     if (this.workspace.active?.root === root) await this.send('preview:set-annotations', state.pins)
   }
   queued(key: string, id: string, label: string, queued: boolean) {
+    if (this.finishedSpawns.has(id)) return
     const list = this.spawns.get(key) ?? []
     if (!list.some(s => s.id === id)) this.spawns.set(key, [...list, { id, label, status: queued ? 'queued' : 'running' }])
     const root = this.chat.chats.get(key)?.context?.root
@@ -124,9 +126,12 @@ export class NativeContextController {
   }
   private spawn(event: AgentEvent) {
     if (!event.projectKey || !event.sessionId) return
+    if (event.type === 'spawn-finished') this.finishedSpawns.add(event.sessionId)
+    else if (this.finishedSpawns.has(event.sessionId)) return
     let list = this.spawns.get(event.projectKey) ?? []
-    if (event.type === 'spawn-started') list = [...list.filter(s => s.id !== event.sessionId), { id: event.sessionId, label: event.branch, status: 'running' }]
+    if (event.type === 'spawn-started') list = [...list.filter(s => s.id !== event.sessionId), { id: event.sessionId, label: list.find(s => s.id === event.sessionId)?.label ?? event.branch, status: 'running' }]
     else if (event.type === 'spawn-finished') list = list.filter(s => s.id !== event.sessionId)
+    else if (event.type === 'status' || event.type === 'error') list = list.map(s => s.id === event.sessionId ? { ...s, activity: event.type === 'status' ? event.text : event.message } : s)
     this.spawns.set(event.projectKey, list)
     const root = this.chat.chats.get(event.projectKey)?.context?.root
     if (root) this.changed(root)
