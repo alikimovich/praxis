@@ -23,7 +23,8 @@ struct ComposerBeam: View {
             let blue = Color(red: 0.26, green: 0.55, blue: 1)
             let cyan = Color(red: 0.32, green: 0.90, blue: 1)
             let peak = colorScheme == .dark ? Color(red: 0.80, green: 0.91, blue: 1) : blue
-            // The base never goes transparent. The broad energy lobe peaks at 135°.
+            // Keep the full rim lit while its 135° highlight rotates every 2.4 seconds.
+            let angle = reduceMotion || once ? 0 : elapsed / 2.4 * 360
             let gradient = AngularGradient(stops: once ? [
                 .init(color: blue, location: 0),
                 .init(color: violet, location: 0.33),
@@ -38,7 +39,7 @@ struct ComposerBeam: View {
                 .init(color: blue.opacity(0.55), location: 0.66),
                 .init(color: violet.opacity(0.4), location: 0.84),
                 .init(color: blue.opacity(0.45), location: 1)
-            ], center: .center, startAngle: .degrees(0), endAngle: .degrees(360))
+            ], center: .center, startAngle: .degrees(angle), endAngle: .degrees(angle + 360))
             let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
             ZStack {
                 shape.stroke(gradient, lineWidth: once ? 3 : 2)

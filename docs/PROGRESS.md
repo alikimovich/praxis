@@ -2,6 +2,17 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Rotate the button energy highlight
+
+Rotate the active button gradient every 2.4 seconds while preserving its full
+thin rim, broad 135° highlight and uneven pulses. Keep chat-ready fading even
+and Reduce Motion static.
+
+Validation: full/native typechecks, native build, chat-controller and docs-link
+checks pass. Direct native-host checks pass; inspected captures show the highlight
+moving around the rim. Full native integration still stops at the previously
+observed soft-wrapped-draft sizing assertion. No real provider calls ran.
+
 ## 2026-09-25 — Broader button energy glow and softer chat-ready breath
 
 Give the active Stop/Send button a thin glow around its full perimeter, with a

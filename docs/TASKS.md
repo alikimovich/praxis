@@ -7,6 +7,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 - [x] Give the Stop/Send button a thin full-perimeter glow, stronger at 135°, with uneven smooth energy pulses.
 - [x] Soften the chat-ready glow into an even, slower breath.
+- [x] Rotate the button highlight around the glowing rim while retaining uneven pulses.
 
 ## Chat actions and comment agents (2026-09-25)
 
