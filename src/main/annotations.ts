@@ -4,8 +4,7 @@ import { mkdir, readFile, rename, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { promisify } from 'util'
 import type { Annotation, AnnotationInput, PublishResult } from '../shared/api'
-import { buildPrBody } from '../shared/pr-body'
-import { buildPublishMessage, publishCommitSummaries } from '../shared/publish-message'
+import { generatePublishDescription } from './publish-description'
 import { enclosingRepoRoot, ensureBranch } from './git'
 import { publishConflictFiles, pushReconciledBranch, withPublishLock } from './publish-reconcile'
 import { aheadOfBase, changedSince, defaultBase } from './publish-scope'
@@ -160,7 +159,7 @@ async function publishToPr(root: string, opts: { title: string }): Promise<Publi
     }
     await git(root, ['push', '-u', 'origin', branch])
 
-    const body = buildPrBody(annotations, changedFiles)
+    const { body } = await generatePublishDescription(root, await defaultBase(root))
     const { stdout } = await execFileP('gh', ['pr', 'create', '--title', title, '--body', body], {
       cwd: root,
       maxBuffer: 10 * 1024 * 1024
@@ -264,29 +263,9 @@ async function shipToMain(
 
   try {
     // 1. Commit all changes (gitignore-respected). Skip the commit if clean.
-    // Title + body come from the commits and files that actually differ from the
-    // base. Chat is intentionally excluded: it contains questions, corrections,
-    // logs, and commands that do not belong in release notes.
     await git(root, ['add', '-A'])
-    const diffstat = await git(root, ['diff', '--stat', base]).catch(() => '')
-    const changedFiles = (await git(root, ['diff', '--name-only', base]).catch(() => ''))
-      .split('\n')
-      .map((file) => file.trim())
-      .filter(Boolean)
-    const commitLog = await git(root, [
-      'log',
-      '--no-merges',
-      '--format=%s%x1f%b%x1e',
-      `${base}..${branch}`
-    ]).catch(() => '')
-    const msg = buildPublishMessage(
-      branch,
-      publishCommitSummaries(commitLog),
-      diffstat,
-      changedFiles
-    )
     const staged = await git(root, ['diff', '--cached', '--name-only'])
-    if (staged) await git(root, ['commit', '-m', msg.title, '-m', msg.body])
+    if (staged) await git(root, ['commit', '-m', 'Prepare project changes for publishing'])
     const ahead = await git(root, ['rev-list', '--count', `${base}..${branch}`]).catch(() => '0')
     if (!staged && ahead === '0') {
       return { ok: false, error: `Nothing to publish — no changes since ${base}.` }
@@ -298,6 +277,7 @@ async function shipToMain(
     // globally and never rewrite a shared branch.
     const pushed = await pushReconciledBranch(root, branch)
     if (!pushed.ok) return conflictResult(pushed.files, pushed.recoveryRefs)
+    const msg = await generatePublishDescription(root, base, branch)
     // 3. Create the PR, or reuse an existing one for this branch.
     let url = ''
     try {
@@ -325,8 +305,8 @@ async function shipToMain(
       url = existing.stdout.trim()
       if (!url) throw e
       // Reused an open PR (PR-only mode publishes again onto the same branch):
-      // refresh its title/body to the cumulative summary. Best-effort.
-      await gh(['pr', 'edit', branch, '--title', msg.title, '--body', msg.body]).catch(() => {})
+      // refresh its title/body to the current code summary; surface update failures.
+      await gh(['pr', 'edit', branch, '--title', msg.title, '--body', msg.body])
     }
     // PR-only mode stops here — stay on the work branch with the PR open for
     // review; publishing again updates the same PR.

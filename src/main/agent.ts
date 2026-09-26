@@ -1,3 +1,5 @@
+import { generatePublishDescription } from './publish-description'
+import { defaultBase } from './publish-scope'
 import { chatIslandContext } from './chat-islands'
 import { setProjectUiEnabled, projectUiInstructions, cancelProjectUi } from './project-ui'
 import type { AgentTurnOptions } from '../shared/api'
@@ -1350,7 +1352,7 @@ export function registerAgentIpc(
       }
       try {
         await git(root, ['push', '-u', 'origin', branch])
-        const body = `Edited by a Praxis comment agent.\n\n🤖 Generated with [Praxis](https://github.com/alikimovich/praxis)`
+        const description = await generatePublishDescription(root, await defaultBase(root), branch)
         const { stdout } = await execFileP(
           'gh',
           [
@@ -1359,9 +1361,9 @@ export function registerAgentIpc(
             '--head',
             branch,
             '--title',
-            title || 'Praxis comment edit',
+            description.title,
             '--body',
-            body
+            description.body
           ],
           { cwd: root }
         )

@@ -46,6 +46,7 @@ const UNIT = [
   "pr-body",
   "feedback-body",
   "publish-message",
+  "publish-description",
   "slash-token",
   "skills-discovery",
   "provider-skills",

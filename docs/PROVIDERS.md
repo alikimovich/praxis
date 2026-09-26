@@ -1,5 +1,13 @@
 # Provider capabilities
 
+PR publishing uses a separate read-only Codex turn with `gpt-5.6-luna` and low
+reasoning effort through the built-in Codex account. It summarizes the committed
+merge-base diff after reconciliation, without chat or commit messages. Titles are
+bounded to 72 characters and descriptions to 120 words. The turn has a 60-second
+timeout; generation or PR-update failures are surfaced for retry, without a
+conversation-based fallback. This requires Codex sign-in even for Claude chats.
+Large patches are capped at 100,000 characters and marked as truncated.
+
 Praxis has one `ProviderSession` seam, not one identical capability set. A model keeps
 the native tools and behavior of its harness; Praxis must gate UI and prompts by declared
 capabilities instead of assuming Claude, Codex, gateways, and Gemini are interchangeable.
