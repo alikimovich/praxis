@@ -11,7 +11,8 @@ control-panel dependency in the target project. Selection is optional context.
 
 ## Inspect and bind
 
-1. Call `chat_island` with `action: "catalog"`.
+1. Call `chat_island` with `action: "catalog"`. Apply its `guidance` and
+   `controlPurposes`; they are the current control-selection and verification rules.
 2. Read the implementation. Preserve its behavior and reuse existing tunable
    constants. If necessary, extract clean literals in one source file and wire
    them into the actual implementation. Do not invent unused parameters.
@@ -25,17 +26,21 @@ control-panel dependency in the target project. Selection is optional context.
 
 ## Match the implementation
 
-- Springs expose the engine's actual stiffness/damping/mass or duration/bounce.
-  Changing constants behind a precomputed curve is not a working spring control.
-- Tweens expose duration/delay and a Bézier field; combined motion uses groups
-  for its individual tracks and shared parameters.
-- Shadows can expose elevation, opacity, softness and light angle, or a 2D light
-  point. The project must deterministically compute actual multilayer shadows
-  from those values. Reuse parameters already exposed by an earlier agent turn.
-- Typography and style controls use literals consumed by the selected component.
-- Layer add/remove, timelines and arbitrary expressions are not supported by the
-  first island catalog. Explain the limit; use supported fields and follow-up
-  source edits. Do not substitute a separate editor for the requested chat island.
+- Choose by meaning: numeric smoothing named “easing” stays a number; a real
+  cubic-Bézier timing function gets a Bézier editor with duration/delay fields.
+- Give scalars useful units, ranges and steps. Counts/pixel blocks use integers;
+  opacity and coefficients use fractions. Use selects only for implemented choices.
+- Springs expose the current engine's actual time/bounce or stiffness/damping/mass
+  together. Derived curves must regenerate when their parameters change.
+- A point combines related numbers (light direction, position), not arbitrary
+  scalars. Group by purpose, such as geometry, trail and response. Keep coupled
+  values in one block so Jev cannot separate them.
+- Trace each binding through styles/rendering, derived values and captured state
+  into the running effect, including canvas loops. An unused constant is not a
+  working control. For shadows, light coordinates must drive the shadow function.
+- Use only the returned catalog. Color is currently text entry; springs are
+  groups. Rich spring/color editors, nested folders, image pickers, comparisons
+  and timelines require further implementation; do not promise them as available.
 
 Keep all controls in Praxis. Do not add motion, change animation engines or alter
 reduced-motion behavior unless requested. Never write `.praxis/` yourself.
@@ -53,8 +58,13 @@ matches this component; preserve unrelated state and clean it up on unmount/HMR.
 Then set manifest presentation to animation and replay to true. Omit Replay when
 no valid target exists.
 
-Controls commit source on release/field commit; dragging does not call a model.
-Verify source and preview changes plus Undo. Source created in a worktree waits
+Sliders, points and curves write source at throttled intervals during dragging,
+plus the final value on release; project HMR/reload supplies preview feedback.
+This is not a runtime adapter and gestures do not call a model.
+Verify a representative adjustment for each independent effect on the actual
+preview, Undo, and persistence after reload. A file diff alone does not prove
+reactivity. When worktree landing or available observation tools prevent that
+check, report verification as pending and describe what remains to verify. Source created in a worktree waits
 for successful landing; parked/failed changes do not activate. If this provider
 lacks `chat_island`, explain that limitation rather than invoking an older panel
 tool. Praxis owns the dev server; do not start another server.

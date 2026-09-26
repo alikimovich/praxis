@@ -1,3 +1,4 @@
+import { chatIslandGuidance, chatIslandControlPurposes } from '../shared/chat-island-guidance'
 import { randomUUID, createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -79,7 +80,9 @@ export class ChatIslands {
     try {
       if (raw?.action === 'catalog') return {
         version: 1, blocks: ['group', 'point'], fields: ['number', 'toggle', 'text', 'color', 'select', 'bezier'],
-        guidance: 'Prepare groups of existing literal bindings (one file, up to 12 fields). A point block has x/y bounded numbers. For springs expose the library’s actual stiffness/damping/mass or duration/bounce. For shadows expose light x/y consumed by a deterministic project shadow function and layer parameters. Jev selects and orders whole blocks; groups keep their bindings together. No arbitrary code is executed by islands. Use action read before updating with id and revision. Default auto engine uses Jev if configured.'
+        controlPurposes: chatIslandControlPurposes,
+        guidance: chatIslandGuidance,
+        bindingRules: 'Existing literal bindings in one file, up to 12 fields. Jev selects/orders whole prepared blocks; keep coupled bindings together. No arbitrary code executes in islands. Read before updating with id/revision. Default auto engine uses Jev if configured.'
       }
       const session = this.sessions.get(chat)
       if (!session) throw new Error('This chat is not available for interactive islands yet.')

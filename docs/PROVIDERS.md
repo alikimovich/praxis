@@ -231,6 +231,15 @@ cannot create islands. The default auto engine uses saved Gateway credentials fo
 Jev to select/order whole prepared blocks; missing credentials use the agent's
 layout with explicit fallback reporting. Runtime failures are not hidden.
 
+Control-capable providers receive the same selection/verification guidance that
+`chat_island` returns in its catalog, maintained in
+`src/shared/chat-island-guidance.ts`. The bundled surface-controls skill reads
+that catalog and applies it to source inspection, parameter semantics, replay and
+preview/Undo checks. This is agent guidance, not automatic proof of runtime
+reactivity; the host independently validates literal bindings and transactions.
+The catalog remains available to existing sessions after an app update, while
+new provider sessions receive the updated initial operating rules.
+
 Native interactions call Bun source services directly and do not invoke a model.
 Current values and island revisions enter the next provider turn as application
 context, separately from the visible user transcript. See [CHAT-ISLANDS.md](CHAT-ISLANDS.md)

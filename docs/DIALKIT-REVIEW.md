@@ -83,7 +83,10 @@ spring/easing editors, a native color picker, collapsible groups and comparisons
 Add image selection when a concrete content workflow needs it. Add runtime
 adapters with a measured animation fixture before promising smooth scrubbing.
 Defer timelines until timing and runtime capabilities can support them truthfully.
-This review records direction; it does not implement or install those features.
+The selection and verification rules are now shared by the provider operating
+instructions and chat-island catalog through `src/shared/chat-island-guidance.ts`;
+the bundled surface-controls skill applies them. Richer editors remain follow-up
+work. Guidance delivery is tested; model compliance is not a host guarantee.
 
 ## Applying this to the pixel-reveal example
 

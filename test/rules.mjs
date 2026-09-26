@@ -4,6 +4,7 @@
  *
  * Run with: bun test/rules.mjs
  */
+import { chatIslandGuidance } from '../src/shared/chat-island-guidance.ts'
 import { PRAXIS_RULES_VERSION, praxisRules } from '../src/main/rules.ts'
 
 let failed = 0
@@ -17,7 +18,7 @@ const assert = (cond, msg) => {
 const r = praxisRules()
 assert(typeof r === 'string' && r.length > 0, 'rules render to a non-empty string')
 assert(typeof PRAXIS_RULES_VERSION === 'number', 'version is a number')
-assert(PRAXIS_RULES_VERSION === 21, 'version bumped to 21')
+assert(PRAXIS_RULES_VERSION === 22, 'version bumped to 22')
 assert(r.includes(`v${PRAXIS_RULES_VERSION}`), 'rules carry the version marker')
 assert(r.includes('before scaffolding or'), 'new projects ask about unresolved setup choices')
 assert(r.includes('after these files successfully land'), 'environment refresh follows landing')
@@ -88,6 +89,7 @@ assert(/\.praxis\//.test(withTools), 'previewTools: forbids sidecar writes')
 assert(!/chat_island/.test(r), 'unsupported providers omit island tool')
 const codexControls = praxisRules({ controlTools: true })
 for (const rules of [withTools, codexControls]) {
+  assert(rules.includes(chatIslandGuidance), 'Every control-capable provider gets the catalog guidance')
   assert(!/define_controls|open_controls|animation-controls/.test(rules), 'No legacy panel instructions')
   assert(/Never substitute a separate panel/.test(rules), 'Chat is the required control destination')
 }

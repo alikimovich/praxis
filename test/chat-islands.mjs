@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { mkdtemp, readFile, writeFile, symlink, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { chatIslandGuidance, chatIslandControlPurposes } from '../src/shared/chat-island-guidance.ts'
+import { chatIslandShape } from '../bin/chat-island-schema.mjs'
 import { ChatIslands } from '../src/main/chat-islands.ts'
 import { islandDefinition } from '../src/main/chat-island-schema.ts'
 import { chooseControlsWithJev } from '../src/main/controls-jev.ts'
@@ -14,6 +16,13 @@ const request = { action: 'define', engine: 'agent', manifest: { file: 'shadow.j
 let changes = 0
 const islands = new ChatIslands(storage, () => changes++)
 try {
+  // Catalog guidance is available before registration and stays within the wire catalog.
+  const catalog = await islands.tool('not-registered', root, { action: 'catalog' })
+  assert.equal(catalog.guidance, chatIslandGuidance)
+  assert.deepEqual(catalog.controlPurposes, chatIslandControlPurposes)
+  assert.deepEqual(Object.keys(catalog.controlPurposes).sort(), [...catalog.fields, ...catalog.blocks].sort())
+  const blockKinds = chatIslandShape.blocks.unwrap().element.shape.kind.options
+  assert.deepEqual(catalog.blocks, blockKinds, 'Catalog must not advertise unrenderable block types')
   await writeFile(join(root, 'shadow.js'), code)
   islands.register('chat', root, 'durable-session', () => 1)
   const made = await islands.tool('chat', root, request)

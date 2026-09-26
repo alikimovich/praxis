@@ -14,10 +14,11 @@
  *
  * Bump PRAXIS_RULES_VERSION whenever the rule text changes (so logs/tests can pin it).
  */
+import { chatIslandGuidance } from '../shared/chat-island-guidance'
 import { SURFACE_CONTROLS_SKILL } from './bundled-skills'
 import { projectMemoryRules } from './project-memory'
 
-export const PRAXIS_RULES_VERSION = 21
+export const PRAXIS_RULES_VERSION = 22
 
 export function praxisRules(opts?: {
   previewTools?: boolean
@@ -164,7 +165,7 @@ export function praxisRules(opts?: {
       `For on-demand controls in chat, call chat_island action:catalog, inspect source, expose`,
       `literal parameters consumed by the project, then action:define with manifest, blocks,`,
       `engine:auto and prompt. Jev selects/orders prepared groups; point blocks bind bounded x/y numbers.`,
-      `Use groups for springs, tweens, typography or shadow layers; use point for light direction.`,
+      chatIslandGuidance,
       `The project must compute shadows from light coordinates deterministically. Never add a tuning UI to it.`,
       `Use action:read and the returned id/revision when revising an island. Keep compatible bindings.`,
       `Controls appear in this conversation and activate only after successful source landing.`,

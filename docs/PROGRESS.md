@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Apply control-selection lessons to agent guidance
+
+Share purpose-based selection and verification rules between control-capable
+provider instructions and the chat-island catalog. Publish purposes for each
+supported control, distinguish scalar smoothing from timing curves/springs, require
+actual binding consumption and targeted replay, and report preview verification
+as pending until observable. Update the portable surface-controls skill, including
+its stale release-only description, and bump operating rules to v22. Unsupported
+rich editors remain explicitly unavailable; no target dependencies are installed.
+
+Validation: full/native typechecks and rules, chat-islands, provider-skills,
+real stdio MCP bridge and docs-link checks pass. The skill validator passes.
+Coverage verifies shared guidance delivery and catalog/schema alignment, not live
+model compliance. No provider calls or native UI changes.
+
 ## 2026-09-25 — Hide scrollbars in the native mobile preview
 
 Decouple preview scrollbar suppression from the retired in-page bezel. Send the

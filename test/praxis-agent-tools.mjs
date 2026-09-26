@@ -1,3 +1,4 @@
+import { chatIslandDescription } from '../bin/chat-island-schema.mjs'
 /**
  * Codex ↔ Praxis MCP control bridge (pure Node/Bun, no provider credentials).
  * Proves the loopback bridge is session-scoped and that the actual stdio MCP
@@ -126,6 +127,8 @@ try {
     'project_ui_catalog',
     'workspace_state'
   ])
+
+  assert.equal(listed.result.tools.find(tool => tool.name === 'chat_island').description, chatIslandDescription)
 
   const previewCall = (name) => request('tools/call', { name, arguments: {} })
   const absent = await previewCall('preview_screenshot')
