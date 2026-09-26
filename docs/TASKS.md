@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Island placement and scrolling (2026-09-25)
+
+- [x] Create a fresh island for later-turn revisions without overwriting historical definitions.
+- [x] Exclude control-value refreshes from automatic scrolling and pause following while adjusting controls.
+
 ## Control latency and chat timing (2026-09-25)
 
 - [x] Surface pending controls before Jev completes and guide existing-control requests toward early definitions.

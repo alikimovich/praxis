@@ -255,7 +255,10 @@ legacy records without completion metadata omit duration.
 Control surfacing publishes a disabled source-validated draft before Jev finishes
 selecting/ordering its blocks. Drafts are ephemeral and removed on failure or
 cancellation; only completed definitions persist. Controls still activate after
-successful landing. Operating rules v23 and the surface-controls skill prioritize
+successful landing. Redefining an island from an earlier turn creates a new ID
+and attaches it to the current response; same-turn definitions still update in
+place. Callers must use the returned ID/revision for subsequent updates.
+Operating rules v23 and the surface-controls skill prioritize
 existing bindings and early definition, without inventing unrequested effects or
 running redundant builds when no source was changed. Required project checks still
 apply to code changes. Existing provider sessions need fresh instructions to pick

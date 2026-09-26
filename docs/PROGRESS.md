@@ -2,6 +2,23 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Keep revised islands with their response and preserve scroll
+
+A define call targeting an earlier turn now creates a fresh island ID on the
+current turn, preserving the old definition. Same-turn updates remain in place;
+new instances reset to their own creation values and count toward the island limit.
+
+Native chat follows conversation-content changes rather than every state refresh.
+Island values/source revisions do not trigger scroll-to-bottom, and control
+interaction pauses following until the user returns to the latest message.
+
+Validation: full/native typechecks, chat-islands, chat-controller and docs-links
+pass. Native build and focused chat-scroll integration pass, including repeated
+control-value refreshes with later messages and continued following of new content.
+The full native smoke run failed waiting for its shadow preview fixture to appear,
+before island creation. No provider calls; pointer-driven mid-history gestures
+were not exercised by the focused follow-revision regression.
+
 ## 2026-09-25 — Earlier control panels and visible chat timing
 
 Publish validated, disabled control drafts before Jev selection completes; retain

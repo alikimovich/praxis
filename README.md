@@ -77,6 +77,8 @@ GitHub PR.
   easing editors in the conversation. Controls bind to source with Undo, Reset
   and optional Replay; changes update the project through HMR. A disabled draft
   appears while Jev arranges the prepared controls; editing activates after landing.
+  Later-turn revisions create a new island beside the new response, preserving
+  earlier definitions. Adjusting controls preserves your place in the conversation.
 - **Next.js source mapping.** Setup detects Next separately from React/Vite and
   provides development-only Turbopack/webpack adapters, with optional MDX mapping.
   It preserves config wrappers and existing component types, synchronizes helpers

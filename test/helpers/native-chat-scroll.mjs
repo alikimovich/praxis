@@ -71,6 +71,25 @@ try {
     }
   }
   await capture('streamed')
+  // Source-value refreshes must not request follow-to-bottom, even if the last
+  // scroll event was missed. A new island definition remains conversation content.
+  const island = {id:'controls',revision:1,title:'Radius',engine:'agent',status:'ready',detail:'',sourceRevision:'a',replay:false,
+    blocks:[{id:'geometry',title:'Geometry',kind:'group',params:['radius']}],
+    fields:[{id:'radius',label:'Radius',kind:'number',value:32,min:1,max:100,step:1}]}
+  const controls = message('panel', 'assistant', 'Tune the radius.')
+  controls.segments.push({kind:'island',island})
+  const state = {chat:'controls-refresh',messages:[controls,...Array.from({length:20},(_,i)=>message(`later-${i}`,'assistant','Text after the controls. '.repeat(20)))],cards:[],questions:[],running:false,status:'',composer:{enabled:true,text:'',revision:1}}
+  host.send('chatState',{state}); await delay(250)
+  const before = await host.request('chatInspect')
+  for (const value of [40,60,80,32]) {
+    island.fields[0].value = value; island.sourceRevision = String(value)
+    host.send('chatState',{state}); await delay(60)
+    assert.equal((await host.request('chatInspect')).followRevision,before.followRevision,'Control values must not request auto-follow')
+  }
+  island.revision++
+  host.send('chatState',{state}); await delay(100)
+  assert((await host.request('chatInspect')).followRevision > before.followRevision,'New definitions can follow with conversation content')
+
   console.log('Native chat scroll: sent questions and streamed responses stay visible across short/long history and shrinking composers.')
 } finally {
   host.child.kill()

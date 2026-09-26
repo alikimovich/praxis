@@ -19,10 +19,23 @@ struct ChatSnapshot: Decodable {
     let chat: String; let messages: [ChatMessage]; let running: Bool; let cards: [ChatCard]
     let questions: [ChatQuestionRequest]; let status: String; let statusDetail: String?
 }
+private extension ChatSnapshot {
+    // Source-value refreshes and composer updates are not new conversation content.
+    var followContent: [String] {
+        [chat, activity?.label ?? "", String(running)] + messages.flatMap { message in
+            [message.id, message.text] + message.segments.flatMap { segment in
+                if let island = segment.island { return [island.id, String(island.revision)] }
+                return [segment.text ?? ""] + (segment.statuses ?? [])
+            }
+        } + cards.map { $0.id + $0.title } + questions.map { $0.id }
+    }
+}
 final class ChatModel: ObservableObject {
     let cat = CatAnimator()
     @Published var snapshot: ChatSnapshot?
     @Published var revision = 0
+    @Published var controlInteraction = 0
+    @Published var followRevision = 0
     @Published var visible = false
     @Published var composerHeight: CGFloat = 0
     var messageFrames: [String: CGRect] = [:]
@@ -30,6 +43,7 @@ final class ChatModel: ObservableObject {
     var bottomInset: CGFloat { composerHeight + ChatComposerFade.footerHeight + ChatComposerFade.transitionHeight }
     func islandAction(_ island: IslandView, action: String, values: [String: Any] = [:]) {
         guard let chat = snapshot?.chat else { return }
+        controlInteraction += 1
         emit(["event":"island-action", "chat":chat, "id":island.id, "revision":island.revision,
               "sourceRevision":island.sourceRevision, "operation":UUID().uuidString, "action":action, "values":values])
     }
@@ -56,6 +70,7 @@ final class NativeChat: NSHostingView<ChatConversation> {
         if let data = try? JSONSerialization.data(withJSONObject: state), let snapshot = try? JSONDecoder().decode(ChatSnapshot.self, from: data) {
             let completed = model.snapshot?.chat == snapshot.chat && model.snapshot?.running == true && !snapshot.running && !(snapshot.messages.last?.text.contains("⚠️") ?? false)
             model.cat.update(running: snapshot.running, questioning: !snapshot.questions.isEmpty || snapshot.cards.contains { $0.actions.contains { $0.action == "permission" } }, completed: completed)
+            if model.snapshot?.followContent != snapshot.followContent { model.followRevision += 1 }
             model.snapshot = snapshot; model.revision += 1
         }
         model.cat.show(!isHidden)
@@ -79,7 +94,7 @@ final class NativeChat: NSHostingView<ChatConversation> {
         composer.update(input)
     }
     func inspect() -> [String: Any] {
-        ["visibleMessageIDs":model.messageFrames.filter { $0.value.maxY > 0 && $0.value.minY < bounds.height - model.bottomInset }.map(\.key), "bottomPosition":model.bottomPosition, "composerInset":model.bottomInset, "height":bounds.height, "catPose":model.cat.pose, "catFrame":model.cat.frame, "catArtwork":!CatArtwork.frames.isEmpty, "frame":NSStringFromRect(frame), "native":true, "visible":!isHidden, "chat":model.snapshot?.chat ?? "", "messageCount":model.snapshot?.messages.count ?? 0,
+        ["followRevision":model.followRevision, "controlInteraction":model.controlInteraction, "visibleMessageIDs":model.messageFrames.filter { $0.value.maxY > 0 && $0.value.minY < bounds.height - model.bottomInset }.map(\.key), "bottomPosition":model.bottomPosition, "composerInset":model.bottomInset, "height":bounds.height, "catPose":model.cat.pose, "catFrame":model.cat.frame, "catArtwork":!CatArtwork.frames.isEmpty, "frame":NSStringFromRect(frame), "native":true, "visible":!isHidden, "chat":model.snapshot?.chat ?? "", "messageCount":model.snapshot?.messages.count ?? 0,
          "messages":model.snapshot?.messages.map { ["id":$0.id,"role":$0.role,"text":$0.text] } ?? [],
          "activity":model.snapshot?.activity?.label ?? "", "activityKind":model.snapshot?.activity?.kind ?? "", "activityAnimated":model.snapshot?.activity?.animated ?? false,
          "islands":model.snapshot?.messages.flatMap { $0.segments.compactMap { $0.island }.map { ["id":$0.id,"revision":$0.revision,"status":$0.status,"title":$0.title,"blocks":$0.blocks.count,"fields":$0.fields.count] as [String: Any] } } ?? [],
@@ -145,7 +160,8 @@ struct ChatConversation: View {
                         if let event = NSApp.currentEvent, [.scrollWheel, .leftMouseDragged, .keyDown].contains(event.type) { follows = bottom <= readingHeight + 48 }
                     }
                     .onChange(of: model.composerHeight) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
-                    .onChange(of: model.revision) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
+                    .onChange(of: model.controlInteraction) { _ in follows = false }
+                    .onChange(of: model.followRevision) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
                     .onChange(of: model.snapshot?.chat) { _ in follows = true; sticky = nil; proxy.scrollTo("bottom", anchor: bottomAnchor) }
                     .overlay(alignment: .bottomLeading) {
                         Text(model.snapshot?.status ?? "")

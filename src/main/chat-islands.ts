@@ -96,12 +96,14 @@ export class ChatIslands {
       const definition = islandDefinition(raw)
       const prior = raw.id ? session.records.find(r => r.id === raw.id) : undefined
       if (raw.id && (!prior || raw.revision !== prior.revision)) throw new Error('Island revision changed. Read it before updating.')
-      if (!prior && session.records.length >= 30) throw new Error('This chat has reached its island limit.')
+      const turn = Math.max(1, session.turn())
+      const replacing = prior?.turn === turn ? prior : undefined
+      if (!replacing && session.records.length >= 30) throw new Error('This chat has reached its island limit.')
       const terminal = session.terminal
       session.composing = true
       try {
-        const record: IslandRecord = { version: 1, id: prior?.id ?? randomUUID(), revision: (prior?.revision ?? 0) + 1,
-          turn: prior?.turn ?? Math.max(1, session.turn()), ...definition, engine: 'agent', status: 'waiting', initial: {} }
+        const record: IslandRecord = { version: 1, id: replacing?.id ?? randomUUID(), revision: (replacing?.revision ?? 0) + 1,
+          turn, ...definition, engine: 'agent', status: 'waiting', initial: {} }
         const source = await islandSource(sourceRoot, record)
         session.preview = { turn: record.turn, view: {
           id: record.id, revision: record.revision, title: record.manifest.title, blocks: record.blocks,
@@ -117,11 +119,11 @@ export class ChatIslands {
         record.manifest.params = record.manifest.params.filter(p => included.has(p.id))
         record.initial = Object.fromEntries(record.manifest.params.map(p => {
           const before = prior?.manifest.params.find(old => old.id === p.id)
-          const compatible = prior?.manifest.file === record.manifest.file && JSON.stringify(before) === JSON.stringify(p)
+          const compatible = replacing && prior?.manifest.file === record.manifest.file && JSON.stringify(before) === JSON.stringify(p)
           return [p.id, compatible ? prior!.initial[p.id] ?? source.values[p.id] : source.values[p.id]]
         }))
         record.engine = selection.engine; record.fallback = selection.fallback
-        const next = prior ? session.records.map(r => r === prior ? record : r) : [...session.records, record]
+        const next = replacing ? session.records.map(r => r === replacing ? record : r) : [...session.records, record]
         const previous = session.records
         session.records = next
         try { this.save(session) } catch (error) { session.records = previous; throw error }

@@ -31,6 +31,7 @@ struct NativeChatIsland: View {
     @State private var gesture = UUID().uuidString
     @State private var lastUpdate = Date.distantPast
     private func live(_ values: [String: IslandValue], ended: Bool = false) {
+        model.controlInteraction += 1
         drafts.merge(values) { _, next in next }
         guard ended || Date().timeIntervalSince(lastUpdate) >= 0.12 else { return }
         lastUpdate = Date()
