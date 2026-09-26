@@ -1,9 +1,10 @@
 import AppKit
 import SwiftUI
 
-/// Native interpretation of libraries.dev/beam: a rotating highlight, colored
-/// edge and soft bloom. No shader bundle or additional rendering surface needed.
+/// A thin, full-perimeter energy rim for generation, and a quieter, even
+/// breath when a chat becomes ready. Both stay on the existing native surface.
 struct ComposerBeam: View {
+    static let readyDuration = 2.4
     let radius: CGFloat
     let started: Date
     let once: Bool
@@ -13,27 +14,44 @@ struct ComposerBeam: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { timeline in
             let elapsed = max(0, timeline.date.timeIntervalSince(started))
-            let progress = elapsed / 1.5
-            let fade = once ? min(1, elapsed / 0.15) * min(1, max(0, (1.5 - elapsed) / 0.3)) : min(1, elapsed / 0.25)
-            let angle = reduceMotion ? 45 : progress * 360
-            let gradient = AngularGradient(stops: [
-                .init(color: .clear, location: 0),
-                .init(color: .clear, location: 0.40),
-                .init(color: Color(red: 0.35, green: 0.30, blue: 1).opacity(0.15), location: 0.48),
-                .init(color: Color(red: 0.65, green: 0.32, blue: 1), location: 0.64),
-                .init(color: Color(red: 0.26, green: 0.55, blue: 1), location: 0.78),
-                .init(color: Color(red: 0.32, green: 0.90, blue: 1), location: 0.88),
-                .init(color: colorScheme == .dark ? .white : Color(red: 0.30, green: 0.48, blue: 1), location: 0.93),
-                .init(color: .clear, location: 1)
-            ], center: .center, startAngle: .degrees(angle), endAngle: .degrees(angle + 360))
+            // Overlapping smooth waves feel alive without random frame-to-frame flicker.
+            let energy = reduceMotion ? 0.7 : 0.70 + 0.16 * sin(elapsed * 3.1)
+                + 0.09 * sin(elapsed * 5.3 + 0.8) + 0.05 * sin(elapsed * 8.7 + 1.9)
+            let readyPhase = min(1, elapsed / Self.readyDuration)
+            let fade = once ? pow(sin(readyPhase * .pi), 2) : min(1, elapsed / 0.25)
+            let violet = Color(red: 0.65, green: 0.32, blue: 1)
+            let blue = Color(red: 0.26, green: 0.55, blue: 1)
+            let cyan = Color(red: 0.32, green: 0.90, blue: 1)
+            let peak = colorScheme == .dark ? Color(red: 0.80, green: 0.91, blue: 1) : blue
+            // The base never goes transparent. The broad energy lobe peaks at 135°.
+            let gradient = AngularGradient(stops: once ? [
+                .init(color: blue, location: 0),
+                .init(color: violet, location: 0.33),
+                .init(color: cyan, location: 0.67),
+                .init(color: blue, location: 1)
+            ] : [
+                .init(color: blue.opacity(0.45), location: 0),
+                .init(color: violet.opacity(0.65), location: 0.16),
+                .init(color: violet.opacity(0.9), location: 0.27),
+                .init(color: peak, location: 0.375),
+                .init(color: cyan.opacity(0.9), location: 0.48),
+                .init(color: blue.opacity(0.55), location: 0.66),
+                .init(color: violet.opacity(0.4), location: 0.84),
+                .init(color: blue.opacity(0.45), location: 1)
+            ], center: .center, startAngle: .degrees(0), endAngle: .degrees(360))
             let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
             ZStack {
-                shape.stroke(gradient, lineWidth: 5).blur(radius: 5).opacity(0.55)
-                shape.stroke(gradient, lineWidth: 2.5).blur(radius: 1.5).opacity(0.6)
-                shape.stroke(gradient, lineWidth: 1.2)
+                shape.stroke(gradient, lineWidth: once ? 3 : 2)
+                    .blur(radius: once ? 4 : 2.5)
+                    .opacity(once ? 0.22 : 0.25 + energy * 0.3)
+                shape.stroke(gradient, lineWidth: once ? 1.5 : 1.4)
+                    .blur(radius: 1)
+                    .opacity(once ? 0.25 : energy * 0.55)
+                shape.stroke(gradient, lineWidth: once ? 0.8 : 0.9)
+                    .opacity(once ? 0.45 : 0.55 + energy * 0.4)
             }
             .padding(8)
-            .opacity(reduceMotion ? (once ? 0.5 : 0.75) : fade)
+            .opacity(reduceMotion ? (once ? 0.4 : 0.75) : fade * (once ? 1 : energy))
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -60,7 +78,7 @@ final class ComposerBeamHost: NSHostingView<AnyView> {
         if visible && once {
             let work = DispatchWorkItem { [weak self] in self?.show(false, radius: radius) }
             expiry = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
+            DispatchQueue.main.asyncAfter(deadline: .now() + ComposerBeam.readyDuration, execute: work)
         }
     }
     override func viewDidMoveToWindow() {

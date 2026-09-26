@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Composer glow refinement (2026-09-25)
+
+- [x] Give the Stop/Send button a thin full-perimeter glow, stronger at 135°, with uneven smooth energy pulses.
+- [x] Soften the chat-ready glow into an even, slower breath.
+
 ## Chat actions and comment agents (2026-09-25)
 
 - [x] Add response Copy/Revert hover and pressed states.

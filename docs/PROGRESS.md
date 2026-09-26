@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Broader button energy glow and softer chat-ready breath
+
+Give the active Stop/Send button a thin glow around its full perimeter, with a
+broad highlight centered at 135° and overlapping smooth waves for uneven energy
+pulses. Replace the chat-ready rotating sweep with a softer, evenly fading
+2.4-second breath. Preserve reduced-motion behavior and existing activity gating.
+
+Validation: full/native typechecks, native build, chat-controller and docs-link
+unit checks pass. A disposable native-host probe passes button activation/removal
+and chat-ready expiry checks; inspected captures at multiple pulse phases and
+chat-ready peak. AppKit captures omit the underlying Liquid Glass controls, so
+these establish glow coverage rather than complete visible compositing. The full
+native integration test and a retry both stop at the soft-wrapped-draft sizing
+assertion before reaching chat activity checks. No real provider calls ran.
+
 ## 2026-09-25 — Chat action feedback and comment-agent lifecycle checks
 
 Add explicit hover/pressed backgrounds to response Copy/Revert buttons. Show
