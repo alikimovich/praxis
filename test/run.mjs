@@ -115,7 +115,7 @@ const UNIT = [
   "praxis-cli"
 ];
 
-const NATIVE = ['native-runtime', 'native-chat-scroll', 'native-next-hmr'];
+const NATIVE = ['native-runtime', 'native-source-window', 'native-chat-scroll', 'native-next-hmr'];
 const LIVE = ['native-runtime-live'];
 const TIERS = { unit: UNIT, native: NATIVE, live: LIVE };
 const selected = new Set();

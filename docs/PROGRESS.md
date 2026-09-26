@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Restore source-editor popout sizing
+
+Reproduce the code window collapsing from its requested 700-point content height
+to 125 points. Lower intrinsic sizing priorities on the overlapping image, video
+and binary viewers so hidden alternatives cannot shrink or constrain the window.
+Pin the editor to its window and set a 760 × 420 content minimum; initial content
+remains 1000 × 700, with resized dimensions retained through docking and reopening.
+
+Validation: full/native typechecks, native build, native-editor and docs-link unit
+checks pass. A new native-tier regression reproduces the original collapse and
+passes opening height, programmatic width/height resizing, code viewport expansion,
+state refresh, docking/reopening and unsaved-text retention. Inspected its PNG.
+Native integration reaches the existing soft-wrapped composer sizing failure.
+No real provider calls; pointer-driven edge resizing was not exercised.
+
 ## 2026-09-25 — Apply control-selection lessons to agent guidance
 
 Share purpose-based selection and verification rules between control-capable

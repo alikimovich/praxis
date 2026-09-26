@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Source editor popout (2026-09-25)
+
+- [x] Prevent hidden viewers from collapsing the code window, provide a useful minimum size, and verify resizing/docking/reopening.
+
 ## Mobile preview scrollbars (2026-09-25)
 
 - [x] Hide page/nested scrollbars in native mobile mode, preserve scrolling through navigation, and restore desktop defaults.

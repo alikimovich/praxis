@@ -28,6 +28,11 @@ that exactly one WebKit view exists. `PRAXIS_NATIVE_BACKGROUND_TEST=1` skips rea
 pointer gestures/animation timing, which must be reported as reduced coverage.
 `test:native-live` separately submits a real provider turn against a fixture.
 
+`node test/native-source-window.mjs` checks the popped-out editor's initial size,
+programmatic resizing, code viewport, docking/reopening and draft retention using
+a disposable native host. It requires an existing build and writes
+`test/artifacts/native/source-window.png`. It does not exercise pointer resizing.
+
 `node test/native-chat-scroll.mjs` uses a disposable native host with fixture
 snapshots to check that sent questions and streamed responses remain visible
 above the floating composer across short/long histories and shrinking drafts.

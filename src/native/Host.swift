@@ -206,13 +206,18 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             let editor = sourceEditors[root] ?? NativeSourceEditor(); sourceEditors[root] = editor
             editor.update(state)
             if state["popped"] as? Bool == true {
-                if editor.popout == nil { let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false); panel.isReleasedWhenClosed = false; panel.delegate = editor; panel.title = "Praxis · Code"; panel.center(); editor.popout = panel }
+                if editor.popout == nil { let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false); panel.isReleasedWhenClosed = false; panel.delegate = editor; panel.title = "Praxis · Code"; panel.contentMinSize = NSSize(width: 760, height: 420); panel.center(); editor.popout = panel }
                 if let container = editor.popout?.contentView, editor.superview !== container {
                     editor.removeFromSuperview()
-                    editor.translatesAutoresizingMaskIntoConstraints = true
-                    editor.autoresizingMask = [.width, .height]
-                    editor.frame = container.bounds
+                    // Let the window own the editor's bounds after leaving the dock.
+                    editor.translatesAutoresizingMaskIntoConstraints = false
                     container.addSubview(editor)
+                    NSLayoutConstraint.activate([
+                        editor.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                        editor.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                        editor.topAnchor.constraint(equalTo: container.topAnchor),
+                        editor.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+                    ])
                 }
                 editor.isHidden = false
                 if state["visible"] as? Bool == true { if editor.popout?.isVisible != true { editor.popout?.makeKeyAndOrderFront(nil) } } else { editor.popout?.orderOut(nil) }
@@ -229,7 +234,13 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             nativeLayout.layout()
         case "sourceInspect":
             let editor = sourceEditors[c["root"] as? String ?? sourceRoot]
-            reply(id, ["native":true, "visible":editor?.state["visible"] as? Bool ?? false, "source":editor?.source ?? "", "text":editor?.code.string ?? "", "popped":editor?.popout?.isVisible ?? false, "dirty":editor?.state["dirty"] as? Bool ?? false, "error":editor?.state["error"] as? String ?? ""])
+            reply(id, ["native":true, "visible":editor?.state["visible"] as? Bool ?? false, "source":editor?.source ?? "", "text":editor?.code.string ?? "", "popped":editor?.popout?.isVisible ?? false, "dirty":editor?.state["dirty"] as? Bool ?? false, "error":editor?.state["error"] as? String ?? "", "width":editor?.bounds.width ?? 0, "height":editor?.bounds.height ?? 0, "viewportHeight":editor?.scroll.contentSize.height ?? 0, "minHeight":editor?.popout?.contentMinSize.height ?? 0, "maxHeight":editor?.popout?.contentMaxSize.height ?? 0])
+        case "sourceResize":
+            guard ephemeral, let panel = sourceEditors[c["root"] as? String ?? sourceRoot]?.popout else { return }
+            panel.setContentSize(NSSize(width: c["width"] as? Double ?? 1000, height: c["height"] as? Double ?? 700)); reply(id)
+        case "captureSource":
+            guard let editor = sourceEditors[c["root"] as? String ?? sourceRoot], let bitmap = editor.bitmapImageRepForCachingDisplay(in: editor.bounds) else { reply(id, error: "No source editor"); return }
+            editor.cacheDisplay(in: editor.bounds, to: bitmap); reply(id, bitmap.representation(using: .png, properties: [:])?.base64EncodedString() ?? "")
         case "sourcePerform":
             guard ephemeral else { return }; emit((c["action"] as? [String: Any] ?? [:]).merging(["event":"source-action"]) { _, new in new }); reply(id)
         case "activityState": activity.update(c)

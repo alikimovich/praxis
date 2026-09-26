@@ -91,6 +91,14 @@ final class NativeSourceEditor: NSView, NSTextViewDelegate, NSSearchFieldDelegat
         for view in [header, split, status] { view.translatesAutoresizingMaskIntoConstraints = false; addSubview(view) }
         for view in [search, treeScroll, operations] { view.translatesAutoresizingMaskIntoConstraints = false; sidebar.addSubview(view) }
         for view in [scroll, image, player, binary] { view.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(view); NSLayoutConstraint.activate([view.leadingAnchor.constraint(equalTo: content.leadingAnchor), view.trailingAnchor.constraint(equalTo: content.trailingAnchor), view.topAnchor.constraint(equalTo: content.topAnchor), view.bottomAnchor.constraint(equalTo: content.bottomAnchor)]) }
+        // These alternative viewers fill the editor even while hidden. Their
+        // intrinsic sizes must not constrain the containing window's resize range.
+        for view in [image, player, binary] {
+            view.setContentHuggingPriority(.defaultLow, for: .vertical)
+            view.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            view.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+            view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        }
         NSLayoutConstraint.activate([
             header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10), header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10), header.topAnchor.constraint(equalTo: topAnchor, constant: 6), header.heightAnchor.constraint(equalToConstant: 28),
             split.leadingAnchor.constraint(equalTo: leadingAnchor), split.trailingAnchor.constraint(equalTo: trailingAnchor), split.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 6), split.bottomAnchor.constraint(equalTo: status.topAnchor, constant: -4),
