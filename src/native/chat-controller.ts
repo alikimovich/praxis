@@ -10,6 +10,7 @@ import { matches, permissionModes, snapshot } from './chat-snapshot'
 import { cardAction } from './chat-actions'
 
 export interface ChatServices {
+  restoreIslands?: (chat: string, root: string, recordId: string) => void
   invoke: (channel: string, ...args: any[]) => Promise<any>
   render: (state: NativeChatSnapshot) => void
   effect: (effect: NativeChatEffect) => void
@@ -65,6 +66,7 @@ export class NativeChatController {
         chat.title = live.record.title
         chat.isolation = live.isolation?.state ?? 'live'
       }
+      if (live.record.id) this.services.restoreIslands?.(chat.chat, chat.root, live.record.id)
       chat.ready = true
       this.settingsChanged(chat)
       this.changed(chat)

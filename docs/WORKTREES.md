@@ -218,3 +218,17 @@ and another read on landing events; existing drafts remain untouched. A parked
 or abandoned binding offers explicit reload/removal instead of endless IPC errors.
 Content Save is serialized with repository writes and checks its loaded revision
 before applying through edit history. See [CONTENT_CONTROLS.md](CONTENT_CONTROLS.md).
+
+## Chat-island source edits
+
+Chat islands validate literal bindings against the creating agent's source tree,
+but persist their spec/turn association in the native profile. They wait for a
+successful terminal/landing event before enabling live edits; failed or parked
+turns leave them unavailable. Closing or stopping the chat cancels composition.
+
+A committed control gesture checks the loaded file revision inside the repository
+write queue and writes its entire single-file batch as one undo group. Stale source
+or a changed/closed island rejects the write. Controls never follow current DOM
+selection. The next chat turn picks up committed live values through normal
+worktree synchronization and a compact provider-only context summary. Full runtime
+scrubbing and multi-file island transactions are not supported by the first slice.

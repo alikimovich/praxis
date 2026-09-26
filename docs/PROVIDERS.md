@@ -11,6 +11,7 @@ capabilities instead of assuming Claude, Codex, gateways, and Gemini are interch
 | Skills menu before the first turn | Yes | Yes | Yes, through Codex | Yes |
 | Provider-native coding tools | Yes | Yes | Depends on model through Codex | Limited |
 | Praxis preview location/screenshots | Yes | Yes | Yes, image support depends on endpoint | No |
+| On-demand native chat islands (`chat_island`) | Yes | Yes | Yes, through Codex | No |
 | Register custom controls / open desktop inspector | Yes | Yes | Yes, through Codex | No |
 | Open mini code editor / highlight exact source | Yes | Yes | Yes, through Codex | No |
 | Praxis worktree control tools | No | Yes | Yes, through Codex | No |
@@ -206,3 +207,17 @@ portable across providers; experimental Gemini explains its missing tools. See
 Codex's routine skill-description context-budget advisory is omitted from chat
 activity. Skill availability and provider context limits are unchanged. Other
 item-level warnings remain visible with their full text, once per item per turn.
+
+## Native chat islands
+
+Interactive Claude and Codex/custom-endpoint sessions expose `chat_island` with
+catalog, define and read actions. Definitions bind literal values in the session's
+source tree and attach to its native conversation. Detached/background children
+cannot create islands. The default auto engine uses saved Gateway credentials for
+Jev to select/order whole prepared blocks; missing credentials use the agent's
+layout with explicit fallback reporting. Runtime failures are not hidden.
+
+Native interactions call Bun source services directly and do not invoke a model.
+Current values and island revisions enter the next provider turn as application
+context, separately from the visible user transcript. See [CHAT-ISLANDS.md](CHAT-ISLANDS.md)
+for the catalog, limits and verification status.

@@ -10,6 +10,25 @@ context, not a prerequisite. Preserve existing values and behavior. Use Praxis's
 controls tools; never implement an editor UI or install a tuning dependency in the
 target project to satisfy a request for Praxis controls.
 
+## Interactive islands in chat
+
+For controls requested in the conversation, prefer `chat_island`. Call
+`action: "catalog"`, inspect the actual source, expose literal constants consumed
+by the project, then `action: "define"` with `manifest`, `blocks`, `engine: "auto"`
+and the original `prompt`. A `group` lists parameter IDs; a `point` block requires
+exactly two bounded number IDs (x/y), useful for light direction. Groups may expose
+spring physics, tween easing, typography or individual shadow-layer values.
+For shadow lighting, implement the deterministic mapping from light coordinates
+to the project's shadow values; the island never evaluates arbitrary code.
+Jev chooses and orders whole prepared blocks, preserving compound bindings.
+
+Read an existing island with `action: "read"`, then pass its `id` and `revision`
+when updating it. Controls write on gesture release/field commit, have Reset/Undo,
+and wait for successful landing. Dynamic layer add/remove and runtime-live preview
+scrubbing are not available yet; expose fixed layer groups or revise them through
+a follow-up agent edit. Preserve the current behavior and explain engine fallback.
+The inspector workflow below remains for explicit inspector/persistent-panel requests.
+
 ## Choose the binding
 
 - **Copy and collections:** call `content_controls` with `action: "catalog"` for the

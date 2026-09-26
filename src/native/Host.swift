@@ -252,6 +252,10 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             chatDivider.begin(at: .zero)
             chatDivider.drag(to: NSPoint(x: (c["delta"] as? Double ?? 0), y: 0)); chatDivider.end()
             reply(id, true)
+        case "islandPerform":
+            if let island = chat.model.snapshot?.messages.flatMap({ $0.segments.compactMap { $0.island } }).first(where: { $0.id == c["island"] as? String }) {
+                chat.model.islandAction(island, action: c["action"] as? String ?? "", values: c["values"] as? [String: Any] ?? [:]); reply(id)
+            } else { reply(id, error: "Island not found") }
         case "chatInspect": reply(id, chat.inspect())
         case "chatPerform": chat.model.action(c["action"] as? String ?? "", id: c["card"] as? String, value: c["value"] as? String, answers: c["answers"] as? [String: String]); reply(id)
         case "composerState": composer.update(c["state"] as? [String: Any] ?? [:])

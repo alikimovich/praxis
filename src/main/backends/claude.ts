@@ -1,3 +1,5 @@
+import { chatIslandShape, chatIslandDescription } from '../../../bin/chat-island-schema.mjs'
+import { runChatIslandTool } from '../chat-islands'
 import { runContentControlTool } from '../content-control-tools'
 import { contentControlsShape } from '../../../bin/content-control-tool-schema.mjs'
 import { runProjectUiTool } from '../project-ui'
@@ -89,6 +91,7 @@ const PREVIEW_TOOL_NAMES = new Set([
 const PRAXIS_TOOL_NAMES = new Set([
   ...PREVIEW_TOOL_NAMES,
   'mcp__praxis__define_controls',
+  'mcp__praxis__chat_island',
   'mcp__praxis__content_controls',
   'mcp__praxis__open_controls',
   'mcp__praxis__open_code',
@@ -677,6 +680,10 @@ async function startSession(
           }
         }
       ),
+      tool('chat_island', chatIslandDescription, chatIslandShape, async (args) => {
+        const result = ctx?.sessionId ? { error: 'Background edits cannot create chat islands.' } : await runChatIslandTool(emitKey, root, args, options.connectionId)
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], isError: !!(result as { error?: string }).error }
+      }),
       tool(
         'define_controls',
         'Register a control panel of tweakable parameters (sliders, color pickers, toggles) ' +

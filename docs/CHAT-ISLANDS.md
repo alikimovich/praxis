@@ -1,7 +1,42 @@
 # On-demand interactive islands in native chat
 
-Status: planned, 2026-09-24. This document records the agreed product direction
-and implementation sequence; none of the new island runtime is shipped yet.
+Status: first working slice implemented, 2026-09-25. The target design and remaining
+stages follow below; the current implementation is deliberately bounded.
+
+## Implemented slice
+
+- Claude/Codex/custom endpoints expose `chat_island` catalog/define/read. Background
+  children cannot create islands. Agent-prepared groups and 2D points render in
+  SwiftUI inside the originating assistant turn, with standard fields and Bézier
+  handles/presets. Springs use grouped parameters for the project's actual engine.
+- Jev selects and orders whole prepared blocks via the installed json-render
+  evaluator. The coding agent determines group membership. Arbitrary nested layout
+  and Jev-generated regrouping are not implemented yet. Missing credentials retain
+  the prepared layout and report the actual agent engine.
+- Up to 12 literal fields in one source file; points batch x/y into one queued,
+  revision-checked write and undo group. Reset, Reload and instrumented Replay are
+  supported. HMR/reload follows commits; dragging is local, not runtime-live preview.
+- Profile-owned records attach to a durable session record and user-turn ordinal,
+  independent of regenerated message IDs. Revisions update the same island. A
+  pending replacement disables that island until landing; keeping the previous
+  usable revision during this wait remains follow-up work. Undo history is
+  in-memory and is not restored across app launches.
+- Provider-only next-turn context includes committed values; ordinary gestures do
+  not call models. Closed/stopped chats and failed/parked turns cannot activate a
+  pending island. Source drift requires Reload; unsupported literals require rebind.
+- The shadow fixture verifies a 2D light control drives actual multilayer CSS
+  shadows after source commit. Layer addition/removal remains an agent edit; a
+  repeatable native collection editor is not implemented. Color currently uses
+  validated text entry, not a native color picker. Curve motion samples, specialized
+  spring previews, row/tab layouts and timelines remain follow-ups.
+
+Validation: deterministic composition for tween/spring/combined/typography/shadow,
+source/undo/conflict/history tests, MCP transport and Swift native integration.
+Inspected the native island capture. Background integration passed with reduced
+pointer/animation coverage. Full native integration passed the island checks but
+later hit the existing style-inspector source-edit timeout. No live provider or
+Jev network call was made; pointer dragging/IME/accessibility acceptance remains.
+
 
 ## Product outcome
 
@@ -50,11 +85,9 @@ locations or unrestricted UI code. Candidate preparation includes meaningful
 labels, limits, units, groups, alternatives and relationships.
 
 Implement the native block registry in SwiftUI/AppKit. No island WebView or React
-chat dependency. Preserve the existing Electron/browser controls workflows;
-rendering islands in those clients is a later adapter, not a first-release gate.
-Gate island tools on client capability and return useful text for unsupported
-history entries. This work must also function after the main UI WebView is removed
-by [the native migration](NATIVE-MIGRATION.md).
+chat dependency. Praxis is now native-only: Electron/browser clients are retired.
+Keep provider capability checks and useful text for unsupported history entries.
+The implementation uses the Bun/Swift seam directly with no application WebView.
 
 References for the intended interaction:
 
@@ -128,6 +161,8 @@ readable unavailable entry with regeneration/recovery actions.
 | Text, toggle, select, color | Typed values and inline validation. |
 | Bézier editor | Draggable handles, named presets, numeric coordinates and a local motion sample. Reuse existing array/string serializers; constrain x coordinates to [0,1], allow supported y overshoot. |
 | Spring editor | Compound controls selected from the library's actual parameterization; physics stiffness/damping/mass and duration/bounce remain distinct. A sample requires a matching adapter or an explicit illustrative label. |
+| Point / vector | Two bounded numbers edited together; useful for light position and transforms. Implemented. |
+| Repeatable groups | Future add/remove/reorder controls for shadow layers and other collections. |
 | Action button | Validated Replay, Undo, Reset or agent-request action. Reset restores captured initial values as one undoable edit. |
 
 Combined animations initially use labeled groups for targets/tracks and shared
@@ -222,10 +257,10 @@ committed values and recent edit summaries, not a message per pointer movement.
    prop/style bindings, timelines/keyframes, pinning/reopening islands outside chat,
    and additional client renderers. Each has its own capability and validation gate.
 
-Stages 1–2 can proceed alongside workspace migration through the typed Bun/Swift
-chat seam. Coordinate shared chat/host files with that work; no new React bridge
-should be introduced. Ship focused commits and update this plan and TASKS as each
-exit check is met. The first implementation chunk is stage 1, not all six stages.
+The workspace migration has completed. Use the typed Bun/Swift chat seam; no
+React bridge should be introduced. Ship focused commits and update this plan and TASKS as each
+exit check is met. The implemented slice spans the foundations of stages 1–4; remaining acceptance
+work and catalog expansion are tracked in TASKS.
 
 ## Verification
 

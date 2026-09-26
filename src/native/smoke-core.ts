@@ -1,3 +1,4 @@
+import { checkChatIslands } from './smoke-islands'
 import assert from 'node:assert/strict'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -55,6 +56,7 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   await page(`(()=>{document.documentElement.style.backgroundColor='rgb(250,250,250)'})()`)
   await inspect('shellInspect',s=>!s.previewHeaderLightText)
   await page(`(()=>{document.documentElement.style.removeProperty('background-color');document.body.style.removeProperty('background-color')})()`)
+  await checkChatIslands(host, fixture, artifacts)
   const initial=await host.request('layoutInspect')
   for(const delta of [-30,30,-20,20])await host.request('dividerPerform',{delta})
   await inspect('layoutInspect',s=>Math.abs(s.width-initial.width)<1)
