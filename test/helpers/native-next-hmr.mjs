@@ -48,7 +48,34 @@ try {
   await writeFile(join(root, 'app/Leaf.tsx'), card.replace("'use client'\n", ''))
   await writeFile(
     join(root, 'app/Card.tsx'),
-    "'use client'; import Leaf from './Leaf'; export default function Card({label}:{label:string}) {return <Leaf label={label}/> }"
+    "'use client'; import Leaf from './Leaf'; import Effect from './Effect'; export default function Card({label}:{label:string}) {return <><Leaf label={label}/><Effect/></> }"
+  )
+  await writeFile(
+    join(root, 'app/hover-effect.ts'),
+    `'use client';
+import { useEffect, type RefObject } from 'react';
+const RADIUS = 32;
+function attach(node: HTMLElement) {
+  const enter = () => { node.style.width = RADIUS + 'px' };
+  node.addEventListener('mouseenter', enter);
+  return () => node.removeEventListener('mouseenter', enter);
+}
+export default function HoverEffect({ targetRef }: {targetRef: RefObject<HTMLDivElement | null>}) {
+  const install = attach;
+  useEffect(() => install(targetRef.current!), [targetRef, install]);
+  return null;
+}`
+  )
+  await writeFile(
+    join(root, 'app/Effect.tsx'),
+    `'use client';
+import { useRef } from 'react';
+import dynamic from 'next/dynamic';
+const HoverEffect = dynamic(() => import('./hover-effect'), {ssr:false});
+export default function Effect() {
+  const ref = useRef<HTMLDivElement>(null);
+  return <><HoverEffect targetRef={ref}/><div ref={ref} data-hover-effect style={{height:20}}>Hover effect</div></>;
+}`
   )
   const installed = spawnSync('bun', ['install'], { cwd: root, stdio: 'inherit', timeout: 120000 })
   if (installed.error) throw installed.error
@@ -67,14 +94,14 @@ try {
   host.send('visible', { view: 'preview', visible: true })
   host.send('load', { view: 'preview', url: info.url })
   const page = (code) => host.request('evaluate', { view: 'preview', code })
-  async function wait(check) {
+  async function wait(check, label = 'page update') {
     for (let i = 0; i < 200; i++) {
       try {
         if (await check()) return
       } catch {}
       await Bun.sleep(100)
     }
-    throw Error('timed out')
+    throw Error('timed out: ' + label)
   }
   await wait(() => page('!!document.querySelector("button")'))
 
@@ -146,6 +173,55 @@ try {
   await interact('undo')
   await wait(async () => (await shadow()) === initial)
   assert.equal(await page('window.hmrSentinel'), 42, 'Undo must not reload the page')
+  console.log('Component, source controls and Undo passed; checking imported hover callback.')
+  const effect = await islands.tool('test', root, {
+    action: 'define',
+    engine: 'agent',
+    manifest: {
+      file: 'app/hover-effect.ts',
+      component: 'Effect',
+      title: 'Hover radius',
+      params: [
+        {
+          id: 'radius',
+          label: 'Radius',
+          kind: 'number',
+          min: 1,
+          max: 100,
+          apply: { strategy: 'literal', anchor: 'const RADIUS = ' }
+        }
+      ]
+    },
+    blocks: [{ id: 'geometry', title: 'Geometry', kind: 'group', params: ['radius'] }]
+  })
+  assert.ok(effect.id, JSON.stringify(effect))
+  await islands.settle('test', true)
+  const radius = () =>
+    page(
+      `(()=>{const el=document.querySelector('[data-hover-effect]');el.dispatchEvent(new MouseEvent('mouseenter'));return el.style.width})()`
+    )
+  assert.equal(await radius(), '32px')
+  const changeEffect = async (action, values = {}) => {
+    const v = islands.sessions.get('test').views.get(effect.id)
+    await islands.interact({
+      chat: 'test',
+      id: effect.id,
+      revision: v.revision,
+      sourceRevision: v.sourceRevision,
+      operation: crypto.randomUUID(),
+      action,
+      values
+    })
+  }
+  await changeEffect('commit', { radius: 80 })
+  await wait(async () => (await radius()) === '80px', 'imported radius 80')
+  await changeEffect('undo')
+  await wait(async () => (await radius()) === '32px')
+  assert.equal(
+    await page('window.hmrSentinel'),
+    42,
+    'Imported imperative effects refresh without navigation'
+  )
   console.log(
     'NATIVE-NEXT-HMR PASS — Next 16.3.5 Webpack Fast Refresh, island source commit and Undo in system WebKit without page reload; no provider calls.'
   )

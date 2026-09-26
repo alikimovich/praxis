@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Live website controls (2026-09-25)
+
+- [x] Reproduce stale imperative hover callbacks, fix the website lifecycle, and cover source commit/Undo without reload in native WebKit.
+
 ## Source editor popout (2026-09-25)
 
 - [x] Prevent hidden viewers from collapsing the code window, provide a useful minimum size, and verify resizing/docking/reopening.

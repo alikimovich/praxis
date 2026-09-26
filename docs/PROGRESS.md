@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-25 — Verify live controls on an imperative website effect
+
+Reproduce the reload-only pixelation update on lkmv.ch: source writes and Fast
+Refresh succeed, but installed hover callbacks retain old constants. Repair the
+website's lazy effect with a component refresh boundary and explicit initializer
+dependency, preserving cleanup and original parameter values. Verify radius
+32 → 80 → Undo 32 in the actual Praxis preview without Cmd+R. Inspect the about
+route in light/dark desktop and mobile layouts, then restore dark desktop.
+
+Extend native-next-hmr with a lazy imperative hover-effect fixture, source-bound
+radius commit/Undo and a window sentinel proving no navigation. The old callback
+pattern fails at radius 80; the corrected lifecycle passes in system WebKit.
+Website check, lint, 52 tests and production build pass. Praxis full/native
+typechecks and docs-link checks pass. No provider calls.
+
 ## 2026-09-25 — Restore source-editor popout sizing
 
 Reproduce the code window collapsing from its requested 700-point content height
