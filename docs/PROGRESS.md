@@ -2,6 +2,64 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Preserve candidate audit and contracts (LKM-84 compatibility)
+
+Read the second preserved review conflict without editing that checkout. Restore
+candidate `eb02154cb9e4ceee6a9fac0c872145a8a8edeb94` audit and contract files
+exactly; all six candidate Swift-backend documents now match byte-for-byte.
+Move the compatibility qualifications into the separate
+[audit proposal and reading guide](SWIFT-BACKEND-AUDIT-PROPOSAL.md), preserving
+its entire prior content and updating the task entrypoint. The companion explains
+the canonical XPC/service/recovery requirements and where the detailed slice
+analysis lives without rewriting the candidate's document snapshots.
+
+Validation: Bun docs-links and focused compatibility checks pass: six candidate
+documents identical, complete prior companion retained, 739 local links/line
+bounds valid, no audit conflict markers, documentation-only changes and clean
+whitespace. Candidate differences are limited to the new companion and progress/
+task entries. No Git mutations or other-worktree edits. Manager merge retry and
+configured verification remain pending; no GUI/smoke suites were run.
+
+## 2026-09-27 — Preserve canonical Swift migration plan (LKM-84 compatibility)
+
+Inspected the preserved review checkout read-only and compared candidate
+`eb02154cb9e4ceee6a9fac0c872145a8a8edeb94`. Restore
+[the canonical plan](SWIFT-BACKEND-PLAN.md) byte-for-byte from that candidate;
+retain the entire audit slice/dependency proposal in
+[its own document](SWIFT-BACKEND-AUDIT-PROPOSAL.md) and update audit/task links.
+Clarify that host-local pipes, Bun-first launch and deferred durable operation
+records are review alternatives, not changes to the canonical separate Swift
+service/XPC, supervision and persisted-recovery requirements.
+
+Validation: Bun documentation checks pass; candidate equality and preservation
+of the entire original audit proposal pass; 740 local links/line bounds resolve;
+no audit conflict markers or diff whitespace errors. No runtime changes or Git
+mutations. No GUI/smoke or configured manager verification was run for this repair.
+The previous worker's exit-0 native command remains limited evidence as recorded
+below; subsequent manager verification reported exit 1. Full verification and
+merge retry remain with the manager under the shared desktop lock.
+
+## 2026-09-27 — Swift backend ownership audit and contract proposal (LKM-84)
+
+Document the current native Swift/Bun baseline (`94b6dd6`) in
+[the ownership audit](SWIFT-BACKEND-AUDIT.md), with 133 registration sites,
+146 production Bun modules, dependency edges, native dispatch/event references,
+provider tools and background lifecycle responsibilities. Separate existing
+behavior from proposed typed/versioned Swift ownership, revision/cancellation/
+reconnection rules and narrow helper privileges. Recommend native preferences as
+the first bounded ownership transfer, with failure injection, rollback and ordered
+follow-ups. No runtime, storage or protocol implementation changes.
+
+Validation: configured full/native typechecks and `bun run test:native` exit 0;
+the native command builds and checks direct-launch guards but emits no smoke
+completion marker or PNG artifacts here, so full desktop coverage is unconfirmed.
+Focused preferences, sheets/autosave, workspace-controller and shell-controller
+checks pass. Docs-links, 735 local audit links/line bounds, complete 146-module
+census, 133-registration count and whitespace checks pass. Additional native-boundary
+check fails on the existing undeclared MCP SDK runtime dependency (also recorded
+2026-09-25). No real provider calls or Swift migration parity claims. Files left
+for manager review/staging/commit; no Git metadata changes.
+
 ## 2026-09-25 — Single viewport dimension readout
 
 Remove the AppKit drag readout that overlapped the isolated preview's CSS-pixel
