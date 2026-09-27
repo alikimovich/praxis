@@ -2,6 +2,24 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Preserve candidate audit and contracts (LKM-84 compatibility)
+
+Read the second preserved review conflict without editing that checkout. Restore
+candidate `eb02154cb9e4ceee6a9fac0c872145a8a8edeb94` audit and contract files
+exactly; all six candidate Swift-backend documents now match byte-for-byte.
+Move the compatibility qualifications into the separate
+[audit proposal and reading guide](SWIFT-BACKEND-AUDIT-PROPOSAL.md), preserving
+its entire prior content and updating the task entrypoint. The companion explains
+the canonical XPC/service/recovery requirements and where the detailed slice
+analysis lives without rewriting the candidate's document snapshots.
+
+Validation: Bun docs-links and focused compatibility checks pass: six candidate
+documents identical, complete prior companion retained, 739 local links/line
+bounds valid, no audit conflict markers, documentation-only changes and clean
+whitespace. Candidate differences are limited to the new companion and progress/
+task entries. No Git mutations or other-worktree edits. Manager merge retry and
+configured verification remain pending; no GUI/smoke suites were run.
+
 ## 2026-09-27 — Preserve canonical Swift migration plan (LKM-84 compatibility)
 
 Inspected the preserved review checkout read-only and compared candidate

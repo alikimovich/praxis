@@ -2,8 +2,7 @@
 
 Status: review proposal, 2026-09-27, LKM-84. Documentation only. Current source in
 this worktree is authoritative; historical Electron/browser descriptions are not
-runtime evidence. The [canonical migration plan](SWIFT-BACKEND-PLAN.md) governs implementation;
-this audit and its alternatives are review material. No migration, storage change, automatic merge, or worktree removal
+runtime evidence. No migration, storage change, automatic merge, or worktree removal
 is authorized by this document. Validation does not establish Swift backend parity.
 
 Read together:
@@ -15,7 +14,7 @@ Read together:
 - [Event census](SWIFT-BACKEND-EVENTS.md): 240 dispatch/emission/subscription sites,
   including Swift commands, native actions and preview channels.
 - [Proposed contracts](SWIFT-BACKEND-CONTRACTS.md) and
-  [first slice and follow-ups](SWIFT-BACKEND-AUDIT-PROPOSAL.md).
+  [first slice and follow-ups](SWIFT-BACKEND-PLAN.md).
 
 ## Coverage method and limits
 

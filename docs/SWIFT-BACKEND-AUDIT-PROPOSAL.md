@@ -29,6 +29,32 @@ implementation follows the canonical foundation-first order unless that plan is
 explicitly revised. All domain acceptance checks and rollback protections remain
 applicable. No implementation or product-policy change is made here.
 
+## Reading the preserved audit and contract snapshots
+
+The candidate's [ownership audit](SWIFT-BACKEND-AUDIT.md) and
+[contract proposal](SWIFT-BACKEND-CONTRACTS.md) are preserved unchanged alongside
+[the canonical plan](SWIFT-BACKEND-PLAN.md). Read this companion for the detailed
+first-slice analysis and compatibility qualifications: the audit's existing
+“first slice and follow-ups” link leads to the canonical phase plan, while the
+detailed candidate comparison, failure injection and rollback live below.
+The audit and its alternatives remain review material; no migration, storage
+change, automatic merge or worktree removal is authorized by these documents.
+
+The contracts' “Ownership and transport” section describes the host-local,
+direct-call and pipe-first staging alternative, not an adopted replacement for
+the canonical separate Swift service/XPC boundary. Typed service interfaces,
+scope, errors, revisions and operation semantics apply to either transport.
+With XPC, put these interfaces behind an explicit connection endpoint, validate
+decoded DTOs and peer identity, and handle connection invalidation using the
+contracts' snapshot/operation recovery rules. Swift supervises legacy Bun and
+narrow helpers; private pipes may still serve those helper boundaries.
+
+The contracts' reference to the first slice's reduced guarantees refers to the
+staging experiment in this companion. It does not relax the canonical plan's
+persisted intent, recovery checkpoints or single-writer requirements. The
+canonical prerequisites and the alternative's deferred supervision/durable ledger
+are distinguished above; no alternative is approved by retaining it for review.
+
 ## Compare dependency closure before choosing
 
 | Candidate | Required closure | Validation value / reason for order |
