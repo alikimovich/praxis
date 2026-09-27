@@ -375,6 +375,17 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             }
         case "previewInput":
             guard ephemeral, let preview = views["preview"] else { reply(id, error: "Test preview unavailable"); return }
+            if c["prepare"] as? Bool == true {
+                // Native input fixtures must regain the main window after auxiliary windows.
+                // Do this once before gestures, never between contentEditable keystrokes.
+                NSApp.activate(ignoringOtherApps: true)
+                window.makeKeyAndOrderFront(nil)
+                window.contentView?.layoutSubtreeIfNeeded()
+                let focused = window.makeFirstResponder(preview)
+                reply(id, ["active": NSApp.isActive, "key": window.isKeyWindow,
+                           "focused": focused, "visible": preview.window === window && !preview.isHidden])
+                return
+            }
             if let key = c["key"] as? String {
                 let code: UInt16 = key == "ArrowRight" ? 124 : key == "Escape" ? 53 : key == "Enter" ? 36 : 0
                 let chars = key == "ArrowRight" ? "\u{F703}" : key == "Escape" ? "\u{1B}" : key == "Enter" ? "\r" : key

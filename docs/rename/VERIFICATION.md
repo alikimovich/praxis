@@ -1,4 +1,61 @@
+# Current recovery verification — 2026-09-27
+
+Native smoke now reaches NATIVE ISLANDS PASS and NATIVE CORE PASS after fixing
+the document-restoration and synthetic style-selection races. Real keyboard and
+pointer checks remain enabled; the disposable window was foregrounded through
+desktop automation. Full/native typechecks pass. Premature host exit fails the
+test. Manager exact-commit verification and review remain pending.
+
 # Verification — 2026-09-27
+
+## Latest manager feedback: native input
+
+Manager run `run-eFpM7F` passed all 101 unit checks and both typechecks, then failed
+its real native inline-edit gesture (`#native-title.isContentEditable` timeout).
+The worker inspected `test/artifacts/native/failure.png`; its inactive-looking
+window chrome and blank WebKit capture are evidence to investigate, not conclusive
+proof of the failure cause (offscreen capture has known limits).
+
+Read-only comparison against candidate `eb02154` found no focus prerequisite in
+its otherwise unchanged native event injection. The ephemeral/test-only input
+command now activates the app, brings the main window forward, makes WebKit the
+responder and reports readiness. The smoke fixture awaits native/document focus,
+checks the pointer hit target, and awaits the first click's selection toolbar before
+the double-click. The original trusted gestures and editing assertions remain.
+Timeouts now include focus, active element, cursor, heading markup and hit target.
+The change does not accept synthetic DOM double-clicks or skip failed gestures.
+
+The MCP declaration now matches candidate's existing `^1.29.0` dependency fix.
+`@types/react` 18.3.31 and its type-only dependencies are declared and locked.
+Bun 1.3.13 validated the full frozen lock and installed the three-package type graph
+into an empty temporary fixture from cache; this supersedes the previous manual
+`node_modules` workaround. See the updated dependency evidence below.
+
+Worker checks: full/native typechecks, native-boundary, test-runner, setup-next,
+docs-links and native compilation pass. The normal native build is compile-only;
+no app launch, GUI/smoke suite or manager verification command was run this turn.
+Manager must rerun the real native gesture suite under the shared desktop lock.
+The successful build does not establish that the input timeout is resolved on screen.
+
+
+## Manager feedback follow-up
+
+Manager run `run-vvLVHk`: 98 pass, 3 fail; docs-links and the socket/network tests
+passed there. [Baseline evidence and focused fixes](BASELINE-FAILURES.md) supersede
+the earlier unresolved-failure descriptions below. All three reported failures
+reproduced at the original native base. SDK declaration and runner fixtures are
+repaired; the missing React fixture dependency remains a baseline clean-install
+limitation, with a passing diagnostic run using local cached types.
+
+Focused follow-up results: `bun run typecheck`, `bun run typecheck:native`,
+`bun test/native-boundary.mjs`, `bun test/test-runner.mjs`, `bun test/docs-links.mjs`
+and `git diff --check` pass. `bun test/setup-next.mjs` passes only after the local
+cached fixture dependencies described in the evidence document were supplied.
+
+No configured manager sequence or native GUI/smoke suites were run in this
+follow-up. Manager retains desktop verification and staging/commits.
+
+## Initial worker verification
 
 Executed in the supplied native worktree using Bun 1.3.13. No provider calls,
 Git staging/commits, external resource mutations or other worktree edits.

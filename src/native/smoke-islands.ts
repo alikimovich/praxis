@@ -30,7 +30,7 @@ document.body.append(card);
   writeFileSync(indexFile, originalIndex + '<script src="/island-light.js"></script>')
   const wait = async (check: () => Promise<boolean> | boolean) => {
     for (let i = 0; i < 100; i++) { if (await check()) return; await new Promise(r => setTimeout(r, 50)) }
-    throw new Error('Native chat island did not update')
+    throw new Error(`Native chat island did not update; preview=${JSON.stringify(await page("({url:location.href, ready:document.readyState, scripts:Array.from(document.scripts,s=>s.src), demo:!!document.querySelector('#island-shadow-demo')})"))}`)
   }
   try {
     chat.messages = [

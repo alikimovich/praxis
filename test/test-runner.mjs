@@ -100,7 +100,11 @@ try {
   mkdirSync(join(cli, 'test/helpers'), { recursive: true })
   writeFileSync(join(cli, 'test/run.mjs'), readFileSync(new URL('./run.mjs', import.meta.url)))
   writeFileSync(join(cli, 'test/helpers/test-runner.mjs'), readFileSync(new URL('./helpers/test-runner.mjs', import.meta.url)))
-  writeFileSync(join(cli, 'test/native-runtime.mjs'), "console.log('NATIVE-RUNTIME PASS')")
+  // Populate every native member with a console-only stub; no desktop is launched.
+  const nativeFixtures = ['native-runtime', 'native-source-window', 'native-chat-scroll', 'native-next-hmr']
+  for (const name of nativeFixtures) {
+    writeFileSync(join(cli, `test/${name}.mjs`), `console.log('${name.toUpperCase()} PASS')`)
+  }
   writeFileSync(join(cli, 'test/native-runtime-live.mjs'), "console.log('NATIVE-RUNTIME-LIVE SKIP — no credentials')")
   const invoke = args => spawnSync('node', [join(cli, 'test/run.mjs'), ...args], { cwd: cli, encoding: 'utf8', timeout: 10000 })
   const report = result => {
@@ -110,8 +114,8 @@ try {
     return JSON.parse(readFileSync(path))
   }
   const success = invoke(['native', 'live'])
-  assert.equal(success.status, 0, success.stderr)
-  assert.deepEqual(report(success).counts, { PASS: 1, SKIP: 1 })
+  assert.equal(success.status, 0, success.stdout + success.stderr)
+  assert.deepEqual(report(success).counts, { PASS: nativeFixtures.length, SKIP: 1 })
   writeFileSync(join(cli, 'test/native-runtime.mjs'), 'process.exit(1)')
   const failure = invoke(['native'])
   assert.equal(failure.status, 1)

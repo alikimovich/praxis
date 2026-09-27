@@ -8,6 +8,10 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Audit the native baseline, rename owned surfaces and document residual aliases.
 - [x] Preserve profiles, sessions, Git paths and project data with tested compatibility handling.
 - [x] Supply migration/rollback guidance and independent LKM-84 reconciliation mapping.
+- [x] Reproduce manager failures against the native base; repair SDK declaration and runner fixtures.
+- [x] Add/lock the React fixture types and verify a clean frozen install of the type dependency graph.
+- [x] Require foreground/WebKit focus before native smoke gestures and improve timeout diagnostics; retain pointer assertions.
+- [x] Repair navigation/style-selection smoke races and reject premature test-host exit.
 - [ ] Manager: stage/commit, rerun index-based docs-links and unrestricted native/MCP checks before acceptance.
 
 ## Viewport resize feedback (2026-09-25)

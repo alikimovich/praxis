@@ -406,6 +406,10 @@ async function main() {
   })
   host.on('closed', async () => {
     if (cleaning) return
+    if (testing) {
+      console.error('Native host closed before the smoke suite completed')
+      process.exitCode = 1
+    }
     await cleanup()
     if (!testing) process.exit(0)
   })

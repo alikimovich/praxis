@@ -2,6 +2,53 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Repair native verification handoffs for LKM-85
+
+Restore the actual original preview document after the History API reload check,
+so the island fixture edits the document being displayed. Use the real preview
+source stamp for the style fixture and await inspector relayout before capturing
+its action generation; a synthetic selection raced with WebKit selection refresh.
+Keep stale-generation guards, source-write assertions and real pointer/keyboard
+coverage. A test host closing before completion now exits unsuccessfully.
+
+Validation: full/native typechecks pass. The real native smoke suite reaches
+NATIVE ISLANDS PASS and NATIVE CORE PASS, including gestures, style source edits,
+Undo, content editing, chat streaming and preview isolation. The disposable window
+needed foreground activation through desktop automation; no background-test flag
+or live provider calls were used. Manager verification and review follow.
+
+## 2026-09-27 — Prepare native smoke focus and lock React fixture types
+
+Manager run run-eFpM7F passed all 101 unit tests but timed out entering inline edit.
+Compare candidate eb02154: its pointer helper likewise sends input without a
+foreground/focus prerequisite. Add test-only activation and WebKit responder setup
+before gestures, await document focus and the first selection, and report DOM focus,
+hit target and heading markup on timeouts. Retain trusted double-click, input
+isolation, caret, Escape and Enter assertions. Inspect the manager's failure PNG;
+offscreen capture alone cannot prove the exact input failure cause.
+
+Align the MCP declaration with candidate's existing ^1.29.0 fix. Declare React 18
+fixture types and lock their transitive types using cached registry metadata and
+published integrity evidence. Bun validates the frozen lock and installs all three
+type packages into an empty temporary fixture. Full/native typechecks, native
+compilation and focused non-GUI checks pass. No GUI/smoke or configured manager
+verification command was run; the focus repair still needs the shared-desktop run.
+
+## 2026-09-27 — Diagnose LKM-85 manager verification failures
+
+Reproduce all three reported failures against native base 94b6dd6. Declare the
+existing MCP SDK as a direct runtime dependency and regenerate Bun's lockfile.
+Repair the runner self-test's missing native stubs, preserving its assertions and
+using console-only fixtures. Record baseline evidence in
+`docs/rename/BASELINE-FAILURES.md`. The unchanged Next fixture passes when supplied
+cached React types, but its baseline missing dev dependency remains a clean-install
+limitation because registry resolution is unavailable here. No incomplete package
+addition or override is left behind. No GUI, provider or manager verification suite
+was run; manager owns final desktop checks and commits.
+
+Validation: full/native typechecks, native-boundary, test-runner and docs-links
+pass. setup-next passes with local cached fixture types; clean-install gap remains.
+
 ## 2026-09-27 — Trezi rename and legacy compatibility (LKM-85)
 
 Rename the native product, CLI/package, source paths, setup helpers, new metadata,

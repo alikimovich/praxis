@@ -47,7 +47,10 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   host.emit('menu', { action: 'reload' })
   await wait(()=>page('!!document.querySelector("#native-title") && !window.reloadSentinel'),'reload completes')
   assert.equal(await page('location.href'), route, 'Reload preserves the current path, query and fragment')
-  await page(`history.replaceState({}, '', ${JSON.stringify(originalURL)})`)
+  // Restore the actual document, not just its History API URL, before later
+  // fixtures edit index.html and depend on its live-reload connection.
+  await page(`(() => { window.reloadSentinel = true; location.href = ${JSON.stringify(originalURL)}; return true })()`)
+  await wait(() => page(`location.href === ${JSON.stringify(originalURL)} && !!document.querySelector('#native-title') && !window.reloadSentinel`), 'original fixture restored')
   console.log('Native reload preserves History API route, query and fragment.')
   await wait(() => page(`getComputedStyle(document.documentElement).scrollbarWidth === 'none'`), 'mobile scrollbar policy restored after navigation')
   await host.request('shellPerform', { action: 'device' })
@@ -138,21 +141,31 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   await invoke('preview:set-select-mode',false)
   assert.equal(await page('typeof window.api'), 'undefined')
   await assert.rejects(()=>dispatchIPC('preview',{type:'invoke',channel:'source:read',args:[fixture,'index.html:1:0']}))
+  // Give the real preview selection the style fixture's source. A synthetic
+  // element-picked event races with WebKit's layout-driven selection refresh.
+  await page(`document.querySelector('#native-title').setAttribute('data-trezi-source','native-style.tsx:1:36')`)
   const layers=await invoke('layers:read'), heading=layers.nodes.find((n:any)=>n.id==='native-title');assert.ok(heading)
   await send('layers:select',{path:heading.path,fingerprint:{tag:heading.tag,source:heading.source}})
   await inspect('inspectorInspect',s=>!s.visible&&s.fields>2)
   serviceEvents.emit('event','preview:toolbar-action','props')
-  const firstInspector=await inspect('inspectorInspect',s=>s.visible&&s.fields>2)
+  await inspect('inspectorInspect',s=>s.visible&&s.fields>2)
   serviceEvents.emit('event','preview:toolbar-action','props')
   await inspect('inspectorInspect',s=>!s.visible)
   serviceEvents.emit('event','preview:toolbar-action','props')
   await inspect('inspectorInspect',s=>s.visible)
-  serviceEvents.emit('event','preview:element-picked',{tag:'h1',id:'native-title',classes:[],selector:'#native-title',source:'native-style.tsx:1:1',componentSource:null,text:'Hello',rect:{x:0,y:0,width:100,height:20},styles:{opacity:'1'}})
-  const inspector=await inspect('inspectorInspect',s=>s.visible&&s.fields>2&&s.generation>firstInspector.generation)
   assert.deepEqual(await host.request('webViews'),['preview'])
   await wait(async()=> (await invoke('styles:read',['font-size']))?.values?.['font-size'], 'preview computed style after selection')
+  // Wait for the opened inspector's preview relayout to settle before capturing
+  // the generation used by the same native action contract as the UI.
+  let inspector = await host.request('inspectorInspect')
+  for (let i=0;i<20;i++) {
+    await delay(100)
+    const next = await host.request('inspectorInspect')
+    if (next.generation === inspector.generation) { inspector = next; break }
+    inspector = next
+  }
   await host.request('inspectorPerform',{action:{root:fixture,generation:inspector.generation,action:'apply',field:'style:opacity',value:'0.8'}})
-  await wait(()=>readFileSync(join(fixture,'native-style.tsx'),'utf8').includes('0.8'),'native style source edit')
+  try { await wait(()=>readFileSync(join(fixture,'native-style.tsx'),'utf8').includes('0.8'),'native style source edit') } catch (error) { console.error('Native inspector failure', { expected: inspector, actual: await host.request('inspectorInspect') }); throw error }
   await host.request('inspectorPerform',{action:{root:fixture,generation:inspector.generation,action:'close'}})
   await inspect('inspectorInspect',s=>!s.visible)
   const edited=await invoke('text:apply',fixture,{source:'index.html:3:1',text:'Edited through Trezi Native'});assert.ok(edited.applied)
