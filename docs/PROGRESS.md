@@ -2,6 +2,25 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Preserve canonical Swift migration plan (LKM-84 compatibility)
+
+Inspected the preserved review checkout read-only and compared candidate
+`eb02154cb9e4ceee6a9fac0c872145a8a8edeb94`. Restore
+[the canonical plan](SWIFT-BACKEND-PLAN.md) byte-for-byte from that candidate;
+retain the entire audit slice/dependency proposal in
+[its own document](SWIFT-BACKEND-AUDIT-PROPOSAL.md) and update audit/task links.
+Clarify that host-local pipes, Bun-first launch and deferred durable operation
+records are review alternatives, not changes to the canonical separate Swift
+service/XPC, supervision and persisted-recovery requirements.
+
+Validation: Bun documentation checks pass; candidate equality and preservation
+of the entire original audit proposal pass; 740 local links/line bounds resolve;
+no audit conflict markers or diff whitespace errors. No runtime changes or Git
+mutations. No GUI/smoke or configured manager verification was run for this repair.
+The previous worker's exit-0 native command remains limited evidence as recorded
+below; subsequent manager verification reported exit 1. Full verification and
+merge retry remain with the manager under the shared desktop lock.
+
 ## 2026-09-27 — Swift backend ownership audit and contract proposal (LKM-84)
 
 Document the current native Swift/Bun baseline (`94b6dd6`) in

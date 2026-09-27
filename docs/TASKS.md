@@ -5,10 +5,12 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Swift backend architecture audit (LKM-84, 2026-09-27)
 
+- [x] Preserve the canonical migration plan and separate audit-specific proposals after candidate compatibility review.
+
 - [x] Inventory current Bun services/routes/controllers, dependencies and background lifecycle with source references.
 - [x] Propose typed Swift ownership/contracts, narrow JS helpers and a bounded first slice with acceptance checks and rollback; documentation ready for review, not migration acceptance.
 
-Review package: [audit](SWIFT-BACKEND-AUDIT.md), [contracts](SWIFT-BACKEND-CONTRACTS.md), [first slice and ordered follow-ups](SWIFT-BACKEND-PLAN.md).
+Review package: [audit](SWIFT-BACKEND-AUDIT.md), [contracts](SWIFT-BACKEND-CONTRACTS.md), [first slice and ordered follow-ups](SWIFT-BACKEND-AUDIT-PROPOSAL.md).
 
 ## Viewport resize feedback (2026-09-25)
 

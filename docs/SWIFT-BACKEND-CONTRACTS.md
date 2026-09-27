@@ -5,7 +5,23 @@ runtime behavior. Source baseline and all current routes are in the
 [ownership audit](SWIFT-BACKEND-AUDIT.md) and [route map](SWIFT-BACKEND-ROUTES.md).
 No protocol or persistence changes are made by this documentation.
 
-## Ownership and transport
+## Relationship to the canonical plan
+
+The [canonical migration plan](SWIFT-BACKEND-PLAN.md) specifies a separate Swift
+service process and XPC for the application service boundary. That remains the
+implementation direction. The host-local/direct-call and pipe-first staging
+proposal below is a review alternative, not an adopted replacement. Typed service
+interfaces, scope, errors, revisions and operation semantics apply to either
+transport. With XPC, put these interfaces behind an explicit connection endpoint,
+validate decoded DTOs and peer identity, and handle connection invalidation using
+the snapshot/operation recovery rules below. Swift supervises legacy Bun and
+narrow helpers; private pipes may still serve those helper boundaries.
+
+The [audit-specific slice proposal](SWIFT-BACKEND-AUDIT-PROPOSAL.md) distinguishes
+canonical prerequisites from the alternative's deferred supervision and durable
+ledger. No alternative changes the canonical single-writer or recovery requirements.
+
+## Ownership and transport — audit staging alternative
 
 Put the service layer in Swift actors behind typed protocols, separate from
 `@MainActor` AppKit/SwiftUI models. Start in the existing Swift host process; do
@@ -223,7 +239,9 @@ status/result; changed payload returns idempotencyMismatch. Never auto-retry an
 uncertain non-idempotent remote request. Query/reconcile the external result, or
 return recoveryRequired. Bound ledger retention with an explicit advertised
 retry horizon; IDs older than that horizon require status/recovery, not execution.
-The first slice's reduced guarantees are stated in the plan.
+The staging experiment's reduced guarantees are stated in the
+[audit-specific proposal](SWIFT-BACKEND-AUDIT-PROPOSAL.md); they do not relax the
+canonical plan's persisted intent and recovery requirements.
 
 Events carry service epoch and monotonically increasing stream sequence. A
 snapshot includes a cursor taken consistently with its state; subscribe from that
