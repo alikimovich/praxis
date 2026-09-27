@@ -2,6 +2,27 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Swift backend ownership audit and contract proposal (LKM-84)
+
+Document the current native Swift/Bun baseline (`94b6dd6`) in
+[the ownership audit](SWIFT-BACKEND-AUDIT.md), with 133 registration sites,
+146 production Bun modules, dependency edges, native dispatch/event references,
+provider tools and background lifecycle responsibilities. Separate existing
+behavior from proposed typed/versioned Swift ownership, revision/cancellation/
+reconnection rules and narrow helper privileges. Recommend native preferences as
+the first bounded ownership transfer, with failure injection, rollback and ordered
+follow-ups. No runtime, storage or protocol implementation changes.
+
+Validation: configured full/native typechecks and `bun run test:native` exit 0;
+the native command builds and checks direct-launch guards but emits no smoke
+completion marker or PNG artifacts here, so full desktop coverage is unconfirmed.
+Focused preferences, sheets/autosave, workspace-controller and shell-controller
+checks pass. Docs-links, 735 local audit links/line bounds, complete 146-module
+census, 133-registration count and whitespace checks pass. Additional native-boundary
+check fails on the existing undeclared MCP SDK runtime dependency (also recorded
+2026-09-25). No real provider calls or Swift migration parity claims. Files left
+for manager review/staging/commit; no Git metadata changes.
+
 ## 2026-09-25 — Single viewport dimension readout
 
 Remove the AppKit drag readout that overlapped the isolated preview's CSS-pixel

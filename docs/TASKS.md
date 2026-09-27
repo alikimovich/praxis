@@ -3,6 +3,13 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Swift backend architecture audit (LKM-84, 2026-09-27)
+
+- [x] Inventory current Bun services/routes/controllers, dependencies and background lifecycle with source references.
+- [x] Propose typed Swift ownership/contracts, narrow JS helpers and a bounded first slice with acceptance checks and rollback; documentation ready for review, not migration acceptance.
+
+Review package: [audit](SWIFT-BACKEND-AUDIT.md), [contracts](SWIFT-BACKEND-CONTRACTS.md), [first slice and ordered follow-ups](SWIFT-BACKEND-PLAN.md).
+
 ## Viewport resize feedback (2026-09-25)
 
 - [x] Remove the duplicate AppKit dimensions and verify the single CSS viewport badge.
