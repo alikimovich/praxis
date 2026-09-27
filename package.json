@@ -113,8 +113,7 @@
     "svelte": "^5.56.4",
     "zod": "^4.0.0",
     "@alikimovich/content-controls": "file:vendor/content-controls",
-    "typescript": "^5.7.2",
-    "@modelcontextprotocol/sdk": "^1.29.0"
+    "typescript": "^5.7.2"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.2",
