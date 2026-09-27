@@ -1,13 +1,13 @@
 import { fileURLToPath } from 'node:url'
 
 if (process.platform !== 'darwin') {
-  console.error('Praxis requires macOS 13.3 or later.')
+  console.error('Trezi requires macOS 13.3 or later.')
   process.exit(1)
 }
 
 if (process.argv.includes('--help')) {
   console.log(
-    'bun run dev:native [--project /path/to/repo]\nBuild and launch Praxis with Bun + WebKit. Use bun run test:native for integration checks.'
+    'bun run dev:native [--project /path/to/repo]\nBuild and launch Trezi with Bun + WebKit. Use bun run test:native for integration checks.'
   )
   process.exit(0)
 }
@@ -19,12 +19,12 @@ for (let i = 0; i < args.length; i++) {
   }
   if (['--test', '--live'].includes(args[i])) continue
   console.error(
-    `Unknown native argument: ${args[i]}. Use --project /path/to/repo; Praxis manages its dev server.`
+    `Unknown native argument: ${args[i]}. Use --project /path/to/repo; Trezi manages its dev server.`
   )
   process.exit(1)
 }
 
-console.log('Building Praxis Native (Bun + system WebKit)…')
+console.log('Building Trezi Native (Bun + system WebKit)…')
 const cwd = fileURLToPath(new URL('../', import.meta.url))
 const build = Bun.spawn([process.execPath, 'scripts/build-native.mjs'], {
   cwd,

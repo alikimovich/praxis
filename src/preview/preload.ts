@@ -1,11 +1,12 @@
+import { sourceStamp, sourceSelector } from './source-stamp'
 import { ANIMATION_REPLAY } from '../shared/preview-channels'
 /**
  * Preview preload — injected into the previewed app's native WebContentsView.
  *
- * This is what makes praxis's differentiator possible: a click-to-select overlay
+ * This is what makes trezi's differentiator possible: a click-to-select overlay
  * laid over the *real running repo*. When "select mode" is on it highlights the
  * hovered element and, on click, captures that element's identity (tag, a
- * best-effort CSS selector, its `data-praxis-source` stamp if the repo opts in,
+ * best-effort CSS selector, its `data-trezi-source` stamp if the repo opts in,
  * and a few key computed styles) and ships it to the main process, which relays
  * it to the chat renderer.
  *
@@ -65,14 +66,14 @@ import { specifiedValues, varRefName } from './style-provenance'
 
 type CommentMode = 'comment' | 'annotate' | null
 
-// The simulator preview loads praxis's own sim-bridge page (an MJPEG <img> of the
-// booted device), flagged with `?praxisSim=1`. There's no previewed-app DOM there
+// The simulator preview loads trezi's own sim-bridge page (an MJPEG <img> of the
+// booted device), flagged with `?treziSim=1`. There's no previewed-app DOM there
 // to highlight/stamp/inspect, so the entire web overlay below is skipped. The
 // query param (not a page global) is the signal because the preload runs in an
 // isolated world and can't see the page's `window`, but `location` is shared.
 // Phase 2/3 add the simulator-specific overlay separately.
 const IS_SIM_BRIDGE =
-  typeof location !== 'undefined' && /[?&]praxisSim=1\b/.test(location.search)
+  typeof location !== 'undefined' && /[?&](?:trezi|praxis)Sim=1\b/.test(location.search)
 
 /** Computed styles worth surfacing in the inspector + Styles panel: the v1
  *  longhand set (curated, not the whole CSSOM). Longhands, not shorthands, so
@@ -152,7 +153,7 @@ function setStatusPill(text: string | null): void {
   }
   if (!statusEl) {
     const el = document.createElement('div')
-    el.setAttribute('data-praxis-status', '')
+    el.setAttribute('data-trezi-status', '')
     el.style.cssText =
       'position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:2147483646;' +
       'max-width:82%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' +
@@ -188,7 +189,7 @@ let lastHovered: Element | null = null
 function ensureOverlay(): void {
   if (overlayHost) return
   const host = document.createElement('div')
-  host.setAttribute('data-praxis-overlay', '')
+  host.setAttribute('data-trezi-overlay', '')
   // Host itself never paints or intercepts; the shadow tree draws the box.
   host.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483647;'
   const shadow = host.attachShadow({ mode: 'open' })
@@ -210,7 +211,7 @@ function ensureOverlay(): void {
 
   // Alt/Option spacing measurements (rebuilt per hover — see drawMeasure).
   const meas = document.createElement('div')
-  meas.setAttribute('data-praxis-measure', '')
+  meas.setAttribute('data-trezi-measure', '')
   meas.style.cssText = 'position:fixed;inset:0;pointer-events:none;'
 
   // Whole-page mode hint chip (top-center) while C/Y is armed.
@@ -226,7 +227,7 @@ function ensureOverlay(): void {
   // an inline comment/annotate input (State B); enterInputState/collapseInput
   // morph between them in place.
   const toolbar = document.createElement('div')
-  toolbar.setAttribute('data-praxis-toolbar', '')
+  toolbar.setAttribute('data-trezi-toolbar', '')
   toolbar.style.cssText =
     'position:fixed;pointer-events:auto;display:none;box-sizing:border-box;align-items:center;gap:2px;' +
     'padding:4px;background:#1f1f1f;border:1px solid rgba(255,255,255,0.08);border-radius:10px;' +
@@ -236,9 +237,9 @@ function ensureOverlay(): void {
   // textarea's scrollbar) from a <style> scoped inside the shadow root.
   const style = document.createElement('style')
   style.textContent =
-    '[data-praxis-toolbar] textarea::placeholder{color:#8a8a8a}' +
-    '[data-praxis-toolbar] textarea{scrollbar-width:none}' +
-    '[data-praxis-toolbar] textarea::-webkit-scrollbar{display:none}' +
+    '[data-trezi-toolbar] textarea::placeholder{color:#8a8a8a}' +
+    '[data-trezi-toolbar] textarea{scrollbar-width:none}' +
+    '[data-trezi-toolbar] textarea::-webkit-scrollbar{display:none}' +
     // Squircle the injected overlay UI's rounded corners (toolbar pill, icon
     // buttons, badges) to match the app — matches styles.css's global rule.
     ':host *{corner-shape:squircle}'
@@ -272,7 +273,7 @@ function ensureOverlay(): void {
       svg: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'
     },
     delete: {
-      title: 'Ask Praxis to delete this element',
+      title: 'Ask Trezi to delete this element',
       svg: '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'
     }
   }
@@ -389,7 +390,7 @@ const NON_TEXT_TAGS = new Set([
 
 /**
  * True when an element can be edited in place: a directly-stamped element whose
- * only content is plain text (no child elements) — so its `data-praxis-source`
+ * only content is plain text (no child elements) — so its `data-trezi-source`
  * maps to exactly this element's text child. Matches the onDblClick guard so the
  * toolbar's Edit button and the double-click gesture agree on "when it's possible".
  */
@@ -397,7 +398,7 @@ function isTextEditable(el: Element): el is HTMLElement {
   return (
     el instanceof HTMLElement &&
     el.childElementCount === 0 &&
-    el.hasAttribute('data-praxis-source') &&
+    sourceStamp(el) !== null &&
     !NON_TEXT_TAGS.has(el.tagName.toLowerCase())
   )
 }
@@ -412,7 +413,7 @@ function setEditAction(): void {
 
 /**
  * Outline the picked element persistently. Stamped elements highlight every
- * sibling with the same data-praxis-source (the same component/loop instance
+ * sibling with the same data-trezi-source (the same component/loop instance
  * set), Figma-style; the badge on the pick reads "h3 × 4" then.
  */
 let pickedElements: Element[] = []
@@ -431,7 +432,7 @@ function setSelectionHighlight(el: Element | null, group?: Element[]): void {
     try {
       // The stamp may live on el itself or an ancestor; the stamped elements ARE
       // the component instances — outline those (all of them).
-      const same = Array.from(document.querySelectorAll(`[data-praxis-source="${CSS.escape(src)}"]`))
+      const same = Array.from(document.querySelectorAll(sourceSelector(src)))
       if (same.length) els = same
     } catch {
       /* malformed stamp for a selector — outline just the pick */
@@ -440,7 +441,7 @@ function setSelectionHighlight(el: Element | null, group?: Element[]): void {
   selEls = els
   for (let i = 0; i < els.length; i++) {
     const b = document.createElement('div')
-    b.setAttribute('data-praxis-selbox', '')
+    b.setAttribute('data-trezi-selbox', '')
     // Thinner than the 2px hover box — selected-but-not-hovered reads calmer.
     b.style.cssText =
       'position:fixed;pointer-events:none;box-sizing:border-box;display:none;' +
@@ -448,7 +449,7 @@ function setSelectionHighlight(el: Element | null, group?: Element[]): void {
     selLayer.appendChild(b)
   }
   const badge = makeChip()
-  badge.setAttribute('data-praxis-selbadge', '')
+  badge.setAttribute('data-trezi-selbadge', '')
   const tag = (els[0] ?? el).tagName.toLowerCase()
   chipName(badge, group && els.length > 1 ? `${els.length} objects` : els.length > 1 ? `${tag} × ${els.length}` : shortLabel(el))
   // Size comes from positionSelection — it holds the anchor's live rect, and
@@ -530,7 +531,7 @@ const pinDots = new Map<string, { selector: string; dot: HTMLDivElement }>()
 function buildPins(): void {
   // Don't materialize the overlay host just to hold an empty pins layer. An idle
   // preview (no annotations, select/comment off) must leave the previewed app's
-  // DOM untouched — otherwise a stray, empty `data-praxis-overlay` div is injected
+  // DOM untouched — otherwise a stray, empty `data-trezi-overlay` div is injected
   // into every page on load, which shows up when inspecting the app.
   if (!annotationPins.length) {
     pinDots.clear()
@@ -606,7 +607,7 @@ function makeChip(): HTMLDivElement {
   chip.style.cssText = CHIP_CSS
   const name = document.createElement('span')
   const size = document.createElement('span')
-  size.setAttribute('data-praxis-size', '')
+  size.setAttribute('data-trezi-size', '')
   size.style.cssText = 'margin-left:6px;font-weight:500;opacity:0.72;'
   chip.append(name, size)
   return chip
@@ -706,7 +707,7 @@ function measureCap(x: number, y: number, axis: 'x' | 'y'): HTMLDivElement {
 
 function measureLabel(text: string, x: number, y: number): HTMLDivElement {
   const d = document.createElement('div')
-  d.setAttribute('data-praxis-measure-label', '')
+  d.setAttribute('data-trezi-measure-label', '')
   d.textContent = text
   d.style.cssText =
     `position:fixed;pointer-events:none;left:${x}px;top:${y}px;` +
@@ -801,14 +802,14 @@ function cssPath(el: Element): string {
 
 /**
  * The source stamp the opened repo opts into (see DESIGN.md): a
- * `data-praxis-source="path/to/File.tsx:line"` attribute. We walk up to the
+ * `data-trezi-source="path/to/File.tsx:line"` attribute. We walk up to the
  * nearest stamped ancestor so a click on a deep text node still resolves to the
  * component that owns it.
  */
 function findSource(el: Element): string | null {
   let node: Element | null = el
   while (node) {
-    const stamp = node.getAttribute('data-praxis-source')
+    const stamp = sourceStamp(node)
     if (stamp) return stamp
     node = node.parentElement
   }
@@ -816,15 +817,15 @@ function findSource(el: Element): string | null {
 }
 
 /**
- * The nearest COMPONENT-instance call site (v8 F3a): `data-praxis-component-source`,
+ * The nearest COMPONENT-instance call site (v8 F3a): `data-trezi-component-source`,
  * which the stamp plugin forwards through `{...props}` so the authored
- * `<Component …/>` wins over the innermost host's `data-praxis-source`. Walk up the
+ * `<Component …/>` wins over the innermost host's `data-trezi-source`. Walk up the
  * same way so a click on a deep child still resolves to its owning instance.
  */
 function findComponentSource(el: Element): string | null {
   let node: Element | null = el
   while (node) {
-    const stamp = node.getAttribute('data-praxis-component-source')
+    const stamp = sourceStamp(node, true)
     if (stamp) return stamp
     node = node.parentElement
   }
@@ -961,7 +962,7 @@ let styleStashEl: HTMLElement | null = null
 
 /**
  * The element style ops target: the current selection, re-resolved through its
- * `data-praxis-source` stamp when HMR swapped the node out from under us.
+ * `data-trezi-source` stamp when HMR swapped the node out from under us.
  */
 function resolveStyleTarget(): HTMLElement | null {
   if (threeD.active()) {
@@ -975,7 +976,7 @@ function resolveStyleTarget(): HTMLElement | null {
     el = null
     if (src) {
       try {
-        el = document.querySelector(`[data-praxis-source="${CSS.escape(src)}"]`)
+        el = document.querySelector(sourceSelector(src))
       } catch {
         el = null
       }
@@ -1284,7 +1285,7 @@ function commitEdit(): void {
   const el = endEdit()
   if (!el) return
   const text = el.textContent ?? ''
-  const source = el.getAttribute('data-praxis-source')
+  const source = sourceStamp(el)
   if (source && text.trim() !== editOriginal.trim()) {
     ipcRenderer.send(TEXT_EDIT, { source: source.slice(0, 256), text: text.slice(0, 2000) })
   }
@@ -1375,7 +1376,7 @@ function resetInput(): void {
   commenting = null
   inputKind = null
   inputFromMode = false
-  if (toolbarEl) toolbarEl.removeAttribute('data-praxis-composer')
+  if (toolbarEl) toolbarEl.removeAttribute('data-trezi-composer')
   if (inputEl) inputEl.value = ''
   if (inputWrapEl) {
     inputWrapEl.style.opacity = '0'
@@ -1398,7 +1399,7 @@ function enterInputState(kind: CommentMode, el: Element, fromMode: boolean): voi
   inputEl.value = ''
   inputEl.placeholder = kind === 'annotate' ? 'Add a note…' : 'Ask for changes…'
   submitEl.style.background = kind === 'annotate' ? '#f59e0b' : '#2563eb'
-  toolbarEl.setAttribute('data-praxis-composer', '')
+  toolbarEl.setAttribute('data-trezi-composer', '')
   setTrailingActions(false)
   paintToggles()
   animatePill(() => {
@@ -1654,7 +1655,7 @@ function hideScrollbars(on: boolean): void {
   // desktop-style bar drew right over the frame's edge otherwise).
   if (on && !frameStyle) {
     frameStyle = document.createElement('style')
-    frameStyle.setAttribute('data-praxis-frame-style', '')
+    frameStyle.setAttribute('data-trezi-frame-style', '')
     frameStyle.textContent =
       '::-webkit-scrollbar{display:none !important;width:0 !important;height:0 !important}' +
       '*,*::before,*::after{scrollbar-width:none !important}'
@@ -1677,7 +1678,7 @@ function setFrame(on: boolean): void {
     return
   }
   const host = document.createElement('div')
-  host.setAttribute('data-praxis-frame', '')
+  host.setAttribute('data-trezi-frame', '')
   host.style.cssText =
     'position:fixed !important;inset:0 !important;overflow:hidden !important;' +
     'pointer-events:none !important;z-index:2147483646 !important'
@@ -1806,13 +1807,13 @@ window.addEventListener('pagehide', () => {
   if (editing) endEdit()
 })
 
-// Report whether the previewed app is "praxis-ready" — i.e. its elements carry
-// data-praxis-source stamps — so the app can offer to set up an unprepared project.
+// Report whether the previewed app is "trezi-ready" — i.e. its elements carry
+// data-trezi-source stamps — so the app can offer to set up an unprepared project.
 // Re-sampled a few times so a slow-rendering SPA (stamps appear after `load`)
 // isn't falsely flagged; the renderer retracts the offer on any stamps>0 report.
 function reportReadiness(): number {
   if (!location.protocol.startsWith('http')) return -1 // skip the placeholder
-  const stamps = document.querySelectorAll('[data-praxis-source]').length
+  const stamps = document.querySelectorAll(sourceSelector()).length
   ipcRenderer.send(READINESS, { stamps, url: location.href, documentStartedAt: performance.timeOrigin })
   return stamps
 }
@@ -1861,6 +1862,7 @@ window.addEventListener('load', () => {
   })
   ipcRenderer.on(ANIMATION_REPLAY, (_e, component: unknown) => {
     if (typeof component === 'string' && component.length <= 80)
+      window.dispatchEvent(new CustomEvent('trezi:animation-replay', { detail: component }))
       window.dispatchEvent(new CustomEvent('praxis:animation-replay', { detail: component }))
   })
   ipcRenderer.on(STYLES_REPLAY, (_e, p: { prop?: unknown; from?: unknown; to?: unknown }) => {

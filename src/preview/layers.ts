@@ -1,3 +1,4 @@
+import { sourceStamp, sourceSelector } from './source-stamp'
 /**
  * Layers panel — DOM tree walk + node resolution, injected alongside the rest
  * of `preload.ts` into the previewed app's isolated world. Split out because
@@ -5,7 +6,7 @@
  * and `preload.ts` only wires the IPC channels into it.
  *
  * Node identity is a DOM CHILD-INDEX PATH (`[0,2,1]`), not a stable id — there
- * is no such thing here. `data-praxis-source` stamps aren't unique (a `.map()`
+ * is no such thing here. `data-trezi-source` stamps aren't unique (a `.map()`
  * over N items puts the same stamp on N nodes) and `cssPath` is lossy (5-level
  * cap), so a path recomputed fresh on every walk is the only workable handle.
  * Every action that resolves a path back to a live element re-validates a
@@ -37,7 +38,7 @@ function elementChildren(el: Element): Element[] {
 }
 
 /**
- * Walk from `document.body` (not `documentElement`) — praxis's own overlay
+ * Walk from `document.body` (not `documentElement`) — trezi's own overlay
  * chrome (`ensureOverlay`'s host, the status pill, the mobile frame) is all
  * appended to `documentElement`, so rooting here excludes it for free.
  */
@@ -54,7 +55,7 @@ export function buildLayersSnapshot(): LayersSnapshot {
     }
     totalSeen++
     const path = parentPath ? [...parentPath, elIndex(el)] : []
-    const source = el.getAttribute('data-praxis-source')
+    const source = sourceStamp(el)
     if (source) stampCounts.set(source, (stampCounts.get(source) ?? 0) + 1)
 
     const tag = el.tagName.toLowerCase()
@@ -84,7 +85,7 @@ export function buildLayersSnapshot(): LayersSnapshot {
       id: (el.id || '').slice(0, 50) || null,
       classes,
       source: source ? source.slice(0, 256) : null,
-      componentSource: (el.getAttribute('data-praxis-component-source') || '').slice(0, 256) || null,
+      componentSource: (sourceStamp(el, true) || '').slice(0, 256) || null,
       text,
       childCount: children.length,
       dupStamp: false // filled in after the walk, once counts are final
@@ -141,7 +142,7 @@ export function resolveLayerElement(path: number[], fingerprint: LayerFingerprin
   const el = resolvePath(path)
   if (!el) return null
   if (el.tagName.toLowerCase() !== fingerprint.tag) return null
-  const src = el.getAttribute('data-praxis-source')
+  const src = sourceStamp(el)
   if ((src || null) !== (fingerprint.source || null)) return null
   return el
 }

@@ -5,22 +5,22 @@ user-edited title, renders newest-first, and can be renamed or closed. The plain
 `projectKey(root)` session key still identifies the first process-level session, but
 it has no product role or special rail treatment.
 
-When Praxis stops a project's sessions (project close, LRU suspension, or quit), the
+When Trezi stops a project's sessions (project close, LRU suspension, or quit), the
 last-active chat is persisted as the current continuation and restored on the next
 open (the transcript always; a Claude SDK resume when the record carries
 `sdkSessionId`). Other stopped chats enter History. Starting a new chat is the way to
 begin with fresh model context; closing the old one archives it. Records written by
-older Praxis builds with `slot: 'main'` are accepted as the current continuation and
+older Trezi builds with `slot: 'main'` are accepted as the current continuation and
 rewritten to `slot: 'current'` on the next save.
 
 Project memory is deliberately separate from chat history and repository state:
 
-- Stored per machine under Praxis userData (`praxis/project-memories/`), keyed by a
+- Stored per machine under Trezi userData (`trezi/project-memories/`), keyed by a
   hash of the canonical project root.
-- Never placed in `.praxis/`, a Git worktree, a commit, or a published PR.
+- Never placed in `.trezi/`, a Git worktree, a commit, or a published PR.
 - Bounded to 16,000 characters because it is model context, not document storage.
 - Injected into every new chat and background-agent context.
-- If memory changes while a chat stays live, Praxis injects that revision once on the
+- If memory changes while a chat stays live, Trezi injects that revision once on the
   chat's next turn instead of repeating it on every turn.
 - After every successful interactive turn, the selected provider runs a separate,
   tool-free evaluation. It merges only durable decisions, stable preferences,

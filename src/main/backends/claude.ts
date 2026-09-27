@@ -31,7 +31,7 @@ import { oklchScale } from '../oklch'
 import { observeAgentPreview } from '../preview-observation-tools'
 import { discoverPortableSkills } from '../bundled-skills'
 import { withSkillReferences } from './skill-menu'
-import { praxisRules } from '../rules'
+import { treziRules } from '../rules'
 import { elevationScale, layeredShadow } from '../shadows'
 import { findPack, SKILL_PACKS } from '../skill-packs'
 import { discoverProjectSkills, mergeSlashCommands } from '../skills'
@@ -61,7 +61,7 @@ import type {
   SpawnContext
 } from './types'
 
-// The bundled Praxis agent plugin (skills teaching the preview workflow). Lives
+// The bundled Trezi agent plugin (skills teaching the preview workflow). Lives
 // at the repo root; resolved relative to the compiled main (out/main →
 // ../../agent-plugin), the same walk as index.ts's appIcon. Only wired in when
 // present so a stripped build degrades gracefully instead of erroring.
@@ -75,7 +75,7 @@ const PLUGIN_PATH = join(__dirname, '../../agent-plugin')
  */
 const INTERRUPT_GRACE_MS = 3_000
 
-// The two in-process `praxis` MCP tools, fully-qualified (mcp__<server>__<tool>).
+// The two in-process `trezi` MCP tools, fully-qualified (mcp__<server>__<tool>).
 // Read-only observers of the user's preview — auto-allowed so they never prompt.
 const PREVIEW_TOOL_NAMES = new Set([
   'mcp__praxis__preview_location',
@@ -83,8 +83,8 @@ const PREVIEW_TOOL_NAMES = new Set([
 ])
 // Validated in-process tools are auto-allowed by both allowedTools and
 // canUseTool. Chat islands persist through the island service; main remains
-// the sole writer of app state under `.praxis/`.
-const PRAXIS_TOOL_NAMES = new Set([
+// the sole writer of app state under `.trezi/`.
+const TREZI_TOOL_NAMES = new Set([
   ...PREVIEW_TOOL_NAMES,
   'mcp__praxis__chat_island',
   'mcp__praxis__content_controls',
@@ -488,7 +488,7 @@ function parseQuestions(input: unknown): QuestionSpec[] {
  * Feed the user's picks back to the model as the AskUserQuestion tool result. We
  * DENY the tool with the answer as its message: in headless SDK mode there is no
  * built-in interactive prompt to run, so intercepting `canUseTool` and returning
- * the answer here keeps the whole exchange under praxis's control. The message is
+ * the answer here keeps the whole exchange under trezi's control. The message is
  * phrased as an answer so the model continues with the user's choice in hand.
  */
 function formatAnswers(questions: QuestionSpec[], answers: QuestionAnswers): string {
@@ -549,7 +549,7 @@ async function startSession(
     sendToRenderer(getWindow, 'agent:event', tagged)
   }
 
-  // In-process SDK MCP server bundling Praxis's own agent tools: read-only views
+  // In-process SDK MCP server bundling Trezi's own agent tools: read-only views
   // of the user's live preview (the native NativeView that index.ts owns,
   // reached via the preview-state registry) which OBSERVE what the user sees
   // (agent-browser is the agent's own headless copy for interaction),
@@ -979,12 +979,12 @@ async function startSession(
           }
         }
       ),
-      // Curated catalog of external "taste" skill packs Praxis can OFFER to install.
+      // Curated catalog of external "taste" skill packs Trezi can OFFER to install.
       // Pure/read-only — just formats SKILL_PACKS for the model; no network, no disk,
       // so it's auto-allowed. Its sibling install_skills is NOT (it writes + fetches).
       tool(
         'list_recommended_skills',
-        'List the curated catalog of external design/craft skill packs Praxis can offer to install into ' +
+        'List the curated catalog of external design/craft skill packs Trezi can offer to install into ' +
           "the user's project or user scope. Call this when a design task would benefit from established " +
           'craft you lack (animation/interaction taste, color systems, frontend polish), then OFFER the ' +
           'user a relevant pack — never install silently. Use the returned id with install_skills.',
@@ -1006,7 +1006,7 @@ async function startSession(
       ),
       // Install a curated skill pack (`npx skills add … --copy`) into the project or
       // user scope. SIDE-EFFECTING: writes files + hits the network, so it is NOT in
-      // PRAXIS_TOOL_NAMES — it surfaces a normal permission card. packId is validated
+      // TREZI_TOOL_NAMES — it surfaces a normal permission card. packId is validated
       // against the curated allowlist (skill-packs.ts) BEFORE anything spawns, so an
       // arbitrary repo string can never reach `npx skills add`. Persists to the LIVE
       // root (ctx.liveRoot), not the per-chat worktree, so installs aren't stranded.
@@ -1065,23 +1065,23 @@ async function startSession(
     options: {
       cwd: root,
       settingSources: ['user', 'project', 'local'],
-      // The repo's CLAUDE.md + skills load via settingSources; Praxis's own
+      // The repo's CLAUDE.md + skills load via settingSources; Trezi's own
       // operating rules (v8 R) are appended to the Claude Code preset, with the
-      // preview-tools section (Claude alone can call the in-process praxis tools).
+      // preview-tools section (Claude alone can call the in-process trezi tools).
       systemPrompt: {
         type: 'preset',
         preset: 'claude_code',
-        append: praxisRules({ previewTools: true, projectMemory: ctx?.projectMemory })
+        append: treziRules({ previewTools: true, projectMemory: ctx?.projectMemory })
       },
-      // The praxis MCP server (preview_location / preview_screenshot / chat_island /
+      // The trezi MCP server (preview_location / preview_screenshot / chat_island /
       // spring_to_css / check_contrast / fluid_clamp / color_scale / layered_shadow /
       // line_height / list_recommended_skills / install_skills). All but install_skills
       // are auto-allowed here so they never surface a permission card (canUseTool also
       // short-circuits them, belt-and-suspenders) — main validates everything
       // chat_island persists, and install_skills prompts (writes files + network).
       mcpServers: { praxis: previewServer },
-      allowedTools: [...PRAXIS_TOOL_NAMES],
-      // The bundled Praxis skill plugin (only when present in this build).
+      allowedTools: [...TREZI_TOOL_NAMES],
+      // The bundled Trezi skill plugin (only when present in this build).
       ...(existsSync(PLUGIN_PATH)
         ? { plugins: [{ type: 'local' as const, path: PLUGIN_PATH }] }
         : {}),
@@ -1134,19 +1134,19 @@ async function startSession(
             emit({ type: 'question-request', request })
           })
         }
-        // The in-process praxis tools are auto-allowed: the preview pair are
+        // The in-process trezi tools are auto-allowed: the preview pair are
         // read-only observers of the user's own view, and chat_island only
         // persists through the validated chat-island service. They're also in
         // allowedTools, but guard here too so a canUseTool call for them can
         // never reach a prompt.
-        if (PRAXIS_TOOL_NAMES.has(toolName)) {
+        if (TREZI_TOOL_NAMES.has(toolName)) {
           emit({ type: 'status', text: describeTool(toolName, toolInput) })
           return { behavior: 'allow', updatedInput: toolInput }
         }
         if (touchesSidecar(toolName, toolInput)) {
           return {
             behavior: 'deny',
-            message: 'The .praxis/ sidecar is managed by praxis, not the agent.'
+            message: 'The .trezi/ sidecar is managed by trezi, not the agent.'
           }
         }
         if (AUTO_ALLOW_TOOLS.has(toolName)) {
@@ -1187,7 +1187,7 @@ async function startSession(
               resolve(
                 behavior === 'allow'
                   ? { behavior: 'allow', updatedInput: toolInput }
-                  : { behavior: 'deny', message: 'Denied by the user in Praxis.' }
+                  : { behavior: 'deny', message: 'Denied by the user in Trezi.' }
               )
             }
           })
@@ -1386,7 +1386,7 @@ async function startSession(
           emit({
             type: 'error',
             message:
-              'That turn stopped responding, so Praxis force-stopped it. The chat has been ' +
+              'That turn stopped responding, so Trezi force-stopped it. The chat has been ' +
               'restarted — earlier messages are still shown, but the assistant no longer has ' +
               'them in context.'
           })

@@ -1,6 +1,6 @@
 ---
 name: surface-controls
-description: Generate interactive controls inside the Praxis chat for animations, shadows, typography, styling and component values. Use when asked to show, expose, add or surface editing or tuning controls. Excludes controls intended for the target app's end users.
+description: Generate interactive controls inside the Trezi chat for animations, shadows, typography, styling and component values. Use when asked to show, expose, add or surface editing or tuning controls. Excludes controls intended for the target app's end users.
 ---
 
 # Surface controls inside chat
@@ -52,8 +52,8 @@ source writes stay disabled until the turn lands.
   groups. Rich spring/color editors, nested folders, image pickers, comparisons
   and timelines require further implementation; do not promise them as available.
 
-Keep all controls in Praxis. Do not add motion, change animation engines or alter
-reduced-motion behavior unless requested. Never write `.praxis/` yourself.
+Keep all controls in Trezi. Do not add motion, change animation engines or alter
+reduced-motion behavior unless requested. Never write `.trezi/` yourself.
 
 ## Updates, Replay and verification
 
@@ -63,7 +63,7 @@ Jev selects and orders prepared blocks. Missing Gateway credentials retain the
 prepared layout and report `engine: "agent"` plus a fallback reason. Report the
 actual engine; network/authentication/invalid-output errors require repair or retry.
 
-For Replay, wire a `praxis:animation-replay` CustomEvent listener whose detail
+For Replay, wire a `trezi:animation-replay` CustomEvent listener whose detail
 matches this component; preserve unrelated state and clean it up on unmount/HMR.
 Then set manifest presentation to animation and replay to true. Omit Replay when
 no valid target exists.
@@ -77,4 +77,4 @@ reactivity. When worktree landing or available observation tools prevent that
 check, report verification as pending and describe what remains to verify. Source created in a worktree waits
 for successful landing; parked/failed changes do not activate. If this provider
 lacks `chat_island`, explain that limitation rather than invoking an older panel
-tool. Praxis owns the dev server; do not start another server.
+tool. Trezi owns the dev server; do not start another server.

@@ -3,8 +3,8 @@ import { mkdtemp, writeFile, symlink, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openAgentCode } from '../src/main/code-tools.ts'
-const root = await mkdtemp(join(tmpdir(), 'praxis-code-reveal-'))
-const outside = await mkdtemp(join(tmpdir(), 'praxis-code-outside-'))
+const root = await mkdtemp(join(tmpdir(), 'trezi-code-reveal-'))
+const outside = await mkdtemp(join(tmpdir(), 'trezi-code-outside-'))
 try {
   await writeFile(join(root, 'motion.ts'), 'const duration = 300\nfunction replay() {\n  animate(duration)\n}\n')
   await writeFile(join(outside, 'private.ts'), 'private code')

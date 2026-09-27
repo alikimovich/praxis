@@ -49,18 +49,18 @@ const CODEX_TARGETS: Record<string, [pkg: string, triple: string]> = {
  * plain `codex` on PATH — a wrong guess costs a failed probe and the
  * cached/last-resort list, never a broken turn.
  *
- * `PRAXIS_CODEX_BIN` wins, mirroring `backends/codex.ts` (it's how
+ * `TREZI_CODEX_BIN` wins, mirroring `backends/codex.ts` (it's how
  * test/provider-seam.mjs forces the CLI-absent path).
  */
 function codexBinary(): string {
-  const override = process.env.PRAXIS_CODEX_BIN
+  const override = process.env.TREZI_CODEX_BIN
   if (override) return override
   const target = CODEX_TARGETS[`${process.platform}-${process.arch}`]
   if (target) {
     const [pkg, triple] = target
     try {
       // Resolved from the compiled main (out/main/index.js), so the walk finds
-      // the app's own node_modules in dev and in an installed ~/.praxis clone.
+      // the app's own node_modules in dev and in an installed ~/.trezi clone.
       // `@openai/codex-sdk` can't be the anchor: its package.json is hidden
       // behind an `exports` map, so only `@openai/codex` (which has none) is
       // reachable — the same anchor the SDK itself uses.

@@ -46,4 +46,4 @@ export type NativeChatCommand =
   | { type: 'seed' | 'submit'; chat: string; text: string }
 export type NativeChatSnapshot = NativeChatState & NativeChatLayout
 
-declare global { interface Window { praxisNativeContext?: { selection(value: import('./api').SelectedElement | null): void } } }
+declare global { interface Window { treziNativeContext?: { selection(value: import('./api').SelectedElement | null): void } } }

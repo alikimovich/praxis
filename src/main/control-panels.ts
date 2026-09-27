@@ -20,10 +20,10 @@ import { commitEdit, withinRoot } from './props'
 
 /**
  * Custom-control panel store + literal apply (v10 Custom Controls). Manifests
- * live in `<repo>/.praxis/control-panels.json` — the same sidecar directory as
+ * live in `<repo>/.trezi/control-panels.json` — the same sidecar directory as
  * annotations.json, with the same discipline: atomic tmp+rename writes, all
  * mutations serialized through a promise chain, and main as the SOLE writer
- * (the agent is denied `.praxis/` writes). The file on disk is user-editable and
+ * (the agent is denied `.trezi/` writes). The file on disk is user-editable and
  * therefore untrusted: every load re-runs each panel through validateManifest,
  * keeping entries that fail (or exceed the panel cap, or duplicate an id) OUT
  * of resolution but PRESERVED verbatim across rewrites — a hand-edit typo in
@@ -47,7 +47,7 @@ interface LoadedStore {
   writable: boolean
 }
 
-const dir = (root: string): string => join(root, '.praxis')
+const dir = (root: string): string => join(root, '.trezi')
 const file = (root: string): string => join(dir(root), 'control-panels.json')
 
 // Well past any store main itself writes (20 panels × 32KB manifests plus
@@ -130,7 +130,7 @@ export function saveManifest(
     if (!resolveRepoFile(root, manifest.file)) return { error: 'file escapes the project root' }
     const store = await readStore(root)
     if (!store.writable)
-      return { error: '.praxis/control-panels.json is not a valid store — fix or delete it first' }
+      return { error: '.trezi/control-panels.json is not a valid store — fix or delete it first' }
     const next = upsertPanel(store.panels, manifest)
     if ('error' in next) return next
     await writeStore(root, next, store.preserved)

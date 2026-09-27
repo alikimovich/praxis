@@ -258,8 +258,8 @@ controller.closed.delete('a')
 for (const [outcome, branch, expected] of [
   ['applied', null, 'Comment applied.'], ['failed', null, 'Comment failed.'],
   ['cancelled', null, 'Comment cancelled.'], ['no-change', null, 'Comment finished without changes.'],
-  ['review', 'praxis/comment-test', 'Comment finished — changes are ready for review.'],
-  ['failed', 'praxis/comment-test', 'Comment failed. Partial changes are saved for review.']
+  ['review', 'trezi/comment-test', 'Comment finished — changes are ready for review.'],
+  ['failed', 'trezi/comment-test', 'Comment failed. Partial changes are saved for review.']
 ]) {
   controller.event({ type: 'spawn-finished', projectKey: 'a', sessionId: 'outcome-test', outcome, branch, origin: 'comment' })
   const message = controller.get('a').messages.at(-1)

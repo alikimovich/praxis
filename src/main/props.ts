@@ -38,7 +38,7 @@ import {
  * before) reports success without writing. `key` coalesces rapid edits of the same
  * target (e.g. retyping a prop) into one undo step; `group` batches distinct-key
  * edits of one gesture (e.g. the four sides of a linked padding scrub) into one
- * atomic undo. Shared by the React + Svelte adapters so EVERY praxis source edit
+ * atomic undo. Shared by the React + Svelte adapters so EVERY trezi source edit
  * is reversible.
  */
 export async function commitEdit(
@@ -63,13 +63,13 @@ export async function commitEdit(
  * Prop editing is framework-agnostic by dispatch: the source file's extension
  * picks an adapter. `.svelte` → props-svelte.ts; JavaScript/TypeScript sources
  * → the React/JSX engine below. Inspection skips other source formats.
- * Both speak the same `data-praxis-source`
+ * Both speak the same `data-trezi-source`
  * stamp, the same shared helpers (resolveSource, mergeFields, …), and return the
  * same PropInspection / PropEditResult shapes.
  */
 
 /**
- * Prop/token editing for the v2 inspector. Given an element's `data-praxis-source`
+ * Prop/token editing for the v2 inspector. Given an element's `data-trezi-source`
  * stamp ("relpath:line"), we parse the source file, find the JSX element on that
  * line, and read its current literal attributes — enriched, when we can resolve
  * a schema, by react-docgen. Edits are applied the "hybrid" way: simple literal
@@ -855,7 +855,7 @@ export function classNameStringNode(v: BabelNode | null | undefined): BabelNode 
  * span so the renderer can highlight it. Svelte / unparsable files fall back to
  * the stamp line alone — the peek still works, just without the span.
  *
- * Images/video/audio come back as `media` (registered with the praxis-media
+ * Images/video/audio come back as `media` (registered with the trezi-media
  * protocol so the renderer can show them) and other non-text files as `binary`;
  * both carry an empty `code`. Before that, a `.png` opened here was decoded as
  * utf8 and rendered as thousands of lines of mojibake.
@@ -1104,7 +1104,7 @@ export function registerPropsIpc(): void {
     (_e, root: string, source: string, baseline: string, content: string) =>
       writeSourceFile(root, source, baseline, content)
   )
-  // v8 F3b: undo/redo over ALL praxis source edits (props, text, token swaps),
+  // v8 F3b: undo/redo over ALL trezi source edits (props, text, token swaps),
   // scoped to the active project root (the rail keeps several projects open).
   ipcMain.handle('edit:undo', (_e, root: string) => undo(root))
   ipcMain.handle('edit:redo', (_e, root: string) => redo(root))

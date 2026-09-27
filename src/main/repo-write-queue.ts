@@ -1,7 +1,7 @@
 import { projectKey } from '../shared/projectKey'
 
 /**
- * One live checkout has one git index and one HEAD, even when many Praxis chats have
+ * One live checkout has one git index and one HEAD, even when many Trezi chats have
  * private worktrees. All operations that snapshot or mutate that live checkout must
  * therefore pass through one repository-scoped queue. Per-chat queues are not enough:
  * two different chats can otherwise both stage/commit through the same live index.

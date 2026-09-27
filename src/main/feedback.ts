@@ -5,7 +5,7 @@ import type { FeedbackInput, FeedbackResult } from '../shared/api'
 import { buildFeedbackBody, buildFeedbackTitle } from '../shared/feedback-body'
 
 /**
- * In-app feedback (LKM-27) → a GitHub issue on Praxis's OWN repo. The app is
+ * In-app feedback (LKM-27) → a GitHub issue on Trezi's OWN repo. The app is
  * distributed as a git checkout (`app.getAppPath()`), so `gh issue create` run
  * there targets the right repo via its `origin` remote — the same seam the
  * self-updater uses (update-ipc.ts). Detection/preflight mirrors annotations.ts's
@@ -60,12 +60,12 @@ async function submitFeedback(
   try {
     await run('git', ['-C', repoRoot, 'rev-parse', '--is-inside-work-tree'], repoRoot)
   } catch {
-    return { ok: false, error: 'Praxis isn’t a git checkout, so feedback can’t be filed.' }
+    return { ok: false, error: 'Trezi isn’t a git checkout, so feedback can’t be filed.' }
   }
   try {
     await run('git', ['-C', repoRoot, 'remote', 'get-url', 'origin'], repoRoot)
   } catch {
-    return { ok: false, error: 'No “origin” remote on the Praxis checkout.' }
+    return { ok: false, error: 'No “origin” remote on the Trezi checkout.' }
   }
   try {
     await run('gh', ['--version'], repoRoot)
@@ -106,7 +106,7 @@ async function submitFeedback(
 
 /**
  * Register the feedback IPC. `getWindow` yields the main window (for the
- * screenshot capture); the issue is filed against Praxis's own checkout.
+ * screenshot capture); the issue is filed against Trezi's own checkout.
  */
 export function registerFeedbackIpc(getWindow: () => NativeView | null): void {
   const repoRoot = app.getAppPath()

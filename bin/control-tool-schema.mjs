@@ -4,8 +4,8 @@ export const defineControlsShape = {
   engine: z.enum(['agent', 'jev', 'auto']).optional(),
   prompt: z.string().max(4000).optional().describe('User request; required when Jev selects and orders prepared params'),
   manifest: z.object({
-    presentation: z.literal('animation').optional().describe('Persistent Praxis panel independent of selection; all params must use literal strategy'),
-    replay: z.boolean().optional().describe('True after wiring praxis:animation-replay, whose detail is the component name, to restart this animation'),
+    presentation: z.literal('animation').optional().describe('Persistent Trezi panel independent of selection; all params must use literal strategy'),
+    replay: z.boolean().optional().describe('True after wiring trezi:animation-replay, whose detail is the component name, to restart this animation'),
     file: z.string().describe('Repo-relative path of the source file the params live in'),
     component: z.string().describe('The component the panel targets (its exported name)'),
     title: z.string().describe('Panel heading shown to the user (≤80 chars)'),

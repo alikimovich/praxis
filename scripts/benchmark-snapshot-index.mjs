@@ -14,7 +14,7 @@ const exec = promisify(execFile)
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const rounds = Number(process.argv[2] ?? 5)
 assert(Number.isInteger(rounds) && rounds >= 3 && rounds <= 20)
-const temp = await mkdtemp(join(tmpdir(), 'praxis-index-bench-'))
+const temp = await mkdtemp(join(tmpdir(), 'trezi-index-bench-'))
 const results = {}
 const command = async (cwd, args, env = {}) => (await exec('git', args, {
   cwd, env: {...process.env, ...env}, maxBuffer: 128 * 1024 * 1024
@@ -32,8 +32,8 @@ async function measure(name, fn) {
 function prototype(repo, index, mode, prefix) {
   let prior = null
   return async () => {
-    const env = {GIT_INDEX_FILE: index, GIT_AUTHOR_NAME: 'Praxis', GIT_AUTHOR_EMAIL: 'praxis@local',
-      GIT_COMMITTER_NAME: 'Praxis', GIT_COMMITTER_EMAIL: 'praxis@local'}
+    const env = {GIT_INDEX_FILE: index, GIT_AUTHOR_NAME: 'Trezi', GIT_AUTHOR_EMAIL: 'trezi@local',
+      GIT_COMMITTER_NAME: 'Trezi', GIT_COMMITTER_EMAIL: 'trezi@local'}
     const g = (step, args) => measure(`${prefix}:${mode}:${step}`, () => command(repo, args, env))
     try {
       const refs = await g('head', ['rev-parse', 'HEAD', 'HEAD^{tree}'])
@@ -55,7 +55,7 @@ function prototype(repo, index, mode, prefix) {
       const tree = await g('write-tree', ['write-tree'])
       if ((mode === 'reuse' || mode === 'clean-head') && tree === headTree) return head
       if (mode === 'reuse' && prior?.head === head && prior.tree === tree) return prior.sha
-      const sha = await g('commit-tree', ['commit-tree', tree, '-p', head, '-m', 'praxis: snapshot benchmark'])
+      const sha = await g('commit-tree', ['commit-tree', tree, '-p', head, '-m', 'trezi: snapshot benchmark'])
       prior = {head, tree, sha}
       return sha
     } catch (error) {
@@ -125,8 +125,8 @@ try {
   await symlink('renamed.sh', join(repo, 'link'))
   await check('delete, rename, executable mode, symlink')
   await writeFile(join(repo, '.env'), 'synthetic=secret\n')
-  await mkdir(join(repo, '.praxis'))
-  await writeFile(join(repo, '.praxis', 'state.json'), '{}')
+  await mkdir(join(repo, '.trezi'))
+  await writeFile(join(repo, '.trezi', 'state.json'), '{}')
   await mkdir(join(repo, 'node_modules'))
   await writeFile(join(repo, 'node_modules', 'synthetic.js'), 'not snapshotted')
   await check('unignored runtime and sidecar exclusions')
@@ -146,7 +146,7 @@ try {
 
   const archive = join(temp, 'source.tar')
   await command(root, ['archive', '--format=tar', `--output=${archive}`, 'HEAD'])
-  for (const scenario of ['praxis', 'many-files', 'large-assets']) {
+  for (const scenario of ['trezi', 'many-files', 'large-assets']) {
     const source = join(temp, scenario)
     await init(source)
     await exec('tar', ['-xf', archive, '-C', source])

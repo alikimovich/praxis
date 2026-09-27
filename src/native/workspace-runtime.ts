@@ -19,7 +19,7 @@ export function installNativeWorkspace(host: NativeBridge, view: NativeView, sto
       const key = entry?.activeSessionKey ?? ''
       const previous = chat.chats.get(key)?.context
       await chat.command({ type: 'context', context: {
-        chat: key, root: entry?.root ?? null, selection: null, turn: { projectUi: preferences.get('praxis:project-ui:v1') === 'true', projectUiEngine: preferences.get('praxis:project-ui-engine:v1') === 'jev' ? 'jev' : 'agent' },
+        chat: key, root: entry?.root ?? null, selection: null, turn: { projectUi: preferences.get('trezi:project-ui:v1') === 'true', projectUiEngine: preferences.get('trezi:project-ui-engine:v1') === 'jev' ? 'jev' : 'agent' },
         setup: { needed: false, dismissed: false, status: null },
         tokens: { needed: false, dismissed: false }, notes: [], spawns: [],
         ...(previous?.root === entry?.root ? previous : {})
@@ -33,9 +33,9 @@ export function installNativeWorkspace(host: NativeBridge, view: NativeView, sto
       if (entry) {
         entry.chatSettings = { ...entry.chatSettings, [effect.chat]: effect.settings }
         let raw: unknown
-        try { raw = JSON.parse(preferences.get('praxis:preferred-model') ?? 'null') } catch {}
+        try { raw = JSON.parse(preferences.get('trezi:preferred-model') ?? 'null') } catch {}
         const preferred = rememberLastUsed(parsePreferredModelState(raw), effect.settings)
-        preferences.set('praxis:preferred-model', JSON.stringify(preferred))
+        preferences.set('trezi:preferred-model', JSON.stringify(preferred))
         nativeWorkspace.preferred = resolvePreferredSettings(preferred)
         nativeWorkspace.changed()
       }

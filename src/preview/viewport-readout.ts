@@ -7,7 +7,7 @@ export function createViewportReadout(
   dispose: () => void
 } {
   const host = document.createElement('div')
-  host.setAttribute('data-praxis-viewport-size', '')
+  host.setAttribute('data-trezi-viewport-size', '')
   host.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:2147483647;'
   if (fixed) host.style.position = 'fixed'
   const shadow = host.attachShadow({ mode: 'open' })

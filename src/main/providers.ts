@@ -1,3 +1,4 @@
+import { nativeSessionPath } from '../native/profile-path'
 import { savedJevKey } from './jev-credentials'
 import { join } from 'node:path'
 import { app, ipcMain as nativeIpcMain, safeStorage } from '../native/platform'
@@ -83,12 +84,12 @@ const cipher: SecretCipher = {
 /**
  * The data dir is INJECTED by `registerProviderIpc` (agent.ts hands over its own
  * `dataDir()`) rather than recomputed here. Same directory either way — but
- * agent.ts's version also performs the one-time `<userData>/dsgn` → `praxis`
- * migration, gated on the praxis dir not existing yet. If this module created
+ * agent.ts's version also performs the one-time `<userData>/dsgn` → `trezi`
+ * migration, gated on the trezi dir not existing yet. If this module created
  * that dir first, the migration would be skipped forever and a pre-rename user's
  * session history and worktrees would be stranded.
  */
-let getDataDir: () => string = () => join(app.getPath('userData'), 'praxis')
+let getDataDir: () => string = () => nativeSessionPath(app.getPath('userData'))
 let _store: ProviderStore | null = null
 const store = (): ProviderStore => (_store ??= createProviderStore(getDataDir(), cipher))
 // Same lazy shape, same reason: `getDataDir` isn't final (and `app.getPath`
@@ -344,7 +345,7 @@ function prettyModelLabel(id: string, siblings: string[]): string {
  * leads with `{value: 'default', displayName: 'Default (recommended)'}`, whose
  * value collides exactly with ours. Two choices sharing a `value` would be a
  * duplicate React key and an ambiguous `resolveChoice` match, so a discovered
- * `default` is dropped in favour of praxis's own entry — which the renderer and
+ * `default` is dropped in favour of trezi's own entry — which the renderer and
  * `agentModelId` ("modelId === 'default' ⇒ send no model") depend on being first.
  */
 function builtinChoices(

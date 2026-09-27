@@ -40,7 +40,7 @@ saved connection; `AI_GATEWAY_API_KEY` is a fallback when none is saved.
 The Gateway credential is separate from a Codex/Claude subscription login. It stays in main; renderer state and tool results
 never contain it. Requests send the UI prompt, prepared component descriptions and
 candidate information to the Gateway. Do not place the credential in a target repo.
-For development with an ignored, owner-only Praxis `.env.local`, Bun can explicitly
+For development with an ignored, owner-only Trezi `.env.local`, Bun can explicitly
 forward its loaded environment when launching, for example:
 
 ```sh
@@ -83,7 +83,7 @@ not a restriction on the agent's existing general-purpose editing abilities.
   generated source, escaping, invalid spec rejection, per-chat gating and settings.
 - `bun run test:project-ui-settings`: actual Settings toggle, default-off behavior,
   persistence of both on and off across app restarts, screenshots.
-- `test/praxis-agent-tools.mjs`: real Codex stdio/socket transport for both tools.
+- `test/trezi-agent-tools.mjs`: real Codex stdio/socket transport for both tools.
 - `bun run test:project-ui-agent`: real Codex turn from Settings through tools,
   source integration and the project preview. Missing auth/usage availability is
   reported as a skip, not a pass.

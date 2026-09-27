@@ -22,7 +22,7 @@ const action = (name, values = {}) => sheets.action({ id: sheets.current.state.i
 await settings.open()
 assert.equal(sheets.current.state.actions.some(a => a.id === 'save' || a.id === 'cancel'), false)
 await action('change', { default: 'codex:default', projectUi: 'false', engine: 'agent' })
-assert.equal(JSON.parse(values.get('praxis:preferred-model')).fixed.provider, 'codex')
+assert.equal(JSON.parse(values.get('trezi:preferred-model')).fixed.provider, 'codex')
 assert.equal(notified, 1)
 await action('connections')
 await action('add')

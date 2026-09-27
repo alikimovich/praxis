@@ -1,11 +1,12 @@
 {
-  "name": "praxis",
-  "productName": "Praxis",
+  "name": "trezi",
+  "productName": "Trezi",
   "version": "0.0.1",
   "description": "AI design & prototyping tool \u2014 chat on the left, live preview of your repo on the right",
   "main": "./out/native/index.cjs",
   "license": "MIT",
   "bin": {
+    "trezi": "bin/trezi.mjs",
     "praxis": "bin/praxis.mjs"
   },
   "engines": {
@@ -41,7 +42,7 @@
     "test:publish-reconcile": "bun test/publish-reconcile.mjs",
     "test:sidecar-migrate": "bun test/sidecar-migrate.mjs",
     "test:update": "bun test/update.mjs",
-    "test:praxis-cli": "bun test/praxis-cli.mjs",
+    "test:trezi-cli": "bun test/trezi-cli.mjs",
     "test:diag-cache": "bun test/diag-cache.mjs",
     "test:diag-rules": "bun test/diag-rules.mjs",
     "pilot:jev": "bun scripts/jev-pilot.mjs",
@@ -94,7 +95,9 @@
     "build": "bun scripts/build-native.mjs",
     "start": "bun out/native/index.cjs",
     "test": "node test/run.mjs unit native",
-    "test:praxis-agent-tools": "bun test/praxis-agent-tools.mjs"
+    "test:trezi-agent-tools": "bun test/trezi-agent-tools.mjs",
+    "test:praxis-cli": "bun test/trezi-cli.mjs",
+    "test:praxis-agent-tools": "bun test/trezi-agent-tools.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.186",

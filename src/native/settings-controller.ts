@@ -12,14 +12,14 @@ export class NativeSettingsController {
     const choices: ModelChoice[] = await this.invoke('providers:choices')
     if (generation !== this.sheets.generation) return
     let raw: unknown
-    try { raw = JSON.parse(this.preferences.get('praxis:preferred-model') ?? 'null') } catch {}
+    try { raw = JSON.parse(this.preferences.get('trezi:preferred-model') ?? 'null') } catch {}
     const preferred = parsePreferredModelState(raw)
     this.sheets.present({
       title: 'Settings', detail: 'Changes save automatically. The default model applies to new chats; UI generation options apply to your next message.',
       fields: [
         { id: 'default', label: 'Default model', kind: 'choice', value: preferredSelectValue(preferred), choices: [{ value: 'last-used', label: 'Use last selected model' }, ...choices.map(c => ({ value: c.value, label: c.group + ' · ' + c.label }))] },
-        { id: 'projectUi', label: 'Build UI from project components', kind: 'choice', value: this.preferences.get('praxis:project-ui:v1') ?? 'false', choices: [{ value: 'false', label: 'Off' }, { value: 'true', label: 'On' }] },
-        { id: 'engine', label: 'UI layout method', kind: 'choice', value: this.preferences.get('praxis:project-ui-engine:v1') ?? 'agent', choices: [{ value: 'agent', label: 'Chat model' }, { value: 'jev', label: 'Jev layout engine' }] }
+        { id: 'projectUi', label: 'Build UI from project components', kind: 'choice', value: this.preferences.get('trezi:project-ui:v1') ?? 'false', choices: [{ value: 'false', label: 'Off' }, { value: 'true', label: 'On' }] },
+        { id: 'engine', label: 'UI layout method', kind: 'choice', value: this.preferences.get('trezi:project-ui-engine:v1') ?? 'agent', choices: [{ value: 'agent', label: 'Chat model' }, { value: 'jev', label: 'Jev layout engine' }] }
       ],
       autosave: true, actions: [{ id: 'connections', label: 'AI providers…' }]
     }, async action => {
@@ -27,9 +27,9 @@ export class NativeSettingsController {
       const choice = choices.find(c => c.value === action.values.default)
       if (action.values.default !== 'last-used' && !choice) throw new Error('Select an available model.')
       if (!['true', 'false'].includes(action.values.projectUi) || !['agent', 'jev'].includes(action.values.engine)) throw new Error('Invalid setting.')
-      this.preferences.set('praxis:preferred-model', JSON.stringify(choice ? setFixedPreference(preferred, settingsFromChoice(choice)) : setLastUsedMode(preferred)))
-      this.preferences.set('praxis:project-ui:v1', action.values.projectUi)
-      this.preferences.set('praxis:project-ui-engine:v1', action.values.engine)
+      this.preferences.set('trezi:preferred-model', JSON.stringify(choice ? setFixedPreference(preferred, settingsFromChoice(choice)) : setLastUsedMode(preferred)))
+      this.preferences.set('trezi:project-ui:v1', action.values.projectUi)
+      this.preferences.set('trezi:project-ui-engine:v1', action.values.engine)
       this.notify()
       if (this.sheets.current) this.sheets.current.state.message = 'Settings saved.'
     })
@@ -50,7 +50,7 @@ export class NativeSettingsController {
       if (!connection) throw new Error('Choose a provider first.')
       if (action.action === 'edit') this.edit(connection)
       else this.sheets.present({
-        title: 'Remove ' + connection.label + '?', detail: 'Remove this provider and its saved API key from Praxis. Chats using it will switch to a default model.',
+        title: 'Remove ' + connection.label + '?', detail: 'Remove this provider and its saved API key from Trezi. Chats using it will switch to a default model.',
         fields: [], actions: [{ id: 'back', label: 'Back' }, { id: 'delete', label: 'Remove provider', primary: true, destructive: true }]
       }, async action => {
         if (action.action === 'delete') await this.invoke('providers:remove', connection.id)

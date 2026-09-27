@@ -8,20 +8,20 @@ app's end users remain ordinary app development. Claude and
 Codex (including custom Codex endpoints) discover the content-controls catalog,
 read the page, and prepare a version-1 recipe bound to a JSON content file. If
 content is inline, chat first extracts it and wires the page to that JSON through
-the normal worktree/landing flow. Praxis renders the editor beside the preview;
+the normal worktree/landing flow. Trezi renders the editor beside the preview;
 it does not install editor UI or dependencies in the target project.
 
 The editor is independent of selection. Text, multiline text, numbers, toggles,
 selects and stable-ID collections come from `@alikimovich/content-controls`.
 Collections support adding, removing and moving items. Drafts survive collapse;
 Undo and Reset operate on drafts. **Save to source** writes the document through
-Praxis edit history, after checking that the loaded revision still matches disk.
+Trezi edit history, after checking that the loaded revision still matches disk.
 A conflicting save preserves the draft; Reload explicitly discards it. App-level
 Undo reverts saved edits. Switching projects or restarting the app discards unsaved
 drafts. A new JSON binding waits for its source to land in the live checkout.
 Missing files do not reject IPC: the editor retries for 30 seconds and on chat
 landing events, then offers reload/removal if the source remains unavailable.
-Existing drafts are never replaced by those events. Recipes persist in `.praxis/content-controls.json` and reopen with the project.
+Existing drafts are never replaced by those events. Recipes persist in `.trezi/content-controls.json` and reopen with the project.
 
 Only recipe-owned fields change on Save; unrelated document and existing item
 fields are retained. JSON files must be inside the project, outside hidden paths,
@@ -68,7 +68,7 @@ existing animation-inspector browser parity remains separate.
 The built 0.1 package is vendored under `vendor/content-controls`, with source
 revision provenance. It is a file dependency, so source installs need no sibling
 checkout or unpublished registry package. Refresh its build and package metadata
-together from the content-controls repository. Runtime React remains Praxis's own
+together from the content-controls repository. Runtime React remains Trezi's own
 React 18 instance; the editor and Motion are lazy-loaded.
 
 - `bun test/content-controls.mjs`: validation, persistence and actual Jev composer
@@ -78,4 +78,4 @@ React 18 instance; the editor and Motion are lazy-loaded.
 - `node test/content-controls-agent.mjs` after build: real Codex registration and
   worktree landing and source save, with verified Jev requests through an encrypted
   saved connection when Gateway credentials are available to seed the test.
-- `bun test/praxis-agent-tools.mjs`: actual MCP transport and tool discovery.
+- `bun test/trezi-agent-tools.mjs`: actual MCP transport and tool discovery.

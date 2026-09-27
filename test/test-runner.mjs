@@ -5,13 +5,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { acquireRunLock, runCommand, runQueue, skipReason } from './helpers/test-runner.mjs'
 
-const root = mkdtempSync(join(tmpdir(), 'praxis-runner-check-'))
+const root = mkdtempSync(join(tmpdir(), 'trezi-runner-check-'))
 const fixture = join(root, 'worker.mjs')
 writeFileSync(fixture, `
 import { writeFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 const [mode, file] = process.argv.slice(2)
-writeFileSync(file, JSON.stringify({ profile: process.env.PRAXIS_USER_DATA, pid: process.pid }))
+writeFileSync(file, JSON.stringify({ profile: process.env.TREZI_USER_DATA, pid: process.pid }))
 if (mode === 'skip') console.log('SKIP missing fixture')
 else if (mode === 'partial') console.log('PARTIAL SKIP — one provider unavailable')
 else if (mode === 'fail') { console.log('SKIP does not override failure'); process.exitCode = 1 }

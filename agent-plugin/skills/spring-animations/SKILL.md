@@ -3,7 +3,7 @@ name: spring-animations
 description: Build spring / bouncy / physics-based UI animations that run on the compositor. Use whenever the user asks for a spring, bouncy, springy, elastic, or physics-based motion, gives spring parameters (stiffness/damping/mass, damping-ratio + frequency, or Framer-style bounce + duration), or wants a natural-feeling open/close, slide, pop, or bottom-sheet animation in CSS.
 ---
 
-# Spring animations in Praxis
+# Spring animations in Trezi
 
 When the user wants a spring, bouncy, or physics-based motion, do **not** hand-write
 `linear()` control points or guess a `cubic-bezier` — you can't integrate a spring

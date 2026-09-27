@@ -3,10 +3,10 @@ import { promisify } from 'util'
 import type { UpdateStatus } from '../shared/api'
 
 /**
- * Praxis self-update — detection half. The app is distributed as a git checkout,
+ * Trezi self-update — detection half. The app is distributed as a git checkout,
  * so an "update" is: does HEAD trail the tracked remote? This module is
  * UI-independent (child_process + git only), like git.ts, so it's unit-testable
- * against a temp repo. The native update workflow lives in src/native/update-controller.ts. Applying an update shells out to `bin/praxis.mjs --update` — the
+ * against a temp repo. The native update workflow lives in src/native/update-controller.ts. Applying an update shells out to `bin/trezi.mjs --update` — the
  * single source of truth for pull + install + build.
  */
 

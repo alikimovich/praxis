@@ -115,7 +115,7 @@ export function parseCodexModels(json: unknown): CatalogModel[] {
  * menu shows them, and there's no priority field to re-derive that from.
  *
  * Note the SDK's list LEADS with its own `{value: 'default'}` sentinel — the
- * exact string praxis uses for "omit the model, use the account default". It is
+ * exact string trezi uses for "omit the model, use the account default". It is
  * kept here (this module reports what the harness said) and dropped by the
  * caller, which prepends its own sentinel; see `providers.ts#builtinChoices`.
  */

@@ -3,7 +3,7 @@
  * replies arrived with their opening cut off mid-word ("ve reliable visibility…",
  * "ing else?").
  *
- * Cause: Codex streams whole items and praxis emits the not-yet-sent SUFFIX, but
+ * Cause: Codex streams whole items and trezi emits the not-yet-sent SUFFIX, but
  * the CLI numbers items PER TURN (`item_0`, `item_1`, … restarting each turn)
  * while the tracker was kept for the whole SESSION. Turn 2's `item_0` therefore
  * inherited turn 1's length and had exactly that many characters sliced off the
@@ -42,7 +42,7 @@ try {
 
   // --- across turns: THE BUG ----------------------------------------------
   // Turn 1's reply is 82 chars and its item is `item_0`. Turn 2 reuses `item_0`.
-  const first = "Hey! I'm ready to help with your Praxis project. What would you like to work on?"
+  const first = "Hey! I'm ready to help with your Trezi project. What would you like to work on?"
   const turn1 = createItemTracker()
   turn1.delta('item_0', first)
 

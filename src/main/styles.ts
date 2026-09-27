@@ -17,7 +17,7 @@ import { applyStyleEditSvelte } from './styles-svelte'
  *    `className` is a literal string → rewrite the single family-matching class
  *    (`p-4` → `p-[13px]`) and splice the new string.
  *  - S2 inline — no/ambiguous utility path → merge into an EXISTING JSX
- *    `style={{…}}` literal. Praxis never ADDS a style attribute that wasn't
+ *    `style={{…}}` literal. Trezi never ADDS a style attribute that wasn't
  *    there: a project styling from a stylesheet/CSS module shouldn't silently
  *    grow inline styles because someone scrubbed a value, so an absent
  *    attribute is S3's problem, not something to invent a convention for.
@@ -200,7 +200,7 @@ export async function applyStyleEdit(root: string, edit: StyleEdit): Promise<Sty
   const styleAttr = (found.opening.attributes ?? []).find(
     (a) => a.type === 'JSXAttribute' && (a.name as { name?: string })?.name === 'style'
   )
-  // Nothing to extend. Adding `style={{…}}` here would be Praxis choosing a
+  // Nothing to extend. Adding `style={{…}}` here would be Trezi choosing a
   // styling convention on the project's behalf — the one thing a design tool
   // editing someone else's repo must not do. The agent gets it instead, and its
   // prompt explicitly forbids reaching for the inline prop.

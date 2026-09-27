@@ -1,3 +1,5 @@
+import '../shared/rename-compat'
+import { nativeProfilePath } from './profile-path'
 /** Native application services and the isolated WebKit message boundary. */
 
 import { execFile, spawnSync } from 'node:child_process'
@@ -14,7 +16,7 @@ export const app = Object.assign(new EventEmitter(), {
     if (name === 'temp') return tmpdir()
     if (name === 'userData')
       return (
-        process.env.PRAXIS_USER_DATA || join(homedir(), 'Library/Application Support/Praxis Native')
+        process.env.TREZI_USER_DATA || nativeProfilePath(join(homedir(), 'Library/Application Support'))
       )
     throw new Error(`Unsupported native path: ${name}`)
   },
@@ -49,6 +51,7 @@ export const previewSendChannels = new Set([
 export async function dispatchIPC(view: string, message: any) {
   if (!message || typeof message.channel !== 'string' || !Array.isArray(message.args))
     throw new Error('Invalid IPC message')
+  message = { ...message, channel: message.channel.replace(/^praxis:/, 'trezi:') }
   if (view === 'preview' && (message.type !== 'send' || !previewSendChannels.has(message.channel)))
     throw new Error('Preview cannot invoke application commands')
   const sender = views.get(view)?.webContents
@@ -91,7 +94,7 @@ export const shell = {
 
 // AES-GCM with a random key held in the macOS Keychain. No secrets in argv.
 function crypt(operation: string, value: Buffer) {
-  const executable = process.env.PRAXIS_NATIVE_HOST
+  const executable = process.env.TREZI_NATIVE_HOST
   if (!executable) throw new Error('Native Keychain helper unavailable')
   const result = spawnSync(executable, ['--crypto', operation], {
     input: value,

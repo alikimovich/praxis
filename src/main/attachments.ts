@@ -14,7 +14,7 @@ import type { ImageAttachment } from '../shared/api'
  * image a path, which is the whole point of this module.
  *
  * Pure (fs + path only, no electron) so it's unit-testable; the caller injects
- * the directory (main uses `<userData>/praxis/attachments`) and the timestamp.
+ * the directory (main uses `<userData>/trezi/attachments`) and the timestamp.
  *
  * Everything here is renderer-supplied and therefore untrusted: the media type
  * picks the extension from a fixed table, the suggested name is reduced to a

@@ -2,6 +2,24 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Trezi rename and legacy compatibility (LKM-85)
+
+Rename the native product, CLI/package, source paths, setup helpers, new metadata,
+preview stamps, runtime names and current documentation to Trezi. Inventory the
+native base and residual exceptions in `docs/rename/`. Keep legacy CLI/environment,
+preferences, stamps, branches and provider identities usable. Alias native profile
+and session directories in place to preserve absolute Git/worktree references and
+writer locks; copy project sidecars without overwriting canonical data. Preserve
+stable OS/Keychain identities and public repository URLs. Document collision,
+rollback and LKM-84 integration policy. No other worktrees or real user data changed.
+
+Validation: full/native typechecks and configured native build/test command exit 0;
+no smoke PNG/completion evidence, so visible integration remains unverified.
+Migration, Git-path/lock and CLI-alias fixtures pass. Unit suite: 92 pass, 9 fail
+(socket/network sandbox limits, baseline dependency failures, runner assertion,
+and index-based docs links awaiting manager staging). See `docs/rename/VERIFICATION.md`.
+No provider calls; manager owns staging, commits and final review.
+
 ## 2026-09-25 — Single viewport dimension readout
 
 Remove the AppKit drag readout that overlapped the isolated preview's CSS-pixel

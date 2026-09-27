@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { generatePublishDescription, parsePublishDescription } from '../src/main/publish-description.ts'
 
-const root = mkdtempSync(join(tmpdir(), 'praxis-pr-test-'))
+const root = mkdtempSync(join(tmpdir(), 'trezi-pr-test-'))
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
 try {
   git('init', '-b', 'main')

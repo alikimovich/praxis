@@ -21,28 +21,28 @@ assert.strictEqual(sanitizeRepoName('a'.repeat(120)).length, 100) // capped
 
 // --- resolveConnectPlan -----------------------------------------------------
 
-// Scaffold case: on praxis/main, base 'main' is an ancestor → fast-forward main
+// Scaffold case: on trezi/main, base 'main' is an ancestor → fast-forward main
 // to the work branch and make it the default; push both (Option B: the repo's
 // default branch shows the built work).
-assert.deepStrictEqual(resolveConnectPlan('praxis/main', true), {
+assert.deepStrictEqual(resolveConnectPlan('trezi/main', true), {
   defaultBranch: 'main',
   fastForwardBase: true,
-  pushBranches: ['main', 'praxis/main']
+  pushBranches: ['main', 'trezi/main']
 })
 
 // Diverged base (existing repo opened with no remote): can't fast-forward, so
 // the work branch itself becomes the default.
-assert.deepStrictEqual(resolveConnectPlan('praxis/feature', false), {
-  defaultBranch: 'praxis/feature',
+assert.deepStrictEqual(resolveConnectPlan('trezi/feature', false), {
+  defaultBranch: 'trezi/feature',
   fastForwardBase: false,
-  pushBranches: ['praxis/feature']
+  pushBranches: ['trezi/feature']
 })
 
-// A praxis branch whose suffix maps to a differently-named base.
-assert.deepStrictEqual(resolveConnectPlan('praxis/dev', true), {
+// A trezi branch whose suffix maps to a differently-named base.
+assert.deepStrictEqual(resolveConnectPlan('trezi/dev', true), {
   defaultBranch: 'dev',
   fastForwardBase: true,
-  pushBranches: ['dev', 'praxis/dev']
+  pushBranches: ['dev', 'trezi/dev']
 })
 
 // Non-work branch (user already on a plain branch) just publishes itself — no
@@ -58,11 +58,11 @@ assert.deepStrictEqual(resolveConnectPlan('trunk', false), {
   pushBranches: ['trunk']
 })
 
-// Degenerate 'praxis/' (empty suffix) falls back to 'main' as the base.
-assert.deepStrictEqual(resolveConnectPlan('praxis/', true), {
+// Degenerate 'trezi/' (empty suffix) falls back to 'main' as the base.
+assert.deepStrictEqual(resolveConnectPlan('trezi/', true), {
   defaultBranch: 'main',
   fastForwardBase: true,
-  pushBranches: ['main', 'praxis/']
+  pushBranches: ['main', 'trezi/']
 })
 
 console.log('GITHUB-CONNECT OK — repo-name sanitize, Option-B branch push plan')

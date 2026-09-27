@@ -45,4 +45,4 @@ export interface NativeChatBridge {
   command: (command: import('./native-chat-controller').NativeChatCommand) => void
   onEffect: (callback: (effect: import('./native-chat-controller').NativeChatEffect) => void) => () => void
 }
-declare global { interface Window { praxisNativeChat?: NativeChatBridge } }
+declare global { interface Window { treziNativeChat?: NativeChatBridge } }

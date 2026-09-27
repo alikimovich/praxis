@@ -5,7 +5,7 @@ import { once } from 'node:events'
 import { NativeBridge } from '../../src/native/bridge.ts'
 
 const directory = resolve('out/native')
-const executable = `${directory}/Praxis Native.app/Contents/MacOS/PraxisHost`
+const executable = `${directory}/Trezi Native.app/Contents/MacOS/TreziHost`
 if (process.platform !== 'darwin' || !existsSync(executable)) {
   console.log('NATIVE-CHAT-SCROLL SKIP — build the macOS native host first.')
   process.exit(0)
@@ -29,7 +29,7 @@ const visible = async id => {
 }
 try {
   await Promise.race([once(host, 'ready'), delay(10000).then(() => { throw Error('Native host did not become ready') })])
-  host.send('shellState', { state: { project: '/tmp/praxis-chat-scroll-fixture', chatWidth: 440, rows: [], homeState: { visible: false } } })
+  host.send('shellState', { state: { project: '/tmp/trezi-chat-scroll-fixture', chatWidth: 440, rows: [], homeState: { visible: false } } })
   for (const history of [0, 1, 8, 45]) {
     const state = {
       chat: `history-${history}`, messages: Array.from({ length: history }, (_, i) =>

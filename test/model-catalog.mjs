@@ -10,7 +10,7 @@
  * fields the parser reads, since each real entry also carries a multi-KB
  * `base_instructions` blob (the full payload is ~300KB). The Claude fixture is
  * the real `Query.supportedModels()` answer from the same day, including the
- * SDK's own `default` sentinel, which collides with praxis's.
+ * SDK's own `default` sentinel, which collides with trezi's.
  *
  * The clock and baseDir are injected, so TTL expiry is tested without sleeping
  * and persistence without touching userData — the whole reason this module is
@@ -28,7 +28,7 @@ import {
   parseCodexModels
 } from '../src/main/model-catalog.ts'
 
-const base = mkdtempSync(join(tmpdir(), 'praxis-model-catalog-'))
+const base = mkdtempSync(join(tmpdir(), 'trezi-model-catalog-'))
 let failed = 0
 const ok = (cond, msg) => {
   if (!cond) {

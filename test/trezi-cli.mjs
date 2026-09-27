@@ -1,10 +1,10 @@
 /**
- * praxis CLI (bin/praxis.mjs) — pure unit test of the lockfile-drift helper
- * that keeps `praxis --update` from aborting on a dirty, install-generated
+ * trezi CLI (bin/trezi.mjs) — pure unit test of the lockfile-drift helper
+ * that keeps `trezi --update` from aborting on a dirty, install-generated
  * lockfile. Runs under bun (no electron), like update.mjs. Importing the module
  * must NOT run the CLI — `main()` is guarded by invokedAsScript().
  *
- * Run with: bun test/praxis-cli.mjs
+ * Run with: bun test/trezi-cli.mjs
  */
 import { spawnSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 import {
   lockfilesToRestore,
   nativeLaunchSpec
-} from '../bin/praxis.mjs'
+} from '../bin/trezi.mjs'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -56,7 +56,7 @@ eq(lockfilesToRestore(' M vendor/bun.lock.bak\n'), [], 'non-exact lockfile path 
 eq(lockfilesToRestore(''), [], 'empty porcelain → nothing to restore')
 eq(lockfilesToRestore('\n\n'), [], 'blank lines → nothing to restore')
 
-const help = spawnSync(process.execPath, [join(repoRoot, 'bin', 'praxis.mjs'), '--help'], {
+const help = spawnSync(process.execPath, [join(repoRoot, 'bin', 'trezi.mjs'), '--help'], {
   cwd: repoRoot,
   encoding: 'utf8'
 })
@@ -66,11 +66,11 @@ assert(!help.stdout.includes('--remote'), 'CLI no longer advertises retired remo
 eq(nativeLaunchSpec('/checkout', ['--project', '/project']), {
   command: 'bun', args: ['/checkout/out/native/index.cjs', '--project', '/project'], cwd: '/checkout'
 }, 'CLI launches the native backend with the requested project')
-const retired = spawnSync(process.execPath, [join(repoRoot, 'bin/praxis.mjs'), 'serve', '/tmp'], { encoding: 'utf8' })
+const retired = spawnSync(process.execPath, [join(repoRoot, 'bin/trezi.mjs'), 'serve', '/tmp'], { encoding: 'utf8' })
 assert(retired.status === 1 && retired.stderr.includes('retired'), 'retired browser mode fails with migration guidance')
 
 if (failed) {
-  console.error(`PRAXIS-CLI FAILED — ${failed} assertion(s)`)
+  console.error(`TREZI-CLI FAILED — ${failed} assertion(s)`)
   process.exit(1)
 }
-console.log('PRAXIS-CLI OK — lockfilesToRestore picks dirty tracked lockfiles, ignores the rest')
+console.log('TREZI-CLI OK — lockfilesToRestore picks dirty tracked lockfiles, ignores the rest')

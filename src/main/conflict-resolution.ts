@@ -70,7 +70,7 @@ export class ReconciliationCoordinator {
 /** Shared by automatic reconciliation and the explicit retry action. */
 export function conflictResolutionPrompt(files: string[]): string {
   return (
-    `The changes from this chat overlapped with recent project edits. Praxis combined ` +
+    `The changes from this chat overlapped with recent project edits. Trezi combined ` +
     `both versions in your private worktree and marked overlapping spots with conflict markers ` +
     `(\`<<<<<<<\`, \`=======\`, \`>>>>>>>\`) in: ${files.join(', ')}. ` +
     `Open each file, reconcile both sides while preserving the recent edits AND the change ` +
@@ -78,6 +78,6 @@ export function conflictResolutionPrompt(files: string[]): string {
     `intent. Do not discard either side wholesale. Verify the combined result with relevant ` +
     `checks, then briefly say what you reconciled. If the intent is genuinely incompatible, ` +
     `leave the unresolved markers and explain the decision needed. Do not edit the live ` +
-    `checkout or bypass Praxis's landing mechanism.`
+    `checkout or bypass Trezi's landing mechanism.`
   )
 }

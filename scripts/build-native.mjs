@@ -7,15 +7,15 @@ import { build as bundle } from 'esbuild'
 if (process.platform !== 'darwin') throw new Error('The native runtime currently requires macOS.')
 const root = fileURLToPath(new URL('../', import.meta.url))
 const out = join(root, 'out/native')
-const contents = join(out, 'Praxis Native.app/Contents')
+const contents = join(out, 'Trezi Native.app/Contents')
 mkdirSync(join(contents, 'MacOS'), { recursive: true })
 mkdirSync(join(contents, 'Resources'), { recursive: true })
-copyFileSync(join(root, 'build/icon.icns'), join(contents, 'Resources/Praxis.icns'))
+copyFileSync(join(root, 'build/icon.icns'), join(contents, 'Resources/Trezi.icns'))
 writeFileSync(join(contents, 'Resources/cat.json'), JSON.stringify(nativeCatAssets(root)))
 const device = readFileSync(join(root, 'src/shared/iphone-frame.ts'), 'utf8').match(/FRAME_DATA_URI = '([^']+)'/)[1]
 writeFileSync(join(out, 'device.png'), Buffer.from(device.split(',')[1], 'base64'))
 const recipeModule = {
-  name: 'praxis-native-transport',
+  name: 'trezi-native-transport',
   setup(build) {
     build.onResolve({ filter: /^@alikimovich\/content-controls\/recipe$/ }, () => ({ path: join(root, 'node_modules/@alikimovich/content-controls/dist/recipe.js') }))
   }
@@ -56,9 +56,9 @@ writeFileSync(
   `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict>
 <key>CFBundleIdentifier</key><string>dev.praxis.native</string>
-<key>CFBundleName</key><string>Praxis Native</string>
-<key>CFBundleIconFile</key><string>Praxis.icns</string>
-<key>CFBundleExecutable</key><string>PraxisHost</string>
+<key>CFBundleName</key><string>Trezi Native</string>
+<key>CFBundleIconFile</key><string>Trezi.icns</string>
+<key>CFBundleExecutable</key><string>TreziHost</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleVersion</key><string>1</string>
 <key>LSMinimumSystemVersion</key><string>13.3</string>
@@ -108,7 +108,7 @@ const result = Bun.spawnSync(
     join(root, 'src/native/ChatMarkdown.swift'),
     join(root, 'src/native/ChatQuestion.swift'),
     '-o',
-    join(contents, 'MacOS/PraxisHost'),
+    join(contents, 'MacOS/TreziHost'),
     '-framework',
     'AppKit',
     '-framework',
@@ -126,5 +126,5 @@ if (result.exitCode) process.exit(result.exitCode)
 if (/require\(["']electron["']\)/.test(readFileSync(join(out, 'index.cjs'), 'utf8')))
   throw new Error('Native backend still imports Electron')
 console.log(
-  'Built Praxis Native: Swift/AppKit UI, Bun services, isolated WebKit project preview.'
+  'Built Trezi Native: Swift/AppKit UI, Bun services, isolated WebKit project preview.'
 )

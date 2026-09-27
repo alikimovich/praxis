@@ -11,11 +11,12 @@ type Delivery =
   | { type: 'reply'; id: number; document: string; error?: string; value?: unknown }
   | { type: 'event'; channel: string; args: unknown[] }
 const nativeGlobal = globalThis as unknown as {
-  webkit: { messageHandlers: { praxis: { postMessage: (value: unknown) => void } } }
+  webkit: { messageHandlers: { trezi: { postMessage: (value: unknown) => void } } }
+  __treziNativeDispatch: (message: Delivery) => void
   __praxisNativeDispatch: (message: Delivery) => void
 }
-const host = nativeGlobal.webkit.messageHandlers.praxis
-nativeGlobal.__praxisNativeDispatch = (message: Delivery) => {
+const host = nativeGlobal.webkit.messageHandlers.trezi
+nativeGlobal.__treziNativeDispatch = (message: Delivery) => {
   if (message.type === 'reply') {
     if (message.document !== documentId) return
     const request = pending.get(message.id)
@@ -24,9 +25,10 @@ nativeGlobal.__praxisNativeDispatch = (message: Delivery) => {
     if (message.error) request.reject(new Error(message.error))
     else request.resolve(message.value)
   } else {
-    for (const listener of listeners.get(message.channel) ?? []) listener({}, ...message.args)
+    for (const listener of listeners.get(message.channel.replace(/^praxis:/, 'trezi:')) ?? []) listener({}, ...message.args)
   }
 }
+nativeGlobal.__praxisNativeDispatch = nativeGlobal.__treziNativeDispatch
 export const ipcRenderer = {
   send(channel: string, ...args: unknown[]) {
     host.postMessage({

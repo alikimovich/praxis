@@ -45,12 +45,12 @@ export async function detectNext(root: string): Promise<NextSetupInfo> {
   }
 }
 
-export const NEXT_LOADER = '.praxis/praxis-next-loader.cjs'
-export const NEXT_ADAPTER = '.praxis/praxis-next.cjs'
+export const NEXT_LOADER = '.trezi/trezi-next-loader.cjs'
+export const NEXT_ADAPTER = '.trezi/trezi-next.cjs'
 
 // A local Babel transform, not a project Babel config. Next keeps its normal
 // SWC pipeline. The loader uses only APIs implemented by Turbopack.
-export const NEXT_LOADER_CONTENT = `// Praxis development source mapping. No project-wide Babel config required.
+export const NEXT_LOADER_CONTENT = `// Trezi development source mapping. No project-wide Babel config required.
 const path = require('node:path')
 // Carry the authored instance into host output even when a component destructures
 // props and does not spread them. This is a compile-time-only signature extension.
@@ -65,13 +65,13 @@ function instanceSource({ types: t }) {
     if (param?.type === 'AssignmentPattern') param = param.left
     let value
     if (param?.type === 'Identifier') {
-      value = t.optionalMemberExpression(t.identifier(param.name), t.stringLiteral('data-praxis-component-source'), true, true)
+      value = t.optionalMemberExpression(t.identifier(param.name), t.stringLiteral('data-trezi-component-source'), true, true)
     } else if (!param || param.type === 'ObjectPattern') {
-      const id = p.scope.generateUidIdentifier('praxisInstance')
+      const id = p.scope.generateUidIdentifier('treziInstance')
       const pattern = param || t.objectPattern([])
-      if (pattern.properties.some((prop) => prop.key?.value === 'data-praxis-component-source')) return
+      if (pattern.properties.some((prop) => prop.key?.value === 'data-trezi-component-source')) return
       // A rest binding must remain last.
-      pattern.properties.unshift(t.objectProperty(t.stringLiteral('data-praxis-component-source'), id))
+      pattern.properties.unshift(t.objectProperty(t.stringLiteral('data-trezi-component-source'), id))
       if (!param) p.node.params.unshift(t.assignmentPattern(pattern, t.objectExpression([])))
       value = id
     } else return
@@ -79,8 +79,8 @@ function instanceSource({ types: t }) {
       if (q.getFunctionParent() !== p) return
       const name = q.node.name
       if (name.type !== 'JSXIdentifier' || !/^[a-z]/.test(name.name)) return
-      if (q.node.attributes.some((a) => a.name?.name === 'data-praxis-component-source')) return
-      q.node.attributes.push(t.jsxAttribute(t.jsxIdentifier('data-praxis-component-source'), t.jsxExpressionContainer(t.cloneNode(value))))
+      if (q.node.attributes.some((a) => a.name?.name === 'data-trezi-component-source')) return
+      q.node.attributes.push(t.jsxAttribute(t.jsxIdentifier('data-trezi-component-source'), t.jsxExpressionContainer(t.cloneNode(value))))
     } })
   } } }
 }
@@ -98,7 +98,7 @@ module.exports = function(source, inputMap) {
       filename: this.resourcePath, root, configFile: false, babelrc: false,
       sourceMaps: true, inputSourceMap: inputMap || undefined,
       parserOpts: { plugins: ['jsx', 'typescript'] },
-      plugins: [require('./praxis-source.cjs'), instanceSource],
+      plugins: [require('./trezi-source.cjs'), instanceSource],
       generatorOpts: { retainLines: true }
     })
     this.callback(null, result.code, result.map)
@@ -109,21 +109,21 @@ module.exports = function(source, inputMap) {
 export const NEXT_ADAPTER_CONTENT = `// Wrap the FINAL Next config (including createMDX and other wrappers).
 // Supports object, function and async configuration exports. Production is unchanged.
 const path = require('node:path')
-module.exports = function withPraxis(config) {
+module.exports = function withTrezi(config) {
   return function(phase, context) {
     const value = typeof config === 'function' ? config.call(this, phase, context) : config
     const apply = (original) => {
       if (phase !== 'phase-development-server') return original
       const current = original || {}
       const root = path.dirname(__dirname)
-      const loader = require.resolve('./praxis-next-loader.cjs')
+      const loader = require.resolve('./trezi-next-loader.cjs')
       const version = require('next/package.json').version.split('.').map(Number)
       const modern = version[0] > 15 || (version[0] === 15 && version[1] >= 3)
       const turbo = modern ? current.turbopack : current.experimental?.turbo
       const rules = { ...(turbo?.rules || {}) }
       for (const ext of ['js', 'jsx', 'ts', 'tsx']) {
         const key = '*.' + ext
-        if (rules[key]) throw new Error('Praxis: existing ' + key + ' Turbopack rule needs manual loader composition.')
+        if (rules[key]) throw new Error('Trezi: existing ' + key + ' Turbopack rule needs manual loader composition.')
         rules[key] = { loaders: [{ loader, options: { root } }] }
       }
       const result = { ...current,

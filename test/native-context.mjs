@@ -34,7 +34,7 @@ await controller.effect({ type: 'setup', chat: 'a', phase: 'dismissed' })
 controller.readiness({ stamps: 0 }); assert.equal(chat.get('a').context.setup.needed, false)
 controller.queued('a', 'spawn', 'Edit', true)
 assert.equal(chat.get('a').context.spawns[0].status, 'queued')
-await controller.effect({ type: 'spawn', event: { type: 'spawn-started', projectKey: 'a', sessionId: 'spawn', branch: 'praxis/edit' } })
+await controller.effect({ type: 'spawn', event: { type: 'spawn-started', projectKey: 'a', sessionId: 'spawn', branch: 'trezi/edit' } })
 assert.equal(chat.get('a').context.spawns[0].status, 'running')
 workspace.active = entries[1]; delay = true
 const activating = controller.activate(entries[1]); await new Promise(resolve => setTimeout(resolve, 0))

@@ -10,7 +10,7 @@ import type {
 } from '../../shared/api'
 
 /**
- * The model-provider seam (v7). praxis's chat is backend-agnostic: `agent.ts` owns
+ * The model-provider seam (v7). trezi's chat is backend-agnostic: `agent.ts` owns
  * the per-project `sessions` map, `activeKey`, teardown, the permission-card
  * settle loop, and every `agent:*` IPC handler — all in terms of `ProviderSession`
  * + `AgentEvent`. A `ModelProvider` plugs a specific backend (Claude Agent SDK,
@@ -76,7 +76,7 @@ export interface SpawnContext {
    *  this root, not the worktree — a worktree write would be stranded when the
    *  worktree is merged/dropped. Absent ⇒ cwd IS the live root. */
   liveRoot?: string
-  /** Durable Praxis-managed project decisions captured when this provider
+  /** Durable Trezi-managed project decisions captured when this provider
    * session starts. Backends inject them into their initial instructions. */
   projectMemory?: string
 }

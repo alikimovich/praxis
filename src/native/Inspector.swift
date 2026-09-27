@@ -18,7 +18,7 @@ enum PreviewInspector {
         guard ["show", "showConsole", "close"].contains(action), let inspector = controller(view) else { return false }
         let selector = NSSelectorFromString(action)
         guard inspector.responds(to: selector) else { return false }
-        // Keep inspector geometry separate from Praxis's managed preview slot.
+        // Keep inspector geometry separate from Trezi's managed preview slot.
         if action != "close", inspector.responds(to: NSSelectorFromString("detach")) {
             inspector.perform(NSSelectorFromString("detach"))
         }
@@ -37,7 +37,7 @@ extension Host {
         if !PreviewInspector.perform(sender.representedObject as? String ?? "show", on: views["preview"]) {
             let alert = NSAlert()
             alert.messageText = "Open Web Inspector from Safari"
-            alert.informativeText = "This WebKit version cannot open an inspector directly. In Safari, enable developer features in Settings → Advanced, then use Develop → this Mac → Praxis Native to inspect the preview."
+            alert.informativeText = "This WebKit version cannot open an inspector directly. In Safari, enable developer features in Settings → Advanced, then use Develop → this Mac → Trezi Native to inspect the preview."
             alert.beginSheetModal(for: window)
         }
     }

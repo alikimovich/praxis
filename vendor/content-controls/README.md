@@ -1,4 +1,4 @@
-# Content controls: native Praxis subset
+# Content controls: native Trezi subset
 
 This vendored distribution exposes only `./recipe` and `./api`, used for content
 validation, recipe stores and agent discovery. SwiftUI renders the editors.

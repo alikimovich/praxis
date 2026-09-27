@@ -60,7 +60,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         outline.indentationPerLevel = 0; outline.allowsEmptySelection = true
         outline.dataSource = self; outline.delegate = self
         outline.setAccessibilityLabel("Projects")
-        outline.registerForDraggedTypes([.praxisProject])
+        outline.registerForDraggedTypes([.treziProject])
         outline.setDraggingSourceOperationMask(.move, forLocal: true)
         let menu = NSMenu(); menu.delegate = self; outline.menu = menu
         let scroll = ProjectScrollView(); scroll.documentView = outline; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay
@@ -126,7 +126,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         split.addSplitViewItem(detailItem)
         window.contentViewController = split
         split.splitView.setPosition(230, ofDividerAt: 0)
-        toolbar = NSToolbar(identifier: "PraxisNativePreviewToolbar")
+        toolbar = NSToolbar(identifier: "TreziNativePreviewToolbar")
         toolbar.delegate = self; toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false; toolbar.autosavesConfiguration = false
         chatHeader.align = { [weak self] in self?.alignChatHeader() }

@@ -1,6 +1,6 @@
 # Worktrees and concurrent chats
 
-Praxis gives every interactive chat on a Git repository root its own linked worktree.
+Trezi gives every interactive chat on a Git repository root its own linked worktree.
 Models edit there; the preview and the user's editor remain on the live checkout. The
 isolation boundary is the worktree, while convergence is owned by one repository-scoped
 landing queue.
@@ -17,7 +17,7 @@ conversation does not justify retaining a stale branch.
 
 ```text
 idle (detached worktree, no chat branch)
-  → turn starts: attach praxis/chat-<id>
+  → turn starts: attach trezi/chat-<id>
   → model edits privately
   → repository landing queue
       → success: validate, write + commit live, detach, delete chat branch
@@ -34,7 +34,7 @@ parked
 
 The branch is a recovery reference, not the session's permanent identity. It exists
 only while a turn can lose work or while a conflict awaits a decision. An idle chat
-retains its worktree/session cwd but no branch, preventing stale `praxis/chat-*` refs
+retains its worktree/session cwd but no branch, preventing stale `trezi/chat-*` refs
 from growing with every chat.
 
 ## Invariants
@@ -49,7 +49,7 @@ from growing with every chat.
   cross into the live checkout.
 - Three-way resolution uses a temporary index seeded from the working tree. The user's
   real staged state is not a resolver input and is never mutated.
-- `.env` and non-template `.env.*`, `node_modules`, `*.tsbuildinfo`, `.praxis/`, and
+- `.env` and non-template `.env.*`, `node_modules`, `*.tsbuildinfo`, `.trezi/`, and
   legacy `.dsgn/` are excluded from snapshots, worktree commits, and live commits.
 - Parked work keeps a durable branch. Successfully landed or discarded work does not.
 - Comment-created and automatic visual-edit background agents are attributed to their
@@ -62,7 +62,7 @@ from growing with every chat.
   and layer moves as well as text. Failed/interrupted children keep partial work
   recoverable without auto-applying it.
 
-## What “conflict” means in Praxis
+## What “conflict” means in Trezi
 
 A park does not necessarily mean Git found overlapping `<<<<<<<` markers. It means the
 chat's result could not be proven safe to land as one batch. Typical causes are another
@@ -95,7 +95,7 @@ raw Git/reset/discard escape hatch.
 ## Recovery and limits
 
 On restart, dirty or unmerged orphan worktrees are folded into recovery records; work
-already present live is removed. Praxis also sweeps branch-only `praxis/chat-*`
+already present live is removed. Trezi also sweeps branch-only `trezi/chat-*`
 leftovers whose checkout was removed by an older or interrupted teardown. Because a
 landed turn is usually a different commit on the live branch, cleanup accepts either
 commit ancestry or patch equivalence against live `HEAD`; it never deletes a checked-
@@ -116,8 +116,8 @@ Regression coverage: `test/chat-worktrees.mjs`, `test/live-commit.mjs`,
 
 Publish is a second repository-wide landing boundary after chat work reaches the live
 checkout. The entire commit → reconcile → push → PR → merge → cleanup sequence holds a
-per-repository publish lock. Before pushing an existing `praxis/*` branch, Praxis
-fetches/prunes origin and records both tips below `refs/praxis/recovery/`.
+per-repository publish lock. Before pushing an existing `trezi/*` branch, Trezi
+fetches/prunes origin and records both tips below `refs/trezi/recovery/`.
 
 The reconciliation is ancestry-driven: a remote ancestor needs only a normal push; a
 local ancestor fast-forwards; true divergence gets an explicit merge commit. A push
@@ -151,10 +151,10 @@ turns still depend on the framework's own reload behavior or a manual restart.
 
 ## Setup helpers and Next.js validation
 
-Git snapshots continue to exclude `.praxis/`. Before creating an agent session and
-before every clean chat turn, Praxis copies only the setup helper allowlist into
+Git snapshots continue to exclude `.trezi/`. Before creating an agent session and
+before every clean chat turn, Trezi copies only the setup helper allowlist into
 the private checkout, verifies the copies, and records paths/SHA-256 hashes in
-`.praxis/setup-helpers.json`. This also handles setup started after a chat's
+`.trezi/setup-helpers.json`. This also handles setup started after a chat's
 worktree already exists. Annotations and other sidecar data are not shared.
 
 Next projects provision dependencies inside the worktree using its package manager,
@@ -248,3 +248,7 @@ Preview processes belong to the app, independently of chat worktrees. Terminal
 interrupts and app quit await termination of each owned process group, escalating
 to SIGKILL after one second. Shell exit does not release ownership while descendants
 survive. Shutdown does not land or discard worktree edits or target unrelated servers.
+
+Trezi compatibility: see [migration policy](rename/MIGRATION.md) for legacy
+profile/worktree paths, retained identities and rollback, and [LKM-84 mapping](rename/COORDINATION.md)
+for integration ordering.

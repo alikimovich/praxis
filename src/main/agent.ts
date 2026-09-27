@@ -1,3 +1,4 @@
+import { nativeSessionPath } from '../native/profile-path'
 import { generatePublishDescription } from './publish-description'
 import { defaultBase } from './publish-scope'
 import { chatIslandContext } from './chat-islands'
@@ -83,28 +84,11 @@ const git = (root: string, args: string[]): Promise<{ stdout: string }> =>
 
 // On-disk agent-session history (v5-D). Lazy so it resolves userData after the
 // app is ready; under the app's userData dir, out of any user repo.
-// `dataDir` migrates the pre-rename `userData/dsgn` dir on first touch: a plain
-// rename, then `git worktree repair` per chat worktree — their `.git` files and
-// the parent repos' admin records hold absolute paths to the old location.
+// Alias legacy stores in place so saved absolute Git/worktree paths remain valid.
 let _dataDir: string | null = null
 function dataDir(): string {
   if (_dataDir) return _dataDir
-  const dir = join(app.getPath('userData'), 'praxis')
-  const legacy = join(app.getPath('userData'), 'dsgn')
-  if (!existsSync(dir) && existsSync(legacy)) {
-    try {
-      renameSync(legacy, dir)
-      const wts = join(dir, 'worktrees')
-      if (existsSync(wts)) {
-        for (const id of readdirSync(wts)) {
-          if (id.startsWith('.')) continue // .index-* snapshots, tmp dirs
-          execFile('git', ['worktree', 'repair'], { cwd: join(wts, id) }, () => {})
-        }
-      }
-    } catch (err) {
-      console.error('dsgn→praxis userData migration failed:', err)
-    }
-  }
+  const dir = nativeSessionPath(app.getPath('userData'))
   _dataDir = dir
   return dir
 }
@@ -274,7 +258,7 @@ const interactiveEvents =
       const session = sessions.get(sessionKey)
       const transcript = session?.record.transcript ?? []
       const last = [...transcript].reverse().find((t) => t.role === 'user')?.text
-      void reconciliation.finish(sessionKey, firstLine(last ?? 'praxis chat edit'), terminal)
+      void reconciliation.finish(sessionKey, firstLine(last ?? 'trezi chat edit'), terminal)
       if (terminal === 'success') {
         void maybeGenerateTitle(sessionKey)
         evaluateProjectMemory(sessionKey)
@@ -348,7 +332,7 @@ const runningCount = (parentKey: string): number =>
   [...spawns.values()].filter((s) => s.parentKey === parentKey).length +
   (startingCounts.get(parentKey) ?? 0)
 const worktreesDir = (): string => join(dataDir(), 'worktrees')
-const firstLine = (t: string): string => (t.split('\n')[0] || 'Praxis comment edit').slice(0, 72)
+const firstLine = (t: string): string => (t.split('\n')[0] || 'Trezi comment edit').slice(0, 72)
 /** Normalise a user-typed chat name: one line, collapsed whitespace, capped.
  *  Empty (after trimming) means "no rename" — the caller rejects it. */
 const cleanTitle = (t: unknown): string =>
@@ -390,7 +374,7 @@ function closeSession(
 /**
  * A detached background spawn reached its terminal event. By default we now
  * AUTO-APPLY its change straight onto the working branch the user is on — no
- * separate `praxis/comment-*` branch, no PR, no manual Apply (that was "too many
+ * separate `trezi/comment-*` branch, no PR, no manual Apply (that was "too many
  * approvals") — and record it in the undo history so Cmd+Z reverts the whole
  * task atomically. The branch + checkout are deleted and the record is NOT
  * persisted, so the finished spawn vanishes from the rail instead of lingering as
@@ -435,7 +419,7 @@ async function finalizeSpawn(id: string, status: 'done' | 'error'): Promise<void
         // the spawn shows up in `git log` and can be reverted on its own.
         await commitLiveTurn(parentRoot, files, {
           title: firstLine(text),
-          body: origin === 'text-edit' ? 'Praxis background text edit.' : 'Praxis comment spawn.'
+          body: origin === 'text-edit' ? 'Trezi background text edit.' : 'Trezi comment spawn.'
         })
         await removeWorktree(parentRoot, wt, { keepBranch: false })
         try {
@@ -687,7 +671,7 @@ export function registerAgentIpc(
       if (activeKey && (activeKey === key || activeKey.startsWith(`${key}#`))) activeKey = null
       const priorCurrent = store().current(key)
       const resumeSessionId = priorCurrent?.sdkSessionId
-      // Isolated chats run in a private `praxis/chat-<id>` worktree (repo roots only);
+      // Isolated chats run in a private `trezi/chat-<id>` worktree (repo roots only);
       // isolatedCwd returns the live root otherwise. adoptSession re-stamps the record
       // back to the live project so history/reattach see it under the real root.
       const cwd = await isolatedCwd(root, key)
@@ -1222,7 +1206,7 @@ export function registerAgentIpc(
   // v8 F1: spawn a detached background agent in its own git worktree. It runs in the
   // background (bypassPermissions — a headless run has no card UI), edits its private
   // checkout (zero cross-writes with the main agent or other spawns), and on finish
-  // commits to a `praxis/comment-<id>` branch + lands in this project's history. Over the
+  // commits to a `trezi/comment-<id>` branch + lands in this project's history. Over the
   // per-repo cap (Phase 3) it QUEUES and starts when a slot frees.
   ipcMain.handle(
     'agent:spawn-comment',
@@ -1435,7 +1419,7 @@ export function registerAgentIpc(
   // User-added model endpoints (v10, `providers:*`). Registered from here, next to
   // the other userData-backed stores, and handed THIS module's `dataDir` so both
   // stores share one directory — and so providers.ts can't create it ahead of the
-  // legacy dsgn→praxis migration above and quietly skip it.
+  // legacy session-store alias above and quietly skip it.
   registerProviderIpc(dataDir, router)
 
   // v9 reattach: everything still live in main, for a fresh renderer (after a
@@ -1504,7 +1488,7 @@ export function registerAgentIpc(
     }
   })
 
-  // Don't leave any backend subprocess running after praxis quits.
+  // Don't leave any backend subprocess running after trezi quits.
   app.on('before-quit', () => {
     const currentByProject = new Map(activeSessionKeyByProject)
     for (const sessionKey of sessions.keys()) {

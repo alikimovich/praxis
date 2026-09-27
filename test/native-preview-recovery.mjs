@@ -32,7 +32,7 @@ assert.ok(sheets.current.state.actions.some(a => a.id === 'refresh'))
 sheets.close()
 
 if (process.platform === 'darwin') {
-  const root = mkdtempSync(join(tmpdir(), 'praxis-recovery-')), other = mkdtempSync(join(tmpdir(), 'praxis-unrelated-'))
+  const root = mkdtempSync(join(tmpdir(), 'trezi-recovery-')), other = mkdtempSync(join(tmpdir(), 'trezi-unrelated-'))
   const children = []
   try {
     for (const cwd of [root, other]) {

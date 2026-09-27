@@ -12,8 +12,8 @@ export class NativeGitController {
   constructor(readonly sheets: NativeSheetController, readonly log: NativeActivityController, readonly preferences: ReturnType<typeof nativePreferences>, readonly render: () => void) {}
   private get workspace() { return this.sheets.workspace }
   private get invoke() { return this.sheets.invoke }
-  get mode() { return this.preferences.get('praxis:publish-mode') === 'pr' ? 'pr' : 'merge' }
-  setMode(value: string) { if (value === 'pr' || value === 'merge') { this.preferences.set('praxis:publish-mode', value); this.render() } }
+  get mode() { return this.preferences.get('trezi:publish-mode') === 'pr' ? 'pr' : 'merge' }
+  setMode(value: string) { if (value === 'pr' || value === 'merge') { this.preferences.set('trezi:publish-mode', value); this.render() } }
   decorate(state: NativeShellState): NativeShellState {
     const entry = this.workspace.active, root = entry?.root ?? '', publishing = this.publishing.has(root)
     const connection = this.connections.get(root)

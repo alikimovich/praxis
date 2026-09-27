@@ -2,7 +2,7 @@
  * media-types.ts unit test (pure — no Electron). This is the half of the
  * editor's media support that decides whether a file is a picture, a video, or
  * bytes we shouldn't pour into CodeMirror, plus the Range parsing the
- * praxis-media protocol needs for <video> seeking.
+ * trezi-media protocol needs for <video> seeking.
  *
  * Asserts: media detection is case-insensitive (`arkady.PNG` is the reported
  * bug), .svg stays TEXT on purpose, source files are never mistaken for media;

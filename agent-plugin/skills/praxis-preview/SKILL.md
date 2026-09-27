@@ -1,9 +1,9 @@
 ---
 name: praxis-preview
-description: How to see and verify the user's live preview in Praxis. Use when inspecting what the user is looking at, checking a page/route, or verifying a visual change after editing UI.
+description: How to see and verify the user's live preview in Trezi. Use when inspecting what the user is looking at, checking a page/route, or verifying a visual change after editing UI.
 ---
 
-# Working with the Praxis preview
+# Working with the Trezi preview
 
 The user watches a live preview of their repo while you edit it. Two lanes:
 

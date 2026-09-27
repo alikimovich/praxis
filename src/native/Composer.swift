@@ -15,7 +15,7 @@ final class ComposerTextView: NSTextView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         if string.isEmpty && !hasMarkedText() {
-            ("Ask Praxis  (/ for skills)" as NSString).draw(at: NSPoint(x: 7, y: 4), withAttributes: [.font:font ?? NSFont.systemFont(ofSize: 14), .foregroundColor:NSColor.placeholderTextColor])
+            ("Ask Trezi  (/ for skills)" as NSString).draw(at: NSPoint(x: 7, y: 4), withAttributes: [.font:font ?? NSFont.systemFont(ofSize: 14), .foregroundColor:NSColor.placeholderTextColor])
         }
     }
     override func paste(_ sender: Any?) {
@@ -90,7 +90,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         text.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         text.autoresizingMask = [.width]; text.textContainer?.widthTracksTextView = true
         text.textContainer?.containerSize = NSSize(width: 400, height: CGFloat.greatestFiniteMagnitude)
-        text.delegate = self; text.setAccessibilityLabel("Message to Praxis")
+        text.delegate = self; text.setAccessibilityLabel("Message to Trezi")
         text.registerForDraggedTypes([.fileURL, .png, .tiff])
         text.pasteFiles = { [weak self] board in self?.readPasteboard(board) ?? false }
         scroll.documentView = text; scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay

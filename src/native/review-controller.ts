@@ -13,14 +13,14 @@ export class NativeReviewController {
     this.sheets.present({ title: record.title || 'Saved chat', detail: [record.projectName, record.branch, new Date(record.startedAt).toLocaleString()].filter(Boolean).join(' · '),
       fields: [
         ...(record.filesTouched.length ? [{ id: 'files', label: 'Files changed', kind: 'readonly' as const, value: record.filesTouched.join('\n') }] : []),
-        { id: 'transcript', label: 'Chat history', kind: 'readonly', value: record.transcript.map(t => `${t.role === 'user' ? 'You' : t.role === 'assistant' ? 'Praxis' : t.role}\n${t.text}`).join('\n\n') || 'No messages were saved for this chat.' }
+        { id: 'transcript', label: 'Chat history', kind: 'readonly', value: record.transcript.map(t => `${t.role === 'user' ? 'You' : t.role === 'assistant' ? 'Trezi' : t.role}\n${t.text}`).join('\n\n') || 'No messages were saved for this chat.' }
       ],
       actions: [{ id: 'cancel', label: 'Close' }, { id: 'rename', label: 'Rename…' }, ...(!comment ? [{ id: 'remove-record', label: 'Delete history…' }] : []), ...(record.prUrl ? [{ id: 'view-pr', label: 'View PR' }] : []),
         ...(comment ? [{ id: 'apply', label: 'Apply' }, ...(!record.prUrl ? [{ id: 'pr', label: 'Create PR' }] : []), { id: 'discard', label: 'Discard…' }] : []),
         ...(record.sdkSessionId ? [{ id: 'resume', label: 'Continue chat', primary: true }] : [])]
     }, async action => {
       const current = () => this.sheets.current?.state.id === action.id
-      const title = record.transcript.find(t => t.role === 'user')?.text.slice(0, 70) || 'Praxis comment edit'
+      const title = record.transcript.find(t => t.role === 'user')?.text.slice(0, 70) || 'Trezi comment edit'
       if (action.action === 'rename') { const project = this.sheets.workspace.state.projects.find(p => p.root === record.projectRoot); if (project) this.sheets.renameChat('history:' + record.id, project.key); return }
       if (action.action === 'view-pr' && record.prUrl) { await this.openExternal(record.prUrl); return }
       if (action.action === 'remove-record') {

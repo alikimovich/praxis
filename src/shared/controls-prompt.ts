@@ -41,7 +41,7 @@ export function controlsPrompt(
       `3. Expose each parameter as a typed prop with a literal default — the Props panel picks them up when I re-inspect the element.`
     )
   }
-  lines.push(`Never create or edit files under \`.praxis/\`.`)
+  lines.push(`Never create or edit files under \`.trezi/\`.`)
   if (oldManifest) {
     lines.push(
       ``,
@@ -77,12 +77,12 @@ export function animationControlsPrompt(
     hint
       ? `Add this animation to the selected element: "${oneLine(hint, 500)}".`
       : `Add a subtle, appropriate animation to the selected element.`,
-    `Then follow the animation-controls skill to surface Praxis native animation controls (manifest.presentation: "animation").`,
+    `Then follow the animation-controls skill to surface Trezi native animation controls (manifest.presentation: "animation").`,
     `Use the selection only to identify the animation's source. The panel must remain mounted and`,
     `usable when I select a different object or clear the selection, with controls wired to the`,
     `real animation and Replay for one-shot motion. Preserve unrelated layout and reduced-motion behavior.`,
     `Use define_controls with literal parameters; do not install DialKit or add tuning UI to the app.`,
-    `Never create or edit files under \`.praxis/\`.`
+    `Never create or edit files under \`.trezi/\`.`
   )
   return lines.join('\n')
 }

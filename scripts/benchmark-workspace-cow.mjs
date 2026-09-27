@@ -15,7 +15,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const rounds = Number(process.argv[2] ?? 5)
 assert(Number.isInteger(rounds) && rounds >= 3 && rounds <= 20)
 assert.equal(process.platform, 'darwin', 'This benchmark targets macOS/APFS')
-const temp = mkdtempSync(join(tmpdir(), 'praxis-cow-bench-'))
+const temp = mkdtempSync(join(tmpdir(), 'trezi-cow-bench-'))
 const run = (cmd, args, cwd = temp) => execFileSync(cmd, args, {
   cwd, encoding: 'utf8', maxBuffer: 128 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe']
 })
@@ -81,7 +81,7 @@ try {
   // Export committed files without copying Git history, dependencies or secrets.
   const archive = join(temp, 'source.tar')
   run('git', ['archive', '--format=tar', `--output=${archive}`, 'HEAD'], root)
-  for (const scenario of ['praxis', 'many-files', 'large-assets']) {
+  for (const scenario of ['trezi', 'many-files', 'large-assets']) {
     const repo = join(temp, scenario)
     mkdirSync(repo)
     run('tar', ['-xf', archive, '-C', repo])
@@ -123,7 +123,7 @@ try {
         } else {
           wt = await timed(`${scenario}:cow-hybrid-create`, async () => {
             const baseSha = await captureBase(repo, join(worktrees, `.index-${id}`))
-            const branch = `praxis/chat-${id}`
+            const branch = `trezi/chat-${id}`
             git(repo, 'worktree', 'add', '--no-checkout', '-b', branch, dest, baseSha)
             cloneSource(repo, dest)
             git(dest, 'read-tree', baseSha)

@@ -13,8 +13,9 @@ const ROOT = dirname(TEST_DIR);
 
 // Backend logic checks run independently of the native desktop.
 const UNIT = [
+  "rename-compat",
   "native-boundary",
-  "praxis-agent-tools",
+  "trezi-agent-tools",
   "codex-mcp",
   "native-shutdown",
   "native-preview-recovery",
@@ -112,7 +113,7 @@ const UNIT = [
   "shadows",
   "type-metrics",
   "skills-install",
-  "praxis-cli"
+  "trezi-cli"
 ];
 
 const NATIVE = ['native-runtime', 'native-source-window', 'native-chat-scroll', 'native-next-hmr'];

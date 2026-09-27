@@ -30,4 +30,4 @@ export interface NativeWorkspaceBridge {
   onProjection(callback: (value: { chatHidden: boolean; viewport: string; selectMode: boolean }) => void): () => void
   onState(callback: (state: NativeWorkspaceSnapshot) => void): () => void
 }
-declare global { interface Window { praxisNativeWorkspace?: NativeWorkspaceBridge } }
+declare global { interface Window { treziNativeWorkspace?: NativeWorkspaceBridge } }

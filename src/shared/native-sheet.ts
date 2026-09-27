@@ -19,8 +19,8 @@ export interface NativeSheetState {
 export interface NativeSheetAction { id: string; action: string; values: Record<string, string> }
 
 export interface NativeSheetsBridge { open(kind: 'new-project' | 'memory' | 'settings' | 'review' | 'feedback' | 'diagnose', key?: string): void }
-declare global { interface Window { praxisNativeSheets?: NativeSheetsBridge } }
+declare global { interface Window { treziNativeSheets?: NativeSheetsBridge } }
 
-declare global { interface Window { praxisNativeActivity?: { append(text: string, kind: string): void; action(action: string): void } } }
+declare global { interface Window { treziNativeActivity?: { append(text: string, kind: string): void; action(action: string): void } } }
 
-declare global { interface Window { praxisNativeGit?: { action(action: 'publish' | 'branch' | 'new-branch' | 'git-updates' | 'connect', value?: string): void } } }
+declare global { interface Window { treziNativeGit?: { action(action: 'publish' | 'branch' | 'new-branch' | 'git-updates' | 'connect', value?: string): void } } }

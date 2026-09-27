@@ -1,3 +1,4 @@
+import { sourceStamp, sourceSelector } from './source-stamp'
 import { captureSurfaces, type Surface } from './three-d-paint'
 import { THREE_D_CSS } from './three-d-styles'
 
@@ -5,11 +6,11 @@ import { THREE_D_CSS } from './three-d-styles'
  * deliberately insufficient; child indexes can silently point at a sibling. */
 function identity(el: Element, scope: ParentNode): () => Element | null {
   const tag = el.localName
-  const stamp = el.getAttribute('data-praxis-source')
+  const stamp = sourceStamp(el)
   const selector = el.id
     ? `#${CSS.escape(el.id)}`
     : stamp
-      ? `[data-praxis-source="${CSS.escape(stamp)}"]`
+      ? sourceSelector(stamp)
       : null
   const unique = selector && scope.querySelectorAll(selector).length === 1
   return () => {
@@ -17,7 +18,7 @@ function identity(el: Element, scope: ParentNode): () => Element | null {
     if (!selector || !unique) return null
     const matches = scope.querySelectorAll(selector)
     const next = matches.length === 1 ? matches[0] : null
-    if (next?.localName !== tag || next.getAttribute('data-praxis-source') !== stamp) return null
+    if (next?.localName !== tag || sourceStamp(next) !== stamp) return null
     el = next
     return el
   }
@@ -55,7 +56,7 @@ export function createThreeDInspector(options: {
     let selected: Element | null = initial
     const focusBefore = document.activeElement
     host = document.createElement('div')
-    host.dataset.praxisThreeD = ''
+    host.dataset.treziThreeD = ''
     const shadow = host.attachShadow({ mode: 'open' })
     const style = document.createElement('style')
     style.textContent = THREE_D_CSS

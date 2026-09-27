@@ -4,7 +4,7 @@
  *
  * The paths these take come straight from the renderer, so the guards matter as
  * much as the happy paths: no traversal, no absolute paths, nothing inside
- * .git/.praxis/.dsgn/node_modules, no silent clobber of an existing file. Also
+ * .git/.trezi/.dsgn/node_modules, no silent clobber of an existing file. Also
  * asserts the case-only rename (Foo.tsx → foo.tsx) that a case-insensitive
  * filesystem would otherwise report as "already exists", and that delete prefers
  * the injected trash hook (main passes shell.trashItem) but still removes the
@@ -40,7 +40,7 @@ try {
   ok(normalizeRelPath('') === null, 'empty path rejected')
   ok(normalizeRelPath('a\0b.ts') === null, 'NUL byte rejected')
   ok(normalizeRelPath('.git/config') === null, '.git rejected')
-  ok(normalizeRelPath('.praxis/annotations.json') === null, '.praxis sidecar rejected')
+  ok(normalizeRelPath('.trezi/annotations.json') === null, '.trezi sidecar rejected')
   ok(normalizeRelPath('sub/.dsgn/x.json') === null, 'legacy .dsgn sidecar rejected at depth')
   ok(normalizeRelPath('node_modules/x/index.js') === null, 'node_modules rejected')
 

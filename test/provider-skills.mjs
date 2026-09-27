@@ -12,7 +12,7 @@ for (const file of ['src/main/backends/claude.ts', 'src/main/backends/codex.ts',
   assert(source.includes('chat_island'), file + ' routes tuning through chat islands')
 }
 
-const base = mkdtempSync(join(tmpdir(), 'praxis-provider-skills-'))
+const base = mkdtempSync(join(tmpdir(), 'trezi-provider-skills-'))
 const root = join(base, 'project')
 const home = join(base, 'home')
 function skill(dir, name, description) {

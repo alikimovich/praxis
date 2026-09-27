@@ -9,7 +9,7 @@ const MAX_BYTES = 512 * 1024
 const digest = (text: string): string => createHash('sha256').update(text).digest('hex')
 const revisionOf = (text: string, panel: ContentControlPanel): string =>
   digest(`${text}\n${JSON.stringify(panel)}`)
-const storeFile = (root: string): string => join(root, '.praxis', 'content-controls.json')
+const storeFile = (root: string): string => join(root, '.trezi', 'content-controls.json')
 
 export function validateContentFile(file: unknown): asserts file is string {
   if (
@@ -48,7 +48,7 @@ async function checkedRecipe(input: unknown): Promise<PanelRecipe> {
 async function readStore(root: string): Promise<ContentControlPanel[]> {
   let text: string
   try {
-    text = await boundedRead(await confined(root, '.praxis/content-controls.json'))
+    text = await boundedRead(await confined(root, '.trezi/content-controls.json'))
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
     throw error
@@ -71,7 +71,7 @@ async function writeStore(root: string, panels: ContentControlPanel[]): Promise<
   const file = storeFile(root)
   await mkdir(dirname(file), { recursive: true })
   // Reject a redirected sidecar before writing any state.
-  await confined(root, '.praxis')
+  await confined(root, '.trezi')
   const text = `${JSON.stringify({ version: 1, panels }, null, 2)}\n`
   if (Buffer.byteLength(text) > MAX_BYTES) throw new Error('Content panel store exceeds 512 KB.')
   const tmp = `${file}.${randomUUID()}.tmp`

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { remoteStatus, updateFromRemote } from '../src/main/git-remote.ts'
 
-const base = mkdtempSync(join(tmpdir(), 'praxis-git-remote-'))
+const base = mkdtempSync(join(tmpdir(), 'trezi-git-remote-'))
 const remote = join(base, 'origin.git'), seed = join(base, 'seed'), local = join(base, 'project')
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
 const identity = (cwd) => { git(cwd, 'config', 'user.name', 'Test'); git(cwd, 'config', 'user.email', 'test@example.com') }
@@ -19,7 +19,7 @@ try {
   git(seed, 'push', '-u', 'origin', 'main')
   git(base, 'clone', remote, local)
   identity(local)
-  git(local, 'checkout', '-b', 'praxis/main')
+  git(local, 'checkout', '-b', 'trezi/main')
   git(seed, 'checkout', '-b', 'feature/design')
   commit(seed, 'feature.txt', 'Remote feature')
   git(seed, 'push', '-u', 'origin', 'feature/design')
@@ -29,8 +29,8 @@ try {
   const fetched = await remoteStatus(local, true)
   assert(fetched.branches.some((b) => b.branch === 'feature/design'))
   assert(!fetched.branches.some((b) => b.branch === 'HEAD'))
-  assert.equal(git(local, 'branch', '--show-current'), 'praxis/main', 'fetch must not switch branches')
-  const pull = { action: 'pull', ref: 'refs/remotes/origin/main', expectedBranch: 'praxis/main' }
+  assert.equal(git(local, 'branch', '--show-current'), 'trezi/main', 'fetch must not switch branches')
+  const pull = { action: 'pull', ref: 'refs/remotes/origin/main', expectedBranch: 'trezi/main' }
   commit(seed, 'upstream.txt', 'GitHub update')
   git(seed, 'push')
   writeFileSync(join(local, 'uncommitted.txt'), 'Keep me')
@@ -39,8 +39,8 @@ try {
   rmSync(join(local, 'uncommitted.txt'))
   assert.match((await updateFromRemote(local, pull, () => true)).message, /agents to finish/)
   assert.match((await updateFromRemote(local, { ...pull, expectedBranch: 'other' })).message, /branch changed/)
-  mkdirSync(join(local, '.praxis'))
-  writeFileSync(join(local, '.praxis/annotations.json'), '[]')
+  mkdirSync(join(local, '.trezi'))
+  writeFileSync(join(local, '.trezi/annotations.json'), '[]')
   git(local, 'remote', 'add', 'offline-backup', join(base, 'missing.git'))
   const first = await updateFromRemote(local, pull)
   git(local, 'remote', 'remove', 'offline-backup')
@@ -48,8 +48,8 @@ try {
   assert(first.files.includes('upstream.txt'))
   assert.equal(readFileSync(join(local, 'upstream.txt'), 'utf8'), 'GitHub update')
   assert.equal((await updateFromRemote(local, pull)).changed, false)
-  assert.equal(readFileSync(join(local, '.praxis/annotations.json'), 'utf8'), '[]')
-  rmSync(join(local, '.praxis'), { recursive: true })
+  assert.equal(readFileSync(join(local, '.trezi/annotations.json'), 'utf8'), '[]')
+  rmSync(join(local, '.trezi'), { recursive: true })
 
   // Diverged but compatible histories merge without losing the local commit.
   commit(local, 'local.txt', 'Local work')

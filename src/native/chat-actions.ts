@@ -87,7 +87,7 @@ export async function cardAction(controller: NativeChatController, chat: Chat, a
       chat.context.notes = chat.context.notes.filter(n => n.id !== action.id)
       effect({ type: 'notes', root: chat.root }); break
     case 'publish-notes': {
-      const result = await invoke('publish:to-pr', chat.root, { title: 'praxis: design handoff' })
+      const result = await invoke('publish:to-pr', chat.root, { title: 'trezi: design handoff' })
       if (!result.ok) throw new Error(result.error ?? 'Publish failed.')
       if (result.url) await invoke('agent:tag-session', chat.root, { prUrl: result.url })
       break

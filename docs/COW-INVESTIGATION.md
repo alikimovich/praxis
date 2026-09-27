@@ -27,12 +27,12 @@ Median milliseconds:
 
 | Fixture | Current creation | CoW hybrid creation | Raw CoW source copy | Capture base |
 | --- | ---: | ---: | ---: | ---: |
-| Praxis: 414 files, 5.92 MiB | 213.5 | 196.0 | 49.3 | 118.4 |
+| Trezi: 414 files, 5.92 MiB | 213.5 | 196.0 | 49.3 | 118.4 |
 | +5,000 small files: 5,414 files, 10.58 MiB | 1,193.1 | 917.3 | 482.1 | 446.7 |
 | +8 random 8 MiB assets: 422 files, 69.92 MiB | 370.3 | 304.1 | 49.5 | 216.7 |
 
 Hybrid creation medians are 8%, 23%, and 18% lower respectively, but the small
-Praxis sample is noisy: current ranged 196–236 ms, hybrid 168–419 ms. This is not
+Trezi sample is noisy: current ranged 196–236 ms, hybrid 168–419 ms. This is not
 evidence of a reliable 8% product speedup. File count still matters: clones need
 directory traversal and per-file metadata even when data blocks are shared.
 
@@ -45,7 +45,7 @@ runtime dependency setup, and concurrent-live-edit protection. Current creation
 includes its existing runtime-link checks, though fixtures have no dependencies.
 
 Raw CoW copies exclude `.git`, root `node_modules`, and `.env`. They have no
-independent Git history/index or merge base and cannot replace a complete Praxis
+independent Git history/index or merge base and cannot replace a complete Trezi
 workspace. Comparing their 49 ms directly with 214 ms would overstate the benefit.
 Whole-repository clones, installed dependencies, cold caches, other filesystems,
 Git filters/LFS/submodules, and recovery/landing performance were not benchmarked.
@@ -71,7 +71,7 @@ a clean tree simply returns HEAD does not match the current implementation.
 A follow-up should profile these subprocesses and index scans separately and
 evaluate safe snapshot/index reuse or avoiding redundant snapshot commits. Such
 an optimization must preserve untracked files, staged state and external edits;
-the repository queue serializes Praxis writers but cannot lock out the user's editor.
+the repository queue serializes Trezi writers but cannot lock out the user's editor.
 Snapshot time is not entirely removable: changed content still needs capturing.
 
 ## Compatibility and correctness findings
@@ -98,7 +98,7 @@ Snapshot time is not entirely removable: changed content still needs capturing.
 - Do not copy a linked worktree's `.git` pointer into an unrelated directory:
   it would point to existing worktree administration. A hybrid must register a new
   worktree. An independent full-repository CoW clone instead needs its own Git
-  metadata and explicit commit/object transfer for Praxis's current landing APIs.
+  metadata and explicit commit/object transfer for Trezi's current landing APIs.
 - Runtime dependencies are currently shared symlinks. Cloning the actual
   dependency files could allow independent package changes, but cloning a symlink
   preserves the shared target. That is a separate feature requiring install/build

@@ -7,7 +7,7 @@
  * repo's default branch reflects what the user made (Option B), not the bare
  * scaffold. Publish stays exactly as-is; it just works once a remote is present.
  *
- * We lean on the `gh` CLI (praxis's audience clones + `bun install`, and the
+ * We lean on the `gh` CLI (trezi's audience clones + `bun install`, and the
  * codebase already shells out to gh for Publish). Everything here is best-effort
  * and defensive: any failure returns `{ ok: false, error }` rather than throwing.
  */
@@ -118,7 +118,7 @@ export async function connectToGitHub(
   // Plan the branches: fast-forward the clean base up to the work branch so the
   // repo's default branch shows what the user built, not the bare scaffold.
   // `merge-base --is-ancestor` exits 0 when base is an ancestor of current.
-  const base = current.startsWith('praxis/') ? current.slice('praxis/'.length) || 'main' : current
+  const base = current.startsWith('trezi/') ? current.slice('trezi/'.length) || 'main' : current
   let baseIsAncestor = false
   if (base !== current) {
     baseIsAncestor = await git(root, ['merge-base', '--is-ancestor', base, current])

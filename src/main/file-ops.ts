@@ -18,10 +18,10 @@ import type { FileOpResult } from '../shared/api'
 
 /**
  * Directories the file manager refuses to touch at any depth: git's own store,
- * the praxis sidecar (`.dsgn` is its pre-rename name — old repos still carry
+ * the trezi sidecar (`.dsgn` is its pre-rename name — old repos still carry
  * it, and the agent's write-deny covers both), and installed dependencies.
  */
-const PROTECTED_SEGMENTS = new Set(['.git', '.praxis', '.dsgn', 'node_modules'])
+const PROTECTED_SEGMENTS = new Set(['.git', '.trezi', '.praxis', '.dsgn', 'node_modules'])
 
 /**
  * Normalize an untrusted path to a repo-relative POSIX path, or null when it

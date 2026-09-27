@@ -64,7 +64,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var preferences: [String: Any] = [:]
     var recentMenu = NSMenu(title: "Open Recent")
     var mediaTasks: [String: WKURLSchemeTask] = [:]
-    let world = WKContentWorld.world(name: "PraxisPreview")
+    let world = WKContentWorld.world(name: "TreziPreview")
     let directory: String
     let ephemeral: Bool
     init(directory: String, ephemeral: Bool) { self.directory = directory; self.ephemeral = ephemeral; super.init() }
@@ -74,6 +74,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         PreviewInspector.enable(config.preferences)
         config.websiteDataStore = .nonPersistent()
         let contentWorld = world
+        config.userContentController.add(self, contentWorld: contentWorld, name: "trezi")
         config.userContentController.add(self, contentWorld: contentWorld, name: "praxis")
         let file = directory + "/preview.js"
         let script = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
@@ -89,9 +90,9 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         return view
     }
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if let path = Bundle.main.path(forResource: "Praxis", ofType: "icns"), let icon = NSImage(contentsOfFile: path) { NSApp.applicationIconImage = icon }
+        if let path = Bundle.main.path(forResource: "Trezi", ofType: "icns"), let icon = NSImage(contentsOfFile: path) { NSApp.applicationIconImage = icon }
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1320, height: 860), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-        window.title = "Praxis · Native"; window.minSize = NSSize(width: 850, height: 550)
+        window.title = "Trezi · Native"; window.minSize = NSSize(width: 850, height: 550)
         window.contentView = canvas; window.delegate = self
         _ = makeView("preview")
         shell = NativeShell(window: window, canvas: canvas)
@@ -127,9 +128,9 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         func submenu(_ title: String) -> NSMenu {
             let item = NSMenuItem(); item.title = title; let sub = NSMenu(title: title); item.submenu = sub; menu.addItem(item); return sub
         }
-        let appMenu = submenu("Praxis")
+        let appMenu = submenu("Trezi")
         let settings = NSMenuItem(title: "Settings…", action: #selector(menuAction(_:)), keyEquivalent: ","); settings.representedObject = "settings"; settings.target = self; appMenu.addItem(settings)
-        appMenu.addItem(withTitle: "Quit Praxis", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "Quit Trezi", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let file = submenu("File")
         for (label, key, action) in [("New Project…", "n", "new-project"), ("Open Project…", "o", "open-project")] {
             let item = NSMenuItem(title: label, action: #selector(menuAction(_:)), keyEquivalent: key); item.target = self; item.representedObject = action; file.addItem(item)
@@ -206,7 +207,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             let editor = sourceEditors[root] ?? NativeSourceEditor(); sourceEditors[root] = editor
             editor.update(state)
             if state["popped"] as? Bool == true {
-                if editor.popout == nil { let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false); panel.isReleasedWhenClosed = false; panel.delegate = editor; panel.title = "Praxis · Code"; panel.contentMinSize = NSSize(width: 760, height: 420); panel.center(); editor.popout = panel }
+                if editor.popout == nil { let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false); panel.isReleasedWhenClosed = false; panel.delegate = editor; panel.title = "Trezi · Code"; panel.contentMinSize = NSSize(width: 760, height: 420); panel.center(); editor.popout = panel }
                 if let container = editor.popout?.contentView, editor.superview !== container {
                     editor.removeFromSuperview()
                     // Let the window own the editor's bounds after leaving the dock.
@@ -361,7 +362,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             if name == "preview" { view?.autoresizingMask = radius == 0 && view?.frame.isEmpty == false ? [.width, .height] : []; previewSurface.needsDisplay = true }
         case "deliver":
             guard let message = c["message"], let data = try? JSONSerialization.data(withJSONObject: message), let json = String(data: data, encoding: .utf8) else { return }
-            view?.evaluateJavaScript("globalThis.__praxisNativeDispatch?.(\(json))", in: nil, in: name == "preview" ? world : .page) { _ in }
+            view?.evaluateJavaScript("globalThis.__treziNativeDispatch?.(\(json))", in: nil, in: name == "preview" ? world : .page) { _ in }
         case "evaluate":
             guard let view = view, let code = c["code"] as? String else { reply(id, error: "Missing evaluation target"); return }
             view.callAsyncJavaScript("return JSON.stringify((await (\(code))) ?? null) ?? 'null';", arguments: [:], in: nil, in: c["isolated"] as? Bool == true ? world : .page) { result in
@@ -474,7 +475,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
 guard CommandLine.arguments.count >= 3 else {
-    fputs("PraxisHost requires the Bun service launcher. Start Praxis with bun run dev:native.\n", stderr)
+    fputs("TreziHost requires the Bun service launcher. Start Trezi with bun run dev:native.\n", stderr)
     exit(64)
 }
 let application = NSApplication.shared

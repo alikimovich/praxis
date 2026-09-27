@@ -1,6 +1,6 @@
 import { chatIslandDescription } from '../bin/chat-island-schema.mjs'
 /**
- * Codex ↔ Praxis MCP control bridge (pure Node/Bun, no provider credentials).
+ * Codex ↔ Trezi MCP control bridge (pure Node/Bun, no provider credentials).
  * Proves the loopback bridge is session-scoped and that the actual stdio MCP
  * subprocess advertises/calls both workspace tools instead of merely testing a
  * config-shaped object.
@@ -11,16 +11,16 @@ import { request as httpRequest } from 'node:http'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  registerPraxisAgentTools,
-  shutdownPraxisAgentTools
-} from '../src/main/praxis-agent-tools.ts'
+  registerTreziAgentTools,
+  shutdownTreziAgentTools
+} from '../src/main/trezi-agent-tools.ts'
 
 import { observeAgentPreview } from '../src/main/preview-observation-tools.ts'
 import { registerPreviewSource } from '../src/main/preview-state.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const calls = []
-const registration = await registerPraxisAgentTools(async (action, args) => {
+const registration = await registerTreziAgentTools(async (action, args) => {
   if (action === 'preview_location' || action === 'preview_screenshot') return observeAgentPreview(action)
   if (action === 'chat_island' || action === 'content_controls' || action === 'project_ui_catalog' || action === 'compose_project_ui' || action === 'open_preview' || action === 'open_code') return { received: args ?? {} }
   calls.push(action)
@@ -59,12 +59,12 @@ assert.equal(
   'another session token cannot operate this chat'
 )
 
-const child = spawn(process.execPath, [join(root, 'bin', 'praxis-agent-mcp.mjs')], {
+const child = spawn(process.execPath, [join(root, 'bin', 'trezi-agent-mcp.mjs')], {
   cwd: root,
   env: {
     ...process.env,
-    PRAXIS_AGENT_TOOL_SOCKET: registration.socketPath,
-    PRAXIS_AGENT_TOOL_TOKEN: registration.token
+    TREZI_AGENT_TOOL_SOCKET: registration.socketPath,
+    TREZI_AGENT_TOOL_TOKEN: registration.token
   },
   stdio: ['pipe', 'pipe', 'pipe']
 })
@@ -107,9 +107,9 @@ try {
   const initialized = await request('initialize', {
     protocolVersion: '2025-06-18',
     capabilities: {},
-    clientInfo: { name: 'praxis-test', version: '1.0.0' }
+    clientInfo: { name: 'trezi-test', version: '1.0.0' }
   })
-  assert.equal(initialized.result.serverInfo.name, 'praxis')
+  assert.equal(initialized.result.serverInfo.name, 'trezi')
   child.stdin.write(
     `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} })}\n`
   )
@@ -203,6 +203,6 @@ assert.equal(
   401,
   'disposed sessions are no longer callable'
 )
-await shutdownPraxisAgentTools()
+await shutdownTreziAgentTools()
 
-console.log('PRAXIS-AGENT-TOOLS OK — scoped loopback bridge + real stdio MCP tools')
+console.log('TREZI-AGENT-TOOLS OK — scoped loopback bridge + real stdio MCP tools')

@@ -11,7 +11,7 @@ for (const file of ['package.json', 'bun.lock', 'bun.lockb', 'packages/web/packa
 for (const file of ['next.config.ts', 'svelte.config.js', 'vite.config.mts', '.env.local']) {
   assert.deepEqual(environmentChanges([file]), { restart: true, install: false }, file)
 }
-const root = mkdtempSync(join(tmpdir(), 'praxis-package-manager-'))
+const root = mkdtempSync(join(tmpdir(), 'trezi-package-manager-'))
 try {
   writeFileSync(join(root, 'bun.lock'), '')
   assert.equal(await projectPackageManager(root), 'bun')

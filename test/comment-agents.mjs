@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { createRecordCapture } from '../src/main/backends/record.ts'
-const temp = mkdtempSync(join(tmpdir(), 'praxis-comments-'))
-process.env.PRAXIS_USER_DATA = join(temp, 'profile')
+const temp = mkdtempSync(join(tmpdir(), 'trezi-comments-'))
+process.env.TREZI_USER_DATA = join(temp, 'profile')
 const repo = join(temp, 'repo'); mkdirSync(repo)
 const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim()
 git('init', '-q'); git('config', 'user.name', 'Fixture'); git('config', 'user.email', 'fixture@example.test')

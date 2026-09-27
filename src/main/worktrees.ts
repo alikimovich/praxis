@@ -9,7 +9,7 @@ import { normalizeBranchName } from './git'
 
 /**
  * Git-worktree management for F1 (comment → parallel agent session). Each spawned
- * comment agent runs in its OWN `git worktree` on a `praxis/comment-<id>` branch — a
+ * comment agent runs in its OWN `git worktree` on a `trezi/comment-<id>` branch — a
  * private on-disk checkout that shares the repo's object store — so N comments edit
  * the repo truly in parallel with zero cross-writes, and the user's live preview
  * (which stays on the main working tree) is undisturbed until they accept one.
@@ -33,7 +33,7 @@ export function excludedWorktreePath(raw: string): boolean {
   const rel = raw.replaceAll('\\', '/').replace(/^\.\//, '')
   const parts = rel.split('/').filter(Boolean)
   if (parts.includes('node_modules')) return true
-  if (parts[0] === '.praxis' || parts[0] === '.dsgn') return true
+  if (parts[0] === '.trezi' || parts[0] === '.praxis' || parts[0] === '.dsgn') return true
   const name = parts.at(-1) ?? ''
   if (name.endsWith('.tsbuildinfo')) return true
   if (name === '.env') return true
@@ -84,7 +84,7 @@ export interface Worktree {
   repoRoot: string
   /** The on-disk checkout (under worktreesDir). */
   path: string
-  /** `praxis/comment-<id>`. */
+  /** `trezi/comment-<id>`. */
   branch: string
   /** The commit the worktree forked from (main-tree HEAD + any uncommitted WIP). */
   baseSha: string
@@ -93,7 +93,7 @@ export interface Worktree {
 /**
  * Snapshot the live tree's FULL current state — tracked modifications AND brand-new
  * untracked files — into a dangling base commit, WITHOUT touching the live tree or
- * its index. `git stash create` omits untracked files (no `-u`), and the praxis
+ * its index. `git stash create` omits untracked files (no `-u`), and the trezi
  * interactive agent constantly creates new files, so we build the snapshot in a
  * throwaway index instead: seed it from HEAD, `add -A` the whole working tree,
  * explicitly remove machine-only/sensitive paths (including runtime symlinks that
@@ -104,10 +104,10 @@ export async function captureBase(repoRoot: string, indexFile: string): Promise<
   const head = (await git(repoRoot, ['rev-parse', 'HEAD'])).stdout.trim()
   const env: NodeJS.ProcessEnv = {
     GIT_INDEX_FILE: indexFile,
-    GIT_AUTHOR_NAME: 'Praxis',
-    GIT_AUTHOR_EMAIL: 'praxis@local',
-    GIT_COMMITTER_NAME: 'Praxis',
-    GIT_COMMITTER_EMAIL: 'praxis@local'
+    GIT_AUTHOR_NAME: 'Trezi',
+    GIT_AUTHOR_EMAIL: 'trezi@local',
+    GIT_COMMITTER_NAME: 'Trezi',
+    GIT_COMMITTER_EMAIL: 'trezi@local'
   }
   try {
     await git(repoRoot, ['read-tree', 'HEAD'], env)
@@ -116,7 +116,7 @@ export async function captureBase(repoRoot: string, indexFile: string): Promise<
     const tree = (await git(repoRoot, ['write-tree'], env)).stdout.trim()
     if (!tree) return head
     const commit = (
-      await git(repoRoot, ['commit-tree', tree, '-p', head, '-m', 'praxis: spawn base (WIP snapshot)'], env)
+      await git(repoRoot, ['commit-tree', tree, '-p', head, '-m', 'trezi: spawn base (WIP snapshot)'], env)
     ).stdout.trim()
     return commit || head
   } finally {
@@ -150,7 +150,7 @@ async function doCreateWorktree(
   // before its worktree exists); otherwise generate one.
   const id = opts.id ?? randomUUID().slice(0, 8)
   // Callers other than comment-spawn (e.g. per-chat isolation) can supply their own
-  // branch-name scheme; default keeps today's `praxis/comment-<id>` naming.
+  // branch-name scheme; default keeps today's `trezi/comment-<id>` naming.
   const branch = normalizeBranchName((opts.branchName ?? ((i) => `comment-${i}`))(id))
   const dir = join(worktreesDir, id)
   await mkdir(worktreesDir, { recursive: true })
@@ -213,13 +213,13 @@ export async function commitWorktree(
   // the spawn's finalization, losing the work.
   await git(wt.path, [
     '-c',
-    'user.name=Praxis',
+    'user.name=Trezi',
     '-c',
-    'user.email=praxis@local',
+    'user.email=trezi@local',
     'commit',
     '--no-verify',
     '-m',
-    message || 'Praxis comment edit'
+    message || 'Trezi comment edit'
   ])
   return { committed: true, files: staged }
 }
@@ -262,14 +262,14 @@ export interface ChatBranchPruneResult {
 /**
  * Remove redundant branch-only leftovers from completed chat turns.
  *
- * A normal `git branch --merged` check is not enough for Praxis: a chat commits in
+ * A normal `git branch --merged` check is not enough for Trezi: a chat commits in
  * its private worktree, then `commitLiveTurn` records an equivalent (different-SHA)
  * commit on the live branch. `git cherry HEAD <chat> <chat>^` compares stable patch
  * ids for only the chat tip, so it recognizes that successful landing without
  * treating the worktree's synthetic WIP-snapshot parent as unmerged work.
  *
  * Safety boundaries:
- * - only local `praxis/chat-*` refs are considered;
+ * - only local `trezi/chat-*` refs are considered;
  * - parked refs supplied by `isProtected` are retained;
  * - a ref checked out in ANY linked worktree is retained (and Git re-checks this
  *   itself when deleting, closing the scan/delete race);
@@ -289,7 +289,7 @@ export async function pruneIntegratedChatBranches(
     branches = (await git(repoRoot, [
       'for-each-ref',
       '--format=%(refname:short)',
-      'refs/heads/praxis/chat-*'
+      'refs/heads/trezi/chat-*', 'refs/heads/praxis/chat-*'
     ])).stdout
       .split('\n')
       .map((line) => line.trim())
@@ -299,7 +299,7 @@ export async function pruneIntegratedChatBranches(
   }
 
   for (const branch of branches) {
-    const id = branch.slice('praxis/chat-'.length)
+    const id = branch.replace(/^(trezi|praxis)\/chat-/, '')
     if (!id || isProtected(id)) {
       result.preserved.push(branch)
       continue
@@ -328,7 +328,7 @@ export async function pruneIntegratedChatBranches(
       await git(repoRoot, ['merge-base', '--is-ancestor', branch, 'HEAD'])
       integrated = true
     } catch {
-      // Separate Praxis live commits have different SHAs; compare the tip patch.
+      // Separate Trezi live commits have different SHAs; compare the tip patch.
       try {
         const cherry = (await git(repoRoot, ['cherry', 'HEAD', branch, `${branch}^`])).stdout
           .split('\n')
@@ -599,13 +599,13 @@ export async function pruneOrphans(
     //
     // Gating on the park record (not author/message) is essential: a chat branch gains one
     // commit per MERGED turn and `baseSha` advances to the tip on each merge, so a crash
-    // mid-turn after a merged turn leaves tip = a praxis-authored, non-base commit that is
+    // mid-turn after a merged turn leaves tip = a trezi-authored, non-base commit that is
     // ALREADY LIVE. Folding that (as an author/message heuristic would) splices merged
     // content into the recovery commit, and the record's Apply then re-applies live changes
     // → spurious 3-way conflicts. Un-parked (merged-tip) orphans just get the WIP committed
     // ON TOP, so branchPatch = only the genuinely-unmerged crash WIP. Comment-spawn orphans
     // have no park record either, so they are unaffected (unchanged prune behavior).
-    if (dirty && branch?.startsWith('praxis/chat-') && isParked(id)) {
+    if (dirty && branch && /^(trezi|praxis)\/chat-/.test(branch) && isParked(id)) {
       await git(dir, ['reset', '--soft', 'HEAD^']).catch(() => {})
     }
     // Best-effort: commit any dirty leftover to its branch before removing the dir,
@@ -613,21 +613,21 @@ export async function pruneOrphans(
     try {
       await git(dir, [
         '-c',
-        'user.name=Praxis',
+        'user.name=Trezi',
         '-c',
-        'user.email=praxis@local',
+        'user.email=trezi@local',
         'add',
         '-A'
       ])
       await git(dir, [
         '-c',
-        'user.name=Praxis',
+        'user.name=Trezi',
         '-c',
-        'user.email=praxis@local',
+        'user.email=trezi@local',
         'commit',
         '--no-verify',
         '-m',
-        'Praxis: recovered orphaned worktree'
+        'Trezi: recovered orphaned worktree'
       ]).catch(() => {})
     } catch {
       /* not a worktree / already clean */

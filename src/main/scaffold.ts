@@ -21,7 +21,7 @@ export interface CreateProjectResult {
   /**
    * The project was created, but something non-fatal went wrong that the user
    * needs to know about NOW rather than discover later. Today that means the
-   * `git init` + first commit didn't work: everything still runs, but praxis's
+   * `git init` + first commit didn't work: everything still runs, but trezi's
    * branch and publish flow both need a repository, so publish would otherwise
    * fail much later with a message that never mentions git (see
    * `annotations.ts`'s "isn't the repository root").
@@ -60,7 +60,7 @@ const templateFiles = (name: string): Record<string, string> => ({
   )}\n`,
   // Patterns are intentionally slash-free (`node_modules`, not `node_modules/`): a
   // trailing-slash pattern is directory-only and won't match the node_modules SYMLINK
-  // Praxis stitches into each chat worktree (see worktrees.ts's RUNTIME_DEPS note).
+  // Trezi stitches into each chat worktree (see worktrees.ts's RUNTIME_DEPS note).
   '.gitignore':
     'node_modules\ndist\ndist-ssr\n.DS_Store\n*.local\n.env\n.env.*\n!.env.example\nnpm-debug.log*\nyarn-error.log*\n',
   'index.html': `<!doctype html>
@@ -116,7 +116,7 @@ createRoot(document.getElementById('root')!).render(
   return (
     <main className="hero">
       <h1>${name}</h1>
-      <p>Fresh project, created with Praxis. Ask the chat to make it yours.</p>
+      <p>Fresh project, created with Trezi. Ask the chat to make it yours.</p>
     </main>
   )
 }
@@ -190,7 +190,7 @@ export async function createProject(
   // NOT silent any more. A swallowed failure here is invisible until the user
   // hits Publish, which then reports "this folder isn't the repository root"
   // (annotations.ts) without ever mentioning git: if the new folder sits inside
-  // some other repo, that parent is what git resolves to, so praxis looks like it
+  // some other repo, that parent is what git resolves to, so trezi looks like it
   // is refusing for a reason the user can't act on. Say it here, while they're
   // looking at the thing that just failed.
   let warning: string | undefined
@@ -198,13 +198,13 @@ export async function createProject(
     await execFileP('git', ['init', '-b', 'main'], { cwd: root, timeout: 10000 })
   } catch (e) {
     warning =
-      `Project created, but \`git init\` failed: ${msg(e)}. Praxis needs a repository ` +
+      `Project created, but \`git init\` failed: ${msg(e)}. Trezi needs a repository ` +
       `to create work branches and to publish, so run \`git init\` in ${root} before publishing.`
   }
   if (!warning) {
     try {
       await execFileP('git', ['add', '-A'], { cwd: root, timeout: 10000 })
-      await execFileP('git', ['commit', '-m', 'Initial commit from Praxis'], {
+      await execFileP('git', ['commit', '-m', 'Initial commit from Trezi'], {
         cwd: root,
         timeout: 10000
       })

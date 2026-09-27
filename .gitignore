@@ -8,7 +8,7 @@ test/artifacts/
 .env
 .env.local
 
-# Unpublished content-controls runtime distributed with Praxis.
+# Unpublished content-controls runtime distributed with Trezi.
 !vendor/content-controls/dist/
 !vendor/content-controls/dist/**
 

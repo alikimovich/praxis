@@ -13,7 +13,7 @@ import type { ProviderConnection, ProviderConnectionInput } from '../shared/api'
  * leave a half-file — with a single file that would cost the user EVERY connection,
  * which is exactly the failure sessions-store dodges by sharding.
  *
- * `baseDir` is injected (the app passes the same `<userData>/praxis` dir agent.ts
+ * `baseDir` is injected (the app passes the same `<userData>/trezi` dir agent.ts
  * uses); tests point it at a temp dir. So is the `SecretCipher` — that keeps
  * `electron.safeStorage` out of this module entirely, so the whole thing is a pure
  * unit test with a fake cipher (see test/providers-store.mjs).
@@ -185,7 +185,7 @@ export function createProviderStore(baseDir: string, cipher: SecretCipher): Prov
     if (plain) {
       if (!cipher.available) {
         throw new Error(
-          'No OS credential store is available, so Praxis cannot store this API key ' +
+          'No OS credential store is available, so Trezi cannot store this API key ' +
             '(it will never write a key to disk in plain text). On Linux, install/unlock ' +
             'a keyring (gnome-keyring, kwallet) and try again.'
         )

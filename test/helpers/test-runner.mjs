@@ -20,7 +20,7 @@ export async function skipReason(log, name) {
 export async function runCommand({ command, args, cwd, name, log, timeoutMs, signal, graceMs = 2000 }) {
   const start = Date.now()
   if (signal?.aborted) return { name, outcome: 'CANCELLED', duration: 0, log }
-  const profile = mkdtempSync(join(tmpdir(), `praxis-test-${name}-`))
+  const profile = mkdtempSync(join(tmpdir(), `trezi-test-${name}-`))
   let fd
   let child
   let timer
@@ -45,7 +45,7 @@ export async function runCommand({ command, args, cwd, name, log, timeoutMs, sig
     fd = openSync(log, 'w')
     child = spawn(command, args, {
       cwd, detached: process.platform !== 'win32', stdio: ['ignore', fd, fd],
-      env: { ...process.env, PRAXIS_USER_DATA: profile }
+      env: { ...process.env, TREZI_USER_DATA: profile }
     })
     signal?.addEventListener('abort', abort, { once: true })
     if (signal?.aborted) abort()

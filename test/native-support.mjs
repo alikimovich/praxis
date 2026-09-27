@@ -11,7 +11,7 @@ assert.equal(messages.length, 0, 'hidden output does not repaint')
 log.append('failure', 'error'); assert.equal(log.visible, true)
 log.action('clear'); assert.equal(log.lines.length, 0)
 log.action('hide'); assert.equal(log.visible, false)
-const record = { id: 'run', projectName: 'Repo', projectRoot: '/repo', title: 'Edit', startedAt: Date.now(), kind: 'comment', branch: 'praxis/run', sdkSessionId: 'sdk', filesTouched: ['app.ts'], transcript: [{ role: 'user', text: 'Change spacing' }] }
+const record = { id: 'run', projectName: 'Repo', projectRoot: '/repo', title: 'Edit', startedAt: Date.now(), kind: 'comment', branch: 'trezi/run', sdkSessionId: 'sdk', filesTouched: ['app.ts'], transcript: [{ role: 'user', text: 'Change spacing' }] }
 let fail = true, pending
 const workspace = { state: { projects: [{ key: 'repo', root: '/repo' }], history: {} }, changed() {}, command: async value => calls.push(['workspace', value]) }
 const sheets = new NativeSheetController({ send() {} }, workspace, {}, async (channel, ...args) => {
