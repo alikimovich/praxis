@@ -4,7 +4,9 @@ Native smoke now reaches NATIVE ISLANDS PASS and NATIVE CORE PASS after fixing
 the document-restoration and synthetic style-selection races. Real keyboard and
 pointer checks remain enabled; the disposable window was foregrounded through
 desktop automation. Full/native typechecks pass. Premature host exit fails the
-test. Manager exact-commit verification and review remain pending.
+test. Manager run 57fbd3e4-bc79-44e1-ac78-e69ea434dbd4 passed full/native typechecks,
+all 101 unit tests, NATIVE ISLANDS PASS, NATIVE CORE PASS and direct-launch checks.
+Independent integration review remains pending.
 
 # Verification — 2026-09-27
 

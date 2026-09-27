@@ -12,7 +12,17 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Add/lock the React fixture types and verify a clean frozen install of the type dependency graph.
 - [x] Require foreground/WebKit focus before native smoke gestures and improve timeout diagnostics; retain pointer assertions.
 - [x] Repair navigation/style-selection smoke races and reject premature test-host exit.
-- [ ] Manager: stage/commit, rerun index-based docs-links and unrestricted native/MCP checks before acceptance.
+- [x] Manager: commit and pass full/native typechecks, all 101 unit tests and real native smoke verification.
+- [ ] Independent review and verification of integration with candidate.
+
+## Swift backend architecture audit (LKM-84, 2026-09-27)
+
+- [x] Preserve candidate plan, audit and contract snapshots exactly; keep compatibility guidance and first-slice additions in the separate audit proposal.
+
+- [x] Inventory current Bun services/routes/controllers, dependencies and background lifecycle with source references.
+- [x] Propose typed Swift ownership/contracts, narrow JS helpers and a bounded first slice with acceptance checks and rollback; documentation ready for review, not migration acceptance.
+
+Review package: [audit](SWIFT-BACKEND-AUDIT.md), [contracts](SWIFT-BACKEND-CONTRACTS.md), [compatibility guide, first slice and ordered follow-ups](SWIFT-BACKEND-AUDIT-PROPOSAL.md).
 
 ## Viewport resize feedback (2026-09-25)
 
