@@ -6,7 +6,17 @@ import { NativeBridge } from '../../src/native/bridge.ts'
 
 const directory = resolve('out/native')
 const executable = `${directory}/Trezi Native.app/Contents/MacOS/TreziHost`
-if (process.platform !== 'darwin' || !existsSync(executable)) {
+if (process.platform !== 'darwin') {
+  console.log('NATIVE-CHAT-SCROLL SKIP — macOS native host required.')
+  process.exit(0)
+}
+if (!existsSync(executable)) {
+  // `bun run test:native` builds first, so a missing host there is a failure,
+  // not a silent SKIP that would hide the reveal/overlap coverage.
+  if (process.argv.includes('--require-build')) {
+    console.error(`NATIVE-CHAT-SCROLL FAIL — native host missing after build: ${executable}`)
+    process.exit(1)
+  }
   console.log('NATIVE-CHAT-SCROLL SKIP — build the macOS native host first.')
   process.exit(0)
 }
@@ -14,7 +24,13 @@ const artifacts = resolve('test/artifacts/native/chat-scroll')
 mkdirSync(artifacts, { recursive: true })
 const host = new NativeBridge(executable, directory, 'ephemeral')
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
-const message = (id, role, text) => ({ id, role, text, segments: [{ kind: 'text', text }] })
+// NSStringFromRect: "{{x, y}, {width, height}}"
+const rect = value => {
+  const [x, y, width, height] = (String(value).match(/-?[\d.]+(?:e-?\d+)?/g) ?? []).map(Number)
+  assert([x, y, width, height].every(Number.isFinite), `Unparseable rect: ${value}`)
+  return { x, y, width, height }
+}
+const message = (id, role, text) =>({ id, role, text, segments: [{ kind: 'text', text }] })
 let stage = 'startup'
 const capture = async name => writeFileSync(`${artifacts}/${name}.png`, Buffer.from(await host.request('captureShell'), 'base64'))
 const visible = async id => {
@@ -78,7 +94,11 @@ try {
     fields:[{id:'radius',label:'Radius',kind:'number',value:32,min:1,max:100,step:1}]}
   const controls = message('panel', 'assistant', 'Tune the radius.')
   controls.segments.push({kind:'island',island})
-  const state = {chat:'controls-refresh',messages:[controls,...Array.from({length:20},(_,i)=>message(`later-${i}`,'assistant','Text after the controls. '.repeat(20)))],cards:[],questions:[],running:false,status:'',composer:{enabled:true,text:'',revision:1}}
+  // History on both sides: each reveal edge must be reachable (not clamped at a
+  // scroll end), and following to the bottom leaves the island's lazy row
+  // unrealized, so the first reveal has to scroll that row in before its anchor.
+  const filler = (prefix, text) => Array.from({length:20},(_,i)=>message(`${prefix}-${i}`,'assistant',text.repeat(20)))
+  const state = {chat:'controls-refresh',messages:[...filler('earlier','Text before the controls. '),controls,...filler('later','Text after the controls. ')],cards:[],questions:[],running:false,status:'',composer:{enabled:true,text:'',revision:1}}
   host.send('chatState',{state}); await delay(250)
   const before = await host.request('chatInspect')
   for (const value of [40,60,80,32]) {
@@ -91,21 +111,54 @@ try {
   assert((await host.request('chatInspect')).followRevision > before.followRevision,'New definitions can follow with conversation content')
   // Reveal IDs live inside a message row rather than as direct LazyVStack
   // children. Completion must wait for the nested anchor's post-scroll geometry.
-  for (const bottom of [false, true]) {
-    const reveal = await host.request('revealChatIsland',{island:island.id,bottom})
+  // Run at the default and the narrowest chat width (WorkspaceLayout clamps to
+  // 320), where the island reflows taller.
+  const edge = bottom => bottom ? 'bottom' : 'top'
+  const settled = async (reveal, bottom, label) => {
     const layout = await host.request('chatInspect')
-    assert.equal(layout.revealAppliedRevision,reveal.revision,`Nested island ${bottom ? 'bottom' : 'top'} reveal settled`)
-    assert(layout.revealAttempt >= 1,'Reveal reports at least one layout-aware attempt')
+    assert.equal(layout.revealAppliedRevision,reveal.revision,`${label}: SwiftUI applied the acknowledged revision`)
+    assert(layout.revealAttempt >= 1,`${label}: reveal reports at least one layout-aware attempt`)
+    const frame = rect(reveal.position), reading = layout.height - layout.composerInset
+    const offset = bottom ? frame.y + frame.height - reading : frame.y
+    assert(Math.abs(offset) <= 8,`${label}: acknowledged ${edge(bottom)} anchor ${reveal.position} is ${offset}pt from the reading edge (${reading})`)
+    return { revision: reveal.revision, position: reveal.position, readingHeight: reading, offset, attempts: layout.revealAttempt }
   }
-  // Overlapping requests: the older one is superseded, never acknowledged with
-  // the newer revision's applied state; only the newest settles.
-  const stale = host.request('revealChatIsland',{island:island.id,bottom:false}).then(value => ({value}),error => ({error}))
-  const newest = await host.request('revealChatIsland',{island:island.id,bottom:true})
-  const superseded = await stale
-  assert.match(superseded.error?.message ?? '',/Island reveal superseded; revision=\d+, newer=\d+/,`Older overlapping reveal is superseded: ${JSON.stringify(superseded.value)}`)
-  assert.equal((await host.request('chatInspect')).revealAppliedRevision,newest.revision,'Newest overlapping reveal settled')
+  for (const width of [440, 320]) {
+    stage = `reveal-${width}`
+    host.send('layoutWidth',{width}); await delay(250)
+    const chatFrame = rect((await host.request('chatInspect')).frame)
+    assert.equal(chatFrame.width,width,`Chat column is ${width}pt wide for reveal checks`)
+    // Evidence only: whether the island's lazy row had published frames before
+    // the first reveal (SwiftUI decides row retention, so this is not asserted).
+    const realizedBefore = Object.keys((await host.request('chatInspect')).islandPositions ?? {}).filter(key => key.endsWith(`-${island.id}`))
+    const record = { width, chatFrame, realizedBefore, edges: {}, overlaps: [] }
+    for (const bottom of [false, true]) {
+      const reveal = await host.request('revealChatIsland',{island:island.id,bottom})
+      record.edges[edge(bottom)] = await settled(reveal, bottom, `${width}pt nested island ${edge(bottom)} reveal`)
+      await capture(`reveal-${width}-${edge(bottom)}`)
+    }
+    // Overlapping requests, sent in one tick: the older one is superseded (an
+    // error naming the newest revision), never acknowledged with the newer
+    // revision's applied state; only the newest settles against its own anchor.
+    // Opposite edges both ways, plus a same-edge pair whose stale anchor
+    // already sits at the requested edge.
+    for (const [first, second] of [[false, true], [true, false], [false, false]]) {
+      const label = `${width}pt overlap ${edge(first)}→${edge(second)}`
+      const stale = host.request('revealChatIsland',{island:island.id,bottom:first}).then(value => ({value}),error => ({error}))
+      const newest = await host.request('revealChatIsland',{island:island.id,bottom:second})
+      const superseded = await stale
+      const match = /Island reveal superseded; revision=(\d+), newer=(\d+)/.exec(superseded.error?.message ?? '')
+      assert(match,`${label}: older reveal must be rejected as superseded, got ${JSON.stringify(superseded.value ?? superseded.error?.message)}`)
+      assert.equal(Number(match[1]),newest.revision - 1,`${label}: the rejected request is the older revision`)
+      assert.equal(Number(match[2]),newest.revision,`${label}: rejection names the newest revision`)
+      record.overlaps.push({ first: edge(first), second: edge(second), superseded: superseded.error.message,
+        newest: await settled(newest, second, `${label} newest`) })
+      await capture(`reveal-${width}-overlap-${edge(first)}-${edge(second)}`)
+    }
+    writeFileSync(`${artifacts}/reveal-${width}.json`, JSON.stringify(record, null, 2))
+  }
 
-  console.log('Native chat scroll: sent questions and streamed responses stay visible across short/long history and shrinking composers.')
+  console.log('Native chat scroll: sent questions and streamed responses stay visible across short/long history and shrinking composers; nested island reveals settle at both edges and overlapping reveals reject the superseded request at 440pt and 320pt chat widths.')
 } finally {
   host.child.kill()
   await once(host.child, 'exit')

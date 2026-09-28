@@ -2,6 +2,70 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Scroll a reveal's row in by its own edge (LKM-107)
+
+The reading-area rule in the entry below broke the Shadow Light smoke (before
+chat-scroll even ran): `Island reveal did not settle at bottom; revision=2,
+applied=1, attempts=80, frame={{36, 718.5}, {368, 1}}`, every attempt at the
+same frame. `scrollTo(id, anchor:)` aligns the SAME unit point of the target
+and the viewport, so the reading-edge point (580/776) lands a view's bottom at
+the reading edge only for the ~1pt anchors. For the ~620pt Shadow Light row it
+parked the end anchor at 718.5 — on screen, behind the composer, outside the
+reading area — so the rule picked the row again forever. The old frame-only rule
+had passed because it targeted that on-screen anchor directly.
+`islandRevealScroll` (replacing `islandRevealTarget`) now falls back to the row
+only while the anchor is outside the whole viewport, and scrolls the row by its
+own near edge (`.top`/`.bottom`), which leaves the anchor on screen; only
+anchors use the reading-edge point. The Swift unit fixture drives the attempt
+loop against that alignment model from the recorded 718.5 fixed point plus the
+1760pt, above-viewport and taller-than-viewport rows; last round's rule fails it.
+
+## 2026-09-28 — Reveal islands whose retained row is offscreen (LKM-107)
+
+The next manager run passed the whole 440pt reveal matrix (revisions 1–8) and
+then failed the first 320pt reveal: `revision=9, applied=8, attempts=80,
+frame={{32, 1760}, {256, 16}}`. The lazy stack had kept the island's row from
+the 440pt pass, so the anchor still published a frame. But narrowing the chat
+reflowed the history above it, and `scrollTo` on a nested anchor inside a
+retained offscreen row does not move. "Has a frame" was the wrong test for
+falling back to the message row. `islandRevealTarget` now targets the message
+row until the anchor is within the reading area (±8pt), then the anchor. The
+Swift unit fixture adds the recorded 1760pt frame, an anchor above the viewport
+and the tolerance boundary. Restoring the frame-only rule fails it.
+
+## 2026-09-28 — Reveal islands whose lazy row is offscreen (LKM-107)
+
+The first manager run of the chat-scroll reveal matrix failed at once:
+`Island reveal did not settle at top; revision=1, applied=0, attempts=80,
+frame=missing`. The island sat in a message row the lazy stack had never
+realized (the chat followed to the bottom), so its nested `island-start-` anchor
+published no frame and `scrollTo` had nothing to find — each of the 80 attempts
+missed. The Shadow Light smoke passed only because its island was already on
+screen. Removing `revealMessage` in the entry below was the wrong call: the
+request carries the containing message ID again, and `islandRevealTarget`
+(`src/native/ChatReveal.swift`) scrolls that direct lazy-stack child in while
+the anchor has no frame, then targets the anchor. The Swift unit fixture covers
+both targets (mutation-checked). The chat-scroll fixture also had the island as
+the first message, where a bottom reveal is clamped at the scroll top and can
+never reach the reading edge; it now has 20 messages on each side, and each
+`reveal-<width>.json` records whether the row had published frames beforehand.
+
+## 2026-09-28 — Put the native reveal overlap case in `test:native` (LKM-107)
+
+Independent review: the manager's `bun run test:native` only ran
+native-runtime, so the native overlap case in `test/helpers/native-chat-scroll.mjs`
+never executed. `test:native` now also runs `test/native-chat-scroll.mjs
+--require-build` (a missing host after the build fails instead of SKIP). The
+reveal section is now a matrix at 440pt and the 320pt minimum chat width: top and
+bottom reveals must settle with the acknowledged anchor within 8pt of the reading
+edge; overlapping pairs top→bottom, bottom→top and top→top (stale anchor already
+at its edge) must reject the older request with `superseded` naming exactly the
+newest revision, and the newest must settle against its own anchor. Evidence:
+`test/artifacts/native/chat-scroll/reveal-{440,320}-{top,bottom}.png`,
+`reveal-{440,320}-overlap-*.png` and `reveal-{440,320}.json`. Checked here:
+syntax, the `--require-build` FAIL/SKIP paths, typechecks and the unit tier;
+the GUI fixture itself is for the manager's desktop-locked run.
+
 ## 2026-09-28 — Resolve superseded island reveals (LKM-107, LKM-86 follow-up)
 
 Review found that a still-polling reveal request accepted any

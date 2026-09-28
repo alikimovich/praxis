@@ -281,7 +281,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             // Publish the request synchronously so overlapping requests take
             // revisions in arrival order; only the settlement wait is async.
             NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil)
-            chat.model.revealIsland = target; chat.model.revealBottom = bottom
+            chat.model.revealIsland = target; chat.model.revealMessage = message.id; chat.model.revealBottom = bottom
             chat.model.revealRevision += 1
             let request = chat.model.revealRequest
             Task { @MainActor in

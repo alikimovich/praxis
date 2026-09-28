@@ -37,9 +37,10 @@ final class ChatModel: ObservableObject {
     @Published var controlInteraction = 0
     @Published var followRevision = 0
     @Published var revealRevision = 0
+    var revealMessage = ""
     var revealIsland = ""
     var revealBottom = false
-    var revealRequest: IslandRevealRequest { IslandRevealRequest(revision: revealRevision, island: revealIsland, bottom: revealBottom) }
+    var revealRequest: IslandRevealRequest { IslandRevealRequest(revision: revealRevision, island: revealIsland, bottom: revealBottom, message: revealMessage) }
     var revealAppliedRevision = 0
     var revealAttempt = 0
     @Published var visible = false
@@ -127,20 +128,22 @@ struct ChatConversation: View {
     @State private var follows = true
     @State private var sticky: String?
     @State private var revealGeneration = 0
-    private func reveal(_ proxy: ScrollViewProxy, readingHeight: CGFloat, bottomAnchor: UnitPoint) {
+    private func reveal(_ proxy: ScrollViewProxy, readingHeight: CGFloat, viewportHeight: CGFloat) {
         revealGeneration += 1
         let generation = revealGeneration
         let request = model.revealRequest
         model.revealAttempt = 0
         // A nested lazy child can receive scrollTo before SwiftUI has committed
         // its latest anchor geometry. Yield once, then reissue against each
-        // completed layout until the measured anchor reaches the viewport.
+        // completed layout until the measured anchor reaches the viewport. An
+        // offscreen row is scrolled in first; see islandRevealScroll.
         Task { @MainActor in
             await Task.yield()
             for attempt in 1...80 {
                 guard revealGeneration == generation, model.revealRevision == request.revision else { return }
                 model.revealAttempt = attempt
-                proxy.scrollTo(request.anchor, anchor: request.bottom ? bottomAnchor : .top)
+                let target = islandRevealScroll(request, positions: model.islandPositions, viewportHeight: viewportHeight)
+                proxy.scrollTo(target.id, anchor: UnitPoint(x: 0.5, y: islandRevealUnitY(target.edge, readingHeight: readingHeight, viewportHeight: viewportHeight)))
                 try? await Task.sleep(nanoseconds: 20_000_000)
                 guard revealGeneration == generation, model.revealRevision == request.revision,
                       let frame = model.islandPositions[request.position] else { continue }
@@ -218,7 +221,7 @@ struct ChatConversation: View {
                     .onChange(of: model.composerHeight) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
                     .onChange(of: model.revealRevision) { _ in
                         follows = false; sticky = nil
-                        reveal(proxy, readingHeight: readingHeight, bottomAnchor: bottomAnchor)
+                        reveal(proxy, readingHeight: readingHeight, viewportHeight: viewport.size.height)
                     }
                     .onChange(of: model.controlInteraction) { _ in follows = false }
                     .onChange(of: model.followRevision) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
