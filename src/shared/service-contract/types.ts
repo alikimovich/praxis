@@ -81,9 +81,11 @@ export interface Payloads {
   snapshot: SnapshotPayload
 }
 export type Envelope = { [K in keyof Payloads]: { version: WireVersion; kind: K; payload: Payloads[K] } }[keyof Payloads]
+/** Separate fields: both identifiers may contain dots. */
+export interface ServiceMethod { service: string; method: string }
 export interface ValidationContext {
   /** Supplied by a trusted endpoint binding, never by the caller's payload. */
   expectedScope?: Scope
   currentRevision?: Revision
-  allowedMethods?: string[]
+  allowedMethods?: ServiceMethod[]
 }

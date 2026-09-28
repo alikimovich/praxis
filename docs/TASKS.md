@@ -27,7 +27,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Gate Shadow Light capture on bounded foreground readiness; verify delayed/failing activation and capture errors without GUI, preserving visible-capture guards.
 - [x] Reproduce capture-time foreground loss; bound fresh-capture reacquisition and retain strict foreground guards and unrelated error propagation.
 - [x] Reconcile candidate Apple Intelligence tracking with S01 tracking; verify a conflict-free three-way TASKS merge without changing Git metadata.
-- [ ] Manager: run configured verification, independent review and candidate integration; no GUI suite was run by this worker.
+- [x] Fix reviewed method-authorization collisions with structured pairs and align Swift slash escaping; pass 100 cross-language cases.
+- [ ] Manager: rerun verification and independent review after contract fixes, then candidate integration; prior revision passed 109 unit checks and native integration per review feedback.
 
 ## Shadow Light (LKM-86)
 

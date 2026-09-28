@@ -7,7 +7,7 @@ struct Fixture: Decodable {
     let wireBase64: String?
     let expectedScope: ServiceJSON?
     let currentRevision: ServiceJSON?
-    let allowedMethods: [String]?
+    let allowedMethods: [ServiceMethod]?
     let previous: String?
 }
 struct FixtureResult: Encodable {

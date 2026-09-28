@@ -29,13 +29,16 @@ try {
   fixtures.push({ name: 'invalid-utf8', wireBase64: Buffer.from([0xc3, 0x28]).toString('base64'), error: 'invalidRequest' })
   // Generate bulky size boundaries from the checked-in request; keep goldens reviewable.
   fixtures.push({ name: 'byte-limit', wire: ' '.repeat(65_537), error: 'invalidRequest' })
-  for (const size of [65_536, 65_537]) {
+  for (const pad of ['a', '/']) for (const size of [65_536, 65_537]) {
     const value = structuredClone(fixtures[0].value)
     value.payload.body = { pad: '' }
-    value.payload.body.pad = 'a'.repeat(size - Buffer.byteLength(JSON.stringify(value)))
-    fixtures.push({ name: `byte-boundary-${size}`, wire: JSON.stringify(value),
+    value.payload.body.pad = pad.repeat(size - Buffer.byteLength(JSON.stringify(value)))
+    fixtures.push({ name: `byte-boundary-${pad === '/' ? 'slash-' : ''}${size}`, wire: JSON.stringify(value),
       ...(size === 65_536 ? { value } : { error: 'invalidRequest' }) })
   }
+  const slashHeavy = structuredClone(fixtures[0].value)
+  slashHeavy.payload.body = { pad: '/'.repeat(40_000) }
+  fixtures.push({ name: 'slash-heavy-40000', wire: JSON.stringify(slashHeavy), value: slashHeavy })
   const multibyte = structuredClone(fixtures[0].value)
   multibyte.payload.body = { pad: '猫'.repeat(22_000) }
   fixtures.push({ name: 'unicode-byte-limit', wire: JSON.stringify(multibyte), error: 'invalidRequest' })

@@ -884,7 +884,10 @@
     "wire": "{\"version\":{\"major\":1,\"minor\":0},\"kind\":\"request\",\"payload\":{\"connection\":\"00000000-0000-0000-0000-000000000007\",\"requestID\":\"00000000-0000-0000-0000-000000000008\",\"operationID\":\"00000000-0000-0000-0000-000000000009\",\"scope\":{\"project\":\"00000000-0000-0000-0000-000000000002\",\"chat\":\"00000000-0000-0000-0000-000000000003\",\"turn\":\"00000000-0000-0000-0000-000000000004\",\"checkout\":\"00000000-0000-0000-0000-000000000005\",\"document\":\"00000000-0000-0000-0000-000000000006\"},\"mode\":\"mutation\",\"expectedRevision\":{\"epoch\":\"00000000-0000-0000-0000-000000000001\",\"counter\":\"9007199254740993\"},\"service\":\"preferences\",\"method\":\"set\",\"body\":{\"entries\":{\"praxis:unicode\":\"你好 🐈 é é \\u0000 newline\\n\",\"praxis:null\":null},\"fraction\":0.125},\"timeoutMilliseconds\":1000}}",
     "error": "unsupportedCapability",
     "allowedMethods": [
-      "workspace.snapshot"
+      {
+        "service": "workspace",
+        "method": "snapshot"
+      }
     ]
   },
   {
@@ -1935,5 +1938,121 @@
     },
     "previous": "{\"version\": {\"major\": 1, \"minor\": 0}, \"kind\": \"request\", \"payload\": {\"connection\": \"00000000-0000-0000-0000-000000000007\", \"requestID\": \"00000000-0000-0000-0000-000000000008\", \"operationID\": \"00000000-0000-0000-0000-000000000009\", \"scope\": {\"project\": \"00000000-0000-0000-0000-000000000002\", \"chat\": \"00000000-0000-0000-0000-000000000003\", \"turn\": \"00000000-0000-0000-0000-000000000004\", \"checkout\": \"00000000-0000-0000-0000-000000000005\", \"document\": \"00000000-0000-0000-0000-000000000006\"}, \"mode\": \"mutation\", \"expectedRevision\": {\"epoch\": \"00000000-0000-0000-0000-000000000001\", \"counter\": \"9007199254740993\"}, \"service\": \"preferences\", \"method\": \"set\", \"body\": {\"list\": [1, 2]}, \"timeoutMilliseconds\": 1000}}",
     "disposition": "idempotencyMismatch"
+  },
+  {
+    "name": "method-pair-exact-0",
+    "wire": "{\"version\":{\"major\":1,\"minor\":0},\"kind\":\"request\",\"payload\":{\"connection\":\"00000000-0000-0000-0000-000000000007\",\"requestID\":\"00000000-0000-0000-0000-000000000008\",\"operationID\":\"00000000-0000-0000-0000-000000000009\",\"scope\":{\"project\":\"00000000-0000-0000-0000-000000000002\",\"chat\":\"00000000-0000-0000-0000-000000000003\",\"turn\":\"00000000-0000-0000-0000-000000000004\",\"checkout\":\"00000000-0000-0000-0000-000000000005\",\"document\":\"00000000-0000-0000-0000-000000000006\"},\"mode\":\"mutation\",\"expectedRevision\":{\"epoch\":\"00000000-0000-0000-0000-000000000001\",\"counter\":\"9007199254740993\"},\"service\":\"source\",\"method\":\"read.file\",\"body\":{\"entries\":{\"praxis:unicode\":\"你好 🐈 é é \\u0000 newline\\n\",\"praxis:null\":null},\"fraction\":0.125},\"timeoutMilliseconds\":1000}}",
+    "value": {
+      "version": {
+        "major": 1,
+        "minor": 0
+      },
+      "kind": "request",
+      "payload": {
+        "connection": "00000000-0000-0000-0000-000000000007",
+        "requestID": "00000000-0000-0000-0000-000000000008",
+        "operationID": "00000000-0000-0000-0000-000000000009",
+        "scope": {
+          "project": "00000000-0000-0000-0000-000000000002",
+          "chat": "00000000-0000-0000-0000-000000000003",
+          "turn": "00000000-0000-0000-0000-000000000004",
+          "checkout": "00000000-0000-0000-0000-000000000005",
+          "document": "00000000-0000-0000-0000-000000000006"
+        },
+        "mode": "mutation",
+        "expectedRevision": {
+          "epoch": "00000000-0000-0000-0000-000000000001",
+          "counter": "9007199254740993"
+        },
+        "service": "source",
+        "method": "read.file",
+        "body": {
+          "entries": {
+            "praxis:unicode": "你好 🐈 é é \u0000 newline\n",
+            "praxis:null": null
+          },
+          "fraction": 0.125
+        },
+        "timeoutMilliseconds": 1000
+      }
+    },
+    "allowedMethods": [
+      {
+        "service": "source",
+        "method": "read.file"
+      }
+    ]
+  },
+  {
+    "name": "method-pair-collision-0",
+    "wire": "{\"version\":{\"major\":1,\"minor\":0},\"kind\":\"request\",\"payload\":{\"connection\":\"00000000-0000-0000-0000-000000000007\",\"requestID\":\"00000000-0000-0000-0000-000000000008\",\"operationID\":\"00000000-0000-0000-0000-000000000009\",\"scope\":{\"project\":\"00000000-0000-0000-0000-000000000002\",\"chat\":\"00000000-0000-0000-0000-000000000003\",\"turn\":\"00000000-0000-0000-0000-000000000004\",\"checkout\":\"00000000-0000-0000-0000-000000000005\",\"document\":\"00000000-0000-0000-0000-000000000006\"},\"mode\":\"mutation\",\"expectedRevision\":{\"epoch\":\"00000000-0000-0000-0000-000000000001\",\"counter\":\"9007199254740993\"},\"service\":\"source\",\"method\":\"read.file\",\"body\":{\"entries\":{\"praxis:unicode\":\"你好 🐈 é é \\u0000 newline\\n\",\"praxis:null\":null},\"fraction\":0.125},\"timeoutMilliseconds\":1000}}",
+    "error": "unsupportedCapability",
+    "allowedMethods": [
+      {
+        "service": "source.read",
+        "method": "file"
+      }
+    ]
+  },
+  {
+    "name": "method-pair-exact-1",
+    "wire": "{\"version\":{\"major\":1,\"minor\":0},\"kind\":\"request\",\"payload\":{\"connection\":\"00000000-0000-0000-0000-000000000007\",\"requestID\":\"00000000-0000-0000-0000-000000000008\",\"operationID\":\"00000000-0000-0000-0000-000000000009\",\"scope\":{\"project\":\"00000000-0000-0000-0000-000000000002\",\"chat\":\"00000000-0000-0000-0000-000000000003\",\"turn\":\"00000000-0000-0000-0000-000000000004\",\"checkout\":\"00000000-0000-0000-0000-000000000005\",\"document\":\"00000000-0000-0000-0000-000000000006\"},\"mode\":\"mutation\",\"expectedRevision\":{\"epoch\":\"00000000-0000-0000-0000-000000000001\",\"counter\":\"9007199254740993\"},\"service\":\"source.read\",\"method\":\"file\",\"body\":{\"entries\":{\"praxis:unicode\":\"你好 🐈 é é \\u0000 newline\\n\",\"praxis:null\":null},\"fraction\":0.125},\"timeoutMilliseconds\":1000}}",
+    "value": {
+      "version": {
+        "major": 1,
+        "minor": 0
+      },
+      "kind": "request",
+      "payload": {
+        "connection": "00000000-0000-0000-0000-000000000007",
+        "requestID": "00000000-0000-0000-0000-000000000008",
+        "operationID": "00000000-0000-0000-0000-000000000009",
+        "scope": {
+          "project": "00000000-0000-0000-0000-000000000002",
+          "chat": "00000000-0000-0000-0000-000000000003",
+          "turn": "00000000-0000-0000-0000-000000000004",
+          "checkout": "00000000-0000-0000-0000-000000000005",
+          "document": "00000000-0000-0000-0000-000000000006"
+        },
+        "mode": "mutation",
+        "expectedRevision": {
+          "epoch": "00000000-0000-0000-0000-000000000001",
+          "counter": "9007199254740993"
+        },
+        "service": "source.read",
+        "method": "file",
+        "body": {
+          "entries": {
+            "praxis:unicode": "你好 🐈 é é \u0000 newline\n",
+            "praxis:null": null
+          },
+          "fraction": 0.125
+        },
+        "timeoutMilliseconds": 1000
+      }
+    },
+    "allowedMethods": [
+      {
+        "service": "source.read",
+        "method": "file"
+      }
+    ]
+  },
+  {
+    "name": "method-pair-collision-1",
+    "wire": "{\"version\":{\"major\":1,\"minor\":0},\"kind\":\"request\",\"payload\":{\"connection\":\"00000000-0000-0000-0000-000000000007\",\"requestID\":\"00000000-0000-0000-0000-000000000008\",\"operationID\":\"00000000-0000-0000-0000-000000000009\",\"scope\":{\"project\":\"00000000-0000-0000-0000-000000000002\",\"chat\":\"00000000-0000-0000-0000-000000000003\",\"turn\":\"00000000-0000-0000-0000-000000000004\",\"checkout\":\"00000000-0000-0000-0000-000000000005\",\"document\":\"00000000-0000-0000-0000-000000000006\"},\"mode\":\"mutation\",\"expectedRevision\":{\"epoch\":\"00000000-0000-0000-0000-000000000001\",\"counter\":\"9007199254740993\"},\"service\":\"source.read\",\"method\":\"file\",\"body\":{\"entries\":{\"praxis:unicode\":\"你好 🐈 é é \\u0000 newline\\n\",\"praxis:null\":null},\"fraction\":0.125},\"timeoutMilliseconds\":1000}}",
+    "error": "unsupportedCapability",
+    "allowedMethods": [
+      {
+        "service": "source",
+        "method": "read.file"
+      }
+    ]
+  },
+  {
+    "name": "empty-method-allowlist",
+    "wire": "{\"version\":{\"major\":1,\"minor\":0},\"kind\":\"request\",\"payload\":{\"connection\":\"00000000-0000-0000-0000-000000000007\",\"requestID\":\"00000000-0000-0000-0000-000000000008\",\"operationID\":\"00000000-0000-0000-0000-000000000009\",\"scope\":{\"project\":\"00000000-0000-0000-0000-000000000002\",\"chat\":\"00000000-0000-0000-0000-000000000003\",\"turn\":\"00000000-0000-0000-0000-000000000004\",\"checkout\":\"00000000-0000-0000-0000-000000000005\",\"document\":\"00000000-0000-0000-0000-000000000006\"},\"mode\":\"mutation\",\"expectedRevision\":{\"epoch\":\"00000000-0000-0000-0000-000000000001\",\"counter\":\"9007199254740993\"},\"service\":\"preferences\",\"method\":\"set\",\"body\":{\"entries\":{\"praxis:unicode\":\"你好 🐈 é é \\u0000 newline\\n\",\"praxis:null\":null},\"fraction\":0.125},\"timeoutMilliseconds\":1000}}",
+    "error": "unsupportedCapability",
+    "allowedMethods": []
   }
 ]

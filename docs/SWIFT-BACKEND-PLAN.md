@@ -43,6 +43,13 @@ conflict-free three-way TASKS resolution. Implementation is unchanged; manager
 desktop verification, independent review and tested candidate integration remain
 pending. No candidate merge commit is claimed by this worker.
 
+2026-09-28 independent-review repair: manager reports 109 unit checks and native
+integration passed on the prior revision. Fix the two subsequent contract findings:
+structured service/method authorization prevents dotted-name collisions, and Swift
+encoding leaves slashes unescaped. All 100 cross-language cases and both typecheck
+tiers pass. This revision awaits manager verification and independent re-review;
+no domain writer has moved and S01 acceptance remains pending.
+
 ## End-state architecture
 
 | Layer | Responsibility |

@@ -240,10 +240,16 @@ struct ServiceEnvelope: Codable, Sendable {
     }
 }
 
+/// Separate fields: both identifiers may contain dots.
+struct ServiceMethod: Codable {
+    let service: String
+    let method: String
+}
+
 struct ServiceValidationContext {
     var expectedScope: ServiceJSON? = nil
     var currentRevision: ServiceJSON? = nil
-    var allowedMethods: [String]? = nil
+    var allowedMethods: [ServiceMethod]? = nil
 }
 
 struct ServiceContractCodec {
@@ -308,7 +314,11 @@ struct ServiceContractCodec {
     }
 
     func encode(_ envelope: ServiceEnvelope) throws -> Data {
-        let data = try JSONEncoder().encode(envelope)
+        let encoder = JSONEncoder()
+        // Match JSON.stringify's slash encoding so valid frames stay within the
+        // same byte limit when re-encoded by either language.
+        encoder.outputFormatting = [.withoutEscapingSlashes]
+        let data = try encoder.encode(envelope)
         _ = try decode(data)
         return data
     }
@@ -351,7 +361,9 @@ struct ServiceContractCodec {
                 if let current = context.currentRevision, expected != current { throw ServiceContractFailure.conflict }
             }
             if let allowed = context.allowedMethods,
-               !allowed.contains("\(payload["service"]?.string ?? "").\(payload["method"]?.string ?? "")") {
+               !allowed.contains(where: {
+                   $0.service == payload["service"]?.string && $0.method == payload["method"]?.string
+               }) {
                 throw ServiceContractFailure.unsupportedCapability
             }
         }

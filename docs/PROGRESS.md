@@ -2,6 +2,25 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Fix reviewed contract authorization and slash encoding (LKM-88)
+
+Independent review reports manager verification passed 109 unit checks and native
+integration, then identifies two contract defects. Reproduce TypeScript accepting
+both source/read.file and source.read/file for one dotted allowlist entry. Replace
+concatenated identifiers with typed service/method pairs in both languages and
+the fixture context; retain exact matching and empty-list denial.
+
+Reproduce Swift rejecting the 65,536-byte slash-heavy fixture during re-encoding.
+Configure JSONEncoder withoutEscapingSlashes to match JSON.stringify. Add exact
+and over-limit slash frames plus the reported 40,000-slash case. Five new golden
+authorization cases cover both exact pairs, both collision rejections and an empty
+allowlist. No runtime domain writer, composer or desktop fixture changes.
+
+All 100 cross-language cases pass through the focused unit runner (run-mO2nhC),
+including Swift compilation and process cleanup. Full/native TypeScript checks
+pass. Manager verification and independent re-review of this revision remain
+required; no GUI suite or Git metadata mutation was performed by this worker.
+
 ## 2026-09-28 — Reconcile candidate task tracking (LKM-88)
 
 Reproduce the TASKS conflict using read-only Git blobs from common base

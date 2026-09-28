@@ -56,6 +56,8 @@ Duplicate object keys, including escaped duplicates and Unicode canonically
 equivalent spellings, are rejected before decoding to prevent Swift dictionary
 collisions. A single decomposed Unicode key/value is preserved without normalization.
 Lone UTF-16 surrogates are rejected. Error messages allow 1,024 Unicode scalars.
+Both encoders leave forward slashes unescaped so slash-heavy frames retain the
+same byte budget; fixtures cover 40,000 slashes and the exact/over-limit boundary.
 
 JSON Schema expresses shapes and basic scalar constraints. The codecs additionally
 validate UInt64 range, frame/depth/collection limits, scope hierarchy, mutation
@@ -69,8 +71,11 @@ versions are not silently accepted by this initial strict codec.
 Hello advertises role, build/schema hash and versioned capability names; HelloAck
 returns selected version, service epoch, capabilities, resource limits and cursor.
 Its cursor epoch must match the service epoch. This defines the exchange, not a
-capability grant algorithm. A dispatcher supplies trusted `allowedMethods` and
-rejects unsupported commands with `unsupportedCapability`; provider/model names
+capability grant algorithm. A dispatcher supplies trusted `allowedMethods` as
+`{service, method}` pairs, compared field by field; joining with a dot is ambiguous
+because either identifier may contain dots. An empty list denies all methods;
+omission performs no method allowlist check. The codec rejects unsupported commands
+with `unsupportedCapability`; provider/model names
 never confer capabilities. Role/peer authorization remains an S02 requirement.
 
 ## Operations, revisions and recovery

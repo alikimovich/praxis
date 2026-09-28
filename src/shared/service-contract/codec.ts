@@ -116,7 +116,8 @@ export function decodeEnvelope(bytes: Uint8Array, context: ValidationContext = {
     const request = envelope.payload
     if (request.mode === 'mutation' && !request.expectedRevision) fail()
     if (request.mode === 'mutation' && context.currentRevision && canonical(request.expectedRevision) !== canonical(context.currentRevision)) fail('conflict')
-    if (context.allowedMethods && !context.allowedMethods.includes(`${request.service}.${request.method}`)) fail('unsupportedCapability')
+    if (context.allowedMethods && !context.allowedMethods.some(allowed =>
+      allowed.service === request.service && allowed.method === request.method)) fail('unsupportedCapability')
   }
   if (envelope.kind === 'hello' || envelope.kind === 'helloAck') {
     const caps = envelope.payload.capabilities
