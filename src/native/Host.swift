@@ -277,10 +277,31 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
                   let message = chat.model.snapshot?.messages.first(where: { $0.segments.contains { $0.island?.id == target } }) else {
                 reply(id, error: "Test island unavailable"); return
             }
+            let bottom = c["bottom"] as? Bool ?? false
+            // Publish the request synchronously so overlapping requests take
+            // revisions in arrival order; only the settlement wait is async.
             NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil)
-            chat.model.revealIsland = target; chat.model.revealMessage = message.id; chat.model.revealBottom = c["bottom"] as? Bool ?? false
+            chat.model.revealIsland = target; chat.model.revealBottom = bottom
             chat.model.revealRevision += 1
-            reply(id, ["message": message.id])
+            let request = chat.model.revealRequest
+            Task { @MainActor in
+                var lastFrame: CGRect?
+                for _ in 0..<100 {
+                    try? await Task.sleep(nanoseconds: 20_000_000)
+                    lastFrame = chat.model.islandPositions[request.position]
+                    // Resolve against this request's own revision and anchor;
+                    // a newer request's applied state never acknowledges it.
+                    switch islandRevealState(request, currentRevision: chat.model.revealRevision, appliedRevision: chat.model.revealAppliedRevision,
+                                             positions: chat.model.islandPositions, readingHeight: max(1, chat.bounds.height - chat.model.bottomInset)) {
+                    case .pending: continue
+                    case .settled(let frame):
+                        reply(id, ["message":message.id, "revision":request.revision, "position":NSStringFromRect(frame)]); return
+                    case .superseded(let newer):
+                        reply(id, error: "Island reveal superseded; revision=\(request.revision), newer=\(newer)"); return
+                    }
+                }
+                reply(id, error: "Island reveal did not settle at \(bottom ? "bottom" : "top"); revision=\(request.revision), applied=\(chat.model.revealAppliedRevision), attempts=\(chat.model.revealAttempt), frame=\(lastFrame.map { NSStringFromRect($0) } ?? "missing")")
+            }
         case "captureVisibleChat":
             guard ephemeral else { reply(id, error: "Test profile required"); return }
             Task { @MainActor in

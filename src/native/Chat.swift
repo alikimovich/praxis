@@ -37,12 +37,15 @@ final class ChatModel: ObservableObject {
     @Published var controlInteraction = 0
     @Published var followRevision = 0
     @Published var revealRevision = 0
-    var revealMessage = ""
     var revealIsland = ""
     var revealBottom = false
+    var revealRequest: IslandRevealRequest { IslandRevealRequest(revision: revealRevision, island: revealIsland, bottom: revealBottom) }
+    var revealAppliedRevision = 0
+    var revealAttempt = 0
     @Published var visible = false
     @Published var composerHeight: CGFloat = 0
     var messageFrames: [String: CGRect] = [:]
+    var islandPositions: [String: CGRect] = [:]
     var bottomPosition: CGFloat = 0
     // Preserve message/status clearance above the floating composer.
     static let statusHeight: CGFloat = 28
@@ -100,7 +103,7 @@ final class NativeChat: NSHostingView<ChatConversation> {
         composer.update(input)
     }
     func inspect() -> [String: Any] {
-        ["followRevision":model.followRevision, "controlInteraction":model.controlInteraction, "visibleMessageIDs":model.messageFrames.filter { $0.value.maxY > 0 && $0.value.minY < bounds.height - model.bottomInset }.map(\.key), "bottomPosition":model.bottomPosition, "composerInset":model.bottomInset, "height":bounds.height, "catPose":model.cat.pose, "catFrame":model.cat.frame, "catArtwork":!CatArtwork.frames.isEmpty, "frame":NSStringFromRect(frame), "native":true, "visible":!isHidden, "chat":model.snapshot?.chat ?? "", "messageCount":model.snapshot?.messages.count ?? 0,
+        ["followRevision":model.followRevision, "controlInteraction":model.controlInteraction, "visibleMessageIDs":model.messageFrames.filter { $0.value.maxY > 0 && $0.value.minY < bounds.height - model.bottomInset }.map(\.key), "bottomPosition":model.bottomPosition, "composerInset":model.bottomInset, "height":bounds.height, "revealRevision":model.revealRevision, "revealAppliedRevision":model.revealAppliedRevision, "revealAttempt":model.revealAttempt, "islandPositions":model.islandPositions.mapValues { NSStringFromRect($0) }, "catPose":model.cat.pose, "catFrame":model.cat.frame, "catArtwork":!CatArtwork.frames.isEmpty, "frame":NSStringFromRect(frame), "native":true, "visible":!isHidden, "chat":model.snapshot?.chat ?? "", "messageCount":model.snapshot?.messages.count ?? 0,
          "messages":model.snapshot?.messages.map { ["id":$0.id,"role":$0.role,"text":$0.text] } ?? [],
          "activity":model.snapshot?.activity?.label ?? "", "activityKind":model.snapshot?.activity?.kind ?? "", "activityAnimated":model.snapshot?.activity?.animated ?? false,
          "islands":model.snapshot?.messages.flatMap { $0.segments.compactMap { $0.island }.map { ["id":$0.id,"revision":$0.revision,"status":$0.status,"title":$0.title,"blocks":$0.blocks.count,"blockKinds":$0.blocks.map(\.kind),"fields":$0.fields.count,"sourceRevision":$0.sourceRevision] as [String: Any] } } ?? [],
@@ -115,10 +118,39 @@ private struct MessagePositions: PreferenceKey {
     static var defaultValue: [String: CGRect] = [:]
     static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) { value.merge(nextValue()) { _, new in new } }
 }
+struct IslandPositions: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) { value.merge(nextValue()) { _, new in new } }
+}
 struct ChatConversation: View {
     @ObservedObject var model: ChatModel
     @State private var follows = true
     @State private var sticky: String?
+    @State private var revealGeneration = 0
+    private func reveal(_ proxy: ScrollViewProxy, readingHeight: CGFloat, bottomAnchor: UnitPoint) {
+        revealGeneration += 1
+        let generation = revealGeneration
+        let request = model.revealRequest
+        model.revealAttempt = 0
+        // A nested lazy child can receive scrollTo before SwiftUI has committed
+        // its latest anchor geometry. Yield once, then reissue against each
+        // completed layout until the measured anchor reaches the viewport.
+        Task { @MainActor in
+            await Task.yield()
+            for attempt in 1...80 {
+                guard revealGeneration == generation, model.revealRevision == request.revision else { return }
+                model.revealAttempt = attempt
+                proxy.scrollTo(request.anchor, anchor: request.bottom ? bottomAnchor : .top)
+                try? await Task.sleep(nanoseconds: 20_000_000)
+                guard revealGeneration == generation, model.revealRevision == request.revision,
+                      let frame = model.islandPositions[request.position] else { continue }
+                if islandRevealReached(request, frame: frame, readingHeight: readingHeight) {
+                    model.revealAppliedRevision = request.revision
+                    return
+                }
+            }
+        }
+    }
     @ViewBuilder
     private func stickyRequest(proxy: ScrollViewProxy) -> some View {
         if let sticky, let message = model.snapshot?.messages.first(where: { $0.id == sticky }) {
@@ -175,6 +207,7 @@ struct ChatConversation: View {
                         model.messageFrames = positions
                         sticky = model.snapshot?.messages.last(where: { $0.role == "user" && (positions[$0.id]?.maxY ?? 1) < 0 })?.id
                     }
+                    .onPreferenceChange(IslandPositions.self) { model.islandPositions = $0 }
                     .overlay(alignment: .top) {
                         stickyRequest(proxy: proxy)
                     }
@@ -185,8 +218,7 @@ struct ChatConversation: View {
                     .onChange(of: model.composerHeight) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
                     .onChange(of: model.revealRevision) { _ in
                         follows = false; sticky = nil
-                        if model.revealBottom { proxy.scrollTo("island-end-" + model.revealIsland, anchor: bottomAnchor) }
-                        else { proxy.scrollTo(model.revealMessage, anchor: .top) }
+                        reveal(proxy, readingHeight: readingHeight, bottomAnchor: bottomAnchor)
                     }
                     .onChange(of: model.controlInteraction) { _ in follows = false }
                     .onChange(of: model.followRevision) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }

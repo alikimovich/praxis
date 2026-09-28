@@ -31,6 +31,7 @@ const UNIT = [
   "native-settings",
   "native-chat-controller",
   "native-composer-layout",
+  "native-chat-reveal",
   "chat-islands",
   "native-context",
   "native-updates",

@@ -89,6 +89,21 @@ try {
   island.revision++
   host.send('chatState',{state}); await delay(100)
   assert((await host.request('chatInspect')).followRevision > before.followRevision,'New definitions can follow with conversation content')
+  // Reveal IDs live inside a message row rather than as direct LazyVStack
+  // children. Completion must wait for the nested anchor's post-scroll geometry.
+  for (const bottom of [false, true]) {
+    const reveal = await host.request('revealChatIsland',{island:island.id,bottom})
+    const layout = await host.request('chatInspect')
+    assert.equal(layout.revealAppliedRevision,reveal.revision,`Nested island ${bottom ? 'bottom' : 'top'} reveal settled`)
+    assert(layout.revealAttempt >= 1,'Reveal reports at least one layout-aware attempt')
+  }
+  // Overlapping requests: the older one is superseded, never acknowledged with
+  // the newer revision's applied state; only the newest settles.
+  const stale = host.request('revealChatIsland',{island:island.id,bottom:false}).then(value => ({value}),error => ({error}))
+  const newest = await host.request('revealChatIsland',{island:island.id,bottom:true})
+  const superseded = await stale
+  assert.match(superseded.error?.message ?? '',/Island reveal superseded; revision=\d+, newer=\d+/,`Older overlapping reveal is superseded: ${JSON.stringify(superseded.value)}`)
+  assert.equal((await host.request('chatInspect')).revealAppliedRevision,newest.revision,'Newest overlapping reveal settled')
 
   console.log('Native chat scroll: sent questions and streamed responses stay visible across short/long history and shrinking composers.')
 } finally {
