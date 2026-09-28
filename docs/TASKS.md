@@ -5,6 +5,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Trezi rename (LKM-85, 2026-09-27)
 
+- [x] Forward legacy Next component instance stamps with canonical precedence.
+
 - [x] Preserve legacy/current mappings in generated Svelte and MDX instrumentation.
 
 - [x] Preserve legacy GitHub connection base planning and JSX source mappings.

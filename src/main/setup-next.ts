@@ -65,21 +65,32 @@ function instanceSource({ types: t }) {
     if (param?.type === 'AssignmentPattern') param = param.left
     let value
     if (param?.type === 'Identifier') {
-      value = t.optionalMemberExpression(t.identifier(param.name), t.stringLiteral('data-trezi-component-source'), true, true)
+      const read = key => t.optionalMemberExpression(t.identifier(param.name), t.stringLiteral(key), true, true)
+      value = t.logicalExpression('??', read('data-trezi-component-source'), read('data-praxis-component-source'))
     } else if (!param || param.type === 'ObjectPattern') {
-      const id = p.scope.generateUidIdentifier('treziInstance')
       const pattern = param || t.objectPattern([])
-      if (pattern.properties.some((prop) => prop.key?.value === 'data-trezi-component-source')) return
-      // A rest binding must remain last.
-      pattern.properties.unshift(t.objectProperty(t.stringLiteral('data-trezi-component-source'), id))
+      const bind = key => {
+        const existing = pattern.properties.find(prop => prop.key?.value === key)
+        if (existing) {
+          const value = existing.value?.type === 'AssignmentPattern' ? existing.value.left : existing.value
+          return value?.type === 'Identifier' ? t.cloneNode(value) : null
+        }
+        const id = p.scope.generateUidIdentifier('treziInstance')
+        // Keep any rest binding last.
+        pattern.properties.unshift(t.objectProperty(t.stringLiteral(key), id))
+        return id
+      }
+      const canonical = bind('data-trezi-component-source')
+      const legacy = bind('data-praxis-component-source')
+      if (!canonical || !legacy) return
       if (!param) p.node.params.unshift(t.assignmentPattern(pattern, t.objectExpression([])))
-      value = id
+      value = t.logicalExpression('??', canonical, legacy)
     } else return
     p.traverse({ JSXOpeningElement(q) {
       if (q.getFunctionParent() !== p) return
       const name = q.node.name
       if (name.type !== 'JSXIdentifier' || !/^[a-z]/.test(name.name)) return
-      if (q.node.attributes.some((a) => a.name?.name === 'data-trezi-component-source')) return
+      if (q.node.attributes.some((a) => ['data-trezi-component-source', 'data-praxis-component-source'].includes(a.name?.name))) return
       q.node.attributes.push(t.jsxAttribute(t.jsxIdentifier('data-trezi-component-source'), t.jsxExpressionContainer(t.cloneNode(value))))
     } })
   } } }

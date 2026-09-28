@@ -2,6 +2,13 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Forward legacy Next component instance stamps
+
+The generated Next loader now reads canonical component-source props with legacy
+fallback for identifier and destructured/defaulted parameters. Reuse existing
+bindings and preserve already stamped hosts. Full loader plus JSX-render regression
+checks legacy/current/conflicting/empty canonical values and repeated transforms.
+
 ## 2026-09-27 — Preserve legacy Svelte and MDX instrumentation
 
 Extend existing-stamp preservation to Svelte and both MDX JSX/Markdown node
