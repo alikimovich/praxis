@@ -2,6 +2,17 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Local Apple Intelligence exploration
+
+Audit auxiliary provider calls, native text/content editing, control selection
+and the Swift/Bun bridge. Record ranked opportunities, platform constraints and
+a bounded first experiment in `docs/APPLE-INTELLIGENCE.md`. Chat titles are the
+recommended first slice, followed by content drafts and prepared-control selection.
+Separate the installed macOS/SDK 26.4.1 baseline from newer image APIs and
+local inference from server models. This is a proposal, not an implementation;
+no inference, provider calls or GUI verification were performed.
+TypeScript checks, the docs-link check and diff whitespace validation pass.
+
 ## 2026-09-28 — Correct composer alignment verification (LKM-87)
 
 Reproduce the manager's alignment assertion without a window: borderless

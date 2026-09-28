@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Local Apple Intelligence exploration (2026-09-28)
+
+- [x] Audit suitable Trezi workflows and Apple APIs; rank opportunities and propose a bounded first experiment in [the exploration](APPLE-INTELLIGENCE.md).
+- [ ] If selected for implementation, benchmark optional local chat titles before expanding to copy drafts and prepared-control selection.
+
 ## Composer container (LKM-87)
 
 - [x] Place attachment/provider/model/Auto controls inside the rounded input surface, preserving alignment and handlers.
