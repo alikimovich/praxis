@@ -1,5 +1,25 @@
 import type { NativeBridge } from './bridge'
 
+/** Window activation is asynchronous; revealing a chat island alone is not readiness. */
+export async function captureForegroundChat(host: NativeBridge): Promise<any> {
+  for (let attempt = 1; ; attempt++) {
+    await preparePreviewInput(host, true)
+    try {
+      return await host.request('captureVisibleChat')
+    } catch (error) {
+      // Readiness cannot hold focus across ScreenCaptureKit's asynchronous work.
+      // Swift rejects those pixels; reacquire and take an entirely new capture.
+      // The legacy test bridge exposes only localized error strings.
+      const foregroundLost = error instanceof Error && (
+        error.message === 'Chat window is not in the foreground' ||
+        error.message === 'Chat lost foreground during capture'
+      )
+      if (!foregroundLost || attempt === 3) throw error
+      console.warn(`Visible chat capture lost foreground (attempt ${attempt}/3); reacquiring`)
+    }
+  }
+}
+
 /** Real WebKit input: page capture listeners are registered by the HTML fixture. */
 export async function checkSelectionInput(host: NativeBridge): Promise<void> {
   const evaluate = (code: string, isolated = false) =>
