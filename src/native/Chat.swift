@@ -126,37 +126,44 @@ struct ChatConversation: View {
             .buttonStyle(.plain).background(.regularMaterial).help("Scroll to this request")
         }
     }
+    @ViewBuilder
+    private var conversationContent: some View {
+        if let snapshot = model.snapshot {
+            if snapshot.messages.isEmpty && snapshot.cards.isEmpty {
+                Text("Ask for a change, or open a project to preview it on the right.")
+                    .foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 28)
+            }
+            ForEach(snapshot.messages) { message in
+                NativeMessageRow(message: message, running: snapshot.running && message.id == snapshot.streamingId, activity: message.id == snapshot.streamingId ? snapshot.activity : nil, model: model).id(message.id)
+                    .background(GeometryReader { geometry in Color.clear.preference(key: MessagePositions.self, value: [message.id:geometry.frame(in: .named("chatScroll"))]) })
+            }
+            if let activity = snapshot.activity, !snapshot.messages.contains(where: { $0.id == snapshot.streamingId }) {
+                ChatActivity(activity: activity, visible: model.visible)
+            }
+            ForEach(snapshot.cards) { card in NativeChatCard(card: card, model: model) }
+            ForEach(snapshot.questions) { request in NativeQuestionCard(request: request, model: model) }
+
+        }
+    }
+    private var conversationScroll: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 20) {
+                conversationContent
+                // Keep the scroll target in the same lazy layout as the
+                // messages. Composer clearance is padding, never a target.
+                Color.clear.frame(height: 1).id("bottom")
+                    .background(GeometryReader { geometry in Color.clear.preference(key: BottomPosition.self, value: geometry.frame(in: .named("chatScroll")).maxY) })
+            }.padding(.horizontal, 18).padding(.top, 18).padding(.bottom, model.bottomInset)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
     var body: some View {
         VStack(spacing: 0) {
             GeometryReader { viewport in
                 ScrollViewReader { proxy in
                     let readingHeight = max(1, viewport.size.height - model.bottomInset)
                     let bottomAnchor = UnitPoint(x: 0.5, y: readingHeight / max(1, viewport.size.height))
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 20) {
-                            if let snapshot = model.snapshot {
-                                if snapshot.messages.isEmpty && snapshot.cards.isEmpty {
-                                    Text("Ask for a change, or open a project to preview it on the right.")
-                                        .foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 28)
-                                }
-                                ForEach(snapshot.messages) { message in
-                                    NativeMessageRow(message: message, running: snapshot.running && message.id == snapshot.streamingId, activity: message.id == snapshot.streamingId ? snapshot.activity : nil, model: model).id(message.id)
-                                        .background(GeometryReader { geometry in Color.clear.preference(key: MessagePositions.self, value: [message.id:geometry.frame(in: .named("chatScroll"))]) })
-                                }
-                                if let activity = snapshot.activity, !snapshot.messages.contains(where: { $0.id == snapshot.streamingId }) {
-                                    ChatActivity(activity: activity, visible: model.visible)
-                                }
-                                ForEach(snapshot.cards) { card in NativeChatCard(card: card, model: model) }
-                                ForEach(snapshot.questions) { request in NativeQuestionCard(request: request, model: model) }
-
-                            }
-                            // Keep the scroll target in the same lazy layout as the
-                            // messages. Composer clearance is padding, never a target.
-                            Color.clear.frame(height: 1).id("bottom")
-                                .background(GeometryReader { geometry in Color.clear.preference(key: BottomPosition.self, value: geometry.frame(in: .named("chatScroll")).maxY) })
-                        }.padding(.horizontal, 18).padding(.top, 18).padding(.bottom, model.bottomInset)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    conversationScroll
                     .mask(ChatComposerFade(composerHeight: model.composerHeight))
                     .coordinateSpace(name: "chatScroll")
                     .onPreferenceChange(MessagePositions.self) { positions in

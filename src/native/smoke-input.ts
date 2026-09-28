@@ -18,6 +18,13 @@ export async function checkSelectionInput(host: NativeBridge): Promise<void> {
     })()`)
     throw new Error(`Preview input timed out: ${code}; ${JSON.stringify(state)}`)
   }
+  const input = async (payload: Record<string, unknown>) => {
+    // App activation may change on a shared desktop; preserve WebKit's editing
+    // responder while ensuring each real gesture reaches the test window.
+    await preparePreviewInput(host, true)
+    await wait('document.hasFocus()')
+    return host.request('previewInput', payload)
+  }
   await preparePreviewInput(host)
   await wait(`document.hasFocus()`)
   await wait(`document.documentElement.style.cursor === 'crosshair'`)
@@ -37,37 +44,37 @@ export async function checkSelectionInput(host: NativeBridge): Promise<void> {
     if (document.elementFromPoint(point.x,point.y) !== el) throw new Error('Heading is not the pointer hit target');
     return point;
   })()`)
-  await host.request('previewInput', point)
+  await input(point)
   await wait(`document.querySelector('[data-trezi-overlay]')?.shadowRoot?.querySelector('[data-trezi-toolbar]')?.style.display === 'flex'`)
-  await host.request('previewInput', { ...point, clicks: 2 })
+  await input({ ...point, clicks: 2 })
   await wait(`document.querySelector('#native-title').isContentEditable`)
-  await host.request('previewInput', { key: 'ArrowRight' })
+  await input({ key: 'ArrowRight' })
   await wait(`getSelection().isCollapsed`)
-  await host.request('previewInput', { key: 'x' })
+  await input({ key: 'x' })
   await wait(`document.querySelector('#native-title').textContent === 'Native Trezi fixturex'`)
   if ((await evaluate('window.previewInputs.length')) !== 0)
     throw new Error('Inline editing leaked input to the preview app')
-  await host.request('previewInput', { key: 'Escape' })
+  await input({ key: 'Escape' })
   await wait(`!document.querySelector('#native-title').isContentEditable && document.documentElement.style.cursor !== 'crosshair'`)
   if (await evaluate(`document.querySelector('#native-title').textContent !== 'Native Trezi fixture'`))
     throw new Error('Escape did not restore the inline text')
-  await host.request('previewInput', point)
-  await host.request('previewInput', { key: 'ArrowRight' })
+  await input(point)
+  await input({ key: 'ArrowRight' })
   await wait(`window.previewInputs.includes('keydown') && window.previewInputs.includes('click')`)
   await host.request('shellPerform', { action: 'select-object' })
   await wait(`document.documentElement.style.cursor === 'crosshair'`)
-  await host.request('previewInput', { ...point, clicks: 2 })
+  await input({ ...point, clicks: 2 })
   await wait(`document.querySelector('#native-title').isContentEditable`)
-  await host.request('previewInput', { key: 'Enter' })
+  await input({ key: 'Enter' })
   await wait(`!document.querySelector('#native-title').isContentEditable`)
   console.log('Native selection blocks page input; inline caret movement and normal interaction passed.')
 }
 
 /** Restore the main test window after auxiliary windows before paint/input checks. */
-export async function preparePreviewInput(host: NativeBridge): Promise<void> {
+export async function preparePreviewInput(host: NativeBridge, preserveResponder = false): Promise<void> {
   let ready: any
   for (let i = 0; i < 100; i++) {
-    ready = await host.request('previewInput', { prepare: true })
+    ready = await host.request('previewInput', { prepare: true, preserveResponder })
     if (ready.active && ready.key && ready.focused && ready.visible) break
     await new Promise(resolve => setTimeout(resolve, 50))
   }

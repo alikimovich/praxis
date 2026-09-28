@@ -377,11 +377,12 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             guard ephemeral, let preview = views["preview"] else { reply(id, error: "Test preview unavailable"); return }
             if c["prepare"] as? Bool == true {
                 // Native input fixtures must regain the main window after auxiliary windows.
-                // Do this once before gestures, never between contentEditable keystrokes.
+                // Keep the existing WebKit responder during contentEditable gestures.
                 NSApp.activate(ignoringOtherApps: true)
                 window.makeKeyAndOrderFront(nil)
                 window.contentView?.layoutSubtreeIfNeeded()
-                let focused = window.makeFirstResponder(preview)
+                let focused = c["preserveResponder"] as? Bool == true
+                    ? window.firstResponder != nil : window.makeFirstResponder(preview)
                 reply(id, ["active": NSApp.isActive, "key": window.isKeyWindow,
                            "focused": focused, "visible": preview.window === window && !preview.isHidden])
                 return

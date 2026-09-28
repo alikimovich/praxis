@@ -6,11 +6,14 @@ Newest first. Append a dated entry when you finish a chunk of work.
 
 The manager's clean integration build exceeded Swift's expression type-checking
 budget in the sticky request overlay. Extract that unchanged view into a typed
-ViewBuilder helper so its constraint solving is independent of the conversation.
+ViewBuilder helper and separate conversation content/scroll helpers so their
+constraint solving is independent of the surrounding view modifiers.
 The preceding worker verification passed all 103 unit tests and both native suites;
 the manager will repeat verification on this correction before independent review.
 Prepare the reload-route HTML before starting the managed server, avoiding an
 unrelated filesystem-triggered reload during the navigation/sentinel assertion.
+Reassert test-window activation before real preview gestures while preserving the
+WebKit editing responder, and still require document focus and all input assertions.
 
 ## 2026-09-27 — Diagnose capped-to-wrapped composer verification failure
 
