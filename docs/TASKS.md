@@ -6,7 +6,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 ## Trezi rename (LKM-85, 2026-09-27)
 
 - [x] Reproduce capped-to-wrapped composer sizing failure without a window; fix lazy TextKit sizing and add regression coverage.
-- [ ] Manager: rerun native desktop verification after the composer sizing correction.
+- [x] Manager: rerun native desktop verification after the composer sizing correction.
+- [x] Extract the sticky request overlay to bound clean-build SwiftUI type checking.
 
 - [x] Audit the native baseline, rename owned surfaces and document residual aliases.
 - [x] Preserve profiles, sessions, Git paths and project data with tested compatibility handling.

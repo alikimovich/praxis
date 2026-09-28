@@ -82,6 +82,8 @@ async function main() {
       join(fixture, 'index.html'),
       '<!doctype html>\n<html><body>\n<h1 id="native-title" data-trezi-source="index.html:3:1">Native Trezi fixture</h1>\n<p>Bun owns this server.</p><script>window.previewInputs=[];for(const type of ["keydown","keyup","keypress","pointerdown","mousedown","click","dblclick","wheel","input"])window.addEventListener(type,event=>window.previewInputs.push(event.type),true)</script></body></html>'
     )
+    // Prepare the reload route before the managed server starts watching files.
+    writeFileSync(join(fixture, 'about.html'), readFileSync(join(fixture, 'index.html')))
   }
   let pickedRoot = fixture || (requestedProject ? resolve(requestedProject) : null)
   const root = resolve(__dirname, '../..')

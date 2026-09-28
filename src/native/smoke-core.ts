@@ -41,7 +41,6 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   writeFileSync(join(artifacts, 'mobile-scrollbars.png'), Buffer.from(await host.request('captureShell'), 'base64'))
   // Reload must use WebKit's current document, including History API navigation.
   const originalURL = await page('location.href')
-  writeFileSync(join(fixture, 'about.html'), readFileSync(join(fixture, 'index.html')))
   const route = new URL('/about.html?tab=details#section', originalURL).href
   await page(`(() => { history.pushState({}, '', ${JSON.stringify(route)}); window.reloadSentinel = true; return true })()`)
   host.emit('menu', { action: 'reload' })

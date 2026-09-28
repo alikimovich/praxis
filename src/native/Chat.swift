@@ -113,6 +113,19 @@ struct ChatConversation: View {
     @ObservedObject var model: ChatModel
     @State private var follows = true
     @State private var sticky: String?
+    @ViewBuilder
+    private func stickyRequest(proxy: ScrollViewProxy) -> some View {
+        if let sticky, let message = model.snapshot?.messages.first(where: { $0.id == sticky }) {
+            Button {
+                follows = false
+                proxy.scrollTo(sticky, anchor: .top)
+            } label: {
+                Text(message.text).font(.caption).lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(8)
+            }
+            .buttonStyle(.plain).background(.regularMaterial).help("Scroll to this request")
+        }
+    }
     var body: some View {
         VStack(spacing: 0) {
             GeometryReader { viewport in
@@ -151,9 +164,7 @@ struct ChatConversation: View {
                         sticky = model.snapshot?.messages.last(where: { $0.role == "user" && (positions[$0.id]?.maxY ?? 1) < 0 })?.id
                     }
                     .overlay(alignment: .top) {
-                        if let sticky, let message = model.snapshot?.messages.first(where: { $0.id == sticky }) {
-                            Button { follows = false; proxy.scrollTo(sticky, anchor: .top) } label: { Text(message.text).font(.caption).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading).padding(8) }.buttonStyle(.plain).background(.regularMaterial).help("Scroll to this request")
-                        }
+                        stickyRequest(proxy: proxy)
                     }
                     .onPreferenceChange(BottomPosition.self) { bottom in
                         model.bottomPosition = bottom

@@ -2,6 +2,16 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Bound SwiftUI sticky-request type checking
+
+The manager's clean integration build exceeded Swift's expression type-checking
+budget in the sticky request overlay. Extract that unchanged view into a typed
+ViewBuilder helper so its constraint solving is independent of the conversation.
+The preceding worker verification passed all 103 unit tests and both native suites;
+the manager will repeat verification on this correction before independent review.
+Prepare the reload-route HTML before starting the managed server, avoiding an
+unrelated filesystem-triggered reload during the navigation/sentinel assertion.
+
 ## 2026-09-27 — Diagnose capped-to-wrapped composer verification failure
 
 Reproduce the manager's soft-wrap assertion in a windowless AppKit fixture using
