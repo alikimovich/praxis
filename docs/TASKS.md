@@ -5,6 +5,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Trezi rename (LKM-85, 2026-09-27)
 
+- [x] Preserve relative current/legacy profile overrides during repeated session alias migration.
+
 - [x] Enforce canonical source-selector precedence and add conflicting/legacy-only stamp regression coverage.
 
 - [x] Reproduce capped-to-wrapped composer sizing failure without a window; fix lazy TextKit sizing and add regression coverage.

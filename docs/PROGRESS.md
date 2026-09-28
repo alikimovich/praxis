@@ -2,6 +2,14 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Preserve relative profile override migration
+
+Independent review found that relative profile overrides created a relative
+session alias target interpreted from the wrong directory. Resolve the existing
+legacy store to its absolute physical path before creating the alias. Regression
+fixtures cover TREZI_USER_DATA and PRAXIS_USER_DATA with praxis/dsgn stores,
+repeated migration, interruption and preserved content; they fail before the fix.
+
 ## 2026-09-27 — Keep source selector precedence consistent
 
 Independent review found that matching a legacy stamp could include an element

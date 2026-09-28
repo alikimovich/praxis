@@ -34,6 +34,29 @@ try {
   assert.equal(readFileSync(join(sessions, 'sessions.json'), 'utf8'), '{"conversation":"keep me too"}')
   assert.equal(realpathSync(join(sessions, 'worktrees', 'chat')), realpathSync(join(old, 'praxis', 'worktrees', 'chat')))
   assert.equal(nativeSessionPath(profile), sessions)
+  // Both override names may contain relative paths. Alias targets must still
+  // resolve to the existing physical store on initial and repeated migration.
+  const originalCwd = process.cwd()
+  process.chdir(root)
+  try {
+    for (const envName of ['TREZI_USER_DATA', 'PRAXIS_USER_DATA']) {
+      for (const legacy of ['praxis', 'dsgn']) {
+        const directory = join(root, envName, legacy)
+        mkdirSync(join(directory, legacy), { recursive: true })
+        put(join(directory, legacy, 'sessions.json'), 'preserved')
+        const override = `./${envName}/${legacy}`
+        const env = { [envName]: override }
+        compatibleEnvironment(env)
+        const migrated = nativeSessionPath(env.TREZI_USER_DATA)
+        assert.equal(readFileSync(join(migrated, 'sessions.json'), 'utf8'), 'preserved')
+        assert.equal(realpathSync(migrated), realpathSync(join(directory, legacy)))
+        assert.equal(nativeSessionPath(env.TREZI_USER_DATA), migrated)
+        rmSync(migrated)
+        assert.equal(nativeSessionPath(env.TREZI_USER_DATA), migrated)
+        assert.equal(readFileSync(join(migrated, 'sessions.json'), 'utf8'), 'preserved')
+      }
+    }
+  } finally { process.chdir(originalCwd) }
   // A real Git worktree continues to resolve through the new session alias.
   const repository = join(root, 'repo'); mkdirSync(repository)
   const git = (cwd, args) => { const result = spawnSync('git', args, { cwd, encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr); return result.stdout }

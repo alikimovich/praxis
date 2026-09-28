@@ -41,7 +41,7 @@ export function nativeSessionPath(profile: string): string {
     throw new Error('Both Praxis and dsgn session stores exist; reconcile them before opening chats. No data was changed.')
   if (candidates.length) {
     if (!lstatSync(candidates[0]).isDirectory()) throw new Error('Legacy session store must be a real directory.')
-    try { symlinkSync(candidates[0], current, 'dir') } catch (e: any) {
+    try { symlinkSync(realpathSync(candidates[0]), current, 'dir') } catch (e: any) {
       if (e.code !== 'EEXIST' || realpathSync(current) !== realpathSync(candidates[0])) throw e
     }
   }
