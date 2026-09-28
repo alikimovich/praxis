@@ -1,5 +1,15 @@
 import assert from 'node:assert/strict'
 import { captureForegroundChat } from '../src/native/smoke-input.ts'
+import { missingShadowCaptureSemantics } from '../src/native/smoke-shadow-semantics.ts'
+
+const topShadow = ['Shadow Light', 'Preview', 'Distance', 'Blur']
+const bottomShadow = ['Light Source', 'Layers', 'Decay', 'rgba(0, 0, 0, 0.35)', 'box-shadow', 'Undo']
+assert.deepEqual(missingShadowCaptureSemantics(topShadow, bottomShadow), [])
+assert.deepEqual(
+  missingShadowCaptureSemantics(['Shadow', 'Preview', 'Distance', 'Blur'], bottomShadow),
+  ['shadow light'],
+  'Light Source in a separate viewport cannot masquerade as the Shadow Light title',
+)
 
 // No host or window: exercise the same readiness/capture sequencing as the smoke fixture.
 const ready = { active: true, key: true, focused: true, visible: true }
