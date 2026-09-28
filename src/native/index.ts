@@ -78,10 +78,11 @@ async function main() {
   const projectIndex = process.argv.indexOf('--project')
   const requestedProject = projectIndex >= 0 ? process.argv[projectIndex + 1] : null
   if (projectIndex >= 0 && !requestedProject) throw new Error('--project requires a folder')
-  const fixture = testDir ? join(testDir, 'project') : null
+  const fixture = testDir ? join(testDir, 'Folder Alpha') : null
   if (fixture) {
     mkdirSync(fixture)
-    writeFileSync(join(fixture, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="red"/></svg>')
+    // A decodable raster icon exercises stored artwork in native sidebar verification.
+    writeFileSync(join(fixture, 'favicon.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=', 'base64'))
     writeFileSync(
       join(fixture, 'index.html'),
       '<!doctype html>\n<html><body>\n<h1 id="native-title" data-trezi-source="index.html:3:1">Native Trezi fixture</h1>\n<p>Bun owns this server.</p><script>window.previewInputs=[];for(const type of ["keydown","keyup","keypress","pointerdown","mousedown","click","dblclick","wheel","input"])window.addEventListener(type,event=>window.previewInputs.push(event.type),true)</script></body></html>'

@@ -34,7 +34,7 @@ the source-built host requires launch arguments and its bundled XPC service.
 | Project website and DOM instrumentation | WKWebView with isolated preview script |
 
 The sidebar starts with Open Project and New Project buttons, separated by a gap
-from projects with project favicons and a More menu for
+from projects with consistent native outline folder symbols and a More menu for
 memory, ordering and closing. History above the chat provides open/saved sessions,
 rename and review/resume. Background runs appear as actionable chat cards. Project
 and chat state persists in the native profile. The toolbar keeps the sidebar toggle, chat

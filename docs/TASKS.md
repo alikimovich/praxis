@@ -3,6 +3,17 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Sidebar folder icons (LKM-105)
+
+- [x] Diagnose sidebar capture timeout with a windowless AppKit reproduction; compensate measured split wrapper insets and add content-width regression coverage.
+- [x] Use the native outline folder symbol for every project row, preserving metadata, layout, selection tint and actions.
+- [x] Run focused non-GUI checks.
+- [x] Repair Shadow Light capture fixture foreground readiness after manager review failure, preserving strict capture/OCR checks.
+- [x] Add foreground sidebar captures at 260/180 points, both selections and hover states, menu/memory and drag-delegate/backend reorder evidence to the native suite; add negative evidence assertions to the unit tier.
+- [x] Draw sidebar folder symbols in exact integral 16×16 frames (zero symbol alignment insets) with a windowless regression test.
+- [x] Restore and assert the foreground after sidebar menu/sheet, reorder and hover steps (teardown runs on failure; leftovers named) with windowless/unit regression coverage.
+- [ ] Manager: inspect foreground selected/unselected/hover states at standard and narrow widths; verify open/select/context menu/reorder and run required native checks.
+
 ## Local Apple Intelligence exploration (2026-09-28)
 
 - [x] Audit suitable Trezi workflows and Apple APIs; rank opportunities and propose a bounded first experiment in [the exploration](APPLE-INTELLIGENCE.md).

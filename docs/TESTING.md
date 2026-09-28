@@ -68,6 +68,41 @@ Read screenshots in `test/artifacts/native/` for UI verification. Offscreen
 AppKit captures do not faithfully paint Liquid Glass; visible inspection may be
 necessary. Never start the target project server manually alongside Trezi.
 
+Sidebar folder acceptance runs inside the normal native project-switching fixture.
+`sidebar-{260,180}-{0,1}-{rest,hover}.png` captures only the foreground sidebar
+through ScreenCaptureKit, with matching JSON containing OCR and row geometry.
+Both projects must be visible, one with stored raster artwork and one without;
+each is selected in turn. Assertions require the folder image, template tint,
+exact 16×16 icon frame at an integral origin, a seven-point gap to the label's
+alignment rect (its frame adds AppKit's 2-point cell padding), icon and label
+x equal to Open Project's, containment, accessibility action label and correct
+More visibility. Blank captures or missing project labels fail.
+`sidebar-interactions.json` records native menu tracking/cancel, the Project Memory
+menu action opening its form, and production pasteboard/validate/accept-drop
+callbacks plus backend order changes at both widths. Drag checks reject no-op and
+nested drops and preserve selection. They exercise delegates with a local test
+drag object, not physical pointer travel. Hover uses native enter/exit callbacks.
+After the menu/Project Memory step, after reorder and in teardown (which also runs
+on failure), `sidebarFocus` cancels tracking menus, ends sheets/modals, dismisses
+Trezi's sheet window and popovers, clears hover and re-keys the main window. The
+fixture then requires no tracking menu, sheet or popover, a key and main window,
+and an active app, naming any leftover. Each capture is preceded by the same
+report. A failed capture keeps the guard's message and appends the report; it is
+never retried. `test/sidebar-focus.mjs` covers this logic without a window.
+`sidebar-selection.json` records the project/chat/preview assertions from the
+existing native selection callback checks after opening the second fixture.
+Review the PNGs for outline glyph fidelity and contrast; physical drag animation
+and pointer targeting remain manual review checks. After a passing smoke run, `test/native-runtime.mjs` fails unless all eight
+captures, their JSON, `sidebar-selection.json` and both widths' menu/reorder
+records were freshly written by that run. `test/sidebar-evidence.mjs`
+rejects deliberately blank, clipped, misaligned and incorrect-state evidence
+without launching a desktop.
+`test/sidebar-sizing.mjs` exercises AppKit split layout without a window, checking
+that requested content widths account for sidebar wrapper insets after reveal.
+`test/sidebar-icon.mjs` lays out a windowless source list and Open Project button
+with `SidebarIconView` across symbol scales at 260/180 points: each folder frame
+must be exactly 16×16, integral, pixel aligned and free of symbol alignment insets.
+
 New tests belong in the appropriate array in `test/run.mjs`. Pure tests must own
 their temporary directories/ports and clean up processes. Use injected service
 registries when testing lifecycle behavior without the desktop. Renderer-specific

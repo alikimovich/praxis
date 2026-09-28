@@ -373,6 +373,25 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             shell.update(state); previewStatus.update(state); nativeLayout.update(state)
             if let home = state["homeState"] as? [String: Any] { welcome.update(home) }
         case "shellInspect": reply(id, shell.inspect())
+        case "sidebarVerification":
+            guard ephemeral else { reply(id, error: "Test profile required"); return }
+            SidebarMenuMonitor.shared.install()
+            reply(id, shell.verifySidebar(c))
+        case "sidebarFocus":
+            guard ephemeral else { reply(id, error: "Test profile required"); return }
+            SidebarMenuMonitor.shared.install()
+            if c["cleanup"] as? Bool == true {
+                sidebarFocusCleanup(main: window, cells: shell.projectCells, dismissAuxiliary: {
+                    if self.sheets.panel?.isVisible == true { self.sheets.model.perform("cancel") }
+                })
+            }
+            reply(id, sidebarFocusReport(main: window, auxiliary: sheets.panel))
+        case "captureVisibleSidebar":
+            guard ephemeral, !shell.sidebarItem.isCollapsed else { reply(id, error: "Visible test sidebar required"); return }
+            Task { @MainActor in
+                do { reply(id, try await captureVisibleRegion(window: window, view: shell.sidebar.view, region: shell.sidebar.view.bounds)) }
+                catch { reply(id, error: error.localizedDescription) }
+            }
         case "previewSurfaceInspect": reply(id, previewSurface.inspect())
         case "shellPerform": reply(id, shell.perform(c["action"] as? String ?? "", id: c["row"] as? String))
         case "captureFeedback":
