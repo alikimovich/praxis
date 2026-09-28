@@ -2,6 +2,13 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Preserve legacy Svelte and MDX instrumentation
+
+Extend existing-stamp preservation to Svelte and both MDX JSX/Markdown node
+paths. The new generated-helper regression reproduces the legacy overwrite,
+preserves current/legacy authored mappings on repeated processing, and confirms
+unstamped content still receives canonical stamps. Register it in the unit tier.
+
 ## 2026-09-27 — Preserve legacy publish bases and JSX mappings
 
 Route GitHub connection planning through one legacy/current-aware ancestry probe;

@@ -70,7 +70,7 @@ module.exports = function treziRnSource({ types: t }) {
 // Svelte: a markup preprocessor that stamps data-trezi-source on elements. The
 // line/col use svelte/compiler offsets (1-based line, 0-based col) so they match
 // trezi's Svelte adapter. Dev-gated; idempotent.
-const SVELTE_HELPER_CONTENT = `// Added by Trezi (.trezi/). A dev-only Svelte markup preprocessor that stamps
+export const SVELTE_HELPER_CONTENT = `// Added by Trezi (.trezi/). A dev-only Svelte markup preprocessor that stamps
 // data-trezi-source="path:line:col" on elements so Trezi can map them to source.
 // Add to svelte.config preprocess for development only.
 import { parse } from 'svelte/compiler'
@@ -107,7 +107,7 @@ export default function treziStamp() {
       walk(ast.fragment ?? ast, (n) => {
         if (!ELEMENT_TYPES.has(n.type) || typeof n.start !== 'number' || typeof n.name !== 'string') return
         const attrs = n.attributes || []
-        if (attrs.some((a) => a.name === 'data-trezi-source')) return
+        if (attrs.some((a) => ['data-trezi-source', 'data-praxis-source'].includes(a.name))) return
         const pos = n.start + 1 + n.name.length
         // Only splice when start points exactly at '<name' — bail on any misaligned
         // offset rather than corrupt markup mid-token (mirrors props-svelte.ts).

@@ -1,6 +1,6 @@
 {
   "base": "94b6dd6d3746e14cc0bf26e7fbd4a8fce1837f7e",
-  "head": "66be4ec3937fb4e406f5583364e4986fc47e3c67",
+  "head": "bde03ebce8790ab1f3419b914d2cae8c5cc8c4f9",
   "integrationTarget": "d34b91e1748a3a92ee8bf6aa44dd80eff44c7b32",
   "mergeBase": "d34b91e1748a3a92ee8bf6aa44dd80eff44c7b32",
   "scanState": "Working-tree contents based on head; occurrence line numbers include local review corrections.",
@@ -86,7 +86,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 8,
+      "line": 15,
       "category": "historical reference",
       "variants": [
         "praxis/main"
@@ -94,7 +94,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 9,
+      "line": 16,
       "category": "historical reference",
       "variants": [
         "data-praxis-source"
@@ -102,7 +102,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 18,
+      "line": 25,
       "category": "historical reference",
       "variants": [
         "PRAXIS_USER_DATA",
@@ -111,7 +111,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 66,
+      "line": 73,
       "category": "historical reference",
       "variants": [
         "praxis/chat"
@@ -119,7 +119,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 67,
+      "line": 74,
       "category": "historical reference",
       "variants": [
         "data-praxis-source"
@@ -127,7 +127,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 266,
+      "line": 273,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -135,7 +135,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 272,
+      "line": 279,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -143,7 +143,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 338,
+      "line": 345,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -151,7 +151,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 487,
+      "line": 494,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -159,7 +159,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 504,
+      "line": 511,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -167,7 +167,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 615,
+      "line": 622,
       "category": "historical reference",
       "variants": [
         "/tmp/Praxis"
@@ -175,7 +175,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 909,
+      "line": 916,
       "category": "historical reference",
       "variants": [
         "Praxis's"
@@ -183,7 +183,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 1284,
+      "line": 1291,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -191,7 +191,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 1355,
+      "line": 1362,
       "category": "historical reference",
       "variants": [
         "Resources/Praxis.icns,"
@@ -199,7 +199,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 1780,
+      "line": 1787,
       "category": "historical reference",
       "variants": [
         "`PRAXIS_NATIVE_TEST_PROVIDER=codex`"
@@ -207,7 +207,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 1806,
+      "line": 1813,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -215,7 +215,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 1808,
+      "line": 1815,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -223,7 +223,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 1846,
+      "line": 1853,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -231,7 +231,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 1917,
+      "line": 1924,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -239,18 +239,10 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 2058,
+      "line": 2065,
       "category": "historical reference",
       "variants": [
         "Praxis"
-      ]
-    },
-    {
-      "path": "docs/PROGRESS.md",
-      "line": 2060,
-      "category": "historical reference",
-      "variants": [
-        "Praxis."
       ]
     },
     {
@@ -258,12 +250,20 @@
       "line": 2067,
       "category": "historical reference",
       "variants": [
+        "Praxis."
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 2074,
+      "category": "historical reference",
+      "variants": [
         "Praxis's"
       ]
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 2068,
+      "line": 2075,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -271,7 +271,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 2076,
+      "line": 2083,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -279,7 +279,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 2312,
+      "line": 2319,
       "category": "historical reference",
       "variants": [
         "`.praxis/`."
@@ -287,7 +287,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 2333,
+      "line": 2340,
       "category": "historical reference",
       "variants": [
         "PRAXIS_NEXT_FIXTURE"
@@ -295,7 +295,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 2349,
+      "line": 2356,
       "category": "historical reference",
       "variants": [
         "Praxis's"
@@ -303,7 +303,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 2445,
+      "line": 2452,
       "category": "historical reference",
       "variants": [
         "`data-praxis-controls`"
@@ -311,7 +311,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 2478,
+      "line": 2485,
       "category": "historical reference",
       "variants": [
         "Praxis,"
@@ -319,7 +319,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 2814,
+      "line": 2821,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -327,7 +327,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 2923,
+      "line": 2930,
       "category": "historical reference",
       "variants": [
         "PRAXIS_TEST_SKIP_INTRO=1"
@@ -335,7 +335,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3158,
+      "line": 3165,
       "category": "historical reference",
       "variants": [
         "Praxis,"
@@ -343,7 +343,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3187,
+      "line": 3194,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -351,7 +351,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3312,
+      "line": 3319,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -359,7 +359,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3652,
+      "line": 3659,
       "category": "historical reference",
       "variants": [
         "`praxis",
@@ -368,7 +368,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3679,
+      "line": 3686,
       "category": "historical reference",
       "variants": [
         "`praxis"
@@ -376,7 +376,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3682,
+      "line": 3689,
       "category": "historical reference",
       "variants": [
         "`PraxisApi`"
@@ -384,7 +384,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3697,
+      "line": 3704,
       "category": "historical reference",
       "variants": [
         "Praxis."
@@ -392,26 +392,10 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3708,
+      "line": 3715,
       "category": "historical reference",
       "variants": [
         "`PraxisApi`"
-      ]
-    },
-    {
-      "path": "docs/PROGRESS.md",
-      "line": 3787,
-      "category": "historical reference",
-      "variants": [
-        "`praxis/chat-*`"
-      ]
-    },
-    {
-      "path": "docs/PROGRESS.md",
-      "line": 3788,
-      "category": "historical reference",
-      "variants": [
-        "Praxis's"
       ]
     },
     {
@@ -424,7 +408,23 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3797,
+      "line": 3795,
+      "category": "historical reference",
+      "variants": [
+        "Praxis's"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3801,
+      "category": "historical reference",
+      "variants": [
+        "`praxis/chat-*`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3804,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -432,7 +432,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3825,
+      "line": 3832,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -440,7 +440,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3827,
+      "line": 3834,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -448,7 +448,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3838,
+      "line": 3845,
       "category": "historical reference",
       "variants": [
         "Praxis-owned"
@@ -456,7 +456,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3840,
+      "line": 3847,
       "category": "historical reference",
       "variants": [
         "Praxis's",
@@ -465,7 +465,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3843,
+      "line": 3850,
       "category": "historical reference",
       "variants": [
         "Praxis",
@@ -474,7 +474,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3846,
+      "line": 3853,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -482,7 +482,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3858,
+      "line": 3865,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -490,7 +490,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3859,
+      "line": 3866,
       "category": "historical reference",
       "variants": [
         "`test/praxis-agent-tools.mjs`"
@@ -498,7 +498,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3867,
+      "line": 3874,
       "category": "historical reference",
       "variants": [
         "`origin/praxis/*`:"
@@ -506,7 +506,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3869,
+      "line": 3876,
       "category": "historical reference",
       "variants": [
         "`praxis/main`,"
@@ -514,7 +514,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3870,
+      "line": 3877,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -522,7 +522,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3890,
+      "line": 3897,
       "category": "historical reference",
       "variants": [
         "`praxis/publish/<session-id>`"
@@ -530,7 +530,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3897,
+      "line": 3904,
       "category": "historical reference",
       "variants": [
         "Praxis's"
@@ -538,7 +538,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 3941,
+      "line": 3948,
       "category": "historical reference",
       "variants": [
         "`persist:praxis-preview`"
@@ -546,7 +546,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4002,
+      "line": 4009,
       "category": "historical reference",
       "variants": [
         "`praxis:preferred-model`"
@@ -554,7 +554,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4060,
+      "line": 4067,
       "category": "historical reference",
       "variants": [
         "`PRAXIS_USER_DATA`);"
@@ -562,7 +562,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4065,
+      "line": 4072,
       "category": "historical reference",
       "variants": [
         "`PRAXIS_USER_DATA=$(mktemp"
@@ -570,7 +570,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4066,
+      "line": 4073,
       "category": "historical reference",
       "variants": [
         "`PRAXIS_USER_DATA`"
@@ -578,7 +578,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4119,
+      "line": 4126,
       "category": "historical reference",
       "variants": [
         "`praxis-media://`"
@@ -586,7 +586,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4130,
+      "line": 4137,
       "category": "historical reference",
       "variants": [
         "`praxis-media://`"
@@ -594,7 +594,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4136,
+      "line": 4143,
       "category": "historical reference",
       "variants": [
         "praxis-media:`"
@@ -602,7 +602,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4191,
+      "line": 4198,
       "category": "historical reference",
       "variants": [
         "Praxis",
@@ -611,7 +611,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4206,
+      "line": 4213,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -619,7 +619,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4215,
+      "line": 4222,
       "category": "historical reference",
       "variants": [
         "`praxis/chat-*`"
@@ -627,7 +627,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4241,
+      "line": 4248,
       "category": "historical reference",
       "variants": [
         "Praxis's"
@@ -635,7 +635,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4270,
+      "line": 4277,
       "category": "historical reference",
       "variants": [
         "`praxis/chat-*`"
@@ -643,7 +643,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4299,
+      "line": 4306,
       "category": "historical reference",
       "variants": [
         "Praxis-side,"
@@ -651,7 +651,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4302,
+      "line": 4309,
       "category": "historical reference",
       "variants": [
         "`.praxis`"
@@ -659,7 +659,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4349,
+      "line": 4356,
       "category": "historical reference",
       "variants": [
         "praxis"
@@ -667,7 +667,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4382,
+      "line": 4389,
       "category": "historical reference",
       "variants": [
         "`?praxisPanel=1`"
@@ -675,7 +675,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4512,
+      "line": 4519,
       "category": "historical reference",
       "variants": [
         "`PRAXIS_CODEX_BIN`"
@@ -683,7 +683,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4531,
+      "line": 4538,
       "category": "historical reference",
       "variants": [
         "praxis's"
@@ -691,7 +691,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4690,
+      "line": 4697,
       "category": "historical reference",
       "variants": [
         "praxis's"
@@ -699,7 +699,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4701,
+      "line": 4708,
       "category": "historical reference",
       "variants": [
         "`model_providers.\"praxis-connection\"`"
@@ -707,7 +707,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4757,
+      "line": 4764,
       "category": "historical reference",
       "variants": [
         "`model_providers.\"praxis-connection\"`"
@@ -715,7 +715,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4861,
+      "line": 4868,
       "category": "historical reference",
       "variants": [
         "`<userData>/praxis/attachments/<stamp>-<name>.<ext>`"
@@ -723,7 +723,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 4966,
+      "line": 4973,
       "category": "historical reference",
       "variants": [
         "`.praxis`,"
@@ -731,7 +731,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5062,
+      "line": 5069,
       "category": "historical reference",
       "variants": [
         "`praxis/chat-*`"
@@ -739,7 +739,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5073,
+      "line": 5080,
       "category": "historical reference",
       "variants": [
         "`Praxis",
@@ -748,7 +748,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5079,
+      "line": 5086,
       "category": "historical reference",
       "variants": [
         "`.praxis/`"
@@ -756,7 +756,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5082,
+      "line": 5089,
       "category": "historical reference",
       "variants": [
         "(`Praxis",
@@ -765,7 +765,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5159,
+      "line": 5166,
       "category": "historical reference",
       "variants": [
         "`praxisTheme`,"
@@ -773,7 +773,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5173,
+      "line": 5180,
       "category": "historical reference",
       "variants": [
         "`praxis:chat-hidden`),"
@@ -781,7 +781,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5184,
+      "line": 5191,
       "category": "historical reference",
       "variants": [
         "`PRAXIS_USER_DATA`"
@@ -789,7 +789,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5187,
+      "line": 5194,
       "category": "historical reference",
       "variants": [
         "`PRAXIS_USER_DATA=$(mktemp"
@@ -797,7 +797,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5191,
+      "line": 5198,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -805,7 +805,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5192,
+      "line": 5199,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -813,7 +813,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5194,
+      "line": 5201,
       "category": "historical reference",
       "variants": [
         "`praxis/<base>`,"
@@ -821,7 +821,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5246,
+      "line": 5253,
       "category": "historical reference",
       "variants": [
         "Praxis-managed.\"**"
@@ -829,7 +829,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5248,
+      "line": 5255,
       "category": "historical reference",
       "variants": [
         "`praxis/chat-*`",
@@ -838,7 +838,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5254,
+      "line": 5261,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -846,7 +846,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5258,
+      "line": 5265,
       "category": "historical reference",
       "variants": [
         "`PRAXIS_RULES_VERSION`"
@@ -854,7 +854,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5277,
+      "line": 5284,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -862,7 +862,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5488,
+      "line": 5495,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -870,7 +870,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5675,
+      "line": 5682,
       "category": "historical reference",
       "variants": [
         "`data-praxis-source`"
@@ -878,7 +878,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5684,
+      "line": 5691,
       "category": "historical reference",
       "variants": [
         "Praxis's"
@@ -886,7 +886,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5687,
+      "line": 5694,
       "category": "historical reference",
       "variants": [
         "`data-praxis-source`"
@@ -894,7 +894,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5922,
+      "line": 5929,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -902,7 +902,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5934,
+      "line": 5941,
       "category": "historical reference",
       "variants": [
         "`PraxisApi.setup.detect`"
@@ -910,7 +910,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5939,
+      "line": 5946,
       "category": "historical reference",
       "variants": [
         "praxis"
@@ -918,7 +918,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5944,
+      "line": 5951,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -926,7 +926,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5946,
+      "line": 5953,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -934,7 +934,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5950,
+      "line": 5957,
       "category": "historical reference",
       "variants": [
         "`.praxis`);"
@@ -942,7 +942,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5979,
+      "line": 5986,
       "category": "historical reference",
       "variants": [
         "`data-praxis-source=\"relpath:line:col\"`"
@@ -950,7 +950,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 5999,
+      "line": 6006,
       "category": "historical reference",
       "variants": [
         "`PRAXIS_USER_DATA`)."
@@ -958,7 +958,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6000,
+      "line": 6007,
       "category": "historical reference",
       "variants": [
         "`PRAXIS_USER_DATA`"
@@ -966,7 +966,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6010,
+      "line": 6017,
       "category": "historical reference",
       "variants": [
         "`data-praxis-source`"
@@ -974,7 +974,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6022,
+      "line": 6029,
       "category": "historical reference",
       "variants": [
         "`data-praxis-source`"
@@ -982,7 +982,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6189,
+      "line": 6196,
       "category": "historical reference",
       "variants": [
         "(`?praxisEditor=1`"
@@ -990,7 +990,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6213,
+      "line": 6220,
       "category": "historical reference",
       "variants": [
         "`praxis"
@@ -998,26 +998,10 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6215,
+      "line": 6222,
       "category": "historical reference",
       "variants": [
         "`praxis"
-      ]
-    },
-    {
-      "path": "docs/PROGRESS.md",
-      "line": 6223,
-      "category": "historical reference",
-      "variants": [
-        "(`bin/praxis.mjs`):"
-      ]
-    },
-    {
-      "path": "docs/PROGRESS.md",
-      "line": 6229,
-      "category": "historical reference",
-      "variants": [
-        "`test/praxis-cli.mjs`"
       ]
     },
     {
@@ -1025,12 +1009,28 @@
       "line": 6230,
       "category": "historical reference",
       "variants": [
+        "(`bin/praxis.mjs`):"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6236,
+      "category": "historical reference",
+      "variants": [
+        "`test/praxis-cli.mjs`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6237,
+      "category": "historical reference",
+      "variants": [
         "`test:praxis-cli`"
       ]
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6240,
+      "line": 6247,
       "category": "historical reference",
       "variants": [
         "dsgn→praxis"
@@ -1038,7 +1038,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6242,
+      "line": 6249,
       "category": "historical reference",
       "variants": [
         "`dsgn→praxis`"
@@ -1046,7 +1046,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6245,
+      "line": 6252,
       "category": "historical reference",
       "variants": [
         "`data-praxis-source`,",
@@ -1056,7 +1056,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6246,
+      "line": 6253,
       "category": "historical reference",
       "variants": [
         "`praxisRules`,",
@@ -1065,7 +1065,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6252,
+      "line": 6259,
       "category": "historical reference",
       "variants": [
         "`Praxis`."
@@ -1073,7 +1073,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6253,
+      "line": 6260,
       "category": "historical reference",
       "variants": [
         "`.praxis/control-panels.json`"
@@ -1081,7 +1081,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6268,
+      "line": 6275,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -1089,7 +1089,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6271,
+      "line": 6278,
       "category": "historical reference",
       "variants": [
         "`data-praxis-source`",
@@ -1098,7 +1098,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6272,
+      "line": 6279,
       "category": "historical reference",
       "variants": [
         "`praxis:`),",
@@ -1109,7 +1109,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6273,
+      "line": 6280,
       "category": "historical reference",
       "variants": [
         "`<userData>/praxis`",
@@ -1119,7 +1119,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6274,
+      "line": 6281,
       "category": "historical reference",
       "variants": [
         "`mcp__praxis__*`"
@@ -1127,7 +1127,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6282,
+      "line": 6289,
       "category": "historical reference",
       "variants": [
         "`praxis/dsgn/…`);"
@@ -1135,7 +1135,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6284,
+      "line": 6291,
       "category": "historical reference",
       "variants": [
         "`.praxis/`;"
@@ -1143,7 +1143,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6287,
+      "line": 6294,
       "category": "historical reference",
       "variants": [
         "`<userData>/praxis`"
@@ -1151,7 +1151,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6290,
+      "line": 6297,
       "category": "historical reference",
       "variants": [
         "`.praxis`"
@@ -1159,7 +1159,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6295,
+      "line": 6302,
       "category": "historical reference",
       "variants": [
         "`.praxis`."
@@ -1167,7 +1167,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6322,
+      "line": 6329,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -1175,34 +1175,10 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6402,
+      "line": 6409,
       "category": "historical reference",
       "variants": [
         "\"Praxis\""
-      ]
-    },
-    {
-      "path": "docs/PROGRESS.md",
-      "line": 6407,
-      "category": "historical reference",
-      "variants": [
-        "**Praxis**;"
-      ]
-    },
-    {
-      "path": "docs/PROGRESS.md",
-      "line": 6408,
-      "category": "historical reference",
-      "variants": [
-        "`alikimovich/praxis`."
-      ]
-    },
-    {
-      "path": "docs/PROGRESS.md",
-      "line": 6412,
-      "category": "historical reference",
-      "variants": [
-        "Praxis"
       ]
     },
     {
@@ -1210,12 +1186,36 @@
       "line": 6414,
       "category": "historical reference",
       "variants": [
+        "**Praxis**;"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6415,
+      "category": "historical reference",
+      "variants": [
+        "`alikimovich/praxis`."
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6419,
+      "category": "historical reference",
+      "variants": [
         "Praxis"
       ]
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6638,
+      "line": 6421,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6645,
       "category": "historical reference",
       "variants": [
         "Praxis;"
@@ -1223,7 +1223,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6640,
+      "line": 6647,
       "category": "historical reference",
       "variants": [
         "**Praxis**"
@@ -1231,7 +1231,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6649,
+      "line": 6656,
       "category": "historical reference",
       "variants": [
         "Praxis's"
@@ -1239,7 +1239,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6651,
+      "line": 6658,
       "category": "historical reference",
       "variants": [
         "`mcp__praxis__preview_location`"
@@ -1247,7 +1247,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6654,
+      "line": 6661,
       "category": "historical reference",
       "variants": [
         "`mcp__praxis__preview_screenshot`"
@@ -1255,7 +1255,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6662,
+      "line": 6669,
       "category": "historical reference",
       "variants": [
         "`praxis-preview`"
@@ -1263,7 +1263,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6863,
+      "line": 6870,
       "category": "historical reference",
       "variants": [
         "Praxis's"
@@ -1271,7 +1271,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 6886,
+      "line": 6893,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -1279,7 +1279,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 7012,
+      "line": 7019,
       "category": "historical reference",
       "variants": [
         "`praxis`"
@@ -1287,7 +1287,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 7070,
+      "line": 7077,
       "category": "historical reference",
       "variants": [
         "Praxis/dsgn"
@@ -1295,7 +1295,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 7087,
+      "line": 7094,
       "category": "historical reference",
       "variants": [
         "Praxis,"
@@ -1303,7 +1303,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 7121,
+      "line": 7128,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -1311,7 +1311,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 7316,
+      "line": 7323,
       "category": "historical reference",
       "variants": [
         "Praxis"
@@ -1319,7 +1319,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 7324,
+      "line": 7331,
       "category": "historical reference",
       "variants": [
         "\"Praxis\""
@@ -1327,7 +1327,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 7325,
+      "line": 7332,
       "category": "historical reference",
       "variants": [
         "Praxis."
@@ -1335,7 +1335,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 7327,
+      "line": 7334,
       "category": "historical reference",
       "variants": [
         "(Praxis)"
@@ -1343,7 +1343,7 @@
     },
     {
       "path": "docs/PROGRESS.md",
-      "line": 7329,
+      "line": 7336,
       "category": "historical reference",
       "variants": [
         "**Praxis**:",
@@ -1712,7 +1712,7 @@
     },
     {
       "path": "docs/TASKS.md",
-      "line": 1547,
+      "line": 1549,
       "category": "historical reference",
       "variants": [
         "Praxis.**",
@@ -1721,7 +1721,7 @@
     },
     {
       "path": "docs/TASKS.md",
-      "line": 1548,
+      "line": 1550,
       "category": "historical reference",
       "variants": [
         "`PraxisApi`,",
@@ -2078,11 +2078,35 @@
       ]
     },
     {
+      "path": "src/main/setup-mdx.ts",
+      "line": 19,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'data-praxis-source'].includes(a.name)))"
+      ]
+    },
+    {
+      "path": "src/main/setup-mdx.ts",
+      "line": 25,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "!('data-praxis-source'"
+      ]
+    },
+    {
       "path": "src/main/setup-react.ts",
       "line": 13,
       "category": "intentional compatibility alias",
       "variants": [
         "'data-praxis-source'].includes(a.name.name)))"
+      ]
+    },
+    {
+      "path": "src/main/setup.ts",
+      "line": 110,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'data-praxis-source'].includes(a.name)))"
       ]
     },
     {
@@ -2658,6 +2682,14 @@
       "category": "intentional compatibility alias",
       "variants": [
         "/data-praxis-source=\"page.mdx:20:0\"/)"
+      ]
+    },
+    {
+      "path": "test/setup-stamps.mjs",
+      "line": 19,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "['data-praxis-source',"
       ]
     },
     {

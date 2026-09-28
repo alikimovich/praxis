@@ -45,6 +45,7 @@ const UNIT = [
   "jev-pilot",
   "test-runner",
   "setup-next",
+  "setup-stamps",
   "code-reveal",
   "conversation-handoff",
   "pr-body",

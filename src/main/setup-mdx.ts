@@ -16,13 +16,15 @@ export default function treziMdx() {
       if (pos) {
         const stamp = rel + ':' + pos.line + ':' + (pos.column - 1)
         if (node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') {
-          if (node.name && /^[a-z]/.test(node.name) && !node.attributes.some(a => a.name === 'data-trezi-source')) {
+          if (node.name && /^[a-z]/.test(node.name) && !node.attributes.some(a => ['data-trezi-source', 'data-praxis-source'].includes(a.name))) {
             node.attributes.push({ type: 'mdxJsxAttribute', name: 'data-trezi-source', value: stamp })
           }
         } else if (['heading', 'paragraph', 'blockquote', 'list', 'listItem', 'code', 'link', 'image', 'table', 'tableRow', 'tableCell'].includes(node.type)) {
           node.data ||= {}
           node.data.hProperties ||= {}
-          node.data.hProperties['data-trezi-source'] ||= stamp
+          if (!('data-trezi-source' in node.data.hProperties) && !('data-praxis-source' in node.data.hProperties)) {
+            node.data.hProperties['data-trezi-source'] = stamp
+          }
         }
       }
       for (const child of node.children || []) walk(child)
