@@ -2,6 +2,110 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Sidebar fixture restores the foreground (LKM-105 feedback)
+
+Manager verification failed twice in `test:native` with "Chat window is not in the
+foreground". That text is `captureVisibleRegion`'s shared guard message, so the
+sidebar capture raises it too. `NATIVE SIDEBAR PASS` never printed. The worktree's
+artifacts from the last run hold every 260-point capture plus 180-0-rest,
+180-0-hover and 180-1-rest, but no 180-1-hover. So the capture that failed was the
+last sidebar hover capture, not a later chat capture. It ran about 350 ms after
+`preparePreviewInput` confirmed the window was key and the app active. That
+capture came after the 260-point context-menu step (which opens the Project Memory
+sheet window) and the reorder step. The icon geometry in those captures was
+correct (16×16, integral origin, 7-point gap, aligned with Open Project).
+
+The fixture had no focus teardown. New `src/native/SidebarFocus.swift` records NSMenu
+tracking notifications. `sidebarFocusCleanup` cancels tracking menus, ends attached
+sheets/modals, sends Trezi's sheet window through Bun's cancel, dismisses popovers
+with `cancelOperation`, clears row hover, then activates the app and re-keys the
+main window. `sidebarFocusReport` names each leftover: a tracking menu, an
+attached/Trezi sheet, a popover, a modal, a non-key/non-main main window with the
+window that holds focus, or an inactive app with the frontmost app. The fixture
+restores and asserts after the menu/Project Memory step, after reorder, and in a
+`withSidebarCleanup` teardown that also runs on failure without masking the
+original error. Before each capture it asserts the report is clean. A failed capture keeps the
+guard's message and appends the report. It is never retried, and the capture guard and
+all geometry assertions are unchanged. `test/sidebar-focus.mjs` (unit tier) tests
+the TS teardown with a fake host. It also runs a windowless Swift fixture for
+leftover naming and cleanup order; that fixture fails if menu cancellation is
+removed. The desktop run that will confirm which leftover was responsible is
+manager-owned.
+
+## 2026-09-28 — Sidebar folder icons draw at exactly 16 points (LKM-105 feedback)
+
+The manager's native run measured the row folder at 16.5×21 with a 4.5-point
+text gap. Cause: `NSImageView` reports an SF Symbol's alignment insets (the 19×14
+folder adds 3/2 points vertically; the extra half point of width appeared only
+in-window), and Auto Layout's 16-point constraints size that alignment
+rect, so the frame the glyph is drawn in grew and sat at a half-point origin.
+New `src/native/SidebarIcon.swift`: `SidebarIconView` zeroes those insets, and `SidebarIconLayout` holds the
+16-point/7-point rhythm shared by project rows and Open/New Project, which had the
+same defect. `SidebarRowStyle` and `SidebarProjectButton` moved there so a
+windowless test can compile them. Icon and label x-positions are unchanged, and the
+glyph now sits in an integral 16×16 frame.
+
+The fixture's text gap measured the label's frame, which includes AppKit's
+2-point label cell padding, so a correct icon still reads as 5. It now measures
+to the label's alignment rect, the edge the 7-point constraint and Open Project
+use. It also adds strict checks for an integral icon origin and for exact icon/label
+alignment with Open Project. The 16×16 expectation is unchanged. New unit test
+`test/sidebar-icon.mjs` fails against a plain image view (16×21) and passes with
+the fix. The GUI suite, capture inspection and commit are manager-owned.
+
+## 2026-09-28 — Sidebar evidence enforced by the native suite (LKM-105 feedback)
+
+Rechecked after merging candidate `0b8037a` (LKM-107 Shadow Light fix): the
+folder presentation and sidebar fixture merged cleanly, and `test:native` still
+reaches `checkVisibleSidebar` through `checkProjectSwitching`. To stop the
+configured verification from passing without evidence, `test/native-runtime.mjs`
+now requires that a passing smoke run freshly wrote all eight `sidebar-*` captures and JSON,
+`sidebar-selection.json`, and menu/memory/reorder records at both 260 and 180 points.
+Full Swift typecheck, TypeScript/native typechecks and the unit tier pass. GUI
+runs and capture inspection remain manager-owned.
+
+## 2026-09-28 — Sidebar fixture width diagnosis (LKM-105 escalation)
+
+Mapped the manager's bundled line 19558 to the content-width wait, after the
+artwork readiness check. A windowless AppKit reproduction requests divider
+position 260 but measures sidebar content at 252: this SDK wraps the sidebar
+with an 8-point inset. The fixture incorrectly equated divider position and
+content width. Measure the wrapper/content difference when setting test widths;
+keep the strict 260/180 capture requirements and all visual assertions intact.
+Timeouts now include the stage and native sidebar state.
+
+Added a registered windowless Swift regression exercising collapse/reveal,
+260/180 widths and restoration. It fails against the old setter (252 versus
+260) and passes with the repair. No folder presentation or composer changes.
+Desktop captures and the configured verification remain manager-owned.
+TypeScript/native and full Swift typechecks, sidebar sizing/evidence,
+shell-controller, native-boundary, docs-links and whitespace checks pass.
+
+## 2026-09-28 — Foreground sidebar acceptance fixture (LKM-105 feedback)
+
+Compared candidate `771ce3d`: its project-switching fixture only writes an
+offscreen whole-window image and has no sidebar acceptance fixture. Replace
+that evidence with eight foreground sidebar-only captures at 260/180 points,
+each project selected in turn with the other row hovered/resting. Use a decoded
+raster favicon for the first disposable project and no artwork for the second.
+Require visible action/project OCR, folder image equality, native template/tint
+and scaling, icon/text geometry, containment and action accessibility labels.
+Write PNGs and geometry/OCR JSON as `test/artifacts/native/sidebar-*.{png,json}`.
+
+An ephemeral-only host hook tracks/cancels the native project menu and invokes
+its memory action, then runs real pasteboard/validate/accept-drop callbacks with
+a local test drag object. Assert no-op/nested rejection, backend order changes
+and preserved selection at both widths; record `sidebar-interactions.json`.
+These are native control/delegate checks, not physical pointer drag automation.
+The configured native suite invokes the fixture; the unit tier includes negative
+evidence tests rejecting blank captures, missing labels, wrong artwork, clipping
+and incorrect selection/hover/menu state. Manager must execute and inspect these
+new artifacts under the desktop lock; no GUI execution is claimed by this worker.
+Use distinct Folder Alpha/Beta row labels so Open Project cannot satisfy a
+missing project-label OCR assertion. Full Swift source typechecking,
+TypeScript/native checks, sidebar negative-evidence, shell-controller, native
+boundary, docs-link and whitespace checks pass.
+
 ## 2026-09-28 — Sidebar review verification fixture (LKM-105 feedback)
 
 Manager's worktree verification passed, but the independent review run failed
