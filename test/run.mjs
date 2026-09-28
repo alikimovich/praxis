@@ -14,6 +14,7 @@ const ROOT = dirname(TEST_DIR);
 // Backend logic checks run independently of the native desktop.
 const UNIT = [
   "rename-compat",
+  "source-stamp",
   "native-boundary",
   "trezi-agent-tools",
   "codex-mcp",

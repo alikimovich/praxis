@@ -168,3 +168,30 @@ Focused verification for this correction:
   `bun test/docs-links.mjs`, `git diff --check`: pass.
 - Configured manager verification and native GUI/smoke suites were not run.
   Existing manager-staged changes were preserved; this correction is unstaged.
+
+## Independent review correction — source selector precedence (2026-09-27)
+
+`sourceStamp` already preferred a present canonical attribute (including empty),
+but `sourceSelector` also matched conflicting legacy values. The legacy selector
+now excludes elements carrying the canonical attribute. Selection grouping and
+first-match HMR style lookup therefore agree with source reads.
+
+`bun test/source-stamp.mjs` reproduced the failure before the fix and passes after
+it. It uses Bun's HTML selector engine on the equivalent selector list because
+that engine does not implement the outer `:is` wrapper. The registered unit check
+covers conflicts, legacy-only, canonical-only, empty, equal and unspecified stamps.
+The native smoke suite additionally exercises the unmodified selector in a real
+DOM, CSS escaping and first-match HMR lookup using a detached document. This new
+DOM check remains unexecuted here; the manager owns desktop verification.
+
+A DOM dependency installation was blocked by sandbox network access. No dependency
+or lockfile change was retained; the checks use existing Bun and native WebKit.
+
+Focused results: `bun run typecheck`, `bun run typecheck:native`,
+`bun test/source-stamp.mjs`, `bun test/rename-compat.mjs`,
+`bun test/html-source.mjs`, `bun test/test-runner.mjs`,
+`bun test/docs-links.mjs`, `bun scripts/audit-rename.mjs` and
+`git diff --check` pass. The generated DOM-check JavaScript also parses; this
+syntax check is not DOM execution. No native GUI/smoke suite or configured manager
+verification loop was run.
+`bun run build:native` also passes and regenerates the preview/native outputs.

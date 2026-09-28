@@ -2,6 +2,16 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Keep source selector precedence consistent
+
+Independent review found that matching a legacy stamp could include an element
+whose canonical stamp pointed elsewhere. Restrict legacy selector matches to
+nodes without a canonical attribute, including when that attribute is empty.
+Reproduce the conflicting-stamp failure with Bun's HTML selector engine and add
+native DOM coverage for grouping, HMR lookup, legacy-only stamps and escaping.
+Focused checks are recorded in rename/VERIFICATION.md; the added desktop DOM
+check remains manager-owned and was not run by this worker.
+
 ## 2026-09-27 — Reconcile latest candidate composer fade
 
 Merge candidate d34b91e into the rename branch, preserving its bottom fade overlay

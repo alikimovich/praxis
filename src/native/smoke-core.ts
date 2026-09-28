@@ -1,3 +1,4 @@
+import { checkSourceStamps } from './smoke-source-stamp'
 import { checkChatIslands } from './smoke-islands'
 import assert from 'node:assert/strict'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -56,6 +57,7 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   await wait(() => page(`!document.querySelector('[data-trezi-frame-style]')`), 'desktop scrollbar policy restored')
   console.log('Native mobile hides document/nested scrollbars, preserves scrolling and survives navigation.')
   await wait(()=>nativeChat.chats.get(nativeChat.active)?.ready,'native chat ready',30000)
+  await checkSourceStamps(page)
   await checkChatIslands(host, fixture, artifacts)
   await inspect('composerInspect', s => s.welcomedChat)
   writeFileSync(join(artifacts,'composer-ready-beam.png'),Buffer.from(await host.request('captureComposer'),'base64'))

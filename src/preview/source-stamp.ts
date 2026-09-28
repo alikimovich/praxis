@@ -5,5 +5,5 @@ export function sourceStamp(element: Element, component = false): string | null 
 }
 export function sourceSelector(value?: string): string {
   const match = value === undefined ? '' : `="${CSS.escape(value)}"`
-  return `:is([data-trezi-source${match}],[data-praxis-source${match}])`
+  return `:is([data-trezi-source${match}],[data-praxis-source${match}]:not([data-trezi-source]))`
 }
