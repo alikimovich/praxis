@@ -220,7 +220,7 @@ Liquid Glass captures have limitations. See [Testing](docs/TESTING.md).
 | `bun run start` | Launch the existing native build |
 | `bun run typecheck` | Check backend/native/shared code and preview code |
 | `bun run test` | Unit and native integration checks |
-| `bun run test:native` | Native integration only |
+| `bun run test:native` | Native integration only (native runtime + chat scroll/reveal) |
 | `bun run test:native-live` | Real provider fixture edit (credentials required) |
 | `bun run verify` | All tiers, including real provider calls |
 
