@@ -6,6 +6,8 @@ Newest first. Append a dated entry when you finish a chunk of work.
 
 Merge candidate d34b91e into the rename branch, preserving its bottom fade overlay
 and button/status ordering while retaining the extracted conversation builders.
+Use Color(NSColor.windowBackgroundColor) for its gradient stops; the candidate
+used a nonexistent NSColor.swiftUIColor member.
 Full manager verification and independent review remain required before landing.
 
 ## 2026-09-27 — Bound SwiftUI sticky-request type checking

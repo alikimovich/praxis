@@ -184,8 +184,8 @@ struct ChatConversation: View {
                         VStack(spacing: 0) {
                             LinearGradient(stops: [
                                 .init(color: .clear, location: 0),
-                                .init(color: NSColor.windowBackgroundColor.swiftUIColor.opacity(0.5), location: 0.5),
-                                .init(color: NSColor.windowBackgroundColor.swiftUIColor, location: 1)
+                                .init(color: Color(NSColor.windowBackgroundColor).opacity(0.5), location: 0.5),
+                                .init(color: Color(NSColor.windowBackgroundColor), location: 1)
                             ], startPoint: .top, endPoint: .bottom)
                             .frame(height: model.bottomInset)
                             Color(NSColor.windowBackgroundColor).frame(height: ChatComposerFade.footerHeight)
