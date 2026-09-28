@@ -2,6 +2,50 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Correct composer alignment verification (LKM-87)
+
+Reproduce the manager's alignment assertion without a window: borderless
+NSPopUpButton frames extend five points left of their alignment rectangles.
+A four-point NSStackView gap therefore produces one point of frame overlap.
+Measure AppKit alignment rectangles in composer coordinates instead; require
+positive sizes and every adjacent gap to retain the configured stack spacing.
+Containment, bottom inset, foreground, hit testing and OCR checks remain required.
+
+Extend the windowless composer test with real Auto Layout at 320/420/520 points,
+and deliberately overlap model/permission and attachment/provider controls to
+prove rejection. Save foreground PNG/OCR/geometry before layout assertions so
+manager failures retain evidence. No product layout changes were needed.
+Compared candidate 99b6cb6: it has neither this fixture nor an equivalent fix.
+
+Focused composer layout and controller checks, TypeScript/native typechecks and
+docs links pass. The composer test compiles the changed Swift verification code.
+Manager must rerun the desktop suite and inspect the new captures; this worker
+did not run GUI verification.
+
+## 2026-09-28 — Foreground composer verification (LKM-87 feedback)
+
+Add a dedicated composer fixture to the existing native smoke sequence.
+Capture the actual composited window through the existing ScreenCaptureKit path,
+including surrounding chat pixels, with PNG/OCR/geometry records for initial,
+Ask mode, attached Auto draft and submitted states. Require input/control
+containment, bottom inset, left/right alignment and unobstructed control hit
+targets. Missing foreground or missing rendered labels fail the fixture.
+
+Exercise the real attachment menu action and open/cancel its NSOpenPanel; use
+the existing file hook for deterministic file selection. Dispatch model and
+permission changes through the native picker target/action, insert text through
+AppKit, and click the native send control. Intercept provider service calls,
+assert one submission includes the draft/file, and restore choices/settings.
+Test-only host commands require an ephemeral profile. This is control-level
+automation plus hit testing; manual pointer/menu inspection remains part of
+manager review.
+
+Worker non-GUI checks pass: full Swift source typechecking, TypeScript/native
+checks, existing windowless composer/controller tests, native boundary and docs
+links. Desktop execution,
+actual PNG inspection, full configured verification and independent review
+remain manager-owned; no new GUI captures are claimed by this worker.
+
 ## 2026-09-28 — One rounded composer container (LKM-87)
 
 Move the existing attachment/provider/model/permission control row into the

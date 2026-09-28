@@ -6,7 +6,13 @@ import ScreenCaptureKit
 /// screencapture process does not own this window and requires broader TCC access.
 @MainActor
 func captureVisibleChat(window: NSWindow, chat: NativeChat) async throws -> [String: Any] {
-    guard window.isVisible, window.isKeyWindow, NSApp.isActive, !chat.isHidden else {
+    let reading = NSRect(x: 0, y: 0, width: chat.bounds.width, height: max(1, chat.bounds.height - chat.model.bottomInset))
+    return try await captureVisibleRegion(window: window, view: chat, region: reading)
+}
+
+@MainActor
+func captureVisibleRegion(window: NSWindow, view: NSView, region: NSRect) async throws -> [String: Any] {
+    guard window.isVisible, window.isKeyWindow, NSApp.isActive, !view.isHidden else {
         throw NSError(domain: "VisibleChatCapture", code: 1, userInfo: [NSLocalizedDescriptionKey: "Chat window is not in the foreground"])
     }
     guard #available(macOS 14.4, *) else {
@@ -24,12 +30,11 @@ func captureVisibleChat(window: NSWindow, chat: NativeChat) async throws -> [Str
     configuration.showsCursor = false
     let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
     // Capture is asynchronous: refuse pixels if the window changed while awaiting it.
-    guard window.isVisible, window.isKeyWindow, NSApp.isActive, !chat.isHidden else {
+    guard window.isVisible, window.isKeyWindow, NSApp.isActive, !view.isHidden else {
         throw NSError(domain: "VisibleChatCapture", code: 4, userInfo: [NSLocalizedDescriptionKey: "Chat lost foreground during capture"])
     }
     // Restrict OCR to chat pixels: the project preview must not supply labels.
-    let reading = NSRect(x: 0, y: 0, width: chat.bounds.width, height: max(1, chat.bounds.height - chat.model.bottomInset))
-    let rect = chat.convert(reading, to: nil)
+    let rect = view.convert(region, to: nil)
     let scale = CGFloat(image.width) / window.frame.width
     let crop = CGRect(x: rect.minX * scale, y: (window.frame.height - rect.maxY) * scale,
                       width: rect.width * scale, height: rect.height * scale).integral
