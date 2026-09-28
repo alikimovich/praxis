@@ -1,6 +1,7 @@
 import { trackDevServer, stopDevServer } from './devserver-processes'
 import { previewServers } from './preview-evidence'
-import { type ChildProcess, spawn } from 'child_process'
+import { type ChildProcess } from 'child_process'
+import { spawnManagedCommand } from './managed-child'
 import { app, type NativeView, ipcMain as nativeIpcMain } from '../native/platform'
 import { access, readFile, readdir } from 'fs/promises'
 import { installProjectDependencies, projectPackageManager } from './project-dependencies'
@@ -319,10 +320,8 @@ function spawnDevServer(
     // override. It must NEVER be built from previewed-page content, agent output,
     // or strings read out of the target repo's files — a repo would then execute
     // arbitrary shell just by being opened, before the user runs anything.
-    const child = spawn(opts.command, {
+    const child = spawnManagedCommand(opts.command, {
       cwd: opts.root,
-      shell: true,
-      detached: true, // new process group so we can kill the whole tree
       env: opts.env
     })
     trackDevServer(child)

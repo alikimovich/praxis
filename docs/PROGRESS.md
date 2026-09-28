@@ -2,6 +2,107 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Native smoke through the service: quit hang, lost logs, capture race (LKM-89 / S02)
+
+Manager verification: all 113 unit checks pass; `test:native` ran through
+the service path, failed its first Shadow Light capture at 15:31:26 (5 s into
+the smoke) and then hung until the 300 s spawn timeout. The error text was
+lost: an XPC service's stderr is discarded, and Bun inherited it. Diagnosed
+from artifacts and code, without running the GUI tier:
+- **Shutdown hang.** Quit answered `.terminateLater`, which runs AppKit in a
+  modal-panel run loop. The client's shutdown reply, callbacks and its own 10 s
+  timeout all hop through `DispatchQueue.main`; if that queue is not serviced
+  there, nothing can finish the drain. The host now returns `.terminateCancel`,
+  drains in the normal run loop, then terminates again, and a 20 s watchdog
+  bounds shutdown. A windowless probe could not settle the run-loop question
+  here (the sandbox denies WindowServer), so this removes the dependency rather
+  than relying on it.
+- **Lost diagnostics.** The client passes its stderr over XPC before the first
+  hello, and the supervisor gives it to Bun as fd 2 (duplicated above the
+  reserved slots, like the profile lease). The fixture asserts a backend stderr
+  line reaches the client.
+- **Deadlock hazard.** The owner queue wrote to Bun's stdin synchronously while
+  the stdout reader waited on the same queue (`queue.sync`), so two full pipes
+  could deadlock. Writes moved to a serial writer queue, and delivery is async;
+  stop drains accepted writes (bounded 2 s) before EOF.
+- **Capture race.** `failure.png` and `shadow-light-initial.png` show the "top"
+  capture scrolled to the bottom (token-offer card visible, island header cut
+  off), while the bottom capture was placed correctly. `chatInspect` now reports
+  message tops. The smoke re-reveals (up to three attempts) when the revealed
+  top is not held before and after capture. All OCR label assertions are
+  unchanged. The underlying late scroll is not identified.
+
+Worker checks: both typechecks, `bun run build`, and the full unit tier (113
+pass) outside the sandbox, including `service-process` with its new diagnostics
+assertion. The native tier was not run by the worker.
+
+## 2026-09-28 — Fix XPC relay stall found by manager verification (LKM-89 / S02)
+
+Manager verification: 112 unit checks passed; `service-process` timed out in its
+XPC section, which the worker sandbox cannot reach (launchd lookup denied).
+Reproduced outside the sandbox and gave each fixture wait the calling step, which
+named the legacy relay. Root cause: `FileHandle.read(upToCount: 65536)` blocks on
+a pipe until the full count or EOF (a standalone probe stays blocked with a short
+line pending), so no Bun → host line was ever relayed. Both the XPC relay
+and the rollback launcher's stdout copier now use `readAvailable(upTo:)` (POSIX
+`read`, EINTR-safe); the guardian fixture pins short-line and EOF reads.
+
+The next failure was in this session's own backend-death case: after
+`serviceStopped` the client reconnected, and launchd's respawn throttle held the
+hello until the client's 10 s timeout. The real host would likewise have waited
+~10 s to quit after a backend crash. `serviceStopped` is now final in the client:
+it invalidates, never reconnects, does not report a failure over the service's
+status, and completes shutdown locally. The fixture requires that shutdown within
+3 s. The raw-client case still proves a fresh instance refuses `resume`.
+
+`test/service-process.mjs` now passes in full (supervision, rollback, codec and
+the XPC half) twice in a row through the unit runner, alongside service-contract,
+managed-child, native-service-launch and native-supervised-bridge. Both
+typechecks and `bun run build` pass. The native GUI tier is left to the manager.
+
+## 2026-09-28 — Separate Swift service, XPC and legacy supervision (LKM-89 / S02)
+
+S01 is accepted and merged into the candidate (51fb928); S02 builds on it. The
+host now connects over versioned, signed XPC to a bundled Swift service, which
+takes the profile lock and supervises Bun over private pipes. No domain writer
+moved: this step changes process ownership and profile exclusion only. Details,
+protocol and rollback: `docs/SWIFT-BACKEND-SERVICE.md`.
+
+Continuing a prior session's implementation, review found and fixed four
+behaviours that the fixture did not cover:
+- **Masked test failures.** The launcher returns the host's exit status, but
+  the host always exited 0 (`NSApp.terminate` exits before code after
+  `application.run()`). Bun now sends its status in `quit`, the service in
+  `serviceStopped`, and the host applies it in `applicationWillTerminate`. Test
+  mode sets `exitCode` before cleanup so the status is known when `quit` is sent.
+- **Second Bun after a service restart.** launchd restarts a lost XPC service
+  on demand; the reconnect hello launched a fresh Bun before the client noticed
+  the epoch change. Reattach now names the epoch (`resume`) and a fresh instance
+  refuses with `recoveryRequired` without launching.
+- **Fatal UI events during reconnect.** Any emit in the 0.25 s reconnect window
+  terminated the app. Never-submitted frames (pre-handshake and reconnecting)
+  now queue in a bounded outbox, still never replaying uncertain sends.
+  Setup-time emits before the client existed went to the terminal; they are
+  buffered too.
+- **Clean exit reported as failure.** Bun's stdout EOF raced its reaped status;
+  the EOF stop is deferred 1 s so the real status wins. Terminal signals to the
+  host now drain through the service.
+
+The fixture adds stale-epoch/duplicate hello refusals, a frame queued mid
+reconnect, backend death → `serviceStopped {status: 1}` → fail-closed reconnect
+with no replacement Bun, and a peer-rejection assertion that a lookup failure
+cannot satisfy. The guardian fixture honours `TMPDIR` and avoids atomic writes
+that stage outside it. Production XPC plist uses `dispatch_main`, matching the
+tested fixture.
+
+Worker checks: both typechecks; `bun run build`; `test/service-process.mjs
+--supervision-only` (profile contention, legacy-lock refusal, startup failure,
+child death, repeated shutdown, descendant/detached cleanup, service-crash drain,
+codec, rollback); managed-child, native-service-launch, native-supervised-bridge,
+native-bridge-close, trezi-cli. Not run by the worker: the XPC half (Seatbelt
+blocks launchd lookup: "Sandbox restriction"), native-shutdown (sandbox denies
+port binding) and the native GUI tier — manager verification required.
+
 ## 2026-09-28 — Local Apple Intelligence exploration
 
 Audit auxiliary provider calls, native text/content editing, control selection

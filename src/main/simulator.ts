@@ -1,5 +1,6 @@
 import { app, ipcMain, type NativeView } from '../native/platform'
-import { spawn, execFile, type ChildProcess } from 'child_process'
+import { execFile, type ChildProcess } from 'child_process'
+import { spawnManagedCommand } from './managed-child'
 import { randomBytes } from 'crypto'
 import { createServer, type Server, type ServerResponse, type IncomingMessage } from 'http'
 import { readFile, unlink, rm } from 'fs/promises'
@@ -935,10 +936,8 @@ function spawnMetro(
     // possible origins: our own literal (`npx expo run:ios`) or a command the
     // user typed as the override. It must NEVER be built from previewed-page
     // content, agent output, or strings read out of the target repo's files.
-    const child: ChildProcess = spawn(opts.command, {
+    const child: ChildProcess = spawnManagedCommand(opts.command, {
       cwd: opts.root,
-      shell: true,
-      detached: true, // own process group so stop() can kill the whole tree
       env: { ...process.env, FORCE_COLOR: '0', CI: '1', EXPO_NO_TELEMETRY: '1' }
     })
     let settled = false

@@ -30,6 +30,13 @@ document.body.append(card);
     }
     throw new Error('Shadow Light native fixture did not reach the expected source/preview state.')
   }
+  const settled = async (check: () => Promise<boolean>, ms = 3000) => {
+    for (const deadline = Date.now() + ms; Date.now() < deadline;) {
+      try { if (await check()) return true } catch { /* retried below */ }
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+    return false
+  }
   const previewMatches = async (values: ShadowLightInput) => !!await page(`(() => {
     const card = document.querySelector('#island-shadow-demo');
     if (!card || card.textContent !== 'Shadow Light') return false;
@@ -71,10 +78,26 @@ document.body.append(card);
     const recognized: string[] = []
     // Tall panels need two viewport captures; both come from the real window.
     for (const bottom of [false, true]) {
-      const revealed = await host.request('revealChatIsland', { island: result.id, bottom })
-      await wait(async () => (await host.request('chatInspect')).visibleMessageIDs.includes(revealed.message))
-      await new Promise(resolve => setTimeout(resolve, 350))
-      const image = await captureForegroundChat(host)
+      let image: any
+      for (let attempt = 1; ; attempt++) {
+        const revealed = await host.request('revealChatIsland', { island: result.id, bottom })
+        // A top reveal puts the message's top at (or, when clamped, below) the viewport
+        // top. A negative top means a later scroll moved it: the header is cut off.
+        const placed = async () => {
+          const state = await host.request('chatInspect')
+          const top = state.messageTops?.[revealed.message]
+          return state.visibleMessageIDs.includes(revealed.message) && (bottom || (typeof top === 'number' && top >= -4))
+        }
+        const where = `revealed island ${bottom ? 'end' : 'top'} for capture ${name}`
+        if (await settled(placed)) {
+          await new Promise(resolve => setTimeout(resolve, 350))
+          image = await captureForegroundChat(host)
+          // Recapture only when the viewport moved during capture; labels are still asserted below.
+          if (await placed()) break
+        }
+        assert.ok(attempt < 3, `Chat viewport did not hold the ${where}`)
+        console.warn(`Chat viewport did not hold the ${where} (attempt ${attempt}/3); revealing again`)
+      }
       assert.ok(image.width > 200 && image.height > 200, 'Nonempty visible chat viewport')
       const stem = `shadow-light-${name}${bottom ? '-bottom' : ''}`
       writeFileSync(join(artifacts, `${stem}.png`), Buffer.from(image.png, 'base64'))

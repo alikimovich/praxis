@@ -3,6 +3,8 @@
 Trezi is a native macOS app: Swift/AppKit/SwiftUI chat and editing tools on the
 left, with the user's project in system WebKit on the right. Bun owns provider
 sessions, Git/worktrees, source editing, persistence and managed project servers.
+A separate Swift XPC service owns profile exclusion and supervises legacy Bun;
+domain writers remain in Bun during migration step S02.
 Electron, the React application renderer and browser/Tailscale mode are retired.
 Distributed as source: clone, `bun install`, `bun run dev`. Users authenticate
 with their own provider subscriptions or endpoint credentials.
@@ -51,7 +53,13 @@ timing and must be reported as reduced coverage. No Electron tests remain.
 - `src/native/index.ts`: Bun entrypoint, service registration and native lifecycle.
 - `src/native/platform.ts`: native event routing, WebKit proxy and Keychain helper.
   Services import it directly; there is no Electron alias or dependency.
-- `src/native/bridge.ts`: JSON pipe protocol to the Swift subprocess.
+- `src/native/bridge.ts`: private legacy JSON bridge to the supervising service;
+  direct host pipes remain available through launch-time legacy rollback.
+- `src/service/ServiceMain.swift`, `src/service/ServiceRuntime.swift`,
+  `src/service/ServiceXPC.swift`: separate signed XPC service and authenticated relay.
+- `src/service/LegacySupervisor.swift`, `src/service/ProcessGuardian.swift`: profile
+  exclusion, Bun/descendant lifetimes and crash cleanup. `src/native/ServiceClient.swift`
+  owns the connection; `src/native/HostService.swift` integrates AppKit lifecycle.
 - `src/native/Host.swift`: AppKit app lifecycle and host protocol.
 - `src/native/ProjectCell.swift`: sidebar row rendering and native project drag reordering.
 - `src/native/Shell.swift`: sidebar/project actions, split view and column-aligned
@@ -85,7 +93,11 @@ timing and must be reported as reduced coverage. No Electron tests remain.
   checks that the app does not depend on Electron or the retired React renderer.
 - `bin/trezi.mjs`, `install.sh`: source installation, native launch and update.
 
-Swift and Bun communicate over pipes. Preview messages are untrusted and are
+The host and Swift service communicate over authenticated XPC; the service and
+legacy Bun use private pipes. `TREZI_BACKEND_OWNER=legacy` selects the previous
+Bun/host transport at launch under the same Swift profile exclusion. See
+`docs/SWIFT-BACKEND-SERVICE.md` for rollback and verification limits.
+Preview messages are untrusted and are
 restricted by actual view identity and an allowlist. The preview cannot invoke
 agent, filesystem or application commands. Preserve WKContentWorld isolation.
 Native profiles remain separate from historical Electron profiles; do not delete
