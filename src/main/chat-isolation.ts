@@ -646,7 +646,8 @@ async function branchAlreadyLive(repoRoot: string, branch: string): Promise<bool
 
 /**
  * Crash recovery for chat worktrees reclaimed by `pruneOrphans` (called from
- * `agent:open-project`). For each reclaimed `trezi/chat-*` orphan, keyed to its OWN repo
+ * `agent:open-project`). For each reclaimed `trezi/chat-*` or legacy `praxis/chat-*`
+ * orphan, keyed to its OWN repo
  * (which may differ from the project being opened — the worktrees dir is shared):
  *  - dirty → a crashed-mid-turn chat: surface its work via a recovery park record.
  *  - clean + already recorded → a persisted park: keep its record + branch untouched.
@@ -660,7 +661,7 @@ export async function handleReclaimed(
 ): Promise<void> {
   if (!deps) return
   for (const r of reclaimed) {
-    if (!r.branch?.startsWith('trezi/chat-') || !r.repoRoot) continue
+    if (!r.branch || !/^(trezi|praxis)\/chat-/.test(r.branch) || !r.repoRoot) continue
     if (r.dirty) {
       await recoveryParkRecord(r.repoRoot, r.id, r.branch)
       continue

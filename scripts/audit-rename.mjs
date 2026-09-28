@@ -17,7 +17,10 @@ for (const path of files) {
 }
 writeFileSync('docs/rename/RESIDUAL.json', JSON.stringify({
   base: '94b6dd6d3746e14cc0bf26e7fbd4a8fce1837f7e',
-  head: 'manager-owned final commit pending',
+  head: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+  integrationTarget: execFileSync('git', ['rev-parse', 'candidate'], { encoding: 'utf8' }).trim(),
+  mergeBase: execFileSync('git', ['merge-base', 'HEAD', 'candidate'], { encoding: 'utf8' }).trim(),
+  scanState: 'Working-tree contents based on head; occurrence line numbers include local review corrections.',
   scope: 'Tracked and nonignored implementation files. This audit script and rename evidence documents contain historical names by definition.',
   paths: files.filter(path => /praxis/i.test(path)),
   occurrences: residual

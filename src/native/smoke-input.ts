@@ -18,14 +18,7 @@ export async function checkSelectionInput(host: NativeBridge): Promise<void> {
     })()`)
     throw new Error(`Preview input timed out: ${code}; ${JSON.stringify(state)}`)
   }
-  let ready: any
-  for (let i = 0; i < 100; i++) {
-    ready = await host.request('previewInput', { prepare: true })
-    if (ready.active && ready.key && ready.focused && ready.visible) break
-    await new Promise(resolve => setTimeout(resolve, 50))
-  }
-  if (!ready?.active || !ready.key || !ready.focused || !ready.visible)
-    throw new Error(`Native preview input could not acquire the foreground window: ${JSON.stringify(ready)}`)
+  await preparePreviewInput(host)
   await wait(`document.hasFocus()`)
   await wait(`document.documentElement.style.cursor === 'crosshair'`)
   await evaluate('window.previewInputs = []')
@@ -68,4 +61,16 @@ export async function checkSelectionInput(host: NativeBridge): Promise<void> {
   await host.request('previewInput', { key: 'Enter' })
   await wait(`!document.querySelector('#native-title').isContentEditable`)
   console.log('Native selection blocks page input; inline caret movement and normal interaction passed.')
+}
+
+/** Restore the main test window after auxiliary windows before paint/input checks. */
+export async function preparePreviewInput(host: NativeBridge): Promise<void> {
+  let ready: any
+  for (let i = 0; i < 100; i++) {
+    ready = await host.request('previewInput', { prepare: true })
+    if (ready.active && ready.key && ready.focused && ready.visible) break
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+  if (!ready?.active || !ready.key || !ready.focused || !ready.visible)
+    throw new Error(`Native preview input could not acquire the foreground window: ${JSON.stringify(ready)}`)
 }

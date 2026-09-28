@@ -9,7 +9,7 @@ import { nativeChat } from './chat-runtime'
 import { checkProjectSwitching } from './smoke-projects'
 import { checkNativeSheets } from './smoke-sheets'
 import { checkNativeChat } from './smoke-chat'
-import { checkSelectionInput } from './smoke-input'
+import { checkSelectionInput, preparePreviewInput } from './smoke-input'
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve,ms))
 export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, root: string) {
   const invoke = (channel: string, ...args: any[]) => dispatchIPC('main',{type:'invoke',channel,args})
@@ -113,6 +113,7 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   await checkProjectSwitching(host, fixture, artifacts)
   assert.equal((await host.request('composerInspect')).readyBeam, false, 'Returning to a ready chat replayed its beam')
   await checkNativeSheets(host,nativeWorkspace.state.activeKey!,artifacts)
+  if (process.env.TREZI_NATIVE_BACKGROUND_TEST !== '1') await preparePreviewInput(host)
   await geometry('sheets')
   const shell=await inspect('shellInspect',s=>s.enabled.code)
   assert.equal(shell.outlineRows,shell.rows.filter((r:any)=>r.kind==='project').length)

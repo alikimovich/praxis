@@ -5,6 +5,9 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Trezi rename (LKM-85, 2026-09-27)
 
+- [x] Reproduce capped-to-wrapped composer sizing failure without a window; fix lazy TextKit sizing and add regression coverage.
+- [ ] Manager: rerun native desktop verification after the composer sizing correction.
+
 - [x] Audit the native baseline, rename owned surfaces and document residual aliases.
 - [x] Preserve profiles, sessions, Git paths and project data with tested compatibility handling.
 - [x] Supply migration/rollback guidance and independent LKM-84 reconciliation mapping.
@@ -14,6 +17,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Repair navigation/style-selection smoke races and reject premature test-host exit.
 - [x] Manager: commit and pass full/native typechecks, all 101 unit tests and real native smoke verification.
 - [ ] Independent review and verification of integration with candidate.
+- [x] Repair reviewed legacy chat recovery and HTML stamp preservation; pin implementation/candidate coordination references.
 
 ## Swift backend architecture audit (LKM-84, 2026-09-27)
 

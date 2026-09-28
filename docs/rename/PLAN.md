@@ -1,7 +1,8 @@
 # Trezi rename plan (LKM-85)
 
 Base: `94b6dd6d3746e14cc0bf26e7fbd4a8fce1837f7e` (native candidate).
-Head: manager-owned final commit; this worker does not stage or commit.
+Implemented through `567e69642a8c132d4ce5720afb3501d4332af764`; pinned integration
+references and review corrections are described in [COORDINATION.md](COORDINATION.md).
 
 1. Inventory tracked text and paths; preserve the source-linked baseline in
    [BASELINE.json](BASELINE.json). Inspect ignored output names only, never secrets.

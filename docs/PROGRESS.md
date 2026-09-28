@@ -2,6 +2,32 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Diagnose capped-to-wrapped composer verification failure
+
+Reproduce the manager's soft-wrap assertion in a windowless AppKit fixture using
+production NativeComposer. Text replacement invalidates TextKit lazily: the
+composer frame shrinks before the document releases its previous capped height.
+Resolve nonempty text sizing during layout, retaining the existing empty-field
+handling and all desktop smoke assertions. Add a registered non-GUI regression
+for capped-to-short replacements, multiple widths, empty text and trailing newlines.
+The reproduction fails before the fix and passes afterward. Manager retains the
+shared-desktop suite and acceptance; no GUI suite or configured verification loop
+was run in this diagnostic follow-up. See rename/VERIFICATION.md.
+
+## 2026-09-27 — Preserve legacy recovery and template source mappings
+
+Independent review found that reclaimed praxis/chat branches lost their recovery
+records and serve-time HTML stamping shadowed existing data-praxis-source mappings.
+Add real Git crash fixtures for dirty and clean-unmerged legacy/current branches,
+including repeat recovery, and template-stamp preservation/idempotence fixtures.
+Both regressions fail before the fixes and pass after accepting both legacy names.
+
+Pin rename implementation 567e696 and candidate/merge-base c4b1aad in the coordination
+map and residual generator. Candidate already includes the LKM-84 audit; its seven
+Swift backend documents match the implementation head exactly. No backend changes
+or other-worktree edits. Focused checks are recorded in rename/VERIFICATION.md;
+manager retains full-suite and desktop verification ownership.
+
 ## 2026-09-27 — Repair native verification handoffs for LKM-85
 
 Restore the actual original preview document after the History API reload check,

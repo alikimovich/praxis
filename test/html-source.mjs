@@ -40,6 +40,17 @@ assert.equal(unstamped, HTML, 'stamping only inserts attributes, nothing else')
 // Idempotent — stamping already-stamped HTML adds nothing.
 assert.equal(await stampHtml(stamped, 'index.html'), stamped, 'stamping is idempotent')
 
+// Template instrumentation knows the original source, unlike the served HTML.
+for (const attribute of ['data-praxis-source', 'data-trezi-source']) {
+  const template = `<h1 ${attribute}="templates/title.html:42:7">Hello</h1>`
+  assert.equal(await stampHtml(template, 'index.html'), template, `${attribute} mapping preserved`)
+  const nested = `<section ${attribute}="templates/card.html:12:3"><strong>Hi</strong></section>`
+  const result = await stampHtml(nested, 'index.html')
+  assert.ok(result.startsWith(`<section ${attribute}="templates/card.html:12:3">`))
+  assert.ok(result.includes('<strong data-trezi-source="index.html:'))
+  assert.equal(await stampHtml(result, 'index.html'), result)
+}
+
 // --- spliceHtmlText (via a real stamp) --------------------------------------
 
 // Pull the <h1>'s stamp coordinates out of the stamped HTML and edit its text.

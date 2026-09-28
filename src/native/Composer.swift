@@ -178,6 +178,12 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         readyBeam.frame = content.convert(content.bounds, to: self).insetBy(dx: -8, dy: -8)
         buttonBeam.frame = sendButton.convert(sendButton.bounds, to: self).insetBy(dx: -8, dy: -8)
         layoutSkills()
+        // String replacement invalidates TextKit lazily. Resolve it at the new
+        // viewport size so a shorter draft cannot retain the capped document's
+        // height until the next paint (and show a spurious scrollbar).
+        if !text.string.isEmpty && scroll.contentSize.width > 0 {
+            text.sizeToFit()
+        }
         // An empty document must not retain its initial 70pt height in a shorter field.
         if text.string.isEmpty && scroll.contentSize.height > 0 && text.frame.size != scroll.contentSize {
             text.setFrameSize(scroll.contentSize)

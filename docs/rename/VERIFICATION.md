@@ -1,4 +1,27 @@
-# Current recovery verification — 2026-09-27
+# Independent-review corrections — 2026-09-27
+
+Based on implementation `567e69642a8c132d4ce5720afb3501d4332af764` and candidate
+`c4b1aad8f7086a5f92d6f776b7b6273b792bf348`. New regression fixtures reproduced
+the missing legacy recovery record and the shadowed legacy template mapping before
+the fixes. After the fixes:
+
+- `bun test/chat-recovery.mjs`: passes real Git dirty and clean-unmerged recovery
+  for both branch prefixes, preserved branch contents/owning repo and repeat recovery.
+- `bun test/html-source.mjs`: passes legacy/current template mapping preservation,
+  nested canonical stamping and repeated stamping alongside existing splice tests.
+- `bun run typecheck` and `bun run typecheck:native`: pass.
+- `bun test/rename-compat.mjs`, `bun test/chat-worktrees.mjs` and
+  `bun test/docs-links.mjs`: pass.
+- `bun scripts/audit-rename.mjs` and `git diff --check`: pass. The residual report
+  records concrete commit references and explicitly identifies its working-tree scan.
+- Pinned candidate-to-head diff of `docs/SWIFT-BACKEND-*.md`: empty; LKM-84 snapshots
+  are preserved. Coordination now documents the actual target and integration order.
+
+No configured manager command, native GUI/smoke suite or provider calls were run
+for these corrections. The earlier manager result below predates this follow-up;
+the manager owns staging, commits and final integration verification.
+
+# Previous recovery verification — 2026-09-27
 
 Native smoke now reaches NATIVE ISLANDS PASS and NATIVE CORE PASS after fixing
 the document-restoration and synthetic style-selection races. Real keyboard and
@@ -111,3 +134,37 @@ interruption checks do not represent a power-loss/fsync durability guarantee.
 Manager follow-up: stage the complete new files, rerun docs-links, supply the final
 head hash in the coordination report, and rerun blocked native/MCP/network checks
 in an unrestricted environment before acceptance.
+
+## Diagnostic escalation — composer sizing (2026-09-27)
+
+The latest manager run passed 102 unit checks and reached NATIVE ISLANDS PASS,
+then failed `Soft-wrapped draft fits before reaching the cap`. Earlier success
+records above do not establish acceptance of this latest state. Prior attempt
+artifact directories inspected here contain result-schema files; the supplied
+manager log and local test artifacts provide the failure evidence.
+
+A windowless fixture compiling the production composer reproduced the same
+assertion before editing. After a painted 80-line draft is replaced, TextKit
+invalidates layout but leaves the document's old height until sizing/paint.
+The measured wrapped draft requires 76pt; the capped draft document is 1368pt.
+`NativeComposer.layout()` now calls `sizeToFit()` for nonempty text at the current
+viewport size. The reproducer then reports a 76pt document in a 76pt viewport.
+This fixes document geometry instead of delaying or relaxing the smoke assertion.
+
+`test/native-composer-layout.mjs` compiles production Swift and runs without an
+NSApplication, window, event loop or desktop input. It covers long-to-wrapped and
+long-to-short replacement, three widths, empty drafts, trailing caret lines and
+capped overflow. It is registered in the unit tier; non-macOS runs explicitly SKIP.
+Full desktop smoke verification remains required under the manager's desktop lock.
+
+Focused verification for this correction:
+
+- The checked-in windowless regression compiled against a temporary copy of the
+  pre-fix composer exits 1: replacement document 1369pt, viewport 76pt at width 420.
+  The same regression passes against the fixed production composer.
+- `bun run typecheck`, `bun run typecheck:native`, `bun run build:native`: pass.
+- `bun test/native-composer-layout.mjs`, `bun test/native-chat-controller.mjs`,
+  `bun test/test-runner.mjs`, `bun test/rename-compat.mjs`,
+  `bun test/docs-links.mjs`, `git diff --check`: pass.
+- Configured manager verification and native GUI/smoke suites were not run.
+  Existing manager-staged changes were preserved; this correction is unstaged.

@@ -1,7 +1,9 @@
 # Native rename occurrence audit (LKM-85)
 
 Base commit: `94b6dd6d3746e14cc0bf26e7fbd4a8fce1837f7e`.
-Head: manager-owned commit pending; all implementation is left in this worktree.
+Committed implementation head: `567e69642a8c132d4ce5720afb3501d4332af764`.
+Integration target and merge base: `c4b1aad8f7086a5f92d6f776b7b6273b792bf348`.
+The residual scan includes working-tree review corrections atop this head.
 This audit replaces the earlier Electron-baseline audit; no parent or parallel
 worktree was read or modified.
 
@@ -10,7 +12,8 @@ case variants and planned disposition. It includes package and lock metadata,
 binaries, Swift/TypeScript names, assets/configuration, all environment variables,
 preview events and stamps, provider tools, branch names, scripts, fixtures and
 current/historical documentation. Source links resolve at the stated base commit;
-line numbers in [RESIDUAL.json](RESIDUAL.json) resolve in the implementation head.
+line numbers in [RESIDUAL.json](RESIDUAL.json) resolve in the scanned working tree.
+The scanner records its concrete HEAD, candidate and merge-base references.
 Renamed path mappings are in [COORDINATION.md](COORDINATION.md).
 
 [PLAN.md](PLAN.md) describes the implementation stages. The manager owns staging
