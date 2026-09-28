@@ -38,6 +38,11 @@ pixels, bounded to three attempts. Non-GUI race regressions pass; unchanged Swif
 guards and PNG/OCR checks still require manager desktop verification. S01 remains
 for review, with no writer transfer or migration acceptance.
 
+2026-09-28 tracking repair: candidate and S01 task sections are preserved in a
+conflict-free three-way TASKS resolution. Implementation is unchanged; manager
+desktop verification, independent review and tested candidate integration remain
+pending. No candidate merge commit is claimed by this worker.
+
 ## End-state architecture
 
 | Layer | Responsibility |

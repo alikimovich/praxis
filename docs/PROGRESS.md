@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Reconcile candidate task tracking (LKM-88)
+
+Reproduce the TASKS conflict using read-only Git blobs from common base
+`927b6db`, candidate `771ce3d` and worker `086cab2`. Both branches inserted
+tracking at the same position. Preserve the candidate Apple Intelligence section
+verbatim and move the intact S01 section below Composer tracking, making the
+three-way file merge clean. Existing implementation and task checkboxes remain
+unchanged; the candidate-owned exploration link resolves on candidate integration.
+
+Check preservation of both input documents, absence of conflict markers, and
+three-way merge output equality with the resolved file. Desktop verification,
+independent review and candidate merge remain manager-owned and pending; this
+worker has not created a candidate merge commit or changed Git metadata.
+
 ## 2026-09-28 — Recover capture-time foreground loss (LKM-88 escalation)
 
 Inspect all four prior artifact logs: the earlier esbuild cleanup failure is

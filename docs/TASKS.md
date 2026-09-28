@@ -3,16 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
-## Swift migration contracts (LKM-88 / S01)
+## Local Apple Intelligence exploration (2026-09-28)
 
-- [x] Add shared versioned Swift/TypeScript DTOs, strict codecs and cross-language golden fixtures without changing a writer.
-- [x] Verify Unicode/null/absence, malformed and bounded payloads, versions, scopes, revisions and operation-versus-request identity.
-- [x] Reconcile separate-service/XPC/supervision/durable-intent requirements and map every audited module/route/event to the 15-step roadmap.
-- [x] Run focused Foundation-only fixture checks, TypeScript/native typechecks and docs links.
-- [x] Reproduce manager cleanup failure and stop the fixture-owned esbuild service; pass the real focused unit runner without weakening assertions or cleanup.
-- [x] Gate Shadow Light capture on bounded foreground readiness; verify delayed/failing activation and capture errors without GUI, preserving visible-capture guards.
-- [x] Reproduce capture-time foreground loss; bound fresh-capture reacquisition and retain strict foreground guards and unrelated error propagation.
-- [ ] Manager: run configured verification, independent review and candidate integration; no GUI suite was run by this worker.
+- [x] Audit suitable Trezi workflows and Apple APIs; rank opportunities and propose a bounded first experiment in [the exploration](APPLE-INTELLIGENCE.md).
+- [ ] If selected for implementation, benchmark optional local chat titles before expanding to copy drafts and prepared-control selection.
 
 ## Composer container (LKM-87)
 
@@ -22,6 +16,18 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Add foreground composer PNG/OCR capture and native attachment/model/Auto/typing/submission verification to the manager suite.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
+
+## Swift migration contracts (LKM-88 / S01)
+
+- [x] Add shared versioned Swift/TypeScript DTOs, strict codecs and cross-language golden fixtures without changing a writer.
+- [x] Verify Unicode/null/absence, malformed and bounded payloads, versions, scopes, revisions and operation-versus-request identity.
+- [x] Reconcile separate-service/XPC/supervision/durable-intent requirements and map every audited module/route/event to the 15-step roadmap.
+- [x] Run focused Foundation-only fixture checks, TypeScript/native typechecks and docs links.
+- [x] Reproduce manager cleanup failure and stop the fixture-owned esbuild service; pass the real focused unit runner without weakening assertions or cleanup.
+- [x] Gate Shadow Light capture on bounded foreground readiness; verify delayed/failing activation and capture errors without GUI, preserving visible-capture guards.
+- [x] Reproduce capture-time foreground loss; bound fresh-capture reacquisition and retain strict foreground guards and unrelated error propagation.
+- [x] Reconcile candidate Apple Intelligence tracking with S01 tracking; verify a conflict-free three-way TASKS merge without changing Git metadata.
+- [ ] Manager: run configured verification, independent review and candidate integration; no GUI suite was run by this worker.
 
 ## Shadow Light (LKM-86)
 
