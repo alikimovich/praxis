@@ -11,6 +11,51 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
+2026-09-28, LKM-88 (step S01): shared contract/fixture implementation and exhaustive
+census ownership mapping are implemented for review. The 92-case cross-language
+fixture suite, TypeScript/native typechecks and docs-link check pass. Manager
+verification, independent review and acceptance remain required. No domain writer has moved. The separate
+Swift service/XPC, Swift supervision and durable intent prerequisites remain
+mandatory. See the [15-step roadmap](SWIFT-BACKEND-ROADMAP.md) for task boundaries,
+future owners and rollback gates, and the [executable wire contract](SWIFT-BACKEND-WIRE.md)
+for the implemented subset. Audit host-local/pipe-first/in-memory staging
+is superseded for implementation and does not relax this plan.
+
+2026-09-28 verification repair: the fixture now stops its esbuild service after
+bundling. The focused unit runner passes all 92 cases and process-group cleanup;
+manager's full verification and review remain pending. No ownership boundary changed.
+
+2026-09-28 manager follow-up: all 108 unit checks and typechecks passed; desktop
+verification stopped at Shadow Light foreground capture. Its fixture now awaits
+bounded main-window readiness before capture, with a passing non-GUI regression.
+Manager must rerun desktop verification and inspect the captures; migration
+acceptance and all writer transfers remain pending.
+
+2026-09-28 escalation: the latest manager run passes 109 unit checks but loses
+foreground during asynchronous capture, after readiness succeeds. The smoke
+helper now retries only explicit foreground rejections with fresh activation and
+pixels, bounded to three attempts. Non-GUI race regressions pass; unchanged Swift
+guards and PNG/OCR checks still require manager desktop verification. S01 remains
+for review, with no writer transfer or migration acceptance.
+
+2026-09-28 tracking repair: candidate and S01 task sections are preserved in a
+conflict-free three-way TASKS resolution. Implementation is unchanged; manager
+desktop verification, independent review and tested candidate integration remain
+pending. No candidate merge commit is claimed by this worker.
+
+2026-09-28 independent-review repair: manager reports 109 unit checks and native
+integration passed on the prior revision. Fix the two subsequent contract findings:
+structured service/method authorization prevents dotted-name collisions, and Swift
+encoding leaves slashes unescaped. All 100 cross-language cases and both typecheck
+tiers pass. This revision awaits manager verification and independent re-review;
+no domain writer has moved and S01 acceptance remains pending.
+
+2026-09-28 encoder review repair: validate original TypeScript values before
+serialization so NaN and either infinity cannot silently become null. Nine
+encoder rejection cases, fifteen valid numeric/null controls, the 100-case
+cross-language suite and both typecheck tiers pass. This revision still requires
+manager verification and independent re-review; ownership remains unchanged.
+
 ## End-state architecture
 
 | Layer | Responsibility |

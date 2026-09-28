@@ -17,6 +17,20 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
 
+## Swift migration contracts (LKM-88 / S01)
+
+- [x] Add shared versioned Swift/TypeScript DTOs, strict codecs and cross-language golden fixtures without changing a writer.
+- [x] Verify Unicode/null/absence, malformed and bounded payloads, versions, scopes, revisions and operation-versus-request identity.
+- [x] Reconcile separate-service/XPC/supervision/durable-intent requirements and map every audited module/route/event to the 15-step roadmap.
+- [x] Run focused Foundation-only fixture checks, TypeScript/native typechecks and docs links.
+- [x] Reproduce manager cleanup failure and stop the fixture-owned esbuild service; pass the real focused unit runner without weakening assertions or cleanup.
+- [x] Gate Shadow Light capture on bounded foreground readiness; verify delayed/failing activation and capture errors without GUI, preserving visible-capture guards.
+- [x] Reproduce capture-time foreground loss; bound fresh-capture reacquisition and retain strict foreground guards and unrelated error propagation.
+- [x] Reconcile candidate Apple Intelligence tracking with S01 tracking; verify a conflict-free three-way TASKS merge without changing Git metadata.
+- [x] Fix reviewed method-authorization collisions with structured pairs and align Swift slash escaping; pass 100 cross-language cases.
+- [x] Reject non-finite TypeScript values before serialization; verify nine direct/nested rejection cases and fifteen valid numeric/null controls.
+- [ ] Manager: rerun verification and independent review after contract fixes, then candidate integration; prior revision passed 109 unit checks and native integration per review feedback.
+
 ## Shadow Light (LKM-86)
 
 - [x] Add bounded Shadow Light generation and a native compound chat-island panel.

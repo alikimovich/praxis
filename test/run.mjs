@@ -13,6 +13,8 @@ const ROOT = dirname(TEST_DIR);
 
 // Backend logic checks run independently of the native desktop.
 const UNIT = [
+  "service-contract",
+  "native-visible-capture",
   "rename-compat",
   "source-stamp",
   "native-boundary",
