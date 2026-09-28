@@ -2,6 +2,25 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Experimental Gen UI and Svelte composition (LKM-106)
+
+Rename the native setting, add wrapping help text and conditionally show the
+explained layout method without clearing its saved choice. Preserve default-off,
+autosave and next-message/queued turn settings.
+
+Add bounded compiler-backed Svelte discovery for literal legacy/rune props,
+default slots and zero-argument children snippets. Both Chat model and Jev export
+real `.svelte` imports/source, retain React TSX, reject mixed frameworks and
+unsupported contracts, and keep json-render out of target runtime dependencies.
+Guard output symlinks and reject late results across cancellation or same-engine
+turn replacement. Update both provider tool descriptions and scope documentation.
+
+Focused React/Svelte SSR, deterministic Jev, settings and queue tests pass, as do
+TypeScript/native and non-GUI Swift typechecks. The Svelte fixture compiles and
+renders integrated generated source without paid calls. Native foreground
+readability/interaction checks and the configured verification remain manager-owned;
+no GUI suite, provider calls, staging or commits were performed by this worker.
+
 ## 2026-09-28 — Local Apple Intelligence exploration
 
 Audit auxiliary provider calls, native text/content editing, control selection

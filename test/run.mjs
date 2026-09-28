@@ -42,6 +42,7 @@ const UNIT = [
   "native-cat-assets",
   "content-controls",
   "project-ui",
+  "project-ui-svelte",
   "project-ui-jev",
   "jev-pilot",
   "test-runner",

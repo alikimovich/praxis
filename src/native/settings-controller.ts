@@ -18,8 +18,8 @@ export class NativeSettingsController {
       title: 'Settings', detail: 'Changes save automatically. The default model applies to new chats; UI generation options apply to your next message.',
       fields: [
         { id: 'default', label: 'Default model', kind: 'choice', value: preferredSelectValue(preferred), choices: [{ value: 'last-used', label: 'Use last selected model' }, ...choices.map(c => ({ value: c.value, label: c.group + ' · ' + c.label }))] },
-        { id: 'projectUi', label: 'Build UI from project components', kind: 'choice', value: this.preferences.get('trezi:project-ui:v1') ?? 'false', choices: [{ value: 'false', label: 'Off' }, { value: 'true', label: 'On' }] },
-        { id: 'engine', label: 'UI layout method', kind: 'choice', value: this.preferences.get('trezi:project-ui-engine:v1') ?? 'agent', choices: [{ value: 'agent', label: 'Chat model' }, { value: 'jev', label: 'Jev layout engine' }] }
+        { id: 'projectUi', label: 'Experimental Gen UI', help: 'Generate UI using your project’s existing components and styles. Experimental; supports React and Svelte.', kind: 'choice', value: this.preferences.get('trezi:project-ui:v1') ?? 'false', choices: [{ value: 'false', label: 'Off' }, { value: 'true', label: 'On' }] },
+        { id: 'engine', label: 'UI layout method', help: 'Chat model uses your selected chat model to arrange components. Jev uses a separate layout model and requires an AI Gateway API key.', visibleWhen: { field: 'projectUi', value: 'true' }, kind: 'choice', value: this.preferences.get('trezi:project-ui-engine:v1') ?? 'agent', choices: [{ value: 'agent', label: 'Chat model' }, { value: 'jev', label: 'Jev layout engine' }] }
       ],
       autosave: true, actions: [{ id: 'connections', label: 'AI providers…' }]
     }, async action => {

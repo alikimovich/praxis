@@ -3,6 +3,14 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Experimental Gen UI (LKM-106)
+
+- [x] Rename settings, explain React/Svelte composition and conditionally show the explained engine while preserving saved choices.
+- [x] Discover the documented Svelte legacy/rune subset and export validated `.svelte` source through both engines; preserve React export.
+- [x] Add deterministic rendering/Jev, unsupported-shape, mixed-framework, escaping/path, stale/cancellation and turn-capture checks.
+- [x] Document supported contracts and run focused non-GUI checks.
+- [ ] Manager: run configured verification and inspect native Settings help/conditional engine at minimum and wider widths under the desktop lock; complete independent review.
+
 ## Local Apple Intelligence exploration (2026-09-28)
 
 - [x] Audit suitable Trezi workflows and Apple APIs; rank opportunities and propose a bounded first experiment in [the exploration](APPLE-INTELLIGENCE.md).

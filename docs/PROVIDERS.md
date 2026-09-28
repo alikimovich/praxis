@@ -201,7 +201,8 @@ retain their existing landing policy.
 
 Claude and Codex expose the read-only `project_ui_catalog` and `compose_project_ui`
 tools. Main enables them per chat only when a submitted message explicitly opts
-in through Settings → Use project components. Gemini receives a limitation notice.
+in through Settings → Experimental Gen UI. Catalog/export supports React and the
+documented Svelte subset; each output tree uses one framework. Gemini receives a limitation notice.
 The tools use the current worktree and return source for ordinary edits and landing;
 see [PROJECT_UI.md](PROJECT_UI.md). Settings can select the current chat model or
 Jev as the composition engine. With Jev, Claude/Codex prepares candidate props and

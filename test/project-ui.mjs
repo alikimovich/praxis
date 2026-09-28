@@ -5,6 +5,7 @@ import { discoverProjectUi } from '../src/main/project-ui-catalog.ts'
 import { exportProjectUi, runProjectUiTool, setProjectUiEnabled, projectUiInstructions } from '../src/main/project-ui.ts'
 import { renderToStaticMarkup } from 'react-dom/server'
 import React from 'react'
+import { composeProjectUiWithJev } from '../src/main/project-ui-jev.ts'
 
 await mkdir('test/artifacts', { recursive: true })
 const root = await mkdtemp(join(process.cwd(), 'test/artifacts/project-ui-'))
@@ -41,6 +42,22 @@ export default function Button({ label, disabled = false }: { label: string; dis
   assert.match(html, /class="project-button"/)
   assert.match(html, /&lt;script&gt; &amp; copy/)
   assert.match(html, /A &quot;quote&quot; &amp; \{brace\}/)
+  const jev = await composeProjectUiWithJev(catalog, {
+    file: 'JevPage.tsx', prompt: 'Welcome card', candidates: [
+      { id: 'card', description: 'Container', element: { type: 'Card', props: { title: 'Jev welcome' } } },
+      { id: 'text', description: 'Copy', element: { type: 'Text', props: { text: '<literal> & copy' } }, root: false }
+    ]
+  }, { evaluate: async ({ questions }) => ({ answers: Object.fromEntries(
+    Object.entries(questions).map(([key, q]) => [key, { type: 'choice', choice: key === 'root' ? 'card' : Object.keys(q.criteria).find(k => k.startsWith('use:')) }])
+  ) }) })
+  assert.equal(jev.stopReason, 'finish')
+  assert.doesNotMatch(jev.code, /json-render/)
+  await writeFile(join(root, jev.file), jev.code)
+  const { default: JevPage } = await import(join(root, jev.file))
+  const jevHtml = renderToStaticMarkup(React.createElement(JevPage))
+  assert.match(jevHtml, /class="project-card quiet"/)
+  assert.match(jevHtml, /Jev welcome/)
+  assert.match(jevHtml, /&lt;literal&gt; &amp; copy/)
   const bad = async (mutate, pattern) => {
     const next = structuredClone(spec); mutate(next)
     await assert.rejects(exportProjectUi(catalog, { file: 'Page.tsx', spec: next }), pattern)
