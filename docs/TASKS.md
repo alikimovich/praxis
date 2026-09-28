@@ -8,6 +8,14 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Audit suitable Trezi workflows and Apple APIs; rank opportunities and propose a bounded first experiment in [the exploration](APPLE-INTELLIGENCE.md).
 - [ ] If selected for implementation, benchmark optional local chat titles before expanding to copy drafts and prepared-control selection.
 
+## Composer bottom row (LKM-104)
+
+- [x] Align attachment, provider/model, Auto and Send in one centered bottom row; retain text above and selector compression.
+- [x] Check windowless normal/narrow empty/multiline/capped layout and rejected raised Send; run focused controller and TypeScript checks.
+- [x] Repair smoke draft inputs for the additional text space; preserve growth assertions and verify the smoke sequence against actual windowless AppKit viewports.
+- [x] Reproduce and repair capped-to-wrapped overflow with legacy scroller gutters; test fresh bridge updates with both scroller styles and preserve desktop fit diagnostics.
+- [ ] Manager: reconcile LKM-103 equal exterior bottom/side inset and subdued scrollbar; verify foreground normal/narrow empty/multiline captures, interactions and latest-message reachability; complete independent review.
+
 ## Composer container (LKM-87)
 
 - [x] Place attachment/provider/model/Auto controls inside the rounded input surface, preserving alignment and handlers.

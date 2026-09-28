@@ -45,18 +45,18 @@ extension NativeComposer {
             guard let hit = hitTest(point) else { return false }
             return hit === view || hit.isDescendant(of: view)
         }
-        let ordered: [NSView] = [plus] + ["Provider", "Model", "Permission mode"].compactMap { pickers[$0] }
+        let ordered: [NSView] = [plus] + ["Provider", "Model", "Permission mode"].compactMap { pickers[$0] } + [sendButton]
         let aligned = ordered.map { view in
             view.superview!.convert(view.alignmentRect(forFrame: view.frame), to: self)
         }
         let gaps = zip(aligned, aligned.dropFirst()).map { $1.minX - $0.maxX }
-        let geometry = zip(["attachment", "provider", "model", "permission"], ordered).map { name, view in
+        let geometry = zip(["attachment", "provider", "model", "permission", "send"], ordered).map { name, view in
             ["control": name, "frame": NSStringFromRect(rect(view)),
              "alignmentRect": NSStringFromRect(view.superview!.convert(view.alignmentRect(forFrame: view.frame), to: self))]
         }
-        return ["contained": controls.superview === content && bubble.contains(row) && bubble.contains(rect(scroll)),
+        return ["contained": controls.superview === content && bubble.contains(row) && bubble.contains(rect(scroll)) && aligned.allSatisfy { bubble.contains($0) } && rect(scroll).minY >= row.maxY,
                 "bottomInset": row.minY - bubble.minY, "hitTargets": hitTargets,
-                "alignment": aligned.count == 4 && aligned.allSatisfy { $0.width > 0 && $0.height > 0 } && gaps.allSatisfy { $0 >= controls.spacing - 0.01 },
+                "alignment": aligned.count == 5 && aligned.allSatisfy { $0.width > 0 && $0.height > 0 } && gaps.allSatisfy { $0 >= controls.spacing - 0.01 } && aligned.allSatisfy { abs($0.midY - row.midY) < 0.01 },
                 "controlGeometry": geometry, "alignmentGaps": gaps,
                 "labels": ["Provider", "Model", "Permission mode"].compactMap { pickers[$0]?.titleOfSelectedItem }]
     }

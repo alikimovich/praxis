@@ -2,6 +2,70 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Measure wrapped drafts with native scrollbar geometry (LKM-104 feedback)
+
+Reproduce an uncapped wrapping overflow through the real composer update path
+without opening a window: after a capped draft, a legacy scrollbar retains a
+17pt gutter, producing a 144pt document in a 127pt viewport at 420pt width.
+Measure the draft with AppKit's content-size API and the actual scroller style;
+settle the scroll subtree before TextKit sizing so viewport/minimum-size changes
+precede document fitting. Preserve scrollbar styling, row layout and fit checks.
+
+Replace the older manually assigned test viewport with actual Auto Layout.
+Add fresh bridge-update sequences at 320/420/520pt for overlay and legacy
+scrollers, including IME marking/unmarking, the preceding capped paint and
+empty reset. The new regression failed before the repair and now passes.
+Report actual clip viewport dimensions, scroller style and text minimum height
+in composer inspection; retain these in the desktop fit assertion's failure.
+
+Candidate remains 771ce3d and contains no equivalent repair. Focused windowless
+AppKit, composer controller, TypeScript/native, docs-link and whitespace checks
+pass. The manager failure did not log its viewport/scroller dimensions, so the
+reproduced legacy-scroller cause still needs confirmation by the desktop rerun.
+Foreground captures and LKM-103 integration remain manager-owned; this worker
+ran no GUI suites or configured manager verification command.
+
+## 2026-09-28 — Repair composer growth smoke fixtures (LKM-104 feedback)
+
+Trace the manager's bundled failure at index.cjs:19816 to the smoke fixture's
+requirement that six draft lines grow the form by more than 60 points. The
+same-row layout gives the minimum-height form more text space, so that fixture
+no longer exercises the asserted growth. Keep the growth assertion and use
+nine lines; lengthen the soft-wrap fixture to exercise growth at wider widths.
+No product layout or behavior changes were needed in this feedback pass.
+
+Mirror the smoke draft sequence in windowless AppKit checks at 320/420/520pt,
+using actual Auto Layout viewports. Require >60pt growth, a further capped
+increase, uncapped soft-wrap growth, fitting short documents and scrollable
+capped content. All pass: compact/grown/capped heights are 128/235/368pt;
+wrapped heights are 235/184/167pt respectively. TypeScript/native checks,
+composer controller, docs links and diff whitespace checks pass.
+
+Compared candidate 771ce3d: no equivalent smoke fixture repair is present.
+Manager must rerun desktop verification and inspect foreground captures, then
+reconcile LKM-103 as previously noted. No GUI suite or configured manager
+verification command was run by this worker.
+
+## 2026-09-28 — Composer Send shares the bottom row (LKM-104)
+
+Move Send into the attachment/provider/model/permission stack, centered on the
+same horizontal row with Send at the far right and text above. Retain selector
+compression/minimum widths, native controls and action handlers; account for the
+removed raised-button space in draft height measurement. Keep the existing
+minimum/capped form heights and exterior layout/scrollbar treatment unchanged.
+
+Include Send in foreground verification geometry and require every control to
+share the row center. Windowless AppKit checks pass at 240/320/420/520 points for
+empty, multiline and capped drafts, including deliberate overlap/raised-Send
+rejection. Bun TypeScript/native checks, composer controller and docs links pass.
+
+Inspected local candidate 771ce3d before editing: it matches this worktree base;
+LKM-103 is absent from its task notes and composer/chat changes. Manager must
+reconcile LKM-103 exterior equal insets and quieter scrollbar, then capture
+normal/narrow empty/multiline states and verify interactions, latest-message
+reachability and absence of gradients under the desktop lock. No GUI suite,
+configured manager verification, staging or commit was performed by this worker.
+
 ## 2026-09-28 — Local Apple Intelligence exploration
 
 Audit auxiliary provider calls, native text/content editing, control selection
