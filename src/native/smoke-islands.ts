@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { checkShadowIsland } from './smoke-shadow-island'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { NativeBridge } from './bridge'
@@ -57,6 +58,9 @@ document.body.append(card);
     await wait(() => readFileSync(file, 'utf8') === code)
     writeFileSync(join(artifacts, 'chat-island.png'), Buffer.from(await host.request('captureShell'), 'base64'))
     assert.deepEqual(await host.request('webViews'), ['preview'])
+    session.records = records
+    await nativeIslands.refresh(chat.chat)
+    await checkShadowIsland(host, fixture, artifacts)
     console.log('NATIVE ISLANDS PASS — Swift rendering, typed point action, source batch/Undo and landing gate; no live model calls.')
   } finally {
     writeFileSync(indexFile, originalIndex)

@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Shadow Light review corrections (LKM-86)
+
+Fix direct JSX attribute writes by identifying attribute literals with the Babel
+parser, reading their decoded values and emitting entity-escaped quoted text.
+JavaScript expression strings retain JS quoting. Apply the same quoting fix to
+the Styles Tailwind path. Regression tests parse edited JSX and preserve quoted
+content utilities, backslashes and ampersands through repeated edits and Undo.
+
+Add a dedicated native Shadow Light fixture after the existing point/group smoke
+coverage. It defines the actual shadow block, checks all six controls against
+computed WebKit box-shadow, waits for Swift to receive each source revision, and
+checks Undo restores both source and preview. It captures shadow-light-initial,
+-adjusted and -restored PNGs for comparison with the approved mockup. Worker ran
+focused Bun tests, TypeScript checks and Swift syntax parsing only; the manager
+must run desktop verification and inspect these new captures under its lock.
+
 ## 2026-09-27 — Shadow Light chat island (LKM-86)
 
 Add a native Shadow Light compound block through the current `chat_island`

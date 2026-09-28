@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { parse } from '@babel/parser'
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,6 +12,12 @@ import { undo } from '../src/main/edit-history.ts'
 
 const initial = { x: .72, y: -.28, distance: 12, blur: 24, layers: 3, decay: .6, color: 'rgba(0, 0, 0, 0.35)' }
 const css = shadowLight(initial).css
+const jsxClass = code => {
+  const ast = parse(code, { sourceType: 'module', plugins: ['jsx', 'typescript'] })
+  const element = ast.program.body.find(n => n.type === 'ExportNamedDeclaration').declaration.declarations[0].init.body
+  const attr = element.openingElement.attributes.find(a => a.name?.name === 'className')
+  return attr?.value.type === 'JSXExpressionContainer' ? attr.value.expression.value : attr?.value.value
+}
 assert.equal(shadowLight({ ...initial, layers: 1 }).css, '-8.64px 3.36px 24px rgba(0,0,0,0.35)')
 assert.equal(shadowLight({ ...initial, x: 0, y: 0, distance: 0 }).layers[2].blurPx, 24)
 assert.deepEqual(shadowLight({ ...initial, decay: 0 }).layers.map(l => l.alpha), [.35, 0, 0])
@@ -35,10 +42,10 @@ const constants = keys.map(id => `const LIGHT_${id} = ${JSON.stringify(initial[i
 try {
   for (const output of ['css', 'tailwind']) {
     const file = `${output}.tsx`
-    const classList = `p-4 hover:shadow-xl shadow-[${css.replaceAll(' ', '_')}]`
+    const classList = `before:content-["hello"] after:content-[\\2713] data-[label=a&b]:block p-4 hover:shadow-xl shadow-[${css.replaceAll(' ', '_')}]`
     const code = constants + (output === 'css'
       ? `export const Card = () => <div style={{ color: 'red', boxShadow: ${JSON.stringify(css)}, opacity: 0.8 }} />;\n// keep me\n`
-      : `export const Card = () => <div className=${JSON.stringify(classList)} title="keep me" />;\n// keep me\n`)
+      : `export const Card = () => <div className='${classList.replaceAll("&", "&amp;")}' title="keep me" />;\n// keep me\n`)
     await writeFile(join(root, file), code)
     const request = { action: 'define', engine: 'agent', manifest: { file, component: 'Card', title: 'Shadow Light', params: [...params,
       { id: 'output', label: 'CSS', kind: 'text', apply: { strategy: 'literal', anchor: output === 'css' ? 'boxShadow: ' : 'className=' } }] },
@@ -57,6 +64,7 @@ try {
     assert.ok(after.includes('const LIGHT_x = -1;'))
     assert.ok(after.includes('keep me'))
     assert.equal((view().fields.find(p => p.id === 'output').value.match(/rgba\(/g) ?? []).length, 8)
+    if (output === 'tailwind') assert.equal(jsxClass(after), view().fields.find(p => p.id === 'output').value, 'JSX parses and decoded classes survive')
     assert.ok(after.includes(output === 'css' ? "color: 'red'" : 'p-4 hover:shadow-xl'))
     await assert.rejects(islands.interact(command('commit', { layers: 1.5 })), /integer/)
     await assert.rejects(islands.interact(command('commit', { x: 2 })), /Invalid shadow/)
@@ -71,12 +79,13 @@ try {
     await islands.interact(command('reset'))
     assert.equal(view().fields.find(p => p.id === 'blur').value, 24)
     assert.equal(view().fields.find(p => p.id === 'output').value, output === 'css' ? css : rewriteClassList(classList, 'box-shadow', css))
+    if (output === 'tailwind') assert.equal(jsxClass(await readFile(join(root, file), 'utf8')), rewriteClassList(classList, 'box-shadow', css))
     islands.close(output)
   }
   // Exercise the real Styles engine too (not just its string helpers).
   for (const tailwind of [false, true]) {
     const file = tailwind ? 'utility.tsx' : 'inline.tsx'
-    const original = tailwind ? 'export const Card = () => <div className="p-4 shadow-md hover:shadow-xl" title="kept" />' : 'export const Card = () => <div style={{ color: "red", boxShadow: "none", opacity: 0.8 }} title="kept" />'
+    const original = tailwind ? 'export const Card = () => <div className="p-4 before:content-[&quot;hello&quot;] shadow-md hover:shadow-xl" title="kept" />' : 'export const Card = () => <div style={{ color: "red", boxShadow: "none", opacity: 0.8 }} title="kept" />'
     await writeFile(join(root, file), original)
     const value = shadowLight({ ...initial, layers: 8 }).css
     for (const next of [value, css]) {
@@ -85,6 +94,8 @@ try {
       assert.equal(result.strategy, tailwind ? 'tailwind' : 'inline')
       const after = await readFile(join(root, file), 'utf8')
       assert.ok(after.includes('title="kept"'))
+      if (tailwind) assert.equal(jsxClass(after), rewriteClassList(jsxClass(original), 'box-shadow', next))
+      else assert.doesNotThrow(() => parse(after, { sourceType: 'module', plugins: ['jsx', 'typescript'] }))
       assert.equal((after.match(/rgba\(/g) ?? []).length, next === value ? 8 : 3)
     }
     await undo(root)
