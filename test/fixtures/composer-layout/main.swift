@@ -40,3 +40,27 @@ for width: CGFloat in [420, 320, 520] {
     }
 }
 print("Composer layout: capped replacement, wrapping, width changes, empty and trailing newline passed without a window")
+
+// Resolve the actual Auto Layout tree without opening an application/window.
+// Borderless popup frames overlap by one point at four-point stack spacing;
+// their alignment rectangles remain correctly separated.
+for width: CGFloat in [320, 420, 520] {
+    composer.setFrameSize(NSSize(width: width, height: 148))
+    composer.layoutSubtreeIfNeeded()
+    let geometry = composer.verificationLayout()
+    require(geometry["alignment"] as? Bool == true, "Ordered control alignment at width \(width): \(geometry)")
+    require(geometry["contained"] as? Bool == true, "Input and controls inside bubble")
+    require((geometry["bottomInset"] as? CGFloat ?? 0) >= 7, "Bubble extends below controls")
+}
+let model = composer.pickers["Model"]!
+let permission = composer.pickers["Permission mode"]!
+let oldFrame = permission.frame
+permission.setFrameOrigin(model.frame.origin)
+require(composer.verificationLayout()["alignment"] as? Bool == false, "Overlapping alignment rectangles must fail")
+permission.frame = oldFrame
+let provider = composer.pickers["Provider"]!
+let oldProviderFrame = provider.frame
+provider.setFrameOrigin(composer.plus.frame.origin)
+require(composer.verificationLayout()["alignment"] as? Bool == false, "Attachment/provider overlap must fail")
+provider.frame = oldProviderFrame
+print("Composer alignment: AppKit insets, all control gaps, containment and rejected overlaps passed without a window")

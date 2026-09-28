@@ -1,3 +1,4 @@
+import { checkVisibleComposer } from './smoke-composer'
 import { checkSourceStamps } from './smoke-source-stamp'
 import { checkChatIslands } from './smoke-islands'
 import assert from 'node:assert/strict'
@@ -208,6 +209,7 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   writeFileSync(join(artifacts,'native-content.png'),Buffer.from(await host.request('captureContent',{documentID:content.id}),'base64'))
   contentAction('close');await wait(async()=>!(await host.request('contentInspect')).some((s:any)=>s.visible),'content close')
   await geometry('content')
+  await checkVisibleComposer(host, fixture, artifacts)
   await checkNativeChat(host,join(artifacts,'swift-chat.png'))
   await host.request('previewInspector',{action:'show'});await inspect('previewInspector',s=>s.visible&&s.inspectable)
   await host.request('previewInspector',{action:'close'})

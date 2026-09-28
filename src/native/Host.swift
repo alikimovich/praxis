@@ -289,6 +289,18 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             }
         case "chatInspect": reply(id, chat.inspect())
         case "chatPerform": chat.model.action(c["action"] as? String ?? "", id: c["card"] as? String, value: c["value"] as? String, answers: c["answers"] as? [String: String]); reply(id)
+        case "composerVerification":
+            guard ephemeral else { reply(id, error: "Test profile required"); return }
+            reply(id, composer.verifyInteraction(c))
+        case "captureVisibleComposer":
+            guard ephemeral else { reply(id, error: "Test profile required"); return }
+            Task { @MainActor in
+                do {
+                    // Include surrounding chat pixels to expose any external fade.
+                    let region = composer.bounds.insetBy(dx: -8, dy: -12)
+                    reply(id, try await captureVisibleRegion(window: window, view: composer, region: region))
+                } catch { reply(id, error: error.localizedDescription) }
+            }
         case "composerState": composer.update(c["state"] as? [String: Any] ?? [:])
         case "composerInspect": reply(id, composer.inspect())
         case "composerIMECheck":

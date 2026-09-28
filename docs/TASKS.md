@@ -3,6 +3,15 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Composer container (LKM-87)
+
+- [x] Place attachment/provider/model/Auto controls inside the rounded input surface, preserving alignment and handlers.
+- [x] Remove the external composer gradient/footer fill and unused fade view.
+- [x] Run focused non-GUI composer/controller checks and TypeScript checks.
+- [x] Add foreground composer PNG/OCR capture and native attachment/model/Auto/typing/submission verification to the manager suite.
+- [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
+- [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
+
 ## Shadow Light (LKM-86)
 
 - [x] Add bounded Shadow Light generation and a native compound chat-island panel.
