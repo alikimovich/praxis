@@ -19,6 +19,7 @@ const UNIT = [
   "trezi-agent-tools",
   "codex-mcp",
   "native-shutdown",
+  "native-bridge-close",
   "native-preview-recovery",
   "native-workspace",
   "native-workspace-controller",

@@ -2,6 +2,42 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Capture the native fixture within its owning process
+
+Manager verification passed all unit checks but the external screencapture
+process failed to capture Trezi's window. Replace that subprocess with
+ScreenCaptureKit's current-process content API and asynchronous screenshot
+capture of the exact NSWindow ID. The SDK documents this API as exposing content
+available to the current process without TCC consent. Keep foreground checks,
+chat-only pixel cropping, OCR assertions and all source/Undo checks unchanged;
+there is no offscreen-cache fallback. This visible test requires macOS 14.4+.
+Candidate ed9b312 has no equivalent capture fix.
+
+Also wait for host exit and drained stdio before deleting the disposable profile,
+preventing the reported late workspace write from hitting a removed directory.
+A Bun fake-host regression covers the final persistence event and close ordering.
+Focused tests, TypeScript checks and full Swift typechecking pass. The GUI suite
+was not run by this worker; manager must rerun it and inspect the captures.
+
+## 2026-09-28 — Preserve TypeScript controls and require visible Shadow Light evidence
+
+Exclude non-JSX .ts/.mts/.cts files from JSX attribute indexing and select JSX
+versus TSX parser plugins by source extension. Add read/edit/Undo regressions for
+angle-bracket assertions and generic arrows alongside the JSX quoting tests.
+
+Replace Shadow Light's offscreen AppKit cache capture with a foreground window
+screenshot. Ephemeral-only host commands reveal the real island in the chat
+scroll view and capture its composited pixels. The native fixture captures both
+top and bottom for initial/adjusted/restored states and requires OCR of the
+panel labels, CSS and Undo from chat pixels only. Empty images and missing
+Screen Recording access fail rather than count as rendering coverage. Save OCR
+JSON next to each PNG for review; layout fidelity still requires manager visual
+comparison with the approved mockup.
+
+Focused Bun regression/boundary tests, TypeScript checks and full Swift source
+typechecking pass. No GUI suite was run and no new screenshots were generated or
+visually approved by this worker; manager desktop verification remains pending.
+
 ## 2026-09-28 — Shadow Light review corrections (LKM-86)
 
 Fix direct JSX attribute writes by identifying attribute literals with the Babel

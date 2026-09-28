@@ -99,7 +99,10 @@ async function main() {
       // Keep the native profile separate from retired Electron installations.
       // Test profiles are disposable.
       await drainDevServers()
-      if (testDir) rmSync(testDir, { recursive: true, force: true })
+      if (testDir) {
+        await host?.closed
+        rmSync(testDir, { recursive: true, force: true })
+      }
     })
     return cleaning
   }

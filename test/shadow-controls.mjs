@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { shadowLight } from '../src/main/shadows.ts'
 import { ChatIslands } from '../src/main/chat-islands.ts'
+import { islandSource, writeIsland, undoIsland } from '../src/main/chat-island-source.ts'
 import { islandDefinition } from '../src/main/chat-island-schema.ts'
 import { rewriteClassList } from '../src/main/tw-styles.ts'
 import { applyStyleEdit } from '../src/main/styles.ts'
@@ -40,6 +41,22 @@ const params = keys.map((id, i) => ({ id, label: id, kind: i === 6 ? 'color' : '
   apply: { strategy: 'literal', anchor: `const LIGHT_${id} = ` } }))
 const constants = keys.map(id => `const LIGHT_${id} = ${JSON.stringify(initial[id])};`).join('\n') + '\n'
 try {
+  for (const extension of ['ts', 'mts', 'cts']) {
+    const file = `assertion.${extension}`
+    const code = 'const distance = 12; const typed = <number>distance;\nconst identity = <T>(value: T): T => value;\n'
+    await writeFile(join(root, file), code)
+    const definition = islandDefinition({ manifest: { file, component: 'Config', title: 'Distance', params: [
+      { id: 'distance', label: 'Distance', kind: 'number', min: 0, max: 64, apply: { strategy: 'literal', anchor: 'const distance = ' } }
+    ] }, blocks: [{ id: 'settings', title: 'Settings', kind: 'group', params: ['distance'] }] })
+    const record = { ...definition, version: 1, id: extension, revision: 1, turn: 1, engine: 'agent', status: 'ready', initial: { distance: 12 } }
+    const before = await islandSource(root, record)
+    assert.equal(before.values.distance, 12)
+    const edit = await writeIsland(root, record, before.revision, { distance: 24 }, () => true)
+    assert.equal((await islandSource(root, record)).values.distance, 24)
+    assert.equal(await readFile(join(root, file), 'utf8'), code.replace('distance = 12', 'distance = 24'))
+    await undoIsland(root, edit.group, () => true)
+    assert.equal(await readFile(join(root, file), 'utf8'), code)
+  }
   for (const output of ['css', 'tailwind']) {
     const file = `${output}.tsx`
     const classList = `before:content-["hello"] after:content-[\\2713] data-[label=a&b]:block p-4 hover:shadow-xl shadow-[${css.replaceAll(' ', '_')}]`

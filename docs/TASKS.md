@@ -10,7 +10,11 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Run focused non-GUI regression checks and TypeScript/Swift typechecks.
 - [x] Fix JSX attribute quoting and preserve quoted/escaped Tailwind classes in parser-backed round trips.
 - [x] Add a native shadow-block fixture covering every control, computed preview CSS, Undo and rendering captures.
-- [ ] Manager: run the new fixture and inspect shadow-light-initial/adjusted/restored PNGs against the approved mockup.
+- [x] Preserve literal controls in non-JSX TypeScript assertion/generic files.
+- [x] Replace offscreen captures with visible window captures and chat-only OCR assertions; scroll to both ends of the actual island.
+- [x] Replace external screencapture with current-process ScreenCaptureKit; preserve foreground/OCR requirements.
+- [x] Await final native host output before removing the disposable test profile.
+- [ ] Manager: run the new fixture and inspect shadow-light-initial/adjusted/restored PNGs and their -bottom companions against the approved mockup.
 - [ ] Manager: verify native layout and live HMR under the shared desktop lock; complete independent review.
 
 ## Trezi rename (LKM-85, 2026-09-27)

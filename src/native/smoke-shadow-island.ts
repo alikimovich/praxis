@@ -67,8 +67,23 @@ document.body.append(card);
     i.id === result.id && i.sourceRevision === view().sourceRevision && i.blockKinds?.[0] === 'shadow' && i.fields === 8)
   await wait(swiftReady)
   const capture = async (name: string) => {
-    await new Promise(resolve => setTimeout(resolve, 250))
-    writeFileSync(join(artifacts, `shadow-light-${name}.png`), Buffer.from(await host.request('captureShell'), 'base64'))
+    const recognized: string[] = []
+    // Tall panels need two viewport captures; both come from the real window.
+    for (const bottom of [false, true]) {
+      const revealed = await host.request('revealChatIsland', { island: result.id, bottom })
+      await wait(async () => (await host.request('chatInspect')).visibleMessageIDs.includes(revealed.message))
+      await new Promise(resolve => setTimeout(resolve, 350))
+      const image = await host.request('captureVisibleChat')
+      assert.ok(image.width > 200 && image.height > 200, 'Nonempty visible chat viewport')
+      const stem = `shadow-light-${name}${bottom ? '-bottom' : ''}`
+      writeFileSync(join(artifacts, `${stem}.png`), Buffer.from(image.png, 'base64'))
+      writeFileSync(join(artifacts, `${stem}.json`), JSON.stringify({ text: image.text, width: image.width, height: image.height }, null, 2))
+      recognized.push(...image.text)
+    }
+    const visibleText = recognized.join(' ').toLowerCase()
+    for (const label of ['shadow light', 'preview', 'light source', 'distance', 'blur', 'layers', 'decay', 'rgba', 'box-shadow', 'undo']) {
+      assert.ok(visibleText.includes(label), `Visible Shadow Light capture is missing ${label}; inspect shadow-light-${name}*.png`)
+    }
   }
   await capture('initial')
   // Each independently adjustable control must change the actual computed shadow.
@@ -89,5 +104,5 @@ document.body.append(card);
     await wait(swiftReady)
   }
   await capture('restored')
-  console.log('NATIVE SHADOW LIGHT PASS — shadow block rendered; all six controls update computed preview CSS; Undo restores source and preview. Inspect shadow-light-*.png against the approved mockup.')
+  console.log('NATIVE SHADOW LIGHT PASS — visible window captures contain Shadow Light controls; all six controls update computed preview CSS; Undo restores source and preview. Layout fidelity still requires inspection of shadow-light-*.png against the approved mockup.')
 }

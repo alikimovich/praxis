@@ -36,6 +36,10 @@ final class ChatModel: ObservableObject {
     @Published var revision = 0
     @Published var controlInteraction = 0
     @Published var followRevision = 0
+    @Published var revealRevision = 0
+    var revealMessage = ""
+    var revealIsland = ""
+    var revealBottom = false
     @Published var visible = false
     @Published var composerHeight: CGFloat = 0
     var messageFrames: [String: CGRect] = [:]
@@ -177,6 +181,11 @@ struct ChatConversation: View {
                         if let event = NSApp.currentEvent, [.scrollWheel, .leftMouseDragged, .keyDown].contains(event.type) { follows = bottom <= readingHeight + 48 }
                     }
                     .onChange(of: model.composerHeight) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
+                    .onChange(of: model.revealRevision) { _ in
+                        follows = false; sticky = nil
+                        if model.revealBottom { proxy.scrollTo("island-end-" + model.revealIsland, anchor: bottomAnchor) }
+                        else { proxy.scrollTo(model.revealMessage, anchor: .top) }
+                    }
                     .onChange(of: model.controlInteraction) { _ in follows = false }
                     .onChange(of: model.followRevision) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
                     .onChange(of: model.snapshot?.chat) { _ in follows = true; sticky = nil; proxy.scrollTo("bottom", anchor: bottomAnchor) }
