@@ -5,6 +5,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 ## Trezi rename (LKM-85, 2026-09-27)
 
+- [x] Preserve legacy GitHub connection base planning and JSX source mappings.
+
 - [x] Preserve relative current/legacy profile overrides during repeated session alias migration.
 
 - [x] Enforce canonical source-selector precedence and add conflicting/legacy-only stamp regression coverage.

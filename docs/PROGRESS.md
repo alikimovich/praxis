@@ -2,6 +2,14 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Preserve legacy publish bases and JSX mappings
+
+Route GitHub connection planning through one legacy/current-aware ancestry probe;
+praxis/main now checks main before choosing the default and fast-forward plan.
+Preserve existing data-praxis-source JSX attributes during Babel instrumentation,
+including component tags and repeated transforms. Add focused regressions for
+both findings; no remote repositories are created by these checks.
+
 ## 2026-09-27 — Preserve relative profile override migration
 
 Independent review found that relative profile overrides created a relative

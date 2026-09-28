@@ -16,7 +16,7 @@ import { ipcMain } from '../native/platform'
 import { basename } from 'path'
 import { promisify } from 'util'
 import type { GithubConnectOptions, GithubConnectResult, GithubStatus } from '../shared/api'
-import { resolveConnectPlan, sanitizeRepoName } from '../shared/github'
+import { planGitHubConnection, sanitizeRepoName } from '../shared/github'
 
 const execFileP = promisify(execFile)
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
@@ -118,14 +118,11 @@ export async function connectToGitHub(
   // Plan the branches: fast-forward the clean base up to the work branch so the
   // repo's default branch shows what the user built, not the bare scaffold.
   // `merge-base --is-ancestor` exits 0 when base is an ancestor of current.
-  const base = current.startsWith('trezi/') ? current.slice('trezi/'.length) || 'main' : current
-  let baseIsAncestor = false
-  if (base !== current) {
-    baseIsAncestor = await git(root, ['merge-base', '--is-ancestor', base, current])
+  const plan = await planGitHubConnection(current, (base, branch) =>
+    git(root, ['merge-base', '--is-ancestor', base, branch])
       .then(() => true)
       .catch(() => false)
-  }
-  const plan = resolveConnectPlan(current, baseIsAncestor)
+  )
 
   try {
     if (plan.fastForwardBase && plan.defaultBranch !== current) {

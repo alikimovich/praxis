@@ -93,6 +93,17 @@ try {
   assert.match(result.code, /data-trezi-source="src\/Card.tsx:2:/)
   assert.match(result.code, /^"use client"/)
   assert.ok(result.map.mappings)
+  for (const tag of ['button', 'Card']) {
+    const legacy = `<${tag} data-praxis-source="page.mdx:20:0" />`
+    const transform = code => babel.transformSync(code, {
+      filename: join(root, 'generated.jsx'), root, configFile: false, babelrc: false,
+      parserOpts: { plugins: ['jsx'] }, plugins: [plugin]
+    }).code
+    const once = transform(legacy)
+    assert.match(once, /data-praxis-source="page.mdx:20:0"/)
+    assert.doesNotMatch(once, /data-trezi-source=/)
+    assert.equal(transform(once), once, 'Repeated instrumentation preserves the authored mapping')
+  }
   const loaderModule = { exports: {} }
   new Function('module', 'require', NEXT_LOADER_CONTENT)(loaderModule, (name) =>
     name === '@babel/core' ? babel : name === './trezi-source.cjs' ? plugin : require(name)

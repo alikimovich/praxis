@@ -10,7 +10,7 @@ module.exports = function treziSource({ types: t }) {
       JSXOpeningElement(p, state) {
         const loc = p.node.loc
         if (!loc) return
-        if (p.node.attributes.some((a) => a.name && a.name.name === 'data-trezi-source')) return
+        if (p.node.attributes.some((a) => a.name && ['data-trezi-source', 'data-praxis-source'].includes(a.name.name))) return
         const root = state.file.opts.root || process.cwd()
         const file = path.relative(root, state.file.opts.filename || '')
         const where = file + ':' + loc.start.line + ':' + loc.start.column

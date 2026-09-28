@@ -4,7 +4,7 @@
  * no network, no Electron. Run via: bun run test:github-connect
  */
 import assert from 'node:assert'
-import { sanitizeRepoName, resolveConnectPlan } from '../src/shared/github.ts'
+import { sanitizeRepoName, resolveConnectPlan, planGitHubConnection } from '../src/shared/github.ts'
 
 // --- sanitizeRepoName -------------------------------------------------------
 
@@ -66,3 +66,21 @@ assert.deepStrictEqual(resolveConnectPlan('trezi/', true), {
 })
 
 console.log('GITHUB-CONNECT OK — repo-name sanitize, Option-B branch push plan')
+
+// Exercise the ancestry probe used by the connection path, including legacy
+// branches. Publishing itself remains outside this local-only regression.
+for (const prefix of ['praxis', 'trezi']) {
+  for (const ancestor of [true, false]) {
+    const calls = []
+    const plan = await planGitHubConnection(`${prefix}/main`, async (base, branch) => {
+      calls.push([base, branch])
+      return ancestor
+    })
+    assert.deepStrictEqual(calls, [['main', `${prefix}/main`]])
+    assert.deepStrictEqual(plan, resolveConnectPlan(`${prefix}/main`, ancestor))
+    assert.equal(plan.defaultBranch, ancestor ? 'main' : `${prefix}/main`)
+  }
+}
+assert.deepStrictEqual(await planGitHubConnection('main', async () => {
+  assert.fail('Plain branches must not probe ancestry')
+}), resolveConnectPlan('main', false))

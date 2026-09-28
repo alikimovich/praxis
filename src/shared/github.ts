@@ -86,3 +86,14 @@ export function resolveConnectPlan(current: string, baseIsAncestor: boolean): Co
   }
   return { defaultBranch: current, fastForwardBase: false, pushBranches: [current] }
 }
+
+/** Resolve the same legacy/current base before performing the ancestry probe. */
+export async function planGitHubConnection(
+  current: string,
+  isAncestor: (base: string, branch: string) => Promise<boolean>
+): Promise<ConnectPlan> {
+  const base = /^(trezi|praxis)\//.test(current)
+    ? current.replace(/^(trezi|praxis)\//, '') || 'main' : current
+  const ancestor = base !== current && await isAncestor(base, current)
+  return resolveConnectPlan(current, ancestor)
+}
