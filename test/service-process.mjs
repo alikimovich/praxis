@@ -71,6 +71,34 @@ async function dead(pid) {
   }
   assert.fail(`fixture process ${pid} survived cleanup`)
 }
+/** The page's live-reload stream: `next` yields the next `data:` value, or null on timeout. */
+async function reloadStream(url, version) {
+  const abort = new AbortController()
+  const response = await fetch(`${url}/__trezi_reload?v=${version}`, { signal: abort.signal })
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  const timedOut = Symbol('timeout')
+  let buffer = ''
+  let pending = null // One outstanding read: a timed-out read keeps its chunk.
+  return {
+    async next(timeout) {
+      const deadline = Date.now() + timeout
+      while (true) {
+        const match = /^data: (.*)$/m.exec(buffer)
+        if (match) { buffer = buffer.slice(match.index + match[0].length); return match[1] }
+        const remaining = deadline - Date.now()
+        if (remaining <= 0) return null
+        pending ??= reader.read()
+        const chunk = await Promise.race([pending, pause(remaining).then(() => timedOut)])
+        if (chunk === timedOut) return null
+        pending = null
+        if (chunk.done) return null
+        buffer += decoder.decode(chunk.value, { stream: true })
+      }
+    },
+    close() { pending?.catch(() => {}); abort.abort(); reader.cancel().catch(() => {}) },
+  }
+}
 function control(connection, kind, extra = {}) { return { version, connection, requestID: randomUUID(), kind, ...extra } }
 function hello(connection, launch, extra = {}) {
   return control(connection, 'hello', { hello: { connection, role: 'ui', versions: [version], schemaHash: 'trezi-supervision-1', capabilities, ...extra }, launch })
@@ -217,6 +245,37 @@ try {
     // The XPC service's own stderr is discarded; Bun's must reach the host's.
     for (let i = 0; i < 100 && !production.stderr.includes('FIXTURE-STDERR production-client'); i++) await pause(20)
     assert.ok(production.stderr.includes('FIXTURE-STDERR production-client'), 'backend diagnostics reach the host stderr')
+    // Live reload from the product's static server running in the supervised
+    // backend: a real file edit must reach the page's reload stream, and a page
+    // that was served before the edit but connects after its broadcast (a page
+    // mid-reload) must still be told to reload.
+    const site = join(scratch, 'site')
+    mkdirSync(site)
+    writeFileSync(join(site, 'index.html'), '<h1 id="title">Before</h1>')
+    production.send({ event: 'fixtureStatic', root: site })
+    const started = await production.line(line => line.startsWith('EVENT ') && JSON.parse(Buffer.from(line.slice(6), 'base64')).method === 'fixtureStatic')
+    const siteURL = JSON.parse(Buffer.from(started.slice(6), 'base64')).url
+    await pause(300) // Let any event for the file written before the watch settle.
+    const served = /var v="(\d+)"/.exec(await (await fetch(siteURL)).text())?.[1]
+    assert.ok(served !== undefined, `served page carries its live-reload version\n${production.stderr}`)
+    const live = await reloadStream(siteURL, served)
+    assert.equal(await live.next(300), null, 'a current page is not told to reload')
+    writeFileSync(join(site, 'index.html'), '<h1 id="title">After</h1>')
+    const changed = await live.next(10_000)
+    live.close()
+    assert.ok(changed !== null && changed !== served, `a file edit under the supervised backend broadcasts a reload\n${production.stderr}`)
+    assert.match(await (await fetch(siteURL)).text(), /After/, 'the reloaded page is the edited file')
+    const late = await reloadStream(siteURL, served)
+    const missed = await late.next(1000)
+    late.close()
+    assert.ok(missed !== null && missed !== served, 'a page that missed the broadcast reloads when its stream connects')
+    await pause(300)
+    const current = /var v="(\d+)"/.exec(await (await fetch(siteURL)).text())?.[1]
+    const settled = await reloadStream(siteURL, current)
+    assert.equal(await settled.next(300), null, 'the reloaded page does not reload again')
+    settled.close()
+    assert.ok(!production.stderr.includes('Live reload'), `watcher reported no failure\n${production.stderr}`)
+    console.log('SERVICE-PROCESS live reload: supervised backend watch, broadcast and missed-broadcast recovery PASS')
     production.send('reconnect')
     production.send({ event: 'fixtureEcho', value: 'during-reconnect' })
     await production.line(line => line === 'RECONNECTED')

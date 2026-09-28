@@ -2,6 +2,35 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Live reload can no longer miss a change (LKM-89 / S02)
+
+Manager verification of the merged tree: 114 unit checks passed, then
+`test:native` timed out at `managed reload` (`src/native/smoke-core.ts`). That step
+`text:apply`s `index.html` and waits for the preview to show the new text.
+
+The watcher under the supervised service was not failing. Earlier in the same run
+the islands smoke rewrote `index.html` and waited for the element its new script
+adds; only a live reload can produce it, and it passed. The pre-LKM-107 LKM-89
+run also passed `managed reload` through the service. Diagnosis from code (this
+worker's sandbox cannot bind ports, reach XPC or receive FSEvents; not
+reproduced here): live reload was edge-triggered with no memory. The step before
+`managed reload` edits `native-style.tsx`, and every fixture change reloads the
+page. The `index.html` write follows a few host round trips later, which now
+cross XPC. A `change` sent while the old page's EventSource has closed and the
+new page's has not opened goes to zero clients. A page that fetched `index.html`
+just before the write then stays stale for good.
+
+`static-server.ts` is now level-triggered. Each watched change bumps a version.
+A served page embeds the version it was read at (captured before the read) and
+connects with `?v=`. The stream announces the current version immediately when
+it differs, and clients reload only on a mismatch. Watcher `error` and setup
+failures are now written to the project log and stderr instead of being
+swallowed. `service-process` now runs the real static server inside the
+backend launched by the real XPC service and checks four things. An edit
+broadcasts a reload. A page that missed the broadcast reloads when its stream
+connects. A current page never reloads. The watcher reports no failure.
+`managed reload` is unchanged.
+
 ## 2026-09-28 — Resolve the S02 candidate merge against LKM-107 (LKM-89 / S02)
 
 The previous manager verification passed: 113 unit checks, both typechecks and
