@@ -412,7 +412,9 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         text.font = SidebarRowStyle.font
         text.lineBreakMode = .byTruncatingTail
         let symbol = row.kind == "project" ? "folder" : row.kind == "history" ? "clock" : "bubble.left"
-        let artwork = row.icon ?? (row.kind == "project" ? ProjectAnimal.image(for: row.project.isEmpty ? row.id : row.project) : NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!)
+        // Project rows share Open Project's symbol, regardless of stored artwork.
+        let artwork = (row.kind == "project" ? nil : row.icon)
+            ?? NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!
         let icon = NSImageView(image: artwork)
         icon.imageScaling = .scaleProportionallyDown
         icon.contentTintColor = artwork.isTemplate ? .labelColor : nil

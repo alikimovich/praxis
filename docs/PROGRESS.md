@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Consistent sidebar folder icons (LKM-105)
+
+Render every project row with the native outline `folder` symbol used by Open
+Project, bypassing supplied artwork and removing the unused animal fallback.
+Preserve stored icon metadata and other row kinds, the 16-point icon frame,
+proportional scaling, text spacing, selection tint, accessibility labels and
+existing selection/menu/reorder handlers.
+
+Full Swift source typechecking, TypeScript/native checks, the focused
+shell-controller check, docs links and diff whitespace validation pass.
+Manager owns foreground capture inspection at standard/narrow widths, native
+interaction checks and the configured verification suite; no GUI checks were run
+by this worker.
+
 ## 2026-09-28 — Local Apple Intelligence exploration
 
 Audit auxiliary provider calls, native text/content editing, control selection
