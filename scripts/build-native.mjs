@@ -82,7 +82,7 @@ const serviceResult = Bun.spawnSync([
   'xcrun', 'swiftc', '-O', '-target',
   `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx13.3`,
   '-module-cache-path', join(out, 'module-cache'),
-  ...['ServiceContract', 'ServiceXPC', 'LegacySupervisor', 'ProcessGuardian', 'ServiceRuntime', 'ServiceMain'].map(name => join(root, `src/service/${name}.swift`)),
+  ...['ServiceContract', 'ServiceXPC', 'LedgerStore', 'OperationLedger', 'LegacySupervisor', 'ProcessGuardian', 'ServiceRuntime', 'ServiceMain'].map(name => join(root, `src/service/${name}.swift`)),
   '-o', join(serviceContents, 'MacOS/TreziService'), '-framework', 'Foundation', '-framework', 'Security'
 ], { stdout: 'inherit', stderr: 'inherit' })
 if (serviceResult.exitCode) process.exit(serviceResult.exitCode)

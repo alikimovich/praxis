@@ -17,6 +17,18 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
 
+## Durable operation ledger (LKM-90 / S03)
+
+- [x] Persistent intent/effect/receipt phases with canonical intent digest; stable duplicates, `idempotencyMismatch`, identity before revision check.
+- [x] Per-domain revisions and FIFO commit lane held across actor suspension; cancellation before effect vs `tooLate`; late results discarded.
+- [x] Restart recovery: intent → abandoned, effect → uncertain (domain blocked) → explicit reconcile, never replay.
+- [x] Checksummed, fully synced journal + generation snapshots; torn-tail quarantine; corrupt/newer-format stores refused untouched; explicit quarantine.
+- [x] Persisted event cursors, retained window, `snapshotRequired` for gaps/epochs; consumer mirror ordering; 7-day retry horizon with expired IDs.
+- [x] Opened by the Swift service under the profile lock; legacy owner never opens it; storage layout/compatibility/rollback documented (`docs/SWIFT-BACKEND-LEDGER.md`).
+- [x] `test/operation-ledger.mjs` (SIGKILL at each boundary + arbitrary kills, restart) in the unit tier.
+- [ ] Manager: full unsandboxed `service-process` (ledger created at XPC launch, epoch kept across service restart), unit + native verification, independent review.
+- [ ] After acceptance: transfer the preferences writer through the adoption gate (import newest v1 state, typed XPC dispatch, drain Bun writer, legacy restoration from newest state).
+
 ## Swift service, XPC and legacy supervision (LKM-89 / S02)
 
 - [x] Separate signed XPC service bundled in the app; versioned control codec with closed negotiation and signed-peer validation both ways.

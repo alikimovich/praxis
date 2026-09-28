@@ -20,6 +20,9 @@ scripts/start-native.mjs ── TreziHost (AppKit) ──XPC── TreziService 
   drain. `src/service/ServiceXPC.swift`: the control frame codec and limits.
 - `src/service/LegacySupervisor.swift`: `ProfileExclusion` and the Bun process
   group. `src/service/ProcessGuardian.swift`: lifetime-pipe guardians.
+- `src/service/OperationLedger.swift` (S03): opened under the profile lock at the
+  first launch hello, before Bun starts; no domain writes through it yet. See
+  [the ledger](SWIFT-BACKEND-LEDGER.md).
 - `src/main/managed-child.ts`: Bun keeps choosing server/Simulator commands but
   spawns them through the Swift guardian when supervised.
 

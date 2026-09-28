@@ -156,7 +156,7 @@ try {
     mkdirSync(join(service, 'MacOS'), { recursive: true })
     const host = join(app, 'MacOS/TreziHost')
     const executable = join(service, 'MacOS/TreziService')
-    compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/service/LegacySupervisor.swift', 'src/service/ServiceRuntime.swift', 'src/service/ProcessGuardian.swift', 'src/service/ServiceMain.swift'], executable)
+    compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/service/LedgerStore.swift', 'src/service/OperationLedger.swift', 'src/service/LegacySupervisor.swift', 'src/service/ServiceRuntime.swift', 'src/service/ProcessGuardian.swift', 'src/service/ServiceMain.swift'], executable)
     compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/native/ServiceClient.swift', 'test/fixtures/service-process/XPCFixture.swift'], host)
     plist(join(app, 'Info.plist'), '<key>CFBundleIdentifier</key><string>dev.praxis.fixture</string><key>CFBundleExecutable</key><string>TreziHost</string><key>CFBundlePackageType</key><string>APPL</string><key>LSBackgroundOnly</key><true/>')
     plist(join(service, 'Info.plist'), '<key>CFBundleIdentifier</key><string>dev.praxis.service</string><key>CFBundleExecutable</key><string>TreziService</string><key>CFBundlePackageType</key><string>XPC!</string><key>XPCService</key><dict><key>ServiceType</key><string>Application</string><key>RunLoopType</key><string>dispatch_main</string></dict>')
@@ -179,6 +179,7 @@ try {
     await dead(rollbackPID)
     groups.delete(rollbackPID)
     assert.equal(readFileSync(state, 'utf8'), '{"newer":"retained-after-rollback"}')
+    assert.ok(!existsSync(join(profile, 'service')), 'the legacy owner never opens the Swift ledger')
     console.log('SERVICE-PROCESS rollback: launch, shared lock, drain and newest draft retention PASS')
     if (process.argv.includes('--supervision-only')) {
       console.log('SERVICE-PROCESS supervision-only PASS — XPC coverage requires the full fixture')
@@ -206,6 +207,11 @@ try {
     assert.ok(!existsSync(backendPID), 'refused reattach started no backend')
     const ready = await client.reply(hello(connection, launch))
     assert.ok(ready.hello, 'real XPC handshake')
+    // The service opens (and recovers) its operation ledger under the profile lock.
+    const ledgerSnapshot = join(profile, 'service/ledger/snapshot.json')
+    const ledgerEpoch = () => JSON.parse(readFileSync(ledgerSnapshot, 'utf8').slice(65)).epoch
+    assert.ok(existsSync(ledgerSnapshot), 'service opened its operation ledger')
+    const firstLedgerEpoch = ledgerEpoch()
     assert.equal(ready.hello.connection, connection)
     const firstBackend = await pidFile(backendPID)
     groups.add(firstBackend)
@@ -238,6 +244,7 @@ try {
     rmSync(backendPID, { force: true })
     const production = processFixture(host, ['production', launchFile, executable])
     await production.line(line => line === 'READY')
+    assert.equal(ledgerEpoch(), firstLedgerEpoch, 'the ledger survives a service restart')
     const productionBackend = await pidFile(backendPID)
     groups.add(productionBackend)
     production.send({ event: 'fixtureEcho', value: 'production-client', stderr: true })

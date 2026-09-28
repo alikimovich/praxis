@@ -10,6 +10,10 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
     let hostRequirement: String
     let supervisor = LegacySupervisor()
     var exclusion: ProfileExclusion?
+    /// S03 substrate, opened (and recovered) under the profile lock. No domain
+    /// writes through it yet; nil if the store could not be proven whole, which
+    /// future ledger-backed domains must treat as `recoveryRequired`.
+    var ledger: OperationLedger?
     var child: LegacyChild?
     var launch: ServiceLaunch?
     var peerPID: pid_t?
@@ -75,6 +79,13 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                         throw ServiceContractFailure.unavailable
                     }
                     exclusion = try ProfileExclusion(profile: requested.profile)
+                    do {
+                        ledger = try OperationLedger(directory: URL(fileURLWithPath: requested.profile)
+                            .appendingPathComponent("service/ledger"))
+                    } catch {
+                        // Files are left exactly as found for diagnosis; legacy Bun is unaffected.
+                        try? session.diagnostics?.write(contentsOf: Data("Trezi service: operation ledger unavailable (\(error)); its files were left untouched.\n".utf8))
+                    }
                     var environment = requested.environment
                     environment["TREZI_SERVICE_LOCKED"] = "1"
                     environment["TREZI_SERVICE_SUPERVISED"] = "1"
@@ -91,7 +102,7 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                             self.queue.async { self.stop(backendStatus: status == 0 ? 0 : 1) }
                         }
                     } catch {
-                        launch = nil; exclusion?.release(); exclusion = nil
+                        launch = nil; ledger = nil; exclusion?.release(); exclusion = nil
                         throw ServiceContractFailure.unavailable
                     }
                     readBackend()
@@ -203,6 +214,8 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
         _ = drained.wait(timeout: .now() + 2)
         supervisor.shutdown()
         try? child?.input.close(); try? child?.output.close()
+        // The ledger needs no drain: each transition is synced before it is acknowledged.
+        ledger = nil
         exclusion?.release(); exclusion = nil
         if let directory = launch?.environment["TREZI_NATIVE_TEST_DIR"] {
             FileManager.default.createFile(atPath: directory + "/service-stopped", contents: Data())
