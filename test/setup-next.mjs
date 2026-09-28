@@ -145,6 +145,28 @@ try {
       }
     }
   }
+  // Legacy locations forwarded through multiple component spreads must win over
+  // generated inner defaults in both plain Babel and complete Next instrumentation.
+  for (const useNext of [false, true]) {
+    const transform = source => {
+      if (!useNext) return babel.transformSync(source, { filename: join(root, 'src/Nested.jsx'), root,
+        configFile: false, babelrc: false, parserOpts: { plugins: ['jsx'] }, plugins: [plugin] }).code
+      let result
+      loaderModule.exports.call({ resourcePath: join(root, 'src/Nested.jsx'), getOptions: () => ({ root }),
+        callback(error, code) { if (error) throw error; result = code } }, source)
+      return result
+    }
+    const source = `function Wrapper(props) { return <Button {...props}/> }
+      function Button(props) { return <button {...props}/> }
+      function App() { return <Wrapper data-praxis-component-source="authored.tsx:20:0" /> }`
+    const once = transform(source)
+    for (const code of [once, transform(once)]) {
+      const js = new Bun.Transpiler({ loader: 'tsx', tsconfig: { compilerOptions: { jsx: 'react', jsxFactory: '__jsx' } } }).transformSync(code)
+      const jsx = (type, props, ...children) => typeof type === 'function' ? type(props || {}) : { type, props, children }
+      const rendered = new Function('__jsx', js + '; return App()')(jsx)
+      assert.equal(rendered.props['data-trezi-component-source'], 'authored.tsx:20:0')
+    }
+  }
   process.env.NODE_ENV = 'production'
   assert.doesNotMatch(
     babel.transformSync(input, {

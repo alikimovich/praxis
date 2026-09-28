@@ -2,6 +2,14 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Preserve legacy instance locations through nested spreads
+
+Normalize copied JSX spread props before forwarding so legacy instance locations
+can override generated inner canonical defaults. Preserve canonical precedence,
+argument evaluation order and single getter evaluation; generated wrappers are
+idempotent. Rendered nested-component tests cover plain Babel and the full Next
+loader through repeated instrumentation.
+
 ## 2026-09-27 — Preserve component-only legacy JSX locations
 
 Guard JSX component-source generation independently of host stamps so a legacy

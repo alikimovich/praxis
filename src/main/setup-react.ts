@@ -8,6 +8,29 @@ module.exports = function treziSource({ types: t }) {
     name: 'trezi-source',
     visitor: {
       JSXOpeningElement(p, state) {
+        // Normalize a copied spread once so forwarded legacy instance locations
+        // can override this element's generated canonical default. Copying first
+        // preserves evaluation order and avoids reading source getters twice.
+        for (const attribute of p.node.attributes) {
+          if (attribute.type !== 'JSXSpreadAttribute') continue
+          const argument = attribute.argument
+          if (argument.type === 'CallExpression' && argument.callee.type === 'ArrowFunctionExpression' &&
+              argument.callee.body.directives?.some(d => d.value.value === 'trezi-source-props')) continue
+          const props = t.identifier('props')
+          const get = key => t.memberExpression(props, t.stringLiteral(key), true)
+          const canonical = () => get('data-trezi-component-source')
+          const legacy = () => get('data-praxis-component-source')
+          const body = t.blockStatement([
+            t.ifStatement(t.logicalExpression('&&',
+              t.binaryExpression('==', canonical(), t.nullLiteral()),
+              t.binaryExpression('!=', legacy(), t.nullLiteral())),
+              t.expressionStatement(t.assignmentExpression('=', canonical(), legacy()))),
+            t.returnStatement(props)
+          ], [t.directive(t.directiveLiteral('trezi-source-props'))])
+          attribute.argument = t.callExpression(t.arrowFunctionExpression([props], body), [
+            t.objectExpression([t.spreadElement(argument)])
+          ])
+        }
         const loc = p.node.loc
         if (!loc) return
         if (p.node.attributes.some((a) => a.name && ['data-trezi-source', 'data-praxis-source'].includes(a.name.name))) return
