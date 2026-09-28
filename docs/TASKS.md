@@ -9,6 +9,9 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Discover the documented Svelte legacy/rune subset and export validated `.svelte` source through both engines; preserve React export.
 - [x] Add deterministic rendering/Jev, unsupported-shape, mixed-framework, escaping/path, stale/cancellation and turn-capture checks.
 - [x] Document supported contracts and run focused non-GUI checks.
+- [x] Add foreground Settings capture/OCR/geometry and native picker interactions at 600/800 points, including engine preservation and immediate-close autosave; register windowless and negative-evidence checks.
+- [x] Reproduce NSHostingController minimum-size propagation without a window; exercise live minimum (540), normal (600) and wider (800) widths without relaxing evidence checks.
+- [x] Make `test:native` produce the Settings evidence itself; retain the original `settings.png` capture and `sheetPerform change` autosave check alongside it.
 - [ ] Manager: run configured verification and inspect native Settings help/conditional engine at minimum and wider widths under the desktop lock; complete independent review.
 
 ## Local Apple Intelligence exploration (2026-09-28)

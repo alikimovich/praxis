@@ -2,6 +2,108 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Settings OCR returns wrapped lines out of order (LKM-106 repair)
+
+`settings-visible-800-on-chat` failed although its PNG shows the engine help
+in full. Vision returned the wrapped help's continuation (`Gateway API key.`)
+before its first line (`… requires an Al`), and the checker joined observations
+in result order and then looked for each sentence as one contiguous run. The
+capture carries text only, with no observation boxes to sort by. So
+`assertSettingsEvidence` now chains a required sentence across line
+observations anchored at line edges: it starts at the end of one line, passes
+through any whole lines, and finishes at the start of another. The pieces must
+concatenate to exactly the sentence, so every word is still required, in order.
+Only the observation order is free. The I/l fold is kept, and the Off-state
+absence checks use the same matcher, so split engine text is still caught.
+`test/native-settings-evidence.mjs` replays that capture's verbatim OCR (it fails
+on the previous checker) and rejects dropped, misspelled and reordered words and
+fragments that don't sit at line edges. All 18 saved `settings-visible-*`
+captures pass the new checker; only this one failed the old one.
+
+## 2026-09-28 — Settings OCR reads SF Pro "I" as "l" (LKM-106 diagnostic repair)
+
+The manager's `test:native` failed at the first foreground capture
+(`settings-visible-540-off`) with "Missing complete foreground text: Generate UI
+using…". The PNG renders the help correctly; the fault was the comparator.
+SF Pro draws capital I and lowercase l with the same glyph, so Vision returned
+`Generate Ul using…` (and `Al providers…`), while the bold `Experimental Gen UI`
+happened to read correctly. `assertSettingsEvidence` now folds only that
+glyph-identical pair before lowercasing (dotted i stays distinct), and the
+Off-state "engine text is absent" checks go through the same normalizer, so the
+fold cannot make them vacuous. `test/native-settings-evidence.mjs` replays the
+capture's verbatim OCR output (fails on the old comparator) and still rejects a
+dropped word, an i→l misspelling, and homoglyph-read engine text while Off.
+
+## 2026-09-28 — Manager-run Settings evidence, existing checks retained (LKM-106 review)
+
+Addresses the reviewer's recorded-evidence findings: `bun run test:native`
+now produces the Settings evidence itself (native-runtime → smoke-core →
+`checkNativeSheets` → `checkVisibleSettings` in `src/native/smoke-settings.ts`).
+Restore the two Settings steps the earlier repair had replaced: the original
+`settings.png` sheet capture (before the new fixture) and the
+`sheetPerform change` autosave round-trip (after it). No check was removed.
+
+Fixture steps, run per width in the live minimum (540), 600 and 800 points plan:
+foreground Off capture → native On action → Chat model capture → native Jev
+action → capture → Off (engine hidden, Jev preserved) → close/reopen → capture →
+On (Jev restored) → Chat model then immediate close/reopen → capture → Off then
+close/reopen → capture. Each capture asserts foreground ownership, requested
+width ≥ minimum, stable minimum, rendered picker set, contained/hit-testable
+pickers, selected labels, saved values and complete OCR of both explanations
+(engine text absent while Off). Reopens assert a fresh sheet ID with unchanged
+values. Evidence is written before assertions.
+
+Manager should inspect `test/artifacts/native/settings-visible-{540,600,800}-{off,
+on-chat,on-jev,off-preserved-jev,reopened-off-jev,restored-on-jev,
+reopened-on-chat,reopened-off-chat}.{png,json}` (24 pairs),
+`settings-visible-interactions.json`, and the retained `settings.png`.
+Worker checks: typechecks, Swift host build, `native-settings-layout`,
+`native-settings-evidence`, `native-settings`, `native-sheets`, `docs-links`.
+Native GUI execution and PNG inspection remain manager-owned.
+
+## 2026-09-28 — Use the live Settings minimum width (LKM-106 verification repair)
+
+Reproduce the manager's `540 !== 600` failure without a visible window. Production
+uses NSHostingController, which propagates SheetContent's 540-point minimum to
+NSWindow; the prior windowless fixture used NSHostingView and retained the
+manually assigned 600-point minimum. Candidate `51fb928` has the same production
+hosting setup and no equivalent fixture correction.
+
+Match the production hosting controller in the windowless test, assert the
+540-point effective minimum, and exercise actual layouts/picker interactions at
+540, 600 and 800 points. The manager fixture derives its narrow width from the
+live window, retaining normal 600 and wider 800 coverage. Reject invalid minimums,
+assert the minimum remains stable across states/reopens, and retain every OCR,
+foreground, visibility, hit-target, preservation and autosave assertion.
+
+The current capture plan is 24 PNG/JSON pairs named
+`test/artifacts/native/settings-visible-{540,600,800}-*.{png,json}`, plus the
+interaction log with its explicit width plan. Focused windowless and evidence
+checks and TypeScript checks pass. Native execution and new capture inspection
+remain manager-owned; this worker did not run GUI suites.
+
+## 2026-09-28 — Foreground Settings acceptance fixture (LKM-106 review)
+
+Compare candidate `51fb928`: its visible-region capture helper and Settings smoke
+fixture match this checkout; it has no newer Settings acceptance fixture to reuse.
+Reuse the shared ScreenCaptureKit/Vision helper, replacing only the Settings
+cacheDisplay capture with foreground evidence. The existing native suite now
+exercises real SwiftUI picker menu-item target/actions at 600-point minimum and
+800-point wider widths, Off/On, Chat model/Jev, hidden engine preservation, and
+close/reopen autosave (including immediate close after changing the engine).
+
+Save 16 `test/artifacts/native/settings-visible-{600,800}-*.png` captures with
+matching OCR/geometry/value JSON plus `settings-visible-interactions.json`.
+Assert full helper text, engine absence/presence, selected labels, unclipped
+picker geometry, hit targets and foreground ownership. Write evidence before
+assertions so manager failures retain inspection artifacts. No direct form-value
+injection is used by the new Settings fixture.
+
+Add windowless SwiftUI picker/binding checks and negative evidence-validation
+checks to the unit tier. Non-GUI checks and Swift/TypeScript typechecks pass.
+The worker has not run foreground/native smoke verification or inspected these
+new captures; manager execution and independent PNG inspection remain required.
+
 ## 2026-09-28 — Experimental Gen UI and Svelte composition (LKM-106)
 
 Rename the native setting, add wrapping help text and conditionally show the

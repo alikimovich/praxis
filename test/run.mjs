@@ -29,6 +29,8 @@ const UNIT = [
   "native-support",
   "native-sheets",
   "native-settings",
+  "native-settings-layout",
+  "native-settings-evidence",
   "native-chat-controller",
   "native-composer-layout",
   "native-chat-reveal",

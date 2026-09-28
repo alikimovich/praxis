@@ -125,3 +125,46 @@ verification: inspect Settings at its minimum supported width and a wider size,
 read all helper text, toggle Off/On, verify the engine disappears/reappears without
 losing its saved choice, and verify autosave across close/reopen. No new native
 capture or live-provider acceptance is claimed by the worker.
+
+### Manager-owned native acceptance evidence
+
+The configured verification reaches `checkVisibleSettings` through the existing
+native core → sheets fixture. It uses ScreenCaptureKit foreground pixels and
+Vision OCR, with no cacheDisplay fallback or background-mode skip. Test-only
+host hooks require an ephemeral profile. Picker interactions dispatch the real
+SwiftUI AppKit menu-item actions; the fixture never injects settings values.
+
+At the **live minimum (currently 540 points)**, **600-point normal width**, and
+**800-point wider width**, inspect each
+`test/artifacts/native/settings-visible-{width}-{state}.png` and matching `.json`:
+
+| State suffix | Required evidence |
+| --- | --- |
+| `off` | Default Off; complete Gen UI help; engine label, help and picker absent |
+| `on-chat` | On; Chat model selected; complete engine explanation |
+| `on-jev` | Jev selected through its native menu action |
+| `off-preserved-jev` | Engine hidden while its saved value remains Jev |
+| `reopened-off-jev` | Fresh window restores Off and saved Jev |
+| `restored-on-jev` | On restores the visible Jev choice |
+| `reopened-on-chat` | Immediate close after choosing Chat model flushes autosave |
+| `reopened-off-chat` | Immediate close after Off restores Off and Chat model |
+
+The current plan produces 24 PNG/JSON pairs. The interaction log records the
+width plan derived from the live NSHostingController-managed window minimum.
+The JSON records foreground ownership, content/minimum width, picker selected
+labels, containment, hit targets, saved form values and OCR text. The fixture
+requires all words of both visible explanations, rejects an engine rendered
+while Off, and saves evidence before assertions. The action/reopen/capture trail
+is `test/artifacts/native/settings-visible-interactions.json`. A fresh sheet ID
+and unchanged values after close/reopen prove restoration from saved preferences.
+Inspect PNGs for wrapping, clipping and overall readability in addition to the
+automatic assertions. These new foreground captures are pending manager execution;
+the worker does not claim to have observed them.
+
+`bun test/native-settings-layout.mjs` verifies the actual SwiftUI pickers,
+bindings, hidden controls, geometry and autosave emission without displaying a
+window. It uses the same NSHostingController as production and asserts its
+540-point minimum and 540/600/800-point layouts.
+`bun test/native-settings-evidence.mjs` injects missing text, wrong state,
+clipping, occlusion and lost foreground into evidence and requires rejection.
+Both are registered in the manager's unit tier.
