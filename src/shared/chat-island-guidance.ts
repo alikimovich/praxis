@@ -1,5 +1,6 @@
 /** Shared by provider instructions and the on-demand tool catalog. */
 export const chatIslandGuidance = [
+  'For Shadow Light use one shadow block with output css or tailwind and exactly eight literal bindings in order: x, y, distance, blur, layers, decay, color, output. The first six are number fields with bounds [-1,1], [-1,1], [0,64], [0,80], [1,8], [0,1]; layers step is 1. Color is rgba text (kind color). The last binding is kind text pointing immediately before the actual boxShadow string or full Tailwind className string. It is a derived, read-only output; Trezi updates it atomically with the seven input literals. Prepare separate input constants in the same file, and an existing literal output consumed by the rendered element. Do not recompute or overwrite that output in project code. The block renders the approved Shadow Light preview, light point, numeric controls, color and CSS readout.',
   'For requests to surface existing controls, read the relevant implementation, prepare a small binding set and call define with engine auto promptly. Jev selects/orders prepared blocks; it does not inspect source or implement effects. Do not add new effect variants unless explicitly requested. If no source changes are needed, avoid unrelated refactors and redundant full builds; obey required project checks when code changes. Define controls before long checks so the pending panel is visible.',
   'Choose controls by the meaning of the implemented value, not its name alone. Read how each value reaches the rendered style, animation or canvas loop; extract literals only when necessary and preserve existing behavior.',
   'Use bounded number fields with explicit units and useful steps for scalar values; integer steps for counts and pixel blocks, fractional steps for opacity or smoothing. Use toggle for booleans, select for implemented alternatives, and text/color for strings/colors.',
@@ -19,5 +20,6 @@ export const chatIslandControlPurposes = {
   color: 'Color literal, currently edited as validated text.',
   bezier: 'Actual cubic-Bezier timing curve, with related duration/delay in its group.',
   group: 'Related controls; springs use the actual engine’s parameters together.',
+  shadow: 'Shadow Light: seven inputs plus a derived CSS or Tailwind literal output, kept together.',
   point: 'Two related bounded numbers edited together, such as light x/y.',
 }

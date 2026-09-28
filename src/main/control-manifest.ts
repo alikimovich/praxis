@@ -29,6 +29,7 @@ const STYLE_PROPS = new Set([
   'color',
   'background-color',
   'border-radius',
+  'box-shadow',
   'opacity',
   'font-size',
   'font-weight',

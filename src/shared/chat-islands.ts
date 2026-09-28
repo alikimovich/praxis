@@ -5,7 +5,8 @@ export type IslandValue = string | number | boolean
 export interface IslandBlock {
   id: string
   title: string
-  kind: 'group' | 'point'
+  kind: 'group' | 'point' | 'shadow'
+  output?: 'css' | 'tailwind'
   params: string[]
 }
 export interface IslandRecord {

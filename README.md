@@ -79,6 +79,9 @@ GitHub PR.
   appears while Jev arranges the prepared controls; editing activates after landing.
   Later-turn revisions create a new island beside the new response, preserving
   earlier definitions. Adjusting controls preserves your place in the conversation.
+  Shadow Light combines a light-source pad, distance, blur, integer layers, decay
+  and rgba color with a shadow preview and CSS readout. Its input literals and
+  Tailwind or inline shadow output update together through source/HMR.
 - **Next.js source mapping.** Setup detects Next separately from React/Vite and
   provides development-only Turbopack/webpack adapters, with optional MDX mapping.
   It preserves config wrappers and existing component types, synchronizes helpers

@@ -8,7 +8,8 @@ export const chatIslandShape = {
   engine: z.enum(['auto', 'jev', 'agent']).optional(),
   manifest: defineControlsShape.manifest.optional().describe('Literal bindings only, in one source file. Expose clean constants consumed by the project.'),
   blocks: z.array(z.object({
-    id: z.string(), title: z.string().max(80), kind: z.enum(['group', 'point']),
+    id: z.string(), title: z.string().max(80), kind: z.enum(['group', 'point', 'shadow']),
+    output: z.enum(['css', 'tailwind']).optional().describe('Shadow only: output literal is CSS or a Tailwind class list'),
     params: z.array(z.string()).min(1).max(12)
   })).min(1).max(12).optional().describe('Prepared groups; point requires exactly two bounded number bindings for x/y. Jev selects and orders whole blocks; compound blocks retain all bindings.')
 }

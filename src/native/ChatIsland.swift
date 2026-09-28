@@ -46,15 +46,21 @@ struct NativeChatIsland: View {
         model.islandAction(island, action: name, values: values.mapValues(\.object))
     }
     private func commit(_ field: IslandField, _ value: IslandValue) { drafts[field.id] = value; action("commit", values: [field.id:value]) }
+    private var shadowPanel: Bool { island.blocks.contains { $0.kind == "shadow" } }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack { Text(island.title).font(.headline); Spacer(); Text(island.engine == "preparing" ? "Preparing…" : island.engine == "jev" ? "Jev" : "Agent").font(.caption).foregroundStyle(.secondary) }
+            HStack { Text(island.title).font(.headline); Spacer(); Text(island.engine == "preparing" ? "Preparing…" : shadowPanel ? "chat island" : island.engine == "jev" ? "Jev" : "Agent").font(.caption).foregroundStyle(.secondary) }
             if !island.detail.isEmpty { Text(island.detail).font(.caption).fixedSize(horizontal: false, vertical: true) }
             ForEach(island.blocks) { block in
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(block.title).font(.subheadline.weight(.medium))
+                    if block.kind != "shadow" { Text(block.title).font(.subheadline.weight(.medium)) }
                     let fields = block.params.compactMap { id in island.fields.first { $0.id == id } }
-                    if block.kind == "point", fields.count == 2 {
+                    if block.kind == "shadow", fields.count == 8 {
+                        ShadowIsland(fields: fields, value: value, field: { field in AnyView(fieldView(field)) }, light: { x, y, ended in
+                            dragging = !ended
+                            live([fields[0].id: .number(x), fields[1].id: .number(y)], ended: ended)
+                        })
+                    } else if block.kind == "point", fields.count == 2 {
                         IslandPoint(x: value(fields[0]).number, y: value(fields[1]).number,
                             xRange: (fields[0].min ?? -1)...(fields[0].max ?? 1), yRange: (fields[1].min ?? -1)...(fields[1].max ?? 1),
                             label: block.title, change: { x, y, ended in
@@ -63,7 +69,7 @@ struct NativeChatIsland: View {
                                 live([fields[0].id:.number(x), fields[1].id:.number(y)], ended: ended)
                             })
                     }
-                    ForEach(fields) { field in
+                    ForEach(block.kind == "shadow" ? [] : fields) { field in
                         if block.kind == "point" {
                             IslandInput(label: field.label, value: value(field).text, numeric: true) { if let n = Double($0), n.isFinite { commit(field, .number(n)) } }
                         } else { fieldView(field) }
@@ -76,8 +82,8 @@ struct NativeChatIsland: View {
                 Button("Undo") { drafts = [:]; action("undo") }.disabled(island.status != "ready")
                 if island.replay { Button("Replay") { action("replay") }.disabled(island.status != "ready") }
             }.controlSize(.small)
-        }.padding(14).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(.separator, lineWidth: 0.5))
+        }.padding(shadowPanel ? 18 : 14).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: shadowPanel ? 20 : 12))
+            .overlay(RoundedRectangle(cornerRadius: shadowPanel ? 20 : 12).stroke(.separator, lineWidth: 0.5))
             .onChange(of: island.sourceRevision) { _ in if !dragging { drafts = [:] } }
             .onChange(of: island.revision) { _ in drafts = [:] }
     }
@@ -109,7 +115,7 @@ struct NativeChatIsland: View {
         }
     }
 }
-private struct IslandInput: View {
+struct IslandInput: View {
     let label: String; let value: String; let numeric: Bool; let commit: (String) -> Void
     @State private var draft = ""
     @FocusState private var focused: Bool
@@ -123,7 +129,7 @@ private struct IslandInput: View {
             .onChange(of: focused) { next in if !next, draft != value, !numeric || Double(draft)?.isFinite == true { commit(draft) } }
     }
 }
-private struct IslandPoint: View {
+struct IslandPoint: View {
     let x: Double; let y: Double; let xRange: ClosedRange<Double>; let yRange: ClosedRange<Double>
     let label: String; let change: (Double, Double, Bool) -> Void
     var body: some View {

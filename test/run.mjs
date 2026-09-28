@@ -115,6 +115,7 @@ const UNIT = [
   "fluid",
   "oklch",
   "shadows",
+  "shadow-controls",
   "type-metrics",
   "skills-install",
   "trezi-cli"

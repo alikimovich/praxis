@@ -83,7 +83,7 @@ export class ChatIslands {
   async tool(chat: string, sourceRoot: string, raw: any, connectionId?: string) {
     try {
       if (raw?.action === 'catalog') return {
-        version: 1, blocks: ['group', 'point'], fields: ['number', 'toggle', 'text', 'color', 'select', 'bezier'],
+        version: 1, blocks: ['group', 'point', 'shadow'], fields: ['number', 'toggle', 'text', 'color', 'select', 'bezier'],
         controlPurposes: chatIslandControlPurposes,
         guidance: chatIslandGuidance,
         bindingRules: 'Existing literal bindings in one file, up to 12 fields. Jev selects/orders whole prepared blocks; keep coupled bindings together. No arbitrary code executes in islands. Read before updating with id/revision. Default auto engine uses Jev if configured.'

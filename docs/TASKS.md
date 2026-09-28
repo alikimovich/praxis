@@ -3,6 +3,13 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Shadow Light (LKM-86)
+
+- [x] Add bounded Shadow Light generation and a native compound chat-island panel.
+- [x] Bind inputs/output atomically; cover Tailwind and inline edits, Reset and Undo.
+- [x] Run focused non-GUI regression checks and TypeScript/Swift typechecks.
+- [ ] Manager: verify native layout and live HMR under the shared desktop lock; complete independent review.
+
 ## Trezi rename (LKM-85, 2026-09-27)
 
 - [x] Preserve component-only legacy JSX locations across rendering and repeated transforms.
@@ -1509,7 +1516,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       shape and a library-aware apply path. The 2026-09-01 opt-in generator can
       now surface these through Custom controls; this item remains the native,
       automatically detected apply path.
-- [ ] **More style properties** — width/height, box-shadow, per-corner radius,
+- [ ] **More style properties** — width/height, per-corner radius,
       borders, position/inset; each needs a family mapping + a sane control.
 - [ ] **Responsive / state variants** (`hover:`, `md:`) — the rewrite currently
       treats variant-prefixed classes as neither candidates nor blockers, so

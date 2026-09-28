@@ -5,6 +5,7 @@ import { lexLiteral, locateAnchor, renderLiteral, resolveLiteralValue } from './
 import { enqueueRepoWrite } from './repo-write-queue'
 import { recordEdit, revertGroup } from './edit-history'
 import type { IslandRecord, IslandValue } from '../shared/chat-islands'
+import { shadowOutput } from './shadow-controls'
 export const sourceHash = (text: string) => createHash('sha256').update(text).digest('hex')
 export async function islandSource(root: string, record: IslandRecord) {
   const base = await realpath(root), file = await realpath(resolve(root, record.manifest.file))
@@ -18,6 +19,7 @@ export async function islandSource(root: string, record: IslandRecord) {
     if (value === null) throw new Error(`Cannot resolve ${p.label}. Ask the agent to rebind this island.`)
     values[p.id] = value
   }
+  for (const block of record.blocks.filter(b => b.kind === 'shadow')) shadowOutput(block, values)
   return { file, code, values, revision: sourceHash(code) }
 }
 /** One file/gesture = one validated write and undo group. All participants share repo queue. */
@@ -28,6 +30,25 @@ export function writeIsland(root: string, record: IslandRecord, expected: string
     if (source.revision !== expected) throw new Error('Source changed. Reload before applying your adjustment.')
     const changes: { start: number; end: number; text: string }[] = []
     if (!values || typeof values !== 'object' || Array.isArray(values) || !Object.keys(values).length) throw new Error('No values to apply.')
+    values = { ...values }
+    const derived = new Set<string>()
+    for (const block of record.blocks.filter(b => b.kind === 'shadow')) {
+      const output = block.params[7]
+      derived.add(output)
+      // Ignore client-supplied output (including Reset); always derive it.
+      delete values[output]
+      if (block.params.some(id => id in values)) {
+        shadowOutput(block, { ...source.values, ...values }) // Reject out-of-range/fractional counts first.
+        for (const id of block.params.slice(0, 6)) {
+          if (!(id in values)) continue
+          const param = record.manifest.params.find(p => p.id === id)!
+          const literal = renderLiteral('number', values[id], param)
+          if (typeof literal !== 'string') throw new Error(literal.error)
+          values[id] = Number(literal)
+        }
+        values[output] = shadowOutput(block, { ...source.values, ...values })
+      }
+    }
     for (const [id, value] of Object.entries(values)) {
       const param = record.manifest.params.find(p => p.id === id)
       if (!param || param.apply.strategy !== 'literal') throw new Error('Unknown binding.')
@@ -36,7 +57,7 @@ export function writeIsland(root: string, record: IslandRecord, expected: string
       const lit = lexLiteral(source.code, loc.at, param.kind)
       if (!lit) throw new Error('Source literal no longer resolves.')
       const converted = param.kind === 'bezier' && typeof value === 'string' ? value.match(/-?\d*\.?\d+/g)?.map(Number) : value
-      const text = renderLiteral(param.kind, converted, param, lit.raw.startsWith('[') ? 'array' : 'string')
+      const text = derived.has(id) ? JSON.stringify(value) : renderLiteral(param.kind, converted, param, lit.raw.startsWith('[') ? 'array' : 'string')
       if (typeof text !== 'string') throw new Error(text.error)
       changes.push({ start: lit.start, end: lit.end, text })
     }

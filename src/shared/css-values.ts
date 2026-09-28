@@ -20,7 +20,7 @@ export interface CssNumber {
 export type StyleGroup = 'layout' | 'appearance' | 'typography' | 'transition'
 
 /** Which control the panel renders for the property. */
-export type StyleControl = 'number' | 'color' | 'select' | 'bezier' | 'readonly'
+export type StyleControl = 'number' | 'color' | 'select' | 'bezier' | 'text' | 'readonly'
 
 export interface StylePropMeta {
   group: StyleGroup
@@ -67,7 +67,7 @@ function sideMeta<P extends 'padding' | 'margin'>(
 
 /**
  * The ENTIRE v1 property set (longhands), keyed by css property name.
- * Out of scope for v1 (width/height, box-shadow, per-corner radius, borders,
+ * Out of scope for v1 (width/height, per-corner radius, borders,
  * position/inset, variants) is deliberately absent — the styles engine
  * allowlist mirrors this table.
  *
@@ -90,6 +90,7 @@ export const STYLE_PROP_META: Record<string, StylePropMeta> = {
   // --- appearance ---
   color: { group: 'appearance', control: 'color' },
   'background-color': { group: 'appearance', control: 'color' },
+  'box-shadow': { group: 'appearance', control: 'text' },
   'border-radius': pxMeta('appearance', 0, 200),
   opacity: { group: 'appearance', control: 'number', unit: '', min: 0, max: 1, step: 0.01 },
 

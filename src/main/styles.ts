@@ -46,8 +46,8 @@ export const STYLE_PROPS: ReadonlySet<string> = new Set(STYLE_PROP_LIST)
  * declaration, escape a style object, or break attribute quoting. Inside parens
  * (`cubic-bezier(…)`, `var(…)`) commas and dots are business as usual.
  */
-export function isSafeStyleValue(value: string): boolean {
-  if (!value.trim() || value.length > 200) return false
+export function isSafeStyleValue(value: string, maxLength = 200): boolean {
+  if (!value.trim() || value.length > maxLength) return false
   let depth = 0
   for (let i = 0; i < value.length; i++) {
     const ch = value[i]
@@ -123,7 +123,7 @@ export async function applyStyleEdit(root: string, edit: StyleEdit): Promise<Sty
   if (!STYLE_PROPS.has(edit.prop)) {
     return { applied: false, error: 'Unsupported style property.' }
   }
-  if (typeof edit.value !== 'string' || !isSafeStyleValue(edit.value)) {
+  if (typeof edit.value !== 'string' || !isSafeStyleValue(edit.value, edit.prop === 'box-shadow' ? 1024 : 200)) {
     return { applied: false, error: 'Invalid style value.' }
   }
   const loc = resolveSource(root, edit.source)

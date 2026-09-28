@@ -2,6 +2,24 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Shadow Light chat island (LKM-86)
+
+Add a native Shadow Light compound block through the current `chat_island`
+agent tool (which shares the legacy define-controls manifest schema). The panel
+includes a local shadow preview, bounded light point, distance/blur/layers/decay,
+rgba color and CSS readout. Seven input literals and the real CSS or Tailwind
+output literal update atomically through existing source/HMR, Reset and Undo.
+Integer layers and rgba channels are validated before writes; generated CSS uses
+the exact persisted input precision. Add box-shadow to the Styles engine and
+Tailwind family rewrite without removing shadow-color or variant utilities.
+
+Focused Bun generation, source round-trip, island lifecycle, existing controls,
+CSS metadata and native-boundary checks pass, as do TypeScript checks and a
+focused Swift typecheck using a minimal ChatModel stub. Desktop fidelity/HMR,
+full native integration and independent review remain manager-owned. No `check`
+script exists in this native checkout. The mockup's small gray labels failed
+APCA; use native system foreground styling for labels.
+
 ## 2026-09-27 — Preserve legacy instance locations through nested spreads
 
 Normalize copied JSX spread props before forwarding so legacy instance locations
