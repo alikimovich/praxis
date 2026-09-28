@@ -1,12 +1,14 @@
 // Deliberately small Bun legacy service for real process supervision checks.
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
-import { writeFileSync } from 'node:fs'
+import { renameSync, writeFileSync } from 'node:fs'
+// Rename into place: a reader polling for the path must never see it empty.
+const publish = (path, pid) => { writeFileSync(`${path}.tmp`, String(pid)); renameSync(`${path}.tmp`, path) }
 if (process.env.FIXTURE_DESCENDANT) {
   const child = spawn(process.execPath, ['-e', "process.on('SIGTERM',()=>{});setInterval(()=>{},1000)"], { stdio: 'ignore' })
-  writeFileSync(process.env.FIXTURE_DESCENDANT, String(child.pid))
+  publish(process.env.FIXTURE_DESCENDANT, child.pid)
 }
-if (process.env.FIXTURE_PID) writeFileSync(process.env.FIXTURE_PID, String(process.pid))
+if (process.env.FIXTURE_PID) publish(process.env.FIXTURE_PID, process.pid)
 for await (const line of createInterface({ input: process.stdin })) {
   const command = JSON.parse(line)
   if (command.type === 'quit' || command.type === 'shutdown') process.exit(0)

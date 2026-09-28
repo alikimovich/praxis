@@ -53,8 +53,18 @@ function processFixture(binary, args = [], env = {}) {
   }
 }
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms))
-async function file(path) { for (let i = 0; i < 100 && !existsSync(path); i++) await pause(20); return readFileSync(path, 'utf8') }
+// A pid file can exist before its digits are written. Number('') is 0, and the
+// cleanup's kill(-0) is kill(0): SIGKILL to this test's own process group.
+async function pidFile(path, timeout = 2000) {
+  for (const deadline = Date.now() + timeout; ; await pause(20)) {
+    const text = existsSync(path) ? readFileSync(path, 'utf8').trim() : ''
+    if (/^\d+$/.test(text) && Number(text) > 1) return Number(text)
+    assert.ok(Date.now() < deadline, `no complete pid in ${path}: ${JSON.stringify(text)}`)
+  }
+}
+function killGroup(pid) { if (Number.isSafeInteger(pid) && pid > 1) try { process.kill(-pid, 'SIGKILL') } catch {} }
 async function dead(pid) {
+  assert.ok(Number.isSafeInteger(pid) && pid > 1, `invalid fixture pid ${pid}`)
   for (let i = 0; i < 100; i++) {
     try { process.kill(pid, 0) } catch (error) { if (error.code === 'ESRCH') return }
     await pause(20)
@@ -67,6 +77,15 @@ function hello(connection, launch, extra = {}) {
 }
 function plist(path, value) { writeFileSync(path, `<?xml version="1.0"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict>${value}</dict></plist>`) }
 try {
+  // Regression: a created-but-unwritten pid file once became group 0 and the
+  // cleanup SIGKILLed this test after its final PASS under parallel load.
+  const unwritten = join(scratch, 'unwritten.pid')
+  writeFileSync(unwritten, '')
+  await assert.rejects(pidFile(unwritten, 100), /no complete pid/, 'empty pid file is never read as 0')
+  writeFileSync(unwritten, '0')
+  await assert.rejects(pidFile(unwritten, 100), /no complete pid/, 'pid 0 names the caller group')
+  // Must be no-ops; a regression here SIGKILLs this test (never test 1: kill(-1) is everyone).
+  killGroup(0); killGroup(-0); killGroup(Number.NaN)
   if (process.platform !== 'darwin') {
     console.log('SERVICE-PROCESS SKIP — macOS XPC and process supervision require Darwin')
   } else {
@@ -93,7 +112,7 @@ try {
       const instance = processFixture(supervisor, [mode, profile, bun, backend], { FIXTURE_DESCENDANT: descendant })
       const pid = Number((await instance.line(line => line.startsWith('CHILD '))).slice(6))
       groups.add(pid)
-      const descendantPID = Number(await file(descendant))
+      const descendantPID = await pidFile(descendant)
       instance.send('stop')
       assert.equal((await instance.done).code, 0)
       await dead(pid)
@@ -122,7 +141,7 @@ try {
     // The explicit launch-time rollback uses the same lock and drains its child.
     const rollbackPIDFile = join(scratch, 'rollback-child.pid')
     const rollback = processFixture(executable, ['--legacy', '--bun', bun, '--backend', backend, '--profile', profile], { FIXTURE_PID: rollbackPIDFile })
-    const rollbackPID = Number(await file(rollbackPIDFile))
+    const rollbackPID = await pidFile(rollbackPIDFile)
     groups.add(rollbackPID)
     const rollbackContender = processFixture(supervisor, ['lock', profile])
     assert.notEqual((await rollbackContender.done).code, 0, 'rollback shares profile exclusion')
@@ -160,7 +179,8 @@ try {
     const ready = await client.reply(hello(connection, launch))
     assert.ok(ready.hello, 'real XPC handshake')
     assert.equal(ready.hello.connection, connection)
-    groups.add(Number(await file(backendPID)))
+    const firstBackend = await pidFile(backendPID)
+    groups.add(firstBackend)
     const bridge = { event: 'fixtureEcho', value: '猫' }
     assert.equal((await client.reply(control(connection, 'legacy', { payload: Buffer.from(JSON.stringify(bridge)).toString('base64') }))).failure, undefined)
     const echoed = await client.line(line => line.startsWith('EVENT ') && JSON.parse(Buffer.from(line.slice(6), 'base64')).method === 'fixtureEcho')
@@ -181,8 +201,8 @@ try {
     await client.reply(control(reconnected, 'shutdown'))
     client.child.stdin.end()
     assert.equal((await client.done).code, 0)
-    await dead(Number(await file(backendPID)))
-    groups.delete(Number(await file(backendPID)))
+    await dead(firstBackend)
+    groups.delete(firstBackend)
     assert.equal(readFileSync(state, 'utf8'), '{"newer":"retained-after-rollback"}')
     await pause(300)
     const launchFile = join(scratch, 'launch.json')
@@ -190,7 +210,8 @@ try {
     rmSync(backendPID, { force: true })
     const production = processFixture(host, ['production', launchFile, executable])
     await production.line(line => line === 'READY')
-    groups.add(Number(await file(backendPID)))
+    const productionBackend = await pidFile(backendPID)
+    groups.add(productionBackend)
     production.send({ event: 'fixtureEcho', value: 'production-client', stderr: true })
     await production.line(line => line.startsWith('EVENT ') && JSON.parse(Buffer.from(line.slice(6), 'base64')).value === 'production-client')
     // The XPC service's own stderr is discarded; Bun's must reach the host's.
@@ -204,14 +225,14 @@ try {
     await production.line(line => line.startsWith('EVENT ') && JSON.parse(Buffer.from(line.slice(6), 'base64')).value === 'after-reconnect')
     production.send('shutdown')
     assert.equal((await production.done).code, 0, 'production client reconnects and joins repeated shutdown')
-    await dead(Number(await file(backendPID)))
-    groups.delete(Number(await file(backendPID)))
+    await dead(productionBackend)
+    groups.delete(productionBackend)
     await pause(300)
     // Backend death reaches the host with its failure status; nothing relaunches Bun.
     rmSync(backendPID, { force: true })
     const crashing = processFixture(host, ['production', launchFile, executable])
     await crashing.line(line => line === 'READY')
-    const crashedPID = Number(await file(backendPID))
+    const crashedPID = await pidFile(backendPID)
     groups.add(crashedPID)
     rmSync(backendPID)
     crashing.send({ event: 'fixtureExit' })
@@ -231,6 +252,6 @@ try {
   }
 } finally {
   for (const child of processes) { child.stdin.destroy(); child.kill('SIGKILL') }
-  for (const pid of groups) { try { process.kill(-pid, 'SIGKILL') } catch {} }
+  for (const pid of groups) killGroup(pid)
   rmSync(scratch, { recursive: true, force: true })
 }

@@ -20,7 +20,7 @@
     "dev:native": "bun scripts/dev-native.mjs",
     "build:native": "bun scripts/build-native.mjs",
     "typecheck:native": "tsc --noEmit -p tsconfig.native.json",
-    "test:native": "bun test/native-runtime.mjs",
+    "test:native": "bun test/native-runtime.mjs && bun test/native-chat-scroll.mjs --require-build",
     "test:native-live": "bun test/native-runtime-live.mjs",
     "link": "bun link",
     "lint": "biome check src test",

@@ -5,6 +5,7 @@ import type { NativeBridge } from './bridge'
 import { captureForegroundChat } from './smoke-input'
 import { nativeChat, nativeIslands } from './chat-runtime'
 import { serviceEvents } from './platform'
+import { missingShadowCaptureSemantics } from './smoke-shadow-semantics'
 import { runChatIslandTool } from '../main/chat-islands'
 import { shadowLight, type ShadowLightInput } from '../main/shadows'
 
@@ -29,13 +30,6 @@ document.body.append(card);
       await new Promise(resolve => setTimeout(resolve, 50))
     }
     throw new Error('Shadow Light native fixture did not reach the expected source/preview state.')
-  }
-  const settled = async (check: () => Promise<boolean>, ms = 3000) => {
-    for (const deadline = Date.now() + ms; Date.now() < deadline;) {
-      try { if (await check()) return true } catch { /* retried below */ }
-      await new Promise(resolve => setTimeout(resolve, 50))
-    }
-    return false
   }
   const previewMatches = async (values: ShadowLightInput) => !!await page(`(() => {
     const card = document.querySelector('#island-shadow-demo');
@@ -75,39 +69,24 @@ document.body.append(card);
     i.id === result.id && i.sourceRevision === view().sourceRevision && i.blockKinds?.[0] === 'shadow' && i.fields === 8)
   await wait(swiftReady)
   const capture = async (name: string) => {
-    const recognized: string[] = []
+    const recognized: string[][] = []
     // Tall panels need two viewport captures; both come from the real window.
     for (const bottom of [false, true]) {
-      let image: any
-      for (let attempt = 1; ; attempt++) {
-        const revealed = await host.request('revealChatIsland', { island: result.id, bottom })
-        // A top reveal puts the message's top at (or, when clamped, below) the viewport
-        // top. A negative top means a later scroll moved it: the header is cut off.
-        const placed = async () => {
-          const state = await host.request('chatInspect')
-          const top = state.messageTops?.[revealed.message]
-          return state.visibleMessageIDs.includes(revealed.message) && (bottom || (typeof top === 'number' && top >= -4))
-        }
-        const where = `revealed island ${bottom ? 'end' : 'top'} for capture ${name}`
-        if (await settled(placed)) {
-          await new Promise(resolve => setTimeout(resolve, 350))
-          image = await captureForegroundChat(host)
-          // Recapture only when the viewport moved during capture; labels are still asserted below.
-          if (await placed()) break
-        }
-        assert.ok(attempt < 3, `Chat viewport did not hold the ${where}`)
-        console.warn(`Chat viewport did not hold the ${where} (attempt ${attempt}/3); revealing again`)
-      }
+      const revealed = await host.request('revealChatIsland', { island: result.id, bottom })
+      const layout = await host.request('chatInspect')
+      assert.equal(layout.revealAppliedRevision, revealed.revision, 'SwiftUI applied the acknowledged island reveal')
+      const image = await captureForegroundChat(host)
       assert.ok(image.width > 200 && image.height > 200, 'Nonempty visible chat viewport')
       const stem = `shadow-light-${name}${bottom ? '-bottom' : ''}`
       writeFileSync(join(artifacts, `${stem}.png`), Buffer.from(image.png, 'base64'))
-      writeFileSync(join(artifacts, `${stem}.json`), JSON.stringify({ text: image.text, width: image.width, height: image.height }, null, 2))
-      recognized.push(...image.text)
+      writeFileSync(join(artifacts, `${stem}.json`), JSON.stringify({
+        text: image.text, width: image.width, height: image.height,
+        reveal: revealed, islandPositions: layout.islandPositions,
+      }, null, 2))
+      recognized.push(image.text)
     }
-    const visibleText = recognized.join(' ').toLowerCase()
-    for (const label of ['shadow light', 'preview', 'light source', 'distance', 'blur', 'layers', 'decay', 'rgba', 'box-shadow', 'undo']) {
-      assert.ok(visibleText.includes(label), `Visible Shadow Light capture is missing ${label}; inspect shadow-light-${name}*.png`)
-    }
+    const missing = missingShadowCaptureSemantics(recognized[0], recognized[1])
+    assert.deepEqual(missing, [], `Visible Shadow Light capture is missing ${missing.join(', ')}; title and Preview must be visible at the top, while controls, output and Undo may span shadow-light-${name}*.png`)
   }
   await capture('initial')
   // Each independently adjustable control must change the actual computed shadow.

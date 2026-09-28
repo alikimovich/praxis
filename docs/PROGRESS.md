@@ -2,6 +2,40 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Resolve the S02 candidate merge against LKM-107 (LKM-89 / S02)
+
+The previous manager verification passed: 113 unit checks, both typechecks and
+`test:native` (NATIVE CORE PASS). Review and merge stopped at the candidate merge
+instead, because `candidate` had meanwhile taken LKM-107. Both branches changed the
+Shadow Light reveal, so `src/native/Chat.swift` and
+`src/native/smoke-shadow-island.ts` conflicted. A trial merge of `candidate` into
+the S02 head, done in a throwaway clone, reproduced exactly those two conflicts.
+
+LKM-107 fixes the race that S02's capture retry only worked around: a reveal is
+re-issued against measured anchor geometry until SwiftUI applies it. The smoke then
+asserts the acknowledged `revealAppliedRevision` before capturing. S02 now takes
+LKM-107's version of both files, so the `messageTops` inspect field and the
+three-attempt re-reveal loop are gone. Every other file came from the clean
+auto-merge (service build/sign steps, `Host.swift` service mode, test tiers,
+docs). The worktree now holds that merged tree, so `native-chat-reveal` joins
+the unit tier here. The service code is unchanged. Per-file `git merge-file`
+(with the `merge=union` driver for this log) shows candidate ← this tree merges
+with no conflicts and yields exactly this tree.
+
+Verifying the merged tree also turned up a real `service-process` flake. One
+parallel unit run killed it with SIGKILL right after its final PASS line; it
+passed alone. The cause: the fixture polled for a pid file and read it as soon
+as it *existed*. A backend can create that file before writing its digits (a
+racing probe saw it empty in 164 of 300 reads), and `Number('')` is 0. That 0
+stayed in the cleanup set after the real pid was removed, and the `finally`
+ran `process.kill(-0, 'SIGKILL')`, which is `kill(0)`: the test's own process
+group. The Swift guardian fixture had the same race, where the force-unwrapped
+`Int32("")!` crashes instead. Fixed: the backend fixture renames its pid files
+into place, both readers wait for a complete pid > 1, and group cleanup refuses
+pids ≤ 1. A regression check at the top of `service-process` asserts that an
+empty file and a `0` are both rejected and that killing group 0 or NaN is a
+no-op.
+
 ## 2026-09-28 — Native smoke through the service: quit hang, lost logs, capture race (LKM-89 / S02)
 
 Manager verification: all 113 unit checks pass; `test:native` ran through
@@ -30,7 +64,8 @@ from artifacts and code, without running the GUI tier:
   off), while the bottom capture was placed correctly. `chatInspect` now reports
   message tops. The smoke re-reveals (up to three attempts) when the revealed
   top is not held before and after capture. All OCR label assertions are
-  unchanged. The underlying late scroll is not identified.
+  unchanged. The underlying late scroll is not identified. (Superseded by
+  LKM-107's acknowledged reveal; see the merge-resolution entry above.)
 
 Worker checks: both typechecks, `bun run build`, and the full unit tier (113
 pass) outside the sandbox, including `service-process` with its new diagnostics
@@ -102,6 +137,150 @@ codec, rollback); managed-child, native-service-launch, native-supervised-bridge
 native-bridge-close, trezi-cli. Not run by the worker: the XPC half (Seatbelt
 blocks launchd lookup: "Sandbox restriction"), native-shutdown (sandbox denies
 port binding) and the native GUI tier — manager verification required.
+## 2026-09-28 — Scroll a reveal's row in by its own edge (LKM-107)
+
+The reading-area rule in the entry below broke the Shadow Light smoke (before
+chat-scroll even ran): `Island reveal did not settle at bottom; revision=2,
+applied=1, attempts=80, frame={{36, 718.5}, {368, 1}}`, every attempt at the
+same frame. `scrollTo(id, anchor:)` aligns the SAME unit point of the target
+and the viewport, so the reading-edge point (580/776) lands a view's bottom at
+the reading edge only for the ~1pt anchors. For the ~620pt Shadow Light row it
+parked the end anchor at 718.5 — on screen, behind the composer, outside the
+reading area — so the rule picked the row again forever. The old frame-only rule
+had passed because it targeted that on-screen anchor directly.
+`islandRevealScroll` (replacing `islandRevealTarget`) now falls back to the row
+only while the anchor is outside the whole viewport, and scrolls the row by its
+own near edge (`.top`/`.bottom`), which leaves the anchor on screen; only
+anchors use the reading-edge point. The Swift unit fixture drives the attempt
+loop against that alignment model from the recorded 718.5 fixed point plus the
+1760pt, above-viewport and taller-than-viewport rows; last round's rule fails it.
+
+## 2026-09-28 — Reveal islands whose retained row is offscreen (LKM-107)
+
+The next manager run passed the whole 440pt reveal matrix (revisions 1–8) and
+then failed the first 320pt reveal: `revision=9, applied=8, attempts=80,
+frame={{32, 1760}, {256, 16}}`. The lazy stack had kept the island's row from
+the 440pt pass, so the anchor still published a frame. But narrowing the chat
+reflowed the history above it, and `scrollTo` on a nested anchor inside a
+retained offscreen row does not move. "Has a frame" was the wrong test for
+falling back to the message row. `islandRevealTarget` now targets the message
+row until the anchor is within the reading area (±8pt), then the anchor. The
+Swift unit fixture adds the recorded 1760pt frame, an anchor above the viewport
+and the tolerance boundary. Restoring the frame-only rule fails it.
+
+## 2026-09-28 — Reveal islands whose lazy row is offscreen (LKM-107)
+
+The first manager run of the chat-scroll reveal matrix failed at once:
+`Island reveal did not settle at top; revision=1, applied=0, attempts=80,
+frame=missing`. The island sat in a message row the lazy stack had never
+realized (the chat followed to the bottom), so its nested `island-start-` anchor
+published no frame and `scrollTo` had nothing to find — each of the 80 attempts
+missed. The Shadow Light smoke passed only because its island was already on
+screen. Removing `revealMessage` in the entry below was the wrong call: the
+request carries the containing message ID again, and `islandRevealTarget`
+(`src/native/ChatReveal.swift`) scrolls that direct lazy-stack child in while
+the anchor has no frame, then targets the anchor. The Swift unit fixture covers
+both targets (mutation-checked). The chat-scroll fixture also had the island as
+the first message, where a bottom reveal is clamped at the scroll top and can
+never reach the reading edge; it now has 20 messages on each side, and each
+`reveal-<width>.json` records whether the row had published frames beforehand.
+
+## 2026-09-28 — Put the native reveal overlap case in `test:native` (LKM-107)
+
+Independent review: the manager's `bun run test:native` only ran
+native-runtime, so the native overlap case in `test/helpers/native-chat-scroll.mjs`
+never executed. `test:native` now also runs `test/native-chat-scroll.mjs
+--require-build` (a missing host after the build fails instead of SKIP). The
+reveal section is now a matrix at 440pt and the 320pt minimum chat width: top and
+bottom reveals must settle with the acknowledged anchor within 8pt of the reading
+edge; overlapping pairs top→bottom, bottom→top and top→top (stale anchor already
+at its edge) must reject the older request with `superseded` naming exactly the
+newest revision, and the newest must settle against its own anchor. Evidence:
+`test/artifacts/native/chat-scroll/reveal-{440,320}-{top,bottom}.png`,
+`reveal-{440,320}-overlap-*.png` and `reveal-{440,320}.json`. Checked here:
+syntax, the `--require-build` FAIL/SKIP paths, typechecks and the unit tier;
+the GUI fixture itself is for the manager's desktop-locked run.
+
+## 2026-09-28 — Resolve superseded island reveals (LKM-107, LKM-86 follow-up)
+
+Review found that a still-polling reveal request accepted any
+`revealAppliedRevision >= revision`, so a newer request's settlement could
+acknowledge an older one whose stale anchor happened to sit at its edge. Move
+the decision into `src/native/ChatReveal.swift`: a request is superseded as soon
+as the model's revision differs from its own, and settles only when its exact
+revision is applied and its own anchor frame reaches the requested edge. The
+host now publishes the request synchronously so overlapping requests take
+revisions in arrival order, and replies with a `superseded` error instead of an
+acknowledgement. `test/native-chat-reveal.mjs` (unit tier) compiles the pure
+logic and covers overlap, same-edge supersession, older applied revisions,
+unsettled/missing frames and the tolerance boundary; a mutation restoring the
+old check fails it. The native chat-scroll fixture adds an overlapping top/bottom
+pair. The now write-only `revealMessage` model field is removed (top reveals
+target the island title anchor). Verified: both typechecks, `build:native`,
+`native-chat-reveal`, `native-visible-capture`, docs links, and the unit tier
+(105 PASS; the 5 FAILs — trezi-agent-tools, codex-mcp, native-shutdown,
+native-preview-recovery, devserver-net — are sandbox socket/port denials, not this
+change). `bun run test:native`, including the overlap case, is left to the
+manager's desktop-locked verification.
+
+## 2026-09-28 — Retry Shadow Light reveal after nested layout settles
+
+Reproduce the deterministic native failure after the earlier acknowledgement
+gate: the title anchor remains 122 points above the viewport because the
+one-shot `scrollTo` runs from `onChange` before SwiftUI commits the nested lazy
+message/island geometry. Move reveal completion into a bounded main-actor loop:
+yield past that update, reissue the same semantic top or composer-safe bottom
+anchor, and mark the revision applied only after the named-coordinate-space
+frame reaches the requested edge. Expose the attempt count in inspection and
+failure diagnostics.
+
+Extend the native chat-scroll fixture to reveal a nested island at both edges
+and require the acknowledged revision to have settled. No title, capture
+semantics or UI layout was relaxed. Verification remains blocked: this session
+and a read-only verification worker both reject every shell command before
+launch with the literal result `Rejected:`, including the focused visible
+capture test, both typechecks, native build and native suite. Consequently no
+fresh Shadow Light PNG, OCR, diagnostic JSON or run ID exists to inspect.
+
+## 2026-09-28 — Gate Shadow Light captures on settled island geometry
+
+Read the retained visible pixels and OCR together. The requested top image starts
+halfway through Light Source and includes the following token card, while the
+requested bottom image starts higher, at the preview tail and Light Source. The
+reveal request previously replied immediately after publishing Swift state, and
+the smoke's readiness check only proved that the containing message intersected
+the viewport; neither proved SwiftUI handled `scrollTo` or reached an anchor.
+
+Measure the island title and end anchors in the scroll coordinate space. Record
+the requested and applied reveal revisions plus anchor frames in chat inspection.
+Delay the host acknowledgement until SwiftUI has handled that revision and the
+requested anchor is within eight points of the top or composer-safe bottom edge;
+otherwise fail with the applied revision and last frame. Capture artifacts now
+persist the acknowledgement and measured frames, and the smoke no longer uses a
+fixed 350 ms delay or the unrelated visible-message predicate. Existing title,
+Preview, controls, output and Undo assertions remain unchanged.
+
+Executable verification is blocked in this session: every shell invocation is
+rejected before process launch with the literal result `Rejected:`, including
+`bun run typecheck:native`, the focused visible-capture regression and
+`bun run test:native`. A separate verification worker encountered the identical
+pre-launch rejection. No fresh run ID, PNG or OCR artifact was generated.
+
+## 2026-09-28 — Reveal the actual top of Shadow Light
+
+Inspect the saved pixels instead of inferring layout from OCR. The initial image
+begins halfway through the light controls and the bottom image begins at the end
+of Preview; the product title exists above both captures. The top reveal targets
+the containing message rather than the tall island, so it does not establish a
+panel-top viewport. Add an explicit island-start anchor and target it directly.
+The visible UI itself is consistent with the intended product structure.
+
+Split capture semantics by viewport. Require `Shadow Light` and `Preview` in the
+top image, then require Light Source, all controls, CSS output and Undo across
+the two real visible captures. Add a non-GUI regression proving `Shadow` in one
+capture plus `Light Source` in another cannot synthesize the title. Command
+execution was unavailable because the runner rejected every Bun invocation
+before launch; no new PNGs or executable test results were produced.
 
 ## 2026-09-28 — Local Apple Intelligence exploration
 

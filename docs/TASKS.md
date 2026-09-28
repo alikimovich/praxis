@@ -55,6 +55,9 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Replace offscreen captures with visible window captures and chat-only OCR assertions; scroll to both ends of the actual island.
 - [x] Replace external screencapture with current-process ScreenCaptureKit; preserve foreground/OCR requirements.
 - [x] Await final native host output before removing the disposable test profile.
+- [x] Reveal the Shadow Light panel's true top and require title/Preview evidence independently from lower controls and output.
+- [x] Retry nested island reveals after SwiftUI layout and acknowledge only measured top/bottom settlement.
+- [x] Resolve overlapping island reveals against their own revision/anchor; superseded requests fail as superseded (Swift unit fixture + native chat-scroll overlap case).
 - [ ] Manager: run the new fixture and inspect shadow-light-initial/adjusted/restored PNGs and their -bottom companions against the approved mockup.
 - [ ] Manager: verify native layout and live HMR under the shared desktop lock; complete independent review.
 

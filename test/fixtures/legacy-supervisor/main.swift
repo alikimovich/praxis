@@ -29,6 +29,17 @@ func check(_ value: @autoclosure () -> Bool, _ message: String) {
 func fails(_ message: String, _ body: () throws -> Void) {
     do { try body(); check(false, message) } catch {}
 }
+/// A pid file exists before its digits are written; wait for a complete pid.
+func waitForPID(_ path: String, _ message: String, timeout: TimeInterval = 5) -> pid_t {
+    let deadline = Date().addingTimeInterval(timeout)
+    repeat {
+        let text = (try? String(contentsOfFile: path, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if let pid = pid_t(text), pid > 1 { return pid }
+        usleep(10_000)
+    } while Date() < deadline
+    check(false, message)
+    return 0
+}
 // Honor the caller's TMPDIR (sandboxed runners); Foundation's default ignores it.
 let profile = URL(fileURLWithPath: ProcessInfo.processInfo.environment["TMPDIR"] ?? NSTemporaryDirectory()).appendingPathComponent("trezi-supervisor-\(UUID().uuidString)")
 try FileManager.default.createDirectory(at: profile, withIntermediateDirectories: true)
@@ -103,11 +114,8 @@ guardianEnvironment["GUARD_BINARY"] = binary
 guardianEnvironment["TARGET_PID_FILE"] = targetFile
 guardianEnvironment["GRANDCHILD_PID_FILE"] = grandchildFile
 let bunChild = try detached.start(executable: bun, arguments: ["-e", bunScript], environment: guardianEnvironment, onExit: { _ in })
-let creationDeadline = Date().addingTimeInterval(5)
-while !FileManager.default.fileExists(atPath: grandchildFile) && Date() < creationDeadline { usleep(10_000) }
-check(FileManager.default.fileExists(atPath: grandchildFile), "detached fixture started")
-let targetPID = Int32(try String(contentsOfFile: targetFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines))!
-let grandchildPID = Int32(try String(contentsOfFile: grandchildFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines))!
+let grandchildPID = waitForPID(grandchildFile, "detached fixture started")
+let targetPID = waitForPID(targetFile, "detached target recorded")
 kill(bunChild.pid, SIGKILL)
 let cleanupDeadline = Date().addingTimeInterval(5)
 while (kill(targetPID, 0) == 0 || kill(grandchildPID, 0) == 0) && Date() < cleanupDeadline { usleep(10_000) }
@@ -122,10 +130,7 @@ owner.executableURL = URL(fileURLWithPath: binary)
 owner.arguments = ["--lifetime-owner", crashProfile.path, bun]
 try owner.run()
 let backendFile = crashProfile.appendingPathComponent("backend.pid")
-let ownerDeadline = Date().addingTimeInterval(5)
-while !FileManager.default.fileExists(atPath: backendFile.path) && Date() < ownerDeadline { usleep(10_000) }
-check(FileManager.default.fileExists(atPath: backendFile.path), "guarded backend started")
-let backendPID = Int32(try String(contentsOf: backendFile, encoding: .utf8))!
+let backendPID = waitForPID(backendFile.path, "guarded backend started")
 // The backend has installed its TERM handler before it yields its first timer.
 usleep(50_000)
 kill(owner.processIdentifier, SIGKILL)
