@@ -2,6 +2,13 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — CLAUDE.md favicon entry corrected (LKM-105 review)
+
+Independent review found CLAUDE.md still described `project-icon.ts` as the
+sidebar row's favicon. The entry now says the favicon is kept as project metadata
+(`project:icon`) and no longer drawn: project rows use the shared folder symbol
+from `src/native/SidebarIcon.swift`. No code changes.
+
 ## 2026-09-28 — Sidebar fixture restores the foreground (LKM-105 feedback)
 
 Manager verification failed twice in `test:native` with "Chat window is not in the
