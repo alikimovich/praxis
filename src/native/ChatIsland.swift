@@ -82,6 +82,7 @@ struct NativeChatIsland: View {
                 Button("Undo") { drafts = [:]; action("undo") }.disabled(island.status != "ready")
                 if island.replay { Button("Replay") { action("replay") }.disabled(island.status != "ready") }
             }.controlSize(.small)
+            Color.clear.frame(height: 1).id("island-end-" + island.id)
         }.padding(shadowPanel ? 18 : 14).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: shadowPanel ? 20 : 12))
             .overlay(RoundedRectangle(cornerRadius: shadowPanel ? 20 : 12).stroke(.separator, lineWidth: 0.5))
             .onChange(of: island.sourceRevision) { _ in if !dragging { drafts = [:] } }

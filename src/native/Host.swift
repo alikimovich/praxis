@@ -272,6 +272,21 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             if let island = chat.model.snapshot?.messages.flatMap({ $0.segments.compactMap { $0.island } }).first(where: { $0.id == c["island"] as? String }) {
                 chat.model.islandAction(island, action: c["action"] as? String ?? "", values: c["values"] as? [String: Any] ?? [:]); reply(id)
             } else { reply(id, error: "Island not found") }
+        case "revealChatIsland":
+            guard ephemeral, let target = c["island"] as? String,
+                  let message = chat.model.snapshot?.messages.first(where: { $0.segments.contains { $0.island?.id == target } }) else {
+                reply(id, error: "Test island unavailable"); return
+            }
+            NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil)
+            chat.model.revealIsland = target; chat.model.revealMessage = message.id; chat.model.revealBottom = c["bottom"] as? Bool ?? false
+            chat.model.revealRevision += 1
+            reply(id, ["message": message.id])
+        case "captureVisibleChat":
+            guard ephemeral else { reply(id, error: "Test profile required"); return }
+            Task { @MainActor in
+                do { reply(id, try await captureVisibleChat(window: window, chat: chat)) }
+                catch { reply(id, error: error.localizedDescription) }
+            }
         case "chatInspect": reply(id, chat.inspect())
         case "chatPerform": chat.model.action(c["action"] as? String ?? "", id: c["card"] as? String, value: c["value"] as? String, answers: c["answers"] as? [String: String]); reply(id)
         case "composerState": composer.update(c["state"] as? [String: Any] ?? [:])

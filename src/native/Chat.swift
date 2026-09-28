@@ -36,6 +36,10 @@ final class ChatModel: ObservableObject {
     @Published var revision = 0
     @Published var controlInteraction = 0
     @Published var followRevision = 0
+    @Published var revealRevision = 0
+    var revealMessage = ""
+    var revealIsland = ""
+    var revealBottom = false
     @Published var visible = false
     @Published var composerHeight: CGFloat = 0
     var messageFrames: [String: CGRect] = [:]
@@ -97,7 +101,7 @@ final class NativeChat: NSHostingView<ChatConversation> {
         ["followRevision":model.followRevision, "controlInteraction":model.controlInteraction, "visibleMessageIDs":model.messageFrames.filter { $0.value.maxY > 0 && $0.value.minY < bounds.height - model.bottomInset }.map(\.key), "bottomPosition":model.bottomPosition, "composerInset":model.bottomInset, "height":bounds.height, "catPose":model.cat.pose, "catFrame":model.cat.frame, "catArtwork":!CatArtwork.frames.isEmpty, "frame":NSStringFromRect(frame), "native":true, "visible":!isHidden, "chat":model.snapshot?.chat ?? "", "messageCount":model.snapshot?.messages.count ?? 0,
          "messages":model.snapshot?.messages.map { ["id":$0.id,"role":$0.role,"text":$0.text] } ?? [],
          "activity":model.snapshot?.activity?.label ?? "", "activityKind":model.snapshot?.activity?.kind ?? "", "activityAnimated":model.snapshot?.activity?.animated ?? false,
-         "islands":model.snapshot?.messages.flatMap { $0.segments.compactMap { $0.island }.map { ["id":$0.id,"revision":$0.revision,"status":$0.status,"title":$0.title,"blocks":$0.blocks.count,"fields":$0.fields.count] as [String: Any] } } ?? [],
+         "islands":model.snapshot?.messages.flatMap { $0.segments.compactMap { $0.island }.map { ["id":$0.id,"revision":$0.revision,"status":$0.status,"title":$0.title,"blocks":$0.blocks.count,"blockKinds":$0.blocks.map(\.kind),"fields":$0.fields.count,"sourceRevision":$0.sourceRevision] as [String: Any] } } ?? [],
          "cards":model.snapshot?.cards.map(\.id) ?? [], "questionCount":model.snapshot?.questions.count ?? 0]
     }
 }
@@ -177,6 +181,11 @@ struct ChatConversation: View {
                         if let event = NSApp.currentEvent, [.scrollWheel, .leftMouseDragged, .keyDown].contains(event.type) { follows = bottom <= readingHeight + 48 }
                     }
                     .onChange(of: model.composerHeight) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
+                    .onChange(of: model.revealRevision) { _ in
+                        follows = false; sticky = nil
+                        if model.revealBottom { proxy.scrollTo("island-end-" + model.revealIsland, anchor: bottomAnchor) }
+                        else { proxy.scrollTo(model.revealMessage, anchor: .top) }
+                    }
                     .onChange(of: model.controlInteraction) { _ in follows = false }
                     .onChange(of: model.followRevision) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
                     .onChange(of: model.snapshot?.chat) { _ in follows = true; sticky = nil; proxy.scrollTo("bottom", anchor: bottomAnchor) }

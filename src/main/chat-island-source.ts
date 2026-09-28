@@ -5,6 +5,7 @@ import { lexLiteral, locateAnchor, renderLiteral, resolveLiteralValue } from './
 import { enqueueRepoWrite } from './repo-write-queue'
 import { recordEdit, revertGroup } from './edit-history'
 import type { IslandRecord, IslandValue } from '../shared/chat-islands'
+import { jsxAttributeLiterals, renderJsxAttribute } from './jsx-attribute-literals'
 import { shadowOutput } from './shadow-controls'
 export const sourceHash = (text: string) => createHash('sha256').update(text).digest('hex')
 export async function islandSource(root: string, record: IslandRecord) {
@@ -13,14 +14,18 @@ export async function islandSource(root: string, record: IslandRecord) {
   if (!rel || rel.startsWith('..') || isAbsolute(rel) || rel.split('/').some(p => ['.git', '.trezi', '.praxis', '.dsgn'].includes(p))) throw new Error('Source target escapes the project or uses metadata.')
   const code = await readFile(file, 'utf8')
   if (Buffer.byteLength(code) > 2_000_000) throw new Error('Source file is too large.')
+  const attributes = await jsxAttributeLiterals(code, file)
   const values: Record<string, IslandValue> = {}
   for (const p of record.manifest.params) {
-    const value = resolveLiteralValue(code, p)
+    const loc = p.apply.strategy === 'literal' ? locateAnchor(code, p.apply.anchor) : { error: 'missing' }
+    const start = 'at' in loc ? loc.at + (code.slice(loc.at).match(/^\s*/)?.[0].length ?? 0) : -1
+    const attribute = attributes.get(start)
+    const value = attribute && ['text', 'color', 'select'].includes(p.kind) ? attribute.value : resolveLiteralValue(code, p)
     if (value === null) throw new Error(`Cannot resolve ${p.label}. Ask the agent to rebind this island.`)
     values[p.id] = value
   }
   for (const block of record.blocks.filter(b => b.kind === 'shadow')) shadowOutput(block, values)
-  return { file, code, values, revision: sourceHash(code) }
+  return { file, code, values, attributes, revision: sourceHash(code) }
 }
 /** One file/gesture = one validated write and undo group. All participants share repo queue. */
 export function writeIsland(root: string, record: IslandRecord, expected: string, values: Record<string, IslandValue>, guard: () => boolean, gestureGroup?: string) {
@@ -54,12 +59,15 @@ export function writeIsland(root: string, record: IslandRecord, expected: string
       if (!param || param.apply.strategy !== 'literal') throw new Error('Unknown binding.')
       const loc = locateAnchor(source.code, param.apply.anchor)
       if ('error' in loc) throw new Error('Binding no longer resolves.')
-      const lit = lexLiteral(source.code, loc.at, param.kind)
+      const start = loc.at + (source.code.slice(loc.at).match(/^\s*/)?.[0].length ?? 0)
+      const attribute = source.attributes.get(start)
+      const lit = attribute ? { ...attribute, raw: source.code.slice(attribute.start, attribute.end) } : lexLiteral(source.code, loc.at, param.kind)
       if (!lit) throw new Error('Source literal no longer resolves.')
       const converted = param.kind === 'bezier' && typeof value === 'string' ? value.match(/-?\d*\.?\d+/g)?.map(Number) : value
       const text = derived.has(id) ? JSON.stringify(value) : renderLiteral(param.kind, converted, param, lit.raw.startsWith('[') ? 'array' : 'string')
       if (typeof text !== 'string') throw new Error(text.error)
-      changes.push({ start: lit.start, end: lit.end, text })
+      changes.push({ start: lit.start, end: lit.end, text: attribute
+        ? renderJsxAttribute(JSON.parse(text), lit.raw[0]) : text })
     }
     changes.sort((a, b) => b.start - a.start)
     for (let i = 1; i < changes.length; i++) if (changes[i].end > changes[i - 1].start) throw new Error('Overlapping bindings cannot be changed together.')

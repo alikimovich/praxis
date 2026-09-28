@@ -4,6 +4,7 @@ import { createInterface } from 'node:readline'
 
 export class NativeBridge extends EventEmitter {
   child: ChildProcessWithoutNullStreams
+  readonly closed: Promise<void>
   private sequence = 0
   private pending = new Map<
     number,
@@ -16,6 +17,8 @@ export class NativeBridge extends EventEmitter {
   constructor(executable: string, directory: string, profile: string) {
     super()
     this.child = spawn(executable, [directory, profile], { stdio: 'pipe' })
+    // close follows exit AND drained stdio; final host events may persist profile data.
+    this.closed = new Promise(resolve => this.child.once('close', () => resolve()))
     this.child.stdin.on('error', (error) => {
       if ((error as NodeJS.ErrnoException).code !== 'EPIPE') this.emit('host-error', error)
     })

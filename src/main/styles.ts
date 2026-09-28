@@ -1,3 +1,4 @@
+import { renderJsxAttribute } from './jsx-attribute-literals'
 import { ipcMain } from '../native/platform'
 import { readFile } from 'fs/promises'
 import type { PropEditResult, StyleEdit, StyleEditResult } from '../shared/api'
@@ -184,7 +185,10 @@ export async function applyStyleEdit(root: string, edit: StyleEdit): Promise<Sty
       const rewritten = tokenClassRewrite(current, edit, token)
       if (rewritten != null) {
         const next =
-          code.slice(0, strNode.start) + JSON.stringify(rewritten) + code.slice(strNode.end)
+          code.slice(0, strNode.start) +
+          (classAttr?.value?.type === 'StringLiteral'
+            ? renderJsxAttribute(rewritten, code[strNode.start]) : JSON.stringify(rewritten)) +
+          code.slice(strNode.end)
         return committed(
           await commitEdit(root, loc.file, code, next, key, edit.group),
           'tailwind',

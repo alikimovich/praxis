@@ -47,6 +47,14 @@ page is never reloaded. It needs an existing native build and runs in the native
 tier after `native-runtime`. No provider calls are made. Static-site live reload
 coverage alone does not verify framework Fast Refresh.
 
+Shadow Light verification requires macOS 14.4+ for ScreenCaptureKit's
+current-process window capture. It captures only Trezi's own foreground window,
+then crops to chat pixels and checks visible labels with OCR. It does not launch
+an external screen recorder or request access to other applications. Inspect
+`shadow-light-{initial,adjusted,restored}.png` and their `-bottom` companions against
+the approved mockup; OCR presence is not a substitute for layout review. Capture
+or OCR failures fail verification without an offscreen fallback.
+
 Read screenshots in `test/artifacts/native/` for UI verification. Offscreen
 AppKit captures do not faithfully paint Liquid Glass; visible inspection may be
 necessary. Never start the target project server manually alongside Trezi.
