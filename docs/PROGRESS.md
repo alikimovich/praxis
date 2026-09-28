@@ -2,6 +2,12 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Reconcile latest candidate composer fade
+
+Merge candidate d34b91e into the rename branch, preserving its bottom fade overlay
+and button/status ordering while retaining the extracted conversation builders.
+Full manager verification and independent review remain required before landing.
+
 ## 2026-09-27 — Bound SwiftUI sticky-request type checking
 
 The manager's clean integration build exceeded Swift's expression type-checking

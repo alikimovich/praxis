@@ -164,7 +164,6 @@ struct ChatConversation: View {
                     let readingHeight = max(1, viewport.size.height - model.bottomInset)
                     let bottomAnchor = UnitPoint(x: 0.5, y: readingHeight / max(1, viewport.size.height))
                     conversationScroll
-                    .mask(ChatComposerFade(composerHeight: model.composerHeight))
                     .coordinateSpace(name: "chatScroll")
                     .onPreferenceChange(MessagePositions.self) { positions in
                         model.messageFrames = positions
@@ -181,6 +180,21 @@ struct ChatConversation: View {
                     .onChange(of: model.controlInteraction) { _ in follows = false }
                     .onChange(of: model.followRevision) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
                     .onChange(of: model.snapshot?.chat) { _ in follows = true; sticky = nil; proxy.scrollTo("bottom", anchor: bottomAnchor) }
+                    .overlay(alignment: .bottom) {
+                        VStack(spacing: 0) {
+                            LinearGradient(stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: NSColor.windowBackgroundColor.swiftUIColor.opacity(0.5), location: 0.5),
+                                .init(color: NSColor.windowBackgroundColor.swiftUIColor, location: 1)
+                            ], startPoint: .top, endPoint: .bottom)
+                            .frame(height: model.bottomInset)
+                            Color(NSColor.windowBackgroundColor).frame(height: ChatComposerFade.footerHeight)
+                        }
+                        .allowsHitTesting(false)
+                    }
+                    .overlay(alignment: .bottomTrailing) {
+                        if !follows { Button { follows = true; proxy.scrollTo("bottom", anchor: bottomAnchor) } label: { Image(systemName: "arrow.down") }.help("Scroll to latest message").padding(12).padding(.bottom, model.bottomInset) }
+                    }
                     .overlay(alignment: .bottomLeading) {
                         Text(model.snapshot?.status ?? "")
                             .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
@@ -188,9 +202,6 @@ struct ChatConversation: View {
                             .padding(.horizontal, 18).frame(height: ChatComposerFade.footerHeight)
                             .padding(.bottom, model.composerHeight)
                             .allowsHitTesting(false)
-                    }
-                    .overlay(alignment: .bottomTrailing) {
-                        if !follows { Button { follows = true; proxy.scrollTo("bottom", anchor: bottomAnchor) } label: { Image(systemName: "arrow.down") }.help("Scroll to latest message").padding(12).padding(.bottom, model.bottomInset) }
                     }
                 }
             }
