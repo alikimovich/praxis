@@ -80,14 +80,14 @@ Native interaction → Bun binding/action service → project edit or preview ac
 ```
 
 Use the installed json-render core behind a Bun composition adapter. Keep the
-persisted island protocol owned and versioned by Praxis: Swift should receive a
+persisted island protocol owned and versioned by Trezi: Swift should receive a
 small normalized tree, not implement every json-render expression or directive.
 Jev composes prepared candidates; it does not invent executable handlers, source
 locations or unrestricted UI code. Candidate preparation includes meaningful
 labels, limits, units, groups, alternatives and relationships.
 
 Implement the native block registry in SwiftUI/AppKit. No island WebView or React
-chat dependency. Praxis is now native-only: Electron/browser clients are retired.
+chat dependency. Trezi is now native-only: Electron/browser clients are retired.
 Keep provider capability checks and useful text for unsupported history entries.
 The implementation uses the Bun/Swift seam directly with no application WebView.
 
@@ -97,7 +97,7 @@ References for the intended interaction:
 - [Jeverative UI](https://jeverative-ui.vercel.app)
 - [Shapeshift demo](https://shapeshiftui.vercel.app)
 - [Shapeshift source](https://github.com/anishfn/shapeshift): an example of intent
-  choosing implemented cards; Praxis additionally needs composition within cards.
+  choosing implemented cards; Trezi additionally needs composition within cards.
 - [json-render](https://github.com/vercel-labs/json-render)
 
 ## Existing foundations and gaps

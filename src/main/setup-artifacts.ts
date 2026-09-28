@@ -4,18 +4,23 @@ import { join } from 'node:path'
 
 // Copy only executable helpers owned by setup, never annotations, tokens, or user data.
 export const SETUP_HELPERS = [
-  'praxis-source.cjs',
-  'praxis-rn-source.cjs',
-  'praxis-svelte-stamp.mjs',
-  'praxis-next-loader.cjs',
-  'praxis-next.cjs',
-  'praxis-mdx.mjs'
+  'trezi-source.cjs',
+  'trezi-rn-source.cjs',
+  'trezi-svelte-stamp.mjs',
+  'trezi-next-loader.cjs',
+  'trezi-next.cjs',
+  'trezi-mdx.mjs'
 ]
 
 /** Runs before a provider turn, including for already-created chat worktrees. */
 export async function syncSetupArtifacts(liveRoot: string, worktree: string): Promise<void> {
-  const target = join(worktree, '.praxis')
-  const source = join(liveRoot, '.praxis')
+  await syncNamedArtifacts(liveRoot, worktree, '.trezi', SETUP_HELPERS)
+  await syncNamedArtifacts(liveRoot, worktree, '.praxis', SETUP_HELPERS.map(name => name.replace('trezi', 'praxis')))
+}
+
+async function syncNamedArtifacts(liveRoot: string, worktree: string, directory: string, helpers: string[]): Promise<void> {
+  const target = join(worktree, directory)
+  const source = join(liveRoot, directory)
   for (const dir of [source, target]) {
     const info = await lstat(dir).catch((e) => {
       if (e.code !== 'ENOENT') throw e
@@ -26,7 +31,7 @@ export async function syncSetupArtifacts(liveRoot: string, worktree: string): Pr
     }
   }
   const verified: Array<{ path: string; sha256: string }> = []
-  for (const name of SETUP_HELPERS) {
+  for (const name of helpers) {
     const from = join(source, name)
     const info = await lstat(from).catch((e) => {
       if (e.code !== 'ENOENT') throw e
@@ -50,7 +55,7 @@ export async function syncSetupArtifacts(liveRoot: string, worktree: string): Pr
     const actual = await readFile(join(target, name))
     if (!content.equals(actual)) throw new Error(`Setup helper verification failed: ${name}`)
     verified.push({
-      path: `.praxis/${name}`,
+      path: `${directory}/${name}`,
       sha256: createHash('sha256').update(actual).digest('hex')
     })
   }

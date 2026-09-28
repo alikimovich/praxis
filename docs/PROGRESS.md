@@ -2,6 +2,172 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Preserve legacy instance locations through nested spreads
+
+Normalize copied JSX spread props before forwarding so legacy instance locations
+can override generated inner canonical defaults. Preserve canonical precedence,
+argument evaluation order and single getter evaluation; generated wrappers are
+idempotent. Rendered nested-component tests cover plain Babel and the full Next
+loader through repeated instrumentation.
+
+## 2026-09-27 — Preserve component-only legacy JSX locations
+
+Guard JSX component-source generation independently of host stamps so a legacy
+component-only location cannot be shadowed by generated canonical coordinates.
+Extend the full Next loader/rendered-output matrix to both component-only and
+host-plus-component legacy stamps, including repeated transforms.
+
+## 2026-09-27 — Forward legacy Next component instance stamps
+
+The generated Next loader now reads canonical component-source props with legacy
+fallback for identifier and destructured/defaulted parameters. Reuse existing
+bindings and preserve already stamped hosts. Full loader plus JSX-render regression
+checks legacy/current/conflicting/empty canonical values and repeated transforms.
+
+## 2026-09-27 — Preserve legacy Svelte and MDX instrumentation
+
+Extend existing-stamp preservation to Svelte and both MDX JSX/Markdown node
+paths. The new generated-helper regression reproduces the legacy overwrite,
+preserves current/legacy authored mappings on repeated processing, and confirms
+unstamped content still receives canonical stamps. Register it in the unit tier.
+
+## 2026-09-27 — Preserve legacy publish bases and JSX mappings
+
+Route GitHub connection planning through one legacy/current-aware ancestry probe;
+praxis/main now checks main before choosing the default and fast-forward plan.
+Preserve existing data-praxis-source JSX attributes during Babel instrumentation,
+including component tags and repeated transforms. Add focused regressions for
+both findings; no remote repositories are created by these checks.
+
+## 2026-09-27 — Preserve relative profile override migration
+
+Independent review found that relative profile overrides created a relative
+session alias target interpreted from the wrong directory. Resolve the existing
+legacy store to its absolute physical path before creating the alias. Regression
+fixtures cover TREZI_USER_DATA and PRAXIS_USER_DATA with praxis/dsgn stores,
+repeated migration, interruption and preserved content; they fail before the fix.
+
+## 2026-09-27 — Keep source selector precedence consistent
+
+Independent review found that matching a legacy stamp could include an element
+whose canonical stamp pointed elsewhere. Restrict legacy selector matches to
+nodes without a canonical attribute, including when that attribute is empty.
+Reproduce the conflicting-stamp failure with Bun's HTML selector engine and add
+native DOM coverage for grouping, HMR lookup, legacy-only stamps and escaping.
+Focused checks are recorded in rename/VERIFICATION.md; the added desktop DOM
+check remains manager-owned and was not run by this worker.
+
+## 2026-09-27 — Reconcile latest candidate composer fade
+
+Merge candidate d34b91e into the rename branch, preserving its bottom fade overlay
+and button/status ordering while retaining the extracted conversation builders.
+Use Color(NSColor.windowBackgroundColor) for its gradient stops; the candidate
+used a nonexistent NSColor.swiftUIColor member.
+Full manager verification and independent review remain required before landing.
+
+## 2026-09-27 — Bound SwiftUI sticky-request type checking
+
+The manager's clean integration build exceeded Swift's expression type-checking
+budget in the sticky request overlay. Extract that unchanged view into a typed
+ViewBuilder helper and separate conversation content/scroll helpers so their
+constraint solving is independent of the surrounding view modifiers.
+The preceding worker verification passed all 103 unit tests and both native suites;
+the manager will repeat verification on this correction before independent review.
+Prepare the reload-route HTML before starting the managed server, avoiding an
+unrelated filesystem-triggered reload during the navigation/sentinel assertion.
+Reassert test-window activation before real preview gestures while preserving the
+WebKit editing responder, and still require document focus and all input assertions.
+
+## 2026-09-27 — Diagnose capped-to-wrapped composer verification failure
+
+Reproduce the manager's soft-wrap assertion in a windowless AppKit fixture using
+production NativeComposer. Text replacement invalidates TextKit lazily: the
+composer frame shrinks before the document releases its previous capped height.
+Resolve nonempty text sizing during layout, retaining the existing empty-field
+handling and all desktop smoke assertions. Add a registered non-GUI regression
+for capped-to-short replacements, multiple widths, empty text and trailing newlines.
+The reproduction fails before the fix and passes afterward. Manager retains the
+shared-desktop suite and acceptance; no GUI suite or configured verification loop
+was run in this diagnostic follow-up. See rename/VERIFICATION.md.
+
+## 2026-09-27 — Preserve legacy recovery and template source mappings
+
+Independent review found that reclaimed praxis/chat branches lost their recovery
+records and serve-time HTML stamping shadowed existing data-praxis-source mappings.
+Add real Git crash fixtures for dirty and clean-unmerged legacy/current branches,
+including repeat recovery, and template-stamp preservation/idempotence fixtures.
+Both regressions fail before the fixes and pass after accepting both legacy names.
+
+Pin rename implementation 567e696 and candidate/merge-base c4b1aad in the coordination
+map and residual generator. Candidate already includes the LKM-84 audit; its seven
+Swift backend documents match the implementation head exactly. No backend changes
+or other-worktree edits. Focused checks are recorded in rename/VERIFICATION.md;
+manager retains full-suite and desktop verification ownership.
+
+## 2026-09-27 — Repair native verification handoffs for LKM-85
+
+Restore the actual original preview document after the History API reload check,
+so the island fixture edits the document being displayed. Use the real preview
+source stamp for the style fixture and await inspector relayout before capturing
+its action generation; a synthetic selection raced with WebKit selection refresh.
+Keep stale-generation guards, source-write assertions and real pointer/keyboard
+coverage. A test host closing before completion now exits unsuccessfully.
+
+Validation: full/native typechecks pass. The real native smoke suite reaches
+NATIVE ISLANDS PASS and NATIVE CORE PASS, including gestures, style source edits,
+Undo, content editing, chat streaming and preview isolation. The disposable window
+needed foreground activation through desktop automation; no background-test flag
+or live provider calls were used. Manager verification and review follow.
+
+## 2026-09-27 — Prepare native smoke focus and lock React fixture types
+
+Manager run run-eFpM7F passed all 101 unit tests but timed out entering inline edit.
+Compare candidate eb02154: its pointer helper likewise sends input without a
+foreground/focus prerequisite. Add test-only activation and WebKit responder setup
+before gestures, await document focus and the first selection, and report DOM focus,
+hit target and heading markup on timeouts. Retain trusted double-click, input
+isolation, caret, Escape and Enter assertions. Inspect the manager's failure PNG;
+offscreen capture alone cannot prove the exact input failure cause.
+
+Align the MCP declaration with candidate's existing ^1.29.0 fix. Declare React 18
+fixture types and lock their transitive types using cached registry metadata and
+published integrity evidence. Bun validates the frozen lock and installs all three
+type packages into an empty temporary fixture. Full/native typechecks, native
+compilation and focused non-GUI checks pass. No GUI/smoke or configured manager
+verification command was run; the focus repair still needs the shared-desktop run.
+
+## 2026-09-27 — Diagnose LKM-85 manager verification failures
+
+Reproduce all three reported failures against native base 94b6dd6. Declare the
+existing MCP SDK as a direct runtime dependency and regenerate Bun's lockfile.
+Repair the runner self-test's missing native stubs, preserving its assertions and
+using console-only fixtures. Record baseline evidence in
+`docs/rename/BASELINE-FAILURES.md`. The unchanged Next fixture passes when supplied
+cached React types, but its baseline missing dev dependency remains a clean-install
+limitation because registry resolution is unavailable here. No incomplete package
+addition or override is left behind. No GUI, provider or manager verification suite
+was run; manager owns final desktop checks and commits.
+
+Validation: full/native typechecks, native-boundary, test-runner and docs-links
+pass. setup-next passes with local cached fixture types; clean-install gap remains.
+
+## 2026-09-27 — Trezi rename and legacy compatibility (LKM-85)
+
+Rename the native product, CLI/package, source paths, setup helpers, new metadata,
+preview stamps, runtime names and current documentation to Trezi. Inventory the
+native base and residual exceptions in `docs/rename/`. Keep legacy CLI/environment,
+preferences, stamps, branches and provider identities usable. Alias native profile
+and session directories in place to preserve absolute Git/worktree references and
+writer locks; copy project sidecars without overwriting canonical data. Preserve
+stable OS/Keychain identities and public repository URLs. Document collision,
+rollback and LKM-84 integration policy. No other worktrees or real user data changed.
+
+Validation: full/native typechecks and configured native build/test command exit 0;
+no smoke PNG/completion evidence, so visible integration remains unverified.
+Migration, Git-path/lock and CLI-alias fixtures pass. Unit suite: 92 pass, 9 fail
+(socket/network sandbox limits, baseline dependency failures, runner assertion,
+and index-based docs links awaiting manager staging). See `docs/rename/VERIFICATION.md`.
+No provider calls; manager owns staging, commits and final review.
 ## 2026-09-27 — Preserve candidate audit and contracts (LKM-84 compatibility)
 
 Read the second preserved review conflict without editing that checkout. Restore

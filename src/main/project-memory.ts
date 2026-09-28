@@ -26,8 +26,8 @@ export interface ProjectMemoryUpdateQueue {
 const EMPTY: ProjectMemory = { content: '', updatedAt: 0 }
 
 /**
- * Durable, per-machine project memory. It lives under Praxis userData rather than
- * `<repo>/.praxis`: memories are model context, not project source, and must never
+ * Durable, per-machine project memory. It lives under Trezi userData rather than
+ * `<repo>/.trezi`: memories are model context, not project source, and must never
  * sneak into a commit/publish or participate in worktree merges.
  */
 export function createProjectMemoryStore(baseDir: string): ProjectMemoryStore {
@@ -120,7 +120,7 @@ export function projectMemoryRules(content: string): string[] {
   return [
     '',
     '## Project memory',
-    'Praxis stores the following durable project decisions separately from this chat.',
+    'Trezi stores the following durable project decisions separately from this chat.',
     'Treat them as standing context. If a current user request contradicts them, follow',
     'the current request and call out that the saved memory may need updating.',
     '',
@@ -137,7 +137,7 @@ export function projectMemoryUpdate(content: string, prompt: string): string {
     ? lines.join('\n')
     : [
         '## Project memory update',
-        'Praxis project memory is now empty. Do not treat earlier saved memory as standing context.'
+        'Trezi project memory is now empty. Do not treat earlier saved memory as standing context.'
       ].join('\n')
   return `${update}\n\n---\n\n${prompt}`
 }

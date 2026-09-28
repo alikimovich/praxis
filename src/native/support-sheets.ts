@@ -5,10 +5,10 @@ export class NativeSupportSheets {
   async feedback() {
     const generation = this.sheets.generation
     const chat = this.sheets.chat.chats.get(this.sheets.chat.active)
-    const conversation = chat?.messages.filter(m => m.text.trim()).map(m => `${m.role === 'user' ? 'You' : 'Praxis'}: ${m.text.trim()}`).join('\n\n') ?? ''
+    const conversation = chat?.messages.filter(m => m.text.trim()).map(m => `${m.role === 'user' ? 'You' : 'Trezi'}: ${m.text.trim()}`).join('\n\n') ?? ''
     const screenshot = await this.capture().catch(() => null)
     if (generation !== this.sheets.generation) return
-    this.sheets.present({ title: 'Send feedback', detail: 'Post feedback as an issue on the Praxis GitHub repository.' + (screenshot || conversation ? ' Review the attachments below before including them.' : ''),
+    this.sheets.present({ title: 'Send feedback', detail: 'Post feedback as an issue on the Trezi GitHub repository.' + (screenshot || conversation ? ' Review the attachments below before including them.' : ''),
       fields: [
         { id: 'body', label: 'What happened, or what could be better?', kind: 'multiline', value: '' },
         ...(screenshot ? [{ id: 'preview', label: 'Screenshot preview', kind: 'image' as const, value: screenshot }, { id: 'screenshot', label: 'Include screenshot', kind: 'choice' as const, value: 'yes', choices: [{ value: 'yes', label: 'Include' }, { value: 'no', label: 'Do not include' }] }] : []),

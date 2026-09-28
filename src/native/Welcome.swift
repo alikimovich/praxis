@@ -4,7 +4,7 @@ import SwiftUI
 struct WelcomeRecent: Identifiable { let root: String; let name: String; var id: String { root } }
 final class WelcomeModel: ObservableObject {
     @Published var busy = true
-    @Published var label = "Opening Praxis…"
+    @Published var label = "Opening Trezi…"
     @Published var recents: [WelcomeRecent] = []
     let cat = CatAnimator()
     init() { cat.update(running: true, questioning: false) }

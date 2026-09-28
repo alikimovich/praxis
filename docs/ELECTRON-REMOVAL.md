@@ -1,6 +1,6 @@
 # Electron retirement and unused-code review
 
-Praxis now ships one application runtime: Swift/AppKit/SwiftUI with Bun services
+Trezi now ships one application runtime: Swift/AppKit/SwiftUI with Bun services
 and an isolated system WebKit project preview. This is a runtime retirement, not
 a Swift rewrite of the backend. `src/main/` remains the backend directory.
 
@@ -9,7 +9,7 @@ a Swift rewrite of the backend. `src/main/` remains the backend directory.
 - Electron's main entrypoint, both application preload/renderer trees, its Vite
   configuration, postinstall bundle rebranding, and React UI generation script.
 - Browser/Tailscale mode: its server, preview gateway/bridge, browser command
-  scope guards, CLI remote configuration, and old React browser UI. `praxis serve`
+  scope guards, CLI remote configuration, and old React browser UI. `trezi serve`
   returns a clear retirement message instead of launching a broken runtime.
 - The old `window.api` interface/global declaration, floating web-panel message
   handlers, renderer-only preferences/layout bridges and source-reveal helper.

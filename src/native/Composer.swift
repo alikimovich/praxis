@@ -15,7 +15,7 @@ final class ComposerTextView: NSTextView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         if string.isEmpty && !hasMarkedText() {
-            ("Ask Praxis  (/ for skills)" as NSString).draw(at: NSPoint(x: 7, y: 4), withAttributes: [.font:font ?? NSFont.systemFont(ofSize: 14), .foregroundColor:NSColor.placeholderTextColor])
+            ("Ask Trezi  (/ for skills)" as NSString).draw(at: NSPoint(x: 7, y: 4), withAttributes: [.font:font ?? NSFont.systemFont(ofSize: 14), .foregroundColor:NSColor.placeholderTextColor])
         }
     }
     override func paste(_ sender: Any?) {
@@ -90,7 +90,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         text.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         text.autoresizingMask = [.width]; text.textContainer?.widthTracksTextView = true
         text.textContainer?.containerSize = NSSize(width: 400, height: CGFloat.greatestFiniteMagnitude)
-        text.delegate = self; text.setAccessibilityLabel("Message to Praxis")
+        text.delegate = self; text.setAccessibilityLabel("Message to Trezi")
         text.registerForDraggedTypes([.fileURL, .png, .tiff])
         text.pasteFiles = { [weak self] board in self?.readPasteboard(board) ?? false }
         scroll.documentView = text; scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay
@@ -178,6 +178,12 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         readyBeam.frame = content.convert(content.bounds, to: self).insetBy(dx: -8, dy: -8)
         buttonBeam.frame = sendButton.convert(sendButton.bounds, to: self).insetBy(dx: -8, dy: -8)
         layoutSkills()
+        // String replacement invalidates TextKit lazily. Resolve it at the new
+        // viewport size so a shorter draft cannot retain the capped document's
+        // height until the next paint (and show a spurious scrollbar).
+        if !text.string.isEmpty && scroll.contentSize.width > 0 {
+            text.sizeToFit()
+        }
         // An empty document must not retain its initial 70pt height in a shorter field.
         if text.string.isEmpty && scroll.contentSize.height > 0 && text.frame.size != scroll.contentSize {
             text.setFrameSize(scroll.contentSize)

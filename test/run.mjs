@@ -13,8 +13,10 @@ const ROOT = dirname(TEST_DIR);
 
 // Backend logic checks run independently of the native desktop.
 const UNIT = [
+  "rename-compat",
+  "source-stamp",
   "native-boundary",
-  "praxis-agent-tools",
+  "trezi-agent-tools",
   "codex-mcp",
   "native-shutdown",
   "native-preview-recovery",
@@ -25,6 +27,7 @@ const UNIT = [
   "native-sheets",
   "native-settings",
   "native-chat-controller",
+  "native-composer-layout",
   "chat-islands",
   "native-context",
   "native-updates",
@@ -42,6 +45,7 @@ const UNIT = [
   "jev-pilot",
   "test-runner",
   "setup-next",
+  "setup-stamps",
   "code-reveal",
   "conversation-handoff",
   "pr-body",
@@ -84,6 +88,7 @@ const UNIT = [
   "edit-history",
   "worktrees",
   "chat-worktrees",
+  "chat-recovery",
   "auto-reconciliation",
   "live-commit",
   "file-tree",
@@ -112,7 +117,7 @@ const UNIT = [
   "shadows",
   "type-metrics",
   "skills-install",
-  "praxis-cli"
+  "trezi-cli"
 ];
 
 const NATIVE = ['native-runtime', 'native-source-window', 'native-chat-scroll', 'native-next-hmr'];

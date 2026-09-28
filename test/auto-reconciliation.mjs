@@ -13,7 +13,7 @@ import {
   releaseChat
 } from '../src/main/chat-isolation.ts'
 
-const dir = mkdtempSync(join(tmpdir(), 'praxis-auto-reconcile-'))
+const dir = mkdtempSync(join(tmpdir(), 'trezi-auto-reconcile-'))
 const git = (cwd, ...args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
 const events = []

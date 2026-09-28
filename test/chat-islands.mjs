@@ -8,8 +8,8 @@ import { ChatIslands } from '../src/main/chat-islands.ts'
 import { islandDefinition } from '../src/main/chat-island-schema.ts'
 import { chooseControlsWithJev } from '../src/main/controls-jev.ts'
 import { enqueueRepoWrite } from '../src/main/repo-write-queue.ts'
-const root = await mkdtemp(join(tmpdir(), 'praxis-islands-'))
-const storage = await mkdtemp(join(tmpdir(), 'praxis-island-store-'))
+const root = await mkdtemp(join(tmpdir(), 'trezi-islands-'))
+const storage = await mkdtemp(join(tmpdir(), 'trezi-island-store-'))
 const code = 'const LIGHT_X = 0;\nconst LIGHT_Y = -0.5;\nconst SOFTNESS = 20;\nconst EASE = [0.25, 0.1, 0.25, 1];\n'
 const number = (id, anchor, min = -1, max = 1) => ({ id, label: id, kind: 'number', min, max, step: 0.01, apply: { strategy: 'literal', anchor } })
 const request = { action: 'define', engine: 'agent', manifest: { file: 'shadow.js', component: 'Card', title: 'Shadow lighting', params: [number('x', 'const LIGHT_X = '), number('y', 'const LIGHT_Y = '), number('blur', 'const SOFTNESS = ', 0, 100), { id: 'ease', label: 'Easing', kind: 'bezier', apply: { strategy: 'literal', anchor: 'const EASE = ' } }] }, blocks: [{ id: 'light', title: 'Light position', kind: 'point', params: ['x','y'] }, { id: 'layers', title: 'Softness and easing', kind: 'group', params: ['blur','ease'] }] }

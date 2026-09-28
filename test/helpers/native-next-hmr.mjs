@@ -13,12 +13,12 @@ import { REACT_HELPER_CONTENT } from '../../src/main/setup-react.ts'
 import { MDX_HELPER_CONTENT } from '../../src/main/setup-mdx.ts'
 if (
   process.platform !== 'darwin' ||
-  !existsSync('out/native/Praxis Native.app/Contents/MacOS/PraxisHost')
+  !existsSync('out/native/Trezi Native.app/Contents/MacOS/TreziHost')
 ) {
   console.log('NATIVE-NEXT-HMR SKIP — build the macOS native host first.')
   process.exit(0)
 }
-const root = await mkdtemp(join(tmpdir(), 'praxis-hmr-'))
+const root = await mkdtemp(join(tmpdir(), 'trezi-hmr-'))
 const handlers = new Map()
 registerDevServerIpc(
   () => ({ webContents: { isDestroyed: () => false, send: (_, line) => console.log(line) } }),
@@ -36,14 +36,14 @@ try {
   pkg.dependencies.react = '19.3.0'
   pkg.dependencies['react-dom'] = '19.3.0'
   await writeFile(join(root, 'package.json'), JSON.stringify(pkg))
-  await mkdir(join(root, '.praxis'), { recursive: true })
+  await mkdir(join(root, '.trezi'), { recursive: true })
   for (const [file, text] of Object.entries({
-    'praxis-next.cjs': NEXT_ADAPTER_CONTENT,
-    'praxis-next-loader.cjs': NEXT_LOADER_CONTENT,
-    'praxis-source.cjs': REACT_HELPER_CONTENT,
-    'praxis-mdx.mjs': MDX_HELPER_CONTENT
+    'trezi-next.cjs': NEXT_ADAPTER_CONTENT,
+    'trezi-next-loader.cjs': NEXT_LOADER_CONTENT,
+    'trezi-source.cjs': REACT_HELPER_CONTENT,
+    'trezi-mdx.mjs': MDX_HELPER_CONTENT
   }))
-    await writeFile(join(root, '.praxis', file), text)
+    await writeFile(join(root, '.trezi', file), text)
   const card = await readFile(join(root, 'app/Card.tsx'), 'utf8')
   await writeFile(join(root, 'app/Leaf.tsx'), card.replace("'use client'\n", ''))
   await writeFile(
@@ -86,7 +86,7 @@ export default function Effect() {
     framework: 'next'
   })
   host = new NativeBridge(
-    resolve('out/native/Praxis Native.app/Contents/MacOS/PraxisHost'),
+    resolve('out/native/Trezi Native.app/Contents/MacOS/TreziHost'),
     resolve('out/native'),
     'ephemeral'
   )

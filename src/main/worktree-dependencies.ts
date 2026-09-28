@@ -39,7 +39,7 @@ export async function provisionNextDependencies(
     }
     return hash.digest('hex')
   }
-  const marker = join(checkout, '.praxis/dependencies.sha256')
+  const marker = join(checkout, '.trezi/dependencies.sha256')
   const current = await fingerprint()
   if (info?.isSymbolicLink()) await rm(target)
   else if (info && (await readFile(marker, 'utf8').catch(() => '')) === current) return
@@ -52,7 +52,7 @@ export async function provisionNextDependencies(
   )
     return
   await install(checkout, () => {})
-  await mkdir(join(checkout, '.praxis'), { recursive: true })
+  await mkdir(join(checkout, '.trezi'), { recursive: true })
   await rm(marker, { force: true })
   await writeFile(marker, await fingerprint(), { flag: 'wx' })
 }

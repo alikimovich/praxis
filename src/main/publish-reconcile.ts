@@ -84,7 +84,7 @@ async function createRecoveryRefs(
   remoteRef: string | null
 ): Promise<string[]> {
   const token = `${Date.now()}-${recoveryCounter++}`
-  const prefix = `refs/praxis/recovery/${safeRefPart(branch)}/${token}`
+  const prefix = `refs/trezi/recovery/${safeRefPart(branch)}/${token}`
   const refs: string[] = []
   const localRef = `${prefix}-local`
   await git(root, ['update-ref', localRef, 'HEAD'])
@@ -131,7 +131,7 @@ async function reconcileOnce(
       'merge',
       '--no-ff',
       '-m',
-      'Reconcile local and remote Praxis publish histories',
+      'Reconcile local and remote Trezi publish histories',
       remoteRef
     ])
     return { ok: true, action: 'merged' }

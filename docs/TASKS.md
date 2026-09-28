@@ -3,6 +3,35 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Trezi rename (LKM-85, 2026-09-27)
+
+- [x] Preserve component-only legacy JSX locations across rendering and repeated transforms.
+
+- [x] Forward legacy Next component instance stamps with canonical precedence.
+
+- [x] Preserve legacy/current mappings in generated Svelte and MDX instrumentation.
+
+- [x] Preserve legacy GitHub connection base planning and JSX source mappings.
+
+- [x] Preserve relative current/legacy profile overrides during repeated session alias migration.
+
+- [x] Enforce canonical source-selector precedence and add conflicting/legacy-only stamp regression coverage.
+
+- [x] Reproduce capped-to-wrapped composer sizing failure without a window; fix lazy TextKit sizing and add regression coverage.
+- [x] Manager: rerun native desktop verification after the composer sizing correction.
+- [x] Extract the sticky request overlay to bound clean-build SwiftUI type checking.
+
+- [x] Audit the native baseline, rename owned surfaces and document residual aliases.
+- [x] Preserve profiles, sessions, Git paths and project data with tested compatibility handling.
+- [x] Supply migration/rollback guidance and independent LKM-84 reconciliation mapping.
+- [x] Reproduce manager failures against the native base; repair SDK declaration and runner fixtures.
+- [x] Add/lock the React fixture types and verify a clean frozen install of the type dependency graph.
+- [x] Require foreground/WebKit focus before native smoke gestures and improve timeout diagnostics; retain pointer assertions.
+- [x] Repair navigation/style-selection smoke races and reject premature test-host exit.
+- [x] Manager: commit and pass full/native typechecks, all 101 unit tests and real native smoke verification.
+- [ ] Independent review and verification of integration with candidate.
+- [x] Repair reviewed legacy chat recovery and HTML stamp preservation; pin implementation/candidate coordination references.
+
 ## Swift backend architecture audit (LKM-84, 2026-09-27)
 
 - [x] Preserve candidate plan, audit and contract snapshots exactly; keep compatibility guidance and first-slice additions in the separate audit proposal.
@@ -102,7 +131,7 @@ Review package: [audit](SWIFT-BACKEND-AUDIT.md), [contracts](SWIFT-BACKEND-CONTR
 
 - [x] Apply purpose-based selection, binding/replay verification and capability limits through shared provider/catalog guidance and the surface-controls skill.
 
-- [x] Review DialKit controls and purposes; record [selection lessons and Praxis gaps](DIALKIT-REVIEW.md).
+- [x] Review DialKit controls and purposes; record [selection lessons and Trezi gaps](DIALKIT-REVIEW.md).
 
 - [x] Apply throttled slider/point/curve changes during dragging, serialize overlapping updates, and preserve gesture Undo and external-edit guards.
 
@@ -220,7 +249,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 
 - [x] Expose native preview Web Inspector, Console shortcuts, and WebKit Inspect Element context menu.
 
-- [x] Make toolbar action groups momentary and bundle/set the Praxis icon for the native app.
+- [x] Make toolbar action groups momentary and bundle/set the Trezi icon for the native app.
 
 - [x] Compare current native/Electron build size, startup, resident memory, idle CPU and preview frame timing; document failures and measurement limits.
 
@@ -235,7 +264,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 - [x] Extend preview page background behind the native toolbar, use a lighter full-height divider, and remove delayed/zero-size resize updates.
 
 - [x] Include the standalone macOS prototype in the repo and expose `bun run dev:native`, forwarding preview URL and integration-test arguments.
-- [x] Connect the shared Praxis UI and application core to the native host while retaining Electron as the default.
+- [x] Connect the shared Trezi UI and application core to the native host while retaining Electron as the default.
 - [x] Verify a successful live provider edit through the native composer (Codex source edit and WebKit preview reload passed; Claude still requires login).
 - [x] Add a standard macOS project/chat sidebar, split-view divider and toolbar around the shared web content.
 - [x] Add a native multiline composer, actual macOS 26 Liquid Glass, shared draft/action bridge and attachment controls.
@@ -370,7 +399,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 
 ## Native animation panels (2026-09-17)
 
-- [x] Replace DialKit integration with Praxis's existing control primitives.
+- [x] Replace DialKit integration with Trezi's existing control primitives.
 - [x] Persist animation panels independently of selection, with collapse/reopen.
 - [x] Wire targeted Replay and existing source-edit/Undo behavior.
 
@@ -390,7 +419,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 
 - [x] Bundle animation tuning guidance (superseded by `/surface-controls` and inline chat islands).
 - [x] Make the skill discoverable by Claude, Codex/custom endpoints, and Gemini.
-- [x] Add selection-independent panels (now native Praxis panels; supersedes the initial project UI approach).
+- [x] Add selection-independent panels (now native Trezi panels; supersedes the initial project UI approach).
 - [x] Keep native inspector controls distinct and update the animation action prompt.
 
 ## Selection, message queues, and preview navigation (2026-09-17)
@@ -504,7 +533,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 
 - [x] **Recommend agent-browser and offer to install it during setup.** Prompt via
       the terminal for piped installers, default to No, skip existing installs or
-      absent terminals, and keep optional failures from blocking Praxis setup.
+      absent terminals, and keep optional failures from blocking Trezi setup.
 
 ## Simultaneous startup reveal (2026-09-14, user-requested) — SHIPPED
 
@@ -551,7 +580,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 
 ## Default button cursor (2026-09-12, user-requested) — SHIPPED
 
-- [x] **Use the default arrow on Praxis buttons.** Cover the shell, expandable
+- [x] **Use the default arrow on Trezi buttons.** Cover the shell, expandable
       chat messages, and preview-overlay action buttons.
 
 ## Merge local and remote main (2026-09-12) — SHIPPED
@@ -762,7 +791,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 
 > **The Electron tier runs on a machine with NO display** (found 2026-08-12),
 > which the 2026-08-07 correction below didn't cover: after an
-> `electron-vite build`, `PRAXIS_USER_DATA=$(mktemp -d) xvfb-run -a node
+> `electron-vite build`, `TREZI_USER_DATA=$(mktemp -d) xvfb-run -a node
 > test/<name>.mjs` launches a real window under a virtual X server, screenshots
 > and all. So "needs a display" is no longer a reason to leave an electron-tier
 > assertion unrun anywhere below.
@@ -802,13 +831,13 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       `height: 0` to `auto` so the swap is motion, not a pop. `test/rail.mjs`.
       See PROGRESS 2026-09-04.
 
-## Browser and hosted Praxis (2026-09-03, user-requested) — IN PROGRESS
+## Browser and hosted Trezi (2026-09-03, user-requested) — IN PROGRESS
 
 - [x] **Write the architecture plan.** ✅ 2026-09-03 — `docs/BROWSER.md` covers a
       shared browser client for localhost, remote access to a local workstation, and
       a Railway-style hosted workspace; it includes security boundaries, persistence,
       preview bridging, delivery phases, and acceptance criteria.
-- [x] **Build the local-browser foundation.** ✅ 2026-09-03 — `praxis serve <repo>`
+- [x] **Build the local-browser foundation.** ✅ 2026-09-03 — `trezi serve <repo>`
       runs the existing workspace engine without a desktop window and serves the
       shared React UI on loopback. A single-use launch exchange, scoped HTTP RPC,
       WebSocket events, sandboxed preview gateway, and browser `postMessage` bridge
@@ -818,7 +847,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       the real browser flow was also driven through source selection.
 - [x] **Restore browser design-token detection and starter scaffolding.** ✅
       2026-09-04 — the browser router now shares the Electron token service, so
-      **Add tokens** writes the root-scoped, idempotent `.praxis/tokens.json` and
+      **Add tokens** writes the root-scoped, idempotent `.trezi/tokens.json` and
       existing Tailwind/CSS/manifest tokens are detected instead of receiving a
       false offer.
 - [ ] **Bring the remaining native editing tools to browser parity.** Move the
@@ -827,7 +856,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       edit through the browser adapter. Native-only affordances should keep explicit
       browser fallbacks.
 - [x] **Add secure single-client remote-workstation access.** ✅ 2026-09-04 —
-      `praxis serve <repo> --remote` keeps control and preview services on separate
+      `trezi serve <repo> --remote` keeps control and preview services on separate
       loopback ports and publishes them as separate, tailnet-only Tailscale Serve
       HTTPS origins. It adds one-time browser pairing, exact public-origin checks,
       secure cookies, reconnect replay, graceful route cleanup, and a visible remote
@@ -849,7 +878,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 - [x] **Create PR must not paste the chat transcript.** ✅ 2026-09-02 — PR title
       and body now come from change-bearing branch commits, changed-file scopes, and
       diffstat. Conversation-only messages, logs, slash commands, and old
-      `Changes requested in Praxis` publish commits are excluded. Existing PRs get
+      `Changes requested in Trezi` publish commits are excluded. Existing PRs get
       their title/body refreshed on the next Create PR. Regression fixture mirrors
       the broken `about-me-2026` PR #8.
 
@@ -875,7 +904,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 
 - [x] **Prune branch-only residue without risking unfinished work.** ✅ 2026-09-01 —
       project open now follows orphan-worktree recovery with a local
-      `praxis/chat-*` branch sweep. It removes only unattached, unparked refs whose tip
+      `trezi/chat-*` branch sweep. It removes only unattached, unparked refs whose tip
       is reachable from live `HEAD` or has a patch-equivalent commit there; unique
       patches remain recoverable. Backup, normal work, comment-agent, remote, and
       checked-out branches are outside the deletion set. `test/worktrees.mjs` covers
@@ -893,10 +922,10 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 - [x] **Evaluate `interface-kit`.** ✅ 2026-09-01 — inspected npm `0.1.3` and its
       published bundle without installing it. Its broader visual property coverage is
       useful reference material, but React 19-only integration and a DOM-preview → copy-
-      prompt edit model are a regression from Praxis's source-aware editing seam, so it
+      prompt edit model are a regression from Trezi's source-aware editing seam, so it
       was not adopted. See PROGRESS 2026-09-01.
 
-## Codex can operate Praxis-owned worktree recovery (2026-08-28, user-requested) — SHIPPED
+## Codex can operate Trezi-owned worktree recovery (2026-08-28, user-requested) — SHIPPED
 
 - [x] **Stop handing complex landing conflicts back to the user.** ✅ 2026-08-28 —
       Codex and gateway sessions now receive session-scoped `workspace_state` and
@@ -904,7 +933,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       in-process coordinator through a token-scoped local socket and the existing
       repository queue; Codex resolves the staged markers in its own checkout and
       normal turn completion lands them. No raw Git or discard/reset capability is
-      exposed. `test/praxis-agent-tools.mjs`, `test/chat-worktrees.mjs`, `test/rules.mjs`.
+      exposed. `test/trezi-agent-tools.mjs`, `test/chat-worktrees.mjs`, `test/rules.mjs`.
 
 ## Remote publish reconciliation (2026-08-27, user-reported)
 
@@ -917,7 +946,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       refused before staging. `test/publish-reconcile.mjs` covers the full graph
       matrix plus a real push race.
 - [ ] **Replace permanent work-branch publishing with unique publish branches.**
-      Build each `praxis/publish/<session-id>` from a freshly fetched
+      Build each `trezi/publish/<session-id>` from a freshly fetched
       `origin/<base>`, apply the session's squashed changes there, open/merge its
       PR, delete the temporary branch, and seed the next chat from the newly
       fetched base. This removes cross-session branch-name collisions entirely;
@@ -959,7 +988,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 ## Architecture + security review fixes (2026-08-14, user-requested) — SHIPPED
 
 - [x] **Preview hardening.** ✅ 2026-08-14 — untrusted preview moved to its own
-      `persist:praxis-preview` partition with deny-all permission handlers;
+      `persist:trezi-preview` partition with deny-all permission handlers;
       `will-redirect` guarded like `will-navigate`; navigation pinned to the
       loaded dev-server origin (was: any localhost port); `shell:true`
       invariants documented at both spawn sites. See PROGRESS 2026-08-14.
@@ -1007,7 +1036,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       `source:read` now classifies media/binary instead of always decoding utf8, and
       the drawer renders `MediaPreview` (image on a checkerboard, video/audio with
       controls, placeholder otherwise) served over a token-scoped, range-capable
-      `praxis-media://` protocol. See PROGRESS 2026-08-09.
+      `trezi-media://` protocol. See PROGRESS 2026-08-09.
 - [ ] **Give the file tree a type hint.** `source:tree` returns bare paths, so the
       sidebar can't show an image icon or a thumbnail until it carries per-entry
       metadata — and the editor can't warn before opening a 200 MB asset.
@@ -1023,7 +1052,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       spawn identity now carries the parent session key; rows show their inherited
       model and aggregate onto the parent/project working status.
 - [x] **Durable per-project memory + clear Main context.** ✅ 2026-08-08 — curated,
-      16k-bounded memory lives outside Git in Praxis userData, enters every provider,
+      16k-bounded memory lives outside Git in Trezi userData, enters every provider,
       and survives a Main reset; the old transcript is archived into History.
 - [x] **Sort the rail's per-project controls by what they act on.** ✅ 2026-08-09 —
       project memory is a brain action on the project row (× is hover-only now),
@@ -1048,7 +1077,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 
 - [x] **Merge conflict on almost every turn, listing `node_modules`.** ✅ 2026-08-08
       — a trailing-slash `node_modules/` `.gitignore` is directory-only and doesn't
-      match the symlink Praxis stitches into each worktree, so `git add -A` staged
+      match the symlink Trezi stitches into each worktree, so `git add -A` staged
       it and the auto-merge choked (`EISDIR`) → parked every turn. Fixed by
       excluding `RUNTIME_DEPS` (node_modules/.env) from every stage explicitly
       instead of trusting `.gitignore` (`worktrees.ts`, `chat-worktrees.ts`), plus a
@@ -1063,7 +1092,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       the Codex harness. Its `apply_patch` reliability is still unmeasured — that
       needs a turn that actually EDITS a file.
 - [x] **Assistant replies were missing their opening, mid-word.** ✅ 2026-08-08 —
-      "ve reliable visibility…", "ing else?". Codex streams whole items and praxis
+      "ve reliable visibility…", "ing else?". Codex streams whole items and trezi
       emits the unsent SUFFIX, but the CLI numbers items PER TURN while the
       tracker lived for the whole SESSION — so turn 2's `item_0` inherited turn
       1's length and lost exactly that many leading characters. Longer replies
@@ -1088,7 +1117,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       ResizeObserver) lives on, so an unchanged card height reported nothing.
       `PanelApp` re-measures on every state push.
 - [x] **`isPortFree` missed a dual-stack occupant.** ✅ 2026-08-07 — SO_REUSEADDR
-      lets a 127.0.0.1 bind succeed under a wildcard listener, so praxis handed
+      lets a 127.0.0.1 bind succeed under a wildcard listener, so trezi handed
       out an occupied port and then previewed whatever already answered there.
       Both probes now run; the wildcard one only votes on `EADDRINUSE`.
 - [ ] **`custom-controls`'s burst assert is still latency-sensitive.** It needs
@@ -1100,7 +1129,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 - [ ] **Leaked fixture dev servers survive a killed test run.** Seven `node
       server.mjs` processes from July/August runs were still holding 7777–7783 on
       this machine (`before-quit` → `stopAll` only runs on a graceful quit). The
-      port fix makes praxis route around them; nothing reaps them.
+      port fix makes trezi route around them; nothing reaps them.
 
 ## Settings "Connecting…" hang + publish guidance (2026-08-07, user-reported)
 
@@ -1153,12 +1182,12 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       capturing what triggers it (large image attachment? long session? a
       particular tool?) — the user reported it as intermittent.
 - [ ] **A hard stop loses the model's context.** The restarted chat is a fresh SDK
-      query, so earlier turns are gone from the model's view even though praxis
+      query, so earlier turns are gone from the model's view even though trezi
       still shows them. The record captures `sdkSessionId`, and v9 resume already
       exists, so restarting via `resume` instead of fresh would keep the context —
       not attempted here because a wedged session's id may itself be unusable.
 - [ ] **Codex/connection turns can't be force-stopped, only aborted locally.** Its
-      `turnAbort` cancels praxis's read of the stream; whether the underlying CLI
+      `turnAbort` cancels trezi's read of the stream; whether the underlying CLI
       process actually dies wasn't verified. Worth checking a connection turn
       against a slow endpoint.
 
@@ -1169,7 +1198,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       `provider`); `src/main/providers-store.ts` (pure) +
       `src/main/providers.ts` (safeStorage cipher, `providers:*` IPC, `/models`
       probe, `resolveConnection`); Codex SDK aimed at the endpoint via a
-      dedicated `model_providers."praxis-connection"` block.
+      dedicated `model_providers."trezi-connection"` block.
       `test/providers-store.mjs`. See PROGRESS 2026-08-07.
 - [x] **Settings dialog + model-first picker.** ✅ 2026-08-07 —
       `SettingsDialog.tsx` / `ProviderForm.tsx` / `renderer/src/providers-store.ts`;
@@ -1184,7 +1213,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       a correct edit, left the untargeted function alone, and finished in 15.5s
       with ZERO error events. That settles the two big unknowns: the gateway's
       `/responses` accepts Codex's request shape, and the
-      `model_providers."praxis-connection"` block (websockets off) is right — no
+      `model_providers."trezi-connection"` block (websockets off) is right — no
       reconnect attempts appeared. `/models` returned 322 models including all
       eight Kimi variants and nine DeepSeek ones.
 - [ ] **Kimi/DeepSeek still unproven — the test key was free-tier.** Every open
@@ -1196,12 +1225,12 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 - [ ] **Open models may fumble Codex's `apply_patch` format.** GPT-5 was trained
       on it; Kimi/DeepSeek weren't, so edits may need retries or fail. Blocked on
       paid credits (above). If it's bad, the fix the user asked for is an appended
-      system-prompt section teaching the patch format (praxis already prepends its
+      system-prompt section teaching the patch format (trezi already prepends its
       rules to the first Codex turn, so there's a hook).
 - [ ] **Connection runs inherit the user's global `~/.codex/config.toml` MCP
       servers.** Observed live: an unauthenticated `mcp.vercel.com` entry on the
       dev machine dumped an OAuth `AuthRequired` blob into the turn's error text.
-      Praxis only overrides `model_provider`, so this is expected — but it means a
+      Trezi only overrides `model_provider`, so this is expected — but it means a
       user's unrelated MCP config can pollute a connection chat. Decide whether a
       connection run should start from a clean MCP set.
 - [ ] **A chat pointing at a deleted connection.** The picker falls back to an
@@ -1214,13 +1243,13 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       Both need a host that exhibits them.
 - [x] **Both seats' model lists are discovered, not curated.** ✅ 2026-08-07 —
       `src/main/model-catalog.ts` (pure: parsers + TTL cache, injected
-      clock/baseDir, persisted to `<userData>/praxis/model-catalog.json`) +
+      clock/baseDir, persisted to `<userData>/trezi/model-catalog.json`) +
       `src/main/codex-models.ts` (runs `codex debug models` on the SDK's vendored
       binary). Claude answers `Query.supportedModels()`, handed back from
       `backends/claude.ts` since it needs a live session. `test/model-catalog.mjs`.
       See PROGRESS 2026-08-07.
 - [ ] **Codex-seat parity holes** (these now matter for every connection model,
-      not just ChatGPT users): praxis's in-process tools aren't available (serve
+      not just ChatGPT users): trezi's in-process tools aren't available (serve
       them over a local MCP server injected via `CodexOptions.config`, whose
       `mcp_tool_call` events `backends/codex.ts` already maps); no
       `AskUserQuestion` equivalent; no resume (`resumeThread(id)` +
@@ -1259,7 +1288,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       CORRECTED 2026-08-07: the reason recorded here ("the Electron tier can't
       launch a window on this machine") was WRONG — see the new gotcha in
       CLAUDE.md. The tier runs fine through `test/run.mjs`, which gives each test
-      a fresh `PRAXIS_USER_DATA`; the `.empty__open` timeout only happens when a
+      a fresh `TREZI_USER_DATA`; the `.empty__open` timeout only happens when a
       test is invoked DIRECTLY (`node test/style-edit.mjs`), because it then uses
       the real app state, and if any project is open the empty state never
       renders. `style-edit` does still fail under the runner, but on a genuine
@@ -1287,7 +1316,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       premise ("can't launch a window on the current dev machine, dies at
       `.empty__open`, at HEAD too") was wrong: that only happens when the test is
       run directly instead of through `test/run.mjs`, which isolates
-      `PRAXIS_USER_DATA` per test. The window launches fine. The S2-refusal
+      `TREZI_USER_DATA` per test. The window launches fine. The S2-refusal
       assertion is still unrun because `style-edit` fails earlier on a real
       inspector assertion. Verified instead with a throwaway harness driving
       the real `applyStyleEdit` in node (PROGRESS 2026-07-30 has the details).
@@ -1349,7 +1378,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       ✅ 2026-07-27 — `setup:detect` read-only probe (`{ framework, canInstrument }`);
       the on-open offer gates on `canInstrument` (no dead-end "Set it up" on a
       static/vanilla repo) and the Styles tab's no-source state shows tailored
-      guidance + an "Ask Praxis to restyle it" seed instead of greyed controls.
+      guidance + an "Ask Trezi to restyle it" seed instead of greyed controls.
       Extended `test/setup-detect.mjs`. See PROGRESS 2026-07-27.
 - [ ] **Follow-up:** driven screenshot test for the static path — offer absent +
       StylePanel read-only guidance rendered on a JS-generated (no-source) element.
@@ -1369,7 +1398,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       narrow window — complementary but unaware of each other's inset.
 - [x] **Phase 3 — pop the drawer out into its own window.** ✅ 2026-07-14 (LKM-48)
       — a pop-out button opens the editor in a standalone, freely-resizable
-      `BrowserWindow` (same renderer bundle via `?praxisEditor=1`, new `EditorWindow`
+      `BrowserWindow` (same renderer bundle via `?treziEditor=1`, new `EditorWindow`
       entry + `CodeDrawer` `variant="window"`). One window per project root;
       re-focuses + retargets on a repeat pop-out. `source.popout/closeWindow/
       onNavigate` IPC. `test/code-drawer.mjs`.
@@ -1385,7 +1414,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
       it plus Finder's click-the-selected-file-again to rename. New
       `src/main/file-ops.ts` (pure) behind `source:create-file`/`rename-file`/
       `delete-file`; every renderer path is re-validated (no traversal, no
-      `.git`/`.praxis`/`.dsgn`/`node_modules`), create/rename never clobber, and
+      `.git`/`.trezi`/`.dsgn`/`node_modules`), create/rename never clobber, and
       delete goes to the OS trash because the content-diff undo history can't
       represent a deleted file. `test/file-ops.mjs`. See PROGRESS 2026-08-05.
       Deliberately out of scope: directory create/rename/delete (a nested path
@@ -1402,7 +1431,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 
 - [x] **Isolate concurrent chats in per-repo worktrees.** ✅ 2026-07-16 —
       Every interactive chat on a git repo root gets its own long-lived worktree,
-      created before `startSession` and removed on close. A `praxis/chat-<id>`
+      created before `startSession` and removed on close. A `trezi/chat-<id>`
       recovery branch is attached during a turn; successful `done` events land via
       the repo queue and delete it, while errors/interruption or conflicts park on
       the branch for review. The preview always serves live, never a worktree. The
@@ -1435,7 +1464,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 - [x] **One repository landing writer + ephemeral chat branches.** ✅ 2026-08-08 —
       per-chat chains did not protect the shared live index from two different chats.
       Every snapshot/landing/resolve/teardown now crosses a repo-scoped queue. A chat's
-      `praxis/chat-*` branch exists only during a turn or while parked; successful
+      `trezi/chat-*` branch exists only during a turn or while parked; successful
       landing/discard detaches the still-live worktree and deletes the branch, and the
       next `beforeTurn` recreates it for crash recovery. `src/main/repo-write-queue.ts`,
       `src/main/{chat-isolation,chat-worktrees,worktrees}.ts`, `test/live-commit.mjs`.
@@ -1467,7 +1496,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 - [x] **AI-surfaced control panels.** ✅ 2026-07-18 — "Surface controls with AI"
       runs a real agent turn that instruments the source and calls a new
       `define_controls` tool; main validates and owns
-      `.praxis/control-panels.json`; the Custom tab renders the manifest with the
+      `.trezi/control-panels.json`; the Custom tab renders the manifest with the
       Styles primitives. `src/main/control-manifest.ts`, `control-panels.ts`,
       `components/CustomPanel.tsx`, `lib/controls-prompt.ts`.
       `test/control-panels.mjs` (unit), `test/custom-controls.mjs` (Electron),
@@ -1510,7 +1539,7 @@ Ranked by leverage. Deferred items note *why* they're not auto-completable.
       100); `lint`/`format` scripts. The repo-wide `biome check --write` reformat
       is deliberately NOT done — run it as its own commit when ready.
 - [x] **Gemini backend gated.** ✅ 2026-07-07 — `pickProvider` returns Claude for
-      `provider:'gemini'` unless `PRAXIS_EXPERIMENTAL_GEMINI=1`; `gemini.ts` banner
+      `provider:'gemini'` unless `TREZI_EXPERIMENTAL_GEMINI=1`; `gemini.ts` banner
       marks it experimental/unwired; removed from the renderer picker so it can't be
       silently selected. Add the SDK dep + a self-skipping e2e test to un-gate.
 - [ ] **Shared test harness.** 55 `.mjs` tests re-derive root + Playwright/Electron

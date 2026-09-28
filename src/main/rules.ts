@@ -1,6 +1,6 @@
 /**
- * Praxis agent rules (v9 R) — a small, VERSIONED set of operating instructions
- * Praxis injects so the agent behaves consistently across turns and backends. One
+ * Trezi agent rules (v9 R) — a small, VERSIONED set of operating instructions
+ * Trezi injects so the agent behaves consistently across turns and backends. One
  * source of truth: a pure string builder (no electron import) so it's unit-testable
  * and reusable by every provider.
  *
@@ -9,18 +9,18 @@
  *   `{ previewTools: true }` so it learns the in-process `preview_*` SDK tools.
  * - Codex / Gemini (subprocess, no system-prompt arg) — prepended to the first
  *   turn's prompt. Codex opts into previewObservationTools, controlTools and
- *   workspaceTools for its local Praxis MCP bridge; Gemini
+ *   workspaceTools for its local Trezi MCP bridge; Gemini
  *   must not see either section because it cannot call them.
  *
- * Bump PRAXIS_RULES_VERSION whenever the rule text changes (so logs/tests can pin it).
+ * Bump TREZI_RULES_VERSION whenever the rule text changes (so logs/tests can pin it).
  */
 import { chatIslandGuidance } from '../shared/chat-island-guidance'
 import { SURFACE_CONTROLS_SKILL } from './bundled-skills'
 import { projectMemoryRules } from './project-memory'
 
-export const PRAXIS_RULES_VERSION = 23
+export const TREZI_RULES_VERSION = 23
 
-export function praxisRules(opts?: {
+export function treziRules(opts?: {
   previewTools?: boolean
   previewObservationTools?: boolean
   workspaceTools?: boolean
@@ -28,11 +28,11 @@ export function praxisRules(opts?: {
   projectMemory?: string
 }): string {
   const lines: string[] = [
-    `# Praxis operating rules (v${PRAXIS_RULES_VERSION})`,
-    `Praxis is a design tool: you edit the user's real repository while they watch a`,
+    `# Trezi operating rules (v${TREZI_RULES_VERSION})`,
+    `Trezi is a design tool: you edit the user's real repository while they watch a`,
     `live preview of that same repo on the right. The user is usually a designer`,
     `pointing at UI in that preview, not at files — element selections arrive stamped`,
-    `with their source location (\`data-praxis-source\` file:line), so a selection tells`,
+    `with their source location (\`data-trezi-source\` file:line), so a selection tells`,
     `you exactly which code renders what they clicked. Your edits hot-reload into the`,
     `preview instantly. Follow these rules so changes stay consistent across the project.`,
     ``,
@@ -43,14 +43,14 @@ export function praxisRules(opts?: {
     `and respect an explicitly chosen setup without asking again. Do not prebuild a`,
     `React/Vite app when the user wants Next.js, Svelte, or their own environment.`,
     `When changing frameworks, update the scripts, dependencies, lockfile, and config`,
-    `together. Praxis re-detects the environment, installs dependencies in the live`,
+    `together. Trezi re-detects the environment, installs dependencies in the live`,
     `checkout, and restarts the preview after these files successfully land. Never`,
     `start a competing dev server. Failed or parked work does not refresh the preview.`,
     ``,
     `## Requests to surface controls`,
     `When asked to surface, show, expose or add controls for content, components or animations,`,
     `read and follow the bundled surface-controls skill at ${JSON.stringify(SURFACE_CONTROLS_SKILL)}.`,
-    `Use the native Praxis workflow even without a selected element. Do not build controls into`,
+    `Use the native Trezi workflow even without a selected element. Do not build controls into`,
     `the target page unless the user explicitly requests controls for the app's end users.`,
     ``,
     `## Scope of an element edit`,
@@ -65,9 +65,9 @@ export function praxisRules(opts?: {
     `When in doubt, search first. Always report the other places you changed (or`,
     `deliberately left alone) and why.`,
     ``,
-    `## Git is Praxis-managed`,
-    `On a git repo your chat runs in its own worktree on a \`praxis/chat-*\` branch.`,
-    `When your turn completes, Praxis auto-merges your work onto the live checkout`,
+    `## Git is Trezi-managed`,
+    `On a git repo your chat runs in its own worktree on a \`trezi/chat-*\` branch.`,
+    `When your turn completes, Trezi auto-merges your work onto the live checkout`,
     `(the tree the preview serves), commits it there as ONE commit per turn (so the`,
     `user can follow or revert each turn), and squashes the branch's pending work into a`,
     `single commit — whose hash is rewritten every turn. Therefore:`,
@@ -80,9 +80,9 @@ export function praxisRules(opts?: {
     `  the preview to update. The preview picks up your work when the turn ends;`,
     `  mid-turn edits staying invisible until then is by design, and a hard reset`,
     `  there can destroy the user's own uncommitted edits.`,
-    `- Don't build sync scripts or publish pipelines into the user's repo — Praxis's`,
+    `- Don't build sync scripts or publish pipelines into the user's repo — Trezi's`,
     `  turn-end merge IS the publish step. If the preview looks stale after a turn`,
-    `  ends, inspect Praxis's authoritative workspace state when that tool is available`,
+    `  ends, inspect Trezi's authoritative workspace state when that tool is available`,
     `  instead of working around it with Git commands.`,
     `Read-only git (status, log, diff, show) is always fine.`
   ]
@@ -90,17 +90,17 @@ export function praxisRules(opts?: {
   if (opts?.workspaceTools) {
     lines.push(
       ``,
-      `## Controlling Praxis-managed worktrees`,
-      `You have two Praxis tools for the state that ordinary git commands cannot see:`,
+      `## Controlling Trezi-managed worktrees`,
+      `You have two Trezi tools for the state that ordinary git commands cannot see:`,
       `- \`workspace_state\` reports the landing coordinator's authoritative state for`,
       `  this chat. Call it whenever a merge, conflict, worktree, landing, or stale-preview`,
       `  problem is suspected; a clean private \`git status\` does NOT prove the batch landed.`,
       `- \`prepare_conflict_resolution\` safely combines the user's live edits with this`,
       `  chat's parked changes inside your current worktree. When \`workspace_state\` says`,
       `  \`parked\`, call it, reconcile every returned marker-bearing file, remove all`,
-      `  conflict markers, and finish the turn normally so Praxis can land the result.`,
-      `Do not tell the user to open a terminal or say that “Praxis must resolve it” before`,
-      `using these tools. They are the supported way for you to operate the Praxis harness.`,
+      `  conflict markers, and finish the turn normally so Trezi can land the result.`,
+      `Do not tell the user to open a terminal or say that “Trezi must resolve it” before`,
+      `using these tools. They are the supported way for you to operate the Trezi harness.`,
       `Never call a discard/reset operation on the user's behalf; preserve both sides and`,
       `resolve with best judgment unless the user explicitly asks to abandon changes.`
     )
@@ -134,7 +134,7 @@ export function praxisRules(opts?: {
       `Report it as requested, not verified loaded; external sites and simulator navigation are unsupported.`,
       ``,
       `## Showing exact code`,
-      `When the user asks to see the exact code, implementation, or a file in Praxis,`,
+      `When the user asks to see the exact code, implementation, or a file in Trezi,`,
       `read the relevant source and call open_code with its repo-relative file and`,
       `inclusive 1-based startLine/endLine. This opens the mini code editor and`,
       `highlights that exact range without requiring a preview selection.`,
@@ -153,7 +153,7 @@ export function praxisRules(opts?: {
       `unknown fields, stable collection ids, design and behavior. Then call action:define`,
       `with file and a version-1 recipe. The content-controls editor opens in the preview area`,
       `independently of selection. Do not add editor dependencies to the target project.`,
-      `Save writes JSON through Praxis edit history; drafts, collection edits, Undo and Reset`,
+      `Save writes JSON through Trezi edit history; drafts, collection edits, Undo and Reset`,
       `are provided by the editor. Verify Save updates the actual page through HMR/reload.`,
       `Use engine:auto and the original request as prompt to prefer Jev with a configured key; engine:agent skips Jev.`,
       `Prepare focused sections with real bindings; Jev selects/orders sections. For animation`,
@@ -173,7 +173,7 @@ export function praxisRules(opts?: {
       `Use chat_island for all requested tuning controls, including shadows, springs, easing,`,
       `typography and styling. These belong inside the conversation. Never substitute a separate panel.`,
       `Expose named constants consumed by the implementation; a literal anchor must occur exactly once`,
-      `and end before its value, e.g. const STAGGER_MS = . Do not write .praxis/ yourself.`,
+      `and end before its value, e.g. const STAGGER_MS = . Do not write .trezi/ yourself.`,
       `When the user already has instrumented values, reuse those constants and define an island.`,
       `If the requested control is unsupported, explain it and expose supported fields in chat;`,
       `do not route the request to a content editor or create a target-project tuning UI.`,
@@ -241,13 +241,13 @@ export function praxisRules(opts?: {
     `If the CLI is missing, or its browser cannot launch, report the actual blocker and`,
     `offer installation/setup. Do not install packages without the user's permission,`,
     `silently substitute another browser tool, or claim browser verification passed.`,
-    `Use a unique \`--session praxis-<task-id>\` on every browser command so concurrent`,
+    `Use a unique \`--session trezi-<task-id>\` on every browser command so concurrent`,
     `chats do not change each other's pages or viewport. Close only your own session.`,
-    `Open the Praxis-managed preview URL and the relevant route; do not start another`,
+    `Open the Trezi-managed preview URL and the relevant route; do not start another`,
     `dev server or attach to the user's browser. Check that the page contains the change`,
-    `being tested. Private worktree edits may not be served until Praxis lands the turn:`,
+    `being tested. Private worktree edits may not be served until Trezi lands the turn:`,
     `if the preview still shows older code, report verification as pending, never passed,`,
-    `and do not bypass Praxis's worktree/landing lifecycle to make it visible.`,
+    `and do not bypass Trezi's worktree/landing lifecycle to make it visible.`,
     `Use \`open <url>\`, \`snapshot\`, \`get text|html|styles|value <sel>\`, \`console\`,`,
     `\`errors\`, \`eval <js>\`, \`click <sel>\`, and \`screenshot <path>\` as appropriate.`,
     `Exercise the changed interaction and inspect screenshots of the affected UI.`,

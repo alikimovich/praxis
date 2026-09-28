@@ -1,7 +1,7 @@
 # Native UI migration plan
 
 Status: application UI migration implemented, 2026-09-24, on candidate.
-The native build has no Praxis React renderer or application WebViews. Final
+The native build has no Trezi React renderer or application WebViews. Final
 verification and measurement evidence is recorded in NATIVE.md, PROGRESS.md and
 RUNTIME_BENCHMARK.md; older-macOS/iOS Simulator release testing remains separate.
 This plan preserves Electron support and shared application services.
@@ -16,9 +16,9 @@ Git, filesystem work, project startup and source-edit operations.
 WKWebView remains for the user's website preview and WebKit's Web Inspector.
 Preview DOM inspection, selection, inline editing, annotations and 3D overlays
 remain JavaScript inside the preview's isolated bridge. Removing React from
-Praxis does not remove JavaScript or React from a user's previewed project.
+Trezi does not remove JavaScript or React from a user's previewed project.
 
-Completion means the native build does not bundle or load the Praxis React
+Completion means the native build does not bundle or load the Trezi React
 renderer, including property-panel and pop-out editor entrypoints. Bun stays;
 rewriting the shared backend in Swift is a separate project with little direct
 benefit to this UI migration. Electron keeps its renderer and runtime.
@@ -90,7 +90,7 @@ light/dark mode, small windows and Reduce Motion.
 
 Wire host startup directly to the Bun workspace controller. Route service events
 to typed native subscribers rather than treating mainView.webContents as the UI
-event bus. Remove native dependence on the full PraxisApi preload and renderer
+event bus. Remove native dependence on the full TreziApi preload and renderer
 menu dispatch for migrated features.
 
 Until remaining panels are replaced, load each legacy panel only when requested,
@@ -157,7 +157,7 @@ Finish native updater/relaunch, browser download/permission handling and recover
 behavior. Treat safe profile import as an explicit feature, not permission for
 simultaneous Electron/native writes.
 
-**Exit check:** a clean native build contains no Praxis React UI bundles; only
+**Exit check:** a clean native build contains no Trezi React UI bundles; only
 the project preview and its inspector require browser surfaces. Core integration
 runs with no renderer evaluation helpers. Re-measure packaged size, cold/warm
 startup, preview readiness, process-tree memory, idle CPU and streaming behavior

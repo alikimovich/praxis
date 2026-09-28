@@ -5,7 +5,7 @@ import { excludedWorktreePath } from './worktrees'
 /**
  * Per-turn commits on the LIVE checkout.
  *
- * A chat's work is committed on its own `praxis/chat-<id>` worktree branch, but the
+ * A chat's work is committed on its own `trezi/chat-<id>` worktree branch, but the
  * merge back onto the live tree is a plain file WRITE (`autoApplyWorktree`) — so
  * without this the user's own checkout just accumulated one giant uncommitted diff
  * until Publish. That makes a single turn impossible to review or roll back with git.
@@ -18,7 +18,7 @@ import { excludedWorktreePath } from './worktrees'
  *    hand edits elsewhere stay uncommitted and a revert can't take them with it;
  *  - the commit is a PATHSPEC (partial) commit, so anything the user had staged for
  *    their own commit is left staged and untouched;
- *  - the praxis-managed `.praxis/` sidecar is never committed (same rule as
+ *  - the trezi-managed `.trezi/` sidecar is never committed (same rule as
  *    `commitWorktree`);
  *  - only inside a git repo ROOT — for a subdirectory project, committing would sweep
  *    up the enclosing repo, which is exactly the surprise `isRepoRoot` exists to avoid;
@@ -43,11 +43,11 @@ const MAX_TITLE = 72
 /** One line, collapsed whitespace, capped — a user prompt makes the commit subject. */
 export function commitTitle(message: string): string {
   const line = (message ?? '').split('\n')[0].replace(/\s+/g, ' ').trim()
-  if (!line) return 'Praxis chat edit'
+  if (!line) return 'Trezi chat edit'
   return line.length > MAX_TITLE ? `${line.slice(0, MAX_TITLE - 1).trimEnd()}…` : line
 }
 
-/** Repo-relative paths this module is willing to commit: no praxis sidecar, no dupes. */
+/** Repo-relative paths this module is willing to commit: no trezi sidecar, no dupes. */
 export function committableFiles(files: string[]): string[] {
   const seen = new Set<string>()
   for (const raw of files) {
@@ -111,9 +111,9 @@ export async function commitLiveTurn(
       // so a target repo's pre-commit hook (husky/lint-staged on a half-finished
       // refactor) can't abort the turn's commit. Same reasoning as `commitWorktree`.
       '-c',
-      'user.name=Praxis',
+      'user.name=Trezi',
       '-c',
-      'user.email=praxis@local',
+      'user.email=trezi@local',
       'commit',
       '--no-verify',
       '-m',

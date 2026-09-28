@@ -1,3 +1,4 @@
+import '../shared/rename-compat'
 import { spawn } from 'node:child_process'
 import { NativeUpdateController } from './update-controller'
 import { installNativeInspector } from './inspector-runtime'
@@ -52,8 +53,8 @@ import { installNativeWorkspace } from './workspace-runtime'
 
 async function main() {
   const testing = process.argv.includes('--test')
-  const testDir = testing ? mkdtempSync(join(tmpdir(), 'praxis-native-')) : null
-  if (testDir) process.env.PRAXIS_USER_DATA = join(testDir, 'profile')
+  const testDir = testing ? mkdtempSync(join(tmpdir(), 'trezi-native-')) : null
+  if (testDir) process.env.TREZI_USER_DATA = join(testDir, 'profile')
   const profile = app.getPath('userData')
   mkdirSync(profile, { recursive: true })
   const lock = join(profile, 'native.lock')
@@ -66,7 +67,7 @@ async function main() {
       running = error.code !== 'ESRCH'
     }
     if (running)
-      throw new Error('Praxis Native is already using this profile. Close that instance first.')
+      throw new Error('Trezi Native is already using this profile. Close that instance first.')
     rmSync(lock)
   }
   writeFileSync(lock, String(process.pid), { flag: 'wx' })
@@ -79,8 +80,10 @@ async function main() {
     writeFileSync(join(fixture, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="red"/></svg>')
     writeFileSync(
       join(fixture, 'index.html'),
-      '<!doctype html>\n<html><body>\n<h1 id="native-title" data-praxis-source="index.html:3:1">Native Praxis fixture</h1>\n<p>Bun owns this server.</p><script>window.previewInputs=[];for(const type of ["keydown","keyup","keypress","pointerdown","mousedown","click","dblclick","wheel","input"])window.addEventListener(type,event=>window.previewInputs.push(event.type),true)</script></body></html>'
+      '<!doctype html>\n<html><body>\n<h1 id="native-title" data-trezi-source="index.html:3:1">Native Trezi fixture</h1>\n<p>Bun owns this server.</p><script>window.previewInputs=[];for(const type of ["keydown","keyup","keypress","pointerdown","mousedown","click","dblclick","wheel","input"])window.addEventListener(type,event=>window.previewInputs.push(event.type),true)</script></body></html>'
     )
+    // Prepare the reload route before the managed server starts watching files.
+    writeFileSync(join(fixture, 'about.html'), readFileSync(join(fixture, 'index.html')))
   }
   let pickedRoot = fixture || (requestedProject ? resolve(requestedProject) : null)
   const root = resolve(__dirname, '../..')
@@ -101,8 +104,8 @@ async function main() {
     return cleaning
   }
   installShutdown(cleanup, forceStopDevServers)
-  const executable = join(__dirname, 'Praxis Native.app/Contents/MacOS/PraxisHost')
-  process.env.PRAXIS_NATIVE_HOST = executable
+  const executable = join(__dirname, 'Trezi Native.app/Contents/MacOS/TreziHost')
+  process.env.TREZI_NATIVE_HOST = executable
   host = new NativeBridge(executable, __dirname, testing ? 'ephemeral' : 'persistent')
   setBridge(host)
   const mainView = new NativeView('main')
@@ -111,14 +114,14 @@ async function main() {
   const refreshPreferences = () => {
     const values = preferences.snapshot()
     let preferred: unknown
-    try { preferred = JSON.parse(values['praxis:preferred-model'] ?? 'null') } catch {}
+    try { preferred = JSON.parse(values['trezi:preferred-model'] ?? 'null') } catch {}
     workspaceController.preferred = resolvePreferredSettings(parsePreferredModelState(preferred))
     for (const chat of chatController.chats.values()) if (chat.context) chat.context.turn = {
-      ...chat.context.turn, projectUi: values['praxis:project-ui:v1'] === 'true',
-      projectUiEngine: values['praxis:project-ui-engine:v1'] === 'jev' ? 'jev' : 'agent'
+      ...chat.context.turn, projectUi: values['trezi:project-ui:v1'] === 'true',
+      projectUiEngine: values['trezi:project-ui-engine:v1'] === 'jev' ? 'jev' : 'agent'
     }
     host!.send('preferences', { values })
-    host!.send('layoutWidth', { width: Number(values['praxis:native-chat-width']) || 440 })
+    host!.send('layoutWidth', { width: Number(values['trezi:native-chat-width']) || 440 })
   }
   const previewView = new NativeView('preview')
   const window = mainView
@@ -217,7 +220,7 @@ async function main() {
   })
   host.on('media', async ({ task, url, headers }) => {
     try {
-      const handler = protocolHandlers.get('praxis-media')!
+      const handler = protocolHandlers.get('trezi-media')!
       const response = await handler(new Request(url, { headers }))
       host!.send('mediaReply', {
         task,
@@ -238,15 +241,15 @@ async function main() {
   serviceEvents.on('event', (channel, line) => { if (channel === 'devserver:log' || channel === 'simulator:log') activityController.append(line, 'server') })
   host.on('native-layout-width', ({ width }) => {
     if (!Number.isFinite(width) || width < 320 || width > 760) return
-    preferences.set('praxis:native-chat-width', String(width))
+    preferences.set('trezi:native-chat-width', String(width))
   })
-  host.on('native-layout-sizes', sizes => { if (['source','layers','inspector'].every(key => Number.isFinite(sizes[key]))) preferences.set('praxis:native-panel-sizes', JSON.stringify({ source:sizes.source, layers:sizes.layers, inspector:sizes.inspector })) })
+  host.on('native-layout-sizes', sizes => { if (['source','layers','inspector'].every(key => Number.isFinite(sizes[key]))) preferences.set('trezi:native-panel-sizes', JSON.stringify({ source:sizes.source, layers:sizes.layers, inspector:sizes.inspector })) })
   host.on('native-layout-frame', ({ frame }) => {
     void dispatchIPC('main', { type: 'send', channel: 'preview:set-bounds', args: [frame] })
   })
   const chatController = installNativeChat(host!, mainView)
   const workspaceController = installNativeWorkspace(host!, mainView, workspace, chatController, preferences)
-  const contextController = new NativeContextController(workspaceController, chatController, () => ({ projectUi: preferences.get('praxis:project-ui:v1') === 'true', projectUiEngine: preferences.get('praxis:project-ui-engine:v1') === 'jev' ? 'jev' : 'agent' }), (channel, ...args) => dispatchIPC('main', { type: 'send', channel, args }))
+  const contextController = new NativeContextController(workspaceController, chatController, () => ({ projectUi: preferences.get('trezi:project-ui:v1') === 'true', projectUiEngine: preferences.get('trezi:project-ui-engine:v1') === 'jev' ? 'jev' : 'agent' }), (channel, ...args) => dispatchIPC('main', { type: 'send', channel, args }))
   const visualEdit = async (root: string, prompt: string) => {
     const entry = workspaceController.state.projects.find(p => p.root === root)
     if (!entry || !prompt.trim()) return
@@ -345,7 +348,7 @@ async function main() {
     const project = workspaceController.active?.root
     await cleanup()
     const processNext = spawn(process.execPath, [join(root, 'out/native/index.cjs'), ...(project ? ['--project', project] : [])], { cwd: root, detached: true, stdio: 'ignore', env: process.env })
-    processNext.on('error', error => { console.error('Could not restart Praxis Native:', error); process.exit(1) }); processNext.once('spawn', () => { processNext.unref(); process.exit(0) })
+    processNext.on('error', error => { console.error('Could not restart Trezi Native:', error); process.exit(1) }); processNext.once('spawn', () => { processNext.unref(); process.exit(0) })
   }, undefined, undefined, () => [...chatController.chats.values()].some(chat => chat.isRunning || chat.text || chat.attachments.length) ? 'Finish running chats and send or clear your drafts before restarting.' : [...editorController.sessions.values()].some(session => [...session.documents.values()].some(doc => doc.text !== doc.baseline)) ? 'Save source editor drafts before restarting.' : [...contentController.sessions.values()].some(session => session.dirty || session.busy) ? 'Save content editor drafts before restarting.' : null)
   host.on('menu', ({ action }) => { if (action === 'updates') void updates.open().catch(error => activityController.append(String(error), 'error')) })
   host.on('download-error', ({ message }) => activityController.append(`Download failed: ${message}`, 'error'))
@@ -405,6 +408,10 @@ async function main() {
   })
   host.on('closed', async () => {
     if (cleaning) return
+    if (testing) {
+      console.error('Native host closed before the smoke suite completed')
+      process.exitCode = 1
+    }
     await cleanup()
     if (!testing) process.exit(0)
   })
@@ -415,15 +422,15 @@ async function main() {
   })
   host.once('ready', async () => {
     host!.send('preferences', { values: preferences.snapshot() })
-    host!.send('layoutWidth', { width: Number(preferences.get('praxis:native-chat-width')) || 440 })
-    try { host!.send('layoutSizes', { sizes: JSON.parse(preferences.get('praxis:native-panel-sizes') ?? '{}') }) } catch {}
+    host!.send('layoutWidth', { width: Number(preferences.get('trezi:native-chat-width')) || 440 })
+    try { host!.send('layoutSizes', { sizes: JSON.parse(preferences.get('trezi:native-panel-sizes') ?? '{}') }) } catch {}
     shellController!.render()
     let preferred: unknown
-    try { preferred = JSON.parse(preferences.get('praxis:preferred-model') ?? 'null') } catch {}
+    try { preferred = JSON.parse(preferences.get('trezi:preferred-model') ?? 'null') } catch {}
     await workspaceController.command({ type: 'attach', preferred: resolvePreferredSettings(parsePreferredModelState(preferred)) })
     await chatController.command({ type: 'attach' })
     if (requestedProject && !testing) await workspaceController.command({ type: 'open', root: resolve(requestedProject) })
-    console.log('Praxis Native is running on Bun + system WebKit. ')
+    console.log('Trezi Native is running on Bun + system WebKit. ')
     if (testing) {
       try {
         await runNativeCoreSmoke(host!, fixture!, root)

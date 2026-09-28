@@ -21,7 +21,7 @@ const controller = new NativeWorkspaceController({
       if (root === '/failure' && failed) throw new Error('Preview failure')
       return { name: root.slice(1), devCommand: 'bun run dev', framework: 'vite', previewKind: 'web' }
     }
-    if (channel === 'git:ensure') return { branch: 'praxis/test' }
+    if (channel === 'git:ensure') return { branch: 'trezi/test' }
     if (channel === 'devserver:info') return { running: false }
     if (channel === 'devserver:start') return { url: 'http://127.0.0.1:7784' }
     if (channel === 'sessions:list') return []

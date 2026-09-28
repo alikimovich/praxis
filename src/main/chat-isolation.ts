@@ -43,7 +43,7 @@ const gitOut = async (cwd: string, args: string[]): Promise<string> =>
 /**
  * Per-CHAT git-worktree isolation glue (v9). Generalizes the comment-spawn
  * worktree machinery to interactive chats: every chat on a git repo ROOT gets one
- * long-lived `praxis/chat-<id>` worktree, forked before its session starts and used
+ * long-lived `trezi/chat-<id>` worktree, forked before its session starts and used
  * as the session's `cwd` for the chat's whole life. After each completed agent turn
  * the chat's work auto-merges back onto the LIVE checkout (which the preview always
  * serves) so the preview updates between turns, and the merged files are committed
@@ -69,7 +69,7 @@ interface ChatState {
   parked: boolean
   /** The persisted park `SessionRecord` id while parked, else null. */
   parkRecordId: string | null
-  /** Files in the cumulative batch that Praxis could not safely land. */
+  /** Files in the cumulative batch that Trezi could not safely land. */
   parkedFiles: string[]
   /** Marker-bearing files after `stageResolve`; retained so preparing twice is
    *  idempotent instead of erasing the only recovery diff on the second call. */
@@ -160,7 +160,7 @@ export async function isolatedCwd(liveRoot: string, sessionKey: string): Promise
     return wt.path
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
-    throw new Error(`Praxis couldn't create an isolated chat workspace: ${detail}`)
+    throw new Error(`Trezi couldn't create an isolated chat workspace: ${detail}`)
   }
 }
 
@@ -258,7 +258,7 @@ export function afterTurn(
           if (outcome.newBase) st.wt.baseSha = outcome.newBase
           await commitLiveTurn(st.liveRoot, outcome.files, {
             title: message,
-            body: `Praxis turn ${turnNo} (${st.wt.branch}).`
+            body: `Trezi turn ${turnNo} (${st.wt.branch}).`
           })
           if (st.parked) {
             st.parked = false
@@ -425,7 +425,7 @@ export async function applyParkedBranch(
       // step, markers and all, instead of tangling it with the user's other WIP.
       await commitLiveTurn(st.liveRoot, res.files, {
         title: `Apply ${st.wt.branch} changes`,
-        body: 'Praxis parked-chat apply.'
+        body: 'Trezi parked-chat apply.'
       })
       st.parked = false
       st.parkedFiles = []
@@ -521,7 +521,7 @@ export async function resolveParkedChat(
         if (outcome.newBase) st.wt.baseSha = outcome.newBase
         await commitLiveTurn(st.liveRoot, outcome.files, {
           title: 'Resolve chat/live merge',
-          body: `Praxis conflict resolution (${st.wt.branch}).`
+          body: `Trezi conflict resolution (${st.wt.branch}).`
         })
         st.parked = false
         st.parkedFiles = []
@@ -646,7 +646,8 @@ async function branchAlreadyLive(repoRoot: string, branch: string): Promise<bool
 
 /**
  * Crash recovery for chat worktrees reclaimed by `pruneOrphans` (called from
- * `agent:open-project`). For each reclaimed `praxis/chat-*` orphan, keyed to its OWN repo
+ * `agent:open-project`). For each reclaimed `trezi/chat-*` or legacy `praxis/chat-*`
+ * orphan, keyed to its OWN repo
  * (which may differ from the project being opened — the worktrees dir is shared):
  *  - dirty → a crashed-mid-turn chat: surface its work via a recovery park record.
  *  - clean + already recorded → a persisted park: keep its record + branch untouched.
@@ -660,7 +661,7 @@ export async function handleReclaimed(
 ): Promise<void> {
   if (!deps) return
   for (const r of reclaimed) {
-    if (!r.branch?.startsWith('praxis/chat-') || !r.repoRoot) continue
+    if (!r.branch || !/^(trezi|praxis)\/chat-/.test(r.branch) || !r.repoRoot) continue
     if (r.dirty) {
       await recoveryParkRecord(r.repoRoot, r.id, r.branch)
       continue
@@ -692,7 +693,7 @@ export async function releaseChat(
     await enqueueRepoWrite(st.liveRoot, async () => {
       if (!st.parked) {
         const turnNo = ++st.turnNo
-        const outcome = await completeTurn(st.liveRoot, st.wt, 'praxis chat changes', {
+        const outcome = await completeTurn(st.liveRoot, st.wt, 'trezi chat changes', {
           land: pendingTerminal === 'success'
         })
         if (outcome.outcome === 'merged') {
@@ -707,8 +708,8 @@ export async function releaseChat(
             )
           }
           await commitLiveTurn(st.liveRoot, outcome.files, {
-            title: 'Praxis chat changes',
-            body: `Praxis final turn (${st.wt.branch}).`
+            title: 'Trezi chat changes',
+            body: `Trezi final turn (${st.wt.branch}).`
           })
         } else if (outcome.outcome === 'parked') {
           st.parked = true
@@ -742,7 +743,7 @@ export function isolationSnapshot(
   }
 }
 
-/** Authoritative state exposed to the chat's Praxis MCP tools. Unlike `git status`
+/** Authoritative state exposed to the chat's Trezi MCP tools. Unlike `git status`
  *  inside the private checkout, this reports whether the landing coordinator has
  *  accepted, parked, or staged the cumulative batch. Paths stay out of the result:
  *  the model already runs in its own worktree and should never target the live one. */
@@ -757,7 +758,7 @@ export function agentWorkspaceState(sessionKey: string): {
     return {
       state: 'live',
       files: [],
-      guidance: 'This chat edits the live folder directly; no Praxis worktree landing is active.'
+      guidance: 'This chat edits the live folder directly; no Trezi worktree landing is active.'
     }
   }
   if (st.resolvingFiles) {
@@ -766,7 +767,7 @@ export function agentWorkspaceState(sessionKey: string): {
       branch: st.wt.branch,
       files: st.resolvingFiles,
       guidance:
-        'Both sides are staged in this worktree. Resolve every conflict marker in the listed files; Praxis will land the result when the turn completes.'
+        'Both sides are staged in this worktree. Resolve every conflict marker in the listed files; Trezi will land the result when the turn completes.'
     }
   }
   if (st.parked) {
@@ -775,7 +776,7 @@ export function agentWorkspaceState(sessionKey: string): {
       branch: st.wt.branch,
       files: st.parkedFiles,
       guidance:
-        'Praxis refused to land this cumulative batch safely. Call prepare_conflict_resolution before editing or giving the user terminal instructions.'
+        'Trezi refused to land this cumulative batch safely. Call prepare_conflict_resolution before editing or giving the user terminal instructions.'
     }
   }
   return {
@@ -783,7 +784,7 @@ export function agentWorkspaceState(sessionKey: string): {
     branch: st.wt.branch,
     files: [],
     guidance:
-      'This chat is healthy and isolated. Praxis will validate and land its edits when the turn completes.'
+      'This chat is healthy and isolated. Trezi will validate and land its edits when the turn completes.'
   }
 }
 

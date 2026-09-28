@@ -10,4 +10,4 @@ export type NativeEditorAction = {
   source?: string; text?: string; name?: string; revision?: number
 }
 
-declare global { interface Window { praxisNativeEditor?: { open(source: string): void; close(): void } } }
+declare global { interface Window { treziNativeEditor?: { open(source: string): void; close(): void } } }

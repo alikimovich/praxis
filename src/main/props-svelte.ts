@@ -21,7 +21,7 @@ import {
 
 /**
  * Svelte adapter for the prop editor — the `.svelte` counterpart of the
- * React/JSX engine in props.ts. Same contract: given a `data-praxis-source` stamp,
+ * React/JSX engine in props.ts. Same contract: given a `data-trezi-source` stamp,
  * find the element on that line/column, read its literal attributes, resolve a
  * component prop schema (`export let` for Svelte 4, `$props()` destructuring for
  * Svelte 5, with TS types → enums when present), and apply simple literal edits
@@ -355,7 +355,7 @@ export async function parseSvelte(code: string): Promise<Node | null> {
 
 // Dirs that never hold authored usage sites — skip them while scanning so a big
 // repo doesn't read its build output / deps on every inspect.
-const SCAN_SKIP = new Set(['node_modules', '.git', '.svelte-kit', '.praxis', 'dist', 'build', 'out'])
+const SCAN_SKIP = new Set(['node_modules', '.git', '.svelte-kit', '.trezi', '.praxis', 'dist', 'build', 'out'])
 
 /** `.svelte` files under `root` whose text mentions `<Component` (cheap pre-filter). */
 async function svelteFilesUsing(root: string, component: string, limit = 4000): Promise<string[]> {

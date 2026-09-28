@@ -52,7 +52,7 @@
     "split": "development",
     "label": "environment",
     "source": "observed",
-    "evidence": "EPERM: operation not permitted, listen '/tmp/praxis-agent-tools-37306.sock'",
+    "evidence": "EPERM: operation not permitted, listen '/tmp/trezi-agent-tools-37306.sock'",
     "rationale": "Observed sandbox socket denial in the initial unit benchmark."
   },
   {

@@ -72,8 +72,8 @@ export class NativeSheetController {
     if (generation !== this.generation) return
     this.present({
       title: 'Project memory — ' + project.name,
-      detail: 'Add preferences and decisions Praxis should remember for this project. Changes save automatically and take effect with the next message.',
-      fields: [{ id: 'content', label: 'What should Praxis remember?', kind: 'multiline', value: memory.content }],
+      detail: 'Add preferences and decisions Trezi should remember for this project. Changes save automatically and take effect with the next message.',
+      fields: [{ id: 'content', label: 'What should Trezi remember?', kind: 'multiline', value: memory.content }],
       autosave: true, actions: []
     }, async action => {
       const content = action.values.content ?? ''
@@ -86,7 +86,7 @@ export class NativeSheetController {
     if (this.current?.state.busy) return
     this.present({
       title: 'New project',
-      detail: 'Start with a React app, or plan a project with Praxis. Next, choose where to save it.',
+      detail: 'Start with a React app, or plan a project with Trezi. Next, choose where to save it.',
       fields: [
         { id: 'setup', label: 'Starting point', kind: 'choice', value: 'react', choices: [
           { value: 'react', label: 'React starter app' }, { value: 'next', label: 'Plan with Next.js' },

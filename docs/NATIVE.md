@@ -1,4 +1,4 @@
-# Native Praxis on macOS
+# Native Trezi on macOS
 
 ```sh
 bun run dev:native
@@ -8,14 +8,14 @@ bun run test:native
 ```
 
 The native application UI is Swift/AppKit/SwiftUI. It does not build or load the
-Praxis React renderer. WebKit is used only for the user's project preview and
+Trezi React renderer. WebKit is used only for the user's project preview and
 Web Inspector. Bun runs the shared agent, Git, filesystem and project-server
 services. `bun run dev` now launches this native runtime; Electron has been removed.
 
 Requires macOS 13.3+, Bun, command-line tools with the macOS 26 SDK, and
 `bun install`. Liquid Glass requires macOS 26; older systems use native visual
 effect materials. This migration was verified on macOS 26.4.1, not every supported
-OS version. Start through Bun: the internal `Praxis Native.app` is a host
+OS version. Start through Bun: the internal `Trezi Native.app` is a host
 subprocess, not a standalone installer.
 
 ## Native ownership
@@ -83,7 +83,7 @@ compiles the Swift host and copies its native image/cat assets. It removes stale
 `out/native/renderer` and `preload.js` from older hybrid builds. The build audits
 its dependency graph against application renderer/React imports and records
 `out/native/build-inputs.json`. There is no Vite/Tailwind application build or
-loopback renderer asset server in native mode. `PRAXIS_NATIVE_PORT` is obsolete.
+loopback renderer asset server in native mode. `TREZI_NATIVE_PORT` is obsolete.
 
 The native platform (`src/native/platform.ts`) is imported directly by backend
 services. Its `main` object is a trusted service sender, not a hidden browser. Swift refuses creation of any
@@ -105,7 +105,7 @@ Repeated WebKit process failures stop automatic reload and show a retry surface.
 
 ## Profiles and lifecycle
 
-Backend state lives in `~/Library/Application Support/Praxis Native`, separately
+Backend state lives in `~/Library/Application Support/Trezi Native`, separately
 from Electron. A profile lock prevents concurrent native writers. Workspace state
 lives in `workspace.json`; versioned native UI preferences live in
 `preferences.json`. Earlier hybrid builds imported legacy native browser values
@@ -117,7 +117,7 @@ Custom endpoint keys use AES-GCM with the encryption key in macOS Keychain. Valu
 reach the cipher helper through stdin, not argv. No real credentials are written
 by the integration tests.
 
-Praxis owns project servers. Quit, terminal SIGINT/SIGTERM/SIGHUP, and host pipe
+Trezi owns project servers. Quit, terminal SIGINT/SIGTERM/SIGHUP, and host pipe
 closure await managed process-group cleanup: SIGTERM, a one-second grace period,
 then SIGKILL for survivors. Ownership survives shell exit; explicit process exit
 has a synchronous forced-stop fallback. Repeated terminal signals share one cleanup.
@@ -131,7 +131,7 @@ branches automatically.
 
 Use `bun run typecheck`, `bun run typecheck:native`, relevant `test/native-*.mjs`
 controller checks, and `bun run test:native`. Do not run Electron suites during
-native-only work. `PRAXIS_NATIVE_BACKGROUND_TEST=1` skips pointer/animation checks;
+native-only work. `TREZI_NATIVE_BACKGROUND_TEST=1` skips pointer/animation checks;
 it is partial UI evidence. Native integration asserts that only the preview
 WebView exists throughout project navigation, sheets, editing, chat and Inspector.
 The test drives native commands and service results, without renderer evaluation.
@@ -144,7 +144,7 @@ tree/navigation/find, repeated divider drags, selection-driven inspectors and
 download cancellation. Controller tests cover conflicts, stale actions, provider
 forms, recipes, token writes, workspace restore and update failure paths. Real
 publishing, update pulls, credential writes and paid provider turns are not part
-of deterministic verification. `PRAXIS_NATIVE_TEST_PROVIDER=codex bun run
+of deterministic verification. `TREZI_NATIVE_TEST_PROVIDER=codex bun run
 test:native-live` opts into a real fixture edit. iOS Simulator integration and
 older-macOS visual behavior still require platform-specific release testing.
 
@@ -161,3 +161,7 @@ serializing writes. Closing or navigating within the form waits for the latest
 draft; a failed save keeps it open with an error. Close-only buttons are omitted
 and actionless windows omit the footer. Provider credentials, source commits,
 creation and destructive operations retain explicit actions.
+
+Trezi compatibility: see [migration policy](rename/MIGRATION.md) for legacy
+profile/worktree paths, retained identities and rollback, and [LKM-84 mapping](rename/COORDINATION.md)
+for integration ordering.

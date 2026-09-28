@@ -1,10 +1,10 @@
-# Praxis
+# Trezi
 
-An AI design & prototyping tool for your own repos. Open a project, Praxis
+An AI design & prototyping tool for your own repos. Open a project, Trezi
 launches its dev server in a live preview on the right, and an AI chat on the
 left edits the running app using the selected provider's native harness.
 
-Unlike a sandbox (Figma Make, Claude Code's scratch dir), Praxis edits *your
+Unlike a sandbox (Figma Make, Claude Code's scratch dir), Trezi edits *your
 real repository* with live hot-reload, and hands the result off as a branch +
 GitHub PR.
 
@@ -13,15 +13,15 @@ GitHub PR.
 - **Choose how a new project starts.** New Project asks whether to use the
   React/TypeScript/Vite defaults, plan Next.js or Svelte, or discuss your own
   environment. The discussion paths initialize an empty repository and open chat
-  before creating an app. After environment changes land, Praxis re-detects the
+  before creating an app. After environment changes land, Trezi re-detects the
   framework, installs dependencies in the preview checkout, and restarts the web
   preview. Custom launch commands are preserved; startup errors keep chat available.
 
-- **Live preview of your repo.** Open a folder → Praxis detects the framework
+- **Live preview of your repo.** Open a folder → Trezi detects the framework
   and package manager, boots that repo's dev server, and previews it in a
   system WebKit `WKWebView`. It self-heals if the dev server dies and restarts.
   Plain HTML/CSS/JS folders (no package.json or build step) are served by a
-  built-in static server with live-reload; anything Praxis can't auto-launch
+  built-in static server with live-reload; anything Trezi can't auto-launch
   prompts for a custom command.
 - **Pull updates and remote branches.** Click the current branch → **Git updates…**
   to fetch branches from GitHub or another Git remote, merge a selected remote
@@ -31,17 +31,17 @@ GitHub PR.
 - **AI chat that edits the running app.** A persistent multi-turn agent session
   streams over IPC and edits source with hot-reload. Backends are pluggable —
   Claude (via the Agent SDK), Codex, and Gemini behind one provider seam
-  (Gemini is experimental, gated behind `PRAXIS_EXPERIMENTAL_GEMINI`). Their
+  (Gemini is experimental, gated behind `TREZI_EXPERIMENTAL_GEMINI`). Their
   capabilities differ; see [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
 - **Peer chats and project memory.** Every project has a flat set of isolated,
   independently named chats, with background agents nested under the chat that
-  launched them. After successful turns, Praxis conservatively learns durable
+  launched them. After successful turns, Trezi conservatively learns durable
   decisions into unified project memory shared by every chat; it lives outside Git
   and remains directly editable. See [`docs/MEMORY.md`](docs/MEMORY.md).
 - **Bring your own model.** Beyond the two subscription seats, Settings →
   Models & Providers connects any OpenAI-compatible endpoint serving the
   `/responses` API — Vercel AI Gateway, Groq, or a custom host — so open models
-  like Kimi or DeepSeek can drive a chat. Paste a key, Praxis fetches that
+  like Kimi or DeepSeek can drive a chat. Paste a key, Trezi fetches that
   endpoint's model catalog, and you tick which models to offer in the picker.
   Connections run on the Codex harness; the key is encrypted with the OS
   keychain and never leaves the main process.
@@ -63,17 +63,17 @@ GitHub PR.
 - **Click-to-edit.** Hold **Shift** while clicking to add or remove objects from
   a selection. Chat requests and Delete include the group; individual property
   controls target the most recent object. A **Select** mode maps a clicked element to its source
-  location (via the `data-praxis-source` stamp — see
+  location (via the `data-trezi-source` stamp — see
   [`docs/DESIGN.md`](docs/DESIGN.md)), then edits its **props** with typed
   controls (react-docgen for React, `svelte/compiler` for Svelte 5), applies
   the repo's **design tokens** (auto-detected from a manifest, Tailwind, or CSS
   vars), and edits text inline. Non-literal text cases run as detached background
   agents without entering the visible chat.
-- **Ask to see the exact code.** Praxis can open its mini code editor in the
+- **Ask to see the exact code.** Trezi can open its mini code editor in the
   relevant file and highlight the implementation, without selecting an object.
   Unsaved editor changes are preserved; available with Claude and Codex.
 - **Surface controls in chat.** Ask for animation or shadow controls, or use
-  `/surface-controls`. Praxis embeds native sliders, inputs, toggles, point and
+  `/surface-controls`. Trezi embeds native sliders, inputs, toggles, point and
   easing editors in the conversation. Controls bind to source with Undo, Reset
   and optional Replay; changes update the project through HMR. A disabled draft
   appears while Jev arranges the prepared controls; editing activates after landing.
@@ -124,8 +124,8 @@ GitHub PR.
 
 ## Install
 
-One line — clones to `~/.praxis` (override with `PRAXIS_HOME`), installs, builds,
-and puts a `praxis` command on your `PATH`:
+One line — clones to `~/.trezi` (override with `TREZI_HOME`), installs, builds,
+and puts a `trezi` command on your `PATH`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/alikimovich/praxis/main/install.sh | bash
@@ -135,9 +135,9 @@ The installer recommends **agent-browser** for automated browser checks, includi
 different screen sizes, and asks whether to install its global CLI and browser.
 It uses Bun, skips the offer when the CLI is
 already on PATH, and defaults to **No**. Unattended installs skip the prompt.
-An optional browser-install failure does not prevent Praxis installation.
+An optional browser-install failure does not prevent Trezi installation.
 To install it later: `bun install --global agent-browser && agent-browser install`.
-Praxis's built-in agent instructions require its use when available for web UI
+Trezi's built-in agent instructions require its use when available for web UI
 verification, including phone/tablet/desktop checks for layout changes. Agents
 must report missing browser support or a preview that cannot yet show their edits.
 
@@ -145,12 +145,12 @@ Then authorize the agent once and launch:
 
 ```bash
 claude setup-token   # one-time: authorize the agent with your own subscription
-praxis               # launch the app (builds on first run)
-praxis --project ./my-app # open a project directly
+trezi               # launch the app (builds on first run)
+trezi --project ./my-app # open a project directly
 ```
 
 In the app, click **Open project…**, pick a repo with a `dev`/`start` script,
-and chat on the left. Praxis **owns the dev server** — quitting or pressing Ctrl-C stops its managed
+and chat on the left. Trezi **owns the dev server** — quitting or pressing Ctrl-C stops its managed
 process groups, force-stopping survivors after a short grace period. Don't also run `dev`
 manually for a project you open here, or you'll hit a port/lock conflict (the
 error banner offers a custom-command retry for monorepos / odd setups).
@@ -158,28 +158,28 @@ error banner offers a custom-command retry for monorepos / odd setups).
 ## Updating
 
 ```bash
-praxis --update      # git pull + bun install + rebuild
+trezi --update      # git pull + bun install + rebuild
 ```
 
 The native Settings update workflow checks the remote, guards unsaved work,
 then pulls, installs, rebuilds and restarts. There's no signed app or auto-download — updates are
 always a git pull of your checkout.
 
-## Develop on Praxis itself
+## Develop on Trezi itself
 
 Contributors work in the checkout directly instead of the installed copy:
 
 ```bash
-git clone https://github.com/alikimovich/praxis.git
-cd praxis
+git clone https://github.com/alikimovich/praxis.git trezi
+cd trezi
 bun install
 bun run dev          # build and launch the native app
-bun link             # optional: expose the `praxis` command from this checkout
+bun link             # optional: expose the `trezi` command from this checkout
 ```
 
 ## Architecture
 
-Praxis has a Swift/AppKit/SwiftUI interface, a Bun service process, and one
+Trezi has a Swift/AppKit/SwiftUI interface, a Bun service process, and one
 WebKit view for the user's project. See [Native architecture](docs/NATIVE.md).
 
 - **Swift** owns chat, composer, sidebar, toolbar, native dialog windows and inspectors. Settings and project memory
@@ -192,7 +192,7 @@ WebKit view for the user's project. See [Native architecture](docs/NATIVE.md).
   checked against a restricted allowlist.
 
 Electron and the old React application UI have been removed. Browser/Tailscale
-mode (`praxis serve`) is retired; the CLI reports that explicitly. The native
+mode (`trezi serve`) is retired; the CLI reports that explicitly. The native
 profile stays separate from old Electron profiles, which are not deleted or
 silently migrated. Existing provider CLI logins remain available.
 
@@ -238,7 +238,7 @@ Jev with your saved Vercel AI Gateway connection from Settings. See [scope and w
 ### Content editors from chat
 
 Ask chat to surface controls for content, components or animations; the bundled
-`surface-controls` skill chooses the appropriate native workflow. Praxis uses content-controls
+`surface-controls` skill chooses the appropriate native workflow. Trezi uses content-controls
 recipes in native SwiftUI editors beside the preview, with drafts, Save to source
 and Undo. The vendored package contains only recipe/API code; its upstream web UI
 and Motion dependency are omitted. Ask to use Jev to
@@ -257,3 +257,10 @@ New prose words softly resolve on
 macOS 15+; older systems show text immediately. Reduce Motion disables the reveal
 and status animation. The composer button beam runs only during active generation,
 not idle drafts, approval waits, stopping or applying completed changes.
+
+### Renamed from Praxis
+
+Existing native data is preserved through in-place aliases; old `praxis` commands
+and `PRAXIS_*` settings remain supported. See [migration and rollback](docs/rename/MIGRATION.md)
+and the [rename audit](docs/rename/AUDIT.md). The public GitHub repository and
+installer URLs retain their existing names.

@@ -25,9 +25,9 @@ Median snapshot capture times, milliseconds:
 
 | Fixture / workload | Production | Retained index, always commit | Retained index + commit reuse |
 | --- | ---: | ---: | ---: |
-| Praxis / clean | 93.1 | 58.9 | 50.4 |
-| Praxis / unchanged WIP | 97.2 | 61.2 | 54.3 |
-| Praxis / external edit | 102.2 | 61.2 | 63.0 |
+| Trezi / clean | 93.1 | 58.9 | 50.4 |
+| Trezi / unchanged WIP | 97.2 | 61.2 | 54.3 |
+| Trezi / external edit | 102.2 | 61.2 | 63.0 |
 | +5,000 small files / clean | 411.8 | 69.6 | 59.1 |
 | +5,000 small files / unchanged WIP | 406.8 | 70.3 | 63.8 |
 | +5,000 small files / external edit | 416.9 | 76.1 | 73.0 |
@@ -46,7 +46,7 @@ The fresh-index instrumented control was close to production. It resolves HEAD
 and its tree together, uses a pinned HEAD SHA in subsequent commands, and records
 each step. Aggregated per-step medians across its workloads:
 
-| Step | Praxis fresh → retained | Many files fresh → retained | Assets fresh → retained |
+| Step | Trezi fresh → retained | Many files fresh → retained | Assets fresh → retained |
 | --- | ---: | ---: | ---: |
 | `git add -A` | 40.9 → 11.5 | 321.6 → 18.2 | 142.1 → 10.8 |
 | `git write-tree` | 12.6 → 9.4 | 37.1 → 11.2 | 13.2 → 9.4 |

@@ -3,7 +3,7 @@
  * it can be unit-tested without loading provider sessions.
  *
  * Codex streams whole `ThreadItem`s (started → updated → completed), not raw
- * deltas, so praxis has to remember how much of each item it has already emitted
+ * deltas, so trezi has to remember how much of each item it has already emitted
  * and turn the next reading into a suffix. The subtlety that bit us: the CLI
  * numbers items PER TURN (`item_0`, `item_1`, …, restarting each turn), so that
  * bookkeeping has to be per-turn too. Kept for the whole session instead, turn 2's

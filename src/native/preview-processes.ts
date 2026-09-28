@@ -52,5 +52,5 @@ export async function stopPreviewProcess(server: PreviewProcess) {
     await new Promise(resolve => setTimeout(resolve, 200))
     if (!await inspect(server.root, server.pid)) return
   }
-  throw new Error('The server did not stop. Review Activity or stop it in its terminal, then retry. Praxis did not force-kill it.')
+  throw new Error('The server did not stop. Review Activity or stop it in its terminal, then retry. Trezi did not force-kill it.')
 }

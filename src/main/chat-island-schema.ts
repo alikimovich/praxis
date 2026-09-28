@@ -7,7 +7,7 @@ export function islandDefinition(raw: unknown): { manifest: ControlPanelManifest
   const input = raw as { manifest?: any; blocks?: unknown }
   const manifest = validateManifest({ ...input.manifest, id: 'island', createdAt: new Date().toISOString() })
   if ('error' in manifest) throw new Error(manifest.error)
-  if (manifest.file.split('/').some(p => p === '.praxis' || p === '.dsgn' || p === '.git')) throw new Error('Cannot bind application metadata.')
+  if (manifest.file.split('/').some(p => p === '.trezi' || p === '.praxis' || p === '.dsgn' || p === '.git')) throw new Error('Cannot bind application metadata.')
   if (manifest.params.some(p => p.apply.strategy !== 'literal')) throw new Error('Chat islands require selection-independent literal bindings.')
   if (!Array.isArray(input.blocks) || !input.blocks.length || input.blocks.length > 12) throw new Error('Provide 1–12 blocks.')
   const seen = new Set<string>()

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import assert from 'node:assert/strict'
 
-const dir = mkdtempSync(join(tmpdir(), 'praxis-shutdown-'))
+const dir = mkdtempSync(join(tmpdir(), 'trezi-shutdown-'))
 const root = resolve('.')
 const pause = () => new Promise(r => setTimeout(r, 25))
 const dead = pid => { try { process.kill(pid, 0); return false } catch { return true } }

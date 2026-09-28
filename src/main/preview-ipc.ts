@@ -10,7 +10,7 @@ import { observePreview } from './preview-evidence'
  * NativeView is created, raised, hidden or destroyed.
  *
  * Trust: the preview hosts the user's project — untrusted content. Every message
- * arriving on a `praxis:preview:*` / `layers:*` channel is therefore checked
+ * arriving on a `trezi:preview:*` / `layers:*` channel is therefore checked
  * against the preview's own webContents before it's believed, and every message
  * that drives the preview is checked to have come from the trusted native service target (never from the preview itself).
  */

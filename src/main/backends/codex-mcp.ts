@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import type { PraxisAgentToolRegistration } from '../praxis-agent-tools'
+import type { TreziAgentToolRegistration } from '../trezi-agent-tools'
 
 const requiredTools = [
   'chat_island',
@@ -14,12 +14,12 @@ const requiredTools = [
   'open_code'
 ]
 
-export function praxisMcpConfig(appRoot: string, registration: PraxisAgentToolRegistration) {
+export function treziMcpConfig(appRoot: string, registration: TreziAgentToolRegistration) {
   return {
     mcp_servers: {
       praxis: {
         command: process.execPath,
-        args: [join(appRoot, 'bin/praxis-agent-mcp.mjs')],
+        args: [join(appRoot, 'bin/trezi-agent-mcp.mjs')],
         cwd: appRoot,
         enabled: true,
         // A missing bridge must fail the turn, including subsequent CLI resumes.
@@ -31,8 +31,8 @@ export function praxisMcpConfig(appRoot: string, registration: PraxisAgentToolRe
             .map((name) => [name, { approval_mode: 'approve' }])
         ),
         env: {
-          PRAXIS_AGENT_TOOL_SOCKET: registration.socketPath,
-          PRAXIS_AGENT_TOOL_TOKEN: registration.token
+          TREZI_AGENT_TOOL_SOCKET: registration.socketPath,
+          TREZI_AGENT_TOOL_TOKEN: registration.token
         }
       }
     }
@@ -40,13 +40,13 @@ export function praxisMcpConfig(appRoot: string, registration: PraxisAgentToolRe
 }
 
 /** Check the actual helper and authenticated socket without making a model call. */
-export async function verifyPraxisMcp(config: ReturnType<typeof praxisMcpConfig>): Promise<void> {
+export async function verifyTreziMcp(config: ReturnType<typeof treziMcpConfig>): Promise<void> {
   const [{ Client }, { StdioClientTransport }] = await Promise.all([
     import('@modelcontextprotocol/sdk/client/index.js'),
     import('@modelcontextprotocol/sdk/client/stdio.js')
   ])
   const server = config.mcp_servers.praxis
-  const client = new Client({ name: 'praxis-startup', version: '1' })
+  const client = new Client({ name: 'trezi-startup', version: '1' })
   const transport = new StdioClientTransport({
     command: server.command,
     args: server.args,
@@ -69,9 +69,9 @@ export async function verifyPraxisMcp(config: ReturnType<typeof praxisMcpConfig>
     if (result.isError) throw new Error('The session tool bridge rejected its connection.')
   } catch (error) {
     const detail = (error instanceof Error ? error.message : String(error))
-      .split(server.env.PRAXIS_AGENT_TOOL_TOKEN)
+      .split(server.env.TREZI_AGENT_TOOL_TOKEN)
       .join('[redacted]')
-    throw new Error(`Praxis tools could not connect: ${detail}. Restart Praxis and retry the chat.`)
+    throw new Error(`Trezi tools could not connect: ${detail}. Restart Trezi and retry the chat.`)
   } finally {
     await client.close().catch(() => {})
   }

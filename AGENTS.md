@@ -1,6 +1,6 @@
-# AGENTS.md — working guide for Praxis
+# AGENTS.md — working guide for Trezi
 
-Praxis is a native macOS app: Swift/AppKit/SwiftUI chat and editing tools on the
+Trezi is a native macOS app: Swift/AppKit/SwiftUI chat and editing tools on the
 left, with the user's project in system WebKit on the right. Bun owns provider
 sessions, Git/worktrees, source editing, persistence and managed project servers.
 Electron, the React application renderer and browser/Tailscale mode are retired.
@@ -24,7 +24,7 @@ builds require macOS 13.3+ and command-line tools with the macOS 26 SDK.
 | `bun run dev` / `bun run dev:native` | Build and launch Swift host + Bun services |
 | `bun run build` / `bun run build:native` | Build to `out/native/` |
 | `bun run start` | Launch existing native build |
-| `praxis --project <repo>` | Launch/open a project through the CLI |
+| `trezi --project <repo>` | Launch/open a project through the CLI |
 | `bun run typecheck` | Check native/backend/shared and isolated preview code |
 | `bun run typecheck:native` | Native/backend/shared check only |
 | `node test/run.mjs unit` | Backend and controller tests, no desktop |
@@ -43,7 +43,7 @@ SKIP is distinct from PASS. See `docs/TESTING.md`.
 
 Read generated PNGs to verify UI without asking the user. Offscreen AppKit image
 caching does not reliably capture Liquid Glass; use visible checks when needed.
-`PRAXIS_NATIVE_BACKGROUND_TEST=1` skips real preview pointer gestures/animation
+`TREZI_NATIVE_BACKGROUND_TEST=1` skips real preview pointer gestures/animation
 timing and must be reported as reduced coverage. No Electron tests remain.
 
 ## Architecture
@@ -79,7 +79,7 @@ timing and must be reported as reduced coverage. No Electron tests remain.
   `src/native/preview-transport.ts`. The project preview is the only WebKit view.
 - `scripts/build-native.mjs`: bundles services and preview, compiles Swift and
   checks that the app does not depend on Electron or the retired React renderer.
-- `bin/praxis.mjs`, `install.sh`: source installation, native launch and update.
+- `bin/trezi.mjs`, `install.sh`: source installation, native launch and update.
 
 Swift and Bun communicate over pipes. Preview messages are untrusted and are
 restricted by actual view identity and an allowlist. The preview cannot invoke
@@ -87,7 +87,7 @@ agent, filesystem or application commands. Preserve WKContentWorld isolation.
 Native profiles remain separate from historical Electron profiles; do not delete
 or implicitly migrate existing user data. See `docs/NATIVE.md`.
 
-Praxis **owns** target dev-server lifetimes: never run the target's `dev` manually.
+Trezi **owns** target dev-server lifetimes: never run the target's `dev` manually.
 The app awaits managed process-group cleanup on quit and terminal shutdown,
 force-stopping survivors after a one-second grace period. Swift edits require
 rebuild/restart; the user's project retains its own HMR.
@@ -112,9 +112,12 @@ package contains only its used recipe/API modules and supporting declarations.
   pre-authorized; do not ask again before staging/committing in-scope work.
 - Prop editing requires `PropInspection.hasSchema`; unresolved components remain
   prompt-only. React and Svelte have separate splice engines.
-- Agents cannot write target `.praxis/` or legacy `.dsgn/` directories.
+- Agents cannot write target `.trezi/`, legacy `.praxis/` or `.dsgn/` directories.
 - The project was originally **dsgn**. Preserve intentional legacy migration and
   cleanup strings in setup, git, sidecar migration and agent persistence. Do not
   rewrite historical `docs/PROGRESS.md` entries.
 - Keep `docs/WORKTREES.md` and `docs/PROVIDERS.md` current for lifecycle/provider
   changes. Project memory and Main-context reset are in `docs/MEMORY.md`.
+
+Trezi rename compatibility and rollback: `docs/rename/MIGRATION.md`. Keep stable
+OS/MCP identities and legacy aliases until a separately verified migration exists.

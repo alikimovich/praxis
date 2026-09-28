@@ -3,9 +3,9 @@
  * now lands as ONE commit on the user's live checkout, so a session reads as progress
  * in `git log` and any turn can be `git revert`ed on its own.
  *
- * Asserts: a turn's files commit with the prompt as the subject + a Praxis body; an
+ * Asserts: a turn's files commit with the prompt as the subject + a Trezi body; an
  * unrelated dirty file is NOT swept in; the user's own STAGED work stays staged and out
- * of the commit; a file the turn created is committed; `.praxis/` sidecar paths are
+ * of the commit; a file the turn created is committed; `.trezi/` sidecar paths are
  * filtered; a no-op (content already at HEAD) commits nothing; an empty file list, a
  * non-repo directory and a repo SUBDIRECTORY are all skipped without throwing; and
  * `commitTitle` collapses/caps a multi-line prompt. Then the real `chat-isolation.ts`
@@ -32,7 +32,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const base = mkdtempSync(join(tmpdir(), 'praxis-lc-'))
+const base = mkdtempSync(join(tmpdir(), 'trezi-lc-'))
 let failed = 0
 const ok = (cond, msg) => {
   if (!cond) {
@@ -84,19 +84,19 @@ try {
     writeFileSync(join(repo, 'other.txt'), 'the user typed this by hand\n')
     const res = await commitLiveTurn(repo, ['a.txt', 'b.txt'], {
       title: 'make the header blue',
-      body: 'Praxis turn 1 (praxis/chat-abc).'
+      body: 'Trezi turn 1 (trezi/chat-abc).'
     })
     ok(res.committed, 'turn commits')
     ok(res.sha && res.sha.length >= 7, 'returns the new HEAD sha')
     ok(res.sha === g(repo, 'rev-parse', 'HEAD').trim(), 'sha is HEAD')
     ok(log(repo)[0] === 'make the header blue', `subject is the prompt (got ${log(repo)[0]})`)
     ok(
-      g(repo, 'log', '-1', '--pretty=%b').includes('Praxis turn 1 (praxis/chat-abc).'),
+      g(repo, 'log', '-1', '--pretty=%b').includes('Trezi turn 1 (trezi/chat-abc).'),
       'body carries the turn/branch trailer'
     )
     ok(
-      g(repo, 'log', '-1', '--pretty=%an').trim() === 'Praxis',
-      'commits as Praxis even without repo identity'
+      g(repo, 'log', '-1', '--pretty=%an').trim() === 'Trezi',
+      'commits as Trezi even without repo identity'
     )
     const inCommit = commitFiles(repo)
     ok(
@@ -132,10 +132,10 @@ try {
     ok(porcelain(repo).length === 0, 'tree is clean afterwards')
   }
 
-  // --- 4. The praxis sidecar never reaches the user's history. ---
+  // --- 4. The trezi sidecar never reaches the user's history. ---
   {
     ok(
-      committableFiles(['.praxis/annotations.json', '.praxis', 'a.txt', 'a.txt', '', ' b.txt ']).join(
+      committableFiles(['.trezi/annotations.json', '.trezi', 'a.txt', 'a.txt', '', ' b.txt ']).join(
         ','
       ) === 'a.txt,b.txt',
       'committableFiles drops sidecar paths, blanks and duplicates'
@@ -153,12 +153,12 @@ try {
       'live commits reject secrets/generated paths but allow env templates'
     )
     const repo = makeRepo()
-    mkdirSync(join(repo, '.praxis'), { recursive: true })
-    writeFileSync(join(repo, '.praxis', 'annotations.json'), '[]\n')
+    mkdirSync(join(repo, '.trezi'), { recursive: true })
+    writeFileSync(join(repo, '.trezi', 'annotations.json'), '[]\n')
     writeFileSync(join(repo, 'a.txt'), 'agent edit\n')
-    await commitLiveTurn(repo, ['.praxis/annotations.json', 'a.txt'], { title: 'edit' })
+    await commitLiveTurn(repo, ['.trezi/annotations.json', 'a.txt'], { title: 'edit' })
     ok(commitFiles(repo).join(',') === 'a.txt', 'sidecar is excluded from the commit')
-    ok(porcelain(repo).join('') === '?? .praxis/', 'sidecar stays untracked')
+    ok(porcelain(repo).join('') === '?? .trezi/', 'sidecar stays untracked')
   }
 
   // --- 5. Nothing to record → no empty commits piling up in the history. ---
@@ -191,7 +191,7 @@ try {
   // --- 7. Subject shaping. ---
   {
     ok(commitTitle('  make it   blue\nand rounded  ') === 'make it blue', 'first line, collapsed')
-    ok(commitTitle('') === 'Praxis chat edit', 'empty prompt gets a fallback subject')
+    ok(commitTitle('') === 'Trezi chat edit', 'empty prompt gets a fallback subject')
     const long = commitTitle('x'.repeat(200))
     ok(long.length === 72 && long.endsWith('…'), `long subject is capped (got ${long.length})`)
   }
@@ -212,7 +212,7 @@ try {
     const key = 'live-commit-test'
     const cwd = await isolatedCwd(repo, key)
     ok(cwd !== repo, `the chat got its own worktree (got ${cwd})`)
-    const branch = `praxis/chat-${cwd.split('/').at(-1)}`
+    const branch = `trezi/chat-${cwd.split('/').at(-1)}`
     ok(!branchExists(repo, branch), 'an idle chat does not retain a stale branch')
 
     /** afterTurn is fire-and-forget (queued on the chat's chain) — wait for the commit. */
@@ -272,7 +272,7 @@ try {
     ok(g(repo, 'show', 'HEAD:b.txt') === 'two\n', 'chat two landed')
     ok(porcelain(repo).length === 0, 'concurrent landings leave no live index debris')
     ok(
-      await waitFor(() => g(repo, 'branch', '--list', 'praxis/chat-*').trim() === ''),
+      await waitFor(() => g(repo, 'branch', '--list', 'trezi/chat-*').trim() === ''),
       'successful concurrent landings leave no chat branches'
     )
     await Promise.all([releaseChat(one), releaseChat(two)])
@@ -289,7 +289,7 @@ try {
     })
     const key = 'failed-terminal'
     const cwd = await isolatedCwd(repo, key)
-    const branch = `praxis/chat-${cwd.split('/').at(-1)}`
+    const branch = `trezi/chat-${cwd.split('/').at(-1)}`
     await beforeTurn(key, 'partial edit')
     writeFileSync(join(cwd, 'a.txt'), 'partial\n')
     afterTurn(key, 'partial edit', [], 'failed')
@@ -318,7 +318,7 @@ try {
     ok((await defaultBase(repo)) === 'main', 'defaultBase falls back to main with no origin')
     ok((await changedSince(repo)).length === 0, 'a clean checkout on the base branch: nothing')
 
-    g(repo, 'checkout', '-q', '-b', 'praxis/main')
+    g(repo, 'checkout', '-q', '-b', 'trezi/main')
     writeFileSync(join(repo, 'a.txt'), 'turn 1\n')
     await commitLiveTurn(repo, ['a.txt'], { title: 'turn one' })
     writeFileSync(join(repo, 'b.txt'), 'turn 2\n')

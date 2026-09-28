@@ -1,3 +1,4 @@
+import { checkSourceStamps } from './smoke-source-stamp'
 import { checkChatIslands } from './smoke-islands'
 import assert from 'node:assert/strict'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -9,7 +10,7 @@ import { nativeChat } from './chat-runtime'
 import { checkProjectSwitching } from './smoke-projects'
 import { checkNativeSheets } from './smoke-sheets'
 import { checkNativeChat } from './smoke-chat'
-import { checkSelectionInput } from './smoke-input'
+import { checkSelectionInput, preparePreviewInput } from './smoke-input'
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve,ms))
 export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, root: string) {
   const invoke = (channel: string, ...args: any[]) => dispatchIPC('main',{type:'invoke',channel,args})
@@ -29,7 +30,7 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   await wait(()=>page('!!document.querySelector("#native-title")'),'fixture loaded')
   await host.request('shellPerform', { action: 'device' })
   await wait(() => page(`getComputedStyle(document.documentElement).scrollbarWidth === 'none'`), 'mobile scrollbars hidden')
-  assert.equal(await page(`!!document.querySelector('[data-praxis-frame]')`), false, 'Native mobile must not inject a second phone frame')
+  assert.equal(await page(`!!document.querySelector('[data-trezi-frame]')`), false, 'Native mobile must not inject a second phone frame')
   await page(`(() => {
     const scroller = document.createElement('div'); scroller.id = 'scrollbar-check';
     scroller.style.cssText = 'height:60px;overflow:scroll';
@@ -41,19 +42,22 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   writeFileSync(join(artifacts, 'mobile-scrollbars.png'), Buffer.from(await host.request('captureShell'), 'base64'))
   // Reload must use WebKit's current document, including History API navigation.
   const originalURL = await page('location.href')
-  writeFileSync(join(fixture, 'about.html'), readFileSync(join(fixture, 'index.html')))
   const route = new URL('/about.html?tab=details#section', originalURL).href
   await page(`(() => { history.pushState({}, '', ${JSON.stringify(route)}); window.reloadSentinel = true; return true })()`)
   host.emit('menu', { action: 'reload' })
   await wait(()=>page('!!document.querySelector("#native-title") && !window.reloadSentinel'),'reload completes')
   assert.equal(await page('location.href'), route, 'Reload preserves the current path, query and fragment')
-  await page(`history.replaceState({}, '', ${JSON.stringify(originalURL)})`)
+  // Restore the actual document, not just its History API URL, before later
+  // fixtures edit index.html and depend on its live-reload connection.
+  await page(`(() => { window.reloadSentinel = true; location.href = ${JSON.stringify(originalURL)}; return true })()`)
+  await wait(() => page(`location.href === ${JSON.stringify(originalURL)} && !!document.querySelector('#native-title') && !window.reloadSentinel`), 'original fixture restored')
   console.log('Native reload preserves History API route, query and fragment.')
   await wait(() => page(`getComputedStyle(document.documentElement).scrollbarWidth === 'none'`), 'mobile scrollbar policy restored after navigation')
   await host.request('shellPerform', { action: 'device' })
-  await wait(() => page(`!document.querySelector('[data-praxis-frame-style]')`), 'desktop scrollbar policy restored')
+  await wait(() => page(`!document.querySelector('[data-trezi-frame-style]')`), 'desktop scrollbar policy restored')
   console.log('Native mobile hides document/nested scrollbars, preserves scrolling and survives navigation.')
   await wait(()=>nativeChat.chats.get(nativeChat.active)?.ready,'native chat ready',30000)
+  await checkSourceStamps(page)
   await checkChatIslands(host, fixture, artifacts)
   await inspect('composerInspect', s => s.welcomedChat)
   writeFileSync(join(artifacts,'composer-ready-beam.png'),Buffer.from(await host.request('captureComposer'),'base64'))
@@ -110,6 +114,7 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   await checkProjectSwitching(host, fixture, artifacts)
   assert.equal((await host.request('composerInspect')).readyBeam, false, 'Returning to a ready chat replayed its beam')
   await checkNativeSheets(host,nativeWorkspace.state.activeKey!,artifacts)
+  if (process.env.TREZI_NATIVE_BACKGROUND_TEST !== '1') await preparePreviewInput(host)
   await geometry('sheets')
   const shell=await inspect('shellInspect',s=>s.enabled.code)
   assert.equal(shell.outlineRows,shell.rows.filter((r:any)=>r.kind==='project').length)
@@ -133,30 +138,40 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   await host.request('shellPerform',{action:'layers'});await inspect('layersInspect',s=>!s.visible)
   await host.request('shellPerform',{action:'select-object'})
   await wait(()=>page(`document.documentElement.style.cursor==='crosshair'`),'select mode')
-  if(process.env.PRAXIS_NATIVE_BACKGROUND_TEST==='1')console.log('SKIP real preview pointer gestures/animation timing: PRAXIS_NATIVE_BACKGROUND_TEST')
+  if(process.env.TREZI_NATIVE_BACKGROUND_TEST==='1')console.log('SKIP real preview pointer gestures/animation timing: TREZI_NATIVE_BACKGROUND_TEST')
   else await checkSelectionInput(host)
   await invoke('preview:set-select-mode',false)
   assert.equal(await page('typeof window.api'), 'undefined')
   await assert.rejects(()=>dispatchIPC('preview',{type:'invoke',channel:'source:read',args:[fixture,'index.html:1:0']}))
+  // Give the real preview selection the style fixture's source. A synthetic
+  // element-picked event races with WebKit's layout-driven selection refresh.
+  await page(`document.querySelector('#native-title').setAttribute('data-trezi-source','native-style.tsx:1:36')`)
   const layers=await invoke('layers:read'), heading=layers.nodes.find((n:any)=>n.id==='native-title');assert.ok(heading)
   await send('layers:select',{path:heading.path,fingerprint:{tag:heading.tag,source:heading.source}})
   await inspect('inspectorInspect',s=>!s.visible&&s.fields>2)
   serviceEvents.emit('event','preview:toolbar-action','props')
-  const firstInspector=await inspect('inspectorInspect',s=>s.visible&&s.fields>2)
+  await inspect('inspectorInspect',s=>s.visible&&s.fields>2)
   serviceEvents.emit('event','preview:toolbar-action','props')
   await inspect('inspectorInspect',s=>!s.visible)
   serviceEvents.emit('event','preview:toolbar-action','props')
   await inspect('inspectorInspect',s=>s.visible)
-  serviceEvents.emit('event','preview:element-picked',{tag:'h1',id:'native-title',classes:[],selector:'#native-title',source:'native-style.tsx:1:1',componentSource:null,text:'Hello',rect:{x:0,y:0,width:100,height:20},styles:{opacity:'1'}})
-  const inspector=await inspect('inspectorInspect',s=>s.visible&&s.fields>2&&s.generation>firstInspector.generation)
   assert.deepEqual(await host.request('webViews'),['preview'])
   await wait(async()=> (await invoke('styles:read',['font-size']))?.values?.['font-size'], 'preview computed style after selection')
+  // Wait for the opened inspector's preview relayout to settle before capturing
+  // the generation used by the same native action contract as the UI.
+  let inspector = await host.request('inspectorInspect')
+  for (let i=0;i<20;i++) {
+    await delay(100)
+    const next = await host.request('inspectorInspect')
+    if (next.generation === inspector.generation) { inspector = next; break }
+    inspector = next
+  }
   await host.request('inspectorPerform',{action:{root:fixture,generation:inspector.generation,action:'apply',field:'style:opacity',value:'0.8'}})
-  await wait(()=>readFileSync(join(fixture,'native-style.tsx'),'utf8').includes('0.8'),'native style source edit')
+  try { await wait(()=>readFileSync(join(fixture,'native-style.tsx'),'utf8').includes('0.8'),'native style source edit') } catch (error) { console.error('Native inspector failure', { expected: inspector, actual: await host.request('inspectorInspect') }); throw error }
   await host.request('inspectorPerform',{action:{root:fixture,generation:inspector.generation,action:'close'}})
   await inspect('inspectorInspect',s=>!s.visible)
-  const edited=await invoke('text:apply',fixture,{source:'index.html:3:1',text:'Edited through Praxis Native'});assert.ok(edited.applied)
-  await wait(()=>page(`document.querySelector('#native-title')?.textContent==='Edited through Praxis Native'`),'managed reload')
+  const edited=await invoke('text:apply',fixture,{source:'index.html:3:1',text:'Edited through Trezi Native'});assert.ok(edited.applied)
+  await wait(()=>page(`document.querySelector('#native-title')?.textContent==='Edited through Trezi Native'`),'managed reload')
   assert.ok((await invoke('edit:undo',fixture)).ok);assert.ok((await invoke('edit:redo',fixture)).ok)
   await host.request('composerPerform',{text:'Native draft'})
   await inspect('composerInspect',s=>s.text==='Native draft')
@@ -180,9 +195,9 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   await host.request('sourcePerform',{action:{root:fixture,action:'dock'}});await inspect('sourceInspect',s=>s.visible&&!s.popped)
   await host.request('sourcePerform',{action:{root:fixture,action:'hide'}});await inspect('sourceInspect',s=>!s.visible)
   await geometry('after docking')
-  mkdirSync(join(fixture,'.praxis'),{recursive:true})
+  mkdirSync(join(fixture,'.trezi'),{recursive:true})
   writeFileSync(join(fixture,'content.json'), JSON.stringify({title:'Native content',items:[{id:'one',name:'First item'}]}))
-  writeFileSync(join(fixture,'.praxis/content-controls.json'), JSON.stringify({version:1,panels:[{id:'qa',file:'content.json',recipe:{version:1,id:'qa',title:'Native content editor',sections:[{id:'main',title:'Main',fields:[{key:'title',label:'Title',type:'text',required:true}]},{id:'items',title:'Items',collection:{key:'items',itemLabelKey:'name',defaults:{name:'New'},fields:[{key:'name',label:'Name',type:'text'}]}}]}}]}))
+  writeFileSync(join(fixture,'.trezi/content-controls.json'), JSON.stringify({version:1,panels:[{id:'qa',file:'content.json',recipe:{version:1,id:'qa',title:'Native content editor',sections:[{id:'main',title:'Main',fields:[{key:'title',label:'Title',type:'text',required:true}]},{id:'items',title:'Items',collection:{key:'items',itemLabelKey:'name',defaults:{name:'New'},fields:[{key:'name',label:'Name',type:'text'}]}}]}}]}))
   serviceEvents.emit('event','content-controls:updated',{root:fixture})
   const content = await wait(async()=> (await host.request('contentInspect')).find((s:any)=>s.visible&&s.fields>2),'native content editor')
   const contentAction = (action: string, extra: any = {}) => host.emit('content-action',{documentID:content.id,root:fixture,generation:content.generation,action,...extra})
@@ -200,11 +215,11 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   assert.deepEqual(await host.request('webViews'),['preview'])
   console.log('NATIVE CORE PASS — no React/main/panel/editor WebViews; workspace, sheets, layout, native editing, streams and preview isolation.')
   if(process.argv.includes('--live')) {
-    const provider=process.env.PRAXIS_NATIVE_TEST_PROVIDER||'claude'
+    const provider=process.env.TREZI_NATIVE_TEST_PROVIDER||'claude'
     if(!['claude','codex'].includes(provider))throw new Error('Unsupported live provider')
     const options={provider,permissionMode:'bypassPermissions',...(provider==='claude'?{model:'haiku'}:{})}
     const restarted=await invoke('agent:restart-chat',fixture,nativeChat.active,options);assert.ok(restarted.ok)
     let done=false,error='';const listener=(channel:string,e:any)=>{if(channel==='agent:event'&&e.projectKey===nativeChat.active){if(e.type==='done')done=true;if(e.type==='error'){error=e.message;done=true}}};serviceEvents.on('event',listener)
-    try { await host.request('composerPerform',{text:'Edit index.html. Replace the heading text "Edited through Praxis Native" with "NATIVE_AGENT_VERIFIED". Make the edit now.'});await inspect('composerInspect',s=>s.enabled);await host.request('composerPerform',{action:'send'});await wait(()=>done,'live provider',180000);assert.equal(error,'');await wait(()=>readFileSync(join(fixture,'index.html'),'utf8').includes('NATIVE_AGENT_VERIFIED'),'live file edit',30000) } finally {serviceEvents.off('event',listener)}
+    try { await host.request('composerPerform',{text:'Edit index.html. Replace the heading text "Edited through Trezi Native" with "NATIVE_AGENT_VERIFIED". Make the edit now.'});await inspect('composerInspect',s=>s.enabled);await host.request('composerPerform',{action:'send'});await wait(()=>done,'live provider',180000);assert.equal(error,'');await wait(()=>readFileSync(join(fixture,'index.html'),'utf8').includes('NATIVE_AGENT_VERIFIED'),'live file edit',30000) } finally {serviceEvents.off('event',listener)}
   }
 }

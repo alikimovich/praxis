@@ -7,30 +7,30 @@ import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { Codex } from '@openai/codex-sdk'
-import { praxisMcpConfig, verifyPraxisMcp } from '../src/main/backends/codex-mcp.ts'
+import { treziMcpConfig, verifyTreziMcp } from '../src/main/backends/codex-mcp.ts'
 import {
-  registerPraxisAgentTools,
-  shutdownPraxisAgentTools
-} from '../src/main/praxis-agent-tools.ts'
+  registerTreziAgentTools,
+  shutdownTreziAgentTools
+} from '../src/main/trezi-agent-tools.ts'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
-const home = await mkdtemp(join(tmpdir(), 'praxis-codex-mcp-'))
+const home = await mkdtemp(join(tmpdir(), 'trezi-codex-mcp-'))
 const calls = []
-const registration = await registerPraxisAgentTools(async (action) => {
+const registration = await registerTreziAgentTools(async (action) => {
   calls.push(action)
   return { state: 'live' }
 })
 let child
 try {
-  const config = praxisMcpConfig(root, registration)
-  // The provider runs in a project/worktree, separate from Praxis's install.
+  const config = treziMcpConfig(root, registration)
+  // The provider runs in a project/worktree, separate from Trezi's install.
   process.chdir(home)
-  await verifyPraxisMcp(config)
+  await verifyTreziMcp(config)
   assert.deepEqual(calls, ['workspace_state'], 'startup verifies the authenticated bridge')
-  const badToken = praxisMcpConfig(root, { ...registration, token: 'invalid-token' })
-  await assert.rejects(verifyPraxisMcp(badToken), /Praxis tools could not connect/)
-  const missingHelper = praxisMcpConfig(home, registration)
-  await assert.rejects(verifyPraxisMcp(missingHelper), /Praxis tools could not connect/)
+  const badToken = treziMcpConfig(root, { ...registration, token: 'invalid-token' })
+  await assert.rejects(verifyTreziMcp(badToken), /Trezi tools could not connect/)
+  const missingHelper = treziMcpConfig(home, registration)
+  await assert.rejects(verifyTreziMcp(missingHelper), /Trezi tools could not connect/)
 
   // Use the exact production config and SDK-selected CLI, not a substitute server.
   const overrides = []
@@ -70,7 +70,7 @@ try {
       child.stdin.write(`${JSON.stringify({ id, method, params })}\n`)
     })
   await request('initialize', {
-    clientInfo: { name: 'praxis-test', version: '1' },
+    clientInfo: { name: 'trezi-test', version: '1' },
     capabilities: { experimentalApi: true }
   })
   child.stdin.write(`${JSON.stringify({ method: 'initialized' })}\n`)
@@ -81,17 +81,17 @@ try {
   })
   const status = await request('mcpServerStatus/list', { threadId: thread.id })
   const server = status.data.find((entry) => entry.name === 'praxis')
-  assert.ok(server, 'Codex connects to the Praxis MCP server')
+  assert.ok(server, 'Codex connects to the Trezi MCP server')
   assert.ok(!server.toolsError, 'Codex can list the tools')
   for (const tool of ['chat_island', 'preview_screenshot', 'preview_location', 'workspace_state']) {
     assert.ok(server.tools[tool], `Codex exposes ${tool}`)
   }
-  assert.equal(config.mcp_servers.praxis.required, true, 'future turns cannot silently omit Praxis')
+  assert.equal(config.mcp_servers.praxis.required, true, 'future turns cannot silently omit Trezi')
   console.log('CODEX-MCP OK — real helper, socket authentication and Codex tool inventory')
 } finally {
   process.chdir(root)
   child?.kill()
   registration.dispose()
-  await shutdownPraxisAgentTools()
+  await shutdownTreziAgentTools()
   await rm(home, { recursive: true, force: true })
 }

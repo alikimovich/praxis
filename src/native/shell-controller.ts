@@ -12,7 +12,7 @@ export class NativeShellController {
   readonly icons = new Map<string, string | undefined>()
   private signature = ''
   private timer?: ReturnType<typeof setTimeout>
-  constructor(readonly workspace: NativeWorkspaceController, readonly chat: NativeChatController, readonly git: NativeGitController, readonly preferences: ReturnType<typeof nativePreferences>, readonly send: (state: NativeShellState) => void, readonly project: (value: { chatHidden: boolean; viewport: string; selectMode: boolean }) => void) { this.hidden = preferences.get('praxis:chat-hidden') === '1' }
+  constructor(readonly workspace: NativeWorkspaceController, readonly chat: NativeChatController, readonly git: NativeGitController, readonly preferences: ReturnType<typeof nativePreferences>, readonly send: (state: NativeShellState) => void, readonly project: (value: { chatHidden: boolean; viewport: string; selectMode: boolean }) => void) { this.hidden = preferences.get('trezi:chat-hidden') === '1' }
   schedule() { if (!this.timer) this.timer = setTimeout(() => { this.timer = undefined; this.render() }, 16) }
   render() {
     const ws = this.workspace.state, active = this.workspace.active
@@ -29,7 +29,7 @@ export class NativeShellController {
     const state = this.git.decorate({
       previewStatus: ws.status, rows, project: active?.key ?? null, selected: active ? `chat:${active.activeSessionKey}` : null,
       homeState: { visible: !active, busy: ws.status.kind === 'busy', label: ws.status.kind === 'busy' ? ws.status.label : ws.status.kind === 'error' ? ws.status.message : '', recents: ws.recents },
-      selectMode: this.selecting, previewReady: ws.status.kind === 'running', chatWidth: Number(this.preferences.get('praxis:native-chat-width')) || 440, chatHidden: this.hidden,
+      selectMode: this.selecting, previewReady: ws.status.kind === 'running', chatWidth: Number(this.preferences.get('trezi:native-chat-width')) || 440, chatHidden: this.hidden,
       branch: active?.branch ?? null, branches: [], publishLabel: 'Publish', publishing: false, publishMode: this.git.mode, codeOpen: this.codeOpen,
       previewBase: active?.url ?? null, previewURL: url, viewport: active?.viewport ?? 'desktop', deviceEnabled: !!active?.url && active.previewKind !== 'simulator'
     })
@@ -40,7 +40,7 @@ export class NativeShellController {
   }
   async action(action: NativeShellAction) {
     const entry = this.workspace.active
-    if (action.action === 'expand') { this.hidden = !this.hidden; this.preferences.set('praxis:chat-hidden', this.hidden ? '1' : '0'); this.render(); return }
+    if (action.action === 'expand') { this.hidden = !this.hidden; this.preferences.set('trezi:chat-hidden', this.hidden ? '1' : '0'); this.render(); return }
     if (!entry) return
     const invoke = this.workspace.services.invoke
     if (action.action === 'select-object') {

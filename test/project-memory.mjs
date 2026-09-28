@@ -9,7 +9,7 @@ import {
   projectMemoryUpdate
 } from '../src/main/project-memory.ts'
 
-const base = mkdtempSync(join(tmpdir(), 'praxis-project-memory-'))
+const base = mkdtempSync(join(tmpdir(), 'trezi-project-memory-'))
 const ok = (condition, message) => {
   if (!condition) throw new Error(message)
 }
@@ -20,8 +20,8 @@ try {
   const b = '/tmp/project-b'
   ok(store.get(a).content === '', 'new projects start with empty memory')
 
-  const saved = store.set(a, '  # Decisions\n\n- Use praxis/master.  ')
-  ok(saved.content === '# Decisions\n\n- Use praxis/master.', 'save trims outer whitespace')
+  const saved = store.set(a, '  # Decisions\n\n- Use trezi/master.  ')
+  ok(saved.content === '# Decisions\n\n- Use trezi/master.', 'save trims outer whitespace')
   ok(saved.updatedAt > 0, 'save stamps a revision')
   ok(store.get(a).content === saved.content, 'memory survives a new read')
   ok(store.get(b).content === '', 'projects remain isolated')

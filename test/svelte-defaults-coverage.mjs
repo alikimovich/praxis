@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 export async function checkSvelteDefaults(app, win, artifacts) {
-  const root = mkdtempSync(join(tmpdir(), 'praxis-svelte-defaults-'))
+  const root = mkdtempSync(join(tmpdir(), 'trezi-svelte-defaults-'))
   const defaults = { copiedDurationMs: 1400, blurPx: 0.5, blurDurationMs: 80,
     blurHoldMs: 150, blurEasing: 'ease-out', negative: -3, zero: 0,
     enabled: true, disabled: false, empty: '' }
@@ -15,9 +15,9 @@ export async function checkSvelteDefaults(app, win, artifacts) {
   const inspect = (source) => win.evaluate(({ root, source }) => window.api.props.inspect(root, source), { root, source })
   const select = async (source) => {
     await win.evaluate(({ root, source }) => {
-      window.__praxisSession.getState().setProjectRoot(root)
-      window.__praxisSelection.getState().setSelected({ tag: 'button', id: null, classes: [], selector: 'button', source, text: 'Copy', rect: { x: 0, y: 0, width: 0, height: 0 }, styles: {} })
-      window.__praxisPropsIsland.getState().setOpen(true)
+      window.__treziSession.getState().setProjectRoot(root)
+      window.__treziSelection.getState().setSelected({ tag: 'button', id: null, classes: [], selector: 'button', source, text: 'Copy', rect: { x: 0, y: 0, width: 0, height: 0 }, styles: {} })
+      window.__treziPropsIsland.getState().setOpen(true)
     }, { root, source })
   }
   try {
@@ -36,7 +36,7 @@ export async function checkSvelteDefaults(app, win, artifacts) {
     await select('CodeBlock.svelte:5')
     let panel
     for (let i = 0; i < 100 && !panel; i++) {
-      panel = app.windows().find(w => w.url().includes('praxisPanel'))
+      panel = app.windows().find(w => w.url().includes('treziPanel'))
       if (!panel) await new Promise(r => setTimeout(r, 100))
     }
     assert.ok(panel, 'floating inspector opened')
@@ -73,7 +73,7 @@ export async function checkSvelteDefaults(app, win, artifacts) {
     // Simulate the source change produced by that agent, then refresh selection.
     writeFileSync(file, code.replace('copiedDurationMs = 1400', 'copiedDurationMs = 2000'))
     const refreshed = await inspect('CodeBlock.svelte:5')
-    await win.evaluate(inspection => window.__praxisSelection.getState().setInspection(inspection), refreshed)
+    await win.evaluate(inspection => window.__treziSelection.getState().setInspection(inspection), refreshed)
     await expectValue('copiedDurationMs', 2000)
     mkdirSync(artifacts, {recursive: true})
     await panel.screenshot({path: join(artifacts, 'svelte-defaults.png')})

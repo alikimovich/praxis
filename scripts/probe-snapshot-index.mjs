@@ -9,7 +9,7 @@ import { promisify } from 'node:util'
 import { captureBase } from '../src/main/worktrees.ts'
 
 const exec = promisify(execFile)
-const temp = await mkdtemp(join(tmpdir(), 'praxis-index-probes-'))
+const temp = await mkdtemp(join(tmpdir(), 'trezi-index-probes-'))
 try {
   for (const probe of ['ignore-rules-without-reseed', 'attributes-change', 'autocrlf-change', 'restored-mtime-with-trustctime-disabled']) {
     const repo = join(temp, probe)

@@ -35,13 +35,13 @@ const eq = (actual, expected, msg) =>
     `${msg} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`
   )
 
-const base = mkdtempSync(join(tmpdir(), 'praxis-style-tokens-'))
+const base = mkdtempSync(join(tmpdir(), 'trezi-style-tokens-'))
 
-// --- fixture A: manifest source (.praxis/tokens.json) ----------------------
+// --- fixture A: manifest source (.trezi/tokens.json) ----------------------
 const manifestRoot = join(base, 'manifest-project')
-mkdirSync(join(manifestRoot, '.praxis'), { recursive: true })
+mkdirSync(join(manifestRoot, '.trezi'), { recursive: true })
 writeFileSync(
-  join(manifestRoot, '.praxis', 'tokens.json'),
+  join(manifestRoot, '.trezi', 'tokens.json'),
   JSON.stringify({
     colors: { text: '#111111', brand: '#2563eb' },
     spacing: { sm: '4px' },

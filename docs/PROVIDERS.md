@@ -8,32 +8,32 @@ timeout; generation or PR-update failures are surfaced for retry, without a
 conversation-based fallback. This requires Codex sign-in even for Claude chats.
 Large patches are capped at 100,000 characters and marked as truncated.
 
-Praxis has one `ProviderSession` seam, not one identical capability set. A model keeps
-the native tools and behavior of its harness; Praxis must gate UI and prompts by declared
+Trezi has one `ProviderSession` seam, not one identical capability set. A model keeps
+the native tools and behavior of its harness; Trezi must gate UI and prompts by declared
 capabilities instead of assuming Claude, Codex, gateways, and Gemini are interchangeable.
 
 | Capability | Claude Agent SDK | Codex SDK | Custom gateway | Gemini (experimental) |
 | --- | --- | --- | --- | --- |
 | Persistent multi-turn context | Yes | Yes | Yes, through Codex | No guaranteed continuity |
-| Repository instruction discovery | `CLAUDE.md` + Claude skills | Codex-native instructions + Praxis rules | Same as Codex | Limited |
+| Repository instruction discovery | `CLAUDE.md` + Claude skills | Codex-native instructions + Trezi rules | Same as Codex | Limited |
 | Skills menu before the first turn | Yes | Yes | Yes, through Codex | Yes |
 | Provider-native coding tools | Yes | Yes | Depends on model through Codex | Limited |
-| Praxis preview location/screenshots | Yes | Yes | Yes, image support depends on endpoint | No |
+| Trezi preview location/screenshots | Yes | Yes | Yes, image support depends on endpoint | No |
 | On-demand native chat islands (`chat_island`) | Yes | Yes | Yes, through Codex | No |
 | Open mini code editor / highlight exact source | Yes | Yes | Yes, through Codex | No |
-| Praxis worktree control tools | No | Yes | Yes, through Codex | No |
-| Praxis question cards | Yes | No | No | No |
-| Praxis approve/deny cards | Yes | No SDK approval event | No SDK approval event | No |
+| Trezi worktree control tools | No | Yes | Yes, through Codex | No |
+| Trezi question cards | Yes | No | No | No |
+| Trezi approve/deny cards | Yes | No SDK approval event | No SDK approval event | No |
 | Image input | Yes | Not wired | Not wired | Not wired |
 | Resume provider thread | Yes | Not wired | Not wired | No |
 | Detached background agents (comments + visual edits) | Yes | Yes | Yes, through Codex | Disabled |
 | Custom endpoint | No | Built-in ChatGPT seat | Yes (`/responses`) | No |
 
-“No” often means Praxis has not built the bridge, not that the underlying model can
+“No” often means Trezi has not built the bridge, not that the underlying model can
 never support the feature. Codex and gateway sessions receive a session-scoped local MCP
 server with `workspace_state` and `prepare_conflict_resolution`: the former reads the
 landing coordinator rather than guessing from the private checkout, while the latter
-routes the existing three-way resolver through Praxis's repository queue. It deliberately
+routes the existing three-way resolver through Trezi's repository queue. It deliberately
 does not expose raw Git or discard/reset operations. Interactive tuning uses
 `chat_island`, scoped to the originating chat and assistant turn. The legacy
 `define_controls` and `open_controls` tools are no longer registered; the socket
@@ -64,7 +64,7 @@ Until capability negotiation exists in `src/shared/api.ts`, the product should a
 promising unsupported actions in backend-agnostic copy. Open-model connections inherit
 the Codex harness's strengths and gaps; changing the model id does not grant Claude's
 design calculators. Preview observation is available through the shared MCP bridge,
-but image understanding depends on the endpoint model. It also retains Praxis worktree-control tools
+but image understanding depends on the endpoint model. It also retains Trezi worktree-control tools
 because those belong to the harness, not the selected endpoint model.
 
 ## Required browser verification
@@ -84,17 +84,17 @@ to pick up the new tool configuration and instructions.
 This is prompt-level enforcement, not a runtime tool-call gate. Existing sessions
 need to be recreated to receive updated rules. A preview still serving code from
 before a private worktree edit cannot verify that edit; the agent must report it as
-pending instead of bypassing Praxis's landing lifecycle or claiming success.
+pending instead of bypassing Trezi's landing lifecycle or claiming success.
 
 ## Skills menu and Codex runtime
 
-Praxis bundles Codex SDK/CLI 0.154.0 or newer; updating the global `codex` binary
-alone does not update the runtime used by Praxis. Run `bun install` and rebuild
+Trezi bundles Codex SDK/CLI 0.154.0 or newer; updating the global `codex` binary
+alone does not update the runtime used by Trezi. Run `bun install` and rebuild
 after pulling a dependency update.
 
 Codex, custom endpoints, and experimental Gemini discover project and user skills
 in `.agents/skills`, their native `.codex/skills` or `.gemini/skills`, and
-`.claude/skills` for compatibility with Praxis-installed packs. Codex honors
+`.claude/skills` for compatibility with Trezi-installed packs. Codex honors
 `CODEX_HOME` for its user skills. Project entries shadow same-named user entries;
 symlinked installs and Codex system skills are included. Menus populate before
 the first turn, independently of authentication. Invoking `/name` supplies the
@@ -114,13 +114,13 @@ text and tool summaries once; later turns rely on the new provider's own context
 This handoff stays out of the displayed/saved transcript and does not reuse a
 previous provider's SDK session id. Past image bytes and full tool outputs are
 not present in the transcript and are not replayed. Large histories may reach the
-selected model's context limit; Praxis does not silently truncate the conversation.
+selected model's context limit; Trezi does not silently truncate the conversation.
 
 ## New-project setup conversations
 
 New Project offers the deterministic React/Vite starter or an empty Git repository
 for Next.js, Svelte, or a custom environment. Discussion choices submit a short
-planning request to the selected provider. Shared Praxis rules ask for unresolved
+planning request to the selected provider. Shared Trezi rules ask for unresolved
 project/environment choices before scaffolding; an explicit choice is not asked
 again. Claude can use its question cards; Codex and gateways ask in ordinary chat.
 The model's conversational behavior remains prompt-guided. Creating the empty
@@ -131,7 +131,7 @@ install dependencies in the live checkout, framework config changes restart the
 managed web preview, and both re-detect the current launch settings. The provider's
 terminal event alone does not prove that private edits reached the live checkout.
 
-Composer queues are managed by Praxis for every provider. They submit separate
+Composer queues are managed by Trezi for every provider. They submit separate
 turns in order, preserving the originating chat, file/image attachments, and
 selection context. They do not depend on provider-native steering support; image
 interpretation remains subject to the capability table above.
@@ -140,7 +140,7 @@ The bundled `surface-controls` skill requires `chat_island` for on-demand tuning
 controls inside the conversation. Claude and Codex/custom endpoints support this
 route; Gemini must explain that native registration is unavailable. Existing
 literal constants can be bound directly without rewriting the project. Optional
-Replay dispatches `praxis:animation-replay` with the component name as its string
+Replay dispatches `trezi:animation-replay` with the component name as its string
 detail. Source edits use island Undo/Reset and HMR; a separate inspector or project
 panel is not a substitute for a requested chat island.
 
@@ -160,8 +160,8 @@ are unsupported. The tool reports a request, not proof that the page loaded.
 Gemini does not expose this tool.
 
 The Codex MCP helper uses an absolute path and working directory rooted at the
-Praxis installation, independent of the target checkout. Before starting a session,
-Praxis checks the real helper’s tool inventory and authenticated workspace socket.
+Trezi installation, independent of the target checkout. Before starting a session,
+Trezi checks the real helper’s tool inventory and authenticated workspace socket.
 The server is required on every Codex turn/resume, so initialization failures stop
 the turn instead of silently dropping inline controls and preview tools. This check
 does not call a model. These session-scoped tools are not installed into separate
@@ -263,3 +263,7 @@ existing bindings and early definition, without inventing unrequested effects or
 running redundant builds when no source was changed. Required project checks still
 apply to code changes. Existing provider sessions need fresh instructions to pick
 up these guidance changes.
+
+Trezi compatibility: see [migration policy](rename/MIGRATION.md) for legacy
+profile/worktree paths, retained identities and rollback, and [LKM-84 mapping](rename/COORDINATION.md)
+for integration ordering.

@@ -26,11 +26,11 @@ import {
 } from '../../shared/run-stats'
 import { agentWorkspaceEvidence, agentWorkspaceState, resolveParkedChat } from '../chat-isolation'
 import { type RolloutUsageWatch, watchRolloutUsage } from '../codex-usage'
-import { type PraxisAgentToolRegistration, registerPraxisAgentTools } from '../praxis-agent-tools'
+import { type TreziAgentToolRegistration, registerTreziAgentTools } from '../trezi-agent-tools'
 import { resolveConnection } from '../providers'
 import { scrubSecret } from '../providers-store'
-import { praxisRules } from '../rules'
-import { praxisMcpConfig, verifyPraxisMcp } from './codex-mcp'
+import { treziRules } from '../rules'
+import { treziMcpConfig, verifyTreziMcp } from './codex-mcp'
 import { createRetryCause } from './codex-retry'
 import { createItemTracker, codexItemWarning } from './codex-stream'
 import { parseProjectMemoryEvaluation, projectMemoryEvaluationPrompt } from './memory'
@@ -40,9 +40,9 @@ import type { ModelProvider, PendingPrompt, ProviderSession, SpawnContext } from
 
 /**
  * OpenAI Codex backend (v7) via `@openai/codex-sdk`. The SDK shells out to the `codex`
- * CLI, which edits the repo with its OWN sandboxed tools. Praxis adds only its small,
+ * CLI, which edits the repo with its OWN sandboxed tools. Trezi adds only its small,
  * session-scoped worktree-control MCP server; everything else here maps Codex's streamed
- * `ThreadEvent`s onto Praxis's `AgentEvent` stream.
+ * `ThreadEvent`s onto Trezi's `AgentEvent` stream.
  *
  * **Two auth paths (v10), because harness and endpoint are orthogonal.** The harness —
  * the agent loop, the tools, the sandbox — is the same either way; only where the model
@@ -68,7 +68,7 @@ import type { ModelProvider, PendingPrompt, ProviderSession, SpawnContext } from
  * deliberately phrased so it does NOT (a broken connection is not a login problem).
  *
  * Tool approvals run headless (`approvalPolicy: 'never'`, `sandboxMode: 'workspace-write'`)
- * — mapping Codex approvals → praxis permission cards is a follow-up (the SDK event stream
+ * — mapping Codex approvals → trezi permission cards is a follow-up (the SDK event stream
  * has no approval-request event to bridge).
  */
 
@@ -79,7 +79,7 @@ const loadCodex = (): Promise<CodexModule> => (codexPromise ??= import('@openai/
 const execFileP = promisify(execFile)
 // Overridable so tests can force the CLI-absent path even where `codex` resolves
 // (e.g. `bun run` puts node_modules/.bin — which has the SDK's codex shim — on PATH).
-const CODEX_BIN = process.env.PRAXIS_CODEX_BIN || 'codex'
+const CODEX_BIN = process.env.TREZI_CODEX_BIN || 'codex'
 /** The SDK shells out to the `codex` CLI; probe it up front so a missing/unauthed CLI
  *  fails soft FAST + clearly, instead of surfacing a slow spawn ENOENT mid-turn. */
 async function codexCliPresent(): Promise<boolean> {
@@ -92,11 +92,12 @@ async function codexCliPresent(): Promise<boolean> {
 }
 
 /**
- * The `model_providers` entry id praxis registers for a connection run. It must not
+ * The `model_providers` entry id trezi registers for a connection run. It must not
  * collide with a built-in provider id: the CLI rejects the ENTIRE config with
  * "model_providers contains reserved built-in provider IDs" if you try to redefine
  * `openai`, so a connection cannot be expressed by patching the built-in provider.
  */
+// Stable provider ID keeps saved Codex endpoint sessions resumable.
 const CONNECTION_PROVIDER_ID = 'praxis-connection'
 
 /**
@@ -137,7 +138,7 @@ function connectionCodexOptions(conn: { baseUrl: string; apiKey: string }): Code
       model_provider: CONNECTION_PROVIDER_ID,
       model_providers: {
         [CONNECTION_PROVIDER_ID]: {
-          name: 'Praxis connection',
+          name: 'Trezi connection',
           base_url: conn.baseUrl,
           env_key: 'CODEX_API_KEY',
           wire_api: 'responses',
@@ -181,7 +182,7 @@ async function startSession(
   let disposed = false
   let aborted = false // session teardown (permanent)
   let turnAbort: AbortController | null = null // cancels the in-flight turn only
-  // praxis rules (v8 R): no system-prompt arg here, so prepend them to the first turn.
+  // trezi rules (v8 R): no system-prompt arg here, so prepend them to the first turn.
   let firstTurn = true
 
   const emit = (event: AgentEvent): void => {
@@ -215,7 +216,7 @@ async function startSession(
   // Build the thread up front (the SDK spawns the `codex` CLI; auth = `codex login`,
   // or the connection's own key when `options.connectionId` is set).
   let thread: Thread | null = null
-  let praxisTools: PraxisAgentToolRegistration | null = null
+  let treziTools: TreziAgentToolRegistration | null = null
   let initErr: Error | null = null
   try {
     // v10: resolve the connection FIRST. A `connectionId` that no longer resolves —
@@ -241,7 +242,7 @@ async function startSession(
       )
     }
     const { Codex } = await loadCodex()
-    praxisTools = await registerPraxisAgentTools(async (action, args) => {
+    treziTools = await registerTreziAgentTools(async (action, args) => {
       const notify = (channel: string, payload: unknown): void =>
         sendToRenderer(getWindow, channel, payload)
       if (action === 'preview_location' || action === 'preview_screenshot')
@@ -269,7 +270,7 @@ async function startSession(
         return {
           ok: false,
           ...before,
-          guidance: 'There is no parked Praxis batch to prepare.'
+          guidance: 'There is no parked Trezi batch to prepare.'
         }
       }
       const prepared = await resolveParkedChat(emitKey)
@@ -280,12 +281,12 @@ async function startSession(
         guidance: prepared.ok
           ? prepared.conflicted.length
             ? 'Resolve every conflict marker in the listed files, then finish the turn normally.'
-            : 'Praxis combined and landed both sides without requiring manual resolution.'
-          : `Praxis could not prepare the conflict: ${prepared.error ?? 'unknown error'}`
+            : 'Trezi combined and landed both sides without requiring manual resolution.'
+          : `Trezi could not prepare the conflict: ${prepared.error ?? 'unknown error'}`
       }
     })
-    const mcpConfig = praxisMcpConfig(app.getAppPath(), praxisTools)
-    await verifyPraxisMcp(mcpConfig)
+    const mcpConfig = treziMcpConfig(app.getAppPath(), treziTools)
+    await verifyTreziMcp(mcpConfig)
     const threadOptions: ThreadOptions = {
       workingDirectory: root,
       skipGitRepoCheck: true,
@@ -301,8 +302,8 @@ async function startSession(
       config: { ...codexOptions.config, ...mcpConfig }
     }).startThread(threadOptions)
   } catch (err) {
-    praxisTools?.dispose()
-    praxisTools = null
+    treziTools?.dispose()
+    treziTools = null
     initErr = err instanceof Error ? err : new Error(String(err))
   }
 
@@ -487,7 +488,7 @@ async function startSession(
     // Composer image attachments are not wired yet; MCP screenshot results are images.
     send: (text, _images) => {
       const prompt = firstTurn
-        ? `${praxisRules({ previewObservationTools: true, controlTools: true, workspaceTools: !ctx?.sessionId, projectMemory: ctx?.projectMemory })}\n\n---\n\n${text}`
+        ? `${treziRules({ previewObservationTools: true, controlTools: true, workspaceTools: !ctx?.sessionId, projectMemory: ctx?.projectMemory })}\n\n---\n\n${text}`
         : text
       firstTurn = false
       chain = chain.then(() => runTurn(prompt))
@@ -499,15 +500,15 @@ async function startSession(
     dispose: () => {
       disposed = true
       stopUsageWatch()
-      praxisTools?.dispose()
-      praxisTools = null
+      treziTools?.dispose()
+      treziTools = null
     },
     shutdown: () => {
       aborted = true
       stopUsageWatch()
       turnAbort?.abort()
-      praxisTools?.dispose()
-      praxisTools = null
+      treziTools?.dispose()
+      treziTools = null
     },
     interrupt: async () => {
       turnAbort?.abort() // cancel the current turn; the session can still take more

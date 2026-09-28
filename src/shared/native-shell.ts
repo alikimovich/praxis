@@ -64,6 +64,6 @@ export interface NativeShellBridge {
 }
 declare global {
   interface Window {
-    praxisNativeShell?: NativeShellBridge
+    treziNativeShell?: NativeShellBridge
   }
 }

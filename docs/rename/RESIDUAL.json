@@ -1,0 +1,2808 @@
+{
+  "base": "94b6dd6d3746e14cc0bf26e7fbd4a8fce1837f7e",
+  "head": "51a818f9be2cfb0e59a3a772abf2ced50f8044c7",
+  "integrationTarget": "d34b91e1748a3a92ee8bf6aa44dd80eff44c7b32",
+  "mergeBase": "d34b91e1748a3a92ee8bf6aa44dd80eff44c7b32",
+  "scanState": "Working-tree contents based on head; occurrence line numbers include local review corrections.",
+  "scope": "Tracked and nonignored implementation files. This audit script and rename evidence documents contain historical names by definition.",
+  "paths": [
+    "agent-plugin/skills/praxis-preview/SKILL.md",
+    "bin/praxis-agent-mcp.mjs",
+    "bin/praxis.mjs"
+  ],
+  "occurrences": [
+    {
+      "path": "AGENTS.md",
+      "line": 115,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "`.praxis/`"
+      ]
+    },
+    {
+      "path": "README.md",
+      "line": 131,
+      "category": "externally controlled dependency",
+      "variants": [
+        "https://raw.githubusercontent.com/alikimovich/praxis/main/install.sh"
+      ]
+    },
+    {
+      "path": "README.md",
+      "line": 173,
+      "category": "externally controlled dependency",
+      "variants": [
+        "https://github.com/alikimovich/praxis.git"
+      ]
+    },
+    {
+      "path": "README.md",
+      "line": 261,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "README.md",
+      "line": 263,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "`praxis`"
+      ]
+    },
+    {
+      "path": "README.md",
+      "line": 264,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "`PRAXIS_*`"
+      ]
+    },
+    {
+      "path": "agent-plugin/.claude-plugin/plugin.json",
+      "line": 2,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "\"praxis\","
+      ]
+    },
+    {
+      "path": "agent-plugin/skills/praxis-preview/SKILL.md",
+      "line": 2,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "praxis-preview"
+      ]
+    },
+    {
+      "path": "bin/trezi-agent-mcp.mjs",
+      "line": 2,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "(key.startsWith('PRAXIS_'))",
+        "process.env[key.replace(/^PRAXIS_/,"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 37,
+      "category": "historical reference",
+      "variants": [
+        "praxis/main"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 38,
+      "category": "historical reference",
+      "variants": [
+        "data-praxis-source"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 47,
+      "category": "historical reference",
+      "variants": [
+        "PRAXIS_USER_DATA",
+        "praxis/dsgn"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 95,
+      "category": "historical reference",
+      "variants": [
+        "praxis/chat"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 96,
+      "category": "historical reference",
+      "variants": [
+        "data-praxis-source"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 295,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 301,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 367,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 516,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 533,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 644,
+      "category": "historical reference",
+      "variants": [
+        "/tmp/Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 938,
+      "category": "historical reference",
+      "variants": [
+        "Praxis's"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 1313,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 1384,
+      "category": "historical reference",
+      "variants": [
+        "Resources/Praxis.icns,"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 1809,
+      "category": "historical reference",
+      "variants": [
+        "`PRAXIS_NATIVE_TEST_PROVIDER=codex`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 1835,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 1837,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 1875,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 1946,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 2087,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 2089,
+      "category": "historical reference",
+      "variants": [
+        "Praxis."
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 2096,
+      "category": "historical reference",
+      "variants": [
+        "Praxis's"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 2097,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 2105,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 2341,
+      "category": "historical reference",
+      "variants": [
+        "`.praxis/`."
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 2362,
+      "category": "historical reference",
+      "variants": [
+        "PRAXIS_NEXT_FIXTURE"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 2378,
+      "category": "historical reference",
+      "variants": [
+        "Praxis's"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 2474,
+      "category": "historical reference",
+      "variants": [
+        "`data-praxis-controls`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 2507,
+      "category": "historical reference",
+      "variants": [
+        "Praxis,"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 2843,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 2952,
+      "category": "historical reference",
+      "variants": [
+        "PRAXIS_TEST_SKIP_INTRO=1"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3187,
+      "category": "historical reference",
+      "variants": [
+        "Praxis,"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3216,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3341,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3681,
+      "category": "historical reference",
+      "variants": [
+        "`praxis",
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3708,
+      "category": "historical reference",
+      "variants": [
+        "`praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3711,
+      "category": "historical reference",
+      "variants": [
+        "`PraxisApi`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3726,
+      "category": "historical reference",
+      "variants": [
+        "Praxis."
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3737,
+      "category": "historical reference",
+      "variants": [
+        "`PraxisApi`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3816,
+      "category": "historical reference",
+      "variants": [
+        "`praxis/chat-*`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3817,
+      "category": "historical reference",
+      "variants": [
+        "Praxis's"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3823,
+      "category": "historical reference",
+      "variants": [
+        "`praxis/chat-*`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3826,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3854,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3856,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3867,
+      "category": "historical reference",
+      "variants": [
+        "Praxis-owned"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3869,
+      "category": "historical reference",
+      "variants": [
+        "Praxis's",
+        "`praxis/chat-*`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3872,
+      "category": "historical reference",
+      "variants": [
+        "Praxis",
+        "“Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3875,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3887,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3888,
+      "category": "historical reference",
+      "variants": [
+        "`test/praxis-agent-tools.mjs`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3896,
+      "category": "historical reference",
+      "variants": [
+        "`origin/praxis/*`:"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3898,
+      "category": "historical reference",
+      "variants": [
+        "`praxis/main`,"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3899,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3919,
+      "category": "historical reference",
+      "variants": [
+        "`praxis/publish/<session-id>`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3926,
+      "category": "historical reference",
+      "variants": [
+        "Praxis's"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 3970,
+      "category": "historical reference",
+      "variants": [
+        "`persist:praxis-preview`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4031,
+      "category": "historical reference",
+      "variants": [
+        "`praxis:preferred-model`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4089,
+      "category": "historical reference",
+      "variants": [
+        "`PRAXIS_USER_DATA`);"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4094,
+      "category": "historical reference",
+      "variants": [
+        "`PRAXIS_USER_DATA=$(mktemp"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4095,
+      "category": "historical reference",
+      "variants": [
+        "`PRAXIS_USER_DATA`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4148,
+      "category": "historical reference",
+      "variants": [
+        "`praxis-media://`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4159,
+      "category": "historical reference",
+      "variants": [
+        "`praxis-media://`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4165,
+      "category": "historical reference",
+      "variants": [
+        "praxis-media:`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4220,
+      "category": "historical reference",
+      "variants": [
+        "Praxis",
+        "`.praxis/`,"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4235,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4244,
+      "category": "historical reference",
+      "variants": [
+        "`praxis/chat-*`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4270,
+      "category": "historical reference",
+      "variants": [
+        "Praxis's"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4299,
+      "category": "historical reference",
+      "variants": [
+        "`praxis/chat-*`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4328,
+      "category": "historical reference",
+      "variants": [
+        "Praxis-side,"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4331,
+      "category": "historical reference",
+      "variants": [
+        "`.praxis`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4378,
+      "category": "historical reference",
+      "variants": [
+        "praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4411,
+      "category": "historical reference",
+      "variants": [
+        "`?praxisPanel=1`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4541,
+      "category": "historical reference",
+      "variants": [
+        "`PRAXIS_CODEX_BIN`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4560,
+      "category": "historical reference",
+      "variants": [
+        "praxis's"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4719,
+      "category": "historical reference",
+      "variants": [
+        "praxis's"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4730,
+      "category": "historical reference",
+      "variants": [
+        "`model_providers.\"praxis-connection\"`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4786,
+      "category": "historical reference",
+      "variants": [
+        "`model_providers.\"praxis-connection\"`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4890,
+      "category": "historical reference",
+      "variants": [
+        "`<userData>/praxis/attachments/<stamp>-<name>.<ext>`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 4995,
+      "category": "historical reference",
+      "variants": [
+        "`.praxis`,"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5091,
+      "category": "historical reference",
+      "variants": [
+        "`praxis/chat-*`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5102,
+      "category": "historical reference",
+      "variants": [
+        "`Praxis",
+        "(praxis/chat-<id>).`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5108,
+      "category": "historical reference",
+      "variants": [
+        "`.praxis/`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5111,
+      "category": "historical reference",
+      "variants": [
+        "(`Praxis",
+        "<praxis@local>`)"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5188,
+      "category": "historical reference",
+      "variants": [
+        "`praxisTheme`,"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5202,
+      "category": "historical reference",
+      "variants": [
+        "`praxis:chat-hidden`),"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5213,
+      "category": "historical reference",
+      "variants": [
+        "`PRAXIS_USER_DATA`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5216,
+      "category": "historical reference",
+      "variants": [
+        "`PRAXIS_USER_DATA=$(mktemp"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5220,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5221,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5223,
+      "category": "historical reference",
+      "variants": [
+        "`praxis/<base>`,"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5275,
+      "category": "historical reference",
+      "variants": [
+        "Praxis-managed.\"**"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5277,
+      "category": "historical reference",
+      "variants": [
+        "`praxis/chat-*`",
+        "`praxis/main`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5283,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5287,
+      "category": "historical reference",
+      "variants": [
+        "`PRAXIS_RULES_VERSION`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5306,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5517,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5704,
+      "category": "historical reference",
+      "variants": [
+        "`data-praxis-source`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5713,
+      "category": "historical reference",
+      "variants": [
+        "Praxis's"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5716,
+      "category": "historical reference",
+      "variants": [
+        "`data-praxis-source`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5951,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5963,
+      "category": "historical reference",
+      "variants": [
+        "`PraxisApi.setup.detect`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5968,
+      "category": "historical reference",
+      "variants": [
+        "praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5973,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5975,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 5979,
+      "category": "historical reference",
+      "variants": [
+        "`.praxis`);"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6008,
+      "category": "historical reference",
+      "variants": [
+        "`data-praxis-source=\"relpath:line:col\"`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6028,
+      "category": "historical reference",
+      "variants": [
+        "`PRAXIS_USER_DATA`)."
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6029,
+      "category": "historical reference",
+      "variants": [
+        "`PRAXIS_USER_DATA`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6039,
+      "category": "historical reference",
+      "variants": [
+        "`data-praxis-source`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6051,
+      "category": "historical reference",
+      "variants": [
+        "`data-praxis-source`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6218,
+      "category": "historical reference",
+      "variants": [
+        "(`?praxisEditor=1`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6242,
+      "category": "historical reference",
+      "variants": [
+        "`praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6244,
+      "category": "historical reference",
+      "variants": [
+        "`praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6252,
+      "category": "historical reference",
+      "variants": [
+        "(`bin/praxis.mjs`):"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6258,
+      "category": "historical reference",
+      "variants": [
+        "`test/praxis-cli.mjs`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6259,
+      "category": "historical reference",
+      "variants": [
+        "`test:praxis-cli`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6269,
+      "category": "historical reference",
+      "variants": [
+        "dsgn→praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6271,
+      "category": "historical reference",
+      "variants": [
+        "`dsgn→praxis`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6274,
+      "category": "historical reference",
+      "variants": [
+        "`data-praxis-source`,",
+        "`.praxis/control-panels.json`,",
+        "`PRAXIS_RULES_VERSION`,"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6275,
+      "category": "historical reference",
+      "variants": [
+        "`praxisRules`,",
+        "`praxis:preview:*`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6281,
+      "category": "historical reference",
+      "variants": [
+        "`Praxis`."
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6282,
+      "category": "historical reference",
+      "variants": [
+        "`.praxis/control-panels.json`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6297,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6300,
+      "category": "historical reference",
+      "variants": [
+        "`data-praxis-source`",
+        "`data-praxis-component-source`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6301,
+      "category": "historical reference",
+      "variants": [
+        "`praxis:`),",
+        "`.praxis/`",
+        "`PraxisApi`,",
+        "`praxis/*`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6302,
+      "category": "historical reference",
+      "variants": [
+        "`<userData>/praxis`",
+        "`PRAXIS_DEBUG_PORT`,",
+        "`__praxis*`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6303,
+      "category": "historical reference",
+      "variants": [
+        "`mcp__praxis__*`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6311,
+      "category": "historical reference",
+      "variants": [
+        "`praxis/dsgn/…`);"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6313,
+      "category": "historical reference",
+      "variants": [
+        "`.praxis/`;"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6316,
+      "category": "historical reference",
+      "variants": [
+        "`<userData>/praxis`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6319,
+      "category": "historical reference",
+      "variants": [
+        "`.praxis`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6324,
+      "category": "historical reference",
+      "variants": [
+        "`.praxis`."
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6351,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6431,
+      "category": "historical reference",
+      "variants": [
+        "\"Praxis\""
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6436,
+      "category": "historical reference",
+      "variants": [
+        "**Praxis**;"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6437,
+      "category": "historical reference",
+      "variants": [
+        "`alikimovich/praxis`."
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6441,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6443,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6667,
+      "category": "historical reference",
+      "variants": [
+        "Praxis;"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6669,
+      "category": "historical reference",
+      "variants": [
+        "**Praxis**"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6678,
+      "category": "historical reference",
+      "variants": [
+        "Praxis's"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6680,
+      "category": "historical reference",
+      "variants": [
+        "`mcp__praxis__preview_location`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6683,
+      "category": "historical reference",
+      "variants": [
+        "`mcp__praxis__preview_screenshot`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6691,
+      "category": "historical reference",
+      "variants": [
+        "`praxis-preview`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6892,
+      "category": "historical reference",
+      "variants": [
+        "Praxis's"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 6915,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 7041,
+      "category": "historical reference",
+      "variants": [
+        "`praxis`"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 7099,
+      "category": "historical reference",
+      "variants": [
+        "Praxis/dsgn"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 7116,
+      "category": "historical reference",
+      "variants": [
+        "Praxis,"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 7150,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 7345,
+      "category": "historical reference",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 7353,
+      "category": "historical reference",
+      "variants": [
+        "\"Praxis\""
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 7354,
+      "category": "historical reference",
+      "variants": [
+        "Praxis."
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 7356,
+      "category": "historical reference",
+      "variants": [
+        "(Praxis)"
+      ]
+    },
+    {
+      "path": "docs/PROGRESS.md",
+      "line": 7358,
+      "category": "historical reference",
+      "variants": [
+        "**Praxis**:",
+        "`app.setName('Praxis')`"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-AUDIT-PROPOSAL.md",
+      "line": 77,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "`praxis:`/`praxis.`"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-AUDIT.md",
+      "line": 61,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "`protocol.handle('praxis-media',"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-AUDIT.md",
+      "line": 110,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "`praxis`,"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-AUDIT.md",
+      "line": 113,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "`praxis/project-memories`,"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-AUDIT.md",
+      "line": 121,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "`praxis/attachments`;"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-AUDIT.md",
+      "line": 155,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "[Praxis",
+        "tools:7](../src/main/praxis-agent-tools.ts#L7)"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-AUDIT.md",
+      "line": 158,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "([praxis-agent-tools.ts:55](../src/main/praxis-agent-tools.ts#L55))."
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-AUDIT.md",
+      "line": 173,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "[bin/praxis-agent-mcp.mjs:61](../bin/praxis-agent-mcp.mjs#L61);"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-CONTRACTS.md",
+      "line": 195,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "`praxis:preview:*`,"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 56,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "preferences.set('praxis:native-panel-sizes',"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 187,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:set-select-mode'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 188,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:element-picked'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 189,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:select-cancelled'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 190,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:toggle-select'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 191,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:toolbar-action'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 192,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:clear-selected'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 193,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:readiness'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 194,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:text-edit'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 195,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:set-annotations'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 196,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:pin-click'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 197,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:set-comment-mode'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 198,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:comment-mode'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 199,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:comment'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 200,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:hide-scrollbars'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 201,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:set-frame'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 202,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:set-status'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 214,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:move-node'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-EVENTS.md",
+      "line": 215,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:preview:animation-replay'"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-MODULES.md",
+      "line": 68,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "findPraxisStamp@477,"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-MODULES.md",
+      "line": 71,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "[src/main/praxis-agent-tools.ts:1](../src/main/praxis-agent-tools.ts#L1)",
+        "PraxisAgentToolAction@6,",
+        "PraxisAgentToolRegistration@18,",
+        "registerPraxisAgentTools@118,",
+        "shutdownPraxisAgentTools@144"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-MODULES.md",
+      "line": 76,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "praxisMcpConfig@17,",
+        "verifyPraxisMcp@43",
+        "../praxis-agent-tools,"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-MODULES.md",
+      "line": 86,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "../praxis-agent-tools,"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-MODULES.md",
+      "line": 113,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "PRAXIS_RULES_VERSION@21,",
+        "praxisRules@23"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-PLAN.md",
+      "line": 20,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-ROUTES.md",
+      "line": 104,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "praxis:preview:element-picked"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-ROUTES.md",
+      "line": 105,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "praxis:preview:select-cancelled"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-ROUTES.md",
+      "line": 106,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "praxis:preview:toolbar-action"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-ROUTES.md",
+      "line": 108,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "praxis:preview:toggle-select"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-ROUTES.md",
+      "line": 116,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "praxis:preview:pin-click"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-ROUTES.md",
+      "line": 117,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "praxis:preview:readiness"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-ROUTES.md",
+      "line": 118,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "praxis:preview:text-edit"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-ROUTES.md",
+      "line": 120,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "praxis:preview:comment-mode"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-ROUTES.md",
+      "line": 121,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "praxis:preview:comment"
+      ]
+    },
+    {
+      "path": "docs/SWIFT-BACKEND-ROUTES.md",
+      "line": 127,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "praxis:preview:move-node"
+      ]
+    },
+    {
+      "path": "docs/TASKS.md",
+      "line": 1553,
+      "category": "historical reference",
+      "variants": [
+        "Praxis.**",
+        "`data-praxis-source`,"
+      ]
+    },
+    {
+      "path": "docs/TASKS.md",
+      "line": 1554,
+      "category": "historical reference",
+      "variants": [
+        "`PraxisApi`,",
+        "`.praxis/`,",
+        "`praxis/*`",
+        "`<userData>/praxis`."
+      ]
+    },
+    {
+      "path": "install.sh",
+      "line": 25,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "TREZI_HOME=\"${TREZI_HOME:-${PRAXIS_HOME:-$HOME/.trezi}}\""
+      ]
+    },
+    {
+      "path": "install.sh",
+      "line": 27,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "\"$HOME/.praxis/.git\""
+      ]
+    },
+    {
+      "path": "install.sh",
+      "line": 28,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "TREZI_HOME=\"$HOME/.praxis\""
+      ]
+    },
+    {
+      "path": "install.sh",
+      "line": 36,
+      "category": "externally controlled dependency",
+      "variants": [
+        "https://github.com/alikimovich/praxis.git"
+      ]
+    },
+    {
+      "path": "install.sh",
+      "line": 54,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "\"$TREZI_HOME/bin/praxis.mjs\"",
+        "\"$HOME/.local/bin/praxis\""
+      ]
+    },
+    {
+      "path": "package.json",
+      "line": 10,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "\"praxis\":",
+        "\"bin/praxis.mjs\""
+      ]
+    },
+    {
+      "path": "package.json",
+      "line": 99,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "\"test:praxis-cli\":"
+      ]
+    },
+    {
+      "path": "package.json",
+      "line": 100,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "\"test:praxis-agent-tools\":"
+      ]
+    },
+    {
+      "path": "scripts/build-native.mjs",
+      "line": 58,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "<key>CFBundleIdentifier</key><string>dev.praxis.native</string>"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 81,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'mcp__praxis__preview_location',"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 82,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'mcp__praxis__preview_screenshot'"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 89,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'mcp__praxis__chat_island',"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 90,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'mcp__praxis__content_controls',"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 91,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'mcp__praxis__open_code',"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 92,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'mcp__praxis__open_preview',"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 93,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'mcp__praxis__project_ui_catalog',"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 94,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'mcp__praxis__compose_project_ui',"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 97,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'mcp__praxis__spring_to_css',"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 100,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'mcp__praxis__check_contrast',"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 104,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'mcp__praxis__fluid_clamp',"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 105,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'mcp__praxis__color_scale',"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 106,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'mcp__praxis__layered_shadow',"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 107,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'mcp__praxis__line_height',"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 111,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'mcp__praxis__list_recommended_skills'"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 565,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis',"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 1082,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "praxis:"
+      ]
+    },
+    {
+      "path": "src/main/backends/claude.ts",
+      "line": 1215,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "`praxis:${skill.name}`))"
+      ]
+    },
+    {
+      "path": "src/main/backends/codex-mcp.ts",
+      "line": 20,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "praxis:"
+      ]
+    },
+    {
+      "path": "src/main/backends/codex-mcp.ts",
+      "line": 48,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "config.mcp_servers.praxis"
+      ]
+    },
+    {
+      "path": "src/main/backends/codex.ts",
+      "line": 101,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis-connection'"
+      ]
+    },
+    {
+      "path": "src/main/backends/tools.ts",
+      "line": 39,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "/(^|[\\s/\\\\\"'])\\.(trezi|praxis|dsgn)([/\\\\]|$)/"
+      ]
+    },
+    {
+      "path": "src/main/chat-island-schema.ts",
+      "line": 10,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'.praxis'"
+      ]
+    },
+    {
+      "path": "src/main/chat-island-source.ts",
+      "line": 12,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'.praxis',"
+      ]
+    },
+    {
+      "path": "src/main/chat-isolation.ts",
+      "line": 649,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "`praxis/chat-*`"
+      ]
+    },
+    {
+      "path": "src/main/chat-isolation.ts",
+      "line": 664,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "!/^(trezi|praxis)\\/chat-/.test(r.branch)"
+      ]
+    },
+    {
+      "path": "src/main/chat-worktrees.ts",
+      "line": 53,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'.praxis/',"
+      ]
+    },
+    {
+      "path": "src/main/devserver.ts",
+      "line": 109,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'.praxis'].includes(entry)))"
+      ]
+    },
+    {
+      "path": "src/main/file-ops.ts",
+      "line": 24,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'.praxis',"
+      ]
+    },
+    {
+      "path": "src/main/git.ts",
+      "line": 20,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "branch.startsWith('praxis/')"
+      ]
+    },
+    {
+      "path": "src/main/html-source.ts",
+      "line": 97,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'data-praxis-source'))"
+      ]
+    },
+    {
+      "path": "src/main/media.ts",
+      "line": 54,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis-media:'].includes(parsed.protocol)"
+      ]
+    },
+    {
+      "path": "src/main/props-svelte.ts",
+      "line": 358,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'.praxis',"
+      ]
+    },
+    {
+      "path": "src/main/setup-artifacts.ts",
+      "line": 18,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'.praxis',",
+        "'praxis')))"
+      ]
+    },
+    {
+      "path": "src/main/setup-mdx.ts",
+      "line": 19,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'data-praxis-source'].includes(a.name)))"
+      ]
+    },
+    {
+      "path": "src/main/setup-mdx.ts",
+      "line": 25,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "!('data-praxis-source'"
+      ]
+    },
+    {
+      "path": "src/main/setup-next.ts",
+      "line": 69,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "read('data-praxis-component-source'))"
+      ]
+    },
+    {
+      "path": "src/main/setup-next.ts",
+      "line": 84,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "bind('data-praxis-component-source')"
+      ]
+    },
+    {
+      "path": "src/main/setup-next.ts",
+      "line": 93,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'data-praxis-component-source'].includes(a.name?.name)))"
+      ]
+    },
+    {
+      "path": "src/main/setup-react.ts",
+      "line": 22,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "get('data-praxis-component-source')"
+      ]
+    },
+    {
+      "path": "src/main/setup-react.ts",
+      "line": 36,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'data-praxis-source'].includes(a.name.name)))"
+      ]
+    },
+    {
+      "path": "src/main/setup-react.ts",
+      "line": 63,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'data-praxis-component-source'].includes(a.name?.name)))"
+      ]
+    },
+    {
+      "path": "src/main/setup.ts",
+      "line": 110,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'data-praxis-source'].includes(a.name)))"
+      ]
+    },
+    {
+      "path": "src/main/setup.ts",
+      "line": 258,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis'))])"
+      ]
+    },
+    {
+      "path": "src/main/sidecar-migrate.ts",
+      "line": 41,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'.praxis'),"
+      ]
+    },
+    {
+      "path": "src/main/simulator.ts",
+      "line": 469,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "!/^(trezi|praxis):/.test(testId))"
+      ]
+    },
+    {
+      "path": "src/main/simulator.ts",
+      "line": 470,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "testId.replace(/^(trezi|praxis):/,"
+      ]
+    },
+    {
+      "path": "src/main/simulator.ts",
+      "line": 479,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "/^(trezi|praxis):/.test(node)"
+      ]
+    },
+    {
+      "path": "src/main/worktrees.ts",
+      "line": 36,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'.praxis'"
+      ]
+    },
+    {
+      "path": "src/main/worktrees.ts",
+      "line": 292,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'refs/heads/praxis/chat-*'"
+      ]
+    },
+    {
+      "path": "src/main/worktrees.ts",
+      "line": 302,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "branch.replace(/^(trezi|praxis)\\/chat-/,"
+      ]
+    },
+    {
+      "path": "src/main/worktrees.ts",
+      "line": 608,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "/^(trezi|praxis)\\/chat-/.test(branch)"
+      ]
+    },
+    {
+      "path": "src/native/Host.swift",
+      "line": 16,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "\"dev.praxis.native.secrets\","
+      ]
+    },
+    {
+      "path": "src/native/Host.swift",
+      "line": 78,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "\"praxis\")"
+      ]
+    },
+    {
+      "path": "src/native/platform.ts",
+      "line": 54,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "message.channel.replace(/^praxis:/,"
+      ]
+    },
+    {
+      "path": "src/native/preferences.ts",
+      "line": 6,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "/^(trezi|praxis)[:.]/.test(key)"
+      ]
+    },
+    {
+      "path": "src/native/preferences.ts",
+      "line": 14,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "(key.startsWith('praxis:')",
+        "key.startsWith('praxis.'))"
+      ]
+    },
+    {
+      "path": "src/native/preferences.ts",
+      "line": 15,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "key.replace(/^praxis/,"
+      ]
+    },
+    {
+      "path": "src/native/preferences.ts",
+      "line": 21,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "values[key.replace(/^praxis([:.])/,"
+      ]
+    },
+    {
+      "path": "src/native/preferences.ts",
+      "line": 24,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "key.replace(/^praxis([:.])/,"
+      ]
+    },
+    {
+      "path": "src/native/preview-transport.ts",
+      "line": 16,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "__praxisNativeDispatch:"
+      ]
+    },
+    {
+      "path": "src/native/preview-transport.ts",
+      "line": 28,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "listeners.get(message.channel.replace(/^praxis:/,"
+      ]
+    },
+    {
+      "path": "src/native/preview-transport.ts",
+      "line": 31,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "nativeGlobal.__praxisNativeDispatch"
+      ]
+    },
+    {
+      "path": "src/native/profile-path.ts",
+      "line": 10,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'Praxis"
+      ]
+    },
+    {
+      "path": "src/native/profile-path.ts",
+      "line": 17,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "src/native/profile-path.ts",
+      "line": 24,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "symlinkSync('Praxis"
+      ]
+    },
+    {
+      "path": "src/native/profile-path.ts",
+      "line": 34,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "['praxis',"
+      ]
+    },
+    {
+      "path": "src/native/profile-path.ts",
+      "line": 41,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "src/native/smoke-source-stamp.ts",
+      "line": 10,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "data-praxis-source=\"old\"></div>'"
+      ]
+    },
+    {
+      "path": "src/native/smoke-source-stamp.ts",
+      "line": 11,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "data-praxis-source=\"old\"></div>'"
+      ]
+    },
+    {
+      "path": "src/native/smoke-source-stamp.ts",
+      "line": 13,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "data-praxis-source=\"old\"></div>'"
+      ]
+    },
+    {
+      "path": "src/native/smoke-source-stamp.ts",
+      "line": 14,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "data-praxis-source=\"old\"></div>',"
+      ]
+    },
+    {
+      "path": "src/preview/preload.ts",
+      "line": 76,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "/[?&](?:trezi|praxis)Sim=1\\b/.test(location.search)"
+      ]
+    },
+    {
+      "path": "src/preview/preload.ts",
+      "line": 1866,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "CustomEvent('praxis:animation-replay',"
+      ]
+    },
+    {
+      "path": "src/preview/source-stamp.ts",
+      "line": 4,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "element.getAttribute(`data-praxis-${suffix}`)"
+      ]
+    },
+    {
+      "path": "src/preview/source-stamp.ts",
+      "line": 8,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "`:is([data-trezi-source${match}],[data-praxis-source${match}]:not([data-trezi-source]))`"
+      ]
+    },
+    {
+      "path": "src/shared/github.ts",
+      "line": 80,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "!current.startsWith('praxis/'))"
+      ]
+    },
+    {
+      "path": "src/shared/github.ts",
+      "line": 83,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "current.replace(/^(trezi|praxis)\\//,"
+      ]
+    },
+    {
+      "path": "src/shared/github.ts",
+      "line": 95,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "/^(trezi|praxis)\\//.test(current)"
+      ]
+    },
+    {
+      "path": "src/shared/github.ts",
+      "line": 96,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "current.replace(/^(trezi|praxis)\\//,"
+      ]
+    },
+    {
+      "path": "src/shared/rename-compat.ts",
+      "line": 4,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "(key.startsWith('PRAXIS_'))",
+        "env[key.replace(/^PRAXIS_/,"
+      ]
+    },
+    {
+      "path": "test/chat-recovery.mjs",
+      "line": 25,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "['praxis',"
+      ]
+    },
+    {
+      "path": "test/codex-mcp.mjs",
+      "line": 83,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis')"
+      ]
+    },
+    {
+      "path": "test/codex-mcp.mjs",
+      "line": 89,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "assert.equal(config.mcp_servers.praxis.required,"
+      ]
+    },
+    {
+      "path": "test/github-connect.mjs",
+      "line": 72,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "['praxis',"
+      ]
+    },
+    {
+      "path": "test/html-source.mjs",
+      "line": 44,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "['data-praxis-source',"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 17,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "['praxis',"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 23,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'Praxis"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 24,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'Praxis"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 25,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis',"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 28,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis',"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 35,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis',"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 42,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'PRAXIS_USER_DATA'])"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 43,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "['praxis',"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 65,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis',"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 66,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis/chat-fixture',"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 78,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis:old':",
+        "'praxis:choice':"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 81,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "assert.equal(preferences.get('praxis:choice'),"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 82,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "preferences.set('praxis:old',"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 84,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'preferences.json'))).values['praxis:old'],"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 85,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'Praxis"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 87,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis'),"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 89,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'.praxis'),"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 90,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'.praxis',"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 91,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'.praxis',"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 92,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'.praxis',",
+        "'praxis-source.cjs'),"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 95,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'.praxis',",
+        "'praxis-source.cjs')))"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 104,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'.praxis',"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 105,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'.praxis'),",
+        "'.praxis'))"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 107,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "PRAXIS_USER_DATA:",
+        "PRAXIS_CODEX_BIN:"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 109,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'praxis',"
+      ]
+    },
+    {
+      "path": "test/rename-compat.mjs",
+      "line": 113,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "Map([['data-praxis-source',"
+      ]
+    },
+    {
+      "path": "test/setup-next.mjs",
+      "line": 97,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "data-praxis-source=\"page.mdx:20:0\""
+      ]
+    },
+    {
+      "path": "test/setup-next.mjs",
+      "line": 103,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "/data-praxis-source=\"page.mdx:20:0\"/)"
+      ]
+    },
+    {
+      "path": "test/setup-next.mjs",
+      "line": 126,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "'data-praxis-source=\"authored-legacy.tsx:4:0\"'])"
+      ]
+    },
+    {
+      "path": "test/setup-next.mjs",
+      "line": 131,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "data-praxis-component-source=\"authored-legacy.tsx:4:0\"${canonicalProp}"
+      ]
+    },
+    {
+      "path": "test/setup-next.mjs",
+      "line": 161,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "data-praxis-component-source=\"authored.tsx:20:0\""
+      ]
+    },
+    {
+      "path": "test/setup-stamps.mjs",
+      "line": 19,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "['data-praxis-source',"
+      ]
+    },
+    {
+      "path": "test/source-stamp.mjs",
+      "line": 8,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "data-praxis-source=\"old\"></div>"
+      ]
+    },
+    {
+      "path": "test/source-stamp.mjs",
+      "line": 9,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "data-praxis-source=\"old\"></div>"
+      ]
+    },
+    {
+      "path": "test/source-stamp.mjs",
+      "line": 11,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "data-praxis-source=\"old\"></div>"
+      ]
+    },
+    {
+      "path": "test/source-stamp.mjs",
+      "line": 12,
+      "category": "intentional compatibility alias",
+      "variants": [
+        "data-praxis-source=\"old\"></div>"
+      ]
+    },
+    {
+      "path": "vendor/content-controls/PROVENANCE.md",
+      "line": 4,
+      "category": "externally controlled dependency",
+      "variants": [
+        "Praxis"
+      ]
+    },
+    {
+      "path": "vendor/content-controls/dist/api.js",
+      "line": 9,
+      "category": "externally controlled dependency",
+      "variants": [
+        "making.\",projects:[{id:\"praxis\",title:\"Praxis\",description:\"A"
+      ]
+    }
+  ]
+}

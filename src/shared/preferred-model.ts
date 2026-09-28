@@ -14,7 +14,7 @@
 import type { ModelChoice } from './api'
 import { type ChatAgentSettings, defaultChatAgentSettings } from './chat-settings'
 
-export const PREFERRED_MODEL_KEY = 'praxis:preferred-model'
+export const PREFERRED_MODEL_KEY = 'trezi:preferred-model'
 /** Sentinel value for the Settings <select> — not a ModelChoice.value. */
 export const LAST_USED_VALUE = 'last-used'
 

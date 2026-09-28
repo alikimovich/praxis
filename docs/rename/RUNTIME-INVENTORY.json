@@ -1,0 +1,12 @@
+{
+  ".praxis": "absent",
+  ".trezi": "absent",
+  "Library/Application Support/Praxis Native": "exists (contents not inspected)",
+  "Library/Application Support/Trezi Native": "absent",
+  "Library/Application Support/Praxis": "exists (contents not inspected)",
+  "Library/Application Support/dsgn": "exists (contents not inspected)",
+  "generated": [
+    "out/native/Trezi Native.app"
+  ],
+  "dependencies": "node_modules exists; dependency contents not renamed"
+}

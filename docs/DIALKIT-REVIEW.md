@@ -1,4 +1,4 @@
-# DialKit lessons for Praxis
+# DialKit lessons for Trezi
 
 Reviewed 2026-09-25 against the current official [site](https://www.dialkit.dev/),
 [README](https://github.com/joshpuckett/dialkit),
@@ -11,9 +11,9 @@ Upstream main is mutable; recheck the installed version before implementation.
 ## Control inventory and selection
 
 The official site presents these controls. The purpose column is our guidance for
-choosing controls in Praxis, not a claim that DialKit discovers bindings itself.
+choosing controls in Trezi, not a claim that DialKit discovers bindings itself.
 
-| Control | Use in Praxis |
+| Control | Use in Trezi |
 | --- | --- |
 | Slider / numeric input | A bounded scalar: radius, gap, opacity, scale, duration. |
 | Toggle | A genuine binary choice, such as enabling a trail. |
@@ -46,14 +46,14 @@ frame. Source: [timeline guide](https://github.com/joshpuckett/dialkit/blob/main
 
 ## Lessons to apply
 
-These are Praxis recommendations derived from the review:
+These are Trezi recommendations derived from the review:
 
 1. Choose by meaning, not by primitive type alone. A duration and a bounce amount
    belong together; unrelated numbers do not become an XY pad just because they
    can. Expose units, sensible bounds and useful precision from the actual code.
 2. Confirm the complete path from control to visible behavior. DialKit's examples
    explicitly consume live values in rendering. A control definition alone does
-   not make a website reactive. Praxis must verify the bound parameter reaches
+   not make a website reactive. Trezi must verify the bound parameter reaches
    the running effect, including canvas loops and values captured by closures.
 3. Preserve the project's animation model. Offer a spring editor only for real
    spring parameters, and a curve editor only for an actual timing curve. A
@@ -65,12 +65,12 @@ These are Praxis recommendations derived from the review:
    compatible edits when controls change, and support cancellation and keyboard
    operation. Test focus retention during incoming values.
 6. Separate runtime feedback from source persistence when adding supported preview
-   adapters. Current Praxis tuning writes source every 120 ms and depends on HMR.
+   adapters. Current Trezi tuning writes source every 120 ms and depends on HMR.
    A future adapter should preview without restarting an effect on every sample,
    then persist a validated final value and remove temporary overrides. Preserve
    WebKit world isolation and host-owned scoped bindings.
 
-## Current Praxis gaps and proposed order
+## Current Trezi gaps and proposed order
 
 Verified against `src/native/ChatIsland.swift`, `src/shared/chat-islands.ts` and
 `src/main/chat-island-schema.ts`: basic fields, points and Bézier handles exist;

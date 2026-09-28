@@ -18,7 +18,7 @@ import { provisionNextDependencies } from '../src/main/worktree-dependencies.ts'
 import { setupPrompt } from '../src/shared/setup-prompt.ts'
 import { typescriptProps } from '../src/main/props-typescript.ts'
 const require = createRequire(import.meta.url)
-const root = await mkdtemp(join(tmpdir(), 'praxis-next-unit-'))
+const root = await mkdtemp(join(tmpdir(), 'trezi-next-unit-'))
 try {
   await mkdir(join(root, 'node_modules/next'), { recursive: true })
   await mkdir(join(root, 'src/app'), { recursive: true })
@@ -49,15 +49,15 @@ try {
     )
     assert.equal((await detectNext(root)).bundler, bundler)
   }
-  await mkdir(join(root, '.praxis'))
+  await mkdir(join(root, '.trezi'))
   for (const [name, value] of [
-    ['praxis-next.cjs', NEXT_ADAPTER_CONTENT],
-    ['praxis-next-loader.cjs', NEXT_LOADER_CONTENT],
-    ['praxis-source.cjs', REACT_HELPER_CONTENT]
+    ['trezi-next.cjs', NEXT_ADAPTER_CONTENT],
+    ['trezi-next-loader.cjs', NEXT_LOADER_CONTENT],
+    ['trezi-source.cjs', REACT_HELPER_CONTENT]
   ]) {
-    await writeFile(join(root, '.praxis', name), value)
+    await writeFile(join(root, '.trezi', name), value)
   }
-  const wrap = require(join(root, '.praxis/praxis-next.cjs'))
+  const wrap = require(join(root, '.trezi/trezi-next.cjs'))
   const config = {
     images: { unoptimized: true },
     webpack(c) {
@@ -76,7 +76,7 @@ try {
     /manual loader composition/
   )
   const babel = require('@babel/core')
-  const plugin = require(join(root, '.praxis/praxis-source.cjs'))
+  const plugin = require(join(root, '.trezi/trezi-source.cjs'))
   const input =
     '"use client";\nexport function Card({label}: {label: string}) { return <button>{label}</button> }'
   const previous = process.env.NODE_ENV
@@ -90,12 +90,23 @@ try {
     plugins: [plugin],
     sourceMaps: true
   })
-  assert.match(result.code, /data-praxis-source="src\/Card.tsx:2:/)
+  assert.match(result.code, /data-trezi-source="src\/Card.tsx:2:/)
   assert.match(result.code, /^"use client"/)
   assert.ok(result.map.mappings)
+  for (const tag of ['button', 'Card']) {
+    const legacy = `<${tag} data-praxis-source="page.mdx:20:0" />`
+    const transform = code => babel.transformSync(code, {
+      filename: join(root, 'generated.jsx'), root, configFile: false, babelrc: false,
+      parserOpts: { plugins: ['jsx'] }, plugins: [plugin]
+    }).code
+    const once = transform(legacy)
+    assert.match(once, /data-praxis-source="page.mdx:20:0"/)
+    assert.doesNotMatch(once, /data-trezi-source=/)
+    assert.equal(transform(once), once, 'Repeated instrumentation preserves the authored mapping')
+  }
   const loaderModule = { exports: {} }
   new Function('module', 'require', NEXT_LOADER_CONTENT)(loaderModule, (name) =>
-    name === '@babel/core' ? babel : name === './praxis-source.cjs' ? plugin : require(name)
+    name === '@babel/core' ? babel : name === './trezi-source.cjs' ? plugin : require(name)
   )
   let transformed
   loaderModule.exports.call(
@@ -109,9 +120,53 @@ try {
     },
     input
   )
-  assert.match(transformed.code, /data-praxis-component-source/)
+  assert.match(transformed.code, /data-trezi-component-source/)
   assert.match(transformed.code, /use client/)
   assert.ok(transformed.map.mappings)
+  for (const hostStamp of ['', 'data-praxis-source="authored-legacy.tsx:4:0"']) {
+    for (const parameter of ['props', '{ label }', '{ label } = {}']) {
+      for (const canonical of [null, 'authored-current.tsx:9:0', '']) {
+        const canonicalProp = canonical === null ? '' : ` data-trezi-component-source="${canonical}"`
+        const source = `function Card(${parameter}) { return <button>Card</button> }
+          function App() { return <Card ${hostStamp} data-praxis-component-source="authored-legacy.tsx:4:0"${canonicalProp} /> }`
+        let output
+        const transform = source => {
+          loaderModule.exports.call({ resourcePath: join(root, 'src/Legacy.tsx'), getOptions: () => ({ root }),
+            callback(error, code) { if (error) throw error; output = code } }, source)
+          return output
+        }
+        for (const code of [transform(source), transform(output)]) {
+          const js = new Bun.Transpiler({ loader: 'tsx', tsconfig: { compilerOptions: { jsx: 'react', jsxFactory: '__jsx' } } }).transformSync(code)
+          const jsx = (type, props, ...children) => typeof type === 'function' ? type(props || {}) : { type, props, children }
+          const rendered = new Function('__jsx', js + '; return App()')(jsx)
+          assert.equal(rendered.type, 'button')
+          assert.equal(rendered.props['data-trezi-component-source'], canonical ?? 'authored-legacy.tsx:4:0')
+        }
+      }
+    }
+  }
+  // Legacy locations forwarded through multiple component spreads must win over
+  // generated inner defaults in both plain Babel and complete Next instrumentation.
+  for (const useNext of [false, true]) {
+    const transform = source => {
+      if (!useNext) return babel.transformSync(source, { filename: join(root, 'src/Nested.jsx'), root,
+        configFile: false, babelrc: false, parserOpts: { plugins: ['jsx'] }, plugins: [plugin] }).code
+      let result
+      loaderModule.exports.call({ resourcePath: join(root, 'src/Nested.jsx'), getOptions: () => ({ root }),
+        callback(error, code) { if (error) throw error; result = code } }, source)
+      return result
+    }
+    const source = `function Wrapper(props) { return <Button {...props}/> }
+      function Button(props) { return <button {...props}/> }
+      function App() { return <Wrapper data-praxis-component-source="authored.tsx:20:0" /> }`
+    const once = transform(source)
+    for (const code of [once, transform(once)]) {
+      const js = new Bun.Transpiler({ loader: 'tsx', tsconfig: { compilerOptions: { jsx: 'react', jsxFactory: '__jsx' } } }).transformSync(code)
+      const jsx = (type, props, ...children) => typeof type === 'function' ? type(props || {}) : { type, props, children }
+      const rendered = new Function('__jsx', js + '; return App()')(jsx)
+      assert.equal(rendered.props['data-trezi-component-source'], 'authored.tsx:20:0')
+    }
+  }
   process.env.NODE_ENV = 'production'
   assert.doesNotMatch(
     babel.transformSync(input, {
@@ -122,7 +177,7 @@ try {
       parserOpts: { plugins: ['jsx', 'typescript'] },
       plugins: [plugin.bind(null)]
     }).code,
-    /data-praxis/
+    /data-trezi/
   )
   const originalMap = { version: 3, sources: ['original.tsx'], mappings: '' }
   loaderModule.exports.call(
@@ -142,19 +197,19 @@ try {
   await mkdir(checkout)
   await syncSetupArtifacts(root, checkout)
   assert.equal(
-    await readFile(join(checkout, '.praxis/praxis-next.cjs'), 'utf8'),
+    await readFile(join(checkout, '.trezi/trezi-next.cjs'), 'utf8'),
     NEXT_ADAPTER_CONTENT
   )
   assert.equal(
-    JSON.parse(await readFile(join(checkout, '.praxis/setup-helpers.json'))).helpers.length,
+    JSON.parse(await readFile(join(checkout, '.trezi/setup-helpers.json'))).helpers.length,
     3
   )
-  await writeFile(join(root, '.praxis/praxis-source.cjs'), 'updated')
+  await writeFile(join(root, '.trezi/trezi-source.cjs'), 'updated')
   await syncSetupArtifacts(root, checkout)
-  assert.equal(await readFile(join(checkout, '.praxis/praxis-source.cjs'), 'utf8'), 'updated')
-  await rm(join(root, '.praxis/praxis-source.cjs'))
+  assert.equal(await readFile(join(checkout, '.trezi/trezi-source.cjs'), 'utf8'), 'updated')
+  await rm(join(root, '.trezi/trezi-source.cjs'))
   await syncSetupArtifacts(root, checkout)
-  await assert.rejects(readFile(join(checkout, '.praxis/praxis-source.cjs')))
+  await assert.rejects(readFile(join(checkout, '.trezi/trezi-source.cjs')))
 
   await writeFile(join(checkout, 'package.json'), JSON.stringify({ dependencies: { next: '^16' } }))
   let installs = 0
@@ -172,7 +227,7 @@ try {
   const prompt = setupPrompt({
     framework: 'next',
     next: await detectNext(root),
-    files: ['.praxis/praxis-next.cjs']
+    files: ['.trezi/trezi-next.cjs']
   })
   assert.doesNotMatch(prompt, /vite.config|interface Props/)
   const file = join(root, 'schema.tsx')
@@ -220,10 +275,10 @@ try {
     })
   })
   const cwd = await isolatedCwd(repo, 'setup-helper-test')
-  await mkdir(join(repo, '.praxis'))
-  await writeFile(join(repo, '.praxis/praxis-source.cjs'), REACT_HELPER_CONTENT)
+  await mkdir(join(repo, '.trezi'))
+  await writeFile(join(repo, '.trezi/trezi-source.cjs'), REACT_HELPER_CONTENT)
   await beforeTurn('setup-helper-test', 'setup')
-  assert.equal(await readFile(join(cwd, '.praxis/praxis-source.cjs'), 'utf8'), REACT_HELPER_CONTENT)
+  assert.equal(await readFile(join(cwd, '.trezi/trezi-source.cjs'), 'utf8'), REACT_HELPER_CONTENT)
   afterTurn('setup-helper-test', 'setup already connected')
   await beforeTurn('setup-helper-test', 'serialize after completion')
   assert.ok(

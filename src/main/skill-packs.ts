@@ -1,8 +1,8 @@
 /**
- * Curated catalog of external "taste" skill packs Praxis can OFFER to install
+ * Curated catalog of external "taste" skill packs Trezi can OFFER to install
  * (never bundle, never silently install) into a user's project (`<repo>/.claude/skills/`)
  * or user scope (`~/.claude/skills/`). Once installed with the `skills` CLI's
- * `--copy` mode, the Agent SDK auto-discovers them (Praxis launches with
+ * `--copy` mode, the Agent SDK auto-discovers them (Trezi launches with
  * `settingSources: ['user','project','local']`).
  *
  * This module is PURE data + arg-building only — no filesystem, no network, no

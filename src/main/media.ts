@@ -6,7 +6,7 @@ import { Readable } from 'stream'
 import { mediaTypeFor, parseRange } from './media-types'
 
 /**
- * The editor's media backend: a custom `praxis-media://` scheme that streams a
+ * The editor's media backend: a custom `trezi-media://` scheme that streams a
  * project's image / video / audio files into the renderer so the code editor can
  * SHOW them instead of decoding their bytes as utf8 (which is how a .PNG used to
  * open — screenfuls of mojibake with line numbers down the side).
@@ -23,7 +23,7 @@ import { mediaTypeFor, parseRange } from './media-types'
  * arbitrary-file read.
  */
 
-export const MEDIA_SCHEME = 'praxis-media'
+export const MEDIA_SCHEME = 'trezi-media'
 
 /**
  * token → absolute path. Bounded (LRU-ish by insertion order): the editor opens
@@ -51,7 +51,7 @@ export function mediaUrl(absPath: string): string {
 
 /** Trusted native UI only: resolve an already-issued opaque media capability. */
 export function nativeMediaPath(url: string): string | undefined {
-  try { const parsed = new URL(url); return parsed.protocol === `${MEDIA_SCHEME}:` && parsed.hostname === 'f' ? files.get(parsed.pathname.slice(1)) : undefined } catch { return undefined }
+  try { const parsed = new URL(url); return [`${MEDIA_SCHEME}:`, 'praxis-media:'].includes(parsed.protocol) && parsed.hostname === 'f' ? files.get(parsed.pathname.slice(1)) : undefined } catch { return undefined }
 }
 
 const notFound = (): Response => new Response('Not found', { status: 404 })

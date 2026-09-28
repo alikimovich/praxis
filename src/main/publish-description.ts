@@ -25,7 +25,7 @@ export function parsePublishDescription(text: string): PublishMessage {
 
 async function summarize(prompt: string): Promise<string> {
   const { Codex } = await import('@openai/codex-sdk')
-  const cwd = await mkdtemp(join(tmpdir(), 'praxis-pr-description-'))
+  const cwd = await mkdtemp(join(tmpdir(), 'trezi-pr-description-'))
   try {
     const thread = new Codex({
       config: {

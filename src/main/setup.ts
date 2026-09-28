@@ -8,23 +8,23 @@ import { join } from 'path'
 import type { Frontend, SetupResult, SetupStrategy } from '../shared/api'
 
 /**
- * Project setup — make a repo praxis-ready, FRAMEWORK-FIRST. We detect the UI
+ * Project setup — make a repo trezi-ready, FRAMEWORK-FIRST. We detect the UI
  * framework from package.json before generating anything, then emit the right
  * source-mapping instrumentation for it (never a React Babel plugin in a Svelte
- * repo). Everything lands in a namespaced `.praxis/` dir, is structurally dev-gated
+ * repo). Everything lands in a namespaced `.trezi/` dir, is structurally dev-gated
  * (not just a comment), idempotent, and removable via uninstall. The agent does
  * the config wiring + prop typing with framework-correct instructions.
  */
 
-const PRAXIS_DIR = '.praxis'
-const REACT_HELPER = '.praxis/praxis-source.cjs'
-const RN_HELPER = '.praxis/praxis-rn-source.cjs'
+const TREZI_DIR = '.trezi'
+const REACT_HELPER = '.trezi/trezi-source.cjs'
+const RN_HELPER = '.trezi/trezi-rn-source.cjs'
 // `.mjs` pins ESM regardless of the repo's package.json `type` (plain Svelte+Vite
 // repos are often `type: commonjs`, where a bare `.js` ESM file fails to import) —
 // mirrors the React helper pinning CommonJS via `.cjs`.
-const SVELTE_HELPER = '.praxis/praxis-svelte-stamp.mjs'
+const SVELTE_HELPER = '.trezi/trezi-svelte-stamp.mjs'
 // Pre-rename (dsgn-era) files: the old root-level plugin plus the `.dsgn/`
-// helpers written before the 2026-07 dsgn→praxis rename. Removed on uninstall.
+// helpers written before the 2026-07 dsgn→trezi rename. Removed on uninstall.
 const LEGACY_FILES = [
   'dsgn-source-plugin.cjs', // the old (buggy) root-level file
   '.dsgn/dsgn-source.cjs',
@@ -32,21 +32,21 @@ const LEGACY_FILES = [
   '.dsgn/dsgn-svelte-stamp.mjs'
 ]
 
-// React/Solid: a JSX Babel plugin that stamps data-praxis-source. Structurally
+// React/Solid: a JSX Babel plugin that stamps data-trezi-source. Structurally
 // dev-gated (returns an empty visitor in production — not trust-the-comment).
-// React Native: the data-praxis-source analog. RN host elements have no DOM, so we
-// stamp `testID="praxis:path:line:col"` — which iOS surfaces as the view's
-// accessibilityIdentifier, letting praxis map an idb view-hierarchy hit back to
+// React Native: the data-trezi-source analog. RN host elements have no DOM, so we
+// stamp `testID="trezi:path:line:col"` — which iOS surfaces as the view's
+// accessibilityIdentifier, letting trezi map an idb view-hierarchy hit back to
 // source. Dev-gated; only stamps elements without an existing testID.
-const RN_HELPER_CONTENT = `// Added by Praxis (.praxis/). Stamps testID="praxis:path:line:col" on JSX elements so
-// Praxis can map a tapped simulator element to its source via idb's accessibility
+const RN_HELPER_CONTENT = `// Added by Trezi (.trezi/). Stamps testID="trezi:path:line:col" on JSX elements so
+// Trezi can map a tapped simulator element to its source via idb's accessibility
 // hierarchy. Wire into the React Native Babel plugins for DEVELOPMENT ONLY; it
 // also self-disables in production builds.
-module.exports = function praxisRnSource({ types: t }) {
-  if (process.env.NODE_ENV === 'production') return { name: 'praxis-rn-source', visitor: {} }
+module.exports = function treziRnSource({ types: t }) {
+  if (process.env.NODE_ENV === 'production') return { name: 'trezi-rn-source', visitor: {} }
   const path = require('path')
   return {
-    name: 'praxis-rn-source',
+    name: 'trezi-rn-source',
     visitor: {
       JSXOpeningElement(p, state) {
         const loc = p.node.loc
@@ -58,7 +58,7 @@ module.exports = function praxisRnSource({ types: t }) {
         p.node.attributes.push(
           t.jsxAttribute(
             t.jsxIdentifier('testID'),
-            t.stringLiteral('praxis:' + file + ':' + loc.start.line + ':' + loc.start.column)
+            t.stringLiteral('trezi:' + file + ':' + loc.start.line + ':' + loc.start.column)
           )
         )
       }
@@ -67,11 +67,11 @@ module.exports = function praxisRnSource({ types: t }) {
 }
 `
 
-// Svelte: a markup preprocessor that stamps data-praxis-source on elements. The
+// Svelte: a markup preprocessor that stamps data-trezi-source on elements. The
 // line/col use svelte/compiler offsets (1-based line, 0-based col) so they match
-// praxis's Svelte adapter. Dev-gated; idempotent.
-const SVELTE_HELPER_CONTENT = `// Added by Praxis (.praxis/). A dev-only Svelte markup preprocessor that stamps
-// data-praxis-source="path:line:col" on elements so Praxis can map them to source.
+// trezi's Svelte adapter. Dev-gated; idempotent.
+export const SVELTE_HELPER_CONTENT = `// Added by Trezi (.trezi/). A dev-only Svelte markup preprocessor that stamps
+// data-trezi-source="path:line:col" on elements so Trezi can map them to source.
 // Add to svelte.config preprocess for development only.
 import { parse } from 'svelte/compiler'
 import path from 'node:path'
@@ -94,11 +94,11 @@ function walk(node, visit) {
   }
 }
 
-export default function praxisStamp() {
-  const noop = { name: 'praxis-stamp', markup: ({ content }) => ({ code: content }) }
+export default function treziStamp() {
+  const noop = { name: 'trezi-stamp', markup: ({ content }) => ({ code: content }) }
   if (process.env.NODE_ENV === 'production') return noop
   return {
-    name: 'praxis-stamp',
+    name: 'trezi-stamp',
     markup({ content, filename }) {
       let ast
       try { ast = parse(content, { modern: true, filename }) } catch { return { code: content } }
@@ -107,13 +107,13 @@ export default function praxisStamp() {
       walk(ast.fragment ?? ast, (n) => {
         if (!ELEMENT_TYPES.has(n.type) || typeof n.start !== 'number' || typeof n.name !== 'string') return
         const attrs = n.attributes || []
-        if (attrs.some((a) => a.name === 'data-praxis-source')) return
+        if (attrs.some((a) => ['data-trezi-source', 'data-praxis-source'].includes(a.name))) return
         const pos = n.start + 1 + n.name.length
         // Only splice when start points exactly at '<name' — bail on any misaligned
         // offset rather than corrupt markup mid-token (mirrors props-svelte.ts).
         if (content.slice(n.start + 1, pos) !== n.name) return
         const { line, column } = lineCol(content, n.start)
-        inserts.push({ pos, text: ' data-praxis-source="' + rel + ':' + line + ':' + column + '"' })
+        inserts.push({ pos, text: ' data-trezi-source="' + rel + ':' + line + ':' + column + '"' })
       })
       inserts.sort((a, b) => b.pos - a.pos)
       let code = content
@@ -178,7 +178,7 @@ async function detect(root: string): Promise<Detected> {
     }
   }
   // React Native / Expo FIRST (they also depend on react) — stamp testID, not
-  // data-praxis-source, since RN host elements have no DOM.
+  // data-trezi-source, since RN host elements have no DOM.
   if (has('react-native') || has('expo')) {
     return { framework: 'react-native', strategy: 'babel-plugin-rn' }
   }
@@ -217,7 +217,7 @@ async function scaffold(root: string): Promise<SetupResult> {
         : d.strategy === 'babel-plugin-rn'
           ? RN_HELPER_CONTENT
           : REACT_HELPER_CONTENT
-    await mkdir(join(root, PRAXIS_DIR), { recursive: true })
+    await mkdir(join(root, TREZI_DIR), { recursive: true })
     const abs = join(root, helper)
     let written = false
     if (!(await exists(abs))) {
@@ -255,7 +255,7 @@ async function scaffold(root: string): Promise<SetupResult> {
 async function uninstall(root: string): Promise<SetupResult> {
   try {
     const removed: string[] = []
-    for (const f of [REACT_HELPER, RN_HELPER, SVELTE_HELPER, NEXT_LOADER, NEXT_ADAPTER, MDX_HELPER, ...LEGACY_FILES]) {
+    for (const f of [REACT_HELPER, RN_HELPER, SVELTE_HELPER, NEXT_LOADER, NEXT_ADAPTER, MDX_HELPER, ...LEGACY_FILES, ...[REACT_HELPER, RN_HELPER, SVELTE_HELPER, NEXT_LOADER, NEXT_ADAPTER, MDX_HELPER].map(path => path.replaceAll('trezi', 'praxis'))]) {
       const abs = join(root, f)
       if (await exists(abs)) {
         await rm(abs)

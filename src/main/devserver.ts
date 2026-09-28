@@ -106,7 +106,7 @@ async function detect(root: string): Promise<DetectedProject> {
     // serve; otherwise there's nothing we know how to launch, so ask for a command.
     if (await findStaticEntry(root)) return staticProject(root)
     const entries = await readdir(root)
-    if (entries.every((entry) => ['.git', '.gitignore', '.DS_Store', '.praxis'].includes(entry))) {
+    if (entries.every((entry) => ['.git', '.gitignore', '.DS_Store', '.trezi', '.praxis'].includes(entry))) {
       return { ...staticProject(root), framework: 'unknown', setupRequired: true }
     }
     throw new Error(
@@ -229,7 +229,7 @@ const CONFLICT_RE =
 function interpretFailure(code: number | null, tail: string): string {
   if (CONFLICT_RE.test(tail)) {
     return (
-      'A dev server is already running for this project. Praxis manages the dev server itself — ' +
+      'A dev server is already running for this project. Trezi manages the dev server itself — ' +
       'stop your other instance (e.g. the `dev` running in your terminal) and try again.'
     )
   }
@@ -257,7 +257,7 @@ async function start(
   onLog(`Assigned free port ${port} (binding ${PREVIEW_HOST}).`)
 
   // Static sites (vanilla HTML/JS) have no command to spawn — serve them from
-  // praxis's built-in in-process static server. A custom command override skips
+  // trezi's built-in in-process static server. A custom command override skips
   // this (the user gave us something explicit to run instead).
   if (opts.framework === 'static' && !opts.command) {
     return startStaticSite(opts.root, port, onLog)
@@ -416,7 +416,7 @@ export function registerDevServerIpc(
 ): void {
   ipcMain = router
   ipcMain.handle('project:detect', async (_e, root: string) => {
-    // Move pre-rename `.dsgn/` data (annotations/tokens) into `.praxis/` before
+    // Move pre-rename `.dsgn/` data (annotations/tokens) into `.trezi/` before
     // anything reads the sidecar. No-op except right after the 2026-07 rename.
     await migrateLegacySidecar(root)
     return detect(root)
@@ -453,6 +453,6 @@ export function registerDevServerIpc(
     return server ? { running: true, server } : { running: false }
   })
 
-  // Never leave a spawned dev server orphaned when praxis quits.
+  // Never leave a spawned dev server orphaned when trezi quits.
   app.on('before-quit', stopAll)
 }

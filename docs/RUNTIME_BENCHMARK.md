@@ -123,7 +123,7 @@ current pipelines, so the application-code delta is not solely an engine effect.
 - Built the current Electron output; used the freshly built native output.
 - Launched isolated profiles with onboarding skipped. Used 1320 × 860 windows.
 - Opened equivalent fresh Git repositories containing the same static HTML page:
-  200 cards with headings, text and buttons. Praxis owned its preview server.
+  200 cards with headings, text and buttons. Trezi owned its preview server.
 - No prompts were sent to a provider. Both apps nevertheless launched a Claude
   SDK helper while opening the project; total RSS includes that helper.
 - Used lightweight temporary stdin bridges in copies of the built entrypoints
@@ -142,7 +142,7 @@ current pipelines, so the application-code delta is not solely an engine effect.
 - Scrolled the preview for 120 requestAnimationFrame callbacks. Both engines
   delivered about 30 callbacks/second on this setup. This is not a maximum-FPS
   result or a comprehensive test of input latency, native transitions or chat.
-- Other existing desktop apps, including the user's native Praxis instance,
+- Other existing desktop apps, including the user's native Trezi instance,
   remained open. Runs were sequential, using fresh profiles but warm OS caches.
 
 ## Failures and limits

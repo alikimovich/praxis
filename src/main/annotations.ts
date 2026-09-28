@@ -11,13 +11,13 @@ import { aheadOfBase, changedSince, defaultBase } from './publish-scope'
 
 /**
  * Annotation sidecar + engineer handoff (v3). Reviewer notes are pinned to
- * elements and stored in `<repo>/.praxis/annotations.json` — a sidecar the agent
- * is told not to touch (writes under `.praxis/` are denied in agent.ts). "Publish"
- * turns the praxis-related working changes + the notes into a branch and a PR.
+ * elements and stored in `<repo>/.trezi/annotations.json` — a sidecar the agent
+ * is told not to touch (writes under `.trezi/` are denied in agent.ts). "Publish"
+ * turns the trezi-related working changes + the notes into a branch and a PR.
  */
 
 const execFileP = promisify(execFile)
-const dir = (root: string): string => join(root, '.praxis')
+const dir = (root: string): string => join(root, '.trezi')
 const file = (root: string): string => join(dir(root), 'annotations.json')
 
 let counter = 0
@@ -106,7 +106,7 @@ async function lockedPublish(
 }
 
 async function publishToPr(root: string, opts: { title: string }): Promise<PublishResult> {
-  const title = opts.title || 'praxis: design handoff'
+  const title = opts.title || 'trezi: design handoff'
   // --- Pre-flight: fail before any mutation. ---
   let original: string
   try {
@@ -135,14 +135,14 @@ async function publishToPr(root: string, opts: { title: string }): Promise<Publi
     return { ok: false, error: 'Nothing to publish — no changes or notes yet.' }
   }
 
-  const branch = `praxis/handoff-${Date.now().toString(36)}`
+  const branch = `trezi/handoff-${Date.now().toString(36)}`
   let committed = false
   try {
     await git(root, ['checkout', '-b', branch])
     // Stage tracked changes + the sidecar only — never sweep in untracked files
     // (local .env, build artifacts, unrelated WIP).
     await git(root, ['add', '-u'])
-    await git(root, ['add', '--', '.praxis'])
+    await git(root, ['add', '--', '.trezi'])
     const staged = await git(root, ['diff', '--cached', '--name-only'])
     // Per-turn live commits mean the work is usually already IN the branch's history,
     // so "nothing staged" no longer means "nothing to publish" — only nothing staged
@@ -189,11 +189,11 @@ async function publishToPr(root: string, opts: { title: string }): Promise<Publi
 }
 
 /**
- * Full "Publish": commit every change on the current praxis/* branch → reconcile
+ * Full "Publish": commit every change on the current trezi/* branch → reconcile
  * its remote counterpart without rewriting either history → push →
  * create (or reuse) a PR → squash-merge it into the default branch (deleting the
  * remote branch) → check out the default branch and pull → delete the merged
- * local branch → start a fresh same-named praxis/* branch off the updated base to
+ * local branch → start a fresh same-named trezi/* branch off the updated base to
  * keep working on. One-click ship-and-continue.
  */
 async function shipToMain(
@@ -214,11 +214,11 @@ async function shipToMain(
   // Default branch (main/master), from origin/HEAD; fall back to main.
   const base = await defaultBase(root)
   if (branch === base) {
-    // The open-time `git:ensure` should have moved the checkout onto a praxis/*
+    // The open-time `git:ensure` should have moved the checkout onto a trezi/*
     // work branch, but a project can still land here on its base branch (ensure
     // failed at open, the user switched back via the titlebar, or a previous
     // publish's recovery stranded them). Self-heal instead of refusing: move
-    // onto `praxis/<base>` now — `checkout -b` carries the uncommitted work
+    // onto `trezi/<base>` now — `checkout -b` carries the uncommitted work
     // along, and the rest of the flow keeps the base branch clean exactly as if
     // open-time ensure had succeeded. `ensureBranch` still refuses non-root
     // checkouts (a subdir of a larger repo), which stays a hard error.
@@ -236,13 +236,13 @@ async function shipToMain(
         error:
           enclosing === null
             ? `This folder isn't a git repository, so there's nothing to publish from. Run \`git init\` in ${root} (and make a first commit), then try again.`
-            : `Can't publish: this folder is inside the repository at ${enclosing}, but isn't its top level, so Praxis won't switch that whole repo onto a work branch. Either open ${enclosing} as the project and publish from there, or make this folder its own repository with \`git init\` in ${root}.`
+            : `Can't publish: this folder is inside the repository at ${enclosing}, but isn't its top level, so Trezi won't switch that whole repo onto a work branch. Either open ${enclosing} as the project and publish from there, or make this folder its own repository with \`git init\` in ${root}.`
       }
     }
     if (!healed.branch || healed.branch === base || healed.error) {
       return {
         ok: false,
-        error: `You're on ${base} and Praxis couldn't create a work branch${healed.error ? `: ${healed.error}` : '.'}`
+        error: `You're on ${base} and Trezi couldn't create a work branch${healed.error ? `: ${healed.error}` : '.'}`
       }
     }
     branch = healed.branch

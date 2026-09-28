@@ -22,7 +22,7 @@ import {
   scrubSecret
 } from '../src/main/providers-store.ts'
 
-const base = mkdtempSync(join(tmpdir(), 'praxis-providers-'))
+const base = mkdtempSync(join(tmpdir(), 'trezi-providers-'))
 let failed = 0
 const ok = (cond, msg) => {
   if (!cond) {
@@ -169,7 +169,7 @@ try {
   )
 
   // --- no cipher available: refuse rather than write plaintext --------------
-  const lockedBase = mkdtempSync(join(tmpdir(), 'praxis-providers-locked-'))
+  const lockedBase = mkdtempSync(join(tmpdir(), 'trezi-providers-locked-'))
   try {
     const locked = createProviderStore(lockedBase, fakeCipher(false))
     ok(
@@ -185,7 +185,7 @@ try {
   }
 
   // --- corrupt file degrades to empty --------------------------------------
-  const badBase = mkdtempSync(join(tmpdir(), 'praxis-providers-bad-'))
+  const badBase = mkdtempSync(join(tmpdir(), 'trezi-providers-bad-'))
   try {
     const badFile = join(badBase, 'providers.json')
     writeFileSync(badFile, '{not json at all', 'utf8')
@@ -298,7 +298,7 @@ try {
   // --- a malformed entry can't reach the picker ----------------------------
   // `choices()` iterates `models`; a string there would be walked CHARACTER by
   // character, so the shape has to be rejected at the read boundary.
-  const junkBase = mkdtempSync(join(tmpdir(), 'praxis-providers-junk-'))
+  const junkBase = mkdtempSync(join(tmpdir(), 'trezi-providers-junk-'))
   try {
     writeFileSync(
       join(junkBase, 'providers.json'),

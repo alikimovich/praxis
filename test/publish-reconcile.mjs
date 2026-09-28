@@ -19,7 +19,7 @@ const run = (cwd, ...args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
 
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), 'praxis-publish-'))
+  const root = mkdtempSync(join(tmpdir(), 'trezi-publish-'))
   roots.push(root)
   const remote = join(root, 'remote.git')
   const local = join(root, 'local')
@@ -37,14 +37,14 @@ function fixture() {
   run(root, 'clone', remote, peer)
   run(peer, 'config', 'user.email', 'peer@example.com')
   run(peer, 'config', 'user.name', 'Peer')
-  run(local, 'checkout', '-b', 'praxis/main')
+  run(local, 'checkout', '-b', 'trezi/main')
   return { root, remote, local, peer }
 }
 
 function seedRemoteBranch({ local, peer }) {
-  run(local, 'push', '-u', 'origin', 'praxis/main')
+  run(local, 'push', '-u', 'origin', 'trezi/main')
   run(peer, 'fetch', 'origin')
-  run(peer, 'checkout', '-b', 'praxis/main', 'origin/praxis/main')
+  run(peer, 'checkout', '-b', 'trezi/main', 'origin/trezi/main')
 }
 
 function commitFile(repo, name, content, message) {
@@ -58,13 +58,13 @@ try {
   {
     const f = fixture()
     commitFile(f.local, 'created.txt', 'created\n', 'local work')
-    const result = await pushReconciledBranch(f.local, 'praxis/main')
+    const result = await pushReconciledBranch(f.local, 'trezi/main')
     assert.equal(result.ok, true)
     assert.equal(result.action, 'created')
     assert.equal(result.attempts, 1)
     assert.equal(result.recoveryRefs.length, 1)
     assert.equal(
-      run(f.remote, 'rev-parse', 'refs/heads/praxis/main'),
+      run(f.remote, 'rev-parse', 'refs/heads/trezi/main'),
       run(f.local, 'rev-parse', 'HEAD')
     )
   }
@@ -74,11 +74,11 @@ try {
     const f = fixture()
     seedRemoteBranch(f)
     commitFile(f.local, 'ahead.txt', 'ahead\n', 'local ahead')
-    const result = await pushReconciledBranch(f.local, 'praxis/main')
+    const result = await pushReconciledBranch(f.local, 'trezi/main')
     assert.equal(result.ok, true)
     assert.equal(result.action, 'ahead')
     assert.equal(
-      run(f.remote, 'rev-parse', 'refs/heads/praxis/main'),
+      run(f.remote, 'rev-parse', 'refs/heads/trezi/main'),
       run(f.local, 'rev-parse', 'HEAD')
     )
   }
@@ -88,9 +88,9 @@ try {
     const f = fixture()
     seedRemoteBranch(f)
     commitFile(f.peer, 'behind.txt', 'remote\n', 'remote ahead')
-    run(f.peer, 'push', 'origin', 'praxis/main')
+    run(f.peer, 'push', 'origin', 'trezi/main')
     const remoteTip = run(f.peer, 'rev-parse', 'HEAD')
-    const result = await pushReconciledBranch(f.local, 'praxis/main')
+    const result = await pushReconciledBranch(f.local, 'trezi/main')
     assert.equal(result.ok, true)
     assert.equal(result.action, 'fast-forwarded')
     assert.equal(run(f.local, 'rev-parse', 'HEAD'), remoteTip)
@@ -102,13 +102,13 @@ try {
     seedRemoteBranch(f)
     commitFile(f.local, 'local.txt', 'local\n', 'local side')
     commitFile(f.peer, 'remote.txt', 'remote\n', 'remote side')
-    run(f.peer, 'push', 'origin', 'praxis/main')
-    const result = await pushReconciledBranch(f.local, 'praxis/main')
+    run(f.peer, 'push', 'origin', 'trezi/main')
+    const result = await pushReconciledBranch(f.local, 'trezi/main')
     assert.equal(result.ok, true)
     assert.equal(result.action, 'merged')
     assert.equal(run(f.local, 'rev-list', '--parents', '-n', '1', 'HEAD').split(' ').length, 3)
     assert.equal(
-      run(f.remote, 'rev-parse', 'refs/heads/praxis/main'),
+      run(f.remote, 'rev-parse', 'refs/heads/trezi/main'),
       run(f.local, 'rev-parse', 'HEAD')
     )
   }
@@ -122,14 +122,14 @@ try {
     run(f.local, 'commit', '-am', 'local side')
     writeFileSync(join(f.peer, 'shared.txt'), 'remote\n')
     run(f.peer, 'commit', '-am', 'remote side')
-    run(f.peer, 'push', 'origin', 'praxis/main')
+    run(f.peer, 'push', 'origin', 'trezi/main')
     const localTip = run(f.local, 'rev-parse', 'HEAD')
     const remoteTip = run(f.peer, 'rev-parse', 'HEAD')
-    const result = await pushReconciledBranch(f.local, 'praxis/main')
+    const result = await pushReconciledBranch(f.local, 'trezi/main')
     assert.equal(result.ok, false)
     assert.deepEqual(result.files, ['shared.txt'])
     assert.deepEqual(await publishConflictFiles(f.local), ['shared.txt'])
-    assert.equal(run(f.remote, 'rev-parse', 'refs/heads/praxis/main'), remoteTip)
+    assert.equal(run(f.remote, 'rev-parse', 'refs/heads/trezi/main'), remoteTip)
     assert.deepEqual(
       new Set(result.recoveryRefs.map((ref) => run(f.local, 'rev-parse', ref))),
       new Set([localTip, remoteTip])
@@ -148,15 +148,15 @@ try {
     const hook = join(f.local, '.git', 'hooks', 'pre-push')
     writeFileSync(
       hook,
-      `#!/bin/sh\nif [ ! -f ${q(sentinel)} ]; then\n  touch ${q(sentinel)}\n  git -C ${q(f.peer)} push origin praxis/main\nfi\n`
+      `#!/bin/sh\nif [ ! -f ${q(sentinel)} ]; then\n  touch ${q(sentinel)}\n  git -C ${q(f.peer)} push origin trezi/main\nfi\n`
     )
     chmodSync(hook, 0o755)
-    const result = await pushReconciledBranch(f.local, 'praxis/main')
+    const result = await pushReconciledBranch(f.local, 'trezi/main')
     assert.equal(result.ok, true)
     assert.equal(result.action, 'merged')
     assert.equal(result.attempts, 2)
     assert.equal(
-      run(f.remote, 'rev-parse', 'refs/heads/praxis/main'),
+      run(f.remote, 'rev-parse', 'refs/heads/trezi/main'),
       run(f.local, 'rev-parse', 'HEAD')
     )
   }

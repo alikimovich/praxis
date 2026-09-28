@@ -9,7 +9,7 @@ if ! command -v git >/dev/null 2>&1; then
 fi
 
 if [ "$(uname -s)" != "Darwin" ]; then
-  echo "Error: Praxis requires macOS 13.3 or later." >&2
+  echo "Error: Trezi requires macOS 13.3 or later." >&2
   exit 1
 fi
 if ! xcrun --find swiftc >/dev/null 2>&1; then
@@ -22,31 +22,36 @@ if ! command -v bun >/dev/null 2>&1; then
 fi
 PM="bun"
 
-PRAXIS_HOME="${PRAXIS_HOME:-$HOME/.praxis}"
+TREZI_HOME="${TREZI_HOME:-${PRAXIS_HOME:-$HOME/.trezi}}"
+# Keep an existing source installation in place for old launchers.
+if [ "$TREZI_HOME" = "$HOME/.trezi" ] && [ ! -e "$TREZI_HOME" ] && [ -d "$HOME/.praxis/.git" ]; then
+  TREZI_HOME="$HOME/.praxis"
+fi
 
-if [ -d "$PRAXIS_HOME/.git" ]; then
-  echo "==> Updating existing install at $PRAXIS_HOME"
-  git -C "$PRAXIS_HOME" pull --ff-only
+if [ -d "$TREZI_HOME/.git" ]; then
+  echo "==> Updating existing install at $TREZI_HOME"
+  git -C "$TREZI_HOME" pull --ff-only
 else
-  echo "==> Cloning Praxis into $PRAXIS_HOME"
-  git clone https://github.com/alikimovich/praxis.git "$PRAXIS_HOME"
+  echo "==> Cloning Trezi into $TREZI_HOME"
+  git clone https://github.com/alikimovich/praxis.git "$TREZI_HOME"
 fi
 
 echo "==> Installing dependencies"
-cd "$PRAXIS_HOME"
+cd "$TREZI_HOME"
 "$PM" install
 
-echo "==> Building Praxis"
+echo "==> Building Trezi"
 "$PM" run build
 
-echo "==> Linking the praxis command"
+echo "==> Linking the trezi command"
 mkdir -p "$HOME/.local/bin"
 
-if [ -f "$PRAXIS_HOME/bin/praxis.mjs" ]; then
-  chmod +x "$PRAXIS_HOME/bin/praxis.mjs"
+if [ -f "$TREZI_HOME/bin/trezi.mjs" ]; then
+  chmod +x "$TREZI_HOME/bin/trezi.mjs"
 fi
 
-ln -sf "$PRAXIS_HOME/bin/praxis.mjs" "$HOME/.local/bin/praxis"
+ln -sf "$TREZI_HOME/bin/trezi.mjs" "$HOME/.local/bin/trezi"
+ln -sf "$TREZI_HOME/bin/praxis.mjs" "$HOME/.local/bin/praxis"
 
 case ":${PATH}:" in
   *":$HOME/.local/bin:"*)
@@ -68,7 +73,7 @@ echo "==> Optional browser testing"
 if command -v agent-browser >/dev/null 2>&1; then
   echo "agent-browser is already installed."
 else
-  echo "Recommended: agent-browser lets Praxis check pages at phone, tablet, and desktop sizes."
+  echo "Recommended: agent-browser lets Trezi check pages at phone, tablet, and desktop sizes."
   echo "This installs the agent-browser CLI globally and downloads its browser."
   browser_answer=""
   # Read the terminal directly: stdin contains this script for curl ... | bash.
@@ -89,7 +94,7 @@ else
           browser_dir="$(bun pm bin -g 2>/dev/null)" || browser_dir=""
           if [ -n "$browser_dir" ] && [ -x "$browser_dir/agent-browser" ]; then
             browser_bin="$browser_dir/agent-browser"
-            echo "Add $browser_dir to your PATH so Praxis can find agent-browser."
+            echo "Add $browser_dir to your PATH so Trezi can find agent-browser."
           fi
         fi
         if [ -n "$browser_bin" ] && "$browser_bin" install; then
@@ -98,7 +103,7 @@ else
           echo "Browser setup did not finish. Once agent-browser is on PATH, run: agent-browser install"
         fi
       else
-        echo "Optional agent-browser installation failed; Praxis is still installed."
+        echo "Optional agent-browser installation failed; Trezi is still installed."
         echo "You can retry later: $PM install --global agent-browser && agent-browser install"
       fi
       ;;
@@ -108,6 +113,6 @@ else
   esac
 fi
 
-echo "==> Praxis installed to $PRAXIS_HOME"
-echo "Run:  praxis"
-echo "(Run this installer again, or 'praxis --update', to update later.)"
+echo "==> Trezi installed to $TREZI_HOME"
+echo "Run:  trezi"
+echo "(Run this installer again, or 'trezi --update', to update later.)"

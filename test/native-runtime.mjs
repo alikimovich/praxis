@@ -14,7 +14,7 @@ if (process.platform !== 'darwin') {
     timeout: 300000
   })
   if (result.error) throw result.error
-  const host = fileURLToPath(new URL('../out/native/Praxis Native.app/Contents/MacOS/PraxisHost', import.meta.url))
+  const host = fileURLToPath(new URL('../out/native/Trezi Native.app/Contents/MacOS/TreziHost', import.meta.url))
   for (const args of [[], ['/tmp']]) {
     const direct = spawnSync(host, args, { encoding: 'utf8', timeout: 10000 })
     if (direct.error) throw direct.error

@@ -5,14 +5,14 @@ import { once } from 'node:events'
 import { NativeBridge } from '../../src/native/bridge.ts'
 
 const directory = resolve('out/native')
-const executable = `${directory}/Praxis Native.app/Contents/MacOS/PraxisHost`
+const executable = `${directory}/Trezi Native.app/Contents/MacOS/TreziHost`
 if (process.platform !== 'darwin' || !existsSync(executable)) {
   console.log('NATIVE-SOURCE-WINDOW SKIP — build the macOS native host first.')
   process.exit(0)
 }
 const host = new NativeBridge(executable, directory, 'ephemeral')
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
-const root = '/tmp/praxis-source-window-fixture'
+const root = '/tmp/trezi-source-window-fixture'
 const state = { root, visible: true, popped: false, source: 'src/Example.tsx', files: ['src/Example.tsx'], text: Array.from({ length: 100 }, (_, i) => `const line${i} = "Editable source line ${i}"`).join('\n'), revision: 1 }
 const inspect = () => host.request('sourceInspect', { root })
 const update = async patch => { Object.assign(state, patch); host.send('sourceState', { state }); await delay(200) }

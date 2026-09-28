@@ -6,7 +6,7 @@ import type { RunningDevServer } from '../shared/api'
 import { stampHtml } from './html-source'
 
 /**
- * praxis's built-in static file server — the preview backend for plain
+ * trezi's built-in static file server — the preview backend for plain
  * HTML/CSS/JS projects that have no package.json and no dev command to spawn.
  *
  * It's an in-process Node http.Server (not a spawned child) so it needs no
@@ -46,7 +46,7 @@ const MIME: Record<string, string> = {
   '.pdf': 'application/pdf'
 }
 
-const RELOAD_PATH = '/__praxis_reload'
+const RELOAD_PATH = '/__trezi_reload'
 
 // Injected before </body>: opens an SSE stream and hard-reloads on any change.
 const LIVE_RELOAD_SNIPPET = `<script>(function(){try{var es=new EventSource("${RELOAD_PATH}");es.onmessage=function(){location.reload()}}catch(e){}})();</script>`
@@ -152,7 +152,7 @@ export function startStaticServer(
           rs.on('error', rej2)
         })
         let html = Buffer.concat(chunks).toString('utf8')
-        // Inject data-praxis-source stamps so the preview can map an element back
+        // Inject data-trezi-source stamps so the preview can map an element back
         // to its line in this file (vanilla projects have no build step to do it).
         // Best-effort: stampHtml returns the input unchanged on any parse failure.
         const rel = relative(root, target).split(sep).join('/')

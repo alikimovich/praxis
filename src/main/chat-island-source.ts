@@ -9,7 +9,7 @@ export const sourceHash = (text: string) => createHash('sha256').update(text).di
 export async function islandSource(root: string, record: IslandRecord) {
   const base = await realpath(root), file = await realpath(resolve(root, record.manifest.file))
   const rel = relative(base, file)
-  if (!rel || rel.startsWith('..') || isAbsolute(rel) || rel.split('/').some(p => ['.git', '.praxis', '.dsgn'].includes(p))) throw new Error('Source target escapes the project or uses metadata.')
+  if (!rel || rel.startsWith('..') || isAbsolute(rel) || rel.split('/').some(p => ['.git', '.trezi', '.praxis', '.dsgn'].includes(p))) throw new Error('Source target escapes the project or uses metadata.')
   const code = await readFile(file, 'utf8')
   if (Buffer.byteLength(code) > 2_000_000) throw new Error('Source file is too large.')
   const values: Record<string, IslandValue> = {}

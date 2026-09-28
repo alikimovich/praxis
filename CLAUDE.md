@@ -1,14 +1,14 @@
-# CLAUDE.md — working guide for Praxis
+# CLAUDE.md — working guide for Trezi
 
-Praxis is a native macOS app (Swift/AppKit/SwiftUI with Bun services): an AI chat on the left that edits a user's repo, with
+Trezi is a native macOS app (Swift/AppKit/SwiftUI with Bun services): an AI chat on the left that edits a user's repo, with
 that repo's dev server live-previewed on the right. Distributed as source
 (clone + `bun install` + `bun run dev`); each user authenticates with their own
 provider subscription (`claude setup-token` / `claude login`; Codex and Gemini
 backends exist behind the same seam).
 
 The project's original name was **dsgn**. A repo-wide rename (2026-07) swept it
-out of the code — the stamp is `data-praxis-source`, the sidecar is `.praxis/`,
-work branches are `praxis/*`. The old name survives only in deliberate legacy
+out of the code — the stamp is `data-trezi-source`, the sidecar is `.trezi/`,
+work branches are `trezi/*`. The old name survives only in deliberate legacy
 shims: setup uninstall removes old `.dsgn/` helpers, `git.ts` recognizes
 `dsgn/*` work branches, `sidecar-migrate.ts` moves old sidecar data, `agent.ts`
 migrates the old `<userData>/dsgn` dir, and the agent sidecar write-deny covers
@@ -51,7 +51,7 @@ native/live jobs are serial, use disposable profiles, and distinguish SKIP from
 PASS. See `docs/TESTING.md` for filtering, logs, timeouts and isolation rules.
 
 Read captured PNGs to verify UI. Offscreen AppKit captures cannot reliably paint
-Liquid Glass. `PRAXIS_NATIVE_BACKGROUND_TEST=1` skips real pointer gestures and
+Liquid Glass. `TREZI_NATIVE_BACKGROUND_TEST=1` skips real pointer gestures and
 animation timing; report that reduced coverage. No Electron tests remain.
 
 > Electron and browser/Tailscale mode are retired. Old user profiles are preserved,
@@ -93,17 +93,17 @@ src/
     file-ops.ts     the same sidebar's file MANAGER — create/rename/delete
                     (source:create-file/rename-file/delete-file). Pure; every
                     renderer-supplied path is re-validated (no traversal, no
-                    .git/.praxis/.dsgn/node_modules), delete goes to the OS trash
+                    .git/.trezi/.dsgn/node_modules), delete goes to the OS trash
     media.ts / media-types.ts   the editor's media viewer: opening a .png/.mp4 must
                     SHOW it, not decode its bytes as utf8. media-types is the pure
                     half (ext→kind/MIME, binary sniff, HTTP Range parsing); media.ts
-                    owns the `praxis-media://` protocol — main hands the renderer an
+                    owns the `trezi-media://` protocol — main hands the renderer an
                     opaque per-file token, so the scheme can never be aimed at a path
                     the renderer chose. Streamed + range-servable (a <video> can't
                     seek otherwise, and a big one must not cross IPC as base64)
     agent.ts        persistent multi-turn agent session (streams over agent:* IPC)
     attachments.ts  gives a PASTED composer image a path (attachments:save writes
-                    the clipboard bytes under <userData>/praxis/attachments so the
+                    the clipboard bytes under <userData>/trezi/attachments so the
                     turn can tell the agent where the image it can see lives; a
                     DROPPED image needs no call — the renderer already has its
                     path). Pure fs+path; sanitizes the renderer-supplied name
@@ -156,7 +156,7 @@ src/
                     parentNode back-references)
     control-manifest.ts / control-panels.ts   AI-surfaced control panels:
                     validate + anchor-lex + render literals (pure) and the
-                    main-owned .praxis/control-panels.json store + controls:* IPC
+                    main-owned .trezi/control-panels.json store + controls:* IPC
     tokens.ts       design-token detection/scaffold   annotations.ts  comments → PR
     spring.ts       pure spring→CSS linear() engine (vendored from ~/dev/spring2css);
                     powers the spring_to_css agent tool in backends/claude.ts
@@ -215,20 +215,20 @@ src/
   shared/style-props.ts  the Styles panel's v1 editable CSS-property allowlist
                     (the `StyleProp` union). main/styles.ts derives its
                     `STYLE_PROPS` from it (the actual write-time boundary);
-                    ../bin/praxis.mjs the `praxis` CLI (launch + `--update`); owns the update
+                    ../bin/trezi.mjs the `trezi` CLI (launch + `--update`); owns the update
                     sequence (git pull + bun install + build). ../install.sh boots it.
 test/             hand-rolled .mjs tests + fixtures/ + artifacts/ (PNGs, gitignored)
 docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec)
 ```
 
-- **Lifecycle:** `install.sh` (curl one-liner) clones to `~/.praxis`, builds, and
-  puts `praxis` on PATH. `praxis` launches the built app; `praxis --update` pulls
+- **Lifecycle:** `install.sh` (curl one-liner) clones to `~/.trezi`, builds, and
+  puts `trezi` on PATH. `trezi` launches the built app; `trezi --update` pulls
   + rebuilds. Native Settings uses `src/native/update-controller.ts` to guard
   unsaved work, check/pull/install/build, and restart.
 
 - The chat runs in `main` via provider SDKs; output streams over `agent:*` IPC
   into Bun chat controllers, which send typed state to Swift.
-- Praxis **owns** the dev-server lifecycle of the target repo (never run the
+- Trezi **owns** the dev-server lifecycle of the target repo (never run the
   target's `dev` manually); it's killed on app quit.
 
 **Why it's built this way (non-obvious choices):**
@@ -240,7 +240,7 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
 - **Prop editing is hybrid**: simple literals splice straight into source (instant
   HMR); complex/expression values fall back to the agent. React and Svelte have
   separate engines because their ASTs differ; selection/tokens are framework-
-  agnostic (they only need the `data-praxis-source` stamp — see `docs/DESIGN.md`).
+  agnostic (they only need the `data-trezi-source` stamp — see `docs/DESIGN.md`).
 
 ## Conventions
 
@@ -301,7 +301,7 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   port. Use the native host test protocol for deterministic integration checks.
 - **Bun blocks postinstall for untrusted dependencies.** `esbuild` remains in
   `package.json#trustedDependencies` for its binary.
-- **The agent is denied writes under a target repo's `.praxis/` (and legacy `.dsgn/`)** (annotations,
+- **The agent is denied writes under a target repo's `.trezi/` (and legacy `.dsgn/`)** (annotations,
   scaffolded instrumentation, and control-panel manifests live there). The
   `define_controls` tool exists precisely because of this: the agent hands main
   a manifest and main is the only writer.
@@ -316,14 +316,14 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   Anything persisting app state must use `SpawnContext.liveRoot` (threaded from
   every `agent.ts` startSession call site) — `define_controls` validates anchors
   against the worktree file the agent just wrote, but saves to the live root.
-- **Chats run in per-chat worktrees (praxis/chat-<id>), auto-merged back to the
+- **Chats run in per-chat worktrees (trezi/chat-<id>), auto-merged back to the
   live tree on each turn's done/error.** The preview ALWAYS serves the live
   checkout, never a worktree. Non-repo-root projects (subdirs, non-git) run on
   the live tree as today (`isRepoRoot` gate in git.ts). Resumed sessions get a
   fresh worktree; the model picker (agent:restart-chat) reuses the existing one.
   Drift from concurrent live edits syncs at turn start; conflicts park on the
   branch for review. One worktree per open chat costs disk (~node_modules are
-  symlinked); worktree directories live under `<userData>/praxis/worktrees`.
+  symlinked); worktree directories live under `<userData>/trezi/worktrees`.
 - **A worktree's symlinked node_modules/.env must be excluded by NAME, never via
   the target's `.gitignore`.** They're symlinked into every worktree so it can
   build, but a `.gitignore` pattern with a trailing slash (`node_modules/`, the
@@ -353,6 +353,6 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   VENDORED one (`@openai/codex-<plat>/vendor/…/bin/codex`), never the `codex` on
   PATH — a global CLI of a different version would answer for a binary that
   never runs the turns; and `Query.supportedModels()` leads with its own
-  `{value:'default'}`, which collides with praxis's "Default" sentinel, so a
+  `{value:'default'}`, which collides with trezi's "Default" sentinel, so a
   discovered `default` is dropped in favour of ours (`agentModelId` maps that
   exact string to "send no model").

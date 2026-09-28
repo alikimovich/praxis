@@ -3,7 +3,7 @@ import { chmodSync, rmSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import { join } from 'node:path'
 
-export type PraxisAgentToolAction =
+export type TreziAgentToolAction =
   | 'workspace_state'
   | 'prepare_conflict_resolution'
   | 'content_controls'
@@ -15,20 +15,20 @@ export type PraxisAgentToolAction =
   | 'project_ui_catalog'
   | 'compose_project_ui'
 
-export interface PraxisAgentToolRegistration {
+export interface TreziAgentToolRegistration {
   socketPath: string
   token: string
   dispose: () => void
 }
 
-type ToolHandler = (action: PraxisAgentToolAction, args?: unknown) => Promise<unknown>
+type ToolHandler = (action: TreziAgentToolAction, args?: unknown) => Promise<unknown>
 
 const sessions = new Map<string, ToolHandler>()
 let server: Server | null = null
 const bridgePath =
   process.platform === 'win32'
-    ? `\\\\.\\pipe\\praxis-agent-tools-${process.pid}`
-    : join('/tmp', `praxis-agent-tools-${process.pid}.sock`)
+    ? `\\\\.\\pipe\\trezi-agent-tools-${process.pid}`
+    : join('/tmp', `trezi-agent-tools-${process.pid}.sock`)
 let starting: Promise<string> | null = null
 
 const json = (res: import('node:http').ServerResponse, status: number, value: unknown): void => {
@@ -110,14 +110,14 @@ async function startServer(): Promise<string> {
 }
 
 /**
- * Register one Codex session with the local-socket Praxis control bridge. The
+ * Register one Codex session with the local-socket Trezi control bridge. The
  * bearer token scopes every MCP call to exactly one live chat; the handler owns
- * the authoritative in-process state and routes mutations through Praxis's repo
+ * the authoritative in-process state and routes mutations through Trezi's repo
  * queue rather than letting the MCP subprocess touch hidden worktrees directly.
  */
-export async function registerPraxisAgentTools(
+export async function registerTreziAgentTools(
   handler: ToolHandler
-): Promise<PraxisAgentToolRegistration> {
+): Promise<TreziAgentToolRegistration> {
   const token = randomUUID()
   sessions.set(token, handler)
   let url: string
@@ -141,7 +141,7 @@ export async function registerPraxisAgentTools(
 
 /** Close the process-wide bridge. Production normally lets process teardown own
  *  this; tests call it so their temporary socket is removed deterministically. */
-export async function shutdownPraxisAgentTools(): Promise<void> {
+export async function shutdownTreziAgentTools(): Promise<void> {
   sessions.clear()
   const active = server
   server = null

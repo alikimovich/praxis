@@ -20,7 +20,7 @@ import {
 /**
  * Per-CHAT git-worktree isolation (v9). Generalizes the comment-spawn worktree
  * machinery (`worktrees.ts`) to interactive chats: every chat on a git repo root
- * runs in its own long-lived `praxis/chat-<id>` worktree, and after each completed
+ * runs in its own long-lived `trezi/chat-<id>` worktree, and after each completed
  * agent turn its work auto-merges back onto the LIVE checkout so the preview (which
  * always serves the live tree) updates between turns. On mid-turn drift the turn
  * parks on the branch for review instead of clobbering the user's edit.
@@ -50,7 +50,7 @@ const git = (
 // of every commit — see RUNTIME_DEPS) AND may not be gitignored in a way that matches
 // the symlink, so a bare `clean -fd` would delete them and break the next build. `-e`
 // re-excludes each so the checkout keeps its node_modules/.env across resets.
-const cleanArgs = (): string[] => ['clean', '-fd', ...RUNTIME_DEPS.flatMap((d) => ['-e', d]), '-e', '.praxis/']
+const cleanArgs = (): string[] => ['clean', '-fd', ...RUNTIME_DEPS.flatMap((d) => ['-e', d]), '-e', '.trezi/', '-e', '.praxis/', '-e', '.dsgn/']
 
 /** Binary-safe `git show <ref>:<path>` — `null` when the path didn't exist at that ref. */
 const readBlobAt = async (cwd: string, ref: string, rel: string): Promise<Buffer | null> => {
@@ -96,7 +96,7 @@ export async function conflictMarkerFiles(wt: Worktree, files: string[]): Promis
 }
 
 /**
- * Fork a fresh worktree for a chat on branch `praxis/chat-<id>`, forking from the live
+ * Fork a fresh worktree for a chat on branch `trezi/chat-<id>`, forking from the live
  * tree's CURRENT state (uncommitted WIP included, via `captureBase`) and symlinking
  * node_modules/.env — exactly like comment spawns, only the branch-name scheme differs.
  */

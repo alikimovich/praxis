@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { workspaceStorage } from '../src/native/workspace'
 
-const profile = mkdtempSync(join(tmpdir(), 'praxis-workspace-'))
+const profile = mkdtempSync(join(tmpdir(), 'trezi-workspace-'))
 afterAll(() => rmSync(profile, { recursive: true, force: true }))
 const projects = [
   { root: '/projects/one', key: 'one', name: 'One', touchedAt: 1 },

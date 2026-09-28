@@ -16,7 +16,7 @@ export type Framework =
   | 'expo'
   | 'react-native'
   // A plain static site (vanilla HTML/CSS/JS, no package.json or build step) —
-  // served by praxis's own built-in static file server, not a spawned dev command.
+  // served by trezi's own built-in static file server, not a spawned dev command.
   | 'static'
   | 'unknown'
 
@@ -30,7 +30,7 @@ export type Framework =
 export type PreviewKind = 'web' | 'simulator'
 
 /**
- * AI-assisted diagnosis of an open/launch failure. praxis *proposes* a fix (never
+ * AI-assisted diagnosis of an open/launch failure. trezi *proposes* a fix (never
  * auto-runs): repo-scoped steps it can apply, host-scoped steps (sudo / global /
  * downloads) the user runs. Cached per-machine by `signature` so a repeat error
  * recalls the plan instead of re-diagnosing.
@@ -39,7 +39,7 @@ export interface DiagStep {
   text: string
   /** Optional exact shell command (shown with a copy button). */
   command?: string
-  /** 'repo' = praxis can apply it; 'host' = machine-level, the user must run it. */
+  /** 'repo' = trezi can apply it; 'host' = machine-level, the user must run it. */
   scope: 'repo' | 'host'
 }
 export interface Diagnosis {
@@ -54,7 +54,7 @@ export interface Diagnosis {
   status?: 'proposed' | 'applied' | 'dismissed'
 }
 
-/** Result of ensuring/switching the opened project's `praxis/*` working branch. */
+/** Result of ensuring/switching the opened project's `trezi/*` working branch. */
 export interface BranchResult {
   /** Files changed between branch tips; omitted when the comparison is unavailable. */
   files?: string[]
@@ -192,13 +192,13 @@ export interface SimPreflight {
 
 /**
  * The agent's permission posture, mirroring the SDK's `PermissionMode`:
- * - `auto` — **praxis's default**: a model classifier approves/denies each tool
- *   call; only the ones it flags as risky fall through to praxis's canUseTool
+ * - `auto` — **trezi's default**: a model classifier approves/denies each tool
+ *   call; only the ones it flags as risky fall through to trezi's canUseTool
  *   (approve/deny card). No prompts for routine work, but genuinely dangerous
  *   ops still surface.
  * - `default` — ask (cards) for every tool the SDK gates.
  * - `acceptEdits` — auto-accept file edits, still ask for the rest (e.g. Bash).
- * - `bypassPermissions` — skip all checks (and praxis's canUseTool guards); unused.
+ * - `bypassPermissions` — skip all checks (and trezi's canUseTool guards); unused.
  */
 export type PermissionMode = 'auto' | 'default' | 'acceptEdits' | 'bypassPermissions'
 
@@ -382,17 +382,17 @@ export interface AgentOptions {
   connectionId?: string
 }
 
-/** Praxis-managed durable context for one project, stored outside the repo. */
+/** Trezi-managed durable context for one project, stored outside the repo. */
 export interface ProjectMemory {
   content: string
   updatedAt: number
 }
 
 /**
- * A user-added model endpoint (v10). Praxis's two built-in seats — Claude (Agent
+ * A user-added model endpoint (v10). Trezi's two built-in seats — Claude (Agent
  * SDK) and Codex (`@openai/codex-sdk`) — log in with the user's own subscription and
  * need no configuration. A *connection* is the third path: an OpenAI-compatible
- * endpoint the user points Praxis at (Vercel AI Gateway, Groq, or any custom host)
+ * endpoint the user points Trezi at (Vercel AI Gateway, Groq, or any custom host)
  * so open models like Kimi or DeepSeek can drive a chat.
  *
  * Harness and endpoint are ORTHOGONAL. The Codex harness runs the loop; the
@@ -415,7 +415,7 @@ export interface ProviderConnection {
   /** Endpoint root, e.g. `https://ai-gateway.vercel.sh/v1`. */
   baseUrl: string
   /**
-   * Which OpenAI wire format Praxis speaks to this host. Only `'responses'` (the
+   * Which OpenAI wire format Trezi speaks to this host. Only `'responses'` (the
    * newer `/responses` endpoint) is possible: the `codex` CLI bundled with
    * `@openai/codex-sdk` REJECTS `wire_api = "chat"` at config load ("no longer
    * supported"), so a host that offers only the older `/chat/completions` route
@@ -468,7 +468,7 @@ export interface ModelCatalogResult {
 
 /**
  * One selectable entry in the chat's model picker (v10). The picker is MODEL-first:
- * the user picks a model and Praxis derives which harness runs it and which endpoint
+ * the user picks a model and Trezi derives which harness runs it and which endpoint
  * it points at, because people think in models rather than harnesses. Built in main
  * so the renderer never hardcodes a model list again.
  */
@@ -509,7 +509,7 @@ export interface SessionRecord {
   projectName: string
   startedAt: number
   endedAt: number | null
-  /** The praxis/* branch it worked on, if the renderer tagged it. */
+  /** The trezi/* branch it worked on, if the renderer tagged it. */
   branch?: string
   /** The PR it produced, if published. */
   prUrl?: string
@@ -599,7 +599,7 @@ export interface Bounds {
 
 /**
  * An element the user picked in the live preview (v2 select mode). `source` is
- * the repo's opt-in `data-praxis-source` stamp ("path/File.tsx:line") when present
+ * the repo's opt-in `data-trezi-source` stamp ("path/File.tsx:line") when present
  * — that's what lets the agent edit the exact component (see DESIGN.md).
  */
 export interface SelectedElement {
@@ -613,7 +613,7 @@ export interface SelectedElement {
   selector: string
   source: string | null
   /**
-   * The nearest COMPONENT-instance call site (v8 F3a) — `data-praxis-component-source`,
+   * The nearest COMPONENT-instance call site (v8 F3a) — `data-trezi-component-source`,
    * which the stamp plugin forwards so the authored `<Component …/>` (not the
    * innermost host) wins. Lets the inspector edit per-instance props. Null when the
    * element isn't inside a stamped component instance (or on a non-React backend).
@@ -627,7 +627,7 @@ export interface SelectedElement {
 /**
  * One row in the Layers panel's DOM tree. `path` is a child-index path from
  * `document.body` (`[0,2,1]`) — recomputed fresh on every read, never a
- * durable id: `data-praxis-source` stamps aren't unique (a `.map()` puts the
+ * durable id: `data-trezi-source` stamps aren't unique (a `.map()` puts the
  * same stamp on every rendered item) and a CSS selector is too lossy, so this
  * is the only workable handle. Every action that resolves a path back to a
  * live element re-validates the `{tag, source}` fingerprint first.
@@ -665,7 +665,7 @@ export interface LayerFingerprint {
 
 /**
  * A Layers-panel or native-preview drag-to-reorder request. Both sides are
- * identified by their `data-praxis-source` stamp — main never needs the DOM path, only the
+ * identified by their `data-trezi-source` stamp — main never needs the DOM path, only the
  * renderer does (to resolve rows back to elements). `sessionId` is a UUID
  * minted client-side once per drag gesture: it becomes the `commitEdit`
  * coalesce key, and deliberately never coalesces with anything else — a move
@@ -703,7 +703,7 @@ export interface SourceMedia {
   /** MIME type, derived from the extension. */
   mediaType: string
   /**
-   * `praxis-media://` URL the renderer can point an <img>/<video>/<audio> at.
+   * `trezi-media://` URL the renderer can point an <img>/<video>/<audio> at.
    * Opaque and per-file: main streams it from disk (range requests included), so
    * a big video never has to cross IPC as base64.
    */
@@ -798,7 +798,7 @@ export interface PropField {
 /** Result of inspecting a selected element's editable props. */
 export interface PropInspection {
   component: string
-  /** The `path:line` we edit at (from the element's data-praxis-source). */
+  /** The `path:line` we edit at (from the element's data-trezi-source). */
   source: string
   fields: PropField[]
   /**
@@ -837,7 +837,7 @@ export interface PanelState {
    *  fetched by the main renderer via `controls:get`; null while unfetched. */
   controls: ResolvedControlPanel[] | null
   /**
-   * Can praxis instrument this project for visual editing (a supported UI
+   * Can trezi instrument this project for visual editing (a supported UI
    * framework was detected)? Tailors the Styles tab's read-only guidance when
    * the picked element has no source stamp. Null while unprobed.
    */
@@ -890,7 +890,7 @@ export interface PropEditResult {
  * one matches, else splice an inline style, else route to the agent).
  */
 export interface StyleEdit {
-  /** The element's `data-praxis-source` stamp ("path/File.tsx:line"). */
+  /** The element's `data-trezi-source` stamp ("path/File.tsx:line"). */
   source: string
   /** The css property (longhand) being edited. */
   prop: string
@@ -1009,13 +1009,13 @@ export interface ControlParam {
 /**
  * An AI-surfaced control panel for one component (Custom Controls, v10) —
  * generated by the agent's `define_controls` tool, validated by main, and
- * persisted in the repo's `.praxis/control-panels.json` sidecar. Upserted by
+ * persisted in the repo's `.trezi/control-panels.json` sidecar. Upserted by
  * `file` + `component` (regenerating replaces, never duplicates).
  */
 export interface ControlPanelManifest {
   /** Animation panels are owned by the project, not the current selection. */
   presentation?: 'animation'
-  /** Project listens for praxis:animation-replay with its component name as detail. */
+  /** Project listens for trezi:animation-replay with its component name as detail. */
   replay?: boolean
   id: string
   /** Repo-relative source file the panel's params live in. */
@@ -1049,7 +1049,7 @@ export interface ResolvedControlPanel {
   params: ResolvedControlParam[]
 }
 
-/** Result of an undo/redo over the praxis source-edit history (v8 F3b). */
+/** Result of an undo/redo over the trezi source-edit history (v8 F3b). */
 export interface UndoResult {
   ok: boolean
   /** The file reverted/re-applied. */
@@ -1060,10 +1060,10 @@ export interface UndoResult {
   conflict?: boolean
 }
 
-/** A reviewer note pinned to an element, stored in the repo's .praxis sidecar. */
+/** A reviewer note pinned to an element, stored in the repo's .trezi sidecar. */
 export interface Annotation {
   id: string
-  /** The element's data-praxis-source, if any. */
+  /** The element's data-trezi-source, if any. */
   source: string | null
   selector: string
   tag: string
@@ -1084,7 +1084,7 @@ export interface PublishResult {
   ok: boolean
   /** The created PR URL on success. */
   url?: string
-  /** The fresh praxis/* branch created to continue on (publish.ship). */
+  /** The fresh trezi/* branch created to continue on (publish.ship). */
   branch?: string
   error?: string
   /** Per-file merge conflicts left for explicit resolution; never auto-resolved. */
@@ -1094,7 +1094,7 @@ export interface PublishResult {
 }
 
 /**
- * In-app feedback (LKM-27) posted as a GitHub issue on Praxis's OWN repo (the
+ * In-app feedback (LKM-27) posted as a GitHub issue on Trezi's OWN repo (the
  * app's git checkout, `app.getAppPath()`), not the opened target project. The
  * screenshot + conversation are opt-in attachments — the renderer only sends
  * them when the corresponding toggle is on, so a bare report carries neither.
@@ -1117,7 +1117,7 @@ export interface FeedbackResult {
 
 /** Result of scaffolding source-stamping into an unprepared project. */
 export type Frontend = 'next' | 'react' | 'react-native' | 'svelte' | 'vue' | 'solid' | 'unknown'
-/** How praxis instruments source mapping for the detected framework. */
+/** How trezi instruments source mapping for the detected framework. */
 export type SetupStrategy =
   | 'next-loader'
   | 'babel-plugin'
@@ -1127,7 +1127,7 @@ export type SetupStrategy =
   | 'none'
 
 /**
- * Read-only setup probe — can praxis instrument this project for visual editing?
+ * Read-only setup probe — can trezi instrument this project for visual editing?
  * Runs the deps-based framework detection WITHOUT writing anything, so the
  * renderer can decide up front whether to even offer setup (never dead-end a
  * static/vanilla project on "Set it up") and how to word the Styles tab's
@@ -1136,7 +1136,7 @@ export type SetupStrategy =
 export interface SetupProbe {
   /** The detected UI framework (deps-based), or 'unknown' when unrecognized. */
   framework: Frontend
-  /** True when praxis can add source-mapping for this framework (i.e. framework !== 'unknown'). */
+  /** True when trezi can add source-mapping for this framework (i.e. framework !== 'unknown'). */
   canInstrument: boolean
 }
 
@@ -1159,7 +1159,7 @@ export interface SetupResult {
   strategy?: SetupStrategy
   /** Svelte major version (4 or 5), so the prop-typing idiom is right. */
   svelteMajor?: number
-  /** Repo-relative files praxis wrote (under `.praxis/`). */
+  /** Repo-relative files trezi wrote (under `.trezi/`). */
   files?: string[]
   /** False if the helper already existed (idempotent). */
   written?: boolean
@@ -1181,12 +1181,12 @@ export interface TokenGroup {
 /** Design tokens detected in the opened repo (one source wins per project). */
 export interface TokenSet {
   source: TokenSource
-  /** Human label for where they came from, e.g. ".praxis/tokens.json". */
+  /** Human label for where they came from, e.g. ".trezi/tokens.json". */
   origin?: string
   groups: TokenGroup[]
 }
 
-/** Result of scaffolding a starter `.praxis/tokens.json` manifest. */
+/** Result of scaffolding a starter `.trezi/tokens.json` manifest. */
 export interface TokenScaffoldResult {
   ok: boolean
   /** False if a manifest already existed (idempotent — nothing written). */
@@ -1203,7 +1203,7 @@ export interface RecentMenuEntry {
 }
 
 /**
- * Self-update status pushed from main (`update:status`). Praxis is distributed
+ * Self-update status pushed from main (`update:status`). Trezi is distributed
  * as a git checkout; the updater compares HEAD to the tracked remote.
  * - `idle`      — up to date, or not a git checkout / offline / no upstream.
  * - `available` — `behind` commits behind the remote; `subject` is the newest.
