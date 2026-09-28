@@ -28,6 +28,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Reproduce capture-time foreground loss; bound fresh-capture reacquisition and retain strict foreground guards and unrelated error propagation.
 - [x] Reconcile candidate Apple Intelligence tracking with S01 tracking; verify a conflict-free three-way TASKS merge without changing Git metadata.
 - [x] Fix reviewed method-authorization collisions with structured pairs and align Swift slash escaping; pass 100 cross-language cases.
+- [x] Reject non-finite TypeScript values before serialization; verify nine direct/nested rejection cases and fifteen valid numeric/null controls.
 - [ ] Manager: rerun verification and independent review after contract fixes, then candidate integration; prior revision passed 109 unit checks and native integration per review feedback.
 
 ## Shadow Light (LKM-86)

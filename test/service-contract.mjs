@@ -25,6 +25,28 @@ try {
   const { decodeEnvelope, encodeEnvelope, operationDisposition } = await import(bundle)
   const goldenPath = join(root, 'test/fixtures/service-contract/golden.json')
   const fixtures = JSON.parse(readFileSync(goldenPath, 'utf8'))
+  // These values cannot be represented by JSON goldens: stringify would erase
+  // the defect by coercing them to null before the encoder sees them.
+  const numericBodies = [
+    amount => ({ amount }),
+    amount => ({ nested: { amount } }),
+    amount => ({ nested: [0, { amounts: [amount] }] }),
+  ]
+  for (const amount of [NaN, Infinity, -Infinity]) {
+    for (const [index, body] of numericBodies.entries()) {
+      const value = structuredClone(fixtures[0].value)
+      value.payload.body = body(amount)
+      assert.throws(() => encodeEnvelope(value), { code: 'invalidRequest' },
+        `encoder rejects ${amount} in numeric payload shape ${index}`)
+    }
+  }
+  for (const amount of [null, 0, 0.125, -0.125, Number.MAX_SAFE_INTEGER]) {
+    for (const body of numericBodies) {
+      const value = structuredClone(fixtures[0].value)
+      value.payload.body = body(amount)
+      assert.deepEqual(decodeEnvelope(encodeEnvelope(value)), value, 'valid numbers and explicit null retain their intent')
+    }
+  }
   // Invalid UTF-8 cannot be carried in JSON string fields.
   fixtures.push({ name: 'invalid-utf8', wireBase64: Buffer.from([0xc3, 0x28]).toString('base64'), error: 'invalidRequest' })
   // Generate bulky size boundaries from the checked-in request; keep goldens reviewable.

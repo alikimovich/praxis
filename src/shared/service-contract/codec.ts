@@ -131,6 +131,9 @@ export function decodeEnvelope(bytes: Uint8Array, context: ValidationContext = {
   return envelope
 }
 export function encodeEnvelope(value: Envelope): Uint8Array {
+  // JSON.stringify coerces non-finite numbers to null. Validate the original
+  // graph first so serialization cannot silently change operation intent.
+  bounded(value)
   const bytes = new TextEncoder().encode(JSON.stringify(value))
   decodeEnvelope(bytes)
   return bytes

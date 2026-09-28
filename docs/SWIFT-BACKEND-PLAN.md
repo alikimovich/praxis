@@ -50,6 +50,12 @@ encoding leaves slashes unescaped. All 100 cross-language cases and both typeche
 tiers pass. This revision awaits manager verification and independent re-review;
 no domain writer has moved and S01 acceptance remains pending.
 
+2026-09-28 encoder review repair: validate original TypeScript values before
+serialization so NaN and either infinity cannot silently become null. Nine
+encoder rejection cases, fifteen valid numeric/null controls, the 100-case
+cross-language suite and both typecheck tiers pass. This revision still requires
+manager verification and independent re-review; ownership remains unchanged.
+
 ## End-state architecture
 
 | Layer | Responsibility |

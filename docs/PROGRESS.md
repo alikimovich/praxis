@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Reject non-finite values before contract encoding (LKM-88)
+
+Reproduce the reviewed TypeScript defect for NaN, Infinity and -Infinity: each
+encodes as null because validation previously ran only after JSON.stringify.
+Add encoder-side regression assertions and observe the pre-fix missing-exception
+failure. Reuse the recursive value validator before serialization, preserving
+operation intent by rejecting invalid numeric values with invalidRequest.
+
+Nine rejection checks cover each value directly, in nested objects and in nested
+arrays. Fifteen positive controls preserve finite numbers and explicit null.
+The focused contract runner passes these checks and all 100 cross-language
+fixtures (run-SEjBB1); full/native TypeScript checks pass. No domain writer,
+Swift implementation, composer or desktop behavior changed. Manager verification
+and independent re-review remain pending for this revision; no GUI suite or Git
+metadata mutation was performed by this worker.
+
 ## 2026-09-28 — Fix reviewed contract authorization and slash encoding (LKM-88)
 
 Independent review reports manager verification passed 109 unit checks and native

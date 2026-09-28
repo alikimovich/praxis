@@ -47,7 +47,9 @@ further path, document-generation and origin validation in their owning task.
 
 Counters and sequence numbers are canonical decimal strings in `[0, UInt64.max]`,
 including values above JavaScript's safe integer range. Numeric JSON values must
-be finite with absolute value at most `Number.MAX_SAFE_INTEGER`. No timestamp,
+be finite with absolute value at most `Number.MAX_SAFE_INTEGER`. TypeScript validates
+the original value graph before serialization, rejecting NaN and either infinity
+instead of allowing JSON.stringify to turn them into null. No timestamp,
 byte/blob or path codec is implied by arbitrary body JSON; owners must define
 those schemas before using them. Frames use strict UTF-8, at most 65,536 bytes,
 24 simultaneously open containers and 256 members per object/array. These maxima
