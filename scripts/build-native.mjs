@@ -90,6 +90,7 @@ const result = Bun.spawnSync(
     join(root, 'src/native/ComposerBeam.swift'),
     join(root, 'src/native/Chat.swift'),
     join(root, 'src/native/ChatScrollStyle.swift'),
+    join(root, 'src/native/ChatReveal.swift'),
     join(root, 'src/native/VisibleChatCapture.swift'),
     join(root, 'src/native/ChatIsland.swift'),
     join(root, 'src/native/ShadowIsland.swift'),

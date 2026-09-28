@@ -18,6 +18,8 @@ bun run test:native
 `bun run test` runs unit and native tiers. `bun run verify` adds live provider
 turns; those require explicit authorization and credentials. The native-runtime test
 builds the app; focused native checks reuse that build and skip when unavailable.
+`bun run test:native` runs native-runtime and then native-chat-scroll with
+`--require-build`, so a missing host there fails instead of skipping.
 Electron/Playwright application tests were removed when the runtime was retired.
 Their historical coverage is not claimed as native parity.
 
@@ -36,8 +38,15 @@ a disposable native host. It requires an existing build and writes
 `node test/native-chat-scroll.mjs` uses a disposable native host with fixture
 snapshots to check that sent questions and streamed responses remain visible
 above the floating composer across short/long histories and shrinking drafts.
-It requires an existing native build and makes no provider calls. Captures are
-written to `test/artifacts/native/chat-scroll/`.
+It also reveals a nested chat island (mid-history, starting offscreen) at 440pt
+and the 320pt minimum chat width:
+each top/bottom reveal must settle with its anchor within 8pt of the reading
+edge, and overlapping pairs (top→bottom, bottom→top, top→top) must reject the
+older request as superseded (naming the newest revision) while the newest
+settles. It requires an existing native build and makes no provider calls.
+Captures are written to `test/artifacts/native/chat-scroll/`, including
+`reveal-<width>-{top,bottom}.png`, `reveal-<width>-overlap-<first>-<second>.png`
+and the measured revisions/frames in `reveal-<width>.json`.
 
 `node test/native-next-hmr.mjs` checks Next.js 16.3.5 in Webpack mode through
 Trezi's managed dev server and system WebKit. It installs dependencies into a
