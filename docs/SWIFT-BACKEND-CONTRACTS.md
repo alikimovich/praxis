@@ -5,33 +5,42 @@ runtime behavior. Source baseline and all current routes are in the
 [ownership audit](SWIFT-BACKEND-AUDIT.md) and [route map](SWIFT-BACKEND-ROUTES.md).
 No protocol or persistence changes are made by this documentation.
 
+LKM-88 implements the transport-independent v1.0 DTO subset and executable golden
+fixtures described in the [wire contract](SWIFT-BACKEND-WIRE.md). The illustrative
+declarations below remain design context; checked-in codecs define the current
+wire shape. No domain writer has moved.
+
 ## Ownership and transport
 
-Put the service layer in Swift actors behind typed protocols, separate from
-`@MainActor` AppKit/SwiftUI models. Start in the existing Swift host process; do
-not require a new daemon, XPC entitlement or install mechanism to port one service.
+LKM-88 reconciliation, 2026-09-28: the [canonical plan](SWIFT-BACKEND-PLAN.md)
+and [15-step roadmap](SWIFT-BACKEND-ROADMAP.md) govern implementation. Service
+actors run in a **separate Swift service process**, with a versioned typed XPC
+connection to the AppKit/SwiftUI app. Direct actor calls are internal service
+implementation details. The previous host-local, Bun-launcher and pipe-first
+proposal is retained as historical analysis in the
+[audit companion](SWIFT-BACKEND-AUDIT-PROPOSAL.md), not an approved staging path.
+
 UI owns focus, display, ephemeral gestures and draft presentation. Swift services
 own validation, workflow choices, durable transitions, operation records and
 repository serialization. A UI draft remains intact until an authoritative save
-acknowledgement; service snapshots must not replace an unsaved draft.
+acknowledgement; service snapshots must not replace an unsaved draft. Validate
+XPC peer identity, decoded DTOs, scope and capability before dispatch; invalidation
+requires snapshot/operation reconciliation, not blind replay.
 
-Use direct async Swift calls between UI adapters and service actors. For the
-transitional Bun adapter and eventual provider/parser helpers, keep private
-inherited bidirectional pipes with bounded newline-delimited UTF-8 JSON frames.
-This matches the source distribution and existing launcher, is debuggable, and
-avoids exposing an HTTP command server. Replace untyped dictionaries at the
-boundary with schema-validated envelopes; serialize pipe writes and keep logs on
-stderr. Impose frame/depth/collection limits before decode. Large screenshots,
-media and source snapshots use scoped temporary-file/blob capabilities with size,
-hash and expiry, not unlimited base64 frames. Retain image content semantics for
-MCP screenshot responses.
+Swift supervises legacy Bun and narrow provider/parser helpers. Those subordinate
+boundaries may use private inherited pipes with bounded UTF-8 JSON frames;
+serialize writes and keep logs on stderr. Their transport does not replace XPC
+between UI and the separate service. Impose frame/depth/collection limits before
+acceptance. Large screenshots, media and sources need scoped blob capabilities
+with size, hash and expiry. Retain MCP screenshot image content semantics.
 
-Bun remains the launcher during the first slice. Eventually Swift supervises
-narrow helpers and project runtimes, but changing process parentage is a separate
-lifecycle slice. No service may assume that UI loss means provider completion or
-that a transport timeout undid a write. Process ownership and recovery policy
-must be explicit per domain. XPC can be reconsidered for packaged deployment; it
-is not required for this source-built architecture.
+Persist operation intent and recovery checkpoints before transferring the first
+writer. An in-memory fixture or actor ledger proves only local contract semantics,
+not restart safety. The launch-time owner switch must be selected before writable
+initialization, with one writer and explicit stop/drain/recovery before switching.
+UI loss is not provider completion; a transport timeout does not undo a write.
+S01 introduces inert DTOs and executable fixtures only; no production service,
+transport or persistence owner changes in this task.
 
 ## Envelope and representative Swift definitions
 
@@ -42,7 +51,9 @@ the canonical Git common directory so linked worktrees share a writer. Keep a
 separate checkout ID to distinguish live and private trees. Persist ID mappings
 before accepting dependent durable commands. Legacy IDs stay behind an adapter.
 
-Illustrative Codable declarations (not a new checked-in runtime schema):
+The declarations below remain illustrative domain-design sketches. The S01
+executable DTOs and golden fixtures define the initial wire subset; these sketches
+are not a second codec or a claim that the domain services exist:
 
 ```swift
 import Foundation
@@ -223,7 +234,8 @@ status/result; changed payload returns idempotencyMismatch. Never auto-retry an
 uncertain non-idempotent remote request. Query/reconcile the external result, or
 return recoveryRequired. Bound ledger retention with an explicit advertised
 retry horizon; IDs older than that horizon require status/recovery, not execution.
-The first slice's reduced guarantees are stated in the plan.
+The historical experiment's reduced guarantees are not canonical acceptance;
+durable intent/recovery is required before any writer transfer.
 
 Events carry service epoch and monotonically increasing stream sequence. A
 snapshot includes a cursor taken consistently with its state; subscribe from that

@@ -2,8 +2,10 @@ import assert from 'node:assert/strict'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { NativeBridge } from './bridge'
+import { captureForegroundChat } from './smoke-input'
 import { nativeChat, nativeIslands } from './chat-runtime'
 import { serviceEvents } from './platform'
+import { missingShadowCaptureSemantics } from './smoke-shadow-semantics'
 import { runChatIslandTool } from '../main/chat-islands'
 import { shadowLight, type ShadowLightInput } from '../main/shadows'
 
@@ -67,23 +69,24 @@ document.body.append(card);
     i.id === result.id && i.sourceRevision === view().sourceRevision && i.blockKinds?.[0] === 'shadow' && i.fields === 8)
   await wait(swiftReady)
   const capture = async (name: string) => {
-    const recognized: string[] = []
+    const recognized: string[][] = []
     // Tall panels need two viewport captures; both come from the real window.
     for (const bottom of [false, true]) {
       const revealed = await host.request('revealChatIsland', { island: result.id, bottom })
-      await wait(async () => (await host.request('chatInspect')).visibleMessageIDs.includes(revealed.message))
-      await new Promise(resolve => setTimeout(resolve, 350))
-      const image = await host.request('captureVisibleChat')
+      const layout = await host.request('chatInspect')
+      assert.equal(layout.revealAppliedRevision, revealed.revision, 'SwiftUI applied the acknowledged island reveal')
+      const image = await captureForegroundChat(host)
       assert.ok(image.width > 200 && image.height > 200, 'Nonempty visible chat viewport')
       const stem = `shadow-light-${name}${bottom ? '-bottom' : ''}`
       writeFileSync(join(artifacts, `${stem}.png`), Buffer.from(image.png, 'base64'))
-      writeFileSync(join(artifacts, `${stem}.json`), JSON.stringify({ text: image.text, width: image.width, height: image.height }, null, 2))
-      recognized.push(...image.text)
+      writeFileSync(join(artifacts, `${stem}.json`), JSON.stringify({
+        text: image.text, width: image.width, height: image.height,
+        reveal: revealed, islandPositions: layout.islandPositions,
+      }, null, 2))
+      recognized.push(image.text)
     }
-    const visibleText = recognized.join(' ').toLowerCase()
-    for (const label of ['shadow light', 'preview', 'light source', 'distance', 'blur', 'layers', 'decay', 'rgba', 'box-shadow', 'undo']) {
-      assert.ok(visibleText.includes(label), `Visible Shadow Light capture is missing ${label}; inspect shadow-light-${name}*.png`)
-    }
+    const missing = missingShadowCaptureSemantics(recognized[0], recognized[1])
+    assert.deepEqual(missing, [], `Visible Shadow Light capture is missing ${missing.join(', ')}; title and Preview must be visible at the top, while controls, output and Undo may span shadow-light-${name}*.png`)
   }
   await capture('initial')
   // Each independently adjustable control must change the actual computed shadow.

@@ -50,6 +50,10 @@ struct NativeChatIsland: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack { Text(island.title).font(.headline); Spacer(); Text(island.engine == "preparing" ? "Preparing…" : shadowPanel ? "chat island" : island.engine == "jev" ? "Jev" : "Agent").font(.caption).foregroundStyle(.secondary) }
+                .id("island-start-" + island.id)
+                .background(GeometryReader { geometry in
+                    Color.clear.preference(key: IslandPositions.self, value: ["start-" + island.id: geometry.frame(in: .named("chatScroll"))])
+                })
             if !island.detail.isEmpty { Text(island.detail).font(.caption).fixedSize(horizontal: false, vertical: true) }
             ForEach(island.blocks) { block in
                 VStack(alignment: .leading, spacing: 10) {
@@ -83,6 +87,9 @@ struct NativeChatIsland: View {
                 if island.replay { Button("Replay") { action("replay") }.disabled(island.status != "ready") }
             }.controlSize(.small)
             Color.clear.frame(height: 1).id("island-end-" + island.id)
+                .background(GeometryReader { geometry in
+                    Color.clear.preference(key: IslandPositions.self, value: ["end-" + island.id: geometry.frame(in: .named("chatScroll"))])
+                })
         }.padding(shadowPanel ? 18 : 14).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: shadowPanel ? 20 : 12))
             .overlay(RoundedRectangle(cornerRadius: shadowPanel ? 20 : 12).stroke(.separator, lineWidth: 0.5))
             .onChange(of: island.sourceRevision) { _ in if !dragging { drafts = [:] } }
