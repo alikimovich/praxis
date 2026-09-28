@@ -4,10 +4,19 @@ LKM-84 review proposal, 2026-09-27. This is an implementation breakdown, not new
 tickets or authorization to execute migration work in this documentation issue.
 See the [audit](SWIFT-BACKEND-AUDIT.md) and [contracts](SWIFT-BACKEND-CONTRACTS.md).
 
+## LKM-88 implementation reconciliation (2026-09-28)
+
+The [15-step roadmap](SWIFT-BACKEND-ROADMAP.md) now assigns every audited module,
+route and event to an implementation task and future owner. Its foundation-first
+order supersedes the alternative breakdown below. The contract ownership section
+has been reconciled to the canonical separate-service/XPC boundary. The remaining
+experiment text is historical review material, not instructions for implementation
+or permission to skip durable intent. S01 transfers no domain writer.
+
 ## Relationship to the canonical migration plan
 
-The [canonical migration plan](SWIFT-BACKEND-PLAN.md) remains authoritative and
-unchanged. It specifies a separate Swift service process, XPC, Swift supervision
+The [canonical migration plan](SWIFT-BACKEND-PLAN.md) remains authoritative.
+It specifies a separate Swift service process, XPC, Swift supervision
 of the legacy Bun service, and persisted operation intent/recovery checkpoints.
 This audit-specific document preserves the bounded-slice analysis and alternatives
 for review; it does not replace that plan or mark a migration phase complete.
@@ -32,7 +41,7 @@ applicable. No implementation or product-policy change is made here.
 ## Reading the preserved audit and contract snapshots
 
 The candidate's [ownership audit](SWIFT-BACKEND-AUDIT.md) and
-[contract proposal](SWIFT-BACKEND-CONTRACTS.md) are preserved unchanged alongside
+[contract proposal](SWIFT-BACKEND-CONTRACTS.md) retain their audit/design material alongside
 [the canonical plan](SWIFT-BACKEND-PLAN.md). Read this companion for the detailed
 first-slice analysis and compatibility qualifications: the audit's existing
 “first slice and follow-ups” link leads to the canonical phase plan, while the
@@ -40,16 +49,16 @@ detailed candidate comparison, failure injection and rollback live below.
 The audit and its alternatives remain review material; no migration, storage
 change, automatic merge or worktree removal is authorized by these documents.
 
-The contracts' “Ownership and transport” section describes the host-local,
-direct-call and pipe-first staging alternative, not an adopted replacement for
-the canonical separate Swift service/XPC boundary. Typed service interfaces,
+The contracts' “Ownership and transport” section now adopts the canonical
+separate Swift service/XPC boundary; the host-local/direct-call/pipe-first
+experiment below is superseded for implementation. Typed service interfaces,
 scope, errors, revisions and operation semantics apply to either transport.
 With XPC, put these interfaces behind an explicit connection endpoint, validate
 decoded DTOs and peer identity, and handle connection invalidation using the
 contracts' snapshot/operation recovery rules. Swift supervises legacy Bun and
 narrow helpers; private pipes may still serve those helper boundaries.
 
-The contracts' reference to the first slice's reduced guarantees refers to the
+The first slice's reduced guarantees below refer only to the
 staging experiment in this companion. It does not relax the canonical plan's
 persisted intent, recovery checkpoints or single-writer requirements. The
 canonical prerequisites and the alternative's deferred supervision/durable ledger

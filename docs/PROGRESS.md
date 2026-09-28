@@ -2,6 +2,90 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Recover capture-time foreground loss (LKM-88 escalation)
+
+Inspect all four prior artifact logs: the earlier esbuild cleanup failure is
+resolved; manager run `run-Qe4PVo` passes 109 unit checks but fails Swift's
+post-ScreenCaptureKit foreground guard. The preceding readiness repair cannot
+hold foreground across the asynchronous capture. A deterministic bridge fixture
+reproduces this gap before repair: readiness succeeds, capture loses foreground,
+and the helper aborts even though a fresh capture could succeed. The logs do not
+identify the external focus owner; actual desktop behavior remains unverified.
+
+Reacquire foreground and request fresh pixels after either explicit foreground
+rejection, up to three capture attempts. Keep Swift's pre/post guards unchanged;
+never return rejected pixels or retry crop, permission, timeout or OCR failures.
+Log each reacquisition and propagate persistent focus loss. Extend the non-GUI
+regression to cover both race windows, fresh evidence, bounded exhaustion and
+immediate propagation of unrelated failures. No composer or domain-writer changes.
+
+Focused capture regression (`run-2sUWaV`), cross-language contract suite
+(`run-4od9tP`, 92 cases), full/native TypeScript checks, docs links and diff
+whitespace checks pass. Manager must run desktop verification and inspect the PNG/OCR evidence before acceptance. No GUI suite,
+Git staging/commit, provider call or user-data operation was performed.
+
+## 2026-09-28 — Await foreground readiness before chat capture (LKM-88 feedback)
+
+Manager run `run-V4xG4K` passes all 108 unit tests and both typecheck tiers,
+including the contract fixture cleanup repair. Native verification then fails at
+Shadow Light's visible chat capture: the window is not foreground. The fixture
+requests activation when revealing an island but only waits for message visibility
+and a fixed paint delay, neither of which proves window activation completed.
+Candidate `771ce3d` has the same capture/activation code and no equivalent repair.
+
+Before each visible chat capture, reuse the bounded main-window readiness helper
+with responder preservation. Require active/key/focused/visible state, then invoke
+the existing capture command. Preserve Swift's before/after foreground guards,
+ScreenCaptureKit capture, PNG/OCR assertions and all source/Undo checks. Failure
+to acquire foreground still fails; capture errors propagate without fallback.
+No production UI or composer changes.
+
+Add a non-GUI regression covering each readiness flag, delayed activation,
+100-attempt bounded failure without capture, and focus loss during capture.
+`bun test/run.mjs unit --filter=native-visible-capture` passes (`run-z8IIZK`),
+as do full/native TypeScript checks and docs links. Actual desktop activation,
+captures and full configured verification remain manager-owned and unverified by
+this worker; no GUI suite was run.
+
+## 2026-09-28 — Close the contract fixture's build service (LKM-88 feedback)
+
+Reproduce the manager failure through the real unit runner with only
+`service-contract` selected: all 92 assertions passed and the test exited zero,
+but process-group cleanup failed with EPERM. The fixture left esbuild's unref'd
+background service alive. Stop that service in a finally block immediately after
+bundling, including when the build fails; retain every contract assertion and the
+runner's strict descendant cleanup/error handling. Candidate `771ce3d` has no
+service-contract fixture or equivalent fix; its runner matches this worktree.
+
+Before repair, focused runner report `run-SxAU6y` records the same cleanup failure.
+After repair, `bun test/run.mjs unit --filter=service-contract` passes all 92 cases
+and runner cleanup (`run-bHNzUH`). Full TypeScript checks and docs links pass.
+No product, codec, composer or domain-owner changes. The full configured command,
+GUI checks, staging and commits remain manager-owned.
+
+## 2026-09-28 — Swift migration contract foundation (LKM-88)
+
+Add inert versioned DTOs and strict TypeScript/Foundation Swift codecs for
+requests, replies/errors, events, identities/revisions, capability negotiation,
+cancellation and snapshots. Register the non-GUI cross-language fixture test in
+the unit tier. Ninety-two cases cover Unicode/null/absence, UInt64 boundaries,
+malformed JSON/UTF-8, frame/depth/collection limits, scope and stale revisions,
+plus operation identity across request attempts. Reject duplicate and canonically
+equivalent Unicode keys before Swift can collapse them; reject Foundation's
+otherwise-permitted trailing commas. Both encoders round-trip the golden values.
+
+Reconcile staging prose to the canonical separate Swift service/XPC architecture,
+Swift supervision and durable intent. Map all 146 audited modules, 133 routes and
+240 event sites to 15 local migration tasks and future owners; a test enforces
+coverage. Document the implemented wire subset and future domain validation,
+durable ledger, snapshot/cancel execution and rollback gates. No domain writer,
+launcher, store, bridge dispatch or composer behavior changes in this step.
+
+Focused cross-language fixtures (including Swift compilation), full/native
+TypeScript checks and docs links pass. Manager owns configured verification,
+desktop checks, independent review and integration. No GUI/native smoke, provider
+calls, Git staging/commits, publishing or user-data changes were performed.
+
 ## 2026-09-28 — Correct composer alignment verification (LKM-87)
 
 Reproduce the manager's alignment assertion without a window: borderless

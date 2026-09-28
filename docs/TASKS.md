@@ -3,6 +3,17 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Swift migration contracts (LKM-88 / S01)
+
+- [x] Add shared versioned Swift/TypeScript DTOs, strict codecs and cross-language golden fixtures without changing a writer.
+- [x] Verify Unicode/null/absence, malformed and bounded payloads, versions, scopes, revisions and operation-versus-request identity.
+- [x] Reconcile separate-service/XPC/supervision/durable-intent requirements and map every audited module/route/event to the 15-step roadmap.
+- [x] Run focused Foundation-only fixture checks, TypeScript/native typechecks and docs links.
+- [x] Reproduce manager cleanup failure and stop the fixture-owned esbuild service; pass the real focused unit runner without weakening assertions or cleanup.
+- [x] Gate Shadow Light capture on bounded foreground readiness; verify delayed/failing activation and capture errors without GUI, preserving visible-capture guards.
+- [x] Reproduce capture-time foreground loss; bound fresh-capture reacquisition and retain strict foreground guards and unrelated error propagation.
+- [ ] Manager: run configured verification, independent review and candidate integration; no GUI suite was run by this worker.
+
 ## Composer container (LKM-87)
 
 - [x] Place attachment/provider/model/Auto controls inside the rounded input surface, preserving alignment and handlers.
