@@ -21,7 +21,7 @@ if (process.platform !== 'darwin') {
     const binary = join(scratch, 'composer-layout')
     run(['xcrun', 'swiftc', '-module-cache-path', cache,
       'test/fixtures/composer-layout/main.swift',
-      ...['Composer', 'ComposerVerification', 'ComposerAttachments', 'ComposerQueue', 'ComposerBeam'].map(name => `src/native/${name}.swift`),
+      ...['ChatScrollStyle', 'Composer', 'ComposerVerification', 'ComposerAttachments', 'ComposerQueue', 'ComposerBeam'].map(name => `src/native/${name}.swift`),
       '-o', binary])
     console.log(run([binary]).trim())
   } finally {

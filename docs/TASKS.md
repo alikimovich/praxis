@@ -3,6 +3,14 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Composer spacing and chat scrollbar (LKM-103)
+
+- [x] Match exterior bottom/side gaps and adjust composer height budget, status/message clearance and resize following.
+- [x] Identify the SwiftUI conversation scroll view; configure its native small scroller using macOS preferences, including live Always-show changes.
+- [x] Extend windowless composer tests for spacing/clearance and native scrollbar policy; run focused controller and TypeScript checks.
+- [x] Repair CGFloat/Double bounds handoff causing empty composer captures; prove failure before the fix and pass through real windowless composer update/layout.
+- [ ] Manager: run native verification and inspect foreground normal/narrow/multiline captures, latest-message reachability, scrollbar idle/hover/drag/wheel behavior and Always-show/accessibility preferences.
+
 ## Local Apple Intelligence exploration (2026-09-28)
 
 - [x] Audit suitable Trezi workflows and Apple APIs; rank opportunities and propose a bounded first experiment in [the exploration](APPLE-INTELLIGENCE.md).

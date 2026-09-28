@@ -45,8 +45,8 @@ final class ChatModel: ObservableObject {
     var messageFrames: [String: CGRect] = [:]
     var bottomPosition: CGFloat = 0
     // Preserve message/status clearance above the floating composer.
-    static let statusHeight: CGFloat = 28
-    var bottomInset: CGFloat { composerHeight + Self.statusHeight + 40 }
+    static let statusHeight = ChatLayout.statusHeight
+    var bottomInset: CGFloat { ChatLayout.bottomInset(composerHeight: composerHeight) }
     func islandAction(_ island: IslandView, action: String, values: [String: Any] = [:]) {
         guard let chat = snapshot?.chat else { return }
         controlInteraction += 1
@@ -92,11 +92,12 @@ final class NativeChat: NSHostingView<ChatConversation> {
         let value = input["text"] as? String ?? ""
         let hasContext = !(input["context"] as? String ?? "").isEmpty
         let queueHeight = ComposerQueueHost.height(count: (input["queue"] as? [Any] ?? []).count, paused: input["queuePaused"] as? Bool ?? false)
-        let composerHeight = Double(composer.preferredHeight(for: value, width: max(0, width - 20), availableHeight: height, hasContext: hasContext, hasAttachments: !(input["attachments"] as? [Any] ?? []).isEmpty, queueHeight: queueHeight))
+        let inset = ChatLayout.composerInset
+        let composerHeight = Double(composer.preferredHeight(for: value, width: max(0, width - 2 * inset), availableHeight: max(0, height - inset), hasContext: hasContext, hasAttachments: !(input["attachments"] as? [Any] ?? []).isEmpty, queueHeight: queueHeight))
         frame = NSRect(x: x, y: y, width: width, height: max(0, height))
         if model.composerHeight != composerHeight { model.composerHeight = composerHeight }
         input["chat"] = state["chat"]; input["visible"] = !isHidden && !(state["chat"] as? String ?? "").isEmpty
-        input["bounds"] = ["x":x + 10, "y":y + max(0, height - composerHeight), "width":max(0, width - 20), "height":composerHeight]
+        input["bounds"] = ChatLayout.composerBounds(in: frame, height: composerHeight)
         composer.update(input)
     }
     func inspect() -> [String: Any] {
@@ -161,6 +162,7 @@ struct ChatConversation: View {
                     .background(GeometryReader { geometry in Color.clear.preference(key: BottomPosition.self, value: geometry.frame(in: .named("chatScroll")).maxY) })
             }.padding(.horizontal, 18).padding(.top, 18).padding(.bottom, model.bottomInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .background(ChatScrollStyle())
         }
     }
     var body: some View {
@@ -182,6 +184,7 @@ struct ChatConversation: View {
                         model.bottomPosition = bottom
                         if let event = NSApp.currentEvent, [.scrollWheel, .leftMouseDragged, .keyDown].contains(event.type) { follows = bottom <= readingHeight + 48 }
                     }
+                    .onChange(of: viewport.size) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
                     .onChange(of: model.composerHeight) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
                     .onChange(of: model.revealRevision) { _ in
                         follows = false; sticky = nil
@@ -199,7 +202,7 @@ struct ChatConversation: View {
                             .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
                             .lineLimit(1).help(model.snapshot?.statusDetail ?? model.snapshot?.status ?? "")
                             .padding(.horizontal, 18).frame(height: ChatModel.statusHeight)
-                            .padding(.bottom, model.composerHeight)
+                            .padding(.bottom, model.composerHeight + ChatLayout.composerInset)
                             .allowsHitTesting(false)
                     }
                 }

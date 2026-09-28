@@ -2,6 +2,46 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Repair composer bounds handoff (LKM-103 feedback)
+
+Reproduce the manager's empty composer capture without opening a window: the
+new CGRect-derived bounds dictionary held CGFloat values, while composer.update
+requires Double values. The failed cast silently retained the initial zero frame.
+Encode placement bounds explicitly as Double and test that exact handoff through
+the real composer update/layout path at each covered width and draft height.
+The new regression fails with the previous CGFloat payload and passes after the
+fix, including nonempty bubble geometry. Keep capture, foreground, OCR and
+interaction assertions unchanged.
+
+Compared candidate 771ce3d: relevant composer/capture fixtures match this branch's
+base and contain no newer repair. Windowless composer checks, chat-controller,
+TypeScript/native checks, full Swift source typechecking (deprecation warnings),
+docs links and whitespace checks pass. Manager must rerun native verification
+and inspect foreground captures; this worker ran no GUI suites or captures.
+
+## 2026-09-28 — Composer exterior spacing and native chat scroller (LKM-103)
+
+Match the composer's exterior bottom gap to its existing 10-point side inset.
+Include that gap in height budgeting, status placement and message clearance;
+keep following the latest message when the viewport resizes as well as when the
+composer grows. Preserve the bubble's controls and gradient-free background.
+
+The conversation is a SwiftUI ScrollView, distinct from the composer's AppKit
+text editor. Configure only its backing NSScrollView with the small native
+scroller and the system's preferred style. AppKit retains fading/hover/dragging
+and accessibility drawing; Always-show uses the native legacy scroller. Observe
+system style changes without replacing the document or handling scroll events.
+
+Windowless composer coverage passes for exterior gaps and message clearance at
+320/420/520-point widths with wrapped/capped drafts, context, attachments and a
+queue. Native overlay/legacy policy, scroll-position preservation and repeated
+configuration checks pass, as do chat-controller, TypeScript/native, full Swift
+source typechecking (deprecation warnings only), docs links and diff whitespace.
+Manager owns desktop verification: foreground normal/narrow/multiline captures,
+latest-message reachability, idle/hover/drag/wheel states and Always-show plus
+accessibility preference checks. No GUI suite or foreground capture was run by
+this worker.
+
 ## 2026-09-28 — Local Apple Intelligence exploration
 
 Audit auxiliary provider calls, native text/content editing, control selection
