@@ -63,7 +63,10 @@ animation timing; report that reduced coverage. No Electron tests remain.
 src/
   native/         Swift/AppKit/SwiftUI UI + Bun controllers
     index.ts        service registration, project lifecycle and host bridge
-    Host.swift      AppKit application and JSON pipe protocol
+    Host.swift      AppKit application and JSON host protocol
+    ServiceClient.swift / HostService.swift   the host's versioned XPC connection to
+                    the Swift service (handshake, reattach, bounded outbox) and its
+                    AppKit quit/restart/exit-status integration
     Shell.swift     sidebar, toolbar and project/chat navigation
     Chat.swift / Composer.swift   native conversation and text input
     WorkspaceLayout.swift        authoritative view/divider geometry
@@ -72,6 +75,13 @@ src/
     platform.ts     direct native service imports, Keychain, event routing
     preview-transport.ts   restricted isolated WKContentWorld transport
     assets/cat/     native animation artwork
+  service/        separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
+    ServiceMain.swift / ServiceRuntime.swift / ServiceXPC.swift   XPC listener,
+                    signed-peer + hello validation, legacy relay, drain; also the
+                    `--legacy` launch-time rollback owner
+    LegacySupervisor.swift / ProcessGuardian.swift   exclusive profile lock, Bun
+                    process group, lifetime-pipe guardians for detached servers
+    ServiceContract.swift   S01 shared DTOs (TS twin: src/shared/service-contract/)
   main/           Backend services (CJS bundle, Bun); historical directory name
     preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
                     bounds/load/reset/capture, the select + comment relays, the
@@ -226,6 +236,11 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   + rebuilds. Native Settings uses `src/native/update-controller.ts` to guard
   unsaved work, check/pull/install/build, and restart.
 
+- `bun run dev`/`start`/`trezi` go through `scripts/start-native.mjs`: the host
+  connects over XPC to the bundled Swift service, which takes the profile lock
+  and supervises Bun over private pipes. Bun is still the single writer of every
+  domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun spawns
+  the host, still under Swift's lock). See `docs/SWIFT-BACKEND-SERVICE.md`.
 - The chat runs in `main` via provider SDKs; output streams over `agent:*` IPC
   into Bun chat controllers, which send typed state to Swift.
 - Trezi **owns** the dev-server lifecycle of the target repo (never run the
@@ -299,6 +314,21 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   string, never add one, so Tailwind projects pay that turn too.)
 - **Inspect WebKit through its native Web Inspector.** There is no Electron CDP
   port. Use the native host test protocol for deterministic integration checks.
+- **In service mode the launcher reports the HOST's exit status**, and
+  `NSApp.terminate` calls `exit` itself — code after `application.run()` never
+  runs. Bun's status must travel in `quit {status}` / `serviceStopped {status}`
+  and is applied in `applicationWillTerminate`; otherwise a failing `--test`
+  smoke exits 0. Reconnect after a lost XPC connection must name the prior
+  epoch (`resume`): launchd silently starts a FRESH service instance, which
+  refuses (`recoveryRequired`) rather than launching a second Bun, but only
+  after launchd's ~10 s respawn throttle, so `serviceStopped` is final (no
+  reconnect, local shutdown). Frames are never replayed after an uncertain
+  send; only never-submitted frames queue. Never read a bridge pipe with
+  `FileHandle.read(upToCount:)`: it waits for the full count, so short lines
+  never arrive — use `readAvailable(upTo:)`. Never answer quit with
+  `.terminateLater` while waiting on main-queue work (modal-panel run loop);
+  cancel, drain, terminate again. An XPC service's stderr is discarded, so
+  Bun's stderr is the host's, passed over XPC (`attachDiagnostics`).
 - **Bun blocks postinstall for untrusted dependencies.** `esbuild` remains in
   `package.json#trustedDependencies` for its binary.
 - **The agent is denied writes under a target repo's `.trezi/` (and legacy `.dsgn/`)** (annotations,

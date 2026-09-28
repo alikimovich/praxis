@@ -3,8 +3,14 @@ import WebKit
 import CryptoKit
 import Security
 
+var serviceClient: ServiceClient?
+let serviceMode = CommandLine.arguments.contains("--service")
+/// Service mode: setup-time events wait for the client instead of reaching the terminal.
+var earlyServiceFrames: [Data] = []
 func emit(_ value: [String: Any]) {
     guard let data = try? JSONSerialization.data(withJSONObject: value), let line = String(data: data, encoding: .utf8) else { return }
+    if let serviceClient { serviceClient.send(data); return }
+    if serviceMode { earlyServiceFrames.append(data); return }
     print(line); fflush(stdout)
 }
 
@@ -67,6 +73,14 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     let world = WKContentWorld.world(name: "TreziPreview")
     let directory: String
     let ephemeral: Bool
+    var serviceTerminated = false
+    var serviceTerminating = false
+    var serviceFailed = false
+    /// Backend-reported status; the launcher returns the host's exit code in service mode.
+    var exitStatus: Int32 = 0
+    var serviceSignals: [DispatchSourceSignal] = []
+    var restartRequested = false
+    var restartProject: String?
     init(directory: String, ephemeral: Bool) { self.directory = directory; self.ephemeral = ephemeral; super.init() }
     func makeView(_ id: String) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -114,14 +128,18 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         canvas.changed = { [weak self] in self?.nativeLayout.layout() }
         window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
         installMenus()
-        DispatchQueue.global().async { [weak self] in
+        if serviceMode {
+            connectService()
+        } else {
+          DispatchQueue.global().async { [weak self] in
             while let line = readLine() {
                 guard let data = line.data(using: .utf8), let c = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
                 DispatchQueue.main.async { self?.command(c) }
             }
             DispatchQueue.main.async { self?.terminateHost() }
         }
-        emit(["event":"ready"])
+          emit(["event":"ready"])
+        }
     }
     func installMenus() {
         let menu = NSMenu()
@@ -173,6 +191,13 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         let name = c["view"] as? String ?? "main"
         let view = views[name]
         switch c["method"] as? String {
+        case "serviceRestart":
+            restartRequested = true
+            restartProject = c["project"] as? String
+            terminateHost()
+        case "serviceStopped":
+            if let status = c["status"] as? Int, status != 0 { exitStatus = 1 }
+            terminateHost()
         case "preferences":
             preferences = c["values"] as? [String: Any] ?? [:]
         case "webViews": reply(id, views.keys.sorted())
@@ -475,7 +500,9 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             let data = Data(base64Encoded: c["data"] as? String ?? "") ?? Data()
             task.didReceive(HTTPURLResponse(url: url, statusCode: c["status"] as? Int ?? 500, httpVersion: "HTTP/1.1", headerFields: c["headers"] as? [String: String])!)
             task.didReceive(data); task.didFinish()
-        case "quit": terminateHost()
+        case "quit":
+            if let status = c["status"] as? Int, status != 0 { exitStatus = 1 }
+            terminateHost()
         default: reply(id, error: "Unsupported native host command")
         }
     }
@@ -533,6 +560,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         NSApp.terminate(nil)
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
 }
 guard CommandLine.arguments.count >= 3 else {
     fputs("TreziHost requires the Bun service launcher. Start Trezi with bun run dev:native.\n", stderr)

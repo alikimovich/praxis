@@ -1,9 +1,11 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
+import type { Writable } from 'node:stream'
 import { createInterface } from 'node:readline'
 
 export class NativeBridge extends EventEmitter {
-  child: ChildProcessWithoutNullStreams
+  child?: ChildProcessWithoutNullStreams
+  private output: Writable
   readonly closed: Promise<void>
   private sequence = 0
   private pending = new Map<
@@ -16,14 +18,21 @@ export class NativeBridge extends EventEmitter {
   >()
   constructor(executable: string, directory: string, profile: string) {
     super()
-    this.child = spawn(executable, [directory, profile], { stdio: 'pipe' })
-    // close follows exit AND drained stdio; final host events may persist profile data.
-    this.closed = new Promise(resolve => this.child.once('close', () => resolve()))
-    this.child.stdin.on('error', (error) => {
+    const supervised = process.env.TREZI_SERVICE_SUPERVISED === '1'
+    this.child = supervised ? undefined : spawn(executable, [directory, profile], { stdio: 'pipe' })
+    const input = this.child?.stdout ?? process.stdin
+    this.output = this.child?.stdin ?? process.stdout
+    const lines = createInterface({ input })
+    // In service mode EOF is sent only after the host's final events drain.
+    this.closed = new Promise(resolve => {
+      if (this.child) this.child.once('close', () => resolve())
+      else lines.once('close', () => resolve())
+    })
+    this.output.on('error', (error) => {
       if ((error as NodeJS.ErrnoException).code !== 'EPIPE') this.emit('host-error', error)
     })
-    this.child.stderr.pipe(process.stderr)
-    createInterface({ input: this.child.stdout }).on('line', (line) => {
+    this.child?.stderr.pipe(process.stderr)
+    lines.on('line', (line) => {
       try {
         const message = JSON.parse(line)
         if (message.event === 'reply') {
@@ -38,19 +47,21 @@ export class NativeBridge extends EventEmitter {
         console.error('Invalid native host message:', error)
       }
     })
-    this.child.on('error', (error) => this.emit('host-error', error))
-    this.child.on('exit', () => {
+    this.child?.on('error', (error) => this.emit('host-error', error))
+    const disconnected = () => {
       for (const request of this.pending.values()) {
         clearTimeout(request.timer)
         request.reject(new Error('Native host closed'))
       }
       this.pending.clear()
       this.emit('closed')
-    })
+    }
+    if (this.child) this.child.once('exit', disconnected)
+    else lines.once('close', disconnected)
   }
   send(method: string, data: object = {}) {
-    if (this.child.stdin.destroyed) return
-    this.child.stdin.write(`${JSON.stringify({ method, ...data })}\n`)
+    if (this.output.destroyed) return
+    this.output.write(`${JSON.stringify({ method, ...data })}\n`)
   }
   request(method: string, data: object = {}, timeout = 30_000): Promise<any> {
     const id = ++this.sequence

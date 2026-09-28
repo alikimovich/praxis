@@ -2,6 +2,170 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Live reload can no longer miss a change (LKM-89 / S02)
+
+Manager verification of the merged tree: 114 unit checks passed, then
+`test:native` timed out at `managed reload` (`src/native/smoke-core.ts`). That step
+`text:apply`s `index.html` and waits for the preview to show the new text.
+
+The watcher under the supervised service was not failing. Earlier in the same run
+the islands smoke rewrote `index.html` and waited for the element its new script
+adds; only a live reload can produce it, and it passed. The pre-LKM-107 LKM-89
+run also passed `managed reload` through the service. Diagnosis from code (this
+worker's sandbox cannot bind ports, reach XPC or receive FSEvents; not
+reproduced here): live reload was edge-triggered with no memory. The step before
+`managed reload` edits `native-style.tsx`, and every fixture change reloads the
+page. The `index.html` write follows a few host round trips later, which now
+cross XPC. A `change` sent while the old page's EventSource has closed and the
+new page's has not opened goes to zero clients. A page that fetched `index.html`
+just before the write then stays stale for good.
+
+`static-server.ts` is now level-triggered. Each watched change bumps a version.
+A served page embeds the version it was read at (captured before the read) and
+connects with `?v=`. The stream announces the current version immediately when
+it differs, and clients reload only on a mismatch. Watcher `error` and setup
+failures are now written to the project log and stderr instead of being
+swallowed. `service-process` now runs the real static server inside the
+backend launched by the real XPC service and checks four things. An edit
+broadcasts a reload. A page that missed the broadcast reloads when its stream
+connects. A current page never reloads. The watcher reports no failure.
+`managed reload` is unchanged.
+
+## 2026-09-28 — Resolve the S02 candidate merge against LKM-107 (LKM-89 / S02)
+
+The previous manager verification passed: 113 unit checks, both typechecks and
+`test:native` (NATIVE CORE PASS). Review and merge stopped at the candidate merge
+instead, because `candidate` had meanwhile taken LKM-107. Both branches changed the
+Shadow Light reveal, so `src/native/Chat.swift` and
+`src/native/smoke-shadow-island.ts` conflicted. A trial merge of `candidate` into
+the S02 head, done in a throwaway clone, reproduced exactly those two conflicts.
+
+LKM-107 fixes the race that S02's capture retry only worked around: a reveal is
+re-issued against measured anchor geometry until SwiftUI applies it. The smoke then
+asserts the acknowledged `revealAppliedRevision` before capturing. S02 now takes
+LKM-107's version of both files, so the `messageTops` inspect field and the
+three-attempt re-reveal loop are gone. Every other file came from the clean
+auto-merge (service build/sign steps, `Host.swift` service mode, test tiers,
+docs). The worktree now holds that merged tree, so `native-chat-reveal` joins
+the unit tier here. The service code is unchanged. Per-file `git merge-file`
+(with the `merge=union` driver for this log) shows candidate ← this tree merges
+with no conflicts and yields exactly this tree.
+
+Verifying the merged tree also turned up a real `service-process` flake. One
+parallel unit run killed it with SIGKILL right after its final PASS line; it
+passed alone. The cause: the fixture polled for a pid file and read it as soon
+as it *existed*. A backend can create that file before writing its digits (a
+racing probe saw it empty in 164 of 300 reads), and `Number('')` is 0. That 0
+stayed in the cleanup set after the real pid was removed, and the `finally`
+ran `process.kill(-0, 'SIGKILL')`, which is `kill(0)`: the test's own process
+group. The Swift guardian fixture had the same race, where the force-unwrapped
+`Int32("")!` crashes instead. Fixed: the backend fixture renames its pid files
+into place, both readers wait for a complete pid > 1, and group cleanup refuses
+pids ≤ 1. A regression check at the top of `service-process` asserts that an
+empty file and a `0` are both rejected and that killing group 0 or NaN is a
+no-op.
+
+## 2026-09-28 — Native smoke through the service: quit hang, lost logs, capture race (LKM-89 / S02)
+
+Manager verification: all 113 unit checks pass; `test:native` ran through
+the service path, failed its first Shadow Light capture at 15:31:26 (5 s into
+the smoke) and then hung until the 300 s spawn timeout. The error text was
+lost: an XPC service's stderr is discarded, and Bun inherited it. Diagnosed
+from artifacts and code, without running the GUI tier:
+- **Shutdown hang.** Quit answered `.terminateLater`, which runs AppKit in a
+  modal-panel run loop. The client's shutdown reply, callbacks and its own 10 s
+  timeout all hop through `DispatchQueue.main`; if that queue is not serviced
+  there, nothing can finish the drain. The host now returns `.terminateCancel`,
+  drains in the normal run loop, then terminates again, and a 20 s watchdog
+  bounds shutdown. A windowless probe could not settle the run-loop question
+  here (the sandbox denies WindowServer), so this removes the dependency rather
+  than relying on it.
+- **Lost diagnostics.** The client passes its stderr over XPC before the first
+  hello, and the supervisor gives it to Bun as fd 2 (duplicated above the
+  reserved slots, like the profile lease). The fixture asserts a backend stderr
+  line reaches the client.
+- **Deadlock hazard.** The owner queue wrote to Bun's stdin synchronously while
+  the stdout reader waited on the same queue (`queue.sync`), so two full pipes
+  could deadlock. Writes moved to a serial writer queue, and delivery is async;
+  stop drains accepted writes (bounded 2 s) before EOF.
+- **Capture race.** `failure.png` and `shadow-light-initial.png` show the "top"
+  capture scrolled to the bottom (token-offer card visible, island header cut
+  off), while the bottom capture was placed correctly. `chatInspect` now reports
+  message tops. The smoke re-reveals (up to three attempts) when the revealed
+  top is not held before and after capture. All OCR label assertions are
+  unchanged. The underlying late scroll is not identified. (Superseded by
+  LKM-107's acknowledged reveal; see the merge-resolution entry above.)
+
+Worker checks: both typechecks, `bun run build`, and the full unit tier (113
+pass) outside the sandbox, including `service-process` with its new diagnostics
+assertion. The native tier was not run by the worker.
+
+## 2026-09-28 — Fix XPC relay stall found by manager verification (LKM-89 / S02)
+
+Manager verification: 112 unit checks passed; `service-process` timed out in its
+XPC section, which the worker sandbox cannot reach (launchd lookup denied).
+Reproduced outside the sandbox and gave each fixture wait the calling step, which
+named the legacy relay. Root cause: `FileHandle.read(upToCount: 65536)` blocks on
+a pipe until the full count or EOF (a standalone probe stays blocked with a short
+line pending), so no Bun → host line was ever relayed. Both the XPC relay
+and the rollback launcher's stdout copier now use `readAvailable(upTo:)` (POSIX
+`read`, EINTR-safe); the guardian fixture pins short-line and EOF reads.
+
+The next failure was in this session's own backend-death case: after
+`serviceStopped` the client reconnected, and launchd's respawn throttle held the
+hello until the client's 10 s timeout. The real host would likewise have waited
+~10 s to quit after a backend crash. `serviceStopped` is now final in the client:
+it invalidates, never reconnects, does not report a failure over the service's
+status, and completes shutdown locally. The fixture requires that shutdown within
+3 s. The raw-client case still proves a fresh instance refuses `resume`.
+
+`test/service-process.mjs` now passes in full (supervision, rollback, codec and
+the XPC half) twice in a row through the unit runner, alongside service-contract,
+managed-child, native-service-launch and native-supervised-bridge. Both
+typechecks and `bun run build` pass. The native GUI tier is left to the manager.
+
+## 2026-09-28 — Separate Swift service, XPC and legacy supervision (LKM-89 / S02)
+
+S01 is accepted and merged into the candidate (51fb928); S02 builds on it. The
+host now connects over versioned, signed XPC to a bundled Swift service, which
+takes the profile lock and supervises Bun over private pipes. No domain writer
+moved: this step changes process ownership and profile exclusion only. Details,
+protocol and rollback: `docs/SWIFT-BACKEND-SERVICE.md`.
+
+Continuing a prior session's implementation, review found and fixed four
+behaviours that the fixture did not cover:
+- **Masked test failures.** The launcher returns the host's exit status, but
+  the host always exited 0 (`NSApp.terminate` exits before code after
+  `application.run()`). Bun now sends its status in `quit`, the service in
+  `serviceStopped`, and the host applies it in `applicationWillTerminate`. Test
+  mode sets `exitCode` before cleanup so the status is known when `quit` is sent.
+- **Second Bun after a service restart.** launchd restarts a lost XPC service
+  on demand; the reconnect hello launched a fresh Bun before the client noticed
+  the epoch change. Reattach now names the epoch (`resume`) and a fresh instance
+  refuses with `recoveryRequired` without launching.
+- **Fatal UI events during reconnect.** Any emit in the 0.25 s reconnect window
+  terminated the app. Never-submitted frames (pre-handshake and reconnecting)
+  now queue in a bounded outbox, still never replaying uncertain sends.
+  Setup-time emits before the client existed went to the terminal; they are
+  buffered too.
+- **Clean exit reported as failure.** Bun's stdout EOF raced its reaped status;
+  the EOF stop is deferred 1 s so the real status wins. Terminal signals to the
+  host now drain through the service.
+
+The fixture adds stale-epoch/duplicate hello refusals, a frame queued mid
+reconnect, backend death → `serviceStopped {status: 1}` → fail-closed reconnect
+with no replacement Bun, and a peer-rejection assertion that a lookup failure
+cannot satisfy. The guardian fixture honours `TMPDIR` and avoids atomic writes
+that stage outside it. Production XPC plist uses `dispatch_main`, matching the
+tested fixture.
+
+Worker checks: both typechecks; `bun run build`; `test/service-process.mjs
+--supervision-only` (profile contention, legacy-lock refusal, startup failure,
+child death, repeated shutdown, descendant/detached cleanup, service-crash drain,
+codec, rollback); managed-child, native-service-launch, native-supervised-bridge,
+native-bridge-close, trezi-cli. Not run by the worker: the XPC half (Seatbelt
+blocks launchd lookup: "Sandbox restriction"), native-shutdown (sandbox denies
+port binding) and the native GUI tier — manager verification required.
 ## 2026-09-28 — Scroll a reveal's row in by its own edge (LKM-107)
 
 The reading-area rule in the entry below broke the Shadow Light smoke (before

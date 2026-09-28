@@ -17,6 +17,19 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
 
+## Swift service, XPC and legacy supervision (LKM-89 / S02)
+
+- [x] Separate signed XPC service bundled in the app; versioned control codec with closed negotiation and signed-peer validation both ways.
+- [x] Swift-owned profile exclusion (`service.lock` flock + legacy `native.lock` reservation) held across service-crash drain by the backend guardian.
+- [x] Supervise legacy Bun and detached servers/Metro through lifetime-pipe guardians; Bun stays the single domain writer.
+- [x] Reattach requires the negotiated epoch; a restarted service refuses (`recoveryRequired`) instead of launching a second Bun. No replay of uncertain sends; never-submitted frames queue in a bounded outbox.
+- [x] Propagate Bun's exit status through `quit`/`serviceStopped` to the host and launcher, so failing `--test` runs cannot exit 0; terminal signals drain through the service.
+- [x] Launch-time owner switch (`TREZI_BACKEND_OWNER=swift|legacy`) through `scripts/start-native.mjs`; rollback tested under the same lock with newest data retained.
+- [x] Real-process fixture `test/service-process.mjs`; supervision, guardian, crash-drain, codec and rollback sections pass in the worker sandbox.
+- [x] Fix the XPC relay stall from manager verification (pipe reads waited for 64 KiB) and make `serviceStopped` final so a crashed backend no longer waits on launchd's respawn throttle; full `test/service-process.mjs` passes.
+- [x] Native smoke through the service: drain without `.terminateLater` (plus 20 s watchdog), pass host stderr to Bun over XPC, remove the two-pipe deadlock hazard, re-reveal disturbed Shadow Light captures.
+- [ ] Manager: rerun unit + `bun run test:native` through the service path (Bun's output is visible again); independent review and candidate integration.
+
 ## Swift migration contracts (LKM-88 / S01)
 
 - [x] Add shared versioned Swift/TypeScript DTOs, strict codecs and cross-language golden fixtures without changing a writer.
@@ -29,7 +42,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Reconcile candidate Apple Intelligence tracking with S01 tracking; verify a conflict-free three-way TASKS merge without changing Git metadata.
 - [x] Fix reviewed method-authorization collisions with structured pairs and align Swift slash escaping; pass 100 cross-language cases.
 - [x] Reject non-finite TypeScript values before serialization; verify nine direct/nested rejection cases and fifteen valid numeric/null controls.
-- [ ] Manager: rerun verification and independent review after contract fixes, then candidate integration; prior revision passed 109 unit checks and native integration per review feedback.
+- [x] Manager: rerun verification and independent review after contract fixes, then candidate integration (accepted; merged into the candidate as 51fb928).
 
 ## Shadow Light (LKM-86)
 

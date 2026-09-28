@@ -15,8 +15,8 @@ services. `bun run dev` now launches this native runtime; Electron has been remo
 Requires macOS 13.3+, Bun, command-line tools with the macOS 26 SDK, and
 `bun install`. Liquid Glass requires macOS 26; older systems use native visual
 effect materials. This migration was verified on macOS 26.4.1, not every supported
-OS version. Start through Bun: the internal `Trezi Native.app` is a host
-subprocess, not a standalone installer.
+OS version. Start through `scripts/start-native.mjs` (via the CLI/dev/start scripts):
+the source-built host requires launch arguments and its bundled XPC service.
 
 ## Native ownership
 
@@ -79,7 +79,8 @@ collection IDs, extra JSON fields and draft undo are retained.
 ## Build and transport
 
 `scripts/build-native.mjs` bundles the Bun entrypoint and isolated preview preload,
-compiles the Swift host and copies its native image/cat assets. It removes stale
+compiles and ad-hoc signs the Swift host, bundled XPC service and rollback guard,
+and copies native image/cat assets. It removes stale
 `out/native/renderer` and `preload.js` from older hybrid builds. The build audits
 its dependency graph against application renderer/React imports and records
 `out/native/build-inputs.json`. There is no Vite/Tailwind application build or
@@ -89,8 +90,9 @@ The native platform (`src/native/platform.ts`) is imported directly by backend
 services. Its `main` object is a trusted service sender, not a hidden browser. Swift refuses creation of any
 application WebView other than `preview`.
 
-Swift and Bun exchange JSON over subprocess pipes. AppKit actions go directly to
-Bun controllers. Preview messages are stamped by their actual WebView and limited
+The host connects to the separate Swift service through authenticated, versioned
+XPC. The service relays existing AppKit actions to Bun controllers over private
+pipes; Bun remains the sole writer of unmigrated domains. Preview messages are stamped by their actual WebView and limited
 to allowed selection/comment/style/layer events. The preview cannot invoke agent,
 filesystem or application commands. Its script runs in a named isolated
 WKContentWorld, and preview storage is ephemeral. Main-frame navigation stays on
@@ -106,7 +108,9 @@ Repeated WebKit process failures stop automatic reload and show a retry surface.
 ## Profiles and lifecycle
 
 Backend state lives in `~/Library/Application Support/Trezi Native`, separately
-from Electron. A profile lock prevents concurrent native writers. Workspace state
+from Electron. Swift holds a shared-launcher flock and reserves the legacy PID lock
+before starting Bun. A guardian retains the flock during service-crash cleanup.
+Workspace state
 lives in `workspace.json`; versioned native UI preferences live in
 `preferences.json`. Earlier hybrid builds imported legacy native browser values
 once; the React-free build retains those files and no longer creates a WebView to
@@ -117,10 +121,12 @@ Custom endpoint keys use AES-GCM with the encryption key in macOS Keychain. Valu
 reach the cipher helper through stdin, not argv. No real credentials are written
 by the integration tests.
 
-Trezi owns project servers. Quit, terminal SIGINT/SIGTERM/SIGHUP, and host pipe
-closure await managed process-group cleanup: SIGTERM, a one-second grace period,
-then SIGKILL for survivors. Ownership survives shell exit; explicit process exit
-has a synchronous forced-stop fallback. Repeated terminal signals share one cleanup.
+Trezi owns project servers. Quit and terminal signals drain Bun under Swift
+supervision; connection loss allows a bounded same-process reconnect before drain.
+Lifetime guardians stop Bun and detached server/Simulator groups even after an
+owner crash. Backend cleanup has a one-second grace; detached guards use half a
+second before group SIGKILL. Repeated shutdown joins existing cleanup. See the
+[service boundary](SWIFT-BACKEND-SERVICE.md) for protocol and rollback limits.
 Native dialog windows are dismissed during host shutdown. Updates
 use the current tracked branch, require a clean checkout and no running chat or
 unsaved source/content/composer drafts, fast-forward, install with Bun, rebuild native and

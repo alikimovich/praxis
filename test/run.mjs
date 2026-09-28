@@ -14,6 +14,7 @@ const ROOT = dirname(TEST_DIR);
 // Backend logic checks run independently of the native desktop.
 const UNIT = [
   "service-contract",
+  "service-process",
   "native-visible-capture",
   "rename-compat",
   "source-stamp",
@@ -22,6 +23,9 @@ const UNIT = [
   "codex-mcp",
   "native-shutdown",
   "native-bridge-close",
+  "native-service-launch",
+  "native-supervised-bridge",
+  "managed-child",
   "native-preview-recovery",
   "native-workspace",
   "native-workspace-controller",
