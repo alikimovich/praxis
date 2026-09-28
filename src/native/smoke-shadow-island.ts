@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { NativeBridge } from './bridge'
+import { preparePreviewInput } from './smoke-input'
 import { nativeChat, nativeIslands } from './chat-runtime'
 import { serviceEvents } from './platform'
 import { runChatIslandTool } from '../main/chat-islands'
@@ -72,6 +73,8 @@ document.body.append(card);
     for (const bottom of [false, true]) {
       const revealed = await host.request('revealChatIsland', { island: result.id, bottom })
       await wait(async () => (await host.request('chatInspect')).visibleMessageIDs.includes(revealed.message))
+      // Activation is asynchronous; visible message IDs do not prove foreground readiness.
+      await preparePreviewInput(host, true)
       await new Promise(resolve => setTimeout(resolve, 350))
       const image = await host.request('captureVisibleChat')
       assert.ok(image.width > 200 && image.height > 200, 'Nonempty visible chat viewport')

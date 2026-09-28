@@ -7,6 +7,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 - [x] Use the native outline folder symbol for every project row, preserving metadata, layout, selection tint and actions.
 - [x] Run focused non-GUI checks.
+- [x] Repair Shadow Light capture fixture foreground readiness after manager review failure, preserving strict capture/OCR checks.
 - [ ] Manager: inspect foreground selected/unselected/hover states at standard and narrow widths; verify open/select/context menu/reorder and run required native checks.
 
 ## Local Apple Intelligence exploration (2026-09-28)

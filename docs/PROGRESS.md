@@ -2,6 +2,23 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Sidebar review verification fixture (LKM-105 feedback)
+
+Manager's worktree verification passed, but the independent review run failed
+before Shadow Light capture with "Chat window is not in the foreground".
+The fixture requested activation during island reveal, then waited for message
+visibility and a fixed delay without checking activation completion. Candidate
+`771ce3d` has the same fixture and no foreground-readiness fix.
+
+Reuse the existing bounded `preparePreviewInput` readiness check before each
+Shadow Light capture, preserving the responder. Keep foreground checks before
+and after capture, OCR assertions and failure behavior intact. No product or
+folder-icon changes are needed. Manager must rerun desktop verification under
+the shared lock; this worker runs only focused non-GUI checks.
+TypeScript/native typechecks, native boundary, shell-controller, docs-link and
+diff whitespace checks pass. Desktop behavior remains manager-unverified for
+this repair.
+
 ## 2026-09-28 — Consistent sidebar folder icons (LKM-105)
 
 Render every project row with the native outline `folder` symbol used by Open
