@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — One rounded composer container (LKM-87)
+
+Move the existing attachment/provider/model/permission control row into the
+composer's native glass content and extend the rounded surface below it.
+Preserve the row's left/right alignment, text viewport, send-button position,
+draft sizing and existing action handlers. Remove the chat's external gradient
+and footer fill, plus the unused fade view/build entry; retain message/status
+clearance so scrolling behavior stays unchanged.
+
+Full Swift source typechecking, Bun TypeScript/native checks, the windowless
+composer layout regression, native chat-controller checks and docs-links pass.
+No GUI suite or manager verification command was run. Manager must verify
+rendering and attachment/model/Auto/composition/submission interactions under
+the shared desktop lock, then complete independent review and integration.
+
 ## 2026-09-28 — Capture the native fixture within its owning process
 
 Manager verification passed all unit checks but the external screencapture

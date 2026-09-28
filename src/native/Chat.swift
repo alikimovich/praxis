@@ -44,7 +44,9 @@ final class ChatModel: ObservableObject {
     @Published var composerHeight: CGFloat = 0
     var messageFrames: [String: CGRect] = [:]
     var bottomPosition: CGFloat = 0
-    var bottomInset: CGFloat { composerHeight + ChatComposerFade.footerHeight + ChatComposerFade.transitionHeight }
+    // Preserve message/status clearance above the floating composer.
+    static let statusHeight: CGFloat = 28
+    var bottomInset: CGFloat { composerHeight + Self.statusHeight + 40 }
     func islandAction(_ island: IslandView, action: String, values: [String: Any] = [:]) {
         guard let chat = snapshot?.chat else { return }
         controlInteraction += 1
@@ -189,18 +191,6 @@ struct ChatConversation: View {
                     .onChange(of: model.controlInteraction) { _ in follows = false }
                     .onChange(of: model.followRevision) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
                     .onChange(of: model.snapshot?.chat) { _ in follows = true; sticky = nil; proxy.scrollTo("bottom", anchor: bottomAnchor) }
-                    .overlay(alignment: .bottom) {
-                        VStack(spacing: 0) {
-                            LinearGradient(stops: [
-                                .init(color: .clear, location: 0),
-                                .init(color: Color(NSColor.windowBackgroundColor).opacity(0.5), location: 0.5),
-                                .init(color: Color(NSColor.windowBackgroundColor), location: 1)
-                            ], startPoint: .top, endPoint: .bottom)
-                            .frame(height: model.bottomInset)
-                            Color(NSColor.windowBackgroundColor).frame(height: ChatComposerFade.footerHeight)
-                        }
-                        .allowsHitTesting(false)
-                    }
                     .overlay(alignment: .bottomTrailing) {
                         if !follows { Button { follows = true; proxy.scrollTo("bottom", anchor: bottomAnchor) } label: { Image(systemName: "arrow.down") }.help("Scroll to latest message").padding(12).padding(.bottom, model.bottomInset) }
                     }
@@ -208,7 +198,7 @@ struct ChatConversation: View {
                         Text(model.snapshot?.status ?? "")
                             .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
                             .lineLimit(1).help(model.snapshot?.statusDetail ?? model.snapshot?.status ?? "")
-                            .padding(.horizontal, 18).frame(height: ChatComposerFade.footerHeight)
+                            .padding(.horizontal, 18).frame(height: ChatModel.statusHeight)
                             .padding(.bottom, model.composerHeight)
                             .allowsHitTesting(false)
                     }

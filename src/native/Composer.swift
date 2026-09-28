@@ -140,19 +140,18 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         skillList.wantsLayer = true; skillList.layer?.cornerRadius = 12
         skillList.layer?.borderWidth = 1; skillList.layer?.borderColor = NSColor.separatorColor.cgColor
         skillList.setAccessibilityLabel("Skills and commands"); skillList.isHidden = true
-        controls.translatesAutoresizingMaskIntoConstraints = false; addSubview(controls)
-        for view in [chips, attachments, scroll, sendButton] { view.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(view) }
+        for view in [chips, attachments, scroll, sendButton, controls] { view.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(view) }
         chipsHeight = chips.heightAnchor.constraint(equalToConstant: 0)
         attachmentsHeight = attachments.heightAnchor.constraint(equalToConstant: 0)
         formTop = backdrop.topAnchor.constraint(equalTo: topAnchor)
         NSLayoutConstraint.activate([
             queuedMessages.topAnchor.constraint(equalTo: topAnchor), queuedMessages.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14), queuedMessages.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14), queuedMessages.bottomAnchor.constraint(equalTo: backdrop.topAnchor, constant: 16),
-            formTop, backdrop.leadingAnchor.constraint(equalTo: leadingAnchor), backdrop.trailingAnchor.constraint(equalTo: trailingAnchor), backdrop.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -8),
-            sendButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10), sendButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -10),
+            formTop, backdrop.leadingAnchor.constraint(equalTo: leadingAnchor), backdrop.trailingAnchor.constraint(equalTo: trailingAnchor), backdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
+            sendButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10), sendButton.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -18),
             chips.topAnchor.constraint(equalTo: content.topAnchor, constant: 10), chips.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), chips.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -12), chipsHeight,
             attachments.topAnchor.constraint(equalTo: chips.bottomAnchor), attachments.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), attachments.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), attachmentsHeight,
             scroll.topAnchor.constraint(equalTo: attachments.bottomAnchor, constant: 4), scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), scroll.bottomAnchor.constraint(equalTo: sendButton.topAnchor, constant: -5),
-            controls.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10), controls.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10), controls.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8), controls.heightAnchor.constraint(equalToConstant: 26)
+            controls.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10), controls.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10), controls.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8), controls.heightAnchor.constraint(equalToConstant: 26)
         ])
         for overlay in [readyBeam, buttonBeam] { addSubview(overlay) }
         isHidden = true
@@ -168,7 +167,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         // The extra fragment includes the caret's empty line after a trailing newline.
         let used = max(manager.usedRect(for: container).maxY, manager.extraLineFragmentRect.maxY)
         let textHeight = ceil(max(manager.defaultLineHeight(for: text.font ?? NSFont.systemFont(ofSize: 14)), used) + text.textContainerInset.height * 2)
-        // 8 footer inset + 26 controls + 8 gap + 14 top + 30 send + 10 bottom + 5 text/send gap.
+        // 8 bottom inset + 26 controls + 18 send/controls gap + 14 top + 30 send + 5 text/send gap.
         let desired = max(128, textHeight + 101 + (hasContext ? 22 : 0)) + (hasAttachments ? ComposerAttachments.rowHeight : 0)
         let limit = min(368, max(128, availableHeight * 0.5))
         return min(availableHeight, min(desired, limit) + queueHeight)
