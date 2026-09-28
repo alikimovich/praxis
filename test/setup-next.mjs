@@ -123,23 +123,25 @@ try {
   assert.match(transformed.code, /data-trezi-component-source/)
   assert.match(transformed.code, /use client/)
   assert.ok(transformed.map.mappings)
-  for (const parameter of ['props', '{ label }', '{ label } = {}']) {
-    for (const canonical of [null, 'authored-current.tsx:9:0', '']) {
-      const canonicalProp = canonical === null ? '' : ` data-trezi-component-source="${canonical}"`
-      const source = `function Card(${parameter}) { return <button>Card</button> }
-        function App() { return <Card data-praxis-source="authored-legacy.tsx:4:0" data-praxis-component-source="authored-legacy.tsx:4:0"${canonicalProp} /> }`
-      let output
-      const transform = source => {
-        loaderModule.exports.call({ resourcePath: join(root, 'src/Legacy.tsx'), getOptions: () => ({ root }),
-          callback(error, code) { if (error) throw error; output = code } }, source)
-        return output
-      }
-      for (const code of [transform(source), transform(output)]) {
-        const js = new Bun.Transpiler({ loader: 'tsx', tsconfig: { compilerOptions: { jsx: 'react', jsxFactory: '__jsx' } } }).transformSync(code)
-        const jsx = (type, props, ...children) => typeof type === 'function' ? type(props || {}) : { type, props, children }
-        const rendered = new Function('__jsx', js + '; return App()')(jsx)
-        assert.equal(rendered.type, 'button')
-        assert.equal(rendered.props['data-trezi-component-source'], canonical ?? 'authored-legacy.tsx:4:0')
+  for (const hostStamp of ['', 'data-praxis-source="authored-legacy.tsx:4:0"']) {
+    for (const parameter of ['props', '{ label }', '{ label } = {}']) {
+      for (const canonical of [null, 'authored-current.tsx:9:0', '']) {
+        const canonicalProp = canonical === null ? '' : ` data-trezi-component-source="${canonical}"`
+        const source = `function Card(${parameter}) { return <button>Card</button> }
+          function App() { return <Card ${hostStamp} data-praxis-component-source="authored-legacy.tsx:4:0"${canonicalProp} /> }`
+        let output
+        const transform = source => {
+          loaderModule.exports.call({ resourcePath: join(root, 'src/Legacy.tsx'), getOptions: () => ({ root }),
+            callback(error, code) { if (error) throw error; output = code } }, source)
+          return output
+        }
+        for (const code of [transform(source), transform(output)]) {
+          const js = new Bun.Transpiler({ loader: 'tsx', tsconfig: { compilerOptions: { jsx: 'react', jsxFactory: '__jsx' } } }).transformSync(code)
+          const jsx = (type, props, ...children) => typeof type === 'function' ? type(props || {}) : { type, props, children }
+          const rendered = new Function('__jsx', js + '; return App()')(jsx)
+          assert.equal(rendered.type, 'button')
+          assert.equal(rendered.props['data-trezi-component-source'], canonical ?? 'authored-legacy.tsx:4:0')
+        }
       }
     }
   }

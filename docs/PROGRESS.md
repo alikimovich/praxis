@@ -2,6 +2,13 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-27 — Preserve component-only legacy JSX locations
+
+Guard JSX component-source generation independently of host stamps so a legacy
+component-only location cannot be shadowed by generated canonical coordinates.
+Extend the full Next loader/rendered-output matrix to both component-only and
+host-plus-component legacy stamps, including repeated transforms.
+
 ## 2026-09-27 — Forward legacy Next component instance stamps
 
 The generated Next loader now reads canonical component-source props with legacy

@@ -37,7 +37,7 @@ module.exports = function treziSource({ types: t }) {
           !isFragment &&
           name &&
           (name.type === 'JSXMemberExpression' || name.type === 'JSXIdentifier')
-        if (isComponent) {
+        if (isComponent && !p.node.attributes.some(a => ['data-trezi-component-source', 'data-praxis-component-source'].includes(a.name?.name))) {
           p.node.attributes.unshift(
             t.jsxAttribute(t.jsxIdentifier('data-trezi-component-source'), t.stringLiteral(where))
           )
