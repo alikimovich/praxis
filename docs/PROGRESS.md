@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — Workflow owner repair: bounded journal, best-effort diagnosis memory (LKM-100 / S13)
+
+Independent review found two defects. First, the journal grew without limit: `prune()` kept
+every failed/cancelled/interrupted record, and runs refused before their first effect
+(pull with busy agents or a dirty tree, "Not signed in", a dirty Trezi checkout) can never be
+resumed or pruned. Now such stepless runs keep the newest 20, runs that began a step keep the
+newest 5 per repository and kind, superseded/dismissed keep 10, results 100. Second,
+`diagnose:run` failed outright when the diagnosis memory refused a write (a damaged
+`diagnostics.json`, an oversized proposal, the service stopping), where the legacy write could
+never suppress the diagnosis. The memory read, write and `diagnose:record` are now best-effort
+(logged). `test/workflow-owner.mjs` gained a bounded-journal case (25 refused pulls, repeated
+"nothing to publish", refused Trezi updates, restart) and extends the damaged-file case
+through the real `diagnose:*` handlers.
+
 ## 2026-09-29 — Swift workflow owner: publishing, remote Git, setup, diagnostics, update (LKM-100 / S13)
 
 The tenth transfer, on the LKM-99 candidate. Details, the protocol, the partial-effect

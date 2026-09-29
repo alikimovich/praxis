@@ -6,6 +6,9 @@
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { ipcMain } from '../../src/native/platform.ts'
+import { registerDiagnoseIpc } from '../../src/main/diagnose.ts'
+import { setWorkflowOwner } from '../../src/main/workflow-owner.ts'
 
 export async function durability({ world, start, legacy, snapshot, git, write, commit, describe, log }) {
   const gh = w => w.gh().counts ?? {}
@@ -212,7 +215,55 @@ export async function durability({ world, start, legacy, snapshot, git, write, c
     await assert.rejects(owner.rememberDiagnosis(w.local, { signature: 'abc2', summary: 'x', steps: [], seenBefore: false }), error => error.code === 'recoveryRequired')
     assert.equal(readFileSync(join(w.profile, 'diagnostics.json'), 'utf8'), '{broken')
     assert.equal(await owner.recallDiagnosis(w.local, 'abc1'), null)
+    // The memory is best-effort: with the file damaged (or the write refused) the user
+    // still gets the diagnosis, and recording their choice does not fail either.
+    const handlers = {}, handle = ipcMain.handle
+    ipcMain.handle = (channel, handler) => { handlers[channel] = handler }
+    registerDiagnoseIpc()
+    ipcMain.handle = handle
+    setWorkflowOwner(owner)
+    try {
+      const failure = 'dyld: Library not loaded: /opt/homebrew/lib/libssl.dylib\nNode found at: /opt/homebrew/Cellar/node/1/bin/node\nAbort trap: 6'
+      const diagnosis = await handlers['diagnose:run']({}, w.local, failure, 'expo run')
+      assert.match(diagnosis.summary, /Node binary/)
+      assert.ok(diagnosis.steps.length > 0)
+      assert.equal(await handlers['diagnose:run']({}, w.local, failure).then(d => d.summary), diagnosis.summary, 'and again, every failure')
+      await handlers['diagnose:record']({}, w.local, diagnosis.signature, 'applied')
+      assert.equal(readFileSync(join(w.profile, 'diagnostics.json'), 'utf8'), '{broken', 'still never overwritten')
+      await assert.rejects(owner.rememberDiagnosis(w.local, { ...diagnosis, steps: Array.from({ length: 51 }, (_, i) => ({ text: `step ${i}`, scope: 'repo' })) }), error => error.code === 'invalidRequest')
+    } finally { setWorkflowOwner(null) }
     log('durability rollback both ways')
+  }
+
+  // The journal stays bounded: runs refused before their first effect (nothing to resume)
+  // leave no record behind, and runs that stopped after some step keep only the newest few.
+  {
+    const w = world('bounded'), f = await start(w), owner = f.workflows()
+    const dir = join(w.profile, 'service/workflows')
+    const files = () => readdirSync(dir).filter(name => name.endsWith('.json')).length
+    const pull = { action: 'pull', ref: 'refs/remotes/origin/main', expectedBranch: 'trezi/main' }
+    for (let i = 0; i < 25; i++) assert.equal((await owner.remoteUpdate(w.local, pull, true)).ok, false)
+    const refused = (await owner.workflows()).filter(r => r.kind === 'remoteUpdate')
+    assert.equal(refused.length, 20, 'refused runs (no step began) keep only the newest 20 records')
+    assert.ok(refused.every(r => r.state === 'failed' && r.steps.length === 0))
+    assert.equal(files(), 20)
+    for (let i = 0; i < 13; i++) assert.equal((await owner.publish(w.local, 'merge', describe)).error, 'Nothing to publish — no changes since main.')
+    const publishes = (await owner.workflows()).filter(r => r.kind === 'publish')
+    // Each refusal began a step and left a receipt; the next request took it over (superseded).
+    assert.deepEqual([publishes.filter(r => r.state === 'failed').length, publishes.filter(r => r.state === 'superseded').length], [1, 10],
+      'the newest run stays resumable, only the newest 10 superseded ones are kept')
+    assert.equal(files(), 20 + 11)
+    // A refused update of a dirty checkout counts against the same bound.
+    const dirty = join(w.base, 'trezi-checkout')
+    git(w.base, 'clone', '-q', w.origin, dirty); write(dirty, 'a.txt', 'local edit\n')
+    for (let i = 0; i < 6; i++) assert.match((await owner.update(dirty)).error, /local changes/)
+    assert.equal(files(), 20 + 11)
+    const total = (await owner.workflows()).length
+    // A restart loads only what is kept.
+    await f.stop()
+    const again = await start(w)
+    assert.equal((await again.workflows().workflows()).length, total)
+    log('durability bounded journal')
   }
 
   // Redaction: credentials echoed by git or gh never reach an answer or the journal.

@@ -50,7 +50,11 @@ coordinator's lane.
 - **Journal first.** A workflow is a record before anything runs; each step's intent is on
   disk (atomic replace, fsync) before its first effect, and its receipt after. At launch a
   record found `running` or `describe` is `interrupted` and its unfinished steps
-  `uncertain`. Finished records are kept (100 most recent) as receipts.
+  `uncertain`. The journal is bounded: a failed or cancelled run with no step (refused before
+  its first effect: not signed in, dirty checkout, busy agents) has nothing to reconcile, so
+  only the newest 20 remain (enough to answer a lost reply to a refusal); runs that began a
+  step and stopped keep the newest 5 per repository and kind (only the last is resumed);
+  superseded and dismissed records keep 10; finished results keep 100.
 - **One operation, one effect.** Every request carries an operation ID. A request re-sent
   after a lost reply (Bun's client asks again with the same ID when a reply does not arrive
   in time) is answered from the record, or joins the run still under way. So a lost reply
@@ -84,7 +88,9 @@ coordinator's lane.
   legacy writer followed it). Removal takes the fixed list only and never goes through a
   linked `.trezi`, `.praxis` or `.dsgn`. A hand-edited helper is kept.
 - **Diagnoses.** Same file and bytes as the legacy store; a damaged file is refused and
-  kept (the legacy store read it as empty and overwrote it on the next save).
+  kept (the legacy store read it as empty and overwrote it on the next save). Bun treats the
+  memory as best-effort, as before: a refused read or write is logged and the user still gets
+  the diagnosis (`diagnose:run`, `diagnose:record`).
 - **Test hooks.** `WORKFLOW_FAULT` crash points and the reply-dropping command exist only
   in the fixture (`test/fixtures/workflow-owner/main.swift`); nothing on the pipe exposes them.
 
@@ -159,8 +165,9 @@ Bun's auto-install off, so no real tool, GitHub or registry is reached):
   crashing and failing after creating the repository, install and build failures resumed
   without a second pull, a crash after the pull, a project install resumed, cancellation of
   a running install and of a publication waiting for its description, busy, restart listing
-  and dismissal, rollback both ways, a damaged diagnoses file kept, redaction, drain and
-  schema.
+  and dismissal, rollback both ways, a damaged diagnoses file kept while `diagnose:run` and
+  `diagnose:record` still succeed, a bounded journal under repeated refusals, redaction, drain
+  and schema.
 
 Not verified here: real GitHub (`gh`) and real installs; the native smoke has no publish,
 setup or update path (the manager's run covers the app with this owner installed).

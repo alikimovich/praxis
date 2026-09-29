@@ -96,6 +96,9 @@ struct WorkflowRecord: Sendable {
 /// `uncertain`. A damaged file is left untouched (and reported), never rewritten.
 final class WorkflowJournal: @unchecked Sendable {
     static let keepFinished = 100
+    static let keepResumable = 5
+    static let keepRefused = 20
+    static let keepSuperseded = 10
 
     let directory: URL
     private let lock = NSLock()
@@ -164,14 +167,40 @@ final class WorkflowJournal: @unchecked Sendable {
         return records.values.first { record in record.replies.contains { $0.0 == operation } }
     }
 
-    /// Drops the oldest finished records beyond the retention bound (never an open one).
+    /// Bounds the journal (never touches an open record):
+    /// - a failed or cancelled run with no steps was refused before its first effect (not
+    ///   signed in, dirty checkout, busy agents): nothing to reconcile, and `accept` never
+    ///   picks one as `prior`. Only the newest `keepRefused` remain, so a lost reply to a
+    ///   refusal can still be answered from its record;
+    /// - runs that did something and stopped (interrupted, failed, cancelled) are kept as
+    ///   receipts, the newest `keepResumable` per repository and kind (only the last is
+    ///   ever resumed);
+    /// - finished results keep the `keepFinished` most recent; superseded and dismissed
+    ///   records only `keepSuperseded`.
     func prune() {
         lock.lock(); defer { lock.unlock() }
-        let finished = records.values.filter { !WorkflowRecord.open.contains($0.state) && !WorkflowRecord.resumable.contains($0.state) }
-            .sorted { ($0.updated, $0.id) > ($1.updated, $1.id) }
-        for record in finished.dropFirst(Self.keepFinished) {
-            unlink(directory.appendingPathComponent(record.id + ".json").path)
-            records.removeValue(forKey: record.id)
+        var keep = Set<String>(), perKind: [String: Int] = [:], refused = 0
+        for record in records.values.sorted(by: { ($0.updated, $0.id) > ($1.updated, $1.id) }) {
+            guard !WorkflowRecord.open.contains(record.state), WorkflowRecord.resumable.contains(record.state) else { continue }
+            if record.steps.isEmpty {
+                if refused < Self.keepRefused { refused += 1; keep.insert(record.id) }
+            } else {
+                let key = record.lane + "\0" + record.kind
+                if perKind[key, default: 0] < Self.keepResumable { perKind[key, default: 0] += 1; keep.insert(record.id) }
+            }
+        }
+        // Finished runs: results (done) keep the newest `keepFinished`; superseded and
+        // dismissed ones (a later request took over, or the user let go) only `keepSuperseded`.
+        func newest(_ states: Set<String>, _ count: Int) -> [String] {
+            records.values.filter { states.contains($0.state) }.sorted { ($0.updated, $0.id) > ($1.updated, $1.id) }.dropFirst(count).map(\.id)
+        }
+        var drop = Set(newest(["done"], Self.keepFinished) + newest(["superseded", "dismissed"], Self.keepSuperseded))
+        for record in records.values where !WorkflowRecord.open.contains(record.state) && WorkflowRecord.resumable.contains(record.state) && !keep.contains(record.id) {
+            drop.insert(record.id)
+        }
+        for id in drop {
+            unlink(directory.appendingPathComponent(id + ".json").path)
+            records.removeValue(forKey: id)
         }
     }
 
