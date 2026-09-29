@@ -188,9 +188,11 @@ WebKit view for the user's project. See [Native architecture](docs/NATIVE.md).
 
 - **Swift** owns chat, composer, sidebar, toolbar, native dialog windows and inspectors. Settings and project memory
   save automatically; dialog windows use traffic lights instead of redundant Close buttons.
-- **Bun** owns provider sessions, Git/worktrees, files, source editing, persistence
-  and managed project servers. Services in `src/main/` are retained backend code;
-  that directory name does not imply an Electron runtime.
+- **Bun** owns provider sessions, Git/worktrees, files, source editing, most
+  persistence and managed project servers. The Swift service already writes
+  preferences and the workspace (open projects, order, selection); see
+  [workspace](docs/SWIFT-BACKEND-WORKSPACE.md). Services in `src/main/` are retained
+  backend code; that directory name does not imply an Electron runtime.
 - **Preview** runs in `WKWebView` with an isolated selection/editing script.
 - **Transport** uses authenticated, versioned XPC between the host and Swift service,
   with private pipes to Bun. Swift holds the exclusive profile lock and supervises

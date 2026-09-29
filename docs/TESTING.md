@@ -86,6 +86,72 @@ Captures are written to `test/artifacts/native/chat-scroll/`, including
 `reveal-<width>-{top,bottom}.png`, `reveal-<width>-overlap-<first>-<second>.png`
 and the measured revisions/frames in `reveal-<width>.json`.
 
+LKM-103 acceptance runs at the end of native-chat-scroll, which `bun run test:native`
+invokes with `--require-build` after native-runtime (a missing host fails there
+instead of skipping). The standalone command still works.
+
+**Verification never changes the user's macOS settings.** It must not
+read-modify-write system preferences: no `defaults`, CFPreferences writes,
+system domains, or preference broadcasts. `test/no-system-preferences.mjs`
+(unit tier) fails if app code, helpers or the harness do any of these.
+Scroller and accessibility modes are switched through `ChatSystemEnvironment`
+(`src/native/ChatEnvironment.swift`), an in-process override that only the
+ephemeral-profile `chatAcceptance` host command can set:
+`{ environment: { scrollers: 'Always'|'WhenScrolling' } }`,
+`{ environment: { accessibility: { increaseContrast, reduceTransparency, reduceMotion } } }`
+and `{ environment: { clear: true } }`. The override dies with the test host.
+
+With no override, the provider returns the real `NSScroller.preferredScrollerStyle`
+and `NSWorkspace` accessibility values, read live. The probe applies the
+scroller style to the conversation's NSScrollView. Accessibility values feed
+the SwiftUI environment keys (`colorSchemeContrast`,
+`accessibilityReduceTransparency`, `accessibilityReduceMotion`) that the chat's
+views and the composer beam read. AppKit's own high-contrast drawing of native
+controls cannot be forced per view (`NSAppearance` maps the accessibility names
+back to Aqua/DarkAqua), so the scroll view's appearance is never replaced and
+the native scroller keeps following macOS. The acceptance asserts this
+(`scrollAppearance` empty). Diagnostics include `system` (read-only real values),
+`accessibility` (effective), `rendered` (what SwiftUI views read) and
+`environmentOverridden`.
+
+Inspect these artifacts under `test/artifacts/native/chat-scroll/`:
+
+- `acceptance-{440,320}-{1,6,80}-lines.png/.json`: full foreground chat column,
+  all three exterior gaps equal 10, contained/aligned/hittable controls, whole
+  latest row above clearance, latest-message OCR, capped versus uncapped input.
+- `acceptance-{440,320}-resized-{short,tall}.png/.json` (capped draft, then
+  resize) and `acceptance-{440,320}-short-1-line`/`-short-then-grow[-tall]`
+  (short window, then growth to the cap): latest row remains reachable in
+  both orders while composer height and viewport size change. `pinCount`
+  records the probe's settled-metric follow pins; `pinned`/`userScrollCount`
+  record the probe's user-input-owned latest state (wheel, live scroll, keys).
+  Input reaches the app as window-targeted events via `NSApp.postEvent` (never
+  `postToPid`, whose events have no window). If a wheel check fails, read
+  `monitorCallbacks`, `scrollWheelEvents` and `lastInputRejection` to see
+  where the event stopped. `probeShowsLatest`/`modelShowsLatest` show whether
+  the latest button should be visible and whether SwiftUI received it.
+  The thumb drag queues its dragged/up events and then delivers the mouseDown
+  with `window.sendEvent`, so the hit-tested NSScroller's own tracking loop
+  consumes them (`src/native/ScrollerDrag.swift`). `lastDrag` in every
+  inspection, and `acceptance-<mode>-<n>-drag.json`, record the hit target, the
+  consumed/leftover counts and scrollY before/after.
+- `acceptance-{WhenScrolling,Always}-*-{idle,active,hover,dragged,latest}.png/.json`:
+  actual SwiftUI probe attachment, native small scroller, wheel and thumb movement,
+  real latest-button click, no hover/drag viewport-width jump, live scroller-mode
+  override reaching the probe, and visible non-autohiding Always scroller. Review resting/active
+  visual prominence; numeric geometry alone cannot prove the intended appearance.
+- `acceptance-accessibility-{true,false}[-latest].png/.json`: all three modes
+  switched through the override and received by the conversation's SwiftUI
+  environment (`rendered`), plus functional wheel/latest scrolling and stable layout.
+- `acceptance-results.json`: successful assertion summary; `acceptance-failure.*`
+  retains failure diagnostics and foreground pixels when capture remains available.
+
+The core suite also writes `test/artifacts/native/composer-visible-{440,320}-*.png`
+and JSON for real attachment-dialog/file, model, Auto, AppKit typing and submission
+checks. The draft is multiline at 440 points and capped at 320 points. These
+fixtures must run in the foreground; no background-coverage exception is applied.
+`bun test/no-system-preferences.mjs` is the system-settings guard described above.
+
 `node test/native-next-hmr.mjs` checks Next.js 16.3.5 in Webpack mode through
 Trezi's managed dev server and system WebKit. It installs dependencies into a
 disposable copy of the Next fixture (registry access/cache required), checks

@@ -5,8 +5,9 @@ left, with the user's project in system WebKit on the right. Bun owns provider
 sessions, Git/worktrees, source editing, persistence and managed project servers.
 A separate Swift XPC service owns profile exclusion, supervises legacy Bun and
 holds the durable operation ledger (S03) and, since LKM-91, writes preferences
-through it (docs/SWIFT-BACKEND-PREFERENCES.md). Every other domain writer remains
-in Bun until a verified transfer.
+through it (docs/SWIFT-BACKEND-PREFERENCES.md); since LKM-92 it also owns
+workspace identity, order and selection (docs/SWIFT-BACKEND-WORKSPACE.md). Every
+other domain writer remains in Bun until a verified transfer.
 Electron, the React application renderer and browser/Tailscale mode are retired.
 Distributed as source: clone, `bun install`, `bun run dev`. Users authenticate
 with their own provider subscriptions or endpoint credentials.
@@ -83,6 +84,11 @@ Groups are defined in `src/native/smoke-groups.ts`.
   Swift preferences writer (v1 `preferences.json`, ledger-backed). Bun reads and
   sends awaited batches via `src/native/preferences-service.ts`;
   `src/native/preferences.ts` is the `TREZI_BACKEND_OWNER=legacy` rollback writer.
+- `src/service/WorkspaceOwner.swift`, `src/service/WorkspaceFile.swift`,
+  `src/service/DomainChannel.swift`: the Swift workspace writer (unchanged
+  `workspace.json`, ledger-backed; identity, order, selection, recents). Bun sends
+  awaited intents via `src/native/workspace-service.ts`; `src/native/workspace.ts`
+  is the rollback writer and `src/native/workspace-model.ts` the shared operations.
 - `src/native/Host.swift`: AppKit app lifecycle and host protocol.
 - `src/native/ProjectCell.swift`: sidebar row rendering and native project drag reordering.
 - `src/native/Shell.swift`: sidebar/project actions, split view and column-aligned

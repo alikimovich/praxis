@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { once } from 'node:events'
+import { checkChatAcceptance } from './chat-acceptance.mjs'
 import { NativeBridge } from '../../src/native/bridge.ts'
 
 const directory = resolve('out/native')
@@ -158,8 +159,10 @@ try {
     writeFileSync(`${artifacts}/reveal-${width}.json`, JSON.stringify(record, null, 2))
   }
 
+  await checkChatAcceptance(host, artifacts)
+
   console.log('Native chat scroll: sent questions and streamed responses stay visible across short/long history and shrinking composers; nested island reveals settle at both edges and overlapping reveals reject the superseded request at 440pt and 320pt chat widths.')
 } finally {
   host.child.kill()
-  await once(host.child, 'exit')
+  await host.closed
 }

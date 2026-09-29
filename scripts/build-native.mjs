@@ -82,7 +82,7 @@ const serviceResult = Bun.spawnSync([
   'xcrun', 'swiftc', '-O', '-target',
   `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx13.3`,
   '-module-cache-path', join(out, 'module-cache'),
-  ...['ServiceContract', 'ServiceXPC', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'LegacySupervisor', 'ProcessGuardian', 'ServiceRuntime', 'ServiceMain'].map(name => join(root, `src/service/${name}.swift`)),
+  ...['ServiceContract', 'ServiceXPC', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile', 'WorkspaceOwner', 'DomainChannel', 'LegacySupervisor', 'ProcessGuardian', 'ServiceRuntime', 'ServiceMain'].map(name => join(root, `src/service/${name}.swift`)),
   '-o', join(serviceContents, 'MacOS/TreziService'), '-framework', 'Foundation', '-framework', 'Security'
 ], { stdout: 'inherit', stderr: 'inherit' })
 if (serviceResult.exitCode) process.exit(serviceResult.exitCode)
@@ -117,7 +117,12 @@ const result = Bun.spawnSync(
     join(root, 'src/native/ComposerQueue.swift'),
     join(root, 'src/native/ComposerBeam.swift'),
     join(root, 'src/native/Chat.swift'),
+    join(root, 'src/native/ChatScrollStyle.swift'),
+    join(root, 'src/native/ChatLatestButton.swift'),
+    join(root, 'src/native/ChatEnvironment.swift'),
     join(root, 'src/native/ChatReveal.swift'),
+    join(root, 'src/native/ChatAcceptance.swift'),
+    join(root, 'src/native/ScrollerDrag.swift'),
     join(root, 'src/native/VisibleChatCapture.swift'),
     join(root, 'src/native/ChatIsland.swift'),
     join(root, 'src/native/ShadowIsland.swift'),

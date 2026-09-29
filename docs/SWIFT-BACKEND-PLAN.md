@@ -11,7 +11,18 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
-**Current (2026-09-28, LKM-91):** the preferences writer moves to the Swift
+**Current (2026-09-29, LKM-92):** S04 (roadmap row) moves workspace identity,
+membership, order, the selected project and recents into the Swift service as
+the only writer of the unchanged `workspace.json`, through the ledger. Keys stay
+as they were; an aliased root (symlink, trailing slash) resolves to the existing
+project. Mappings are persisted before any dependent session/server command. Session,
+server and Git fields stay legacy-owned and reach the file only through a typed
+`update` adapter; display state and drafts are never stored. `TREZI_BACKEND_OWNER=legacy`
+keeps a byte-identical Bun writer as the rollback owner. See
+[workspace](SWIFT-BACKEND-WORKSPACE.md). Implemented for review on the accepted
+LKM-91 base; manager verification and acceptance are pending.
+
+**Earlier (2026-09-28, LKM-91):** the preferences writer moves to the Swift
 service, through the ledger, behind the adoption gate: v1 `preferences.json` is
 kept byte-compatible, Bun's callers send awaited batches over the supervised pipe
 and read acknowledged snapshots, and `TREZI_BACKEND_OWNER=legacy` keeps Bun's

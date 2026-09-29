@@ -75,7 +75,9 @@ final class ComposerBeamHost: NSHostingView<AnyView> {
         guard visible != active else { return }
         expiry?.cancel(); expiry = nil
         active = visible
-        rootView = visible ? AnyView(ComposerBeam(radius: radius, started: Date(), once: once)) : AnyView(EmptyView())
+        // Same accessibility source as the conversation (system unless overridden in tests).
+        rootView = visible ? AnyView(ComposerBeam(radius: radius, started: Date(), once: once)
+            .modifier(ChatAccessibilityEnvironment(accessibility: ChatSystemEnvironment.shared.accessibility))) : AnyView(EmptyView())
         if visible && once {
             let work = DispatchWorkItem { [weak self] in self?.show(false, radius: radius) }
             expiry = work

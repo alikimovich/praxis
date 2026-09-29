@@ -105,6 +105,14 @@ src/
                     external-edit adoption. Bun's client is native/preferences-service.ts;
                     native/preferences.ts is the legacy-launch rollback writer
                     (docs/SWIFT-BACKEND-PREFERENCES.md)
+    WorkspaceOwner.swift / WorkspaceFile.swift / DomainChannel.swift   the
+                    workspace writer (LKM-92): project identity (canonical root →
+                    key), order, selection and recents in the unchanged workspace.json;
+                    session/server/Git fields arrive through a typed `update`
+                    adapter. Bun's client is native/workspace-service.ts;
+                    native/workspace.ts is the legacy-launch rollback writer and
+                    native/workspace-model.ts the byte-identical TS operations
+                    (docs/SWIFT-BACKEND-WORKSPACE.md)
   main/           Backend services (CJS bundle, Bun); historical directory name
     preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
                     bounds/load/reset/capture, the select + comment relays, the
@@ -264,9 +272,10 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
 - `bun run dev`/`start`/`trezi` go through `scripts/start-native.mjs`: the host
   connects over XPC to the bundled Swift service, which takes the profile lock
   and supervises Bun over private pipes. The service writes `preferences.json`
-  (`docs/SWIFT-BACKEND-PREFERENCES.md`); Bun is still the single writer of every
+  (`docs/SWIFT-BACKEND-PREFERENCES.md`) and `workspace.json`
+  (`docs/SWIFT-BACKEND-WORKSPACE.md`); Bun is still the single writer of every
   other domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun
-  spawns the host, still under Swift's lock, and writes preferences itself). See
+  spawns the host, still under Swift's lock, and writes both itself). See
   `docs/SWIFT-BACKEND-SERVICE.md`.
 - The chat runs in `main` via provider SDKs; output streams over `agent:*` IPC
   into Bun chat controllers, which send typed state to Swift.
