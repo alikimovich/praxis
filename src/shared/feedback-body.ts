@@ -13,8 +13,8 @@
  */
 
 /** GitHub's hard issue-body limit; stay safely under it. */
-const BODY_LIMIT = 65536
-const SAFE_LIMIT = 60000
+export const BODY_LIMIT = 65536
+export const SAFE_LIMIT = 60000
 
 /** Collapse the feedback's first non-empty line into a concise issue title. */
 export function buildFeedbackTitle(body: string): string {

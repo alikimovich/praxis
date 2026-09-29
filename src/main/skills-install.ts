@@ -67,8 +67,12 @@ function listInstalledSkills(dir: string): string[] {
  * `npx <buildInstallArgs>` (argv array — never a shell string), captures output,
  * enforces a ~120s timeout, then lists what landed. Resolves `{ ok:false, … }` on
  * any failure instead of throwing.
+ *
+ * This is the legacy-launch twin: under the Swift launch the workflow owner runs the
+ * same install (service/WorkflowTools.swift) and the agent tool reaches either one
+ * through `workflowOwner().installSkills`.
  */
-export async function installSkillPack(input: InstallInput): Promise<InstallResult> {
+export async function installSkillPackLegacy(input: InstallInput): Promise<InstallResult> {
   const { packId, scope, liveRoot } = input
   const targetDir = targetDirFor(scope, liveRoot)
   const pack = findPack(packId)

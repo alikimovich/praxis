@@ -16,7 +16,7 @@ import { startRepositoryFixture } from './repository-fixture.mjs'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 export const SOURCES = [...SOURCE_SOURCES,
-  ...['WorkflowJournal', 'WorkflowOwner', 'WorkflowPublish', 'WorkflowRemote', 'WorkflowSetup'].map(name => `src/service/${name}.swift`)]
+  ...['WorkflowJournal', 'WorkflowContext', 'WorkflowOwner', 'WorkflowPublish', 'WorkflowRemote', 'WorkflowSetup', 'WorkflowTools'].map(name => `src/service/${name}.swift`)]
 
 /** Compiles the fixture once per source hash and compiler version; returns the binary path. */
 export function compileWorkflowFixture() {
@@ -42,7 +42,7 @@ export function compileWorkflowFixture() {
 export function installFakes(dir) {
   mkdirSync(dir, { recursive: true })
   const script = name => `#!${process.execPath}\n${readFileSync(join(root, 'test/fixtures/workflow-owner', name), 'utf8')}`
-  for (const [name, source] of [['gh', 'fake-gh.mjs'], ['bun', 'fake-pm.mjs'], ['npm', 'fake-pm.mjs']]) {
+  for (const [name, source] of [['gh', 'fake-gh.mjs'], ['bun', 'fake-pm.mjs'], ['npm', 'fake-pm.mjs'], ['npx', 'fake-pm.mjs']]) {
     writeFileSync(join(dir, name), script(source))
     chmodSync(join(dir, name), 0o755)
   }

@@ -18,6 +18,12 @@ coordinator's lane.
 - `src/service/WorkflowRemote.swift`: Connect to GitHub, remote status, pull and switch.
 - `src/service/WorkflowSetup.swift`: instrumentation helpers, their removal, new projects,
   Trezi's own update, and `WorkflowDiagnoses` (the diagnosis memory).
+- `src/service/WorkflowTools.swift` (S15): the in-app feedback issue (`gh issue create` in
+  Trezi's checkout; intent journaled first, a retry or a `gh` failure looks for an issue
+  with the same title and body before filing) and curated skill-pack installs
+  (`npx skills add`, argv built by the owner from a GitHub `owner/name` and plain skill
+  names). `src/service/WorkflowContext.swift` holds the outcome type and per-run context.
+  Twins: `src/main/feedback-legacy.ts`, `src/main/skills-install.ts`.
 - `src/native/workflow-service.ts`: Bun's client. `src/main/workflow-owner.ts` is the seam;
   `src/main/workflow-legacy.ts` is the rollback twin over the original TS code, which now
   lives in `src/main/publish.ts` (moved from `annotations.ts` and `agent.ts`),

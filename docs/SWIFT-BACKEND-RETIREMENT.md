@@ -10,7 +10,7 @@ unlisted module, a stale row, or a gate line that disagrees with the rows fails.
 
 ## Status (2026-09-29)
 
-**Retirement gate: blocked by 9 Bun-owned rows.** The legacy owners and
+**Retirement gate: blocked by 7 Bun-owned rows.** The legacy owners and
 `TREZI_BACKEND_OWNER=legacy` stay; nothing that the rollback switch needs was removed.
 
 Moved in this step:
@@ -38,6 +38,16 @@ Moved in this step:
 - Trezi's own update check (`git fetch` and the behind count) is a workflow-owner lane
   request, `updateCheck`; `update-controller.ts` reaches `checkForUpdate` only with no
   owner.
+- The in-app feedback issue (`gh issue create`) and the curated skill-pack install
+  (`npx skills add`) are workflow-owner recorded workflows, `feedback` and `skills`
+  (`WorkflowTools.swift`). Bun composes the title and body (at most 65,536 UTF-16
+  units, far inside the 32 MiB pipe frame; a test sends the largest body the composer
+  can build) and picks the pack from its catalog; the owner accepts only a GitHub
+  `owner/name` and plain skill names and builds the argv itself. A feedback issue is
+  never filed twice: the intent is journaled before `gh issue create`, and a retry
+  after a crash or a `gh` failure looks for an issue with the same title and body
+  before filing. Legacy twins: `feedback-legacy.ts` (no journal; it now also keeps the
+  body out of the error text) and `skills-install.ts`.
 - Dead adapter code: `agent.ts` still imported a Git runner and fs writers it no
   longer used.
 
@@ -94,6 +104,32 @@ Settings ▸ Updates ─ workflow owner: pull, install, build (journaled) ─ re
   ([workflows](SWIFT-BACKEND-WORKFLOWS.md)); `trezi --update` is the terminal path and
   runs only while the app is closed.
 
+## Distribution and recovery evidence
+
+Deterministic (no provider, GitHub, Xcode build or app launch involved):
+
+- `test/install-update.mjs` (unit tier) runs the real `install.sh` and `bin/trezi.mjs`
+  against a local origin in a scratch `HOME`, with only `bun install`/`bun run build`
+  scripted and `git clone` redirected to the origin: a clean install (clone, platform
+  check, install, build, `trezi` link), a launch with the build present and with it
+  missing, `trezi --update`, an update interrupted at its build (the pull is neither
+  undone nor repeated, the earlier build stays, the next run completes), a diverged
+  checkout (refused before install or build, its own commit kept), lockfile drift and an
+  installer re-run.
+- `test/service-process.mjs` (native tier): profile-lock contention; a lock holder
+  SIGKILLed with no cleanup, after which a new owner acquires the profile and sees the
+  crashed owner's data; the `--legacy` rollback launch sharing the same lock and keeping
+  a newer file (`{"newer":"retained-after-rollback"}`); the runtime journal sweep; and
+  XPC reconnect with the service epoch (`resume`), refusing a stale or wrong epoch.
+- `test/workflow-owner.mjs`: an in-app update interrupted after the pull resumes
+  without pulling again; rollback both ways (Swift owner ⇄ legacy twin) never replaces
+  newer work.
+
+Not covered, and not claimed: a real Xcode/SDK build, a real launch of the app from
+`trezi`, real provider or GitHub calls, and `no Bun application backend`: Bun still hosts
+the provider adapters and the controllers listed above, so the profile still gets writes
+from Bun for every domain the census does not give an owner.
+
 ## Retained JavaScript (by design)
 
 These stay JS in the end state, as the plan allows. They hold no application state and
@@ -129,7 +165,7 @@ launch, which blocks retirement).
 | `src/main/diag-cache.ts` | rollback | WorkflowOwner | diagnosis memory |
 | `src/main/edit-history.ts` | rollback | SourceOwner | Undo history |
 | `src/main/editing-model.ts` | rollback | EditingOwner | sidecars, island histories |
-| `src/main/feedback.ts` | bun | WorkflowOwner | `gh issue create`, no receipt |
+| `src/main/feedback-legacy.ts` | rollback | WorkflowOwner | `gh issue create` without a journal |
 | `src/main/file-ops.ts` | rollback | SourceOwner | file-tree create/rename/delete |
 | `src/main/file-tree.ts` | helper | SourceOwner | `git ls-files` read |
 | `src/main/git-remote.ts` | rollback | WorkflowOwner | fetch, pull, switch |
@@ -152,7 +188,7 @@ launch, which blocks retirement).
 | `src/main/setup.ts` | rollback | WorkflowOwner | setup helpers |
 | `src/main/sidecar-migrate.ts` | rollback | EditingOwner | `.dsgn`/`.praxis` sidecar migration |
 | `src/main/simulator.ts` | rollback | PlatformOwner | Simulator tools, Metro |
-| `src/main/skills-install.ts` | bun | WorkflowOwner | `npx skills add` |
+| `src/main/skills-install.ts` | rollback | WorkflowOwner | `npx skills add` without a journal |
 | `src/main/source-commit.ts` | rollback | SourceOwner | source writes without an owner |
 | `src/main/trezi-agent-tools.ts` | helper | ProviderOwner (helper process) | Codex tool bridge socket |
 | `src/main/update.ts` | rollback | WorkflowOwner | update check's `git fetch` |

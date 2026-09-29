@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process'
 import { app } from '../native/platform'
+import { fileFeedbackIssue } from './feedback-legacy'
+import { installSkillPackLegacy } from './skills-install'
 import { checkForUpdate } from './update'
 import { recallSignature, remember, setStatus } from './diag-cache'
 import { remoteStatus, updateFromRemote } from './git-remote'
@@ -96,6 +98,8 @@ export function createLegacyWorkflows(options: LegacyWorkflowOptions = {}): Work
         return { ok: false, error: error instanceof Error ? error.message : String(error) }
       }
     },
+    feedback: (root, title, body) => fileFeedbackIssue(root, title, body),
+    installSkills: (input) => installSkillPackLegacy(input),
     recallDiagnosis: (root, signature) => recallSignature(userData(), root, signature),
     rememberDiagnosis: (root, diagnosis) => remember(userData(), root, diagnosis),
     diagnosisStatus: (root, signature, status) => setStatus(userData(), root, signature, status),

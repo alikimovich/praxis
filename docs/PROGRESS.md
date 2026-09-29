@@ -2,6 +2,26 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-102 second repair: feedback and skills to the workflow owner, launcher and recovery tests (gate still blocked, 7 Bun-owned)
+
+- WorkflowOwner recorded workflows `feedback` (`gh issue create`) and `skills` (`npx skills
+  add`) in `WorkflowTools.swift` (the shared step/runner code moved to
+  `WorkflowContext.swift`). The intent is journaled before the effect. A feedback retry
+  after a crash (the step comes back `uncertain`) or a `gh` failure lists issues and
+  answers the identical one instead of filing another. The owner validates the
+  `owner/name` repo and skill names and builds the argv. Largest composer body (65,536
+  units) is tested through the pipe. Legacy twins: `feedback-legacy.ts`,
+  `skills-install.ts`.
+- `test/install-update.mjs`: install.sh / `trezi` / `trezi --update` against a local
+  origin, including an interrupted update and a diverged checkout. `service-process`:
+  profile recovery after the lock holder is SIGKILLed.
+- Census: 9 → 7 Bun-owned rows (`codex-models`, `model-catalog`, `providers-store`,
+  `props`, `native/platform`, `native/profile-path`, `native/index`).
+- Not done: those seven rows, the provider adapters' move into helpers (needs an
+  authorized live parity run: UNVERIFIED, not passed), and removal of
+  `TREZI_BACKEND_OWNER=legacy`/`TreziService --legacy` (the census forbids it while any
+  row is Bun-owned). No live provider, GitHub, hardware or real Xcode build was run.
+
 ## 2026-09-29 — LKM-102 repair round: four census rows moved (gate still blocked, 9 Bun-owned)
 
 Review found the retirement gate blocked by 13 Bun-owned rows. This round moves the

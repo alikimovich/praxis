@@ -92,4 +92,18 @@ if (group === 'repo' && action === 'edit') {
   if (branch) git(repoDir(args[2]), 'symbolic-ref', 'HEAD', `refs/heads/${branch}`)
   done()
 }
+// Issues (S15 feedback): `issue-create-lost` files the issue and then exits 1, like a reply lost after the effect.
+state.issues ??= []
+if (group === 'issue' && action === 'create') {
+  if (state.unauthed) fail('To get started with GitHub CLI, please run:  gh auth login')
+  if (fault('issue-create-fail')) fail('HTTP 500: Server Error (https://api.github.com/graphql)')
+  const number = state.issues.length + 1
+  const issue = { number, title: flag('--title'), body: flag('--body'), url: `https://github.com/fake/repo/issues/${number}` }
+  state.issues.push(issue); count('issueCreate')
+  if (fault('issue-create-lost')) fail('HTTP 502: Bad Gateway (https://api.github.com/graphql)')
+  done(`\nCreating issue in fake/repo\n\n${issue.url}`)
+}
+if (group === 'issue' && action === 'list') {
+  done(JSON.stringify(state.issues.slice().reverse().slice(0, Number(flag('--limit') ?? 30)).map(({ title, body, url }) => ({ title, body, url }))))
+}
 fail(`fake gh: unsupported command: ${args.join(' ')}`)

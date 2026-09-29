@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { findPack } from '../main/skill-packs'
 import type { ServiceFailure } from '../shared/service-contract/types'
 import type { PublishMessage } from '../shared/publish-message'
 import { healPublishBranch } from '../main/publish'
@@ -141,6 +144,20 @@ export function serviceWorkflows(link: WorkflowLink, options: WorkflowClientOpti
         polling = false
         await watcher
       }
+    },
+    async feedback(root, title, body) {
+      return (await call('feedback', { root, title, body, intent: 'feedback', ...leases() })).result
+    },
+    async installSkills(input) {
+      const pack = findPack(input.packId)
+      const targetDir = input.scope === 'user' ? join(homedir(), '.claude', 'skills') : join(input.liveRoot, '.claude', 'skills')
+      // The catalog is Bun's; the owner accepts only a GitHub owner/name and plain skill names.
+      if (!pack) {
+        return { ok: false, packId: input.packId, scope: input.scope, targetDir, installed: [],
+          message: `Refusing to install '${input.packId}': not in the curated skill-pack allowlist.` }
+      }
+      return (await call('skills', { root: input.liveRoot, packId: pack.id, scope: input.scope, repo: pack.repo,
+        skills: pack.skills ?? [], title: pack.title, intent: 'skills', ...leases() })).result
     },
     recallDiagnosis: (root, signature) => call('diagnosis', { root, signature }, 'read'),
     async rememberDiagnosis(root, diagnosis) {

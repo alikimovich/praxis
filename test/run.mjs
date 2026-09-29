@@ -105,6 +105,7 @@ const UNIT = [
   "annotation-store",
   "retirement-census",
   "distribution",
+  "install-update",
   "project-memory-evaluation",
   "providers-store",
   "model-catalog",

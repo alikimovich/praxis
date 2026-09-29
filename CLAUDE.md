@@ -190,10 +190,12 @@ src/
                     client is native/editing-service.ts behind main/editing-owner.ts;
                     main/editing-model.ts is the rollback twin (docs/SWIFT-BACKEND-EDITING.md)
     WorkflowOwner.swift / WorkflowJournal.swift / WorkflowPublish.swift /
-    WorkflowRemote.swift / WorkflowSetup.swift   the workflow owner (LKM-100): Publish
+    WorkflowRemote.swift / WorkflowSetup.swift / WorkflowTools.swift / WorkflowContext.swift
+                    the workflow owner (LKM-100): Publish
                     (merge / PR only), handoff and saved-run PRs, Connect to GitHub, remote
                     fetch/pull/switch, `.trezi/` setup helpers, new projects, Trezi's own
-                    update and the diagnosis memory, each a durable record (intent before
+                    update, the in-app feedback issue, curated skill-pack installs and the
+                    diagnosis memory, each a durable record (intent before
                     the effect, receipt after, operation-ID dedupe) reconciled from GitHub
                     and Git instead of repeated. Bun's helpers only propose (PR
                     descriptions, detection, starter files, diagnoses). Bun's client is

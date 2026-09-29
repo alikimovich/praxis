@@ -258,7 +258,20 @@ try {
 
   assert.equal(diagnosed.after.status, 'applied'); assert.equal(diagnosed.recalled.seenBefore, true)
 
+  const skills = await parity('skills', async (owner, w) => {
+    const input = { packId: 'anthropic-frontend-design', scope: 'project', liveRoot: w.local }
+    const ok = await owner.installSkills(input)
+    writeFileSync(w.pmState, JSON.stringify({ calls: w.pm().calls, fail: { skills: 1 } }))
+    const failed = await owner.installSkills(input)
+    const refused = await owner.installSkills({ ...input, packId: 'not-a-pack' })
+    return { ok, failed, refused, calls: w.pm().calls }
+  })
+
+  assert.equal(skills.ok.ok, true); assert.deepEqual(skills.ok.installed, ['frontend-design']); assert.equal(skills.failed.ok, false)
+  assert.match(skills.refused.message, /not in the curated skill-pack allowlist/); assert.equal(skills.calls.length, 2)
+
   // ───────────── durability (Swift owner) ─────────────
+  await import('./helpers/workflow-tools-checks.mjs').then(module => module.toolChecks({ world, start, log }))
   await import('./helpers/workflow-durability.mjs').then(module => module.durability({ world, start, legacy, snapshot, git, write, commit, describe, log, fakes }))
   console.log('WORKFLOW OWNER OK — parity, lost replies, crashes, failures, cancellation, restart, rollback, drain, redaction, schema')
 } finally {

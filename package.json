@@ -64,6 +64,7 @@
     "test:annotation-store": "bun test/annotation-store.mjs",
     "test:retirement-census": "bun test/retirement-census.mjs",
     "test:distribution": "bun test/distribution.mjs",
+    "test:install-update": "bun test/install-update.mjs",
     "test:project-icon": "bun test/project-icon.mjs",
     "test:providers": "bun test/providers-store.mjs",
     "test:model-catalog": "bun test/model-catalog.mjs",
