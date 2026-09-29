@@ -54,6 +54,20 @@ Read captured PNGs to verify UI. Offscreen AppKit captures cannot reliably paint
 Liquid Glass. `TREZI_NATIVE_BACKGROUND_TEST=1` skips real pointer gestures and
 animation timing; report that reduced coverage. No Electron tests remain.
 
+`bun run dev:native --test --only=group,group` (or `bun test/native-runtime.mjs
+--only=…`) runs only the named native smoke groups: `core`, `islands`,
+`shadow-light`, `sidebar`, `settings`, `chat`, `composer`. An unknown name fails
+before the build; no flag runs every group, which acceptance still requires.
+Groups are defined in `src/native/smoke-groups.ts`.
+
+### Evidence budget
+
+- A foreground window capture plus JSON geometry/state from the existing fixtures
+  is enough acceptance evidence.
+- Do not add OCR of wrapped text, synthetic CGEvent/input-routing tests, or any
+  `defaults write`/system preference change unless the ticket explicitly requires it.
+- Tests must never change the user's system settings.
+
 > Electron and browser/Tailscale mode are retired. Old user profiles are preserved,
 > not implicitly imported or deleted. See `docs/NATIVE.md`.
 
@@ -63,7 +77,10 @@ animation timing; report that reduced coverage. No Electron tests remain.
 src/
   native/         Swift/AppKit/SwiftUI UI + Bun controllers
     index.ts        service registration, project lifecycle and host bridge
-    Host.swift      AppKit application and JSON pipe protocol
+    Host.swift      AppKit application and JSON host protocol
+    ServiceClient.swift / HostService.swift   the host's versioned XPC connection to
+                    the Swift service (handshake, reattach, bounded outbox) and its
+                    AppKit quit/restart/exit-status integration
     Shell.swift     sidebar, toolbar and project/chat navigation
     Chat.swift / Composer.swift   native conversation and text input
     WorkspaceLayout.swift        authoritative view/divider geometry
@@ -72,6 +89,30 @@ src/
     platform.ts     direct native service imports, Keychain, event routing
     preview-transport.ts   restricted isolated WKContentWorld transport
     assets/cat/     native animation artwork
+  service/        separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
+    ServiceMain.swift / ServiceRuntime.swift / ServiceXPC.swift   XPC listener,
+                    signed-peer + hello validation, legacy relay, drain; also the
+                    `--legacy` launch-time rollback owner
+    LegacySupervisor.swift / ProcessGuardian.swift   exclusive profile lock, Bun
+                    process group, lifetime-pipe guardians for detached servers
+    ServiceContract.swift   S01 shared DTOs (TS twin: src/shared/service-contract/)
+    OperationLedger.swift / LedgerStore.swift / LedgerMirror.swift   S03 durable
+                    operation ledger: intent digest, receipts, per-domain revisions,
+                    event cursors, crash recovery. Opened under the profile lock
+                    (docs/SWIFT-BACKEND-LEDGER.md)
+    PreferencesOwner.swift / PreferencesFile.swift   the preferences writer (LKM-91):
+                    byte-compatible v1 preferences.json, ledger-backed batches,
+                    external-edit adoption. Bun's client is native/preferences-service.ts;
+                    native/preferences.ts is the legacy-launch rollback writer
+                    (docs/SWIFT-BACKEND-PREFERENCES.md)
+    WorkspaceOwner.swift / WorkspaceFile.swift / DomainChannel.swift   the
+                    workspace writer (LKM-92): project identity (canonical root →
+                    key), order, selection and recents in the unchanged workspace.json;
+                    session/server/Git fields arrive through a typed `update`
+                    adapter. Bun's client is native/workspace-service.ts;
+                    native/workspace.ts is the legacy-launch rollback writer and
+                    native/workspace-model.ts the byte-identical TS operations
+                    (docs/SWIFT-BACKEND-WORKSPACE.md)
   main/           Backend services (CJS bundle, Bun); historical directory name
     preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
                     bounds/load/reset/capture, the select + comment relays, the
@@ -86,10 +127,12 @@ src/
                     (framework 'static': no package.json/dev command; live-reload)
     file-tree.ts    list a project's files (git ls-files / fs-walk) for the
                     native source editor's file tree (source:tree IPC)
-    project-icon.ts the project's own favicon for its rail row (project:icon) —
-                    a declared <link rel="icon"> first, else the conventional
+    project-icon.ts the project's own favicon, kept as project metadata (project:icon)
+                    — a declared <link rel="icon"> first, else the conventional
                     paths; inlined as a data: URL, mtime-revalidated. Reads the
-                    FILES, not the running page, so an un-run project has one too
+                    FILES, not the running page, so an un-run project has one too.
+                    No longer drawn in sidebar rows: every project row uses the
+                    shared native folder symbol (src/native/SidebarIcon.swift)
     file-ops.ts     the same sidebar's file MANAGER — create/rename/delete
                     (source:create-file/rename-file/delete-file). Pure; every
                     renderer-supplied path is re-validated (no traversal, no
@@ -226,6 +269,14 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   + rebuilds. Native Settings uses `src/native/update-controller.ts` to guard
   unsaved work, check/pull/install/build, and restart.
 
+- `bun run dev`/`start`/`trezi` go through `scripts/start-native.mjs`: the host
+  connects over XPC to the bundled Swift service, which takes the profile lock
+  and supervises Bun over private pipes. The service writes `preferences.json`
+  (`docs/SWIFT-BACKEND-PREFERENCES.md`) and `workspace.json`
+  (`docs/SWIFT-BACKEND-WORKSPACE.md`); Bun is still the single writer of every
+  other domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun
+  spawns the host, still under Swift's lock, and writes both itself). See
+  `docs/SWIFT-BACKEND-SERVICE.md`.
 - The chat runs in `main` via provider SDKs; output streams over `agent:*` IPC
   into Bun chat controllers, which send typed state to Swift.
 - Trezi **owns** the dev-server lifecycle of the target repo (never run the
@@ -299,6 +350,21 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   string, never add one, so Tailwind projects pay that turn too.)
 - **Inspect WebKit through its native Web Inspector.** There is no Electron CDP
   port. Use the native host test protocol for deterministic integration checks.
+- **In service mode the launcher reports the HOST's exit status**, and
+  `NSApp.terminate` calls `exit` itself — code after `application.run()` never
+  runs. Bun's status must travel in `quit {status}` / `serviceStopped {status}`
+  and is applied in `applicationWillTerminate`; otherwise a failing `--test`
+  smoke exits 0. Reconnect after a lost XPC connection must name the prior
+  epoch (`resume`): launchd silently starts a FRESH service instance, which
+  refuses (`recoveryRequired`) rather than launching a second Bun, but only
+  after launchd's ~10 s respawn throttle, so `serviceStopped` is final (no
+  reconnect, local shutdown). Frames are never replayed after an uncertain
+  send; only never-submitted frames queue. Never read a bridge pipe with
+  `FileHandle.read(upToCount:)`: it waits for the full count, so short lines
+  never arrive — use `readAvailable(upTo:)`. Never answer quit with
+  `.terminateLater` while waiting on main-queue work (modal-panel run loop);
+  cancel, drain, terminate again. An XPC service's stderr is discarded, so
+  Bun's stderr is the host's, passed over XPC (`attachDiagnostics`).
 - **Bun blocks postinstall for untrusted dependencies.** `esbuild` remains in
   `package.json#trustedDependencies` for its binary.
 - **The agent is denied writes under a target repo's `.trezi/` (and legacy `.dsgn/`)** (annotations,

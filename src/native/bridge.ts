@@ -1,11 +1,15 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
+import type { Writable } from 'node:stream'
 import { createInterface } from 'node:readline'
 
 export class NativeBridge extends EventEmitter {
-  child: ChildProcessWithoutNullStreams
+  child?: ChildProcessWithoutNullStreams
+  private output: Writable
   readonly closed: Promise<void>
   private sequence = 0
+  /** Host events held (in order) while startup awaits the service; service frames still flow. */
+  private held: [string, unknown][] | null = null
   private pending = new Map<
     number,
     {
@@ -16,14 +20,21 @@ export class NativeBridge extends EventEmitter {
   >()
   constructor(executable: string, directory: string, profile: string) {
     super()
-    this.child = spawn(executable, [directory, profile], { stdio: 'pipe' })
-    // close follows exit AND drained stdio; final host events may persist profile data.
-    this.closed = new Promise(resolve => this.child.once('close', () => resolve()))
-    this.child.stdin.on('error', (error) => {
+    const supervised = process.env.TREZI_SERVICE_SUPERVISED === '1'
+    this.child = supervised ? undefined : spawn(executable, [directory, profile], { stdio: 'pipe' })
+    const input = this.child?.stdout ?? process.stdin
+    this.output = this.child?.stdin ?? process.stdout
+    const lines = createInterface({ input })
+    // In service mode EOF is sent only after the host's final events drain.
+    this.closed = new Promise(resolve => {
+      if (this.child) this.child.once('close', () => resolve())
+      else lines.once('close', () => resolve())
+    })
+    this.output.on('error', (error) => {
       if ((error as NodeJS.ErrnoException).code !== 'EPIPE') this.emit('host-error', error)
     })
-    this.child.stderr.pipe(process.stderr)
-    createInterface({ input: this.child.stdout }).on('line', (line) => {
+    this.child?.stderr.pipe(process.stderr)
+    lines.on('line', (line) => {
       try {
         const message = JSON.parse(line)
         if (message.event === 'reply') {
@@ -33,24 +44,43 @@ export class NativeBridge extends EventEmitter {
           this.pending.delete(message.id)
           if (message.error) request.reject(new Error(message.error))
           else request.resolve(message.value)
-        } else this.emit(message.event, message)
+        } else if (message.event === 'service-reply' || message.event === 'service-event') this.emit(message.event, message)
+        else this.deliver(message.event, message)
       } catch (error) {
         console.error('Invalid native host message:', error)
       }
     })
-    this.child.on('error', (error) => this.emit('host-error', error))
-    this.child.on('exit', () => {
+    this.child?.on('error', (error) => this.emit('host-error', error))
+    const disconnected = () => {
       for (const request of this.pending.values()) {
         clearTimeout(request.timer)
         request.reject(new Error('Native host closed'))
       }
       this.pending.clear()
-      this.emit('closed')
-    })
+      this.deliver('closed')
+    }
+    if (this.child) this.child.once('exit', disconnected)
+    else lines.once('close', disconnected)
+  }
+  hold() { this.held ??= [] }
+  /** Replays held host events once every handler is registered. */
+  release() {
+    const held = this.held ?? []
+    this.held = null
+    for (const [event, message] of held) this.emit(event, ...(message === undefined ? [] : [message]))
+  }
+  private deliver(event: string, message?: unknown) {
+    if (this.held) this.held.push([event, message])
+    else this.emit(event, ...(message === undefined ? [] : [message]))
   }
   send(method: string, data: object = {}) {
-    if (this.child.stdin.destroyed) return
-    this.child.stdin.write(`${JSON.stringify({ method, ...data })}\n`)
+    if (this.output.destroyed) return
+    this.output.write(`${JSON.stringify({ method, ...data })}\n`)
+  }
+  /** Supervised only: a frame for the Swift service itself (no `method`, so it never reaches the host). */
+  sendService(frame: { service: string }) {
+    if (this.output.destroyed) return
+    this.output.write(`${JSON.stringify(frame)}\n`)
   }
   request(method: string, data: object = {}, timeout = 30_000): Promise<any> {
     const id = ++this.sequence

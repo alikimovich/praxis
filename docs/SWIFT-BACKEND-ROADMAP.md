@@ -6,16 +6,26 @@ S01 is LKM-88; S02–S15 are stable local task IDs, not assertions about externa
 issue identifiers or assignments to people. The manager owns scheduling, commits,
 verification and review. Future owners below name architectural responsibility.
 
-Only S01 is implemented in this change. Contract fixtures do not install an XPC
-service, supervise processes, persist an operation ledger or transfer any domain
-writer. All current launch, storage and UI behavior remains authoritative.
+S01 is accepted (candidate 51fb928). S02 (LKM-89) adds the separate XPC service,
+Swift supervision of legacy Bun, Swift-owned profile exclusion and the
+launch-time owner switch; it is implemented for review and transfers no domain
+writer; see [service and rollback](SWIFT-BACKEND-SERVICE.md). S03's durable
+operation ledger (LKM-90) is implemented for review in the Swift service and
+also transfers no writer ([ledger](SWIFT-BACKEND-LEDGER.md)). The preferences
+writer transfer (LKM-91) is implemented for review: the service owns
+`preferences.json` in the unchanged v1 format, and Bun's writer remains the
+launch-time rollback owner ([preferences](SWIFT-BACKEND-PREFERENCES.md)).
+The workspace transfer (LKM-92, row S04) is implemented for review: the service
+owns project identity, order, selection and recents in the unchanged
+`workspace.json`, legacy slices report their per-project fields through a typed
+adapter, and Bun's writer is the rollback owner ([workspace](SWIFT-BACKEND-WORKSPACE.md)).
 
 | Task | Canonical phase | Scope and future owner | Required exit evidence |
 | --- | --- | --- | --- |
-| S01 | 1 | Contracts and executable correctness fixtures (LKM-88); shared Swift/TypeScript protocol | Golden parity, malformed/version/limit/scope/revision rejection, request versus operation identity, complete census mapping. Manager review pending. |
-| S02 | 2 | Separate Swift service, XPC and supervision; Swift supervisor owns legacy Bun and helper lifetimes | Peer validation, launch negotiation, invalidation/reconnect, bounded shutdown, exclusive profile lock and launch-time owner selection. No domain takeover by transport alone. |
-| S03 | 3 | Durable intent/checkpoint/snapshot substrate and preferences; Swift persistence service | Persist intent before effects, recover after each injected crash phase, deduplicate across restart, preserve v1 preferences/unknown keys/null and unsaved drafts; drain-and-restart restoration. |
-| S04 | 3 | Basic projects/workspaces; Swift workspace coordinator | Stable root/checkout identity, restore/open/close/reorder/suspend parity, revisioned snapshots and preservation of newer workspace state on rollback. AppKit retains picking and presentation. |
+| S01 | 1 | Contracts and executable correctness fixtures (LKM-88); shared Swift/TypeScript protocol | Golden parity, malformed/version/limit/scope/revision rejection, request versus operation identity, complete census mapping. Accepted; merged as 51fb928. |
+| S02 | 2 | Separate Swift service, XPC and supervision; Swift supervisor owns legacy Bun and helper lifetimes | Peer validation, launch negotiation, invalidation/reconnect, bounded shutdown, exclusive profile lock and launch-time owner selection. No domain takeover by transport alone. Implemented for review (LKM-89): `test/service-process.mjs`. |
+| S03 | 3 | Durable intent/checkpoint/snapshot substrate and preferences; Swift persistence service | Persist intent before effects, recover after each injected crash phase, deduplicate across restart, preserve v1 preferences/unknown keys/null and unsaved drafts; drain-and-restart restoration. Ledger substrate implemented for review (LKM-90): `test/operation-ledger.mjs`. Preferences transfer implemented for review (LKM-91): `test/preferences-owner.mjs`. |
+| S04 | 3 | Basic projects/workspaces; Swift workspace coordinator | Stable root/checkout identity, restore/open/close/reorder/suspend parity, revisioned snapshots and preservation of newer workspace state on rollback. AppKit retains picking and presentation. Implemented for review (LKM-92): `test/workspace-owner.mjs`. Root identity moved; checkout (worktree) identity stays with S07, and warm-project suspension keeps running in Bun on the Swift-owned `touchedAt` until S06/S11. |
 | S05 | 3 | Memory, annotations and attachments; Swift state services | Manual save beats stale evaluation, annotation publishing split, scratch/blob bounds, original data retained on corruption/failure and restart. Repository lane gates project sidecar changes. |
 | S06 | 4 | Managed servers/dependencies/static serving; Swift process supervisor | Selected runtime preserved; process groups, descendants, watchers and logs stop on shutdown; readiness/port/restart failures and rollback tested without orphan adoption. |
 | S07 | 5 | Git/worktrees/isolation policy and recovery; per-repository Swift coordinator | Explicit mutation intent, common-directory FIFO lease, private index, recovery refs and interrupted landing; preserve user index/worktrees and never blind-reset newer changes. |
@@ -73,8 +83,10 @@ writer. Host-local actors, a Bun-owned future launcher and an in-memory-only
 ledger were audit staging alternatives and are not accepted migration steps.
 
 S01 has no production owner switch because it transfers no writer. Reverting
-these inert contract files requires no data restoration. S02 must add launch-time
-owner selection before S03 opens any writable domain. Every transfer must first
+these inert contract files requires no data restoration. S02 adds launch-time
+owner selection (`TREZI_BACKEND_OWNER=swift|legacy`) under one Swift profile lock
+before S03 opens any writable domain; its rollback domain is only the lock files
+and process lifetime. Every transfer must first
 name its exact files, journals, receipts, drafts and worktrees; test stopping new
 mutations, draining or recording uncertain operations, closing the current owner
 and restoring the legacy owner under the same exclusive profile lock. Retain

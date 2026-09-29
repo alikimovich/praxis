@@ -113,9 +113,8 @@ composer.perform(["text": ""])
 print("Foreground matrix mirror: five-line draft grows, fits and keeps the row at 440/320pt chat widths")
 
 // Shrink after submit: the submitted draft clears, so the composer returns to its
-// compact height while the conversation is pinned. The frame must stay anchored
-// to the bottom gap and the reading inset must shrink with it, so the latest row
-// (pinned to the inset) cannot stay under the old, taller composer.
+// compact height with the shared row intact and the frame anchored to the bottom
+// gap. The reading inset and pin that follow it are LKM-103's (chat follow layout, below).
 for chatWidth: CGFloat in [440, 320] {
     let bounds = CGRect(x: 0, y: 0, width: chatWidth, height: 776)
     let width = chatWidth - 2 * ChatLayout.composerInset
@@ -131,12 +130,11 @@ for chatWidth: CGFloat in [440, 320] {
             heights.append(height)
         }
         require(heights[1] < heights[0], "Composer shrinks after the draft clears at chat width \(chatWidth): \(heights)")
-        require(ChatLayout.bottomInset(composerHeight: heights[1]) < ChatLayout.bottomInset(composerHeight: heights[0]), "Reading inset shrinks with the composer at chat width \(chatWidth)")
         require(bounds.maxY - composer.frame.maxY == ChatLayout.composerInset, "Compact composer keeps its bottom gap at chat width \(chatWidth)")
         require(composer.text.frame.height <= composer.scroll.contentSize.height + 1, "Cleared input fits its compact viewport at chat width \(chatWidth)")
     }
 }
-print("Shrink after submit: compact height, bottom anchor and reading inset settle at 440/320pt chat widths")
+print("Shrink after submit: compact height, shared row and bottom anchor settle at 440/320pt chat widths")
 
 // Resolve the actual Auto Layout tree without opening an application/window.
 // Borderless popup frames overlap by one point at four-point stack spacing;

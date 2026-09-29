@@ -1,20 +1,50 @@
 import { environmentChanges } from '../shared/environment-changes'
 import { projectKey } from '../shared/projectKey'
-import { agentOptionsFor, chatAgentSettingsFromOptions, defaultChatAgentSettings, resumeChatSettings, type ChatAgentSettings } from '../shared/chat-settings'
+import { agentOptionsFor, chatAgentSettingsFromOptions, defaultChatAgentSettings, resumeChatSettings } from '../shared/chat-settings'
 import type { WorkspaceSnapshot } from '../shared/api'
 import type { ProjectEntry } from '../shared/workspace'
 import type { NativeWorkspaceCommand, NativeWorkspaceSnapshot } from '../shared/native-workspace'
+import type { WorkspaceStore } from './workspace'
+import { MAX_PATCHES, METADATA_FIELDS, projectName, type WorkspaceEntryRecord, type WorkspacePatch } from './workspace-model'
 
 export interface WorkspaceServices {
   invoke(channel: string, ...args: any[]): Promise<any>
-  read(): string | null
-  write(raw: string): void
+  /** The workspace owner: the Swift service, or the legacy writer under TREZI_BACKEND_OWNER=legacy. */
+  store: WorkspaceStore
   render(state: NativeWorkspaceSnapshot): void
   activate(entry: ProjectEntry | null): Promise<void>
   closeChat(key: string): void
   reusableChat(key: string): boolean
 }
-/** Owns project/session lifetime. Renderers receive projections, never navigation callbacks. */
+/** A working entry from a stored record. Gaps in old records get the defaults the
+ *  pre-S04 controller created entries with; unknown fields are carried along. */
+function entryFrom(record: WorkspaceEntryRecord): ProjectEntry {
+  const entry = structuredClone(record) as Record<string, any>
+  const key = record.key
+  if (typeof entry.name !== 'string') entry.name = projectName(record.root)
+  if (!(entry.url === null || typeof entry.url === 'string')) entry.url = null
+  if (entry.previewKind !== 'web' && entry.previewKind !== 'simulator') entry.previewKind = 'web'
+  if (!(entry.branch === null || typeof entry.branch === 'string')) entry.branch = null
+  if (!(entry.launchSpec === null || METADATA_FIELDS.launchSpec(entry.launchSpec))) entry.launchSpec = null
+  if (typeof entry.touchedAt !== 'number') entry.touchedAt = 0
+  if (!METADATA_FIELDS.sessionKeys(entry.sessionKeys)) entry.sessionKeys = [key]
+  if (!entry.sessionKeys.includes(entry.activeSessionKey)) entry.activeSessionKey = entry.sessionKeys[0]
+  return entry as ProjectEntry
+}
+const metadataOf = (record: object) => new Map(Object.keys(METADATA_FIELDS)
+  .filter(name => (record as any)[name] !== undefined).map(name => [name, JSON.stringify((record as any)[name])]))
+
+/**
+ * Owns project/session lifetime. Renderers receive projections, never navigation callbacks.
+ *
+ * Project identity (root → key), membership, order, the selected project, recents
+ * and `touchedAt` belong to the workspace store (S04): they change only through its
+ * operations and are read back from its acknowledged snapshot. Each is persisted
+ * before anything that depends on it (a session, a server) starts. The rest of an
+ * entry is the legacy-owned metadata slice (sessions, servers, Git, display): this
+ * controller decides it and `changed()` hands the differences to the store's typed
+ * `update` adapter. Status, history and errors are display state and never stored.
+ */
 export class NativeWorkspaceController {
   state: NativeWorkspaceSnapshot = { revision: 0, projects: [], activeKey: null, status: { kind: 'idle' }, history: {}, recents: [] }
   preferred = defaultChatAgentSettings()
@@ -22,15 +52,67 @@ export class NativeWorkspaceController {
   private intent = 0
   private jobs = new Map<string, Promise<void>>()
   private closing = new Set<string>()
-  constructor(readonly services: WorkspaceServices) {}
-  reportError(error: unknown) { this.state.error = String(error); this.changed() }
+  private closes = new Map<string, Promise<void>>()
+  /** Per project: the metadata last handed to the store (as JSON), so only changes are sent. */
+  private sent = new Map<string, Map<string, string>>()
+  constructor(readonly services: WorkspaceServices) {
+    // An adopted external edit: take identity/order/selection, re-send our metadata.
+    services.store.subscribe(() => { this.adopt(true); this.changed() })
+  }
+  /** Rendered only: a failing store must not be retried by its own error report. */
+  reportError(error: unknown) { this.state.error = String(error); this.publish() }
   get active() { return this.state.projects.find(p => p.key === this.state.activeKey) ?? null }
   changed() {
+    this.persist()
+    this.publish()
+  }
+  private publish() {
     this.state.revision++
-    this.services.write(JSON.stringify({ projects: this.state.projects, activeKey: this.state.activeKey, recents: this.state.recents }))
     this.services.render(structuredClone(this.state))
   }
-  reorderProject(key: string, before: string | null) {
+  /** Takes the store's acknowledged identity, order, selection, recents and touchedAt.
+   *  Existing entries keep Bun's metadata; an external adoption re-baselines it. */
+  private adopt(external = false) {
+    const view = this.services.store.snapshot()
+    const known = new Map(this.state.projects.map(entry => [entry.key, entry]))
+    this.state.projects = view.projects.map(record => {
+      const entry = known.get(record.key)
+      if (!entry || external) this.sent.set(record.key, metadataOf(record))
+      if (!entry) return entryFrom(record)
+      if (typeof record.touchedAt === 'number') entry.touchedAt = record.touchedAt
+      return entry
+    })
+    for (const key of [...this.sent.keys()]) if (!view.projects.some(record => record.key === key)) this.sent.delete(key)
+    this.state.activeKey = view.activeKey
+    this.state.recents = view.recents.map(({ root, name, at }) => ({ root, name, at: typeof at === 'number' ? at : 0 }))
+  }
+  /** Sends changed metadata through the typed adapter; a failure is reported and re-sent with the next change. */
+  private persist() {
+    const patches: WorkspacePatch[] = []
+    for (const entry of this.state.projects) {
+      if (this.closing.has(entry.key)) continue
+      const sent = this.sent.get(entry.key) ?? new Map<string, string>()
+      this.sent.set(entry.key, sent)
+      const fields: Record<string, unknown> = {}
+      for (const [name, valid] of Object.entries(METADATA_FIELDS)) {
+        const raw = (entry as any)[name]
+        if (raw === undefined) continue
+        const json = JSON.stringify(raw), value = JSON.parse(json)
+        // Values the store would refuse (e.g. an over-long name) are not persisted.
+        if (sent.get(name) === json || !valid(value)) continue
+        fields[name] = value; sent.set(name, json)
+      }
+      if (Object.keys(fields).length) patches.push({ key: entry.key, fields })
+    }
+    for (let index = 0; index < patches.length; index += MAX_PATCHES) {
+      const batch = patches.slice(index, index + MAX_PATCHES)
+      this.services.store.update(batch).catch(error => {
+        for (const patch of batch) for (const name of Object.keys(patch.fields)) this.sent.get(patch.key)?.delete(name)
+        this.reportError(error)
+      })
+    }
+  }
+  async reorderProject(key: string, before: string | null) {
     const projects = this.state.projects
     const from = projects.findIndex(project => project.key === key)
     if (from < 0 || before === key || (before !== null && !projects.some(project => project.key === before))) return
@@ -38,7 +120,8 @@ export class NativeWorkspaceController {
     const to = before === null ? next.length : next.findIndex(project => project.key === before)
     next.splice(to, 0, projects[from])
     if (next.every((project, index) => project === projects[index])) return
-    this.state.projects = next
+    await this.services.store.reorder(key, before)
+    this.adopt()
     this.changed()
   }
   private find(key: string) {
@@ -70,7 +153,8 @@ export class NativeWorkspaceController {
   async command(command: NativeWorkspaceCommand) {
     if (command.type === 'attach') {
       if (command.preferred) this.preferred = command.preferred
-      this.boot ??= this.restore(command.legacy)
+      // A reattaching UI gets the current projection; restore runs once.
+      this.boot ??= this.restore()
       await this.boot; this.services.render(structuredClone(this.state)); return
     }
     if (command.type === 'open') {
@@ -135,45 +219,52 @@ export class NativeWorkspaceController {
       if (this.intent === intent) await this.services.activate(entry)
     } else await this.select(entry.key)
   }
-  private async restore(legacy?: string | null) {
-    const raw = this.services.read() ?? legacy
-    if (raw) {
-      const value = JSON.parse(raw)
-      if (!Array.isArray(value.projects)) throw new Error('Invalid saved workspace')
-      this.state.projects = value.projects.filter((p: any) => p && typeof p.root === 'string' && p.root.startsWith('/') && p.key === projectKey(p.root))
-      this.state.activeKey = this.state.projects.some(p => p.key === value.activeKey) ? value.activeKey : this.state.projects.at(-1)?.key ?? null
-      this.state.recents = Array.isArray(value.recents) ? value.recents.filter((p: any) => typeof p.root === 'string' && typeof p.name === 'string') : []
-    }
+  private async restore() {
+    this.adopt()
+    // The pre-S04 rule: no stored selection restores the last project.
+    const restored = this.state.activeKey ?? this.state.projects.at(-1)?.key ?? null
     const live: WorkspaceSnapshot = await this.services.invoke('agent:workspace-snapshot')
     for (const project of live.projects) {
       let entry = this.state.projects.find(p => p.key === project.projectKey)
-      if (!entry) { entry = this.entry(project.root); this.state.projects.push(entry) }
+      if (!entry) {
+        const { key } = await this.services.store.open(project.root, { ...this.preferred })
+        this.adopt()
+        // Another path to a stored project: that entry keeps its own sessions.
+        if (key !== project.projectKey) continue
+        entry = this.state.projects.find(p => p.key === key)
+        if (!entry) continue
+      }
       entry.sessionKeys = project.chats.map(c => c.sessionKey)
       entry.activeSessionKey = project.activeSessionKey ?? entry.sessionKeys[0]
       entry.chatSettings = Object.fromEntries(project.chats.map(c => [c.sessionKey, chatAgentSettingsFromOptions(c.options)]))
     }
     this.changed()
-    if (this.active) await this.select(this.active.key)
-  }
-  private entry(root: string): ProjectEntry {
-    const key = projectKey(root)
-    return { root, key, name: root.split('/').filter(Boolean).at(-1) ?? root, url: null, previewKind: 'web', branch: null, launchSpec: null, touchedAt: Date.now(), sessionKeys: [key], activeSessionKey: key, chatSettings: { [key]: { ...this.preferred } } }
+    if (restored && this.state.projects.some(p => p.key === restored)) await this.select(restored)
   }
   async open(root: string, command?: string) {
     if (!root.startsWith('/')) throw new Error('Project requires an absolute path')
-    const key = projectKey(root)
-    const prior = this.jobs.get(key)
-    if (this.closing.has(key) && prior) await prior.catch(() => {})
-    let entry = this.state.projects.find(p => p.key === key)
-    if (!entry) { entry = this.entry(root); this.state.projects.push(entry) }
+    const requested = projectKey(root)
+    const prior = this.jobs.get(requested)
+    await this.closes.get(requested)?.catch(() => {})
+    if (this.closing.has(requested) && prior) await prior.catch(() => {})
+    // The identity is persisted before any session or server is started for it.
+    const { key } = await this.services.store.open(root, { ...this.preferred })
+    this.adopt()
     await this.select(key, command)
   }
   async select(key: string, command?: string, restart = false) {
     const entry = this.find(key), intent = ++this.intent
-    this.state.activeKey = key; entry.touchedAt = Date.now()
     this.state.status = { kind: 'busy', label: 'Opening ' + entry.name + '…' }
     this.changed()
     const current = () => this.intent === intent && !this.closing.has(key) && this.state.projects.includes(entry)
+    try {
+      // The selection is persisted before the project's session or server starts.
+      await this.services.store.select(key)
+    } catch (error) {
+      if (current()) { this.state.status = { kind: 'error', message: String(error) }; this.changed() }
+      return
+    }
+    this.adopt()
     try {
       await this.serialize(key, async () => {
         if (this.closing.has(key)) return
@@ -210,7 +301,7 @@ export class NativeWorkspaceController {
           entry.environmentRevision = 0; entry.dependenciesPending = false
         }
         this.state.history[key] = await this.services.invoke('sessions:list', entry.root)
-        this.state.recents = [{ root: entry.root, name: entry.name, at: Date.now() }, ...this.state.recents.filter(p => p.root !== entry.root)].slice(0, 10)
+        await this.services.store.recent(entry.root, entry.name).then(() => this.adopt(), error => this.reportError(error))
       })
       if (!current()) { this.changed(); return }
       await this.services.invoke('agent:set-active', entry.root, entry.activeSessionKey)
@@ -251,17 +342,23 @@ export class NativeWorkspaceController {
     const entry = this.find(key)
     this.closing.add(key)
     const wasActive = this.state.activeKey === key
-    if (wasActive) { ++this.intent; this.state.activeKey = null }
-    this.state.projects = this.state.projects.filter(p => p !== entry)
-    this.changed()
-    try {
-      await this.serialize(key, async () => {
-        await this.services.invoke('devserver:stop', entry.root)
-        if (entry.previewKind === 'simulator') await this.services.invoke('simulator:stop')
-        await this.services.invoke('agent:close-project', entry.root)
-        for (const session of entry.sessionKeys) this.services.closeChat(session)
-      })
-    } finally { this.closing.delete(key) }
+    if (wasActive) ++this.intent
+    const done = (async () => {
+      try {
+        // Removed from the store before its session and server are torn down.
+        await this.services.store.close(key)
+        this.adopt()
+        this.changed()
+        await this.serialize(key, async () => {
+          await this.services.invoke('devserver:stop', entry.root)
+          if (entry.previewKind === 'simulator') await this.services.invoke('simulator:stop')
+          await this.services.invoke('agent:close-project', entry.root)
+          for (const session of entry.sessionKeys) this.services.closeChat(session)
+        })
+      } finally { this.closing.delete(key) }
+    })()
+    this.closes.set(key, done)
+    try { await done } finally { if (this.closes.get(key) === done) this.closes.delete(key) }
     if (wasActive && this.state.activeKey === null) {
       const next = this.state.projects.at(-1)
       if (next) await this.select(next.key)

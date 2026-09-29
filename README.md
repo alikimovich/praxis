@@ -182,17 +182,25 @@ bun link             # optional: expose the `trezi` command from this checkout
 
 ## Architecture
 
-Trezi has a Swift/AppKit/SwiftUI interface, a Bun service process, and one
+Trezi has a Swift/AppKit/SwiftUI interface, a separate Swift XPC service supervising
+the legacy Bun backend, and one
 WebKit view for the user's project. See [Native architecture](docs/NATIVE.md).
 
 - **Swift** owns chat, composer, sidebar, toolbar, native dialog windows and inspectors. Settings and project memory
   save automatically; dialog windows use traffic lights instead of redundant Close buttons.
-- **Bun** owns provider sessions, Git/worktrees, files, source editing, persistence
-  and managed project servers. Services in `src/main/` are retained backend code;
-  that directory name does not imply an Electron runtime.
+- **Bun** owns provider sessions, Git/worktrees, files, source editing, most
+  persistence and managed project servers. The Swift service already writes
+  preferences and the workspace (open projects, order, selection); see
+  [workspace](docs/SWIFT-BACKEND-WORKSPACE.md). Services in `src/main/` are retained
+  backend code; that directory name does not imply an Electron runtime.
 - **Preview** runs in `WKWebView` with an isolated selection/editing script.
-- **Transport** is JSON over pipes between Swift and Bun; preview messages are
-  checked against a restricted allowlist.
+- **Transport** uses authenticated, versioned XPC between the host and Swift service,
+  with private pipes to Bun. Swift holds the exclusive profile lock and supervises
+  Bun and its managed child lifetimes. Preview messages retain their restricted allowlist.
+
+`TREZI_BACKEND_OWNER=legacy bun run start` selects the previous Bun/host launch
+path under the same Swift profile lock. Stop the current instance first; both paths
+retain the newest stores and worktrees. See [service migration and rollback](docs/SWIFT-BACKEND-SERVICE.md).
 
 Electron and the old React application UI have been removed. Browser/Tailscale
 mode (`trezi serve`) is retired; the CLI reports that explicitly. The native
@@ -231,11 +239,11 @@ still need release validation; see [current limits](docs/NATIVE.md).
 
 ### Compose UI from project components
 
-Enable **Settings → Use project components** to have Claude or Codex compose React
+Enable **Settings → Experimental Gen UI** to have Claude or Codex compose React or Svelte
 UI from the opened project’s components and styles using json-render. This is
 experimental and off by default. The setting is saved on this device and captured
 when you submit a message. Turning it off restores ordinary editing and keeps
-generated source. Choose **Jev (experimental)** as the composition engine to try
+generated source. Choose **Jev layout engine** as the UI layout method to try
 Jev with your saved Vercel AI Gateway connection from Settings. See [scope and workflow](docs/PROJECT_UI.md).
 
 ### Content editors from chat

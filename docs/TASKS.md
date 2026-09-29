@@ -3,6 +3,65 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Merge-friendly docs and evidence budget (LKM-110)
+
+- [x] Union-merge `docs/TASKS.md` and `docs/PROGRESS.md` via `.gitattributes`; scripted two-branch merge check (`test/docs-merge-union.mjs`).
+- [x] Add the Evidence budget to AGENTS.md and CLAUDE.md.
+- [x] Add `--only=group,group` to the native smoke (`core`, `islands`, `shadow-light`, `sidebar`, `settings`, `chat`, `composer`); unknown names fail before the build; full suite stays the default.
+- [ ] Manager: run configured verification (full unit + native) and reconcile `smoke-core.ts` gating with LKM-109's check list if it lands first.
+## Native verification reports all failures (LKM-109)
+
+- [x] Split the native smoke into named checks with declared dependencies; collect failures, skip dependents with `skipped: depends on X`, restore foreground/window state after each failure.
+- [x] Print and document the end-of-run summary (check, first assertion line, capture path); exit non-zero on any failure.
+- [x] Default per-test runner timeout 600 s → 120 s.
+- [x] Fixture unit test with a deliberately failing check (`test/native-smoke-runner.mjs`); `TREZI_NATIVE_SMOKE_FAIL` for real runs.
+- [ ] Manager: run configured verification (typechecks, unit, `test:native`) under the desktop lock; optionally `TREZI_NATIVE_SMOKE_FAIL=composer bun run test:native` to see a real collect-all summary.
+
+## Experimental Gen UI (LKM-106)
+
+- [x] Rename settings, explain React/Svelte composition and conditionally show the explained engine while preserving saved choices.
+- [x] Discover the documented Svelte legacy/rune subset and export validated `.svelte` source through both engines; preserve React export.
+- [x] Add deterministic rendering/Jev, unsupported-shape, mixed-framework, escaping/path, stale/cancellation and turn-capture checks.
+- [x] Document supported contracts and run focused non-GUI checks.
+- [x] Add foreground Settings capture/OCR/geometry and native picker interactions at 600/800 points, including engine preservation and immediate-close autosave; register windowless and negative-evidence checks.
+- [x] Reproduce NSHostingController minimum-size propagation without a window; exercise live minimum (540), normal (600) and wider (800) widths without relaxing evidence checks.
+- [x] Make `test:native` produce the Settings evidence itself; retain the original `settings.png` capture and `sheetPerform change` autosave check alongside it.
+- [ ] Manager: run configured verification and inspect native Settings help/conditional engine at minimum and wider widths under the desktop lock; complete independent review.
+
+## Composer spacing and chat scrollbar (LKM-103)
+
+- [x] Native latest button (NSButton) over the conversation: the SwiftUI button never ran its action for the acceptance click (buttonClickCount 0); harness asserts the action runs; fixture regression with SwiftUI negative control.
+- [x] Match exterior bottom/side gaps and adjust composer height budget, status/message clearance and resize following.
+- [x] Identify the SwiftUI conversation scroll view; configure its native small scroller using macOS preferences, including live Always-show changes.
+- [x] Extend windowless composer tests for spacing/clearance and native scrollbar policy; run focused controller and TypeScript checks.
+- [x] Repair CGFloat/Double bounds handoff causing empty composer captures; prove failure before the fix and pass through real windowless composer update/layout.
+- [x] Wire growth/resize/scroll acceptance into test:native; capture real SwiftUI probe identity, native preference transitions and wheel/thumb/latest-button interactions.
+- [x] Add normal/narrow multiline/capped foreground fixtures and preference restoration unit coverage, with PNG/OCR/geometry paths documented in TESTING.
+- [x] Diagnose stale document-bound clamping after composer growth; retry following on settled AppKit dimensions and add a windowless regression with a negative control.
+- [x] Fix capped-draft + short-resize follow shortfall: pin to the document end from settled AppKit metrics (no stale fractional anchor); cover grow→resize and resize→grow at 440pt windowless and in native acceptance.
+- [x] Probe-owned latest state: probe-owned pinned state changed only by user input (wheel/key monitor, live scroll) or explicit latest/chat attach; windowless regression + negative controls.
+- [x] Diagnose the TIFF-paste composerInspect timeout: step runs no recent LKM-103 code; window lost key during the wait. Smoke timeouts now report last state, focus and Bun chat context (smoke-wait.ts + unit test with negative control).
+- [ ] Manager: rerun test:native; if the paste step fails again, read the reported lastState/context fields.
+- [x] Acceptance drag reveals the overlay knob (flashScrollers + bounded hit-test wait) and refuses mouseDown unless the knob hit-tests to NSScroller; fixture regression.
+- [x] Ignore stale didEndLiveScroll after the latest attach (reviewed Cursor patch: no SwiftUI callbacks from attach, post-click diagnostics); three-order fixture regression with negative controls.
+- [x] Route the acceptance thumb drag through the scroller's own tracking loop (queue drag, window.sendEvent mouseDown); drag diagnostics; direction-strict assertion; fixture regression with unrouted negative control.
+- [x] Remove all system-preference writes from verification; in-process ChatSystemEnvironment override (scroller style + Increase Contrast/Reduce Transparency/Reduce Motion) through the probe and SwiftUI environment; system-settings guard test; provider defaults test.
+- [x] Report the latest button's rendered frame via onGeometryChange (PreferenceKey never arrived); offscreen NSHostingView regression with negative control.
+- [x] Drive the latest button from the probe's pinned state + scroll position; windowless visibility regression.
+- [x] Route the acceptance wheel/mouse input as window-targeted events through NSApp.postEvent (pid-posted events had no window and were dropped); accept nil-window wheels over the chat; add input diagnostics and windowless routing coverage.
+- [ ] Manager: run native verification and inspect foreground normal/narrow/multiline captures, latest-message reachability, scrollbar idle/hover/drag/wheel behavior and Always-show/accessibility preferences.
+
+## Sidebar folder icons (LKM-105)
+
+- [x] Diagnose sidebar capture timeout with a windowless AppKit reproduction; compensate measured split wrapper insets and add content-width regression coverage.
+- [x] Use the native outline folder symbol for every project row, preserving metadata, layout, selection tint and actions.
+- [x] Run focused non-GUI checks.
+- [x] Repair Shadow Light capture fixture foreground readiness after manager review failure, preserving strict capture/OCR checks.
+- [x] Add foreground sidebar captures at 260/180 points, both selections and hover states, menu/memory and drag-delegate/backend reorder evidence to the native suite; add negative evidence assertions to the unit tier.
+- [x] Draw sidebar folder symbols in exact integral 16×16 frames (zero symbol alignment insets) with a windowless regression test.
+- [x] Restore and assert the foreground after sidebar menu/sheet, reorder and hover steps (teardown runs on failure; leftovers named) with windowless/unit regression coverage.
+- [ ] Manager: inspect foreground selected/unselected/hover states at standard and narrow widths; verify open/select/context menu/reorder and run required native checks.
+
 ## Local Apple Intelligence exploration (2026-09-28)
 
 - [x] Audit suitable Trezi workflows and Apple APIs; rank opportunities and propose a bounded first experiment in [the exploration](APPLE-INTELLIGENCE.md).
@@ -19,7 +78,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Diagnose initial foreground capture timeout from empty/setup-card state; regress capture readiness while retaining populated latest-message checks and diagnostic geometry.
 - [x] Repeat attachment/model/Auto interactions, disabled empty Send/Return, Return (normal) and Send-click (narrow) multiline submission, and a Stop-state capture at each matrix width, so manager verification produces the evidence.
 - [x] Repair "latest message did not settle above composer": the check sampled the lazy bottom anchor (`bottomPosition`); it now waits on the newest message's measured frame against the composer top and requires the last painted line. Pinning itself is LKM-103's (candidate); regressions: shrink-after-submit at 440/320pt in the layout fixture and `native-composer-latest`.
-- [ ] Manager: after merging candidate, run `test:native`; inspect the 440/320 `initial`, `draft`, `sending` and `submitted` captures (`composer-visible-<width>-*`, `-chat.png` pairs) for the shared row, compact-after-submit composer and the latest line above it; complete independent review.
+- [x] Merge candidate (LKM-103/109/110): the latest-row check now reads LKM-103's `chatAcceptance` geometry (`latestBottom` ≤ `readingHeight`) and capture; LKM-104's own `latest` field, `captureVisibleChatColumn`, `smoke-composer-latest.ts`, `native-composer-latest` and the latest-line OCR are removed.
+- [ ] Manager: after merging candidate, run `test:native`; inspect the 440/320 `initial`, `draft`, `sending` and `submitted` captures (`composer-visible-<width>-*`, `-chat.png`/`-chat.json` pairs) for the shared row, compact-after-submit composer and the latest line above it; complete independent review.
 
 ## Composer container (LKM-87)
 
@@ -29,6 +89,52 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Add foreground composer PNG/OCR capture and native attachment/model/Auto/typing/submission verification to the manager suite.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
+
+## Swift-owned workspace identity (LKM-92 / S04)
+
+- [x] Name the domain exactly (`workspace.json` membership/order/root/key/`touchedAt`/`activeKey`/recents, temp file, ledger domain `workspace`, legacy-owned metadata slice, display state and drafts) and tighten its rollback plan (`docs/SWIFT-BACKEND-WORKSPACE.md`).
+- [x] Swift document model and operations byte-identical to a shared TS model: unknown fields, invalid/duplicate entries and recents kept; JS number/key-order serialization; invalid files refused untouched.
+- [x] Canonical-root identity (string key unchanged; `realpath` aliases resolve to the existing project); typed `update` adapter for session/server/Git/display fields (no dual writers).
+- [x] Ledger-backed `WorkspaceOwner` on the supervised pipe (shared `DomainChannel` with preferences): import, receipts, conflicts, external-edit adoption, crash reconciliation with journaled answers, bounded drain.
+- [x] Controller reads identity/order/selection from acknowledged snapshots; open/select/close persisted before sessions, servers, Git or activation; a refused selection starts nothing; restart and UI reattach preserve projects and selection.
+- [x] `TREZI_BACKEND_OWNER=legacy` keeps a byte-identical Bun writer; Swift adopts newer legacy writes; no backup restore.
+- [x] `test/workspace-owner.mjs` (unit tier), controller/legacy-writer checks, real-service workspace round trip in `test/service-process.mjs`.
+- [ ] Manager: stage the new files (docs-links checks tracked paths), run unit + unsandboxed `service-process` + `bun run test:native` through the service path, independent review.
+
+## Swift-owned preferences (LKM-91 / S03)
+
+- [x] Name the domain exactly (v1 `preferences.json`, temp file, ledger domain `preferences`, drafts) and tighten its rollback plan (`docs/SWIFT-BACKEND-PREFERENCES.md`).
+- [x] Swift v1 reader/writer with byte parity: unknown keys, null vs absence, UTF-16 limits, lone surrogates, `praxis` copies; invalid files refused untouched.
+- [x] Ledger-backed owner in the service: import under the profile lock, atomic batches, idempotent receipts, conflicts, external-edit adoption, crash reconciliation from the file (journaled target digest).
+- [x] Bun client over the supervised pipe: acknowledged reads, one batch at a time, no fallback write on timeout; all callers converted to awaited batches; startup holds host events while it awaits the snapshot.
+- [x] Stop/drain on quit; `TREZI_BACKEND_OWNER=legacy` keeps Bun's writer as the rollback owner, reading the newest file; Swift adopts newer legacy writes.
+- [x] `test/preferences-owner.mjs` (unit tier), settings failed-draft/close-waits checks, real-service preferences check in `test/service-process.mjs`.
+- [ ] Manager: stage the new files (docs-links checks tracked paths), run unit + `bun run test:native` through the service path, independent review.
+
+## Durable operation ledger (LKM-90 / S03)
+
+- [x] Persistent intent/effect/receipt phases with canonical intent digest; stable duplicates, `idempotencyMismatch`, identity before revision check.
+- [x] Per-domain revisions and FIFO commit lane held across actor suspension; cancellation before effect vs `tooLate`; late results discarded.
+- [x] Restart recovery: intent → abandoned, effect → uncertain (domain blocked) → explicit reconcile, never replay.
+- [x] Checksummed, fully synced journal + generation snapshots; torn-tail quarantine; corrupt/newer-format stores refused untouched; explicit quarantine.
+- [x] Persisted event cursors, retained window, `snapshotRequired` for gaps/epochs; consumer mirror ordering; 7-day retry horizon with expired IDs.
+- [x] Opened by the Swift service under the profile lock; legacy owner never opens it; storage layout/compatibility/rollback documented (`docs/SWIFT-BACKEND-LEDGER.md`).
+- [x] `test/operation-ledger.mjs` (SIGKILL at each boundary + arbitrary kills, restart) in the unit tier.
+- [ ] Manager: full unsandboxed `service-process` (ledger created at XPC launch, epoch kept across service restart), unit + native verification, independent review.
+- [x] After acceptance: transfer the preferences writer through the adoption gate (LKM-91; see "Swift-owned preferences" above).
+
+## Swift service, XPC and legacy supervision (LKM-89 / S02)
+
+- [x] Separate signed XPC service bundled in the app; versioned control codec with closed negotiation and signed-peer validation both ways.
+- [x] Swift-owned profile exclusion (`service.lock` flock + legacy `native.lock` reservation) held across service-crash drain by the backend guardian.
+- [x] Supervise legacy Bun and detached servers/Metro through lifetime-pipe guardians; Bun stays the single domain writer.
+- [x] Reattach requires the negotiated epoch; a restarted service refuses (`recoveryRequired`) instead of launching a second Bun. No replay of uncertain sends; never-submitted frames queue in a bounded outbox.
+- [x] Propagate Bun's exit status through `quit`/`serviceStopped` to the host and launcher, so failing `--test` runs cannot exit 0; terminal signals drain through the service.
+- [x] Launch-time owner switch (`TREZI_BACKEND_OWNER=swift|legacy`) through `scripts/start-native.mjs`; rollback tested under the same lock with newest data retained.
+- [x] Real-process fixture `test/service-process.mjs`; supervision, guardian, crash-drain, codec and rollback sections pass in the worker sandbox.
+- [x] Fix the XPC relay stall from manager verification (pipe reads waited for 64 KiB) and make `serviceStopped` final so a crashed backend no longer waits on launchd's respawn throttle; full `test/service-process.mjs` passes.
+- [x] Native smoke through the service: drain without `.terminateLater` (plus 20 s watchdog), pass host stderr to Bun over XPC, remove the two-pipe deadlock hazard, re-reveal disturbed Shadow Light captures.
+- [ ] Manager: rerun unit + `bun run test:native` through the service path (Bun's output is visible again); independent review and candidate integration.
 
 ## Swift migration contracts (LKM-88 / S01)
 
@@ -42,7 +148,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Reconcile candidate Apple Intelligence tracking with S01 tracking; verify a conflict-free three-way TASKS merge without changing Git metadata.
 - [x] Fix reviewed method-authorization collisions with structured pairs and align Swift slash escaping; pass 100 cross-language cases.
 - [x] Reject non-finite TypeScript values before serialization; verify nine direct/nested rejection cases and fifteen valid numeric/null controls.
-- [ ] Manager: rerun verification and independent review after contract fixes, then candidate integration; prior revision passed 109 unit checks and native integration per review feedback.
+- [x] Manager: rerun verification and independent review after contract fixes, then candidate integration (accepted; merged into the candidate as 51fb928).
 
 ## Shadow Light (LKM-86)
 

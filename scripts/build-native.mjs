@@ -67,6 +67,26 @@ writeFileSync(
 <key>NSMicrophoneUsageDescription</key><string>Allow your local project preview to test microphone features when you approve.</string>
 </dict></plist>`
 )
+const serviceContents = join(contents, 'XPCServices/dev.praxis.service.xpc/Contents')
+mkdirSync(join(serviceContents, 'MacOS'), { recursive: true })
+writeFileSync(join(serviceContents, 'Info.plist'), `<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>dev.praxis.service</string>
+<key>CFBundleName</key><string>Trezi Service</string>
+<key>CFBundleExecutable</key><string>TreziService</string>
+<key>CFBundlePackageType</key><string>XPC!</string>
+<key>CFBundleVersion</key><string>1</string>
+<key>XPCService</key><dict><key>ServiceType</key><string>Application</string><key>RunLoopType</key><string>dispatch_main</string></dict>
+</dict></plist>`)
+const serviceResult = Bun.spawnSync([
+  'xcrun', 'swiftc', '-O', '-target',
+  `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx13.3`,
+  '-module-cache-path', join(out, 'module-cache'),
+  ...['ServiceContract', 'ServiceXPC', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile', 'WorkspaceOwner', 'DomainChannel', 'LegacySupervisor', 'ProcessGuardian', 'ServiceRuntime', 'ServiceMain'].map(name => join(root, `src/service/${name}.swift`)),
+  '-o', join(serviceContents, 'MacOS/TreziService'), '-framework', 'Foundation', '-framework', 'Security'
+], { stdout: 'inherit', stderr: 'inherit' })
+if (serviceResult.exitCode) process.exit(serviceResult.exitCode)
+copyFileSync(join(serviceContents, 'MacOS/TreziService'), join(out, 'TreziService'))
 writeFileSync(join(out, 'main.swift'), readFileSync(join(root, 'src/native/Host.swift')))
 const result = Bun.spawnSync(
   [
@@ -78,8 +98,16 @@ const result = Bun.spawnSync(
     '-module-cache-path',
     join(out, 'module-cache'),
     join(out, 'main.swift'),
+    join(root, 'src/service/ServiceContract.swift'),
+    join(root, 'src/service/ServiceXPC.swift'),
+    join(root, 'src/native/ServiceClient.swift'),
+    join(root, 'src/native/HostService.swift'),
     join(root, 'src/native/Shell.swift'),
     join(root, 'src/native/ProjectCell.swift'),
+    join(root, 'src/native/SidebarVerification.swift'),
+    join(root, 'src/native/SidebarSizing.swift'),
+    join(root, 'src/native/SidebarFocus.swift'),
+    join(root, 'src/native/SidebarIcon.swift'),
     join(root, 'src/native/PreviewSurface.swift'),
     join(root, 'src/native/ToolbarLayout.swift'),
     join(root, 'src/native/Inspector.swift'),
@@ -89,7 +117,12 @@ const result = Bun.spawnSync(
     join(root, 'src/native/ComposerQueue.swift'),
     join(root, 'src/native/ComposerBeam.swift'),
     join(root, 'src/native/Chat.swift'),
+    join(root, 'src/native/ChatScrollStyle.swift'),
+    join(root, 'src/native/ChatLatestButton.swift'),
+    join(root, 'src/native/ChatEnvironment.swift'),
     join(root, 'src/native/ChatReveal.swift'),
+    join(root, 'src/native/ChatAcceptance.swift'),
+    join(root, 'src/native/ScrollerDrag.swift'),
     join(root, 'src/native/VisibleChatCapture.swift'),
     join(root, 'src/native/ChatIsland.swift'),
     join(root, 'src/native/ShadowIsland.swift'),
@@ -98,6 +131,7 @@ const result = Bun.spawnSync(
     join(root, 'src/native/Cat.swift'),
     join(root, 'src/native/Welcome.swift'),
     join(root, 'src/native/Sheets.swift'),
+    join(root, 'src/native/SheetVerification.swift'),
     join(root, 'src/native/Activity.swift'),
     join(root, 'src/native/SourceEditor.swift'),
     join(root, 'src/native/SourceFileTree.swift'),
@@ -126,6 +160,10 @@ const result = Bun.spawnSync(
   { stdout: 'inherit', stderr: 'inherit' }
 )
 if (result.exitCode) process.exit(result.exitCode)
+for (const path of [join(out, 'TreziService'), join(contents, 'XPCServices/dev.praxis.service.xpc'), join(out, 'Trezi Native.app')]) {
+  const signed = Bun.spawnSync(['codesign', '--force', '--sign', '-', path], { stdout: 'inherit', stderr: 'inherit' })
+  if (signed.exitCode) process.exit(signed.exitCode)
+}
 if (/require\(["']electron["']\)/.test(readFileSync(join(out, 'index.cjs'), 'utf8')))
   throw new Error('Native backend still imports Electron')
 console.log(

@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Merge candidate into LKM-104 (LKM-103/109/110)
+
+Candidate owns chat scroll (LKM-103), the all-failures runner (LKM-109) and `--only`
+groups plus the evidence budget (LKM-110). Conflicts: `smoke-core.ts` keeps
+candidate's `selectSmokeChecks(parseSmokeGroups(...))` with LKM-104's 9-line and
+40-repeat smoke drafts; `smoke-composer.ts` keeps LKM-104's Send/Return/Stop
+matrix; `test/run.mjs` is candidate's list. The duplicate latest-row clearance
+machinery is dropped: `composerVerification`'s `latest` field,
+`captureVisibleChatColumn`, `smoke-composer-latest.ts`, `test/native-composer-latest.mjs`
+and the latest-line OCR (evidence budget). The `sending`/`submitted` captures now wait
+on `chatAcceptance`'s `latestBottom`/`readingHeight` and save its full-column capture
+plus JSON (`-chat.png`/`-chat.json`). The layout fixture's shrink-after-submit block
+keeps the composer checks and drops the reading-inset assertion (LKM-103's).
+No GUI suite ran.
+
 ## 2026-09-28 — Rebase composer evidence on LKM-103's scroll work (LKM-104 repair)
 
 Manager verification failed with "latest message did not settle above composer".
@@ -193,6 +208,1195 @@ reconcile LKM-103 exterior equal insets and quieter scrollbar, then capture
 normal/narrow empty/multiline states and verify interactions, latest-message
 reachability and absence of gradients under the desktop lock. No GUI suite,
 configured manager verification, staging or commit was performed by this worker.
+## 2026-09-28 — Merge-friendly docs and native smoke groups (LKM-110)
+
+Six of the last eight merge conflicts were only in the two append-style logs, so
+`.gitattributes` now union-merges `docs/TASKS.md` as well as `docs/PROGRESS.md`.
+`test/docs-merge-union.mjs` builds a disposable repo with this checkout's
+attributes, appends different lines on two branches and merges them: no conflict,
+both sets kept (it fails without the TASKS rule). Union can keep both versions of
+a line both sides edited, e.g. a checkbox ticked differently, so review those.
+
+AGENTS.md and CLAUDE.md gain an Evidence budget: a foreground capture plus JSON
+geometry/state from existing fixtures is enough. OCR of wrapped text, synthetic
+CGEvent/input-routing tests and `defaults write`/system preference changes need
+an explicit ticket requirement, and tests must never change the user's system
+settings.
+
+`--only=group,group` (`src/native/smoke-groups.ts`) filters which native smoke
+groups run: `core`, `islands`, `shadow-light`, `sidebar`, `settings`, `chat`,
+`composer`. With LKM-109's collect-all runner merged, `runNativeCoreSmoke` only
+filters its named check list (`selectSmokeChecks`). The hook is one import
+after the last existing one and a filter at the `runSmokeChecks` call site. It
+stays out of the top-of-file imports and the `wait`/`inspect` helpers, which the
+candidate rewrote (smoke-wait), so the merge is clean. An earlier version put a
+function-local shadow of `runSmokeChecks` next to those helpers, and that
+conflicted. Failure collection, capture/restore and skipping are untouched.
+`SMOKE_CHECK_GROUPS` maps each check to its group(s), and a check with
+no group (or prelude entry) throws, so new checks can't escape `--only`;
+`test/native-smoke-groups.mjs` parses smoke-core.ts and asserts this plus that
+no selection filters out a dependency. The prelude (`startup`, `open-project`,
+`chat-ready`, `final-shell`) always runs, and a filtered run prints a
+`NATIVE SMOKE FILTERED` notice saying it is not full-suite acceptance. `checkChatIslands` reads the selection
+itself so `islands` and `shadow-light` share the one `chat-islands` check and its
+fixture scope. `dev-native.mjs` rejects an unknown/empty group, or
+`--only` without `--test`, before building; `--live` requires `core`.
+`native-runtime` asserts sidebar evidence only when `sidebar` ran. With no flag,
+every group runs exactly as before. Group names are listed in `--help` and
+docs/TESTING.md.
+Manager verification then failed `native-boundary` with exit 0 and its PASS line
+in the log: `runCommand` (test/helpers/test-runner.mjs) SIGKILLs the test's
+process group after exit to reap descendants, and macOS answers EPERM, not ESRCH,
+when the group holds only unreaped zombies (esbuild's service child, which that
+test starts, racing the exit). The runner recorded that as a spawn error and
+marked a passing test FAIL. `killTargetGone` now treats EPERM as "gone" only for
+those post-exit reaps on darwin; stop/timeout kills stay strict, and
+`test/test-runner.mjs` covers the matrix. It could not be reproduced on demand
+(240 fast/esbuild runs passed), so this is fixed from the mechanism and evidence.
+
+## 2026-09-29 — Swift-owned workspace identity and persistence (LKM-92 / S04)
+
+The second writer transfer, on the accepted LKM-91 base. Under the Swift launch
+the service is the only writer of `workspace.json` (format unchanged). It owns
+project identity (root → key), membership, order, the selected project and
+recents, through the ledger domain `workspace`. Details and the tightened
+rollback plan are in `docs/SWIFT-BACKEND-WORKSPACE.md`.
+
+The file mixed the domain with fields owned by later slices: session keys and
+chat settings (S11), URL, launch spec and dependency flags (S06), and the branch
+(S07). Moving the whole file would have transferred those early; splitting it
+would have broken rollback to the old format. Instead Bun's controllers still
+decide those values, and the workspace controller sends only their differences
+through a typed `update` adapter. It validates each field and refuses `root`,
+`key` and `touchedAt`. Swift persists them without interpreting them. One writer
+per datum, one writer of the file.
+
+Identity, order and selection now come from the store, never from a local
+mutation. `open`, `select` and `close` are awaited before anything that depends
+on them: agent sessions, Git, detection, dev servers, activation and teardown.
+A selection that cannot be persisted shows the error and starts nothing. Keys
+keep their string form, so no session store or agent map changes. Canonical-root
+identity is added on `open`: a root that `realpath`s to a stored project's
+folder (a symlink, or `/tmp` vs `/private/tmp`) returns that project instead of
+creating a duplicate.
+
+The operations are written twice, in `src/service/WorkspaceFile.swift` and
+`src/native/workspace-model.ts`, and tested byte for byte. The TS copy backs
+the `TREZI_BACKEND_OWNER=legacy` writer. Four profile fixtures (current, old,
+odd, empty) go through 18 operations with identical results and bytes. To make
+that possible, the shared `JSValue` writer now formats numbers and orders
+integer-like keys exactly as `JSON.stringify` does; preferences output is
+unaffected. Both owners now keep invalid entries, unknown fields and old
+recents where the old writer dropped them. `close` also removes duplicate
+copies of a key. The unused attach-time `legacy` raw-workspace parameter is gone.
+
+The preferences pipe inbox and drain became the generic `DomainChannel`, and the
+service routes `{"service":"workspace"` lines to the second owner. Bun's
+client sends operations as intents, one at a time. A conflict caused by an
+adopted external edit is retried on the newer revision; it never falls back to
+a local write.
+
+Verification (worker sandbox): `test/workspace-owner.mjs` passes all seven
+sections. That covers parity, operations and concurrency, external edits and
+damage, injected write faults, SIGKILL at each durable boundary, rollback in
+both directions, and Bun's client plus the controller on the real owner across
+a service restart and UI reattach. `native-workspace-controller`,
+`native-workspace`, `preferences-owner`, `operation-ledger` and
+`service-process --supervision-only` also pass, the last with the real service
+executable built from the new sources. New Swift files have zero diagnostics
+under `-strict-concurrency=complete`. Both typechecks pass. The full
+`service-process` XPC section, which adds a workspace round trip through the
+real service, and `test:native` need the manager's unsandboxed run.
+## 2026-09-28 — Native smoke reports every failure in one pass (LKM-109)
+
+Before this change, `runNativeCoreSmoke` was one long async function, so the
+first failing assertion ended the run. Each agent loop therefore found only one
+problem. The function is now a list of named checks (`startup`, `open-project`,
+`mobile-viewport`, `chat-ready`, …, `final-shell`, plus `live-provider` under
+`--live`). They run through the new pure `smoke-runner.ts`. Each check keeps its
+assertions verbatim, moved as-is. A check declares `dependsOn` only for the checks
+whose state it builds on. In practice almost everything needs `open-project`, and
+the chat checks need `chat-ready`. When a dependency does not pass, the check is
+skipped with an explicit `skipped: depends on X`. Independent checks still run.
+
+After a failure the runner captures `failure-<check>.png`. It then runs that
+check's own cleanup, for example closing its sheet or content window, docking
+and hiding the editor, clearing the composer or leaving mobile/History-API
+navigation. Last, it runs a shared restore (`smoke-restore.ts`). The restore
+reuses the sidebar fixture's `sidebarFocus` cleanup and `preparePreviewInput`,
+turns select mode off, and returns to the first fixture project in desktop
+viewport on its own page. That way one broken check leaves the app in the state
+a passing run would have left it. Restore runs only after failures, so a passing
+run follows the same sequence as before. At the end the smoke prints the
+summary documented in `docs/TESTING.md` and throws if anything did not pass.
+`index.ts` already turns that throw into exit status 1.
+
+To prove the behaviour without breaking a real check, `TREZI_NATIVE_SMOKE_FAIL`
+names checks that fail deliberately. `test/native-smoke-runner.mjs` covers the
+runner with a fixture list. Also, `test/run.mjs` now kills each test after
+120 s by default instead of 600 s, which matches what Agent OS passes.
+
+## 2026-09-28 — Settings OCR returns wrapped lines out of order (LKM-106 repair)
+
+`settings-visible-800-on-chat` failed although its PNG shows the engine help
+in full. Vision returned the wrapped help's continuation (`Gateway API key.`)
+before its first line (`… requires an Al`), and the checker joined observations
+in result order and then looked for each sentence as one contiguous run. The
+capture carries text only, with no observation boxes to sort by. So
+`assertSettingsEvidence` now chains a required sentence across line
+observations anchored at line edges: it starts at the end of one line, passes
+through any whole lines, and finishes at the start of another. The pieces must
+concatenate to exactly the sentence, so every word is still required, in order.
+Only the observation order is free. The I/l fold is kept, and the Off-state
+absence checks use the same matcher, so split engine text is still caught.
+`test/native-settings-evidence.mjs` replays that capture's verbatim OCR (it fails
+on the previous checker) and rejects dropped, misspelled and reordered words and
+fragments that don't sit at line edges. All 18 saved `settings-visible-*`
+captures pass the new checker; only this one failed the old one.
+
+## 2026-09-29 — Latest button click never ran its action: native NSButton (LKM-103)
+
+`acceptance-WhenScrolling-6-latest` failed with `probeShowsLatest` true and
+`latestVisible` false (latestTop 0, readingHeight 542). Neither measurement
+was wrong. The dump shows `lastLatest.buttonClickCount` 0 and `distanceAfter`
+1673.5 pt: the reader was still 1673 pt up in history because the latest
+click never ran the button's action. The click itself was correct:
+`{519.5, 229}` is the exact window point of `latestButtonFrame
+{{271,508},{37,22}}` (chat x 230, flipped 748 − 519), and it hit the hosting
+view (`NativeChat`). A SwiftUI Button rendered inside NSHostingView offers no
+AppKit control there. No run has ever shown this click working: the b35c7def
+failure blamed on a stale `didEnd` had the same symptom before click counts
+existed.
+
+Offscreen (no WindowServer), `NSButtonCell`'s own tracking loop consumes a
+queued `mouseUp` and fires the action, which is the path the visible chat
+window uses (the NSScroller drag works the same way). A SwiftUI Button fired
+for neither delivery order. So the latest affordance is now a native
+`ChatLatestButton` (`src/native/ChatLatestButton.swift`):
+- It is an NSButton sibling above the chat in `chatColumn`, placed `margin`
+  (12) above the composer clearance at the trailing edge, with the same
+  geometry as before.
+- The probe's `showsLatest` still drives it. Its real frame (chat top-left
+  space) feeds `latestButtonFrame`, and it hides with the chat.
+- A press bumps `model.latestRequest`; SwiftUI then follows, scrolls to latest
+  and attaches, exactly as the old action did.
+- The SwiftUI overlay, the `reportsFrame` modifier and the `chatRoot` space
+  are removed.
+
+The harness now also asserts that each latest click runs the button action
+(`latestButtonClickCount` + 1) before the unchanged latest-row clearance check.
+
+Fixture: the shown button reports a real frame at the exact clearance
+position. A click at that frame hit-tests to the button, and its tracking loop
+consumes the queued mouseUp and runs the action once. Hidden/chat-hidden
+states report zero. Negative control: the SwiftUI button's hit is not a
+native control. On head the test fails because no native control exists.
+
+Candidate 922eca70 conflicts (TASKS, smoke-core): the smoke-wait import moved
+to the top of smoke-core and the chat context is applied inside `inspect`, so
+only lines the candidate leaves untouched change. The LKM-103 TASKS section now
+sits after LKM-106, so the candidate's inserts at the top don't collide. Both
+three-way merges were simulated clean with `git merge-file`.
+
+## 2026-09-29 — composerInspect timeout during the TIFF paste: diagnosis (LKM-103)
+
+Manager verification failed in the core smoke right after NATIVE ISLANDS PASS
+with `Native check timed out: composerInspect; false`. Diagnosis from the
+saved log and artifacts:
+
+- **Which wait:** the bundle stack (`index.cjs:20489`) is the clipboard-paste
+  loop's `attachments.length === count && enabled && text === ''` wait
+  (smoke-core.ts:87). `paste-png.png` was written in this run and
+  `paste-tiff.png` is from an earlier run, so the PNG paste passed and the
+  **TIFF** paste timed out.
+- **No LKM-103 code on that path:** it runs no code from the last two attempts.
+  `chatAcceptance`, `ScrollerDrag`/`revealKnob` and the drag/latest harness
+  steps first run at smoke-core.ts:212 (`checkVisibleComposer`) and in the
+  later chat-scroll acceptance. The only LKM-103 code active there is the
+  conversation layout/probe, which passed this same step in earlier runs.
+  Nothing else in the repo writes `NSPasteboard.general`, and the paste is
+  synchronous (write → `sendAction(paste)` → read), so there is no internal race.
+- **Anomaly:** `failure.png` shows the window had lost key status (grey traffic
+  lights, dimmed toolbar), while `paste-png.png` shows it key. Something
+  outside the app took focus during the wait.
+- **Ambiguous evidence:** the dumped chat state's `composerInset: 314` implies
+  composerHeight 236. That fits either one attachment row (128 + 108) or about
+  seven lines of pasted text. The old helper printed only the predicate's
+  `false`, so the run cannot say whether `attachments`, `enabled` (chat
+  `ready`/`switching`) or `text` failed.
+
+Given that evidence I could not attribute this to LKM-103 code, so no product
+change is claimed as its fix. I did not weaken, skip or lengthen any check.
+Instead the step is now self-diagnosing:
+
+- `src/native/smoke-wait.ts` replaces smoke-core's inline `wait`/`inspect`
+  (same 10 s timeout and 80 ms interval). A timeout still prints the label and
+  predicate result, then appends the last inspected state: scalars, array
+  lengths, truncated strings, no attachment payloads.
+- The paste wait adds Bun-side `ready`/`switching`/`running`/text
+  length/attachment count.
+- `composerInspect` also reports `windowKey`, `appActive` and
+  `inputIsFirstResponder`.
+- `test/native-smoke-wait.mjs` (unit tier) feeds the failing predicate a
+  timed-out state and requires the message to name each field. It reproduces
+  the old `composerInspect; false` message as a negative control and fails if
+  the diagnostic detail is removed.
+
+## 2026-09-29 — Reveal the overlay knob before the acceptance drag (LKM-103)
+
+The latest-button fix held, but "Native thumb dragging moves content" failed
+intermittently: the hit target was NSClipView, not NSScroller, and scrollY
+stayed at 3306 (run b35c7def had passed with NSScroller). The chat's
+autohiding overlay knob had faded before the synthetic mouseDown, so the click
+fell through to the clip view.
+
+Harness-only fix; product style and autohide are unchanged.
+- `ScrollerDrag.revealKnob` calls `flashScrollers()`, as scrolling does, then
+  polls with a bounded wait (1.5 s) until a hit-test at the knob's window
+  location returns NSScroller.
+- The acceptance fails with the hit class, knob rect and elapsed wait if it
+  never does. `lastDrag` records hit-before/after-reveal and `revealWait`.
+- `ScrollerDrag.perform` refuses (queues and delivers nothing) unless the knob
+  hit-tests to NSScroller at mouseDown, so a drag can never land on the clip
+  view.
+- The drag must still go through NSScroller and move content toward history.
+
+Fixture: a view covering the knob stands in for the faded scroller. The drag is
+refused before mouseDown, the reveal wait times out within bounds and reports
+the blocker, and once the knob is uncovered it hit-tests to NSScroller and the
+drag moves content, in both modes. Removing the refusal guard fails the fixture.
+
+## 2026-09-29 — Ignore stale live-scroll end after latest attach (LKM-103)
+
+Manager verification passed wheel and thumb drag in both Always and
+WhenScrolling, then failed `acceptance-WhenScrolling-6-latest`. After the
+latest-button click it showed `pinned=false`, the latest button still visible,
+`scrollY=2688.5` / `documentHeight=4774` and `latestVisible=false`.
+
+Likely cause (inferred from code, not yet confirmed by counters, which did not
+exist in that run): an overlay (WhenScrolling) thumb drag can post
+`didEndLiveScrollNotification` after the click's `attach()`. The old handler
+then called `userScrolled()`: it detached, bumped the pin generation (dropping
+attach's queued pin) and reported `follows=false`. The windowless replay of
+that order reproduces the failure exactly: detached, 900 pt from the end.
+
+Fix: a Cursor repair patch, reviewed and corrected here.
+- `didEndLiveScroll` detaches only when a live scroll is open. Otherwise it is
+  ignored and counted (`ignoredLiveScrollEndCount`).
+- `attach()` closes any open live scroll, counts attaches and sets `isPinned`
+  directly. The patch had used `setPinned(true)`, which synchronously called
+  `onPinnedChange` (SwiftUI `@State`) and `onLatestButtonChange` (published
+  `showsLatest`) from inside `updateNSView`: a state mutation during a view
+  update. The button already sets `follows = true`, and the pin's bounds change
+  refreshes the button afterwards.
+- The patch did not compile: `latestButtonClickCount` was `private(set)` but
+  incremented from `ChatConversation`.
+- Acceptance `lastLatest` records hit target, click point, and click/attach
+  counts, distance, pinned, live-scroll and ignored-end counters before the
+  click. It adds the "after" values only once the queued click and pin have run.
+  The patch had read them right after `postEvent`, when the click was merely
+  queued, and hit-tested in the content view's own (possibly flipped) space
+  instead of its superview's.
+
+Fixture regression, three orders: a live scroll open at attach; only a stale
+end; and the stale end landing before attach's queued pin. It asserts `attach()`
+makes no synchronous SwiftUI callbacks, the probe stays pinned at the end, and
+the stale end is counted. Negative controls: with the old handler the
+queued-pin order fails ("stale didEnd must not detach (false, distance 900.0)");
+with the patch's `setPinned(true)` it fails "attach pins without calling back
+into SwiftUI (2 callbacks)".
+
+## 2026-09-29 — Thumb drag through the scroller's own tracking loop (LKM-103)
+
+Manager verification now passes wheel and latest-button checks (frame
+{{271,508},{37,22}}, no system settings touched). It next failed "Native thumb
+dragging moves content": scrollY stayed at 3306.
+
+The drag was no longer pid-posted: it already used window-targeted
+`NSEvent.mouseEvent`s through `NSApp.postEvent`, the path that makes the
+latest-button click work. What differs is that NSScroller runs its own
+tracking loop inside `mouseDown` and dequeues the drag from the app queue.
+The harness posted each `mouseDragged`/`mouseUp` from async code after 25 ms
+sleeps, so the tracker never had the events it needed.
+
+Offscreen diagnosis (sandbox, no WindowServer, window number 0):
+- A real NSScroller hit-tests at its knob centre in both Always and
+  WhenScrolling (overlay) modes, even when the overlay is not revealed.
+- With the dragged/up events queued first and the mouseDown delivered to the
+  hit-tested scroller, scrollY went 3000 → 2187 for a 96-point upward drag in
+  both modes.
+- Posting the same events without routing the mouseDown left it at 3000.
+
+Fix: `src/native/ScrollerDrag.swift`, compiled into the app and the fixture.
+- It builds window-targeted down/dragged/up events at the knob centre (window
+  coordinates) and queues the dragged/up events.
+- It then delivers the mouseDown with `window.sendEvent`: AppKit hit-tests it
+  to the scroller, and the scroller's tracking loop consumes the queued drag.
+- Scroll position is never set directly.
+- Every acceptance inspection now carries `lastDrag` diagnostics (and each
+  mode writes `acceptance-<mode>-<n>-drag.json`): hit-test target, hit-is-scroller,
+  scroller style, knob rect, window number, whether events resolve to the chat
+  window, queued / consumed-by-tracker / leftover counts, scrollY before/after,
+  and live-scroll inputs seen by the probe.
+- The drag assertion now also requires the expected direction: scrollY must
+  decrease by more than 40 points, in both Always and WhenScrolling.
+
+Fixture regression, in an offscreen window that is never shown, for both modes:
+- The knob hit-tests to the scroller.
+- The events are window-targeted, the tracker consumes all 9 queued events,
+  and content moves toward history.
+- Negative control: the same drag posted without routing the mouseDown leaves
+  scrollY unchanged with 0 consumed, which is how the acceptance check fails
+  without routing.
+
+## 2026-09-29 — Accessibility/scroller modes via an in-process override (LKM-103)
+
+Manager verification failed in `test/helpers/chat-preferences.mjs`. The
+acceptance ran `defaults write com.apple.universalaccess` (increaseContrast,
+reduceTransparency, reduceMotion) and `defaults write -g AppleShowScrollBars`,
+which changes the user's real macOS settings. Restoring then failed with
+"Domain (com.apple.universalaccess) not found". The user confirmed their Mac
+is back to its original state; the protected domain probably never took the
+writes. Hard rule from now on: verification never reads-modify-writes or
+otherwise changes system settings.
+
+- **Removed:** the helper and its mocked unit test. `ChatAcceptance`'s
+  `UserDefaults`/`CFPreferencesAppSynchronize("com.apple.universalaccess")`
+  calls, and its `DistributedNotificationCenter` broadcasts of
+  `AppleShowScrollBarsSettingChanged`/`com.apple.accessibility.api` (a
+  system-wide side effect).
+- **Added:** `ChatSystemEnvironment` (`src/native/ChatEnvironment.swift`).
+  Production returns the live `NSScroller.preferredScrollerStyle` and
+  `NSWorkspace` Increase Contrast / Reduce Transparency / Reduce Motion values,
+  and republishes on their change notifications. The ephemeral `chatAcceptance`
+  command can override the scroller style and/or accessibility in-process. The
+  probe reads the scroller style (overrides reconfigure it through the same
+  notification path as the real setting). The conversation root and the
+  composer beam feed accessibility into the SwiftUI environment keys their
+  views read (`_colorSchemeContrast`, `_accessibilityReduceTransparency`,
+  `_accessibilityReduceMotion`: SwiftUI's public setters for those values).
+- **Not overridable:** AppKit's high-contrast drawing of native controls.
+  `NSAppearance(named: .accessibilityHighContrastAqua)` returns plain Aqua
+  (checked offscreen), so per-view emulation would only force Aqua/DarkAqua.
+  The scroll view's appearance is therefore never replaced; the native scroller
+  keeps following macOS itself, and the acceptance asserts it (`scrollAppearance`
+  empty).
+- **Acceptance:** switches Always/WhenScrolling and all three accessibility modes
+  through the override. It keeps every capture, geometry, wheel, drag,
+  latest-button and layout assertion, and additionally requires each mode to
+  reach the SwiftUI environment the chat renders with (`rendered`). It clears
+  the override in `finally`. Diagnostics report the real system values
+  read-only.
+- **Tests:** `test/no-system-preferences.mjs` (unit tier) scans src/test/scripts/bin
+  for the `defaults` tool, CFPreferences/other-domain writes, persistent-domain
+  writes, preference broadcasts, and the system domains/keys. It self-tests its
+  detector; a temporary helper using the old calls fails it. The composer-layout
+  fixture checks that:
+  - the default provider (shared and fresh) equals the real NSWorkspace/NSScroller
+    values;
+  - partial overrides, clearing, live system reads and change notifications work;
+  - the probe reconfigures to Always/overlay without touching the appearance;
+  - an offscreen NSHostingView's SwiftUI views receive each overridden
+    combination (removing the environment modifier fails it).
+
+## 2026-09-28 — Report the latest button's rendered frame directly (LKM-103)
+
+The native check then showed the button rendered (acceptance-failure.png;
+probeShowsLatest and model.showsLatest both true), but `latestButtonFrame`
+stayed zero. The `LatestButtonPosition` PreferenceKey never arrived through the
+NSHostingView / GeometryReader / ScrollViewReader / overlay nesting, even when
+observed on the root VStack, so the harness could neither report nor click it.
+The PreferenceKey, its emitter and its consumer are removed. The button now
+calls `reportsFrame(in: ChatLayout.rootSpace)`, a small modifier in
+ChatScrollStyle.swift built on `onGeometryChange` (back-deployed to macOS 13)
+plus `onDisappear` → `.zero`. It reports the real rendered frame in the root
+`chatRoot` space, which fills the hosting view with a top-left origin, so
+ChatAcceptance's click conversion is unchanged. The harness still measures
+that frame; it is never derived from a model flag. A zero frame while
+`showsLatest` is true now fails with its own message, and diagnostics include
+`latestButtonFrame`.
+
+A new fixture section hosts the same nesting in an offscreen NSHostingView (in
+a borderless window that is never shown). The shown button must report a
+nonzero frame at the exact bottom-trailing position in chatRoot points, with a
+click point inside the host; hiding resets the frame to zero; re-showing
+reports again. With the modifier turned into a no-op, the section fails:
+"Shown latest button reports a nonzero rendered frame ((0,0,0,0))".
+
+## 2026-09-28 — Latest button driven by the scroll probe (LKM-103)
+
+With input routing fixed, the native check reached the probe (monitorCallbacks
+1, pinned false, userScrollCount 3, scrollY 3943→3243), but `latestButton`
+stayed false. Two defects:
+
+- The harness reads `model.latestButtonFrame`. Its `.onPreferenceChange` was
+  attached to the scroll view before the `.bottomTrailing` overlay that hosts
+  the button. Preferences only flow up from a modifier's own subtree, so the
+  button's frame never reached it. The frame was also measured in `chatScroll`,
+  a coordinate space the overlay isn't inside.
+- Visibility came from the SwiftUI `follows` flag, written back from an AppKit
+  callback, rather than from the probe's own state.
+
+The button's visibility is now `ChatScrollStyleProbe.showsLatestButton`:
+(unpinned or not following) and at least 1pt from the end. The probe refreshes
+it on every clip/document bounds change, on pinned changes, and (deferred) after
+SwiftUI updates, and publishes it to `ChatModel.showsLatest`. The button appears
+as soon as a detached reader scrolls away, and hides the moment they return to
+the bottom (before the settle re-pins) or click latest. Reveal/control
+interaction away from the end still offers it. Its frame is observed on the root
+`VStack` in a new `chatRoot` coordinate space. Acceptance diagnostics add
+`probeShowsLatest`/`modelShowsLatest`; the native checks are unchanged.
+
+The windowless regression has a visibility table, plus wheel and live-scroll
+sequences: following hides it; unpinned and scrolled away shows it; it stays
+visible after rest and composer changes; back at the bottom hides it; re-pin
+keeps it hidden; history shows it again; the latest click hides it. A reveal
+away from the end shows it. Removing the position-driven refresh fails the
+regression ("unpinned and scrolled away shows latest ([])").
+
+## 2026-09-28 — Acceptance wheel never reached the scroll view (LKM-103 input routing)
+
+The native wheel/latest-button check failed again. The log showed
+userScrollCount 0, pinned true and scrollY exactly at the bottom: the wheel
+never reached the scroll logic at all, and there was no re-pin loop (pinCount
+counts only real moves). The acceptance posted a CGEvent with `postToPid`, and
+such events arrive with `NSEvent.window == nil`. The probe's window guard
+dropped them, and AppKit never hit-tested them to the NSScrollView. Tagging
+the public `mouseEventWindowUnderMousePointer*` fields does not change that.
+The `NSApp.currentEvent` re-pin theory in the entry below is wrong. The
+probe-owned pinned state it introduced is still correct and is kept.
+
+- **Diagnostics:** the acceptance inspect result now reports the probe's
+  input-monitor callbacks, scroll-wheel events examined, the last rejection
+  reason (e.g. `nil window: pointer outside conversation`, `other window`,
+  `other window number`, `no vertical delta`, `conversation not in a window`)
+  and the chat window number.
+- **Probe:** `ChatScrollStyleProbe.wheelRejection` accepts a nil-window wheel
+  whose pointer is over the conversation. The pointer comes from the event's
+  Quartz location converted to screen, window and scroll coordinates, falling
+  back to `NSEvent.mouseLocation`. It still rejects events for any other window
+  object or window number.
+- **Acceptance:** AppKit has no window-targeted scroll-wheel constructor, but a
+  window-targeted `NSEvent.mouseEvent`'s CGEvent carries the window number
+  (field 51) and a window-local location; checked offscreen. The fixture
+  retypes that as a precise pixel wheel event and fails loudly unless it
+  resolves to the chat window. It posts the event with `NSApp.postEvent`, so
+  it passes through the event queue, the local monitor, `NSApplication.sendEvent`
+  and NSWindow hit-testing to the scroll view. Hover, thumb drag (still toward
+  history) and the latest click use the same path, so the scroller's own
+  tracking loop dequeues the drags. The harness never calls the probe. Native
+  assertions and thresholds are unchanged.
+- **Windowless regression:** a classifier table (accepted: chat window, nil
+  window over the conversation; rejected: outside, other window or number, no
+  window, no pointer) and the Quartz flip. The real `handleInput` path runs on
+  an offscreen, never-shown window: a nil-window pid-style wheel over the
+  conversation detaches and survives growth; wheels outside it, for another
+  window number, with no delta, or with no window are dropped with the stated
+  reason; non-scroll input is ignored. Restoring the old window guard fails the
+  table.
+
+## 2026-09-28 — Only user input detaches from latest (LKM-103 wheel fix)
+
+(Correction: the root cause below was misdiagnosed; see the entry above. The
+wheel event never reached the probe.) The resize fix passed natively, but
+"Wheel scrolls history and reveals latest button" failed: after a wheel scroll
+up, the view stayed pinned (scrollY 3943, no latest button). The original
+theory was that SwiftUI's `NSApp.currentEvent` check re-pinned the view after
+the probe's programmatic pin; that `currentEvent` logic is removed.
+
+The probe now owns "pinned to latest", and it changes only on user input:
+- A local wheel/key monitor (wheel over the conversation, or scrolling keys
+  with focus inside it) and NSScrollView live-scroll notifications (trackpad
+  gestures, scroller drag) detach immediately. They also invalidate queued
+  pins and report the change to SwiftUI, which shows the latest button.
+- Pins require pinned && `follows`.
+- Re-attach happens only when user input comes to rest at the end
+  (0.35 s settle, not during live scroll), or on an explicit attach (latest
+  button, chat switch).
+- Pins, SwiftUI scrollTo and AppKit clamping never change the state. The
+  `currentEvent` logic is removed.
+
+The acceptance fixture's pid-posted events now name the target window
+(`mouseEventWindowUnderMousePointer…` fields), so AppKit and the monitor see
+`event.window`. Diagnostics include `pinned` and `userScrollCount`. Native
+thresholds and assertions are unchanged.
+
+The windowless regression covers both the wheel and live-scroll paths:
+- A queued pin is dropped.
+- Settle, document/viewport configuration, composer growth/shrink, a
+  composer-height pin request and a resize all leave scrollY unchanged and
+  not pinned.
+- Returning to the end re-attaches only after the input rests.
+- Latest re-attaches.
+- Programmatic pins leave `userScrollCount` at 0.
+
+An in-fixture negative control shows the previous gate re-pins history on
+growth, and removing the detach from `userScrolled` fails the regression.
+
+## 2026-09-28 — Pin following chats from settled AppKit metrics (LKM-103 resize fix)
+
+Manager native verification failed `acceptance-440-resized-short`. The draft was
+capped, then the window was made short: latest bottom 220.9 vs reading height ~211,
+scrollY 4456, document 5055, viewport 568. The composer cap follows the viewport
+(368 at 776, 279 at 568), so the clearance changes with the resize. SwiftUI's
+follow anchor is a *fraction* of the viewport. Applying the tall layout's
+fraction to the short viewport stops ~31pt of scroll and ~10pt of row short,
+which matches the capture. The stale value can come from the probe's stored
+closure, or from a scrollTo resolved after layout.
+
+Following no longer depends on that fraction. The document's bottom padding
+equals the composer clearance, so "following" is exactly "scrolled to the
+document end". The probe now pins the NSScrollView to its end in AppKit, reading
+the document/viewport bounds current at that moment. It does this on every
+settled document/viewport size change, and on an explicit request (composer
+height, viewport, streaming, chat switch, latest button), but only while
+`follows` is true. A reader in history is never moved. The metric-only paths
+(composer height, viewport) no longer issue a SwiftUI scrollTo at all.
+
+The windowless regression replays 440pt with real composer cap heights, in both
+orders (grow→resize, resize→grow). It applies the stale fractional anchor after
+each step before layout settles. It asserts the latest row sits below the top
+edge and above composer top minus status+gap. A negative control reproduces the
+manager's ~10pt shortfall, and removing the settled pin fails the regression. It
+also checks that history position survives growth/resize and ignores pin
+requests. The native acceptance adds the resize→grow order at both widths
+(`short-1-line`, `short-then-grow`, `short-then-grow-tall`). The existing
+assertions are unchanged.
+
+## 2026-09-28 — Rewire LKM-103 acceptance onto the merged candidate
+
+Candidate 0b8037a (LKM-88/LKM-107) now runs native-chat-scroll directly in
+`test:native` with `--require-build`. The earlier LKM-103 chaining from
+native-runtime would have run the fixture twice, so it is removed. The
+acceptance matrix still runs at the end of native-chat-scroll, after the
+candidate's reveal checks, so the configured manager command still produces
+every capture. The wrapper timeout rises from 180 s to 360 s because the
+acceptance matrix now follows the reveal matrix. The Swift build, typechecks,
+composer/acceptance/reveal/docs unit checks all pass. The unit tier failed only
+on sandbox socket/port EPERM.
+
+## 2026-09-28 — Hand-off check of manager acceptance fixtures (LKM-103)
+
+A fresh session resumed the preserved worktree after the previous run stopped
+on a quota limit, and re-checked the staged fixtures against the reviewer's
+evidence list. The list asked for: the real SwiftUI probe, idle/hover/active/drag/
+wheel, live Always-show and accessibility preferences, 440/320-point 1/6/80-line
+drafts, short/tall resize, and native-chat-scroll running under test:native.
+All of these are covered. One change: `chatAcceptance {prepare}` now waits up to
+2 s for AppKit's asynchronous activation before its foreground guard. It still
+fails if activation is denied. Swift build, typechecks, composer/acceptance/docs
+unit checks pass. The unit tier failed only on sandbox socket/port EPERM. No GUI
+suite or preference mutation was run.
+
+## 2026-09-28 — Follow settled chat document bounds (LKM-103 diagnostic repair)
+
+Inspect the retained foreground failure PNG and one/six-line JSON captures. The
+composer and document grow by 83 points (128→211 and 7413→7496), but scrollY
+remains 6636 and the latest row stays at y=549.32, overlapping status clearance.
+The composer-height scroll request runs before AppKit installs the enlarged
+SwiftUI document; it clamps against old bounds with no post-layout retry.
+
+Observe actual conversation document/viewport dimensions through the existing
+native scroller probe and retry SwiftUI scrollTo after AppKit layout changes,
+only while following remains enabled. Ignore origin-only scrolling, preserve
+native scroller policy and controls, and detach observers when the document
+changes or the probe is destroyed. No fixed-delay production retry is used.
+
+The windowless regression replays the captured dimensions, demonstrates the
+stale offset, then checks settled growth/shrink, viewport resize and absence of
+history-scroll feedback. Removing settled-layout delivery makes this regression
+fail at the stale-bottom assertion. Focused composer, acceptance-preference and
+controller checks plus TypeScript/native and full Swift typechecks pass.
+Desktop acceptance assertions are unchanged;
+manager must rerun the native suite and inspect its foreground captures.
+No GUI suite, preference mutation, staging or commit was performed.
+
+## 2026-09-28 — Manager acceptance fixtures (LKM-103 review feedback)
+
+Compare candidate 771ce3d before editing: it has no newer composer/capture fixture
+repair. Wire the separate chat-scroll fixture into test:native's native-runtime
+entrypoint, after the core host exits, so the configured manager command actually
+runs growth/resize/scroll acceptance. Preserve the prior shrinking/streaming checks.
+
+Add ephemeral-only inspection of the probe inside the real SwiftUI conversation:
+assert its configured scroll view identity, native small size, overflowing content,
+live preferred/effective styles and Always-show visibility. Send wheel, hover,
+thumb-drag and actual scroll-to-latest button mouse events to this process.
+Record full-column foreground PNG/OCR and geometry for 440/320-point widths,
+1/6/80-line drafts, short/tall viewport resizing and idle/active/hover/drag states.
+Require equal exterior gaps and the complete latest row above composer clearance.
+Run the existing attachment/model/Auto/send fixture at both widths, with multiline
+and capped draft submission respectively.
+
+The manager desktop-lock fixture temporarily toggles Show scroll bars and the
+actual Increase Contrast/Reduce Transparency/Reduce Motion preferences. Require
+native getters to observe each change and exercise scrolling afterward. Snapshot
+exact prior values/absence, restore in finally and SIGINT/SIGTERM handlers, and
+write restoration journals before mutations. Denied writes or unobserved native
+changes fail explicitly; there is no simulated-preference pass or capture fallback.
+See docs/TESTING.md for capture paths, assertions and crash recovery records.
+
+Worker checks pass: registered preference-restoration unit test (mocked commands,
+no system writes), windowless composer, test runner, TypeScript/native and full
+Swift source typechecking (deprecation warnings), helper bundling, docs links and
+whitespace. No GUI suite, foreground capture or system preference mutation was
+performed by this worker. These are fixtures ready for manager execution; native
+interaction and visual acceptance are not yet claimed.
+
+## 2026-09-28 — Repair composer bounds handoff (LKM-103 feedback)
+
+Reproduce the manager's empty composer capture without opening a window: the
+new CGRect-derived bounds dictionary held CGFloat values, while composer.update
+requires Double values. The failed cast silently retained the initial zero frame.
+Encode placement bounds explicitly as Double and test that exact handoff through
+the real composer update/layout path at each covered width and draft height.
+The new regression fails with the previous CGFloat payload and passes after the
+fix, including nonempty bubble geometry. Keep capture, foreground, OCR and
+interaction assertions unchanged.
+
+Compared candidate 771ce3d: relevant composer/capture fixtures match this branch's
+base and contain no newer repair. Windowless composer checks, chat-controller,
+TypeScript/native checks, full Swift source typechecking (deprecation warnings),
+docs links and whitespace checks pass. Manager must rerun native verification
+and inspect foreground captures; this worker ran no GUI suites or captures.
+
+## 2026-09-28 — Composer exterior spacing and native chat scroller (LKM-103)
+
+Match the composer's exterior bottom gap to its existing 10-point side inset.
+Include that gap in height budgeting, status placement and message clearance;
+keep following the latest message when the viewport resizes as well as when the
+composer grows. Preserve the bubble's controls and gradient-free background.
+
+The conversation is a SwiftUI ScrollView, distinct from the composer's AppKit
+text editor. Configure only its backing NSScrollView with the small native
+scroller and the system's preferred style. AppKit retains fading/hover/dragging
+and accessibility drawing; Always-show uses the native legacy scroller. Observe
+system style changes without replacing the document or handling scroll events.
+
+Windowless composer coverage passes for exterior gaps and message clearance at
+320/420/520-point widths with wrapped/capped drafts, context, attachments and a
+queue. Native overlay/legacy policy, scroll-position preservation and repeated
+configuration checks pass, as do chat-controller, TypeScript/native, full Swift
+source typechecking (deprecation warnings only), docs links and diff whitespace.
+Manager owns desktop verification: foreground normal/narrow/multiline captures,
+latest-message reachability, idle/hover/drag/wheel states and Always-show plus
+accessibility preference checks. No GUI suite or foreground capture was run by
+this worker.
+
+## 2026-09-28 — Settings OCR reads SF Pro "I" as "l" (LKM-106 diagnostic repair)
+
+The manager's `test:native` failed at the first foreground capture
+(`settings-visible-540-off`) with "Missing complete foreground text: Generate UI
+using…". The PNG renders the help correctly; the fault was the comparator.
+SF Pro draws capital I and lowercase l with the same glyph, so Vision returned
+`Generate Ul using…` (and `Al providers…`), while the bold `Experimental Gen UI`
+happened to read correctly. `assertSettingsEvidence` now folds only that
+glyph-identical pair before lowercasing (dotted i stays distinct), and the
+Off-state "engine text is absent" checks go through the same normalizer, so the
+fold cannot make them vacuous. `test/native-settings-evidence.mjs` replays the
+capture's verbatim OCR output (fails on the old comparator) and still rejects a
+dropped word, an i→l misspelling, and homoglyph-read engine text while Off.
+
+## 2026-09-28 — Manager-run Settings evidence, existing checks retained (LKM-106 review)
+
+Addresses the reviewer's recorded-evidence findings: `bun run test:native`
+now produces the Settings evidence itself (native-runtime → smoke-core →
+`checkNativeSheets` → `checkVisibleSettings` in `src/native/smoke-settings.ts`).
+Restore the two Settings steps the earlier repair had replaced: the original
+`settings.png` sheet capture (before the new fixture) and the
+`sheetPerform change` autosave round-trip (after it). No check was removed.
+
+Fixture steps, run per width in the live minimum (540), 600 and 800 points plan:
+foreground Off capture → native On action → Chat model capture → native Jev
+action → capture → Off (engine hidden, Jev preserved) → close/reopen → capture →
+On (Jev restored) → Chat model then immediate close/reopen → capture → Off then
+close/reopen → capture. Each capture asserts foreground ownership, requested
+width ≥ minimum, stable minimum, rendered picker set, contained/hit-testable
+pickers, selected labels, saved values and complete OCR of both explanations
+(engine text absent while Off). Reopens assert a fresh sheet ID with unchanged
+values. Evidence is written before assertions.
+
+Manager should inspect `test/artifacts/native/settings-visible-{540,600,800}-{off,
+on-chat,on-jev,off-preserved-jev,reopened-off-jev,restored-on-jev,
+reopened-on-chat,reopened-off-chat}.{png,json}` (24 pairs),
+`settings-visible-interactions.json`, and the retained `settings.png`.
+Worker checks: typechecks, Swift host build, `native-settings-layout`,
+`native-settings-evidence`, `native-settings`, `native-sheets`, `docs-links`.
+Native GUI execution and PNG inspection remain manager-owned.
+
+## 2026-09-28 — Use the live Settings minimum width (LKM-106 verification repair)
+
+Reproduce the manager's `540 !== 600` failure without a visible window. Production
+uses NSHostingController, which propagates SheetContent's 540-point minimum to
+NSWindow; the prior windowless fixture used NSHostingView and retained the
+manually assigned 600-point minimum. Candidate `51fb928` has the same production
+hosting setup and no equivalent fixture correction.
+
+Match the production hosting controller in the windowless test, assert the
+540-point effective minimum, and exercise actual layouts/picker interactions at
+540, 600 and 800 points. The manager fixture derives its narrow width from the
+live window, retaining normal 600 and wider 800 coverage. Reject invalid minimums,
+assert the minimum remains stable across states/reopens, and retain every OCR,
+foreground, visibility, hit-target, preservation and autosave assertion.
+
+The current capture plan is 24 PNG/JSON pairs named
+`test/artifacts/native/settings-visible-{540,600,800}-*.{png,json}`, plus the
+interaction log with its explicit width plan. Focused windowless and evidence
+checks and TypeScript checks pass. Native execution and new capture inspection
+remain manager-owned; this worker did not run GUI suites.
+
+## 2026-09-28 — Foreground Settings acceptance fixture (LKM-106 review)
+
+Compare candidate `51fb928`: its visible-region capture helper and Settings smoke
+fixture match this checkout; it has no newer Settings acceptance fixture to reuse.
+Reuse the shared ScreenCaptureKit/Vision helper, replacing only the Settings
+cacheDisplay capture with foreground evidence. The existing native suite now
+exercises real SwiftUI picker menu-item target/actions at 600-point minimum and
+800-point wider widths, Off/On, Chat model/Jev, hidden engine preservation, and
+close/reopen autosave (including immediate close after changing the engine).
+
+Save 16 `test/artifacts/native/settings-visible-{600,800}-*.png` captures with
+matching OCR/geometry/value JSON plus `settings-visible-interactions.json`.
+Assert full helper text, engine absence/presence, selected labels, unclipped
+picker geometry, hit targets and foreground ownership. Write evidence before
+assertions so manager failures retain inspection artifacts. No direct form-value
+injection is used by the new Settings fixture.
+
+Add windowless SwiftUI picker/binding checks and negative evidence-validation
+checks to the unit tier. Non-GUI checks and Swift/TypeScript typechecks pass.
+The worker has not run foreground/native smoke verification or inspected these
+new captures; manager execution and independent PNG inspection remain required.
+
+## 2026-09-28 — Experimental Gen UI and Svelte composition (LKM-106)
+
+Rename the native setting, add wrapping help text and conditionally show the
+explained layout method without clearing its saved choice. Preserve default-off,
+autosave and next-message/queued turn settings.
+
+Add bounded compiler-backed Svelte discovery for literal legacy/rune props,
+default slots and zero-argument children snippets. Both Chat model and Jev export
+real `.svelte` imports/source, retain React TSX, reject mixed frameworks and
+unsupported contracts, and keep json-render out of target runtime dependencies.
+Guard output symlinks and reject late results across cancellation or same-engine
+turn replacement. Update both provider tool descriptions and scope documentation.
+
+Focused React/Svelte SSR, deterministic Jev, settings and queue tests pass, as do
+TypeScript/native and non-GUI Swift typechecks. The Svelte fixture compiles and
+renders integrated generated source without paid calls. Native foreground
+readability/interaction checks and the configured verification remain manager-owned;
+no GUI suite, provider calls, staging or commits were performed by this worker.
+## 2026-09-29 — Manager verification: `native-sheets` timeout (LKM-91 / S03)
+
+119 unit checks passed; `native-sheets` hung until the 600 s cap (its first line
+printed, the autosave section never finished). Cause: an earlier repair made a
+cancelled autosaving sheet loop on `flushPending()` until a save succeeded. The
+existing check saves 16,001 characters, which can never succeed, so close retried
+forever instead of staying open with the failed draft ("try closing again to
+retry"). That loop was also unnecessary: `SheetAutosave.enqueue` on the next
+close already retries the retained draft, which `native-settings` proves (failed
+batch keeps the draft, close waits for the retried save). Reverted
+`sheet-autosave.ts` and `sheets-runtime.ts` to their original behavior; kept the
+`native-settings` synchronization hardening (wait for the blocked apply instead
+of a fixed sleep). `native-sheets` and `native-settings` (three repeats) pass.
+
+## 2026-09-28 — Preferences move to the Swift service (LKM-91 / S03)
+
+The first writer transfer. Under the default launch the Swift service is the only
+writer of `preferences.json`, through the operation ledger. Bun keeps the
+controllers that decide what to save, sends awaited batches over its supervised
+pipe and reads acknowledged snapshots. `TREZI_BACKEND_OWNER=legacy` keeps Bun's
+writer as the rollback owner. Nothing else moves. Details and the domain's
+rollback plan: `docs/SWIFT-BACKEND-PREFERENCES.md`.
+
+The file format does not change, down to the bytes, because it is the rollback
+artifact. Swift reads and writes it as insertion-ordered JSON over UTF-16 code
+units with `JSON.parse`/`JSON.stringify` semantics. That keeps key order,
+repeated keys, lone surrogates and the JS `.length` limits exactly as Bun had
+them. The test compares Swift's written bytes with Bun's for the same batch.
+
+The ledger checkpoint is only the file's digest, so the file stays the one copy of
+the values. A batch re-reads the file first. A different digest is an external
+edit: the batch conflicts and the file is adopted as a new revision. The same
+adoption at launch is how newer writes by the legacy owner survive a return to
+Swift. An invalid external file is never replaced. The target digest is journaled
+with the effect record (a new optional `pending` field on ledger operations), so a
+crash between the rename and the receipt is reconciled from the file instead of
+replayed.
+
+The callers were re-inventoried: settings (one atomic batch built from the
+committed state when sent, so a newer last-used model is not clobbered), last-used
+model, publish mode, chat hidden, chat width and panel sizes. Bun's client sends
+one batch at a time on the last committed revision. A timeout or failure rejects;
+there is no local fallback write. Autosave keeps a failed draft and close waits
+for the save. Startup now awaits the snapshot, so the bridge holds host events
+until every handler is registered. On quit the service lets Bun finish, then
+drains accepted preference requests (bounded) before releasing the ledger.
+
+Verification (worker): `test/preferences-owner.mjs` passes, three runs in a row.
+It compiles the real sources into a fixture and covers parity, batches,
+idempotency, concurrency, external edits, injected temp/flush/rename failures,
+SIGKILL at each durable boundary, rollback both ways, and Bun's real client
+against the real owner. The fixture blocks after its own SIGKILL: in a
+multithreaded process `kill(getpid())` can return before the process dies, which
+let a rename slip past an injected crash in one run. The full unsandboxed
+`test/service-process.mjs` passes, and now sends a batch from the supervised
+backend through the real XPC service. `native-settings` adds the failed-draft and
+close-waits cases. Both typechecks and `bun run build` pass. The native GUI tier
+was not run by the worker.
+
+## 2026-09-28 — Durable operation ledger in the Swift service (LKM-90 / S03)
+
+S03's first half: the substrate every writer transfer needs. No domain writer
+moves. Bun still writes preferences and everything else. The preferences
+transfer waits for this to be verified, behind the adoption gate in
+`docs/SWIFT-BACKEND-LEDGER.md`.
+
+`OperationLedger` (an actor) persists intent before effects. The intent digest
+is SHA-256 over canonical domain/mode/service/method/scope/expected
+revision/body. Identity is checked before the revision, so a retry of a
+successful operation returns its receipt instead of conflicting with the
+revision it advanced. Swift actors are reentrant, so each domain has a FIFO lane
+held across the effect's suspensions. `beginEffect()` splits cancellable
+preparation from a non-idempotent effect, which is what makes the restart rule
+exact: an intent without an effect is abandoned (never run later), and an effect
+without a receipt is `uncertain`. An uncertain operation blocks its domain until
+the owner reconciles it against the external world. Blind replay was the thing
+to avoid. Cancel before the effect discards the late result; after the effect,
+cancel returns `tooLate`.
+
+`LedgerStore` keeps `<profile>/service/ledger/`: a checksummed, `F_FULLFSYNC`ed
+journal and an atomically replaced snapshot, with generations so a crash
+mid-compaction is unambiguous. Only an unterminated final line counts as a torn
+write. It is copied to `quarantine/` and truncated. Any other damage, and any
+other format (a newer build's store), refuses to open with the files untouched.
+A fresh store would forget receipts and execute duplicates, so replacing one is
+an explicit `quarantineLedgerStore` call, never automatic.
+
+The ledger epoch is persisted, so event cursors survive restart. Gaps older than
+the 1,024-event window, foreign epochs and future cursors need a snapshot.
+`LedgerMirror` pins the consumer rule: a reply never writes state, so a late one
+can't overwrite a newer snapshot. Receipts are retained for a 7-day horizon
+(earlier past 4,096 operations). Expired IDs answer `recoveryRequired`, never
+execute.
+
+`ServiceRuntime` opens the ledger once, at the first launch hello, after
+`ProfileExclusion` and before Bun. If it can't be opened, the service logs that
+and keeps running legacy Bun. The `--legacy` owner never opens it. Nothing is
+exposed over XPC yet, since typed domain dispatch arrives with the first writer.
+
+Verification (worker sandbox): `test/operation-ledger.mjs` passes. It compiles
+the real sources into a fixture process and SIGKILLs it at every durable
+boundary and at arbitrary times, then restarts. `service-process
+--supervision-only` passes with the ledger linked into the real service
+executable. The ledger files also pass a `-strict-concurrency=complete`
+typecheck. The XPC assertions (ledger created at launch, epoch kept across a
+second service instance) need the manager's unsandboxed run.
+
+## 2026-09-28 — Live reload can no longer miss a change (LKM-89 / S02)
+
+Manager verification of the merged tree: 114 unit checks passed, then
+`test:native` timed out at `managed reload` (`src/native/smoke-core.ts`). That step
+`text:apply`s `index.html` and waits for the preview to show the new text.
+
+The watcher under the supervised service was not failing. Earlier in the same run
+the islands smoke rewrote `index.html` and waited for the element its new script
+adds; only a live reload can produce it, and it passed. The pre-LKM-107 LKM-89
+run also passed `managed reload` through the service. Diagnosis from code (this
+worker's sandbox cannot bind ports, reach XPC or receive FSEvents; not
+reproduced here): live reload was edge-triggered with no memory. The step before
+`managed reload` edits `native-style.tsx`, and every fixture change reloads the
+page. The `index.html` write follows a few host round trips later, which now
+cross XPC. A `change` sent while the old page's EventSource has closed and the
+new page's has not opened goes to zero clients. A page that fetched `index.html`
+just before the write then stays stale for good.
+
+`static-server.ts` is now level-triggered. Each watched change bumps a version.
+A served page embeds the version it was read at (captured before the read) and
+connects with `?v=`. The stream announces the current version immediately when
+it differs, and clients reload only on a mismatch. Watcher `error` and setup
+failures are now written to the project log and stderr instead of being
+swallowed. `service-process` now runs the real static server inside the
+backend launched by the real XPC service and checks four things. An edit
+broadcasts a reload. A page that missed the broadcast reloads when its stream
+connects. A current page never reloads. The watcher reports no failure.
+`managed reload` is unchanged.
+
+## 2026-09-28 — Resolve the S02 candidate merge against LKM-107 (LKM-89 / S02)
+
+The previous manager verification passed: 113 unit checks, both typechecks and
+`test:native` (NATIVE CORE PASS). Review and merge stopped at the candidate merge
+instead, because `candidate` had meanwhile taken LKM-107. Both branches changed the
+Shadow Light reveal, so `src/native/Chat.swift` and
+`src/native/smoke-shadow-island.ts` conflicted. A trial merge of `candidate` into
+the S02 head, done in a throwaway clone, reproduced exactly those two conflicts.
+
+LKM-107 fixes the race that S02's capture retry only worked around: a reveal is
+re-issued against measured anchor geometry until SwiftUI applies it. The smoke then
+asserts the acknowledged `revealAppliedRevision` before capturing. S02 now takes
+LKM-107's version of both files, so the `messageTops` inspect field and the
+three-attempt re-reveal loop are gone. Every other file came from the clean
+auto-merge (service build/sign steps, `Host.swift` service mode, test tiers,
+docs). The worktree now holds that merged tree, so `native-chat-reveal` joins
+the unit tier here. The service code is unchanged. Per-file `git merge-file`
+(with the `merge=union` driver for this log) shows candidate ← this tree merges
+with no conflicts and yields exactly this tree.
+
+Verifying the merged tree also turned up a real `service-process` flake. One
+parallel unit run killed it with SIGKILL right after its final PASS line; it
+passed alone. The cause: the fixture polled for a pid file and read it as soon
+as it *existed*. A backend can create that file before writing its digits (a
+racing probe saw it empty in 164 of 300 reads), and `Number('')` is 0. That 0
+stayed in the cleanup set after the real pid was removed, and the `finally`
+ran `process.kill(-0, 'SIGKILL')`, which is `kill(0)`: the test's own process
+group. The Swift guardian fixture had the same race, where the force-unwrapped
+`Int32("")!` crashes instead. Fixed: the backend fixture renames its pid files
+into place, both readers wait for a complete pid > 1, and group cleanup refuses
+pids ≤ 1. A regression check at the top of `service-process` asserts that an
+empty file and a `0` are both rejected and that killing group 0 or NaN is a
+no-op.
+
+## 2026-09-28 — Native smoke through the service: quit hang, lost logs, capture race (LKM-89 / S02)
+
+Manager verification: all 113 unit checks pass; `test:native` ran through
+the service path, failed its first Shadow Light capture at 15:31:26 (5 s into
+the smoke) and then hung until the 300 s spawn timeout. The error text was
+lost: an XPC service's stderr is discarded, and Bun inherited it. Diagnosed
+from artifacts and code, without running the GUI tier:
+- **Shutdown hang.** Quit answered `.terminateLater`, which runs AppKit in a
+  modal-panel run loop. The client's shutdown reply, callbacks and its own 10 s
+  timeout all hop through `DispatchQueue.main`; if that queue is not serviced
+  there, nothing can finish the drain. The host now returns `.terminateCancel`,
+  drains in the normal run loop, then terminates again, and a 20 s watchdog
+  bounds shutdown. A windowless probe could not settle the run-loop question
+  here (the sandbox denies WindowServer), so this removes the dependency rather
+  than relying on it.
+- **Lost diagnostics.** The client passes its stderr over XPC before the first
+  hello, and the supervisor gives it to Bun as fd 2 (duplicated above the
+  reserved slots, like the profile lease). The fixture asserts a backend stderr
+  line reaches the client.
+- **Deadlock hazard.** The owner queue wrote to Bun's stdin synchronously while
+  the stdout reader waited on the same queue (`queue.sync`), so two full pipes
+  could deadlock. Writes moved to a serial writer queue, and delivery is async;
+  stop drains accepted writes (bounded 2 s) before EOF.
+- **Capture race.** `failure.png` and `shadow-light-initial.png` show the "top"
+  capture scrolled to the bottom (token-offer card visible, island header cut
+  off), while the bottom capture was placed correctly. `chatInspect` now reports
+  message tops. The smoke re-reveals (up to three attempts) when the revealed
+  top is not held before and after capture. All OCR label assertions are
+  unchanged. The underlying late scroll is not identified. (Superseded by
+  LKM-107's acknowledged reveal; see the merge-resolution entry above.)
+
+Worker checks: both typechecks, `bun run build`, and the full unit tier (113
+pass) outside the sandbox, including `service-process` with its new diagnostics
+assertion. The native tier was not run by the worker.
+
+## 2026-09-28 — Fix XPC relay stall found by manager verification (LKM-89 / S02)
+
+Manager verification: 112 unit checks passed; `service-process` timed out in its
+XPC section, which the worker sandbox cannot reach (launchd lookup denied).
+Reproduced outside the sandbox and gave each fixture wait the calling step, which
+named the legacy relay. Root cause: `FileHandle.read(upToCount: 65536)` blocks on
+a pipe until the full count or EOF (a standalone probe stays blocked with a short
+line pending), so no Bun → host line was ever relayed. Both the XPC relay
+and the rollback launcher's stdout copier now use `readAvailable(upTo:)` (POSIX
+`read`, EINTR-safe); the guardian fixture pins short-line and EOF reads.
+
+The next failure was in this session's own backend-death case: after
+`serviceStopped` the client reconnected, and launchd's respawn throttle held the
+hello until the client's 10 s timeout. The real host would likewise have waited
+~10 s to quit after a backend crash. `serviceStopped` is now final in the client:
+it invalidates, never reconnects, does not report a failure over the service's
+status, and completes shutdown locally. The fixture requires that shutdown within
+3 s. The raw-client case still proves a fresh instance refuses `resume`.
+
+`test/service-process.mjs` now passes in full (supervision, rollback, codec and
+the XPC half) twice in a row through the unit runner, alongside service-contract,
+managed-child, native-service-launch and native-supervised-bridge. Both
+typechecks and `bun run build` pass. The native GUI tier is left to the manager.
+
+## 2026-09-28 — Separate Swift service, XPC and legacy supervision (LKM-89 / S02)
+
+S01 is accepted and merged into the candidate (51fb928); S02 builds on it. The
+host now connects over versioned, signed XPC to a bundled Swift service, which
+takes the profile lock and supervises Bun over private pipes. No domain writer
+moved: this step changes process ownership and profile exclusion only. Details,
+protocol and rollback: `docs/SWIFT-BACKEND-SERVICE.md`.
+
+Continuing a prior session's implementation, review found and fixed four
+behaviours that the fixture did not cover:
+- **Masked test failures.** The launcher returns the host's exit status, but
+  the host always exited 0 (`NSApp.terminate` exits before code after
+  `application.run()`). Bun now sends its status in `quit`, the service in
+  `serviceStopped`, and the host applies it in `applicationWillTerminate`. Test
+  mode sets `exitCode` before cleanup so the status is known when `quit` is sent.
+- **Second Bun after a service restart.** launchd restarts a lost XPC service
+  on demand; the reconnect hello launched a fresh Bun before the client noticed
+  the epoch change. Reattach now names the epoch (`resume`) and a fresh instance
+  refuses with `recoveryRequired` without launching.
+- **Fatal UI events during reconnect.** Any emit in the 0.25 s reconnect window
+  terminated the app. Never-submitted frames (pre-handshake and reconnecting)
+  now queue in a bounded outbox, still never replaying uncertain sends.
+  Setup-time emits before the client existed went to the terminal; they are
+  buffered too.
+- **Clean exit reported as failure.** Bun's stdout EOF raced its reaped status;
+  the EOF stop is deferred 1 s so the real status wins. Terminal signals to the
+  host now drain through the service.
+
+The fixture adds stale-epoch/duplicate hello refusals, a frame queued mid
+reconnect, backend death → `serviceStopped {status: 1}` → fail-closed reconnect
+with no replacement Bun, and a peer-rejection assertion that a lookup failure
+cannot satisfy. The guardian fixture honours `TMPDIR` and avoids atomic writes
+that stage outside it. Production XPC plist uses `dispatch_main`, matching the
+tested fixture.
+
+Worker checks: both typechecks; `bun run build`; `test/service-process.mjs
+--supervision-only` (profile contention, legacy-lock refusal, startup failure,
+child death, repeated shutdown, descendant/detached cleanup, service-crash drain,
+codec, rollback); managed-child, native-service-launch, native-supervised-bridge,
+native-bridge-close, trezi-cli. Not run by the worker: the XPC half (Seatbelt
+blocks launchd lookup: "Sandbox restriction"), native-shutdown (sandbox denies
+port binding) and the native GUI tier — manager verification required.
+## 2026-09-28 — CLAUDE.md favicon entry corrected (LKM-105 review)
+
+Independent review found CLAUDE.md still described `project-icon.ts` as the
+sidebar row's favicon. The entry now says the favicon is kept as project metadata
+(`project:icon`) and no longer drawn: project rows use the shared folder symbol
+from `src/native/SidebarIcon.swift`. No code changes.
+
+## 2026-09-28 — Sidebar fixture restores the foreground (LKM-105 feedback)
+
+Manager verification failed twice in `test:native` with "Chat window is not in the
+foreground". That text is `captureVisibleRegion`'s shared guard message, so the
+sidebar capture raises it too. `NATIVE SIDEBAR PASS` never printed. The worktree's
+artifacts from the last run hold every 260-point capture plus 180-0-rest,
+180-0-hover and 180-1-rest, but no 180-1-hover. So the capture that failed was the
+last sidebar hover capture, not a later chat capture. It ran about 350 ms after
+`preparePreviewInput` confirmed the window was key and the app active. That
+capture came after the 260-point context-menu step (which opens the Project Memory
+sheet window) and the reorder step. The icon geometry in those captures was
+correct (16×16, integral origin, 7-point gap, aligned with Open Project).
+
+The fixture had no focus teardown. New `src/native/SidebarFocus.swift` records NSMenu
+tracking notifications. `sidebarFocusCleanup` cancels tracking menus, ends attached
+sheets/modals, sends Trezi's sheet window through Bun's cancel, dismisses popovers
+with `cancelOperation`, clears row hover, then activates the app and re-keys the
+main window. `sidebarFocusReport` names each leftover: a tracking menu, an
+attached/Trezi sheet, a popover, a modal, a non-key/non-main main window with the
+window that holds focus, or an inactive app with the frontmost app. The fixture
+restores and asserts after the menu/Project Memory step, after reorder, and in a
+`withSidebarCleanup` teardown that also runs on failure without masking the
+original error. Before each capture it asserts the report is clean. A failed capture keeps the
+guard's message and appends the report. It is never retried, and the capture guard and
+all geometry assertions are unchanged. `test/sidebar-focus.mjs` (unit tier) tests
+the TS teardown with a fake host. It also runs a windowless Swift fixture for
+leftover naming and cleanup order; that fixture fails if menu cancellation is
+removed. The desktop run that will confirm which leftover was responsible is
+manager-owned.
+
+## 2026-09-28 — Sidebar folder icons draw at exactly 16 points (LKM-105 feedback)
+
+The manager's native run measured the row folder at 16.5×21 with a 4.5-point
+text gap. Cause: `NSImageView` reports an SF Symbol's alignment insets (the 19×14
+folder adds 3/2 points vertically; the extra half point of width appeared only
+in-window), and Auto Layout's 16-point constraints size that alignment
+rect, so the frame the glyph is drawn in grew and sat at a half-point origin.
+New `src/native/SidebarIcon.swift`: `SidebarIconView` zeroes those insets, and `SidebarIconLayout` holds the
+16-point/7-point rhythm shared by project rows and Open/New Project, which had the
+same defect. `SidebarRowStyle` and `SidebarProjectButton` moved there so a
+windowless test can compile them. Icon and label x-positions are unchanged, and the
+glyph now sits in an integral 16×16 frame.
+
+The fixture's text gap measured the label's frame, which includes AppKit's
+2-point label cell padding, so a correct icon still reads as 5. It now measures
+to the label's alignment rect, the edge the 7-point constraint and Open Project
+use. It also adds strict checks for an integral icon origin and for exact icon/label
+alignment with Open Project. The 16×16 expectation is unchanged. New unit test
+`test/sidebar-icon.mjs` fails against a plain image view (16×21) and passes with
+the fix. The GUI suite, capture inspection and commit are manager-owned.
+
+## 2026-09-28 — Sidebar evidence enforced by the native suite (LKM-105 feedback)
+
+Rechecked after merging candidate `0b8037a` (LKM-107 Shadow Light fix): the
+folder presentation and sidebar fixture merged cleanly, and `test:native` still
+reaches `checkVisibleSidebar` through `checkProjectSwitching`. To stop the
+configured verification from passing without evidence, `test/native-runtime.mjs`
+now requires that a passing smoke run freshly wrote all eight `sidebar-*` captures and JSON,
+`sidebar-selection.json`, and menu/memory/reorder records at both 260 and 180 points.
+Full Swift typecheck, TypeScript/native typechecks and the unit tier pass. GUI
+runs and capture inspection remain manager-owned.
+
+## 2026-09-28 — Sidebar fixture width diagnosis (LKM-105 escalation)
+
+Mapped the manager's bundled line 19558 to the content-width wait, after the
+artwork readiness check. A windowless AppKit reproduction requests divider
+position 260 but measures sidebar content at 252: this SDK wraps the sidebar
+with an 8-point inset. The fixture incorrectly equated divider position and
+content width. Measure the wrapper/content difference when setting test widths;
+keep the strict 260/180 capture requirements and all visual assertions intact.
+Timeouts now include the stage and native sidebar state.
+
+Added a registered windowless Swift regression exercising collapse/reveal,
+260/180 widths and restoration. It fails against the old setter (252 versus
+260) and passes with the repair. No folder presentation or composer changes.
+Desktop captures and the configured verification remain manager-owned.
+TypeScript/native and full Swift typechecks, sidebar sizing/evidence,
+shell-controller, native-boundary, docs-links and whitespace checks pass.
+
+## 2026-09-28 — Foreground sidebar acceptance fixture (LKM-105 feedback)
+
+Compared candidate `771ce3d`: its project-switching fixture only writes an
+offscreen whole-window image and has no sidebar acceptance fixture. Replace
+that evidence with eight foreground sidebar-only captures at 260/180 points,
+each project selected in turn with the other row hovered/resting. Use a decoded
+raster favicon for the first disposable project and no artwork for the second.
+Require visible action/project OCR, folder image equality, native template/tint
+and scaling, icon/text geometry, containment and action accessibility labels.
+Write PNGs and geometry/OCR JSON as `test/artifacts/native/sidebar-*.{png,json}`.
+
+An ephemeral-only host hook tracks/cancels the native project menu and invokes
+its memory action, then runs real pasteboard/validate/accept-drop callbacks with
+a local test drag object. Assert no-op/nested rejection, backend order changes
+and preserved selection at both widths; record `sidebar-interactions.json`.
+These are native control/delegate checks, not physical pointer drag automation.
+The configured native suite invokes the fixture; the unit tier includes negative
+evidence tests rejecting blank captures, missing labels, wrong artwork, clipping
+and incorrect selection/hover/menu state. Manager must execute and inspect these
+new artifacts under the desktop lock; no GUI execution is claimed by this worker.
+Use distinct Folder Alpha/Beta row labels so Open Project cannot satisfy a
+missing project-label OCR assertion. Full Swift source typechecking,
+TypeScript/native checks, sidebar negative-evidence, shell-controller, native
+boundary, docs-link and whitespace checks pass.
+
+## 2026-09-28 — Sidebar review verification fixture (LKM-105 feedback)
+
+Manager's worktree verification passed, but the independent review run failed
+before Shadow Light capture with "Chat window is not in the foreground".
+The fixture requested activation during island reveal, then waited for message
+visibility and a fixed delay without checking activation completion. Candidate
+`771ce3d` has the same fixture and no foreground-readiness fix.
+
+Reuse the existing bounded `preparePreviewInput` readiness check before each
+Shadow Light capture, preserving the responder. Keep foreground checks before
+and after capture, OCR assertions and failure behavior intact. No product or
+folder-icon changes are needed. Manager must rerun desktop verification under
+the shared lock; this worker runs only focused non-GUI checks.
+TypeScript/native typechecks, native boundary, shell-controller, docs-link and
+diff whitespace checks pass. Desktop behavior remains manager-unverified for
+this repair.
+
+## 2026-09-28 — Consistent sidebar folder icons (LKM-105)
+
+Render every project row with the native outline `folder` symbol used by Open
+Project, bypassing supplied artwork and removing the unused animal fallback.
+Preserve stored icon metadata and other row kinds, the 16-point icon frame,
+proportional scaling, text spacing, selection tint, accessibility labels and
+existing selection/menu/reorder handlers.
+
+Full Swift source typechecking, TypeScript/native checks, the focused
+shell-controller check, docs links and diff whitespace validation pass.
+Manager owns foreground capture inspection at standard/narrow widths, native
+interaction checks and the configured verification suite; no GUI checks were run
+by this worker.
 ## 2026-09-28 — Scroll a reveal's row in by its own edge (LKM-107)
 
 The reading-area rule in the entry below broke the Shadow Light smoke (before

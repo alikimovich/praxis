@@ -3,17 +3,17 @@ import { sanitizeRepoName } from '../shared/github'
 import type { NativeShellState } from '../shared/native-shell'
 import type { NativeSheetController } from './sheets-runtime'
 import type { NativeActivityController } from './activity-controller'
-import type { nativePreferences } from './preferences'
+import type { NativePreferences } from './preferences'
 export class NativeGitController {
   readonly branches = new Map<string, string[]>()
   readonly connections = new Map<string, GithubStatus | null>()
   private readonly revisions = new Map<string, number>()
   readonly publishing = new Set<string>()
-  constructor(readonly sheets: NativeSheetController, readonly log: NativeActivityController, readonly preferences: ReturnType<typeof nativePreferences>, readonly render: () => void) {}
+  constructor(readonly sheets: NativeSheetController, readonly log: NativeActivityController, readonly preferences: NativePreferences, readonly render: () => void) {}
   private get workspace() { return this.sheets.workspace }
   private get invoke() { return this.sheets.invoke }
   get mode() { return this.preferences.get('trezi:publish-mode') === 'pr' ? 'pr' : 'merge' }
-  setMode(value: string) { if (value === 'pr' || value === 'merge') { this.preferences.set('trezi:publish-mode', value); this.render() } }
+  async setMode(value: string) { if (value === 'pr' || value === 'merge') { await this.preferences.set('trezi:publish-mode', value); this.render() } }
   decorate(state: NativeShellState): NativeShellState {
     const entry = this.workspace.active, root = entry?.root ?? '', publishing = this.publishing.has(root)
     const connection = this.connections.get(root)

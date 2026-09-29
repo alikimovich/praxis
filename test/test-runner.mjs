@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, mkdirSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { acquireRunLock, runCommand, runQueue, skipReason } from './helpers/test-runner.mjs'
+import { acquireRunLock, killTargetGone, runCommand, runQueue, skipReason } from './helpers/test-runner.mjs'
 
 const root = mkdtempSync(join(tmpdir(), 'trezi-runner-check-'))
 const fixture = join(root, 'worker.mjs')
@@ -121,6 +121,13 @@ try {
   assert.equal(failure.status, 1)
   assert.equal(report(failure).counts.FAIL, 1)
   for (const args of [['unit', '--jobs=0'], ['unit', '--filter=missing'], ['constructor']]) assert.equal(invoke(args).status, 2)
+  // macOS reports EPERM for a group holding only unreaped zombies: gone when reaping, never when stopping.
+  const eperm = Object.assign(new Error('kill'), { code: 'EPERM' }), esrch = Object.assign(new Error('kill'), { code: 'ESRCH' })
+  assert.equal(killTargetGone(esrch, false, 'linux'), true)
+  assert.equal(killTargetGone(eperm, true, 'darwin'), true)
+  assert.equal(killTargetGone(eperm, false, 'darwin'), false, 'A failed stop/timeout kill is still a failure')
+  assert.equal(killTargetGone(eperm, true, 'linux'), false)
+  assert.equal(killTargetGone(Object.assign(new Error('kill'), { code: 'EINVAL' }), true, 'darwin'), false)
   console.log('TEST-RUNNER OK — bounded concurrency, barriers, outcomes, timeout, cancellation, cleanup')
 } finally {
   rmSync(root, { recursive: true, force: true })

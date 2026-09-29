@@ -32,7 +32,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     private let items = [ "chat", "address", "interaction", "select-object", "device", "tools", "code", "layers", "expand", "publish"]
     private let labels = ["select-object":"Select Object", "layers":"Show Layers", "home":"Back to Project", "address":"Preview Address", "device":"Switch to Mobile", "branch":"Branch", "publish":"Publish", "code":"Show Code", "expand":"Expand Preview"]
     private let symbols = ["select-object":"cursorarrow", "layers":"square.3.layers.3d", "home":"house", "device":"iphone", "branch":"arrow.triangle.branch", "publish":"arrow.up.circle", "code":"chevron.left.forwardslash.chevron.right", "expand":"arrow.up.left.and.arrow.down.right"]
-    private var sidebarButtons: [String: NSButton] = [:]
+    private(set) var sidebarButtons: [String: NSButton] = [:]
     private var previewState: [String: Any] = [:]
     private var sidebarBeforeExpand = false
     private let chatHeader = ChatToolbarView()
@@ -412,8 +412,10 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         text.font = SidebarRowStyle.font
         text.lineBreakMode = .byTruncatingTail
         let symbol = row.kind == "project" ? "folder" : row.kind == "history" ? "clock" : "bubble.left"
-        let artwork = row.icon ?? (row.kind == "project" ? ProjectAnimal.image(for: row.project.isEmpty ? row.id : row.project) : NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!)
-        let icon = NSImageView(image: artwork)
+        // Project rows share Open Project's symbol, regardless of stored artwork.
+        let artwork = (row.kind == "project" ? nil : row.icon)
+            ?? NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!
+        let icon = SidebarIconView(image: artwork)
         icon.imageScaling = .scaleProportionallyDown
         icon.contentTintColor = artwork.isTemplate ? .labelColor : nil
         text.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -427,9 +429,8 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         more.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(more)
         cell.addSubview(icon); cell.addSubview(text); cell.textField = text; cell.imageView = icon
         icon.translatesAutoresizingMaskIntoConstraints = false; text.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2), icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor), icon.widthAnchor.constraint(equalToConstant: 16), icon.heightAnchor.constraint(equalToConstant: 16),
-            text.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 7), text.trailingAnchor.constraint(equalTo: more.leadingAnchor, constant: -4), text.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+        NSLayoutConstraint.activate(SidebarIconLayout.constraints(icon: icon, label: text, in: cell, leading: 2) + [
+            text.trailingAnchor.constraint(equalTo: more.leadingAnchor, constant: -4),
             more.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4), more.centerYAnchor.constraint(equalTo: cell.centerYAnchor), more.widthAnchor.constraint(equalToConstant: 28)
         ])
         cell.toolTip = row.title
@@ -444,7 +445,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         guard let row = outline.item(atRow: outline.clickedRow) as? ShellRow else { return }
         for item in projectMenu(row).items { menu.addItem(item.copy() as! NSMenuItem) }
     }
-    private func projectMenu(_ row: ShellRow) -> NSMenu {
+    func projectMenu(_ row: ShellRow) -> NSMenu {
         let menu = NSMenu(); menu.autoenablesItems = false
         for (title, action) in [("Project Memory…", "memory"), ("Close Project", "close")] {
             let item = NSMenuItem(title: title, action: #selector(contextAction(_:)), keyEquivalent: "")
@@ -478,7 +479,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     func perform(_ action: String, id: String?) -> Bool {
         if action == "window-width", let width = Double(id ?? ""), let window, width >= 850 && width <= 2000 { var frame = window.frame; frame.size.width = width; window.setFrame(frame, display: true); return true }
         if action == "sidebar-width", let id, let width = Double(id), (180...340).contains(width) {
-            split.splitView.setPosition(width, ofDividerAt: 0); split.view.layoutSubtreeIfNeeded(); return true
+            setSidebarContentWidth(width, in: split); return true
         }
         if action == "toggle-sidebar" {
             // No animation in the pipe test: an occluded/locked desktop can pause

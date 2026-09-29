@@ -3,7 +3,6 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { NativeBridge } from './bridge'
 import { nativeChat } from './chat-runtime'
-import { settleLatestAboveComposer } from './smoke-composer-latest'
 
 /** Foreground composer evidence; provider calls are intercepted, never sent. */
 export async function checkVisibleComposer(host: NativeBridge, fixture: string, artifacts: string) {
@@ -39,10 +38,22 @@ async function checkComposerAtWidth(host: NativeBridge, fixture: string, artifac
     return invoke(channel, ...args)
   }
   const inspect = () => host.request('composerInspect')
-  // `latestText` is the end of the newest conversation content. When given, the
-  // newest message must sit above the composer and its last line must be painted.
-  const capture = async (name: string, expected: string[], latestText?: string) => {
-    if (latestText) await settleLatestAboveComposer(host, wait, `${width}-${name}`)
+  // With `latest`, the newest message must end above the composer clearance. The
+  // pin and its geometry are LKM-103's: read them from `chatAcceptance`, waiting on
+  // the observable (never a fixed sleep). Only its end is required, since the
+  // drafted prompt and the tall reply are taller than the reading area.
+  const settleLatest = async (name: string) => {
+    let state: any = {}
+    const ended = (s: any) => !!s.latestID && s.latestBottom > 0 && s.latestBottom <= s.readingHeight + 1
+    try {
+      await wait(async () => ended(state = await host.request('chatAcceptance', {})))
+    } catch (cause) {
+      const { latestID, latestTop, latestBottom, readingHeight, pinned } = state
+      throw new Error(`Composer capture ${width}-${name}: latest message did not end above the composer: ${JSON.stringify({ latestID, latestTop, latestBottom, readingHeight, pinned })}`, { cause })
+    }
+  }
+  const capture = async (name: string, expected: string[], latest = false) => {
+    if (latest) await settleLatest(name)
     const layout = await host.request('composerVerification')
     await new Promise(resolve => setTimeout(resolve, 350))
     const image = await host.request('captureVisibleComposer')
@@ -55,10 +66,12 @@ async function checkComposerAtWidth(host: NativeBridge, fixture: string, artifac
     assert.equal(layout.hitTargets, true, 'Composer controls receive hits above glass/beam overlays')
     assert.ok(layout.bottomInset >= 7, 'Rounded bottom extends below the controls')
     assert.ok(image.width > 200 && image.height > 100, 'Nonempty foreground composer pixels')
-    if (latestText) {
-      const column = await host.request('captureVisibleChatColumn')
+    if (latest) {
+      // Full-column capture plus geometry as evidence of the latest row above the composer.
+      const { image: column, ...geometry } = await host.request('chatAcceptance', { capture: true })
       writeFileSync(`${stem}-chat.png`, Buffer.from(column.png, 'base64'))
-      assert.ok(column.text.join(' ').includes(latestText), `Painted conversation of ${stem}-chat.png ends with "${latestText}"`)
+      writeFileSync(`${stem}-chat.json`, JSON.stringify({ ...geometry, text: column.text, pixels: [column.width, column.height] }, null, 2))
+      assert.ok(geometry.latestBottom > 0 && geometry.latestBottom <= geometry.readingHeight + 1, `${stem}-chat.png: latest message ends above the composer`)
     }
     for (const label of expected) assert.ok(image.text.join(' ').toLowerCase().includes(label.toLowerCase()), `Missing rendered ${label} in ${stem}.png`)
   }
@@ -121,7 +134,7 @@ async function checkComposerAtWidth(host: NativeBridge, fixture: string, artifac
     // Sending: the draft cleared, so the composer is compact again while the
     // turn runs. Stop replaces Send; the model locks while Auto stays usable.
     await wait(async () => chat.isRunning && (await inspect()).text === '' && (await inspect()).bounds.height === empty.bounds.height)
-    await capture('sending', ['Auto'], 'Composer verification message')
+    await capture('sending', ['Auto'], true)
     const sending = await host.request('composerVerification')
     assert.equal(sending.send.label, 'Stop', `${width}: Send becomes Stop while the turn runs`)
     assert.equal(sending.send.enabled, true, `${width}: Stop remains available`)
@@ -129,12 +142,11 @@ async function checkComposerAtWidth(host: NativeBridge, fixture: string, artifac
     assert.deepEqual(sending.labels, ['Codex', 'Fixture B', 'Auto'], `${width}: selectors retain their values`)
     // A tall reply overflows the conversation while the composer is compact, so
     // the newest line depends on the pin to the end above the composer.
-    const latestText = `Latest composer reply at ${width}.`
-    const reply = Array.from({ length: 24 }, (_, i) => `Composer scroll fixture paragraph ${i + 1}.`).join('\n\n') + `\n\n${latestText}`
+    const reply = Array.from({ length: 24 }, (_, i) => `Composer scroll fixture paragraph ${i + 1}.`).join('\n\n') + `\n\nLatest composer reply at ${width}.`
     nativeChat.event({ type: 'delta', projectKey: chat.chat, text: reply })
     nativeChat.event({ type: 'done', projectKey: chat.chat, landingPending: false })
     await wait(async () => !chat.isRunning && !(await inspect()).text && !(await inspect()).attachments.length)
-    await capture('submitted', ['Codex', 'Fixture B', 'Auto'], latestText)
+    await capture('submitted', ['Codex', 'Fixture B', 'Auto'], true)
     console.log('Visible composer: foreground captures, containment/hit targets, attachment dialog/file, model, Auto, AppKit typing and submission passed.')
   } finally {
     nativeChat.services.invoke = invoke

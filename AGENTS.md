@@ -3,6 +3,11 @@
 Trezi is a native macOS app: Swift/AppKit/SwiftUI chat and editing tools on the
 left, with the user's project in system WebKit on the right. Bun owns provider
 sessions, Git/worktrees, source editing, persistence and managed project servers.
+A separate Swift XPC service owns profile exclusion, supervises legacy Bun and
+holds the durable operation ledger (S03) and, since LKM-91, writes preferences
+through it (docs/SWIFT-BACKEND-PREFERENCES.md); since LKM-92 it also owns
+workspace identity, order and selection (docs/SWIFT-BACKEND-WORKSPACE.md). Every
+other domain writer remains in Bun until a verified transfer.
 Electron, the React application renderer and browser/Tailscale mode are retired.
 Distributed as source: clone, `bun install`, `bun run dev`. Users authenticate
 with their own provider subscriptions or endpoint credentials.
@@ -46,12 +51,44 @@ caching does not reliably capture Liquid Glass; use visible checks when needed.
 `TREZI_NATIVE_BACKGROUND_TEST=1` skips real preview pointer gestures/animation
 timing and must be reported as reduced coverage. No Electron tests remain.
 
+`bun run dev:native --test --only=group,group` (or `bun test/native-runtime.mjs
+--only=…`) runs only the named native smoke groups: `core`, `islands`,
+`shadow-light`, `sidebar`, `settings`, `chat`, `composer`. An unknown name fails
+before the build; no flag runs every group, which acceptance still requires.
+Groups are defined in `src/native/smoke-groups.ts`.
+
+### Evidence budget
+
+- A foreground window capture plus JSON geometry/state from the existing fixtures
+  is enough acceptance evidence.
+- Do not add OCR of wrapped text, synthetic CGEvent/input-routing tests, or any
+  `defaults write`/system preference change unless the ticket explicitly requires it.
+- Tests must never change the user's system settings.
+
 ## Architecture
 
 - `src/native/index.ts`: Bun entrypoint, service registration and native lifecycle.
 - `src/native/platform.ts`: native event routing, WebKit proxy and Keychain helper.
   Services import it directly; there is no Electron alias or dependency.
-- `src/native/bridge.ts`: JSON pipe protocol to the Swift subprocess.
+- `src/native/bridge.ts`: private legacy JSON bridge to the supervising service;
+  direct host pipes remain available through launch-time legacy rollback.
+- `src/service/ServiceMain.swift`, `src/service/ServiceRuntime.swift`,
+  `src/service/ServiceXPC.swift`: separate signed XPC service and authenticated relay.
+- `src/service/LegacySupervisor.swift`, `src/service/ProcessGuardian.swift`: profile
+  exclusion, Bun/descendant lifetimes and crash cleanup. `src/native/ServiceClient.swift`
+  owns the connection; `src/native/HostService.swift` integrates AppKit lifecycle.
+- `src/service/OperationLedger.swift`, `src/service/LedgerStore.swift`,
+  `src/service/LedgerMirror.swift`: durable operation intent, receipts, revisions,
+  event cursors and recovery (docs/SWIFT-BACKEND-LEDGER.md).
+- `src/service/PreferencesOwner.swift`, `src/service/PreferencesFile.swift`: the
+  Swift preferences writer (v1 `preferences.json`, ledger-backed). Bun reads and
+  sends awaited batches via `src/native/preferences-service.ts`;
+  `src/native/preferences.ts` is the `TREZI_BACKEND_OWNER=legacy` rollback writer.
+- `src/service/WorkspaceOwner.swift`, `src/service/WorkspaceFile.swift`,
+  `src/service/DomainChannel.swift`: the Swift workspace writer (unchanged
+  `workspace.json`, ledger-backed; identity, order, selection, recents). Bun sends
+  awaited intents via `src/native/workspace-service.ts`; `src/native/workspace.ts`
+  is the rollback writer and `src/native/workspace-model.ts` the shared operations.
 - `src/native/Host.swift`: AppKit app lifecycle and host protocol.
 - `src/native/ProjectCell.swift`: sidebar row rendering and native project drag reordering.
 - `src/native/Shell.swift`: sidebar/project actions, split view and column-aligned
@@ -74,6 +111,9 @@ timing and must be reported as reduced coverage. No Electron tests remain.
   windows with traffic lights and an action bar only when needed. Settings and
   project memory autosave; close/navigation waits for their latest write. Swift owns welcome/status/cat surfaces.
 - `src/native/assets/cat`: original animation assets consumed by the native build.
+- `src/main/project-ui*.ts`: Experimental Gen UI discovery, strict React/Svelte
+  composition export and optional Jev topology selection. Helpers return source
+  proposals only; supported contracts and limitations are in `docs/PROJECT_UI.md`.
 - `src/main/`: retained backend services (the directory name is historical).
   Agent/provider sessions, dev servers, Git/worktrees, setup, source parsers,
   props/styles/tokens, annotations, diagnostics, media and iOS Simulator.
@@ -85,7 +125,11 @@ timing and must be reported as reduced coverage. No Electron tests remain.
   checks that the app does not depend on Electron or the retired React renderer.
 - `bin/trezi.mjs`, `install.sh`: source installation, native launch and update.
 
-Swift and Bun communicate over pipes. Preview messages are untrusted and are
+The host and Swift service communicate over authenticated XPC; the service and
+legacy Bun use private pipes. `TREZI_BACKEND_OWNER=legacy` selects the previous
+Bun/host transport at launch under the same Swift profile exclusion. See
+`docs/SWIFT-BACKEND-SERVICE.md` for rollback and verification limits.
+Preview messages are untrusted and are
 restricted by actual view identity and an allowlist. The preview cannot invoke
 agent, filesystem or application commands. Preserve WKContentWorld isolation.
 Native profiles remain separate from historical Electron profiles; do not delete

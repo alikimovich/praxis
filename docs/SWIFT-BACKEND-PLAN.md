@@ -11,6 +11,40 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
+**Current (2026-09-29, LKM-92):** S04 (roadmap row) moves workspace identity,
+membership, order, the selected project and recents into the Swift service as
+the only writer of the unchanged `workspace.json`, through the ledger. Keys stay
+as they were; an aliased root (symlink, trailing slash) resolves to the existing
+project. Mappings are persisted before any dependent session/server command. Session,
+server and Git fields stay legacy-owned and reach the file only through a typed
+`update` adapter; display state and drafts are never stored. `TREZI_BACKEND_OWNER=legacy`
+keeps a byte-identical Bun writer as the rollback owner. See
+[workspace](SWIFT-BACKEND-WORKSPACE.md). Implemented for review on the accepted
+LKM-91 base; manager verification and acceptance are pending.
+
+**Earlier (2026-09-28, LKM-91):** the preferences writer moves to the Swift
+service, through the ledger, behind the adoption gate: v1 `preferences.json` is
+kept byte-compatible, Bun's callers send awaited batches over the supervised pipe
+and read acknowledged snapshots, and `TREZI_BACKEND_OWNER=legacy` keeps Bun's
+writer as the rollback owner. See [preferences](SWIFT-BACKEND-PREFERENCES.md).
+Implemented for review; manager verification and acceptance are pending. Every
+other domain writer is still Bun.
+
+**Earlier (2026-09-28, LKM-90):** S02 (LKM-89) is merged into this step's base
+(5b18354). S03's durable operation ledger — persistent intent, request digests
+and receipts, commit checkpoints, per-domain revisions, persisted event cursors
+and recovery queries — is implemented for review in the Swift service; see the
+[ledger](SWIFT-BACKEND-LEDGER.md) for storage layout, compatibility, rollback and
+the preferences adoption gate. No domain writer has moved.
+
+**Earlier (2026-09-28):** S01 (LKM-88) is accepted and merged into the candidate
+as 51fb928. S02 (LKM-89) — the separate Swift XPC service, legacy Bun
+supervision, Swift-owned profile exclusion and launch-time owner selection — is
+implemented for review; see [service and rollback](SWIFT-BACKEND-SERVICE.md).
+Manager verification (unsandboxed XPC fixture and native tier) and independent
+review are pending for S02. No domain writer has moved; S03 is next. The dated
+entries below are history: their "pending" notes refer to S01 before acceptance.
+
 2026-09-28, LKM-88 (step S01): shared contract/fixture implementation and exhaustive
 census ownership mapping are implemented for review. The 92-case cross-language
 fixture suite, TypeScript/native typechecks and docs-link check pass. Manager

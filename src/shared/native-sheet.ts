@@ -1,6 +1,8 @@
 export interface NativeSheetField {
   id: string
   label: string
+  help?: string
+  visibleWhen?: { field: string; value: string }
   kind: 'text' | 'multiline' | 'secure' | 'choice' | 'multichoice' | 'readonly' | 'image'
   value: string
   choices?: { value: string; label: string }[]

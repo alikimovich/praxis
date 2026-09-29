@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { NativeBridge } from './bridge'
+import { checkVisibleSettings } from './smoke-settings'
 import { dispatchIPC, serviceEvents } from './platform'
 export async function checkNativeSheets(host: NativeBridge, key: string, artifacts: string) {
   const wait = async (check: (state: any) => boolean) => {
@@ -42,6 +43,7 @@ export async function checkNativeSheets(host: NativeBridge, key: string, artifac
   await wait(state => state.visible && state.title === 'Settings')
   await new Promise(resolve => setTimeout(resolve, 250))
   writeFileSync(join(artifacts, 'settings.png'), Buffer.from(await host.request('captureSheet'), 'base64'))
+  await checkVisibleSettings(host, artifacts)
   await host.request('sheetPerform', { action: 'change', values: { default: 'last-used', projectUi: 'false', engine: 'agent' } })
   await wait(state => !state.busy)
   await host.request('sheetPerform', { action: 'connections' })
