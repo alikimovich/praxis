@@ -2,9 +2,10 @@
 
 LKM-89, step S02 of the [canonical plan](SWIFT-BACKEND-PLAN.md) and
 [roadmap](SWIFT-BACKEND-ROADMAP.md). This step moves **process supervision and
-profile exclusion** to a separate Swift service. It moves **no domain writer**:
-Bun remains the single writer of workspaces, preferences, sessions, memory,
-annotations, Git/worktrees, source edits and managed servers.
+profile exclusion** to a separate Swift service. It moved **no domain writer**.
+Since LKM-91 the service writes preferences ([preferences](SWIFT-BACKEND-PREFERENCES.md));
+Bun remains the single writer of workspaces, sessions, memory, annotations,
+Git/worktrees, source edits and managed servers.
 
 ## Topology
 
@@ -21,8 +22,10 @@ scripts/start-native.mjs ── TreziHost (AppKit) ──XPC── TreziService 
 - `src/service/LegacySupervisor.swift`: `ProfileExclusion` and the Bun process
   group. `src/service/ProcessGuardian.swift`: lifetime-pipe guardians.
 - `src/service/OperationLedger.swift` (S03): opened under the profile lock at the
-  first launch hello, before Bun starts; no domain writes through it yet. See
-  [the ledger](SWIFT-BACKEND-LEDGER.md).
+  first launch hello, before Bun starts. See [the ledger](SWIFT-BACKEND-LEDGER.md).
+- `src/service/PreferencesOwner.swift` (S03, LKM-91): the preferences writer. Bun
+  lines starting `{"service":"preferences"` go to it, not to the host; see
+  [preferences](SWIFT-BACKEND-PREFERENCES.md).
 - `src/main/managed-child.ts`: Bun keeps choosing server/Simulator commands but
   spawns them through the Swift guardian when supervised.
 

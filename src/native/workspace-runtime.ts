@@ -1,5 +1,5 @@
 import { parsePreferredModelState, rememberLastUsed, resolvePreferredSettings } from '../shared/preferred-model'
-import type { nativePreferences } from './preferences'
+import type { NativePreferences } from './preferences'
 import type { NativeBridge } from './bridge'
 import type { NativeChatController } from './chat-controller'
 import { NativeWorkspaceController } from './workspace-controller'
@@ -8,7 +8,7 @@ import type { NativeWorkspaceCommand } from '../shared/native-workspace'
 import type { NativeShellAction } from '../shared/native-shell'
 
 export let nativeWorkspace: NativeWorkspaceController
-export function installNativeWorkspace(host: NativeBridge, view: NativeView, storage: { read(): string | null; write(raw: string): void }, chat: NativeChatController, preferences: ReturnType<typeof nativePreferences>) {
+export function installNativeWorkspace(host: NativeBridge, view: NativeView, storage: { read(): string | null; write(raw: string): void }, chat: NativeChatController, preferences: NativePreferences) {
   const invoke = (channel: string, ...args: any[]) => dispatchIPC('main', { type: 'invoke', channel, args })
   nativeWorkspace = new NativeWorkspaceController({
     invoke, read: storage.read, write: storage.write,
@@ -32,11 +32,15 @@ export function installNativeWorkspace(host: NativeBridge, view: NativeView, sto
       const entry = nativeWorkspace.state.projects.find(p => p.root === effect.root)
       if (entry) {
         entry.chatSettings = { ...entry.chatSettings, [effect.chat]: effect.settings }
-        let raw: unknown
-        try { raw = JSON.parse(preferences.get('trezi:preferred-model') ?? 'null') } catch {}
-        const preferred = rememberLastUsed(parsePreferredModelState(raw), effect.settings)
-        preferences.set('trezi:preferred-model', JSON.stringify(preferred))
-        nativeWorkspace.preferred = resolvePreferredSettings(preferred)
+        const remember = (raw: string | null) => {
+          let saved: unknown
+          try { saved = JSON.parse(raw ?? 'null') } catch {}
+          return rememberLastUsed(parsePreferredModelState(saved), effect.settings)
+        }
+        // Recomputed from the committed state when sent, so queued changes compose.
+        void preferences.apply(current => [['trezi:preferred-model', JSON.stringify(remember(current['trezi:preferred-model'] ?? null))]])
+          .catch(error => nativeWorkspace.reportError(error))
+        nativeWorkspace.preferred = resolvePreferredSettings(remember(preferences.get('trezi:preferred-model')))
         nativeWorkspace.changed()
       }
     }

@@ -4,8 +4,9 @@ Trezi is a native macOS app: Swift/AppKit/SwiftUI chat and editing tools on the
 left, with the user's project in system WebKit on the right. Bun owns provider
 sessions, Git/worktrees, source editing, persistence and managed project servers.
 A separate Swift XPC service owns profile exclusion, supervises legacy Bun and
-holds the durable operation ledger (S03); domain writers remain in Bun until a
-verified transfer.
+holds the durable operation ledger (S03) and, since LKM-91, writes preferences
+through it (docs/SWIFT-BACKEND-PREFERENCES.md). Every other domain writer remains
+in Bun until a verified transfer.
 Electron, the React application renderer and browser/Tailscale mode are retired.
 Distributed as source: clone, `bun install`, `bun run dev`. Users authenticate
 with their own provider subscriptions or endpoint credentials.
@@ -63,7 +64,11 @@ timing and must be reported as reduced coverage. No Electron tests remain.
   owns the connection; `src/native/HostService.swift` integrates AppKit lifecycle.
 - `src/service/OperationLedger.swift`, `src/service/LedgerStore.swift`,
   `src/service/LedgerMirror.swift`: durable operation intent, receipts, revisions,
-  event cursors and recovery (docs/SWIFT-BACKEND-LEDGER.md). No writer uses it yet.
+  event cursors and recovery (docs/SWIFT-BACKEND-LEDGER.md).
+- `src/service/PreferencesOwner.swift`, `src/service/PreferencesFile.swift`: the
+  Swift preferences writer (v1 `preferences.json`, ledger-backed). Bun reads and
+  sends awaited batches via `src/native/preferences-service.ts`;
+  `src/native/preferences.ts` is the `TREZI_BACKEND_OWNER=legacy` rollback writer.
 - `src/native/Host.swift`: AppKit app lifecycle and host protocol.
 - `src/native/ProjectCell.swift`: sidebar row rendering and native project drag reordering.
 - `src/native/Shell.swift`: sidebar/project actions, split view and column-aligned

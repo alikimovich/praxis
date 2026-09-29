@@ -156,7 +156,7 @@ try {
     mkdirSync(join(service, 'MacOS'), { recursive: true })
     const host = join(app, 'MacOS/TreziHost')
     const executable = join(service, 'MacOS/TreziService')
-    compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/service/LedgerStore.swift', 'src/service/OperationLedger.swift', 'src/service/LegacySupervisor.swift', 'src/service/ServiceRuntime.swift', 'src/service/ProcessGuardian.swift', 'src/service/ServiceMain.swift'], executable)
+    compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/service/LedgerStore.swift', 'src/service/OperationLedger.swift', 'src/service/PreferencesFile.swift', 'src/service/PreferencesOwner.swift', 'src/service/LegacySupervisor.swift', 'src/service/ServiceRuntime.swift', 'src/service/ProcessGuardian.swift', 'src/service/ServiceMain.swift'], executable)
     compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/native/ServiceClient.swift', 'test/fixtures/service-process/XPCFixture.swift'], host)
     plist(join(app, 'Info.plist'), '<key>CFBundleIdentifier</key><string>dev.praxis.fixture</string><key>CFBundleExecutable</key><string>TreziHost</string><key>CFBundlePackageType</key><string>APPL</string><key>LSBackgroundOnly</key><true/>')
     plist(join(service, 'Info.plist'), '<key>CFBundleIdentifier</key><string>dev.praxis.service</string><key>CFBundleExecutable</key><string>TreziService</string><key>CFBundlePackageType</key><string>XPC!</string><key>XPCService</key><dict><key>ServiceType</key><string>Application</string><key>RunLoopType</key><string>dispatch_main</string></dict>')
@@ -242,6 +242,8 @@ try {
     const launchFile = join(scratch, 'launch.json')
     writeFileSync(launchFile, JSON.stringify(launch))
     rmSync(backendPID, { force: true })
+    // Written by the previous (legacy) owner while no service ran: imported at launch.
+    writeFileSync(join(profile, 'preferences.json'), JSON.stringify({ version: 1, values: { 'trezi:chat-hidden': '1', 'trezi:future': null } }))
     const production = processFixture(host, ['production', launchFile, executable])
     await production.line(line => line === 'READY')
     assert.equal(ledgerEpoch(), firstLedgerEpoch, 'the ledger survives a service restart')
@@ -252,6 +254,14 @@ try {
     // The XPC service's own stderr is discarded; Bun's must reach the host's.
     for (let i = 0; i < 100 && !production.stderr.includes('FIXTURE-STDERR production-client'); i++) await pause(20)
     assert.ok(production.stderr.includes('FIXTURE-STDERR production-client'), 'backend diagnostics reach the host stderr')
+    // S03 preferences: Bun's client → private pipe → the Swift owner → preferences.json.
+    production.send({ event: 'fixturePreferences', key: 'trezi:native-chat-width', value: '512' })
+    const preferenceLine = await production.line(line => line.startsWith('EVENT ') && JSON.parse(Buffer.from(line.slice(6), 'base64')).method === 'fixturePreferences')
+    const preferenceResult = JSON.parse(Buffer.from(preferenceLine.slice(6), 'base64'))
+    assert.deepEqual(preferenceResult, { method: 'fixturePreferences', before: null, after: '512' }, JSON.stringify(preferenceResult))
+    assert.equal(readFileSync(join(profile, 'preferences.json'), 'utf8'), '{"version":1,"values":{"trezi:chat-hidden":"1","trezi:future":null,"trezi:native-chat-width":"512"}}',
+      'the service imported the legacy v1 file and wrote the same format')
+    assert.ok(!production.lines.some(line => line.startsWith('EVENT ') && JSON.parse(Buffer.from(line.slice(6), 'base64')).service), 'service frames never reach the host')
     // Live reload from the product's static server running in the supervised
     // backend: a real file edit must reach the page's reload stream, and a page
     // that was served before the edit but connects after its broadcast (a page

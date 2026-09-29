@@ -22,6 +22,10 @@ struct LedgerOperation: Codable, Sendable {
     var failure: ServiceFailure?
     let created: Double
     var updated: Double
+    /// Recorded with the effect: what the owner needs to reconcile an uncertain
+    /// outcome (for preferences, the digest of the file it was about to install).
+    /// Optional, so journals written before it existed decode unchanged.
+    var pending: [String: ServiceJSON]? = nil
 }
 
 struct LedgerDomain: Codable, Sendable {
@@ -96,7 +100,7 @@ struct LedgerEffectContext: Sendable {
     let revision: ServiceRevision
     let reserved: ServiceRevision
     let checkpoint: [String: ServiceJSON]
-    func beginEffect() async throws { try await ledger.beginEffect(operationID) }
+    func beginEffect(pending: [String: ServiceJSON]? = nil) async throws { try await ledger.beginEffect(operationID, pending: pending) }
 }
 
 /// Durable operation ledger for Swift-owned domains. Each domain has one FIFO
@@ -246,10 +250,10 @@ actor OperationLedger {
     }
 
     /// The gate between preparation and a non-idempotent effect.
-    func beginEffect(_ id: String) throws {
+    func beginEffect(_ id: String, pending: [String: ServiceJSON]? = nil) throws {
         guard let op = state.operations[id], op.phase == .intent || op.phase == .effect else { throw LedgerEffectError.cancelled }
         guard op.phase == .intent else { return }
-        do { try write(LedgerRecord(n: 0, kind: .effect, at: options.now(), id: id)) }
+        do { try write(LedgerRecord(n: 0, kind: .effect, at: options.now(), checkpoint: pending, id: id)) }
         catch { throw LedgerEffectError.notApplied(Self.failure(.ioFailure, "The effect could not be recorded.", operationID: id)) }
         options.boundary?(.effect)
     }
@@ -370,6 +374,7 @@ actor OperationLedger {
             guard let id = record.id, state.operations[id]?.phase == .intent else { throw ServiceContractFailure.conflict }
             state.operations[id]!.phase = .effect
             state.operations[id]!.updated = record.at
+            state.operations[id]!.pending = record.checkpoint
         case .uncertain:
             guard let id = record.id, let op = state.operations[id], op.phase == .effect else { throw ServiceContractFailure.conflict }
             state.operations[id]!.phase = .uncertain

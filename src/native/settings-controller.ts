@@ -1,11 +1,11 @@
 import type { ModelChoice, ProviderConnection } from '../shared/api'
 import { parsePreferredModelState, preferredSelectValue, setFixedPreference, settingsFromChoice, setLastUsedMode } from '../shared/preferred-model'
-import type { nativePreferences } from './preferences'
+import type { NativePreferences } from './preferences'
 import type { NativeSheetController } from './sheets-runtime'
 const ids = (text: string) => [...new Set(text.split(/[\s,]+/).filter(Boolean))]
 const origin = (url: string) => { try { return new URL(url).origin } catch { return null } }
 export class NativeSettingsController {
-  constructor(readonly sheets: NativeSheetController, readonly preferences: ReturnType<typeof nativePreferences>, readonly notify: () => void) {}
+  constructor(readonly sheets: NativeSheetController, readonly preferences: NativePreferences, readonly notify: () => void) {}
   private get invoke() { return this.sheets.invoke }
   async open() {
     const generation = this.sheets.generation
@@ -27,9 +27,19 @@ export class NativeSettingsController {
       const choice = choices.find(c => c.value === action.values.default)
       if (action.values.default !== 'last-used' && !choice) throw new Error('Select an available model.')
       if (!['true', 'false'].includes(action.values.projectUi) || !['agent', 'jev'].includes(action.values.engine)) throw new Error('Invalid setting.')
-      this.preferences.set('trezi:preferred-model', JSON.stringify(choice ? setFixedPreference(preferred, settingsFromChoice(choice)) : setLastUsedMode(preferred)))
-      this.preferences.set('trezi:project-ui:v1', action.values.projectUi)
-      this.preferences.set('trezi:project-ui-engine:v1', action.values.engine)
+      // One atomic batch, built from the committed state when it is sent (a chat may
+      // have recorded a newer last-used model since the sheet opened). Autosave
+      // keeps the draft and closing waits for this to settle.
+      await this.preferences.apply(current => {
+        let saved: unknown
+        try { saved = JSON.parse(current['trezi:preferred-model'] ?? 'null') } catch {}
+        const state = parsePreferredModelState(saved)
+        return [
+          ['trezi:preferred-model', JSON.stringify(choice ? setFixedPreference(state, settingsFromChoice(choice)) : setLastUsedMode(state))],
+          ['trezi:project-ui:v1', action.values.projectUi],
+          ['trezi:project-ui-engine:v1', action.values.engine]
+        ]
+      })
       this.notify()
       if (this.sheets.current) this.sheets.current.state.message = 'Settings saved.'
     })

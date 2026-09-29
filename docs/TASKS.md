@@ -39,6 +39,16 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
 
+## Swift-owned preferences (LKM-91 / S03)
+
+- [x] Name the domain exactly (v1 `preferences.json`, temp file, ledger domain `preferences`, drafts) and tighten its rollback plan (`docs/SWIFT-BACKEND-PREFERENCES.md`).
+- [x] Swift v1 reader/writer with byte parity: unknown keys, null vs absence, UTF-16 limits, lone surrogates, `praxis` copies; invalid files refused untouched.
+- [x] Ledger-backed owner in the service: import under the profile lock, atomic batches, idempotent receipts, conflicts, external-edit adoption, crash reconciliation from the file (journaled target digest).
+- [x] Bun client over the supervised pipe: acknowledged reads, one batch at a time, no fallback write on timeout; all callers converted to awaited batches; startup holds host events while it awaits the snapshot.
+- [x] Stop/drain on quit; `TREZI_BACKEND_OWNER=legacy` keeps Bun's writer as the rollback owner, reading the newest file; Swift adopts newer legacy writes.
+- [x] `test/preferences-owner.mjs` (unit tier), settings failed-draft/close-waits checks, real-service preferences check in `test/service-process.mjs`.
+- [ ] Manager: stage the new files (docs-links checks tracked paths), run unit + `bun run test:native` through the service path, independent review.
+
 ## Durable operation ledger (LKM-90 / S03)
 
 - [x] Persistent intent/effect/receipt phases with canonical intent digest; stable duplicates, `idempotencyMismatch`, identity before revision check.
@@ -49,7 +59,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Opened by the Swift service under the profile lock; legacy owner never opens it; storage layout/compatibility/rollback documented (`docs/SWIFT-BACKEND-LEDGER.md`).
 - [x] `test/operation-ledger.mjs` (SIGKILL at each boundary + arbitrary kills, restart) in the unit tier.
 - [ ] Manager: full unsandboxed `service-process` (ledger created at XPC launch, epoch kept across service restart), unit + native verification, independent review.
-- [ ] After acceptance: transfer the preferences writer through the adoption gate (import newest v1 state, typed XPC dispatch, drain Bun writer, legacy restoration from newest state).
+- [x] After acceptance: transfer the preferences writer through the adoption gate (LKM-91; see "Swift-owned preferences" above).
 
 ## Swift service, XPC and legacy supervision (LKM-89 / S02)
 
