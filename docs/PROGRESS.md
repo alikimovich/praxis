@@ -2,6 +2,54 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Durable operation ledger in the Swift service (LKM-90 / S03)
+
+S03's first half: the substrate every writer transfer needs. No domain writer
+moves. Bun still writes preferences and everything else. The preferences
+transfer waits for this to be verified, behind the adoption gate in
+`docs/SWIFT-BACKEND-LEDGER.md`.
+
+`OperationLedger` (an actor) persists intent before effects. The intent digest
+is SHA-256 over canonical domain/mode/service/method/scope/expected
+revision/body. Identity is checked before the revision, so a retry of a
+successful operation returns its receipt instead of conflicting with the
+revision it advanced. Swift actors are reentrant, so each domain has a FIFO lane
+held across the effect's suspensions. `beginEffect()` splits cancellable
+preparation from a non-idempotent effect, which is what makes the restart rule
+exact: an intent without an effect is abandoned (never run later), and an effect
+without a receipt is `uncertain`. An uncertain operation blocks its domain until
+the owner reconciles it against the external world. Blind replay was the thing
+to avoid. Cancel before the effect discards the late result; after the effect,
+cancel returns `tooLate`.
+
+`LedgerStore` keeps `<profile>/service/ledger/`: a checksummed, `F_FULLFSYNC`ed
+journal and an atomically replaced snapshot, with generations so a crash
+mid-compaction is unambiguous. Only an unterminated final line counts as a torn
+write. It is copied to `quarantine/` and truncated. Any other damage, and any
+other format (a newer build's store), refuses to open with the files untouched.
+A fresh store would forget receipts and execute duplicates, so replacing one is
+an explicit `quarantineLedgerStore` call, never automatic.
+
+The ledger epoch is persisted, so event cursors survive restart. Gaps older than
+the 1,024-event window, foreign epochs and future cursors need a snapshot.
+`LedgerMirror` pins the consumer rule: a reply never writes state, so a late one
+can't overwrite a newer snapshot. Receipts are retained for a 7-day horizon
+(earlier past 4,096 operations). Expired IDs answer `recoveryRequired`, never
+execute.
+
+`ServiceRuntime` opens the ledger once, at the first launch hello, after
+`ProfileExclusion` and before Bun. If it can't be opened, the service logs that
+and keeps running legacy Bun. The `--legacy` owner never opens it. Nothing is
+exposed over XPC yet, since typed domain dispatch arrives with the first writer.
+
+Verification (worker sandbox): `test/operation-ledger.mjs` passes. It compiles
+the real sources into a fixture process and SIGKILLs it at every durable
+boundary and at arbitrary times, then restarts. `service-process
+--supervision-only` passes with the ledger linked into the real service
+executable. The ledger files also pass a `-strict-concurrency=complete`
+typecheck. The XPC assertions (ledger created at launch, epoch kept across a
+second service instance) need the manager's unsandboxed run.
+
 ## 2026-09-28 — Live reload can no longer miss a change (LKM-89 / S02)
 
 Manager verification of the merged tree: 114 unit checks passed, then

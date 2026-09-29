@@ -15,6 +15,7 @@ const ROOT = dirname(TEST_DIR);
 const UNIT = [
   "service-contract",
   "service-process",
+  "operation-ledger",
   "native-visible-capture",
   "rename-compat",
   "source-stamp",

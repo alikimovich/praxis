@@ -11,7 +11,14 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
-**Current (2026-09-28):** S01 (LKM-88) is accepted and merged into the candidate
+**Current (2026-09-28, LKM-90):** S02 (LKM-89) is merged into this step's base
+(5b18354). S03's durable operation ledger — persistent intent, request digests
+and receipts, commit checkpoints, per-domain revisions, persisted event cursors
+and recovery queries — is implemented for review in the Swift service; see the
+[ledger](SWIFT-BACKEND-LEDGER.md) for storage layout, compatibility, rollback and
+the preferences adoption gate. No domain writer has moved.
+
+**Earlier (2026-09-28):** S01 (LKM-88) is accepted and merged into the candidate
 as 51fb928. S02 (LKM-89) — the separate Swift XPC service, legacy Bun
 supervision, Swift-owned profile exclusion and launch-time owner selection — is
 implemented for review; see [service and rollback](SWIFT-BACKEND-SERVICE.md).

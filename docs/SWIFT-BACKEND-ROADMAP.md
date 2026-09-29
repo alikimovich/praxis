@@ -9,14 +9,16 @@ verification and review. Future owners below name architectural responsibility.
 S01 is accepted (candidate 51fb928). S02 (LKM-89) adds the separate XPC service,
 Swift supervision of legacy Bun, Swift-owned profile exclusion and the
 launch-time owner switch; it is implemented for review and transfers no domain
-writer. No operation ledger exists yet (S03). Storage and UI behavior are
-unchanged; see [service and rollback](SWIFT-BACKEND-SERVICE.md).
+writer; see [service and rollback](SWIFT-BACKEND-SERVICE.md). S03's durable
+operation ledger (LKM-90) is implemented for review in the Swift service and
+also transfers no writer; the preferences writer moves only after it is verified
+([ledger](SWIFT-BACKEND-LEDGER.md)). Storage and UI behavior are unchanged.
 
 | Task | Canonical phase | Scope and future owner | Required exit evidence |
 | --- | --- | --- | --- |
 | S01 | 1 | Contracts and executable correctness fixtures (LKM-88); shared Swift/TypeScript protocol | Golden parity, malformed/version/limit/scope/revision rejection, request versus operation identity, complete census mapping. Accepted; merged as 51fb928. |
 | S02 | 2 | Separate Swift service, XPC and supervision; Swift supervisor owns legacy Bun and helper lifetimes | Peer validation, launch negotiation, invalidation/reconnect, bounded shutdown, exclusive profile lock and launch-time owner selection. No domain takeover by transport alone. Implemented for review (LKM-89): `test/service-process.mjs`. |
-| S03 | 3 | Durable intent/checkpoint/snapshot substrate and preferences; Swift persistence service | Persist intent before effects, recover after each injected crash phase, deduplicate across restart, preserve v1 preferences/unknown keys/null and unsaved drafts; drain-and-restart restoration. |
+| S03 | 3 | Durable intent/checkpoint/snapshot substrate and preferences; Swift persistence service | Persist intent before effects, recover after each injected crash phase, deduplicate across restart, preserve v1 preferences/unknown keys/null and unsaved drafts; drain-and-restart restoration. Ledger substrate implemented for review (LKM-90): `test/operation-ledger.mjs`; preferences transfer pending its adoption gate. |
 | S04 | 3 | Basic projects/workspaces; Swift workspace coordinator | Stable root/checkout identity, restore/open/close/reorder/suspend parity, revisioned snapshots and preservation of newer workspace state on rollback. AppKit retains picking and presentation. |
 | S05 | 3 | Memory, annotations and attachments; Swift state services | Manual save beats stale evaluation, annotation publishing split, scratch/blob bounds, original data retained on corruption/failure and restart. Repository lane gates project sidecar changes. |
 | S06 | 4 | Managed servers/dependencies/static serving; Swift process supervisor | Selected runtime preserved; process groups, descendants, watchers and logs stop on shutdown; readiness/port/restart failures and rollback tested without orphan adoption. |

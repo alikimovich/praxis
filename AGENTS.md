@@ -3,8 +3,9 @@
 Trezi is a native macOS app: Swift/AppKit/SwiftUI chat and editing tools on the
 left, with the user's project in system WebKit on the right. Bun owns provider
 sessions, Git/worktrees, source editing, persistence and managed project servers.
-A separate Swift XPC service owns profile exclusion and supervises legacy Bun;
-domain writers remain in Bun during migration step S02.
+A separate Swift XPC service owns profile exclusion, supervises legacy Bun and
+holds the durable operation ledger (S03); domain writers remain in Bun until a
+verified transfer.
 Electron, the React application renderer and browser/Tailscale mode are retired.
 Distributed as source: clone, `bun install`, `bun run dev`. Users authenticate
 with their own provider subscriptions or endpoint credentials.
@@ -60,6 +61,9 @@ timing and must be reported as reduced coverage. No Electron tests remain.
 - `src/service/LegacySupervisor.swift`, `src/service/ProcessGuardian.swift`: profile
   exclusion, Bun/descendant lifetimes and crash cleanup. `src/native/ServiceClient.swift`
   owns the connection; `src/native/HostService.swift` integrates AppKit lifecycle.
+- `src/service/OperationLedger.swift`, `src/service/LedgerStore.swift`,
+  `src/service/LedgerMirror.swift`: durable operation intent, receipts, revisions,
+  event cursors and recovery (docs/SWIFT-BACKEND-LEDGER.md). No writer uses it yet.
 - `src/native/Host.swift`: AppKit app lifecycle and host protocol.
 - `src/native/ProjectCell.swift`: sidebar row rendering and native project drag reordering.
 - `src/native/Shell.swift`: sidebar/project actions, split view and column-aligned

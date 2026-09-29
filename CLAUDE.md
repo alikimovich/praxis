@@ -82,6 +82,10 @@ src/
     LegacySupervisor.swift / ProcessGuardian.swift   exclusive profile lock, Bun
                     process group, lifetime-pipe guardians for detached servers
     ServiceContract.swift   S01 shared DTOs (TS twin: src/shared/service-contract/)
+    OperationLedger.swift / LedgerStore.swift / LedgerMirror.swift   S03 durable
+                    operation ledger: intent digest, receipts, per-domain revisions,
+                    event cursors, crash recovery. Opened under the profile lock;
+                    no domain writes through it yet (docs/SWIFT-BACKEND-LEDGER.md)
   main/           Backend services (CJS bundle, Bun); historical directory name
     preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
                     bounds/load/reset/capture, the select + comment relays, the
