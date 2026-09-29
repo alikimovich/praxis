@@ -2,6 +2,182 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-102 review repair: agent guide and TASKS brought up to the reduced scope
+
+Docs only. With LKM-112 merged, the byte-identical constraint on `docs/agent-guide/` is
+gone, so the pages now describe LKM-102: `service-owners.md` (an LKM-102 row and owner
+blocks for `ProviderData`, `PlatformOpen`, `ProfilePaths`, `EditingProject`,
+`WorkflowTools`/`WorkflowContext`, the service-held profile lock; adapters in Bun by
+default, helpers opt-in via `TREZI_PROVIDER_HELPERS=1`, connections in-process; the stale
+"everything else remains in Bun" sentence is replaced by the 0-row census), `architecture.md`
+(`platform.ts` has no Keychain helper, `profile-path.ts` only resolves),
+`backend-map.md` (providers-store, model-catalog, codex-models are rollback twins of
+`provider-data.ts`; annotation-store renders, the editing owner commits) and
+`verification.md` (`scripts/requirements.mjs`, the retirement census). `docs/TASKS.md`:
+the LKM-98 helper item no longer claims the adapters moved (helper runtime built, routing
+opt-in, adapter move deferred to LKM-111), the stale scroller-style note is gone.
+
+## 2026-09-29 — LKM-102 reconciled with LKM-112's agent guide (merge conflict repair)
+
+The candidate merge aborted on `AGENTS.md` and `CLAUDE.md`: LKM-112 rewrote both
+(AGENTS.md canonical, CLAUDE.md = `@AGENTS.md`) and moved the long material into
+`docs/agent-guide/`, while LKM-102 had edited the old long versions. Root cause: two
+branches editing the same rewritten regions; PROGRESS/TASKS merge with `merge=union` and
+were never the problem. Fix: `AGENTS.md`, `CLAUDE.md`, `test/docs-links.mjs` and the seven
+`docs/agent-guide/*.md` pages are byte-identical to LKM-112's (an identical add/add or
+identical change merges cleanly; any divergence in a file absent from the merge base
+conflicts again), so LKM-102's old CLAUDE/AGENTS wording is dropped. The candidate
+`AGENTS.md` makes no claim LKM-102 contradicts. The guide pages still describe the
+pre-LKM-102 owners (listed as an open item under LKM-102 in `docs/TASKS.md`); they are
+updated after the merge, not here. The authoritative LKM-102 state stays in
+`docs/SWIFT-BACKEND-RETIREMENT.md`, `SWIFT-BACKEND-PLAN.md`, `-PROVIDERS.md` and
+`-PLATFORM.md`. `test/docs-links.mjs` (LKM-112's version, which also scans AGENTS.md and
+the guide) passes on this tree.
+
+## 2026-09-29 — LKM-102 reduced acceptance: the last seven Bun rows, helper opt-in (census 0 Bun-owned; adapters → LKM-111)
+
+Scope reduced by a recorded decision (option A): the SDK adapter move, the live provider
+parity run (not authorized) and removal of the legacy launch path and old Bun copies are
+LKM-111. What LKM-102 now delivers:
+
+- Helper routing is opt-in again. The earlier repair ran built-in adapters in helpers by
+  default; with no live parity run that changed real chats unverified. `ServiceRuntime`
+  installs a helper only on `TREZI_PROVIDER_HELPERS=1` (`ProviderHelperCommand.builtIn`),
+  `backends/index.ts` routes on the same opt-in, and v10 connections stay in-process
+  whatever the setting (a helper would carry the user's API key into another process).
+- Seven rows moved, each with its legacy twin and Swift/TS parity tests:
+  - `ProviderData.swift`: connections store (key through `TreziHost --crypto` on stdin),
+    catalog cache (file order kept for byte parity), Codex probe
+    (`test/provider-data.mjs`).
+  - `PlatformOpen.swift`: links, files, open-in-editor (`checkOpen` in
+    `platform-owner.mjs`). Twins: `platform-legacy.ts`, `open-in-editor-legacy.ts`.
+  - `ProfilePaths.swift`: the launcher asks `TreziService --resolve-profile`, and the
+    service makes the session alias under the lock before Bun
+    (`rename-compat.mjs` parity). Twin: `profile-path-legacy.ts`, which refuses under a
+    service launch.
+  - `native/index.ts`: no `native.lock` of its own. It refuses without the service's
+    lock and moved its test fixture to `smoke-fixture.ts` and the legacy restart to
+    `legacy-restart.ts`.
+- Census: 7 → 0 Bun-owned rows. The gate line reads open, but the census test keeps
+  `TREZI_BACKEND_OWNER=legacy`, `TreziService --legacy` and the rollback rows while the
+  LKM-111 deferral is recorded.
+
+## 2026-09-29 — LKM-102 repair: service-process epoch resume test
+
+- `service-process.mjs`: after production shutdown, the XPC client first-launches a
+  fresh service and resumes its epoch (reconnect + new connection id, same as the
+  earlier XPC resume case; cannot handshake while production still holds the service).
+
+## 2026-09-29 — LKM-102 repair: feedback crash resume + stale test runner lock
+
+- `WorkflowTools.feedback` resumes after `WORKFLOW_FAULT=feedback.issue` by comparing
+  `title`/`body` fields on the prior record (not `JSValue` params equality), so the
+  retry reconciles `issues/1` instead of filing a duplicate.
+- `acquireRunLock` removes a stale `.runner-lock` when its `pid=` owner is gone.
+
+## 2026-09-29 — LKM-102 review repair: provider helpers, feedback parity, service-process (gate still blocked, 7 Bun-owned)
+
+- Built-in Claude, Codex and Gemini adapters run in supervised provider helpers under the
+  Swift launch (`provider-helper.cjs`, `pickProvider` + `ServiceRuntime` helper command).
+  Parity uses the existing fake-provider helper fixtures; live Claude/Codex inside helpers
+  is SKIP (not PASS).
+- `feedback-legacy.ts` accepts an injectable `gh`; `workflow-owner.mjs` parity covers
+  feedback argv/body/dedupe against the Swift owner with `fake-gh.mjs`.
+- `service-process.mjs`: Swift service restart with epoch resume, stale-resume
+  `recoveryRequired`, and `native.lock` not owned by the supervised Bun backend.
+- Retirement gate unchanged: seven Bun-owned census rows and legacy rollback remain.
+
+## 2026-09-29 — LKM-102 second repair: feedback and skills to the workflow owner, launcher and recovery tests (gate still blocked, 7 Bun-owned)
+
+- WorkflowOwner recorded workflows `feedback` (`gh issue create`) and `skills` (`npx skills
+  add`) in `WorkflowTools.swift` (the shared step/runner code moved to
+  `WorkflowContext.swift`). The intent is journaled before the effect. A feedback retry
+  after a crash (the step comes back `uncertain`) or a `gh` failure lists issues and
+  answers the identical one instead of filing another. The owner validates the
+  `owner/name` repo and skill names and builds the argv. Largest composer body (65,536
+  units) is tested through the pipe. Legacy twins: `feedback-legacy.ts`,
+  `skills-install.ts`.
+- `test/install-update.mjs`: install.sh / `trezi` / `trezi --update` against a local
+  origin, including an interrupted update and a diverged checkout. `service-process`:
+  profile recovery after the lock holder is SIGKILLed.
+- Census: 9 → 7 Bun-owned rows (`codex-models`, `model-catalog`, `providers-store`,
+  `props`, `native/platform`, `native/profile-path`, `native/index`).
+- Not done: those seven rows, the provider adapters' move into helpers (needs an
+  authorized live parity run: UNVERIFIED, not passed), and removal of
+  `TREZI_BACKEND_OWNER=legacy`/`TreziService --legacy` (the census forbids it while any
+  row is Bun-owned). No live provider, GitHub, hardware or real Xcode build was run.
+
+## 2026-09-29 — LKM-102 repair round: four census rows moved (gate still blocked, 9 Bun-owned)
+
+Review found the retirement gate blocked by 13 Bun-owned rows. This round moves the
+ones that fit an existing owner, keeping each TS module as its legacy twin:
+
+- EditingOwner (`EditingProject.swift`, repository lane): the `.dsgn`/`.praxis` sidecar
+  migration, the setup helpers a chat worktree carries (`setup-helpers.json` bytes
+  unchanged) and the Next dependency marker (`.trezi/dependencies.sha256`). Bun's
+  `worktree-dependencies.ts` is now effect-free: it asks the owner, runs the install
+  through the service installer, then asks it to record the marker. Swift/TS parity in
+  `test/editing-owner.mjs`. A linked `.trezi`, `.praxis` or `.dsgn` is refused.
+- WorkflowOwner: Trezi's own update check (`updateCheck`, a lane request; the fetch keeps
+  its 15 s bound). `update-controller.ts` uses `checkForUpdate` only without an owner.
+- Census: Bun-owned rows 13 → 9; setup-artifacts, sidecar-migrate and update are rollback
+  twins now, worktree-dependencies has no effect left.
+
+Still Bun-owned: `codex-models`, `model-catalog`, `providers-store` (provider helper
+move), `feedback`, `skills-install`, `props` editor CLIs, `native/platform`,
+`native/profile-path`, `native/index`. The provider SDK adapters still run in Bun; that
+move needs an authorized live parity run, which was not available (unverified, not
+passed). No legacy owner or `TREZI_BACKEND_OWNER=legacy` was removed.
+
+## 2026-09-29 — Retirement census, last sidecar writers, one platform source (LKM-102 / S15, partial)
+
+The last step of the migration, on the LKM-101 candidate. Details are in
+`docs/SWIFT-BACKEND-RETIREMENT.md`.
+
+S15 may remove Bun's application orchestration only once the census shows every module
+has its final owner. It does not yet, so nothing the rollback switch needs was removed.
+What this step does instead:
+
+- The census is executable. `test/retirement-census.mjs` finds every module under
+  `src/main`, `src/native` and `src/shared` that writes files, runs a process or sends a
+  signal. Each one must have a row (rollback twin, retained helper, smoke fixture, or
+  Bun-owned), and each row must still have an effect. The gate line must count the
+  Bun-owned rows, and while any remain the legacy switch must stay. Today: 58 modules,
+  28 rollback, 7 helper, 10 test, 13 Bun-owned.
+- The reviewer notes sidecar (`.trezi/annotations.json`), which S05 held back for the
+  S07 repository lane, and the starter `tokens.json` now go through the editing owner's
+  hash-bound sidecar commit, in the repository lane. The bytes are unchanged. A hand
+  edit between read and commit is read again and never overwritten. A linked `.trezi`
+  is refused, and a damaged `tokens.json` is no longer replaced by the starter.
+  `annotation-store` also runs on the real Swift owner inside `test/editing-owner.mjs`,
+  with Swift/TS parity for the new sidecar steps.
+- The supported platform has one source, `scripts/requirements.mjs`: macOS 13.3, the
+  macOS 26.0 SDK to build, and Bun 1.3.0. The build stamps it into both bundles, and the
+  build, launcher, `bun run dev`, the CLI and `install.sh` refuse early with one message.
+  `test/distribution.mjs` checks this and the package layout the launch spec expects.
+- `agent.ts` had an unused Git runner and unused fs writers; both are removed.
+
+The gate is still blocked. There are 13 Bun-owned rows: provider catalogs and store,
+Codex probe, feedback issues, skills install, the editor CLIs, the update check's fetch,
+worktree setup helpers and dependency markers, the legacy sidecar migration,
+orchestration, Keychain/`open`, and profile migration. The provider SDK adapters also
+still run in Bun, and moving them needs an authorized live parity run. No live provider,
+GitHub, package manager or simulator was used.
+
+Verification (worker): the quick tier passes, with 141 unit checks (including the two
+new tests and the extended `annotation-store` and `editing-owner`) and both typechecks.
+`docs-links` fails until the new files are staged: it checks tracked paths.
+
+Native verification (staged, desktop lock), from the run logs because the tool calls
+timed out on the worker's side. Full run: 141 unit checks, the native build (both
+bundles at the unchanged `macosx13.3` target), native smoke 20 of 20 (islands, Shadow
+Light, sidebar and settings included) and NATIVE CORE PASS. Then chat acceptance failed
+at "Latest message remains clear after native scroller style change": `latestVisible`
+was false and `latestTop`/`latestBottom` were 0 while pinned. A rerun of the chat and
+islands groups failed at the same step; its smoke passed 6 of 6. The probe reports
+`systemPreferredStyle: "legacy"`. This change touches no host or UI Swift code, so the
+cause is LKM-103's scroller-style path under a legacy system scroller, not this step.
+This is an inference; the manager should confirm it.
 ## 2026-09-29 — AGENTS.md is the short canonical agent guide (LKM-112)
 
 `CLAUDE.md` (41 KB) and `AGENTS.md` (15 KB) had drifted into two long, overlapping

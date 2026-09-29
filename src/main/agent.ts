@@ -5,11 +5,8 @@ import { chatIslandContext } from './chat-islands'
 import { setProjectUiEnabled, projectUiInstructions, cancelProjectUi } from './project-ui'
 import type { AgentTurnOptions } from '../shared/api'
 import { conflictResolutionPrompt, ReconciliationCoordinator } from './conflict-resolution'
-import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync, readdirSync, renameSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { promisify } from 'node:util'
 import { app, type NativeView, ipcMain as nativeIpcMain } from '../native/platform'
 import type {
   AgentEvent,
@@ -81,10 +78,7 @@ import {
   type Worktree
 } from './worktrees'
 
-const execFileP = promisify(execFile)
 let ipcMain: RpcHandlerRegistry = nativeIpcMain
-const git = (root: string, args: string[]): Promise<{ stdout: string }> =>
-  execFileP('git', args, { cwd: root, timeout: 20000 }) as Promise<{ stdout: string }>
 
 // On-disk agent-session history (v5-D). Lazy so it resolves userData after the
 // app is ready; under the app's userData dir, out of any user repo.

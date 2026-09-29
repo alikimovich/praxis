@@ -1,8 +1,11 @@
 import { fileURLToPath } from 'node:url'
 import { NATIVE_SMOKE_GROUPS, parseSmokeGroups } from '../src/native/smoke-groups.ts'
+import { requireSupportedPlatform } from './requirements.mjs'
 
-if (process.platform !== 'darwin') {
-  console.error('Trezi requires macOS 13.3 or later.')
+try {
+  requireSupportedPlatform()
+} catch (error) {
+  console.error(error.message)
   process.exit(1)
 }
 

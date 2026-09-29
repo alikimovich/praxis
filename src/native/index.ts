@@ -1,13 +1,12 @@
 import '../shared/rename-compat'
-import { spawn } from 'node:child_process'
+import { restartThroughLauncher } from './legacy-restart'
+import { removeSmokeDirectory, saveSmokeFailure, smokeDirectory, writeSmokeProject } from './smoke-fixture'
 import { NativeUpdateController } from './update-controller'
 import { installNativeInspector } from './inspector-runtime'
 import { NativePreviewRecovery } from './preview-recovery'
 import { NativeLayersController } from './layers-controller'
 import { agentOptionsFor } from '../shared/chat-settings'
 import { NativeEditorController } from './editor-controller'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { conversationsClosed, projectHasRunningAgents, registerAgentIpc, setProjectMemoryOwner } from '../main/agent'
 import { registerAnnotationsIpc } from '../main/annotations'
@@ -52,6 +51,7 @@ import { type ConversationOwner, setConversationOwner } from '../main/conversati
 import { serviceConversation } from './conversation-service'
 import { serviceProvider } from './provider-service'
 import { setProviderOwner } from '../main/provider-owner'
+import { setProviderDataOwner } from '../main/provider-data'
 import { serviceEditing } from './editing-service'
 import { setEditingOwner } from '../main/editing-owner'
 import { serviceWorkflows } from './workflow-service'
@@ -74,41 +74,19 @@ async function main() {
   if (process.env.TREZI_SERVICE_SUPERVISED === '1') {
     console.log = console.info = console.debug = (...args) => console.error(...args)
   }
-  const serviceLocked = process.env.TREZI_SERVICE_LOCKED === '1'
+  // The profile lock (`service.lock`, and the legacy `native.lock` reservation older
+  // builds check) is the service's, in both launches (LKM-102): an unsupervised Bun
+  // could share a profile with a running Trezi, so it refuses and writes nothing.
+  if (process.env.TREZI_SERVICE_LOCKED !== '1')
+    throw new Error('Trezi must be started by its service (trezi or bun run dev), which holds the profile lock. Nothing was changed.')
   const testing = process.argv.includes('--test')
-  const testDir = testing ? process.env.TREZI_NATIVE_TEST_DIR || mkdtempSync(join(tmpdir(), 'trezi-native-')) : null
+  const testDir = testing ? smokeDirectory() : null
   if (testDir) process.env.TREZI_USER_DATA = join(testDir, 'profile')
   const profile = app.getPath('userData')
-  mkdirSync(profile, { recursive: true })
-  const lock = join(profile, 'native.lock')
-  if (!serviceLocked && existsSync(lock)) {
-    const pid = Number(readFileSync(lock, 'utf8'))
-    let running = true
-    try {
-      process.kill(pid, 0)
-    } catch (error: any) {
-      running = error.code !== 'ESRCH'
-    }
-    if (running)
-      throw new Error('Trezi is already using this profile. Close that instance first.')
-    rmSync(lock)
-  }
-  if (!serviceLocked) writeFileSync(lock, String(process.pid), { flag: 'wx' })
   const projectIndex = process.argv.indexOf('--project')
   const requestedProject = projectIndex >= 0 ? process.argv[projectIndex + 1] : null
   if (projectIndex >= 0 && !requestedProject) throw new Error('--project requires a folder')
-  const fixture = testDir ? join(testDir, 'Folder Alpha') : null
-  if (fixture) {
-    mkdirSync(fixture)
-    // A decodable raster icon exercises stored artwork in native sidebar verification.
-    writeFileSync(join(fixture, 'favicon.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=', 'base64'))
-    writeFileSync(
-      join(fixture, 'index.html'),
-      '<!doctype html>\n<html><body>\n<h1 id="native-title" data-trezi-source="index.html:3:1">Native Trezi fixture</h1>\n<p>Bun owns this server.</p><script>window.previewInputs=[];for(const type of ["keydown","keyup","keypress","pointerdown","mousedown","click","dblclick","wheel","input"])window.addEventListener(type,event=>window.previewInputs.push(event.type),true)</script></body></html>'
-    )
-    // Prepare the reload route before the managed server starts watching files.
-    writeFileSync(join(fixture, 'about.html'), readFileSync(join(fixture, 'index.html')))
-  }
+  const fixture = testDir ? writeSmokeProject(testDir) : null
   let pickedRoot = fixture || (requestedProject ? resolve(requestedProject) : null)
   const root = resolve(__dirname, '../..')
   let host: NativeBridge | undefined
@@ -124,14 +102,13 @@ async function main() {
       await Promise.race([conversationsClosed().catch(() => {}), new Promise(resolve => setTimeout(resolve, 3000).unref?.())])
       // The service-mode host exits with this status; the launcher reports it.
       host?.send('quit', { status: typeof process.exitCode === 'number' ? process.exitCode : 0 })
-      if (!serviceLocked) rmSync(lock, { force: true })
       // Keep the native profile separate from retired Electron installations.
       // Test profiles are disposable.
       // Swift launch: the service stops its groups (and again if Bun dies first).
       await Promise.all([drainDevServers(), runtime?.stopAll().catch(() => {})])
       if (testDir) {
         await host?.closed
-        if (!process.env.TREZI_NATIVE_TEST_DIR) rmSync(testDir, { recursive: true, force: true })
+        removeSmokeDirectory(testDir)
       }
     })
     return cleaning
@@ -176,7 +153,12 @@ async function main() {
   if (process.env.TREZI_SERVICE_SUPERVISED === '1') { conversation = serviceConversation(host); setConversationOwner(conversation) }
   // Provider sessions (S10): the service holds each session's grant, answers its
   // permission requests and tool calls, owns Stop's deadline and persists resume ids.
-  if (process.env.TREZI_SERVICE_SUPERVISED === '1') setProviderOwner(serviceProvider(host))
+  // It also writes the provider data: connections and their keys, the model catalog.
+  if (process.env.TREZI_SERVICE_SUPERVISED === '1') {
+    const provider = serviceProvider(host)
+    setProviderOwner(provider)
+    setProviderDataOwner(provider.data)
+  }
   // Editing workflows (S12): island history and activation, the controls sidecars
   // (hash-bound, in the repository lane), content drafts and deferred navigation.
   if (repository) { const lanes = repository; setEditingOwner(serviceEditing(host, { leases: () => lanes.heldLeases() })) }
@@ -442,12 +424,8 @@ async function main() {
       return
     }
     await cleanup()
-    const restartEnvironment = { ...process.env }
-    for (const key of ['TREZI_SERVICE_LOCKED', 'TREZI_SERVICE_SUPERVISED', 'TREZI_SERVICE_PID', 'TREZI_SERVICE_EXECUTABLE', 'TREZI_NATIVE_TEST_DIR']) delete restartEnvironment[key]
-    const ownerPID = process.env.TREZI_SERVICE_PID || String(process.pid)
-    const processNext = spawn(process.execPath, [join(root, 'scripts/start-native.mjs'), '--wait-for-owner', ownerPID, ...(project ? ['--project', project] : [])], { cwd: root, detached: true, stdio: 'ignore', env: restartEnvironment })
-    processNext.on('error', error => { console.error('Could not restart Trezi:', error); process.exit(1) }); processNext.once('spawn', () => { processNext.unref(); process.exit(0) })
-  }, undefined, undefined, () => [...chatController.chats.values()].some(chat => chat.isRunning || chat.text || chat.attachments.length) ? 'Finish running chats and send or clear your drafts before restarting.' : [...editorController.sessions.values()].some(session => [...session.documents.values()].some(doc => doc.text !== doc.baseline)) ? 'Save source editor drafts before restarting.' : [...contentController.sessions.values()].some(session => session.dirty || session.busy) ? 'Save content editor drafts before restarting.' : null, workflowOwner())
+    restartThroughLauncher(root, project)
+  },undefined, undefined, () => [...chatController.chats.values()].some(chat => chat.isRunning || chat.text || chat.attachments.length) ? 'Finish running chats and send or clear your drafts before restarting.' : [...editorController.sessions.values()].some(session => [...session.documents.values()].some(doc => doc.text !== doc.baseline)) ? 'Save source editor drafts before restarting.' : [...contentController.sessions.values()].some(session => session.dirty || session.busy) ? 'Save content editor drafts before restarting.' : null, workflowOwner())
   host.on('menu', ({ action }) => { if (action === 'updates') void updates.open().catch(error => activityController.append(String(error), 'error')) })
   host.on('download-error', ({ message }) => activityController.append(`Download failed: ${message}`, 'error'))
   host.on('download-finished', () => activityController.append('Download finished.', 'success'))
@@ -542,7 +520,7 @@ async function main() {
         process.exitCode = 1
         console.error(error)
         try {
-          writeFileSync(join(root, 'test/artifacts/native/failure.png'), Buffer.from(await host!.request('captureShell'), 'base64'))
+          saveSmokeFailure(root, await host!.request('captureShell'))
           console.error('Native chat state:', await host!.request('chatInspect'))
           console.error('Native geometry:', await host!.request('layoutInspect'))
         } catch { /* preserve original failure */ }

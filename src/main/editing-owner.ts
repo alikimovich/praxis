@@ -8,8 +8,13 @@ import type { ControlPanelManifest } from '../shared/api'
  * - chat islands: the only writer of their history files (`<userData>/chat-islands`),
  *   pending activation bound to the turn that defined them, command admission, the
  *   revision chain of a queued batch and each island's Undo group;
- * - the controls sidecars (`.trezi/control-panels.json`, `content-controls.json`),
- *   committed only if the file still holds the bytes Bun read, in the repository lane;
+ * - the project sidecars (`.trezi/control-panels.json`, `content-controls.json`, and
+ *   since S15 `annotations.json` and `tokens.json`), committed only if the file still
+ *   holds the bytes Bun read, in the repository lane;
+ * - the project's other `.trezi/` files (S15): the pre-rename sidecar migration, the
+ *   setup helpers a chat worktree carries and the Next dependency marker, run in the
+ *   same lane (`EditingProject.swift`; Bun still runs the install between the two
+ *   dependency calls);
  * - unsaved content-editor drafts, kept across restarts;
  * - deferred preview navigation (`open_preview`), released when its turn lands.
  * Bun keeps the JS helpers (manifest/recipe validation, Jev composition, literal
@@ -46,7 +51,8 @@ export interface ContentDraft {
   updated: string
 }
 
-export type SidecarName = 'control-panels.json' | 'content-controls.json'
+export type SidecarName = 'control-panels.json' | 'content-controls.json' | 'annotations.json' | 'tokens.json'
+export const SIDECAR_NAMES: readonly SidecarName[] = ['control-panels.json', 'content-controls.json', 'annotations.json', 'tokens.json']
 export type SidecarCommit = { ok: true; hash: string } | { ok: false; conflict: true }
 export type NavigationEvent = 'landed' | 'failed' | 'begin' | 'close'
 
@@ -79,8 +85,17 @@ export interface EditingOwner {
   contentDrafts(root: string): Promise<ContentDraft[]>
   saveContentDraft(root: string, panel: string, revision: string, value: Record<string, unknown>): Promise<void>
   clearContentDraft(root: string, panel: string): Promise<void>
-  /** Hash-bound sidecar commit; `expectedHash` null means the file must not exist. */
+  /** Hash-bound project sidecar commit; `expectedHash` null means the file must not exist. */
   sidecar(root: string, name: SidecarName, expectedHash: string | null, content: string): Promise<SidecarCommit>
+  // Project files in `.trezi/` (S15), each in the project's repository lane
+  /** Moves pre-rename `.praxis/`/`.dsgn/` metadata into `.trezi/`; answers the legacy copies a differing file won over. */
+  migrateSidecar(root: string): Promise<string[]>
+  /** Copies the live project's setup helpers into a worktree (verified, hashes recorded). */
+  syncSetupHelpers(liveRoot: string, worktree: string): Promise<void>
+  /** Removes a Next checkout's shared `node_modules` link; answers whether it needs its own install. */
+  dependencyState(liveRoot: string, checkout: string): Promise<boolean>
+  /** Records the manifests the checkout's install ran against. */
+  markDependencies(liveRoot: string, checkout: string): Promise<void>
 }
 
 let owner: EditingOwner | null = null

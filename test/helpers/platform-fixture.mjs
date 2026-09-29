@@ -17,7 +17,7 @@ import { servicePlatform } from '../../src/native/platform-service.ts'
 const root = fileURLToPath(new URL('../..', import.meta.url))
 export const SOURCES = ['ServiceContract', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile',
   'WorkspaceOwner', 'DomainChannel', 'ManagedProcess', 'RuntimeNet', 'RuntimeDetect', 'StaticSite', 'StaticServer', 'RepositoryGit',
-  'RepositoryJournal', 'RepositoryEffects', 'RepositoryLanding', 'RepositoryOwner', 'SourcePaths', 'PlatformTools', 'PlatformMedia',
+  'RepositoryJournal', 'RepositoryEffects', 'RepositoryLanding', 'RepositoryOwner', 'SourcePaths', 'PlatformTools', 'PlatformOpen', 'PlatformMedia',
   'SimulatorTools', 'SimulatorBridge', 'SimulatorOwner', 'PlatformOwner'].map(name => `src/service/${name}.swift`)
 
 /** Compiles the fixture once per source hash and compiler version; returns the binary path. */

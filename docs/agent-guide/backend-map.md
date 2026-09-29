@@ -80,14 +80,21 @@ src/main/
                   it unit-tests without electron), while providers.ts owns the
                   safeStorage cipher, the providers:* IPC, the /models catalog probe,
                   the picker's ModelChoice list, and resolveConnection() — the seam
-                  backends/codex.ts aims the Codex SDK at
+                  backends/codex.ts aims the Codex SDK at. Under the Swift launch the
+                  service's provider owner writes the connections store (keys through
+                  `TreziHost --crypto`, not the safeStorage cipher) via
+                  src/service/ProviderData.swift behind main/provider-data.ts;
+                  providers-store.ts and the cipher are the legacy-launch rollback twin
   model-catalog.ts / codex-models.ts   what the two BUILT-IN seats offer, discovered
                   instead of curated. model-catalog is the pure half (parsers + a TTL
                   cache with injected clock/baseDir, persisted under userData);
                   codex-models runs `codex debug models` on the SDK's OWN vendored
                   binary, not PATH. Claude needs a live session (Query.supportedModels()),
                   so backends/claude.ts hands its answer back via recordClaudeModels;
-                  providers.ts only schedules the refresh, never on the render path
+                  providers.ts only schedules the refresh, never on the render path.
+                  Under the Swift launch the provider owner writes the cache and runs
+                  the probe (src/service/ProviderData.swift via main/provider-data.ts);
+                  these two are the legacy-launch rollback twins
   simulator.ts    iOS Simulator preview (Metro/Expo detect, MJPEG sim bridge); the
                   legacy-launch rollback of the Swift platform owner
   props.ts / props-svelte.ts   prop editing engines (React via react-docgen /
@@ -116,8 +123,8 @@ src/main/
   publish.ts      the legacy Publish / handoff / saved-run PR code (rollback twin of
                   service/WorkflowPublish.swift); the routes go through workflow-owner.ts
   annotation-store.ts  the notes sidecar's storage (list/add/remove; no Git), split
-                  from publication in annotations.ts; Bun-owned until the S07
-                  repository lane
+                  from publication in annotations.ts; it renders only, the editing
+                  owner commits the sidecar (since LKM-102)
   spring.ts       pure spring→CSS linear() engine (vendored from ~/dev/spring2css);
                   powers the spring_to_css agent tool in backends/claude.ts
   apca.ts         APCA (Lc) contrast checker + accessible-color suggester

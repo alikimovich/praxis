@@ -3,13 +3,22 @@ import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import '../src/shared/rename-compat.ts'
-import { nativeProfilePath } from '../src/native/profile-path.ts'
+import { spawnSync } from 'node:child_process'
+import { requireSupportedPlatform } from './requirements.mjs'
+
+/** The default profile, with the `Praxis Native` alias made by the service (`ProfilePaths.swift`). */
+export function defaultProfile(out, support = join(homedir(), 'Library/Application Support')) {
+  const result = spawnSync(join(out, 'TreziService'), ['--resolve-profile', support], { encoding: 'utf8' })
+  if (result.error) throw new Error(`Could not run TreziService to find the profile (${result.error.message}); run bun run build.`)
+  if (result.status !== 0) throw new Error(result.stderr.trim() || 'TreziService could not resolve the profile.')
+  return result.stdout.trim()
+}
 
 export function nativeServiceLaunchSpec(root, args, env, bun, testDirectory = null) {
   const owner = env.TREZI_BACKEND_OWNER ?? 'swift'
   if (!['swift', 'legacy'].includes(owner)) throw new Error('TREZI_BACKEND_OWNER must be swift or legacy')
-  const profile = resolve(testDirectory ? join(testDirectory, 'profile') : env.TREZI_USER_DATA || nativeProfilePath(join(homedir(), 'Library/Application Support')))
   const out = join(root, 'out/native')
+  const profile = resolve(testDirectory ? join(testDirectory, 'profile') : env.TREZI_USER_DATA || defaultProfile(out))
   const host = join(out, 'Trezi.app/Contents/MacOS/TreziHost')
   const common = ['--bun', bun, '--backend', join(out, 'index.cjs'), '--profile', profile, '--', ...args]
   return {
@@ -21,7 +30,7 @@ export function nativeServiceLaunchSpec(root, args, env, bun, testDirectory = nu
 }
 
 async function main() {
-  if (process.platform !== 'darwin') throw new Error('Trezi requires macOS 13.3 or later.')
+  requireSupportedPlatform()
   const args = process.argv.slice(2)
   if (args[0] === '--wait-for-owner') {
     const pid = Number(args[1])

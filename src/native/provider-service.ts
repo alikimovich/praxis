@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import type { ServiceFailure } from '../shared/service-contract/types'
 import { type HelperHandlers, ProviderError, type ProviderOwner } from '../main/provider-owner'
 import { LIMITS, MESSAGES, permissionTarget, validImages } from '../main/provider-policy'
+import type { ProviderDataOwner } from '../main/provider-data'
+import { parseCodexModels } from '../main/model-catalog'
 
 type Result = { kind: 'succeeded'; payload: any } | { kind: 'failed'; payload: ServiceFailure }
 interface ServiceMessage {
@@ -26,8 +28,9 @@ const MAX_TOOL_RESULT = 16 * 1024 * 1024
  * they are written. For a helper-hosted session the owner also pushes `service-event`
  * frames: validated events, record snapshots, the helper's exit, and Trezi tool calls
  * it already authorized, which Bun runs and answers (`provider-helper` frames).
+ * `data` is the same connection's provider data client (`main/provider-data.ts`).
  */
-export function serviceProvider(link: ProviderLink, options: { timeout?: number } = {}): ProviderOwner {
+export function serviceProvider(link: ProviderLink, options: { timeout?: number } = {}): ProviderOwner & { data: ProviderDataOwner } {
   const connection = randomUUID()
   const timeout = options.timeout ?? 60_000
   const pending = new Map<number, { resolve: (value: Result) => void; timer: ReturnType<typeof setTimeout> }>()
@@ -131,6 +134,21 @@ export function serviceProvider(link: ProviderLink, options: { timeout?: number 
       await call('close', { session })
     },
     snapshot: () => call('snapshot', {}, 'read'),
-    status: () => call('status', {}, 'read')
+    status: () => call('status', {}, 'read'),
+    data: {
+      kind: 'swift',
+      save: async (input) => (await call('connectionSave', { input: plain(input) })).connection,
+      remove: async (id) => { await call('connectionRemove', { id }) },
+      // An id the store could never hold has no key (and is not worth a round trip).
+      secretFor: async (id) => (SAFE_ID.test(id) ? ((await call('connectionSecret', { id }, 'read')).secret ?? null) : null),
+      saveCatalog: async (backend, models) =>
+        (await call('catalogSave', { backend, models: models.map(({ id, label }) => ({ id, label })) })).saved === true,
+      codexModels: async () => {
+        const { stdout } = await call('codexModels', {}, 'read')
+        try { return typeof stdout === 'string' ? parseCodexModels(JSON.parse(stdout)) : [] } catch { return [] }
+      }
+    }
   }
 }
+
+const SAFE_ID = /^[A-Za-z0-9_-]{1,128}$/

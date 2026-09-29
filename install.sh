@@ -36,8 +36,11 @@ else
   git clone https://github.com/alikimovich/praxis.git "$TREZI_HOME"
 fi
 
-echo "==> Installing dependencies"
 cd "$TREZI_HOME"
+echo "==> Checking macOS, SDK and Bun versions"
+bun scripts/requirements.mjs --build
+
+echo "==> Installing dependencies"
 "$PM" install
 
 echo "==> Building Trezi"

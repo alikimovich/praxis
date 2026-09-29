@@ -23,6 +23,7 @@ import { createRecordCapture } from '../src/main/backends/record.ts'
 import { legacyProviders } from '../src/main/provider-model.ts'
 import { providerOwner, setProviderOwner } from '../src/main/provider-owner.ts'
 import { LIMITS } from '../src/main/provider-policy.ts'
+import { pickProvider } from '../src/main/backends/index.ts'
 import { startProviderSession } from '../src/main/provider-sessions.ts'
 import { registerPreviewSource } from '../src/main/preview-state.ts'
 import { authorizedTool } from '../src/main/session-tools.ts'
@@ -69,6 +70,46 @@ async function helperSession(owner) {
 
 try {
   binary = compileProviderFixture()
+
+  await section('routing', async () => {
+    // Helpers are an explicit opt-in: the default Swift launch runs every adapter in-process
+    // in Bun, and a connection stays in-process in both modes (a fake connection's chat runs end to end in test/provider-data.mjs).
+    const saved = { ...process.env }
+    try {
+      process.env.TREZI_SERVICE_SUPERVISED = '1'
+      delete process.env.TREZI_PROVIDER_HELPERS
+      for (const options of [{ provider: 'claude' }, { provider: 'codex' }, { connectionId: 'c1' }, {}])
+        assert.notEqual(pickProvider(options).host, 'helper', `default ${JSON.stringify(options)}`)
+      process.env.TREZI_PROVIDER_HELPERS = '1'
+      assert.equal(pickProvider({ provider: 'claude' }).host, 'helper')
+      assert.equal(pickProvider({ provider: 'codex' }).host, 'helper')
+      assert.notEqual(pickProvider({ connectionId: 'c1' }).host, 'helper')
+      assert.notEqual(pickProvider({ provider: 'claude', connectionId: 'c1' }).host, 'helper')
+      // Inside a helper, and on the legacy launch, the opt-in never nests or applies.
+      process.env.TREZI_PROVIDER_HELPER = '1'
+      assert.notEqual(pickProvider({ provider: 'claude' }).host, 'helper')
+      delete process.env.TREZI_PROVIDER_HELPER
+      delete process.env.TREZI_SERVICE_SUPERVISED
+      assert.notEqual(pickProvider({ provider: 'claude' }).host, 'helper')
+    } finally {
+      for (const key of ['TREZI_SERVICE_SUPERVISED', 'TREZI_PROVIDER_HELPERS', 'TREZI_PROVIDER_HELPER']) {
+        if (key in saved) process.env[key] = saved[key]; else delete process.env[key]
+      }
+    }
+    // The service installs a helper command only on the opt-in (ServiceRuntime's hello).
+    const out = join(scratch, 'out'); mkdirSync(out, { recursive: true })
+    const backend = join(out, 'index.cjs')
+    const f = await fixture(profile('routing'))
+    const builtIn = environment => f.cmd({ cmd: 'builtIn', environment, backend, bun: process.execPath })
+    assert.equal((await builtIn({})).helper, null, 'the default launch installs no helper')
+    assert.equal((await builtIn({ TREZI_PROVIDER_HELPERS: '0' })).helper, null)
+    assert.equal((await builtIn({ TREZI_PROVIDER_HELPERS: '1' })).helper, null, 'no bundled helper entry, no helper')
+    writeFileSync(join(out, 'provider-helper.cjs'), '')
+    assert.equal((await builtIn({})).helper, null, 'a bundled entry alone does not opt in')
+    assert.deepEqual((await builtIn({ TREZI_PROVIDER_HELPERS: '1' })).helper,
+      { executable: process.execPath, arguments: [join(out, 'provider-helper.cjs')], providers: ['claude', 'codex', 'fake', 'gemini'] })
+    await stop(f)
+  })
 
   await section('policy', async () => {
     const home = profile('policy')

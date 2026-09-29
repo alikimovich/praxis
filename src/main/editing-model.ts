@@ -1,16 +1,19 @@
 import { randomUUID } from 'node:crypto'
-import { lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { accessSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import type { IslandRecord } from '../shared/chat-islands'
 import { previewPath } from '../shared/preview-navigation'
+import { migrateLegacySidecar } from './sidecar-migrate'
+import { syncSetupArtifacts } from './setup-artifacts'
 import { contentHash } from './source-owner'
 import {
   EditingError,
   swiftEditingOwner,
   type ContentDraft,
   type EditingOwner,
-  type SidecarName
+  type SidecarName,
+  SIDECAR_NAMES
 } from './editing-owner'
 
 /**
@@ -204,13 +207,58 @@ export function legacyEditing(options: { islands?: string } = {}): EditingOwner 
 
     async sidecar(root, name, expectedHash, content) {
       return commitSidecarLocally(root, name, expectedHash, content)
+    },
+
+    // Project files: the legacy modules, as before S15 (errors carry the owner's code).
+    migrateSidecar: root => legacy(() => migrateLegacySidecar(root)),
+    syncSetupHelpers: (liveRoot, worktree) => legacy(() => syncSetupArtifacts(liveRoot, worktree)),
+    async dependencyState(liveRoot, checkout) {
+      const target = join(checkout, 'node_modules')
+      let info: ReturnType<typeof lstatSync> | null = null
+      try { info = lstatSync(target) } catch { /* absent */ }
+      if (info?.isSymbolicLink()) rmSync(target)
+      else if (info) {
+        let marker = ''
+        try { marker = readFileSync(join(checkout, '.trezi/dependencies.sha256'), 'utf8') } catch { /* none */ }
+        if (marker === dependencyFingerprint(checkout)) return false
+      }
+      try { accessSync(join(liveRoot, 'node_modules')); return true } catch { return false }
+    },
+    async markDependencies(_liveRoot, checkout) {
+      const directory = join(checkout, '.trezi')
+      try { if (!lstatSync(directory).isDirectory()) fail('invalidRequest', `Metadata must be a real directory: ${directory}`) } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+        mkdirSync(directory, { recursive: true })
+      }
+      const marker = join(directory, 'dependencies.sha256')
+      rmSync(marker, { force: true })
+      writeFileSync(marker, dependencyFingerprint(checkout), { flag: 'wx' })
     }
   }
 }
 
-/** The legacy writer of a controls sidecar: same checks as `EditingSidecar.commit`. */
+/** Manifests and lockfile a Next checkout's install ran against: each name, then its bytes. */
+const DEPENDENCY_FILES = ['package.json', 'bun.lock', 'bun.lockb', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock']
+export function dependencyFingerprint(checkout: string): string {
+  const hash = createHash('sha256')
+  for (const file of DEPENDENCY_FILES) {
+    hash.update(file)
+    try { hash.update(readFileSync(join(checkout, file))) } catch { /* absent */ }
+  }
+  return hash.digest('hex')
+}
+
+/** A legacy module's failure, as the owner's `invalidRequest` (the Swift owner refuses the same cases). */
+async function legacy<T>(run: () => Promise<T>): Promise<T> {
+  try { return await run() } catch (error) {
+    if (error instanceof EditingError) throw error
+    return fail('invalidRequest', error instanceof Error ? error.message : String(error))
+  }
+}
+
+/** The legacy writer of a project sidecar: same checks as `EditingSidecar.commit`. */
 export function commitSidecarLocally(root: string, name: SidecarName, expectedHash: string | null, content: string) {
-  if (name !== 'control-panels.json' && name !== 'content-controls.json') fail('invalidRequest', 'Not a controls sidecar.')
+  if (!SIDECAR_NAMES.includes(name)) fail('invalidRequest', 'Not a project sidecar.')
   if (Buffer.byteLength(content) > SIDECAR_BYTES) fail('invalidRequest', `The ${name} store would exceed 1 MB.`)
   const refused = () => fail('unauthorized', 'The .trezi folder is not a plain folder inside the project.')
   const base = realpathSync(root), directory = join(base, '.trezi'), file = join(directory, name)

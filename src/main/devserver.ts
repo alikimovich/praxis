@@ -15,7 +15,7 @@ import {
   URL_RE,
   waitForReachable
 } from './devserver-net'
-import { migrateLegacySidecar } from './sidecar-migrate'
+import { editingOwner } from './editing-model'
 import { startStaticServer } from './static-server'
 import { detectProject, interpretFailure, PREVIEW_HOST, PREVIEW_PORT_BASE, withPort } from './project-detect'
 import type { RpcHandlerRegistry } from './rpc-router'
@@ -284,7 +284,8 @@ export function registerDevServerIpc(
   ipcMain.handle('project:detect', async (_e, root: string) => {
     // Move pre-rename `.dsgn/` data (annotations/tokens) into `.trezi/` before
     // anything reads the sidecar. No-op except right after the 2026-07 rename.
-    await migrateLegacySidecar(root)
+    for (const legacy of await editingOwner().migrateSidecar(root))
+      console.warn(`Trezi metadata collision: keeping the existing file; legacy copy retained at ${legacy}`)
     return runtime ? runtime.detect(root) : detectProject(root)
   })
   if (runtime) {

@@ -2,7 +2,7 @@
 // Swift owner (see test/platform-owner.mjs for the fixture and the simulator checks).
 import assert from 'node:assert/strict'
 import { createHash, randomBytes } from 'node:crypto'
-import { appendFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { mediaTypeFor } from '../../src/main/media-types.ts'
 import { attachmentFileName, pruneAttachments } from '../../src/main/attachments.ts'
@@ -151,6 +151,93 @@ export async function checkAttachments({ fixture, scratch, log, rejects }) {
   assert.equal(await linked.owner().saveAttachment({ mediaType: 'image/png', data: Buffer.from('png').toString('base64') }, 'x.png'), '')
   assert.deepEqual(readdirSync(elsewhere), [])
   await linked.stop()
+}
+
+/**
+ * Opening links, files and "Open in editor" (LKM-102) through the owner, against the
+ * rollback twins: scripted `open`/`code`/`zed` on a PATH with no real editor on it.
+ */
+export async function checkOpen({ fixture, scratch, log, rejects }) {
+  log('open: links, files and Open in editor, parity with the legacy twins')
+  const { openInEditorLegacy } = await import('../../src/main/open-in-editor-legacy.ts')
+  const { openExternal } = await import('../../src/native/platform-legacy.ts')
+  const bin = join(scratch, 'open-bin'), record = join(scratch, 'open.log')
+  mkdirSync(bin)
+  for (const name of ['open', 'code', 'cursor', 'zed', 'subl']) {
+    writeFileSync(join(bin, name), '#!/bin/sh\nprintf \'%s\\n\' "$(basename "$0") $*" >> "$FAKE_OPEN_LOG"\n[ -e "$FAKE_OPEN_LOG.fail-$(basename "$0")" ] && { echo "$(basename "$0") refused" >&2; exit 1; }\nexit 0\n', { mode: 0o755 })
+  }
+  const fail = (name, on = true) => (on ? writeFileSync(`${record}.fail-${name}`, '') : rmSync(`${record}.fail-${name}`, { force: true }))
+  const ran = () => { const lines = existsSync(record) ? readFileSync(record, 'utf8').trim().split('\n').filter(Boolean) : []; rmSync(record, { force: true }); return lines }
+  const env = { PATH: `${bin}:/usr/bin:/bin`, FAKE_OPEN_LOG: record }
+  const started = await fixture(join(scratch, 'open-profile'), { ...env, PLATFORM_OPEN: join(bin, 'open') })
+  const owner = started.owner()
+  const project = join(scratch, 'open-project'), file = join(project, 'src', 'App.tsx')
+  mkdirSync(join(project, 'src'), { recursive: true }); writeFileSync(file, 'export {}\n')
+  writeFileSync(join(scratch, 'outside.tsx'), 'x'); symlinkSync(join(scratch, 'outside.tsx'), join(project, 'escape.tsx'))
+
+  // Links: http(s) only, one argument, same refusal as the legacy twin.
+  await owner.openLink('https://example.com/a?b=c d')
+  assert.deepEqual(ran(), ['open https://example.com/a?b=c d'])
+  for (const url of ['javascript:alert(1)', 'file:///etc/passwd', '-a Calculator']) {
+    const legacy = await openExternal(url).then(() => null, error => error.message)
+    const swift = await owner.openLink(url).then(() => null, error => error.message)
+    assert.equal(swift, legacy, url)
+    assert.equal((await started.frame('openLink', { url })).payload.code, 'invalidRequest', url)
+  }
+  assert.deepEqual(ran(), [], 'a refused link never ran open')
+
+  // Files: '' on success, the failure text otherwise.
+  assert.equal(await owner.openFile(file), '')
+  assert.deepEqual(ran(), [`open ${file}`])
+  fail('open')
+  assert.match(await owner.openFile(file), /^Error: Command failed: .*open .*App\.tsx\nopen refused/)
+  fail('open', false); ran()
+  assert.equal(await owner.openFile(join(project, 'missing.tsx')), 'The file does not exist.')
+  assert.equal(await owner.openFile('relative.tsx'), 'The file does not exist.')
+  assert.deepEqual(ran(), [])
+
+  // Open in editor: the first CLI that works, with the same jump target as the legacy twin.
+  const saved = { PATH: process.env.PATH, FAKE_OPEN_LOG: process.env.FAKE_OPEN_LOG }
+  Object.assign(process.env, env)
+  try {
+    for (const [label, failing, loc] of [['code', [], { line: 12, column: 4 }], ['cursor after code', ['code'], { line: 3 }],
+      ['zed after code and cursor', ['code', 'cursor'], { line: 1, column: 1 }]]) {
+      for (const name of failing) fail(name)
+      assert.deepEqual(await owner.openInEditor(project, file, loc.line, loc.column), { ok: true }, label)
+      const swift = ran()
+      assert.deepEqual(await openInEditorLegacy({ file, ...loc }), { ok: true }, label)
+      assert.deepEqual(swift, ran(), `${label}: the same CLI runs`)
+      for (const name of failing) fail(name, false)
+    }
+  } finally {
+    for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value }
+  }
+  assert.deepEqual((await owner.openInEditor(project, file, 7)), { ok: true })
+  assert.deepEqual(ran(), [`code -g ${file}:7`])
+  // No editor works: the file's default app, without the jump.
+  for (const name of ['code', 'cursor', 'zed', 'subl']) fail(name)
+  assert.deepEqual(await owner.openInEditor(project, file, 2), { ok: true })
+  assert.deepEqual(ran(), [`code -g ${file}:2`, `cursor -g ${file}:2`, `zed ${file}:2`, `subl ${file}:2`, `open ${file}`])
+  for (const name of ['code', 'cursor', 'zed', 'subl']) fail(name, false)
+  assert.deepEqual(await owner.openInEditor(project, join(project, 'missing.tsx'), 1), { ok: false, error: 'The source file does not exist.' })
+  await rejects(owner.openInEditor(project, join(project, 'escape.tsx'), 1), 'unauthorized', /outside the project/)
+  await rejects(owner.openInEditor(project, join(scratch, 'outside.tsx'), 1), 'unauthorized')
+  assert.deepEqual(ran(), [], 'nothing outside the project was opened')
+  // Bun's `shell` (every Open link / Reveal call site) goes to the installed owner.
+  const { shell } = await import('../../src/native/platform.ts')
+  const { setPlatformOwner } = await import('../../src/main/platform-owner.ts')
+  setPlatformOwner(owner)
+  try {
+    await shell.openExternal('https://trezi.example/docs')
+    assert.equal(await shell.openPath(file), '')
+    await assert.rejects(shell.openExternal('javascript:x'), /Only HTTP\(S\)/)
+  } finally { setPlatformOwner(null) }
+  assert.deepEqual(ran(), ['open https://trezi.example/docs', `open ${file}`])
+  for (const body of [{ root: project, path: 'src/App.tsx', line: 1 }, { root: 'rel', path: file, line: 1 }, { root: project, path: file, line: 1.5 },
+    { root: project, path: file, line: -1 }, { root: project, path: file, line: 1, column: 'x' }, { root: project, path: file }]) {
+    assert.equal((await started.frame('openInEditor', body)).payload.code, 'invalidRequest', JSON.stringify(body))
+  }
+  await started.stop()
 }
 
 export async function checkServers({ owner, scratch, log, rejects, gone }) {

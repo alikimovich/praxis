@@ -7,7 +7,14 @@ user") and `AGENTS.md` ("Commands and verification"). Linked from
 ## Commands
 
 Use **bun**, not npm/yarn. Node 22 (`.nvmrc`) remains available for tooling/tests.
-Native builds require macOS 13.3+ and command-line tools with the macOS 26 SDK.
+Native builds require macOS 13.3+ and command-line tools with the macOS 26 SDK. The
+supported platform (macOS 13.3, SDK 26.0, Bun 1.3.0) has one source,
+`scripts/requirements.mjs`; the build, launcher, CLI and installer enforce it and
+`test/distribution.mjs` keeps `package.json` and the docs in sync with it.
+
+The retirement census (`test/retirement-census.mjs`, `docs/SWIFT-BACKEND-RETIREMENT.md`)
+lists every Bun module with a file, process or signal effect as rollback / helper / test /
+Bun-owned and fails on an unlisted one. Add a row when you add such a module.
 
 | Command | What |
 | --- | --- |

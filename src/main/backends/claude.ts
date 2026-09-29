@@ -35,7 +35,7 @@ import { treziRules } from '../rules'
 import { elevationScale, layeredShadow } from '../shadows'
 import { findPack, SKILL_PACKS } from '../skill-packs'
 import { discoverProjectSkills, mergeSlashCommands } from '../skills'
-import { installSkillPack } from '../skills-install'
+import { workflowOwner } from '../workflow-owner'
 import {
   analyze,
   fromBounceDuration,
@@ -1055,7 +1055,7 @@ async function startSession(
             }
           }
           const scope = args.scope ?? pack.recommendedScope
-          const result = await installSkillPack({
+          const result = await workflowOwner().installSkills({
             packId: args.packId,
             scope,
             liveRoot: ctx?.liveRoot ?? root

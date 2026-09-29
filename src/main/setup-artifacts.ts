@@ -12,7 +12,8 @@ export const SETUP_HELPERS = [
   'trezi-mdx.mjs'
 ]
 
-/** Runs before a provider turn, including for already-created chat worktrees. */
+/** The legacy-launch twin of `EditingProject.syncHelpers` (reached through the editing owner
+ * seam only). Runs before a provider turn, including for already-created chat worktrees. */
 export async function syncSetupArtifacts(liveRoot: string, worktree: string): Promise<void> {
   await syncNamedArtifacts(liveRoot, worktree, '.trezi', SETUP_HELPERS)
   await syncNamedArtifacts(liveRoot, worktree, '.praxis', SETUP_HELPERS.map(name => name.replace('trezi', 'praxis')))

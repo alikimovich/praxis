@@ -1,5 +1,5 @@
 import { isNextProject, provisionNextDependencies } from './worktree-dependencies'
-import { syncSetupArtifacts } from './setup-artifacts'
+import { editingOwner } from './editing-model'
 import { execFile } from 'child_process'
 import { mkdir, symlink, writeFile, readFile, rm, readdir, stat } from 'fs/promises'
 import { randomUUID } from 'crypto'
@@ -157,7 +157,7 @@ async function createOwnedWorktree(
   const linkNodeModules = !(await isNextProject(repoRoot))
   const wt = await owner.createWorktree(repoRoot, worktreesDir, { id, branch, linkNodeModules })
   try {
-    await syncSetupArtifacts(repoRoot, wt.path)
+    await editingOwner().syncSetupHelpers(repoRoot, wt.path)
     await provisionNextDependencies(repoRoot, wt.path)
   } catch (error) {
     await owner.removeWorktree(wt, false, 'abandon').catch(() => {})
@@ -197,7 +197,7 @@ async function doCreateWorktree(
     }
   }
   try {
-    await syncSetupArtifacts(repoRoot, dir)
+    await editingOwner().syncSetupHelpers(repoRoot, dir)
     await provisionNextDependencies(repoRoot, dir)
   } catch (error) {
     await git(repoRoot, ['worktree', 'remove', '--force', dir]).catch(() => {})

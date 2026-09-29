@@ -3,8 +3,10 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { nativeCatAssets } from './native-cat-assets.mjs'
 import { build as bundle } from 'esbuild'
+import { MIN_MACOS, requireSupportedPlatform } from './requirements.mjs'
 
-if (process.platform !== 'darwin') throw new Error('The native runtime currently requires macOS.')
+requireSupportedPlatform({ sdk: true })
+const target = `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx${MIN_MACOS}`
 const root = fileURLToPath(new URL('../', import.meta.url))
 const out = join(root, 'out/native')
 const contents = join(out, 'Trezi.app/Contents')
@@ -24,6 +26,17 @@ const backend = await bundle({
   metafile: true,
   entryPoints: [join(root, 'src/native/index.ts')],
   outfile: join(out, 'index.cjs'),
+  bundle: true,
+  platform: 'node',
+  target: 'es2022',
+  format: 'cjs',
+  packages: 'external',
+  plugins: [recipeModule],
+  sourcemap: true
+})
+await bundle({
+  entryPoints: [join(root, 'src/main/backends/provider-helper-entry.ts')],
+  outfile: join(out, 'provider-helper.cjs'),
   bundle: true,
   platform: 'node',
   target: 'es2022',
@@ -64,7 +77,7 @@ writeFileSync(
 <key>CFBundleExecutable</key><string>TreziHost</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleVersion</key><string>1</string>
-<key>LSMinimumSystemVersion</key><string>13.3</string>
+<key>LSMinimumSystemVersion</key><string>${MIN_MACOS}</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSCameraUsageDescription</key><string>Allow your local project preview to test camera features when you approve.</string>
 <key>NSMicrophoneUsageDescription</key><string>Allow your local project preview to test microphone features when you approve.</string>
@@ -82,10 +95,9 @@ writeFileSync(join(serviceContents, 'Info.plist'), `<?xml version="1.0" encoding
 <key>XPCService</key><dict><key>ServiceType</key><string>Application</string><key>RunLoopType</key><string>dispatch_main</string></dict>
 </dict></plist>`)
 const serviceResult = Bun.spawnSync([
-  'xcrun', 'swiftc', '-O', '-target',
-  `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx13.3`,
+  'xcrun', 'swiftc', '-O', '-target', target,
   '-module-cache-path', join(out, 'module-cache'),
-  ...['ServiceContract', 'ServiceXPC', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile', 'WorkspaceOwner', 'MemoryFile', 'MemoryOwner', 'DomainChannel', 'LegacySupervisor', 'ProcessGuardian', 'ManagedProcess', 'RuntimeNet', 'RuntimeDetect', 'StaticSite', 'StaticServer', 'RuntimeServer', 'RuntimeOwner', 'RepositoryGit', 'RepositoryJournal', 'RepositoryEffects', 'RepositoryLanding', 'RepositoryOwner', 'SourcePaths', 'SourceJournal', 'SourceHistory', 'SourceStore', 'SourceDrafts', 'SourceOwner', 'ConversationState', 'ConversationStore', 'ConversationOwner', 'ProviderPolicy', 'ProviderStore', 'ProviderHelper', 'ProviderFrames', 'ProviderOwner', 'EditingIslands', 'EditingStores', 'EditingOwner', 'WorkflowJournal', 'WorkflowOwner', 'WorkflowPublish', 'WorkflowRemote', 'WorkflowSetup', 'PlatformTools', 'PlatformMedia', 'SimulatorTools', 'SimulatorBridge', 'SimulatorOwner', 'PlatformOwner', 'ServiceRuntime', 'ServiceMain'].map(name => join(root, `src/service/${name}.swift`)),
+  ...['ServiceContract', 'ServiceXPC', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile', 'WorkspaceOwner', 'MemoryFile', 'MemoryOwner', 'DomainChannel', 'LegacySupervisor', 'ProcessGuardian', 'ManagedProcess', 'RuntimeNet', 'RuntimeDetect', 'StaticSite', 'StaticServer', 'RuntimeServer', 'RuntimeOwner', 'RepositoryGit', 'RepositoryJournal', 'RepositoryEffects', 'RepositoryLanding', 'RepositoryOwner', 'SourcePaths', 'SourceJournal', 'SourceHistory', 'SourceStore', 'SourceDrafts', 'SourceOwner', 'ConversationState', 'ConversationStore', 'ConversationOwner', 'ProviderPolicy', 'ProviderStore', 'ProviderHelper', 'ProviderFrames', 'ProviderData', 'ProviderOwner', 'EditingIslands', 'EditingStores', 'EditingProject', 'EditingOwner', 'WorkflowJournal', 'WorkflowContext', 'WorkflowOwner', 'WorkflowPublish', 'WorkflowRemote', 'WorkflowSetup', 'WorkflowTools', 'PlatformTools', 'PlatformOpen', 'PlatformMedia', 'SimulatorTools', 'SimulatorBridge', 'SimulatorOwner', 'PlatformOwner', 'ProfilePaths', 'ServiceRuntime', 'ServiceMain'].map(name => join(root, `src/service/${name}.swift`)),
   '-o', join(serviceContents, 'MacOS/TreziService'), '-framework', 'Foundation', '-framework', 'Security', '-framework', 'CoreServices'
 ], { stdout: 'inherit', stderr: 'inherit' })
 if (serviceResult.exitCode) process.exit(serviceResult.exitCode)
@@ -97,7 +109,7 @@ const result = Bun.spawnSync(
     'swiftc',
     '-O',
     '-target',
-    `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx13.3`,
+    target,
     '-module-cache-path',
     join(out, 'module-cache'),
     join(out, 'main.swift'),

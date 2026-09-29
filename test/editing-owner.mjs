@@ -8,13 +8,14 @@
 //   island history bytes on the legacy twin and the Swift owner;
 // - turns: the conversation coordinator is the authority for an island's origin and a
 //   navigation's turn;
-// - suites: chat-islands, shadow-controls, control-panels, content-controls and
-//   native-content re-run unchanged with the Swift owners preloaded;
+// - suites: chat-islands, shadow-controls, control-panels, content-controls,
+//   native-content and annotation-store (S15: notes and starter tokens) re-run
+//   unchanged with the Swift owners preloaded;
 // - drafts (restart, stale base refused, damaged file), sidecars (stale bytes, symlinks,
 //   lanes), crash (SIGKILL inside an island write), rollback, drain, schema.
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -136,13 +137,78 @@ async function sidecars(owner, root) {
   writeFileSync(file, '{"hand":"edit"}\n')
   await attempt('hand edit refused', owner.sidecar(root, 'control-panels.json', contentHash('{"version":1,"panels":[]}\n'), '{}\n'))
   out.push(['hand edit kept', readFileSync(file, 'utf8')])
-  await attempt('not a sidecar', owner.sidecar(root, 'annotations.json', null, '{}'))
+  await attempt('not a sidecar', owner.sidecar(root, 'settings.json', null, '{}'))
+  // S15: the notes and starter tokens sidecars commit the same way.
+  await attempt('notes create', owner.sidecar(root, 'annotations.json', null, '[]\n'))
+  await attempt('notes bound update', owner.sidecar(root, 'annotations.json', contentHash('[]\n'), '[{"id":"a1","text":"x"}]\n'))
+  await attempt('notes stale', owner.sidecar(root, 'annotations.json', contentHash('[]\n'), '[]\n'))
+  await attempt('tokens create-only', owner.sidecar(root, 'tokens.json', null, '{}\n'))
+  await attempt('tokens exists', owner.sidecar(root, 'tokens.json', null, '{"x":1}\n'))
+  out.push(['notes kept', readFileSync(join(root, '.trezi', 'annotations.json'), 'utf8')])
   rmSync(file); symlinkSync(join(scratch, 'outside.json'), file)
   await attempt('symlinked file', owner.sidecar(root, 'control-panels.json', null, '{}'))
   rmSync(join(root, '.trezi'), { recursive: true }); symlinkSync(dir('outside-trezi'), join(root, '.trezi'))
   await attempt('symlinked folder', owner.sidecar(root, 'content-controls.json', null, '{}'))
   rmSync(join(root, '.trezi'))
   await attempt('oversized', owner.sidecar(root, 'content-controls.json', null, 'x'.repeat(1024 * 1024 + 1)))
+  return out
+}
+
+/** The other `.trezi/` files (S15): migration, setup helpers, dependency marker; identical on both owners. */
+async function project(owner, base) {
+  const out = []
+  const attempt = async (label, promise) => { try { out.push([label, await promise]) } catch (error) { out.push([label, error.code ?? String(error)]) } }
+  const tree = path => existsSync(path) ? readdirSync(path).sort().map(name => [name, lstatSync(join(path, name)).isFile() ? readFileSync(join(path, name), 'utf8') : 'dir']) : null
+  const put = (path, text) => { mkdirSync(join(path, '..'), { recursive: true }); writeFileSync(path, text) }
+  // Migration: .praxis copies over, .dsgn's known files move, a differing file collides, existing wins.
+  const live = join(base, 'live')
+  put(join(live, '.praxis', 'notes.json'), 'praxis-notes')
+  put(join(live, '.praxis', 'nested', 'deep.json'), 'deep')
+  put(join(live, '.praxis', 'tokens.json'), 'praxis-tokens')
+  put(join(live, '.dsgn', 'annotations.json'), 'dsgn-notes')
+  put(join(live, '.dsgn', 'tokens.json'), 'dsgn-tokens')
+  put(join(live, '.dsgn', 'other.json'), 'stays')
+  await attempt('migrate', owner.migrateSidecar(live))
+  out.push(['migrated', tree(join(live, '.trezi')), tree(join(live, '.dsgn')), tree(join(live, '.praxis'))])
+  await attempt('migrate again', owner.migrateSidecar(live))
+  put(join(live, '.praxis', 'notes.json'), 'praxis-notes-changed')
+  await attempt('migrate collision', owner.migrateSidecar(live))
+  const linked = join(base, 'linked')
+  mkdirSync(linked, { recursive: true }); symlinkSync(dir('outside-migrate'), join(linked, '.trezi'))
+  put(join(linked, '.dsgn', 'tokens.json'), 'x')
+  await attempt('migrate linked .trezi', owner.migrateSidecar(linked))
+  // Setup helpers: copied and hashed, a vanished helper is removed, a linked folder refused.
+  const tree2 = join(base, 'worktree')
+  mkdirSync(tree2, { recursive: true })
+  put(join(live, '.trezi', 'trezi-source.cjs'), 'source')
+  put(join(live, '.trezi', 'trezi-next.cjs'), 'next')
+  put(join(live, '.praxis', 'praxis-mdx.mjs'), 'mdx')
+  put(join(tree2, '.trezi', 'trezi-mdx.mjs'), 'stale')
+  await attempt('sync helpers', owner.syncSetupHelpers(live, tree2))
+  out.push(['helpers', tree(join(tree2, '.trezi')), tree(join(tree2, '.praxis'))])
+  rmSync(join(live, '.trezi', 'trezi-next.cjs'))
+  await attempt('sync again', owner.syncSetupHelpers(live, tree2))
+  out.push(['helpers after removal', tree(join(tree2, '.trezi'))])
+  const bad = join(base, 'bad-worktree')
+  mkdirSync(bad, { recursive: true }); symlinkSync(dir('outside-sync'), join(bad, '.trezi'))
+  await attempt('sync linked target', owner.syncSetupHelpers(live, bad))
+  // Dependency marker: link removed then install, marker recorded, unchanged manifests skip.
+  const app = join(base, 'app'), checkout = join(base, 'checkout')
+  put(join(app, 'node_modules', 'x.txt'), 'x')
+  put(join(checkout, 'package.json'), '{"name":"a"}')
+  symlinkSync(join(app, 'node_modules'), join(checkout, 'node_modules'))
+  await attempt('needs install (link)', owner.dependencyState(app, checkout))
+  out.push(['link removed', existsSync(join(checkout, 'node_modules'))])
+  mkdirSync(join(checkout, 'node_modules'))
+  await attempt('needs install (no marker)', owner.dependencyState(app, checkout))
+  await attempt('mark', owner.markDependencies(app, checkout))
+  out.push(['marker', readFileSync(join(checkout, '.trezi', 'dependencies.sha256'), 'utf8')])
+  await attempt('skip when marked', owner.dependencyState(app, checkout))
+  writeFileSync(join(checkout, 'package.json'), '{"name":"b"}')
+  await attempt('install after manifest change', owner.dependencyState(app, checkout))
+  rmSync(join(app, 'node_modules'), { recursive: true })
+  mkdirSync(join(base, 'fresh'))
+  await attempt('no live dependencies', owner.dependencyState(app, join(base, 'fresh')))
   return out
 }
 
@@ -161,7 +227,21 @@ try {
     assert.deepEqual(swiftSide, legacySide)
     assert.deepEqual(swiftSide.map(([label, value]) => [label, value?.ok ?? value]).slice(0, 5),
       [['create', true], ['create again is stale', false], ['bound update', true], ['hand edit refused', false], ['hand edit kept', '{"hand":"edit"}\n']])
-    assert.deepEqual(swiftSide.slice(5).map(([, code]) => code), ['invalidRequest', 'unauthorized', 'unauthorized', 'invalidRequest'])
+    assert.deepEqual(swiftSide.slice(5).map(([label, value]) => [label, value?.ok ?? value]), [
+      ['not a sidecar', 'invalidRequest'], ['notes create', true], ['notes bound update', true], ['notes stale', false],
+      ['tokens create-only', true], ['tokens exists', false], ['notes kept', '[{"id":"a1","text":"x"}]\n'],
+      ['symlinked file', 'unauthorized'], ['symlinked folder', 'unauthorized'], ['oversized', 'invalidRequest']])
+    const legacyProject = await project(legacyEditing(), dir('project-legacy'))
+    const swiftProject = await project(editing, dir('project-swift'))
+    const swiftBase = dir('project-swift'), legacyBase = dir('project-legacy')
+    const relative = (steps, base) => JSON.parse(JSON.stringify(steps).replaceAll(base, '<base>'))
+    assert.deepEqual(relative(swiftProject, swiftBase), relative(legacyProject, legacyBase), 'project files: identical on both owners')
+    const answer = label => relative(swiftProject, swiftBase).find(step => step[0] === label)[1]
+    assert.deepEqual([answer('migrate'), answer('migrate again')], [[], []])
+    assert.deepEqual(answer('migrate collision'), ['<base>/live/.praxis/notes.json'])
+    assert.deepEqual([answer('migrate linked .trezi'), answer('sync linked target')], ['invalidRequest', 'invalidRequest'])
+    assert.deepEqual([answer('needs install (link)'), answer('needs install (no marker)'), answer('skip when marked'),
+      answer('install after manifest change'), answer('no live dependencies')], [true, true, false, true, false])
     console.log(`parity: ${legacy.length} island/navigation/draft steps and ${legacySide.length} sidecar steps identical on both owners`)
     await fixture.stop()
   }
@@ -216,7 +296,7 @@ try {
   }
 
   // ── suites: legacy island/controls/content suites on the Swift owners ────
-  for (const suite of ['chat-islands', 'shadow-controls', 'control-panels', 'content-controls', 'native-content']) {
+  for (const suite of ['chat-islands', 'shadow-controls', 'control-panels', 'content-controls', 'native-content', 'annotation-store']) {
     const profile = dir(`suite-${suite}`)
     const result = await new Promise(resolve => {
       const child = spawn('bun', ['--preload', './test/helpers/editing-owner-preload.mjs', `test/${suite}.mjs`], {
@@ -227,7 +307,7 @@ try {
     })
     assert.equal(result.code, 0, `${suite} on the Swift owners:\n${result.text}`)
     const frames = Number(result.text.match(/EDITING-PARITY editing=(\d+)/)?.[1] ?? 0)
-    if (['chat-islands', 'shadow-controls'].includes(suite)) assert.ok(frames > 0, `${suite} went through the editing owner`)
+    if (['chat-islands', 'shadow-controls', 'annotation-store'].includes(suite)) assert.ok(frames > 0, `${suite} went through the editing owner`)
     console.log(`suite ${suite}: passes on the Swift owners (${frames} editing frames)`)
   }
 

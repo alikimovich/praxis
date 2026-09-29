@@ -22,9 +22,13 @@ writers from Bun:
 | LKM-99 | the editing workflows' state: chat island histories and activation (bound to the defining turn), the controls sidecars (hash-bound commits), content-editor drafts and deferred preview navigation; Bun keeps the JS helpers and inspector views | `docs/SWIFT-BACKEND-EDITING.md` |
 | LKM-100 | Trezi's side-effecting workflows outside a chat turn (Publish and PRs, Connect to GitHub, remote pull/switch, setup helpers, new projects, Trezi's update, the diagnosis memory) as journaled workflows with receipts, so a lost reply or crash never repeats a PR, merge or update; Bun keeps the proposing helpers and the sheets | `docs/SWIFT-BACKEND-WORKFLOWS.md` |
 | LKM-101 | the iOS Simulator preview (bounded, cancellable xcrun/idb runs, the launch command as a journaled group, the loopback bridge), scoped media grants to the source editor, pasted attachments and the running-servers recovery | `docs/SWIFT-BACKEND-PLATFORM.md` |
+| LKM-102 | the last census rows: provider data (connections store, model catalog cache, Codex model discovery: `ProviderData.swift`), opening links, files and the editor (`PlatformOpen.swift`), the profile and session-store aliases (`ProfilePaths.swift`), the profile lock (Bun no longer takes one), the `annotations.json` and `tokens.json` sidecars (`EditingProject.swift`), the feedback issue and skill-pack installs (`WorkflowTools.swift`, `WorkflowContext.swift`). The SDK adapters run in Bun by default; provider helpers are an explicit opt-in (`TREZI_PROVIDER_HELPERS=1`) and v10 connections stay in-process | `docs/SWIFT-BACKEND-RETIREMENT.md` |
 
-Every other domain writer remains in Bun until a verified transfer; annotation
-storage is split from publication but stays in Bun until the S07 repository lane.
+The census in `docs/SWIFT-BACKEND-RETIREMENT.md` has 0 Bun-owned rows: every Bun module
+that writes a file, spawns a process or signals is a rollback twin, a helper or a test.
+Bun still hosts the provider SDK adapters, the source parsers and the UI-side
+controllers; moving the adapters, the live parity run and removing the legacy owners
+(`TREZI_BACKEND_OWNER=legacy`) are LKM-111.
 
 ## The launch path
 
@@ -36,12 +40,15 @@ and serializes every Trezi Git effect in user repositories, commits every Trezi 
 edit, Undo and file-tree operation from hash-bound parser proposals, owns chat records,
 live-chat checkpoints and turn transitions, holds every provider session's grant,
 permission answers, tool authorization, Stop's deadline and resume ids, owns chat island
-histories and activation, the controls sidecars, content drafts and deferred preview
-navigation, runs publication, remote Git actions, setup, new projects, Trezi's update and
-the diagnosis memory as journaled workflows, and runs the iOS Simulator preview, issues the
-source editor's media grants, writes pasted attachments and performs the running-servers
-recovery (docs per row in the table above). Bun is still the single writer of every other
-domain.
+histories and activation, the project sidecars, content drafts and deferred preview
+navigation, runs publication, remote Git actions, setup, new projects, Trezi's update, the
+feedback issue, skill-pack installs and the diagnosis memory as journaled workflows, and
+runs the iOS Simulator preview, issues the source editor's media grants, writes pasted
+attachments and performs the running-servers recovery. Since LKM-102 it also writes the
+provider data (connections, model catalog), opens links, files and the editor, makes the
+profile aliases (the launcher asks `TreziService --resolve-profile`) and alone holds the
+profile lock: `src/native/index.ts` refuses to start without it
+(`TREZI_SERVICE_LOCKED=1`). Docs per row in the table above.
 
 `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun spawns the host, still under
 Swift's lock, writes all three itself and runs its own servers after the launcher sweeps the
@@ -132,34 +139,45 @@ src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
                   main/conversation-owner.ts; main/conversation-model.ts is the rollback
                   twin (docs/SWIFT-BACKEND-CONVERSATION.md)
   ProviderOwner.swift / ProviderFrames.swift / ProviderPolicy.swift / ProviderHelper.swift /
-  ProviderStore.swift
+  ProviderStore.swift / ProviderData.swift
                   the provider owner (LKM-98): every provider session is opened here and
                   gets a grant (Trezi tools, roots, chat); it answers permission requests
                   (Claude's canUseTool asks it), authorizes Trezi tools (Claude's in-process
                   tools, Codex's MCP bridge), holds Stop's deadline, persists resume ids and
                   supervises provider helpers (stdio only, allowlisted env, own process
-                  group, every frame checked against the grant). The SDK adapters still
-                  run in Bun (main/provider-sessions.ts wires them — every provider session
-                  starts there); Bun's client is native/provider-service.ts behind
+                  group, every frame checked against the grant). The SDK adapters run in
+                  Bun by default (main/provider-sessions.ts wires them — every provider
+                  session starts there); helpers are an explicit opt-in
+                  (`TREZI_PROVIDER_HELPERS=1`) and v10 connections stay in-process even
+                  then; the adapter move is LKM-111. ProviderData.swift (LKM-102) writes
+                  the connections store (keys via `TreziHost --crypto`), the model catalog
+                  cache and runs the Codex model probe on the SDK's vendored binary, behind
+                  main/provider-data.ts. Bun's client is native/provider-service.ts behind
                   main/provider-owner.ts; main/provider-model.ts + provider-policy.ts are
                   the rollback twin (docs/SWIFT-BACKEND-PROVIDERS.md)
-  EditingOwner.swift / EditingIslands.swift / EditingStores.swift   the editing
+  EditingOwner.swift / EditingIslands.swift / EditingStores.swift / EditingProject.swift
+                  the editing
                   coordinator (LKM-99): the only writer of chat island histories
                   (unchanged chat-islands/*.json) and their state machine (activation
                   only by the defining turn, which it asks the conversation owner;
                   command admission, a queued batch's revision chain, per-island
-                  Undo); hash-bound commits of .trezi/control-panels.json and
-                  content-controls.json in the repository lane; persisted content-editor
+                  Undo); hash-bound commits of the project sidecars in .trezi/
+                  (control-panels.json, content-controls.json, and since LKM-102
+                  annotations.json and tokens.json) in the repository lane, plus the
+                  sidecar migration, setup helpers and Next dependency marker
+                  (EditingProject); persisted content-editor
                   drafts; deferred open_preview navigation. Bun keeps the JS helpers
                   and views (main/chat-islands.ts, native/content-controller.ts,
                   native/navigation-controller.ts, native/turn-boundaries.ts); Bun's
                   client is native/editing-service.ts behind main/editing-owner.ts;
                   main/editing-model.ts is the rollback twin (docs/SWIFT-BACKEND-EDITING.md)
   WorkflowOwner.swift / WorkflowJournal.swift / WorkflowPublish.swift /
-  WorkflowRemote.swift / WorkflowSetup.swift   the workflow owner (LKM-100): Publish
+  WorkflowRemote.swift / WorkflowSetup.swift / WorkflowTools.swift / WorkflowContext.swift
+                  the workflow owner (LKM-100): Publish
                   (merge / PR only), handoff and saved-run PRs, Connect to GitHub, remote
                   fetch/pull/switch, `.trezi/` setup helpers, new projects, Trezi's own
-                  update and the diagnosis memory, each a durable record (intent before
+                  update, the in-app feedback issue, curated skill-pack installs (LKM-102)
+                  and the diagnosis memory, each a durable record (intent before
                   the effect, receipt after, operation-ID dedupe) reconciled from GitHub
                   and Git instead of repeated. Bun's helpers only propose (PR
                   descriptions, detection, starter files, diagnoses). Bun's client is
@@ -168,16 +186,23 @@ src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
                   setup.ts, scaffold.ts, diag-cache.ts) is the rollback twin
                   (docs/SWIFT-BACKEND-WORKFLOWS.md)
   PlatformOwner.swift / SimulatorOwner.swift / SimulatorBridge.swift /
-  SimulatorTools.swift / PlatformMedia.swift / PlatformTools.swift   the platform
+  SimulatorTools.swift / PlatformMedia.swift / PlatformTools.swift / PlatformOpen.swift
+                  the platform
                   owner (LKM-101): the iOS Simulator preview (bounded, cancellable
                   xcrun/idb runs in a ToolScope, the app's launch command as a journaled
                   group, the loopback MJPEG bridge, idb input and picks), scoped media
                   grants for the source editor (view, identity, size, SHA-256, expiry),
-                  pasted attachments from hash-checked chunks, and the running-servers
-                  recovery. Bun's client is native/platform-service.ts behind
-                  main/platform-owner.ts; simulator.ts, media.ts, attachments.ts and
-                  native/preview-processes.ts are the rollback twin
+                  pasted attachments from hash-checked chunks, the running-servers
+                  recovery, and (PlatformOpen, LKM-102) opening links, files and "Open
+                  in editor". Bun's client is native/platform-service.ts behind
+                  main/platform-owner.ts; simulator.ts, media.ts, attachments.ts,
+                  native/preview-processes.ts, native/platform-legacy.ts and
+                  main/open-in-editor-legacy.ts are the rollback twin
                   (docs/SWIFT-BACKEND-PLATFORM.md)
+  ProfilePaths.swift   the profile and session-store rename aliases (LKM-102): the
+                  launcher asks `TreziService --resolve-profile`; the session alias is
+                  made under the profile lock before Bun starts
+                  (docs/SWIFT-BACKEND-RETIREMENT.md)
 ```
 
 The host side of the connection: `src/native/ServiceClient.swift` owns the versioned XPC

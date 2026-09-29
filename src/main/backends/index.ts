@@ -3,10 +3,40 @@ import type { ModelProvider } from './types'
 import { claudeProvider } from './claude'
 import { codexProvider } from './codex'
 import { geminiProvider } from './gemini'
+import { helperProvider } from './helper-session'
 import { withSkillMenu } from './skill-menu'
 
 const codexWithSkills = withSkillMenu(codexProvider)
 const geminiWithSkills = withSkillMenu(geminiProvider)
+
+/** In-process adapters (legacy launch and unit tests without a helper command). */
+function inProcessProvider(options: AgentOptions): ModelProvider {
+  if (options.connectionId) return codexWithSkills
+  switch (options.provider) {
+    case 'codex':
+      return codexWithSkills
+    case 'gemini':
+      return geminiEnabled() ? geminiWithSkills : claudeProvider
+    case 'claude':
+    case undefined:
+    default:
+      return claudeProvider
+  }
+}
+
+/** Supervised helpers (opt-in, `TREZI_PROVIDER_HELPERS=1`): built-in seats run in a provider helper process. */
+function supervisedProvider(options: AgentOptions): ModelProvider {
+  switch (options.provider) {
+    case 'codex':
+      return helperProvider('codex')
+    case 'gemini':
+      return geminiEnabled() ? helperProvider('gemini') : helperProvider('claude')
+    case 'claude':
+    case undefined:
+    default:
+      return helperProvider('claude')
+  }
+}
 
 export type { ModelProvider, ProviderSession, PendingPrompt } from './types'
 
@@ -43,19 +73,18 @@ function geminiEnabled(): boolean {
   return v === '1' || v === 'true'
 }
 
+/**
+ * The adapters run in-process in Bun by default, on both launches. Provider helpers are
+ * an explicit opt-in of the Swift launch (`TREZI_PROVIDER_HELPERS=1`; the service
+ * installs its helper command only then), and even then a v10 connection stays
+ * in-process: its key is resolved here and never crosses into a helper. Moving the
+ * adapters out of Bun by default waits for the authorized live parity run (LKM-111).
+ */
+export function helpersEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.TREZI_PROVIDER_HELPER !== '1' && env.TREZI_SERVICE_SUPERVISED === '1' && env.TREZI_PROVIDER_HELPERS === '1'
+}
+
 export function pickProvider(options: AgentOptions): ModelProvider {
-  // A connection is an endpoint, not a harness — and Codex is the harness that can
-  // point at one. It wins the dispatch (see the note above); codex.ts fails the turn
-  // soft if the id no longer resolves.
   if (options.connectionId) return codexWithSkills
-  switch (options.provider) {
-    case 'codex':
-      return codexWithSkills
-    case 'gemini':
-      return geminiEnabled() ? geminiWithSkills : claudeProvider
-    case 'claude':
-    case undefined:
-    default:
-      return claudeProvider
-  }
+  return helpersEnabled() ? supervisedProvider(options) : inProcessProvider(options)
 }

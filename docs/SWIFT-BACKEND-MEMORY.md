@@ -34,7 +34,7 @@ below). Attachments are not part of this task.
 | Evaluation (model call, prompt, parse) | Bun provider backends (`src/main/backends/memory.ts`) | Bun helper: proposes only | Bun |
 | Per-session "memory version already in context" | Bun memory (`createProjectMemoryInjection`) | Bun chat state (S11), keyed by the owner's digest | Bun |
 | Editor draft (autosave) | Bun memory (`SheetAutosave`) | Bun, untouched by this domain | Bun |
-| Annotations `.trezi/annotations.json` | inside the user's repository | **Bun** (`annotation-store.ts`), blocked on S07 | Bun |
+| Annotations `.trezi/annotations.json` | inside the user's repository | **Swift** editing owner since S15 (hash-bound sidecar commit; `annotation-store.ts` renders), see [retirement](SWIFT-BACKEND-RETIREMENT.md) | Bun |
 
 `<profile>/trezi` is the session store. It may be Bun's alias of an older
 `praxis`/`dsgn` store (`nativeSessionPath`). The service never creates `trezi`
@@ -145,7 +145,8 @@ repository lane:
   project and applies only the newest. A list that finishes late (from activation,
   or an earlier add/remove) can no longer replace a newer list or its preview pins.
 
-The remaining S05 annotation work — the Swift writer through the S07 repository
+(Done in S15, LKM-102: the editing owner commits the notes hash-bound in the repository
+lane; see [retirement](SWIFT-BACKEND-RETIREMENT.md).) The remaining S05 annotation work — the Swift writer through the S07 repository
 lane — is recorded in `docs/TASKS.md` and must land before S15.
 
 ## Rollback (tightened to this domain)

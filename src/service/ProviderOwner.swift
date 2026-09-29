@@ -16,8 +16,12 @@ import Darwin
 /// Bun and their results (screenshots included) are validated before the helper gets
 /// them. A helper that crashes or hangs past Stop's deadline ends its turn exactly once.
 ///
-/// The built-in SDK adapters (Claude, Codex) run in-process in Bun and ask this owner;
-/// they are not moved into helpers until a live parity run is authorized.
+/// The built-in SDK adapters (Claude, Codex) and every v10 connection run in-process in
+/// Bun and ask this owner. Helper hosting for the built-in seats is opt-in
+/// (`TREZI_PROVIDER_HELPERS=1`); moving them for good waits for a live parity run (LKM-111).
+///
+/// It also writes the provider data (`ProviderData.swift`): the connections store with
+/// its Keychain-encrypted keys, the model catalog cache, and the Codex model probe.
 final class ProviderOwner: @unchecked Sendable {
     static let service = "provider"
     static let helperPrefix = Data("{\"service\":\"provider-helper\"".utf8)
@@ -40,6 +44,8 @@ final class ProviderOwner: @unchecked Sendable {
         var now: @Sendable () -> Double = { (Date().timeIntervalSince1970 * 1000).rounded(.down) }
         /// Test hook: named points inside writes (a fixture crashes there).
         var fault: (@Sendable (String) -> Void)?
+        /// The Keychain helper, the checkout and the launch environment for `ProviderData`.
+        var data = ProviderData.Tools()
     }
 
     enum Phase: String { case idle, running, cancelling, stopped }
@@ -80,11 +86,16 @@ final class ProviderOwner: @unchecked Sendable {
     let lock = NSLock()
     var closed = false
     let inflight = DispatchGroup()
+    /// Provider data writes, one at a time and off the session queue (a Keychain call or
+    /// the Codex probe must not hold up a permission answer).
+    let data: ProviderData
+    let dataWrites = DispatchQueue(label: "dev.trezi.provider.data")
 
     init(options: Options, send: @escaping @Sendable (Data) -> Void) {
         var store = ProviderStore(profile: URL(fileURLWithPath: options.profile))
         store.fault = options.fault
         self.options = options; self.store = store; self.send = send
+        data = ProviderData(profile: options.profile, tools: options.data, now: options.now)
         // Before any request: sessions a crash cut off are reported, and the list starts empty.
         recovered = store.recover()
     }
@@ -111,7 +122,7 @@ final class ProviderOwner: @unchecked Sendable {
         }
     }
 
-    static let reads: Set<String> = ["recover", "snapshot", "status"]
+    static let reads: Set<String> = ["recover", "snapshot", "status", "connectionSecret", "codexModels"]
     static let methods: [String: (required: Set<String>, optional: Set<String>)] = [
         "open": (["session", "chat", "provider", "root", "liveRoot", "background"], []),
         "openHelper": (["session", "chat", "provider", "root", "liveRoot", "background", "options", "context"], []),
@@ -121,13 +132,51 @@ final class ProviderOwner: @unchecked Sendable {
         "recover": (["record"], []), "answer": (["session", "id", "kind", "value"], []),
         "configure": (["session"], ["model", "mode"]), "close": (["session"], []),
         "snapshot": ([], []), "status": ([], []),
+        "connectionSave": (["input"], []), "connectionRemove": (["id"], []), "connectionSecret": (["id"], []),
+        "catalogSave": (["backend", "models"], []), "codexModels": ([], []),
     ]
+
+    /// Provider data requests, answered off the session queue.
+    func handleData(_ frame: PipeFrame, _ body: ProviderBody) throws {
+        let ok = JSValue.object([])
+        switch frame.method {
+        case "connectionSave":
+            guard let input = body.value("input") else { throw ServiceContractFailure.invalidRequest }
+            dataWrites.async { self.settle(frame) { Self.object([("connection", try self.data.saveConnection(input))]) } }
+        case "connectionRemove":
+            let id = try body.string("id", max: 256, empty: true)
+            dataWrites.async { self.settle(frame) { try self.data.removeConnection(id); return ok } }
+        case "connectionSecret":
+            let id = try body.string("id", max: 256, empty: true)
+            work.async { self.settle(frame) { Self.object([("secret", self.data.secret(id).map { .string(JSText($0)) } ?? .null)]) } }
+        case "catalogSave":
+            let backend = try body.string("backend", max: 16)
+            guard ["claude", "codex"].contains(backend), case .array(let raw)? = body.value("models"), raw.count <= 10_000 else {
+                throw ServiceContractFailure.invalidRequest
+            }
+            let models: [(id: JSText, label: JSText)] = try raw.map {
+                guard let id = $0["id"]?.text, let label = $0["label"]?.text else { throw ServiceContractFailure.invalidRequest }
+                return (id, label)
+            }
+            dataWrites.async { self.settle(frame) { Self.object([("saved", .bool(self.data.saveCatalog(backend: backend, models: models)))]) } }
+        default:
+            work.async { self.settle(frame) { Self.object([("stdout", self.data.codexModels().map { .string(JSText($0)) } ?? .null)]) } }
+        }
+    }
+
+    private func settle(_ frame: PipeFrame, _ run: () throws -> JSValue) {
+        do { answer(frame, .succeeded(try run())) } catch { answer(frame, .failed(Self.failure(error))) }
+    }
 
     /// nil: answered later (a cancel waits for its deadline, a helper for its readiness).
     func handle(_ frame: PipeFrame) throws -> JSValue? {
         guard frame.expectedRevision == nil, let rule = Self.methods[frame.method],
               frame.mode == (Self.reads.contains(frame.method) ? "read" : "mutation") else { throw ServiceContractFailure.invalidRequest }
         let body = try ProviderBody(frame, required: rule.required, optional: rule.optional)
+        if ["connectionSave", "connectionRemove", "connectionSecret", "catalogSave", "codexModels"].contains(frame.method) {
+            try handleData(frame, body)
+            return nil
+        }
         let ok = JSValue.object([])
         switch frame.method {
         case "open":

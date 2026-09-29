@@ -1,7 +1,6 @@
 import { typescriptProps } from './props-typescript'
-import { ipcMain, shell } from '../native/platform'
-import { execFile } from 'child_process'
-import { promisify } from 'util'
+import { ipcMain } from '../native/platform'
+import { openInEditorLegacy } from './open-in-editor-legacy'
 import { readFile, stat } from 'fs/promises'
 import { existsSync, readFileSync, statSync } from 'fs'
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve } from 'path'
@@ -977,18 +976,8 @@ async function writeSourceFile(
   return res.applied ? { ok: true, hash: contentHash(content) } : { ok: false, error: res.error }
 }
 
-const execFileP = promisify(execFile)
-
-// Editor CLIs tried in order for "Open in editor" — each accepts a
-// file:line[:col] jump target. A missing CLI fails fast (ENOENT) and the next
-// is tried; when none exist the file opens with the OS default app (no jump).
-const EDITOR_CLIS: Array<{ cmd: string; args: (target: string) => string[] }> = [
-  { cmd: 'code', args: (t) => ['-g', t] },
-  { cmd: 'cursor', args: (t) => ['-g', t] },
-  { cmd: 'zed', args: (t) => [t] },
-  { cmd: 'subl', args: (t) => [t] }
-]
-
+// "Open in editor": the Swift platform owner runs the editor CLIs (`PlatformOpen.swift`);
+// with none, `open-in-editor-legacy.ts` does.
 async function openInEditor(
   root: string,
   source: string
@@ -1000,17 +989,13 @@ async function openInEditor(
   } catch {
     return { ok: false, error: 'The source file does not exist.' }
   }
-  const target = `${loc.file}:${loc.line}${loc.column != null ? `:${loc.column}` : ''}`
-  for (const editor of EDITOR_CLIS) {
-    try {
-      await execFileP(editor.cmd, editor.args(target), { timeout: 5000 })
-      return { ok: true }
-    } catch {
-      /* not installed / failed — try the next */
-    }
+  const owner = swiftPlatformOwner()
+  if (!owner) return openInEditorLegacy(loc)
+  try {
+    return await owner.openInEditor(root, loc.file, loc.line, loc.column)
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }
-  const err = await shell.openPath(loc.file) // '' on success
-  return err ? { ok: false, error: err } : { ok: true }
 }
 
 /**

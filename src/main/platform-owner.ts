@@ -8,9 +8,11 @@ import type { PreviewProcess } from '../native/preview-processes'
  *   supervised process group, the loopback bridge, idb input and element picks, stop;
  * - scoped media grants for the native source editor (view-bound, expiring, hashed);
  * - pasted composer images (uploaded in bounded chunks, hash-checked, written by it);
- * - the "Running servers" recovery sheet's inspection and SIGTERM.
+ * - the "Running servers" recovery sheet's inspection and SIGTERM;
+ * - opening links, files and "Open in editor" (LKM-102).
  * With no Swift owner (`TREZI_BACKEND_OWNER=legacy`, unit tests) the original TS code
- * runs: `simulator.ts`, `media.ts`, `attachments.ts` and `preview-processes.ts`. Call
+ * runs: `simulator.ts`, `media.ts`, `attachments.ts`, `preview-processes.ts`,
+ * `native/platform-legacy.ts` and `open-in-editor-legacy.ts`. Call
  * sites choose one or the other, never both.
  */
 
@@ -52,6 +54,12 @@ export interface PlatformOwner {
   findServers(root: string): Promise<PreviewProcess[]>
   stopServer(server: PreviewProcess): Promise<void>
   status(): Promise<PlatformStatus>
+  /** An http(s) link in the default browser; rejects anything else. */
+  openLink(url: string): Promise<void>
+  /** An existing absolute path with its default app: '' on success, else the failure text. */
+  openFile(path: string): Promise<string>
+  /** "Open in editor": a file inside `root` at a line, with the first editor CLI that works. */
+  openInEditor(root: string, file: string, line: number, column?: number): Promise<{ ok: boolean; error?: string }>
 }
 
 let owner: PlatformOwner | null = null

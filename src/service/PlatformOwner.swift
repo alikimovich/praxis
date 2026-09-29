@@ -6,7 +6,8 @@ import Darwin
 ///   command as a supervised group, the loopback bridge, picks and teardown;
 /// - scoped media grants for the native source editor (`MediaScopes`);
 /// - pasted composer images, uploaded in bounded chunks (`AttachmentUploads`);
-/// - the "Running servers" recovery sheet's inspection and SIGTERM (`PreviewServers`).
+/// - the "Running servers" recovery sheet's inspection and SIGTERM (`PreviewServers`);
+/// - opening links, files and "Open in editor" (`PlatformOpen`, LKM-102).
 /// Bun asks over the private pipe (`{"service":"platform",…}`) and keeps the views, the
 /// sheet and the bridge page's bezel asset (a JS module it proposes with each start).
 final class PlatformOwner: @unchecked Sendable {
@@ -28,6 +29,8 @@ final class PlatformOwner: @unchecked Sendable {
         /// An upload that receives nothing for this long is dropped.
         var attachmentIdle: TimeInterval = 60
         var servers = PreviewServers.Tools()
+        /// `open` and the editor CLIs (looked up on the launch environment's PATH).
+        var open = PlatformOpen.Tools()
         /// Tool paths and timings for the simulator; nil uses the system tools.
         var simulator: SimulatorCoordinator.Options?
     }
@@ -176,6 +179,23 @@ final class PlatformOwner: @unchecked Sendable {
                     try PreviewServers.stop(server, tools: self.options.servers, protected: self.protected)
                     return .object([(JSText("stopped"), .bool(true))])
                 }
+            case ("openLink", "mutation"):
+                let url = try Self.text(try Self.fields(frame, ["url": .string]), "url", max: 8192)
+                perform(frame) { try PlatformOpen.link(url, tools: self.options.open); return .object([]) }
+            case ("openFile", "mutation"):
+                let path = try Self.text(try Self.fields(frame, ["path": .string]), "path")
+                perform(frame) { .object([(JSText("error"), .string(JSText(PlatformOpen.file(path, tools: self.options.open))))]) }
+            case ("openInEditor", "mutation"):
+                let body = try Self.fields(frame, ["root": .string, "path": .string, "line": .number], optional: ["column": .number])
+                let root = try Self.root(body), path = try Self.text(body, "path")
+                func position(_ key: String) throws -> Int? {
+                    guard case .number(let value)? = body[key] else { return nil }
+                    guard value.rounded() == value, value >= 0, value <= Double(Int32.max) else { throw ServiceContractFailure.invalidRequest }
+                    return Int(value)
+                }
+                guard path.hasPrefix("/"), let line = try position("line") else { throw ServiceContractFailure.invalidRequest }
+                let column = try position("column")
+                perform(frame) { try PlatformOpen.editor(root: root, path: path, line: line, column: column, tools: self.options.open) }
             default: throw ServiceContractFailure.invalidRequest
             }
         } catch let refusal as PlatformRefusal {

@@ -32,21 +32,21 @@ drives the Claude Code CLI over its private control protocol, and the Codex SDK 
 `codex` CLI. So providers stay **SDK adapters**, and the end state is one supervised
 **helper** process per session, running the adapter under the helper host.
 
-That end state needs a live run of each real adapter inside a helper, and live provider
-calls are not authorized. So in this step:
+Live provider calls are not authorized for verification, so parity of the real Claude
+and Codex adapters inside helpers is reported SKIP (not PASS). In this step:
 
 - the helper runtime is complete: the service spawns, supervises, bounds and polices
   helpers, and Bun hosts their sessions as ordinary `ProviderSession`s. It is verified
   with a scripted fake provider inside the real helper host (below);
-- the built-in adapters (Claude, Codex, experimental Gemini) still run in-process in
-  Bun. They no longer decide anything the owner decides. They ask it for their
-  permission answers, tool authorization and Stop's deadline, and report turns,
-  terminal events and thread ids;
-- the service is launched with no helper command (`ProviderOwner.Options.helper` is
-  nil), so production hosts no helper yet. Moving the adapters in needs three things:
-  a live parity run; handing a Codex connection's key to its helper over the open frame
-  (today `resolveConnection` decrypts it in Bun); and routing the Claude model catalog
-  update through Bun. Recorded in TASKS.
+- the built-in adapters (Claude, Codex, experimental Gemini) run in Bun by default.
+  Helper routing (`provider-helper.cjs` via `ProviderOwner.Options.helper`) is an
+  explicit opt-in of the Swift launch (`TREZI_PROVIDER_HELPERS=1`, LKM-102); v10
+  connections stay in-process even then. Wherever they run, adapters decide nothing the
+  owner decides; they ask it for permission answers, tool authorization and Stop's
+  deadline, and report turns, terminal events and thread ids;
+- the connections store, model catalog cache and Codex probe moved to the owner
+  (`ProviderData.swift`, LKM-102; see [retirement](SWIFT-BACKEND-RETIREMENT.md)). The
+  adapter move and the live parity run are LKM-111.
 
 ## The domain, exactly
 

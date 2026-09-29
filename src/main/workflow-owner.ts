@@ -1,13 +1,16 @@
 import type {
   Diagnosis,
+  FeedbackResult,
   GitRemoteAction,
   GitRemoteResult,
   GitRemoteStatus,
   GithubConnectOptions,
   GithubConnectResult,
-  PublishResult
+  PublishResult,
+  UpdateStatus
 } from '../shared/api'
 import type { PublishMessage } from '../shared/publish-message'
+import type { InstallInput, InstallResult } from './skills-install'
 import { legacyWorkflows } from './workflow-legacy'
 
 /**
@@ -17,7 +20,8 @@ import { legacyWorkflows } from './workflow-legacy'
  * - publication: Publish (merge or PR only), the notes handoff PR, a saved run's PR;
  * - remote Git actions: Connect to GitHub, fetch, pull, switch to a remote branch;
  * - project setup: the `.trezi/` instrumentation helpers, their removal, new projects;
- * - Trezi's own update (pull, install, build) and the diagnosis memory.
+ * - Trezi's own update (pull, install, build) and the diagnosis memory;
+ * - the in-app feedback issue (`gh issue create`) and curated skill-pack installs.
  * A reply lost after a remote effect, a crash or a retry therefore never repeats a PR,
  * a merge or an update: the owner answers from its receipt, or reconciles an uncertain
  * step from what GitHub and Git hold. Bun keeps the helpers that only propose bounded
@@ -48,7 +52,7 @@ export interface WorkflowSummary {
   /** The last lines of a running step's output. */
   progress?: string
 }
-export type WorkflowKind = 'publish' | 'handoff' | 'branchPr' | 'connect' | 'remoteUpdate' | 'setup' | 'uninstall' | 'createProject' | 'update'
+export type WorkflowKind = 'publish' | 'handoff' | 'branchPr' | 'connect' | 'remoteUpdate' | 'setup' | 'uninstall' | 'createProject' | 'update' | 'feedback' | 'skills'
 
 export class WorkflowError extends Error {
   constructor(readonly code: string, message: string) { super(message) }
@@ -67,8 +71,14 @@ export interface WorkflowOwner {
   removeHelpers(root: string): Promise<{ ok: boolean; files?: string[]; error?: string }>
   /** Starter files (relative path → content) and the package manager to install with. */
   createProject(root: string, files: Record<string, string>, install: 'bun' | 'npm' | null): Promise<CreatedProject>
+  /** Whether Trezi's own checkout trails its upstream (fetches; `idle` on any soft failure). */
+  updateCheck(root: string): Promise<UpdateStatus>
   /** Trezi's own update: pull (fast-forward), install, build. Restart stays the caller's. */
   update(root: string, progress?: (text: string) => void): Promise<{ ok: boolean; error?: string }>
+  /** Files the in-app feedback issue on Trezi's own repository (`root` is its checkout). */
+  feedback(root: string, title: string, body: string): Promise<FeedbackResult>
+  /** Installs a curated skill pack (`npx skills add`); never throws for an install failure. */
+  installSkills(input: InstallInput): Promise<InstallResult>
   recallDiagnosis(root: string, signature: string): Promise<Diagnosis | null>
   rememberDiagnosis(root: string, diagnosis: Diagnosis): Promise<void>
   diagnosisStatus(root: string, signature: string, status: 'applied' | 'dismissed'): Promise<void>

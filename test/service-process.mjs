@@ -135,6 +135,22 @@ try {
     owner.send('release')
     assert.equal((await owner.done).code, 0)
     run(supervisor, ['startup-failure', profile])
+    // Profile recovery after a crash: the holder is SIGKILLed (no release, no cleanup), the
+    // kernel drops its lock, the next owner acquires the same profile and finds the data.
+    {
+      const crashing = processFixture(supervisor, ['lock', profile])
+      await crashing.line(line => line === 'LOCKED')
+      assert.notEqual((await processFixture(supervisor, ['lock', profile]).done).code, 0, 'a live holder still excludes')
+      writeFileSync(state, '{"newer":"written-before-crash"}')
+      crashing.child.kill('SIGKILL')
+      assert.equal((await crashing.done).signal, 'SIGKILL')
+      const recovered = processFixture(supervisor, ['lock', profile])
+      await recovered.line(line => line === 'LOCKED')
+      assert.equal(readFileSync(state, 'utf8'), '{"newer":"written-before-crash"}', 'the recovering owner sees the crashed owner’s data')
+      recovered.send('release')
+      assert.equal((await recovered.done).code, 0)
+      writeFileSync(state, '{"newer":"retained"}')
+    }
     for (const mode of ['shutdown', 'child-death']) {
       const descendant = join(scratch, `${mode}.pid`)
       const instance = processFixture(supervisor, [mode, profile, bun, backend], { FIXTURE_DESCENDANT: descendant })
@@ -156,7 +172,7 @@ try {
     mkdirSync(join(service, 'MacOS'), { recursive: true })
     const host = join(app, 'MacOS/TreziHost')
     const executable = join(service, 'MacOS/TreziService')
-    compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/service/LedgerStore.swift', 'src/service/OperationLedger.swift', 'src/service/PreferencesFile.swift', 'src/service/PreferencesOwner.swift', 'src/service/WorkspaceFile.swift', 'src/service/WorkspaceOwner.swift', 'src/service/MemoryFile.swift', 'src/service/MemoryOwner.swift', 'src/service/DomainChannel.swift', 'src/service/LegacySupervisor.swift', 'src/service/ManagedProcess.swift', 'src/service/RuntimeNet.swift', 'src/service/RuntimeDetect.swift', 'src/service/StaticSite.swift', 'src/service/StaticServer.swift', 'src/service/RuntimeServer.swift', 'src/service/RuntimeOwner.swift', 'src/service/RepositoryGit.swift', 'src/service/RepositoryJournal.swift', 'src/service/RepositoryEffects.swift', 'src/service/RepositoryLanding.swift', 'src/service/RepositoryOwner.swift', 'src/service/SourcePaths.swift', 'src/service/SourceJournal.swift', 'src/service/SourceHistory.swift', 'src/service/SourceStore.swift', 'src/service/SourceDrafts.swift', 'src/service/SourceOwner.swift', 'src/service/ConversationState.swift', 'src/service/ConversationStore.swift', 'src/service/ConversationOwner.swift', 'src/service/ProviderPolicy.swift', 'src/service/ProviderStore.swift', 'src/service/ProviderHelper.swift', 'src/service/ProviderFrames.swift', 'src/service/ProviderOwner.swift', 'src/service/EditingIslands.swift', 'src/service/EditingStores.swift', 'src/service/EditingOwner.swift', 'src/service/WorkflowJournal.swift', 'src/service/WorkflowOwner.swift', 'src/service/WorkflowPublish.swift', 'src/service/WorkflowRemote.swift', 'src/service/WorkflowSetup.swift', 'src/service/PlatformTools.swift', 'src/service/PlatformMedia.swift', 'src/service/SimulatorTools.swift', 'src/service/SimulatorBridge.swift', 'src/service/SimulatorOwner.swift', 'src/service/PlatformOwner.swift', 'src/service/ServiceRuntime.swift', 'src/service/ProcessGuardian.swift', 'src/service/ServiceMain.swift'], executable)
+    compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/service/LedgerStore.swift', 'src/service/OperationLedger.swift', 'src/service/PreferencesFile.swift', 'src/service/PreferencesOwner.swift', 'src/service/WorkspaceFile.swift', 'src/service/WorkspaceOwner.swift', 'src/service/MemoryFile.swift', 'src/service/MemoryOwner.swift', 'src/service/DomainChannel.swift', 'src/service/LegacySupervisor.swift', 'src/service/ManagedProcess.swift', 'src/service/RuntimeNet.swift', 'src/service/RuntimeDetect.swift', 'src/service/StaticSite.swift', 'src/service/StaticServer.swift', 'src/service/RuntimeServer.swift', 'src/service/RuntimeOwner.swift', 'src/service/RepositoryGit.swift', 'src/service/RepositoryJournal.swift', 'src/service/RepositoryEffects.swift', 'src/service/RepositoryLanding.swift', 'src/service/RepositoryOwner.swift', 'src/service/SourcePaths.swift', 'src/service/SourceJournal.swift', 'src/service/SourceHistory.swift', 'src/service/SourceStore.swift', 'src/service/SourceDrafts.swift', 'src/service/SourceOwner.swift', 'src/service/ConversationState.swift', 'src/service/ConversationStore.swift', 'src/service/ConversationOwner.swift', 'src/service/ProviderPolicy.swift', 'src/service/ProviderStore.swift', 'src/service/ProviderHelper.swift', 'src/service/ProviderFrames.swift', 'src/service/ProviderData.swift', 'src/service/ProviderOwner.swift', 'src/service/EditingIslands.swift', 'src/service/EditingStores.swift', 'src/service/EditingProject.swift', 'src/service/EditingOwner.swift', 'src/service/WorkflowJournal.swift', 'src/service/WorkflowContext.swift', 'src/service/WorkflowOwner.swift', 'src/service/WorkflowPublish.swift', 'src/service/WorkflowRemote.swift', 'src/service/WorkflowSetup.swift', 'src/service/WorkflowTools.swift', 'src/service/PlatformTools.swift', 'src/service/PlatformOpen.swift','src/service/PlatformMedia.swift', 'src/service/SimulatorTools.swift', 'src/service/SimulatorBridge.swift', 'src/service/SimulatorOwner.swift', 'src/service/PlatformOwner.swift', 'src/service/ServiceRuntime.swift', 'src/service/ProcessGuardian.swift', 'src/service/ProfilePaths.swift', 'src/service/ServiceMain.swift'], executable)
     compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/native/ServiceClient.swift', 'test/fixtures/service-process/XPCFixture.swift'], host)
     plist(join(app, 'Info.plist'), '<key>CFBundleIdentifier</key><string>dev.praxis.fixture</string><key>CFBundleExecutable</key><string>TreziHost</string><key>CFBundlePackageType</key><string>APPL</string><key>LSBackgroundOnly</key><true/>')
     plist(join(service, 'Info.plist'), '<key>CFBundleIdentifier</key><string>dev.praxis.service</string><key>CFBundleExecutable</key><string>TreziService</string><key>CFBundlePackageType</key><string>XPC!</string><key>XPCService</key><dict><key>ServiceType</key><string>Application</string><key>RunLoopType</key><string>dispatch_main</string></dict>')
@@ -263,6 +279,45 @@ try {
     const launchFile = join(scratch, 'launch.json')
     writeFileSync(launchFile, JSON.stringify(launch))
     rmSync(backendPID, { force: true })
+    // Swift (non-legacy) service: restart with epoch resume and stale-resume refusal.
+    {
+      const boot = processFixture(host, ['production', launchFile, executable])
+      await boot.line(line => line === 'READY')
+      const bootBackend = await pidFile(backendPID)
+      groups.add(bootBackend)
+      const staleClient = processFixture(host)
+      const staleConnection = randomUUID()
+      assert.equal(
+        (await staleClient.reply({ ...hello(staleConnection, launch), resume: randomUUID() })).failure,
+        'recoveryRequired',
+        'a fresh service refuses a stale client epoch'
+      )
+      staleClient.child.stdin.end()
+      await staleClient.done
+      boot.send('shutdown')
+      assert.equal((await boot.done).code, 0)
+      await dead(bootBackend)
+      groups.delete(bootBackend)
+      rmSync(backendPID, { force: true })
+      await pause(300)
+      // Production shutdown drained the service; a new XPC client can first-launch again.
+      const restarted = processFixture(host)
+      const restartedConnection = randomUUID()
+      const restartedReady = await restarted.reply(hello(restartedConnection, launch))
+      assert.ok(restartedReady.hello?.serviceEpoch, 'handshake after production shutdown returns service epoch')
+      restarted.send('reconnect')
+      await restarted.line(line => line === 'RECONNECTED')
+      await pause(200)
+      const resumedConnection = randomUUID()
+      const epochResumed = await restarted.reply({
+        ...hello(resumedConnection, launch),
+        resume: restartedReady.hello.serviceEpoch
+      })
+      assert.equal(epochResumed.hello?.serviceEpoch, restartedReady.hello.serviceEpoch, 'resume after service restart keeps the epoch')
+      await restarted.reply(control(resumedConnection, 'shutdown'))
+      restarted.child.stdin.end()
+      await restarted.done
+    }
     // Written by the previous (legacy) owner while no service ran: imported at launch.
     writeFileSync(join(profile, 'preferences.json'), JSON.stringify({ version: 1, values: { 'trezi:chat-hidden': '1', 'trezi:future': null } }))
     writeFileSync(join(profile, 'workspace.json'), JSON.stringify({ projects: [{ root: '/legacy-project', key: '/legacy-project', name: 'legacy', touchedAt: 1 }], activeKey: '/legacy-project', recents: [] }))
@@ -271,6 +326,11 @@ try {
     assert.equal(ledgerEpoch(), firstLedgerEpoch, 'the ledger survives a service restart')
     const productionBackend = await pidFile(backendPID)
     groups.add(productionBackend)
+    const nativeLock = join(profile, 'native.lock')
+    if (existsSync(nativeLock)) {
+      const lockPid = Number(readFileSync(nativeLock, 'utf8'))
+      assert.notEqual(lockPid, productionBackend, 'the supervised Bun backend must not own native.lock')
+    }
     production.send({ event: 'fixtureEcho', value: 'production-client', stderr: true })
     await production.line(line => line.startsWith('EVENT ') && JSON.parse(Buffer.from(line.slice(6), 'base64')).value === 'production-client')
     // The XPC service's own stderr is discarded; Bun's must reach the host's.

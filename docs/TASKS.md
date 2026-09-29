@@ -104,6 +104,23 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
 
+## Legacy retirement, launcher and distribution (LKM-102 / S15)
+
+- [x] Executable census of every Bun module with a file, process or signal effect (`docs/SWIFT-BACKEND-RETIREMENT.md`, `test/retirement-census.mjs`): rollback / helper / test / Bun-owned, gate line counted, legacy switch required while blocked.
+- [x] Reviewer notes (`annotations.json`) and starter `tokens.json` committed by the editing owner (hash-bound, repository lane; Swift/TS parity; `annotation-store` re-run on the Swift owner).
+- [x] One platform source (`scripts/requirements.mjs`: macOS 13.3, SDK 26.0, Bun 1.3.0) stamped by the build and enforced by build, launcher, dev, CLI and installer (`test/distribution.mjs`).
+- [x] Removed dead Git/fs adapter imports from `agent.ts`.
+- [x] Moved to Swift owners: `setup-artifacts`, `sidecar-migrate`, `worktree-dependencies` (EditingOwner, `EditingProject.swift`) and the update check (`WorkflowOwner.updateCheck`); 13 → 9 Bun-owned rows.
+- [x] Moved `feedback:submit` (`gh issue create`) and the skill-pack install (`npx skills add`) to journaled WorkflowOwner workflows (`WorkflowTools.swift`); 9 → 7 Bun-owned rows.
+- [x] `test/install-update.mjs` (clean install, launch, update, interrupted update, diverged checkout, lockfile drift) and profile-lock recovery after a SIGKILLed owner in `test/service-process.mjs`.
+- [x] Transfer the remaining 7 Bun-owned census rows (each with its own rollback plan): `codex-models`, `model-catalog`, `providers-store` (ProviderOwner, `ProviderData.swift`); `props` editor CLIs and `native/platform` Keychain crypto/`open` (PlatformOwner `PlatformOpen.swift`, crypto in ProviderData); `native/profile-path` (`ProfilePaths.swift`), `native/index` and the legacy `native.lock` (the service's lock; Bun refuses without it). 7 → 0 Bun-owned rows (reduced acceptance, `docs/SWIFT-BACKEND-RETIREMENT.md`).
+- [x] Provider helper routing is an explicit opt-in (`TREZI_PROVIDER_HELPERS=1`); the default launch installs no helper and runs the adapters in Bun. v10 connections always stay in-process (`test/provider-data.mjs`).
+- [ ] Deferred to LKM-111: move the provider SDK adapters into supervised helpers after an authorized live parity run (LKM-98 follow-up); then a full native + live run with no legacy module loaded.
+- [ ] Deferred to LKM-111: delete `TREZI_BACKEND_OWNER=legacy`, `TreziService --legacy`, the rollback rows and old Bun copies, keeping every store, journal and worktree.
+- [x] After the LKM-102 + LKM-112 merge: `docs/agent-guide/` brought up to LKM-102 (done; the list below is what changed). `service-owners.md`: "Every other domain writer remains in Bun…" / annotation storage, the provider owner block (+ `ProviderData.swift`, adapters in Bun by default, helpers opt-in via `TREZI_PROVIDER_HELPERS=1`, connections in-process), the editing, workflow and platform blocks (+ `EditingProject.swift`, `WorkflowTools.swift`/`WorkflowContext.swift`, `PlatformOpen.swift`), a `ProfilePaths.swift` entry and the profile lock; `backend-map.md`: `providers-store`/`model-catalog`/`codex-models` are rollback twins of `main/provider-data.ts`, `annotation-store` renders and the editing owner commits; `architecture.md`: `platform.ts` has no Keychain helper (`platform-legacy.ts` is the twin), `profile-path.ts` only resolves; `verification.md`: `scripts/requirements.mjs` and the `docs/SWIFT-BACKEND-RETIREMENT.md` census.
+- [x] Worker native verification (latest run on the merged tree): configured verification passes, native smoke 20 passed, 0 failed, 0 skipped; no host/UI Swift changed here.
+- [ ] Manager: stage the new files (docs-links checks tracked paths), configured verification and independent review.
+
 ## Swift platform owner: Simulator, media, attachments, server recovery (LKM-101 / S14)
 
 - [x] Name the domain exactly and tighten its rollback (`docs/SWIFT-BACKEND-PLATFORM.md`): simulator tools, launch command, bridge; media grants; attachments; running-servers recovery. Retire the unreachable `trezi-media` scheme route (Host `media`/`mediaReply`, Bun `protocol.handle`).
@@ -152,7 +169,9 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Every session agent.ts starts is opened with the owner (`provider-sessions.ts`): Claude's `canUseTool` asks it, Claude's in-process tools and Codex's MCP bridge are authorized against the grant (`session-tools.ts`), Stop runs on the owner's deadline with the adapter's kill switch (`ProviderSession.forceStop`), thread ids are persisted and used when a record lacks one.
 - [x] Helper runtime: `ProviderHelper.swift` (stdio only, allowlisted environment, own process group with watchdog and journal, bounded lines), frame validation and violations in `ProviderOwner.swift`, helper host `backends/helper-host.ts`, Bun's side `backends/helper-session.ts`.
 - [x] `test/provider-owner.mjs` (unit tier): policy parity, fake-provider helper (stream/tool/error/resume/permission/question/model), screenshot and pasted-image transport, privilege enforcement, crash/hang/stall/failed start, recovery, rollback, drain, adapter wrapper, schema.
-- [ ] Move the Claude and Codex adapters into helpers (give the service its helper command) after an authorized live parity run; first hand a Codex connection's key to its helper in the open frame and route the Claude model-catalog update through Bun.
+- [x] The helper runtime and entry are built (`provider-helper.cjs`, `ServiceRuntime` helper command, `pickProvider`); routing is opt-in only (`TREZI_PROVIDER_HELPERS=1`, default = adapters in Bun, v10 connections always in-process); fake-provider parity only — live Claude/Codex SKIP.
+- [ ] Deferred to LKM-111: move the Claude/Codex/Gemini adapters out of Bun into the helpers by default, after an authorized live parity run.
+- [ ] Hand a Codex connection's key to its helper in the open frame and route the Claude model-catalog update through Bun without Bun-owned catalog/store writes.
 - [ ] Unverified: real Claude/Codex sessions under the owner (permission answers, tool authorization, Stop escalation) need an authorized live run (`test:native-live`).
 - [ ] Title and memory generation still run in Bun beside the adapters (they move with them).
 - [ ] Manager: stage the new files (docs-links checks tracked paths), run the unit tier unsandboxed, `bun run test:native`, independent review.
@@ -181,7 +200,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] `TREZI_BACKEND_OWNER=legacy` keeps the TS writers; journal, reports and drafts survive the switch; drain refuses queued writes.
 - [x] `test/source-owner.mjs` (unit tier): React/Svelte/HTML/layers fixture parity, `shadow-controls` re-run on the owner, proposals, paths, transactions, crash, history, files, drafts, lanes, rollback, drain.
 - [ ] S08 sub-boundary: file-tree listing (`source:tree`), media (`trezi-media://`), component resolution and open-in-editor stay Bun read-only; move with S12/S15.
-- [ ] S08 sub-boundary: sidecar stores stay Bun writers inside the repository lease — `control-panels.json` and `content-controls.json` moved to the Swift editing owner (LKM-99); `tokens.json` and annotations remain.
+- [x] S08 sub-boundary: sidecar stores — `control-panels.json` and `content-controls.json` moved to the Swift editing owner (LKM-99); `tokens.json` and annotations followed (LKM-102).
 - [x] S13: setup/scaffold instrumentation writers (`setup.ts`, `scaffold.ts`) moved to the Swift workflow owner (LKM-100); the TS writers are its rollback twin.
 - [ ] S09 follow-up: run the parsers in a separate supervised helper process (today they run in Bun and are bound by the seam, not by process privileges).
 - [ ] Follow-up: a UI to review and acknowledge interrupted source transactions (today they are listed in the Activity log at launch).
@@ -197,7 +216,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] `TREZI_BACKEND_OWNER=legacy` keeps the TS Git code; worktrees, journal and refs survive the switch; drain releases leases and settles running effects.
 - [x] `test/repository-owner.mjs` (unit tier); `service-process` builds the owner.
 - [x] S07 sub-boundary: remote fetch/pull/checkout (`git-remote.ts`) and publishing (`annotations.ts`, now `publish.ts`) moved to the Swift workflow owner in the repository lane (LKM-100).
-- [ ] S07 sub-boundary: the annotation sidecar writer can now move through the repository lane (unblocks the S05 item below).
+- [x] S07 sub-boundary: the annotation sidecar writer moved through the repository lane (LKM-102).
 - [x] S07 sub-boundary: content/island/control source writes move to the S08 source service (LKM-96); scaffolding stays in Bun inside the lease (see S13 item under LKM-96).
 - [ ] Follow-up: a UI to review and acknowledge interrupted repository operations (today they are listed in the Activity log at launch).
 - [ ] Manager: stage the new files (docs-links checks tracked paths), run the unit tier unsandboxed (full `service-process`), `bun run test:native`, independent review.
@@ -225,7 +244,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] `TREZI_BACKEND_OWNER=legacy` keeps the Bun writer; Swift adopts newer legacy writes; no old-version restore.
 - [x] Annotation storage split from publication (`annotation-store.ts`): CRUD parity, per-project serialization, unknown entries kept, damaged files kept, no Git side effects; stale note responses dropped in the context controller.
 - [x] `test/memory-owner.mjs`, `test/annotation-store.mjs` (unit tier); `project-memory` and `native-context` extended.
-- [ ] Unblocked by S07 (LKM-95): move the annotation sidecar writer to Swift through the repository lane (must land before S15).
+- [x] Unblocked by S07 (LKM-95): move the annotation sidecar writer to Swift through the repository lane (LKM-102: editing owner's sidecar commit).
 - [x] S05 remainder: attachments (scratch/blob bounds) moved to the Swift platform owner (LKM-101): chunked, hash-checked uploads.
 - [ ] Manager: stage the new files (docs-links checks tracked paths), run unit + unsandboxed `service-process` + `bun run test:native` through the service path, independent review.
 

@@ -48,8 +48,9 @@ import type { ModelProvider, PendingPrompt, ProviderSession, SpawnContext } from
  * - **A user connection** (`AgentOptions.connectionId`): requests go to an
  *   OpenAI-compatible endpoint the user added (Vercel AI Gateway, Groq, a custom host)
  *   with the user's own key, so an open model like Kimi or DeepSeek can drive the chat.
- *   The key is decrypted in main by `resolveConnection` (safeStorage; see
- *   `main/providers.ts`) and handed to this one `Codex` instance — it is never written
+ *   The key reaches main through `resolveConnection` (the Swift provider owner's
+ *   Keychain helper, or safeStorage on the legacy launch; see `main/provider-data.ts`),
+ *   always in-process, and is handed to this one `Codex` instance — it is never written
  *   to the user's `~/.codex/config.toml`, never put in argv, never emitted, and never
  *   crosses to the renderer.
  *
@@ -218,7 +219,7 @@ async function startSession(
     // rotated keychain) — must fail soft and SAY SO. Falling through to the ChatGPT
     // seat would quietly run the turn on the wrong account, bill the wrong balance,
     // and answer with a different model than the picker says is selected.
-    const conn = options.connectionId ? resolveConnection(options.connectionId) : null
+    const conn = options.connectionId ? await resolveConnection(options.connectionId) : null
     connKey = conn?.apiKey ?? null
     if (options.connectionId && !conn) {
       throw new Error(
@@ -495,7 +496,7 @@ async function updateProjectMemory(
   const abort = new AbortController()
   const timer = setTimeout(() => abort.abort(), 25_000)
   try {
-    const conn = options.connectionId ? resolveConnection(options.connectionId) : null
+    const conn = options.connectionId ? await resolveConnection(options.connectionId) : null
     if (options.connectionId && !conn) return null
     if (!conn && !(await codexCliPresent())) return null
     const { Codex } = await loadCodex()

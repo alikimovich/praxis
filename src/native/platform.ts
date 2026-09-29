@@ -2,14 +2,14 @@ import '../shared/rename-compat'
 import { nativeProfilePath } from './profile-path'
 /** Native application services and the isolated WebKit message boundary. */
 
-import { execFile, spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { promisify } from 'node:util'
 import * as channels from '../shared/preview-channels'
+import { swiftPlatformOwner } from '../main/platform-owner'
 import { bridge } from './bridge'
+import * as legacy from './platform-legacy'
 
 export const app = Object.assign(new EventEmitter(), {
   getPath(name: string) {
@@ -73,42 +73,20 @@ export async function dispatchIPC(view: string, message: any) {
   ipcMain.emit(message.channel, event, ...args)
 }
 
-const run = promisify(execFile)
+/** Opening outside Trezi: the Swift platform owner runs `open` (LKM-102); with none,
+ *  the rollback twin in `platform-legacy.ts` does. */
 export const shell = {
   async openExternal(url: string) {
-    if (!/^https?:\/\//i.test(url)) throw new Error('Only HTTP(S) external links are supported')
-    await run('/usr/bin/open', [url])
+    const owner = swiftPlatformOwner()
+    await (owner ? owner.openLink(url) : legacy.openExternal(url))
   },
   async openPath(path: string) {
-    try {
-      await run('/usr/bin/open', [resolve(path)])
-      return ''
-    } catch (error) {
-      return String(error)
-    }
+    const owner = swiftPlatformOwner()
+    return owner ? owner.openFile(resolve(path)).catch((error) => String(error)) : legacy.openPath(path)
   },
   async trashItem(path: string) {
     await bridge().request('trash', { path: resolve(path) })
   }
-}
-
-// AES-GCM with a random key held in the macOS Keychain. No secrets in argv.
-function crypt(operation: string, value: Buffer) {
-  const executable = process.env.TREZI_NATIVE_HOST
-  if (!executable) throw new Error('Native Keychain helper unavailable')
-  const result = spawnSync(executable, ['--crypto', operation], {
-    input: value,
-    maxBuffer: 16 * 1024 * 1024
-  })
-  if (result.status !== 0)
-    throw new Error('macOS Keychain encryption unavailable; unlock the keychain and retry.')
-  return result.stdout
-}
-export const safeStorage = {
-  isEncryptionAvailable: () => process.platform === 'darwin',
-  getSelectedStorageBackend: () => 'keychain',
-  encryptString: (text: string) => crypt('encrypt', Buffer.from(text)),
-  decryptString: (blob: Buffer) => crypt('decrypt', blob).toString('utf8')
 }
 
 export class NativeImage {

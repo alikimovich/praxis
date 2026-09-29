@@ -117,6 +117,15 @@ export function acquireRunLock(path) {
     if (error.code !== 'EEXIST') throw error
     let owner = 'unknown'
     try { owner = readFileSync(path, 'utf8').trim() } catch {}
+    const pid = Number(/^pid=(\d+)$/.exec(owner)?.[1])
+    if (Number.isSafeInteger(pid) && pid > 1) {
+      let alive = true
+      try { process.kill(pid, 0) } catch (killError) { alive = killError.code !== 'ESRCH' }
+      if (!alive) {
+        unlinkSync(path)
+        return acquireRunLock(path)
+      }
+    }
     throw new Error(`Another suite owns ${path} (${owner}). Wait for it to finish. If it crashed, verify its PID is gone before removing the lock.`)
   }
   try { writeFileSync(fd, `pid=${process.pid}\n`) }

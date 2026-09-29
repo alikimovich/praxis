@@ -104,7 +104,7 @@ async function start(w, extra = {}) {
 function legacy(w) {
   process.env.FAKE_GH_STATE = w.ghState
   process.env.FAKE_PM_STATE = w.pmState
-  return createLegacyWorkflows({ bun: fakes.bun, userData: () => w.profile })
+  return createLegacyWorkflows({ bun: fakes.bun, userData: () => w.profile, gh: fakes.gh })
 }
 
 /** Runs `scenario` on a fresh world with each owner; answers and state must match. */
@@ -196,13 +196,15 @@ try {
     const stale = await owner.remoteUpdate(w.local, { action: 'pull', ref: 'refs/remotes/origin/main', expectedBranch: 'other' }, false)
     const pulled = await owner.remoteUpdate(w.local, { action: 'pull', ref: 'refs/remotes/origin/main', expectedBranch: 'trezi/main' }, false)
     const switched = await owner.remoteUpdate(w.local, { action: 'checkout', ref: 'refs/remotes/origin/feature/design', expectedBranch: 'trezi/main' }, false)
+    const update = await owner.updateCheck(w.local)
     let outside
     try { await owner.remoteStatus(join(w.local, '..'), false) } catch (error) { outside = error.message }
-    return { cached, fetched, busy, stale, pulled, switched, outside, state: snapshot(w) }
+    return { cached, fetched, update, busy, stale, pulled, switched, outside, state: snapshot(w) }
   })
 
   assert.equal(remote.pulled.ok, true); assert.equal(remote.switched.branch, 'feature/design'); assert.equal(remote.busy.ok, false)
   assert.match(remote.outside, /top-level folder/)
+  assert.deepEqual(remote.update, { status: 'idle', behind: 0 }) // the fixture branch is not behind its own upstream
 
   const setup = await parity('setup', async (owner, w) => {
     write(w.local, 'package.json', JSON.stringify({ dependencies: { react: '^19.0.0', next: '^15.0.0' }, scripts: { dev: 'next dev' } }))
@@ -256,7 +258,29 @@ try {
 
   assert.equal(diagnosed.after.status, 'applied'); assert.equal(diagnosed.recalled.seenBefore, true)
 
+  const skills = await parity('skills', async (owner, w) => {
+    const input = { packId: 'anthropic-frontend-design', scope: 'project', liveRoot: w.local }
+    const ok = await owner.installSkills(input)
+    writeFileSync(w.pmState, JSON.stringify({ calls: w.pm().calls, fail: { skills: 1 } }))
+    const failed = await owner.installSkills(input)
+    const refused = await owner.installSkills({ ...input, packId: 'not-a-pack' })
+    return { ok, failed, refused, calls: w.pm().calls }
+  })
+
+  assert.equal(skills.ok.ok, true); assert.deepEqual(skills.ok.installed, ['frontend-design']); assert.equal(skills.failed.ok, false)
+  assert.match(skills.refused.message, /not in the curated skill-pack allowlist/); assert.equal(skills.calls.length, 2)
+
+  await parity('feedback', async (owner, w) => {
+    const title = 'Sidebar focus'
+    const body = 'Steps to reproduce…'
+    const result = await owner.feedback(w.local, title, body)
+    const issue = w.gh().issues[0]
+    return { result, issue: issue ? { title: issue.title, body: issue.body } : null, create: w.gh().counts?.issueCreate }
+  })
+  log('parity feedback')
+
   // ───────────── durability (Swift owner) ─────────────
+  await import('./helpers/workflow-tools-checks.mjs').then(module => module.toolChecks({ world, start, log }))
   await import('./helpers/workflow-durability.mjs').then(module => module.durability({ world, start, legacy, snapshot, git, write, commit, describe, log, fakes }))
   console.log('WORKFLOW OWNER OK — parity, lost replies, crashes, failures, cancellation, restart, rollback, drain, redaction, schema')
 } finally {

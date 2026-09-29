@@ -1,5 +1,8 @@
 import { spawn } from 'node:child_process'
 import { app } from '../native/platform'
+import { fileFeedbackIssue } from './feedback-legacy'
+import { installSkillPackLegacy } from './skills-install'
+import { checkForUpdate } from './update'
 import { recallSignature, remember, setStatus } from './diag-cache'
 import { remoteStatus, updateFromRemote } from './git-remote'
 import { connectToGitHub } from './github'
@@ -60,6 +63,8 @@ export interface LegacyWorkflowOptions {
   bun?: string
   /** Where the diagnosis memory lives (the profile). */
   userData?: () => string
+  /** `gh` for feedback (tests inject a fake). */
+  gh?: string
 }
 
 export function createLegacyWorkflows(options: LegacyWorkflowOptions = {}): WorkflowOwner {
@@ -77,6 +82,7 @@ export function createLegacyWorkflows(options: LegacyWorkflowOptions = {}): Work
     writeHelpers: (root, files) => writeHelpersLegacy(root, files),
     removeHelpers: (root) => removeHelpersLegacy(root),
     createProject: (root, files, install) => createProjectLegacy(root, files, install),
+    updateCheck: (root) => checkForUpdate(root),
     async update(root, progress) {
       try {
         const dirty = await run(root, 'git', ['status', '--porcelain'])
@@ -94,6 +100,8 @@ export function createLegacyWorkflows(options: LegacyWorkflowOptions = {}): Work
         return { ok: false, error: error instanceof Error ? error.message : String(error) }
       }
     },
+    feedback: (root, title, body) => fileFeedbackIssue(root, title, body, { gh: options.gh }),
+    installSkills: (input) => installSkillPackLegacy(input),
     recallDiagnosis: (root, signature) => recallSignature(userData(), root, signature),
     rememberDiagnosis: (root, diagnosis) => remember(userData(), root, diagnosis),
     diagnosisStatus: (root, signature, status) => setStatus(userData(), root, signature, status),

@@ -34,11 +34,14 @@ simulator.markerTimeout = number("PLATFORM_MARKER", 20)
 simulator.stopGrace = 0.3
 simulator.bridgePortBase = Int(number("PLATFORM_BRIDGE_BASE", 7800))
 
+// Opening: PLATFORM_OPEN stands in for /usr/bin/open; the editor CLIs are the real list,
+// looked up on this process's PATH (the test puts scripted ones there).
+let opening = PlatformOpen.Tools(open: env["PLATFORM_OPEN"] ?? "/nonexistent/open", environment: env, timeout: number("PLATFORM_EDITOR_TIMEOUT", 5))
 let options = PlatformOwner.Options(profile: profile, environment: env, watchdog: nil, journal: journal,
     mediaTTL: number("PLATFORM_MEDIA_TTL", 900), maxMediaTokens: Int(number("PLATFORM_MEDIA_TOKENS", 500)),
     maxMediaBytes: Int64(number("PLATFORM_MEDIA_MAX", 256 * 1024 * 1024)),
     maxAttachmentBytes: Int(number("PLATFORM_ATTACH_MAX", 25 * 1024 * 1024)), attachmentIdle: number("PLATFORM_ATTACH_IDLE", 60),
-    simulator: simulator)
+    open: opening, simulator: simulator)
 let owner = PlatformOwner(options: options, send: { emit($0) })
 emit([("ready", .bool(true))])
 
