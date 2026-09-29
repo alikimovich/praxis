@@ -463,58 +463,58 @@ scrollHistory(revealed, by: 600); drainLayout()
 require(revealed.probe.isPinned && revealed.probe.showsLatestButton, "Reveal away from the end shows latest")
 print("Chat latest button: probe-driven show on unpin+scroll away, hide at bottom, re-pin, latest click and reveal passed without a window")
 
-// Manager failure: the latest button rendered, but latestButtonFrame stayed
-// zero (its PreferenceKey never reached the observer), so the harness could
-// neither see nor click it. Host the conversation's nesting in an offscreen
-// NSHostingView: the reported frame must be the real, nonzero rendered frame
-// in chatRoot (top-left) points while shown, and zero once hidden.
-final class LatestState: ObservableObject { @Published var shows = false }
-struct LatestHarness: View {
-    @ObservedObject var state: LatestState
-    let bottomInset: CGFloat
-    let report: (CGRect) -> Void
-    var body: some View {
-        VStack(spacing: 0) {
-            GeometryReader { _ in
-                ScrollViewReader { _ in
-                    ScrollView { Color.clear.frame(height: 3000) }
-                        .coordinateSpace(name: "chatScroll")
-                        .overlay(alignment: .bottomTrailing) {
-                            if state.shows {
-                                Button {} label: { Image(systemName: "arrow.down") }
-                                    .reportsFrame(in: ChatLayout.rootSpace, report)
-                                    .padding(12).padding(.bottom, bottomInset)
-                            }
-                        }
-                }
-            }
-        }.coordinateSpace(name: ChatLayout.rootSpace)
-    }
+// Manager failure (acceptance-WhenScrolling-6-latest): the latest button was
+// shown at its measured frame and the click landed on it, but its action never
+// ran (buttonClickCount 0; hit target the SwiftUI hosting view). The button is
+// now a native NSButton sibling above the chat. Offscreen the window is never
+// visible, so NSControl.mouseDown declines; its cell's own tracking loop is what
+// the visible chat window runs, and it must recognise a queued click.
+final class FlippedColumn: NSView { override var isFlipped: Bool { true } }
+final class FlippedChat: NSView { override var isFlipped: Bool { true } }
+func latestClick(_ type: NSEvent.EventType, _ point: NSPoint) -> NSEvent {
+    NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+        windowNumber: offscreen.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)!
 }
-let latestState = LatestState()
-var latestFrame = CGRect.zero
-let hostSize = NSSize(width: 440, height: 600), harnessInset: CGFloat = 200
-let latestHost = NSHostingView(rootView: LatestHarness(state: latestState, bottomInset: harnessInset) { latestFrame = $0 })
-latestHost.frame = NSRect(origin: .zero, size: hostSize)
-offscreen.setContentSize(hostSize)
-offscreen.contentView = latestHost
-func settleHost() { for _ in 0..<5 { latestHost.layoutSubtreeIfNeeded(); RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05)) } }
-settleHost()
-latestState.shows = true
-settleHost()
-require(latestFrame.width > 0 && latestFrame.height > 0, "Shown latest button reports a nonzero rendered frame (\(latestFrame))")
-require(abs(latestFrame.maxX - (hostSize.width - 12)) < 1 && abs(latestFrame.maxY - (hostSize.height - 12 - harnessInset)) < 1,
-    "Frame is in chatRoot top-left points at the bottom-trailing overlay position (\(latestFrame))")
-// ChatAcceptance clicks the frame's centre converted from chatRoot to the host.
-let click = NSPoint(x: latestFrame.midX, y: latestHost.isFlipped ? latestFrame.midY : hostSize.height - latestFrame.midY)
-require(latestHost.bounds.contains(click), "Latest click point lies inside the hosting view")
-latestState.shows = false
-settleHost()
-require(latestFrame == .zero, "Hidden latest button resets its frame to zero (\(latestFrame))")
-latestState.shows = true
-settleHost()
-require(latestFrame.width > 0, "Re-shown latest button reports its frame again")
-print("Chat latest frame: shown button reports its real chatRoot frame, hidden resets to zero, in an offscreen NSHostingView")
+let column = FlippedColumn(frame: NSRect(x: 0, y: 0, width: 320, height: 748))
+let latestChat = FlippedChat(frame: column.bounds)
+column.addSubview(latestChat)
+let latest = ChatLatestButton()
+column.addSubview(latest, positioned: .above, relativeTo: latestChat)
+offscreen.setContentSize(column.frame.size)
+offscreen.contentView = column
+let inset = ChatLayout.bottomInset(composerHeight: 128)
+require(latest.place(over: latestChat, bottomInset: inset, visible: false) == .zero && latest.isHidden, "Hidden latest button reports a zero frame")
+let shownFrame = latest.place(over: latestChat, bottomInset: inset, visible: true)
+require(!latest.isHidden && shownFrame.width > 0 && shownFrame.height > 0, "Shown latest button has a real frame (\(shownFrame))")
+require(abs(shownFrame.maxX - (320 - ChatLatestButton.margin)) < 0.5 && abs(shownFrame.maxY - (748 - inset - ChatLatestButton.margin)) < 0.5,
+    "Latest button sits margin above the composer clearance at the trailing edge (\(shownFrame))")
+// Same conversion as ChatAcceptance: chat top-left frame centre -> window point.
+let latestPoint = latestChat.convert(NSPoint(x: shownFrame.midX, y: shownFrame.midY), to: nil)
+let latestHit = column.hitTest(column.superview?.convert(latestPoint, from: nil) ?? latestPoint)
+require(latestHit === latest, "A click at the reported frame hit-tests to the native button (\(String(describing: latestHit.map { type(of: $0) })))")
+var presses = 0
+latest.onPress = { presses += 1 }
+NSApp.postEvent(latestClick(.leftMouseUp, latestPoint), atStart: false)
+let tracked = latest.cell!.trackMouse(with: latestClick(.leftMouseDown, latestPoint), in: latest.bounds, of: latest, untilMouseUp: true)
+let strayUp = NSApp.nextEvent(matching: .leftMouseUp, until: .distantPast, inMode: .default, dequeue: true)
+require(tracked && strayUp == nil, "The button's tracking loop consumes the queued mouseUp and recognises the click")
+require(presses == 1, "The queued synthetic click runs the button's action exactly once (\(presses))")
+latestChat.isHidden = true
+require(latest.place(over: latestChat, bottomInset: inset, visible: true) == .zero && latest.isHidden, "Hidden chat hides the latest button")
+// Negative control: the SwiftUI Button this replaced. A click there hit-tests
+// to the hosting view, not a control that runs its own tracking loop.
+final class SwiftUIClicks { var count = 0 }
+let swiftUIClicks = SwiftUIClicks()
+let swiftUIHost = NSHostingView(rootView: ZStack(alignment: .bottomTrailing) {
+    Color.clear
+    Button { swiftUIClicks.count += 1 } label: { Image(systemName: "arrow.down") }.padding(12)
+}.frame(width: 320, height: 300))
+swiftUIHost.frame = NSRect(x: 0, y: 0, width: 320, height: 300)
+offscreen.contentView = swiftUIHost
+for _ in 0..<5 { swiftUIHost.layoutSubtreeIfNeeded(); RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05)) }
+let swiftUIHit = swiftUIHost.hitTest(NSPoint(x: 320 - 12 - 10, y: 12 + 10))
+require(!(swiftUIHit is NSControl), "Negative control: the SwiftUI latest button is not a native control (\(String(describing: swiftUIHit.map { type(of: $0) })))")
+print("Chat latest button: native button frame above the composer clearance, click hit-test and tracking loop, hidden states; SwiftUI negative control")
 
 // Accessibility/scroller provider. With no override it must be exactly the
 // real macOS values (read-only here); overrides stay in-process and flow

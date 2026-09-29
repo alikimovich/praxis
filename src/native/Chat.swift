@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 struct ChatSegment: Decodable { let kind: String; let text: String?; let at: Double?; let statuses: [String]?; let island: IslandView? }
@@ -54,6 +55,9 @@ final class ChatModel: ObservableObject {
     /// Driven by the scroll probe: unpinned (or not following) and away from the end.
     @Published var showsLatest = false
     var latestButtonClickCount = 0  // acceptance diagnostics
+    /// Bumped by the native latest button; the conversation scrolls to latest.
+    @Published var latestRequest = 0
+    func pressLatest() { latestButtonClickCount += 1; latestRequest += 1 }
     // Preserve message/status clearance above the floating composer.
     static let statusHeight = ChatLayout.statusHeight
     var bottomInset: CGFloat { ChatLayout.bottomInset(composerHeight: composerHeight) }
@@ -76,7 +80,27 @@ final class ChatModel: ObservableObject {
 final class NativeChat: NSHostingView<ChatConversation> {
     let model = ChatModel()
     var lastState: [String: Any] = [:]
-    init() { super.init(rootView: ChatConversation(model: model)); isHidden = true; sizingOptions = [] }
+    /// Native sibling over the conversation (see ChatLatestButton).
+    let latestButton = ChatLatestButton()
+    private var latestObservers: Set<AnyCancellable> = []
+    init() {
+        super.init(rootView: ChatConversation(model: model)); isHidden = true; sizingOptions = []
+        latestButton.onPress = { [weak self] in self?.model.pressLatest() }
+        // @Published fires before the value changes; place on the next turn.
+        model.$showsLatest.combineLatest(model.$composerHeight)
+            .sink { [weak self] _ in DispatchQueue.main.async { self?.layoutLatestButton() } }
+            .store(in: &latestObservers)
+    }
+    override var isHidden: Bool { didSet { layoutLatestButton() } }
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        if let superview { superview.addSubview(latestButton, positioned: .above, relativeTo: self) } else { latestButton.removeFromSuperview() }
+        layoutLatestButton()
+    }
+    override func layout() { super.layout(); layoutLatestButton() }
+    func layoutLatestButton() {
+        model.latestButtonFrame = latestButton.place(over: self, bottomInset: model.bottomInset, visible: model.showsLatest)
+    }
     required init(rootView: ChatConversation) { fatalError("init(rootView:) has not been implemented") }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     func update(_ state: [String: Any], composer: NativeComposer) {
@@ -106,6 +130,7 @@ final class NativeChat: NSHostingView<ChatConversation> {
         let composerHeight = Double(composer.preferredHeight(for: value, width: max(0, width - 2 * inset), availableHeight: max(0, height - inset), hasContext: hasContext, hasAttachments: !(input["attachments"] as? [Any] ?? []).isEmpty, queueHeight: queueHeight))
         frame = NSRect(x: x, y: y, width: width, height: max(0, height))
         if model.composerHeight != composerHeight { model.composerHeight = composerHeight }
+        layoutLatestButton()
         input["chat"] = state["chat"]; input["visible"] = !isHidden && !(state["chat"] as? String ?? "").isEmpty
         input["bounds"] = ChatLayout.composerBounds(in: frame, height: composerHeight)
         composer.update(input)
@@ -242,14 +267,8 @@ struct ChatConversation: View {
                     .onChange(of: model.controlInteraction) { _ in follows = false }
                     .onChange(of: model.followRevision) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor); pinRequest += 1 } }
                     .onChange(of: model.snapshot?.chat) { _ in follows = true; sticky = nil; proxy.scrollTo("bottom", anchor: bottomAnchor); attachRequest += 1 }
-                    .overlay(alignment: .bottomTrailing) {
-                        if model.showsLatest { Button {
-                            model.latestButtonClickCount += 1
-                            follows = true; proxy.scrollTo("bottom", anchor: bottomAnchor); attachRequest += 1
-                        } label: { Image(systemName: "arrow.down") }.help("Scroll to latest message")
-                            .reportsFrame(in: ChatLayout.rootSpace) { model.latestButtonFrame = $0 }
-                            .padding(12).padding(.bottom, model.bottomInset) }
-                    }
+                    // The latest button itself is native (NativeChat.latestButton).
+                    .onChange(of: model.latestRequest) { _ in follows = true; proxy.scrollTo("bottom", anchor: bottomAnchor); attachRequest += 1 }
                     .overlay(alignment: .bottomLeading) {
                         Text(model.snapshot?.status ?? "")
                             .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
@@ -265,8 +284,6 @@ struct ChatConversation: View {
         // System accessibility options (or the acceptance override) for all
         // SwiftUI views in the conversation, including the echo above.
         .modifier(ChatAccessibilityEnvironment(accessibility: system.accessibility))
-        // The hosting view's own top-left space; the latest button reports here.
-        .coordinateSpace(name: ChatLayout.rootSpace)
     }
 }
 private struct NativeMessageRow: View {

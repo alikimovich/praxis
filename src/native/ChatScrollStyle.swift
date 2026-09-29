@@ -2,8 +2,6 @@ import AppKit
 import SwiftUI
 
 enum ChatLayout {
-    /// Named space on the conversation root, filling the NSHostingView.
-    static let rootSpace = "chatRoot"
     static let composerInset: CGFloat = 10
     static let statusHeight: CGFloat = 28
     static func composerFrame(in bounds: CGRect, height: CGFloat) -> CGRect {
@@ -20,16 +18,6 @@ enum ChatLayout {
     }
     static func bottomInset(composerHeight: CGFloat) -> CGFloat {
         composerHeight + composerInset + statusHeight + 40
-    }
-}
-
-extension View {
-    /// Reports this view's rendered frame in a named ancestor space, and zero
-    /// once it leaves the hierarchy. A PreferenceKey read on an outer view never
-    /// arrived from the conversation's overlay, so this is a direct callback.
-    func reportsFrame(in space: String, _ report: @escaping (CGRect) -> Void) -> some View {
-        onGeometryChange(for: CGRect.self, of: { $0.frame(in: .named(space)) }, action: report)
-            .onDisappear { report(.zero) }
     }
 }
 

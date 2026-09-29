@@ -3,8 +3,20 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Experimental Gen UI (LKM-106)
+
+- [x] Rename settings, explain React/Svelte composition and conditionally show the explained engine while preserving saved choices.
+- [x] Discover the documented Svelte legacy/rune subset and export validated `.svelte` source through both engines; preserve React export.
+- [x] Add deterministic rendering/Jev, unsupported-shape, mixed-framework, escaping/path, stale/cancellation and turn-capture checks.
+- [x] Document supported contracts and run focused non-GUI checks.
+- [x] Add foreground Settings capture/OCR/geometry and native picker interactions at 600/800 points, including engine preservation and immediate-close autosave; register windowless and negative-evidence checks.
+- [x] Reproduce NSHostingController minimum-size propagation without a window; exercise live minimum (540), normal (600) and wider (800) widths without relaxing evidence checks.
+- [x] Make `test:native` produce the Settings evidence itself; retain the original `settings.png` capture and `sheetPerform change` autosave check alongside it.
+- [ ] Manager: run configured verification and inspect native Settings help/conditional engine at minimum and wider widths under the desktop lock; complete independent review.
+
 ## Composer spacing and chat scrollbar (LKM-103)
 
+- [x] Native latest button (NSButton) over the conversation: the SwiftUI button never ran its action for the acceptance click (buttonClickCount 0); harness asserts the action runs; fixture regression with SwiftUI negative control.
 - [x] Match exterior bottom/side gaps and adjust composer height budget, status/message clearance and resize following.
 - [x] Identify the SwiftUI conversation scroll view; configure its native small scroller using macOS preferences, including live Always-show changes.
 - [x] Extend windowless composer tests for spacing/clearance and native scrollbar policy; run focused controller and TypeScript checks.
@@ -24,17 +36,6 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Drive the latest button from the probe's pinned state + scroll position; windowless visibility regression.
 - [x] Route the acceptance wheel/mouse input as window-targeted events through NSApp.postEvent (pid-posted events had no window and were dropped); accept nil-window wheels over the chat; add input diagnostics and windowless routing coverage.
 - [ ] Manager: run native verification and inspect foreground normal/narrow/multiline captures, latest-message reachability, scrollbar idle/hover/drag/wheel behavior and Always-show/accessibility preferences.
-
-## Experimental Gen UI (LKM-106)
-
-- [x] Rename settings, explain React/Svelte composition and conditionally show the explained engine while preserving saved choices.
-- [x] Discover the documented Svelte legacy/rune subset and export validated `.svelte` source through both engines; preserve React export.
-- [x] Add deterministic rendering/Jev, unsupported-shape, mixed-framework, escaping/path, stale/cancellation and turn-capture checks.
-- [x] Document supported contracts and run focused non-GUI checks.
-- [x] Add foreground Settings capture/OCR/geometry and native picker interactions at 600/800 points, including engine preservation and immediate-close autosave; register windowless and negative-evidence checks.
-- [x] Reproduce NSHostingController minimum-size propagation without a window; exercise live minimum (540), normal (600) and wider (800) widths without relaxing evidence checks.
-- [x] Make `test:native` produce the Settings evidence itself; retain the original `settings.png` capture and `sheetPerform change` autosave check alongside it.
-- [ ] Manager: run configured verification and inspect native Settings help/conditional engine at minimum and wider widths under the desktop lock; complete independent review.
 
 ## Sidebar folder icons (LKM-105)
 

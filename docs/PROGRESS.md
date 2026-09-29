@@ -2,6 +2,68 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Settings OCR returns wrapped lines out of order (LKM-106 repair)
+
+`settings-visible-800-on-chat` failed although its PNG shows the engine help
+in full. Vision returned the wrapped help's continuation (`Gateway API key.`)
+before its first line (`… requires an Al`), and the checker joined observations
+in result order and then looked for each sentence as one contiguous run. The
+capture carries text only, with no observation boxes to sort by. So
+`assertSettingsEvidence` now chains a required sentence across line
+observations anchored at line edges: it starts at the end of one line, passes
+through any whole lines, and finishes at the start of another. The pieces must
+concatenate to exactly the sentence, so every word is still required, in order.
+Only the observation order is free. The I/l fold is kept, and the Off-state
+absence checks use the same matcher, so split engine text is still caught.
+`test/native-settings-evidence.mjs` replays that capture's verbatim OCR (it fails
+on the previous checker) and rejects dropped, misspelled and reordered words and
+fragments that don't sit at line edges. All 18 saved `settings-visible-*`
+captures pass the new checker; only this one failed the old one.
+
+## 2026-09-29 — Latest button click never ran its action: native NSButton (LKM-103)
+
+`acceptance-WhenScrolling-6-latest` failed with `probeShowsLatest` true and
+`latestVisible` false (latestTop 0, readingHeight 542). Neither measurement
+was wrong. The dump shows `lastLatest.buttonClickCount` 0 and `distanceAfter`
+1673.5 pt: the reader was still 1673 pt up in history because the latest
+click never ran the button's action. The click itself was correct:
+`{519.5, 229}` is the exact window point of `latestButtonFrame
+{{271,508},{37,22}}` (chat x 230, flipped 748 − 519), and it hit the hosting
+view (`NativeChat`). A SwiftUI Button rendered inside NSHostingView offers no
+AppKit control there. No run has ever shown this click working: the b35c7def
+failure blamed on a stale `didEnd` had the same symptom before click counts
+existed.
+
+Offscreen (no WindowServer), `NSButtonCell`'s own tracking loop consumes a
+queued `mouseUp` and fires the action, which is the path the visible chat
+window uses (the NSScroller drag works the same way). A SwiftUI Button fired
+for neither delivery order. So the latest affordance is now a native
+`ChatLatestButton` (`src/native/ChatLatestButton.swift`):
+- It is an NSButton sibling above the chat in `chatColumn`, placed `margin`
+  (12) above the composer clearance at the trailing edge, with the same
+  geometry as before.
+- The probe's `showsLatest` still drives it. Its real frame (chat top-left
+  space) feeds `latestButtonFrame`, and it hides with the chat.
+- A press bumps `model.latestRequest`; SwiftUI then follows, scrolls to latest
+  and attaches, exactly as the old action did.
+- The SwiftUI overlay, the `reportsFrame` modifier and the `chatRoot` space
+  are removed.
+
+The harness now also asserts that each latest click runs the button action
+(`latestButtonClickCount` + 1) before the unchanged latest-row clearance check.
+
+Fixture: the shown button reports a real frame at the exact clearance
+position. A click at that frame hit-tests to the button, and its tracking loop
+consumes the queued mouseUp and runs the action once. Hidden/chat-hidden
+states report zero. Negative control: the SwiftUI button's hit is not a
+native control. On head the test fails because no native control exists.
+
+Candidate 922eca70 conflicts (TASKS, smoke-core): the smoke-wait import moved
+to the top of smoke-core and the chat context is applied inside `inspect`, so
+only lines the candidate leaves untouched change. The LKM-103 TASKS section now
+sits after LKM-106, so the candidate's inserts at the top don't collide. Both
+three-way merges were simulated clean with `git merge-file`.
+
 ## 2026-09-29 — composerInspect timeout during the TIFF paste: diagnosis (LKM-103)
 
 Manager verification failed in the core smoke right after NATIVE ISLANDS PASS
@@ -486,23 +548,6 @@ Manager owns desktop verification: foreground normal/narrow/multiline captures,
 latest-message reachability, idle/hover/drag/wheel states and Always-show plus
 accessibility preference checks. No GUI suite or foreground capture was run by
 this worker.
-## 2026-09-28 — Settings OCR returns wrapped lines out of order (LKM-106 repair)
-
-`settings-visible-800-on-chat` failed although its PNG shows the engine help
-in full. Vision returned the wrapped help's continuation (`Gateway API key.`)
-before its first line (`… requires an Al`), and the checker joined observations
-in result order and then looked for each sentence as one contiguous run. The
-capture carries text only, with no observation boxes to sort by. So
-`assertSettingsEvidence` now chains a required sentence across line
-observations anchored at line edges: it starts at the end of one line, passes
-through any whole lines, and finishes at the start of another. The pieces must
-concatenate to exactly the sentence, so every word is still required, in order.
-Only the observation order is free. The I/l fold is kept, and the Off-state
-absence checks use the same matcher, so split engine text is still caught.
-`test/native-settings-evidence.mjs` replays that capture's verbatim OCR (it fails
-on the previous checker) and rejects dropped, misspelled and reordered words and
-fragments that don't sit at line edges. All 18 saved `settings-visible-*`
-captures pass the new checker; only this one failed the old one.
 
 ## 2026-09-28 — Settings OCR reads SF Pro "I" as "l" (LKM-106 diagnostic repair)
 

@@ -1,3 +1,4 @@
+import { inspectUntil, waitFor } from './smoke-wait'
 import { checkVisibleComposer } from './smoke-composer'
 import { checkSourceStamps } from './smoke-source-stamp'
 import { checkChatIslands } from './smoke-islands'
@@ -12,17 +13,16 @@ import { checkProjectSwitching } from './smoke-projects'
 import { checkNativeSheets } from './smoke-sheets'
 import { checkNativeChat } from './smoke-chat'
 import { checkSelectionInput, preparePreviewInput } from './smoke-input'
-import { inspectUntil, waitFor } from './smoke-wait'
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve,ms))
 export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, root: string) {
   const invoke = (channel: string, ...args: any[]) => dispatchIPC('main',{type:'invoke',channel,args})
   const send = (channel: string, ...args: any[]) => dispatchIPC('main',{type:'send',channel,args})
   const page = (code: string) => host.request('evaluate',{view:'preview',code})
-  // Timeouts report the last inspected state, not just the predicate's `false`.
-  const wait = (check: () => Promise<any> | any, label: string, timeout=10000) => waitFor(check, label, timeout)
-  const inspect = (method: string, check: (s:any)=>boolean, extra?: () => unknown) => inspectUntil(m => host.request(m), method, check, extra)
-  // Bun-side chat inputs to the composer's `enabled`/attachments/text.
+  // Timeouts report the last inspected state (composer waits add the Bun-side
+  // chat inputs to `enabled`/attachments/text), not just the predicate's `false`.
   const chatContext = () => { const chat = nativeChat.get(nativeChat.active); return { ready: chat?.ready, switching: chat?.switching, running: chat?.isRunning, textLength: chat?.text?.length, attachments: chat?.attachments?.length } }
+  const wait = (check: () => Promise<any> | any, label: string, timeout=10000) => waitFor(check, label, timeout)
+  const inspect = (method: string, check: (s:any)=>boolean) => inspectUntil(m => host.request(m), method, check, method === 'composerInspect' ? chatContext : undefined)
   const geometry = async (stage: string) => { const value = await host.request('layoutInspect'); console.log('Native geometry', stage, JSON.stringify(value)); assert.ok(value.windowHeight >= 550 && value.canvasHeight >= 450, `Collapsed workspace at ${stage}`) }
   await geometry('startup')
   const artifacts=join(root,'test/artifacts/native');mkdirSync(artifacts,{recursive:true})
@@ -88,7 +88,7 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   for (const clipboard of [{ image: 'png' }, { image: 'tiff' }, { paths: [join(fixture, 'index.html'), join(fixture, 'native-style.tsx')] }]) {
     assert.deepEqual(await host.request('composerPasteCheck', clipboard), { enabled: true, dispatched: true })
     const count = 'paths' in clipboard ? 2 : 1
-    const previews = await inspect('composerInspect', s => s.attachments.length === count && s.enabled && s.text === '', chatContext)
+    const previews = await inspect('composerInspect', s => s.attachments.length === count && s.enabled && s.text === '')
     assert.equal(previews.attachmentPreviews.count, count)
     assert.equal(previews.attachmentPreviews.images, 'paths' in clipboard ? 0 : 1)
     assert.equal(previews.attachmentPreviews.height, 108)

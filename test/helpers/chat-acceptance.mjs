@@ -31,6 +31,13 @@ export async function checkChatAcceptance(host, artifacts) {
     for (const key of ['contained', 'alignment', 'hitTargets']) assert.equal(state.layout[key], true, key)
     return { ...state, capturedText: image.text }
   }
+  // Click the native latest button with window-targeted mouse events; its
+  // action must run (not merely the scroll position change) before capture.
+  const clickLatest = async label => {
+    const before = await inspect({})
+    await inspect({ input: 'latest' })
+    await wait(s => s.latestButtonClickCount === before.latestButtonClickCount + 1, `${label}: latest click runs the button action`)
+  }
   const latestCapture = async name => {
     await wait(s => s.latestVisible, `${name}: complete latest row above composer clearance`)
     const state = await capture(name)
@@ -126,8 +133,8 @@ export async function checkChatAcceptance(host, artifacts) {
       await capture(`${prefix}-dragged`)
       assert.equal(dragged.viewportWidth, baseline.viewportWidth, 'Hover/drag causes no viewport width jump')
       assert.equal(dragged.chatWidth, baseline.chatWidth)
-      // Activate the actual SwiftUI button via mouse events, not scrollTo directly.
-      await inspect({ input: 'latest' })
+      // Activate the actual latest button via mouse events, not scrollTo directly.
+      await clickLatest(`${prefix}-latest`)
       await latestCapture(`${prefix}-latest`)
       results.push({ preference, wheelMoved: true, dragMoved: true, latestButtonWorked: true })
     }
@@ -145,7 +152,7 @@ export async function checkChatAcceptance(host, artifacts) {
       const contrast = await latestCapture(`acceptance-accessibility-${enabled}`)
       await inspect({ input: 'wheel', delta: 500 })
       await wait(s => s.latestButton, 'Accessibility scroll remains usable')
-      await inspect({ input: 'latest' })
+      await clickLatest(`acceptance-accessibility-${enabled}-latest`)
       const after = await latestCapture(`acceptance-accessibility-${enabled}-latest`)
       assert.equal(after.viewportWidth, before.viewportWidth, 'Accessibility input preserves viewport layout')
       results.push({ accessibility: enabled, appearance: contrast.appearance, scroller: contrast.scrollerEffectiveAppearance,
