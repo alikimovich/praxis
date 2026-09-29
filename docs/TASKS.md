@@ -67,6 +67,20 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Audit suitable Trezi workflows and Apple APIs; rank opportunities and propose a bounded first experiment in [the exploration](APPLE-INTELLIGENCE.md).
 - [ ] If selected for implementation, benchmark optional local chat titles before expanding to copy drafts and prepared-control selection.
 
+## Composer bottom row (LKM-104)
+
+- [x] Align attachment, provider/model, Auto and Send in one centered bottom row; retain text above and selector compression.
+- [x] Check windowless normal/narrow empty/multiline/capped layout and rejected raised Send; run focused controller and TypeScript checks.
+- [x] Repair smoke draft inputs for the additional text space; preserve growth assertions and verify the smoke sequence against actual windowless AppKit viewports.
+- [x] Reproduce and repair capped-to-wrapped overflow with legacy scroller gutters; test fresh bridge updates with both scroller styles and preserve desktop fit diagnostics.
+- [x] ~~Reconcile LKM-103 commit d0c6803 in this branch~~ — reverted: exterior insets and scrollbar styling stay in LKM-103; composer checks tolerate it landing separately.
+- [x] Add foreground normal/narrow empty/multiline capture pairs including the full chat column and latest-reply OCR.
+- [x] Diagnose initial foreground capture timeout from empty/setup-card state; regress capture readiness while retaining populated latest-message checks and diagnostic geometry.
+- [x] Repeat attachment/model/Auto interactions, disabled empty Send/Return, Return (normal) and Send-click (narrow) multiline submission, and a Stop-state capture at each matrix width, so manager verification produces the evidence.
+- [x] Repair "latest message did not settle above composer": the check sampled the lazy bottom anchor (`bottomPosition`); it now waits on the newest message's measured frame against the composer top and requires the last painted line. Pinning itself is LKM-103's (candidate); regressions: shrink-after-submit at 440/320pt in the layout fixture and `native-composer-latest`.
+- [x] Merge candidate (LKM-103/109/110): the latest-row check now reads LKM-103's `chatAcceptance` geometry (`latestBottom` ≤ `readingHeight`) and capture; LKM-104's own `latest` field, `captureVisibleChatColumn`, `smoke-composer-latest.ts`, `native-composer-latest` and the latest-line OCR are removed.
+- [ ] Manager: after merging candidate, run `test:native`; inspect the 440/320 `initial`, `draft`, `sending` and `submitted` captures (`composer-visible-<width>-*`, `-chat.png`/`-chat.json` pairs) for the shared row, compact-after-submit composer and the latest line above it; complete independent review.
+
 ## Composer container (LKM-87)
 
 - [x] Place attachment/provider/model/Auto controls inside the rounded input surface, preserving alignment and handlers.

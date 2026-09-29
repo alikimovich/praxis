@@ -17,9 +17,9 @@ for width: CGFloat in [420, 320, 520] {
     for value in ["", longDraft, wrappedDraft, longDraft, "Short", "", "Line\nLine\n"] {
         composer.perform(["text": value])
         let height = composer.preferredHeight(for: value, width: width, availableHeight: 776, hasContext: false)
-        // Supply the viewport normally assigned by Auto Layout, without a window.
-        composer.scroll.setFrameSize(NSSize(width: width - 24, height: height - 101))
-        composer.layout()
+        // Resolve the real viewport through Auto Layout, without a window.
+        composer.setFrameSize(NSSize(width: width, height: height))
+        composer.layoutSubtreeIfNeeded()
         // The smoke sequence captures the expanded draft before replacing it.
         // Resolve that preceding paint without drawing or creating a window.
         if value == longDraft { composer.text.sizeToFit() }
@@ -43,17 +43,125 @@ for width: CGFloat in [420, 320, 520] {
 }
 print("Composer layout: capped replacement, wrapping, width changes, empty and trailing newline passed without a window")
 
+// Mirror the native smoke drafts so a desktop timeout cannot hide a fixture
+// that no longer exceeds the minimum-height form's available text space.
+let growthDraft = Array(repeating: "A line of draft text", count: 9).joined(separator: "\n") + "\n"
+let smokeWrappedDraft = String(repeating: "wrap text ", count: 40)
+for width: CGFloat in [320, 420, 520] {
+    func height(_ value: String) -> CGFloat {
+        composer.preferredHeight(for: value, width: width, availableHeight: 776, hasContext: false)
+    }
+    let compact = height("")
+    let grown = height(growthDraft)
+    let capped = height(longDraft)
+    let wrapped = height(smokeWrappedDraft)
+    print("Smoke draft heights at \(width): compact=\(compact), grown=\(grown), capped=\(capped), wrapped=\(wrapped)")
+    require(grown > compact + 60, "Smoke multiline fixture grows by more than 60pt")
+    require(capped > grown && capped <= 368, "Smoke long fixture grows further to the cap")
+    require(wrapped > compact && wrapped < capped, "Smoke wrapped fixture grows but stays below the cap")
+    for value in [growthDraft, longDraft, smokeWrappedDraft, ""] {
+        composer.perform(["text": value])
+        composer.setFrameSize(NSSize(width: width, height: height(value)))
+        composer.layoutSubtreeIfNeeded()
+        let viewport = composer.scroll.contentSize.height
+        let document = composer.text.frame.height
+        if value == longDraft {
+            require(document > viewport + 100, "Smoke capped draft remains scrollable")
+        } else {
+            require(document <= viewport + 1, "Smoke uncapped draft fits its actual viewport")
+        }
+    }
+}
+
+// Start fresh and use the bridge update path, including the preceding capped paint.
+for style in [NSScroller.Style.overlay, .legacy] {
+    for width: Double in [320, 420, 520] {
+        let live = NativeComposer(frame: .zero)
+        live.scroll.scrollerStyle = style
+        live.text.setMarkedText("に", selectedRange: NSRange(location: 1, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+        live.text.unmarkText(); live.text.string = ""
+        for value in ["", growthDraft, longDraft, smokeWrappedDraft, ""] {
+            let height = live.preferredHeight(for: value, width: width, availableHeight: 776, hasContext: false)
+            live.update(["visible": true, "text": value, "bounds": ["x": 10.0, "y": 776 - Double(height), "width": width, "height": Double(height)]])
+            live.layoutSubtreeIfNeeded()
+            if value == longDraft { live.text.sizeToFit() }
+            if value != longDraft {
+                require(live.text.frame.height <= live.scroll.contentSize.height + 1, "Bridge uncapped document fits (style \(style.rawValue), width \(width), document \(live.text.frame.height), viewport \(live.scroll.contentSize.height))")
+            }
+        }
+    }
+}
+print("Bridge sizing: overlay/legacy scrollers, IME, capped-to-wrapped replacements and empty reset passed at 320/420/520pt")
+
+// Mirror the foreground matrix (smoke-composer.ts): its multiline draft must
+// grow past the minimum form at the normal/narrow chat widths it resizes to.
+let matrixMultiline = ["First", "Second", "Third", "Fourth", "Fifth"].map { "\($0) composer line" }.joined(separator: "\n")
+for chatWidth: CGFloat in [440, 320] {
+    let width = chatWidth - 2 * ChatLayout.composerInset
+    for available: CGFloat in [500, 766] {
+        let compact = composer.preferredHeight(for: "", width: width, availableHeight: available, hasContext: false)
+        let multiline = composer.preferredHeight(for: matrixMultiline, width: width, availableHeight: available, hasContext: false)
+        require(multiline > compact, "Matrix multiline draft grows the composer at chat width \(chatWidth): \(compact) -> \(multiline)")
+        composer.perform(["text": matrixMultiline])
+        composer.setFrameSize(NSSize(width: width, height: multiline))
+        composer.layoutSubtreeIfNeeded()
+        require(composer.text.frame.height <= composer.scroll.contentSize.height + 1, "Matrix multiline draft fits at chat width \(chatWidth)")
+        require(composer.verificationLayout()["alignment"] as? Bool == true, "Matrix multiline keeps the shared row at chat width \(chatWidth)")
+    }
+}
+composer.perform(["text": ""])
+print("Foreground matrix mirror: five-line draft grows, fits and keeps the row at 440/320pt chat widths")
+
+// Shrink after submit: the submitted draft clears, so the composer returns to its
+// compact height with the shared row intact and the frame anchored to the bottom
+// gap. The reading inset and pin that follow it are LKM-103's (chat follow layout, below).
+for chatWidth: CGFloat in [440, 320] {
+    let bounds = CGRect(x: 0, y: 0, width: chatWidth, height: 776)
+    let width = chatWidth - 2 * ChatLayout.composerInset
+    // 80 lines is the narrow-width foreground draft; 5 the normal-width one.
+    for draft in [matrixMultiline, longDraft] {
+        var heights: [CGFloat] = []
+        for value in [draft, ""] {
+            let height = composer.preferredHeight(for: value, width: width, availableHeight: bounds.height - ChatLayout.composerInset, hasContext: false)
+            composer.update(["bounds": ChatLayout.composerBounds(in: bounds, height: height), "visible": false, "text": value])
+            composer.layoutSubtreeIfNeeded()
+            require(composer.frame == ChatLayout.composerFrame(in: bounds, height: height), "Composer applies the \(value.isEmpty ? "compact" : "drafted") frame at chat width \(chatWidth)")
+            require(composer.verificationLayout()["alignment"] as? Bool == true, "Row stays aligned while shrinking at chat width \(chatWidth)")
+            heights.append(height)
+        }
+        require(heights[1] < heights[0], "Composer shrinks after the draft clears at chat width \(chatWidth): \(heights)")
+        require(bounds.maxY - composer.frame.maxY == ChatLayout.composerInset, "Compact composer keeps its bottom gap at chat width \(chatWidth)")
+        require(composer.text.frame.height <= composer.scroll.contentSize.height + 1, "Cleared input fits its compact viewport at chat width \(chatWidth)")
+    }
+}
+print("Shrink after submit: compact height, shared row and bottom anchor settle at 440/320pt chat widths")
+
 // Resolve the actual Auto Layout tree without opening an application/window.
 // Borderless popup frames overlap by one point at four-point stack spacing;
 // their alignment rectangles remain correctly separated.
-for width: CGFloat in [320, 420, 520] {
-    composer.setFrameSize(NSSize(width: width, height: 148))
-    composer.layoutSubtreeIfNeeded()
-    let geometry = composer.verificationLayout()
-    require(geometry["alignment"] as? Bool == true, "Ordered control alignment at width \(width): \(geometry)")
-    require(geometry["contained"] as? Bool == true, "Input and controls inside bubble")
-    require((geometry["bottomInset"] as? CGFloat ?? 0) >= 7, "Bubble extends below controls")
+for width: CGFloat in [240, 320, 420, 520] {
+    for value in ["", "First line\nSecond line\n", longDraft] {
+        composer.perform(["text": value])
+        let height = composer.preferredHeight(for: value, width: width, availableHeight: 776, hasContext: false)
+        composer.setFrameSize(NSSize(width: width, height: height))
+        composer.layoutSubtreeIfNeeded()
+        let geometry = composer.verificationLayout()
+        require(geometry["alignment"] as? Bool == true, "Ordered control alignment at width \(width): \(geometry)")
+        require(geometry["contained"] as? Bool == true, "Input and controls inside bubble")
+        require((geometry["bottomInset"] as? CGFloat ?? 0) >= 7, "Bubble extends below controls")
+        require(composer.controls.arrangedSubviews.contains(composer.sendButton), "Send shares the control row")
+        require(composer.pickers.values.allSatisfy { !$0.isHidden && $0.frame.width >= 35 }, "Selectors remain usable at narrow widths")
+    }
 }
+// Send must sit on the shared row. A raised (floating) Send fails alignment.
+composer.perform(["text": ""])
+composer.setFrameSize(NSSize(width: 420, height: 148))
+composer.layoutSubtreeIfNeeded()
+require(composer.verificationLayout()["alignment"] as? Bool == true, "Send shares the centered row before it is moved")
+let rowSendFrame = composer.sendButton.frame
+composer.sendButton.setFrameOrigin(NSPoint(x: rowSendFrame.minX, y: rowSendFrame.minY + 18))
+require(composer.verificationLayout()["alignment"] as? Bool == false, "Raised Send must fail row alignment")
+composer.sendButton.frame = rowSendFrame
 let model = composer.pickers["Model"]!
 let permission = composer.pickers["Permission mode"]!
 let oldFrame = permission.frame

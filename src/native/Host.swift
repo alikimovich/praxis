@@ -365,7 +365,14 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
                 } catch { reply(id, error: error.localizedDescription) }
             }
         case "composerState": composer.update(c["state"] as? [String: Any] ?? [:])
-        case "composerInspect": reply(id, composer.inspect())
+        case "composerInspect":
+            var inspected = composer.inspect()
+            // Send lives in the shared controls row, not directly in the form bubble.
+            inspected["sendInsideForm"] = composer.sendButton.isDescendant(of: composer.content)
+            let clip = composer.scroll.contentSize
+            inspected["inputWidth"] = Double(clip.width); inspected["textMinimumHeight"] = Double(composer.text.minSize.height)
+            inspected["scrollerStyle"] = composer.scroll.scrollerStyle.rawValue
+            reply(id, inspected)
         case "composerIMECheck":
             guard ephemeral else { reply(id, error: "Test profile required"); return }
             let old = composer.text.string

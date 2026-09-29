@@ -95,7 +95,8 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         text.pasteFiles = { [weak self] board in self?.readPasteboard(board) ?? false }
         scroll.documentView = text; scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay
         scroll.borderType = .noBorder
-        controls.orientation = .horizontal; controls.spacing = 4
+        controls.orientation = .horizontal; controls.spacing = 4; controls.alignment = .centerY
+        controls.detachesHiddenViews = false
         plus.addItem(withTitle: ""); plus.item(at: 0)?.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "Attach or select")
         plus.isBordered = false; (plus.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow; plus.setAccessibilityLabel("Attachments and tools")
         for (title, action) in [("Attach Files…", "attach"), ("Show Layers", "layers")] {
@@ -123,6 +124,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         }
         sendButton.bezelStyle = .circular; sendButton.isBordered = true
         sendButton.target = self; sendButton.action = #selector(send(_:))
+        controls.addArrangedSubview(sendButton)
         plus.widthAnchor.constraint(equalToConstant: 30).isActive = true
         sendButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
         sendButton.heightAnchor.constraint(equalToConstant: 30).isActive = true
@@ -140,18 +142,17 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         skillList.wantsLayer = true; skillList.layer?.cornerRadius = 12
         skillList.layer?.borderWidth = 1; skillList.layer?.borderColor = NSColor.separatorColor.cgColor
         skillList.setAccessibilityLabel("Skills and commands"); skillList.isHidden = true
-        for view in [chips, attachments, scroll, sendButton, controls] { view.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(view) }
+        for view in [chips, attachments, scroll, controls] { view.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(view) }
         chipsHeight = chips.heightAnchor.constraint(equalToConstant: 0)
         attachmentsHeight = attachments.heightAnchor.constraint(equalToConstant: 0)
         formTop = backdrop.topAnchor.constraint(equalTo: topAnchor)
         NSLayoutConstraint.activate([
             queuedMessages.topAnchor.constraint(equalTo: topAnchor), queuedMessages.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14), queuedMessages.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14), queuedMessages.bottomAnchor.constraint(equalTo: backdrop.topAnchor, constant: 16),
             formTop, backdrop.leadingAnchor.constraint(equalTo: leadingAnchor), backdrop.trailingAnchor.constraint(equalTo: trailingAnchor), backdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
-            sendButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10), sendButton.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -18),
             chips.topAnchor.constraint(equalTo: content.topAnchor, constant: 10), chips.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), chips.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -12), chipsHeight,
             attachments.topAnchor.constraint(equalTo: chips.bottomAnchor), attachments.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), attachments.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), attachmentsHeight,
-            scroll.topAnchor.constraint(equalTo: attachments.bottomAnchor, constant: 4), scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), scroll.bottomAnchor.constraint(equalTo: sendButton.topAnchor, constant: -5),
-            controls.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10), controls.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10), controls.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8), controls.heightAnchor.constraint(equalToConstant: 26)
+            scroll.topAnchor.constraint(equalTo: attachments.bottomAnchor, constant: 4), scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), scroll.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -5),
+            controls.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10), controls.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10), controls.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8), controls.heightAnchor.constraint(equalToConstant: 30)
         ])
         for overlay in [readyBeam, buttonBeam] { addSubview(overlay) }
         isHidden = true
@@ -160,15 +161,21 @@ final class NativeComposer: NSView, NSTextViewDelegate {
     func preferredHeight(for value: String, width: CGFloat, availableHeight: CGFloat, hasContext: Bool, hasAttachments: Bool = false, queueHeight: CGFloat = 0) -> CGFloat {
         let storage = NSTextStorage(string: value, attributes: [.font: text.font ?? NSFont.systemFont(ofSize: 14)])
         let manager = NSLayoutManager()
-        let container = NSTextContainer(size: NSSize(width: max(1, width - 24 - text.textContainerInset.width * 2), height: .greatestFiniteMagnitude))
+        // A legacy scroller can retain its gutter after a capped draft. Measure
+        // with that gutter so replacing it cannot wrap into an extra clipped line.
+        let viewport = NSScrollView.contentSize(forFrameSize: NSSize(width: max(1, width - 24), height: 1),
+            horizontalScrollerClass: nil, verticalScrollerClass: scroll.hasVerticalScroller ? NSScroller.self : nil,
+            borderType: scroll.borderType, controlSize: scroll.verticalScroller?.controlSize ?? .regular,
+            scrollerStyle: scroll.scrollerStyle)
+        let container = NSTextContainer(size: NSSize(width: max(1, viewport.width - text.textContainerInset.width * 2), height: .greatestFiniteMagnitude))
         container.lineFragmentPadding = text.textContainer?.lineFragmentPadding ?? 5
         storage.addLayoutManager(manager); manager.addTextContainer(container)
         manager.ensureLayout(for: container)
         // The extra fragment includes the caret's empty line after a trailing newline.
         let used = max(manager.usedRect(for: container).maxY, manager.extraLineFragmentRect.maxY)
         let textHeight = ceil(max(manager.defaultLineHeight(for: text.font ?? NSFont.systemFont(ofSize: 14)), used) + text.textContainerInset.height * 2)
-        // 8 bottom inset + 26 controls + 18 send/controls gap + 14 top + 30 send + 5 text/send gap.
-        let desired = max(128, textHeight + 101 + (hasContext ? 22 : 0)) + (hasAttachments ? ComposerAttachments.rowHeight : 0)
+        // 8 bottom inset + 30 controls (including Send) + 14 top + 5 text/row gap.
+        let desired = max(128, textHeight + 57 + (hasContext ? 22 : 0)) + (hasAttachments ? ComposerAttachments.rowHeight : 0)
         let limit = min(368, max(128, availableHeight * 0.5))
         return min(availableHeight, min(desired, limit) + queueHeight)
     }
@@ -180,6 +187,7 @@ final class NativeComposer: NSView, NSTextViewDelegate {
         // String replacement invalidates TextKit lazily. Resolve it at the new
         // viewport size so a shorter draft cannot retain the capped document's
         // height until the next paint (and show a spurious scrollbar).
+        scroll.layoutSubtreeIfNeeded()
         if !text.string.isEmpty && scroll.contentSize.width > 0 {
             text.sizeToFit()
         }
