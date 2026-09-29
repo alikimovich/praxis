@@ -1,7 +1,8 @@
 /** Named groups of the native smoke, selected with `--only=group,group`
- *  (`bun run dev:native --test --only=core,chat`). Selection only chooses which
- *  groups run; the startup → open-project → chat-ready prelude always runs because
- *  every group builds on it. No flag runs every group. Pure. */
+ *  (`bun run dev:native --test --only=core,chat`). Selection only filters which of
+ *  smoke-core's named checks run (smoke-runner still collects every failure the
+ *  same way); the shared prelude always runs because every group builds on it.
+ *  No flag runs every group. Pure. */
 export const NATIVE_SMOKE_GROUPS = ['core', 'islands', 'shadow-light', 'sidebar', 'settings', 'chat', 'composer'] as const
 export type NativeSmokeGroup = (typeof NATIVE_SMOKE_GROUPS)[number]
 
@@ -21,4 +22,43 @@ export function parseSmokeGroups(argv: readonly string[]): Set<NativeSmokeGroup>
   // The live turn edits the heading text that the core group's text edit writes.
   if (argv.includes('--live') && !names.includes('core')) throw new Error('--live needs the core group in --only')
   return new Set(names as NativeSmokeGroup[])
+}
+
+/** Checks that run for every selection: the setup the groups build on, and the
+ *  closing capture plus one-WebKit-view isolation check. */
+export const SMOKE_PRELUDE = ['startup', 'open-project', 'chat-ready', 'final-shell'] as const
+
+/** The group(s) each smoke-core check belongs to; a check runs when any of them is selected. */
+export const SMOKE_CHECK_GROUPS: Readonly<Record<string, readonly NativeSmokeGroup[]>> = {
+  'mobile-viewport': ['core'],
+  'source-stamps': ['core'],
+  'shell-layout': ['core'],
+  'selection-input': ['core'],
+  inspector: ['core'],
+  'text-edit': ['core'],
+  'source-editor': ['core'],
+  'content-editor': ['core'],
+  'preview-inspector': ['core'],
+  'live-provider': ['core'],
+  // One fixture scope covers both; smoke-islands reads the selection to run either part.
+  'chat-islands': ['islands', 'shadow-light'],
+  'project-switching': ['sidebar'],
+  sheets: ['settings'],
+  'native-chat': ['chat'],
+  composer: ['composer'],
+  'chat-drafts': ['composer'],
+  'visible-composer': ['composer']
+}
+
+/** Only the checks the selection names, plus the prelude, in their original order.
+ *  A check with no group and not in the prelude is a bug: new checks must be classified.
+ *  A filtered run says so up front: its final PASS line is not full-suite acceptance. */
+export function selectSmokeChecks<T extends { name: string }>(checks: T[], groups: ReadonlySet<NativeSmokeGroup>, log: (line: string) => void = console.log): T[] {
+  const prelude: readonly string[] = SMOKE_PRELUDE
+  for (const { name } of checks)
+    if (!prelude.includes(name) && !SMOKE_CHECK_GROUPS[name]) throw new Error(`Native smoke check ${name} has no group in smoke-groups.ts`)
+  const picked = checks.filter(({ name }) => prelude.includes(name) || SMOKE_CHECK_GROUPS[name].some(group => groups.has(group)))
+  if (picked.length < checks.length)
+    log(`NATIVE SMOKE FILTERED (--only=${[...groups].join(',')}): running ${picked.length} of ${checks.length} checks; the other groups did not run, so a pass below is not full-suite acceptance.`)
+  return picked
 }

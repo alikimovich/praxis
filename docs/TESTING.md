@@ -4,7 +4,8 @@ The test runner is `node test/run.mjs unit|native|live|all`. Unit checks run wit
 bounded concurrency (default up to four workers). Native desktop and live provider
 checks are serial. Logs and JSON summaries are written to `test/artifacts/runs/`;
 a lock prevents overlapping runner invocations. PASS, SKIP, FAIL, timeout and
-cancellation remain distinct outcomes.
+cancellation remain distinct outcomes. Each test is killed after 120 s by default
+(`--timeout-ms=<ms>` overrides it).
 
 ```sh
 bun run typecheck
@@ -30,25 +31,42 @@ that exactly one WebKit view exists. `TREZI_NATIVE_BACKGROUND_TEST=1` skips real
 pointer gestures/animation timing, which must be reported as reduced coverage.
 `test:native-live` separately submits a real provider turn against a fixture.
 
-Native smoke groups: `bun run dev:native --test --only=group,group` (or
-`bun test/native-runtime.mjs --only=…`) runs only the named groups. The
-startup/open-project/chat-ready prelude and the final one-WebKit-view check always
-run; with no flag every group runs. Defined in `src/native/smoke-groups.ts`:
+### Native smoke summary
 
-| Group | Covers |
-| --- | --- |
-| `core` | mobile viewport/reload, source stamps, toolbar/preview surface, divider/expand, layers, selection input, inspector style edit, text edit + undo/redo, popped-out source editor, content editor, preview Web Inspector |
-| `islands` | generic chat island: Swift rendering, point commit, Undo, landing gate |
-| `shadow-light` | Shadow Light island (shares the islands fixture scope) |
-| `sidebar` | project switching and visible sidebar captures/interactions |
-| `settings` | sheets and forms: running servers, New project, project memory, Settings, AI providers, feedback, diagnose, activity |
-| `chat` | native chat streaming/queues/permissions (`smoke-chat.ts`) |
-| `composer` | composer growth/paste/attachments, per-chat drafts, slash commands, visible composer |
+The native smoke (`src/native/smoke-core.ts`, run by `test/native-runtime.mjs`)
+is a list of named checks run by `src/native/smoke-runner.ts`. A failing check
+does not end the run. Its failure is recorded, the window is captured to
+`test/artifacts/native/failure-<check>.png`, the check's own cleanup runs, and
+then the shared restore (`src/native/smoke-restore.ts`) runs. The restore closes
+sheets, menus and popovers, re-keys the main window, turns select mode off,
+reselects the first fixture project in desktop viewport and reloads its page if
+needed. After that the remaining checks run. A check that declares `dependsOn`
+is skipped when any of those checks did not pass. Checks with no
+dependency on the failed one still run. A failed cleanup or restore is logged as
+`WARN [smoke] <check> <cleanup|restore> after failure: …` and does not stop the
+run. If the native host exits, every remaining check is skipped. Each check
+logs `START`, `PASS`/`FAIL` or `SKIP [smoke] <check>` as it runs, and the run
+ends with:
 
-An unknown or empty group name fails before the build. `--live` requires `core`
-(the live turn edits the heading the core group writes). `native-runtime` only
-demands fresh sidebar evidence when `sidebar` ran. Acceptance still needs the
-full suite.
+```text
+NATIVE SMOKE SUMMARY: <passed> passed, <failed> failed, <skipped> skipped (<total> checks)
+FAILED <check>
+  assertion: <first non-empty line of the error message>
+  at: <smoke-*.ts:line:column of the failing assertion, when the stack has one>
+  capture: <absolute path of failure-<check>.png, or "unavailable (<reason>)">
+SKIPPED <check>
+  skipped: depends on <first dependency that did not pass, or "native host (it exited)">
+```
+
+Failures and skips are listed in run order. If any check did not pass, the smoke
+exits non-zero. `NATIVE CORE PASS` is printed only when every check passed. To see
+the collect-all behaviour in a real run, set
+`TREZI_NATIVE_SMOKE_FAIL=<check>[,<check>]`. Each named check then fails
+deliberately without running, and its dependents are skipped. Unknown names are
+rejected before anything runs. `test/native-smoke-runner.mjs` (unit tier) runs a
+fixture list that includes a deliberately failing check. It asserts that later
+checks still run and that dependents are skipped with their reason, and it
+checks the exact summary text.
 
 `node test/native-source-window.mjs` checks the popped-out editor's initial size,
 programmatic resizing, code viewport, docking/reopening and draft retention using
@@ -128,3 +146,28 @@ their temporary directories/ports and clean up processes. Use injected service
 registries when testing lifecycle behavior without the desktop. Renderer-specific
 unit tests were removed; retained backend generation tests use React as a dev
 fixture to verify that generated project code actually renders.
+
+### Native smoke groups
+
+`bun run dev:native --test --only=group,group` (or
+`bun test/native-runtime.mjs --only=…`) runs only the named groups. It
+filters which of the named smoke checks run (see "Native smoke summary"); failure
+collection is unchanged. The `startup`, `open-project`, `chat-ready` and
+`final-shell` checks (setup, and the closing capture plus one-WebKit-view check)
+always run; with no flag every group runs. `src/native/smoke-groups.ts` maps each
+check to its group, and a check with no group there is an error:
+
+| Group | Covers |
+| --- | --- |
+| `core` | mobile viewport/reload, source stamps, toolbar/preview surface, divider/expand, layers, selection input, inspector style edit, text edit + undo/redo, popped-out source editor, content editor, preview Web Inspector |
+| `islands` | `chat-islands`, generic part: Swift rendering, point commit, Undo, landing gate |
+| `shadow-light` | `chat-islands`, Shadow Light part (same fixture scope; the check runs when either group is selected) |
+| `sidebar` | project switching and visible sidebar captures/interactions |
+| `settings` | sheets and forms: running servers, New project, project memory, Settings, AI providers, feedback, diagnose, activity |
+| `chat` | native chat streaming/queues/permissions (`smoke-chat.ts`) |
+| `composer` | composer growth/paste/attachments, per-chat drafts, slash commands, visible composer |
+
+An unknown or empty group name fails before the build. `--live` requires `core`
+(the live turn edits the heading the core group writes). `native-runtime` only
+demands fresh sidebar evidence when `sidebar` ran. Acceptance still needs the
+full suite.

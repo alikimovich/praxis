@@ -18,6 +18,7 @@ const UNIT = [
   "operation-ledger",
   "preferences-owner",
   "native-visible-capture",
+  "native-smoke-runner",
   "rename-compat",
   "source-stamp",
   "native-boundary",
@@ -145,7 +146,7 @@ const LIVE = ['native-runtime-live'];
 const TIERS = { unit: UNIT, native: NATIVE, live: LIVE };
 const selected = new Set();
 const options = { jobs: Math.min(4, availableParallelism()),
-  'timeout-ms': 600_000, filter: null };
+  'timeout-ms': 120_000, filter: null };
 let serial = false;
 try {
   for (const arg of process.argv.slice(2)) {
@@ -170,7 +171,7 @@ try {
     for (const name of options.filter) if (!names.includes(name)) throw new Error(`test not in selected tiers: ${name}`);
   }
 } catch (error) {
-  console.error(`${error.message}\nusage: node test/run.mjs <unit|native|live|all> [--serial] [--jobs=4] [--timeout-ms=600000] [--filter=name,name]`);
+  console.error(`${error.message}\nusage: node test/run.mjs <unit|native|live|all> [--serial] [--jobs=4] [--timeout-ms=120000] [--filter=name,name]`);
   process.exit(2);
 }
 

@@ -3,14 +3,17 @@ import { checkShadowIsland } from './smoke-shadow-island'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { NativeBridge } from './bridge'
+import { parseSmokeGroups } from './smoke-groups'
 import { nativeChat, nativeIslands } from './chat-runtime'
 import { serviceEvents } from './platform'
 import { runChatIslandTool } from '../main/chat-islands'
 
 /** Real Swift decoding/actions and source writes; no provider or Jev network call.
- *  `parts` selects the generic island check and/or Shadow Light (smoke-groups'
- *  `islands` / `shadow-light`); both share this fixture and restoration scope. */
-export async function checkChatIslands(host: NativeBridge, fixture: string, artifacts: string, parts = { islands: true, shadow: true }) {
+ *  Runs the generic island check and/or Shadow Light as `--only` selects (smoke-groups'
+ *  `islands` / `shadow-light`; both by default); they share this fixture and restoration scope. */
+export async function checkChatIslands(host: NativeBridge, fixture: string, artifacts: string) {
+  const groups = parseSmokeGroups(process.argv)
+  const parts = { islands: groups.has('islands'), shadow: groups.has('shadow-light') }
   const chat = nativeChat.get(nativeChat.active)
   const messages = chat.messages
   const context = chat.context
