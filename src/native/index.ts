@@ -39,7 +39,8 @@ import { installShutdown } from './shutdown'
 import { parsePreferredModelState, resolvePreferredSettings } from '../shared/preferred-model'
 import { nativePreferences } from './preferences'
 import { servicePreferences } from './preferences-service'
-import { workspaceStorage } from './workspace'
+import { legacyWorkspace } from './workspace'
+import { serviceWorkspace } from './workspace-service'
 import { installNativeChat } from './chat-runtime'
 import { NativeShellController } from './shell-controller'
 import { NativeSupportSheets } from './support-sheets'
@@ -122,12 +123,14 @@ async function main() {
   // once every handler (including 'ready' and 'closed') is registered.
   host.hold()
   const mainView = new NativeView('main')
-  const workspace = workspaceStorage(profile)
   // Swift service owner (supervised) or the legacy Bun writer (TREZI_BACKEND_OWNER=legacy).
   // Never both, and never a local write when the service does not answer.
   const preferences = process.env.TREZI_SERVICE_SUPERVISED === '1'
     ? await servicePreferences(host).catch(error => { throw new Error(`Trezi could not read preferences from its service: ${error.message}`) })
     : nativePreferences(profile)
+  const workspace = process.env.TREZI_SERVICE_SUPERVISED === '1'
+    ? await serviceWorkspace(host).catch(error => { throw new Error(`Trezi could not read the workspace from its service: ${error.message}`) })
+    : legacyWorkspace(profile)
   const refreshPreferences = () => {
     const values = preferences.snapshot()
     let preferred: unknown

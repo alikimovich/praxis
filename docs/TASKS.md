@@ -47,6 +47,17 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
 
+## Swift-owned workspace identity (LKM-92 / S04)
+
+- [x] Name the domain exactly (`workspace.json` membership/order/root/key/`touchedAt`/`activeKey`/recents, temp file, ledger domain `workspace`, legacy-owned metadata slice, display state and drafts) and tighten its rollback plan (`docs/SWIFT-BACKEND-WORKSPACE.md`).
+- [x] Swift document model and operations byte-identical to a shared TS model: unknown fields, invalid/duplicate entries and recents kept; JS number/key-order serialization; invalid files refused untouched.
+- [x] Canonical-root identity (string key unchanged; `realpath` aliases resolve to the existing project); typed `update` adapter for session/server/Git/display fields (no dual writers).
+- [x] Ledger-backed `WorkspaceOwner` on the supervised pipe (shared `DomainChannel` with preferences): import, receipts, conflicts, external-edit adoption, crash reconciliation with journaled answers, bounded drain.
+- [x] Controller reads identity/order/selection from acknowledged snapshots; open/select/close persisted before sessions, servers, Git or activation; a refused selection starts nothing; restart and UI reattach preserve projects and selection.
+- [x] `TREZI_BACKEND_OWNER=legacy` keeps a byte-identical Bun writer; Swift adopts newer legacy writes; no backup restore.
+- [x] `test/workspace-owner.mjs` (unit tier), controller/legacy-writer checks, real-service workspace round trip in `test/service-process.mjs`.
+- [ ] Manager: stage the new files (docs-links checks tracked paths), run unit + unsandboxed `service-process` + `bun run test:native` through the service path, independent review.
+
 ## Swift-owned preferences (LKM-91 / S03)
 
 - [x] Name the domain exactly (v1 `preferences.json`, temp file, ledger domain `preferences`, drafts) and tighten its rollback plan (`docs/SWIFT-BACKEND-PREFERENCES.md`).

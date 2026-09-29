@@ -111,8 +111,9 @@ Backend state lives in `~/Library/Application Support/Trezi Native`, separately
 from Electron. Swift holds a shared-launcher flock and reserves the legacy PID lock
 before starting Bun. A guardian retains the flock during service-crash cleanup.
 Workspace state
-lives in `workspace.json`; versioned native UI preferences live in
-`preferences.json`. Earlier hybrid builds imported legacy native browser values
+lives in `workspace.json` and versioned native UI preferences in
+`preferences.json`; the Swift service writes both (Bun under
+`TREZI_BACKEND_OWNER=legacy`). Earlier hybrid builds imported legacy native browser values
 once; the React-free build retains those files and no longer creates a WebView to
 read browser storage. It does not import Electron history or custom endpoints.
 Existing provider CLI sign-ins can be reused.

@@ -4,8 +4,9 @@ LKM-90, step S03 of the [canonical plan](SWIFT-BACKEND-PLAN.md) and
 [roadmap](SWIFT-BACKEND-ROADMAP.md). This adds the Swift service's persistent
 operation intent, request digests and receipts, commit checkpoints, per-domain
 revisions, event cursors and recovery queries. It transferred no domain writer itself. The first writer to use it is
-preferences (LKM-91, [preferences](SWIFT-BACKEND-PREFERENCES.md)); Bun remains the
-writer of workspaces, sessions and every other store.
+preferences (LKM-91, [preferences](SWIFT-BACKEND-PREFERENCES.md)); the second is the
+workspace (LKM-92, [workspace](SWIFT-BACKEND-WORKSPACE.md)). Bun remains the writer of
+sessions and every other store.
 
 - `src/service/LedgerStore.swift`: file format, checksums, sync, compaction, damage handling.
 - `src/service/OperationLedger.swift`: identity, admission, phases, recovery, events, retention.

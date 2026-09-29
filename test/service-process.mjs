@@ -156,7 +156,7 @@ try {
     mkdirSync(join(service, 'MacOS'), { recursive: true })
     const host = join(app, 'MacOS/TreziHost')
     const executable = join(service, 'MacOS/TreziService')
-    compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/service/LedgerStore.swift', 'src/service/OperationLedger.swift', 'src/service/PreferencesFile.swift', 'src/service/PreferencesOwner.swift', 'src/service/LegacySupervisor.swift', 'src/service/ServiceRuntime.swift', 'src/service/ProcessGuardian.swift', 'src/service/ServiceMain.swift'], executable)
+    compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/service/LedgerStore.swift', 'src/service/OperationLedger.swift', 'src/service/PreferencesFile.swift', 'src/service/PreferencesOwner.swift', 'src/service/WorkspaceFile.swift', 'src/service/WorkspaceOwner.swift', 'src/service/DomainChannel.swift', 'src/service/LegacySupervisor.swift', 'src/service/ServiceRuntime.swift', 'src/service/ProcessGuardian.swift', 'src/service/ServiceMain.swift'], executable)
     compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/native/ServiceClient.swift', 'test/fixtures/service-process/XPCFixture.swift'], host)
     plist(join(app, 'Info.plist'), '<key>CFBundleIdentifier</key><string>dev.praxis.fixture</string><key>CFBundleExecutable</key><string>TreziHost</string><key>CFBundlePackageType</key><string>APPL</string><key>LSBackgroundOnly</key><true/>')
     plist(join(service, 'Info.plist'), '<key>CFBundleIdentifier</key><string>dev.praxis.service</string><key>CFBundleExecutable</key><string>TreziService</string><key>CFBundlePackageType</key><string>XPC!</string><key>XPCService</key><dict><key>ServiceType</key><string>Application</string><key>RunLoopType</key><string>dispatch_main</string></dict>')
@@ -244,6 +244,7 @@ try {
     rmSync(backendPID, { force: true })
     // Written by the previous (legacy) owner while no service ran: imported at launch.
     writeFileSync(join(profile, 'preferences.json'), JSON.stringify({ version: 1, values: { 'trezi:chat-hidden': '1', 'trezi:future': null } }))
+    writeFileSync(join(profile, 'workspace.json'), JSON.stringify({ projects: [{ root: '/legacy-project', key: '/legacy-project', name: 'legacy', touchedAt: 1 }], activeKey: '/legacy-project', recents: [] }))
     const production = processFixture(host, ['production', launchFile, executable])
     await production.line(line => line === 'READY')
     assert.equal(ledgerEpoch(), firstLedgerEpoch, 'the ledger survives a service restart')
@@ -261,6 +262,14 @@ try {
     assert.deepEqual(preferenceResult, { method: 'fixturePreferences', before: null, after: '512' }, JSON.stringify(preferenceResult))
     assert.equal(readFileSync(join(profile, 'preferences.json'), 'utf8'), '{"version":1,"values":{"trezi:chat-hidden":"1","trezi:future":null,"trezi:native-chat-width":"512"}}',
       'the service imported the legacy v1 file and wrote the same format')
+    // S04 workspace: Bun's client → private pipe → the Swift owner → workspace.json.
+    production.send({ event: 'fixtureWorkspace', root: '/second-project/' })
+    const workspaceLine = await production.line(line => line.startsWith('EVENT ') && JSON.parse(Buffer.from(line.slice(6), 'base64')).method === 'fixtureWorkspace')
+    const workspaceResult = JSON.parse(Buffer.from(workspaceLine.slice(6), 'base64'))
+    assert.deepEqual(workspaceResult, { method: 'fixtureWorkspace', before: ['/legacy-project'], after: ['/legacy-project', '/second-project'], activeKey: '/second-project' }, JSON.stringify(workspaceResult))
+    const savedWorkspace = JSON.parse(readFileSync(join(profile, 'workspace.json'), 'utf8'))
+    assert.deepEqual([savedWorkspace.projects.map(p => p.key), savedWorkspace.activeKey], [['/legacy-project', '/second-project'], '/second-project'],
+      'the service imported the legacy workspace and wrote the same format')
     assert.ok(!production.lines.some(line => line.startsWith('EVENT ') && JSON.parse(Buffer.from(line.slice(6), 'base64')).service), 'service frames never reach the host')
     // Live reload from the product's static server running in the supervised
     // backend: a real file edit must reach the page's reload stream, and a page

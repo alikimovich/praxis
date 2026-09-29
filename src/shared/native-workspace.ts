@@ -18,7 +18,7 @@ export interface NativeWorkspaceSnapshot {
   recents: { root: string; name: string; at: number }[]
 }
 export type NativeWorkspaceCommand =
-  | { type: 'attach'; legacy?: string | null; preferred?: ChatAgentSettings }
+  | { type: 'attach'; preferred?: ChatAgentSettings }
   | { type: 'open'; root?: string; command?: string }
   | { type: 'select' | 'close' | 'new-chat'; key: string }
   | { type: 'chat'; key: string; session: string }

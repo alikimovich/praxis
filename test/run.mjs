@@ -17,6 +17,7 @@ const UNIT = [
   "service-process",
   "operation-ledger",
   "preferences-owner",
+  "workspace-owner",
   "native-visible-capture",
   "native-smoke-runner",
   "rename-compat",

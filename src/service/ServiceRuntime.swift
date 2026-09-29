@@ -16,6 +16,8 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
     var ledger: OperationLedger?
     /// S03 preferences writer: Bun's requests arrive on its private pipe.
     var preferences: PreferencesChannel?
+    /// S04 workspace writer (projects, order, selection), on the same pipe.
+    var workspace: WorkspaceChannel?
     var child: LegacyChild?
     var launch: ServiceLaunch?
     var peerPID: pid_t?
@@ -109,12 +111,15 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                     }
                     if let input = child?.input {
                         let writer = writer
-                        preferences = PreferencesChannel(owner: PreferencesOwner(
-                            disk: PreferencesDisk(path: URL(fileURLWithPath: requested.profile).appendingPathComponent("preferences.json").path),
-                            ledger: ledger)) { frame in
+                        let send: @Sendable (Data) -> Void = { frame in
                             var line = frame; line.append(10)
                             writer.async { try? input.write(contentsOf: line) }
                         }
+                        let profile = URL(fileURLWithPath: requested.profile)
+                        preferences = PreferencesChannel(owner: PreferencesOwner(
+                            disk: PreferencesDisk(path: profile.appendingPathComponent("preferences.json").path), ledger: ledger), send: send)
+                        workspace = WorkspaceChannel(owner: WorkspaceOwner(
+                            disk: PreferencesDisk(path: profile.appendingPathComponent("workspace.json").path), ledger: ledger), send: send)
                     }
                     readBackend()
                 }
@@ -170,10 +175,11 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
 
     func readBackend() {
         guard let output = child?.output else { return }
-        // Handed to the reader directly (not via `queue`), so Bun's preference
-        // writes are still served while `stop` waits for Bun to exit.
-        let preferences = preferences
-        let servicePrefix = Data("{\"service\":\"preferences\"".utf8)
+        // Handed to the reader directly (not via `queue`), so Bun's preference and
+        // workspace writes are still served while `stop` waits for Bun to exit.
+        let preferences = preferences, workspace = workspace
+        let preferencesPrefix = Data("{\"service\":\"preferences\"".utf8)
+        let workspacePrefix = Data("{\"service\":\"workspace\"".utf8)
         DispatchQueue.global().async { [weak self] in
             var pending = Data()
             do {
@@ -184,7 +190,8 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                     while let end = pending.firstIndex(of: 10) {
                         let line = Data(pending[..<end]); pending.removeSubrange(...end)
                         guard line.count <= ServiceXPC.maxLegacyBytes else { throw ServiceContractFailure.invalidRequest }
-                        if line.starts(with: servicePrefix) { preferences?.submit(line); continue }
+                        if line.starts(with: preferencesPrefix) { preferences?.submit(line); continue }
+                        if line.starts(with: workspacePrefix) { workspace?.submit(line); continue }
                         guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any], object["method"] is String else { continue }
                         self?.queue.async { [weak self] in self?.deliver(line) }
                     }
@@ -230,9 +237,10 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
         _ = drained.wait(timeout: .now() + 2)
         supervisor.shutdown()
         try? child?.input.close(); try? child?.output.close()
-        // Bun has exited: refuse new preference requests and let accepted ones
-        // finish (bounded). One still running at exit is recovered from the ledger.
+        // Bun has exited: refuse new preference/workspace requests and let accepted
+        // ones finish (bounded). One still running at exit is recovered from the ledger.
         preferences?.close(timeout: 2); preferences = nil
+        workspace?.close(timeout: 2); workspace = nil
         // The ledger needs no drain: each transition is synced before it is acknowledged.
         ledger = nil
         exclusion?.release(); exclusion = nil
