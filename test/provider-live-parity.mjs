@@ -71,7 +71,9 @@ const fixtures = []
 const results = []
 try {
   const binary = compileProviderFixture()
-  const fixture = await startProviderFixture(binary, join(scratch, 'profile'), {
+  const profile = join(scratch, 'profile')
+  mkdirSync(profile)
+  const fixture = await startProviderFixture(binary, profile, {
     PROVIDER_HELPER_EXEC: process.execPath,
     PROVIDER_HELPER_ARGS: join(root, 'src/main/backends/provider-helper-entry.ts'),
     PROVIDER_HELPER_PROVIDERS: 'claude,codex'

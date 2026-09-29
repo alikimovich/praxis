@@ -179,8 +179,7 @@ enum PlatformTool {
     }
 }
 
-/// The "Running servers" recovery sheet's inspection and stop (formerly
-/// `src/native/preview-processes.ts`): TCP listeners of this user whose working
+/// The "Running servers" recovery sheet's inspection and stop: TCP listeners of this user whose working
 /// directory is the project folder. A server is identified by pid, kernel start time,
 /// command, folder and addresses, re-checked immediately before it is signalled; only
 /// SIGTERM is sent (the user is told to stop it themselves if it does not exit), and

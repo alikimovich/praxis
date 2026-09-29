@@ -2,6 +2,13 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-111 repair: live parity attempted, still blocked by the worker sandbox
+
+- Ran `TREZI_LIVE_PROVIDERS=1 bun run test:provider-live` for real. The harness itself had a bug (it never created the fixture's profile directory, so the Swift fixture hit a precondition before any provider call); fixed in `test/provider-live-parity.mjs`.
+- With that fixed, the run reached the providers but the sandbox refused them: `api.anthropic.com` was denied ("user denied") for Claude, and Codex could not open its local unix socket (`EPERM` on `/tmp/trezi-agent-tools-*.sock`). All four runs returned no answer and 0 tokens, so this is **not** a parity result. No provider call succeeded.
+- The live-parity item in `docs/TASKS.md` stays open: run the command above on a machine that can reach Anthropic and OpenAI, then tick it and record the `PROVIDER-LIVE-PARITY OK` line, the total token count and `test/artifacts/provider-live-parity.json` here.
+- Also removed the last comment naming the deleted `src/native/preview-processes.ts` (`src/service/PlatformTools.swift`).
+
 ## 2026-09-29 — LKM-111: adapters in supervised helpers, the Bun rollback removed, a self-contained Trezi.app and one start path
 
 Scope A (user decision): the plan scope, no JS-to-Swift rewrite.
