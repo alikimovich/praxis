@@ -65,6 +65,8 @@ import { createSessionStore, type SessionStore } from './sessions-store'
 import { ConversationError, type ConversationOwner, type Persist, swiftConversationOwner } from './conversation-owner'
 import { legacyConversation } from './conversation-model'
 import { TurnTracker } from './chat-turns'
+import { providerOwner } from './provider-owner'
+import { startProviderSession } from './provider-sessions'
 import {
   applyBranchToWorkingTree,
   autoApplyWorktree,
@@ -564,7 +566,8 @@ async function startSpawn(q: QueuedSpawn): Promise<string | null> {
   }
   const opts: AgentOptions = { ...q.options, permissionMode: 'bypassPermissions' }
   try {
-    const s = await pickProvider(opts).startSession(
+    const s = await startProviderSession(
+      pickProvider(opts),
       wt.path,
       opts,
       getWindow_,
@@ -697,7 +700,8 @@ export function registerAgentIpc(
     resumeSessionId?: string
   ): Promise<ProviderSession> => {
     const tracker = new TurnTracker()
-    const s = await pickProvider(options).startSession(
+    const s = await startProviderSession(
+      pickProvider(options),
       cwd,
       options,
       getWindow,
@@ -767,7 +771,10 @@ export function registerAgentIpc(
       activeSessionKeyByProject.delete(key)
       if (activeKey && (activeKey === key || activeKey.startsWith(`${key}#`))) activeKey = null
       const priorCurrent = store().current(key)
-      const resumeSessionId = priorCurrent?.sdkSessionId
+      // A thread id the provider reported after the record was last saved (a crash in
+      // between) is kept by the provider owner.
+      const resumeSessionId = priorCurrent?.sdkSessionId ??
+        (priorCurrent ? (await providerOwner().recover(priorCurrent.id).catch(() => null))?.resume : undefined)
       // Isolated chats run in a private `trezi/chat-<id>` worktree (repo roots only);
       // isolatedCwd returns the live root otherwise. adoptSession re-stamps the record
       // back to the live project so history/reattach see it under the real root.

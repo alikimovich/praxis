@@ -5,7 +5,11 @@ import { join } from 'node:path'
 import { discoverProviderSkills, withSkillReferences, withSkillMenu } from '../src/main/backends/skill-menu.ts'
 
 // Both provider registries and bundled routing must retire the competing panel path.
-for (const file of ['src/main/backends/claude.ts', 'src/main/backends/codex.ts',
+// Codex's (and helper-hosted sessions') Trezi tools are dispatched by session-tools.ts.
+for (const file of ['src/main/backends/claude.ts', 'src/main/backends/codex.ts']) {
+  assert(!/define_controls|open_controls|animation-controls/.test(readFileSync(new URL('../' + file, import.meta.url), 'utf8')), file + ' has no legacy panel route')
+}
+for (const file of ['src/main/backends/claude.ts', 'src/main/session-tools.ts',
   'agent-plugin/skills/surface-controls/SKILL.md', 'agent-plugin/skills/spring-animations/SKILL.md']) {
   const source = readFileSync(new URL('../' + file, import.meta.url), 'utf8')
   assert(!/define_controls|open_controls|animation-controls/.test(source), file + ' has no legacy panel route')

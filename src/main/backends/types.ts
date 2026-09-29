@@ -79,6 +79,18 @@ export interface SpawnContext {
   /** Durable Trezi-managed project decisions captured when this provider
    * session starts. Backends inject them into their initial instructions. */
   projectMemory?: string
+  /** The provider owner's session id (S10, set by `provider-sessions.ts`): the adapter
+   *  asks the owner with it before answering a permission request or running one of
+   *  Trezi's tools. Absent only when an adapter is started outside that wiring. */
+  grant?: string
+  /** Inside a provider helper: Trezi's tools, run by Bun after the Swift owner
+   *  authorized the call against the helper's grant. */
+  tools?: SessionToolHost
+}
+
+/** Trezi tools as seen from a provider helper (see `backends/helper-host.ts`). */
+export interface SessionToolHost {
+  invoke(tool: string, args?: unknown): Promise<unknown>
 }
 
 /**
@@ -129,6 +141,13 @@ export interface ProviderSession {
    * needs it: resolving undefined reads as a clean stop.
    */
   interrupt?: () => Promise<{ hardStopped: boolean } | undefined>
+  /**
+   * The kill switch Stop escalates to when the provider owner's deadline passes
+   * before `interrupt` answered (S10: the owner holds the deadline, see
+   * `provider-sessions.ts`). It must end the turn: finalize, then emit an `error`
+   * and one `done`. A backend without one is shut down instead.
+   */
+  forceStop?: () => void
 }
 
 export interface ModelProvider {
@@ -139,6 +158,9 @@ export interface ModelProvider {
    *  terminal `done`/`error`). Claude and Codex do today; others would silently
    *  leak a worktree + rail row, so agent.ts refuses to spawn on them. */
   supportsSpawn?: boolean
+  /** `helper`: sessions run in a provider helper the Swift owner supervises, which
+   *  already holds their grant and lifecycle (`backends/helper-session.ts`). */
+  host?: 'helper'
   startSession: (
     root: string,
     options: AgentOptions,

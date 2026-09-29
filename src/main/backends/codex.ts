@@ -1,9 +1,3 @@
-import { runChatIslandTool } from '../chat-islands'
-import { observeAgentPreview } from '../preview-observation-tools'
-import { runContentControlTool } from '../content-control-tools'
-import { runProjectUiTool } from '../project-ui'
-import { openAgentPreview } from '../preview-tools'
-import { openAgentCode } from '../code-tools'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type {
@@ -24,10 +18,10 @@ import {
   type TokenUsage,
   usageDelta
 } from '../../shared/run-stats'
-import { agentWorkspaceEvidence, agentWorkspaceState, resolveParkedChat } from '../chat-isolation'
 import { type RolloutUsageWatch, watchRolloutUsage } from '../codex-usage'
 import { type TreziAgentToolRegistration, registerTreziAgentTools } from '../trezi-agent-tools'
 import { resolveConnection } from '../providers'
+import { authorizedTool, runTreziTool } from '../session-tools'
 import { scrubSecret } from '../providers-store'
 import { treziRules } from '../rules'
 import { treziMcpConfig, verifyTreziMcp } from './codex-mcp'
@@ -242,49 +236,14 @@ async function startSession(
       )
     }
     const { Codex } = await loadCodex()
-    treziTools = await registerTreziAgentTools(async (action, args) => {
-      const notify = (channel: string, payload: unknown): void =>
-        sendToRenderer(getWindow, channel, payload)
-      if (action === 'preview_location' || action === 'preview_screenshot')
-        return observeAgentPreview(action)
-      if (action === 'project_ui_catalog' || action === 'compose_project_ui')
-        return runProjectUiTool(root, emitKey, action, args, options.connectionId)
-      if (action === 'content_controls')
-        return runContentControlTool(root, ctx?.liveRoot ?? root, emitKey, args, notify, options.connectionId)
-      if (action === 'chat_island') return ctx?.sessionId ? { error: 'Background edits cannot create chat islands.' } : runChatIslandTool(emitKey, root, args, options.connectionId)
-      if (action === 'open_preview')
-        return openAgentPreview(ctx?.liveRoot ?? root, emitKey, args, notify, !!ctx?.sessionId)
-      if (action === 'open_code')
-        return ctx?.sessionId
-          ? { error: 'Background edits cannot navigate the user editor.' }
-          : openAgentCode(root, ctx?.liveRoot ?? root, emitKey, args, notify)
-      if (ctx?.sessionId)
-        return {
-          ok: false,
-          guidance:
-            'This background edit lands automatically. Do not change the parent chat workspace.'
-        }
-      if (action === 'workspace_state') return agentWorkspaceEvidence(emitKey, ctx?.liveRoot ?? root)
-      const before = agentWorkspaceState(emitKey)
-      if (before.state === 'live' || before.state === 'isolated') {
-        return {
-          ok: false,
-          ...before,
-          guidance: 'There is no parked Trezi batch to prepare.'
-        }
-      }
-      const prepared = await resolveParkedChat(emitKey)
-      const state = agentWorkspaceState(emitKey)
-      return {
-        ...prepared,
-        ...state,
-        guidance: prepared.ok
-          ? prepared.conflicted.length
-            ? 'Resolve every conflict marker in the listed files, then finish the turn normally.'
-            : 'Trezi combined and landed both sides without requiring manual resolution.'
-          : `Trezi could not prepare the conflict: ${prepared.error ?? 'unknown error'}`
-      }
-    })
+    // Trezi's tools for this chat, each authorized by the provider owner against the
+    // session's grant first (a background edit is not granted the editor or islands).
+    const scope = {
+      root, liveRoot: ctx?.liveRoot ?? root, emitKey, background: !!ctx?.sessionId, connectionId: options.connectionId,
+      notify: (channel: string, payload: unknown): void => sendToRenderer(getWindow, channel, payload)
+    }
+    treziTools = await registerTreziAgentTools((action, args) =>
+      authorizedTool(ctx?.grant, action, args, () => runTreziTool(action, args, scope)))
     const mcpConfig = treziMcpConfig(app.getAppPath(), treziTools)
     await verifyTreziMcp(mcpConfig)
     const threadOptions: ThreadOptions = {

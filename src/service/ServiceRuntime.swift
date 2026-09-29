@@ -30,6 +30,9 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
     /// S11 conversation coordinator (chat records, live checkpoints, turns, approvals,
     /// spawn admission), on the same pipe.
     var conversation: ConversationOwner?
+    /// S10 provider owner (session grants, permissions, tool authorization, Stop's
+    /// deadline, resume persistence, supervised helpers), on the same pipe.
+    var provider: ProviderOwner?
     var child: LegacyChild?
     var launch: ServiceLaunch?
     var peerPID: pid_t?
@@ -144,6 +147,9 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                         self.repository = repository
                         source = SourceOwner(options: SourceOwner.Options(profile: requested.profile), repository: repository, send: send)
                         conversation = ConversationOwner(options: ConversationOwner.Options(profile: requested.profile), send: send)
+                        // No built-in adapter is helper-hosted yet (it needs a live parity run), so no helper command.
+                        provider = ProviderOwner(options: ProviderOwner.Options(profile: requested.profile, environment: requested.environment,
+                            watchdog: CommandLine.arguments[0], journal: journal), send: send)
                     }
                     readBackend()
                 }
@@ -200,9 +206,9 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
     func readBackend() {
         guard let output = child?.output else { return }
         // Handed to the reader directly (not via `queue`), so Bun's preference,
-        // workspace, memory, runtime, repository, source and conversation requests are still served while `stop` waits for Bun to exit.
+        // workspace, memory, runtime, repository, source, conversation and provider requests are still served while `stop` waits for Bun to exit.
         let preferences = preferences, workspace = workspace, memory = memory, runtime = runtime, repository = repository, source = source
-        let conversation = conversation
+        let conversation = conversation, provider = provider
         let preferencesPrefix = Data("{\"service\":\"preferences\"".utf8)
         let workspacePrefix = Data("{\"service\":\"workspace\"".utf8)
         let memoryPrefix = Data("{\"service\":\"memory\"".utf8)
@@ -210,6 +216,7 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
         let repositoryPrefix = Data("{\"service\":\"repository\"".utf8)
         let sourcePrefix = Data("{\"service\":\"source\"".utf8)
         let conversationPrefix = Data("{\"service\":\"conversation\"".utf8)
+        let providerPrefix = Data("{\"service\":\"provider\"".utf8)
         DispatchQueue.global().async { [weak self] in
             var pending = Data()
             do {
@@ -227,6 +234,7 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                         if line.starts(with: repositoryPrefix) { repository?.submit(line); continue }
                         if line.starts(with: sourcePrefix) { source?.submit(line); continue }
                         if line.starts(with: conversationPrefix) { conversation?.submit(line); continue }
+                        if line.starts(with: providerPrefix) || line.starts(with: ProviderOwner.helperPrefix) { provider?.submit(line); continue }
                         guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any], object["method"] is String else { continue }
                         self?.queue.async { [weak self] in self?.deliver(line) }
                     }
@@ -286,6 +294,9 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
         // Bun has exited: its chats were closed (saved to History) or are left as
         // checkpoints, which the next launch recovers. A decision already underway finishes.
         conversation?.close(timeout: 2); conversation = nil
+        // Bun has exited: its provider sessions are over. Helpers are stopped (bounded);
+        // sessions still listed are reported by the next launch.
+        provider?.close(timeout: 2); provider = nil
         // Bun has exited: refuse new preference/workspace/memory requests and let accepted
         // ones finish (bounded). One still running at exit is recovered from the ledger.
         preferences?.close(timeout: 2); preferences = nil

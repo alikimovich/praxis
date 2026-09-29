@@ -192,10 +192,13 @@ WebKit view for the user's project. See [Native architecture](docs/NATIVE.md).
   Swift service already writes preferences, the workspace (open projects, order,
   selection) and project memory, runs managed project servers, performs Trezi's Git
   effects, commits source edits that Bun's parsers propose, and owns chat records,
-  checkpoints and turn transitions (Bun's provider sessions report typed events to it);
+  checkpoints and turn transitions (Bun's provider sessions report typed events to it),
+  and holds each provider session's grant: permission answers, Trezi tool
+  authorization, Stop's deadline, resume ids and supervised provider helpers;
   see [workspace](docs/SWIFT-BACKEND-WORKSPACE.md), [memory](docs/SWIFT-BACKEND-MEMORY.md),
   [runtime](docs/SWIFT-BACKEND-RUNTIME.md), [repository](docs/SWIFT-BACKEND-REPOSITORY.md),
-  [source](docs/SWIFT-BACKEND-SOURCE.md) and [conversation](docs/SWIFT-BACKEND-CONVERSATION.md). Services in `src/main/` are retained
+  [source](docs/SWIFT-BACKEND-SOURCE.md), [conversation](docs/SWIFT-BACKEND-CONVERSATION.md)
+  and [providers](docs/SWIFT-BACKEND-PROVIDERS.md). Services in `src/main/` are retained
   backend code; that directory name does not imply an Electron runtime.
 - **Preview** runs in `WKWebView` with an isolated selection/editing script.
 - **Transport** uses authenticated, versioned XPC between the host and Swift service,

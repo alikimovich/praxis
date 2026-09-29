@@ -52,7 +52,9 @@ import { interruptWithEscalation } from './interrupt'
 import { parseProjectMemoryEvaluation, projectMemoryEvaluationPrompt } from './memory'
 import { createRecordCapture } from './record'
 import { sanitizeTitle, transcriptDigest } from './title'
-import { AUTO_ALLOW_TOOLS, describeTool, sendToRenderer, toolDetail, touchesSidecar } from './tools'
+import { describeTool, sendToRenderer, toolDetail } from './tools'
+import { providerOwner } from '../provider-owner'
+import { INTERRUPT_GRACE_MS, type PermissionVerdict, decidePermission, permissionTarget } from '../provider-policy'
 import type {
   ModelProvider,
   PendingPrompt,
@@ -66,14 +68,6 @@ import type {
 // ../../agent-plugin), the same walk as index.ts's appIcon. Only wired in when
 // present so a stripped build degrades gracefully instead of erroring.
 const PLUGIN_PATH = join(__dirname, '../../agent-plugin')
-
-/**
- * How long Stop waits for the SDK's graceful `interrupt()` before killing the
- * query outright. Generous enough that a merely BUSY subprocess (mid tool call,
- * flushing a long response) still gets to stop cleanly and keep its session, but
- * short enough that a wedged one doesn't leave the user staring at a dead button.
- */
-const INTERRUPT_GRACE_MS = 3_000
 
 // The two in-process `trezi` MCP tools, fully-qualified (mcp__<server>__<tool>).
 // Read-only observers of the user's preview — auto-allowed so they never prompt.
@@ -561,10 +555,28 @@ async function startSession(
   // never prompt — all are side-effect-free, and chat_island persists only
   // through the validated chat-island service. install_skills is NOT auto-allowed:
   // it writes files + hits the network, so it surfaces a normal permission card.
+  // Every Trezi tool call is authorized by the provider owner against this session's
+  // grant before it runs (S10): a background edit is not granted the editor or islands,
+  // a closed session nothing, and oversized arguments are refused.
+  const guarded = <T extends { name: string; handler: (...a: any[]) => Promise<any> }>(defs: T[]): T[] =>
+    defs.map((def) => ({
+      ...def,
+      handler: async (args: unknown, extra: unknown) => {
+        if (ctx?.grant) {
+          try {
+            await providerOwner().authorize(ctx.grant, def.name, args)
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            return { content: [{ type: 'text' as const, text: JSON.stringify({ error: message }) }], isError: true }
+          }
+        }
+        return def.handler(args, extra)
+      }
+    }))
   const previewServer = createSdkMcpServer({
     name: 'praxis',
     version: '1.0.0',
-    tools: [
+    tools: guarded([
       tool(
         'project_ui_catalog',
         'Discover supported React and Svelte components, literal props and styles for UI composition. Requires Experimental Gen UI enabled.',
@@ -1057,7 +1069,7 @@ async function startSession(
           }
         }
       )
-    ]
+    ])
   })
 
   const q: Query = query({
@@ -1095,11 +1107,20 @@ async function startSession(
       // sdkSessionId) instead of starting fresh. Absent for the default open/new-chat path.
       ...(ctx?.resumeSessionId ? { resume: ctx.resumeSessionId } : {}),
       canUseTool: async (toolName, toolInput, opts) => {
+        // The provider owner decides (S10); the adapter only settles the SDK callback.
+        // An owner that cannot answer fails closed.
+        const verdict: PermissionVerdict = ctx?.grant
+          ? await providerOwner().permission(ctx.grant, toolName, toolInput).catch(() => ({
+              decision: 'deny' as const,
+              message: 'Trezi could not check this permission.'
+            }))
+          : decidePermission(toolName, permissionTarget(toolName, toolInput), {
+              live: true, background: !!ctx?.sessionId, root, liveRoot: ctx?.liveRoot ?? root, profile: ''
+            })
         // The agent asking the user a question isn't a permission decision — surface
         // it as an interactive multiple-choice card and feed the answer back as the
-        // tool result. (Handled before the permission machinery so it never shows an
-        // approve/deny card.)
-        if (toolName === 'AskUserQuestion') {
+        // tool result (it never shows an approve/deny card).
+        if (verdict.decision === 'question') {
           const questions = parseQuestions(toolInput)
           if (questions.length === 0) {
             return { behavior: 'deny', message: 'The question had no answerable options.' }
@@ -1134,25 +1155,13 @@ async function startSession(
             emit({ type: 'question-request', request })
           })
         }
-        // The in-process trezi tools are auto-allowed: the preview pair are
-        // read-only observers of the user's own view, and chat_island only
-        // persists through the validated chat-island service. They're also in
-        // allowedTools, but guard here too so a canUseTool call for them can
-        // never reach a prompt.
-        if (TREZI_TOOL_NAMES.has(toolName)) {
+        // Trezi's own tools (also in allowedTools) and read-only tools are allowed
+        // without a prompt; the .trezi/ sidecar and Trezi's own data are denied.
+        if (verdict.decision === 'allow') {
           emit({ type: 'status', text: describeTool(toolName, toolInput) })
           return { behavior: 'allow', updatedInput: toolInput }
         }
-        if (touchesSidecar(toolName, toolInput)) {
-          return {
-            behavior: 'deny',
-            message: 'The .trezi/ sidecar is managed by trezi, not the agent.'
-          }
-        }
-        if (AUTO_ALLOW_TOOLS.has(toolName)) {
-          emit({ type: 'status', text: describeTool(toolName, toolInput) })
-          return { behavior: 'allow', updatedInput: toolInput }
-        }
+        if (verdict.decision === 'deny') return { behavior: 'deny', message: verdict.message }
         if (disposed || abort.signal.aborted || opts.signal.aborted) {
           return { behavior: 'deny', message: 'Session no longer active.' }
         }
@@ -1254,6 +1263,25 @@ async function startSession(
       })
   } catch {
     /* no supportedModels() on this SDK — same outcome, one turn earlier */
+  }
+
+  // The kill switch Stop escalates to: abort the query the SDK was built with (the
+  // same switch shutdown() uses), end the turn exactly once, and let agent.ts rebuild
+  // the now-dead session (`hardStopped`).
+  const forceStop = (): void => {
+    if (hardStopped) return
+    hardStopped = true // stop the reader loop double-emitting on a late result
+    abort.abort()
+    input.close()
+    emit({
+      type: 'error',
+      message:
+        'That turn stopped responding, so Trezi force-stopped it. The chat has been ' +
+        'restarted — earlier messages are still shown, but the assistant no longer has ' +
+        'them in context.'
+    })
+    cap.finalize()
+    emit({ type: 'done' })
   }
 
   // Drive the output stream for the life of the session.
@@ -1366,35 +1394,26 @@ async function startSession(
     setPermissionMode: async (mode) => {
       await q.setPermissionMode?.(mode)
     },
+    // `q.interrupt()` is a CONTROL REQUEST to the CLI subprocess, and the SDK's
+    // control-request promise settles only when a matching `control_response` comes
+    // back — there is no timeout in the SDK. So when that subprocess is wedged (the
+    // request went out and nothing ever came back: 0 tokens in, 0 out, the turn
+    // running for minutes) the graceful path never returns — precisely the state Stop
+    // exists to escape. The provider owner holds the deadline and tells
+    // provider-sessions.ts when to reach for `forceStop` (S10); started outside that
+    // wiring, the adapter bounds it itself.
     interrupt: async () => {
-      // `q.interrupt()` is a CONTROL REQUEST to the CLI subprocess, and the SDK's
-      // control-request promise settles only when a matching `control_response`
-      // comes back — there is no timeout in the SDK. So when that subprocess is
-      // wedged (the request went out and nothing ever came back: 0 tokens in, 0
-      // out, the turn running for minutes) the graceful path never returns, this
-      // promise never settles, and Stop does nothing at all — precisely the state
-      // Stop exists to escape. Race it, then escalate to the abort signal the
-      // query was constructed with, which is the kill switch shutdown() already
-      // relies on and which nothing else was reaching for here.
+      if (ctx?.grant) {
+        await q.interrupt?.()
+        return undefined
+      }
       return await interruptWithEscalation({
         graceful: () => q.interrupt?.(),
         graceMs: INTERRUPT_GRACE_MS,
-        escalate: () => {
-          hardStopped = true // stop the reader loop double-emitting on a late result
-          abort.abort()
-          input.close()
-          emit({
-            type: 'error',
-            message:
-              'That turn stopped responding, so Trezi force-stopped it. The chat has been ' +
-              'restarted — earlier messages are still shown, but the assistant no longer has ' +
-              'them in context.'
-          })
-          cap.finalize()
-          emit({ type: 'done' })
-        }
+        escalate: forceStop
       })
-    }
+    },
+    forceStop
   }
 }
 

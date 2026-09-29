@@ -96,6 +96,18 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
 
+## Swift provider owner and helper capability enforcement (LKM-98 / S10)
+
+- [x] Decide the integration boundary (SDK adapters, one supervised helper per session in the end state), name the domain exactly (grants, permission decisions, tool authorization, Stop's deadline, sessions journal, resume ids, helpers; Bun-kept SDK sessions and credentials in their own stores) and tighten its rollback plan (`docs/SWIFT-BACKEND-PROVIDERS.md`).
+- [x] Swift `ProviderOwner` on the private pipe; Bun client `src/native/provider-service.ts`, seam `src/main/provider-owner.ts`, rollback twin `src/main/provider-model.ts` with the shared policy `src/main/provider-policy.ts` (mirrored by `ProviderPolicy.swift`).
+- [x] Every session agent.ts starts is opened with the owner (`provider-sessions.ts`): Claude's `canUseTool` asks it, Claude's in-process tools and Codex's MCP bridge are authorized against the grant (`session-tools.ts`), Stop runs on the owner's deadline with the adapter's kill switch (`ProviderSession.forceStop`), thread ids are persisted and used when a record lacks one.
+- [x] Helper runtime: `ProviderHelper.swift` (stdio only, allowlisted environment, own process group with watchdog and journal, bounded lines), frame validation and violations in `ProviderOwner.swift`, helper host `backends/helper-host.ts`, Bun's side `backends/helper-session.ts`.
+- [x] `test/provider-owner.mjs` (unit tier): policy parity, fake-provider helper (stream/tool/error/resume/permission/question/model), screenshot and pasted-image transport, privilege enforcement, crash/hang/stall/failed start, recovery, rollback, drain, adapter wrapper, schema.
+- [ ] Move the Claude and Codex adapters into helpers (give the service its helper command) after an authorized live parity run; first hand a Codex connection's key to its helper in the open frame and route the Claude model-catalog update through Bun.
+- [ ] Unverified: real Claude/Codex sessions under the owner (permission answers, tool authorization, Stop escalation) need an authorized live run (`test:native-live`).
+- [ ] Title and memory generation still run in Bun beside the adapters (they move with them).
+- [ ] Manager: stage the new files (docs-links checks tracked paths), run the unit tier unsandboxed, `bun run test:native`, independent review.
+
 ## Swift conversation state and chat orchestration (LKM-97 / S11)
 
 - [x] Name the domain exactly (session records and History, live checkpoints, turn state machine and completion policy, titles, handoff, approvals, spawn admission; Bun-kept provider sessions, prompts, composer queue and drafts) and tighten its rollback plan (`docs/SWIFT-BACKEND-CONVERSATION.md`).
@@ -105,7 +117,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Completion policy, titles (user wins), model handoff once, approvals and permission mode, spawn admission (3 per project, FIFO) moved to the owner.
 - [x] `test/conversation-owner.mjs` (unit tier): owner parity, agent streaming on both owners (Swift repository/source owners for landing), crash, rollback, schema, drain, `comment-agents` re-run on the owner, adapter boundary.
 - [ ] S12: the composer's queued-message list, drafts and attachments stay in the Bun native chat controller (the owner enforces one turn at a time and turn identity).
-- [ ] S10: provider sessions, prompt assembly, title and memory generation stay Bun adapters.
+- [ ] S10 (LKM-98): provider sessions are opened with the Swift provider owner; the SDK adapters, prompt assembly, title and memory generation stay in Bun until the helper move above.
 - [ ] Follow-up: a UI for chats recovered from checkpoints (today they are listed in the Activity log and restored to History or as the project's current chat).
 - [ ] Manager: stage the new files (docs-links checks tracked paths), run the unit tier unsandboxed, `bun run test:native`, independent review.
 

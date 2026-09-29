@@ -1,9 +1,17 @@
 # Provider capabilities
 
 S02 supervises the legacy Bun backend from a separate Swift XPC service. Provider
-SDKs, authentication and session writers remain in Bun; the UI connection grants
-no provider/parser role or preview capability. No provider call is required by the
-deterministic [service lifecycle fixtures](SWIFT-BACKEND-SERVICE.md).
+SDKs and authentication remain in Bun; the UI connection grants no provider/parser
+role or preview capability. No provider call is required by the deterministic
+[service lifecycle fixtures](SWIFT-BACKEND-SERVICE.md).
+
+Since LKM-98 (S10) every provider session is opened with the Swift service's provider
+owner, which fixes the session's grant (Trezi tools, roots, chat), answers its
+permission requests, authorizes its Trezi tools, holds Stop's deadline and persists
+resume ids; the adapters ask instead of deciding. Credentials stay in their own stores.
+Provider helpers (one supervised process per session, held to its grant) are built
+and verified with a fake provider; the real adapters move into them after an
+authorized live run. See [providers](SWIFT-BACKEND-PROVIDERS.md).
 
 PR publishing uses a separate read-only Codex turn with `gpt-5.6-luna` and low
 reasoning effort through the built-in Codex account. It summarizes the committed

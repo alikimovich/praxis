@@ -50,6 +50,8 @@ import { type SourceOwner, setSourceOwner } from '../main/source-owner'
 import { serviceSource } from './source-service'
 import { type ConversationOwner, setConversationOwner } from '../main/conversation-owner'
 import { serviceConversation } from './conversation-service'
+import { serviceProvider } from './provider-service'
+import { setProviderOwner } from '../main/provider-owner'
 import { installNativeChat } from './chat-runtime'
 import { NativeShellController } from './shell-controller'
 import { NativeSupportSheets } from './support-sheets'
@@ -166,6 +168,9 @@ async function main() {
   // checkpoints, turn transitions, titles, model handoff, approvals and spawn admission.
   let conversation: ConversationOwner | null = null
   if (process.env.TREZI_SERVICE_SUPERVISED === '1') { conversation = serviceConversation(host); setConversationOwner(conversation) }
+  // Provider sessions (S10): the service holds each session's grant, answers its
+  // permission requests and tool calls, owns Stop's deadline and persists resume ids.
+  if (process.env.TREZI_SERVICE_SUPERVISED === '1') setProviderOwner(serviceProvider(host))
   const refreshPreferences = () => {
     const values = preferences.snapshot()
     let preferred: unknown
