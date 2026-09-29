@@ -3,10 +3,9 @@
 LKM-90, step S03 of the [canonical plan](SWIFT-BACKEND-PLAN.md) and
 [roadmap](SWIFT-BACKEND-ROADMAP.md). This adds the Swift service's persistent
 operation intent, request digests and receipts, commit checkpoints, per-domain
-revisions, event cursors and recovery queries. It **transfers no domain writer**.
-Bun remains the single writer of preferences, workspaces, sessions and every
-other store. Preferences are the rest of the S03 roadmap row. They move only
-after this substrate is verified, under the adoption gate below.
+revisions, event cursors and recovery queries. It transferred no domain writer itself. The first writer to use it is
+preferences (LKM-91, [preferences](SWIFT-BACKEND-PREFERENCES.md)); Bun remains the
+writer of workspaces, sessions and every other store.
 
 - `src/service/LedgerStore.swift`: file format, checksums, sync, compaction, damage handling.
 - `src/service/OperationLedger.swift`: identity, admission, phases, recovery, events, retention.
@@ -29,7 +28,9 @@ Every line is `<sha256 hex of the JSON> <JSON>\n`. `format` is
 `trezi-ledger-1`. `state` holds the event head `sequence`, `domains`
 (revision, checkpoint, `blockedBy`), `operations`, `expired` IDs and the
 retained `events`. Record kinds are `domain`, `intent`, `effect`, `receipt` and
-`uncertain`. Replay and live writes share one transition function
+`uncertain`. An `effect` record may carry the owner's reconciliation note
+(`checkpoint`, kept as the operation's optional `pending`; LKM-91), which older
+readers ignore. Replay and live writes share one transition function
 (`OperationLedger.apply`). A record that does not apply is corruption.
 
 Compaction runs every 512 journal records, and at open after pruning. It writes
@@ -153,7 +154,7 @@ The domain affected by this step is `<profile>/service/ledger/` only.
 
 ## Adoption gate for the first writer (preferences)
 
-Before Swift writes preferences:
+Met by LKM-91 (see [preferences](SWIFT-BACKEND-PREFERENCES.md) for each item):
 - Name the exact files (the v1 preferences store and its unknown keys and nulls).
 - Import the newest legacy state as the domain's initial checkpoint, under the
   profile lock, with drafts untouched.
@@ -162,8 +163,8 @@ Before Swift writes preferences:
 - Test legacy restoration from the *newest* Swift-written state, not a backup.
 - Prove drain-and-restart restoration.
 
-Until then, `TREZI_BACKEND_OWNER=legacy` and Bun's preferences writer remain the
-rollback owners.
+`TREZI_BACKEND_OWNER=legacy` and Bun's preferences writer remain the rollback
+owners.
 
 ## Verification
 

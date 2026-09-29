@@ -38,6 +38,7 @@ import { runNativeCoreSmoke } from './smoke-core'
 import { installShutdown } from './shutdown'
 import { parsePreferredModelState, resolvePreferredSettings } from '../shared/preferred-model'
 import { nativePreferences } from './preferences'
+import { servicePreferences } from './preferences-service'
 import { workspaceStorage } from './workspace'
 import { installNativeChat } from './chat-runtime'
 import { NativeShellController } from './shell-controller'
@@ -117,9 +118,16 @@ async function main() {
   process.env.TREZI_NATIVE_HOST = executable
   host = new NativeBridge(executable, __dirname, testing ? 'ephemeral' : 'persistent')
   setBridge(host)
+  // Hold host events while the preference snapshot is awaited; released below,
+  // once every handler (including 'ready' and 'closed') is registered.
+  host.hold()
   const mainView = new NativeView('main')
   const workspace = workspaceStorage(profile)
-  const preferences = nativePreferences(profile)
+  // Swift service owner (supervised) or the legacy Bun writer (TREZI_BACKEND_OWNER=legacy).
+  // Never both, and never a local write when the service does not answer.
+  const preferences = process.env.TREZI_SERVICE_SUPERVISED === '1'
+    ? await servicePreferences(host).catch(error => { throw new Error(`Trezi could not read preferences from its service: ${error.message}`) })
+    : nativePreferences(profile)
   const refreshPreferences = () => {
     const values = preferences.snapshot()
     let preferred: unknown
@@ -248,11 +256,12 @@ async function main() {
   host.on('activity-action', ({ action }) => activityController.action(action))
   host.on('menu', ({ action }) => { if (action === 'logs') activityController.action('toggle') })
   serviceEvents.on('event', (channel, line) => { if (channel === 'devserver:log' || channel === 'simulator:log') activityController.append(line, 'server') })
+  const reportPreferences = (error: unknown) => activityController.append(`Could not save a preference: ${error instanceof Error ? error.message : String(error)}`, 'error')
   host.on('native-layout-width', ({ width }) => {
     if (!Number.isFinite(width) || width < 320 || width > 760) return
-    preferences.set('trezi:native-chat-width', String(width))
+    void preferences.set('trezi:native-chat-width', String(width)).catch(reportPreferences)
   })
-  host.on('native-layout-sizes', sizes => { if (['source','layers','inspector'].every(key => Number.isFinite(sizes[key]))) preferences.set('trezi:native-panel-sizes', JSON.stringify({ source:sizes.source, layers:sizes.layers, inspector:sizes.inspector })) })
+  host.on('native-layout-sizes', sizes => { if (['source','layers','inspector'].every(key => Number.isFinite(sizes[key]))) void preferences.set('trezi:native-panel-sizes', JSON.stringify({ source:sizes.source, layers:sizes.layers, inspector:sizes.inspector })).catch(reportPreferences) })
   host.on('native-layout-frame', ({ frame }) => {
     void dispatchIPC('main', { type: 'send', channel: 'preview:set-bounds', args: [frame] })
   })
@@ -348,7 +357,7 @@ async function main() {
   workspaceController.services.activate = async entry => { await activateContext(entry); if (entry) void gitController.refresh(entry.root).catch(error => activityController.append(String(error), 'error')) }
   host.on('shell-action', action => {
     const key = action.project ?? workspaceController.state.activeKey
-    if (action.action === 'publish-mode') { gitController.setMode(action.value); refreshPreferences(); return }
+    if (action.action === 'publish-mode') { void gitController.setMode(action.value).then(refreshPreferences, reportPreferences); return }
     if (!key) return
     const operation = action.action === 'branch' ? gitController.branch(key, action.value ?? '') : action.action === 'new-branch' ? gitController.branch(key, action.value ?? '', true) : action.action === 'publish' ? gitController.publish(key) : action.action === 'git-updates' ? gitController.updates(key) : null
     void operation?.catch(error => activityController.append(String(error), 'error'))
@@ -374,6 +383,8 @@ async function main() {
   host.on('menu', ({ action }) => { if (action === 'servers' && workspaceController.state.activeKey) previewRecovery.open(workspaceController.state.activeKey) })
   const reviewController = new NativeReviewController(sheetController, url => shell.openExternal(url))
   const settingsController = new NativeSettingsController(sheetController, preferences, refreshPreferences)
+  // An external edit adopted by the service reaches the controllers and the host.
+  preferences.subscribe(() => { refreshPreferences(); shellController?.render() })
   host.on('sheet-action', action => { void sheetController.action(action) })
   const openSheet = (kind: string, key?: string) => {
     if (sheetController.current?.state.busy) return
@@ -467,6 +478,7 @@ async function main() {
       }
     }
   })
+  host.release()
 }
 main().catch((error) => {
   console.error(error)

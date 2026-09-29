@@ -11,7 +11,15 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
-**Current (2026-09-28, LKM-90):** S02 (LKM-89) is merged into this step's base
+**Current (2026-09-28, LKM-91):** the preferences writer moves to the Swift
+service, through the ledger, behind the adoption gate: v1 `preferences.json` is
+kept byte-compatible, Bun's callers send awaited batches over the supervised pipe
+and read acknowledged snapshots, and `TREZI_BACKEND_OWNER=legacy` keeps Bun's
+writer as the rollback owner. See [preferences](SWIFT-BACKEND-PREFERENCES.md).
+Implemented for review; manager verification and acceptance are pending. Every
+other domain writer is still Bun.
+
+**Earlier (2026-09-28, LKM-90):** S02 (LKM-89) is merged into this step's base
 (5b18354). S03's durable operation ledger — persistent intent, request digests
 and receipts, commit checkpoints, per-domain revisions, persisted event cursors
 and recovery queries — is implemented for review in the Swift service; see the

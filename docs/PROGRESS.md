@@ -2,6 +2,35 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Native smoke reports every failure in one pass (LKM-109)
+
+Before this change, `runNativeCoreSmoke` was one long async function, so the
+first failing assertion ended the run. Each agent loop therefore found only one
+problem. The function is now a list of named checks (`startup`, `open-project`,
+`mobile-viewport`, `chat-ready`, …, `final-shell`, plus `live-provider` under
+`--live`). They run through the new pure `smoke-runner.ts`. Each check keeps its
+assertions verbatim, moved as-is. A check declares `dependsOn` only for the checks
+whose state it builds on. In practice almost everything needs `open-project`, and
+the chat checks need `chat-ready`. When a dependency does not pass, the check is
+skipped with an explicit `skipped: depends on X`. Independent checks still run.
+
+After a failure the runner captures `failure-<check>.png`. It then runs that
+check's own cleanup, for example closing its sheet or content window, docking
+and hiding the editor, clearing the composer or leaving mobile/History-API
+navigation. Last, it runs a shared restore (`smoke-restore.ts`). The restore
+reuses the sidebar fixture's `sidebarFocus` cleanup and `preparePreviewInput`,
+turns select mode off, and returns to the first fixture project in desktop
+viewport on its own page. That way one broken check leaves the app in the state
+a passing run would have left it. Restore runs only after failures, so a passing
+run follows the same sequence as before. At the end the smoke prints the
+summary documented in `docs/TESTING.md` and throws if anything did not pass.
+`index.ts` already turns that throw into exit status 1.
+
+To prove the behaviour without breaking a real check, `TREZI_NATIVE_SMOKE_FAIL`
+names checks that fail deliberately. `test/native-smoke-runner.mjs` covers the
+runner with a fixture list. Also, `test/run.mjs` now kills each test after
+120 s by default instead of 600 s, which matches what Agent OS passes.
+
 ## 2026-09-28 — Settings OCR returns wrapped lines out of order (LKM-106 repair)
 
 `settings-visible-800-on-chat` failed although its PNG shows the engine help
@@ -651,6 +680,65 @@ TypeScript/native and non-GUI Swift typechecks. The Svelte fixture compiles and
 renders integrated generated source without paid calls. Native foreground
 readability/interaction checks and the configured verification remain manager-owned;
 no GUI suite, provider calls, staging or commits were performed by this worker.
+## 2026-09-29 — Manager verification: `native-sheets` timeout (LKM-91 / S03)
+
+119 unit checks passed; `native-sheets` hung until the 600 s cap (its first line
+printed, the autosave section never finished). Cause: an earlier repair made a
+cancelled autosaving sheet loop on `flushPending()` until a save succeeded. The
+existing check saves 16,001 characters, which can never succeed, so close retried
+forever instead of staying open with the failed draft ("try closing again to
+retry"). That loop was also unnecessary: `SheetAutosave.enqueue` on the next
+close already retries the retained draft, which `native-settings` proves (failed
+batch keeps the draft, close waits for the retried save). Reverted
+`sheet-autosave.ts` and `sheets-runtime.ts` to their original behavior; kept the
+`native-settings` synchronization hardening (wait for the blocked apply instead
+of a fixed sleep). `native-sheets` and `native-settings` (three repeats) pass.
+
+## 2026-09-28 — Preferences move to the Swift service (LKM-91 / S03)
+
+The first writer transfer. Under the default launch the Swift service is the only
+writer of `preferences.json`, through the operation ledger. Bun keeps the
+controllers that decide what to save, sends awaited batches over its supervised
+pipe and reads acknowledged snapshots. `TREZI_BACKEND_OWNER=legacy` keeps Bun's
+writer as the rollback owner. Nothing else moves. Details and the domain's
+rollback plan: `docs/SWIFT-BACKEND-PREFERENCES.md`.
+
+The file format does not change, down to the bytes, because it is the rollback
+artifact. Swift reads and writes it as insertion-ordered JSON over UTF-16 code
+units with `JSON.parse`/`JSON.stringify` semantics. That keeps key order,
+repeated keys, lone surrogates and the JS `.length` limits exactly as Bun had
+them. The test compares Swift's written bytes with Bun's for the same batch.
+
+The ledger checkpoint is only the file's digest, so the file stays the one copy of
+the values. A batch re-reads the file first. A different digest is an external
+edit: the batch conflicts and the file is adopted as a new revision. The same
+adoption at launch is how newer writes by the legacy owner survive a return to
+Swift. An invalid external file is never replaced. The target digest is journaled
+with the effect record (a new optional `pending` field on ledger operations), so a
+crash between the rename and the receipt is reconciled from the file instead of
+replayed.
+
+The callers were re-inventoried: settings (one atomic batch built from the
+committed state when sent, so a newer last-used model is not clobbered), last-used
+model, publish mode, chat hidden, chat width and panel sizes. Bun's client sends
+one batch at a time on the last committed revision. A timeout or failure rejects;
+there is no local fallback write. Autosave keeps a failed draft and close waits
+for the save. Startup now awaits the snapshot, so the bridge holds host events
+until every handler is registered. On quit the service lets Bun finish, then
+drains accepted preference requests (bounded) before releasing the ledger.
+
+Verification (worker): `test/preferences-owner.mjs` passes, three runs in a row.
+It compiles the real sources into a fixture and covers parity, batches,
+idempotency, concurrency, external edits, injected temp/flush/rename failures,
+SIGKILL at each durable boundary, rollback both ways, and Bun's real client
+against the real owner. The fixture blocks after its own SIGKILL: in a
+multithreaded process `kill(getpid())` can return before the process dies, which
+let a rename slip past an injected crash in one run. The full unsandboxed
+`test/service-process.mjs` passes, and now sends a batch from the supervised
+backend through the real XPC service. `native-settings` adds the failed-draft and
+close-waits cases. Both typechecks and `bun run build` pass. The native GUI tier
+was not run by the worker.
+
 ## 2026-09-28 — Durable operation ledger in the Swift service (LKM-90 / S03)
 
 S03's first half: the substrate every writer transfer needs. No domain writer
