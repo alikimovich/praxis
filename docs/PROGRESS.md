@@ -2,6 +2,21 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-102 review repair: agent guide and TASKS brought up to the reduced scope
+
+Docs only. With LKM-112 merged, the byte-identical constraint on `docs/agent-guide/` is
+gone, so the pages now describe LKM-102: `service-owners.md` (an LKM-102 row and owner
+blocks for `ProviderData`, `PlatformOpen`, `ProfilePaths`, `EditingProject`,
+`WorkflowTools`/`WorkflowContext`, the service-held profile lock; adapters in Bun by
+default, helpers opt-in via `TREZI_PROVIDER_HELPERS=1`, connections in-process; the stale
+"everything else remains in Bun" sentence is replaced by the 0-row census), `architecture.md`
+(`platform.ts` has no Keychain helper, `profile-path.ts` only resolves),
+`backend-map.md` (providers-store, model-catalog, codex-models are rollback twins of
+`provider-data.ts`; annotation-store renders, the editing owner commits) and
+`verification.md` (`scripts/requirements.mjs`, the retirement census). `docs/TASKS.md`:
+the LKM-98 helper item no longer claims the adapters moved (helper runtime built, routing
+opt-in, adapter move deferred to LKM-111), the stale scroller-style note is gone.
+
 ## 2026-09-29 — LKM-102 reconciled with LKM-112's agent guide (merge conflict repair)
 
 The candidate merge aborted on `AGENTS.md` and `CLAUDE.md`: LKM-112 rewrote both

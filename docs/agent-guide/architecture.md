@@ -39,9 +39,17 @@ src/
                     windows with traffic lights and an action bar only when needed.
                     Settings and project memory autosave; close/navigation waits for
                     their latest write. Swift owns welcome/status/cat surfaces
-    platform.ts     direct native service imports, native event routing, WebKit proxy,
-                    Keychain helper. Services import it directly; there is no Electron
-                    alias or dependency
+    platform.ts     direct native service imports, native event routing, WebKit proxy.
+                    Services import it directly; there is no Electron alias or
+                    dependency. Opening links and files goes to the platform owner
+                    (src/service/PlatformOpen.swift); Keychain crypto and `open` live
+                    in platform-legacy.ts, the rollback twin (`TREZI_BACKEND_OWNER=legacy`)
+    profile-path.ts   only resolves the profile aliases; the service creates them
+                    (src/service/ProfilePaths.swift, `TreziService --resolve-profile`,
+                    made under the profile lock before Bun starts);
+                    profile-path-legacy.ts creates them without the service and
+                    refuses under `TREZI_SERVICE_LOCKED=1`. index.ts refuses to start
+                    without the service's profile lock
     preview-transport.ts   restricted isolated WKContentWorld transport
     assets/cat/     original native animation artwork consumed by the native build
   preview/preload.ts  isolated WKWebView instrumentation: selection, comments,
