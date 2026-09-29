@@ -160,6 +160,18 @@ src/
                     their turn); Bun's client is native/conversation-service.ts behind
                     main/conversation-owner.ts; main/conversation-model.ts is the rollback
                     twin (docs/SWIFT-BACKEND-CONVERSATION.md)
+    ProviderOwner.swift / ProviderFrames.swift / ProviderPolicy.swift / ProviderHelper.swift /
+    ProviderStore.swift
+                    the provider owner (LKM-98): every provider session is opened here and
+                    gets a grant (Trezi tools, roots, chat); it answers permission requests
+                    (Claude's canUseTool asks it), authorizes Trezi tools (Claude's in-process
+                    tools, Codex's MCP bridge), holds Stop's deadline, persists resume ids and
+                    supervises provider helpers (stdio only, allowlisted env, own process
+                    group, every frame checked against the grant). The SDK adapters still
+                    run in Bun (main/provider-sessions.ts wires them); Bun's client is
+                    native/provider-service.ts behind main/provider-owner.ts;
+                    main/provider-model.ts + provider-policy.ts are the rollback twin
+                    (docs/SWIFT-BACKEND-PROVIDERS.md)
   main/           Backend services (CJS bundle, Bun); historical directory name
     preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
                     bounds/load/reset/capture, the select + comment relays, the
@@ -208,7 +220,12 @@ src/
                     retry attempts as separate `error` events; this collapses them into
                     one line that keeps the actual cause). interrupt.ts is the shared
                     "Stop must always work" helper — ask the backend nicely, then kill
-                    (see the Gotcha on the SDK's untimed interrupt)
+                    (see the Gotcha on the SDK's untimed interrupt). helper-host.ts runs a
+                    provider inside a supervised helper; helper-session.ts is Bun's view of
+                    such a session (verified with a fake provider only, see
+                    docs/SWIFT-BACKEND-PROVIDERS.md)
+    session-tools.ts  Trezi's session tools for Codex's MCP bridge and helper sessions,
+                    each authorized by the provider owner first (`authorizedTool`)
     codex-usage.ts  live token counts for a Codex turn: the SDK's event stream
                     reports usage only at `turn.completed`, so this tails the
                     CLI's own session rollout (`$CODEX_HOME/sessions/…jsonl`) for
@@ -334,7 +351,9 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   every Trezi Git effect in user repositories (`docs/SWIFT-BACKEND-REPOSITORY.md`),
   and commits every Trezi source edit, Undo and file-tree operation from hash-bound
   parser proposals (`docs/SWIFT-BACKEND-SOURCE.md`), and owns chat records, live-chat
-  checkpoints and turn transitions (`docs/SWIFT-BACKEND-CONVERSATION.md`);
+  checkpoints and turn transitions (`docs/SWIFT-BACKEND-CONVERSATION.md`), and holds
+  every provider session's grant, permission answers, tool authorization, Stop's
+  deadline and resume ids (`docs/SWIFT-BACKEND-PROVIDERS.md`);
   Bun is still the single writer of every other domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun
   spawns the host, still under Swift's lock, writes all three itself and runs its
   own servers after the launcher sweeps the runtime journal). See
@@ -390,10 +409,13 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   Stop a dead button — the IPC never resolved, and since `done` is only emitted
   from a `result` message, the spinner ran forever. The kill switch was present
   the whole time (`shutdown()`'s `abort.abort()`) but only teardown reached it.
-  Any future backend cancel must bound itself the same way — go through
-  `backends/interrupt.ts`, and report `hardStopped` so agent.ts rebuilds the dead
-  session. Codex was always safe here (its cancel is a local AbortController);
-  Gemini had no `interrupt` at all, so Stop silently did nothing.
+  Since LKM-98 the provider owner holds the deadline: `provider-sessions.ts` runs a
+  backend's graceful `interrupt` through `interruptWithOwner` and, when the owner says
+  escalate, its `forceStop` kill switch once (it must end the turn: error + one done).
+  Give any future backend a `forceStop` rather than its own timer, and keep the
+  `hardStopped` report so agent.ts rebuilds the dead session. An unreachable owner
+  falls back to the local bound. Codex was always safe here (its cancel is a local
+  AbortController); Gemini had no `interrupt` at all, so Stop silently did nothing.
 - **ESM/CJS**: the Agent SDK is ESM-only, `main` is CJS → dynamic `import()`
   only, never static/`require`.
 - **The preview is the only WebKit view.** Do not reintroduce an application

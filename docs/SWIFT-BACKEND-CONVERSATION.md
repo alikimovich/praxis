@@ -29,7 +29,7 @@ they supply typed events, and Bun performs the effects the owner's answers call 
 | Model handoff: refused mid-turn; the next turn carries the history once | Swift decides; Bun builds the prompt | TS twin |
 | Permission mode and pending approvals (permission cards, agent questions) | Swift registry and policy; Bun settles the SDK callbacks | TS twin |
 | Background spawn admission (3 per project, FIFO queue, cancel) | Swift | TS twin |
-| Provider SDK sessions, event streams, prompts, title and memory generation | Bun (S10 moves providers) | Bun |
+| Provider SDK sessions, event streams, prompts, title and memory generation | Bun, under the S10 provider owner's grant ([providers](SWIFT-BACKEND-PROVIDERS.md)) | Bun |
 | Composer drafts, attachments and the queued-message list shown in the composer | Bun native chat controller (S12) | Bun |
 | Git, worktrees, landing, Undo records | Repository and source owners (S07/S08) | TS Git code |
 

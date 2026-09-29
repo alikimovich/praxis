@@ -2,6 +2,55 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — Swift provider owner and helper capability enforcement (LKM-98 / S10)
+
+The eighth transfer, on the LKM-97 candidate. Details, the protocols and the tightened
+rollback plan are in `docs/SWIFT-BACKEND-PROVIDERS.md`.
+
+The plan's open question (native protocol or SDK helper) is answered: SDK adapters, and
+in the end state one supervised helper process per session. Neither SDK exposes a
+protocol Trezi could speak natively with established parity. Moving the real adapters
+into helpers needs a live parity run, which is not authorized. So this step builds and
+proves the helper runtime with a scripted fake provider, and puts the in-process
+adapters under the owner's authority now.
+
+Every provider session agent.ts starts is opened with the owner first
+(`provider-sessions.ts`). Its grant is fixed there from the provider, whether it is a
+background edit, and its roots. Claude's `canUseTool` no longer decides: the owner
+answers, with the same order and messages. It adds one rule: an edit inside Trezi's
+profile but outside the session's own roots (another chat's worktree, the session
+files, the service stores) is denied. Claude's in-process Trezi tools and Codex's MCP
+bridge are authorized against the grant before they run. Codex's bridge handler moved to
+`session-tools.ts`, where helper tool calls run too. Stop's deadline is the owner's: it
+answers `escalate` when the graceful stop has not settled in 3 s, and the adapter's kill
+switch (Claude's force-stop, now `ProviderSession.forceStop`) runs once. An unreachable
+owner falls back to the same local bound. Thread ids are persisted per session record, so
+a crash between the provider reporting one and the record being saved no longer loses
+the resume.
+
+Helpers are held to their grant by what the service checks, not by the pipe. A helper
+inherits only its stdio, gets an allowlisted environment (no `TREZI_*` variable, no
+other provider's key), and runs in its own process group with a watchdog and a journal
+entry. Its lines are bounded, and every frame is validated. It cannot address another
+chat, emit an approval or a title itself, write what the user said, or send anything
+off-protocol: each is a violation that stops it and ends its turn once. Tool results
+(screenshots) are validated before it gets them. Crashes, hangs past Stop's deadline,
+stalled and failed starts each end the turn exactly once.
+
+Verification (worker sandbox): `test/provider-owner.mjs` passes in about 8 s (cached
+fixture), with sections policy parity, helper, images, privilege, failure, recovery,
+rollback, drain, wrapper and schema. `conversation-owner`, `comment-agents`,
+`native-chat-controller`, `auto-reconciliation`, `interrupt-escalation`, `codex-stream`
+and `provider-skills` (its routing check now follows `session-tools.ts`) pass, and both
+typechecks pass. The new Swift files have zero diagnostics under
+`-strict-concurrency=complete`, and the full service compiles. Worker verification
+tool: native tier (staged) 136 unit checks and the native smoke (20 passed, 0 failed, 0
+skipped, with islands, Shadow Light, sidebar, settings, chat acceptance and chat scroll).
+After that run `ProviderOwner.swift` was split mechanically (`ProviderFrames.swift`) and
+docs were edited; the quick tier (136 unit checks, both typechecks) passes on the final
+revision. Real Claude/Codex sessions under the owner are not verified (live provider
+calls need authorization).
+
 ## 2026-09-29 — Swift conversation state and chat orchestration (LKM-97 / S11)
 
 The seventh transfer, on the LKM-96 candidate. Under the Swift launch the service

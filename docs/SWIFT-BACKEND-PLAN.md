@@ -11,7 +11,23 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
-**Current (2026-09-29, LKM-97):** S11 (roadmap row) moves conversation state into the
+**Current (2026-09-29, LKM-98):** S10 (roadmap row) puts provider sessions under the
+Swift service. Every session is opened there first and gets a grant fixed from its
+provider, background flag and roots. The service answers its permission requests
+(Claude's `canUseTool` no longer decides) and authorizes its Trezi tools (Claude's
+in-process tools, Codex's MCP bridge). It holds Stop's deadline, escalating to the
+adapter's kill switch once, and persists provider thread ids for resume. It also
+supervises provider helpers: stdio only, an allowlisted environment, its own process
+group, and bounded frames each checked against the grant, with violations stopping the
+helper. This answers the open question on the provider boundary: SDK adapters, one
+supervised helper per session in the end state. The helper runtime is verified with a
+scripted fake provider. The real adapters still run in-process in Bun until an
+authorized live parity run moves them. `TREZI_BACKEND_OWNER=legacy` keeps the TS twin as
+the rollback owner. See [providers](SWIFT-BACKEND-PROVIDERS.md). Implemented for review
+on the LKM-97 candidate; manager verification and acceptance are pending, and
+real-provider behaviour is unverified.
+
+**Earlier (2026-09-29, LKM-97):** S11 (roadmap row) moves conversation state into the
 Swift service. It is the only writer of session records and History (unchanged
 `sessions/*.json`), keeps a checkpoint of every live chat, and at launch saves a chat a
 crash cut off without replacing newer work. It owns the turn state machine and its
@@ -213,7 +229,8 @@ events, cancellation, and reconnection.
 
 ## Open questions
 
-- Exact provider integration boundary (native protocol vs SDK helper)
+- ~~Exact provider integration boundary (native protocol vs SDK helper)~~ (LKM-98: SDK
+  adapters, one supervised helper per session in the end state; see [providers](SWIFT-BACKEND-PROVIDERS.md))
 - ~~Source parser helper contract and expected-content hashing~~ (LKM-96: proposals
   carry the SHA-256 of the bytes they were computed from; see [source](SWIFT-BACKEND-SOURCE.md))
 - Persistence format migration strategy

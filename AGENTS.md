@@ -16,7 +16,11 @@ Undo, file-tree operations and editor drafts (docs/SWIFT-BACKEND-SOURCE.md). Sin
 LKM-97 it owns conversation state: session records and History, live-chat checkpoints,
 turn transitions and completion policy, titles, model handoff, approvals and spawn
 admission; Bun's provider sessions report typed events to it
-(docs/SWIFT-BACKEND-CONVERSATION.md).
+(docs/SWIFT-BACKEND-CONVERSATION.md). Since LKM-98 every provider session is opened
+with its provider owner, which fixes the session's grant, answers its permission
+requests, authorizes Trezi tools, holds Stop's deadline, persists resume ids and
+supervises provider helpers against their grant; the SDK adapters still run in Bun
+(docs/SWIFT-BACKEND-PROVIDERS.md).
 Every other domain writer remains in Bun until a
 verified transfer; annotation storage is split from
 publication but stays in Bun until the S07 repository lane.
@@ -144,7 +148,9 @@ Groups are defined in `src/native/smoke-groups.ts`.
   proposals only; supported contracts and limitations are in `docs/PROJECT_UI.md`.
 - `src/main/`: retained backend services (the directory name is historical).
   Agent/provider sessions, dev servers, Git/worktrees, setup, source parsers,
-  props/styles/tokens, annotations, diagnostics, media and iOS Simulator.
+  props/styles/tokens, annotations, diagnostics, media and iOS Simulator. Every
+  provider session starts through `src/main/provider-sessions.ts` (the provider owner's
+  grant; see docs/SWIFT-BACKEND-PROVIDERS.md).
 - `src/shared/api.ts`: shared service types. `src/shared/preview-channels.ts`:
   selection/style/layer message names. Keep producers and consumers in sync.
 - `src/preview/preload.ts`: isolated project DOM instrumentation, using

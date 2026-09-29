@@ -23,6 +23,7 @@ const UNIT = [
   "repository-owner",
   "source-owner",
   "conversation-owner",
+  "provider-owner",
   "native-visible-capture",
   "native-smoke-runner",
   "rename-compat",
