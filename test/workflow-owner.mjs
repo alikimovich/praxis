@@ -196,13 +196,15 @@ try {
     const stale = await owner.remoteUpdate(w.local, { action: 'pull', ref: 'refs/remotes/origin/main', expectedBranch: 'other' }, false)
     const pulled = await owner.remoteUpdate(w.local, { action: 'pull', ref: 'refs/remotes/origin/main', expectedBranch: 'trezi/main' }, false)
     const switched = await owner.remoteUpdate(w.local, { action: 'checkout', ref: 'refs/remotes/origin/feature/design', expectedBranch: 'trezi/main' }, false)
+    const update = await owner.updateCheck(w.local)
     let outside
     try { await owner.remoteStatus(join(w.local, '..'), false) } catch (error) { outside = error.message }
-    return { cached, fetched, busy, stale, pulled, switched, outside, state: snapshot(w) }
+    return { cached, fetched, update, busy, stale, pulled, switched, outside, state: snapshot(w) }
   })
 
   assert.equal(remote.pulled.ok, true); assert.equal(remote.switched.branch, 'feature/design'); assert.equal(remote.busy.ok, false)
   assert.match(remote.outside, /top-level folder/)
+  assert.deepEqual(remote.update, { status: 'idle', behind: 0 }) // the fixture branch is not behind its own upstream
 
   const setup = await parity('setup', async (owner, w) => {
     write(w.local, 'package.json', JSON.stringify({ dependencies: { react: '^19.0.0', next: '^15.0.0' }, scripts: { dev: 'next dev' } }))

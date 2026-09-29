@@ -14,7 +14,7 @@ import { SOURCES as CONVERSATION_SOURCES, startConversationFixture } from './con
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 export const SOURCES = [...CONVERSATION_SOURCES,
-  ...['EditingIslands', 'EditingStores', 'EditingOwner'].map(name => `src/service/${name}.swift`)]
+  ...['EditingIslands', 'EditingStores', 'EditingProject', 'EditingOwner'].map(name => `src/service/${name}.swift`)]
 
 /** Compiles the fixture once per source hash and compiler version; returns the binary path. */
 export function compileEditingFixture() {

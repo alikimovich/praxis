@@ -122,6 +122,7 @@ export function serviceWorkflows(link: WorkflowLink, options: WorkflowClientOpti
     async createProject(root, files, install) {
       return (await call('createProject', { root, files, install, intent: 'create' })).result
     },
+    updateCheck: root => call('updateCheck', { root, ...leases() }),
     async update(root, progress) {
       let polling = true
       const poll = async () => {

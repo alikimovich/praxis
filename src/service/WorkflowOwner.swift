@@ -49,6 +49,7 @@ final class WorkflowOwner: @unchecked Sendable {
         "uninstall": (["root", "intent"], ["leases"], "uninstall"),
         "createProject": (["root", "files", "install", "intent"], [], "create"),
         "update": (["root", "intent"], [], "update"),
+        "updateCheck": (["root"], ["leases"], nil),
         "remember": (["root", "diagnosis"], [], nil),
         "diagnosisStatus": (["root", "signature", "status"], [], nil),
     ]
@@ -133,6 +134,11 @@ final class WorkflowOwner: @unchecked Sendable {
             let root = try body.path("root"), fetch = try body.bool("fetch")
             return lane(frame, root: root, leases: try body.strings("leases")) {
                 try WorkflowRemote(context: self.context(id: nil, root: root)).status(fetch: fetch)
+            }
+        case "updateCheck":
+            let root = try body.path("root")
+            return lane(frame, root: root, leases: try body.strings("leases")) {
+                WorkflowRemote(context: self.context(id: nil, root: root)).updateCheck()
             }
         default: break
         }

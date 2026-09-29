@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { checkForUpdate } from '../main/update'
+import type { UpdateStatus } from '../shared/api'
 import type { WorkflowOwner } from '../main/workflow-owner'
 import type { NativeSheetController } from './sheets-runtime'
 /**
@@ -13,11 +14,11 @@ export class NativeUpdateController {
     const child=spawn(command,args,{cwd:root,env:process.env,stdio:['ignore','pipe','pipe']});let output=''
     const data=(chunk: Buffer)=>{output=(output+chunk.toString()).slice(-16000);this.progress(output.split('\n').filter(Boolean).slice(-4).join('\n'))}
     child.stdout.on('data',data);child.stderr.on('data',data);child.on('error',reject);child.on('exit',code=>code===0?resolve(output):reject(new Error(output||`Update exited with ${code}`)))
-  }), readonly check = checkForUpdate, readonly canRestart: () => string | null = () => null, readonly owner: WorkflowOwner | null = null) {}
+  }), readonly check: ((root: string) => Promise<UpdateStatus>) | undefined = undefined, readonly canRestart: () => string | null = () => null, readonly owner: WorkflowOwner | null = null) {}
   async open() {
     this.sheets.present({title:'Trezi updates',detail:'Check for updates to this installation of Trezi.',fields:[],actions:[{id:'cancel',label:'Close'},{id:'check',label:'Check for updates',primary:true}]},async()=>{
       const generation=this.sheets.generation
-      const status=await this.check(this.root)
+      const status=await (this.check ? this.check(this.root) : this.owner ? this.owner.updateCheck(this.root) : checkForUpdate(this.root))
       if(generation!==this.sheets.generation)return
       this.sheets.present({title:'Trezi updates',detail:status.status==='available'?`${status.behind} new ${status.behind === 1 ? 'change' : 'changes'} available. Trezi will restart after updating.${status.subject ? '\n\nLatest change: ' + status.subject : ''}`:'No updates found. If you are offline, reconnect and check again.',fields:[],actions:[{id:'cancel',label:'Close'},...(status.status==='available'?[{id:'apply',label:'Update and restart',primary:true}]:[])]},async()=>this.apply())
     })

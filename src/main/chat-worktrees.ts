@@ -1,5 +1,5 @@
 import { provisionNextDependencies } from './worktree-dependencies'
-import { syncSetupArtifacts } from './setup-artifacts'
+import { editingOwner } from './editing-model'
 import { execFile } from 'child_process'
 import { lstat, readFile, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
@@ -118,7 +118,7 @@ export function createChatWorktree(
  * the reset can never conflict. Advances `wt.baseSha` in place to the new fork point.
  */
 export async function syncFromLive(liveRoot: string, wt: Worktree): Promise<{ synced: boolean }> {
-  await syncSetupArtifacts(liveRoot, wt.path)
+  await editingOwner().syncSetupHelpers(liveRoot, wt.path)
   const owner = repositoryOwner()
   if (owner) {
     const { synced, baseSha } = await owner.syncWorktree({ ...wt, repoRoot: liveRoot })
@@ -278,7 +278,7 @@ export async function stageResolve(liveRoot: string, wt: Worktree): Promise<Reso
   if (owner) {
     // Setup helpers live under excluded `.trezi/` paths, so syncing them first never
     // makes the worktree look changed to the service's parked-state check.
-    await syncSetupArtifacts(liveRoot, wt.path)
+    await editingOwner().syncSetupHelpers(liveRoot, wt.path)
     const { conflicted, files, clean, baseSha } = await owner.stageResolve({ ...wt, repoRoot: liveRoot })
     wt.baseSha = baseSha
     return { conflicted, files, clean }
@@ -304,7 +304,7 @@ export async function stageResolve(liveRoot: string, wt: Worktree): Promise<Reso
   const files = await changedFiles(wt)
   const tip = await revParse(wt.path, 'HEAD') // the parked squash — sole restore point
   const oldBase = wt.baseSha
-  await syncSetupArtifacts(liveRoot, wt.path)
+  await editingOwner().syncSetupHelpers(liveRoot, wt.path)
   const indexFile = join(dirname(wt.path), `.index-resolve-${wt.id}`)
   const live = await captureBase(liveRoot, indexFile) // snapshot the user's live tree
   await git(wt.path, cleanArgs())

@@ -12,6 +12,9 @@ and the inspector views. Source writes are still proposals to the
 [conversation owner's](SWIFT-BACKEND-CONVERSATION.md).
 
 - `src/service/EditingOwner.swift`: requests, validation, turn binding, lanes, drain.
+- `src/service/EditingProject.swift` (S15): the `.dsgn`/`.praxis` sidecar migration, the
+  setup helpers copied into a chat worktree (`setup-helpers.json`) and the Next dependency
+  marker, in the repository lane; twins `sidecar-migrate.ts`, `setup-artifacts.ts`, `editing-model.ts`.
 - `src/service/EditingIslands.swift`: island history files and the island state machine.
 - `src/service/EditingStores.swift`: the project sidecar commit (controls; since S15 also
   `annotations.json` and `tokens.json`, see [retirement](SWIFT-BACKEND-RETIREMENT.md)), content drafts,

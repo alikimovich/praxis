@@ -2,6 +2,28 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-102 repair round: four census rows moved (gate still blocked, 9 Bun-owned)
+
+Review found the retirement gate blocked by 13 Bun-owned rows. This round moves the
+ones that fit an existing owner, keeping each TS module as its legacy twin:
+
+- EditingOwner (`EditingProject.swift`, repository lane): the `.dsgn`/`.praxis` sidecar
+  migration, the setup helpers a chat worktree carries (`setup-helpers.json` bytes
+  unchanged) and the Next dependency marker (`.trezi/dependencies.sha256`). Bun's
+  `worktree-dependencies.ts` is now effect-free: it asks the owner, runs the install
+  through the service installer, then asks it to record the marker. Swift/TS parity in
+  `test/editing-owner.mjs`. A linked `.trezi`, `.praxis` or `.dsgn` is refused.
+- WorkflowOwner: Trezi's own update check (`updateCheck`, a lane request; the fetch keeps
+  its 15 s bound). `update-controller.ts` uses `checkForUpdate` only without an owner.
+- Census: Bun-owned rows 13 → 9; setup-artifacts, sidecar-migrate and update are rollback
+  twins now, worktree-dependencies has no effect left.
+
+Still Bun-owned: `codex-models`, `model-catalog`, `providers-store` (provider helper
+move), `feedback`, `skills-install`, `props` editor CLIs, `native/platform`,
+`native/profile-path`, `native/index`. The provider SDK adapters still run in Bun; that
+move needs an authorized live parity run, which was not available (unverified, not
+passed). No legacy owner or `TREZI_BACKEND_OWNER=legacy` was removed.
+
 ## 2026-09-29 — Retirement census, last sidecar writers, one platform source (LKM-102 / S15, partial)
 
 The last step of the migration, on the LKM-101 candidate. Details are in

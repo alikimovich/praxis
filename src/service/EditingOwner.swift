@@ -77,16 +77,24 @@ final class EditingOwner: @unchecked Sendable {
         "contentDrafts": (["root"], []), "saveContentDraft": (["root", "panel", "revision", "value"], []),
         "clearContentDraft": (["root", "panel"], []),
         "sidecar": (["root", "name", "expectedHash", "content"], ["leases"]),
+        // Project files (EditingProject): `root` is the live project, whose lane they run in.
+        "migrateSidecar": (["root"], ["leases"]),
+        "syncSetupHelpers": (["root", "worktree"], ["leases"]),
+        "dependencyState": (["root", "checkout"], ["leases"]),
+        "markDependencies": (["root", "checkout"], ["leases"]),
     ]
     static let actions: Set<String> = ["commit", "reset", "undo", "reload"]
 
-    /// Decides a request on the intake queue; a sidecar commit answers an effect for the lane.
-    private func handle(_ frame: PipeFrame) throws -> (@Sendable () throws -> JSValue)? {
+    /// An effect that runs in the project's repository lane (or the lease Bun's chain holds).
+    struct Effect { let root: String; let leases: [String]; let run: @Sendable () throws -> JSValue }
+
+    /// Decides a request on the intake queue; a sidecar or project-file effect is answered from the lane.
+    private func handle(_ frame: PipeFrame) throws -> Effect? {
         guard frame.expectedRevision == nil, let rule = Self.methods[frame.method],
               frame.mode == (Self.reads.contains(frame.method) ? "read" : "mutation") else { throw ServiceContractFailure.invalidRequest }
         let body = try Body(frame, required: rule.required, optional: rule.optional)
         let ok = JSValue.object([])
-        func result(_ value: JSValue) -> (@Sendable () throws -> JSValue)? { answer(frame, .succeeded(value)); return nil }
+        func result(_ value: JSValue) -> Effect? { answer(frame, .succeeded(value)); return nil }
         switch frame.method {
         // Islands
         case "islandsOpen":
@@ -184,12 +192,35 @@ final class EditingOwner: @unchecked Sendable {
             let content = Data(try SourceOwner.content(body.value("content")).utf8)
             guard content.count <= EditingSidecar.maxBytes else { throw RepositoryRefusal(.invalidRequest, "The \(name) store would exceed 1 MB.") }
             let root = try SourcePaths.root(try body.path("root"))
-            _ = try body.strings("leases")
-            return {
+            return Effect(root: root, leases: try body.strings("leases")) {
                 switch try EditingSidecar.commit(root: root, name: name, expected: expected, content: content) {
                 case .conflict: return Self.object([("ok", .bool(false)), ("conflict", .bool(true))])
                 case .written(let hash): return Self.object([("ok", .bool(true)), ("hash", .string(JSText(hash)))])
                 }
+            }
+
+        // Project files (`.trezi/` beside the sidecars)
+        case "migrateSidecar":
+            let root = try SourcePaths.root(try body.path("root"))
+            return Effect(root: root, leases: try body.strings("leases")) {
+                Self.object([("collisions", .array(try EditingProject.migrate(root: root).map { .string(JSText($0)) }))])
+            }
+        case "syncSetupHelpers":
+            let root = try SourcePaths.root(try body.path("root")), worktree = try SourcePaths.root(try body.path("worktree"))
+            return Effect(root: root, leases: try body.strings("leases")) {
+                try EditingProject.syncHelpers(liveRoot: root, worktree: worktree)
+                return .object([])
+            }
+        case "dependencyState":
+            let root = try SourcePaths.root(try body.path("root")), checkout = try SourcePaths.root(try body.path("checkout"))
+            return Effect(root: root, leases: try body.strings("leases")) {
+                Self.object([("install", .bool(try EditingProject.dependencyState(liveRoot: root, checkout: checkout)))])
+            }
+        case "markDependencies":
+            let root = try SourcePaths.root(try body.path("root")), checkout = try SourcePaths.root(try body.path("checkout"))
+            return Effect(root: root, leases: try body.strings("leases")) {
+                try EditingProject.mark(checkout: checkout)
+                return .object([])
             }
         default: throw ServiceContractFailure.invalidRequest
         }
@@ -207,18 +238,14 @@ final class EditingOwner: @unchecked Sendable {
         return known.turn
     }
 
-    /// A sidecar commit runs in the repository's lane (or the lease Bun's chain holds).
-    private func lane(_ frame: PipeFrame, _ effect: @escaping @Sendable () throws -> JSValue) {
-        guard let root = try? Body(frame, required: ["root", "name", "expectedHash", "content"], optional: ["leases"]),
-              let given = try? root.path("root"), let real = try? SourcePaths.root(given), let leases = try? root.strings("leases") else {
-            return answer(frame, .failed(RepositoryOwner.fail(.invalidRequest, "Invalid editing request.")))
-        }
+    /// An effect runs in the repository's lane (or the lease Bun's chain holds).
+    private func lane(_ frame: PipeFrame, _ effect: Effect) {
         let deadline = frame.timeoutMilliseconds.map { DispatchTime.now() + .milliseconds(Int($0)) }
-        let scheduled = repository.serialize(root: real, leases: leases) {
+        let scheduled = repository.serialize(root: effect.root, leases: effect.leases) {
             self.lock.lock(); let refused = self.closed; self.lock.unlock()
             if refused { return self.answer(frame, .failed(Self.stopping)) }
             if let deadline, DispatchTime.now() > deadline { return self.answer(frame, .failed(SourceOwner.expired)) }
-            do { self.answer(frame, .succeeded(try effect())) } catch { self.answer(frame, .failed(Self.failure(error))) }
+            do { self.answer(frame, .succeeded(try effect.run())) } catch { self.answer(frame, .failed(Self.failure(error))) }
         }
         if !scheduled { answer(frame, .failed(Self.stopping)) }
     }

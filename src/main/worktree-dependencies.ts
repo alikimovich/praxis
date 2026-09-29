@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto'
-import { access, lstat, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { editingOwner } from './editing-model'
 import { installProjectDependencies } from './project-dependencies'
 
 export async function isNextProject(root: string): Promise<boolean> {
@@ -15,44 +15,18 @@ export async function isNextProject(root: string): Promise<boolean> {
 }
 
 /** Next/Turbopack cannot follow the shared node_modules link outside its root.
- * Install using the checkout's manifests and lockfile; never broaden the root. */
+ * Install using the checkout's manifests and lockfile; never broaden the root. The editing
+ * owner removes the link and keeps the marker (`.trezi/dependencies.sha256`); the install
+ * runs through the service installer. */
 export async function provisionNextDependencies(
   liveRoot: string,
   checkout: string,
   install = installProjectDependencies
 ): Promise<void> {
   if (!(await isNextProject(checkout))) return
-  const target = join(checkout, 'node_modules')
-  const info = await lstat(target).catch(() => null)
-  const fingerprint = async () => {
-    const hash = createHash('sha256')
-    for (const file of [
-      'package.json',
-      'bun.lock',
-      'bun.lockb',
-      'package-lock.json',
-      'pnpm-lock.yaml',
-      'yarn.lock'
-    ]) {
-      hash.update(file)
-      hash.update(await readFile(join(checkout, file)).catch(() => Buffer.alloc(0)))
-    }
-    return hash.digest('hex')
-  }
-  const marker = join(checkout, '.trezi/dependencies.sha256')
-  const current = await fingerprint()
-  if (info?.isSymbolicLink()) await rm(target)
-  else if (info && (await readFile(marker, 'utf8').catch(() => '')) === current) return
+  const owner = editingOwner()
   // Empty/uninstalled projects are provisioned by their ordinary setup turn.
-  if (
-    !(await access(join(liveRoot, 'node_modules')).then(
-      () => true,
-      () => false
-    ))
-  )
-    return
+  if (!(await owner.dependencyState(liveRoot, checkout))) return
   await install(checkout, () => {})
-  await mkdir(join(checkout, '.trezi'), { recursive: true })
-  await rm(marker, { force: true })
-  await writeFile(marker, await fingerprint(), { flag: 'wx' })
+  await owner.markDependencies(liveRoot, checkout)
 }

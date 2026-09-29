@@ -10,7 +10,7 @@ unlisted module, a stale row, or a gate line that disagrees with the rows fails.
 
 ## Status (2026-09-29)
 
-**Retirement gate: blocked by 13 Bun-owned rows.** The legacy owners and
+**Retirement gate: blocked by 9 Bun-owned rows.** The legacy owners and
 `TREZI_BACKEND_OWNER=legacy` stay; nothing that the rollback switch needs was removed.
 
 Moved in this step:
@@ -27,6 +27,17 @@ Moved in this step:
   so they gain the controls sidecars' checks: a linked `.trezi` folder or file is
   refused (the old writers followed a link out of the project) and a store is capped at
   1 MiB (about 500 notes at the 2000-character maximum).
+- The other `.trezi/` files, by the editing owner in the repository lane
+  (`EditingProject.swift`): the `.dsgn`/`.praxis` sidecar migration, the setup helpers a
+  chat worktree carries (with `setup-helpers.json`) and the Next dependency marker
+  (`.trezi/dependencies.sha256`). Bun keeps only the orchestration: it asks the owner,
+  runs the install through the service installer, then asks it to record the marker.
+  The legacy twins are `sidecar-migrate.ts`, `setup-artifacts.ts` and
+  `editing-model.ts`. A `.trezi`/`.praxis`/`.dsgn` folder or a helper that is a link is
+  refused (the old code followed it).
+- Trezi's own update check (`git fetch` and the behind count) is a workflow-owner lane
+  request, `updateCheck`; `update-controller.ts` reaches `checkForUpdate` only with no
+  owner.
 - Dead adapter code: `agent.ts` still imported a Git runner and fs writers it no
   longer used.
 
@@ -49,6 +60,10 @@ Not moved, and why the gate stays closed:
 - Files: `<project>/.trezi/annotations.json` and `<project>/.trezi/tokens.json`, bytes
   unchanged (`JSON.stringify(value, null, 2)` plus a newline). No journal, receipt or
   draft is added: each commit is a single atomic, hash-bound replace.
+- The setup helpers and the dependency marker keep their bytes and names
+  (`.trezi/setup-helpers.json`, `.trezi/dependencies.sha256`); the migration only ever
+  copies (exclusive, then link) before it unlinks the `.dsgn` original, so an interrupted
+  run repeats safely and a file that already exists in `.trezi/` always wins.
 - Owner switch: quit (the service drains the editing owner before it releases the
   profile), relaunch with `TREZI_BACKEND_OWNER=legacy`; the legacy twin writes the same
   bytes with the same checks. A pre-S15 build reads both files as before.
@@ -133,16 +148,15 @@ launch, which blocks retirement).
 | `src/main/publish.ts` | rollback | WorkflowOwner | publish, handoff, saved-run PRs |
 | `src/main/scaffold.ts` | rollback | WorkflowOwner | new projects |
 | `src/main/sessions-store.ts` | rollback | ConversationOwner | session records |
-| `src/main/setup-artifacts.ts` | bun | RepositoryOwner | worktree setup helpers in `.trezi/` |
+| `src/main/setup-artifacts.ts` | rollback | EditingOwner | worktree setup helpers in `.trezi/` |
 | `src/main/setup.ts` | rollback | WorkflowOwner | setup helpers |
-| `src/main/sidecar-migrate.ts` | bun | EditingOwner | `.dsgn`/`.praxis` sidecar migration |
+| `src/main/sidecar-migrate.ts` | rollback | EditingOwner | `.dsgn`/`.praxis` sidecar migration |
 | `src/main/simulator.ts` | rollback | PlatformOwner | Simulator tools, Metro |
 | `src/main/skills-install.ts` | bun | WorkflowOwner | `npx skills add` |
 | `src/main/source-commit.ts` | rollback | SourceOwner | source writes without an owner |
 | `src/main/trezi-agent-tools.ts` | helper | ProviderOwner (helper process) | Codex tool bridge socket |
-| `src/main/update.ts` | bun | WorkflowOwner | update check's `git fetch` |
+| `src/main/update.ts` | rollback | WorkflowOwner | update check's `git fetch` |
 | `src/main/workflow-legacy.ts` | rollback | WorkflowOwner | legacy workflow runner |
-| `src/main/worktree-dependencies.ts` | bun | RepositoryOwner | dependency markers in `.trezi/` |
 | `src/main/worktrees.ts` | rollback | RepositoryOwner | worktree lifecycle |
 | `src/native/bridge.ts` | rollback | ServiceRuntime | legacy transport spawns the host |
 | `src/native/index.ts` | bun | ServiceRuntime / Host | orchestration, legacy `native.lock`, test fixture |

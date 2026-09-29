@@ -50,6 +50,11 @@ export function serviceEditing(link: EditingLink, options: { timeout?: number; l
       throw new EditingError(result.payload.code, result.payload.message)
     })
   }
+  /** A project-file request runs in the leases this async chain holds. */
+  const held = (body: Record<string, unknown>) => {
+    const leases = options.leases?.() ?? []
+    return leases.length ? { ...body, leases } : body
+  }
   const present = (values: Record<string, unknown>) => Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined && v !== null))
   // JSON drops `undefined`, as the pipe does; definitions travel as plain data.
   const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value))
@@ -81,6 +86,10 @@ export function serviceEditing(link: EditingLink, options: { timeout?: number; l
     sidecar: (root, name, expectedHash, content) => {
       const leases = options.leases?.() ?? []
       return call('sidecar', { root, name, expectedHash, content, ...(leases.length ? { leases } : {}) }, 'mutation', true)
-    }
+    },
+    migrateSidecar: async root => (await call('migrateSidecar', held({ root }), 'mutation', true)).collisions,
+    syncSetupHelpers: async (root, worktree) => { await call('syncSetupHelpers', held({ root, worktree }), 'mutation', true) },
+    dependencyState: async (root, checkout) => (await call('dependencyState', held({ root, checkout }), 'mutation', true)).install,
+    markDependencies: async (root, checkout) => { await call('markDependencies', held({ root, checkout }), 'mutation', true) }
   }
 }

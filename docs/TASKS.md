@@ -102,7 +102,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Reviewer notes (`annotations.json`) and starter `tokens.json` committed by the editing owner (hash-bound, repository lane; Swift/TS parity; `annotation-store` re-run on the Swift owner).
 - [x] One platform source (`scripts/requirements.mjs`: macOS 13.3, SDK 26.0, Bun 1.3.0) stamped by the build and enforced by build, launcher, dev, CLI and installer (`test/distribution.mjs`).
 - [x] Removed dead Git/fs adapter imports from `agent.ts`.
-- [ ] Transfer the 13 Bun-owned census rows (each with its own rollback plan): catalogs/store/Codex probe with the provider helpers; `feedback:submit` as a workflow; skills install; open-in-editor and `open`; update-check fetch; worktree setup helpers and dependency markers; sidecar migration; profile migration; Keychain crypto; orchestration.
+- [x] Moved to Swift owners: `setup-artifacts`, `sidecar-migrate`, `worktree-dependencies` (EditingOwner, `EditingProject.swift`) and the update check (`WorkflowOwner.updateCheck`); 13 → 9 Bun-owned rows.
+- [ ] Transfer the remaining 9 Bun-owned census rows (was 13) (each with its own rollback plan): catalogs/store/Codex probe with the provider helpers; `feedback:submit` as a workflow; skills install; open-in-editor and `open`; update-check fetch; worktree setup helpers and dependency markers; sidecar migration; profile migration; Keychain crypto; orchestration.
 - [ ] Move the provider SDK adapters into supervised helpers after an authorized live parity run (LKM-98 follow-up); then a full native + live run with no legacy module loaded.
 - [ ] Only after the gate opens: delete `TREZI_BACKEND_OWNER=legacy`, `TreziService --legacy` and the rollback rows, keeping every store, journal and worktree.
 - [x] Worker native verification: smoke 20/20 and native core pass; chat acceptance fails twice at the scroller-style-change step (`systemPreferredStyle: legacy`); no host/UI Swift changed here.

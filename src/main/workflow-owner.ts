@@ -5,7 +5,8 @@ import type {
   GitRemoteStatus,
   GithubConnectOptions,
   GithubConnectResult,
-  PublishResult
+  PublishResult,
+  UpdateStatus
 } from '../shared/api'
 import type { PublishMessage } from '../shared/publish-message'
 import { legacyWorkflows } from './workflow-legacy'
@@ -67,6 +68,8 @@ export interface WorkflowOwner {
   removeHelpers(root: string): Promise<{ ok: boolean; files?: string[]; error?: string }>
   /** Starter files (relative path → content) and the package manager to install with. */
   createProject(root: string, files: Record<string, string>, install: 'bun' | 'npm' | null): Promise<CreatedProject>
+  /** Whether Trezi's own checkout trails its upstream (fetches; `idle` on any soft failure). */
+  updateCheck(root: string): Promise<UpdateStatus>
   /** Trezi's own update: pull (fast-forward), install, build. Restart stays the caller's. */
   update(root: string, progress?: (text: string) => void): Promise<{ ok: boolean; error?: string }>
   recallDiagnosis(root: string, signature: string): Promise<Diagnosis | null>

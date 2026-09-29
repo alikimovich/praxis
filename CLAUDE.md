@@ -175,14 +175,15 @@ src/
                     native/provider-service.ts behind main/provider-owner.ts;
                     main/provider-model.ts + provider-policy.ts are the rollback twin
                     (docs/SWIFT-BACKEND-PROVIDERS.md)
-    EditingOwner.swift / EditingIslands.swift / EditingStores.swift   the editing
+    EditingOwner.swift / EditingIslands.swift / EditingStores.swift / EditingProject.swift   the editing
                     coordinator (LKM-99): the only writer of chat island histories
                     (unchanged chat-islands/*.json) and their state machine (activation
                     only by the defining turn, which it asks the conversation owner;
                     command admission, a queued batch's revision chain, per-island
                     Undo); hash-bound commits of the project sidecars in .trezi/
                     (control-panels.json, content-controls.json, and since S15
-                    annotations.json and tokens.json) in the repository lane; persisted content-editor
+                    annotations.json and tokens.json) in the repository lane, plus the sidecar migration,
+                    setup helpers and Next dependency marker (EditingProject); persisted content-editor
                     drafts; deferred open_preview navigation. Bun keeps the JS helpers
                     and views (main/chat-islands.ts, native/content-controller.ts,
                     native/navigation-controller.ts, native/turn-boundaries.ts); Bun's

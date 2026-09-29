@@ -90,5 +90,12 @@ assert.deepEqual(names(tsNames), ['annotations.json', 'content-controls.json', '
 for (const path of ['src/main/annotation-store.ts', 'src/main/tokens.ts'])
   assert.deepEqual([...effects(read(path))], [], `${path} writes through the editing owner only`)
 
+// `.trezi/` project files moved to the editing owner: the same helper list and legacy files in Swift and TS.
+const literals = text => [...text.matchAll(/["']([^"']+)["']/g)].map(match => match[1])
+const swiftProject = read('src/service/EditingProject.swift'), tsSetup = read('src/main/setup-artifacts.ts')
+assert.deepEqual(literals(swiftProject.match(/static let helpers = \[([^\]]*)\]/)[1]), literals(tsSetup.match(/export const SETUP_HELPERS[^=]*= \[([^\]]*)\]/)[1]), 'Swift and TS sync the same setup helpers')
+assert.deepEqual(literals(swiftProject.match(/static let dsgnFiles = \[([^\]]*)\]/)[1]), ['annotations.json', 'tokens.json', 'control-panels.json'])
+assert.match(read('src/main/sidecar-migrate.ts'), /\['annotations\.json', 'tokens\.json', 'control-panels\.json'\]/, 'the TS migration moves the same .dsgn files')
+
 const count = kind => rows.filter(row => row.kind === kind).length
 console.log(`RETIREMENT CENSUS OK — ${rows.length} modules with effects classified (${count('rollback')} rollback, ${count('helper')} helper, ${count('test')} test, ${bun.length} Bun-owned: gate ${bun.length ? 'blocked' : 'open'})`)

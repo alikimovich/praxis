@@ -15,7 +15,7 @@
 //   lanes), crash (SIGKILL inside an island write), rollback, drain, schema.
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -154,6 +154,64 @@ async function sidecars(owner, root) {
   return out
 }
 
+/** The other `.trezi/` files (S15): migration, setup helpers, dependency marker; identical on both owners. */
+async function project(owner, base) {
+  const out = []
+  const attempt = async (label, promise) => { try { out.push([label, await promise]) } catch (error) { out.push([label, error.code ?? String(error)]) } }
+  const tree = path => existsSync(path) ? readdirSync(path).sort().map(name => [name, lstatSync(join(path, name)).isFile() ? readFileSync(join(path, name), 'utf8') : 'dir']) : null
+  const put = (path, text) => { mkdirSync(join(path, '..'), { recursive: true }); writeFileSync(path, text) }
+  // Migration: .praxis copies over, .dsgn's known files move, a differing file collides, existing wins.
+  const live = join(base, 'live')
+  put(join(live, '.praxis', 'notes.json'), 'praxis-notes')
+  put(join(live, '.praxis', 'nested', 'deep.json'), 'deep')
+  put(join(live, '.praxis', 'tokens.json'), 'praxis-tokens')
+  put(join(live, '.dsgn', 'annotations.json'), 'dsgn-notes')
+  put(join(live, '.dsgn', 'tokens.json'), 'dsgn-tokens')
+  put(join(live, '.dsgn', 'other.json'), 'stays')
+  await attempt('migrate', owner.migrateSidecar(live))
+  out.push(['migrated', tree(join(live, '.trezi')), tree(join(live, '.dsgn')), tree(join(live, '.praxis'))])
+  await attempt('migrate again', owner.migrateSidecar(live))
+  put(join(live, '.praxis', 'notes.json'), 'praxis-notes-changed')
+  await attempt('migrate collision', owner.migrateSidecar(live))
+  const linked = join(base, 'linked')
+  mkdirSync(linked, { recursive: true }); symlinkSync(dir('outside-migrate'), join(linked, '.trezi'))
+  put(join(linked, '.dsgn', 'tokens.json'), 'x')
+  await attempt('migrate linked .trezi', owner.migrateSidecar(linked))
+  // Setup helpers: copied and hashed, a vanished helper is removed, a linked folder refused.
+  const tree2 = join(base, 'worktree')
+  mkdirSync(tree2, { recursive: true })
+  put(join(live, '.trezi', 'trezi-source.cjs'), 'source')
+  put(join(live, '.trezi', 'trezi-next.cjs'), 'next')
+  put(join(live, '.praxis', 'praxis-mdx.mjs'), 'mdx')
+  put(join(tree2, '.trezi', 'trezi-mdx.mjs'), 'stale')
+  await attempt('sync helpers', owner.syncSetupHelpers(live, tree2))
+  out.push(['helpers', tree(join(tree2, '.trezi')), tree(join(tree2, '.praxis'))])
+  rmSync(join(live, '.trezi', 'trezi-next.cjs'))
+  await attempt('sync again', owner.syncSetupHelpers(live, tree2))
+  out.push(['helpers after removal', tree(join(tree2, '.trezi'))])
+  const bad = join(base, 'bad-worktree')
+  mkdirSync(bad, { recursive: true }); symlinkSync(dir('outside-sync'), join(bad, '.trezi'))
+  await attempt('sync linked target', owner.syncSetupHelpers(live, bad))
+  // Dependency marker: link removed then install, marker recorded, unchanged manifests skip.
+  const app = join(base, 'app'), checkout = join(base, 'checkout')
+  put(join(app, 'node_modules', 'x.txt'), 'x')
+  put(join(checkout, 'package.json'), '{"name":"a"}')
+  symlinkSync(join(app, 'node_modules'), join(checkout, 'node_modules'))
+  await attempt('needs install (link)', owner.dependencyState(app, checkout))
+  out.push(['link removed', existsSync(join(checkout, 'node_modules'))])
+  mkdirSync(join(checkout, 'node_modules'))
+  await attempt('needs install (no marker)', owner.dependencyState(app, checkout))
+  await attempt('mark', owner.markDependencies(app, checkout))
+  out.push(['marker', readFileSync(join(checkout, '.trezi', 'dependencies.sha256'), 'utf8')])
+  await attempt('skip when marked', owner.dependencyState(app, checkout))
+  writeFileSync(join(checkout, 'package.json'), '{"name":"b"}')
+  await attempt('install after manifest change', owner.dependencyState(app, checkout))
+  rmSync(join(app, 'node_modules'), { recursive: true })
+  mkdirSync(join(base, 'fresh'))
+  await attempt('no live dependencies', owner.dependencyState(app, join(base, 'fresh')))
+  return out
+}
+
 try {
   // ── parity ──────────────────────────────────────────────────────────────
   {
@@ -173,6 +231,17 @@ try {
       ['not a sidecar', 'invalidRequest'], ['notes create', true], ['notes bound update', true], ['notes stale', false],
       ['tokens create-only', true], ['tokens exists', false], ['notes kept', '[{"id":"a1","text":"x"}]\n'],
       ['symlinked file', 'unauthorized'], ['symlinked folder', 'unauthorized'], ['oversized', 'invalidRequest']])
+    const legacyProject = await project(legacyEditing(), dir('project-legacy'))
+    const swiftProject = await project(editing, dir('project-swift'))
+    const swiftBase = dir('project-swift'), legacyBase = dir('project-legacy')
+    const relative = (steps, base) => JSON.parse(JSON.stringify(steps).replaceAll(base, '<base>'))
+    assert.deepEqual(relative(swiftProject, swiftBase), relative(legacyProject, legacyBase), 'project files: identical on both owners')
+    const answer = label => relative(swiftProject, swiftBase).find(step => step[0] === label)[1]
+    assert.deepEqual([answer('migrate'), answer('migrate again')], [[], []])
+    assert.deepEqual(answer('migrate collision'), ['<base>/live/.praxis/notes.json'])
+    assert.deepEqual([answer('migrate linked .trezi'), answer('sync linked target')], ['invalidRequest', 'invalidRequest'])
+    assert.deepEqual([answer('needs install (link)'), answer('needs install (no marker)'), answer('skip when marked'),
+      answer('install after manifest change'), answer('no live dependencies')], [true, true, false, true, false])
     console.log(`parity: ${legacy.length} island/navigation/draft steps and ${legacySide.length} sidecar steps identical on both owners`)
     await fixture.stop()
   }

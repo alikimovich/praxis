@@ -11,6 +11,10 @@ import type { ControlPanelManifest } from '../shared/api'
  * - the project sidecars (`.trezi/control-panels.json`, `content-controls.json`, and
  *   since S15 `annotations.json` and `tokens.json`), committed only if the file still
  *   holds the bytes Bun read, in the repository lane;
+ * - the project's other `.trezi/` files (S15): the pre-rename sidecar migration, the
+ *   setup helpers a chat worktree carries and the Next dependency marker, run in the
+ *   same lane (`EditingProject.swift`; Bun still runs the install between the two
+ *   dependency calls);
  * - unsaved content-editor drafts, kept across restarts;
  * - deferred preview navigation (`open_preview`), released when its turn lands.
  * Bun keeps the JS helpers (manifest/recipe validation, Jev composition, literal
@@ -83,6 +87,15 @@ export interface EditingOwner {
   clearContentDraft(root: string, panel: string): Promise<void>
   /** Hash-bound project sidecar commit; `expectedHash` null means the file must not exist. */
   sidecar(root: string, name: SidecarName, expectedHash: string | null, content: string): Promise<SidecarCommit>
+  // Project files in `.trezi/` (S15), each in the project's repository lane
+  /** Moves pre-rename `.praxis/`/`.dsgn/` metadata into `.trezi/`; answers the legacy copies a differing file won over. */
+  migrateSidecar(root: string): Promise<string[]>
+  /** Copies the live project's setup helpers into a worktree (verified, hashes recorded). */
+  syncSetupHelpers(liveRoot: string, worktree: string): Promise<void>
+  /** Removes a Next checkout's shared `node_modules` link; answers whether it needs its own install. */
+  dependencyState(liveRoot: string, checkout: string): Promise<boolean>
+  /** Records the manifests the checkout's install ran against. */
+  markDependencies(liveRoot: string, checkout: string): Promise<void>
 }
 
 let owner: EditingOwner | null = null

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { app } from '../native/platform'
+import { checkForUpdate } from './update'
 import { recallSignature, remember, setStatus } from './diag-cache'
 import { remoteStatus, updateFromRemote } from './git-remote'
 import { connectToGitHub } from './github'
@@ -77,6 +78,7 @@ export function createLegacyWorkflows(options: LegacyWorkflowOptions = {}): Work
     writeHelpers: (root, files) => writeHelpersLegacy(root, files),
     removeHelpers: (root) => removeHelpersLegacy(root),
     createProject: (root, files, install) => createProjectLegacy(root, files, install),
+    updateCheck: (root) => checkForUpdate(root),
     async update(root, progress) {
       try {
         const dirty = await run(root, 'git', ['status', '--porcelain'])

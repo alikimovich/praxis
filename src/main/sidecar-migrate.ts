@@ -14,7 +14,7 @@ async function publishCopy(from: string, to: string) {
  * collisions are reported and both versions remain available for reconciliation.
  * Exclusive copies are restartable. Never follow project-controlled symlinks.
  */
-async function copyLegacy(from: string, to: string): Promise<void> {
+async function copyLegacy(from: string, to: string, collisions: string[]): Promise<void> {
   const info = await lstat(from).catch((error) => {
     if (error.code === 'ENOENT') return null
     throw error
@@ -26,19 +26,21 @@ async function copyLegacy(from: string, to: string): Promise<void> {
   await mkdir(to, { recursive: true })
   for (const entry of await readdir(from, { withFileTypes: true })) {
     const source = join(from, entry.name), target = join(to, entry.name)
-    if (entry.isDirectory()) { await copyLegacy(source, target); continue }
+    if (entry.isDirectory()) { await copyLegacy(source, target, collisions); continue }
     if (!entry.isFile()) throw new Error(`Unsupported legacy metadata entry: ${source}`)
     try { await publishCopy(source, target) } catch (error: any) {
       if (error.code !== 'EEXIST') throw error
       const targetInfo = await lstat(target)
       if (!targetInfo.isFile()) throw new Error(`Invalid metadata destination: ${target}`)
-      if (!(await readFile(source)).equals(await readFile(target)))
-        console.warn(`Trezi metadata collision: using ${target}; legacy copy retained at ${source}`)
+      if (!(await readFile(source)).equals(await readFile(target))) collisions.push(source)
     }
   }
 }
-export async function migrateLegacySidecar(root: string): Promise<void> {
-  await copyLegacy(join(root, '.praxis'), join(root, '.trezi'))
+/** The legacy-launch twin of `EditingProject.migrate` (reached through the editing owner
+ * seam only). Answers the legacy copies that differ from the file that won. */
+export async function migrateLegacySidecar(root: string): Promise<string[]> {
+  const collisions: string[] = []
+  await copyLegacy(join(root, '.praxis'), join(root, '.trezi'), collisions)
   const oldDirectory = await lstat(join(root, '.dsgn')).catch(error => { if (error.code === 'ENOENT') return null; throw error })
   if (oldDirectory && !oldDirectory.isDirectory()) throw new Error('Legacy dsgn metadata must be a real directory.')
   const currentDirectory = await lstat(join(root, '.trezi')).catch(error => { if (error.code === 'ENOENT') return null; throw error })
@@ -56,4 +58,5 @@ export async function migrateLegacySidecar(root: string): Promise<void> {
     await publishCopy(from, to)
     await unlink(from)
   }
+  return collisions
 }
