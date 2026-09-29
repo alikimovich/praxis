@@ -1,15 +1,15 @@
-import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { dirname, join, relative } from 'node:path'
+import { createHash } from 'node:crypto'
+import { readFile, realpath, stat } from 'node:fs/promises'
+import { join, relative } from 'node:path'
 import type { PanelRecipe } from '@alikimovich/content-controls/recipe'
 import type { ContentControlDocument, ContentControlPanel } from '../shared/api'
 import { enqueueRepoWrite } from './repo-write-queue'
+import { editingOwner } from './editing-model'
 
 const MAX_BYTES = 512 * 1024
 const digest = (text: string): string => createHash('sha256').update(text).digest('hex')
 const revisionOf = (text: string, panel: ContentControlPanel): string =>
   digest(`${text}\n${JSON.stringify(panel)}`)
-const storeFile = (root: string): string => join(root, '.trezi', 'content-controls.json')
 
 export function validateContentFile(file: unknown): asserts file is string {
   if (
@@ -45,19 +45,20 @@ async function checkedRecipe(input: unknown): Promise<PanelRecipe> {
   if (JSON.stringify(input).length > 32_000) throw new Error('Recipe exceeds 32 KB.')
   return parseRecipe(input)
 }
-async function readStore(root: string): Promise<ContentControlPanel[]> {
+/** The store and the SHA-256 of the bytes read (null: no store yet); writes bind to it. */
+async function loadStore(root: string): Promise<{ panels: ContentControlPanel[]; hash: string | null }> {
   let text: string
   try {
     text = await boundedRead(await confined(root, '.trezi/content-controls.json'))
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { panels: [], hash: null }
     throw error
   }
   const data = JSON.parse(text)
   if (data.version !== 1 || !Array.isArray(data.panels) || data.panels.length > 20)
     throw new Error('Invalid content-controls store. Repair it before saving panels.')
   const seen = new Set<string>()
-  return Promise.all(
+  const panels = await Promise.all(
     data.panels.map(async (panel: ContentControlPanel) => {
       validateContentFile(panel.file)
       const recipe = await checkedRecipe(panel.recipe)
@@ -66,21 +67,17 @@ async function readStore(root: string): Promise<ContentControlPanel[]> {
       return { id: recipe.id, file: panel.file, recipe }
     })
   )
+  return { panels, hash: digest(text) }
 }
-async function writeStore(root: string, panels: ContentControlPanel[]): Promise<void> {
-  const file = storeFile(root)
-  await mkdir(dirname(file), { recursive: true })
-  // Reject a redirected sidecar before writing any state.
-  await confined(root, '.trezi')
+async function readStore(root: string): Promise<ContentControlPanel[]> {
+  return (await loadStore(root)).panels
+}
+/** Committed by the editing owner (S12) only if the store still holds what was read. */
+async function writeStore(root: string, panels: ContentControlPanel[], hash: string | null): Promise<void> {
   const text = `${JSON.stringify({ version: 1, panels }, null, 2)}\n`
   if (Buffer.byteLength(text) > MAX_BYTES) throw new Error('Content panel store exceeds 512 KB.')
-  const tmp = `${file}.${randomUUID()}.tmp`
-  try {
-    await writeFile(tmp, text, { flag: 'wx' })
-    await rename(tmp, file)
-  } finally {
-    await rm(tmp, { force: true })
-  }
+  const result = await editingOwner().sidecar(root, 'content-controls.json', hash, text)
+  if (!result.ok) throw new Error('.trezi/content-controls.json changed while saving; nothing was written. Try again.')
 }
 export async function readContentDocument(
   root: string,
@@ -126,13 +123,13 @@ export async function defineContentControls(
   const panel = { id: recipe.id, file: input.file, recipe }
   await readContentDocument(root, panel)
   return enqueueRepoWrite(liveRoot, async () => {
-    const panels = await readStore(liveRoot)
+    const { panels, hash } = await loadStore(liveRoot)
     const at = panels.findIndex((p) => p.id === panel.id)
     if (at < 0) {
       if (panels.length >= 20) throw new Error('Content panel limit reached (20).')
       panels.push(panel)
     } else panels[at] = panel
-    await writeStore(liveRoot, panels)
+    await writeStore(liveRoot, panels, hash)
     return panel
   })
 }
@@ -180,10 +177,8 @@ export async function saveContentControls(
   })
 }
 export async function removeContentControls(root: string, id: string): Promise<void> {
-  await enqueueRepoWrite(root, async () =>
-    writeStore(
-      root,
-      (await readStore(root)).filter((p) => p.id !== id)
-    )
-  )
+  await enqueueRepoWrite(root, async () => {
+    const { panels, hash } = await loadStore(root)
+    await writeStore(root, panels.filter((p) => p.id !== id), hash)
+  })
 }

@@ -1,5 +1,5 @@
 import { views, ipcMain } from '../native/platform'
-import { mkdir, readFile, rename, stat, writeFile } from 'fs/promises'
+import { readFile, stat } from 'fs/promises'
 import { isAbsolute, join, normalize } from 'path'
 import type {
   ControlPanelManifest,
@@ -17,13 +17,15 @@ import {
   validateManifest
 } from './control-manifest'
 import { commitEdit, withinRoot } from './props'
+import { editingOwner } from './editing-model'
+import { contentHash } from './source-owner'
 
 /**
  * Custom-control panel store + literal apply (v10 Custom Controls). Manifests
  * live in `<repo>/.trezi/control-panels.json` — the same sidecar directory as
- * annotations.json, with the same discipline: atomic tmp+rename writes, all
- * mutations serialized through a promise chain, and main as the SOLE writer
- * (the agent is denied `.trezi/` writes). The file on disk is user-editable and
+ * annotations.json. All mutations are serialized through a promise chain and
+ * committed by the editing owner (S12: the Swift service, hash-bound, in the
+ * repository lane) as the SOLE writer (the agent is denied `.trezi/` writes). The file on disk is user-editable and
  * therefore untrusted: every load re-runs each panel through validateManifest,
  * keeping entries that fail (or exceed the panel cap, or duplicate an id) OUT
  * of resolution but PRESERVED verbatim across rewrites — a hand-edit typo in
@@ -45,6 +47,8 @@ interface LoadedStore {
   /** False when a store FILE exists but can't be loaded as one (bad JSON,
    *  wrong shape, oversized) — mutations refuse rather than clobber it. */
   writable: boolean
+  /** SHA-256 of the bytes read (null: no store file). A write is bound to it. */
+  hash: string | null
 }
 
 const dir = (root: string): string => join(root, '.trezi')
@@ -74,34 +78,35 @@ async function readStore(root: string): Promise<LoadedStore> {
   try {
     size = (await stat(file(root))).size
   } catch {
-    return { panels: [], preserved: [], writable: true } // no store yet
+    return { panels: [], preserved: [], writable: true, hash: null } // no store yet
   }
-  const corrupt: LoadedStore = { panels: [], preserved: [], writable: false }
+  const corrupt: LoadedStore = { panels: [], preserved: [], writable: false, hash: null }
   if (size > MAX_STORE_BYTES) return corrupt
-  let parsed: unknown
+  let parsed: unknown, hash: string
   try {
-    parsed = JSON.parse(await readFile(file(root), 'utf8'))
+    const bytes = await readFile(file(root))
+    hash = contentHash(bytes)
+    parsed = JSON.parse(bytes.toString('utf8'))
   } catch {
     return corrupt
   }
   const raw = (parsed as { panels?: unknown } | null)?.panels
   if (!Array.isArray(raw)) return corrupt
-  return { ...partitionStoreEntries(raw), writable: true }
+  return { ...partitionStoreEntries(raw), writable: true, hash }
 }
 
-/** Atomic write (tmp + rename), like annotations.ts — a crash can't leave a
- *  half-written file that readStore would treat as "no panels". Preserved
- *  entries ride along after the validated panels, verbatim. */
+/** The editing owner (S12) commits the store atomically, only if the file still
+ *  holds the bytes `readStore` read — a hand edit in between is refused, never
+ *  overwritten. Preserved entries ride along after the validated panels, verbatim. */
 async function writeStore(
   root: string,
   panels: ControlPanelManifest[],
-  preserved: unknown[]
+  preserved: unknown[],
+  hash: string | null
 ): Promise<void> {
-  await mkdir(dir(root), { recursive: true })
   const store: ControlStore = { version: 1, panels: [...panels, ...preserved] }
-  const tmp = file(root) + '.tmp'
-  await writeFile(tmp, JSON.stringify(store, null, 2) + '\n', 'utf8')
-  await rename(tmp, file(root))
+  const result = await editingOwner().sidecar(root, 'control-panels.json', hash, JSON.stringify(store, null, 2) + '\n')
+  if (!result.ok) throw new Error('.trezi/control-panels.json changed while saving; nothing was written. Try again.')
 }
 
 // Main is the only writer, but two IPC calls can interleave at their awaits.
@@ -133,7 +138,7 @@ export function saveManifest(
       return { error: '.trezi/control-panels.json is not a valid store — fix or delete it first' }
     const next = upsertPanel(store.panels, manifest)
     if ('error' in next) return next
-    await writeStore(root, next, store.preserved)
+    await writeStore(root, next, store.preserved, store.hash)
     return manifest
   })
 }
@@ -143,7 +148,7 @@ export function removePanel(root: string, id: string): Promise<ControlPanelManif
     const store = await readStore(root)
     const next = store.panels.filter((p) => p.id !== id)
     if (store.writable && next.length !== store.panels.length)
-      await writeStore(root, next, store.preserved)
+      await writeStore(root, next, store.preserved, store.hash)
     return next
   })
 }

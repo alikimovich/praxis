@@ -58,6 +58,7 @@
     "test:source-owner": "bun test/source-owner.mjs",
     "test:conversation-owner": "bun test/conversation-owner.mjs",
     "test:provider-owner": "bun test/provider-owner.mjs",
+    "test:editing-owner": "bun test/editing-owner.mjs",
     "test:annotation-store": "bun test/annotation-store.mjs",
     "test:project-icon": "bun test/project-icon.mjs",
     "test:providers": "bun test/providers-store.mjs",

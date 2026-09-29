@@ -33,6 +33,9 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
     /// S10 provider owner (session grants, permissions, tool authorization, Stop's
     /// deadline, resume persistence, supervised helpers), on the same pipe.
     var provider: ProviderOwner?
+    /// S12 editing coordinator (islands, controls sidecars, content drafts, deferred
+    /// navigation), on the same pipe; sidecar commits run in the repository's lanes.
+    var editing: EditingOwner?
     var child: LegacyChild?
     var launch: ServiceLaunch?
     var peerPID: pid_t?
@@ -146,7 +149,10 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                             environment: requested.environment), send: send)
                         self.repository = repository
                         source = SourceOwner(options: SourceOwner.Options(profile: requested.profile), repository: repository, send: send)
-                        conversation = ConversationOwner(options: ConversationOwner.Options(profile: requested.profile), send: send)
+                        let conversation = ConversationOwner(options: ConversationOwner.Options(profile: requested.profile), send: send)
+                        self.conversation = conversation
+                        editing = EditingOwner(options: EditingOwner.Options(profile: requested.profile,
+                            turn: { [weak conversation] chat in conversation?.turn(of: chat) ?? (false, nil) }), repository: repository, send: send)
                         // No built-in adapter is helper-hosted yet (it needs a live parity run), so no helper command.
                         provider = ProviderOwner(options: ProviderOwner.Options(profile: requested.profile, environment: requested.environment,
                             watchdog: CommandLine.arguments[0], journal: journal), send: send)
@@ -206,9 +212,9 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
     func readBackend() {
         guard let output = child?.output else { return }
         // Handed to the reader directly (not via `queue`), so Bun's preference,
-        // workspace, memory, runtime, repository, source, conversation and provider requests are still served while `stop` waits for Bun to exit.
+        // workspace, memory, runtime, repository, source, conversation, provider and editing requests are still served while `stop` waits for Bun to exit.
         let preferences = preferences, workspace = workspace, memory = memory, runtime = runtime, repository = repository, source = source
-        let conversation = conversation, provider = provider
+        let conversation = conversation, provider = provider, editing = editing
         let preferencesPrefix = Data("{\"service\":\"preferences\"".utf8)
         let workspacePrefix = Data("{\"service\":\"workspace\"".utf8)
         let memoryPrefix = Data("{\"service\":\"memory\"".utf8)
@@ -217,6 +223,7 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
         let sourcePrefix = Data("{\"service\":\"source\"".utf8)
         let conversationPrefix = Data("{\"service\":\"conversation\"".utf8)
         let providerPrefix = Data("{\"service\":\"provider\"".utf8)
+        let editingPrefix = Data("{\"service\":\"editing\"".utf8)
         DispatchQueue.global().async { [weak self] in
             var pending = Data()
             do {
@@ -235,6 +242,7 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                         if line.starts(with: sourcePrefix) { source?.submit(line); continue }
                         if line.starts(with: conversationPrefix) { conversation?.submit(line); continue }
                         if line.starts(with: providerPrefix) || line.starts(with: ProviderOwner.helperPrefix) { provider?.submit(line); continue }
+                        if line.starts(with: editingPrefix) { editing?.submit(line); continue }
                         guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any], object["method"] is String else { continue }
                         self?.queue.async { [weak self] in self?.deliver(line) }
                     }
@@ -289,8 +297,12 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
         // lease answers "stopping" instead of starting; one already writing finishes
         // (bounded), and one cut short is rolled back from its journal next launch.
         source?.refuse()
+        editing?.refuse()
         repository?.close(timeout: 5); repository = nil
         source?.close(timeout: 5); source = nil
+        // Island decisions and drafts already answered are on disk; a sidecar commit
+        // queued behind a released lease answered "stopping" above.
+        editing?.close(timeout: 2); editing = nil
         // Bun has exited: its chats were closed (saved to History) or are left as
         // checkpoints, which the next launch recovers. A decision already underway finishes.
         conversation?.close(timeout: 2); conversation = nil

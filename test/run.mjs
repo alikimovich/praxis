@@ -24,6 +24,7 @@ const UNIT = [
   "source-owner",
   "conversation-owner",
   "provider-owner",
+  "editing-owner",
   "native-visible-capture",
   "native-smoke-runner",
   "rename-compat",

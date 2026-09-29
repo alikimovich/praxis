@@ -20,7 +20,10 @@ admission; Bun's provider sessions report typed events to it
 with its provider owner, which fixes the session's grant, answers its permission
 requests, authorizes Trezi tools, holds Stop's deadline, persists resume ids and
 supervises provider helpers against their grant; the SDK adapters still run in Bun
-(docs/SWIFT-BACKEND-PROVIDERS.md).
+(docs/SWIFT-BACKEND-PROVIDERS.md). Since LKM-99 it owns the editing workflows' state:
+chat island histories and activation (bound to the defining turn), the controls
+sidecars (hash-bound commits), content-editor drafts and deferred preview navigation;
+Bun keeps the JS helpers and inspector views (docs/SWIFT-BACKEND-EDITING.md).
 Every other domain writer remains in Bun until a
 verified transfer; annotation storage is split from
 publication but stays in Bun until the S07 repository lane.

@@ -361,6 +361,12 @@ const startingSpawns = new Map<string, string>()
 // A cancel that arrived while its spawn was still starting: interrupted once it runs.
 const cancelOnStart = new Set<string>()
 /** Git updates must not move the live branch beneath an active project turn. */
+/** The turn the chat's provider is working on now (islands and navigation bind to it). */
+export function currentTurn(sessionKey: string): string | null {
+  const session = sessions.get(sessionKey)
+  return (session && trackers.get(session)?.current?.turn) ?? null
+}
+
 export function projectHasRunningAgents(root: string): boolean {
   const key = projectKey(root)
   return (

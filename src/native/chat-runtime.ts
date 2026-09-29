@@ -1,5 +1,7 @@
 import { join } from 'node:path'
 import { ChatIslands, installChatIslands } from '../main/chat-islands'
+import { currentTurn } from '../main/agent'
+import { TurnBoundaries } from './turn-boundaries'
 import type { NativeChatSnapshot } from '../shared/native-chat-controller'
 import { app, views } from './platform'
 import { chatAgentSettingsFromOptions } from '../shared/chat-settings'
@@ -9,12 +11,15 @@ import { NativeChatController } from './chat-controller'
 import { dispatchIPC, serviceEvents, type NativeView } from './platform'
 
 export let nativeIslands: ChatIslands
+const boundaries = new TurnBoundaries()
+/** Turn boundaries per chat (begin, landed, failed), for deferred preview navigation. */
+export const turnBoundaries = new Set<(key: string, kind: 'begin' | 'landed' | 'failed', turn: string | null) => void>()
 export let nativeChat: NativeChatController
 export function installNativeChat(host: NativeBridge, view: NativeView) {
   const islands = new ChatIslands(join(app.getPath('userData'), 'chat-islands'), key => {
     const chat = nativeChat.chats.get(key)
     if (chat) nativeChat.changed(chat)
-  })
+  }, undefined, { origin: currentTurn })
   nativeIslands = islands
   installChatIslands(islands)
   const renderIslands = (state: NativeChatSnapshot) => {
@@ -51,19 +56,19 @@ export function installNativeChat(host: NativeBridge, view: NativeView) {
     })()
   })
   const stop = nativeChat.stop.bind(nativeChat)
-  nativeChat.stop = async chat => { try { await islands.settle(chat.chat, false) } finally { await stop(chat) } }
+  nativeChat.stop = async chat => { try { await islands.settle(chat.chat, false, currentTurn(chat.chat)) } finally { await stop(chat) } }
   const close = nativeChat.close.bind(nativeChat)
-  nativeChat.close = key => { islands.close(key); close(key) }
+  nativeChat.close = key => { islands.close(key); boundaries.forget(key); for (const listener of turnBoundaries) listener(key, 'failed', null); close(key) }
   host.on('composer-action', action => { void nativeChat.composer(action) })
   host.on('chat-action', action => { void nativeChat.action(action) })
   serviceEvents.on('event', (channel: string, event: AgentEvent) => {
     if (channel === 'agent:event') {
       nativeChat.event(event)
       const key = event.projectKey
-      if (key && !event.sessionId) {
-        const terminal = event.type === 'error' || event.type === 'isolation' && event.state === 'parked'
-        const success = event.type === 'isolation' && event.state === 'merged' || event.type === 'done' && !event.landingPending
-        if (terminal || success) void islands.settle(key, !terminal).catch(error => {
+      if (key && !event.sessionId) for (const { kind, turn } of boundaries.events(key, event)) {
+        for (const listener of turnBoundaries) listener(key, kind, turn)
+        // Only the islands the ending turn defined are activated (or made unavailable).
+        if (kind !== 'begin') void islands.settle(key, kind === 'landed', turn).catch(error => {
           const chat = nativeChat.chats.get(key); if (chat) { chat.error = String(error); nativeChat.changed(chat) }
         })
       }

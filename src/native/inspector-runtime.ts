@@ -8,6 +8,10 @@ import { dispatchIPC, serviceEvents } from './platform'
 import { describeSelectionForPrompt, oneLine } from '../shared/selection-context'
 import { backgroundAgentOptions } from '../shared/background-model'
 import { agentOptionsFor } from '../shared/chat-settings'
+import { editingOwner } from '../main/editing-model'
+import { currentTurn } from '../main/agent'
+import { NavigationController } from './navigation-controller'
+import { turnBoundaries } from './chat-runtime'
 export function installNativeInspector(host: NativeBridge, workspace: NativeWorkspaceController, chat: NativeChatController, context: NativeContextController, visualEdit: (root: string, prompt: string) => Promise<void>, openSource: (source?: string) => void, report: (error: unknown) => void) {
   const send = (channel: string, ...args: any[]) => dispatchIPC('main', { type: 'send', channel, args })
   const controller = new NativeInspectorController(workspace.services.invoke, send, state => host.send('inspectorState', { state }), async (root, prompt, submit) => {
@@ -16,7 +20,21 @@ export function installNativeInspector(host: NativeBridge, workspace: NativeWork
     if (submit) await chat.command({ type: 'submit', chat: entry.activeSessionKey, text: prompt })
     else await visualEdit(root, prompt)
   }, () => chat.action({ chat: chat.active, action: 'setup' }), () => chat.chats.get(chat.active)?.settings.provider ?? 'claude')
-  const content = new NativeContentController(workspace.services.invoke, (documentID, state) => host.send('contentState', { documentID, state }))
+  const content = new NativeContentController(workspace.services.invoke, (documentID, state) => host.send('contentState', { documentID, state }), editingOwner())
+  // Deferred preview navigation (S12): the editing owner holds an agent's request
+  // until its turn lands; this only loads it in the chat and project that asked.
+  const navigation = new NavigationController(editingOwner(), {
+    active: () => {
+      const entry = workspace.active, status = workspace.state.status
+      if (!entry) return null
+      const url = status.kind === 'running' && entry.previewKind !== 'simulator' ? status.url : null
+      return { root: entry.root, chat: entry.activeSessionKey, url }
+    },
+    load: url => workspace.services.invoke('preview:load', url)
+  }, currentTurn, report)
+  turnBoundaries.add((key, kind, turn) => { void navigation.boundary(key, kind, turn).catch(report) })
+  const render = workspace.services.render
+  workspace.services.render = state => { render(state); navigation.poke() }
   const openContent = async (root: string) => {
     const panels = await workspace.services.invoke('content-controls:list', root)
     for (const panel of panels) if (!content.sessions.has(root + '\n' + panel.id)) await content.open(root, panel.id).catch(report)
@@ -33,6 +51,7 @@ export function installNativeInspector(host: NativeBridge, workspace: NativeWork
     if (value.type === 'selection-clear' && value.chat === chat.active && selection?.prompt === value.prompt) void controller.select(null).catch(report)
   }
   serviceEvents.on('event', (channel, value) => {
+    if (channel === 'preview:open') { void navigation.request(value).catch(report); return }
     const entry = workspace.active
     if (!entry) return
     if (channel === 'content-controls:updated' && value.root === entry.root) { void openContent(entry.root).catch(report) }
@@ -59,5 +78,5 @@ export function installNativeInspector(host: NativeBridge, workspace: NativeWork
       controller.requestedFile = value.file ?? null; controller.state.tab = value.tab; controller.publish(); void controller.refresh().catch(report)
     }
   })
-  return { inspector: controller, content }
+  return { inspector: controller, content, navigation }
 }

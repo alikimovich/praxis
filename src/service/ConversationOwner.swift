@@ -303,6 +303,15 @@ final class ConversationOwner: @unchecked Sendable {
         catch { throw RepositoryRefusal(.ioFailure, "The chat could not be checkpointed (\(error)).") }
     }
 
+    /// The editing coordinator's question (S12): is this a live chat, and which turn is in
+    /// flight (nil when idle)? Answered in order with the chat's own transitions.
+    func turn(of chat: String) -> (known: Bool, turn: String?) {
+        intake.sync {
+            guard let current = state.chats[chat] else { return (false, nil) }
+            return (true, current.phase == .idle ? nil : current.turn)
+        }
+    }
+
     // MARK: Drain
 
     /// Refuses new requests; one being decided finishes.

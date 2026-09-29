@@ -20,6 +20,8 @@ export interface IslandRecord {
   fallback?: string
   status: 'waiting' | 'ready' | 'unavailable'
   initial: Record<string, IslandValue>
+  /** The turn id that defined it (S12): only that turn's landing activates it. */
+  origin?: string
 }
 export interface IslandView {
   id: string

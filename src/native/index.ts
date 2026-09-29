@@ -52,6 +52,8 @@ import { type ConversationOwner, setConversationOwner } from '../main/conversati
 import { serviceConversation } from './conversation-service'
 import { serviceProvider } from './provider-service'
 import { setProviderOwner } from '../main/provider-owner'
+import { serviceEditing } from './editing-service'
+import { setEditingOwner } from '../main/editing-owner'
 import { installNativeChat } from './chat-runtime'
 import { NativeShellController } from './shell-controller'
 import { NativeSupportSheets } from './support-sheets'
@@ -171,6 +173,9 @@ async function main() {
   // Provider sessions (S10): the service holds each session's grant, answers its
   // permission requests and tool calls, owns Stop's deadline and persists resume ids.
   if (process.env.TREZI_SERVICE_SUPERVISED === '1') setProviderOwner(serviceProvider(host))
+  // Editing workflows (S12): island history and activation, the controls sidecars
+  // (hash-bound, in the repository lane), content drafts and deferred navigation.
+  if (repository) { const lanes = repository; setEditingOwner(serviceEditing(host, { leases: () => lanes.heldLeases() })) }
   const refreshPreferences = () => {
     const values = preferences.snapshot()
     let preferred: unknown

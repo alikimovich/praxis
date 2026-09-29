@@ -11,7 +11,22 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
-**Current (2026-09-29, LKM-98):** S10 (roadmap row) puts provider sessions under the
+**Current (2026-09-29, LKM-99):** S12 (roadmap row) moves the editing workflows' state
+into the Swift service. It is the only writer of chat island histories and decides every
+island step: a definition is bound to the turn the conversation owner says is in flight,
+only that turn's landing activates it (a late or another turn's terminal activates
+nothing), commands are admitted for the current revision one at a time, a queued
+batch's source revision advances only through its own writes, and each island's Undo
+group reverts through the source owner. It commits the controls sidecars
+(`.trezi/control-panels.json`, `content-controls.json`) only against the bytes Bun read,
+in the repository lane; persists content-editor drafts across restarts (a stale one is
+refused on save); and holds an agent's `open_preview` until its turn lands (the native
+app had lost this deferral). Bun keeps the JS helpers, the isolated WebKit
+instrumentation and the inspector views. `TREZI_BACKEND_OWNER=legacy` keeps the TS twin
+as the rollback owner. See [editing](SWIFT-BACKEND-EDITING.md). Implemented for review
+on the LKM-98 candidate; manager verification and acceptance are pending.
+
+**Earlier (2026-09-29, LKM-98):** S10 (roadmap row) puts provider sessions under the
 Swift service. Every session is opened there first and gets a grant fixed from its
 provider, background flag and roots. The service answers its permission requests
 (Claude's `canUseTool` no longer decides) and authorizes its Trezi tools (Claude's

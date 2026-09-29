@@ -2,6 +2,64 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — Swift editing coordinator: islands, controls sidecars, content drafts, navigation (LKM-99 / S12)
+
+The ninth transfer, on the LKM-98 candidate. Details, the protocol and the tightened
+rollback plan are in `docs/SWIFT-BACKEND-EDITING.md`.
+
+S12's controllers are mostly views: the inspector, layers and styles controllers hold
+no state beyond their generation checks, and the DOM work stays in the isolated WebKit
+world. The state that decides what an edit does moved: the chat islands, the controls
+sidecars, content drafts and deferred navigation.
+
+Islands had a turn-isolation bug. Any `done` (including a late one, which S11 marks
+`stale` but the island code never looked at) activated every waiting island of the
+chat, so turn 1's late terminal could activate turn 2's island before turn 2 landed.
+Now the service binds each definition to the turn the conversation owner says is in
+flight (`origin`), and only that turn's terminal settles it. Bun attributes terminals
+with `TurnBoundaries` (`src/native/turn-boundaries.ts`): the landing's untagged
+`isolation` event belongs to the `done` that asked for it, and a stale terminal ends
+nothing. The service is the only writer of the island histories (same files and
+format) and decides admission, the revision chain of a queued gesture batch (frames
+arriving before the previous write settled still apply, an external edit's revision
+is never blessed) and each island's Undo group. Composition (Jev), literal resolution
+and the hash-bound source proposals stay JS.
+
+The controls sidecars (`.trezi/control-panels.json`, `content-controls.json`) are now
+committed by the owner only against the bytes Bun read, in the repository lane: a hand
+edit between read and write is refused and kept. A symlinked `.trezi` or store file is
+refused (the legacy writer followed an in-project link). Content-editor drafts, which
+lived in Bun memory, are persisted and restored after a restart; a restored draft stays
+bound to its own base revision, so it cannot be saved over content that changed
+meanwhile. `open_preview` asked to navigate "after this turn lands", but no native code
+consumed it since Electron was retired; the owner now holds it until the requesting
+turn lands (dropped on failure, park, a newer turn, leaving the chat), and
+`NavigationController` loads it in that chat's project once its server runs.
+
+Still in Bun: the composer's queue, drafts and attachments; the workspace controller's
+server fields; project UI composition enablement; the preview DOM instrumentation (JS
+by design). Recorded in TASKS.
+
+Verification (worker sandbox): `test/editing-owner.mjs` passes in about 3 s (cached
+fixture): parity (52 island/navigation/draft steps and 9 sidecar steps identical on the
+legacy twin and the Swift owner, including history bytes), turns (conversation-owned
+origin, navigation, `TurnBoundaries` reordering), the `chat-islands`,
+`shadow-controls`, `control-panels`, `content-controls` and `native-content` suites
+re-run unchanged on the Swift owners, drafts, lanes, crash (SIGKILL before and after the
+history rename), rollback both ways, drain and schema. `chat-islands.mjs` now waits for
+its repository lease explicitly and handles one refusal at once (both needed only when
+the lease is a service round trip). The manager's quick verification (both typechecks,
+137 unit checks) passes; the new Swift files have zero diagnostics under
+`-strict-concurrency=complete`. The native smoke's islands now use scratch histories
+through `register`, so the chat's own history is untouched.
+
+Worker native verification (staged, desktop lock): a run filtered to chat, core, islands
+and shadow-light failed `shell-layout` (1 of 15). The preview was still reloading after
+the islands check restored `index.html`, so its injected background never took. The
+composer checks that normally sit between them were filtered out. The islands check now
+waits for that reload. The full run then passed: native smoke 20 of 20 (NATIVE ISLANDS,
+SHADOW LIGHT, SIDEBAR, SETTINGS and CORE PASS) and CHAT ACCEPTANCE PASS.
+
 ## 2026-09-29 — Swift provider owner and helper capability enforcement (LKM-98 / S10)
 
 The eighth transfer, on the LKM-97 candidate. Details, the protocols and the tightened

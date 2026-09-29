@@ -172,6 +172,18 @@ src/
                     native/provider-service.ts behind main/provider-owner.ts;
                     main/provider-model.ts + provider-policy.ts are the rollback twin
                     (docs/SWIFT-BACKEND-PROVIDERS.md)
+    EditingOwner.swift / EditingIslands.swift / EditingStores.swift   the editing
+                    coordinator (LKM-99): the only writer of chat island histories
+                    (unchanged chat-islands/*.json) and their state machine (activation
+                    only by the defining turn, which it asks the conversation owner;
+                    command admission, a queued batch's revision chain, per-island
+                    Undo); hash-bound commits of .trezi/control-panels.json and
+                    content-controls.json in the repository lane; persisted content-editor
+                    drafts; deferred open_preview navigation. Bun keeps the JS helpers
+                    and views (main/chat-islands.ts, native/content-controller.ts,
+                    native/navigation-controller.ts, native/turn-boundaries.ts); Bun's
+                    client is native/editing-service.ts behind main/editing-owner.ts;
+                    main/editing-model.ts is the rollback twin (docs/SWIFT-BACKEND-EDITING.md)
   main/           Backend services (CJS bundle, Bun); historical directory name
     preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
                     bounds/load/reset/capture, the select + comment relays, the
@@ -267,7 +279,8 @@ src/
                     parentNode back-references)
     control-manifest.ts / control-panels.ts   AI-surfaced control panels:
                     validate + anchor-lex + render literals (pure) and the
-                    main-owned .trezi/control-panels.json store + controls:* IPC
+                    .trezi/control-panels.json store (rendered here, committed
+                    hash-bound by the editing owner) + controls:* IPC
     tokens.ts       design-token detection/scaffold   annotations.ts  comments → PR
     annotation-store.ts  the notes sidecar's storage (list/add/remove; no Git), split
                     from publication; Bun-owned until the S07 repository lane
@@ -353,7 +366,9 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   parser proposals (`docs/SWIFT-BACKEND-SOURCE.md`), and owns chat records, live-chat
   checkpoints and turn transitions (`docs/SWIFT-BACKEND-CONVERSATION.md`), and holds
   every provider session's grant, permission answers, tool authorization, Stop's
-  deadline and resume ids (`docs/SWIFT-BACKEND-PROVIDERS.md`);
+  deadline and resume ids (`docs/SWIFT-BACKEND-PROVIDERS.md`), and owns chat island
+  histories and activation, the controls sidecars, content drafts and deferred preview
+  navigation (`docs/SWIFT-BACKEND-EDITING.md`);
   Bun is still the single writer of every other domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun
   spawns the host, still under Swift's lock, writes all three itself and runs its
   own servers after the launcher sweeps the runtime journal). See
@@ -456,7 +471,8 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
 - **The agent is denied writes under a target repo's `.trezi/` (and legacy `.dsgn/`)** (annotations,
   scaffolded instrumentation, and control-panel manifests live there). The
   `define_controls` tool exists precisely because of this: the agent hands main
-  a manifest and main is the only writer.
+  a manifest, main validates it, and the editing owner (the Swift service, or its
+  legacy twin) is the only writer — hash-bound, so a hand edit is never overwritten.
 - **A control-panel manifest stores no values.** Every value is re-resolved from
   source on lookup (literal → lex the literal after the anchor; prop → the live
   inspection; style → computed styles), so an edit that moves a constant is
