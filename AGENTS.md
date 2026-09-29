@@ -32,9 +32,11 @@ repeats a PR, merge or update; Bun keeps the proposing helpers and the sheets
 cancellable xcrun/idb runs, the launch command as a journaled group, the loopback bridge),
 issues scoped media grants to the source editor, writes pasted attachments and performs the
 running-servers recovery (docs/SWIFT-BACKEND-PLATFORM.md).
-Every other domain writer remains in Bun until a
-verified transfer; annotation storage is split from
-publication but stays in Bun until the S07 repository lane.
+Since LKM-102 (S15) the editing owner also commits the reviewer notes and starter
+tokens sidecars; the Bun modules that still write, spawn or signal are classified in
+docs/SWIFT-BACKEND-RETIREMENT.md, whose retirement gate is still blocked, so the
+legacy owners and `TREZI_BACKEND_OWNER=legacy` remain.
+Every other domain writer remains in Bun until a verified transfer.
 Electron, the React application renderer and browser/Tailscale mode are retired.
 Distributed as source: clone, `bun install`, `bun run dev`. Users authenticate
 with their own provider subscriptions or endpoint credentials.
@@ -49,7 +51,8 @@ with their own provider subscriptions or endpoint credentials.
 ## Commands and verification
 
 Use **Bun**, not npm/yarn. Node 22 remains available for tooling/tests. Native
-builds require macOS 13.3+ and command-line tools with the macOS 26 SDK.
+builds require macOS 13.3+ and command-line tools with the macOS 26 SDK
+(`scripts/requirements.mjs` is the one source).
 
 | Command | Purpose |
 | --- | --- |
@@ -121,8 +124,8 @@ Groups are defined in `src/native/smoke-groups.ts`.
   project; manual `save` versus generated `propose`). Bun's client is
   `src/native/project-memory-service.ts`; `src/main/project-memory.ts` holds the
   shared rules, the rollback writer, the evaluation queue and injection.
-  `src/main/annotation-store.ts` is annotation storage (Bun-owned, split from
-  publication in `src/main/annotations.ts`).
+  `src/main/annotation-store.ts` is annotation storage (split from publication in
+  `src/main/annotations.ts`; since S15 it renders and the editing owner commits).
 - `src/service/RuntimeOwner.swift`, `src/service/RuntimeServer.swift`,
   `src/service/ManagedProcess.swift`, `src/service/RuntimeDetect.swift`,
   `src/service/RuntimeNet.swift`, `src/service/StaticSite.swift`,

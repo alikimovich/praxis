@@ -11,7 +11,18 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
-**Current (2026-09-29, LKM-101):** S14 (roadmap row) moves the remaining OS services Bun
+**Current (2026-09-29, LKM-102):** S15 (roadmap row) reconciles the census and gates the
+legacy retirement. The last S05 sidecar writer (reviewer notes) and the starter tokens
+scaffold moved to the editing owner's hash-bound sidecar commit, and the supported
+platform (macOS 13.3+, macOS 26 SDK to build, Bun 1.3+) has one source enforced by the
+build, launcher, CLI and installer. Every Bun module that writes files, runs processes or
+sends signals is classified in [retirement](SWIFT-BACKEND-RETIREMENT.md) and checked by
+`test/retirement-census.mjs`. **The retirement gate is blocked** (13 Bun-owned rows; the
+provider adapters still run in Bun pending an authorized live parity run), so no legacy
+owner, rollback twin or `TREZI_BACKEND_OWNER=legacy` was removed and Bun still hosts the
+application controllers. Implemented for review on the LKM-101 candidate.
+
+**Earlier (2026-09-29, LKM-101):** S14 (roadmap row) moves the remaining OS services Bun
 ran itself into the Swift service's platform owner. The iOS Simulator preview (preflight,
 boot, idb, the app's launch command as a journaled process group, the loopback bridge and
 its frame capture, input and element picks) is a Swift coordinator: every tool run is

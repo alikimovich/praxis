@@ -103,6 +103,8 @@ const UNIT = [
   "preferred-model",
   "project-memory",
   "annotation-store",
+  "retirement-census",
+  "distribution",
   "project-memory-evaluation",
   "providers-store",
   "model-catalog",

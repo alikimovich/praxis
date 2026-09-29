@@ -62,6 +62,8 @@
     "test:workflow-owner": "bun test/workflow-owner.mjs",
     "test:platform-owner": "bun test/platform-owner.mjs",
     "test:annotation-store": "bun test/annotation-store.mjs",
+    "test:retirement-census": "bun test/retirement-census.mjs",
+    "test:distribution": "bun test/distribution.mjs",
     "test:project-icon": "bun test/project-icon.mjs",
     "test:providers": "bun test/providers-store.mjs",
     "test:model-catalog": "bun test/model-catalog.mjs",

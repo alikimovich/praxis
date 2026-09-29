@@ -13,7 +13,8 @@ and the inspector views. Source writes are still proposals to the
 
 - `src/service/EditingOwner.swift`: requests, validation, turn binding, lanes, drain.
 - `src/service/EditingIslands.swift`: island history files and the island state machine.
-- `src/service/EditingStores.swift`: the controls sidecar commit, content drafts,
+- `src/service/EditingStores.swift`: the project sidecar commit (controls; since S15 also
+  `annotations.json` and `tokens.json`, see [retirement](SWIFT-BACKEND-RETIREMENT.md)), content drafts,
   deferred navigation.
 - `src/native/editing-service.ts`: Bun's client. `src/main/editing-owner.ts` is the
   seam, `src/main/editing-model.ts` the rollback twin (`editingOwner()` answers the

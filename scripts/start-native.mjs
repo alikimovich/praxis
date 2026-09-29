@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import '../src/shared/rename-compat.ts'
 import { nativeProfilePath } from '../src/native/profile-path.ts'
+import { requireSupportedPlatform } from './requirements.mjs'
 
 export function nativeServiceLaunchSpec(root, args, env, bun, testDirectory = null) {
   const owner = env.TREZI_BACKEND_OWNER ?? 'swift'
@@ -21,7 +22,7 @@ export function nativeServiceLaunchSpec(root, args, env, bun, testDirectory = nu
 }
 
 async function main() {
-  if (process.platform !== 'darwin') throw new Error('Trezi requires macOS 13.3 or later.')
+  requireSupportedPlatform()
   const args = process.argv.slice(2)
   if (args[0] === '--wait-for-owner') {
     const pid = Number(args[1])

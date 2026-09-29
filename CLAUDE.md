@@ -38,7 +38,10 @@ history as written.
 | `bun run lint` | Biome lint over `src` + `test` |
 
 Use **bun**, not npm/yarn. Node 22 (`.nvmrc`) remains available for tooling.
-Native builds require macOS 13.3+ and command-line tools with the macOS 26 SDK.
+Native builds require macOS 13.3+ and command-line tools with the macOS 26 SDK
+(one source: `scripts/requirements.mjs`, enforced by build, launcher, CLI and installer).
+`docs/SWIFT-BACKEND-RETIREMENT.md` is the S15 census of every Bun module with a file,
+process or signal effect; `test/retirement-census.mjs` fails on an unlisted one.
 The `dev:native`, `build:native`, and `typecheck:native` aliases remain supported.
 
 ## Verify your own work WITHOUT asking the user
@@ -177,8 +180,9 @@ src/
                     (unchanged chat-islands/*.json) and their state machine (activation
                     only by the defining turn, which it asks the conversation owner;
                     command admission, a queued batch's revision chain, per-island
-                    Undo); hash-bound commits of .trezi/control-panels.json and
-                    content-controls.json in the repository lane; persisted content-editor
+                    Undo); hash-bound commits of the project sidecars in .trezi/
+                    (control-panels.json, content-controls.json, and since S15
+                    annotations.json and tokens.json) in the repository lane; persisted content-editor
                     drafts; deferred open_preview navigation. Bun keeps the JS helpers
                     and views (main/chat-islands.ts, native/content-controller.ts,
                     native/navigation-controller.ts, native/turn-boundaries.ts); Bun's
@@ -311,7 +315,7 @@ src/
     publish.ts      the legacy Publish / handoff / saved-run PR code (rollback twin of
                     service/WorkflowPublish.swift); the routes go through workflow-owner.ts
     annotation-store.ts  the notes sidecar's storage (list/add/remove; no Git), split
-                    from publication; Bun-owned until the S07 repository lane
+                    from publication; renders only, the editing owner commits it (S15)
     spring.ts       pure spring→CSS linear() engine (vendored from ~/dev/spring2css);
                     powers the spring_to_css agent tool in backends/claude.ts
     apca.ts         APCA (Lc) contrast checker + accessible-color suggester
@@ -395,7 +399,7 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   checkpoints and turn transitions (`docs/SWIFT-BACKEND-CONVERSATION.md`), and holds
   every provider session's grant, permission answers, tool authorization, Stop's
   deadline and resume ids (`docs/SWIFT-BACKEND-PROVIDERS.md`), and owns chat island
-  histories and activation, the controls sidecars, content drafts and deferred preview
+  histories and activation, the project sidecars, content drafts and deferred preview
   navigation (`docs/SWIFT-BACKEND-EDITING.md`), and runs publication, remote Git actions,
   setup, new projects, Trezi's update and the diagnosis memory as journaled workflows
   (`docs/SWIFT-BACKEND-WORKFLOWS.md`), and runs the iOS Simulator preview, issues the source

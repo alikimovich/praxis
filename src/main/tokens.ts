@@ -2,10 +2,11 @@
 // which imports `detectTokens` from here for its OWN pure re-validation logic
 // — can be loaded under plain bun for unit testing (see test/style-tokens.mjs).
 import * as platform from '../native/platform'
-import { mkdir, readFile, readdir, writeFile } from 'fs/promises'
+import { readFile, readdir } from 'fs/promises'
 import { join } from 'path'
 import type { Token, TokenGroup, TokenScaffoldResult, TokenSet } from '../shared/api'
 import type { RpcHandlerRegistry } from './rpc-router'
+import { editingOwner } from './editing-model'
 
 /**
  * Design-token detection (the differentiator's last piece). A repo can expose
@@ -297,7 +298,9 @@ const STARTER_MANIFEST = {
 /**
  * Write a starter `.trezi/tokens.json` so a token-less project gets an editable,
  * canonical token source (which then wins detection). Idempotent: if a manifest
- * already exists we leave it untouched and report `written: false`.
+ * already exists we leave it untouched and report `written: false`. The editing
+ * owner creates the file (S15): create-only, so an existing file that detection
+ * could not read (damaged, or written meanwhile) is refused, never replaced.
  */
 async function scaffoldManifest(root: string): Promise<TokenScaffoldResult> {
   try {
@@ -307,12 +310,10 @@ async function scaffoldManifest(root: string): Promise<TokenScaffoldResult> {
     if (current.source !== 'none') {
       return { ok: true, written: false, set: current }
     }
-    await mkdir(join(root, '.trezi'), { recursive: true })
-    await writeFile(
-      join(root, '.trezi', 'tokens.json'),
-      JSON.stringify(STARTER_MANIFEST, null, 2) + '\n',
-      'utf8'
-    )
+    const result = await editingOwner().sidecar(root, 'tokens.json', null, JSON.stringify(STARTER_MANIFEST, null, 2) + '\n')
+    if (!result.ok) {
+      return { ok: false, written: false, error: '.trezi/tokens.json already exists; it was left untouched.' }
+    }
     return { ok: true, written: true, set: await detectTokens(root) }
   } catch (err) {
     return { ok: false, written: false, error: err instanceof Error ? err.message : String(err) }

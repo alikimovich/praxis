@@ -1,15 +1,19 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Annotation, AnnotationInput } from '../shared/api'
 import { projectKey } from '../shared/projectKey'
+import { editingOwner } from './editing-model'
+import type { SidecarCommit } from './editing-owner'
+import { contentHash } from './source-owner'
 
 /**
  * Annotation storage (S05), separate from publication (`annotations.ts`, S13).
  * Reviewer notes are pinned to elements in `<repo>/.trezi/annotations.json`, a
- * sidecar the agent may not write. This module only reads and writes that file:
- * it runs no Git and publishes nothing. The file sits inside the user's
- * repository, so its writer stays in Bun until the repository lane (S07) can
- * serialize sidecar writes with Git; see docs/SWIFT-BACKEND-MEMORY.md.
+ * sidecar the agent may not write. This module reads the file and renders the next
+ * list; it runs no Git and publishes nothing. Since S15 it no longer writes: the
+ * editing owner commits the new text only if the file still holds the bytes read
+ * here, in the repository lane (the Swift service, or its legacy twin under
+ * `TREZI_BACKEND_OWNER=legacy`). See docs/SWIFT-BACKEND-RETIREMENT.md.
  */
 
 export const MAX_ANNOTATION_TEXT = 2000
@@ -30,17 +34,22 @@ export interface AnnotationStore {
   remove: (root: string, id: string) => Promise<Annotation[]>
 }
 
-const dir = (root: string): string => join(root, '.trezi')
-const file = (root: string): string => join(dir(root), 'annotations.json')
+const file = (root: string): string => join(root, '.trezi', 'annotations.json')
 const isNote = (value: unknown): value is Annotation =>
   !!value && typeof value === 'object' && typeof (value as Annotation).id === 'string' && typeof (value as Annotation).text === 'string'
 
+type Commit = (root: string, expectedHash: string | null, content: string) => Promise<SidecarCommit>
+
+/** A hand edit between read and commit is re-read and the change re-applied, this often. */
+const ATTEMPTS = 3
+
 export function createAnnotationStore(
-  options: { now?: () => Date; newId?: () => string } = {}
+  options: { now?: () => Date; newId?: () => string; commit?: Commit } = {}
 ): AnnotationStore {
   let counter = 0
   const now = options.now ?? (() => new Date())
   const newId = options.newId ?? ((): string => `a${Date.now().toString(36)}${(counter++).toString(36)}`)
+  const commit: Commit = options.commit ?? ((root, expectedHash, content) => editingOwner().sidecar(root, 'annotations.json', expectedHash, content))
 
   /**
    * Every entry exactly as stored, so a write never drops what it does not
@@ -48,17 +57,17 @@ export function createAnnotationStore(
    * never replaced (the pre-S05 reader read it as empty and the next note
    * overwrote every earlier one).
    */
-  const read = async (root: string): Promise<unknown[]> => {
-    let raw: string
+  const read = async (root: string): Promise<{ list: unknown[]; hash: string | null }> => {
+    let raw: Buffer
     try {
-      raw = await readFile(file(root), 'utf8')
+      raw = await readFile(file(root))
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { list: [], hash: null }
       throw new AnnotationStoreError('ioFailure', `Notes could not be read (${String(error)}).`)
     }
     let parsed: unknown
     try {
-      parsed = JSON.parse(raw)
+      parsed = JSON.parse(raw.toString('utf8'))
     } catch {
       parsed = null
     }
@@ -68,15 +77,23 @@ export function createAnnotationStore(
         '.trezi/annotations.json is not a valid notes file. It was left untouched; fix or remove it, then try again.'
       )
     }
-    return parsed
+    return { list: parsed, hash: contentHash(raw) }
   }
 
-  /** Atomic write (tmp + rename) so a crash can't leave a half-written file. */
-  const write = async (root: string, list: unknown[]): Promise<void> => {
-    await mkdir(dir(root), { recursive: true })
-    const tmp = `${file(root)}.tmp`
-    await writeFile(tmp, `${JSON.stringify(list, null, 2)}\n`, 'utf8')
-    await rename(tmp, file(root))
+  /**
+   * Read, apply `change` and commit against the bytes read (the owner writes
+   * atomically). `change` returns null when nothing changes, so nothing is written.
+   * A file edited in between is read again, never overwritten.
+   */
+  const update = async (root: string, change: (list: unknown[]) => unknown[] | null): Promise<unknown[]> => {
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+      const { list, hash } = await read(root)
+      const next = change(list)
+      if (!next) return list
+      const result = await commit(root, hash, `${JSON.stringify(next, null, 2)}\n`)
+      if (result.ok) return next
+    }
+    throw new AnnotationStoreError('conflict', '.trezi/annotations.json kept changing while saving; nothing was written. Try again.')
   }
 
   // Two IPC calls can interleave at their awaits. Serialize each project's
@@ -96,12 +113,11 @@ export function createAnnotationStore(
   const notes = (list: unknown[]): Annotation[] => list.filter(isNote)
 
   return {
-    list: (root) => serialize(root, async () => notes(await read(root))),
+    list: (root) => serialize(root, async () => notes((await read(root)).list)),
     add: (root, input) =>
       serialize(root, async () => {
-        const list = await read(root)
         const text = typeof input?.text === 'string' ? input.text.trim() : ''
-        if (!text) return notes(list)
+        if (!text) return notes((await read(root)).list)
         const annotation: Annotation = {
           id: newId(),
           source: input.source,
@@ -110,16 +126,14 @@ export function createAnnotationStore(
           text: text.slice(0, MAX_ANNOTATION_TEXT),
           createdAt: now().toISOString()
         }
-        const next = [...list, annotation]
-        await write(root, next)
-        return notes(next)
+        return notes(await update(root, list => [...list, annotation]))
       }),
     remove: (root, id) =>
-      serialize(root, async () => {
-        const list = await read(root)
-        const next = list.filter((entry) => !(isNote(entry) && entry.id === id))
-        if (next.length !== list.length) await write(root, next)
-        return notes(next)
-      })
+      serialize(root, async () =>
+        notes(await update(root, list => {
+          const next = list.filter((entry) => !(isNote(entry) && entry.id === id))
+          return next.length === list.length ? null : next
+        }))
+      )
   }
 }

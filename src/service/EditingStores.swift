@@ -1,14 +1,15 @@
 import Foundation
 import Darwin
 
-/// The controls sidecars (S12): `.trezi/control-panels.json` and
-/// `.trezi/content-controls.json` in a user's repository. Bun validates manifests and
-/// recipes and renders the next store text; the service commits it only if the file
-/// still holds the bytes Bun read (`expectedHash`, nil for "absent"), in the
-/// repository's lane. The agent can never write these (its sandbox denies `.trezi/`),
-/// and no other Trezi path writes them.
+/// The project sidecars in a user's `.trezi/`: the controls stores (S12,
+/// `control-panels.json`, `content-controls.json`), the reviewer notes
+/// (`annotations.json`, S05's writer, moved with S15) and the starter design tokens
+/// (`tokens.json`, S15). Bun validates and renders the next store text; the service
+/// commits it only if the file still holds the bytes Bun read (`expectedHash`, nil for
+/// "absent"), in the repository's lane. The agent can never write these (its sandbox
+/// denies `.trezi/`), and no other Trezi path writes them.
 enum EditingSidecar {
-    static let names: Set<String> = ["control-panels.json", "content-controls.json"]
+    static let names: Set<String> = ["control-panels.json", "content-controls.json", "annotations.json", "tokens.json"]
     static let maxBytes = 1024 * 1024
 
     enum Outcome { case written(String), conflict }

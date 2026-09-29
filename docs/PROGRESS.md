@@ -2,6 +2,56 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — Retirement census, last sidecar writers, one platform source (LKM-102 / S15, partial)
+
+The last step of the migration, on the LKM-101 candidate. Details are in
+`docs/SWIFT-BACKEND-RETIREMENT.md`.
+
+S15 may remove Bun's application orchestration only once the census shows every module
+has its final owner. It does not yet, so nothing the rollback switch needs was removed.
+What this step does instead:
+
+- The census is executable. `test/retirement-census.mjs` finds every module under
+  `src/main`, `src/native` and `src/shared` that writes files, runs a process or sends a
+  signal. Each one must have a row (rollback twin, retained helper, smoke fixture, or
+  Bun-owned), and each row must still have an effect. The gate line must count the
+  Bun-owned rows, and while any remain the legacy switch must stay. Today: 58 modules,
+  28 rollback, 7 helper, 10 test, 13 Bun-owned.
+- The reviewer notes sidecar (`.trezi/annotations.json`), which S05 held back for the
+  S07 repository lane, and the starter `tokens.json` now go through the editing owner's
+  hash-bound sidecar commit, in the repository lane. The bytes are unchanged. A hand
+  edit between read and commit is read again and never overwritten. A linked `.trezi`
+  is refused, and a damaged `tokens.json` is no longer replaced by the starter.
+  `annotation-store` also runs on the real Swift owner inside `test/editing-owner.mjs`,
+  with Swift/TS parity for the new sidecar steps.
+- The supported platform has one source, `scripts/requirements.mjs`: macOS 13.3, the
+  macOS 26.0 SDK to build, and Bun 1.3.0. The build stamps it into both bundles, and the
+  build, launcher, `bun run dev`, the CLI and `install.sh` refuse early with one message.
+  `test/distribution.mjs` checks this and the package layout the launch spec expects.
+- `agent.ts` had an unused Git runner and unused fs writers; both are removed.
+
+The gate is still blocked. There are 13 Bun-owned rows: provider catalogs and store,
+Codex probe, feedback issues, skills install, the editor CLIs, the update check's fetch,
+worktree setup helpers and dependency markers, the legacy sidecar migration,
+orchestration, Keychain/`open`, and profile migration. The provider SDK adapters also
+still run in Bun, and moving them needs an authorized live parity run. No live provider,
+GitHub, package manager or simulator was used.
+
+Verification (worker): the quick tier passes, with 141 unit checks (including the two
+new tests and the extended `annotation-store` and `editing-owner`) and both typechecks.
+`docs-links` fails until the new files are staged: it checks tracked paths.
+
+Native verification (staged, desktop lock), from the run logs because the tool calls
+timed out on the worker's side. Full run: 141 unit checks, the native build (both
+bundles at the unchanged `macosx13.3` target), native smoke 20 of 20 (islands, Shadow
+Light, sidebar and settings included) and NATIVE CORE PASS. Then chat acceptance failed
+at "Latest message remains clear after native scroller style change": `latestVisible`
+was false and `latestTop`/`latestBottom` were 0 while pinned. A rerun of the chat and
+islands groups failed at the same step; its smoke passed 6 of 6. The probe reports
+`systemPreferredStyle: "legacy"`. This change touches no host or UI Swift code, so the
+cause is LKM-103's scroller-style path under a legacy system scroller, not this step.
+This is an inference; the manager should confirm it.
+
 ## 2026-09-29 — Swift platform owner: Simulator, media, attachments, server recovery (LKM-101 / S14)
 
 The eleventh transfer, on the LKM-100 candidate. Details, the protocol and the tightened

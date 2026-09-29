@@ -96,6 +96,18 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
 
+## Legacy retirement, launcher and distribution (LKM-102 / S15)
+
+- [x] Executable census of every Bun module with a file, process or signal effect (`docs/SWIFT-BACKEND-RETIREMENT.md`, `test/retirement-census.mjs`): rollback / helper / test / Bun-owned, gate line counted, legacy switch required while blocked.
+- [x] Reviewer notes (`annotations.json`) and starter `tokens.json` committed by the editing owner (hash-bound, repository lane; Swift/TS parity; `annotation-store` re-run on the Swift owner).
+- [x] One platform source (`scripts/requirements.mjs`: macOS 13.3, SDK 26.0, Bun 1.3.0) stamped by the build and enforced by build, launcher, dev, CLI and installer (`test/distribution.mjs`).
+- [x] Removed dead Git/fs adapter imports from `agent.ts`.
+- [ ] Transfer the 13 Bun-owned census rows (each with its own rollback plan): catalogs/store/Codex probe with the provider helpers; `feedback:submit` as a workflow; skills install; open-in-editor and `open`; update-check fetch; worktree setup helpers and dependency markers; sidecar migration; profile migration; Keychain crypto; orchestration.
+- [ ] Move the provider SDK adapters into supervised helpers after an authorized live parity run (LKM-98 follow-up); then a full native + live run with no legacy module loaded.
+- [ ] Only after the gate opens: delete `TREZI_BACKEND_OWNER=legacy`, `TreziService --legacy` and the rollback rows, keeping every store, journal and worktree.
+- [x] Worker native verification: smoke 20/20 and native core pass; chat acceptance fails twice at the scroller-style-change step (`systemPreferredStyle: legacy`); no host/UI Swift changed here.
+- [ ] Manager: stage the new files (docs-links checks tracked paths), configured verification (confirm the chat acceptance scroller-style failure also occurs on the LKM-101 candidate) and independent review.
+
 ## Swift platform owner: Simulator, media, attachments, server recovery (LKM-101 / S14)
 
 - [x] Name the domain exactly and tighten its rollback (`docs/SWIFT-BACKEND-PLATFORM.md`): simulator tools, launch command, bridge; media grants; attachments; running-servers recovery. Retire the unreachable `trezi-media` scheme route (Host `media`/`mediaReply`, Bun `protocol.handle`).
@@ -173,7 +185,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] `TREZI_BACKEND_OWNER=legacy` keeps the TS writers; journal, reports and drafts survive the switch; drain refuses queued writes.
 - [x] `test/source-owner.mjs` (unit tier): React/Svelte/HTML/layers fixture parity, `shadow-controls` re-run on the owner, proposals, paths, transactions, crash, history, files, drafts, lanes, rollback, drain.
 - [ ] S08 sub-boundary: file-tree listing (`source:tree`), media (`trezi-media://`), component resolution and open-in-editor stay Bun read-only; move with S12/S15.
-- [ ] S08 sub-boundary: sidecar stores stay Bun writers inside the repository lease — `control-panels.json` and `content-controls.json` moved to the Swift editing owner (LKM-99); `tokens.json` and annotations remain.
+- [x] S08 sub-boundary: sidecar stores — `control-panels.json` and `content-controls.json` moved to the Swift editing owner (LKM-99); `tokens.json` and annotations followed (LKM-102).
 - [x] S13: setup/scaffold instrumentation writers (`setup.ts`, `scaffold.ts`) moved to the Swift workflow owner (LKM-100); the TS writers are its rollback twin.
 - [ ] S09 follow-up: run the parsers in a separate supervised helper process (today they run in Bun and are bound by the seam, not by process privileges).
 - [ ] Follow-up: a UI to review and acknowledge interrupted source transactions (today they are listed in the Activity log at launch).
@@ -189,7 +201,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] `TREZI_BACKEND_OWNER=legacy` keeps the TS Git code; worktrees, journal and refs survive the switch; drain releases leases and settles running effects.
 - [x] `test/repository-owner.mjs` (unit tier); `service-process` builds the owner.
 - [x] S07 sub-boundary: remote fetch/pull/checkout (`git-remote.ts`) and publishing (`annotations.ts`, now `publish.ts`) moved to the Swift workflow owner in the repository lane (LKM-100).
-- [ ] S07 sub-boundary: the annotation sidecar writer can now move through the repository lane (unblocks the S05 item below).
+- [x] S07 sub-boundary: the annotation sidecar writer moved through the repository lane (LKM-102).
 - [x] S07 sub-boundary: content/island/control source writes move to the S08 source service (LKM-96); scaffolding stays in Bun inside the lease (see S13 item under LKM-96).
 - [ ] Follow-up: a UI to review and acknowledge interrupted repository operations (today they are listed in the Activity log at launch).
 - [ ] Manager: stage the new files (docs-links checks tracked paths), run the unit tier unsandboxed (full `service-process`), `bun run test:native`, independent review.
@@ -217,7 +229,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] `TREZI_BACKEND_OWNER=legacy` keeps the Bun writer; Swift adopts newer legacy writes; no old-version restore.
 - [x] Annotation storage split from publication (`annotation-store.ts`): CRUD parity, per-project serialization, unknown entries kept, damaged files kept, no Git side effects; stale note responses dropped in the context controller.
 - [x] `test/memory-owner.mjs`, `test/annotation-store.mjs` (unit tier); `project-memory` and `native-context` extended.
-- [ ] Unblocked by S07 (LKM-95): move the annotation sidecar writer to Swift through the repository lane (must land before S15).
+- [x] Unblocked by S07 (LKM-95): move the annotation sidecar writer to Swift through the repository lane (LKM-102: editing owner's sidecar commit).
 - [x] S05 remainder: attachments (scratch/blob bounds) moved to the Swift platform owner (LKM-101): chunked, hash-checked uploads.
 - [ ] Manager: stage the new files (docs-links checks tracked paths), run unit + unsandboxed `service-process` + `bun run test:native` through the service path, independent review.
 

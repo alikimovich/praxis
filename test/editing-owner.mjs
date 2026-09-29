@@ -8,8 +8,9 @@
 //   island history bytes on the legacy twin and the Swift owner;
 // - turns: the conversation coordinator is the authority for an island's origin and a
 //   navigation's turn;
-// - suites: chat-islands, shadow-controls, control-panels, content-controls and
-//   native-content re-run unchanged with the Swift owners preloaded;
+// - suites: chat-islands, shadow-controls, control-panels, content-controls,
+//   native-content and annotation-store (S15: notes and starter tokens) re-run
+//   unchanged with the Swift owners preloaded;
 // - drafts (restart, stale base refused, damaged file), sidecars (stale bytes, symlinks,
 //   lanes), crash (SIGKILL inside an island write), rollback, drain, schema.
 import assert from 'node:assert/strict'
@@ -136,7 +137,14 @@ async function sidecars(owner, root) {
   writeFileSync(file, '{"hand":"edit"}\n')
   await attempt('hand edit refused', owner.sidecar(root, 'control-panels.json', contentHash('{"version":1,"panels":[]}\n'), '{}\n'))
   out.push(['hand edit kept', readFileSync(file, 'utf8')])
-  await attempt('not a sidecar', owner.sidecar(root, 'annotations.json', null, '{}'))
+  await attempt('not a sidecar', owner.sidecar(root, 'settings.json', null, '{}'))
+  // S15: the notes and starter tokens sidecars commit the same way.
+  await attempt('notes create', owner.sidecar(root, 'annotations.json', null, '[]\n'))
+  await attempt('notes bound update', owner.sidecar(root, 'annotations.json', contentHash('[]\n'), '[{"id":"a1","text":"x"}]\n'))
+  await attempt('notes stale', owner.sidecar(root, 'annotations.json', contentHash('[]\n'), '[]\n'))
+  await attempt('tokens create-only', owner.sidecar(root, 'tokens.json', null, '{}\n'))
+  await attempt('tokens exists', owner.sidecar(root, 'tokens.json', null, '{"x":1}\n'))
+  out.push(['notes kept', readFileSync(join(root, '.trezi', 'annotations.json'), 'utf8')])
   rmSync(file); symlinkSync(join(scratch, 'outside.json'), file)
   await attempt('symlinked file', owner.sidecar(root, 'control-panels.json', null, '{}'))
   rmSync(join(root, '.trezi'), { recursive: true }); symlinkSync(dir('outside-trezi'), join(root, '.trezi'))
@@ -161,7 +169,10 @@ try {
     assert.deepEqual(swiftSide, legacySide)
     assert.deepEqual(swiftSide.map(([label, value]) => [label, value?.ok ?? value]).slice(0, 5),
       [['create', true], ['create again is stale', false], ['bound update', true], ['hand edit refused', false], ['hand edit kept', '{"hand":"edit"}\n']])
-    assert.deepEqual(swiftSide.slice(5).map(([, code]) => code), ['invalidRequest', 'unauthorized', 'unauthorized', 'invalidRequest'])
+    assert.deepEqual(swiftSide.slice(5).map(([label, value]) => [label, value?.ok ?? value]), [
+      ['not a sidecar', 'invalidRequest'], ['notes create', true], ['notes bound update', true], ['notes stale', false],
+      ['tokens create-only', true], ['tokens exists', false], ['notes kept', '[{"id":"a1","text":"x"}]\n'],
+      ['symlinked file', 'unauthorized'], ['symlinked folder', 'unauthorized'], ['oversized', 'invalidRequest']])
     console.log(`parity: ${legacy.length} island/navigation/draft steps and ${legacySide.length} sidecar steps identical on both owners`)
     await fixture.stop()
   }
@@ -216,7 +227,7 @@ try {
   }
 
   // ── suites: legacy island/controls/content suites on the Swift owners ────
-  for (const suite of ['chat-islands', 'shadow-controls', 'control-panels', 'content-controls', 'native-content']) {
+  for (const suite of ['chat-islands', 'shadow-controls', 'control-panels', 'content-controls', 'native-content', 'annotation-store']) {
     const profile = dir(`suite-${suite}`)
     const result = await new Promise(resolve => {
       const child = spawn('bun', ['--preload', './test/helpers/editing-owner-preload.mjs', `test/${suite}.mjs`], {
@@ -227,7 +238,7 @@ try {
     })
     assert.equal(result.code, 0, `${suite} on the Swift owners:\n${result.text}`)
     const frames = Number(result.text.match(/EDITING-PARITY editing=(\d+)/)?.[1] ?? 0)
-    if (['chat-islands', 'shadow-controls'].includes(suite)) assert.ok(frames > 0, `${suite} went through the editing owner`)
+    if (['chat-islands', 'shadow-controls', 'annotation-store'].includes(suite)) assert.ok(frames > 0, `${suite} went through the editing owner`)
     console.log(`suite ${suite}: passes on the Swift owners (${frames} editing frames)`)
   }
 

@@ -10,7 +10,8 @@ import {
   swiftEditingOwner,
   type ContentDraft,
   type EditingOwner,
-  type SidecarName
+  type SidecarName,
+  SIDECAR_NAMES
 } from './editing-owner'
 
 /**
@@ -208,9 +209,9 @@ export function legacyEditing(options: { islands?: string } = {}): EditingOwner 
   }
 }
 
-/** The legacy writer of a controls sidecar: same checks as `EditingSidecar.commit`. */
+/** The legacy writer of a project sidecar: same checks as `EditingSidecar.commit`. */
 export function commitSidecarLocally(root: string, name: SidecarName, expectedHash: string | null, content: string) {
-  if (name !== 'control-panels.json' && name !== 'content-controls.json') fail('invalidRequest', 'Not a controls sidecar.')
+  if (!SIDECAR_NAMES.includes(name)) fail('invalidRequest', 'Not a project sidecar.')
   if (Buffer.byteLength(content) > SIDECAR_BYTES) fail('invalidRequest', `The ${name} store would exceed 1 MB.`)
   const refused = () => fail('unauthorized', 'The .trezi folder is not a plain folder inside the project.')
   const base = realpathSync(root), directory = join(base, '.trezi'), file = join(directory, name)

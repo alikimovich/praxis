@@ -4,6 +4,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { requireSupportedPlatform } from '../scripts/requirements.mjs'
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 
@@ -72,7 +73,7 @@ export function nativeLaunchSpec(root, args = []) {
 }
 
 function launch(args = []) {
-  if (process.platform !== 'darwin') throw new Error('Trezi requires macOS 13.3 or later.')
+  requireSupportedPlatform()
   const spec = nativeLaunchSpec(repoRoot, args)
   const host = join(repoRoot, 'out/native/Trezi.app/Contents/MacOS/TreziHost')
   if (!existsSync(join(repoRoot, 'out/native/index.cjs')) || !existsSync(host) || !existsSync(join(repoRoot, 'out/native/TreziService'))) {

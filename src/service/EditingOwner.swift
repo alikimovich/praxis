@@ -4,8 +4,9 @@ import Foundation
 /// the editing workflows between the preview, the inspectors and the chat:
 /// - chat islands: their history files, pending activation bound to the originating
 ///   turn, command admission, revision chains and per-island Undo (`EditingIslands`);
-/// - the controls sidecars (`.trezi/control-panels.json`, `content-controls.json`),
-///   committed hash-bound in the repository's lane (`EditingSidecar`);
+/// - the project sidecars (`.trezi/control-panels.json`, `content-controls.json`,
+///   `annotations.json`, `tokens.json`), committed hash-bound in the repository's
+///   lane (`EditingSidecar`);
 /// - unsaved content-editor drafts, persisted across restarts (`EditingDrafts`);
 /// - deferred preview navigation, released when the requesting turn lands.
 /// Bun keeps the JS helpers (manifest/recipe validation, Jev composition, literal
