@@ -50,6 +50,51 @@ are sandbox limits: local port binding (`trezi-agent-tools`, `codex-mcp`,
 in `service-process`. `service-process` still built the real service with the
 memory owner and passed its supervision and rollback sections. `test:native` needs
 the manager's desktop run.
+## 2026-09-28 — Merge-friendly docs and native smoke groups (LKM-110)
+
+Six of the last eight merge conflicts were only in the two append-style logs, so
+`.gitattributes` now union-merges `docs/TASKS.md` as well as `docs/PROGRESS.md`.
+`test/docs-merge-union.mjs` builds a disposable repo with this checkout's
+attributes, appends different lines on two branches and merges them: no conflict,
+both sets kept (it fails without the TASKS rule). Union can keep both versions of
+a line both sides edited, e.g. a checkbox ticked differently, so review those.
+
+AGENTS.md and CLAUDE.md gain an Evidence budget: a foreground capture plus JSON
+geometry/state from existing fixtures is enough. OCR of wrapped text, synthetic
+CGEvent/input-routing tests and `defaults write`/system preference changes need
+an explicit ticket requirement, and tests must never change the user's system
+settings.
+
+`--only=group,group` (`src/native/smoke-groups.ts`) filters which native smoke
+groups run: `core`, `islands`, `shadow-light`, `sidebar`, `settings`, `chat`,
+`composer`. With LKM-109's collect-all runner merged, `runNativeCoreSmoke` only
+filters its named check list (`selectSmokeChecks`). The hook is one import
+after the last existing one and a filter at the `runSmokeChecks` call site. It
+stays out of the top-of-file imports and the `wait`/`inspect` helpers, which the
+candidate rewrote (smoke-wait), so the merge is clean. An earlier version put a
+function-local shadow of `runSmokeChecks` next to those helpers, and that
+conflicted. Failure collection, capture/restore and skipping are untouched.
+`SMOKE_CHECK_GROUPS` maps each check to its group(s), and a check with
+no group (or prelude entry) throws, so new checks can't escape `--only`;
+`test/native-smoke-groups.mjs` parses smoke-core.ts and asserts this plus that
+no selection filters out a dependency. The prelude (`startup`, `open-project`,
+`chat-ready`, `final-shell`) always runs, and a filtered run prints a
+`NATIVE SMOKE FILTERED` notice saying it is not full-suite acceptance. `checkChatIslands` reads the selection
+itself so `islands` and `shadow-light` share the one `chat-islands` check and its
+fixture scope. `dev-native.mjs` rejects an unknown/empty group, or
+`--only` without `--test`, before building; `--live` requires `core`.
+`native-runtime` asserts sidebar evidence only when `sidebar` ran. With no flag,
+every group runs exactly as before. Group names are listed in `--help` and
+docs/TESTING.md.
+Manager verification then failed `native-boundary` with exit 0 and its PASS line
+in the log: `runCommand` (test/helpers/test-runner.mjs) SIGKILLs the test's
+process group after exit to reap descendants, and macOS answers EPERM, not ESRCH,
+when the group holds only unreaped zombies (esbuild's service child, which that
+test starts, racing the exit). The runner recorded that as a spawn error and
+marked a passing test FAIL. `killTargetGone` now treats EPERM as "gone" only for
+those post-exit reaps on darwin; stop/timeout kills stay strict, and
+`test/test-runner.mjs` covers the matrix. It could not be reproduced on demand
+(240 fast/esbuild runs passed), so this is fixed from the mechanism and evidence.
 
 ## 2026-09-29 — Swift-owned workspace identity and persistence (LKM-92 / S04)
 
@@ -150,6 +195,535 @@ absence checks use the same matcher, so split engine text is still caught.
 on the previous checker) and rejects dropped, misspelled and reordered words and
 fragments that don't sit at line edges. All 18 saved `settings-visible-*`
 captures pass the new checker; only this one failed the old one.
+
+## 2026-09-29 — Latest button click never ran its action: native NSButton (LKM-103)
+
+`acceptance-WhenScrolling-6-latest` failed with `probeShowsLatest` true and
+`latestVisible` false (latestTop 0, readingHeight 542). Neither measurement
+was wrong. The dump shows `lastLatest.buttonClickCount` 0 and `distanceAfter`
+1673.5 pt: the reader was still 1673 pt up in history because the latest
+click never ran the button's action. The click itself was correct:
+`{519.5, 229}` is the exact window point of `latestButtonFrame
+{{271,508},{37,22}}` (chat x 230, flipped 748 − 519), and it hit the hosting
+view (`NativeChat`). A SwiftUI Button rendered inside NSHostingView offers no
+AppKit control there. No run has ever shown this click working: the b35c7def
+failure blamed on a stale `didEnd` had the same symptom before click counts
+existed.
+
+Offscreen (no WindowServer), `NSButtonCell`'s own tracking loop consumes a
+queued `mouseUp` and fires the action, which is the path the visible chat
+window uses (the NSScroller drag works the same way). A SwiftUI Button fired
+for neither delivery order. So the latest affordance is now a native
+`ChatLatestButton` (`src/native/ChatLatestButton.swift`):
+- It is an NSButton sibling above the chat in `chatColumn`, placed `margin`
+  (12) above the composer clearance at the trailing edge, with the same
+  geometry as before.
+- The probe's `showsLatest` still drives it. Its real frame (chat top-left
+  space) feeds `latestButtonFrame`, and it hides with the chat.
+- A press bumps `model.latestRequest`; SwiftUI then follows, scrolls to latest
+  and attaches, exactly as the old action did.
+- The SwiftUI overlay, the `reportsFrame` modifier and the `chatRoot` space
+  are removed.
+
+The harness now also asserts that each latest click runs the button action
+(`latestButtonClickCount` + 1) before the unchanged latest-row clearance check.
+
+Fixture: the shown button reports a real frame at the exact clearance
+position. A click at that frame hit-tests to the button, and its tracking loop
+consumes the queued mouseUp and runs the action once. Hidden/chat-hidden
+states report zero. Negative control: the SwiftUI button's hit is not a
+native control. On head the test fails because no native control exists.
+
+Candidate 922eca70 conflicts (TASKS, smoke-core): the smoke-wait import moved
+to the top of smoke-core and the chat context is applied inside `inspect`, so
+only lines the candidate leaves untouched change. The LKM-103 TASKS section now
+sits after LKM-106, so the candidate's inserts at the top don't collide. Both
+three-way merges were simulated clean with `git merge-file`.
+
+## 2026-09-29 — composerInspect timeout during the TIFF paste: diagnosis (LKM-103)
+
+Manager verification failed in the core smoke right after NATIVE ISLANDS PASS
+with `Native check timed out: composerInspect; false`. Diagnosis from the
+saved log and artifacts:
+
+- **Which wait:** the bundle stack (`index.cjs:20489`) is the clipboard-paste
+  loop's `attachments.length === count && enabled && text === ''` wait
+  (smoke-core.ts:87). `paste-png.png` was written in this run and
+  `paste-tiff.png` is from an earlier run, so the PNG paste passed and the
+  **TIFF** paste timed out.
+- **No LKM-103 code on that path:** it runs no code from the last two attempts.
+  `chatAcceptance`, `ScrollerDrag`/`revealKnob` and the drag/latest harness
+  steps first run at smoke-core.ts:212 (`checkVisibleComposer`) and in the
+  later chat-scroll acceptance. The only LKM-103 code active there is the
+  conversation layout/probe, which passed this same step in earlier runs.
+  Nothing else in the repo writes `NSPasteboard.general`, and the paste is
+  synchronous (write → `sendAction(paste)` → read), so there is no internal race.
+- **Anomaly:** `failure.png` shows the window had lost key status (grey traffic
+  lights, dimmed toolbar), while `paste-png.png` shows it key. Something
+  outside the app took focus during the wait.
+- **Ambiguous evidence:** the dumped chat state's `composerInset: 314` implies
+  composerHeight 236. That fits either one attachment row (128 + 108) or about
+  seven lines of pasted text. The old helper printed only the predicate's
+  `false`, so the run cannot say whether `attachments`, `enabled` (chat
+  `ready`/`switching`) or `text` failed.
+
+Given that evidence I could not attribute this to LKM-103 code, so no product
+change is claimed as its fix. I did not weaken, skip or lengthen any check.
+Instead the step is now self-diagnosing:
+
+- `src/native/smoke-wait.ts` replaces smoke-core's inline `wait`/`inspect`
+  (same 10 s timeout and 80 ms interval). A timeout still prints the label and
+  predicate result, then appends the last inspected state: scalars, array
+  lengths, truncated strings, no attachment payloads.
+- The paste wait adds Bun-side `ready`/`switching`/`running`/text
+  length/attachment count.
+- `composerInspect` also reports `windowKey`, `appActive` and
+  `inputIsFirstResponder`.
+- `test/native-smoke-wait.mjs` (unit tier) feeds the failing predicate a
+  timed-out state and requires the message to name each field. It reproduces
+  the old `composerInspect; false` message as a negative control and fails if
+  the diagnostic detail is removed.
+
+## 2026-09-29 — Reveal the overlay knob before the acceptance drag (LKM-103)
+
+The latest-button fix held, but "Native thumb dragging moves content" failed
+intermittently: the hit target was NSClipView, not NSScroller, and scrollY
+stayed at 3306 (run b35c7def had passed with NSScroller). The chat's
+autohiding overlay knob had faded before the synthetic mouseDown, so the click
+fell through to the clip view.
+
+Harness-only fix; product style and autohide are unchanged.
+- `ScrollerDrag.revealKnob` calls `flashScrollers()`, as scrolling does, then
+  polls with a bounded wait (1.5 s) until a hit-test at the knob's window
+  location returns NSScroller.
+- The acceptance fails with the hit class, knob rect and elapsed wait if it
+  never does. `lastDrag` records hit-before/after-reveal and `revealWait`.
+- `ScrollerDrag.perform` refuses (queues and delivers nothing) unless the knob
+  hit-tests to NSScroller at mouseDown, so a drag can never land on the clip
+  view.
+- The drag must still go through NSScroller and move content toward history.
+
+Fixture: a view covering the knob stands in for the faded scroller. The drag is
+refused before mouseDown, the reveal wait times out within bounds and reports
+the blocker, and once the knob is uncovered it hit-tests to NSScroller and the
+drag moves content, in both modes. Removing the refusal guard fails the fixture.
+
+## 2026-09-29 — Ignore stale live-scroll end after latest attach (LKM-103)
+
+Manager verification passed wheel and thumb drag in both Always and
+WhenScrolling, then failed `acceptance-WhenScrolling-6-latest`. After the
+latest-button click it showed `pinned=false`, the latest button still visible,
+`scrollY=2688.5` / `documentHeight=4774` and `latestVisible=false`.
+
+Likely cause (inferred from code, not yet confirmed by counters, which did not
+exist in that run): an overlay (WhenScrolling) thumb drag can post
+`didEndLiveScrollNotification` after the click's `attach()`. The old handler
+then called `userScrolled()`: it detached, bumped the pin generation (dropping
+attach's queued pin) and reported `follows=false`. The windowless replay of
+that order reproduces the failure exactly: detached, 900 pt from the end.
+
+Fix: a Cursor repair patch, reviewed and corrected here.
+- `didEndLiveScroll` detaches only when a live scroll is open. Otherwise it is
+  ignored and counted (`ignoredLiveScrollEndCount`).
+- `attach()` closes any open live scroll, counts attaches and sets `isPinned`
+  directly. The patch had used `setPinned(true)`, which synchronously called
+  `onPinnedChange` (SwiftUI `@State`) and `onLatestButtonChange` (published
+  `showsLatest`) from inside `updateNSView`: a state mutation during a view
+  update. The button already sets `follows = true`, and the pin's bounds change
+  refreshes the button afterwards.
+- The patch did not compile: `latestButtonClickCount` was `private(set)` but
+  incremented from `ChatConversation`.
+- Acceptance `lastLatest` records hit target, click point, and click/attach
+  counts, distance, pinned, live-scroll and ignored-end counters before the
+  click. It adds the "after" values only once the queued click and pin have run.
+  The patch had read them right after `postEvent`, when the click was merely
+  queued, and hit-tested in the content view's own (possibly flipped) space
+  instead of its superview's.
+
+Fixture regression, three orders: a live scroll open at attach; only a stale
+end; and the stale end landing before attach's queued pin. It asserts `attach()`
+makes no synchronous SwiftUI callbacks, the probe stays pinned at the end, and
+the stale end is counted. Negative controls: with the old handler the
+queued-pin order fails ("stale didEnd must not detach (false, distance 900.0)");
+with the patch's `setPinned(true)` it fails "attach pins without calling back
+into SwiftUI (2 callbacks)".
+
+## 2026-09-29 — Thumb drag through the scroller's own tracking loop (LKM-103)
+
+Manager verification now passes wheel and latest-button checks (frame
+{{271,508},{37,22}}, no system settings touched). It next failed "Native thumb
+dragging moves content": scrollY stayed at 3306.
+
+The drag was no longer pid-posted: it already used window-targeted
+`NSEvent.mouseEvent`s through `NSApp.postEvent`, the path that makes the
+latest-button click work. What differs is that NSScroller runs its own
+tracking loop inside `mouseDown` and dequeues the drag from the app queue.
+The harness posted each `mouseDragged`/`mouseUp` from async code after 25 ms
+sleeps, so the tracker never had the events it needed.
+
+Offscreen diagnosis (sandbox, no WindowServer, window number 0):
+- A real NSScroller hit-tests at its knob centre in both Always and
+  WhenScrolling (overlay) modes, even when the overlay is not revealed.
+- With the dragged/up events queued first and the mouseDown delivered to the
+  hit-tested scroller, scrollY went 3000 → 2187 for a 96-point upward drag in
+  both modes.
+- Posting the same events without routing the mouseDown left it at 3000.
+
+Fix: `src/native/ScrollerDrag.swift`, compiled into the app and the fixture.
+- It builds window-targeted down/dragged/up events at the knob centre (window
+  coordinates) and queues the dragged/up events.
+- It then delivers the mouseDown with `window.sendEvent`: AppKit hit-tests it
+  to the scroller, and the scroller's tracking loop consumes the queued drag.
+- Scroll position is never set directly.
+- Every acceptance inspection now carries `lastDrag` diagnostics (and each
+  mode writes `acceptance-<mode>-<n>-drag.json`): hit-test target, hit-is-scroller,
+  scroller style, knob rect, window number, whether events resolve to the chat
+  window, queued / consumed-by-tracker / leftover counts, scrollY before/after,
+  and live-scroll inputs seen by the probe.
+- The drag assertion now also requires the expected direction: scrollY must
+  decrease by more than 40 points, in both Always and WhenScrolling.
+
+Fixture regression, in an offscreen window that is never shown, for both modes:
+- The knob hit-tests to the scroller.
+- The events are window-targeted, the tracker consumes all 9 queued events,
+  and content moves toward history.
+- Negative control: the same drag posted without routing the mouseDown leaves
+  scrollY unchanged with 0 consumed, which is how the acceptance check fails
+  without routing.
+
+## 2026-09-29 — Accessibility/scroller modes via an in-process override (LKM-103)
+
+Manager verification failed in `test/helpers/chat-preferences.mjs`. The
+acceptance ran `defaults write com.apple.universalaccess` (increaseContrast,
+reduceTransparency, reduceMotion) and `defaults write -g AppleShowScrollBars`,
+which changes the user's real macOS settings. Restoring then failed with
+"Domain (com.apple.universalaccess) not found". The user confirmed their Mac
+is back to its original state; the protected domain probably never took the
+writes. Hard rule from now on: verification never reads-modify-writes or
+otherwise changes system settings.
+
+- **Removed:** the helper and its mocked unit test. `ChatAcceptance`'s
+  `UserDefaults`/`CFPreferencesAppSynchronize("com.apple.universalaccess")`
+  calls, and its `DistributedNotificationCenter` broadcasts of
+  `AppleShowScrollBarsSettingChanged`/`com.apple.accessibility.api` (a
+  system-wide side effect).
+- **Added:** `ChatSystemEnvironment` (`src/native/ChatEnvironment.swift`).
+  Production returns the live `NSScroller.preferredScrollerStyle` and
+  `NSWorkspace` Increase Contrast / Reduce Transparency / Reduce Motion values,
+  and republishes on their change notifications. The ephemeral `chatAcceptance`
+  command can override the scroller style and/or accessibility in-process. The
+  probe reads the scroller style (overrides reconfigure it through the same
+  notification path as the real setting). The conversation root and the
+  composer beam feed accessibility into the SwiftUI environment keys their
+  views read (`_colorSchemeContrast`, `_accessibilityReduceTransparency`,
+  `_accessibilityReduceMotion`: SwiftUI's public setters for those values).
+- **Not overridable:** AppKit's high-contrast drawing of native controls.
+  `NSAppearance(named: .accessibilityHighContrastAqua)` returns plain Aqua
+  (checked offscreen), so per-view emulation would only force Aqua/DarkAqua.
+  The scroll view's appearance is therefore never replaced; the native scroller
+  keeps following macOS itself, and the acceptance asserts it (`scrollAppearance`
+  empty).
+- **Acceptance:** switches Always/WhenScrolling and all three accessibility modes
+  through the override. It keeps every capture, geometry, wheel, drag,
+  latest-button and layout assertion, and additionally requires each mode to
+  reach the SwiftUI environment the chat renders with (`rendered`). It clears
+  the override in `finally`. Diagnostics report the real system values
+  read-only.
+- **Tests:** `test/no-system-preferences.mjs` (unit tier) scans src/test/scripts/bin
+  for the `defaults` tool, CFPreferences/other-domain writes, persistent-domain
+  writes, preference broadcasts, and the system domains/keys. It self-tests its
+  detector; a temporary helper using the old calls fails it. The composer-layout
+  fixture checks that:
+  - the default provider (shared and fresh) equals the real NSWorkspace/NSScroller
+    values;
+  - partial overrides, clearing, live system reads and change notifications work;
+  - the probe reconfigures to Always/overlay without touching the appearance;
+  - an offscreen NSHostingView's SwiftUI views receive each overridden
+    combination (removing the environment modifier fails it).
+
+## 2026-09-28 — Report the latest button's rendered frame directly (LKM-103)
+
+The native check then showed the button rendered (acceptance-failure.png;
+probeShowsLatest and model.showsLatest both true), but `latestButtonFrame`
+stayed zero. The `LatestButtonPosition` PreferenceKey never arrived through the
+NSHostingView / GeometryReader / ScrollViewReader / overlay nesting, even when
+observed on the root VStack, so the harness could neither report nor click it.
+The PreferenceKey, its emitter and its consumer are removed. The button now
+calls `reportsFrame(in: ChatLayout.rootSpace)`, a small modifier in
+ChatScrollStyle.swift built on `onGeometryChange` (back-deployed to macOS 13)
+plus `onDisappear` → `.zero`. It reports the real rendered frame in the root
+`chatRoot` space, which fills the hosting view with a top-left origin, so
+ChatAcceptance's click conversion is unchanged. The harness still measures
+that frame; it is never derived from a model flag. A zero frame while
+`showsLatest` is true now fails with its own message, and diagnostics include
+`latestButtonFrame`.
+
+A new fixture section hosts the same nesting in an offscreen NSHostingView (in
+a borderless window that is never shown). The shown button must report a
+nonzero frame at the exact bottom-trailing position in chatRoot points, with a
+click point inside the host; hiding resets the frame to zero; re-showing
+reports again. With the modifier turned into a no-op, the section fails:
+"Shown latest button reports a nonzero rendered frame ((0,0,0,0))".
+
+## 2026-09-28 — Latest button driven by the scroll probe (LKM-103)
+
+With input routing fixed, the native check reached the probe (monitorCallbacks
+1, pinned false, userScrollCount 3, scrollY 3943→3243), but `latestButton`
+stayed false. Two defects:
+
+- The harness reads `model.latestButtonFrame`. Its `.onPreferenceChange` was
+  attached to the scroll view before the `.bottomTrailing` overlay that hosts
+  the button. Preferences only flow up from a modifier's own subtree, so the
+  button's frame never reached it. The frame was also measured in `chatScroll`,
+  a coordinate space the overlay isn't inside.
+- Visibility came from the SwiftUI `follows` flag, written back from an AppKit
+  callback, rather than from the probe's own state.
+
+The button's visibility is now `ChatScrollStyleProbe.showsLatestButton`:
+(unpinned or not following) and at least 1pt from the end. The probe refreshes
+it on every clip/document bounds change, on pinned changes, and (deferred) after
+SwiftUI updates, and publishes it to `ChatModel.showsLatest`. The button appears
+as soon as a detached reader scrolls away, and hides the moment they return to
+the bottom (before the settle re-pins) or click latest. Reveal/control
+interaction away from the end still offers it. Its frame is observed on the root
+`VStack` in a new `chatRoot` coordinate space. Acceptance diagnostics add
+`probeShowsLatest`/`modelShowsLatest`; the native checks are unchanged.
+
+The windowless regression has a visibility table, plus wheel and live-scroll
+sequences: following hides it; unpinned and scrolled away shows it; it stays
+visible after rest and composer changes; back at the bottom hides it; re-pin
+keeps it hidden; history shows it again; the latest click hides it. A reveal
+away from the end shows it. Removing the position-driven refresh fails the
+regression ("unpinned and scrolled away shows latest ([])").
+
+## 2026-09-28 — Acceptance wheel never reached the scroll view (LKM-103 input routing)
+
+The native wheel/latest-button check failed again. The log showed
+userScrollCount 0, pinned true and scrollY exactly at the bottom: the wheel
+never reached the scroll logic at all, and there was no re-pin loop (pinCount
+counts only real moves). The acceptance posted a CGEvent with `postToPid`, and
+such events arrive with `NSEvent.window == nil`. The probe's window guard
+dropped them, and AppKit never hit-tested them to the NSScrollView. Tagging
+the public `mouseEventWindowUnderMousePointer*` fields does not change that.
+The `NSApp.currentEvent` re-pin theory in the entry below is wrong. The
+probe-owned pinned state it introduced is still correct and is kept.
+
+- **Diagnostics:** the acceptance inspect result now reports the probe's
+  input-monitor callbacks, scroll-wheel events examined, the last rejection
+  reason (e.g. `nil window: pointer outside conversation`, `other window`,
+  `other window number`, `no vertical delta`, `conversation not in a window`)
+  and the chat window number.
+- **Probe:** `ChatScrollStyleProbe.wheelRejection` accepts a nil-window wheel
+  whose pointer is over the conversation. The pointer comes from the event's
+  Quartz location converted to screen, window and scroll coordinates, falling
+  back to `NSEvent.mouseLocation`. It still rejects events for any other window
+  object or window number.
+- **Acceptance:** AppKit has no window-targeted scroll-wheel constructor, but a
+  window-targeted `NSEvent.mouseEvent`'s CGEvent carries the window number
+  (field 51) and a window-local location; checked offscreen. The fixture
+  retypes that as a precise pixel wheel event and fails loudly unless it
+  resolves to the chat window. It posts the event with `NSApp.postEvent`, so
+  it passes through the event queue, the local monitor, `NSApplication.sendEvent`
+  and NSWindow hit-testing to the scroll view. Hover, thumb drag (still toward
+  history) and the latest click use the same path, so the scroller's own
+  tracking loop dequeues the drags. The harness never calls the probe. Native
+  assertions and thresholds are unchanged.
+- **Windowless regression:** a classifier table (accepted: chat window, nil
+  window over the conversation; rejected: outside, other window or number, no
+  window, no pointer) and the Quartz flip. The real `handleInput` path runs on
+  an offscreen, never-shown window: a nil-window pid-style wheel over the
+  conversation detaches and survives growth; wheels outside it, for another
+  window number, with no delta, or with no window are dropped with the stated
+  reason; non-scroll input is ignored. Restoring the old window guard fails the
+  table.
+
+## 2026-09-28 — Only user input detaches from latest (LKM-103 wheel fix)
+
+(Correction: the root cause below was misdiagnosed; see the entry above. The
+wheel event never reached the probe.) The resize fix passed natively, but
+"Wheel scrolls history and reveals latest button" failed: after a wheel scroll
+up, the view stayed pinned (scrollY 3943, no latest button). The original
+theory was that SwiftUI's `NSApp.currentEvent` check re-pinned the view after
+the probe's programmatic pin; that `currentEvent` logic is removed.
+
+The probe now owns "pinned to latest", and it changes only on user input:
+- A local wheel/key monitor (wheel over the conversation, or scrolling keys
+  with focus inside it) and NSScrollView live-scroll notifications (trackpad
+  gestures, scroller drag) detach immediately. They also invalidate queued
+  pins and report the change to SwiftUI, which shows the latest button.
+- Pins require pinned && `follows`.
+- Re-attach happens only when user input comes to rest at the end
+  (0.35 s settle, not during live scroll), or on an explicit attach (latest
+  button, chat switch).
+- Pins, SwiftUI scrollTo and AppKit clamping never change the state. The
+  `currentEvent` logic is removed.
+
+The acceptance fixture's pid-posted events now name the target window
+(`mouseEventWindowUnderMousePointer…` fields), so AppKit and the monitor see
+`event.window`. Diagnostics include `pinned` and `userScrollCount`. Native
+thresholds and assertions are unchanged.
+
+The windowless regression covers both the wheel and live-scroll paths:
+- A queued pin is dropped.
+- Settle, document/viewport configuration, composer growth/shrink, a
+  composer-height pin request and a resize all leave scrollY unchanged and
+  not pinned.
+- Returning to the end re-attaches only after the input rests.
+- Latest re-attaches.
+- Programmatic pins leave `userScrollCount` at 0.
+
+An in-fixture negative control shows the previous gate re-pins history on
+growth, and removing the detach from `userScrolled` fails the regression.
+
+## 2026-09-28 — Pin following chats from settled AppKit metrics (LKM-103 resize fix)
+
+Manager native verification failed `acceptance-440-resized-short`. The draft was
+capped, then the window was made short: latest bottom 220.9 vs reading height ~211,
+scrollY 4456, document 5055, viewport 568. The composer cap follows the viewport
+(368 at 776, 279 at 568), so the clearance changes with the resize. SwiftUI's
+follow anchor is a *fraction* of the viewport. Applying the tall layout's
+fraction to the short viewport stops ~31pt of scroll and ~10pt of row short,
+which matches the capture. The stale value can come from the probe's stored
+closure, or from a scrollTo resolved after layout.
+
+Following no longer depends on that fraction. The document's bottom padding
+equals the composer clearance, so "following" is exactly "scrolled to the
+document end". The probe now pins the NSScrollView to its end in AppKit, reading
+the document/viewport bounds current at that moment. It does this on every
+settled document/viewport size change, and on an explicit request (composer
+height, viewport, streaming, chat switch, latest button), but only while
+`follows` is true. A reader in history is never moved. The metric-only paths
+(composer height, viewport) no longer issue a SwiftUI scrollTo at all.
+
+The windowless regression replays 440pt with real composer cap heights, in both
+orders (grow→resize, resize→grow). It applies the stale fractional anchor after
+each step before layout settles. It asserts the latest row sits below the top
+edge and above composer top minus status+gap. A negative control reproduces the
+manager's ~10pt shortfall, and removing the settled pin fails the regression. It
+also checks that history position survives growth/resize and ignores pin
+requests. The native acceptance adds the resize→grow order at both widths
+(`short-1-line`, `short-then-grow`, `short-then-grow-tall`). The existing
+assertions are unchanged.
+
+## 2026-09-28 — Rewire LKM-103 acceptance onto the merged candidate
+
+Candidate 0b8037a (LKM-88/LKM-107) now runs native-chat-scroll directly in
+`test:native` with `--require-build`. The earlier LKM-103 chaining from
+native-runtime would have run the fixture twice, so it is removed. The
+acceptance matrix still runs at the end of native-chat-scroll, after the
+candidate's reveal checks, so the configured manager command still produces
+every capture. The wrapper timeout rises from 180 s to 360 s because the
+acceptance matrix now follows the reveal matrix. The Swift build, typechecks,
+composer/acceptance/reveal/docs unit checks all pass. The unit tier failed only
+on sandbox socket/port EPERM.
+
+## 2026-09-28 — Hand-off check of manager acceptance fixtures (LKM-103)
+
+A fresh session resumed the preserved worktree after the previous run stopped
+on a quota limit, and re-checked the staged fixtures against the reviewer's
+evidence list. The list asked for: the real SwiftUI probe, idle/hover/active/drag/
+wheel, live Always-show and accessibility preferences, 440/320-point 1/6/80-line
+drafts, short/tall resize, and native-chat-scroll running under test:native.
+All of these are covered. One change: `chatAcceptance {prepare}` now waits up to
+2 s for AppKit's asynchronous activation before its foreground guard. It still
+fails if activation is denied. Swift build, typechecks, composer/acceptance/docs
+unit checks pass. The unit tier failed only on sandbox socket/port EPERM. No GUI
+suite or preference mutation was run.
+
+## 2026-09-28 — Follow settled chat document bounds (LKM-103 diagnostic repair)
+
+Inspect the retained foreground failure PNG and one/six-line JSON captures. The
+composer and document grow by 83 points (128→211 and 7413→7496), but scrollY
+remains 6636 and the latest row stays at y=549.32, overlapping status clearance.
+The composer-height scroll request runs before AppKit installs the enlarged
+SwiftUI document; it clamps against old bounds with no post-layout retry.
+
+Observe actual conversation document/viewport dimensions through the existing
+native scroller probe and retry SwiftUI scrollTo after AppKit layout changes,
+only while following remains enabled. Ignore origin-only scrolling, preserve
+native scroller policy and controls, and detach observers when the document
+changes or the probe is destroyed. No fixed-delay production retry is used.
+
+The windowless regression replays the captured dimensions, demonstrates the
+stale offset, then checks settled growth/shrink, viewport resize and absence of
+history-scroll feedback. Removing settled-layout delivery makes this regression
+fail at the stale-bottom assertion. Focused composer, acceptance-preference and
+controller checks plus TypeScript/native and full Swift typechecks pass.
+Desktop acceptance assertions are unchanged;
+manager must rerun the native suite and inspect its foreground captures.
+No GUI suite, preference mutation, staging or commit was performed.
+
+## 2026-09-28 — Manager acceptance fixtures (LKM-103 review feedback)
+
+Compare candidate 771ce3d before editing: it has no newer composer/capture fixture
+repair. Wire the separate chat-scroll fixture into test:native's native-runtime
+entrypoint, after the core host exits, so the configured manager command actually
+runs growth/resize/scroll acceptance. Preserve the prior shrinking/streaming checks.
+
+Add ephemeral-only inspection of the probe inside the real SwiftUI conversation:
+assert its configured scroll view identity, native small size, overflowing content,
+live preferred/effective styles and Always-show visibility. Send wheel, hover,
+thumb-drag and actual scroll-to-latest button mouse events to this process.
+Record full-column foreground PNG/OCR and geometry for 440/320-point widths,
+1/6/80-line drafts, short/tall viewport resizing and idle/active/hover/drag states.
+Require equal exterior gaps and the complete latest row above composer clearance.
+Run the existing attachment/model/Auto/send fixture at both widths, with multiline
+and capped draft submission respectively.
+
+The manager desktop-lock fixture temporarily toggles Show scroll bars and the
+actual Increase Contrast/Reduce Transparency/Reduce Motion preferences. Require
+native getters to observe each change and exercise scrolling afterward. Snapshot
+exact prior values/absence, restore in finally and SIGINT/SIGTERM handlers, and
+write restoration journals before mutations. Denied writes or unobserved native
+changes fail explicitly; there is no simulated-preference pass or capture fallback.
+See docs/TESTING.md for capture paths, assertions and crash recovery records.
+
+Worker checks pass: registered preference-restoration unit test (mocked commands,
+no system writes), windowless composer, test runner, TypeScript/native and full
+Swift source typechecking (deprecation warnings), helper bundling, docs links and
+whitespace. No GUI suite, foreground capture or system preference mutation was
+performed by this worker. These are fixtures ready for manager execution; native
+interaction and visual acceptance are not yet claimed.
+
+## 2026-09-28 — Repair composer bounds handoff (LKM-103 feedback)
+
+Reproduce the manager's empty composer capture without opening a window: the
+new CGRect-derived bounds dictionary held CGFloat values, while composer.update
+requires Double values. The failed cast silently retained the initial zero frame.
+Encode placement bounds explicitly as Double and test that exact handoff through
+the real composer update/layout path at each covered width and draft height.
+The new regression fails with the previous CGFloat payload and passes after the
+fix, including nonempty bubble geometry. Keep capture, foreground, OCR and
+interaction assertions unchanged.
+
+Compared candidate 771ce3d: relevant composer/capture fixtures match this branch's
+base and contain no newer repair. Windowless composer checks, chat-controller,
+TypeScript/native checks, full Swift source typechecking (deprecation warnings),
+docs links and whitespace checks pass. Manager must rerun native verification
+and inspect foreground captures; this worker ran no GUI suites or captures.
+
+## 2026-09-28 — Composer exterior spacing and native chat scroller (LKM-103)
+
+Match the composer's exterior bottom gap to its existing 10-point side inset.
+Include that gap in height budgeting, status placement and message clearance;
+keep following the latest message when the viewport resizes as well as when the
+composer grows. Preserve the bubble's controls and gradient-free background.
+
+The conversation is a SwiftUI ScrollView, distinct from the composer's AppKit
+text editor. Configure only its backing NSScrollView with the small native
+scroller and the system's preferred style. AppKit retains fading/hover/dragging
+and accessibility drawing; Always-show uses the native legacy scroller. Observe
+system style changes without replacing the document or handling scroll events.
+
+Windowless composer coverage passes for exterior gaps and message clearance at
+320/420/520-point widths with wrapped/capped drafts, context, attachments and a
+queue. Native overlay/legacy policy, scroll-position preservation and repeated
+configuration checks pass, as do chat-controller, TypeScript/native, full Swift
+source typechecking (deprecation warnings only), docs links and diff whitespace.
+Manager owns desktop verification: foreground normal/narrow/multiline captures,
+latest-message reachability, idle/hover/drag/wheel states and Always-show plus
+accessibility preference checks. No GUI suite or foreground capture was run by
+this worker.
 
 ## 2026-09-28 — Settings OCR reads SF Pro "I" as "l" (LKM-106 diagnostic repair)
 

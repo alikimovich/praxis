@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Merge-friendly docs and evidence budget (LKM-110)
+
+- [x] Union-merge `docs/TASKS.md` and `docs/PROGRESS.md` via `.gitattributes`; scripted two-branch merge check (`test/docs-merge-union.mjs`).
+- [x] Add the Evidence budget to AGENTS.md and CLAUDE.md.
+- [x] Add `--only=group,group` to the native smoke (`core`, `islands`, `shadow-light`, `sidebar`, `settings`, `chat`, `composer`); unknown names fail before the build; full suite stays the default.
+- [ ] Manager: run configured verification (full unit + native) and reconcile `smoke-core.ts` gating with LKM-109's check list if it lands first.
 ## Native verification reports all failures (LKM-109)
 
 - [x] Split the native smoke into named checks with declared dependencies; collect failures, skip dependents with `skipped: depends on X`, restore foreground/window state after each failure.
@@ -21,6 +27,29 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Reproduce NSHostingController minimum-size propagation without a window; exercise live minimum (540), normal (600) and wider (800) widths without relaxing evidence checks.
 - [x] Make `test:native` produce the Settings evidence itself; retain the original `settings.png` capture and `sheetPerform change` autosave check alongside it.
 - [ ] Manager: run configured verification and inspect native Settings help/conditional engine at minimum and wider widths under the desktop lock; complete independent review.
+
+## Composer spacing and chat scrollbar (LKM-103)
+
+- [x] Native latest button (NSButton) over the conversation: the SwiftUI button never ran its action for the acceptance click (buttonClickCount 0); harness asserts the action runs; fixture regression with SwiftUI negative control.
+- [x] Match exterior bottom/side gaps and adjust composer height budget, status/message clearance and resize following.
+- [x] Identify the SwiftUI conversation scroll view; configure its native small scroller using macOS preferences, including live Always-show changes.
+- [x] Extend windowless composer tests for spacing/clearance and native scrollbar policy; run focused controller and TypeScript checks.
+- [x] Repair CGFloat/Double bounds handoff causing empty composer captures; prove failure before the fix and pass through real windowless composer update/layout.
+- [x] Wire growth/resize/scroll acceptance into test:native; capture real SwiftUI probe identity, native preference transitions and wheel/thumb/latest-button interactions.
+- [x] Add normal/narrow multiline/capped foreground fixtures and preference restoration unit coverage, with PNG/OCR/geometry paths documented in TESTING.
+- [x] Diagnose stale document-bound clamping after composer growth; retry following on settled AppKit dimensions and add a windowless regression with a negative control.
+- [x] Fix capped-draft + short-resize follow shortfall: pin to the document end from settled AppKit metrics (no stale fractional anchor); cover grow→resize and resize→grow at 440pt windowless and in native acceptance.
+- [x] Probe-owned latest state: probe-owned pinned state changed only by user input (wheel/key monitor, live scroll) or explicit latest/chat attach; windowless regression + negative controls.
+- [x] Diagnose the TIFF-paste composerInspect timeout: step runs no recent LKM-103 code; window lost key during the wait. Smoke timeouts now report last state, focus and Bun chat context (smoke-wait.ts + unit test with negative control).
+- [ ] Manager: rerun test:native; if the paste step fails again, read the reported lastState/context fields.
+- [x] Acceptance drag reveals the overlay knob (flashScrollers + bounded hit-test wait) and refuses mouseDown unless the knob hit-tests to NSScroller; fixture regression.
+- [x] Ignore stale didEndLiveScroll after the latest attach (reviewed Cursor patch: no SwiftUI callbacks from attach, post-click diagnostics); three-order fixture regression with negative controls.
+- [x] Route the acceptance thumb drag through the scroller's own tracking loop (queue drag, window.sendEvent mouseDown); drag diagnostics; direction-strict assertion; fixture regression with unrouted negative control.
+- [x] Remove all system-preference writes from verification; in-process ChatSystemEnvironment override (scroller style + Increase Contrast/Reduce Transparency/Reduce Motion) through the probe and SwiftUI environment; system-settings guard test; provider defaults test.
+- [x] Report the latest button's rendered frame via onGeometryChange (PreferenceKey never arrived); offscreen NSHostingView regression with negative control.
+- [x] Drive the latest button from the probe's pinned state + scroll position; windowless visibility regression.
+- [x] Route the acceptance wheel/mouse input as window-targeted events through NSApp.postEvent (pid-posted events had no window and were dropped); accept nil-window wheels over the chat; add input diagnostics and windowless routing coverage.
+- [ ] Manager: run native verification and inspect foreground normal/narrow/multiline captures, latest-message reachability, scrollbar idle/hover/drag/wheel behavior and Always-show/accessibility preferences.
 
 ## Sidebar folder icons (LKM-105)
 

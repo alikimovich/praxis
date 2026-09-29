@@ -1,3 +1,4 @@
+import { inspectUntil, waitFor } from './smoke-wait'
 import { checkVisibleComposer } from './smoke-composer'
 import { checkSourceStamps } from './smoke-source-stamp'
 import { checkChatIslands } from './smoke-islands'
@@ -14,6 +15,7 @@ import { checkNativeChat } from './smoke-chat'
 import { checkSelectionInput, preparePreviewInput } from './smoke-input'
 import { formatSmokeSummary, parseInjectedFailures, runSmokeChecks, type SmokeCheck } from './smoke-runner'
 import { captureSmokeFailure, restoreSmokeState } from './smoke-restore'
+import { parseSmokeGroups, selectSmokeChecks } from './smoke-groups'
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve,ms))
 /** Named checks run by smoke-runner: a failure no longer stops the run. `dependsOn`
  *  lists the checks whose app/window state a check builds on; an independent check
@@ -22,8 +24,11 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   const invoke = (channel: string, ...args: any[]) => dispatchIPC('main',{type:'invoke',channel,args})
   const send = (channel: string, ...args: any[]) => dispatchIPC('main',{type:'send',channel,args})
   const page = (code: string) => host.request('evaluate',{view:'preview',code})
-  const wait = async (check: () => Promise<any> | any, label: string, timeout=10000) => { const end=Date.now()+timeout; let last; while(Date.now()<end) { try { last=await check(); if(last)return last } catch(error){last=error}; await delay(80) }; throw new Error(`Native check timed out: ${label}; ${String(last)}`) }
-  const inspect = (method: string, check: (s:any)=>boolean) => wait(async()=>{const state=await host.request(method);return check(state)&&state},method)
+  // Timeouts report the last inspected state (composer waits add the Bun-side
+  // chat inputs to `enabled`/attachments/text), not just the predicate's `false`.
+  const chatContext = () => { const chat = nativeChat.get(nativeChat.active); return { ready: chat?.ready, switching: chat?.switching, running: chat?.isRunning, textLength: chat?.text?.length, attachments: chat?.attachments?.length } }
+  const wait = (check: () => Promise<any> | any, label: string, timeout=10000) => waitFor(check, label, timeout)
+  const inspect = (method: string, check: (s:any)=>boolean) => inspectUntil(m => host.request(m), method, check, method === 'composerInspect' ? chatContext : undefined)
   const geometry = async (stage: string) => { const value = await host.request('layoutInspect'); console.log('Native geometry', stage, JSON.stringify(value)); assert.ok(value.windowHeight >= 550 && value.canvasHeight >= 450, `Collapsed workspace at ${stage}`) }
   const artifacts=join(root,'test/artifacts/native');mkdirSync(artifacts,{recursive:true})
   writeFileSync(join(fixture,'native-style.tsx'), 'export function Fixture() { return <h1 style={{ opacity: 1 }}>Hello</h1> }')
@@ -316,7 +321,8 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   } })
   let hostClosed = false
   void host.closed.then(() => { hostClosed = true })
-  const results = await runSmokeChecks(checks, {
+  // `--only` filters which named checks run; failure collection is unchanged.
+  const results = await runSmokeChecks(selectSmokeChecks(checks, parseSmokeGroups(process.argv)), {
     capture: name => captureSmokeFailure(host, artifacts, name),
     restore: () => restoreSmokeState(host, firstProject),
     inject: parseInjectedFailures(process.env.TREZI_NATIVE_SMOKE_FAIL),

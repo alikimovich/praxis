@@ -42,7 +42,9 @@ const UNIT = [
   "native-settings-evidence",
   "native-chat-controller",
   "native-composer-layout",
+  "native-smoke-wait",
   "native-chat-reveal",
+  "no-system-preferences",
   "chat-islands",
   "native-context",
   "native-updates",
@@ -139,7 +141,9 @@ const UNIT = [
   "shadow-controls",
   "type-metrics",
   "skills-install",
-  "trezi-cli"
+  "trezi-cli",
+  "native-smoke-groups",
+  "docs-merge-union"
 ];
 
 const NATIVE = ['native-runtime', 'native-source-window', 'native-chat-scroll', 'native-next-hmr'];
