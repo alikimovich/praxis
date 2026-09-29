@@ -16,6 +16,7 @@ const UNIT = [
   "service-contract",
   "service-process",
   "operation-ledger",
+  "preferences-owner",
   "native-visible-capture",
   "rename-compat",
   "source-stamp",

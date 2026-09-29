@@ -2,7 +2,7 @@ import type { NativeShellAction, NativeShellState } from '../shared/native-shell
 import type { NativeWorkspaceController } from './workspace-controller'
 import type { NativeChatController } from './chat-controller'
 import type { NativeGitController } from './git-controller'
-import type { nativePreferences } from './preferences'
+import type { NativePreferences } from './preferences'
 const title = (text?: string, fallback = 'New chat') => text?.replace(/\s+/g, ' ').trim().slice(0, 70) || fallback
 export class NativeShellController {
   hidden = false
@@ -12,7 +12,7 @@ export class NativeShellController {
   readonly icons = new Map<string, string | undefined>()
   private signature = ''
   private timer?: ReturnType<typeof setTimeout>
-  constructor(readonly workspace: NativeWorkspaceController, readonly chat: NativeChatController, readonly git: NativeGitController, readonly preferences: ReturnType<typeof nativePreferences>, readonly send: (state: NativeShellState) => void, readonly project: (value: { chatHidden: boolean; viewport: string; selectMode: boolean }) => void) { this.hidden = preferences.get('trezi:chat-hidden') === '1' }
+  constructor(readonly workspace: NativeWorkspaceController, readonly chat: NativeChatController, readonly git: NativeGitController, readonly preferences: NativePreferences, readonly send: (state: NativeShellState) => void, readonly project: (value: { chatHidden: boolean; viewport: string; selectMode: boolean }) => void) { this.hidden = preferences.get('trezi:chat-hidden') === '1' }
   schedule() { if (!this.timer) this.timer = setTimeout(() => { this.timer = undefined; this.render() }, 16) }
   render() {
     const ws = this.workspace.state, active = this.workspace.active
@@ -40,7 +40,7 @@ export class NativeShellController {
   }
   async action(action: NativeShellAction) {
     const entry = this.workspace.active
-    if (action.action === 'expand') { this.hidden = !this.hidden; this.preferences.set('trezi:chat-hidden', this.hidden ? '1' : '0'); this.render(); return }
+    if (action.action === 'expand') { this.hidden = !this.hidden; this.render(); await this.preferences.set('trezi:chat-hidden', this.hidden ? '1' : '0'); return }
     if (!entry) return
     const invoke = this.workspace.services.invoke
     if (action.action === 'select-object') {

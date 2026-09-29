@@ -14,6 +14,8 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
     /// writes through it yet; nil if the store could not be proven whole, which
     /// future ledger-backed domains must treat as `recoveryRequired`.
     var ledger: OperationLedger?
+    /// S03 preferences writer: Bun's requests arrive on its private pipe.
+    var preferences: PreferencesChannel?
     var child: LegacyChild?
     var launch: ServiceLaunch?
     var peerPID: pid_t?
@@ -105,6 +107,15 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                         launch = nil; ledger = nil; exclusion?.release(); exclusion = nil
                         throw ServiceContractFailure.unavailable
                     }
+                    if let input = child?.input {
+                        let writer = writer
+                        preferences = PreferencesChannel(owner: PreferencesOwner(
+                            disk: PreferencesDisk(path: URL(fileURLWithPath: requested.profile).appendingPathComponent("preferences.json").path),
+                            ledger: ledger)) { frame in
+                            var line = frame; line.append(10)
+                            writer.async { try? input.write(contentsOf: line) }
+                        }
+                    }
                     readBackend()
                 }
                 peerPID = session.connection.processIdentifier
@@ -159,6 +170,10 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
 
     func readBackend() {
         guard let output = child?.output else { return }
+        // Handed to the reader directly (not via `queue`), so Bun's preference
+        // writes are still served while `stop` waits for Bun to exit.
+        let preferences = preferences
+        let servicePrefix = Data("{\"service\":\"preferences\"".utf8)
         DispatchQueue.global().async { [weak self] in
             var pending = Data()
             do {
@@ -169,6 +184,7 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                     while let end = pending.firstIndex(of: 10) {
                         let line = Data(pending[..<end]); pending.removeSubrange(...end)
                         guard line.count <= ServiceXPC.maxLegacyBytes else { throw ServiceContractFailure.invalidRequest }
+                        if line.starts(with: servicePrefix) { preferences?.submit(line); continue }
                         guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any], object["method"] is String else { continue }
                         self?.queue.async { [weak self] in self?.deliver(line) }
                     }
@@ -214,6 +230,9 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
         _ = drained.wait(timeout: .now() + 2)
         supervisor.shutdown()
         try? child?.input.close(); try? child?.output.close()
+        // Bun has exited: refuse new preference requests and let accepted ones
+        // finish (bounded). One still running at exit is recovered from the ledger.
+        preferences?.close(timeout: 2); preferences = nil
         // The ledger needs no drain: each transition is synced before it is acknowledged.
         ledger = nil
         exclusion?.release(); exclusion = nil

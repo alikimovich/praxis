@@ -84,8 +84,13 @@ src/
     ServiceContract.swift   S01 shared DTOs (TS twin: src/shared/service-contract/)
     OperationLedger.swift / LedgerStore.swift / LedgerMirror.swift   S03 durable
                     operation ledger: intent digest, receipts, per-domain revisions,
-                    event cursors, crash recovery. Opened under the profile lock;
-                    no domain writes through it yet (docs/SWIFT-BACKEND-LEDGER.md)
+                    event cursors, crash recovery. Opened under the profile lock
+                    (docs/SWIFT-BACKEND-LEDGER.md)
+    PreferencesOwner.swift / PreferencesFile.swift   the preferences writer (LKM-91):
+                    byte-compatible v1 preferences.json, ledger-backed batches,
+                    external-edit adoption. Bun's client is native/preferences-service.ts;
+                    native/preferences.ts is the legacy-launch rollback writer
+                    (docs/SWIFT-BACKEND-PREFERENCES.md)
   main/           Backend services (CJS bundle, Bun); historical directory name
     preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
                     bounds/load/reset/capture, the select + comment relays, the
@@ -244,9 +249,11 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
 
 - `bun run dev`/`start`/`trezi` go through `scripts/start-native.mjs`: the host
   connects over XPC to the bundled Swift service, which takes the profile lock
-  and supervises Bun over private pipes. Bun is still the single writer of every
-  domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun spawns
-  the host, still under Swift's lock). See `docs/SWIFT-BACKEND-SERVICE.md`.
+  and supervises Bun over private pipes. The service writes `preferences.json`
+  (`docs/SWIFT-BACKEND-PREFERENCES.md`); Bun is still the single writer of every
+  other domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun
+  spawns the host, still under Swift's lock, and writes preferences itself). See
+  `docs/SWIFT-BACKEND-SERVICE.md`.
 - The chat runs in `main` via provider SDKs; output streams over `agent:*` IPC
   into Bun chat controllers, which send typed state to Swift.
 - Trezi **owns** the dev-server lifecycle of the target repo (never run the

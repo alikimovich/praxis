@@ -2,6 +2,51 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Preferences move to the Swift service (LKM-91 / S03)
+
+The first writer transfer. Under the default launch the Swift service is the only
+writer of `preferences.json`, through the operation ledger. Bun keeps the
+controllers that decide what to save, sends awaited batches over its supervised
+pipe and reads acknowledged snapshots. `TREZI_BACKEND_OWNER=legacy` keeps Bun's
+writer as the rollback owner. Nothing else moves. Details and the domain's
+rollback plan: `docs/SWIFT-BACKEND-PREFERENCES.md`.
+
+The file format does not change, down to the bytes, because it is the rollback
+artifact. Swift reads and writes it as insertion-ordered JSON over UTF-16 code
+units with `JSON.parse`/`JSON.stringify` semantics. That keeps key order,
+repeated keys, lone surrogates and the JS `.length` limits exactly as Bun had
+them. The test compares Swift's written bytes with Bun's for the same batch.
+
+The ledger checkpoint is only the file's digest, so the file stays the one copy of
+the values. A batch re-reads the file first. A different digest is an external
+edit: the batch conflicts and the file is adopted as a new revision. The same
+adoption at launch is how newer writes by the legacy owner survive a return to
+Swift. An invalid external file is never replaced. The target digest is journaled
+with the effect record (a new optional `pending` field on ledger operations), so a
+crash between the rename and the receipt is reconciled from the file instead of
+replayed.
+
+The callers were re-inventoried: settings (one atomic batch built from the
+committed state when sent, so a newer last-used model is not clobbered), last-used
+model, publish mode, chat hidden, chat width and panel sizes. Bun's client sends
+one batch at a time on the last committed revision. A timeout or failure rejects;
+there is no local fallback write. Autosave keeps a failed draft and close waits
+for the save. Startup now awaits the snapshot, so the bridge holds host events
+until every handler is registered. On quit the service lets Bun finish, then
+drains accepted preference requests (bounded) before releasing the ledger.
+
+Verification (worker): `test/preferences-owner.mjs` passes, three runs in a row.
+It compiles the real sources into a fixture and covers parity, batches,
+idempotency, concurrency, external edits, injected temp/flush/rename failures,
+SIGKILL at each durable boundary, rollback both ways, and Bun's real client
+against the real owner. The fixture blocks after its own SIGKILL: in a
+multithreaded process `kill(getpid())` can return before the process dies, which
+let a rename slip past an injected crash in one run. The full unsandboxed
+`test/service-process.mjs` passes, and now sends a batch from the supervised
+backend through the real XPC service. `native-settings` adds the failed-draft and
+close-waits cases. Both typechecks and `bun run build` pass. The native GUI tier
+was not run by the worker.
+
 ## 2026-09-28 — Durable operation ledger in the Swift service (LKM-90 / S03)
 
 S03's first half: the substrate every writer transfer needs. No domain writer
