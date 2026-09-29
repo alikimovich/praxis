@@ -36,6 +36,34 @@ fixture scope. `dev-native.mjs` rejects an unknown/empty group, or
 `native-runtime` asserts sidebar evidence only when `sidebar` ran. With no flag,
 every group runs exactly as before. Group names are listed in `--help` and
 docs/TESTING.md.
+## 2026-09-28 — Native smoke reports every failure in one pass (LKM-109)
+
+Before this change, `runNativeCoreSmoke` was one long async function, so the
+first failing assertion ended the run. Each agent loop therefore found only one
+problem. The function is now a list of named checks (`startup`, `open-project`,
+`mobile-viewport`, `chat-ready`, …, `final-shell`, plus `live-provider` under
+`--live`). They run through the new pure `smoke-runner.ts`. Each check keeps its
+assertions verbatim, moved as-is. A check declares `dependsOn` only for the checks
+whose state it builds on. In practice almost everything needs `open-project`, and
+the chat checks need `chat-ready`. When a dependency does not pass, the check is
+skipped with an explicit `skipped: depends on X`. Independent checks still run.
+
+After a failure the runner captures `failure-<check>.png`. It then runs that
+check's own cleanup, for example closing its sheet or content window, docking
+and hiding the editor, clearing the composer or leaving mobile/History-API
+navigation. Last, it runs a shared restore (`smoke-restore.ts`). The restore
+reuses the sidebar fixture's `sidebarFocus` cleanup and `preparePreviewInput`,
+turns select mode off, and returns to the first fixture project in desktop
+viewport on its own page. That way one broken check leaves the app in the state
+a passing run would have left it. Restore runs only after failures, so a passing
+run follows the same sequence as before. At the end the smoke prints the
+summary documented in `docs/TESTING.md` and throws if anything did not pass.
+`index.ts` already turns that throw into exit status 1.
+
+To prove the behaviour without breaking a real check, `TREZI_NATIVE_SMOKE_FAIL`
+names checks that fail deliberately. `test/native-smoke-runner.mjs` covers the
+runner with a fixture list. Also, `test/run.mjs` now kills each test after
+120 s by default instead of 600 s, which matches what Agent OS passes.
 
 ## 2026-09-28 — Settings OCR returns wrapped lines out of order (LKM-106 repair)
 
