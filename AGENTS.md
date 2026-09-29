@@ -86,6 +86,9 @@ timing and must be reported as reduced coverage. No Electron tests remain.
   windows with traffic lights and an action bar only when needed. Settings and
   project memory autosave; close/navigation waits for their latest write. Swift owns welcome/status/cat surfaces.
 - `src/native/assets/cat`: original animation assets consumed by the native build.
+- `src/main/project-ui*.ts`: Experimental Gen UI discovery, strict React/Svelte
+  composition export and optional Jev topology selection. Helpers return source
+  proposals only; supported contracts and limitations are in `docs/PROJECT_UI.md`.
 - `src/main/`: retained backend services (the directory name is historical).
   Agent/provider sessions, dev servers, Git/worktrees, setup, source parsers,
   props/styles/tokens, annotations, diagnostics, media and iOS Simulator.

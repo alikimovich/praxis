@@ -1,11 +1,11 @@
-import { resolveJevKey } from './jev-credentials'
-import { z } from 'zod'
 import type {
   Experimental_CompositionEvaluator,
   Experimental_CompositionEvent
 } from '@json-render/core'
-import type { ProjectUiCatalog } from './project-ui-catalog'
+import { z } from 'zod'
+import { resolveJevKey } from './jev-credentials'
 import { buildCatalog, exportProjectUi, validateProjectUiFile } from './project-ui'
+import type { ProjectUiCatalog } from './project-ui-catalog'
 
 export const JEV_MODEL = 'typesafe-ai/jev'
 export const jevCompositionInput = z
@@ -44,7 +44,7 @@ export async function composeProjectUiWithJev(
 ) {
   options.signal?.throwIfAborted()
   const args = jevCompositionInput.parse(input)
-  validateProjectUiFile(args.file)
+  const framework = validateProjectUiFile(args.file)
   if (Buffer.byteLength(JSON.stringify(args)) > 32_000)
     throw new Error('Keep Jev candidates below 32 KB.')
   if (new Set(args.candidates.map((c) => c.id)).size !== args.candidates.length)
@@ -52,6 +52,9 @@ export async function composeProjectUiWithJev(
   const catalog = await buildCatalog(project)
   // Validate before network use, including components with required children (validated after composition).
   for (const candidate of args.candidates) {
+    const discovered = project.components.find((c) => c.name === candidate.element.type)
+    if (discovered && (discovered.framework ?? 'react') !== framework)
+      throw new Error(`${discovered.name} cannot compose into ${framework} source.`)
     const component = catalog.data.components[candidate.element.type]
     if (!component) throw new Error(`Unknown component: ${candidate.element.type}`)
     component.props.parse(candidate.element.props)
@@ -124,6 +127,7 @@ export async function composeProjectUiWithJev(
     )
   }
   const output = await exportProjectUi(project, { file: args.file, spec })
+  signal.throwIfAborted()
   return {
     ...output,
     spec,

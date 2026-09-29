@@ -3,6 +3,17 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Experimental Gen UI (LKM-106)
+
+- [x] Rename settings, explain React/Svelte composition and conditionally show the explained engine while preserving saved choices.
+- [x] Discover the documented Svelte legacy/rune subset and export validated `.svelte` source through both engines; preserve React export.
+- [x] Add deterministic rendering/Jev, unsupported-shape, mixed-framework, escaping/path, stale/cancellation and turn-capture checks.
+- [x] Document supported contracts and run focused non-GUI checks.
+- [x] Add foreground Settings capture/OCR/geometry and native picker interactions at 600/800 points, including engine preservation and immediate-close autosave; register windowless and negative-evidence checks.
+- [x] Reproduce NSHostingController minimum-size propagation without a window; exercise live minimum (540), normal (600) and wider (800) widths without relaxing evidence checks.
+- [x] Make `test:native` produce the Settings evidence itself; retain the original `settings.png` capture and `sheetPerform change` autosave check alongside it.
+- [ ] Manager: run configured verification and inspect native Settings help/conditional engine at minimum and wider widths under the desktop lock; complete independent review.
+
 ## Sidebar folder icons (LKM-105)
 
 - [x] Diagnose sidebar capture timeout with a windowless AppKit reproduction; compensate measured split wrapper insets and add content-width regression coverage.

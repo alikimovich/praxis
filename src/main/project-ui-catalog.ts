@@ -1,10 +1,12 @@
-import { readdir, readFile, lstat } from 'node:fs/promises'
+import { lstat, readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import ts from 'typescript'
 import { z } from 'zod'
+import { discoverSvelteComponent } from './project-ui-svelte'
 
 export interface UiComponent {
   name: string
+  framework?: 'react' | 'svelte'
   file: string
   exported: string
   description: string
@@ -62,9 +64,31 @@ export async function discoverProjectUi(root: string): Promise<ProjectUiCatalog>
           .map((m) => `${m[1]}: ${m[2].trim()}`)
         result.styles.push(`${file}${tokens.length ? `\n${tokens.join('\n')}` : ''}`)
       }
-      if (!/\.(tsx|jsx)$/.test(file) || /\.(test|spec|stories)\./.test(file)) continue
+      if (!/\.(tsx|jsx|svelte)$/.test(file) || /\.(test|spec|stories)\./.test(file)) continue
       sources++
       const code = await readFile(join(root, file), 'utf8')
+      if (file.endsWith('.svelte')) {
+        if (!identifier.test(entry.name.slice(0, -7))) {
+          result.warnings.push(
+            `${file}: only capitalized reusable Svelte components are cataloged (routes are not components).`
+          )
+          continue
+        }
+        try {
+          const component = await discoverSvelteComponent(file, code)
+          while (
+            ['Text', 'React', 'GeneratedComposition'].includes(component.name) ||
+            result.components.some((c) => c.name === component.name)
+          )
+            component.name += '_'
+          result.components.push(component)
+        } catch (error) {
+          result.warnings.push(
+            `${file}: unsupported Svelte component; ${error instanceof Error ? error.message : String(error)}`
+          )
+        }
+        continue
+      }
       const ast = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
       const exports = new Map<string, string>()
       for (const node of ast.statements) {
@@ -187,6 +211,7 @@ export async function discoverProjectUi(root: string): Promise<ProjectUiCatalog>
         }
         result.components.push({
           name,
+          framework: 'react',
           file,
           exported,
           description: doc.description?.slice(0, 500) || `${localName} from ${file}`,
@@ -201,7 +226,7 @@ export async function discoverProjectUi(root: string): Promise<ProjectUiCatalog>
   if (truncated) result.warnings.push('Discovery limit reached; this is a partial catalog.')
   if (!result.components.length)
     result.warnings.push(
-      'No supported exported React components found. Use ordinary source editing for this project.'
+      'No supported React or Svelte components found. Use ordinary source editing for this project.'
     )
   return result
 }

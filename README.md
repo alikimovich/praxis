@@ -237,11 +237,11 @@ still need release validation; see [current limits](docs/NATIVE.md).
 
 ### Compose UI from project components
 
-Enable **Settings → Use project components** to have Claude or Codex compose React
+Enable **Settings → Experimental Gen UI** to have Claude or Codex compose React or Svelte
 UI from the opened project’s components and styles using json-render. This is
 experimental and off by default. The setting is saved on this device and captured
 when you submit a message. Turning it off restores ordinary editing and keeps
-generated source. Choose **Jev (experimental)** as the composition engine to try
+generated source. Choose **Jev layout engine** as the UI layout method to try
 Jev with your saved Vercel AI Gateway connection from Settings. See [scope and workflow](docs/PROJECT_UI.md).
 
 ### Content editors from chat

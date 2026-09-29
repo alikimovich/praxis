@@ -117,11 +117,11 @@ for (const [name, description] of [
 }
 
 server.registerTool('project_ui_catalog', {
-  description: 'Discover exported React components, literal props and styles for UI composition. Requires Use project components enabled.',
+  description: 'Discover supported React and Svelte components, literal props and styles for UI composition. Requires Experimental Gen UI enabled.',
   annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
 }, async () => result(await invoke('project_ui_catalog')))
 server.registerTool('compose_project_ui', {
-  description: 'Return project-component TSX. For the current chat model provide file and spec. With Jev selected provide file, prompt and atomic candidates; Jev chooses the composition. Apply returned source with ordinary edit tools. Never silently fall back if Jev fails.',
+  description: 'Return project-component source: .tsx for React or .svelte for Svelte. Do not mix frameworks. For the current chat model provide file and spec. With Jev selected provide file, prompt and atomic candidates; Jev chooses the composition. Apply returned source with ordinary edit tools. Never silently fall back if Jev fails.',
   annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
   inputSchema: { file: z.string(), prompt: z.string().optional(), candidates: z.array(z.object({ id: z.string(), description: z.string(), element: z.object({ type: z.string(), props: z.record(z.string(), z.unknown()) }), root: z.boolean().optional(), resource: z.string().optional() })).optional(), spec: z.object({ root: z.string(), elements: z.record(z.string(), z.object({ type: z.string(), props: z.record(z.string(), z.unknown()), children: z.array(z.string()) }).strict()) }).strict().optional() }
 }, async (args) => result(await invoke('compose_project_ui', args)))

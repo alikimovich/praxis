@@ -274,6 +274,17 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "sheetState": sheets.update(c["state"] as? [String: Any] ?? [:])
         case "sheetClose": sheets.close(c["id"] as? String ?? "")
         case "sheetInspect": reply(id, sheets.inspect())
+        case "settingsVerification":
+            guard ephemeral else { reply(id, error: "Test profile required"); return }
+            do { reply(id, try sheets.verifySettings(c)) }
+            catch { reply(id, error: error.localizedDescription) }
+        case "captureVisibleSettings":
+            guard ephemeral, let panel = sheets.panel, let content = panel.contentView,
+                  sheets.model.state?.title == "Settings" else { reply(id, error: "Test Settings window required"); return }
+            Task { @MainActor in
+                do { reply(id, try await captureVisibleRegion(window: panel, view: content, region: content.bounds)) }
+                catch { reply(id, error: error.localizedDescription) }
+            }
         case "captureSheet":
             guard let content = sheets.panel?.contentView?.superview else { reply(id, error: "No native sheet"); return }
             content.layoutSubtreeIfNeeded(); content.displayIfNeeded()
