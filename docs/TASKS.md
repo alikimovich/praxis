@@ -3,6 +3,14 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## AGENTS.md as the short canonical agent guide (LKM-112)
+
+- [x] Rewrite `AGENTS.md` (≤ 8 KB, tool-neutral): purpose, architecture map with links, commands, verification + Evidence budget, Git/worktree rules, head/grep-only reading of PROGRESS/TASKS.
+- [x] Move the long material into `docs/agent-guide/*.md` (architecture, service-owners, backend-map, verification, git-worktrees, gotchas, conventions); no rule dropped (checklist in PROGRESS).
+- [x] `CLAUDE.md` = `@AGENTS.md` + two Claude notes (≤ 1 KB).
+- [x] `test/docs-links.mjs` also covers `AGENTS.md` + `docs/agent-guide/*.md` and enforces the size budgets and the import.
+- [ ] Manager: run configured verification (typechecks, unit, `test:native`); commit notes carry the section checklist from PROGRESS.
+
 ## App name without "Native" (LKM-108)
 
 - [x] Build `out/native/Trezi.app` (`CFBundleName`/`CFBundleDisplayName` `Trezi`, window title `Trezi`); every launcher, test helper and doc path follows; the build removes a stale `Trezi Native.app`.
