@@ -20,8 +20,10 @@ settings.
 `--only=group,group` (`src/native/smoke-groups.ts`) filters which native smoke
 groups run: `core`, `islands`, `shadow-light`, `sidebar`, `settings`, `chat`,
 `composer`. With LKM-109's collect-all runner merged, `runNativeCoreSmoke` only
-filters its named check list (`selectSmokeChecks`: one import and one
-changed line at `runSmokeChecks`); failure collection, capture/restore and skipping are
+filters its named check list (`selectSmokeChecks`). The hook is added lines
+only, outside the candidate's rewritten hunks so the merge is clean: two imports
+at the top and a function-local `runSmokeChecks` that shadows the runner import
+and filters before delegating; the check list and call site are untouched; failure collection, capture/restore and skipping are
 untouched. `SMOKE_CHECK_GROUPS` maps each check to its group(s), and a check with
 no group (or prelude entry) throws, so new checks can't escape `--only`;
 `test/native-smoke-groups.mjs` parses smoke-core.ts and asserts this plus that

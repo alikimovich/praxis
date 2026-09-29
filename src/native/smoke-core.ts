@@ -1,4 +1,5 @@
 import { parseSmokeGroups, selectSmokeChecks } from './smoke-groups'
+import { runSmokeChecks as runEverySmokeCheck } from './smoke-runner'
 import { checkVisibleComposer } from './smoke-composer'
 import { checkSourceStamps } from './smoke-source-stamp'
 import { checkChatIslands } from './smoke-islands'
@@ -22,6 +23,8 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve,ms))
 export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, root: string) {
   const invoke = (channel: string, ...args: any[]) => dispatchIPC('main',{type:'invoke',channel,args})
   const send = (channel: string, ...args: any[]) => dispatchIPC('main',{type:'send',channel,args})
+  // `--only`: shadows the runner import here so the check list below is filtered, not edited.
+  const runSmokeChecks: typeof runEverySmokeCheck = (checks, hooks) => runEverySmokeCheck(selectSmokeChecks(checks, parseSmokeGroups(process.argv)), hooks)
   const page = (code: string) => host.request('evaluate',{view:'preview',code})
   const wait = async (check: () => Promise<any> | any, label: string, timeout=10000) => { const end=Date.now()+timeout; let last; while(Date.now()<end) { try { last=await check(); if(last)return last } catch(error){last=error}; await delay(80) }; throw new Error(`Native check timed out: ${label}; ${String(last)}`) }
   const inspect = (method: string, check: (s:any)=>boolean) => wait(async()=>{const state=await host.request(method);return check(state)&&state},method)
@@ -317,7 +320,7 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   } })
   let hostClosed = false
   void host.closed.then(() => { hostClosed = true })
-  const results = await runSmokeChecks(selectSmokeChecks(checks, parseSmokeGroups(process.argv)), {
+  const results = await runSmokeChecks(checks, {
     capture: name => captureSmokeFailure(host, artifacts, name),
     restore: () => restoreSmokeState(host, firstProject),
     inject: parseInjectedFailures(process.env.TREZI_NATIVE_SMOKE_FAIL),
