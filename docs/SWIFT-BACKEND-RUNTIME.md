@@ -198,8 +198,15 @@ that is also its own watchdog, and drives it through Bun's real client:
   helper error, an oversized answer or no answer.
 - **Sockets** (a real listener): the static site, a real Bun server on its port,
   restart, the printed-URL fallback, a listener on `127.0.0.1`, `0.0.0.0` or `::`
-  marking its port occupied, a server that cannot bind reported as `conflict`, and
-  `stopAll`.
+  marking its port occupied, a child that hits `EADDRINUSE` on a port held at its
+  exact address reported as `conflict` within seconds (not on the readiness timeout),
+  and `stopAll`. The section runs with a 12 s readiness timeout, so a start that never
+  becomes reachable fails fast instead of waiting 90 s.
+
+The fixture is a 16-file `swiftc` build. The test caches the binary under
+`$TMPDIR/trezi-runtime-owner-cache`, keyed by every source's bytes and the compiler
+version (built privately, renamed into place), so a cold run beside other
+Swift-compiling tests stays inside the 120 s runner cap and a warm run takes about 9 s.
 
 The watcher needs FSEvents and the socket section needs local port binding. Where
 the environment forbids either, those sections are reported and the test ends in

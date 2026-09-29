@@ -8,8 +8,9 @@
 // where local binding is allowed and otherwise make the whole test report SKIP.
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { EventEmitter } from 'node:events'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -29,13 +30,35 @@ const skipped = []
 let cases = 0
 const PORT = 47000 + (process.pid % 900)
 
+/**
+ * Compiles the fixture, or reuses a binary built from byte-identical sources. Cold,
+ * this is a 16-file swiftc build that takes 30-45 s while other Swift-compiling
+ * tests run beside it and it spends the shared 120 s budget. The cache key covers
+ * every source and the compiler version, so an edited source always rebuilds; the
+ * build goes to a private path and is renamed into place, so parallel runs never
+ * see a half-written binary.
+ */
 function compile() {
   const sources = ['ServiceContract', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile', 'WorkspaceOwner',
     'DomainChannel', 'ProcessGuardian', 'ManagedProcess', 'RuntimeNet', 'RuntimeDetect', 'StaticSite', 'StaticServer', 'RuntimeServer', 'RuntimeOwner']
     .map(name => `src/service/${name}.swift`)
-  const result = spawnSync('xcrun', ['swiftc', '-module-cache-path', join(scratch, 'module-cache'), ...sources,
-    'test/fixtures/runtime-owner/main.swift', '-framework', 'CoreServices', '-o', binary], { cwd: root, encoding: 'utf8', timeout: 400_000 })
-  assert.equal(result.status, 0, `swiftc: ${result.error || ''}\n${result.stdout}\n${result.stderr}`)
+  const files = [...sources, 'test/fixtures/runtime-owner/main.swift']
+  const compiler = spawnSync('xcrun', ['swiftc', '--version'], { encoding: 'utf8' })
+  const key = createHash('sha256')
+  key.update(`${compiler.stdout}${compiler.stderr}`)
+  for (const file of files) key.update(`${file}\0`).update(readFileSync(join(root, file)))
+  const cache = join(tmpdir(), 'trezi-runtime-owner-cache')
+  mkdirSync(cache, { recursive: true })
+  const cached = join(cache, `fixture-${key.digest('hex').slice(0, 24)}`)
+  if (!existsSync(cached)) {
+    const building = `${cached}.${process.pid}.tmp`
+    const result = spawnSync('xcrun', ['swiftc', '-module-cache-path', join(cache, 'module-cache'), ...files,
+      '-framework', 'CoreServices', '-o', building], { cwd: root, encoding: 'utf8', timeout: 400_000 })
+    assert.equal(result.status, 0, `swiftc: ${result.error || ''}\n${result.stdout}\n${result.stderr}`)
+    renameSync(building, cached)
+  }
+  // A private copy: the fixture is also its own watchdog, so it must not be replaced under a run.
+  writeFileSync(binary, readFileSync(cached), { mode: 0o755 })
 }
 
 const dir = (name = `case-${++cases}`) => { const path = join(scratch, name); mkdirSync(path, { recursive: true }); return path }
@@ -470,7 +493,9 @@ exit 0
   if (!bindable) {
     skipped.push('sockets (local port binding)')
   } else await section('sockets', async () => {
-    const fixture = await start(dir(), { RUNTIME_PORT: '' })
+    // Real servers become ready in well under a second. A short readiness timeout makes a
+    // start that never becomes reachable fail in seconds, not after the 90 s default.
+    const fixture = await start(dir(), { RUNTIME_PORT: '', RUNTIME_READY_TIMEOUT: '12' })
     const runtime = fixture.runtime()
     const site = dir()
     write(join(site, 'index.html'), '<body><h1>Live</h1></body>')
@@ -503,12 +528,26 @@ exit 0
       assert.equal((await fixture.cmd({ cmd: 'free', port: holder.port })).free, false, `a listener on ${hostname} occupies the port`)
       holder.stop(true)
     }
-    const squatter = Bun.serve({ port: 0, hostname: '0.0.0.0', fetch: () => new Response('stranger') })
+    // A server that cannot bind its port is a conflict. The holder listens on the exact
+    // address the child binds, so the child's EADDRINUSE is guaranteed (a specific bind
+    // beside a wildcard listener is not refused on macOS under SO_REUSEADDR). It prints
+    // the error and exits, as the frameworks do.
+    const holder = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: () => new Response('stranger') })
     try {
       const conflict = dir()
-      await assert.rejects(runtime.start({ root: conflict, command: `"${process.execPath}" -e 'Bun.serve({port:${squatter.port},hostname:"127.0.0.1",fetch:()=>new Response("x")})'` }),
-        error => error.code === 'conflict')
-    } finally { squatter.stop(true) }
+      write(join(conflict, 'server.mjs'), `import { createServer } from 'node:net'
+const server = createServer()
+server.on('error', error => { console.error('listen ' + error.code + ': address already in use 127.0.0.1:' + ${holder.port}); process.exit(1) })
+server.listen(${holder.port}, '127.0.0.1', () => console.log('bound unexpectedly'))`)
+      const began = Date.now()
+      await assert.rejects(runtime.start({ root: conflict, command: `"${process.execPath}" server.mjs` }), error => {
+        assert.equal(error.code, 'conflict', error.message)
+        assert.match(error.message, /^A dev server is already running for this project/)
+        return true
+      })
+      assert.ok(Date.now() - began < 10_000, 'a conflict fails on the child exit, not on the readiness timeout')
+      assert.deepEqual(await runtime.info(conflict), { running: false })
+    } finally { holder.stop(true) }
     await runtime.stopAll()
     await assert.rejects(fetch(again.url)); await assert.rejects(fetch(printed.url))
     await stop(fixture)

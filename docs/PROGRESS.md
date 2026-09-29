@@ -79,6 +79,18 @@ one. The preview fixture strings in the native smoke (`Native Trezi fixture`,
 The LKM-84/85 records under `docs/rename/` stay as written; COORDINATION and
 MIGRATION note the later rename.
 
+LKM-94 verification repair: the manager's unit run timed out `runtime-owner` at the
+120 s cap. Its `sockets` section used the 90 s default readiness timeout, and its
+port-conflict case bound `127.0.0.1` beside a `0.0.0.0` listener, which macOS
+allows under `SO_REUSEADDR`. The child stayed alive and silent, so readiness ended
+only on the 90 s timer with `deadlineExceeded`, not `conflict`. The runtime is
+unchanged. The test now uses a 12 s readiness timeout for that section, holds the
+port at the exact address the child binds so `EADDRINUSE` is certain, and asserts
+`conflict` within 10 s. It also caches the compiled fixture by source hash and
+compiler version. Cold under three other Swift compiles it takes 33 s and warm 9 s.
+The sockets section itself still cannot run in the worker sandbox (no local port
+binding), so it is the manager's check.
+
 ## 2026-09-29 — Swift-owned project memory; annotation storage split (LKM-93 / S05)
 
 The third writer transfer, on the LKM-92 candidate. Under the Swift launch the
