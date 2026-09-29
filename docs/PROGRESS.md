@@ -36,6 +36,16 @@ fixture scope. `dev-native.mjs` rejects an unknown/empty group, or
 `native-runtime` asserts sidebar evidence only when `sidebar` ran. With no flag,
 every group runs exactly as before. Group names are listed in `--help` and
 docs/TESTING.md.
+Manager verification then failed `native-boundary` with exit 0 and its PASS line
+in the log: `runCommand` (test/helpers/test-runner.mjs) SIGKILLs the test's
+process group after exit to reap descendants, and macOS answers EPERM, not ESRCH,
+when the group holds only unreaped zombies (esbuild's service child, which that
+test starts, racing the exit). The runner recorded that as a spawn error and
+marked a passing test FAIL. `killTargetGone` now treats EPERM as "gone" only for
+those post-exit reaps on darwin; stop/timeout kills stay strict, and
+`test/test-runner.mjs` covers the matrix. It could not be reproduced on demand
+(240 fast/esbuild runs passed), so this is fixed from the mechanism and evidence.
+
 ## 2026-09-28 — Native smoke reports every failure in one pass (LKM-109)
 
 Before this change, `runNativeCoreSmoke` was one long async function, so the

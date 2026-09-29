@@ -17,6 +17,15 @@ export async function skipReason(log, name) {
   } finally { input.destroy() }
 }
 
+/** Whether a failed group kill means "nothing left to kill". macOS reports EPERM, not
+ *  ESRCH, when the only members left in the group are exited-but-unreaped zombies
+ *  (e.g. esbuild's service child racing the test's exit), so the post-exit reap —
+ *  which only ever signals our own children — treats it as gone. Stop/timeout
+ *  kills stay strict: an EPERM there is a real failure to stop a live test. */
+export function killTargetGone(error, reaping, platform = process.platform) {
+  return error.code === 'ESRCH' || (reaping && platform === 'darwin' && error.code === 'EPERM')
+}
+
 export async function runCommand({ command, args, cwd, name, log, timeoutMs, signal, graceMs = 2000 }) {
   const start = Date.now()
   if (signal?.aborted) return { name, outcome: 'CANCELLED', duration: 0, log }
@@ -28,13 +37,13 @@ export async function runCommand({ command, args, cwd, name, log, timeoutMs, sig
   let timedOut = false
   let cancelled = false
   let spawnError
-  const kill = (sig) => {
+  const kill = (sig, reaping = false) => {
     if (!child?.pid) return
     try {
       // Every test owns a process group, including its ordinary server children.
       if (process.platform === 'win32') child.kill(sig)
       else process.kill(-child.pid, sig)
-    } catch (error) { if (error.code !== 'ESRCH') spawnError ??= error }
+    } catch (error) { if (!killTargetGone(error, reaping)) spawnError ??= error }
   }
   const stop = () => {
     kill('SIGTERM')
@@ -55,7 +64,7 @@ export async function runCommand({ command, args, cwd, name, log, timeoutMs, sig
       child.on('close', (code, exitSignal) => resolve({ code, signal: exitSignal }))
     })
     // Reap leftover descendants before another test can use shared fixtures.
-    kill('SIGKILL')
+    kill('SIGKILL', true)
     const reason = result.code === 0 && !spawnError && !cancelled && !timedOut
       ? await skipReason(log, name) : null
     const outcome = cancelled ? 'CANCELLED' : timedOut ? 'TIMEOUT'
@@ -66,7 +75,7 @@ export async function runCommand({ command, args, cwd, name, log, timeoutMs, sig
     clearTimeout(timer)
     clearTimeout(escalation)
     signal?.removeEventListener('abort', abort)
-    kill('SIGKILL')
+    kill('SIGKILL', true)
     if (fd !== undefined) closeSync(fd)
     rmSync(profile, { recursive: true, force: true })
   }
