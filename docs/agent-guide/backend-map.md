@@ -1,0 +1,149 @@
+# Agent guide — `src/main/` backend map
+
+Moved from the old `CLAUDE.md` architecture tree and `AGENTS.md` ("`src/main/`:
+retained backend services"). Linked from [AGENTS.md](../../AGENTS.md).
+
+`src/main/` holds the retained backend services (CJS bundle, Bun; the directory name
+is historical): agent/provider sessions, dev servers, Git/worktrees, setup, source
+parsers, props/styles/tokens, annotations, diagnostics, media and iOS Simulator. Every
+provider session starts through `src/main/provider-sessions.ts` (the provider owner's
+grant; see `docs/SWIFT-BACKEND-PROVIDERS.md`). Where the Swift service owns a domain,
+the TS module listed here is its client or its legacy-launch rollback twin — see
+[service-owners.md](service-owners.md).
+
+```
+src/main/
+  preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
+                  bounds/load/reset/capture, the select + comment relays, the
+                  prop-panel island's plumbing, Styles reads, Layers. Owns no
+                  view — native/index.ts hands it a `PreviewIpcHost` (accessors +
+                  the shared `PreviewState`, which native/index.ts's load
+                  re-arm reads). The sandboxed preload can only be READ by a
+                  request/reply round trip; `requestReply` is that pattern
+                  once, shared by styles:read and layers:read
+  devserver.ts    legacy-launch runner: spawn dev server, parse URL, readiness
+                  (the Swift launch serves the same routes via devserver-service.ts)
+  project-detect.ts detect framework/PM + launch commands (pure; Swift mirror
+                  in service/RuntimeDetect.swift)
+  static-server.ts legacy-launch static file server for vanilla HTML/JS projects
+                  (framework 'static': no package.json/dev command; live-reload)
+  file-tree.ts    list a project's files (git ls-files / fs-walk) for the
+                  native source editor's file tree (source:tree IPC)
+  project-icon.ts the project's own favicon, kept as project metadata (project:icon)
+                  — a declared <link rel="icon"> first, else the conventional
+                  paths; inlined as a data: URL, mtime-revalidated. Reads the
+                  FILES, not the running page, so an un-run project has one too.
+                  No longer drawn in sidebar rows: every project row uses the
+                  shared native folder symbol (src/native/SidebarIcon.swift)
+  file-ops.ts     the same sidebar's file MANAGER — create/rename/delete
+                  (source:create-file/rename-file/delete-file). Pure; every
+                  renderer-supplied path is re-validated (no traversal, no
+                  .git/.trezi/.dsgn/node_modules), delete goes to the OS trash
+  media.ts / media-types.ts   the editor's media viewer: opening a .png/.mp4 must
+                  SHOW it, not decode its bytes as utf8. media-types is the pure
+                  half (ext→kind/MIME, binary sniff); media.ts is the legacy
+                  registry of opaque `trezi-media://f/<token>` URLs that only trusted
+                  native code turns back into a path (AppKit shows the file). Under the
+                  Swift launch the platform owner issues these grants instead. No
+                  WebKit view serves the scheme (the Electron-era stream is retired)
+  agent.ts        persistent multi-turn agent session (streams over agent:* IPC);
+                  asks the conversation owner before every chat transition
+  attachments.ts  gives a PASTED composer image a path (attachments:save writes
+                  the clipboard bytes under <userData>/trezi/attachments so the
+                  turn can tell the agent where the image it can see lives; a
+                  DROPPED image needs no call — the renderer already has its
+                  path). Pure fs+path; sanitizes the renderer-supplied name.
+                  Legacy-launch writer: under the Swift launch the platform owner
+                  writes the same folder and names from hash-checked chunks
+  backends/       provider seam: claude.ts, codex.ts, gemini.ts behind pickProvider
+                  (gemini currently has NO SDK dep — treat as experimental). A set
+                  AgentOptions.connectionId routes to codex.ts whatever `provider` says.
+                  codex-retry.ts is codex.ts's pure half (the CLI emits all five of its
+                  retry attempts as separate `error` events; this collapses them into
+                  one line that keeps the actual cause). interrupt.ts is the shared
+                  "Stop must always work" helper — ask the backend nicely, then kill
+                  (see the Gotcha on the SDK's untimed interrupt). helper-host.ts runs a
+                  provider inside a supervised helper; helper-session.ts is Bun's view of
+                  such a session (verified with a fake provider only, see
+                  docs/SWIFT-BACKEND-PROVIDERS.md)
+  session-tools.ts  Trezi's session tools for Codex's MCP bridge and helper sessions,
+                  each authorized by the provider owner first (`authorizedTool`)
+  codex-usage.ts  live token counts for a Codex turn: the SDK's event stream
+                  reports usage only at `turn.completed`, so this tails the
+                  CLI's own session rollout (`$CODEX_HOME/sessions/…jsonl`) for
+                  its `token_count` records. Every reading is a running THREAD
+                  total, so codex.ts DIFFS them (`usageDelta`), never sums
+  providers-store.ts / providers.ts   v10 "connections" — user-added OpenAI-compatible
+                  endpoints (AI Gateway, Groq, custom) so open models like Kimi/DeepSeek
+                  can drive a chat. Same pure/main split as control-manifest vs
+                  control-panels: the store takes an injected baseDir + SecretCipher (so
+                  it unit-tests without electron), while providers.ts owns the
+                  safeStorage cipher, the providers:* IPC, the /models catalog probe,
+                  the picker's ModelChoice list, and resolveConnection() — the seam
+                  backends/codex.ts aims the Codex SDK at
+  model-catalog.ts / codex-models.ts   what the two BUILT-IN seats offer, discovered
+                  instead of curated. model-catalog is the pure half (parsers + a TTL
+                  cache with injected clock/baseDir, persisted under userData);
+                  codex-models runs `codex debug models` on the SDK's OWN vendored
+                  binary, not PATH. Claude needs a live session (Query.supportedModels()),
+                  so backends/claude.ts hands its answer back via recordClaudeModels;
+                  providers.ts only schedules the refresh, never on the render path
+  simulator.ts    iOS Simulator preview (Metro/Expo detect, MJPEG sim bridge); the
+                  legacy-launch rollback of the Swift platform owner
+  props.ts / props-svelte.ts   prop editing engines (React via react-docgen /
+                  Svelte 5); they mirror each other's splice/apply contract
+  styles.ts / styles-svelte.ts  CSS editing for the island's Styles tab: one
+                  edit → Tailwind class rewrite, else merge into an EXISTING
+                  inline style, else hand to the agent; tw-styles.ts +
+                  inline-style.ts are the pure mapping/splicing halves
+  style-tokens.ts re-resolves a design-token pick from the island (name+group
+                  only) against the project's own tokens and decides what to
+                  write — a `var(--name)` reference or a Tailwind token class
+  move-node.ts / move-node-svelte.ts / move-node-html.ts   the Layers panel's
+                  drag-to-reorder engines (React/Svelte/static HTML): same-
+                  parent sibling reorder writes real source; anything
+                  ambiguous (shared stamp, cross-file, templated by a
+                  .map()/{#each}) → needsAgent. move-node-splice.ts is the
+                  shared, dependency-free rebuild-from-scratch splice all
+                  three call; ast-walk.ts is the shared parent/ancestor walk
+                  (React + Svelte; static HTML uses its own, to dodge parse5's
+                  parentNode back-references)
+  control-manifest.ts / control-panels.ts   AI-surfaced control panels:
+                  validate + anchor-lex + render literals (pure) and the
+                  .trezi/control-panels.json store (rendered here, committed
+                  hash-bound by the editing owner) + controls:* IPC
+  tokens.ts       design-token detection/scaffold   annotations.ts  comments → PR
+  publish.ts      the legacy Publish / handoff / saved-run PR code (rollback twin of
+                  service/WorkflowPublish.swift); the routes go through workflow-owner.ts
+  annotation-store.ts  the notes sidecar's storage (list/add/remove; no Git), split
+                  from publication in annotations.ts; Bun-owned until the S07
+                  repository lane
+  spring.ts       pure spring→CSS linear() engine (vendored from ~/dev/spring2css);
+                  powers the spring_to_css agent tool in backends/claude.ts
+  apca.ts         APCA (Lc) contrast checker + accessible-color suggester
+                  (adapted from ~/dev/apca-cli; apca-w3 + colorparsley loaded via
+                  dynamic import — ESM-only); powers the check_contrast agent tool
+  fluid.ts / oklch.ts / shadows.ts   pure design-system calculators powering the
+                  fluid_clamp (Utopia clamp() math), color_scale (OKLCH tonal ramp
+                  + gamut map) and layered_shadow (multi-layer box-shadow) agent tools
+  type-metrics.ts pure line-height + letter-spacing recommender (size-aware,
+                  WCAG-floored leading; Material-3 tracking); powers the line_height agent tool
+  skill-packs.ts / skills-install.ts   curated allowlist catalog of external "taste"
+                  skills + the `npx skills add --copy` runner; power the
+                  list_recommended_skills (pure) and install_skills (side-effecting) agent tools
+  git.ts, worktrees.ts, chat-worktrees.ts, chat-isolation.ts
+                  git/worktree primitives; worktrees: per-chat isolation + sync/merge/recovery;
+                  chat-worktrees: turn-scoped ops (sync, commit, apply); chat-isolation: lifecycle.
+                  Their mutating functions dispatch to the Swift repository owner when
+                  one is installed (repository-owner.ts); repo-write-queue.ts likewise
+  live-commit.ts  one commit per turn on the LIVE checkout (pure): stages only the
+                  files that turn changed, partial-commits so the user's own staged
+                  work is untouched, skips non-repo-root projects, never throws
+  publish-scope.ts  what a session changed / is there anything to publish (pure) —
+                  measured against the default branch, since committed turns leave
+                  nothing to see in a HEAD-relative diff. Used by annotations.ts
+  setup.ts, scaffold.ts, xcode.ts
+  diagnose.ts, diag-cache.ts, diag-rules.ts         sessions-store.ts, edit-history.ts
+  update.ts       self-update detection (pure: fetch + rev-list behind-count)
+  project-ui*.ts  Experimental Gen UI (see architecture.md and docs/PROJECT_UI.md)
+```
