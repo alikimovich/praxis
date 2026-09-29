@@ -106,7 +106,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let path = Bundle.main.path(forResource: "Trezi", ofType: "icns"), let icon = NSImage(contentsOfFile: path) { NSApp.applicationIconImage = icon }
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1320, height: 860), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-        window.title = "Trezi · Native"; window.minSize = NSSize(width: 850, height: 550)
+        window.title = "Trezi"; window.minSize = NSSize(width: 850, height: 550)
         window.contentView = canvas; window.delegate = self
         _ = makeView("preview")
         shell = NativeShell(window: window, canvas: canvas)
@@ -365,7 +365,14 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
                 } catch { reply(id, error: error.localizedDescription) }
             }
         case "composerState": composer.update(c["state"] as? [String: Any] ?? [:])
-        case "composerInspect": reply(id, composer.inspect())
+        case "composerInspect":
+            var inspected = composer.inspect()
+            // Send lives in the shared controls row, not directly in the form bubble.
+            inspected["sendInsideForm"] = composer.sendButton.isDescendant(of: composer.content)
+            let clip = composer.scroll.contentSize
+            inspected["inputWidth"] = Double(clip.width); inspected["textMinimumHeight"] = Double(composer.text.minSize.height)
+            inspected["scrollerStyle"] = composer.scroll.scrollerStyle.rawValue
+            reply(id, inspected)
         case "composerIMECheck":
             guard ephemeral else { reply(id, error: "Test profile required"); return }
             let old = composer.text.string

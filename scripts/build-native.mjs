@@ -7,7 +7,7 @@ import { build as bundle } from 'esbuild'
 if (process.platform !== 'darwin') throw new Error('The native runtime currently requires macOS.')
 const root = fileURLToPath(new URL('../', import.meta.url))
 const out = join(root, 'out/native')
-const contents = join(out, 'Trezi Native.app/Contents')
+const contents = join(out, 'Trezi.app/Contents')
 mkdirSync(join(contents, 'MacOS'), { recursive: true })
 mkdirSync(join(contents, 'Resources'), { recursive: true })
 copyFileSync(join(root, 'build/icon.icns'), join(contents, 'Resources/Trezi.icns'))
@@ -51,12 +51,15 @@ for (const [input, output] of [
 // Remove stale application UI artifacts from earlier hybrid builds.
 rmSync(join(out, 'renderer'), { recursive: true, force: true })
 rmSync(join(out, 'preload.js'), { force: true })
+// The bundle was "Trezi Native.app" before LKM-108; don't leave a second app behind.
+rmSync(join(out, 'Trezi Native.app'), { recursive: true, force: true })
 writeFileSync(
   join(contents, 'Info.plist'),
   `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict>
 <key>CFBundleIdentifier</key><string>dev.praxis.native</string>
-<key>CFBundleName</key><string>Trezi Native</string>
+<key>CFBundleName</key><string>Trezi</string>
+<key>CFBundleDisplayName</key><string>Trezi</string>
 <key>CFBundleIconFile</key><string>Trezi.icns</string>
 <key>CFBundleExecutable</key><string>TreziHost</string>
 <key>CFBundlePackageType</key><string>APPL</string>
@@ -160,12 +163,12 @@ const result = Bun.spawnSync(
   { stdout: 'inherit', stderr: 'inherit' }
 )
 if (result.exitCode) process.exit(result.exitCode)
-for (const path of [join(out, 'TreziService'), join(contents, 'XPCServices/dev.praxis.service.xpc'), join(out, 'Trezi Native.app')]) {
+for (const path of [join(out, 'TreziService'), join(contents, 'XPCServices/dev.praxis.service.xpc'), join(out, 'Trezi.app')]) {
   const signed = Bun.spawnSync(['codesign', '--force', '--sign', '-', path], { stdout: 'inherit', stderr: 'inherit' })
   if (signed.exitCode) process.exit(signed.exitCode)
 }
 if (/require\(["']electron["']\)/.test(readFileSync(join(out, 'index.cjs'), 'utf8')))
   throw new Error('Native backend still imports Electron')
 console.log(
-  'Built Trezi Native: Swift/AppKit UI, Bun services, isolated WebKit project preview.'
+  'Built Trezi: Swift/AppKit UI, Bun services, isolated WebKit project preview.'
 )

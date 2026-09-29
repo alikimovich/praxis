@@ -1,4 +1,4 @@
-# Native Trezi on macOS
+# Trezi on macOS
 
 ```sh
 bun run dev:native
@@ -108,7 +108,8 @@ Repeated WebKit process failures stop automatic reload and show a retry surface.
 ## Profiles and lifecycle
 
 Backend state lives in `~/Library/Application Support/Trezi Native`, separately
-from Electron. Swift holds a shared-launcher flock and reserves the legacy PID lock
+from Electron. The directory keeps that name although the app is now `Trezi.app`:
+renaming it would need a profile migration. Swift holds a shared-launcher flock and reserves the legacy PID lock
 before starting Bun. A guardian retains the flock during service-crash cleanup.
 Workspace state
 lives in `workspace.json` and versioned native UI preferences in

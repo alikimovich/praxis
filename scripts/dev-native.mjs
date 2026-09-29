@@ -44,7 +44,7 @@ if (args.some(arg => arg === '--only' || arg.startsWith('--only='))) {
   }
 }
 
-console.log('Building Trezi Native (Bun + system WebKit)…')
+console.log('Building Trezi (Bun + system WebKit)…')
 const cwd = fileURLToPath(new URL('../', import.meta.url))
 const build = Bun.spawn([process.execPath, 'scripts/build-native.mjs'], {
   cwd,

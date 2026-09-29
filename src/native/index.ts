@@ -76,7 +76,7 @@ async function main() {
       running = error.code !== 'ESRCH'
     }
     if (running)
-      throw new Error('Trezi Native is already using this profile. Close that instance first.')
+      throw new Error('Trezi is already using this profile. Close that instance first.')
     rmSync(lock)
   }
   if (!serviceLocked) writeFileSync(lock, String(process.pid), { flag: 'wx' })
@@ -120,7 +120,7 @@ async function main() {
     return cleaning
   }
   installShutdown(cleanup, forceStopDevServers)
-  const executable = join(__dirname, 'Trezi Native.app/Contents/MacOS/TreziHost')
+  const executable = join(__dirname, 'Trezi.app/Contents/MacOS/TreziHost')
   process.env.TREZI_NATIVE_HOST = executable
   host = new NativeBridge(executable, __dirname, testing ? 'ephemeral' : 'persistent')
   setBridge(host)
@@ -389,7 +389,7 @@ async function main() {
     for (const key of ['TREZI_SERVICE_LOCKED', 'TREZI_SERVICE_SUPERVISED', 'TREZI_SERVICE_PID', 'TREZI_SERVICE_EXECUTABLE', 'TREZI_NATIVE_TEST_DIR']) delete restartEnvironment[key]
     const ownerPID = process.env.TREZI_SERVICE_PID || String(process.pid)
     const processNext = spawn(process.execPath, [join(root, 'scripts/start-native.mjs'), '--wait-for-owner', ownerPID, ...(project ? ['--project', project] : [])], { cwd: root, detached: true, stdio: 'ignore', env: restartEnvironment })
-    processNext.on('error', error => { console.error('Could not restart Trezi Native:', error); process.exit(1) }); processNext.once('spawn', () => { processNext.unref(); process.exit(0) })
+    processNext.on('error', error => { console.error('Could not restart Trezi:', error); process.exit(1) }); processNext.once('spawn', () => { processNext.unref(); process.exit(0) })
   }, undefined, undefined, () => [...chatController.chats.values()].some(chat => chat.isRunning || chat.text || chat.attachments.length) ? 'Finish running chats and send or clear your drafts before restarting.' : [...editorController.sessions.values()].some(session => [...session.documents.values()].some(doc => doc.text !== doc.baseline)) ? 'Save source editor drafts before restarting.' : [...contentController.sessions.values()].some(session => session.dirty || session.busy) ? 'Save content editor drafts before restarting.' : null)
   host.on('menu', ({ action }) => { if (action === 'updates') void updates.open().catch(error => activityController.append(String(error), 'error')) })
   host.on('download-error', ({ message }) => activityController.append(`Download failed: ${message}`, 'error'))
@@ -473,7 +473,7 @@ async function main() {
     await workspaceController.command({ type: 'attach', preferred: resolvePreferredSettings(parsePreferredModelState(preferred)) })
     await chatController.command({ type: 'attach' })
     if (requestedProject && !testing) await workspaceController.command({ type: 'open', root: resolve(requestedProject) })
-    console.log('Trezi Native is running on Bun + system WebKit. ')
+    console.log('Trezi is running on Bun + system WebKit. ')
     if (testing) {
       try {
         await runNativeCoreSmoke(host!, fixture!, root)

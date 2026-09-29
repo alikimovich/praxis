@@ -31,6 +31,10 @@ is an independent audit, not a prerequisite. Its worktree was not accessed.
 | `praxis/chat-*`, `praxis/comment-*` | `trezi/chat-*`, `trezi/comment-*` | Existing branches retained; recovery recognizes both |
 | external GitHub repository / installer URLs | unchanged | Separate administration pending |
 
+LKM-108 later dropped "Native" from the app: the bundle is now `Trezi.app`
+(`CFBundleName`/`CFBundleDisplayName` `Trezi`); the build removes a stale
+`Trezi Native.app`. The native profile directory keeps the `Trezi Native` name.
+
 The target already contains LKM-84 commits
 `86d224c27931025b6f8158d0d44156f8f6afe7a2` and
 `678de9570fceb5b40c5e279fe72dae35ebd0af9d`. Rename/audit reconciliation is recorded in

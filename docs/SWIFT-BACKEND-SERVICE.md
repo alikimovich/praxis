@@ -44,7 +44,7 @@ scripts/start-native.mjs ── TreziHost (AppKit) ──XPC── TreziService 
   legacy launch, server commands) and spawns them through the Swift guardian.
 
 The XPC service is bundled at
-`Trezi Native.app/Contents/XPCServices/dev.praxis.service.xpc` and copied to
+`Trezi.app/Contents/XPCServices/dev.praxis.service.xpc` and copied to
 `out/native/TreziService` for the rollback launcher and guardians. The build
 ad-hoc signs all three.
 

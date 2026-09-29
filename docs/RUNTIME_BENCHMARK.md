@@ -142,7 +142,7 @@ current pipelines, so the application-code delta is not solely an engine effect.
 - Scrolled the preview for 120 requestAnimationFrame callbacks. Both engines
   delivered about 30 callbacks/second on this setup. This is not a maximum-FPS
   result or a comprehensive test of input latency, native transitions or chat.
-- Other existing desktop apps, including the user's native Trezi instance,
+- Other existing desktop apps, including the user's own Trezi instance,
   remained open. Runs were sequential, using fresh profiles but warm OS caches.
 
 ## Failures and limits

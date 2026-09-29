@@ -104,7 +104,9 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
       await inspect('composerInspect', s => s.text === '')
       const compactComposer = await host.request('composerInspect')
       const bottom = compactComposer.bounds.y + compactComposer.bounds.height
-      await host.request('composerPerform', { text: Array(6).fill('A line of draft text').join('\n') + '\n' })
+      // The shared bottom row leaves more text space in the minimum-height form.
+      // Nine lines exercise >60pt growth; mirrored by the windowless layout fixture.
+      await host.request('composerPerform', { text: Array(9).fill('A line of draft text').join('\n') + '\n' })
       const grownComposer = await inspect('composerInspect', s => s.bounds.height > compactComposer.bounds.height + 60)
       assert.equal(grownComposer.bounds.y + grownComposer.bounds.height, bottom, 'Composer grows upward from its anchored bottom')
       assert.ok(grownComposer.documentHeight <= grownComposer.inputHeight + 1, 'Uncapped draft fits without scrolling, including trailing newline')
@@ -112,9 +114,9 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
       const cappedComposer = await inspect('composerInspect', s => s.bounds.height > grownComposer.bounds.height && s.documentHeight > s.inputHeight + 100)
       assert.ok(cappedComposer.bounds.height <= 368 && cappedComposer.bounds.height > grownComposer.bounds.height)
       writeFileSync(join(artifacts, 'composer-expanded.png'), Buffer.from(await host.request('captureComposer', { contentOnly: true }), 'base64'))
-      await host.request('composerPerform', { text: 'wrap text '.repeat(20) })
+      await host.request('composerPerform', { text: 'wrap text '.repeat(40) })
       const wrappedComposer = await inspect('composerInspect', s => s.bounds.height > compactComposer.bounds.height && s.bounds.height < cappedComposer.bounds.height)
-      assert.ok(wrappedComposer.documentHeight <= wrappedComposer.inputHeight + 1, 'Soft-wrapped draft fits before reaching the cap')
+      assert.ok(wrappedComposer.documentHeight <= wrappedComposer.inputHeight + 1, 'Soft-wrapped draft fits before reaching the cap: ' + JSON.stringify(wrappedComposer))
       await host.request('composerPerform', { text: '' })
       await inspect('composerInspect', s => s.text === '' && s.bounds.height === compactComposer.bounds.height)
       for (const clipboard of [{ image: 'png' }, { image: 'tiff' }, { paths: [join(fixture, 'index.html'), join(fixture, 'native-style.tsx')] }]) {

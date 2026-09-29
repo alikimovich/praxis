@@ -13,7 +13,7 @@ import { REACT_HELPER_CONTENT } from '../../src/main/setup-react.ts'
 import { MDX_HELPER_CONTENT } from '../../src/main/setup-mdx.ts'
 if (
   process.platform !== 'darwin' ||
-  !existsSync('out/native/Trezi Native.app/Contents/MacOS/TreziHost')
+  !existsSync('out/native/Trezi.app/Contents/MacOS/TreziHost')
 ) {
   console.log('NATIVE-NEXT-HMR SKIP — build the macOS native host first.')
   process.exit(0)
@@ -86,7 +86,7 @@ export default function Effect() {
     framework: 'next'
   })
   host = new NativeBridge(
-    resolve('out/native/Trezi Native.app/Contents/MacOS/TreziHost'),
+    resolve('out/native/Trezi.app/Contents/MacOS/TreziHost'),
     resolve('out/native'),
     'ephemeral'
   )
