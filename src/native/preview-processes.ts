@@ -3,7 +3,10 @@ import { promisify } from 'node:util'
 import { realpath } from 'node:fs/promises'
 
 const exec = promisify(execFile)
-export interface PreviewProcess { pid: number; root: string; command: string; started: string; addresses: string[] }
+// The legacy (rollback) inspection. Under the Swift launch the platform owner lists and
+// stops these servers (`PreviewServers` in src/service/PlatformTools.swift) and adds
+// `identity` (pid and kernel start time), which a stop must repeat unchanged.
+export interface PreviewProcess { pid: number; root: string; command: string; started: string; addresses: string[]; identity?: string }
 async function output(file: string, args: string[]) {
   try { return (await exec(file, args, { timeout: 8000, maxBuffer: 1024 * 1024 })).stdout }
   catch (error: any) {

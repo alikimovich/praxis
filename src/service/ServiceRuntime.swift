@@ -39,6 +39,9 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
     /// S13 workflow owner (publication, remote Git actions, project setup, Trezi's
     /// update and the diagnosis memory; durable receipts).
     var workflow: WorkflowOwner?
+    /// S14 platform owner (the Simulator preview and its Metro group, scoped media
+    /// grants, pasted attachments, the running-servers recovery), on the same pipe.
+    var platform: PlatformOwner?
     var child: LegacyChild?
     var launch: ServiceLaunch?
     var peerPID: pid_t?
@@ -148,6 +151,9 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                         memory = MemoryChannel(owner: MemoryOwner(store: MemoryStore(profile: profile), ledger: ledger), send: send)
                         runtime = RuntimeOwner(options: RuntimeOwner.Options(environment: requested.environment,
                             watchdog: CommandLine.arguments[0], journal: journal), send: send)
+                        let bun = child?.pid ?? 0, host = session.connection.processIdentifier
+                        platform = PlatformOwner(options: PlatformOwner.Options(profile: requested.profile, environment: requested.environment,
+                            watchdog: CommandLine.arguments[0], journal: journal, protectedPIDs: { [bun, host] }), send: send)
                         let repository = RepositoryOwner(options: RepositoryOwner.Options(profile: requested.profile,
                             environment: requested.environment), send: send)
                         self.repository = repository
@@ -217,9 +223,9 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
     func readBackend() {
         guard let output = child?.output else { return }
         // Handed to the reader directly (not via `queue`), so Bun's preference,
-        // workspace, memory, runtime, repository, source, conversation, provider, editing and workflow requests are still served while `stop` waits for Bun to exit.
+        // workspace, memory, runtime, repository, source, conversation, provider, editing, workflow and platform requests are still served while `stop` waits for Bun to exit.
         let preferences = preferences, workspace = workspace, memory = memory, runtime = runtime, repository = repository, source = source
-        let conversation = conversation, provider = provider, editing = editing, workflow = workflow
+        let conversation = conversation, provider = provider, editing = editing, workflow = workflow, platform = platform
         let preferencesPrefix = Data("{\"service\":\"preferences\"".utf8)
         let workspacePrefix = Data("{\"service\":\"workspace\"".utf8)
         let memoryPrefix = Data("{\"service\":\"memory\"".utf8)
@@ -230,6 +236,7 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
         let providerPrefix = Data("{\"service\":\"provider\"".utf8)
         let editingPrefix = Data("{\"service\":\"editing\"".utf8)
         let workflowPrefix = Data("{\"service\":\"workflow\"".utf8)
+        let platformPrefix = Data("{\"service\":\"platform\"".utf8)
         DispatchQueue.global().async { [weak self] in
             var pending = Data()
             do {
@@ -250,6 +257,7 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                         if line.starts(with: providerPrefix) || line.starts(with: ProviderOwner.helperPrefix) { provider?.submit(line); continue }
                         if line.starts(with: editingPrefix) { editing?.submit(line); continue }
                         if line.starts(with: workflowPrefix) { workflow?.submit(line); continue }
+                        if line.starts(with: platformPrefix) { platform?.submit(line); continue }
                         guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any], object["method"] is String else { continue }
                         self?.queue.async { [weak self] in self?.deliver(line) }
                     }
@@ -298,6 +306,9 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
         // Bun has exited; its project servers have not. Drain every owned group and
         // site before anything is released (bounded), so no rollback overlaps them.
         runtime?.close(timeout: 5); runtime = nil
+        // The simulator preview and its Metro group end the same way (bounded); media
+        // grants and attachment uploads are memory only and end with the service.
+        platform?.close(timeout: 5); platform = nil
         // Bun's leases end with Bun; a Git effect still running finishes (bounded) so its
         // journal entry settles. One cut short is reported as interrupted next launch.
         // Source requests are refused first: a source write queued behind a released

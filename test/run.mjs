@@ -26,6 +26,7 @@ const UNIT = [
   "provider-owner",
   "editing-owner",
   "workflow-owner",
+  "platform-owner",
   "native-visible-capture",
   "native-smoke-runner",
   "rename-compat",

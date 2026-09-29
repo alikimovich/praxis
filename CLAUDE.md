@@ -196,6 +196,17 @@ src/
                     main/workflow-legacy.ts (over main/publish.ts, github.ts, git-remote.ts,
                     setup.ts, scaffold.ts, diag-cache.ts) is the rollback twin
                     (docs/SWIFT-BACKEND-WORKFLOWS.md)
+    PlatformOwner.swift / SimulatorOwner.swift / SimulatorBridge.swift /
+    SimulatorTools.swift / PlatformMedia.swift / PlatformTools.swift   the platform
+                    owner (LKM-101): the iOS Simulator preview (bounded, cancellable
+                    xcrun/idb runs in a ToolScope, the app's launch command as a journaled
+                    group, the loopback MJPEG bridge, idb input and picks), scoped media
+                    grants for the source editor (view, identity, size, SHA-256, expiry),
+                    pasted attachments from hash-checked chunks, and the running-servers
+                    recovery. Bun's client is native/platform-service.ts behind
+                    main/platform-owner.ts; simulator.ts, media.ts, attachments.ts and
+                    native/preview-processes.ts are the rollback twin
+                    (docs/SWIFT-BACKEND-PLATFORM.md)
   main/           Backend services (CJS bundle, Bun); historical directory name
     preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
                     bounds/load/reset/capture, the select + comment relays, the
@@ -225,18 +236,20 @@ src/
                     .git/.trezi/.dsgn/node_modules), delete goes to the OS trash
     media.ts / media-types.ts   the editor's media viewer: opening a .png/.mp4 must
                     SHOW it, not decode its bytes as utf8. media-types is the pure
-                    half (ext→kind/MIME, binary sniff, HTTP Range parsing); media.ts
-                    owns the `trezi-media://` protocol — main hands the renderer an
-                    opaque per-file token, so the scheme can never be aimed at a path
-                    the renderer chose. Streamed + range-servable (a <video> can't
-                    seek otherwise, and a big one must not cross IPC as base64)
+                    half (ext→kind/MIME, binary sniff); media.ts is the legacy
+                    registry of opaque `trezi-media://f/<token>` URLs that only trusted
+                    native code turns back into a path (AppKit shows the file). Under the
+                    Swift launch the platform owner issues these grants instead. No
+                    WebKit view serves the scheme (the Electron-era stream is retired)
     agent.ts        persistent multi-turn agent session (streams over agent:* IPC);
                     asks the conversation owner before every chat transition
     attachments.ts  gives a PASTED composer image a path (attachments:save writes
                     the clipboard bytes under <userData>/trezi/attachments so the
                     turn can tell the agent where the image it can see lives; a
                     DROPPED image needs no call — the renderer already has its
-                    path). Pure fs+path; sanitizes the renderer-supplied name
+                    path). Pure fs+path; sanitizes the renderer-supplied name.
+                    Legacy-launch writer: under the Swift launch the platform owner
+                    writes the same folder and names from hash-checked chunks
     backends/       provider seam: claude.ts, codex.ts, gemini.ts behind pickProvider
                     (gemini currently has NO SDK dep — treat as experimental). A set
                     AgentOptions.connectionId routes to codex.ts whatever `provider` says.
@@ -270,7 +283,8 @@ src/
                     binary, not PATH. Claude needs a live session (Query.supportedModels()),
                     so backends/claude.ts hands its answer back via recordClaudeModels;
                     providers.ts only schedules the refresh, never on the render path
-    simulator.ts    iOS Simulator preview (Metro/Expo detect, MJPEG sim bridge)
+    simulator.ts    iOS Simulator preview (Metro/Expo detect, MJPEG sim bridge); the
+                    legacy-launch rollback of the Swift platform owner
     props.ts / props-svelte.ts   prop editing engines (React via react-docgen /
                     Svelte 5); they mirror each other's splice/apply contract
     styles.ts / styles-svelte.ts  CSS editing for the island's Styles tab: one
@@ -384,7 +398,9 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   histories and activation, the controls sidecars, content drafts and deferred preview
   navigation (`docs/SWIFT-BACKEND-EDITING.md`), and runs publication, remote Git actions,
   setup, new projects, Trezi's update and the diagnosis memory as journaled workflows
-  (`docs/SWIFT-BACKEND-WORKFLOWS.md`);
+  (`docs/SWIFT-BACKEND-WORKFLOWS.md`), and runs the iOS Simulator preview, issues the source
+  editor's media grants, writes pasted attachments and performs the running-servers
+  recovery (`docs/SWIFT-BACKEND-PLATFORM.md`);
   Bun is still the single writer of every other domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun
   spawns the host, still under Swift's lock, writes all three itself and runs its
   own servers after the launcher sweeps the runtime journal). See

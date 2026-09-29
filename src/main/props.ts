@@ -22,6 +22,7 @@ import {
 } from './props-svelte'
 import { looksBinary, mediaTypeFor } from './media-types'
 import { mediaUrl } from './media'
+import { swiftPlatformOwner } from './platform-owner'
 import { spliceHtmlText } from './html-source'
 import { undo, redo, editAvailability, revertGroup, canRevertGroup } from './edit-history'
 import { proposeEdit } from './source-commit'
@@ -843,8 +844,8 @@ export function classNameStringNode(v: BabelNode | null | undefined): BabelNode 
  * span so the renderer can highlight it. Svelte / unparsable files fall back to
  * the stamp line alone — the peek still works, just without the span.
  *
- * Images/video/audio come back as `media` (registered with the trezi-media
- * protocol so the renderer can show them) and other non-text files as `binary`;
+ * Images/video/audio come back as `media` (an opaque `trezi-media://` grant the
+ * native editor turns into a path) and other non-text files as `binary`;
  * both carry an empty `code`. Before that, a `.png` opened here was decoded as
  * utf8 and rendered as thousands of lines of mojibake.
  */
@@ -861,11 +862,20 @@ export async function readSourceView(root: string, source: string): Promise<Sour
     } catch {
       return null
     }
+    // Swift launch: a grant bound to the source editor, the file's size and hash, with
+    // an expiry. A file it refuses (too large, changed while read) shows as binary.
+    const platform = swiftPlatformOwner()
+    let url: string
+    try {
+      url = platform ? (await platform.grantMedia(root, loc.file)).url : mediaUrl(loc.file)
+    } catch {
+      return { file: rel, code: '', line: loc.line, binary: true, bytes }
+    }
     return {
       file: rel,
       code: '',
       line: loc.line,
-      media: { ...media, url: mediaUrl(loc.file) },
+      media: { ...media, url },
       bytes
     }
   }

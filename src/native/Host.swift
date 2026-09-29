@@ -43,7 +43,7 @@ if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--crypto" {
 }
 
 final class Canvas: NSView { var changed: (() -> Void)?; override var isFlipped: Bool { true }; override func layout() { super.layout(); changed?() } }
-final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate, WKURLSchemeHandler {
+final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate {
     var window: NSWindow!
     var shell: NativeShell!
     var composer: NativeComposer!
@@ -69,7 +69,6 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var urlObservers: [String: NSKeyValueObservation] = [:]
     var preferences: [String: Any] = [:]
     var recentMenu = NSMenu(title: "Open Recent")
-    var mediaTasks: [String: WKURLSchemeTask] = [:]
     let world = WKContentWorld.world(name: "TreziPreview")
     let directory: String
     let ephemeral: Bool
@@ -538,11 +537,6 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             catch { reply(id, error: error.localizedDescription) }
         case "fullscreen": reply(id, window.styleMask.contains(.fullScreen))
         case "nativeEdit": NSApp.sendAction(Selector((c["action"] as? String ?? "undo") + ":"), to: nil, from: nil)
-        case "mediaReply":
-            guard let key = c["task"] as? String, let task = mediaTasks.removeValue(forKey: key), let url = task.request.url else { return }
-            let data = Data(base64Encoded: c["data"] as? String ?? "") ?? Data()
-            task.didReceive(HTTPURLResponse(url: url, statusCode: c["status"] as? Int ?? 500, httpVersion: "HTTP/1.1", headerFields: c["headers"] as? [String: String])!)
-            task.didReceive(data); task.didFinish()
         case "quit":
             if let status = c["status"] as? Int, status != 0 { exitStatus = 1 }
             terminateHost()
@@ -588,11 +582,6 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         let alert = NSAlert(); alert.messageText = "Allow this preview to use \(type == .camera ? "your camera" : type == .microphone ? "your microphone" : "your camera and microphone")?"; alert.informativeText = "\(origin.protocol)://\(origin.host):\(origin.port)"; alert.addButton(withTitle: "Allow Once"); alert.addButton(withTitle: "Don’t Allow")
         alert.beginSheetModal(for: window) { response in decisionHandler(response == .alertFirstButtonReturn ? .grant : .deny) }
     }
-    func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
-        let key = UUID().uuidString; mediaTasks[key] = urlSchemeTask
-        emit(["event":"media", "task":key, "url":urlSchemeTask.request.url!.absoluteString, "headers":urlSchemeTask.request.allHTTPHeaderFields ?? [:]])
-    }
-    func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) { for (key, task) in mediaTasks where task === urlSchemeTask { mediaTasks.removeValue(forKey: key) } }
     func windowDidEnterFullScreen(_ notification: Notification) { emit(["event":"fullscreen", "value":true]) }
     func windowDidExitFullScreen(_ notification: Notification) { emit(["event":"fullscreen", "value":false]) }
     func windowWillClose(_ notification: Notification) {

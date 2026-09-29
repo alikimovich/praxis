@@ -96,6 +96,18 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
 
+## Swift platform owner: Simulator, media, attachments, server recovery (LKM-101 / S14)
+
+- [x] Name the domain exactly and tighten its rollback (`docs/SWIFT-BACKEND-PLATFORM.md`): simulator tools, launch command, bridge; media grants; attachments; running-servers recovery. Retire the unreachable `trezi-media` scheme route (Host `media`/`mediaReply`, Bun `protocol.handle`).
+- [x] Swift `PlatformOwner` on the private pipe; Bun client `src/native/platform-service.ts`, seam `src/main/platform-owner.ts`; the TS code (`simulator.ts`, `media.ts`, `attachments.ts`, `preview-processes.ts`) is the rollback owner.
+- [x] Simulator coordinator: bounded, cancellable tool runs (`ToolScope`), supersede/stop cancels a start still booting or building, restart never overlaps, Metro as a journaled process group, loopback bridge with host/token/body/viewer limits, idb input, picks and stale-companion recovery.
+- [x] Media grants bound to the source editor view, the file's identity, size and SHA-256, expiring; re-granted by the client after expiry or a change. Attachments uploaded in hash-checked chunks with the legacy caps, names and pruning.
+- [x] `test/platform-owner.mjs` (unit tier): preflight/pure parity, unavailable, bridge, idb, restart, cancel, supersede, failures, drain, crash sweep, media, attachments, server recovery, schema. Scripted xcrun/idb/Metro only.
+- [ ] Live platform check (needs Xcode + a simulator runtime, not run by the worker): a real Expo/React Native launch, `open -a Simulator` from the XPC service, idb input on a device.
+- [ ] Remaining Bun-owned OS effects for S15 (census, 2026-09-29): provider CLIs and probes (claude/codex SDK spawns, `codex --version`/`debug models`, gemini), the Codex MCP unix socket (`trezi-agent-tools.ts`), `npx skills add` (`skills-install.ts`), Keychain crypto via `TreziHost --crypto`, `/usr/bin/open` and editor CLIs (`source:open-in-editor`), profile migration symlinks, the provider store and catalog cache, `feedback:submit` (`gh issue create`), the update check's `git fetch`, the PR-description temp directory; and in project `.trezi/`: annotations, tokens, legacy-sidecar migration, worktree setup helpers and dependency markers.
+- [x] Worker native verification (staged, groups core/chat/composer): 139 unit checks, typechecks, native smoke 17/17, chat acceptance pass (read from the run log; the tool call timed out client-side).
+- [ ] Manager: configured verification (full native run) and independent review.
+
 ## Swift workflow owner (LKM-100 / S13)
 
 - [x] Name the domain exactly (publication, remote Git actions, setup helpers, new projects, Trezi update, diagnosis memory; Bun-kept proposing helpers and sheets) and tighten its rollback and partial-effect recovery (`docs/SWIFT-BACKEND-WORKFLOWS.md`).
@@ -193,7 +205,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Drain at quit before the profile lock is released; `TREZI_BACKEND_OWNER=legacy` keeps Bun's runner as the rollback owner.
 - [x] `test/runtime-owner.mjs` (unit tier); `service-process` legacy journal sweep.
 - [ ] Remaining S06 sub-boundary: the workspace controller's persisted server fields (`url`, `launchSpec`, dependency flags) stay on the S04 adapter until the controller moves (S12).
-- [ ] Remaining S06 sub-boundary: the user-driven "Servers" recovery sheet (`preview-processes.ts`, foreign listeners) stays in Bun; move it with S12/S14 platform process integration before S15.
+- [x] Remaining S06 sub-boundary: the user-driven "Servers" recovery sheet moved to the Swift platform owner (LKM-101); `preview-processes.ts` is its rollback twin.
 - [ ] Manager: stage the new files (docs-links checks tracked paths), run the unit tier unsandboxed (runtime-owner watcher + socket sections, full `service-process`, `devserver-net`), `bun run test:native` through the Swift static site, independent review.
 
 ## Swift-owned project memory; annotation storage split (LKM-93 / S05)
@@ -206,7 +218,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Annotation storage split from publication (`annotation-store.ts`): CRUD parity, per-project serialization, unknown entries kept, damaged files kept, no Git side effects; stale note responses dropped in the context controller.
 - [x] `test/memory-owner.mjs`, `test/annotation-store.mjs` (unit tier); `project-memory` and `native-context` extended.
 - [ ] Unblocked by S07 (LKM-95): move the annotation sidecar writer to Swift through the repository lane (must land before S15).
-- [ ] S05 remainder: attachments (scratch/blob bounds) are not in this task.
+- [x] S05 remainder: attachments (scratch/blob bounds) moved to the Swift platform owner (LKM-101): chunked, hash-checked uploads.
 - [ ] Manager: stage the new files (docs-links checks tracked paths), run unit + unsandboxed `service-process` + `bun run test:native` through the service path, independent review.
 
 ## Swift-owned workspace identity (LKM-92 / S04)
