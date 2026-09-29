@@ -2,6 +2,52 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Merge-friendly docs and native smoke groups (LKM-110)
+
+Six of the last eight merge conflicts were only in the two append-style logs, so
+`.gitattributes` now union-merges `docs/TASKS.md` as well as `docs/PROGRESS.md`.
+`test/docs-merge-union.mjs` builds a disposable repo with this checkout's
+attributes, appends different lines on two branches and merges them: no conflict,
+both sets kept (it fails without the TASKS rule). Union can keep both versions of
+a line both sides edited, e.g. a checkbox ticked differently, so review those.
+
+AGENTS.md and CLAUDE.md gain an Evidence budget: a foreground capture plus JSON
+geometry/state from existing fixtures is enough. OCR of wrapped text, synthetic
+CGEvent/input-routing tests and `defaults write`/system preference changes need
+an explicit ticket requirement, and tests must never change the user's system
+settings.
+
+`--only=group,group` (`src/native/smoke-groups.ts`) filters which native smoke
+groups run: `core`, `islands`, `shadow-light`, `sidebar`, `settings`, `chat`,
+`composer`. With LKM-109's collect-all runner merged, `runNativeCoreSmoke` only
+filters its named check list (`selectSmokeChecks`). The hook is one import
+after the last existing one and a filter at the `runSmokeChecks` call site. It
+stays out of the top-of-file imports and the `wait`/`inspect` helpers, which the
+candidate rewrote (smoke-wait), so the merge is clean. An earlier version put a
+function-local shadow of `runSmokeChecks` next to those helpers, and that
+conflicted. Failure collection, capture/restore and skipping are untouched.
+`SMOKE_CHECK_GROUPS` maps each check to its group(s), and a check with
+no group (or prelude entry) throws, so new checks can't escape `--only`;
+`test/native-smoke-groups.mjs` parses smoke-core.ts and asserts this plus that
+no selection filters out a dependency. The prelude (`startup`, `open-project`,
+`chat-ready`, `final-shell`) always runs, and a filtered run prints a
+`NATIVE SMOKE FILTERED` notice saying it is not full-suite acceptance. `checkChatIslands` reads the selection
+itself so `islands` and `shadow-light` share the one `chat-islands` check and its
+fixture scope. `dev-native.mjs` rejects an unknown/empty group, or
+`--only` without `--test`, before building; `--live` requires `core`.
+`native-runtime` asserts sidebar evidence only when `sidebar` ran. With no flag,
+every group runs exactly as before. Group names are listed in `--help` and
+docs/TESTING.md.
+Manager verification then failed `native-boundary` with exit 0 and its PASS line
+in the log: `runCommand` (test/helpers/test-runner.mjs) SIGKILLs the test's
+process group after exit to reap descendants, and macOS answers EPERM, not ESRCH,
+when the group holds only unreaped zombies (esbuild's service child, which that
+test starts, racing the exit). The runner recorded that as a spawn error and
+marked a passing test FAIL. `killTargetGone` now treats EPERM as "gone" only for
+those post-exit reaps on darwin; stop/timeout kills stay strict, and
+`test/test-runner.mjs` covers the matrix. It could not be reproduced on demand
+(240 fast/esbuild runs passed), so this is fixed from the mechanism and evidence.
+
 ## 2026-09-29 — Swift-owned workspace identity and persistence (LKM-92 / S04)
 
 The second writer transfer, on the accepted LKM-91 base. Under the Swift launch

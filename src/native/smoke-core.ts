@@ -15,6 +15,7 @@ import { checkNativeChat } from './smoke-chat'
 import { checkSelectionInput, preparePreviewInput } from './smoke-input'
 import { formatSmokeSummary, parseInjectedFailures, runSmokeChecks, type SmokeCheck } from './smoke-runner'
 import { captureSmokeFailure, restoreSmokeState } from './smoke-restore'
+import { parseSmokeGroups, selectSmokeChecks } from './smoke-groups'
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve,ms))
 /** Named checks run by smoke-runner: a failure no longer stops the run. `dependsOn`
  *  lists the checks whose app/window state a check builds on; an independent check
@@ -320,7 +321,8 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
   } })
   let hostClosed = false
   void host.closed.then(() => { hostClosed = true })
-  const results = await runSmokeChecks(checks, {
+  // `--only` filters which named checks run; failure collection is unchanged.
+  const results = await runSmokeChecks(selectSmokeChecks(checks, parseSmokeGroups(process.argv)), {
     capture: name => captureSmokeFailure(host, artifacts, name),
     restore: () => restoreSmokeState(host, firstProject),
     inject: parseInjectedFailures(process.env.TREZI_NATIVE_SMOKE_FAIL),

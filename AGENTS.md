@@ -51,6 +51,20 @@ caching does not reliably capture Liquid Glass; use visible checks when needed.
 `TREZI_NATIVE_BACKGROUND_TEST=1` skips real preview pointer gestures/animation
 timing and must be reported as reduced coverage. No Electron tests remain.
 
+`bun run dev:native --test --only=group,group` (or `bun test/native-runtime.mjs
+--only=…`) runs only the named native smoke groups: `core`, `islands`,
+`shadow-light`, `sidebar`, `settings`, `chat`, `composer`. An unknown name fails
+before the build; no flag runs every group, which acceptance still requires.
+Groups are defined in `src/native/smoke-groups.ts`.
+
+### Evidence budget
+
+- A foreground window capture plus JSON geometry/state from the existing fixtures
+  is enough acceptance evidence.
+- Do not add OCR of wrapped text, synthetic CGEvent/input-routing tests, or any
+  `defaults write`/system preference change unless the ticket explicitly requires it.
+- Tests must never change the user's system settings.
+
 ## Architecture
 
 - `src/native/index.ts`: Bun entrypoint, service registration and native lifecycle.

@@ -139,7 +139,9 @@ const UNIT = [
   "shadow-controls",
   "type-metrics",
   "skills-install",
-  "trezi-cli"
+  "trezi-cli",
+  "native-smoke-groups",
+  "docs-merge-union"
 ];
 
 const NATIVE = ['native-runtime', 'native-source-window', 'native-chat-scroll', 'native-next-hmr'];

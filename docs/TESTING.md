@@ -212,3 +212,28 @@ their temporary directories/ports and clean up processes. Use injected service
 registries when testing lifecycle behavior without the desktop. Renderer-specific
 unit tests were removed; retained backend generation tests use React as a dev
 fixture to verify that generated project code actually renders.
+
+### Native smoke groups
+
+`bun run dev:native --test --only=group,group` (or
+`bun test/native-runtime.mjs --only=…`) runs only the named groups. It
+filters which of the named smoke checks run (see "Native smoke summary"); failure
+collection is unchanged. The `startup`, `open-project`, `chat-ready` and
+`final-shell` checks (setup, and the closing capture plus one-WebKit-view check)
+always run; with no flag every group runs. `src/native/smoke-groups.ts` maps each
+check to its group, and a check with no group there is an error:
+
+| Group | Covers |
+| --- | --- |
+| `core` | mobile viewport/reload, source stamps, toolbar/preview surface, divider/expand, layers, selection input, inspector style edit, text edit + undo/redo, popped-out source editor, content editor, preview Web Inspector |
+| `islands` | `chat-islands`, generic part: Swift rendering, point commit, Undo, landing gate |
+| `shadow-light` | `chat-islands`, Shadow Light part (same fixture scope; the check runs when either group is selected) |
+| `sidebar` | project switching and visible sidebar captures/interactions |
+| `settings` | sheets and forms: running servers, New project, project memory, Settings, AI providers, feedback, diagnose, activity |
+| `chat` | native chat streaming/queues/permissions (`smoke-chat.ts`) |
+| `composer` | composer growth/paste/attachments, per-chat drafts, slash commands, visible composer |
+
+An unknown or empty group name fails before the build. `--live` requires `core`
+(the live turn edits the heading the core group writes). `native-runtime` only
+demands fresh sidebar evidence when `sidebar` ran. Acceptance still needs the
+full suite.
