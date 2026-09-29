@@ -2,6 +2,60 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — Swift-owned workspace identity and persistence (LKM-92 / S04)
+
+The second writer transfer, on the accepted LKM-91 base. Under the Swift launch
+the service is the only writer of `workspace.json` (format unchanged). It owns
+project identity (root → key), membership, order, the selected project and
+recents, through the ledger domain `workspace`. Details and the tightened
+rollback plan are in `docs/SWIFT-BACKEND-WORKSPACE.md`.
+
+The file mixed the domain with fields owned by later slices: session keys and
+chat settings (S11), URL, launch spec and dependency flags (S06), and the branch
+(S07). Moving the whole file would have transferred those early; splitting it
+would have broken rollback to the old format. Instead Bun's controllers still
+decide those values, and the workspace controller sends only their differences
+through a typed `update` adapter. It validates each field and refuses `root`,
+`key` and `touchedAt`. Swift persists them without interpreting them. One writer
+per datum, one writer of the file.
+
+Identity, order and selection now come from the store, never from a local
+mutation. `open`, `select` and `close` are awaited before anything that depends
+on them: agent sessions, Git, detection, dev servers, activation and teardown.
+A selection that cannot be persisted shows the error and starts nothing. Keys
+keep their string form, so no session store or agent map changes. Canonical-root
+identity is added on `open`: a root that `realpath`s to a stored project's
+folder (a symlink, or `/tmp` vs `/private/tmp`) returns that project instead of
+creating a duplicate.
+
+The operations are written twice, in `src/service/WorkspaceFile.swift` and
+`src/native/workspace-model.ts`, and tested byte for byte. The TS copy backs
+the `TREZI_BACKEND_OWNER=legacy` writer. Four profile fixtures (current, old,
+odd, empty) go through 18 operations with identical results and bytes. To make
+that possible, the shared `JSValue` writer now formats numbers and orders
+integer-like keys exactly as `JSON.stringify` does; preferences output is
+unaffected. Both owners now keep invalid entries, unknown fields and old
+recents where the old writer dropped them. `close` also removes duplicate
+copies of a key. The unused attach-time `legacy` raw-workspace parameter is gone.
+
+The preferences pipe inbox and drain became the generic `DomainChannel`, and the
+service routes `{"service":"workspace"` lines to the second owner. Bun's
+client sends operations as intents, one at a time. A conflict caused by an
+adopted external edit is retried on the newer revision; it never falls back to
+a local write.
+
+Verification (worker sandbox): `test/workspace-owner.mjs` passes all seven
+sections. That covers parity, operations and concurrency, external edits and
+damage, injected write faults, SIGKILL at each durable boundary, rollback in
+both directions, and Bun's client plus the controller on the real owner across
+a service restart and UI reattach. `native-workspace-controller`,
+`native-workspace`, `preferences-owner`, `operation-ledger` and
+`service-process --supervision-only` also pass, the last with the real service
+executable built from the new sources. New Swift files have zero diagnostics
+under `-strict-concurrency=complete`. Both typechecks pass. The full
+`service-process` XPC section, which adds a workspace round trip through the
+real service, and `test:native` need the manager's unsandboxed run.
+
 ## 2026-09-28 — Settings OCR returns wrapped lines out of order (LKM-106 repair)
 
 `settings-visible-800-on-chat` failed although its PNG shows the engine help

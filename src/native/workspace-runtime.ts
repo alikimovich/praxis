@@ -1,5 +1,6 @@
 import { parsePreferredModelState, rememberLastUsed, resolvePreferredSettings } from '../shared/preferred-model'
 import type { NativePreferences } from './preferences'
+import type { WorkspaceStore } from './workspace'
 import type { NativeBridge } from './bridge'
 import type { NativeChatController } from './chat-controller'
 import { NativeWorkspaceController } from './workspace-controller'
@@ -8,10 +9,10 @@ import type { NativeWorkspaceCommand } from '../shared/native-workspace'
 import type { NativeShellAction } from '../shared/native-shell'
 
 export let nativeWorkspace: NativeWorkspaceController
-export function installNativeWorkspace(host: NativeBridge, view: NativeView, storage: { read(): string | null; write(raw: string): void }, chat: NativeChatController, preferences: NativePreferences) {
+export function installNativeWorkspace(host: NativeBridge, view: NativeView, store: WorkspaceStore, chat: NativeChatController, preferences: NativePreferences) {
   const invoke = (channel: string, ...args: any[]) => dispatchIPC('main', { type: 'invoke', channel, args })
   nativeWorkspace = new NativeWorkspaceController({
-    invoke, read: storage.read, write: storage.write,
+    invoke, store,
     render: state => view.webContents.send('native-workspace:state', state),
     closeChat: key => chat.close(key),
     reusableChat: key => { const value = chat.chats.get(key); return !value || (!value.text && !value.messages.length && !value.attachments.length) },
@@ -54,7 +55,7 @@ export function installNativeWorkspace(host: NativeBridge, view: NativeView, sto
     const key = action.id?.startsWith('project:') ? action.id.slice(8) : action.project ?? nativeWorkspace.state.activeKey
     if (!key) return
     if (action.action === 'project-reorder') {
-      nativeWorkspace.reorderProject(key, action.value || null)
+      void nativeWorkspace.reorderProject(key, action.value || null).catch(error => nativeWorkspace.reportError(error))
       return
     }
     if (action.action === 'new-chat') run({ type: 'new-chat', key })

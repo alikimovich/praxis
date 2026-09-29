@@ -58,10 +58,7 @@ indirect enum JSValue: Equatable, Sendable {
         switch self {
         case .null: out += JSText("null")
         case .bool(let value): out += JSText(value ? "true" : "false")
-        case .number(let value):
-            if !value.isFinite { out += JSText("null") }
-            else if value == value.rounded(), abs(value) < 1e21 { out += JSText(String(format: "%.0f", value == 0 ? 0 : value)) }
-            else { out += JSText("\(value)") }
+        case .number(let value): out += JSText(JSValue.number(value))
         case .string(let value): JSValue.quote(value, into: &out)
         case .array(let values):
             out.append(0x5B)
@@ -69,12 +66,50 @@ indirect enum JSValue: Equatable, Sendable {
             out.append(0x5D)
         case .object(let fields):
             out.append(0x7B)
-            for (index, (key, value)) in fields.enumerated() {
+            for (index, (key, value)) in JSValue.enumerationOrder(fields).enumerated() {
                 if index > 0 { out.append(0x2C) }
                 JSValue.quote(key, into: &out); out.append(0x3A); value.write(to: &out)
             }
             out.append(0x7D)
         }
+    }
+
+    /// JavaScript's own-property order: array-index keys ("0"…"4294967294", no
+    /// leading zeros) ascending, then every other key in insertion order.
+    static func enumerationOrder(_ fields: [(JSText, JSValue)]) -> [(JSText, JSValue)] {
+        func index(_ key: JSText) -> UInt64? {
+            guard !key.isEmpty, key.count <= 10, key.allSatisfy({ (0x30...0x39).contains($0) }), key == [0x30] || key[0] != 0x30,
+                  let value = UInt64(key.string), value < 4_294_967_295 else { return nil }
+            return value
+        }
+        let indexed = fields.compactMap { field in index(field.0).map { ($0, field) } }
+        guard !indexed.isEmpty else { return fields }
+        return indexed.sorted { $0.0 < $1.0 }.map(\.1) + fields.filter { index($0.0) == nil }
+    }
+
+    /// `Number.prototype.toString()` for a finite double (non-finite is `null`, -0 is "0").
+    static func number(_ value: Double) -> String {
+        guard value.isFinite else { return "null" }
+        if value == 0 { return "0" }
+        // Swift's description is the shortest round-tripping digit string, as in JS;
+        // only its layout differs. Reduce it to digits and a decimal exponent.
+        let description = abs(value).description
+        let parts = description.split(separator: "e", maxSplits: 1)
+        let mantissa = String(parts[0])
+        let exponent = parts.count > 1 ? Int(parts[1])! : 0
+        let point = mantissa.firstIndex(of: ".").map { mantissa.distance(from: mantissa.startIndex, to: $0) } ?? mantissa.count
+        var digits = [Character](mantissa.replacingOccurrences(of: ".", with: ""))
+        var n = point + exponent
+        while digits.first == "0" { digits.removeFirst(); n -= 1 }
+        while digits.last == "0" { digits.removeLast() }
+        let k = digits.count, sign = value < 0 ? "-" : ""
+        let all = String(digits)
+        if k <= n && n <= 21 { return sign + all + String(repeating: "0", count: n - k) }
+        if 0 < n && n <= 21 { return sign + String(digits[..<n]) + "." + String(digits[n...]) }
+        if -6 < n && n <= 0 { return sign + "0." + String(repeating: "0", count: -n) + all }
+        let e = n - 1
+        let power = (e < 0 ? "-" : "+") + String(abs(e))
+        return sign + (k == 1 ? all : String(digits[0]) + "." + String(digits[1...])) + "e" + power
     }
 
     static func quote(_ text: JSText, into out: inout JSText) {

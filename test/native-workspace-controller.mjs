@@ -1,11 +1,23 @@
 import assert from 'node:assert/strict'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { NativeWorkspaceController } from '../src/native/workspace-controller.ts'
+import { legacyWorkspace } from '../src/native/workspace.ts'
 const tick = () => new Promise(resolve => setTimeout(resolve, 0))
 const gate = () => { let resolve; const promise = new Promise(r => resolve = r); return { promise, resolve } }
 const projects = new Map(), calls = [], renders = [], active = []
-let saved = null, slow, failed = false, counter = 0
-const controller = new NativeWorkspaceController({
-  read: () => saved, write: raw => { saved = raw },
+let slow, failed = false, counter = 0
+const profile = mkdtempSync(join(tmpdir(), 'trezi-workspace-controller-'))
+process.on('exit', () => rmSync(profile, { recursive: true, force: true }))
+const saved = () => readFileSync(join(profile, 'workspace.json'), 'utf8')
+/** The store's operations land in `calls` too, so ordering against dependent commands is visible. */
+function logged(store) {
+  const wrap = name => async (...args) => { calls.push([`store:${name}`, ...args]); const result = await store[name](...args); calls.push([`stored:${name}`, ...args]); return result }
+  return { ...store, open: wrap('open'), select: wrap('select'), close: wrap('close'), reorder: wrap('reorder'), recent: wrap('recent'), update: store.update }
+}
+const services = (store) => ({
+  store,
   render: state => renders.push(state), activate: async entry => { active.push(entry?.key ?? null) },
   closeChat() {}, reusableChat: () => false,
   invoke: async (channel, ...args) => {
@@ -39,6 +51,7 @@ const controller = new NativeWorkspaceController({
     return { ok: true }
   }
 })
+const controller = new NativeWorkspaceController(services(logged(legacyWorkspace(profile))))
 await controller.command({ type: 'attach' })
 await controller.open('/one')
 assert.equal(controller.state.status.kind, 'running')
@@ -75,7 +88,7 @@ assert.equal(active.at(-1), '/failure')
 assert.ok(projects.has('/failure'), 'failed preview must retain repair chat')
 await controller.close('/failure')
 assert.equal(controller.state.activeKey, '/two')
-assert.equal(JSON.parse(saved).activeKey, '/two')
+assert.equal(JSON.parse(saved()).activeKey, '/two')
 assert.equal(renders.at(-1).activeKey, '/two')
 console.log('Native workspace: project/chat commands, stale opening, close during startup, repair chat and persistence passed')
 
@@ -84,15 +97,98 @@ assert.ok(order.length >= 2)
 const activeBeforeReorder = controller.state.activeKey
 const sessionsBeforeReorder = controller.state.projects.map(project => [project.key, [...project.sessionKeys]])
 const serviceCalls = calls.length
-controller.reorderProject(order[0], null)
+await controller.reorderProject(order[0], null)
 assert.deepEqual(controller.state.projects.map(project => project.key), [...order.slice(1), order[0]])
-assert.deepEqual(JSON.parse(saved).projects.map(project => project.key), [...order.slice(1), order[0]])
-controller.reorderProject(order[0], order[1])
+assert.deepEqual(JSON.parse(saved()).projects.map(project => project.key), [...order.slice(1), order[0]])
+await controller.reorderProject(order[0], order[1])
 assert.deepEqual(controller.state.projects.map(project => project.key), order)
 const revision = controller.state.revision
-for (const [key, before] of [[order[0], order[0]], ['/missing', null], [order[0], '/missing'], [order[0], order[1]]]) controller.reorderProject(key, before)
+for (const [key, before] of [[order[0], order[0]], ['/missing', null], [order[0], '/missing'], [order[0], order[1]]]) await controller.reorderProject(key, before)
 assert.equal(controller.state.revision, revision, 'invalid and unchanged drops are ignored')
 assert.equal(controller.state.activeKey, activeBeforeReorder)
 assert.deepEqual(controller.state.projects.map(project => [project.key, [...project.sessionKeys]]), sessionsBeforeReorder)
-assert.equal(calls.length, serviceCalls, 'reordering must not restart providers or previews')
+assert.deepEqual(calls.slice(serviceCalls).filter(call => !call[0].startsWith('store')), [], 'reordering must not restart providers or previews')
 console.log('Native project reordering: both directions, persistence, invalid drops and session preservation passed')
+
+// --- S04: the store owns identity/order/selection; each is persisted first ------
+const flush = async () => { for (let i = 0; i < 5; i++) await tick() }
+{
+  const at = (name, root) => calls.findIndex(call => call[0] === name && call[1] === root)
+  const start = calls.length
+  await controller.open('/three/')
+  const mine = calls.slice(start)
+  const index = (name, root) => mine.findIndex(call => call[0] === name && call[1] === root)
+  assert.ok(index('stored:open', '/three/') >= 0 && index('stored:open', '/three/') < index('agent:open-project', '/three/'), 'identity persisted before the session starts')
+  assert.ok(index('stored:select', '/three') >= 0 && index('stored:select', '/three') < index('git:ensure', '/three/'), 'selection persisted before the project is touched')
+  const devserver = mine.findIndex(call => call[0] === 'devserver:start' && call[1]?.root === '/three/')
+  assert.ok(devserver > index('stored:select', '/three'), 'selection persisted before the server starts')
+  assert.equal(controller.state.activeKey, '/three', 'canonical key from the store')
+  await flush()
+  const file = JSON.parse(saved())
+  const three = file.projects.find(p => p.key === '/three')
+  assert.equal(three.branch, 'trezi/test', 'legacy-owned metadata reaches the store through the typed adapter')
+  assert.equal(three.url, 'http://127.0.0.1:7784')
+  assert.equal(typeof three.touchedAt, 'number')
+  assert.deepEqual(file.recents[0], { root: '/three/', name: 'three/', at: file.recents[0].at }, 'recents are stored by the owner')
+  for (const display of ['status', 'history', 'error', 'revision']) assert.ok(!(display in file), `${display} is display state, never stored`)
+  await controller.open('/three')
+  assert.equal(controller.state.projects.filter(p => p.key === '/three').length, 1, 'the same root is never duplicated')
+  assert.ok(at('stored:open', '/three') > 0)
+  console.log('Native workspace S04: identity and selection persisted before sessions/servers; canonical keys; metadata adapter; display state not stored passed')
+}
+
+// A store that cannot persist the selection: nothing dependent runs.
+{
+  const store = legacyWorkspace(profile)
+  const refusing = { ...store, select: async () => { throw new Error('The workspace was not saved') } }
+  const blocked = new NativeWorkspaceController(services(refusing))
+  await blocked.command({ type: 'attach' })
+  const start = calls.length
+  await blocked.open('/blocked')
+  assert.equal(blocked.state.status.kind, 'error')
+  assert.match(blocked.state.status.message, /not saved/)
+  assert.ok(!calls.slice(start).some(call => ['agent:open-project', 'devserver:start', 'agent:set-active'].includes(call[0])), 'no dependent command without a persisted selection')
+  console.log('Native workspace S04: a refused selection starts no session, server or activation passed')
+}
+
+// Restart: a new controller on the same store file restores projects, order and selection.
+{
+  await flush()
+  const before = JSON.parse(saved())
+  const order = before.projects.map(p => p.key)
+  projects.clear()
+  const restarted = new NativeWorkspaceController(services(legacyWorkspace(profile)))
+  await restarted.command({ type: 'attach' })
+  assert.deepEqual(restarted.state.projects.map(p => p.key), order, 'order survives restart')
+  assert.equal(restarted.state.activeKey, before.activeKey, 'selection survives restart')
+  const rendered = renders.length, snapshot = saved()
+  await restarted.command({ type: 'attach' })
+  assert.equal(renders.length, rendered + 1, 'a reattaching UI gets a projection')
+  assert.deepEqual(renders.at(-1).projects.map(p => p.key), order)
+  assert.equal(renders.at(-1).activeKey, before.activeKey)
+  assert.equal(saved(), snapshot, 'reattach changes nothing stored')
+  console.log('Native workspace S04: restart restores projects/order/selection; UI reattach re-renders without writes passed')
+}
+
+// Old records (before sessions/chat settings existed) restore with defaults; nothing is dropped.
+{
+  const old = mkdtempSync(join(tmpdir(), 'trezi-workspace-old-'))
+  const { writeFileSync } = await import('node:fs')
+  writeFileSync(join(old, 'workspace.json'), JSON.stringify({ projects: [
+    { root: '/legacy', key: '/legacy', name: 'Legacy', touchedAt: 5, future: { kept: true } },
+    { root: 'relative', key: 'relative' },
+    null
+  ], activeKey: '/legacy', extra: 1 }))
+  projects.clear()
+  const legacy = new NativeWorkspaceController(services(legacyWorkspace(old)))
+  await legacy.command({ type: 'attach' })
+  const entry = legacy.state.projects[0]
+  assert.deepEqual([entry.key, entry.sessionKeys, entry.activeSessionKey, entry.previewKind], ['/legacy', ['/legacy'], '/legacy', 'web'])
+  await flush()
+  const file = JSON.parse(readFileSync(join(old, 'workspace.json'), 'utf8'))
+  assert.deepEqual(file.projects.slice(1), [{ root: 'relative', key: 'relative' }, null], 'invalid entries are kept, not deleted')
+  assert.deepEqual(file.projects[0].future, { kept: true }, 'unknown entry fields are kept')
+  assert.equal(file.extra, 1, 'unknown top-level fields are kept')
+  rmSync(old, { recursive: true, force: true })
+  console.log('Native workspace S04: old records get defaults; invalid entries and unknown fields are preserved passed')
+}
