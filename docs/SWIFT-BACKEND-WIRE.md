@@ -90,6 +90,8 @@ service, method, scope, expected revision and body; connection, request ID and
 timeout do not change it. Object field order is irrelevant; array order, null
 versus absence and Unicode value spelling are significant. This is an executable
 identity rule, not an in-memory substitute for the required durable ledger.
+S03 adds that ledger in the Swift service ([ledger](SWIFT-BACKEND-LEDGER.md)):
+its persisted intent digest follows the same identity rule.
 
 Mutations require `expectedRevision`. A trusted current revision rejects a stale
 counter or epoch with `conflict`. Future dispatch must validate syntax/scope,

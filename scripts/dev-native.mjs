@@ -33,7 +33,7 @@ const build = Bun.spawn([process.execPath, 'scripts/build-native.mjs'], {
 })
 const code = await build.exited
 if (code) process.exit(code)
-const child = Bun.spawn([process.execPath, 'out/native/index.cjs', ...args], {
+const child = Bun.spawn([process.execPath, 'scripts/start-native.mjs', ...args], {
   cwd,
   stdin: 'inherit',
   stdout: 'inherit',

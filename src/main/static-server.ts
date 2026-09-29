@@ -48,8 +48,13 @@ const MIME: Record<string, string> = {
 
 const RELOAD_PATH = '/__trezi_reload'
 
-// Injected before </body>: opens an SSE stream and hard-reloads on any change.
-const LIVE_RELOAD_SNIPPET = `<script>(function(){try{var es=new EventSource("${RELOAD_PATH}");es.onmessage=function(){location.reload()}}catch(e){}})();</script>`
+// Injected before </body>: opens an SSE stream and hard-reloads when the tree's
+// change version differs from the one this page was served at. Level-triggered:
+// a change that lands while no stream is open (mid-reload, or a dropped stream)
+// is announced as soon as the stream (re)connects instead of being lost.
+export function liveReloadSnippet(version: number): string {
+  return `<script>(function(){try{var v="${version}",es=new EventSource("${RELOAD_PATH}?v="+v);es.onmessage=function(e){if(e.data!==v)location.reload()}}catch(e){}})();</script>`
+}
 
 /** Find the entry HTML to serve for the directory root: index.html, else the first *.html. */
 export async function findStaticEntry(root: string): Promise<string | null> {
@@ -90,6 +95,8 @@ export function startStaticServer(
 ): Promise<{ server: Server; running: RunningDevServer }> {
   const { root, port, host } = opts
   const clients = new Set<import('http').ServerResponse>()
+  // Bumped on every watched change; pages carry the version they were served at.
+  let version = 0
 
   const server = createServer((req, res) => {
     const url = req.url ?? '/'
@@ -102,6 +109,9 @@ export function startStaticServer(
         Connection: 'keep-alive'
       })
       res.write('retry: 1000\n\n')
+      // A page served before a change whose broadcast it missed reloads now.
+      const seen = new URL(url, 'http://localhost').searchParams.get('v')
+      if (seen !== null && seen !== String(version)) res.write(`data: ${version}\n\n`)
       clients.add(res)
       req.on('close', () => clients.delete(res))
       return
@@ -144,6 +154,9 @@ export function startStaticServer(
 
       if (isHtml) {
         // Inject the live-reload snippet — read fully so we can rewrite the body.
+        // Capture the version BEFORE reading: a change racing the read then
+        // costs one extra reload, never a stale page.
+        const served = version
         const chunks: Buffer[] = []
         await new Promise<void>((res2, rej2) => {
           const rs = createReadStream(target)
@@ -157,9 +170,8 @@ export function startStaticServer(
         // Best-effort: stampHtml returns the input unchanged on any parse failure.
         const rel = relative(root, target).split(sep).join('/')
         html = await stampHtml(html, rel)
-        html = html.includes('</body>')
-          ? html.replace('</body>', `${LIVE_RELOAD_SNIPPET}</body>`)
-          : html + LIVE_RELOAD_SNIPPET
+        const snippet = liveReloadSnippet(served)
+        html = html.includes('</body>') ? html.replace('</body>', `${snippet}</body>`) : html + snippet
         const body = Buffer.from(html, 'utf8')
         res.writeHead(200, {
           'Content-Type': type,
@@ -187,11 +199,18 @@ export function startStaticServer(
   let watcher: FSWatcher | null = null
   let reloadTimer: NodeJS.Timeout | null = null
   const notifyReload = (): void => {
+    // Bump now so a page served during the debounce already counts as current.
+    version++
     if (reloadTimer) return
     reloadTimer = setTimeout(() => {
       reloadTimer = null
-      for (const c of clients) c.write('data: change\n\n')
+      for (const c of clients) c.write(`data: ${version}\n\n`)
     }, 80)
+  }
+  // The project's log AND stderr: a silent watcher failure is a stale preview.
+  const watchFailure = (line: string): void => {
+    onLog(line)
+    console.error(line)
   }
   try {
     watcher = watch(root, { recursive: true }, (_e, name) => {
@@ -199,9 +218,9 @@ export function startStaticServer(
       if (name && /(^|[/\\])(\.git|node_modules)([/\\]|$)/.test(name)) return
       notifyReload()
     })
-    watcher.on('error', () => {})
-  } catch {
-    /* recursive watch unsupported here — serve without live reload */
+    watcher.on('error', (error) => watchFailure(`Live reload stopped: watching ${root} failed: ${error.message}`))
+  } catch (error) {
+    watchFailure(`Live reload unavailable: cannot watch ${root}: ${error instanceof Error ? error.message : String(error)}`)
   }
 
   server.on('close', () => {

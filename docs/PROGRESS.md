@@ -378,6 +378,479 @@ Manager owns desktop verification: foreground normal/narrow/multiline captures,
 latest-message reachability, idle/hover/drag/wheel states and Always-show plus
 accessibility preference checks. No GUI suite or foreground capture was run by
 this worker.
+## 2026-09-28 — Settings OCR returns wrapped lines out of order (LKM-106 repair)
+
+`settings-visible-800-on-chat` failed although its PNG shows the engine help
+in full. Vision returned the wrapped help's continuation (`Gateway API key.`)
+before its first line (`… requires an Al`), and the checker joined observations
+in result order and then looked for each sentence as one contiguous run. The
+capture carries text only, with no observation boxes to sort by. So
+`assertSettingsEvidence` now chains a required sentence across line
+observations anchored at line edges: it starts at the end of one line, passes
+through any whole lines, and finishes at the start of another. The pieces must
+concatenate to exactly the sentence, so every word is still required, in order.
+Only the observation order is free. The I/l fold is kept, and the Off-state
+absence checks use the same matcher, so split engine text is still caught.
+`test/native-settings-evidence.mjs` replays that capture's verbatim OCR (it fails
+on the previous checker) and rejects dropped, misspelled and reordered words and
+fragments that don't sit at line edges. All 18 saved `settings-visible-*`
+captures pass the new checker; only this one failed the old one.
+
+## 2026-09-28 — Settings OCR reads SF Pro "I" as "l" (LKM-106 diagnostic repair)
+
+The manager's `test:native` failed at the first foreground capture
+(`settings-visible-540-off`) with "Missing complete foreground text: Generate UI
+using…". The PNG renders the help correctly; the fault was the comparator.
+SF Pro draws capital I and lowercase l with the same glyph, so Vision returned
+`Generate Ul using…` (and `Al providers…`), while the bold `Experimental Gen UI`
+happened to read correctly. `assertSettingsEvidence` now folds only that
+glyph-identical pair before lowercasing (dotted i stays distinct), and the
+Off-state "engine text is absent" checks go through the same normalizer, so the
+fold cannot make them vacuous. `test/native-settings-evidence.mjs` replays the
+capture's verbatim OCR output (fails on the old comparator) and still rejects a
+dropped word, an i→l misspelling, and homoglyph-read engine text while Off.
+
+## 2026-09-28 — Manager-run Settings evidence, existing checks retained (LKM-106 review)
+
+Addresses the reviewer's recorded-evidence findings: `bun run test:native`
+now produces the Settings evidence itself (native-runtime → smoke-core →
+`checkNativeSheets` → `checkVisibleSettings` in `src/native/smoke-settings.ts`).
+Restore the two Settings steps the earlier repair had replaced: the original
+`settings.png` sheet capture (before the new fixture) and the
+`sheetPerform change` autosave round-trip (after it). No check was removed.
+
+Fixture steps, run per width in the live minimum (540), 600 and 800 points plan:
+foreground Off capture → native On action → Chat model capture → native Jev
+action → capture → Off (engine hidden, Jev preserved) → close/reopen → capture →
+On (Jev restored) → Chat model then immediate close/reopen → capture → Off then
+close/reopen → capture. Each capture asserts foreground ownership, requested
+width ≥ minimum, stable minimum, rendered picker set, contained/hit-testable
+pickers, selected labels, saved values and complete OCR of both explanations
+(engine text absent while Off). Reopens assert a fresh sheet ID with unchanged
+values. Evidence is written before assertions.
+
+Manager should inspect `test/artifacts/native/settings-visible-{540,600,800}-{off,
+on-chat,on-jev,off-preserved-jev,reopened-off-jev,restored-on-jev,
+reopened-on-chat,reopened-off-chat}.{png,json}` (24 pairs),
+`settings-visible-interactions.json`, and the retained `settings.png`.
+Worker checks: typechecks, Swift host build, `native-settings-layout`,
+`native-settings-evidence`, `native-settings`, `native-sheets`, `docs-links`.
+Native GUI execution and PNG inspection remain manager-owned.
+
+## 2026-09-28 — Use the live Settings minimum width (LKM-106 verification repair)
+
+Reproduce the manager's `540 !== 600` failure without a visible window. Production
+uses NSHostingController, which propagates SheetContent's 540-point minimum to
+NSWindow; the prior windowless fixture used NSHostingView and retained the
+manually assigned 600-point minimum. Candidate `51fb928` has the same production
+hosting setup and no equivalent fixture correction.
+
+Match the production hosting controller in the windowless test, assert the
+540-point effective minimum, and exercise actual layouts/picker interactions at
+540, 600 and 800 points. The manager fixture derives its narrow width from the
+live window, retaining normal 600 and wider 800 coverage. Reject invalid minimums,
+assert the minimum remains stable across states/reopens, and retain every OCR,
+foreground, visibility, hit-target, preservation and autosave assertion.
+
+The current capture plan is 24 PNG/JSON pairs named
+`test/artifacts/native/settings-visible-{540,600,800}-*.{png,json}`, plus the
+interaction log with its explicit width plan. Focused windowless and evidence
+checks and TypeScript checks pass. Native execution and new capture inspection
+remain manager-owned; this worker did not run GUI suites.
+
+## 2026-09-28 — Foreground Settings acceptance fixture (LKM-106 review)
+
+Compare candidate `51fb928`: its visible-region capture helper and Settings smoke
+fixture match this checkout; it has no newer Settings acceptance fixture to reuse.
+Reuse the shared ScreenCaptureKit/Vision helper, replacing only the Settings
+cacheDisplay capture with foreground evidence. The existing native suite now
+exercises real SwiftUI picker menu-item target/actions at 600-point minimum and
+800-point wider widths, Off/On, Chat model/Jev, hidden engine preservation, and
+close/reopen autosave (including immediate close after changing the engine).
+
+Save 16 `test/artifacts/native/settings-visible-{600,800}-*.png` captures with
+matching OCR/geometry/value JSON plus `settings-visible-interactions.json`.
+Assert full helper text, engine absence/presence, selected labels, unclipped
+picker geometry, hit targets and foreground ownership. Write evidence before
+assertions so manager failures retain inspection artifacts. No direct form-value
+injection is used by the new Settings fixture.
+
+Add windowless SwiftUI picker/binding checks and negative evidence-validation
+checks to the unit tier. Non-GUI checks and Swift/TypeScript typechecks pass.
+The worker has not run foreground/native smoke verification or inspected these
+new captures; manager execution and independent PNG inspection remain required.
+
+## 2026-09-28 — Experimental Gen UI and Svelte composition (LKM-106)
+
+Rename the native setting, add wrapping help text and conditionally show the
+explained layout method without clearing its saved choice. Preserve default-off,
+autosave and next-message/queued turn settings.
+
+Add bounded compiler-backed Svelte discovery for literal legacy/rune props,
+default slots and zero-argument children snippets. Both Chat model and Jev export
+real `.svelte` imports/source, retain React TSX, reject mixed frameworks and
+unsupported contracts, and keep json-render out of target runtime dependencies.
+Guard output symlinks and reject late results across cancellation or same-engine
+turn replacement. Update both provider tool descriptions and scope documentation.
+
+Focused React/Svelte SSR, deterministic Jev, settings and queue tests pass, as do
+TypeScript/native and non-GUI Swift typechecks. The Svelte fixture compiles and
+renders integrated generated source without paid calls. Native foreground
+readability/interaction checks and the configured verification remain manager-owned;
+no GUI suite, provider calls, staging or commits were performed by this worker.
+## 2026-09-28 — Durable operation ledger in the Swift service (LKM-90 / S03)
+
+S03's first half: the substrate every writer transfer needs. No domain writer
+moves. Bun still writes preferences and everything else. The preferences
+transfer waits for this to be verified, behind the adoption gate in
+`docs/SWIFT-BACKEND-LEDGER.md`.
+
+`OperationLedger` (an actor) persists intent before effects. The intent digest
+is SHA-256 over canonical domain/mode/service/method/scope/expected
+revision/body. Identity is checked before the revision, so a retry of a
+successful operation returns its receipt instead of conflicting with the
+revision it advanced. Swift actors are reentrant, so each domain has a FIFO lane
+held across the effect's suspensions. `beginEffect()` splits cancellable
+preparation from a non-idempotent effect, which is what makes the restart rule
+exact: an intent without an effect is abandoned (never run later), and an effect
+without a receipt is `uncertain`. An uncertain operation blocks its domain until
+the owner reconciles it against the external world. Blind replay was the thing
+to avoid. Cancel before the effect discards the late result; after the effect,
+cancel returns `tooLate`.
+
+`LedgerStore` keeps `<profile>/service/ledger/`: a checksummed, `F_FULLFSYNC`ed
+journal and an atomically replaced snapshot, with generations so a crash
+mid-compaction is unambiguous. Only an unterminated final line counts as a torn
+write. It is copied to `quarantine/` and truncated. Any other damage, and any
+other format (a newer build's store), refuses to open with the files untouched.
+A fresh store would forget receipts and execute duplicates, so replacing one is
+an explicit `quarantineLedgerStore` call, never automatic.
+
+The ledger epoch is persisted, so event cursors survive restart. Gaps older than
+the 1,024-event window, foreign epochs and future cursors need a snapshot.
+`LedgerMirror` pins the consumer rule: a reply never writes state, so a late one
+can't overwrite a newer snapshot. Receipts are retained for a 7-day horizon
+(earlier past 4,096 operations). Expired IDs answer `recoveryRequired`, never
+execute.
+
+`ServiceRuntime` opens the ledger once, at the first launch hello, after
+`ProfileExclusion` and before Bun. If it can't be opened, the service logs that
+and keeps running legacy Bun. The `--legacy` owner never opens it. Nothing is
+exposed over XPC yet, since typed domain dispatch arrives with the first writer.
+
+Verification (worker sandbox): `test/operation-ledger.mjs` passes. It compiles
+the real sources into a fixture process and SIGKILLs it at every durable
+boundary and at arbitrary times, then restarts. `service-process
+--supervision-only` passes with the ledger linked into the real service
+executable. The ledger files also pass a `-strict-concurrency=complete`
+typecheck. The XPC assertions (ledger created at launch, epoch kept across a
+second service instance) need the manager's unsandboxed run.
+
+## 2026-09-28 — Live reload can no longer miss a change (LKM-89 / S02)
+
+Manager verification of the merged tree: 114 unit checks passed, then
+`test:native` timed out at `managed reload` (`src/native/smoke-core.ts`). That step
+`text:apply`s `index.html` and waits for the preview to show the new text.
+
+The watcher under the supervised service was not failing. Earlier in the same run
+the islands smoke rewrote `index.html` and waited for the element its new script
+adds; only a live reload can produce it, and it passed. The pre-LKM-107 LKM-89
+run also passed `managed reload` through the service. Diagnosis from code (this
+worker's sandbox cannot bind ports, reach XPC or receive FSEvents; not
+reproduced here): live reload was edge-triggered with no memory. The step before
+`managed reload` edits `native-style.tsx`, and every fixture change reloads the
+page. The `index.html` write follows a few host round trips later, which now
+cross XPC. A `change` sent while the old page's EventSource has closed and the
+new page's has not opened goes to zero clients. A page that fetched `index.html`
+just before the write then stays stale for good.
+
+`static-server.ts` is now level-triggered. Each watched change bumps a version.
+A served page embeds the version it was read at (captured before the read) and
+connects with `?v=`. The stream announces the current version immediately when
+it differs, and clients reload only on a mismatch. Watcher `error` and setup
+failures are now written to the project log and stderr instead of being
+swallowed. `service-process` now runs the real static server inside the
+backend launched by the real XPC service and checks four things. An edit
+broadcasts a reload. A page that missed the broadcast reloads when its stream
+connects. A current page never reloads. The watcher reports no failure.
+`managed reload` is unchanged.
+
+## 2026-09-28 — Resolve the S02 candidate merge against LKM-107 (LKM-89 / S02)
+
+The previous manager verification passed: 113 unit checks, both typechecks and
+`test:native` (NATIVE CORE PASS). Review and merge stopped at the candidate merge
+instead, because `candidate` had meanwhile taken LKM-107. Both branches changed the
+Shadow Light reveal, so `src/native/Chat.swift` and
+`src/native/smoke-shadow-island.ts` conflicted. A trial merge of `candidate` into
+the S02 head, done in a throwaway clone, reproduced exactly those two conflicts.
+
+LKM-107 fixes the race that S02's capture retry only worked around: a reveal is
+re-issued against measured anchor geometry until SwiftUI applies it. The smoke then
+asserts the acknowledged `revealAppliedRevision` before capturing. S02 now takes
+LKM-107's version of both files, so the `messageTops` inspect field and the
+three-attempt re-reveal loop are gone. Every other file came from the clean
+auto-merge (service build/sign steps, `Host.swift` service mode, test tiers,
+docs). The worktree now holds that merged tree, so `native-chat-reveal` joins
+the unit tier here. The service code is unchanged. Per-file `git merge-file`
+(with the `merge=union` driver for this log) shows candidate ← this tree merges
+with no conflicts and yields exactly this tree.
+
+Verifying the merged tree also turned up a real `service-process` flake. One
+parallel unit run killed it with SIGKILL right after its final PASS line; it
+passed alone. The cause: the fixture polled for a pid file and read it as soon
+as it *existed*. A backend can create that file before writing its digits (a
+racing probe saw it empty in 164 of 300 reads), and `Number('')` is 0. That 0
+stayed in the cleanup set after the real pid was removed, and the `finally`
+ran `process.kill(-0, 'SIGKILL')`, which is `kill(0)`: the test's own process
+group. The Swift guardian fixture had the same race, where the force-unwrapped
+`Int32("")!` crashes instead. Fixed: the backend fixture renames its pid files
+into place, both readers wait for a complete pid > 1, and group cleanup refuses
+pids ≤ 1. A regression check at the top of `service-process` asserts that an
+empty file and a `0` are both rejected and that killing group 0 or NaN is a
+no-op.
+
+## 2026-09-28 — Native smoke through the service: quit hang, lost logs, capture race (LKM-89 / S02)
+
+Manager verification: all 113 unit checks pass; `test:native` ran through
+the service path, failed its first Shadow Light capture at 15:31:26 (5 s into
+the smoke) and then hung until the 300 s spawn timeout. The error text was
+lost: an XPC service's stderr is discarded, and Bun inherited it. Diagnosed
+from artifacts and code, without running the GUI tier:
+- **Shutdown hang.** Quit answered `.terminateLater`, which runs AppKit in a
+  modal-panel run loop. The client's shutdown reply, callbacks and its own 10 s
+  timeout all hop through `DispatchQueue.main`; if that queue is not serviced
+  there, nothing can finish the drain. The host now returns `.terminateCancel`,
+  drains in the normal run loop, then terminates again, and a 20 s watchdog
+  bounds shutdown. A windowless probe could not settle the run-loop question
+  here (the sandbox denies WindowServer), so this removes the dependency rather
+  than relying on it.
+- **Lost diagnostics.** The client passes its stderr over XPC before the first
+  hello, and the supervisor gives it to Bun as fd 2 (duplicated above the
+  reserved slots, like the profile lease). The fixture asserts a backend stderr
+  line reaches the client.
+- **Deadlock hazard.** The owner queue wrote to Bun's stdin synchronously while
+  the stdout reader waited on the same queue (`queue.sync`), so two full pipes
+  could deadlock. Writes moved to a serial writer queue, and delivery is async;
+  stop drains accepted writes (bounded 2 s) before EOF.
+- **Capture race.** `failure.png` and `shadow-light-initial.png` show the "top"
+  capture scrolled to the bottom (token-offer card visible, island header cut
+  off), while the bottom capture was placed correctly. `chatInspect` now reports
+  message tops. The smoke re-reveals (up to three attempts) when the revealed
+  top is not held before and after capture. All OCR label assertions are
+  unchanged. The underlying late scroll is not identified. (Superseded by
+  LKM-107's acknowledged reveal; see the merge-resolution entry above.)
+
+Worker checks: both typechecks, `bun run build`, and the full unit tier (113
+pass) outside the sandbox, including `service-process` with its new diagnostics
+assertion. The native tier was not run by the worker.
+
+## 2026-09-28 — Fix XPC relay stall found by manager verification (LKM-89 / S02)
+
+Manager verification: 112 unit checks passed; `service-process` timed out in its
+XPC section, which the worker sandbox cannot reach (launchd lookup denied).
+Reproduced outside the sandbox and gave each fixture wait the calling step, which
+named the legacy relay. Root cause: `FileHandle.read(upToCount: 65536)` blocks on
+a pipe until the full count or EOF (a standalone probe stays blocked with a short
+line pending), so no Bun → host line was ever relayed. Both the XPC relay
+and the rollback launcher's stdout copier now use `readAvailable(upTo:)` (POSIX
+`read`, EINTR-safe); the guardian fixture pins short-line and EOF reads.
+
+The next failure was in this session's own backend-death case: after
+`serviceStopped` the client reconnected, and launchd's respawn throttle held the
+hello until the client's 10 s timeout. The real host would likewise have waited
+~10 s to quit after a backend crash. `serviceStopped` is now final in the client:
+it invalidates, never reconnects, does not report a failure over the service's
+status, and completes shutdown locally. The fixture requires that shutdown within
+3 s. The raw-client case still proves a fresh instance refuses `resume`.
+
+`test/service-process.mjs` now passes in full (supervision, rollback, codec and
+the XPC half) twice in a row through the unit runner, alongside service-contract,
+managed-child, native-service-launch and native-supervised-bridge. Both
+typechecks and `bun run build` pass. The native GUI tier is left to the manager.
+
+## 2026-09-28 — Separate Swift service, XPC and legacy supervision (LKM-89 / S02)
+
+S01 is accepted and merged into the candidate (51fb928); S02 builds on it. The
+host now connects over versioned, signed XPC to a bundled Swift service, which
+takes the profile lock and supervises Bun over private pipes. No domain writer
+moved: this step changes process ownership and profile exclusion only. Details,
+protocol and rollback: `docs/SWIFT-BACKEND-SERVICE.md`.
+
+Continuing a prior session's implementation, review found and fixed four
+behaviours that the fixture did not cover:
+- **Masked test failures.** The launcher returns the host's exit status, but
+  the host always exited 0 (`NSApp.terminate` exits before code after
+  `application.run()`). Bun now sends its status in `quit`, the service in
+  `serviceStopped`, and the host applies it in `applicationWillTerminate`. Test
+  mode sets `exitCode` before cleanup so the status is known when `quit` is sent.
+- **Second Bun after a service restart.** launchd restarts a lost XPC service
+  on demand; the reconnect hello launched a fresh Bun before the client noticed
+  the epoch change. Reattach now names the epoch (`resume`) and a fresh instance
+  refuses with `recoveryRequired` without launching.
+- **Fatal UI events during reconnect.** Any emit in the 0.25 s reconnect window
+  terminated the app. Never-submitted frames (pre-handshake and reconnecting)
+  now queue in a bounded outbox, still never replaying uncertain sends.
+  Setup-time emits before the client existed went to the terminal; they are
+  buffered too.
+- **Clean exit reported as failure.** Bun's stdout EOF raced its reaped status;
+  the EOF stop is deferred 1 s so the real status wins. Terminal signals to the
+  host now drain through the service.
+
+The fixture adds stale-epoch/duplicate hello refusals, a frame queued mid
+reconnect, backend death → `serviceStopped {status: 1}` → fail-closed reconnect
+with no replacement Bun, and a peer-rejection assertion that a lookup failure
+cannot satisfy. The guardian fixture honours `TMPDIR` and avoids atomic writes
+that stage outside it. Production XPC plist uses `dispatch_main`, matching the
+tested fixture.
+
+Worker checks: both typechecks; `bun run build`; `test/service-process.mjs
+--supervision-only` (profile contention, legacy-lock refusal, startup failure,
+child death, repeated shutdown, descendant/detached cleanup, service-crash drain,
+codec, rollback); managed-child, native-service-launch, native-supervised-bridge,
+native-bridge-close, trezi-cli. Not run by the worker: the XPC half (Seatbelt
+blocks launchd lookup: "Sandbox restriction"), native-shutdown (sandbox denies
+port binding) and the native GUI tier — manager verification required.
+## 2026-09-28 — CLAUDE.md favicon entry corrected (LKM-105 review)
+
+Independent review found CLAUDE.md still described `project-icon.ts` as the
+sidebar row's favicon. The entry now says the favicon is kept as project metadata
+(`project:icon`) and no longer drawn: project rows use the shared folder symbol
+from `src/native/SidebarIcon.swift`. No code changes.
+
+## 2026-09-28 — Sidebar fixture restores the foreground (LKM-105 feedback)
+
+Manager verification failed twice in `test:native` with "Chat window is not in the
+foreground". That text is `captureVisibleRegion`'s shared guard message, so the
+sidebar capture raises it too. `NATIVE SIDEBAR PASS` never printed. The worktree's
+artifacts from the last run hold every 260-point capture plus 180-0-rest,
+180-0-hover and 180-1-rest, but no 180-1-hover. So the capture that failed was the
+last sidebar hover capture, not a later chat capture. It ran about 350 ms after
+`preparePreviewInput` confirmed the window was key and the app active. That
+capture came after the 260-point context-menu step (which opens the Project Memory
+sheet window) and the reorder step. The icon geometry in those captures was
+correct (16×16, integral origin, 7-point gap, aligned with Open Project).
+
+The fixture had no focus teardown. New `src/native/SidebarFocus.swift` records NSMenu
+tracking notifications. `sidebarFocusCleanup` cancels tracking menus, ends attached
+sheets/modals, sends Trezi's sheet window through Bun's cancel, dismisses popovers
+with `cancelOperation`, clears row hover, then activates the app and re-keys the
+main window. `sidebarFocusReport` names each leftover: a tracking menu, an
+attached/Trezi sheet, a popover, a modal, a non-key/non-main main window with the
+window that holds focus, or an inactive app with the frontmost app. The fixture
+restores and asserts after the menu/Project Memory step, after reorder, and in a
+`withSidebarCleanup` teardown that also runs on failure without masking the
+original error. Before each capture it asserts the report is clean. A failed capture keeps the
+guard's message and appends the report. It is never retried, and the capture guard and
+all geometry assertions are unchanged. `test/sidebar-focus.mjs` (unit tier) tests
+the TS teardown with a fake host. It also runs a windowless Swift fixture for
+leftover naming and cleanup order; that fixture fails if menu cancellation is
+removed. The desktop run that will confirm which leftover was responsible is
+manager-owned.
+
+## 2026-09-28 — Sidebar folder icons draw at exactly 16 points (LKM-105 feedback)
+
+The manager's native run measured the row folder at 16.5×21 with a 4.5-point
+text gap. Cause: `NSImageView` reports an SF Symbol's alignment insets (the 19×14
+folder adds 3/2 points vertically; the extra half point of width appeared only
+in-window), and Auto Layout's 16-point constraints size that alignment
+rect, so the frame the glyph is drawn in grew and sat at a half-point origin.
+New `src/native/SidebarIcon.swift`: `SidebarIconView` zeroes those insets, and `SidebarIconLayout` holds the
+16-point/7-point rhythm shared by project rows and Open/New Project, which had the
+same defect. `SidebarRowStyle` and `SidebarProjectButton` moved there so a
+windowless test can compile them. Icon and label x-positions are unchanged, and the
+glyph now sits in an integral 16×16 frame.
+
+The fixture's text gap measured the label's frame, which includes AppKit's
+2-point label cell padding, so a correct icon still reads as 5. It now measures
+to the label's alignment rect, the edge the 7-point constraint and Open Project
+use. It also adds strict checks for an integral icon origin and for exact icon/label
+alignment with Open Project. The 16×16 expectation is unchanged. New unit test
+`test/sidebar-icon.mjs` fails against a plain image view (16×21) and passes with
+the fix. The GUI suite, capture inspection and commit are manager-owned.
+
+## 2026-09-28 — Sidebar evidence enforced by the native suite (LKM-105 feedback)
+
+Rechecked after merging candidate `0b8037a` (LKM-107 Shadow Light fix): the
+folder presentation and sidebar fixture merged cleanly, and `test:native` still
+reaches `checkVisibleSidebar` through `checkProjectSwitching`. To stop the
+configured verification from passing without evidence, `test/native-runtime.mjs`
+now requires that a passing smoke run freshly wrote all eight `sidebar-*` captures and JSON,
+`sidebar-selection.json`, and menu/memory/reorder records at both 260 and 180 points.
+Full Swift typecheck, TypeScript/native typechecks and the unit tier pass. GUI
+runs and capture inspection remain manager-owned.
+
+## 2026-09-28 — Sidebar fixture width diagnosis (LKM-105 escalation)
+
+Mapped the manager's bundled line 19558 to the content-width wait, after the
+artwork readiness check. A windowless AppKit reproduction requests divider
+position 260 but measures sidebar content at 252: this SDK wraps the sidebar
+with an 8-point inset. The fixture incorrectly equated divider position and
+content width. Measure the wrapper/content difference when setting test widths;
+keep the strict 260/180 capture requirements and all visual assertions intact.
+Timeouts now include the stage and native sidebar state.
+
+Added a registered windowless Swift regression exercising collapse/reveal,
+260/180 widths and restoration. It fails against the old setter (252 versus
+260) and passes with the repair. No folder presentation or composer changes.
+Desktop captures and the configured verification remain manager-owned.
+TypeScript/native and full Swift typechecks, sidebar sizing/evidence,
+shell-controller, native-boundary, docs-links and whitespace checks pass.
+
+## 2026-09-28 — Foreground sidebar acceptance fixture (LKM-105 feedback)
+
+Compared candidate `771ce3d`: its project-switching fixture only writes an
+offscreen whole-window image and has no sidebar acceptance fixture. Replace
+that evidence with eight foreground sidebar-only captures at 260/180 points,
+each project selected in turn with the other row hovered/resting. Use a decoded
+raster favicon for the first disposable project and no artwork for the second.
+Require visible action/project OCR, folder image equality, native template/tint
+and scaling, icon/text geometry, containment and action accessibility labels.
+Write PNGs and geometry/OCR JSON as `test/artifacts/native/sidebar-*.{png,json}`.
+
+An ephemeral-only host hook tracks/cancels the native project menu and invokes
+its memory action, then runs real pasteboard/validate/accept-drop callbacks with
+a local test drag object. Assert no-op/nested rejection, backend order changes
+and preserved selection at both widths; record `sidebar-interactions.json`.
+These are native control/delegate checks, not physical pointer drag automation.
+The configured native suite invokes the fixture; the unit tier includes negative
+evidence tests rejecting blank captures, missing labels, wrong artwork, clipping
+and incorrect selection/hover/menu state. Manager must execute and inspect these
+new artifacts under the desktop lock; no GUI execution is claimed by this worker.
+Use distinct Folder Alpha/Beta row labels so Open Project cannot satisfy a
+missing project-label OCR assertion. Full Swift source typechecking,
+TypeScript/native checks, sidebar negative-evidence, shell-controller, native
+boundary, docs-link and whitespace checks pass.
+
+## 2026-09-28 — Sidebar review verification fixture (LKM-105 feedback)
+
+Manager's worktree verification passed, but the independent review run failed
+before Shadow Light capture with "Chat window is not in the foreground".
+The fixture requested activation during island reveal, then waited for message
+visibility and a fixed delay without checking activation completion. Candidate
+`771ce3d` has the same fixture and no foreground-readiness fix.
+
+Reuse the existing bounded `preparePreviewInput` readiness check before each
+Shadow Light capture, preserving the responder. Keep foreground checks before
+and after capture, OCR assertions and failure behavior intact. No product or
+folder-icon changes are needed. Manager must rerun desktop verification under
+the shared lock; this worker runs only focused non-GUI checks.
+TypeScript/native typechecks, native boundary, shell-controller, docs-link and
+diff whitespace checks pass. Desktop behavior remains manager-unverified for
+this repair.
+
+## 2026-09-28 — Consistent sidebar folder icons (LKM-105)
+
+Render every project row with the native outline `folder` symbol used by Open
+Project, bypassing supplied artwork and removing the unused animal fallback.
+Preserve stored icon metadata and other row kinds, the 16-point icon frame,
+proportional scaling, text spacing, selection tint, accessibility labels and
+existing selection/menu/reorder handlers.
+
+Full Swift source typechecking, TypeScript/native checks, the focused
+shell-controller check, docs links and diff whitespace validation pass.
+Manager owns foreground capture inspection at standard/narrow widths, native
+interaction checks and the configured verification suite; no GUI checks were run
+by this worker.
 ## 2026-09-28 — Scroll a reveal's row in by its own edge (LKM-107)
 
 The reading-area rule in the entry below broke the Shadow Light smoke (before

@@ -567,7 +567,7 @@ async function startSession(
     tools: [
       tool(
         'project_ui_catalog',
-        'Discover exported React components, literal props and styles for UI composition. Requires Use project components enabled.',
+        'Discover supported React and Svelte components, literal props and styles for UI composition. Requires Experimental Gen UI enabled.',
         {},
         async () => ({
           content: [{ type: 'text' as const, text: JSON.stringify(
@@ -577,7 +577,7 @@ async function startSession(
       ),
       tool(
         'compose_project_ui',
-        'Return project-component TSX. For the current chat model provide file and spec. With Jev selected provide file, prompt and atomic candidates; Jev chooses the composition. Apply returned source with ordinary edit tools. Never silently fall back if Jev fails.',
+        'Return project-component source: .tsx for React or .svelte for Svelte. Do not mix frameworks. For the current chat model provide file and spec. With Jev selected provide file, prompt and atomic candidates; Jev chooses the composition. Apply returned source with ordinary edit tools. Never silently fall back if Jev fails.',
         {
           file: z.string(),
           prompt: z.string().optional(),

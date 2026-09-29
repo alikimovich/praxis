@@ -1,5 +1,10 @@
 # Provider capabilities
 
+S02 supervises the legacy Bun backend from a separate Swift XPC service. Provider
+SDKs, authentication and session writers remain in Bun; the UI connection grants
+no provider/parser role or preview capability. No provider call is required by the
+deterministic [service lifecycle fixtures](SWIFT-BACKEND-SERVICE.md).
+
 PR publishing uses a separate read-only Codex turn with `gpt-5.6-luna` and low
 reasoning effort through the built-in Codex account. It summarizes the committed
 merge-base diff after reconciliation, without chat or commit messages. Titles are
@@ -201,7 +206,8 @@ retain their existing landing policy.
 
 Claude and Codex expose the read-only `project_ui_catalog` and `compose_project_ui`
 tools. Main enables them per chat only when a submitted message explicitly opts
-in through Settings → Use project components. Gemini receives a limitation notice.
+in through Settings → Experimental Gen UI. Catalog/export supports React and the
+documented Svelte subset; each output tree uses one framework. Gemini receives a limitation notice.
 The tools use the current worktree and return source for ordinary edits and landing;
 see [PROJECT_UI.md](PROJECT_UI.md). Settings can select the current chat model or
 Jev as the composition engine. With Jev, Claude/Codex prepares candidate props and

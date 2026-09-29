@@ -5,6 +5,11 @@ Models edit there; the preview and the user's editor remain on the live checkout
 isolation boundary is the worktree, while convergence is owned by one repository-scoped
 landing queue.
 
+S02 changes process supervision, not this writer: Bun still owns repository queues,
+worktree creation and recovery. Swift's profile lease spans backend crash cleanup.
+Launch-time rollback reads current stores/worktrees in place; it never restores an
+old backup or removes a recovery branch. See [service rollback](SWIFT-BACKEND-SERVICE.md).
+
 Copy-on-write creation measurements and integration tradeoffs are recorded in
 [COW-INVESTIGATION.md](COW-INVESTIGATION.md). The experiment leaves this lifecycle
 unchanged; CoW file duplication alone does not provide landing or recovery.

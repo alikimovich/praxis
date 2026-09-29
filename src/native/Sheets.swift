@@ -2,7 +2,8 @@ import AppKit
 import SwiftUI
 
 struct SheetChoice: Decodable, Identifiable { let value: String; let label: String; var id: String { value } }
-struct SheetField: Decodable, Identifiable { let id: String; let label: String; let kind: String; let value: String; let choices: [SheetChoice]? }
+struct SheetFieldCondition: Decodable { let field: String; let value: String }
+struct SheetField: Decodable, Identifiable { let id: String; let label: String; let kind: String; let value: String; let choices: [SheetChoice]?; let help: String?; let visibleWhen: SheetFieldCondition? }
 struct SheetAction: Decodable, Identifiable { let id: String; let label: String; let primary: Bool?; let destructive: Bool? }
 struct SheetState: Decodable { let id: String; let title: String; let detail: String; let fields: [SheetField]; let actions: [SheetAction]; let busy: Bool; let autosave: Bool?; let dismissible: Bool?; let message: String? }
 final class SheetModel: ObservableObject {
@@ -46,9 +47,15 @@ struct SheetContent: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         if !state.detail.isEmpty { Text(state.detail).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
-                        ForEach(state.fields) { field in
+                        ForEach(state.fields.filter { field in
+                            guard let condition = field.visibleWhen else { return true }
+                            return model.values[condition.field] == condition.value
+                        }) { field in
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(field.label).font(.headline)
+                                if let help = field.help {
+                                    Text(help).font(.body).fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
+                                }
                                 if field.kind == "image", let data = Data(base64Encoded: field.value.components(separatedBy: ",").last ?? ""), let image = NSImage(data: data) {
                                     Image(nsImage: image).resizable().scaledToFit().frame(maxHeight: 160)
                                 } else if field.kind == "readonly" {
