@@ -130,6 +130,16 @@ src/
                     real-path containment). Bun's client is native/runtime-service.ts
                     on the devserver:* routes (main/devserver-service.ts); HTML
                     stamping stays a JS helper (docs/SWIFT-BACKEND-RUNTIME.md)
+    RepositoryOwner.swift / RepositoryEffects.swift / RepositoryLanding.swift /
+    RepositoryJournal.swift / RepositoryGit.swift   the repository coordinator
+                    (LKM-95): one FIFO lane per repository common directory (Bun's
+                    `enqueueRepoWrite` becomes a lease on it), every Trezi Git effect
+                    (worktrees, landings, live commits, branch switches, recovery),
+                    journaled intent, `refs/trezi/recovery/*` before anything could
+                    orphan work, explicit intents for landing/discard/removal. Bun's
+                    client is native/repository-service.ts behind the seam
+                    main/repository-owner.ts; the TS Git code is the rollback owner
+                    (docs/SWIFT-BACKEND-REPOSITORY.md)
   main/           Backend services (CJS bundle, Bun); historical directory name
     preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
                     bounds/load/reset/capture, the select + comment relays, the
@@ -238,7 +248,9 @@ src/
                     list_recommended_skills (pure) and install_skills (side-effecting) agent tools
     git.ts, worktrees.ts, chat-worktrees.ts, chat-isolation.ts
                     git/worktree primitives; worktrees: per-chat isolation + sync/merge/recovery;
-                    chat-worktrees: turn-scoped ops (sync, commit, apply); chat-isolation: lifecycle
+                    chat-worktrees: turn-scoped ops (sync, commit, apply); chat-isolation: lifecycle.
+                    Their mutating functions dispatch to the Swift repository owner when
+                    one is installed (repository-owner.ts); repo-write-queue.ts likewise
     live-commit.ts  one commit per turn on the LIVE checkout (pure): stages only the
                     files that turn changed, partial-commits so the user's own staged
                     work is untouched, skips non-repo-root projects, never throws
@@ -297,8 +309,9 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   (`docs/SWIFT-BACKEND-PREFERENCES.md`), `workspace.json`
   (`docs/SWIFT-BACKEND-WORKSPACE.md`) and project memory
   (`docs/SWIFT-BACKEND-MEMORY.md`), and runs managed project servers, installs
-  and static sites (`docs/SWIFT-BACKEND-RUNTIME.md`); Bun is still the single
-  writer of every other domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun
+  and static sites (`docs/SWIFT-BACKEND-RUNTIME.md`), and performs and serializes
+  every Trezi Git effect in user repositories (`docs/SWIFT-BACKEND-REPOSITORY.md`);
+  Bun is still the single writer of every other domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun
   spawns the host, still under Swift's lock, writes all three itself and runs its
   own servers after the launcher sweeps the runtime journal). See
   `docs/SWIFT-BACKEND-SERVICE.md`.

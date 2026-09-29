@@ -20,6 +20,7 @@ const UNIT = [
   "workspace-owner",
   "memory-owner",
   "runtime-owner",
+  "repository-owner",
   "native-visible-capture",
   "native-smoke-runner",
   "rename-compat",

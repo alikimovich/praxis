@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto'
 import { join, dirname, resolve } from 'path'
 import { promisify } from 'util'
 import { normalizeBranchName } from './git'
+import { type RemoveIntent, type RepositoryOwner, repositoryOwner } from './repository-owner'
 
 /**
  * Git-worktree management for F1 (comment → parallel agent session). Each spawned
@@ -136,9 +137,33 @@ export function createWorktree(
   worktreesDir: string,
   opts: { label?: string; id?: string; branchName?: (id: string) => string } = {}
 ): Promise<Worktree> {
+  const owner = repositoryOwner()
+  if (owner) return createOwnedWorktree(owner, repoRoot, worktreesDir, opts)
   const run = createChain.then(() => doCreateWorktree(repoRoot, worktreesDir, opts))
   createChain = run.catch(() => {}) // keep the chain alive even if one create fails
   return run
+}
+
+/** Under the Swift owner: the service snapshots and adds the worktree in the
+ *  repository's lane; setup helpers and Next dependencies stay JS. */
+async function createOwnedWorktree(
+  owner: RepositoryOwner,
+  repoRoot: string,
+  worktreesDir: string,
+  opts: { id?: string; branchName?: (id: string) => string }
+): Promise<Worktree> {
+  const id = opts.id ?? randomUUID().slice(0, 8)
+  const branch = normalizeBranchName((opts.branchName ?? ((i) => `comment-${i}`))(id))
+  const linkNodeModules = !(await isNextProject(repoRoot))
+  const wt = await owner.createWorktree(repoRoot, worktreesDir, { id, branch, linkNodeModules })
+  try {
+    await syncSetupArtifacts(repoRoot, wt.path)
+    await provisionNextDependencies(repoRoot, wt.path)
+  } catch (error) {
+    await owner.removeWorktree(wt, false, 'abandon').catch(() => {})
+    throw error
+  }
+  return wt
 }
 
 async function doCreateWorktree(
@@ -191,6 +216,8 @@ export async function commitWorktree(
   wt: Worktree,
   message: string
 ): Promise<{ committed: boolean; files: string[] }> {
+  const owner = repositoryOwner()
+  if (owner) return owner.commitWorktree(wt, message)
   // Collapse EVERYTHING the spawn produced into a single commit off the fork
   // point — the uncommitted WIP AND any commits the agent made on its own (the
   // spawn runs bypassPermissions and nothing forbids `git commit`). A soft reset
@@ -249,8 +276,16 @@ export async function branchPatch(repoRoot: string, branch: string): Promise<str
   }
 }
 
-/** Delete a spawn's branch (v8 F1 Phase 2 — Discard). Never throws. */
-export async function deleteBranch(repoRoot: string, branch: string): Promise<void> {
+/** Delete a spawn's branch (v8 F1 Phase 2 — Discard). Never throws. `integrated`
+ *  means the caller verified the branch's change is already live; a `discard` keeps
+ *  a recovery ref under the Swift owner. */
+export async function deleteBranch(
+  repoRoot: string,
+  branch: string,
+  intent: 'discard' | 'integrated' = 'discard'
+): Promise<void> {
+  const owner = repositoryOwner()
+  if (owner) return owner.deleteBranch(repoRoot, branch, intent).catch(() => {})
   await git(repoRoot, ['branch', '-D', branch]).catch(() => {})
 }
 
@@ -283,6 +318,14 @@ export async function pruneIntegratedChatBranches(
   repoRoot: string,
   isProtected: (id: string) => boolean = () => false
 ): Promise<ChatBranchPruneResult> {
+  const owner = repositoryOwner()
+  if (owner) {
+    // The ids are read here only to evaluate `isProtected`; the service decides and deletes.
+    const refs = await git(repoRoot, ['for-each-ref', '--format=%(refname:short)', 'refs/heads/trezi/chat-*', 'refs/heads/praxis/chat-*'])
+      .then(({ stdout }) => stdout.split('\n').map((line) => line.trim()).filter(Boolean), () => [] as string[])
+    const protectedIds = refs.map((branch) => branch.replace(/^(trezi|praxis)\/chat-/, '')).filter((id) => id && isProtected(id))
+    return owner.pruneBranches(repoRoot, protectedIds).catch(() => ({ deleted: [], preserved: [] }))
+  }
   const result: ChatBranchPruneResult = { deleted: [], preserved: [] }
   let branches: string[]
   try {
@@ -361,6 +404,8 @@ export async function pruneIntegratedChatBranches(
  * keeps crash recovery durable while avoiding one permanent branch per idle chat.
  */
 export async function attachWorktreeBranch(wt: Worktree): Promise<void> {
+  const owner = repositoryOwner()
+  if (owner) return owner.attachBranch(wt)
   const current = (await git(wt.path, ['branch', '--show-current'])).stdout.trim()
   if (current === wt.branch) return
   await git(wt.path, ['checkout', '-B', wt.branch, 'HEAD'])
@@ -372,6 +417,8 @@ export async function attachWorktreeBranch(wt: Worktree): Promise<void> {
  * before the next turn. Parked branches never call this helper.
  */
 export async function retireWorktreeBranch(wt: Worktree): Promise<void> {
+  const owner = repositoryOwner()
+  if (owner) return owner.retireBranch(wt)
   const current = (await git(wt.path, ['branch', '--show-current'])).stdout.trim()
   if (current === wt.branch) await git(wt.path, ['checkout', '--detach', 'HEAD'])
   await deleteBranch(wt.repoRoot, wt.branch)
@@ -441,6 +488,29 @@ export async function applyToWorkingTree(
 }
 
 /**
+ * Explicitly apply a spawn branch's own change (`branch^..branch`) onto the live
+ * checkout: `branchPatch` + `applyToWorkingTree`, or the service's `applyBranch`.
+ * `empty` when the branch holds no change.
+ */
+export async function applyBranchToWorkingTree(
+  repoRoot: string,
+  branch: string,
+  tmpDir: string
+): Promise<{ ok: boolean; conflict: boolean; empty?: boolean; error?: string }> {
+  const owner = repositoryOwner()
+  if (owner) {
+    try {
+      return await owner.applyBranch(repoRoot, branch)
+    } catch (e) {
+      return { ok: false, conflict: false, error: msg(e) }
+    }
+  }
+  const patch = await branchPatch(repoRoot, branch)
+  if (!patch.trim()) return { ok: false, conflict: false, empty: true }
+  return applyToWorkingTree(repoRoot, patch, tmpDir)
+}
+
+/**
  * Auto-apply a finished spawn's change straight onto the LIVE working tree as plain
  * file writes (v8 F1 redesign) — so a comment lands on the branch the user works in,
  * with no separate branch / PR / manual Apply, and is undoable via Cmd+Z. Reads each
@@ -456,6 +526,8 @@ export async function autoApplyWorktree(
   wt: Worktree,
   files: string[]
 ): Promise<{ applied: boolean; edits: { file: string; before: string; after: string }[] }> {
+  const owner = repositoryOwner()
+  if (owner) return owner.autoApply({ ...wt, repoRoot: parentRoot }, files)
   const fail = { applied: false, edits: [] as { file: string; before: string; after: string }[] }
   const edits: { file: string; before: string; after: string }[] = []
   for (const rel of files) {
@@ -497,12 +569,21 @@ export async function autoApplyWorktree(
  * Tear down a worktree: remove its checkout and (unless `keepBranch`) delete its
  * branch. Never throws — teardown runs in finalizers. `keepBranch` is set when the
  * spawn committed real work (the branch is the durable record for PR/Apply/Discard).
+ * `intent` says why: `landed` (HEAD's change is on the live tree), `release` (the
+ * kept branch holds the work) or `abandon` (the default). Under the Swift owner any
+ * dirty or unlanded work gets a recovery ref before the checkout goes.
  */
 export async function removeWorktree(
   repoRoot: string,
   wt: Worktree,
-  opts: { keepBranch?: boolean } = {}
+  opts: { keepBranch?: boolean; intent?: RemoveIntent } = {}
 ): Promise<void> {
+  const owner = repositoryOwner()
+  if (owner) {
+    return owner
+      .removeWorktree({ ...wt, repoRoot }, !!opts.keepBranch, opts.intent ?? (opts.keepBranch ? 'release' : 'abandon'))
+      .catch(() => {})
+  }
   try {
     await git(repoRoot, ['worktree', 'remove', '--force', wt.path])
   } catch {
@@ -562,6 +643,13 @@ export async function pruneOrphans(
    *  into the parked squash — see the fold block below. Defaults to "never parked". */
   isParked: (id: string) => boolean = () => false
 ): Promise<Array<{ id: string; dirty: boolean; branch: string | null; repoRoot: string | null }>> {
+  const owner = repositoryOwner()
+  if (owner) {
+    const ids = await readdir(worktreesDir).catch(() => [] as string[])
+    return owner
+      .pruneOrphans(repoRoot, worktreesDir, [...skip], ids.filter((id) => !skip.has(id) && isParked(id)))
+      .catch(() => [])
+  }
   try {
     await git(repoRoot, ['worktree', 'prune'])
   } catch {

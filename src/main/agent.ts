@@ -64,10 +64,9 @@ import type { RpcHandlerRegistry } from './rpc-router'
 import { createSessionStore, type SessionStore } from './sessions-store'
 import { TurnTerminalTracker } from './turn-terminal'
 import {
-  applyToWorkingTree,
+  applyBranchToWorkingTree,
   autoApplyWorktree,
   branchExists,
-  branchPatch,
   commitWorktree,
   createWorktree,
   deleteBranch,
@@ -426,7 +425,7 @@ async function finalizeSpawn(id: string, status: 'done' | 'error'): Promise<void
           title: firstLine(text),
           body: origin === 'text-edit' ? 'Trezi background text edit.' : 'Trezi comment spawn.'
         })
-        await removeWorktree(parentRoot, wt, { keepBranch: false })
+        await removeWorktree(parentRoot, wt, { keepBranch: false, intent: 'landed' })
         try {
           store().remove(session.record.id)
         } catch {
@@ -449,7 +448,7 @@ async function finalizeSpawn(id: string, status: 'done' | 'error'): Promise<void
           session.record.endedAt = session.record.endedAt ?? Date.now()
           store().save(session.record)
         }
-        await removeWorktree(parentRoot, wt, { keepBranch: committed })
+        await removeWorktree(parentRoot, wt, { keepBranch: committed, intent: committed ? 'release' : 'abandon' })
         safeSend(getWindow_, 'agent:event', {
           type: 'spawn-finished',
           projectKey: parentSessionKey,
@@ -567,7 +566,7 @@ async function startSpawn(q: QueuedSpawn): Promise<string | null> {
   } catch {
     spawns.delete(wt.id)
     releaseSlot()
-    await removeWorktree(q.root, wt, { keepBranch: false })
+    await removeWorktree(q.root, wt, { keepBranch: false, intent: 'abandon' })
     safeSend(getWindow_, 'agent:event', {
       type: 'spawn-finished',
       projectKey: q.parentSessionKey,
@@ -1298,9 +1297,8 @@ export function registerAgentIpc(
     if (!(await isRepoRoot(root))) return { ok: false, error: 'Not a git repository.' }
     if (!(await branchExists(root, branch)))
       return { ok: false, error: 'That branch no longer exists.' }
-    const patch = await branchPatch(root, branch)
-    if (!patch.trim()) return { ok: false, error: 'That run made no changes to apply.' }
-    const res = await applyToWorkingTree(root, patch, worktreesDir())
+    const res = await applyBranchToWorkingTree(root, branch, worktreesDir())
+    if (res.empty) return { ok: false, error: 'That run made no changes to apply.' }
     if (res.ok) return { ok: true }
     return {
       ok: false,
