@@ -91,6 +91,25 @@ for style in [NSScroller.Style.overlay, .legacy] {
 }
 print("Bridge sizing: overlay/legacy scrollers, IME, capped-to-wrapped replacements and empty reset passed at 320/420/520pt")
 
+// Mirror the foreground matrix (smoke-composer.ts): its multiline draft must
+// grow past the minimum form at the normal/narrow chat widths it resizes to.
+let matrixMultiline = ["First", "Second", "Third", "Fourth", "Fifth"].map { "\($0) composer line" }.joined(separator: "\n")
+for chatWidth: CGFloat in [440, 320] {
+    let width = chatWidth - 20  // NativeChat places the composer 10pt from each side
+    for available: CGFloat in [500, 766] {
+        let compact = composer.preferredHeight(for: "", width: width, availableHeight: available, hasContext: false)
+        let multiline = composer.preferredHeight(for: matrixMultiline, width: width, availableHeight: available, hasContext: false)
+        require(multiline > compact, "Matrix multiline draft grows the composer at chat width \(chatWidth): \(compact) -> \(multiline)")
+        composer.perform(["text": matrixMultiline])
+        composer.setFrameSize(NSSize(width: width, height: multiline))
+        composer.layoutSubtreeIfNeeded()
+        require(composer.text.frame.height <= composer.scroll.contentSize.height + 1, "Matrix multiline draft fits at chat width \(chatWidth)")
+        require(composer.verificationLayout()["alignment"] as? Bool == true, "Matrix multiline keeps the shared row at chat width \(chatWidth)")
+    }
+}
+composer.perform(["text": ""])
+print("Foreground matrix mirror: five-line draft grows, fits and keeps the row at 440/320pt chat widths")
+
 // Resolve the actual Auto Layout tree without opening an application/window.
 // Borderless popup frames overlap by one point at four-point stack spacing;
 // their alignment rectangles remain correctly separated.

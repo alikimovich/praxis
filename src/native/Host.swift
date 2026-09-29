@@ -305,14 +305,33 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "captureVisibleChat":
             guard ephemeral else { reply(id, error: "Test profile required"); return }
             Task { @MainActor in
-                do { reply(id, try await captureVisibleChat(window: window, chat: chat)) }
+                do {
+                    if c["fullColumn"] as? Bool == true {
+                        reply(id, try await captureVisibleRegion(window: window, view: chat, region: chat.bounds))
+                    } else { reply(id, try await captureVisibleChat(window: window, chat: chat)) }
+                }
                 catch { reply(id, error: error.localizedDescription) }
             }
         case "chatInspect": reply(id, chat.inspect())
         case "chatPerform": chat.model.action(c["action"] as? String ?? "", id: c["card"] as? String, value: c["value"] as? String, answers: c["answers"] as? [String: String]); reply(id)
         case "composerVerification":
             guard ephemeral else { reply(id, error: "Test profile required"); return }
-            reply(id, composer.verifyInteraction(c))
+            if c["latest"] as? Bool == true { chat.model.latestRevision += 1 }
+            var verification = composer.verifyInteraction(c)
+            // Exterior spacing and scrollbar styling belong to LKM-103; report
+            // them as evidence only. Scrollability proves the latest-message check.
+            verification["outerInsets"] = ["left": composer.frame.minX - chat.frame.minX,
+                "right": chat.frame.maxX - composer.frame.maxX, "bottom": chat.frame.maxY - composer.frame.maxY]
+            func scrollView(in view: NSView) -> NSScrollView? {
+                view as? NSScrollView ?? view.subviews.lazy.compactMap { scrollView(in: $0) }.first
+            }
+            let conversation = scrollView(in: chat)
+            verification["conversationScroller"] = ["found": conversation != nil,
+                "scrollable": (conversation?.documentView?.bounds.height ?? 0) > (conversation?.contentSize.height ?? 0),
+                "small": conversation?.verticalScroller?.controlSize == .small,
+                "overlay": conversation?.scrollerStyle == .overlay,
+                "autohides": conversation?.autohidesScrollers ?? false]
+            reply(id, verification)
         case "captureVisibleComposer":
             guard ephemeral else { reply(id, error: "Test profile required"); return }
             Task { @MainActor in

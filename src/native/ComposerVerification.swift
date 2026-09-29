@@ -26,9 +26,20 @@ extension NativeComposer {
             text.insertText(typing, replacementRange: text.selectedRange())
         }
         if command["submit"] as? Bool == true { sendButton.performClick(nil) }
+        // Deliver Return through the window's key path, as a physical press would.
+        if command["keySubmit"] as? Bool == true {
+            window.makeFirstResponder(text)
+            for type in [NSEvent.EventType.keyDown, .keyUp] {
+                if let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36) { window.sendEvent(event) }
+            }
+        }
         var result = verificationLayout()
         result["foreground"] = true
         result["attachmentDialog"] = attachmentDialog
+        result["send"] = ["enabled": sendButton.isEnabled, "label": sendButton.accessibilityLabel() ?? ""]
+        result["pickersEnabled"] = pickers.mapValues { $0.isEnabled }
+        result["composerHeight"] = frame.height
+        result["textFits"] = text.frame.height <= scroll.contentSize.height + 1
         return result
     }
 

@@ -2,6 +2,100 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Return LKM-103 scope; keep LKM-107 reveal intact (LKM-104 review)
+
+After updating onto candidate (LKM-107, LKM-89), remove everything this branch
+had borrowed from LKM-103 commit `d0c6803` so the two land independently:
+`src/native/ChatScrollStyle.swift` (ChatLayout + scroller probe) deleted; the
+Chat.swift ChatLayout insets, status padding, `.background(ChatScrollStyle())`
+and viewport-size follow reverted; the `scripts/build-native.mjs` source entry
+and `test/native-composer-layout.mjs` compile-list entry reverted; the
+fixture's exterior-spacing and scroller-policy blocks removed. The foreground
+capture no longer flashes or asserts scroller style. It requires 10pt side
+insets and a bottom gap that is either flush (before LKM-103) or equal to the
+sides (after), and only reports scroller facts as evidence.
+
+LKM-104 keeps its own row/matrix work. Chat.swift now differs from candidate
+only by the test-only `latestRevision` scroll-to-latest hook; the LKM-107
+`reveal(...)`/`ChatReveal.swift` path, its revision-settled `revealChatIsland`
+reply and the removed Shadow Light 350ms sleep are untouched. The Shadow Light
+fixture runs before the composer matrix and no longer sees any spacing change
+from this branch, so the recorded failure is not reachable from it; the
+existing `native-chat-reveal` regression passes. The capture-readiness helper
+is renamed `smoke-composer-latest.ts` / `test/native-composer-latest.mjs` to
+make clear it is latest-message reachability, not scroll styling.
+
+Typechecks, native build, composer layout/latest, chat reveal, controller and
+docs-link checks pass. No GUI suite was run by this worker.
+
+## 2026-09-28 — Foreground matrix produces interaction evidence (LKM-104 review)
+
+Independent review asked that manager verification itself prove the
+interactions at the required widths/states, not only at the original width.
+At each of 440pt (normal) and 320pt (narrow) the foreground fixture now:
+captures empty; asserts Send is disabled and that both a Send click and a
+window-delivered Return leave an empty draft unsent (and insert no newline);
+opens/cancels the attachment sheet; switches Model A→B and Permission
+Ask→Auto; types a five-line draft and captures it, asserting Send enabled,
+growth past the compact form and no inner scrolling; submits it (Return at
+normal, row Send click at narrow) and checks the exact multiline payload; then
+captures `-sending`, asserting Stop is enabled, the form is compact again,
+Provider/Model lock while Permission stays usable, and the submitted message is
+visible. A distinct long reply ends each turn so the next capture's OCR proves
+the newest reply stays reachable; a final `restored` capture repeats it at the
+original width. `composerVerification` gains `keySubmit` plus Send/picker
+state, composer height and text-fit fields. The windowless layout fixture
+mirrors the five-line draft at 440/320pt chat widths (grows, fits, keeps the row).
+
+Windowless composer layout/scroll, full native build and TypeScript/native
+typechecks pass. Unit tier: 103 pass; the 5 failures are sandbox `listen`
+denials (trezi-agent-tools, codex-mcp, native-shutdown, native-preview-recovery,
+devserver-net). No GUI suite was run by this worker.
+
+## 2026-09-28 — Diagnose initial composer capture timeout (LKM-104 escalation)
+
+Map the manager stack at bundled index.cjs:18696/18747 to the initial
+capture's newly added latest-message wait. The recorded state has zero
+messages, a tokens setup card and bottomPosition 0; the old predicate rejects
+that state for all 100 polls. This is a fixture precondition failure before
+the first capture, not evidence of failed control alignment.
+
+Extract capture scroll readiness and reveal/wait only when messages exist.
+Preserve the populated-conversation geometry requirement, foreground captures,
+scrollbar assertions and final-reply OCR. Timeout errors now name the capture
+and retain its last chat geometry. Register a non-GUI regression for the
+recorded empty state, delayed populated geometry, and rejection of zero or
+occluded populated positions. Same-row layout and LKM-103 spacing remain intact.
+
+Focused composer layout/scroll, controller, boundary and TypeScript/native
+checks pass. No native GUI suite or manager verification command was run;
+foreground matrix execution and screenshot inspection remain manager-owned.
+
+## 2026-09-28 — Reconcile composer spacing and foreground matrix (LKM-104 review)
+
+Candidate remains 771ce3d, but repository history contains LKM-103 commit
+`d0c6803`. Reuse its ChatLayout, ChatScrollStyle, Chat.swift integration and
+windowless tests in this worktree without changing Git history. The composer
+now has equal 10pt exterior bottom/side insets; status and follow clearance
+include that bottom gap. The conversation uses the small system scrollbar,
+respects Always-show preferences, and keeps the resize follow behavior.
+Preserve LKM-104's same-row controls and wrapped-draft sizing repairs.
+
+Extend the manager foreground fixture to 440pt normal and 320pt narrow chat
+widths, each with empty and multiline input. Save composer PNGs plus full-column
+`-chat.png` companions and JSON geometry/OCR for `normal-empty`,
+`normal-multiline`, `narrow-empty` and `narrow-multiline`. Full-column captures
+include the exterior gaps and flashed conversation scrollbar. Add a deterministic
+long reply, assert scrolling is available, reveal the latest message through an
+ephemeral-only command, and require its final line in foreground OCR. Preserve
+attachment/model/permission/submission checks and restore the original width.
+
+Windowless composer/spacing/scroller checks, native controller, native boundary,
+TypeScript/native checks, full Swift source typechecking, docs links and diff
+whitespace checks pass. No GUI suite or new foreground captures were run by this
+worker. Manager must execute the added matrix and inspect all four PNG pairs
+for centered controls, equal outer gaps, subdued scrollbar and no gradient.
+
 ## 2026-09-28 — Measure wrapped drafts with native scrollbar geometry (LKM-104 feedback)
 
 Reproduce an uncapped wrapping overflow through the real composer update path

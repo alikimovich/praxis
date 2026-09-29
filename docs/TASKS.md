@@ -14,7 +14,11 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Check windowless normal/narrow empty/multiline/capped layout and rejected raised Send; run focused controller and TypeScript checks.
 - [x] Repair smoke draft inputs for the additional text space; preserve growth assertions and verify the smoke sequence against actual windowless AppKit viewports.
 - [x] Reproduce and repair capped-to-wrapped overflow with legacy scroller gutters; test fresh bridge updates with both scroller styles and preserve desktop fit diagnostics.
-- [ ] Manager: reconcile LKM-103 equal exterior bottom/side inset and subdued scrollbar; verify foreground normal/narrow empty/multiline captures, interactions and latest-message reachability; complete independent review.
+- [x] ~~Reconcile LKM-103 commit d0c6803 in this branch~~ — reverted: exterior insets and scrollbar styling stay in LKM-103; composer checks tolerate it landing separately.
+- [x] Add foreground normal/narrow empty/multiline capture pairs including the full chat column and latest-reply OCR.
+- [x] Diagnose initial foreground capture timeout from empty/setup-card state; regress capture readiness while retaining populated latest-message checks and diagnostic geometry.
+- [x] Repeat attachment/model/Auto interactions, disabled empty Send/Return, Return (normal) and Send-click (narrow) multiline submission, and a Stop-state capture at each matrix width, so manager verification produces the evidence.
+- [ ] Manager: run `test:native` and inspect the six normal/narrow empty/multiline/sending capture pairs plus `restored`; complete independent review.
 
 ## Composer container (LKM-87)
 
