@@ -6,6 +6,18 @@ import { nativeChat } from './chat-runtime'
 
 /** Foreground composer evidence; provider calls are intercepted, never sent. */
 export async function checkVisibleComposer(host: NativeBridge, fixture: string, artifacts: string) {
+  const initial = await host.request('chatAcceptance', { prepare: true })
+  try {
+    for (const width of [440, 320]) {
+      await host.request('chatAcceptance', { width })
+      await checkComposerAtWidth(host, fixture, artifacts, width)
+    }
+  } finally {
+    await host.request('chatAcceptance', { width: initial.chatWidth })
+  }
+}
+
+async function checkComposerAtWidth(host: NativeBridge, fixture: string, artifacts: string, width: number) {
   const wait = async (check: () => Promise<any> | any) => {
     for (let i = 0; i < 100; i++) {
       const result = await check()
@@ -30,7 +42,7 @@ export async function checkVisibleComposer(host: NativeBridge, fixture: string, 
     const layout = await host.request('composerVerification')
     await new Promise(resolve => setTimeout(resolve, 350))
     const image = await host.request('captureVisibleComposer')
-    const stem = join(artifacts, `composer-visible-${name}`)
+    const stem = join(artifacts, `composer-visible-${width}-${name}`)
     writeFileSync(`${stem}.png`, Buffer.from(image.png, 'base64'))
     writeFileSync(`${stem}.json`, JSON.stringify({ ...layout, text: image.text, width: image.width, height: image.height }, null, 2))
     assert.equal(layout.foreground, true, JSON.stringify(layout))
@@ -71,11 +83,11 @@ export async function checkVisibleComposer(host: NativeBridge, fixture: string, 
     await choose('Model', 'composer-b')
     await choose('Permission mode', 'default')
     await capture('ask', ['Codex', 'Fixture B', 'Ask always', 'index.html'])
-    await choose('Permission mode', 'auto')
-    const prompt = 'Composer verification message'
+    const prompt = Array(width === 320 ? 80 : 6).fill('Composer verification message').join('\n')
     await host.request('composerVerification', { typing: prompt })
     await wait(async () => (await inspect()).text === prompt && (await inspect()).enabled)
-    await capture('draft', ['Codex', 'Fixture B', 'Auto', prompt, 'index.html'])
+    await choose('Permission mode', 'auto')
+    await capture('draft', ['Codex', 'Fixture B', 'Auto', 'Composer verification message', 'index.html'])
     await host.request('composerVerification', { submit: true })
     await wait(() => calls.some(c => c.channel === 'agent:send'))
     const sent = calls.filter(c => c.channel === 'agent:send')
