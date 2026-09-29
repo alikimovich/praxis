@@ -84,9 +84,11 @@ commands. Each is recorded in `docs/TASKS.md`.
   deletion would orphan; the target commit before a landing writes files; the live
   pre-image before a three-way apply can write conflict markers; a detached orphan's
   recovery commit. Refs guarding an effect that completed with the work still
-  reachable (a clean landing, a clean apply) are deleted; the rest are kept. Past
-  100 refs per repository the oldest are pruned, never one an unsettled journal entry
-  names.
+  reachable (a clean landing, a clean apply) are deleted; the rest are kept, and
+  the owner never prunes them (refs are the only handle on moved-out work; list them
+  with `git for-each-ref refs/trezi/recovery/` and delete them by hand once
+  inspected). Each ref name carries a random suffix so refs of one kind and label
+  within one operation never overwrite each other.
 - **Landing.** Unchanged policy (write only where the live file equals the fork point
   or already the target; refuse the whole batch otherwise), with these changes: files
   are compared as bytes; a symlink or a path resolving outside the checkout is refused;
@@ -101,9 +103,13 @@ commands. Each is recorded in `docs/TASKS.md`.
   a path and discard that file's changes.
 - **Paths.** Git path output is read with `-z`, so non-ASCII names are exact rather
   than C-quoted.
-- **Startup recovery.** Unchanged for this repository's orphans, except that the
-  recovery commit leaves excluded paths out and a detached dirty orphan gets a
-  recovery ref. An orphan of *another* repository is left for that repository's own
+- **Startup recovery.** A dirty orphan's work is made durable before its checkout is
+  touched: recovery refs on its HEAD and on a private-index snapshot of the dirty
+  state, then the recovery commit on its branch (folded into a parked chat's squash,
+  with the branch put back as found if the commit fails). A checkout whose commit
+  failed (signing that cannot run in the background service, a Git error) is moved
+  aside, never force-removed; a ref that could not be made leaves the orphan exactly
+  as found. The recovery commit leaves excluded paths out. An orphan of *another* repository is left for that repository's own
   lane (before, it was reclaimed from whichever project opened first). A folder that
   is no longer a worktree is moved aside to `.recovered-<name>-<time>` instead of
   deleted; Trezi's own `.`-prefixed scratch is removed.
@@ -193,6 +199,10 @@ inside an effect) and drives it through Bun's client and the unchanged TS entry 
   and after a removal preserved dirty work: the next process reports each as
   interrupted, its refs hold the target/parked/dirty content, nothing is reset, and
   `acknowledge` needs its intent and keeps the ref.
+- **Orphans.** Two dirty orphans (one parked) with a recovery commit that cannot be
+  made (signing required, failing program): both checkouts stay on disk, the parked
+  branch tip is unchanged, each has its own `orphan-head`/`orphan-dirty` ref; with
+  signing working the work is committed on its branch and the checkout removed.
 - **Rollback and drain.** The legacy owner lands a turn on a Swift-made worktree with
   journal bytes and refs unchanged; a damaged journal is refused untouched while
   leases work; close refuses a request queued behind a lease and later requests.

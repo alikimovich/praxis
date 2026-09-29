@@ -21,7 +21,7 @@ import { setRepositoryOwner } from '../src/main/repository-owner.ts'
 import { enqueueRepoWrite } from '../src/main/repo-write-queue.ts'
 import { completeTurn, createChatWorktree, discardParked, stageResolve, syncFromLive } from '../src/main/chat-worktrees.ts'
 import { commitLiveTurn } from '../src/main/live-commit.ts'
-import { removeWorktree, retireWorktreeBranch } from '../src/main/worktrees.ts'
+import { pruneOrphans, removeWorktree, retireWorktreeBranch } from '../src/main/worktrees.ts'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'trezi-repository-owner-')))
@@ -323,6 +323,73 @@ try {
     const removed = await interrupted(owned, 'removeWorktree')
     assert.equal(g(live, 'show', `${removed.refs[0]}:x.txt`), 'dirty when removed')
     assert.ok(existsSync(join(removal.path, 'x.txt')), 'the checkout is still there')
+    setRepositoryOwner(null)
+    await stop(owned)
+  })
+
+  await section('orphans', async () => {
+    const home = profile('orphans')
+    const dir = join(home, 'trezi', 'worktrees')
+    const live = repo()
+    let owned = await fixture(home)
+    await install(owned)
+    // Two orphans: a plain dirty chat, and a PARKED chat (its tip is the cumulative squash).
+    const plain = await chat(live, dir, 'orph1')
+    const parked = await chat(live, dir, 'orph2')
+    writeFileSync(join(parked.path, 'a.txt'), 'one, the parked chat\'s version\n')
+    writeFileSync(join(live, 'a.txt'), 'one, the user\'s version\n')
+    assert.equal((await completeTurn(live, parked, 'parked turn')).outcome, 'parked')
+    const parkedTip = g(parked.path, 'rev-parse', 'HEAD')
+    writeFileSync(join(plain.path, 'x.txt'), 'plain dirty work\n')
+    writeFileSync(join(parked.path, 'y.txt'), 'parked dirty work\n')
+    setRepositoryOwner(null)
+    await stop(owned)
+
+    // The recovery commit cannot be made (signing is required and cannot run here).
+    g(live, 'config', 'commit.gpgsign', 'true')
+    g(live, 'config', 'gpg.program', '/usr/bin/false')
+    owned = await fixture(home)
+    await install(owned)
+    const reclaimed = await pruneOrphans(live, dir, new Set(), id => id === parked.id)
+    assert.deepEqual(reclaimed.map(item => item.id).sort(), [parked.id, plain.id].sort())
+    // Nothing was force-removed: the dirty files are still on disk (in place or moved aside).
+    const found = (id, file) => {
+      const names = execFileSync('ls', ['-A', dir], { encoding: 'utf8' }).split('\n').filter(Boolean)
+      return names.filter(name => name === id || name.startsWith(`.recovered-${id}-`)).map(name => join(dir, name, file)).find(existsSync)
+    }
+    assert.equal(read(found(plain.id, 'x.txt')), 'plain dirty work\n')
+    assert.equal(read(found(parked.id, 'y.txt')), 'parked dirty work\n')
+    // The parked branch was put back exactly as it was: no fold survived the failed commit.
+    assert.equal(g(live, 'rev-parse', `refs/heads/${parked.branch}`), parkedTip)
+    // Both dirty states are at their own recovery refs (distinct names within one sweep).
+    const refs = recovery(live)
+    const dirtyRefs = refs.filter(ref => ref.endsWith('-orphan-dirty'))
+    assert.equal(dirtyRefs.length, 2)
+    assert.equal(new Set(refs).size, refs.length)
+    const contents = dirtyRefs.map(ref => g(live, 'ls-tree', '-r', '--name-only', ref)).join('\n')
+    assert.match(contents, /x\.txt/)
+    assert.match(contents, /y\.txt/)
+    assert.ok(refs.some(ref => ref.endsWith('-orphan-head') && g(live, 'rev-parse', ref) === parkedTip), 'the parked tip has its own ref')
+    assert.equal((await owned.frame('status', {})).payload.active.length, 0)
+    setRepositoryOwner(null)
+    await stop(owned)
+
+    // With a working commit the same sweep recovers the work on the branch and removes the checkout.
+    g(live, 'config', '--unset', 'commit.gpgsign')
+    g(live, 'config', '--unset', 'gpg.program')
+    const again = repo()
+    owned = await fixture(home)
+    await install(owned)
+    const third = await chat(again, join(home, 'trezi', 'worktrees-b'), 'orph3')
+    writeFileSync(join(third.path, 'z.txt'), 'committed by recovery\n')
+    setRepositoryOwner(null)
+    await stop(owned)
+    owned = await fixture(home)
+    await install(owned)
+    const done = await pruneOrphans(again, join(home, 'trezi', 'worktrees-b'), new Set(), () => false)
+    assert.equal(done[0].dirty, true)
+    assert.equal(existsSync(third.path), false)
+    assert.equal(g(again, 'show', `refs/heads/${third.branch}:z.txt`), 'committed by recovery')
     setRepositoryOwner(null)
     await stop(owned)
   })

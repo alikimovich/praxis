@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — Repository recovery review repairs (LKM-95 / S07)
+
+Independent review found startup orphan recovery could lose work. For a dirty
+leftover worktree it ignored whether the recovery commit succeeded and then
+force-removed the checkout; a parked chat's fold (`reset --soft HEAD^`) had already
+moved its branch back a commit. Now the orphan's HEAD and a private-index snapshot of
+its dirty state each get a recovery ref first. If the commit fails (for example
+signing that cannot run in the background service) the fold is undone and the
+checkout is moved aside, never force-removed; a ref that cannot be made leaves the
+orphan as found. Recovery ref names also gained a random suffix: several orphans in
+one sweep share kind and label and would have overwritten each other's refs. The
+documented 100-ref cap never existed in code; it is removed instead of implemented,
+because deleting refs silently is exactly what recovery refs must not do, so refs are
+never pruned automatically. `test/repository-owner.mjs` has a new `orphans` section
+with a failing signing program (two dirty orphans, one parked).
+
 ## 2026-09-29 — Swift repository coordinator: Git, worktrees and recovery (LKM-95 / S07)
 
 The fifth transfer, on the LKM-94 candidate. Under the Swift launch the service is the

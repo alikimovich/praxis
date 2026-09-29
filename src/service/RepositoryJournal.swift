@@ -128,12 +128,6 @@ final class RepositoryJournal: @unchecked Sendable {
         return true
     }
 
-    /// Every ref an unsettled entry still names; the ref cap never prunes these.
-    func pinnedRefs() -> Set<String> {
-        lock.lock(); defer { lock.unlock() }
-        return Set((active + interrupted).flatMap(\.refs))
-    }
-
     func snapshot() -> (active: [RepositoryEntry], interrupted: [RepositoryEntry]) {
         lock.lock(); defer { lock.unlock() }
         return (active, interrupted)
@@ -170,10 +164,10 @@ final class RepositoryJournal: @unchecked Sendable {
 /// Recovery refs: `refs/trezi/recovery/<UTC time>-<kind>-<operation>[-<label>]`, in the
 /// repository's common directory (shared by every worktree), created before an
 /// effect that could otherwise make work unreachable. They are never deleted on
-/// rollback; the oldest settled ones are pruned only beyond `cap` per repository.
+/// rollback, and never pruned automatically: they are the only handle on work an
+/// operation moved out of its checkout, so only the user deletes them.
 enum RecoveryRefs {
     static let namespace = "refs/trezi/recovery/"
-    static let cap = 100
 
     static func name(kind: String, operationID: String, label: String? = nil) -> String {
         let formatter = DateFormatter()
@@ -181,7 +175,10 @@ enum RecoveryRefs {
         formatter.timeZone = TimeZone(identifier: "UTC")
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         let short = String(operationID.lowercased().filter { $0.isHexDigit }.prefix(12))
-        return namespace + "\(formatter.string(from: Date()))-\(kind)-\(short)" + (label.map { "-\($0)" } ?? "")
+        // Unique per ref: several refs with one kind and label in one operation (each
+        // orphan of a recovery sweep) must never overwrite one another.
+        let unique = String(UUID().uuidString.lowercased().filter { $0.isHexDigit }.prefix(6))
+        return namespace + "\(formatter.string(from: Date()))-\(kind)-\(short)-\(unique)" + (label.map { "-\($0)" } ?? "")
     }
 
     static func list(_ git: RepositoryGit, _ root: String) -> [String] {
@@ -189,15 +186,6 @@ enum RecoveryRefs {
             .split(separator: "\n").map(String.init).filter { !$0.isEmpty }.sorted()
     }
 
-    /// Drops the oldest refs beyond the cap, never one an unsettled entry names.
-    static func prune(_ git: RepositoryGit, _ root: String, pinned: Set<String>) {
-        let refs = list(git, root)
-        guard refs.count > cap else { return }
-        var excess = refs.count - cap
-        for ref in refs where excess > 0 && !pinned.contains(ref) {
-            if git.succeeds(root, ["update-ref", "-d", ref]) { excess -= 1 }
-        }
-    }
 }
 
 /// FIFO serialization per repository common directory: the live checkout and every

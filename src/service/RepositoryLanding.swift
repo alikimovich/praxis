@@ -215,22 +215,50 @@ extension RepositoryEffects {
             let branch = (try? git.line(path, ["rev-parse", "--abbrev-ref", "HEAD"])).flatMap { $0.isEmpty ? nil : $0 }
             let ownRoot = ((common as NSString).deletingLastPathComponent)
             let dirty = !(((try? git.text(path, ["status", "--porcelain"])) ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            // A parked chat's tip is its cumulative squash: fold the recovery commit into it.
-            if dirty, let branch, RepositoryPaths.isChatBranch(branch), parked.contains(id) {
-                _ = git.succeeds(path, ["reset", "--soft", "HEAD^"])
-            }
+            // The checkout is only removed once its work is reachable from a ref or a
+            // commit on its branch. Anything short of that leaves it on disk (moved
+            // aside when it is still dirty), never force-removed.
+            var removable = true
             if dirty {
-                _ = git.succeeds(path, ["add", "-A"])
-                try? RepositoryPaths.unstageExcluded(git, path)
-                _ = git.succeeds(path, ["-c", "user.name=Trezi", "-c", "user.email=trezi@local", "commit", "--no-verify", "-m", "Trezi: recovered orphaned worktree"])
-                if branch == "HEAD", let head = try? head(path) { try c.preserve(head, label: "orphan") }
+                do {
+                    removable = try recoverOrphan(c, path, id: id, branch: branch, folded: RepositoryPaths.isChatBranch(branch ?? "") && parked.contains(id))
+                } catch {
+                    // A ref that could not be made (or a Git error): keep everything as found.
+                    reclaimed.append(Reclaimed(id: id, dirty: true, branch: branch, repoRoot: ownRoot))
+                    continue
+                }
             }
             c.point("prune.committed")
-            if !git.succeeds(c.root, ["worktree", "remove", "--force", path]) { moveAside(path) }
+            if !removable { moveAside(path) }
+            else if !git.succeeds(c.root, ["worktree", "remove", "--force", path]) { moveAside(path) }
             reclaimed.append(Reclaimed(id: id, dirty: dirty, branch: branch, repoRoot: ownRoot))
         }
         _ = git.succeeds(c.root, ["worktree", "prune"])
         return reclaimed
+    }
+
+    /// Makes a dirty orphan's work durable before its checkout goes: recovery refs on
+    /// its HEAD and on a private-index snapshot of the dirty state, then the recovery
+    /// commit on its branch (folded into a parked chat's cumulative squash). Returns
+    /// false, with the branch put back as found, when the commit could not be made
+    /// (a signing hook, a Git error); the refs still hold the work then.
+    private func recoverOrphan(_ c: RepositoryContext, _ path: String, id: String, branch: String?, folded: Bool) throws -> Bool {
+        let original = try head(path)
+        try c.preserve(original, label: "orphan-head")
+        let snapshot = try RepositoryPaths.snapshot(git, path, index: c.index(), message: "Trezi recovery: orphaned worktree \(id)")
+        if snapshot != original { try c.preserve(snapshot, label: "orphan-dirty") }
+        c.point("prune.preserved")
+        // A parked chat's tip is its cumulative squash: fold the recovery commit into it.
+        let fold = folded && branch != nil && git.succeeds(path, ["reset", "--soft", "HEAD^"])
+        func abandon() -> Bool { if fold { _ = git.succeeds(path, ["reset", "--soft", original]) }; return false }
+        guard git.succeeds(path, ["add", "-A"]) else { return abandon() }
+        try? RepositoryPaths.unstageExcluded(git, path)
+        if !git.succeeds(path, ["diff", "--cached", "--quiet"]) || fold {
+            // Nothing staged and not folded means only excluded paths were dirty: no commit is needed.
+            guard git.succeeds(path, ["-c", "user.name=Trezi", "-c", "user.email=trezi@local", "commit", "--no-verify", "-m",
+                                      "Trezi: recovered orphaned worktree"]) else { return abandon() }
+        }
+        return true
     }
 
     /// Deletes local `trezi/chat-*` refs whose tip is already on the live branch
