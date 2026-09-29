@@ -38,6 +38,7 @@ const UNIT = [
   "native-settings-evidence",
   "native-chat-controller",
   "native-composer-layout",
+  "native-smoke-wait",
   "native-chat-reveal",
   "no-system-preferences",
   "chat-islands",

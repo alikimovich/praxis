@@ -76,7 +76,9 @@ final class ChatScrollStyleProbe: NSView {
     var pinRequest = 0
     var attachRequest = 0
     private(set) var pinCount = 0
+    private(set) var attachCount = 0
     private(set) var userScrollCount = 0
+    private(set) var ignoredLiveScrollEndCount = 0
     // Input diagnostics: monitor callbacks, wheel events examined, last drop.
     private(set) var monitorCallbackCount = 0
     private(set) var scrollWheelEventCount = 0
@@ -88,6 +90,8 @@ final class ChatScrollStyleProbe: NSView {
     private var layoutObservers: [NSObjectProtocol] = []
     private var inputMonitor: Any?
     private var liveScrolling = false
+    /// Whether AppKit still considers a live scroll in progress (diagnostics only).
+    var isLiveScrolling: Bool { liveScrolling }
     private var pinGeneration = 0
     private var settle: DispatchWorkItem?
     private weak var observedDocument: NSView?
@@ -136,10 +140,17 @@ final class ChatScrollStyleProbe: NSView {
             self.pin(scroll)
         }
     }
-    /// Explicit "go to latest" from SwiftUI, which already set its own state.
+    /// Explicit "go to latest" from SwiftUI, which already set `follows = true`.
+    /// Runs inside updateNSView, so it must not call back into SwiftUI
+    /// (onPinnedChange/onLatestButtonChange); the pin's bounds change refreshes
+    /// the latest button afterwards.
     func attach() {
         settle?.cancel(); settle = nil
         pinGeneration += 1
+        // An overlay thumb drag can post didEndLiveScroll after the click. With
+        // no live scroll open, that stale end is ignored instead of detaching.
+        liveScrolling = false
+        attachCount += 1
         isPinned = true
         requestPin()
     }
@@ -247,7 +258,13 @@ final class ChatScrollStyleProbe: NSView {
                 self?.liveScrolling = true; self?.userScrolled()
             })
             layoutObservers.append(NotificationCenter.default.addObserver(forName: NSScrollView.didEndLiveScrollNotification, object: scroll, queue: .main) { [weak self] _ in
-                self?.liveScrolling = false; self?.userScrolled()
+                guard let self else { return }
+                guard self.liveScrolling else {
+                    self.ignoredLiveScrollEndCount += 1
+                    return
+                }
+                self.liveScrolling = false
+                self.userScrolled()
             })
             for view in [scroll.documentView, scroll.contentView].compactMap({ $0 }) {
                 view.postsFrameChangedNotifications = true

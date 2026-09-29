@@ -1,7 +1,10 @@
 import AppKit
 
 /// Last thumb-drag diagnostics, reported with every acceptance inspection.
-enum AcceptanceDiagnostics { static var lastDrag: [String: Any] = [:] }
+enum AcceptanceDiagnostics {
+    static var lastDrag: [String: Any] = [:]
+    static var lastLatest: [String: Any] = [:]
+}
 
 // Only dispatched by the ephemeral-profile Host command. Scroller style and
 // accessibility modes are switched through the in-process ChatSystemEnvironment
@@ -98,12 +101,27 @@ extension Host {
                 guard knob.height > 0 else { throw fail("Native thumb is not draggable") }
                 try mouse(.mouseMoved, knobPoint)
                 try await Task.sleep(nanoseconds: 50_000_000)
+                // A faded overlay knob falls through to the clip view. Reveal it
+                // (flashScrollers, as scrolling does) and wait, bounded, until the
+                // knob hit-tests to the scroller; never change style/autohide.
+                let before = ScrollerDrag.knobHit(scroller: scroller, window: window)
+                let revealed = await ScrollerDrag.revealKnob(scroller: scroller, scroll: scroll, window: window) {
+                    try? await Task.sleep(nanoseconds: 25_000_000)
+                }
+                var report: [String: Any] = ["hitBeforeReveal": before.dictionary, "hitAfterReveal": revealed.hit.dictionary,
+                                             "revealWait": revealed.elapsed]
+                guard revealed.hit.isScroller else {
+                    AcceptanceDiagnostics.lastDrag = report
+                    throw fail("Scroller knob never hit-tested to NSScroller before mouseDown: hit \(revealed.hit.target), knob \(NSStringFromRect(revealed.hit.knob)), waited \(String(format: "%.2f", revealed.elapsed))s")
+                }
                 // Queue the drag, then let the window hit-test the mouseDown to the
                 // scroller, whose own tracking loop consumes it (see ScrollerDrag).
                 let scrolls = probe.userScrollCount
-                var report = ScrollerDrag.perform(scroller: scroller, scroll: scroll, window: window, dy: 96) { window.sendEvent($0) }.dictionary
+                let drag = ScrollerDrag.perform(scroller: scroller, scroll: scroll, window: window, dy: 96) { window.sendEvent($0) }
+                report.merge(drag.dictionary) { _, new in new }
                 report["liveScrollInputs"] = probe.userScrollCount - scrolls
                 AcceptanceDiagnostics.lastDrag = report
+                if drag.refused { throw fail("Thumb drag refused: knob hit \(drag.hitTarget) at mouseDown, knob \(NSStringFromRect(drag.knob))") }
             case "latest":
                 let frame = chat.model.latestButtonFrame
                 guard frame.width > 0, frame.height > 0 else {
@@ -111,18 +129,47 @@ extension Host {
                                                       : "Scroll-to-latest button is missing")
                 }
                 let point = windowPoint(NSPoint(x: frame.midX, y: chat.isFlipped ? frame.midY : chat.bounds.height - frame.midY), in: chat)
+                let hitTarget: String
+                // hitTest takes the receiver's superview coordinates.
+                if let content = window.contentView,
+                   let hit = content.hitTest(content.superview?.convert(point, from: nil) ?? point) {
+                    hitTarget = String(describing: type(of: hit))
+                } else { hitTarget = "nil" }
+                let attachBefore = probe.attachCount
+                let distanceBefore = ChatScrollStyleProbe.distanceFromEnd(scroll)
+                let clicksBefore = chat.model.latestButtonClickCount
+                let ignoredBefore = probe.ignoredLiveScrollEndCount
                 try mouse(.leftMouseDown, point); try mouse(.leftMouseUp, point)
+                // The click is only queued here; "after" values are read once it
+                // and the resulting pin have run (below, after the settle sleep).
+                AcceptanceDiagnostics.lastLatest = [
+                    "hitTarget": hitTarget, "clickPoint": NSStringFromPoint(point),
+                    "clicksBefore": clicksBefore, "attachBefore": attachBefore,
+                    "distanceBefore": distanceBefore, "pinnedBefore": probe.isPinned,
+                    "liveScrollingBefore": probe.isLiveScrolling, "ignoredLiveScrollEndsBefore": ignoredBefore,
+                ]
             default: throw fail("Unknown chat input")
             }
         }
         // Event delivery and SwiftUI layout happen on subsequent run-loop turns.
         try await Task.sleep(nanoseconds: 100_000_000)
+        if command["input"] as? String == "latest" {
+            let clicksBefore = AcceptanceDiagnostics.lastLatest["clicksBefore"] as? Int ?? 0
+            AcceptanceDiagnostics.lastLatest.merge([
+                "buttonClickCount": chat.model.latestButtonClickCount - clicksBefore,
+                "attachAfter": probe.attachCount, "distanceAfter": ChatScrollStyleProbe.distanceFromEnd(scroll),
+                "pinnedAfter": probe.isPinned, "liveScrollingAfter": probe.isLiveScrolling,
+                "ignoredLiveScrollEndsAfter": probe.ignoredLiveScrollEndCount,
+            ]) { _, new in new }
+        }
         let composerFrame = composer.convert(composer.bounds, to: chat)
         let latest = chat.model.snapshot?.messages.last?.id ?? ""
         let latestFrame = chat.model.messageFrames[latest] ?? .zero
         let readingHeight = chat.bounds.height - chat.model.bottomInset
         var result: [String: Any] = [
             "probeAttached": probe.configuredScroll === scroll, "configurationCount": probe.configurationCount, "pinCount": probe.pinCount,
+            "attachCount": probe.attachCount, "ignoredLiveScrollEnds": probe.ignoredLiveScrollEndCount,
+            "liveScrolling": probe.isLiveScrolling, "latestButtonClickCount": chat.model.latestButtonClickCount,
             "pinned": probe.isPinned, "userScrollCount": probe.userScrollCount,
             "monitorCallbacks": probe.monitorCallbackCount, "scrollWheelEvents": probe.scrollWheelEventCount,
             "lastInputRejection": probe.lastInputRejection,
@@ -144,6 +191,7 @@ extension Host {
             "readingHeight": readingHeight, "latestButton": chat.model.latestButtonFrame.width > 0,
             "latestButtonFrame": NSStringFromRect(chat.model.latestButtonFrame),
             "lastDrag": AcceptanceDiagnostics.lastDrag,
+            "lastLatest": AcceptanceDiagnostics.lastLatest,
             "layout": composer.verificationLayout(), "composer": composer.inspect(),
             "appearance": window.effectiveAppearance.name.rawValue,
             // Read-only: the real macOS values, never written by verification.

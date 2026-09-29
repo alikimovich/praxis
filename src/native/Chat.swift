@@ -53,6 +53,7 @@ final class ChatModel: ObservableObject {
     var renderedAccessibility = ChatAccessibility()
     /// Driven by the scroll probe: unpinned (or not following) and away from the end.
     @Published var showsLatest = false
+    var latestButtonClickCount = 0  // acceptance diagnostics
     // Preserve message/status clearance above the floating composer.
     static let statusHeight = ChatLayout.statusHeight
     var bottomInset: CGFloat { ChatLayout.bottomInset(composerHeight: composerHeight) }
@@ -242,7 +243,10 @@ struct ChatConversation: View {
                     .onChange(of: model.followRevision) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor); pinRequest += 1 } }
                     .onChange(of: model.snapshot?.chat) { _ in follows = true; sticky = nil; proxy.scrollTo("bottom", anchor: bottomAnchor); attachRequest += 1 }
                     .overlay(alignment: .bottomTrailing) {
-                        if model.showsLatest { Button { follows = true; proxy.scrollTo("bottom", anchor: bottomAnchor); attachRequest += 1 } label: { Image(systemName: "arrow.down") }.help("Scroll to latest message")
+                        if model.showsLatest { Button {
+                            model.latestButtonClickCount += 1
+                            follows = true; proxy.scrollTo("bottom", anchor: bottomAnchor); attachRequest += 1
+                        } label: { Image(systemName: "arrow.down") }.help("Scroll to latest message")
                             .reportsFrame(in: ChatLayout.rootSpace) { model.latestButtonFrame = $0 }
                             .padding(12).padding(.bottom, model.bottomInset) }
                     }

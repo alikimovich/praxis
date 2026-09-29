@@ -2,6 +2,114 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — composerInspect timeout during the TIFF paste: diagnosis (LKM-103)
+
+Manager verification failed in the core smoke right after NATIVE ISLANDS PASS
+with `Native check timed out: composerInspect; false`. Diagnosis from the
+saved log and artifacts:
+
+- **Which wait:** the bundle stack (`index.cjs:20489`) is the clipboard-paste
+  loop's `attachments.length === count && enabled && text === ''` wait
+  (smoke-core.ts:87). `paste-png.png` was written in this run and
+  `paste-tiff.png` is from an earlier run, so the PNG paste passed and the
+  **TIFF** paste timed out.
+- **No LKM-103 code on that path:** it runs no code from the last two attempts.
+  `chatAcceptance`, `ScrollerDrag`/`revealKnob` and the drag/latest harness
+  steps first run at smoke-core.ts:212 (`checkVisibleComposer`) and in the
+  later chat-scroll acceptance. The only LKM-103 code active there is the
+  conversation layout/probe, which passed this same step in earlier runs.
+  Nothing else in the repo writes `NSPasteboard.general`, and the paste is
+  synchronous (write → `sendAction(paste)` → read), so there is no internal race.
+- **Anomaly:** `failure.png` shows the window had lost key status (grey traffic
+  lights, dimmed toolbar), while `paste-png.png` shows it key. Something
+  outside the app took focus during the wait.
+- **Ambiguous evidence:** the dumped chat state's `composerInset: 314` implies
+  composerHeight 236. That fits either one attachment row (128 + 108) or about
+  seven lines of pasted text. The old helper printed only the predicate's
+  `false`, so the run cannot say whether `attachments`, `enabled` (chat
+  `ready`/`switching`) or `text` failed.
+
+Given that evidence I could not attribute this to LKM-103 code, so no product
+change is claimed as its fix. I did not weaken, skip or lengthen any check.
+Instead the step is now self-diagnosing:
+
+- `src/native/smoke-wait.ts` replaces smoke-core's inline `wait`/`inspect`
+  (same 10 s timeout and 80 ms interval). A timeout still prints the label and
+  predicate result, then appends the last inspected state: scalars, array
+  lengths, truncated strings, no attachment payloads.
+- The paste wait adds Bun-side `ready`/`switching`/`running`/text
+  length/attachment count.
+- `composerInspect` also reports `windowKey`, `appActive` and
+  `inputIsFirstResponder`.
+- `test/native-smoke-wait.mjs` (unit tier) feeds the failing predicate a
+  timed-out state and requires the message to name each field. It reproduces
+  the old `composerInspect; false` message as a negative control and fails if
+  the diagnostic detail is removed.
+
+## 2026-09-29 — Reveal the overlay knob before the acceptance drag (LKM-103)
+
+The latest-button fix held, but "Native thumb dragging moves content" failed
+intermittently: the hit target was NSClipView, not NSScroller, and scrollY
+stayed at 3306 (run b35c7def had passed with NSScroller). The chat's
+autohiding overlay knob had faded before the synthetic mouseDown, so the click
+fell through to the clip view.
+
+Harness-only fix; product style and autohide are unchanged.
+- `ScrollerDrag.revealKnob` calls `flashScrollers()`, as scrolling does, then
+  polls with a bounded wait (1.5 s) until a hit-test at the knob's window
+  location returns NSScroller.
+- The acceptance fails with the hit class, knob rect and elapsed wait if it
+  never does. `lastDrag` records hit-before/after-reveal and `revealWait`.
+- `ScrollerDrag.perform` refuses (queues and delivers nothing) unless the knob
+  hit-tests to NSScroller at mouseDown, so a drag can never land on the clip
+  view.
+- The drag must still go through NSScroller and move content toward history.
+
+Fixture: a view covering the knob stands in for the faded scroller. The drag is
+refused before mouseDown, the reveal wait times out within bounds and reports
+the blocker, and once the knob is uncovered it hit-tests to NSScroller and the
+drag moves content, in both modes. Removing the refusal guard fails the fixture.
+
+## 2026-09-29 — Ignore stale live-scroll end after latest attach (LKM-103)
+
+Manager verification passed wheel and thumb drag in both Always and
+WhenScrolling, then failed `acceptance-WhenScrolling-6-latest`. After the
+latest-button click it showed `pinned=false`, the latest button still visible,
+`scrollY=2688.5` / `documentHeight=4774` and `latestVisible=false`.
+
+Likely cause (inferred from code, not yet confirmed by counters, which did not
+exist in that run): an overlay (WhenScrolling) thumb drag can post
+`didEndLiveScrollNotification` after the click's `attach()`. The old handler
+then called `userScrolled()`: it detached, bumped the pin generation (dropping
+attach's queued pin) and reported `follows=false`. The windowless replay of
+that order reproduces the failure exactly: detached, 900 pt from the end.
+
+Fix: a Cursor repair patch, reviewed and corrected here.
+- `didEndLiveScroll` detaches only when a live scroll is open. Otherwise it is
+  ignored and counted (`ignoredLiveScrollEndCount`).
+- `attach()` closes any open live scroll, counts attaches and sets `isPinned`
+  directly. The patch had used `setPinned(true)`, which synchronously called
+  `onPinnedChange` (SwiftUI `@State`) and `onLatestButtonChange` (published
+  `showsLatest`) from inside `updateNSView`: a state mutation during a view
+  update. The button already sets `follows = true`, and the pin's bounds change
+  refreshes the button afterwards.
+- The patch did not compile: `latestButtonClickCount` was `private(set)` but
+  incremented from `ChatConversation`.
+- Acceptance `lastLatest` records hit target, click point, and click/attach
+  counts, distance, pinned, live-scroll and ignored-end counters before the
+  click. It adds the "after" values only once the queued click and pin have run.
+  The patch had read them right after `postEvent`, when the click was merely
+  queued, and hit-tested in the content view's own (possibly flipped) space
+  instead of its superview's.
+
+Fixture regression, three orders: a live scroll open at attach; only a stale
+end; and the stale end landing before attach's queued pin. It asserts `attach()`
+makes no synchronous SwiftUI callbacks, the probe stays pinned at the end, and
+the stale end is counted. Negative controls: with the old handler the
+queued-pin order fails ("stale didEnd must not detach (false, distance 900.0)");
+with the patch's `setPinned(true)` it fails "attach pins without calling back
+into SwiftUI (2 callbacks)".
+
 ## 2026-09-29 — Thumb drag through the scroller's own tracking loop (LKM-103)
 
 Manager verification now passes wheel and latest-button checks (frame

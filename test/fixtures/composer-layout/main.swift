@@ -421,6 +421,41 @@ for path in ["wheel", "live scroll"] {
     replay.probe.attach(); drainLayout()
     require(!replay.probe.showsLatestButton && shown == [true, false, true, false], "\(path): latest click hides it (\(shown))")
 }
+// Manager failure (WhenScrolling after thumb drag): didEndLiveScroll arrived after
+// the latest-button attach and called userScrolled(), clearing follows before pin.
+for path in ["willStart pending", "didEnd only", "didEnd before queued pin"] {
+    let replay = ChatReplay()
+    replay.probe.userScrolled(); scrollHistory(replay, by: 900); drainLayout()
+    require(!replay.probe.isPinned && replay.probe.showsLatestButton, "\(path): detached in history")
+    if path != "didEnd only" {
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: replay.scroll)
+        require(replay.probe.isLiveScrolling, "\(path): live scroll started")
+    }
+    // attach() runs inside SwiftUI's updateNSView: no synchronous callbacks.
+    var callbacks = 0
+    replay.probe.onPinnedChange = { _ in callbacks += 1 }
+    replay.probe.onLatestButtonChange = { _ in callbacks += 1 }
+    replay.probe.attach()
+    require(callbacks == 0 && replay.probe.isPinned && !replay.probe.isLiveScrolling,
+        "\(path): attach pins without calling back into SwiftUI (\(callbacks) callbacks)")
+    let ignoredBefore = replay.probe.ignoredLiveScrollEndCount
+    if path == "didEnd before queued pin" {
+        // The stale end lands before attach's queued pin has run.
+        NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: replay.scroll)
+        drainLayout()
+    } else {
+        drainLayout()
+        require(replay.probe.isPinned && ChatScrollStyleProbe.distanceFromEnd(replay.scroll) < 1, "\(path): attach pins to the end")
+        NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: replay.scroll)
+        drainLayout()
+    }
+    drainSettle()
+    require(replay.probe.isPinned && ChatScrollStyleProbe.distanceFromEnd(replay.scroll) < 1,
+        "\(path): stale didEnd must not detach (\(replay.probe.isPinned), distance \(ChatScrollStyleProbe.distanceFromEnd(replay.scroll)))")
+    require(replay.probe.ignoredLiveScrollEndCount == ignoredBefore + 1,
+        "\(path): stale didEnd counted as ignored (\(replay.probe.ignoredLiveScrollEndCount))")
+}
+print("Chat latest after drag: stale didEndLiveScroll after attach does not detach or block re-pin")
 // A reveal (follows false) away from the end also offers latest, without unpinning.
 let revealed = ChatReplay()
 revealed.follows = false
@@ -583,3 +618,48 @@ for style: NSScroller.Style in [.legacy, .overlay] {
         "\(name): an unrouted drag does not move content, so the acceptance drag check fails (\(unrouted.dictionary))")
 }
 print("Chat thumb drag: queued drag routed to the hit-tested scroller moves content toward history in Always and WhenScrolling; unrouted negative control does not")
+
+// Manager failure (intermittent): the drag's hit target was NSClipView, since
+// the autohiding overlay knob had faded. The drag must never reach mouseDown
+// unless the knob hit-tests to NSScroller: ScrollerDrag refuses it, and the
+// acceptance reveals the knob (flashScrollers) and waits, bounded, first.
+// A view covering the knob stands in for the faded scroller offscreen.
+final class KnobCover: NSView {}
+func runAsync<T>(_ body: @escaping @MainActor () async -> T) -> T {
+    var result: T?
+    Task { @MainActor in result = await body() }
+    while result == nil { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
+    return result!
+}
+for style: NSScroller.Style in [.overlay, .legacy] {
+    let name = style == .legacy ? "Always" : "WhenScrolling"
+    let (scroll, scroller) = dragScroll(style)
+    let knob = scroller.rect(for: .knob)
+    let cover = KnobCover(frame: scroll.convert(scroller.convert(knob, to: scroll), to: offscreen.contentView).insetBy(dx: -4, dy: -4))
+    offscreen.contentView!.addSubview(cover)
+    let hidden = ScrollerDrag.knobHit(scroller: scroller, window: offscreen)
+    require(!hidden.isScroller && hidden.target == "KnobCover", "\(name): covered knob does not hit-test to the scroller (\(hidden.target))")
+    var delivered = 0
+    let refused = ScrollerDrag.perform(scroller: scroller, scroll: scroll, window: offscreen, dy: 96) { _ in delivered += 1 }
+    require(refused.refused && delivered == 0 && refused.queued == 0 && refused.scrollBefore == refused.scrollAfter,
+        "\(name): a drag whose knob is not NSScroller is refused before mouseDown (\(refused.dictionary))")
+    // Bounded wait: still hidden -> reports the hit class, knob and elapsed time.
+    let timedOut = runAsync { await ScrollerDrag.revealKnob(scroller: scroller, scroll: scroll, window: offscreen, timeout: 0.2) {
+        try? await Task.sleep(nanoseconds: 20_000_000) } }
+    require(!timedOut.hit.isScroller && timedOut.hit.target == "KnobCover" && timedOut.elapsed >= 0.2 && timedOut.elapsed < 1,
+        "\(name): reveal wait is bounded and reports the blocking hit (\(timedOut.hit.dictionary), \(timedOut.elapsed)s)")
+    // Revealed during the wait (cover removed) -> hit-tests to NSScroller, drag proceeds.
+    let revealed = runAsync { () -> (hit: ScrollerDrag.KnobHit, elapsed: TimeInterval) in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { cover.removeFromSuperview() }
+        return await ScrollerDrag.revealKnob(scroller: scroller, scroll: scroll, window: offscreen, timeout: 1.5) {
+            try? await Task.sleep(nanoseconds: 20_000_000) }
+    }
+    require(revealed.hit.isScroller && revealed.elapsed < 1.5, "\(name): knob hit-tests to NSScroller once revealed (\(revealed.hit.dictionary))")
+    let moved = ScrollerDrag.perform(scroller: scroller, scroll: scroll, window: offscreen, dy: 96) { down in
+        let content = offscreen.contentView!
+        content.hitTest(content.superview?.convert(down.locationInWindow, from: nil) ?? down.locationInWindow)?.mouseDown(with: down)
+    }
+    require(!moved.refused && moved.hitIsScroller && moved.scrollBefore - moved.scrollAfter > 40,
+        "\(name): revealed knob drag goes through NSScroller and moves content (\(moved.dictionary))")
+}
+print("Chat thumb drag reveal: non-NSScroller knob hit refuses mouseDown, bounded reveal wait reports the blocker, revealed knob drags content")

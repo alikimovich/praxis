@@ -14,6 +14,10 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Diagnose stale document-bound clamping after composer growth; retry following on settled AppKit dimensions and add a windowless regression with a negative control.
 - [x] Fix capped-draft + short-resize follow shortfall: pin to the document end from settled AppKit metrics (no stale fractional anchor); cover grow→resize and resize→grow at 440pt windowless and in native acceptance.
 - [x] Probe-owned latest state: probe-owned pinned state changed only by user input (wheel/key monitor, live scroll) or explicit latest/chat attach; windowless regression + negative controls.
+- [x] Diagnose the TIFF-paste composerInspect timeout: step runs no recent LKM-103 code; window lost key during the wait. Smoke timeouts now report last state, focus and Bun chat context (smoke-wait.ts + unit test with negative control).
+- [ ] Manager: rerun test:native; if the paste step fails again, read the reported lastState/context fields.
+- [x] Acceptance drag reveals the overlay knob (flashScrollers + bounded hit-test wait) and refuses mouseDown unless the knob hit-tests to NSScroller; fixture regression.
+- [x] Ignore stale didEndLiveScroll after the latest attach (reviewed Cursor patch: no SwiftUI callbacks from attach, post-click diagnostics); three-order fixture regression with negative controls.
 - [x] Route the acceptance thumb drag through the scroller's own tracking loop (queue drag, window.sendEvent mouseDown); drag diagnostics; direction-strict assertion; fixture regression with unrouted negative control.
 - [x] Remove all system-preference writes from verification; in-process ChatSystemEnvironment override (scroller style + Increase Contrast/Reduce Transparency/Reduce Motion) through the probe and SwiftUI environment; system-settings guard test; provider defaults test.
 - [x] Report the latest button's rendered frame via onGeometryChange (PreferenceKey never arrived); offscreen NSHostingView regression with negative control.
