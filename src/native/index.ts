@@ -22,7 +22,7 @@ import { listProjectFiles } from '../main/file-tree'
 import { checkoutBranch, ensureBranch, listBranches, switchBranch } from '../main/git'
 import { registerGitRemoteIpc } from '../main/git-remote'
 import { registerGithubIpc } from '../main/github'
-import { nativeMediaPath, registerMediaProtocol } from '../main/media'
+import { nativeMediaPath } from '../main/media'
 import { type PreviewState, registerPreviewIpc } from '../main/preview-ipc'
 import { readProjectIcon } from '../main/project-icon'
 import { registerPropsIpc } from '../main/props'
@@ -33,7 +33,7 @@ import { registerStylesIpc } from '../main/styles'
 import { registerTokensIpc } from '../main/tokens'
 import * as channels from '../shared/preview-channels'
 import { NativeBridge, setBridge } from './bridge'
-import { app, dispatchIPC, ipcMain, NativeView, protocolHandlers, shell, views, serviceEvents } from './platform'
+import { app, dispatchIPC, ipcMain, NativeView, shell, views, serviceEvents } from './platform'
 import { runNativeCoreSmoke } from './smoke-core'
 import { installShutdown } from './shutdown'
 import { parsePreferredModelState, resolvePreferredSettings } from '../shared/preferred-model'
@@ -56,6 +56,8 @@ import { serviceEditing } from './editing-service'
 import { setEditingOwner } from '../main/editing-owner'
 import { serviceWorkflows } from './workflow-service'
 import { setWorkflowOwner, workflowOwner } from '../main/workflow-owner'
+import { servicePlatform } from './platform-service'
+import { type PlatformOwner, setPlatformOwner } from '../main/platform-owner'
 import { installNativeChat } from './chat-runtime'
 import { NativeShellController } from './shell-controller'
 import { NativeSupportSheets } from './support-sheets'
@@ -181,6 +183,10 @@ async function main() {
   // Side-effecting workflows (S13): publication, remote Git actions, project setup,
   // Trezi's update and the diagnosis memory, journaled with receipts in the service.
   if (repository) { const lanes = repository; setWorkflowOwner(serviceWorkflows(host, { leases: () => lanes.heldLeases() })) }
+  // Platform services (S14): the Simulator preview and its Metro group, scoped media
+  // grants for the source editor, pasted attachments and the running-servers recovery.
+  let platform: PlatformOwner | null = null
+  if (process.env.TREZI_SERVICE_SUPERVISED === '1') { platform = servicePlatform(host); setPlatformOwner(platform) }
   const refreshPreferences = () => {
     const values = preferences.snapshot()
     let preferred: unknown
@@ -240,7 +246,6 @@ async function main() {
   registerSimulatorIpc(() => window)
   registerFeedbackIpc(() => window)
   registerGitRemoteIpc(ipcMain, projectHasRunningAgents)
-  registerMediaProtocol()
   ipcMain.handle('project:pick', () => {
     if (pickedRoot) {
       const first = pickedRoot
@@ -286,20 +291,6 @@ async function main() {
           message: { type: 'reply', id: message.id, document: message.document, error: text }
         })
       else console.error(`Native ${view} IPC rejected: ${text}`)
-    }
-  })
-  host.on('media', async ({ task, url, headers }) => {
-    try {
-      const handler = protocolHandlers.get('trezi-media')!
-      const response = await handler(new Request(url, { headers }))
-      host!.send('mediaReply', {
-        task,
-        status: response.status,
-        headers: Object.fromEntries(response.headers),
-        data: Buffer.from(await response.arrayBuffer()).toString('base64')
-      })
-    } catch {
-      host!.send('mediaReply', { task, status: 404, data: '' })
     }
   })
 
@@ -356,8 +347,16 @@ async function main() {
     if (channel === 'layers:changed' || channel === 'preview:url-changed') void layersController.refresh()
     if (channel === 'layers:move-request') void layersController.move(value).catch(error => activityController.append(String(error), 'error'))
   })
+  // A media document is shown by path: the legacy registry, or the platform owner's
+  // grant for the source editor (re-issued when it expired or the file changed). Only
+  // the newest state is delivered when a resolution is outstanding.
+  let sourceStates = 0
   const editorController = new NativeEditorController(workspaceController.services.invoke, state => {
-    host!.send('sourceState', { state: { ...state, mediaPath: state.document?.media ? nativeMediaPath(state.document.media.url) : undefined } })
+    const media = state.document?.media, sequence = ++sourceStates
+    const deliver = (mediaPath?: string) => { if (sequence === sourceStates) host!.send('sourceState', { state: { ...state, mediaPath } }) }
+    if (!media) deliver()
+    else if (!platform) deliver(nativeMediaPath(media.url))
+    else void platform.mediaPath(media.url, state.root, join(state.root, state.document!.file)).then(deliver, () => deliver())
     if (shellController && workspaceController.active?.root === state.root) { shellController.codeOpen = state.visible; shellController.schedule() }
   })
   const openSource = (source?: string, popped?: boolean) => { const root = workspaceController.active?.root; if (root) void editorController.open(root, source, popped) }
@@ -453,7 +452,9 @@ async function main() {
   host.on('download-error', ({ message }) => activityController.append(`Download failed: ${message}`, 'error'))
   host.on('download-finished', () => activityController.append('Download finished.', 'success'))
   const supportSheets = new NativeSupportSheets(sheetController, () => host!.request('captureFeedback'), url => shell.openExternal(url))
-  const previewRecovery = new NativePreviewRecovery(sheetController)
+  const previewRecovery = platform
+    ? new NativePreviewRecovery(sheetController, root => platform!.findServers(root), server => platform!.stopServer(server))
+    : new NativePreviewRecovery(sheetController)
   host.on('menu', ({ action }) => { if (action === 'servers' && workspaceController.state.activeKey) previewRecovery.open(workspaceController.state.activeKey) })
   const reviewController = new NativeReviewController(sheetController, url => shell.openExternal(url))
   const settingsController = new NativeSettingsController(sheetController, preferences, refreshPreferences)

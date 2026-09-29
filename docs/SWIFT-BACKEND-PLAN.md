@@ -11,7 +11,22 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
-**Current (2026-09-29, LKM-100):** S13 (roadmap row) moves Trezi's side-effecting
+**Current (2026-09-29, LKM-101):** S14 (roadmap row) moves the remaining OS services Bun
+ran itself into the Swift service's platform owner. The iOS Simulator preview (preflight,
+boot, idb, the app's launch command as a journaled process group, the loopback bridge and
+its frame capture, input and element picks) is a Swift coordinator: every tool run is
+bounded and cancellable, so a stop or a newer start reaches a boot or build still waiting,
+and a restart never overlaps. The native source editor's media access is a scoped grant
+(view, file identity, size, SHA-256, expiry) instead of a Bun path registry; pasted images
+are uploaded in hash-checked chunks and written by the service; the running-servers sheet's
+inspection and SIGTERM re-check identity in Swift. The unreachable `trezi-media` scheme route
+is retired. A census of the Bun-owned OS effects that remain is recorded in TASKS for S15.
+`TREZI_BACKEND_OWNER=legacy` keeps the original TS code as the rollback owner. See
+[platform](SWIFT-BACKEND-PLATFORM.md). Implemented for review on the LKM-100 candidate;
+manager verification and acceptance are pending, and a real Xcode/simulator run is
+unverified (scripted tools only).
+
+**Earlier (2026-09-29, LKM-100):** S13 (roadmap row) moves Trezi's side-effecting
 workflows outside a chat turn into the Swift service's workflow owner: Publish (merge or
 PR only), the handoff and saved-run PRs, Connect to GitHub, remote fetch/pull/switch, the
 `.trezi/` instrumentation helpers, new projects (files, first commit, install), Trezi's own

@@ -191,9 +191,3 @@ export class NativeView {
 export const views = new Map<string, NativeView>()
 export type NativeWebContents = NativeView['webContents']
 
-export const protocolHandlers = new Map<string, (request: Request) => Promise<Response>>()
-export const protocol = {
-  handle(scheme: string, handler: (request: Request) => Promise<Response>) {
-    protocolHandlers.set(scheme, handler)
-  }
-}

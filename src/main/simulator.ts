@@ -11,6 +11,7 @@ import { xcodeFailureReason, simBuildDestination, extractBuildError } from './xc
 import { findFreePort, stripAnsi } from './devserver-net'
 import { FRAME_DATA_URI, FRAME_INSET, FRAME_ASPECT } from '../shared/iphone-frame'
 import type { RunningSimulator, SimDevice, SimPreflight } from '../shared/api'
+import { swiftPlatformOwner } from './platform-owner'
 
 /**
  * iOS-Simulator preview runner — the React Native / Expo counterpart to
@@ -1149,6 +1150,20 @@ async function startTestBridge(interactive = false): Promise<{ url: string }> {
 export function registerSimulatorIpc(getWindow: () => NativeView | null): void {
   getWin = getWindow
   const log = simLog
+  // Swift launch: the service's platform owner runs the simulator, the bridge and the
+  // app's launch command; everything below is the legacy (rollback) implementation.
+  const owner = swiftPlatformOwner()
+  if (owner) {
+    owner.onSimulatorLog(log)
+    owner.onSimulatorPick(pick => sendToWin('simulator:element-picked', pick))
+    ipcMain.handle('simulator:preflight', () => owner.simulatorPreflight())
+    ipcMain.handle('simulator:start', (_e, opts: { root: string; command?: string; udid?: string }) => owner.simulatorStart(opts))
+    ipcMain.handle('simulator:stop', () => owner.simulatorStop())
+    ipcMain.handle('simulator:set-select-mode', (_e, active: boolean) => owner.simulatorSelect(!!active))
+    // The service also stops it when it shuts down; this ends it with the window.
+    app.on('before-quit', () => { void owner.simulatorStop().catch(() => {}) })
+    return
+  }
   ipcMain.handle('simulator:preflight', () => preflight())
   ipcMain.handle('simulator:start', (_e, opts: { root: string; command?: string; udid?: string }) =>
     start(opts, log)

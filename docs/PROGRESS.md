@@ -2,6 +2,50 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — Swift platform owner: Simulator, media, attachments, server recovery (LKM-101 / S14)
+
+The eleventh transfer, on the LKM-100 candidate. Details, the protocol and the tightened
+rollback plan are in `docs/SWIFT-BACKEND-PLATFORM.md`.
+
+A census of the OS effects Bun still performed under the Swift launch found four clusters
+in this step's scope: the whole Simulator preview (simctl/idb runs, `pkill idb_companion`,
+`rm -rf /tmp/idb`, `open -a Simulator`, the Metro process group and a Node HTTP bridge),
+pasted-image writes and pruning, the running-servers sheet's SIGTERM, and the editor's media
+registry. The Simulator had real lifecycle gaps: Stop could not reach a start still in
+`bootstatus` (up to 120 s) or a build, and that start then installed its bridge anyway;
+tool runs had timeouts but nothing stopped what they left behind.
+
+Under the Swift launch the service's platform owner now does all of it. Every tool run is
+bounded (deadline, own process group, output caps) and belongs to a `ToolScope`, so a stop or
+a newer start ends the waiting boot or build and the start answers `cancelled`; a restart never
+overlaps its predecessor; Metro runs as a journaled group (watchdog + runtime journal), so a
+crash never leaves it behind. The bridge moved to Swift with the same page, token, Host check,
+body and viewer limits. Media access for the native editor became a scoped grant (view, file
+identity, size, SHA-256, expiry, bounded) instead of a path registry; the client re-grants an
+expired or changed one. Pasted images arrive in hash-checked 1 MiB chunks (a 25 MiB image as
+one line would have exceeded the pipe's 32 MiB line limit and closed the bridge). The
+`trezi-media` WebKit scheme route was unreachable (no view registered it) and is removed.
+
+Bun keeps the views, the sheet and the bezel artwork it sends with each start. The remaining
+Bun-owned OS effects (provider CLIs, the Codex tool socket, skill installs, Keychain crypto,
+`open`/editor CLIs, profile migration, provider store, feedback issues, the update check's
+fetch, and the project `.trezi/` writers for annotations, tokens and worktree setup) are
+listed in TASKS for S15.
+
+Verification (worker): `test/platform-owner.mjs` passes in about 12 s (cached fixture; four
+repeated runs): pure and preflight parity with the TS code in seven modes, unavailable, the
+view-only and interactive bridges, stale-companion recovery, restart, cancel during boot and
+during Metro, supersede, build failure, early exit, no frames, drain, a crashed owner's group
+swept at the next launch, media grants, attachments, server recovery and schema. It binds
+loopback ports, which this worker sandbox forbids, so it was run outside the sandbox. Related
+suites (`service-process`, `runtime-owner`, `native-preview-recovery`, `media-types`,
+`attachments`, `docs-links`) pass; both typechecks pass; `bun run build:native` succeeds; the
+new Swift files have zero diagnostics under `-strict-concurrency=complete`. Worker native
+verification (staged, desktop lock, groups core, chat, composer): 139 unit checks including
+`platform-owner` and `service-process`, both typechecks, native smoke 17 of 17, CHAT ACCEPTANCE
+PASS (read from the run log; the tool call timed out client-side after 300 s). No real Xcode,
+simulator or idb was used.
+
 ## 2026-09-29 — Workflow owner repair: bounded journal, best-effort diagnosis memory (LKM-100 / S13)
 
 Independent review found two defects. First, the journal grew without limit: `prune()` kept

@@ -4,6 +4,8 @@
 
 Task IDs and future-owner meanings are defined in the [15-step roadmap](SWIFT-BACKEND-ROADMAP.md). Assignments are future migration accountability, not current ownership or permission to transfer a writer.
 
+**LKM-101 reconciliation (2026-09-29):** the `media`/`mediaReply` scheme bridge is removed (no WebKit view registered `trezi-media`; the native editor shows media by path from a Swift grant). `simulator:log` and `simulator:element-picked` are produced from the Swift platform owner's `simulator-log`/`simulator-picked` events. See [platform](SWIFT-BACKEND-PLATFORM.md).
+
 | Source | Dispatch / emission / subscription | Migration task | Future owner |
 | --- | --- | --- | --- |
 | [src/native/PreviewStatus.swift:9](../src/native/PreviewStatus.swift#L9) | func action(_ name: String) { emit(["event":"native-preview-action", "action":name, "project":project, "command":command]) } | S06 | AppKit presentation; Swift process supervisor |
@@ -50,10 +52,10 @@ Task IDs and future-owner meanings are defined in the [15-step roadmap](SWIFT-BA
 | [src/native/workspace-runtime.ts:48](../src/native/workspace-runtime.ts#L48) | host.on('shell-action', (action: NativeShellAction) => { | S04 | Swift workspace coordinator |
 | [src/native/index.ts:125](../src/native/index.ts#L125) | const send = (channel: string, ...args: unknown[]) => mainView.webContents.send(channel, ...args) | S02 | Swift service supervisor / XPC boundary |
 | [src/native/index.ts:195](../src/native/index.ts#L195) | host.on('ipc', async ({ view, message }) => { | S12 | Swift editing/preview coordinators; AppKit and isolated DOM JS |
-| [src/native/index.ts:218](../src/native/index.ts#L218) | host.on('media', async ({ task, url, headers }) => { | S08 | Swift source transaction service |
+| [src/native/index.ts:218](../src/native/index.ts#L218) | host.on('media', async ({ task, url, headers }) => { | S08 | Swift source transaction service (retired, LKM-101: unreachable scheme route removed) |
 | [src/native/index.ts:236](../src/native/index.ts#L236) | host.on('activity-action', ({ action }) => activityController.action(action)) | S13 | Swift application services; repository/source commit authority |
 | [src/native/index.ts:237](../src/native/index.ts#L237) | host.on('menu', ({ action }) => { if (action === 'logs') activityController.action('toggle') }) | S13 | Swift application services; repository/source commit authority |
-| [src/native/index.ts:238](../src/native/index.ts#L238) | serviceEvents.on('event', (channel, line) => { if (channel === 'devserver:log' &#124;&#124; channel === 'simulator:log') activityController.append(line, 'server') }) | S06 | Swift process supervisor |
+| [src/native/index.ts:238](../src/native/index.ts#L238) | serviceEvents.on('event', (channel, line) => { if (channel === 'devserver:log' &#124;&#124; channel === 'simulator:log') activityController.append(line, 'server') }) | S06 | Swift process supervisor (simulator log lines come from the Swift platform owner, LKM-101) |
 | [src/native/index.ts:239](../src/native/index.ts#L239) | host.on('native-layout-width', ({ width }) => { | S03 | Swift persistence service |
 | [src/native/index.ts:243](../src/native/index.ts#L243) | host.on('native-layout-sizes', sizes => { if (['source','layers','inspector'].every(key => Number.isFinite(sizes[key]))) preferences.set('praxis:native-panel-sizes', JSON.stringify({ source:sizes.source, layers:sizes.layers, inspector:sizes.inspector })) }) | S03 | Swift persistence service |
 | [src/native/index.ts:244](../src/native/index.ts#L244) | host.on('native-layout-frame', ({ frame }) => { | S12 | Swift editing/preview coordinators; AppKit and isolated DOM JS |
@@ -167,14 +169,14 @@ Task IDs and future-owner meanings are defined in the [15-step roadmap](SWIFT-BA
 | [src/native/Host.swift:407](../src/native/Host.swift#L407) | case "trash": | S12 | AppKit UI/WebKit broker; Swift domain coordinators |
 | [src/native/Host.swift:410](../src/native/Host.swift#L410) | case "fullscreen": reply(id, window.styleMask.contains(.fullScreen)) | S02 | Swift service supervisor / XPC boundary |
 | [src/native/Host.swift:411](../src/native/Host.swift#L411) | case "nativeEdit": NSApp.sendAction(Selector((c["action"] as? String ?? "undo") + ":"), to: nil, from: nil) | S12 | AppKit UI/WebKit broker; Swift domain coordinators |
-| [src/native/Host.swift:412](../src/native/Host.swift#L412) | case "mediaReply": | S08 | AppKit broker; Swift source service |
+| [src/native/Host.swift:412](../src/native/Host.swift#L412) | case "mediaReply": | S08 | AppKit broker; Swift source service (retired, LKM-101: unreachable scheme route removed) |
 | [src/native/Host.swift:417](../src/native/Host.swift#L417) | case "quit": terminateHost() | S02 | Swift service supervisor / XPC boundary |
 | [src/native/Host.swift:425](../src/native/Host.swift#L425) | emit(["event":"ipc", "view":name, "message":body]) | S12 | AppKit UI/WebKit broker; Swift domain coordinators |
 | [src/native/Host.swift:429](../src/native/Host.swift#L429) | emit(["event":"loaded", "view":name, "url":webView.url?.absoluteString ?? ""]) | S12 | AppKit UI/WebKit broker; Swift domain coordinators |
 | [src/native/Host.swift:433](../src/native/Host.swift#L433) | emit(["event":"load-error", "view":views.first(where: { $0.value === webView })?.key ?? "", "message":error.localizedDescription]) | S12 | AppKit UI/WebKit broker; Swift domain coordinators |
 | [src/native/Host.swift:439](../src/native/Host.swift#L439) | else { emit(["event":"load-error", "view":"preview", "message":"The preview stopped repeatedly. Use Run to restart it, or inspect the activity log."]) } | S12 | AppKit UI/WebKit broker; Swift domain coordinators |
 | [src/native/Host.swift:451](../src/native/Host.swift#L451) | if action.navigationType == .linkActivated && ["https", "http"].contains(url.scheme ?? "") { emit(["event":"external", "url":url.absoluteString]) } | S12 | AppKit UI/WebKit broker; Swift domain coordinators |
-| [src/native/Host.swift:462](../src/native/Host.swift#L462) | emit(["event":"media", "task":key, "url":urlSchemeTask.request.url!.absoluteString, "headers":urlSchemeTask.request.allHTTPHeaderFields ?? [:]]) | S08 | AppKit broker; Swift source service |
+| [src/native/Host.swift:462](../src/native/Host.swift#L462) | emit(["event":"media", "task":key, "url":urlSchemeTask.request.url!.absoluteString, "headers":urlSchemeTask.request.allHTTPHeaderFields ?? [:]]) | S08 | AppKit broker; Swift source service (retired, LKM-101: unreachable scheme route removed) |
 | [src/native/Host.swift:465](../src/native/Host.swift#L465) | func windowDidEnterFullScreen(_ notification: Notification) { emit(["event":"fullscreen", "value":true]) } | S12 | AppKit UI/WebKit broker; Swift domain coordinators |
 | [src/native/Host.swift:466](../src/native/Host.swift#L466) | func windowDidExitFullScreen(_ notification: Notification) { emit(["event":"fullscreen", "value":false]) } | S12 | AppKit UI/WebKit broker; Swift domain coordinators |
 | [src/native/ChatIsland.swift:39](../src/native/ChatIsland.swift#L39) | emit(["event":"island-action", "chat":chat, "id":island.id, "revision":island.revision, | S12 | AppKit presentation; Swift editing/preview coordinators; AppKit and isolated DOM JS |

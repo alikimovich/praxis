@@ -26,6 +26,7 @@ import type {
 import { projectKey } from '../shared/projectKey'
 import { backgroundAgentOptions } from '../shared/background-model'
 import { pruneAttachments, saveImageAttachment } from './attachments'
+import { swiftPlatformOwner } from './platform-owner'
 import { type ProviderSession, pickProvider } from './backends'
 import { handoffPrompt } from './backends/conversation-handoff'
 import { seedFromRecord } from './backends/record'
@@ -1268,6 +1269,9 @@ export function registerAgentIpc(
   ipcMain.handle(
     'attachments:save',
     async (_e, image: ImageAttachment, name?: string): Promise<string> => {
+      // Swift launch: uploaded in bounded chunks and written by the platform owner.
+      const platform = swiftPlatformOwner()
+      if (platform) return platform.saveAttachment(image, name)
       const dir = join(dataDir(), 'attachments')
       const saved = await saveImageAttachment(dir, image, name, String(Date.now()))
       void pruneAttachments(dir, Date.now())

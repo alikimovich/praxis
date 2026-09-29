@@ -28,7 +28,10 @@ LKM-100 it runs Trezi's side-effecting workflows outside a chat turn (Publish an
 Connect to GitHub, remote pull/switch, setup helpers, new projects, Trezi's update, the
 diagnosis memory) as journaled workflows with receipts, so a lost reply or crash never
 repeats a PR, merge or update; Bun keeps the proposing helpers and the sheets
-(docs/SWIFT-BACKEND-WORKFLOWS.md).
+(docs/SWIFT-BACKEND-WORKFLOWS.md). Since LKM-101 it runs the iOS Simulator preview (bounded,
+cancellable xcrun/idb runs, the launch command as a journaled group, the loopback bridge),
+issues scoped media grants to the source editor, writes pasted attachments and performs the
+running-servers recovery (docs/SWIFT-BACKEND-PLATFORM.md).
 Every other domain writer remains in Bun until a
 verified transfer; annotation storage is split from
 publication but stays in Bun until the S07 repository lane.
