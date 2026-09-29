@@ -9,7 +9,7 @@ import { NativeEditorController } from './editor-controller'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { projectHasRunningAgents, registerAgentIpc, setProjectMemoryOwner } from '../main/agent'
+import { conversationsClosed, projectHasRunningAgents, registerAgentIpc, setProjectMemoryOwner } from '../main/agent'
 import { registerAnnotationsIpc } from '../main/annotations'
 import { registerContentControlsIpc } from '../main/content-controls-ipc'
 import { registerControlsIpc } from '../main/control-panels'
@@ -48,6 +48,8 @@ import { type RepositoryOwner, setRepositoryOwner } from '../main/repository-own
 import { serviceRepository } from './repository-service'
 import { type SourceOwner, setSourceOwner } from '../main/source-owner'
 import { serviceSource } from './source-service'
+import { type ConversationOwner, setConversationOwner } from '../main/conversation-owner'
+import { serviceConversation } from './conversation-service'
 import { installNativeChat } from './chat-runtime'
 import { NativeShellController } from './shell-controller'
 import { NativeSupportSheets } from './support-sheets'
@@ -109,6 +111,9 @@ async function main() {
     // Publish the promise before emitting quit: the host can close during cleanup.
     cleaning = Promise.resolve().then(async () => {
       app.emit('before-quit')
+      // Chats are saved by the conversation owner; bounded, and a chat cut short keeps
+      // its checkpoint for the next launch.
+      await Promise.race([conversationsClosed().catch(() => {}), new Promise(resolve => setTimeout(resolve, 3000).unref?.())])
       // The service-mode host exits with this status; the launcher reports it.
       host?.send('quit', { status: typeof process.exitCode === 'number' ? process.exitCode : 0 })
       if (!serviceLocked) rmSync(lock, { force: true })
@@ -157,6 +162,10 @@ async function main() {
   // owns Undo, file operations and saved drafts.
   let source: SourceOwner | null = null
   if (repository) { const lanes = repository; source = serviceSource(host, { leases: () => lanes.heldLeases() }); setSourceOwner(source) }
+  // Conversation state (S11): the service owns chat records and History, live-chat
+  // checkpoints, turn transitions, titles, model handoff, approvals and spawn admission.
+  let conversation: ConversationOwner | null = null
+  if (process.env.TREZI_SERVICE_SUPERVISED === '1') { conversation = serviceConversation(host); setConversationOwner(conversation) }
   const refreshPreferences = () => {
     const values = preferences.snapshot()
     let preferred: unknown
@@ -291,6 +300,13 @@ async function main() {
     if (journal) activityController.append(`Repository journal: ${journal}`, 'error')
     for (const entry of interrupted) activityController.append(
       `An earlier ${entry.kind} in ${entry.root} was interrupted; its work is kept${entry.refs.length ? ` at ${entry.refs.join(', ')}` : ''}.`, 'error')
+  }, () => {})
+  // A chat a crash cut off was saved from its checkpoint at launch (never over a newer
+  // record, which is kept, with the checkpoint copied beside it).
+  if (conversation) void conversation.status().then(({ recovered }) => {
+    for (const entry of recovered) activityController.append(entry.outcome === 'damaged'
+      ? `A damaged chat checkpoint was moved aside${entry.copy ? ` to ${entry.copy}` : ''}.`
+      : `A chat was cut off${entry.interrupted ? ' mid-turn' : ''} when Trezi last stopped; ${entry.outcome === 'restored' ? 'its conversation was restored' : `a newer copy was kept and the checkpoint saved to ${entry.copy}`}.`, 'error')
   }, () => {})
   // A transaction a crash cut short was rolled back at launch where its own bytes were
   // still there; a file changed since was kept, with the pre-image beside the report.

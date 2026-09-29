@@ -63,8 +63,9 @@ export async function cardAction(controller: NativeChatController, chat: Chat, a
         if (!prompt) throw new Error(`Automatic source mapping is unavailable for ${result.framework ?? 'this framework'}.`)
         if (chat.cancellation !== cancellation || controller.chats.get(chat.chat) !== chat) return
         chat.isRunning = true; chat.turnStartedAt = Date.now(); assistant(chat)
+        chat.turn = crypto.randomUUID()
         effect({ type: 'setup', chat: chat.chat, phase: 'configuring' }); controller.changed(chat)
-        await invoke('agent:send', prompt, undefined, chat.chat)
+        await invoke('agent:send', prompt, undefined, chat.chat, undefined, chat.turn)
       } catch (error) {
         chat.setup = false; chat.isRunning = false
         effect({ type: 'setup', chat: chat.chat, phase: 'failed', status: String(error) })

@@ -20,15 +20,15 @@ import type {
   OpenProjectResult,
   PermissionMode,
   QuestionAnswers,
+  SessionTranscriptEntry,
   WorkspaceSnapshot
 } from '../shared/api'
 import { projectKey } from '../shared/projectKey'
 import { backgroundAgentOptions } from '../shared/background-model'
 import { pruneAttachments, saveImageAttachment } from './attachments'
 import { type ProviderSession, pickProvider } from './backends'
-import { withConversationHandoff } from './backends/conversation-handoff'
+import { handoffPrompt } from './backends/conversation-handoff'
 import { seedFromRecord } from './backends/record'
-import { EDIT_TOOLS } from './backends/tools'
 import type { SpawnContext } from './backends/types'
 import {
   adoptSession,
@@ -62,7 +62,9 @@ import {
 import { registerProviderIpc } from './providers'
 import type { RpcHandlerRegistry } from './rpc-router'
 import { createSessionStore, type SessionStore } from './sessions-store'
-import { TurnTerminalTracker } from './turn-terminal'
+import { ConversationError, type ConversationOwner, type Persist, swiftConversationOwner } from './conversation-owner'
+import { legacyConversation } from './conversation-model'
+import { TurnTracker } from './chat-turns'
 import {
   applyBranchToWorkingTree,
   autoApplyWorktree,
@@ -93,6 +95,17 @@ function dataDir(): string {
 }
 let _store: SessionStore | null = null
 const store = (): SessionStore => (_store ??= createSessionStore(dataDir()))
+// The conversation owner (S11): the Swift service's coordinator when it supervises Bun,
+// else the in-process twin writing through the legacy store. Every chat transition —
+// a turn's start, its terminal event, landing, titles, handoff, approvals, spawn
+// admission — is decided there; this module performs the effects.
+let _legacyConversation: ConversationOwner | null = null
+function conversation(): ConversationOwner {
+  const swift = swiftConversationOwner()
+  if (swift) return swift
+  _legacyConversation ??= legacyConversation(store)
+  return _legacyConversation
+}
 // The memory owner: the Swift service (set by the native entry point when it is
 // supervised) or the legacy Bun writer. `dataDir()` is resolved first either way:
 // it creates the session store's alias before the service is asked to write in it.
@@ -165,27 +178,45 @@ let intendedKey: string | null = null
 // than both creating a session and leaking the loser's subprocess.
 const opening = new Map<string, Promise<OpenProjectResult>>()
 
-// v9 workspace-snapshot: sessionKeys with a turn currently in flight. Driven by
-// provider terminal events, observed through each backend's `ctx.onEvent` hook
-// (already wired for spawns; extended here to every interactive session). Providers
-// can emit error→done, so `turnTerminals` separately deduplicates finalization. Added on
-// `agent:send`, retained through landing/reconciliation, and swept wherever
-// a sessionKey leaves the `sessions` map so it can't outlive its session.
+// sessionKeys with a turn in flight: this process's mirror of the owner's turn state
+// (the owner decides; this answers synchronous questions like
+// `projectHasRunningAgents`). Added on `agent:send`, retained through
+// landing/reconciliation, and swept wherever a sessionKey leaves the `sessions` map
+// so it can't outlive its session.
 const runningKeys = new Set<string>()
 const preparingTurns = new Map<string, { cancelled: boolean }>()
-const turnTerminals = new TurnTerminalTracker()
+// Each provider session's sends in order: which turn (and run of it) an event belongs to.
+const trackers = new WeakMap<ProviderSession, TurnTracker>()
+// A model switch's recorded conversation, sent once with the next turn when the owner
+// says the handoff is due.
+const handoffHistory = new Map<string, SessionTranscriptEntry[]>()
 const reconciliation = new ReconciliationCoordinator({
   running: runningKeys,
   preparations: preparingTurns,
   currentSession: (key) => sessions.get(key),
-  begin: (key) => turnTerminals.begin(key),
+  begin: () => {},
   land: afterTurn,
-  showParked: showParkedChat
+  showParked: showParkedChat,
+  continued: (key, turn, run) => conversation().continueTurn(key, turn, run),
+  landed: async (key, turn) => (await conversation().landed(key, turn, Date.now())).completedAt,
+  dispatch: (session, prompt, turn, run) => {
+    trackers.get(session)?.push(turn, run)
+    session.send(prompt)
+  }
 })
 
-// Chats whose auto-name is currently being generated — guards against a second
-// `done` firing another title call before the first resolves.
-const titling = new Set<string>()
+/** A throttled checkpoint of a streaming chat's record (tool boundaries flush its text). */
+const checkpointTimers = new Map<string, ReturnType<typeof setTimeout>>()
+function scheduleCheckpoint(sessionKey: string): void {
+  if (checkpointTimers.has(sessionKey)) return
+  const timer = setTimeout(() => {
+    checkpointTimers.delete(sessionKey)
+    const s = sessions.get(sessionKey)
+    if (s) void conversation().checkpoint(sessionKey, s.record).catch(() => {})
+  }, 1000)
+  timer.unref?.()
+  checkpointTimers.set(sessionKey, timer)
+}
 
 /**
  * Give a chat a meaningful name once it has real content: after a turn finishes,
@@ -196,29 +227,25 @@ const titling = new Set<string>()
  * backend without title support or any failure just leaves the heuristic name.
  */
 async function maybeGenerateTitle(sessionKey: string): Promise<void> {
+  // The owner already decided this chat wants a name (untitled, both sides spoke,
+  // no other generation running); it also decides whether the answer is used.
   const session = sessions.get(sessionKey)
-  if (!session || session.record.title || titling.has(sessionKey)) return
-  session.finalize() // flush the just-finished turn into the transcript
-  const transcript = session.record.transcript
-  const hasUser = transcript.some((t) => t.role === 'user')
-  const hasAssistant = transcript.some((t) => t.role === 'assistant')
-  if (!hasUser || !hasAssistant) return
-  const generate = pickProvider(session.options).generateTitle
-  if (!generate) return
-  titling.add(sessionKey)
+  let title: string | null = null
   try {
-    const title = await generate(transcript, session.options)
-    // The session may have been closed/replaced while we awaited — re-check, and
-    // don't clobber a title set meanwhile.
-    const live = sessions.get(sessionKey)
-    if (title && live === session && !session.record.title) {
-      session.record.title = title
-      session.emit({ type: 'title', title })
-    }
+    if (!session) return
+    session.finalize() // flush the just-finished turn into the transcript
+    const generate = pickProvider(session.options).generateTitle
+    if (generate) title = await generate(session.record.transcript, session.options)
   } catch {
     /* best-effort — the rail keeps the first-message heuristic */
   } finally {
-    titling.delete(sessionKey)
+    // A name chosen meanwhile (a rename) wins; an empty answer just ends titling.
+    const result = await conversation().title(sessionKey, title ?? '', 'generated').catch(() => ({ ok: false, title: undefined }))
+    const live = sessions.get(sessionKey)
+    if (result.ok && result.title && live && live === session) {
+      live.record.title = result.title
+      live.emit({ type: 'title', title: result.title })
+    }
   }
 }
 
@@ -245,29 +272,56 @@ function evaluateProjectMemory(sessionKey: string): void {
   )
 }
 
-/** Interactive-session event hook: bookkeeping, naming, landing, and memory learning. */
+/**
+ * Interactive-session event hook: the provider adapter's typed events for the owner.
+ * Each event is tagged with the turn it belongs to (the tracker's oldest unfinished
+ * send). Providers disagree about terminal sequences (Codex can emit error→done while
+ * Claude may emit only error), so the owner claims one terminal per run of a turn and
+ * refuses a late one; a claimed success may auto-land, name the chat and teach memory,
+ * a failure persists partial work on the chat branch but never writes it into the
+ * project. Approval requests are registered with the owner, which settles answers.
+ */
 const interactiveEvents =
-  (sessionKey: string) =>
+  (sessionKey: string, tracker: TurnTracker) =>
   (e: AgentEvent): void => {
-    // Providers disagree about terminal sequences: Codex can emit error→done while
-    // Claude may emit only error. Claim one outcome. Success may auto-land; failure
-    // persists partial work on the chat branch but never writes it into the project.
-    if (e.type === 'done' || e.type === 'error') {
-      // Backends forward this same tagged event after the hook. Keep the UI busy
-      // until landing (or the automatic continuation) finishes.
-      if (e.type === 'done') e.landingPending = runningKeys.has(sessionKey)
-      const terminal = turnTerminals.claim(sessionKey, e.type)
-      if (!terminal) return
-      if (e.type === 'done') e.landingPending = true
-      const session = sessions.get(sessionKey)
-      const transcript = session?.record.transcript ?? []
-      const last = [...transcript].reverse().find((t) => t.role === 'user')?.text
-      void reconciliation.finish(sessionKey, firstLine(last ?? 'trezi chat edit'), terminal)
-      if (terminal === 'success') {
-        void maybeGenerateTitle(sessionKey)
-        evaluateProjectMemory(sessionKey)
+    if (e.type === 'permission-request') void conversation().register(sessionKey, e.request.id, 'permission', e.request.toolName).catch(() => {})
+    else if (e.type === 'question-request') void conversation().register(sessionKey, e.request.id, 'question', '').catch(() => {})
+    const at = e.turn ? null : tracker.attribute(e)
+    if (at) e.turn = at.turn
+    if (e.type === 'status') scheduleCheckpoint(sessionKey)
+    if (e.type !== 'done' && e.type !== 'error') return
+    // Backends forward this same tagged event after the hook. Keep the UI busy
+    // until landing (or the automatic continuation) finishes. A `done` no send
+    // accounts for is late: it completes nothing, here or in the chat.
+    if (e.type === 'done') {
+      if (!at) {
+        e.stale = true
+        e.landingPending = false
+        return
       }
+      e.landingPending = at.first || runningKeys.has(sessionKey)
     }
+    const session = sessions.get(sessionKey)
+    if (!at || !session || trackers.get(session) !== tracker) return
+    session.finalize()
+    const record = session.record
+    void conversation()
+      .terminal(sessionKey, at.turn, at.run, e.type, record)
+      .then((claim) => {
+        if (!claim.claimed) return
+        const last = [...record.transcript].reverse().find((t) => t.role === 'user')?.text
+        void reconciliation.finish(sessionKey, firstLine(last ?? 'trezi chat edit'), claim.outcome, at.turn, at.run)
+        if (claim.title) void maybeGenerateTitle(sessionKey)
+        if (claim.memory) evaluateProjectMemory(sessionKey)
+      })
+      .catch((error) => {
+        // Never leave the chat busy because the owner could not answer.
+        console.error('The conversation owner could not record the end of a turn:', error)
+        if (sessions.get(sessionKey) !== session) return
+        runningKeys.delete(sessionKey)
+        preparingTurns.delete(sessionKey)
+        session.emit({ type: 'landing-finished', turn: at.turn })
+      })
   }
 
 // v8 F1: detached comment spawns — background agents each in their OWN git worktree,
@@ -288,7 +342,8 @@ interface Spawn {
 const spawns = new Map<string, Spawn>()
 // v8 F1 Phase 3: bound concurrent spawns per project; the rest queue (FIFO) and start
 // as slots free, so firing many comments can't fork unbounded worktrees/subprocesses.
-const MAX_SPAWNS_PER_REPO = 3
+// The conversation owner admits them (3 per project) and keeps the queue's order;
+// Bun keeps each queued spawn's request until the owner admits it.
 interface QueuedSpawn {
   id: string
   root: string
@@ -298,18 +353,11 @@ interface QueuedSpawn {
   options: AgentOptions
   origin: BackgroundSpawnOrigin
 }
-const spawnQueue: QueuedSpawn[] = []
-// `startSpawn` only inserts into `spawns` once the worktree + session have
-// finished starting up — a long async stretch (createWorktree, then the
-// provider's startSession). Counting just `spawns` left a window where
-// concurrent `pumpQueue` iterations (from separate finalizeSpawn calls) and
-// the direct `agent:spawn-comment` handler could all read the cap as not-yet-
-// reached and start a spawn together, overshooting MAX_SPAWNS_PER_REPO. This
-// tracks slots reserved-but-not-yet-counted-in-`spawns`, incremented
-// SYNCHRONOUSLY (the first statement of `startSpawn`, before its first
-// `await`) so the reservation lands before control ever yields back to the
-// event loop — the same tick as the cap check both callers just did.
-const startingCounts = new Map<string, number>()
+const queuedSpawns = new Map<string, QueuedSpawn>()
+// Admitted by the owner but still creating their worktree + session (not yet in `spawns`).
+const startingSpawns = new Map<string, string>()
+// A cancel that arrived while its spawn was still starting: interrupted once it runs.
+const cancelOnStart = new Set<string>()
 /** Git updates must not move the live branch beneath an active project turn. */
 export function projectHasRunningAgents(root: string): boolean {
   const key = projectKey(root)
@@ -319,56 +367,52 @@ export function projectHasRunningAgents(root: string): boolean {
       return record && projectKey(record.projectRoot) === key
     }) ||
     [...spawns.values()].some((spawn) => projectKey(spawn.parentRoot) === key) ||
-    spawnQueue.some((spawn) => projectKey(spawn.root) === key) ||
-    (startingCounts.get(key) ?? 0) > 0
+    [...queuedSpawns.values()].some((spawn) => projectKey(spawn.root) === key) ||
+    [...startingSpawns.values()].includes(key)
   )
 }
-
-function reserveSpawnSlot(parentKey: string): void {
-  startingCounts.set(parentKey, (startingCounts.get(parentKey) ?? 0) + 1)
-}
-function releaseSpawnSlot(parentKey: string): void {
-  const n = (startingCounts.get(parentKey) ?? 0) - 1
-  if (n <= 0) startingCounts.delete(parentKey)
-  else startingCounts.set(parentKey, n)
-}
-const runningCount = (parentKey: string): number =>
-  [...spawns.values()].filter((s) => s.parentKey === parentKey).length +
-  (startingCounts.get(parentKey) ?? 0)
 const worktreesDir = (): string => join(dataDir(), 'worktrees')
 const firstLine = (t: string): string => (t.split('\n')[0] || 'Trezi comment edit').slice(0, 72)
-/** Normalise a user-typed chat name: one line, collapsed whitespace, capped.
- *  Empty (after trimming) means "no rename" — the caller rejects it. */
-const cleanTitle = (t: unknown): string =>
-  typeof t === 'string' ? t.replace(/\s+/g, ' ').trim().slice(0, 120) : ''
 
-/** Tear down a session: stop it emitting, deny its prompts, provider teardown,
- * then persist it. `current` keeps it as the project's last-active chat (restored
- * in place on the next open); `history` archives it as a previous agent; `none`
- * skips disk (the conversation is being transferred onto a replacement session). */
-function closeSession(
-  s: ProviderSession,
-  persist: 'current' | 'history' | 'none' = 'history'
-): void {
+/** Provider teardown: stop it emitting, deny its prompts, abort the run. */
+function stopProvider(s: ProviderSession): void {
   s.dispose()
-  ;[...s.pending.keys()].forEach((id) => resolvePending(s, id, 'deny'))
+  for (const id of [...s.pending.keys()]) resolvePending(s, id, 'deny')
   // Release any unanswered questions so their SDK callbacks unblock (dismiss).
-  if (s.pendingQuestions)
-    [...s.pendingQuestions.keys()].forEach((id) => resolveQuestion(s, id, null))
+  for (const id of [...(s.pendingQuestions?.keys() ?? [])]) resolveQuestion(s, id, null)
   s.shutdown()
+}
+
+/** Close an interactive chat: provider teardown, then the owner persists its record.
+ * `current` keeps it as the project's last-active chat (restored in place on the next
+ * open); `history` archives it as a previous agent; `none` forgets it. Only chats the
+ * user engaged (≥1 prompt) are kept. Never throws — History is non-critical. */
+async function closeChat(sessionKey: string, s: ProviderSession, persist: Persist): Promise<void> {
+  stopProvider(s)
+  clearTimeout(checkpointTimers.get(sessionKey))
+  checkpointTimers.delete(sessionKey)
+  handoffHistory.delete(sessionKey)
+  try {
+    s.finalize()
+    if (persist !== 'none' && s.record.transcript.some((t) => t.role === 'user')) s.record.endedAt = Date.now()
+    await conversation().close(sessionKey, persist, s.record)
+  } catch (error) {
+    console.error('Trezi could not save a closed chat:', error instanceof Error ? error.message : error)
+  }
+}
+
+/** Tear down a detached spawn's session, then persist its record in History (through
+ * the store, whose writer is the conversation owner under the Swift launch). */
+function closeSession(s: ProviderSession): void {
+  stopProvider(s)
   // Only persist sessions the user actually engaged (≥1 prompt) — skip opened-then
   // -closed empties. Best-effort: a disk hiccup must not break teardown.
   try {
     s.finalize()
-    if (persist === 'none') return
     if (s.record.transcript.some((t) => t.role === 'user')) {
       s.record.endedAt = Date.now()
-      if (persist === 'current') {
-        store().saveCurrent(s.record)
-      } else {
-        delete s.record.slot
-        store().save(s.record)
-      }
+      delete s.record.slot
+      store().save(s.record)
     }
   } catch {
     // history is non-critical; never let it interfere with session lifecycle
@@ -393,7 +437,7 @@ async function finalizeSpawn(id: string, status: 'done' | 'error'): Promise<void
   const spawn = spawns.get(id)
   if (!spawn || spawn.finalizing) return
   spawn.finalizing = true
-  const { session, wt, parentKey, parentSessionKey, parentRoot, text, origin } = spawn
+  const { session, wt, parentSessionKey, parentRoot, text, origin } = spawn
   await enqueueRepoWrite(parentRoot, async () => {
     try {
       closeSession(session) // finalize + persist the record (removed below if we auto-apply)
@@ -471,7 +515,13 @@ async function finalizeSpawn(id: string, status: 'done' | 'error'): Promise<void
     }
   })
   spawns.delete(id)
-  void pumpQueue(parentKey) // a slot just freed — start the next queued spawn
+  void admitNext(id) // a slot just freed — start the next queued spawn
+}
+
+let quitting: Promise<void> = Promise.resolve()
+/** Settles once every chat closed at quit has been saved by the owner (bounded by the caller). */
+export function conversationsClosed(): Promise<void> {
+  return quitting
 }
 
 // finalizeSpawn runs outside registerAgentIpc's closure, so it needs the window
@@ -494,17 +544,9 @@ function safeSend(get: () => NativeView | null, channel: string, payload: unknow
  * Returns the branch (immediate path needs it) or null on failure.
  */
 async function startSpawn(q: QueuedSpawn): Promise<string | null> {
-  // Reserve the slot HERE, synchronously, before the first await — see the
-  // comment on `startingCounts` above. Every exit path below must release it
-  // exactly once (the success path releases it right after `spawns.set`
-  // takes over counting it; both failure paths release before returning).
-  reserveSpawnSlot(q.parentKey)
-  let slotReserved = true
-  const releaseSlot = () => {
-    if (!slotReserved) return
-    slotReserved = false
-    releaseSpawnSlot(q.parentKey)
-  }
+  // The owner admitted it (its slot is counted there until `spawnDone`).
+  startingSpawns.set(q.id, q.parentKey)
+  const releaseSlot = () => startingSpawns.delete(q.id)
   let wt: Worktree
   try {
     wt = await enqueueRepoWrite(q.root, () => createWorktree(q.root, worktreesDir(), { label: q.text, id: q.id }))
@@ -517,7 +559,7 @@ async function startSpawn(q: QueuedSpawn): Promise<string | null> {
       branch: null,
       origin: q.origin, outcome: 'failed'
     } satisfies AgentEvent)
-    void pumpQueue(q.parentKey)
+    void admitNext(q.id)
     return null
   }
   const opts: AgentOptions = { ...q.options, permissionMode: 'bypassPermissions' }
@@ -558,10 +600,12 @@ async function startSpawn(q: QueuedSpawn): Promise<string | null> {
       text: q.text,
       origin: q.origin
     })
-    // Now counted via `spawns` itself — release the reservation so it isn't
-    // double-counted by `runningCount`.
     releaseSlot()
     s.send(q.text)
+    if (cancelOnStart.delete(q.id)) {
+      spawns.get(wt.id)!.cancelled = true
+      void s.interrupt?.().catch(() => {})
+    }
     return wt.branch
   } catch {
     spawns.delete(wt.id)
@@ -574,18 +618,20 @@ async function startSpawn(q: QueuedSpawn): Promise<string | null> {
       branch: null,
       origin: q.origin, outcome: 'failed'
     } satisfies AgentEvent)
-    void pumpQueue(q.parentKey)
+    void admitNext(q.id)
     return null
   }
 }
 
-/** Start queued spawns for a project while it has free slots (FIFO). Each dequeued
- *  spawn emits `spawn-started` so the rail flips its row from queued → running. */
-async function pumpQueue(parentKey: string): Promise<void> {
-  while (runningCount(parentKey) < MAX_SPAWNS_PER_REPO) {
-    const idx = spawnQueue.findIndex((q) => q.parentKey === parentKey)
-    if (idx === -1) return
-    const [q] = spawnQueue.splice(idx, 1)
+/** A spawn's slot freed: start what the owner admits next, in its queue order. Each
+ *  dequeued spawn emits `spawn-started` so the rail flips its row from queued → running. */
+async function admitNext(id: string): Promise<void> {
+  const next = await conversation().spawnDone(id).catch(() => [] as string[])
+  for (const nextId of next) {
+    const q = queuedSpawns.get(nextId)
+    queuedSpawns.delete(nextId)
+    // Cancelled here while the owner admitted it: give its slot straight back.
+    if (!q) { void admitNext(nextId); continue }
     const branch = await startSpawn(q)
     if (branch) {
       safeSend(getWindow_, 'agent:event', {
@@ -642,6 +688,57 @@ export function registerAgentIpc(
   getWindow_ = getWindow // share with finalizeSpawn (runs outside this closure)
   // v9 per-chat worktree isolation — deps-injected so this module barely grows.
   initChatIsolation({ worktreesDir, store, getWindow })
+  /** Starts an interactive chat's provider session with its turn tracker and event hook. */
+  const startChat = async (
+    root: string,
+    sessionKey: string,
+    options: AgentOptions,
+    cwd: string,
+    resumeSessionId?: string
+  ): Promise<ProviderSession> => {
+    const tracker = new TurnTracker()
+    const s = await pickProvider(options).startSession(
+      cwd,
+      options,
+      getWindow,
+      await contextWithMemory(root, sessionKey, {
+        emitKey: sessionKey,
+        liveRoot: root,
+        onEvent: interactiveEvents(sessionKey, tracker),
+        ...(resumeSessionId ? { resumeSessionId } : {})
+      })
+    )
+    trackers.set(s, tracker)
+    return s
+  }
+
+  /** Registers a started chat with the owner, then makes it live here. A chat the
+   *  owner cannot record is torn down: it would accept no turn. */
+  const installChat = async (
+    sessionKey: string,
+    key: string,
+    s: ProviderSession,
+    options: AgentOptions,
+    active: boolean
+  ): Promise<void> => {
+    try {
+      await conversation().open(sessionKey, key, s.record, options, active)
+    } catch (error) {
+      stopProvider(s)
+      throw error
+    }
+    sessions.set(sessionKey, s)
+  }
+
+  /** Forget a chat's local turn state (its owner record was closed or replaced). */
+  const forgetChat = (sessionKey: string): void => {
+    memoryInjection.forget(sessionKey)
+    setProjectUiEnabled(sessionKey, false)
+    runningKeys.delete(sessionKey)
+    preparingTurns.delete(sessionKey)
+    reconciliation.begin(sessionKey)
+  }
+
   ipcMain.handle('agent:open-project', async (_e, root: string, options: AgentOptions = {}) => {
     const key = projectKey(root)
     // This is the renderer's latest intent — record it synchronously, before any await.
@@ -662,13 +759,9 @@ export function registerAgentIpc(
         const existing = sessions.get(sessionKey)
         if (!existing) continue
         const terminal = runningKeys.has(sessionKey) ? 'failed' : 'success'
-        closeSession(existing, sessionKey === currentKey ? 'current' : 'history')
         sessions.delete(sessionKey)
-        memoryInjection.forget(sessionKey)
-        setProjectUiEnabled(sessionKey, false)
-        runningKeys.delete(sessionKey)
-        preparingTurns.delete(sessionKey)
-        reconciliation.begin(sessionKey)
+        await closeChat(sessionKey, existing, sessionKey === currentKey ? 'current' : 'history')
+        forgetChat(sessionKey)
         await releaseChat(sessionKey, terminal)
       }
       activeSessionKeyByProject.delete(key)
@@ -679,35 +772,23 @@ export function registerAgentIpc(
       // isolatedCwd returns the live root otherwise. adoptSession re-stamps the record
       // back to the live project so history/reattach see it under the real root.
       const cwd = await isolatedCwd(root, key)
-      const start = async (resume?: string): Promise<ProviderSession> =>
-        pickProvider(options).startSession(
-          cwd,
-          options,
-          getWindow,
-          await contextWithMemory(root, key, {
-            emitKey: key,
-            liveRoot: root,
-            onEvent: interactiveEvents(key),
-            ...(resume ? { resumeSessionId: resume } : {})
-          })
-        )
       let s: ProviderSession
       try {
-        s = await start(resumeSessionId)
+        s = await startChat(root, key, options, cwd, resumeSessionId)
       } catch (err) {
         // A stale Claude resume id shouldn't block opening the project — fall
         // back to a fresh provider thread and still paint the saved transcript.
         if (!resumeSessionId) throw err
-        s = await start()
+        s = await startChat(root, key, options, cwd)
       }
       adoptSession(key, s.record, root)
       if (priorCurrent) seedFromRecord(s.record, priorCurrent, { reuseId: true })
       s.record.endedAt = null
       if (priorCurrent?.title) s.emit({ type: 'title', title: priorCurrent.title })
-      sessions.set(key, s)
       // Only claim the active slot if the renderer still wants this project active.
       // A later open/set-active for a different project moved `intendedKey` on, and
       // that project's own turn is what should stream.
+      await installChat(key, key, s, options, intendedKey === key)
       if (intendedKey === key) {
         activeKey = key
         activeSessionKeyByProject.set(key, key)
@@ -725,7 +806,7 @@ export function registerAgentIpc(
         void pruneOrphans(
           root,
           worktreesDir(),
-          new Set([...spawns.keys(), ...liveChatWorktreeIds()]),
+          new Set([...spawns.keys(), ...startingSpawns.keys(), ...liveChatWorktreeIds()]),
           hasParkRecord
         )
           .then(async (reclaimed) => {
@@ -759,20 +840,6 @@ export function registerAgentIpc(
     const key = projectKey(root)
     const projectSessionKeys = sessionKeysForProject(key)
     const currentSessionKey = activeSessionKeyByProject.get(key) ?? projectSessionKeys[0]
-    for (const sk of projectSessionKeys) {
-      const s = sessions.get(sk)
-      if (s) {
-        const terminal = runningKeys.has(sk) ? 'failed' : 'success'
-        closeSession(s, sk === currentSessionKey ? 'current' : 'history')
-        sessions.delete(sk)
-        memoryInjection.forget(sk)
-        setProjectUiEnabled(sk, false)
-        runningKeys.delete(sk)
-        preparingTurns.delete(sk)
-        reconciliation.begin(sk)
-        void releaseChat(sk, terminal) // running partial work parks; idle work tears down
-      }
-    }
     activeSessionKeyByProject.delete(key)
     // Closing the active project clears `active` — never auto-promote an arbitrary
     // backgrounded session (it would start emitting into a chat the renderer isn't
@@ -781,6 +848,18 @@ export function registerAgentIpc(
     // Clear intent too, so an open of this project still in flight can't claim the
     // active slot for a project the user just closed.
     if (intendedKey === key) intendedKey = null
+    const closing: Promise<void>[] = []
+    for (const sk of projectSessionKeys) {
+      const s = sessions.get(sk)
+      if (s) {
+        const terminal = runningKeys.has(sk) ? 'failed' : 'success'
+        sessions.delete(sk)
+        closing.push(closeChat(sk, s, sk === currentSessionKey ? 'current' : 'history'))
+        forgetChat(sk)
+        void releaseChat(sk, terminal) // running partial work parks; idle work tears down
+      }
+    }
+    await Promise.all(closing)
     // v8 F3b: drop the project's undo/redo history — a reopened project starts fresh.
     clearHistory(root)
   })
@@ -807,6 +886,7 @@ export function registerAgentIpc(
     if (sessions.has(target)) {
       activeKey = target
       activeSessionKeyByProject.set(key, target)
+      await conversation().activate(target).catch(() => {})
     }
   })
 
@@ -830,18 +910,9 @@ export function registerAgentIpc(
       const sessionKey = `${key}#${randomUUID()}`
       try {
         const cwd = await isolatedCwd(root, sessionKey)
-        const s = await pickProvider(options).startSession(
-          cwd,
-          options,
-          getWindow,
-          await contextWithMemory(root, sessionKey, {
-            emitKey: sessionKey,
-            liveRoot: root,
-            onEvent: interactiveEvents(sessionKey)
-          })
-        )
+        const s = await startChat(root, sessionKey, options, cwd)
         adoptSession(sessionKey, s.record, root)
-        sessions.set(sessionKey, s)
+        await installChat(sessionKey, key, s, options, true)
         activeSessionKeyByProject.set(key, sessionKey)
         if (intendedKey === key) activeKey = sessionKey
         return { ok: true, sessionKey }
@@ -859,14 +930,16 @@ export function registerAgentIpc(
   // to hard-abort a wedged backend (see `agent:interrupt`), that kills the whole
   // query, not just the turn — so the chat must be rebuilt or it would look alive
   // while silently swallowing every later message.
+  //
+  // The chat itself (record, title, approvals, turn state) stays with the owner; only
+  // its provider session is replaced. The owner records the handoff: the next turn
+  // carries the conversation so far, once. A model change is refused mid-turn; a
+  // restart after a force-stop abandons the dead session's turn.
   const restartChatSession = async (
     root: string,
     sessionKey: string,
     options: AgentOptions = {},
-    how: { persist: 'current' | 'history' | 'none'; seed: boolean } = {
-      persist: 'none',
-      seed: true
-    }
+    reason: 'model' | 'restart' = 'model'
   ): Promise<{ ok: boolean; error?: string }> => {
     const key = projectKey(root)
     if (!sessionKeysForProject(key).includes(sessionKey)) {
@@ -881,36 +954,33 @@ export function registerAgentIpc(
       // sessionKey) so a model/backend restart keeps its isolation instead of
       // silently dropping to the live root and leaking the worktree.
       const cwd = await isolatedCwd(root, sessionKey)
-      const s = await pickProvider(options).startSession(
-        cwd,
-        options,
-        getWindow,
-        await contextWithMemory(root, sessionKey, {
-          emitKey: sessionKey,
-          liveRoot: root,
-          onEvent: interactiveEvents(sessionKey)
-        })
-      )
-      closeSession(existing, how.persist)
-      memoryInjection.forget(sessionKey)
-      setProjectUiEnabled(sessionKey, false)
-      runningKeys.delete(sessionKey)
-      preparingTurns.delete(sessionKey)
-      reconciliation.begin(sessionKey)
+      const s = await startChat(root, sessionKey, options, cwd)
       adoptSession(sessionKey, s.record, root)
-      if (how.seed) {
-        const sdkSessionId = s.record.sdkSessionId
-        seedFromRecord(s.record, previous, { reuseId: true })
-        // A new provider session has no SDK history, even though the UI keeps it.
-        if (sdkSessionId) s.record.sdkSessionId = sdkSessionId
-        else delete s.record.sdkSessionId
-        s.send = withConversationHandoff(s.send, previous.transcript)
-      }
+      const sdkSessionId = s.record.sdkSessionId
+      seedFromRecord(s.record, previous, { reuseId: true })
+      // A new provider session has no SDK history, even though the UI keeps it.
+      if (sdkSessionId) s.record.sdkSessionId = sdkSessionId
+      else delete s.record.sdkSessionId
       s.record.endedAt = null
+      try {
+        await conversation().handoff(sessionKey, options, s.record, reason)
+      } catch (error) {
+        stopProvider(s)
+        throw error
+      }
+      if (sessions.get(sessionKey) !== existing) {
+        stopProvider(s)
+        return { ok: false, error: 'That chat is no longer open.' }
+      }
+      stopProvider(existing)
+      void conversation().release(sessionKey).catch(() => {})
+      forgetChat(sessionKey)
+      handoffHistory.set(sessionKey, previous.transcript.map((entry) => ({ ...entry })))
       sessions.set(sessionKey, s)
       if (activeKey === sessionKey) activeSessionKeyByProject.set(key, sessionKey)
       return { ok: true }
     } catch (err) {
+      if (err instanceof ConversationError && err.code === 'busy') return { ok: false, error: err.message }
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   }
@@ -924,7 +994,7 @@ export function registerAgentIpc(
       options: AgentOptions = {}
     ): Promise<{ ok: boolean; error?: string }> => {
       if (runningKeys.has(sessionKey)) return { ok: false, error: 'Wait for the current response to finish before switching models.' }
-      return restartChatSession(root, sessionKey, options)
+      return restartChatSession(root, sessionKey, options, 'model')
     }
   )
 
@@ -954,6 +1024,7 @@ export function registerAgentIpc(
         // Already resumed and still live — just switch to it.
         activeSessionKeyByProject.set(key, sessionKey)
         if (intendedKey === key) activeKey = sessionKey
+        await conversation().activate(sessionKey).catch(() => {})
         return { ok: true, sessionKey }
       }
       try {
@@ -966,17 +1037,7 @@ export function registerAgentIpc(
         // resumed chat under main's defaults ('default' = ask for every edit) while
         // the renderer's toolbar still showed the chat's own mode.
         const opts: AgentOptions = { ...options, provider: 'claude' }
-        const s = await pickProvider(opts).startSession(
-          cwd,
-          opts,
-          getWindow,
-          await contextWithMemory(root, sessionKey, {
-            emitKey: sessionKey,
-            liveRoot: root,
-            resumeSessionId: rec.sdkSessionId,
-            onEvent: interactiveEvents(sessionKey)
-          })
-        )
+        const s = await startChat(root, sessionKey, opts, cwd, rec.sdkSessionId)
         adoptSession(sessionKey, s.record, root)
         // Seed the fresh live record with the resumed chat's on-disk history. The
         // SDK resumes the conversation context and the renderer paints the past
@@ -986,7 +1047,7 @@ export function registerAgentIpc(
         // empty chat. The History record stays on its own id.
         seedFromRecord(s.record, rec)
         if (rec.title) s.emit({ type: 'title', title: rec.title })
-        sessions.set(sessionKey, s)
+        await installChat(sessionKey, key, s, opts, true)
         activeSessionKeyByProject.set(key, sessionKey)
         if (intendedKey === key) activeKey = sessionKey
         return { ok: true, sessionKey }
@@ -998,7 +1059,7 @@ export function registerAgentIpc(
 
   // v9 multi-chat — close ONE of a project's live chats (its rail × ), leaving the
   // project and its other chats alive. Tears down just that sessionKey's session
-  // (closeSession persists it to history, so a closed chat becomes a resumable
+  // (closeChat persists it to history, so a closed chat becomes a resumable
   // "previous agent" like any other teardown), then re-points the project's active
   // chat to a survivor. Returns the remaining live sessionKeys + the new active one
   // (null when none remain, so the renderer closes the project instead).
@@ -1011,15 +1072,12 @@ export function registerAgentIpc(
     ): Promise<{ ok: boolean; remaining: string[]; activeSessionKey: string | null }> => {
       const key = projectKey(root)
       const s = sessions.get(sessionKey)
+      let closing: Promise<void> = Promise.resolve()
       if (s) {
         const terminal = runningKeys.has(sessionKey) ? 'failed' : 'success'
-        closeSession(s, 'history')
         sessions.delete(sessionKey)
-        memoryInjection.forget(sessionKey)
-        setProjectUiEnabled(sessionKey, false)
-        runningKeys.delete(sessionKey)
-        preparingTurns.delete(sessionKey)
-        reconciliation.begin(sessionKey)
+        closing = closeChat(sessionKey, s, 'history')
+        forgetChat(sessionKey)
         void releaseChat(sessionKey, terminal) // running partial work parks; idle work tears down
       }
       const remaining = sessionKeysForProject(key)
@@ -1034,6 +1092,8 @@ export function registerAgentIpc(
       // survivor (only while this project is still the intended one — never resurrect
       // a backgrounded session into a chat the renderer isn't showing).
       if (activeKey === sessionKey) activeKey = intendedKey === key ? nextActive : null
+      await closing
+      if (nextActive) await conversation().activate(nextActive).catch(() => {})
       return { ok: true, remaining, activeSessionKey: nextActive }
     }
   )
@@ -1044,21 +1104,17 @@ export function registerAgentIpc(
   // any chat whose record already carries a name — so a user-chosen name can never
   // be overwritten by the auto-namer. The `title` event keeps every other renderer
   // view (and this window's own store) in step.
-  ipcMain.handle('agent:rename-chat', (_e, sessionKey: string, title: string) => {
+  ipcMain.handle('agent:rename-chat', async (_e, sessionKey: string, title: string) => {
     const session = sessions.get(sessionKey)
     if (!session) return { ok: false, error: 'no live chat' }
-    const name = cleanTitle(title)
-    if (!name) return { ok: false, error: 'empty name' }
-    session.record.title = name
-    // A resumed/parked chat may already have its record on disk — keep that copy
-    // in step too. A never-persisted live record stays out of `sessions:list`.
-    try {
-      if (store().get(session.record.id)) store().save(session.record)
-    } catch {
-      /* history is non-critical */
-    }
-    session.emit({ type: 'title', title: name })
-    return { ok: true, title: name }
+    // The owner cleans the name, keeps it over any generated one, and updates a
+    // copy already in History (a resumed/parked chat). A never-persisted live
+    // record stays out of `sessions:list`.
+    const result = await conversation().title(sessionKey, title, 'user').catch(() => ({ ok: false, error: 'no live chat', title: undefined }))
+    if (!result.ok || !result.title) return { ok: false, error: result.error ?? 'empty name' }
+    session.record.title = result.title
+    session.emit({ type: 'title', title: result.title })
+    return { ok: true, title: result.title }
   })
 
   // Does this project still have a live session? (LRU eviction can suspend a
@@ -1070,26 +1126,25 @@ export function registerAgentIpc(
 
   ipcMain.handle('agent:set-model', async (_e, model: string) => {
     const session = activeSession()
-    if (!session) return
+    if (!session || !activeKey) return
     await session.setModel?.(model)
     session.options.model = model
+    await conversation().configure(activeKey, session.options).catch(() => {})
   })
 
   ipcMain.handle('agent:set-permission-mode', async (_e, mode: PermissionMode, sessionKey?: string) => {
-    const session = sessionKey === undefined ? activeSession() : sessions.get(sessionKey)
-    if (!session) return
+    const key = sessionKey === undefined ? activeKey : sessionKey
+    const session = key ? sessions.get(key) : undefined
+    if (!session || !key) return
     // Apply to the backend first; only commit our copy if it took (keeps the
     // toolbar and the live agent in agreement).
     await session.setPermissionMode?.(mode)
     session.options.permissionMode = mode
     // Switching to a more permissive posture should also release prompts already
-    // on screen — otherwise the user picks "Auto" but the pending card stays.
-    if (mode === 'bypassPermissions' || mode === 'acceptEdits') {
-      for (const [id, p] of [...session.pending.entries()]) {
-        if (mode === 'bypassPermissions' || EDIT_TOOLS.has(p.toolName)) {
-          resolvePending(session, id, 'allow')
-        }
-      }
+    // on screen — otherwise the user picks "Auto" but the pending card stays. The
+    // owner records the mode and answers which open prompts it no longer asks.
+    for (const id of await conversation().mode(key, mode)) {
+      if (session.pending.has(id)) resolvePending(session, id, 'allow')
     }
   })
 
@@ -1099,9 +1154,13 @@ export function registerAgentIpc(
   // sessions rather than just `activeSession()`. Falling back to the active
   // session first is a cheap common-case shortcut; the full scan below is the
   // actual fix (a session backing a stale id silently no-ops in resolvePending).
+  // The owner knows which chat holds each approval and answers null for a late or
+  // repeated answer, which then settles nothing. Only if the owner cannot answer at
+  // all is the card settled by lookup, so the user is never left blocked.
   ipcMain.handle('agent:respond-permission', async (_e, id: string, behavior: 'allow' | 'deny') => {
-    const session = findSessionWithPending(id)
-    if (session) resolvePending(session, id, behavior)
+    const chat = await conversation().resolve(id, 'permission').catch(() => undefined)
+    const session = chat === undefined ? findSessionWithPending(id) : chat ? sessions.get(chat) : undefined
+    if (session?.pending.has(id)) resolvePending(session, id, behavior)
   })
 
   // Answer a pending agent question (AskUserQuestion) — settles the awaiting
@@ -1109,63 +1168,82 @@ export function registerAgentIpc(
   ipcMain.handle(
     'agent:respond-question',
     async (_e, id: string, answers: QuestionAnswers | null) => {
-      const session = findSessionWithQuestion(id)
-      if (session) resolveQuestion(session, id, answers)
+      const chat = await conversation().resolve(id, 'question').catch(() => undefined)
+      const session = chat === undefined ? findSessionWithQuestion(id) : chat ? sessions.get(chat) : undefined
+      if (session?.pendingQuestions?.has(id)) resolveQuestion(session, id, answers)
     }
   )
 
-  ipcMain.handle('agent:send', async (_e, text: string, images?: ImageAttachment[], requestedKey?: string, turn?: AgentTurnOptions) => {
+  // One user turn. The owner admits it (one turn per chat: a second is refused as
+  // busy), records the user entry when the provider is about to get it, and hands
+  // the model-switch history over once. `turnId` names the turn (the composer's
+  // submission id), so its events, and no other turn's, complete it in the chat.
+  ipcMain.handle('agent:send', async (_e, text: string, images?: ImageAttachment[], requestedKey?: string, turn?: AgentTurnOptions, turnId?: string) => {
     const key = requestedKey ?? activeKey
     const session = key ? sessions.get(key) : null
     if (requestedKey && !session) throw new Error('This chat is closed.')
     if (key && runningKeys.has(key)) throw new Error('This chat is already running.')
-    if (!session) {
+    if (!session || !key) {
       safeSend(getWindow, 'agent:event', {
         type: 'error',
         message: 'Open a project first — the agent works inside a repo.'
       } satisfies AgentEvent)
       return
     }
+    const id = typeof turnId === 'string' && turnId && turnId.length <= 128 ? turnId : randomUUID()
+    try {
+      await conversation().begin(key, id)
+    } catch (error) {
+      if (error instanceof ConversationError && error.code === 'busy') throw new Error('This chat is already running.')
+      if (error instanceof ConversationError && error.code === 'notFound') throw new Error('This chat is closed.')
+      throw error
+    }
     const preparation = { cancelled: false }
-    if (key) preparingTurns.set(key, preparation)
+    preparingTurns.set(key, preparation)
     const note = images?.length ? `${text} [${images.length} image(s) attached]`.trim() : text
     // Capture the destination before any await; queued background messages must
     // never follow a subsequent project or chat switch.
-    if (key) {
-      runningKeys.add(key)
-      reconciliation.begin(key)
-      turnTerminals.begin(key)
-    }
+    runningKeys.add(key)
+    reconciliation.begin(key)
     // Turn-start: sync the user's between-turn live edits into this chat's worktree
     // (serialized behind the chat's chain — waits out any in-flight merge). No-op for
     // a non-isolated chat.
     try {
-      if (key) await beforeTurn(key, text)
+      await beforeTurn(key, text)
       if (preparation.cancelled) throw new Error('Message cancelled before sending.')
-      if (key && sessions.get(key) !== session) throw new Error('This chat is closed.')
+      if (sessions.get(key) !== session) throw new Error('This chat is closed.')
       if (requestedKey && isolationSnapshot(requestedKey)?.state === 'parked') {
         throw new Error('Resolve this chat’s conflicting changes before sending queued messages.')
       }
-      session.record.transcript.push({ role: 'user', text: note, at: Date.now() })
+      const entry = { role: 'user' as const, text: note, at: Date.now() }
+      const { handoff } = await conversation().send(key, id, entry).catch((error) => {
+        if (error instanceof ConversationError && error.code === 'cancelled') throw new Error('Message cancelled before sending.')
+        throw error
+      })
+      if (preparation.cancelled || sessions.get(key) !== session) throw new Error('Message cancelled before sending.')
+      session.record.transcript.push(entry)
       // Memory is part of the provider's initial instructions. If the user edited it
       // while this session remained open, inject the new snapshot exactly once on the
       // next turn (not every turn, which would needlessly inflate context).
       const root = session.record.projectRoot
-      const prompt = await memoryInjection.prompt(root, key ?? undefined, text)
+      const prompt = await memoryInjection.prompt(root, key, text)
       const supportsUi = !session.options.provider || ['claude', 'codex'].includes(session.options.provider)
       const useUi = turn?.projectUi === true && supportsUi
       const uiEngine = turn?.projectUiEngine === 'jev' ? 'jev' : 'agent'
-      if (key) setProjectUiEnabled(key, useUi, uiEngine)
+      setProjectUiEnabled(key, useUi, uiEngine)
       const uiNotice = turn?.projectUi === true && !supportsUi
         ? 'The requested project component composition mode requires Claude or Codex. Explain this limitation for UI requests.\n\n' : ''
-      const islandContext = key ? await chatIslandContext(key) : ''
-      if (preparation.cancelled || key && sessions.get(key) !== session) throw new Error('Message cancelled before sending.')
-      session.send(projectUiInstructions(useUi, uiEngine) + uiNotice + islandContext + prompt, images)
+      const islandContext = await chatIslandContext(key)
+      if (preparation.cancelled || sessions.get(key) !== session) throw new Error('Message cancelled before sending.')
+      // A model switch: the fresh provider gets the recorded conversation, once.
+      const history = handoff ? handoffHistory.get(key) ?? [] : []
+      if (handoff) handoffHistory.delete(key)
+      trackers.get(session)?.push(id, 0)
+      session.send(handoffPrompt(history, projectUiInstructions(useUi, uiEngine) + uiNotice + islandContext + prompt), images)
     } catch (error) {
-      if (key) {
-        runningKeys.delete(key)
-        preparingTurns.delete(key)
-      }
+      runningKeys.delete(key)
+      preparingTurns.delete(key)
+      await conversation().abort(key, id).catch(() => false)
       throw error
     }
   })
@@ -1240,9 +1318,16 @@ export function registerAgentIpc(
         id, root, parentKey, parentSessionKey, text,
         options: backgroundAgentOptions(options, origin), origin
       }
-      if (runningCount(parentKey) >= MAX_SPAWNS_PER_REPO) {
-        spawnQueue.push(q) // a slot will free on the next finalizeSpawn → pumpQueue
+      // Held before the owner answers, so a slot freed meanwhile can start it.
+      queuedSpawns.set(id, q)
+      if (!(await conversation().spawn(id, parentKey).catch(() => false))) {
+        // Queued (or the owner cannot admit it now): a slot freeing starts it.
         return { ok: true, spawnId: id, queued: true }
+      }
+      // Cancelled while the owner admitted it: give the slot back.
+      if (!queuedSpawns.delete(id)) {
+        void admitNext(id)
+        return { ok: false, reason: 'Cancelled.' }
       }
       const branch = await startSpawn(q)
       if (!branch) return { ok: false, reason: 'Could not start the agent (is it logged in?).' }
@@ -1252,9 +1337,11 @@ export function registerAgentIpc(
 
   // v8 F1 Phase 3 — cancel a running OR queued comment spawn (the rail row's ×).
   ipcMain.handle('agent:spawn-interrupt', async (_e, id: string) => {
-    const queuedIdx = spawnQueue.findIndex((q) => q.id === id)
-    if (queuedIdx !== -1) {
-      const [q] = spawnQueue.splice(queuedIdx, 1)
+    const waiting = queuedSpawns.get(id)
+    // Still queued with the owner — or admitted but not yet started here.
+    if (waiting && ((await conversation().spawnCancel(id).catch(() => false)) || queuedSpawns.has(id))) {
+      const q = waiting
+      queuedSpawns.delete(id)
       safeSend(getWindow, 'agent:event', {
         type: 'spawn-finished',
         projectKey: q.parentSessionKey,
@@ -1266,7 +1353,10 @@ export function registerAgentIpc(
       return
     }
     const spawn = spawns.get(id)
-    if (!spawn) return
+    if (!spawn) {
+      if (startingSpawns.has(id)) cancelOnStart.add(id)
+      return
+    }
     spawn.cancelled = true
     // → emits done → finalizeSpawn commits any work. Interrupting a turn that
     // already finished/aborted makes the SDK throw "Operation aborted" — a stop
@@ -1399,14 +1489,11 @@ export function registerAgentIpc(
       .filter((r) => r.slot !== 'current' && r.slot !== 'main')
   )
   ipcMain.handle('sessions:get', (_e, id: string) => store().get(id))
-  ipcMain.handle('sessions:rename', (_e, id: string, title: string) => {
-    const name = cleanTitle(title)
-    if (!name) return { ok: false, error: 'empty name' }
-    const rec = store().get(id)
-    if (!rec) return { ok: false, error: 'unknown session' }
-    rec.title = name
-    store().save(rec)
-    return { ok: true, title: name }
+  ipcMain.handle('sessions:rename', async (_e, id: string, title: string) => {
+    const result = await conversation().rename(id, title)
+    // The next read must see it, like every other write through the store.
+    if (result.ok) await store().flush?.()
+    return result
   })
   ipcMain.handle('sessions:remove', (_e, id: string) => store().remove(id))
 
@@ -1429,7 +1516,10 @@ export function registerAgentIpc(
   // sessionKey) — `record.projectKey` is always the plain projectKey(root) even
   // for an additional/resumed chat (see the comment on `emitKey` above), and
   // `record.projectRoot` recovers the absolute root alongside it.
-  ipcMain.handle('agent:workspace-snapshot', (): WorkspaceSnapshot => {
+  // Turn state (running, the turn in flight) comes from the owner, so a reattach sees
+  // what the coordinator decided; the transcript is the provider's live capture.
+  ipcMain.handle('agent:workspace-snapshot', async (): Promise<WorkspaceSnapshot> => {
+    const owned = new Map((await conversation().snapshot().catch(() => ({ chats: [] }))).chats.map((chat) => [chat.chat, chat]))
     const byProject = new Map<string, LiveProjectSnapshot>()
     for (const [sessionKey, s] of sessions) {
       const pKey = s.record.projectKey
@@ -1443,10 +1533,12 @@ export function registerAgentIpc(
         }
         byProject.set(pKey, proj)
       }
+      const chat = owned.get(sessionKey)
       proj.chats.push({
         sessionKey,
         record: s.record,
-        isRunning: runningKeys.has(sessionKey),
+        isRunning: chat ? chat.phase !== 'idle' : runningKeys.has(sessionKey),
+        turn: chat?.turn ?? null,
         isolation: isolationSnapshot(sessionKey),
         // The posture this chat is really running under (updated in place by
         // set-model / set-permission-mode) — the renderer repoints its pickers at
@@ -1463,10 +1555,13 @@ export function registerAgentIpc(
     if (sessionKey) cancelProjectUi(sessionKey)
     const preparation = sessionKey ? preparingTurns.get(sessionKey) : undefined
     if (preparation) preparation.cancelled = true
+    // The owner marks the turn cancelled: it lands as failed and never continues.
+    if (sessionKey) await conversation().cancel(sessionKey).catch(() => {})
     const session = sessionKey ? sessions.get(sessionKey) : undefined
-    if (!session)
+    if (!session || !sessionKey)
       return // Release any open prompts (interrupt may not abort their per-call signal),
       // so cards don't orphan and the backend callbacks unblock.
+    void conversation().release(sessionKey).catch(() => {})
     ;[...session.pending.keys()].forEach((id) => resolvePending(session, id, 'deny'))
     if (session.pendingQuestions)
       [...session.pendingQuestions.keys()].forEach((id) => resolveQuestion(session, id, null))
@@ -1484,23 +1579,28 @@ export function registerAgentIpc(
     ])
     // The backend killed its query to escape a wedge, so this session is dead:
     // rebuild the chat in place, or it would keep accepting messages into nothing.
-    if (outcome && typeof outcome === 'object' && outcome.hardStopped && sessionKey) {
-      await restartChatSession(root, sessionKey, session.options)
+    if (outcome && typeof outcome === 'object' && outcome.hardStopped) {
+      await restartChatSession(root, sessionKey, session.options, 'restart')
     }
   })
 
-  // Don't leave any backend subprocess running after trezi quits.
+  // Don't leave any backend subprocess running after trezi quits. Each chat is closed
+  // through the owner (its record saved, its checkpoint dropped); `conversationsClosed`
+  // lets the entry point wait for that. A chat the quit cuts short keeps its
+  // checkpoint, which the next Swift launch recovers.
   app.on('before-quit', () => {
     const currentByProject = new Map(activeSessionKeyByProject)
     for (const sessionKey of sessions.keys()) {
       const project = sessions.get(sessionKey)?.record.projectKey
       if (project && !currentByProject.has(project)) currentByProject.set(project, sessionKey)
     }
+    const closing: Promise<unknown>[] = []
     for (const [sessionKey, s] of sessions) {
-      closeSession(
+      closing.push(closeChat(
+        sessionKey,
         s,
         sessionKey === currentByProject.get(s.record.projectKey) ? 'current' : 'history'
-      )
+      ))
     }
     sessions.clear()
     memoryInjection.clear()
@@ -1513,6 +1613,9 @@ export function registerAgentIpc(
     // leftover to its branch (recovering the work) and reclaims the checkout.
     for (const { session } of spawns.values()) closeSession(session)
     spawns.clear()
+    queuedSpawns.clear()
+    closing.push(store().flush?.() ?? Promise.resolve())
+    quitting = Promise.all(closing).then(() => {})
     // v9: forget chat-isolation state (mirror of spawns) — checkouts stay on disk for
     // the next launch's crash recovery, never committed/removed during the quit race.
     dropAll()

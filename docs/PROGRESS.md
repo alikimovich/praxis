@@ -2,6 +2,53 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — Swift conversation state and chat orchestration (LKM-97 / S11)
+
+The seventh transfer, on the LKM-96 candidate. Under the Swift launch the service
+decides what a chat is between provider events; details and the tightened rollback
+plan are in `docs/SWIFT-BACKEND-CONVERSATION.md`.
+
+Turn identity came first, because nothing identified turns before. Each provider
+session emits one `done` per send, in order, so `TurnTracker` (`src/main/chat-turns.ts`)
+attributes every event to the send it belongs to. Events carry their turn
+(`AgentEvent.turn`), whose id is the composer's submission id. The owner claims at most
+one terminal per run of a turn. Codex's `error`→`done` is claimed once. A `done` that
+arrives after the next turn began (the async gap in Codex between a failed turn's error
+and its done) is refused as stale, and so is a `done` no send accounts for. The chat
+controller ignores any terminal tagged with another turn, so a late event can no longer
+complete the wrong turn in either place. Before, the tracker was keyed by chat, and
+`begin` reset it.
+
+The owner decides every transition agent.ts used to make locally: admitting one turn
+per chat, recording the user entry, cancellation (a stopped turn lands as failed and
+never continues), the single reconciliation continuation, landing, and the completion
+policy (whether to name the chat and evaluate memory). A generated title never replaces
+a name the user chose, even from a stale record. A model switch is refused mid-turn,
+and the next turn carries the history exactly once. Approvals are settled once; a late
+answer finds nothing. Spawn admission (3 per project, FIFO) moved too. Bun still runs the
+provider sessions and performs the effects: landing goes through the repository
+coordinator, Undo records through the source owner.
+
+Persistence: the owner is the only writer of `sessions/*.json`, byte-identical to the
+legacy store, which still reads them (with an overlay for writes not yet acknowledged).
+New: every live chat is checkpointed at each transition and at tool boundaries while it
+streams. A chat a crash cut off is restored at the next launch, with a note if it was
+mid-turn, as the project's current chat if it was active. A record written later by
+either owner is kept, and the checkpoint copied aside.
+
+Still in Bun: provider sessions and prompts (S10), and the composer's queued-message
+list, drafts and attachments (S12). Recorded in TASKS.
+
+Verification (worker sandbox): `test/conversation-owner.mjs` passes in about 14 s
+(cached fixture). Its sections cover owner parity (identical answers and session-file
+bytes on both owners); streaming through agent.ts and the chat controller on both
+owners, with identical outcomes and the Swift run landing through the Swift repository
+and source owners; crash (SIGKILL mid-turn, inside a checkpoint, inside a History
+write); rollback, schema and drain; `comment-agents` re-run on the Swift owners; and the
+adapter boundary. `native-chat-controller`, `auto-reconciliation`,
+`conversation-handoff` and `comment-agents` pass unchanged, and both typechecks pass.
+The new Swift files have zero diagnostics under `-strict-concurrency=complete`.
+
 ## 2026-09-29 — Swift source transactions, file operations, Undo and parser proposals (LKM-96 / S08+S09)
 
 The sixth transfer, on the LKM-95 candidate. Under the Swift launch the service is the

@@ -16,6 +16,13 @@ interface ReconciliationDeps {
     reconcile: boolean
   ) => Promise<string[] | null>
   showParked: (key: string) => void
+  // The conversation owner's transitions (S11). Absent in unit tests of the policy alone.
+  /** landing → running for the continuation run; false when the owner refuses it. */
+  continued?: (key: string, turn: string, run: number) => Promise<boolean>
+  /** landing → idle; answers the `completedAt` the owner stamped. */
+  landed?: (key: string, turn: string) => Promise<number | undefined>
+  /** Hands the continuation prompt to the provider as run `run` of the turn. */
+  dispatch?: (session: ProviderSession, prompt: string, turn: string, run: number) => void
 }
 
 /** Owns one automatic continuation per user turn, independent of active UI chat. */
@@ -27,7 +34,7 @@ export class ReconciliationCoordinator {
     this.resolving.delete(key)
   }
 
-  async finish(key: string, message: string, terminal: TurnTerminalOutcome): Promise<void> {
+  async finish(key: string, message: string, terminal: TurnTerminalOutcome, turn?: string, run = 0): Promise<void> {
     const d = this.deps
     const session = d.currentSession(key)
     const wasResolving = this.resolving.delete(key)
@@ -36,15 +43,17 @@ export class ReconciliationCoordinator {
     d.running.add(key)
     const current = (): boolean =>
       d.preparations.get(key) === preparation && d.currentSession(key) === session
-    const finish = (): void => {
+    const finish = async (): Promise<void> => {
       if (!current()) return
       this.resolving.delete(key)
       d.showParked(key)
+      const completedAt = turn && d.landed ? await d.landed(key, turn).catch(() => undefined) : undefined
+      if (!current()) return
       d.running.delete(key)
       d.preparations.delete(key)
-      const turn = [...(session?.record.transcript ?? [])].reverse().find(entry => entry.role === 'user')
-      if (turn && turn.completedAt == null) turn.completedAt = Date.now()
-      session?.emit({ type: 'landing-finished' })
+      const entry = [...(session?.record.transcript ?? [])].reverse().find(entry => entry.role === 'user')
+      if (entry && entry.completedAt == null) entry.completedAt = completedAt ?? Date.now()
+      session?.emit({ type: 'landing-finished', ...(turn ? { turn } : {}) })
     }
     try {
       const files = await d.land(
@@ -55,14 +64,18 @@ export class ReconciliationCoordinator {
         !wasResolving
       )
       if (!current()) return
-      if (files?.length && session && !preparation.cancelled) {
+      const next = run + 1
+      if (files?.length && session && !preparation.cancelled && (!turn || !d.continued || await d.continued(key, turn, next))) {
+        if (!current()) return
         this.resolving.add(key)
         d.begin(key)
-        session.emit({ type: 'reconciliation-started' })
-        session.send(conflictResolutionPrompt(files))
-      } else finish()
+        session.emit({ type: 'reconciliation-started', ...(turn ? { turn } : {}) })
+        const prompt = conflictResolutionPrompt(files)
+        if (turn && d.dispatch) d.dispatch(session, prompt, turn, next)
+        else session.send(prompt)
+      } else await finish()
     } catch {
-      finish()
+      await finish()
     }
   }
 }

@@ -96,6 +96,19 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
 
+## Swift conversation state and chat orchestration (LKM-97 / S11)
+
+- [x] Name the domain exactly (session records and History, live checkpoints, turn state machine and completion policy, titles, handoff, approvals, spawn admission; Bun-kept provider sessions, prompts, composer queue and drafts) and tighten its rollback plan (`docs/SWIFT-BACKEND-CONVERSATION.md`).
+- [x] Swift `ConversationOwner` on the private pipe; Bun client `src/native/conversation-service.ts`, seam `src/main/conversation-owner.ts`, rollback twin `src/main/conversation-model.ts`.
+- [x] Turn identity: `TurnTracker` attributes provider events to their turn and run; the owner claims one terminal per run and refuses duplicate and late ones; the chat controller ignores terminals of another turn (`AgentEvent.turn`/`stale`).
+- [x] Session records written only by the owner (byte-identical; overlay for read-your-writes); live-chat checkpoints; crash recovery that never replaces newer records.
+- [x] Completion policy, titles (user wins), model handoff once, approvals and permission mode, spawn admission (3 per project, FIFO) moved to the owner.
+- [x] `test/conversation-owner.mjs` (unit tier): owner parity, agent streaming on both owners (Swift repository/source owners for landing), crash, rollback, schema, drain, `comment-agents` re-run on the owner, adapter boundary.
+- [ ] S12: the composer's queued-message list, drafts and attachments stay in the Bun native chat controller (the owner enforces one turn at a time and turn identity).
+- [ ] S10: provider sessions, prompt assembly, title and memory generation stay Bun adapters.
+- [ ] Follow-up: a UI for chats recovered from checkpoints (today they are listed in the Activity log and restored to History or as the project's current chat).
+- [ ] Manager: stage the new files (docs-links checks tracked paths), run the unit tier unsandboxed, `bun run test:native`, independent review.
+
 ## Swift source transactions, file operations, Undo and parser proposals (LKM-96 / S08+S09)
 
 - [x] Name the domain exactly (proposal commits, editor reads/saves, file-tree operations, Undo/redo/revert, drafts, journal; Bun-kept parsers, listing, media, sidecar stores, setup/scaffold) and tighten its rollback plan (`docs/SWIFT-BACKEND-SOURCE.md`).

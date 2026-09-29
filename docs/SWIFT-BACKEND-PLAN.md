@@ -11,7 +11,21 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
-**Current (2026-09-29, LKM-96):** S08 and S09 (roadmap rows) move source
+**Current (2026-09-29, LKM-97):** S11 (roadmap row) moves conversation state into the
+Swift service. It is the only writer of session records and History (unchanged
+`sessions/*.json`), keeps a checkpoint of every live chat, and at launch saves a chat a
+crash cut off without replacing newer work. It owns the turn state machine and its
+completion policy: one turn per chat, at most one terminal claimed per turn run, and a
+late or duplicate terminal refused, so it cannot complete the wrong turn. It also owns
+titles (a user rename always wins), model handoff (history carried once), pending
+approvals and permission mode, and background-spawn admission. Bun's provider sessions
+stay adapters: `TurnTracker` attributes each event to its turn, and Bun performs the
+effects the owner's answers call for, landing through the repository coordinator.
+`TREZI_BACKEND_OWNER=legacy` keeps the in-process TS twin as the rollback owner. See
+[conversation](SWIFT-BACKEND-CONVERSATION.md). Implemented for review on the LKM-96
+candidate; manager verification and acceptance are pending.
+
+**Earlier (2026-09-29, LKM-96):** S08 and S09 (roadmap rows) move source
 transactions into the Swift service. Bun's parsers (React, Svelte, HTML, Tailwind,
 tokens, moves, islands, content, controls) only propose `{path, expectedHash,
 content}`; the service commits a proposal only if the file still holds the bytes it

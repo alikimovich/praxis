@@ -313,7 +313,8 @@ final class SourceOwner: @unchecked Sendable {
         if counted { inflight.leave() }
     }
 
-    static func reply(id: JSValue, frame: PipeFrame?, result: PreferencesOwner.Answer) -> Data {
+    /// Also the conversation coordinator's reply (same frame shape, its own service name).
+    static func reply(service: String = SourceOwner.service, id: JSValue, frame: PipeFrame?, result: PreferencesOwner.Answer) -> Data {
         let body: JSValue
         switch result {
         case .succeeded(let payload): body = RepositoryOwner.object([("kind", .string(JSText("succeeded"))), ("payload", payload)])

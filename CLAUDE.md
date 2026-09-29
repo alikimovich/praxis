@@ -150,6 +150,16 @@ src/
                     delete, editor reads/saves and persisted drafts. Bun's client is
                     native/source-service.ts behind main/source-owner.ts; edit-history.ts
                     and file-ops.ts are the rollback owner (docs/SWIFT-BACKEND-SOURCE.md)
+    ConversationOwner.swift / ConversationState.swift / ConversationStore.swift   the
+                    conversation coordinator (LKM-97): the only writer of session records
+                    and History (unchanged sessions/*.json), live-chat checkpoints with
+                    crash recovery, the turn state machine (one turn per chat; one terminal
+                    claimed per turn run; late/duplicate terminals refused), completion
+                    policy, titles, model handoff, approvals, spawn admission. Bun's
+                    provider sessions are adapters (main/chat-turns.ts tags events with
+                    their turn); Bun's client is native/conversation-service.ts behind
+                    main/conversation-owner.ts; main/conversation-model.ts is the rollback
+                    twin (docs/SWIFT-BACKEND-CONVERSATION.md)
   main/           Backend services (CJS bundle, Bun); historical directory name
     preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
                     bounds/load/reset/capture, the select + comment relays, the
@@ -184,7 +194,8 @@ src/
                     opaque per-file token, so the scheme can never be aimed at a path
                     the renderer chose. Streamed + range-servable (a <video> can't
                     seek otherwise, and a big one must not cross IPC as base64)
-    agent.ts        persistent multi-turn agent session (streams over agent:* IPC)
+    agent.ts        persistent multi-turn agent session (streams over agent:* IPC);
+                    asks the conversation owner before every chat transition
     attachments.ts  gives a PASTED composer image a path (attachments:save writes
                     the clipboard bytes under <userData>/trezi/attachments so the
                     turn can tell the agent where the image it can see lives; a
@@ -322,7 +333,8 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   and static sites (`docs/SWIFT-BACKEND-RUNTIME.md`), and performs and serializes
   every Trezi Git effect in user repositories (`docs/SWIFT-BACKEND-REPOSITORY.md`),
   and commits every Trezi source edit, Undo and file-tree operation from hash-bound
-  parser proposals (`docs/SWIFT-BACKEND-SOURCE.md`);
+  parser proposals (`docs/SWIFT-BACKEND-SOURCE.md`), and owns chat records, live-chat
+  checkpoints and turn transitions (`docs/SWIFT-BACKEND-CONVERSATION.md`);
   Bun is still the single writer of every other domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun
   spawns the host, still under Swift's lock, writes all three itself and runs its
   own servers after the launcher sweeps the runtime journal). See

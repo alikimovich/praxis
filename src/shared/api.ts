@@ -339,6 +339,11 @@ export type AgentEvent = (
   /** Set for a detached background spawn's events — the renderer keeps these
    *  out of the main chat stream and routes them to the spawn's own rail row. */
   sessionId?: string
+  /** The user turn an interactive chat's event belongs to (S11). A terminal event
+   *  for another turn than the one a chat is running is late and must be ignored. */
+  turn?: string
+  /** A `done` no unfinished send accounts for (a late event): it completes nothing. */
+  stale?: boolean
 }
 
 /** Per-session options the user can set from the chat toolbar. */
@@ -559,6 +564,9 @@ export interface LiveChatSnapshot {
   /** A turn is currently in flight for this session (best-effort — see
    *  `agent:workspace-snapshot`'s implementation for how it's derived). */
   isRunning: boolean
+  /** The turn in flight (S11: from the conversation owner), so a reattached chat
+   *  accepts that turn's terminal events and no other. */
+  turn?: string | null
   /** Per-chat worktree isolation status (v9), for the renderer to rehydrate the chat's
    *  isolation chip after a reload. Absent for a non-isolated chat (treated as 'live'). */
   isolation?: { state: 'live' | 'isolated' | 'parked'; branch?: string }

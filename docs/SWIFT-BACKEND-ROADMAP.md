@@ -39,6 +39,11 @@ multi-file transactions in the repository's lanes, owns grouped Undo, file-tree
 operations, editor reads/saves and persisted drafts, and rolls back interrupted
 transactions without overwriting newer work; the TS writers are the rollback owner
 ([source](SWIFT-BACKEND-SOURCE.md)).
+The conversation transfer (LKM-97, row S11) is implemented for review: the service owns
+session records and History, live-chat checkpoints and crash recovery, turn transitions
+with terminal deduplication and stale-event refusal, completion policy, titles, model
+handoff, approvals and spawn admission; Bun's provider sessions are adapters and the TS
+twin is the rollback owner ([conversation](SWIFT-BACKEND-CONVERSATION.md)).
 
 | Task | Canonical phase | Scope and future owner | Required exit evidence |
 | --- | --- | --- | --- |
@@ -52,7 +57,7 @@ transactions without overwriting newer work; the TS writers are the rollback own
 | S08 | 5 | Source transactions, file tree, media reads, drafts and Undo; Swift source service | Expected hashes, root/symlink checks, multi-file interrupted commit recovery, grouped Undo, blob scopes and newer external edits preserved; Repository remains serialization authority. Implemented for review (LKM-96): `test/source-owner.mjs`. File-tree listing, media (`trezi-media://`) and component resolution stay Bun read-only; sidecar stores stay Bun inside the lease; setup/scaffold writers move with S13. |
 | S09 | 5 | Parser/source-edit helper extraction; read-only JS parsers under Swift source authority | Hash-bound patches/diagnostics, React/Svelte/HTML parity, unavailable/schema/ambiguous cases, cancelled/stale proposals; helpers cannot commit source. Implemented for review (LKM-96) with S08: parsers stay in the Bun process (no separate helper process yet) but commit only through `proposeEdit`; a static check keeps file writes and Undo state out of the engines. |
 | S10 | 6 | Provider adapters, authentication, catalogs and tools; Swift provider service plus supervised SDK/math helpers | Capability negotiation, secret/reference boundary, image semantics, helper privileges and deterministic failure/cancel fixtures. Paid/live provider checks require separate authorization. |
-| S11 | 6 | Chat/turn/spawn orchestration and transcript state; Swift conversation coordinator | Queues, approvals, terminal deduplication, model handoff, cancellation, checkpointed transcripts and reconnect without draft loss; repository effects delegated to S07. |
+| S11 | 6 | Chat/turn/spawn orchestration and transcript state; Swift conversation coordinator | Queues, approvals, terminal deduplication, model handoff, cancellation, checkpointed transcripts and reconnect without draft loss; repository effects delegated to S07. Implemented for review (LKM-97): `test/conversation-owner.mjs`. The composer's queued-message list and drafts stay in the Bun chat controller (S12); provider sessions stay Bun adapters (S10). |
 | S12 | 7 | Editing/controls/content/composition/preview controllers; Swift coordinators, AppKit and isolated DOM JS | Originating chat/turn/document/revision checks, pending activation, saved-source Undo through S08, preserved drafts and DOM allowlist; test hooks never become helper capabilities. |
 | S13 | 7 | Publishing/remote actions/setup/diagnostics/support and shared sheet routing; Swift application services | Explicit side-effect intent, durable local/remote receipts, uncertain-result reconciliation, redacted logs and failure-preserving autosave; commits delegated to Repository/Source. |
 | S14 | 7 | Simulator and platform process integration; Swift simulator coordinator | Supervised xcrun/bridge lifecycle, failed preflight/build/boot/install and teardown recovery; platform/device verification recorded separately. |

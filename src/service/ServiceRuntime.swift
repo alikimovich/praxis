@@ -27,6 +27,9 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
     /// S08/S09 source transactions (hash-bound commits, Undo, file operations, drafts),
     /// run in the repository coordinator's lanes, on the same pipe.
     var source: SourceOwner?
+    /// S11 conversation coordinator (chat records, live checkpoints, turns, approvals,
+    /// spawn admission), on the same pipe.
+    var conversation: ConversationOwner?
     var child: LegacyChild?
     var launch: ServiceLaunch?
     var peerPID: pid_t?
@@ -140,6 +143,7 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                             environment: requested.environment), send: send)
                         self.repository = repository
                         source = SourceOwner(options: SourceOwner.Options(profile: requested.profile), repository: repository, send: send)
+                        conversation = ConversationOwner(options: ConversationOwner.Options(profile: requested.profile), send: send)
                     }
                     readBackend()
                 }
@@ -196,14 +200,16 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
     func readBackend() {
         guard let output = child?.output else { return }
         // Handed to the reader directly (not via `queue`), so Bun's preference,
-        // workspace, memory, runtime, repository and source requests are still served while `stop` waits for Bun to exit.
+        // workspace, memory, runtime, repository, source and conversation requests are still served while `stop` waits for Bun to exit.
         let preferences = preferences, workspace = workspace, memory = memory, runtime = runtime, repository = repository, source = source
+        let conversation = conversation
         let preferencesPrefix = Data("{\"service\":\"preferences\"".utf8)
         let workspacePrefix = Data("{\"service\":\"workspace\"".utf8)
         let memoryPrefix = Data("{\"service\":\"memory\"".utf8)
         let runtimePrefix = Data("{\"service\":\"runtime\"".utf8)
         let repositoryPrefix = Data("{\"service\":\"repository\"".utf8)
         let sourcePrefix = Data("{\"service\":\"source\"".utf8)
+        let conversationPrefix = Data("{\"service\":\"conversation\"".utf8)
         DispatchQueue.global().async { [weak self] in
             var pending = Data()
             do {
@@ -220,6 +226,7 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                         if line.starts(with: runtimePrefix) || line.starts(with: RuntimeOwner.helperPrefix) { runtime?.submit(line); continue }
                         if line.starts(with: repositoryPrefix) { repository?.submit(line); continue }
                         if line.starts(with: sourcePrefix) { source?.submit(line); continue }
+                        if line.starts(with: conversationPrefix) { conversation?.submit(line); continue }
                         guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any], object["method"] is String else { continue }
                         self?.queue.async { [weak self] in self?.deliver(line) }
                     }
@@ -276,6 +283,9 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
         source?.refuse()
         repository?.close(timeout: 5); repository = nil
         source?.close(timeout: 5); source = nil
+        // Bun has exited: its chats were closed (saved to History) or are left as
+        // checkpoints, which the next launch recovers. A decision already underway finishes.
+        conversation?.close(timeout: 2); conversation = nil
         // Bun has exited: refuse new preference/workspace/memory requests and let accepted
         // ones finish (bounded). One still running at exit is recovered from the ledger.
         preferences?.close(timeout: 2); preferences = nil

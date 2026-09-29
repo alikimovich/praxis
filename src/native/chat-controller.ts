@@ -5,7 +5,7 @@ import type { NativeChatCommand, NativeChatEffect, NativeChatLayout, NativeChatS
 import type { NativeComposerAction } from '../shared/native-composer'
 import { defaultChoiceFor, providerOptions, resolveSelection } from '../shared/provider-choices'
 import { parseSlashToken } from '../shared/slash-token'
-import { append, assistant, finish, hydrate, mirror, newChat, reduce, type Chat, type Submission } from './chat-state'
+import { append, assistant, finish, hydrate, late, mirror, newChat, reduce, type Chat, type Submission } from './chat-state'
 import { matches, permissionModes, snapshot } from './chat-snapshot'
 import { cardAction } from './chat-actions'
 
@@ -62,6 +62,7 @@ export class NativeChatController {
       // a newer stream with an older transcript.
       if (version === chat.version || !chat.messages.length) {
         chat.isRunning = live.isRunning
+        if (live.turn) chat.turn = live.turn
         hydrate(chat, live.record.transcript)
         chat.title = live.record.title
         chat.isolation = live.isolation?.state ?? 'live'
@@ -130,6 +131,8 @@ export class NativeChatController {
       ? event.request.sessionKey : event.projectKey
     if (!key || this.closed.has(key)) return
     const chat = this.get(key)
+    // A late terminal (an earlier turn's, or one no send accounts for) completes nothing.
+    if (late(chat, event)) return
     const priorPhase = chat.phase
     reduce(chat, event)
     if (event.type === 'error' || (event.type === 'isolation' && event.state === 'parked')) {
@@ -215,6 +218,7 @@ export class NativeChatController {
   async run(chat: Chat, submission: Submission) {
     chat.phase = 'thinking'; chat.activityDetail = ''; chat.stopping = false
     chat.sending = true; chat.isRunning = true; chat.turnStartedAt = Date.now(); chat.streamingId = null
+    chat.turn = submission.id
     const cancellation = chat.cancellation
     const { text, attachments, selection, turn } = submission
     chat.messages.push({ id: crypto.randomUUID(), role: 'user', at: Date.now(), text, statuses: [], segments: text ? [{ kind: 'text', text }] : [],
@@ -227,7 +231,7 @@ export class NativeChatController {
       const files = attachments.filter(a => !a.type.startsWith('image/')).map(a => a.path)
       const prompt = (files.length ? `[Attached files]\n${files.join('\n')}\n\n` : '') +
         (paths.length ? `[Attached images — the image(s) in this message are on disk at]\n${paths.join('\n')}\n\n` : '') + (selection?.prompt ?? '') + text
-      await this.services.invoke('agent:send', prompt, images.length ? images.map(a => ({ mediaType: a.type, data: a.data })) : undefined, chat.chat, turn)
+      await this.services.invoke('agent:send', prompt, images.length ? images.map(a => ({ mediaType: a.type, data: a.data })) : undefined, chat.chat, turn, submission.id)
     } catch (error) {
       chat.paused = true; append(chat, `\n\nUnable to send: ${String(error)}`); finish(chat)
     } finally { chat.sending = false; this.changed(chat); void this.drain(chat) }
