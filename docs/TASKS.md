@@ -96,6 +96,21 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
 
+## Swift repository coordinator: Git, worktrees and recovery (LKM-95 / S07)
+
+- [x] Name the domain exactly (lanes/leases, worktree lifecycle, landings, explicit apply/reconcile/discard, live commits, branch switches, startup recovery, journal, recovery refs; Bun-kept chat state, park records, Undo, setup helpers, reads) and tighten its rollback plan (`docs/SWIFT-BACKEND-REPOSITORY.md`).
+- [x] Swift lanes per repository common directory; Bun leases via `enqueueRepoWrite` (re-entrant per async chain); branch switches, orphan/branch recovery and spawn-branch apply now serialized.
+- [x] Swift effects with parity to the TS Git code (legacy suites re-run on the owner); private-index snapshots; scoped to linked worktrees under the profile; path-like checkout names refused.
+- [x] Durable intent journal, interrupted entries reported (never replayed), `acknowledge` intent; recovery refs before every effect that could orphan work; explicit intents for landing, reconciliation, discard, removal and branch deletion.
+- [x] Landing hardened: byte comparison, no writes through symlinks or outside the checkout, partial writes restored, oversized batches park.
+- [x] `TREZI_BACKEND_OWNER=legacy` keeps the TS Git code; worktrees, journal and refs survive the switch; drain releases leases and settles running effects.
+- [x] `test/repository-owner.mjs` (unit tier); `service-process` builds the owner.
+- [ ] S07 sub-boundary: remote fetch/pull/checkout (`git-remote.ts`) and publishing (`annotations.ts`) run in Bun inside the Swift lease; move their Git effects with S13.
+- [ ] S07 sub-boundary: the annotation sidecar writer can now move through the repository lane (unblocks the S05 item below).
+- [ ] S07 sub-boundary: content/island/control source writes and scaffolding stay in Bun inside the lease until S08.
+- [ ] Follow-up: a UI to review and acknowledge interrupted repository operations (today they are listed in the Activity log at launch).
+- [ ] Manager: stage the new files (docs-links checks tracked paths), run the unit tier unsandboxed (full `service-process`), `bun run test:native`, independent review.
+
 ## Swift-owned managed project runtime (LKM-94 / S06)
 
 - [x] Name the domain exactly (detection, process groups, ports, readiness, installs, static site, watcher, SSE, journal; Bun-owned command choice, install repository lease, stamping helper, sidecar migration, evidence mirror, persisted server fields) and tighten its rollback plan (`docs/SWIFT-BACKEND-RUNTIME.md`).
@@ -119,7 +134,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] `TREZI_BACKEND_OWNER=legacy` keeps the Bun writer; Swift adopts newer legacy writes; no old-version restore.
 - [x] Annotation storage split from publication (`annotation-store.ts`): CRUD parity, per-project serialization, unknown entries kept, damaged files kept, no Git side effects; stale note responses dropped in the context controller.
 - [x] `test/memory-owner.mjs`, `test/annotation-store.mjs` (unit tier); `project-memory` and `native-context` extended.
-- [ ] Blocked on S07: move the annotation sidecar writer to Swift through the repository lane (must land before S15).
+- [ ] Unblocked by S07 (LKM-95): move the annotation sidecar writer to Swift through the repository lane (must land before S15).
 - [ ] S05 remainder: attachments (scratch/blob bounds) are not in this task.
 - [ ] Manager: stage the new files (docs-links checks tracked paths), run unit + unsandboxed `service-process` + `bun run test:native` through the service path, independent review.
 

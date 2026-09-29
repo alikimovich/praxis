@@ -44,6 +44,8 @@ import { serviceWorkspace } from './workspace-service'
 import { serviceProjectMemory } from './project-memory-service'
 import { type ProjectRuntime, serviceRuntime } from './runtime-service'
 import { setDependencyInstaller } from '../main/project-dependencies'
+import { type RepositoryOwner, setRepositoryOwner } from '../main/repository-owner'
+import { serviceRepository } from './repository-service'
 import { installNativeChat } from './chat-runtime'
 import { NativeShellController } from './shell-controller'
 import { NativeSupportSheets } from './support-sheets'
@@ -144,6 +146,10 @@ async function main() {
     runtime = owner
     setDependencyInstaller(root => owner.install(root))
   }
+  // Repository coordination (S07): every Trezi Git effect and repository lease goes
+  // through the service's per-repository lane, journal and recovery refs.
+  let repository: RepositoryOwner | null = null
+  if (process.env.TREZI_SERVICE_SUPERVISED === '1') { repository = serviceRepository(host); setRepositoryOwner(repository) }
   const refreshPreferences = () => {
     const values = preferences.snapshot()
     let preferred: unknown
@@ -272,6 +278,13 @@ async function main() {
   host.on('activity-action', ({ action }) => activityController.action(action))
   host.on('menu', ({ action }) => { if (action === 'logs') activityController.action('toggle') })
   serviceEvents.on('event', (channel, line) => { if (channel === 'devserver:log' || channel === 'simulator:log') activityController.append(line, 'server') })
+  // Work a previous service could not finish stays in the journal and its recovery refs;
+  // nothing is replayed or reset. Say so once, where the user looks for background work.
+  if (repository) void repository.status().then(({ interrupted, journal }) => {
+    if (journal) activityController.append(`Repository journal: ${journal}`, 'error')
+    for (const entry of interrupted) activityController.append(
+      `An earlier ${entry.kind} in ${entry.root} was interrupted; its work is kept${entry.refs.length ? ` at ${entry.refs.join(', ')}` : ''}.`, 'error')
+  }, () => {})
   const reportPreferences = (error: unknown) => activityController.append(`Could not save a preference: ${error instanceof Error ? error.message : String(error)}`, 'error')
   host.on('native-layout-width', ({ width }) => {
     if (!Number.isFinite(width) || width < 320 || width > 760) return

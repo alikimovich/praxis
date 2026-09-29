@@ -16,6 +16,7 @@ import {
   RUNTIME_DEPS,
   type Worktree
 } from './worktrees'
+import { repositoryOwner } from './repository-owner'
 
 /**
  * Per-CHAT git-worktree isolation (v9). Generalizes the comment-spawn worktree
@@ -118,6 +119,13 @@ export function createChatWorktree(
  */
 export async function syncFromLive(liveRoot: string, wt: Worktree): Promise<{ synced: boolean }> {
   await syncSetupArtifacts(liveRoot, wt.path)
+  const owner = repositoryOwner()
+  if (owner) {
+    const { synced, baseSha } = await owner.syncWorktree({ ...wt, repoRoot: liveRoot })
+    wt.baseSha = baseSha
+    await provisionNextDependencies(liveRoot, wt.path)
+    return { synced }
+  }
   const indexFile = join(dirname(wt.path), `.index-sync-${wt.id}`)
   const live = await captureBase(liveRoot, indexFile)
   const liveTree = await revParse(liveRoot, `${live}^{tree}`)
@@ -158,6 +166,8 @@ export async function completeTurn(
   message: string,
   opts: { land?: boolean } = {}
 ): Promise<TurnOutcome> {
+  const owner = repositoryOwner()
+  if (owner) return owner.completeTurn({ ...wt, repoRoot: liveRoot }, message, opts.land !== false)
   const { committed, files } = await commitWorktree(wt, message)
   if (!committed) {
     const newBase = await revParse(wt.path, 'HEAD')
@@ -221,6 +231,8 @@ export interface ApplyOutcome {
  * advances the fork point and unparks.
  */
 export async function applyParked(liveRoot: string, wt: Worktree): Promise<ApplyOutcome> {
+  const owner = repositoryOwner()
+  if (owner) return owner.applyParked({ ...wt, repoRoot: liveRoot })
   const patch = await diffWorktree(wt)
   const files = await changedFiles(wt)
   const tmpDir = join(dirname(wt.path), '.apply-tmp')
@@ -262,6 +274,15 @@ export interface ResolvePrep {
  * tells the user Resolve does.
  */
 export async function stageResolve(liveRoot: string, wt: Worktree): Promise<ResolvePrep> {
+  const owner = repositoryOwner()
+  if (owner) {
+    // Setup helpers live under excluded `.trezi/` paths, so syncing them first never
+    // makes the worktree look changed to the service's parked-state check.
+    await syncSetupArtifacts(liveRoot, wt.path)
+    const { conflicted, files, clean, baseSha } = await owner.stageResolve({ ...wt, repoRoot: liveRoot })
+    wt.baseSha = baseSha
+    return { conflicted, files, clean }
+  }
   const porcelain = (await git(wt.path, ['status', '--porcelain=v1', '-z', '--untracked-files=all']))
     .stdout
     .split('\0')
@@ -328,6 +349,8 @@ export async function stageResolve(liveRoot: string, wt: Worktree): Promise<Reso
  * live and its worktree keeps the branch checked out (a `git branch -D` would fail).
  */
 export async function discardParked(wt: Worktree): Promise<void> {
+  const owner = repositoryOwner()
+  if (owner) return owner.discardParked(wt).catch(() => {})
   await git(wt.path, ['reset', '--hard', wt.baseSha]).catch(() => {})
   await git(wt.path, cleanArgs()).catch(() => {})
 }

@@ -668,7 +668,7 @@ export async function handleReclaimed(
     }
     if (deps.store().get(`chatpark-${r.id}`)) continue // a persisted park — leave it
     if (await branchAlreadyLive(r.repoRoot, r.branch)) {
-      await deleteBranch(r.repoRoot, r.branch)
+      await deleteBranch(r.repoRoot, r.branch, 'integrated')
     } else {
       await recoveryParkRecord(r.repoRoot, r.id, r.branch)
     }
@@ -716,7 +716,7 @@ export async function releaseChat(
           upsertParkRecord(st, outcome.files)
         }
       }
-      await removeWorktree(st.liveRoot, st.wt, { keepBranch: st.parked })
+      await removeWorktree(st.liveRoot, st.wt, { keepBranch: st.parked, intent: st.parked ? 'release' : 'landed' })
     })
   } catch {
     /* teardown never throws */

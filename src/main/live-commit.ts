@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { repositoryOwner } from './repository-owner'
 import { excludedWorktreePath } from './worktrees'
 
 /**
@@ -93,6 +94,11 @@ export async function commitLiveTurn(
 ): Promise<LiveCommit> {
   const paths = committableFiles(files)
   if (!paths.length) return { committed: false, files: [] }
+  const owner = repositoryOwner()
+  if (owner) {
+    // Same pathspec commit, in the repository's lane; the service re-checks the paths.
+    return owner.commitLive(root, paths, commitTitle(message.title), message.body).catch(() => ({ committed: false, files: [] }))
+  }
   if (!(await atRepoRoot(root))) return { committed: false, files: [] }
   const pathArgs = ['--', ...paths]
   try {

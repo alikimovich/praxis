@@ -2,6 +2,74 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — Repository recovery review repairs (LKM-95 / S07)
+
+Independent review found startup orphan recovery could lose work. For a dirty
+leftover worktree it ignored whether the recovery commit succeeded and then
+force-removed the checkout; a parked chat's fold (`reset --soft HEAD^`) had already
+moved its branch back a commit. Now the orphan's HEAD and a private-index snapshot of
+its dirty state each get a recovery ref first. If the commit fails (for example
+signing that cannot run in the background service) the fold is undone and the
+checkout is moved aside, never force-removed; a ref that cannot be made leaves the
+orphan as found. Recovery ref names also gained a random suffix: several orphans in
+one sweep share kind and label and would have overwritten each other's refs. The
+documented 100-ref cap never existed in code; it is removed instead of implemented,
+because deleting refs silently is exactly what recovery refs must not do, so refs are
+never pruned automatically. `test/repository-owner.mjs` has a new `orphans` section
+with a failing signing program (two dirty orphans, one parked).
+
+## 2026-09-29 — Swift repository coordinator: Git, worktrees and recovery (LKM-95 / S07)
+
+The fifth transfer, on the LKM-94 candidate. Under the Swift launch the service is the
+serialization authority for every user repository and performs every Git effect
+Trezi makes there. Details and the tightened rollback plan are in
+`docs/SWIFT-BACKEND-REPOSITORY.md`.
+
+Serialization moved first. `enqueueRepoWrite` now takes a lease on the service's lane
+for the repository's common directory, so the live checkout and all its worktrees share
+one FIFO, and the service's own effects run in the same lane. Bun tracks held leases
+per async chain, so effects inside a lease run in it and a nested lease on the same
+repository is re-entrant. Branch switches, orphan recovery, branch pruning and the
+spawn-branch apply were outside the old queue; they are serialized now.
+
+The effects are Swift twins of the TS Git code, reached through the unchanged
+functions in `worktrees.ts`, `chat-worktrees.ts`, `live-commit.ts` and `git.ts` (the
+seam is `src/main/repository-owner.ts`). The strongest parity check re-runs the legacy
+suites (`chat-worktrees`, `worktrees`, `live-commit`, `git`, `chat-recovery`,
+`auto-reconciliation`, `setup-next`) with the Swift owner preloaded; all pass
+unchanged. Chat state, park records, Undo history and setup helpers stay in Bun.
+
+Recovery: each mutation's intent is journaled and synced before its first effect. A
+recovery ref is named in the journal and created before anything could orphan work:
+dirty or unlanded worktree state before a sync reset, removal or discard, the parked
+tip before reconciliation, the target of a landing, the live pre-image of a three-way
+apply. An operation cut short is reported at the next launch (and in the Activity log)
+with its refs; nothing is replayed or reset. Removing, discarding and landing need
+their explicit intent. Worktree operations are refused unless the path is a linked
+worktree of that repository under the profile, so the main checkout is never reset.
+
+Behavior changes: landing compares bytes, never writes through a symlink or outside
+the checkout, creates missing directories, restores already-written files if a write
+fails, and parks batches over 16 MiB. `checkout` accepts only an existing local branch
+(a non-ref name could be read by Git as a path and discard that file's changes). Git
+paths are read NUL-separated, so non-ASCII names are exact. An orphan of another
+repository is left for that repository's lane, and a folder that is no longer a
+worktree is moved aside instead of deleted. A clean fork point is HEAD itself.
+
+Still in Bun, inside the Swift lease: remote fetch/pull/checkout and publishing (S13),
+the annotation sidecar writer (now unblocked), and content/island/control source writes
+(S08). Recorded in TASKS.
+
+Verification (worker sandbox): `test/repository-owner.mjs` passes parity, lanes,
+external changes (foreign index lock, external commit, the user's staged work), intent
+and scope refusals, crash recovery (SIGKILL inside a landing, after reconciliation's
+reset, during removal), rollback (legacy lands on a Swift-made worktree with journal
+and refs untouched; damaged journal refused untouched) and drain, in about 20 s. Both
+typechecks pass and the new Swift files have zero diagnostics under
+`-strict-concurrency=complete`. `service-process` builds the real service with the
+owner and passes its supervision and rollback sections; its XPC section needs the
+manager's unsandboxed run.
+
 ## 2026-09-29 — Swift-owned managed project runtime (LKM-94 / S06)
 
 The fourth transfer, on the LKM-93 candidate, and the first that moves processes

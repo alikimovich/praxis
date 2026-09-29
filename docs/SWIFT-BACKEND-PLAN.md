@@ -11,7 +11,23 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
-**Current (2026-09-29, LKM-94):** S06 (roadmap row) moves the managed project
+**Current (2026-09-29, LKM-95):** S07 (roadmap row) moves repository coordination
+into the Swift service: one FIFO lane per repository common directory (the live
+checkout and all its worktrees), leases that replace Bun's process-local
+`enqueueRepoWrite` queue, and every Trezi Git effect — worktree create/sync/remove,
+turn commits and landings, explicit apply, reconciliation staging, discard, live
+commits, branch switches and startup recovery. Each mutation's intent is journaled
+before its first effect; recovery refs (`refs/trezi/recovery/*`) are made before
+anything could become unreachable; removal, discard and landing need their explicit
+intent; interrupted operations are reported, never replayed. Snapshots use a private
+index. Bun keeps chat state, park records, Undo history and setup helpers, and other
+slices' writers (remote actions, publishing, annotations, source writes) run inside
+the Swift lease until they move. `TREZI_BACKEND_OWNER=legacy` keeps the TS Git code
+as the rollback owner; worktrees, journal and refs survive the switch. See
+[repository](SWIFT-BACKEND-REPOSITORY.md). Implemented for review on the LKM-94
+candidate; manager verification and acceptance are pending.
+
+**Earlier (2026-09-29, LKM-94):** S06 (roadmap row) moves the managed project
 runtime into the Swift service as one unit: runtime detection, dependency installs,
 dev-server process groups, ports, readiness, the static site with its FSEvents
 watcher and live-reload stream, and shutdown and crash recovery. Bun still chooses
