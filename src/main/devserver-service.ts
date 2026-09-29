@@ -30,7 +30,7 @@ export function registerServiceDevServer(router: RpcHandlerRegistry, runtime: Pr
     const generation = bump(key)
     previewServers.delete(key)
     if (opts.installDependencies) {
-      await installProjectDependencies(opts.root, log)
+      await installProjectDependencies(opts.root)
       if (generations.get(key) !== generation) throw new Error('Preview start was cancelled.')
     }
     const server = await runtime.start({ root: opts.root, command: opts.command, framework: opts.framework })

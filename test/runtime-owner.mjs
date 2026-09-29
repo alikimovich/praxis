@@ -6,6 +6,7 @@
 // close; the static site's HTTP layer, traversal, SSE and watcher over a socketpair;
 // stamping through the JS helper. Sections that need a listening socket run only
 // where local binding is allowed and otherwise make the whole test report SKIP.
+import './helpers/with-repository-owner.mjs'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -262,7 +263,7 @@ exit 0
     assert.equal(await runtime.install(project({})), false, 'no package.json, nothing to install')
     // Bun's queue wrapper routes through the owner; the repository lease stays in Bun.
     setDependencyInstaller(path => runtime.install(path))
-    await installProjectDependencies(plain, () => {})
+    await installProjectDependencies(plain)
     setDependencyInstaller(null)
     await stop(fixture)
     const slow = await start(dir(), { PATH, RUNTIME_INSTALL_TIMEOUT: '1' })
@@ -337,7 +338,7 @@ exit 0
     assert.deepEqual(exact.ready.swept, [unrelated.pid], 'the recorded group itself is stopped')
     await dead(unrelated.pid)
     await stop(exact)
-    // The legacy launch creates no journal where none existed.
+    // A sweep with no journal creates none.
     assert.ok(!existsSync(join(dir(), 'service')))
   })
 

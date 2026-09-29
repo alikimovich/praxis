@@ -1,18 +1,17 @@
 /**
- * trezi CLI (bin/trezi.mjs) — pure unit test of the lockfile-drift helper
- * that keeps `trezi --update` from aborting on a dirty, install-generated
- * lockfile. Runs under bun (no electron), like update.mjs. Importing the module
- * must NOT run the CLI — `main()` is guarded by invokedAsScript().
+ * trezi CLI — the lockfile-drift helper that keeps `trezi --update` (bin/trezi.mjs)
+ * from aborting on a dirty, install-generated lockfile, and the shell command's
+ * (bin/trezi) help, version and refusals. Opening the app is covered, through a
+ * recorded `open`, by test/install-update.mjs. Importing bin/trezi.mjs must NOT
+ * run the CLI — `main()` is guarded by invokedAsScript().
  *
  * Run with: bun test/trezi-cli.mjs
  */
 import { spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import {
-  lockfilesToRestore,
-  nativeLaunchSpec
-} from '../bin/trezi.mjs'
+import { lockfilesToRestore } from '../bin/trezi.mjs'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -56,21 +55,23 @@ eq(lockfilesToRestore(' M vendor/bun.lock.bak\n'), [], 'non-exact lockfile path 
 eq(lockfilesToRestore(''), [], 'empty porcelain → nothing to restore')
 eq(lockfilesToRestore('\n\n'), [], 'blank lines → nothing to restore')
 
-const help = spawnSync(process.execPath, [join(repoRoot, 'bin', 'trezi.mjs'), '--help'], {
-  cwd: repoRoot,
-  encoding: 'utf8'
-})
+const cli = join(repoRoot, 'bin/trezi')
+const help = spawnSync(cli, ['--help'], { encoding: 'utf8' })
 assert(help.status === 0, 'CLI help exits successfully')
-assert(help.stdout.includes('--project'), 'CLI help documents native project launch')
+for (const text of ['trezi <folder>', 'trezi .', '--update', '--version']) assert(help.stdout.includes(text), `CLI help documents ${text}`)
 assert(!help.stdout.includes('--remote'), 'CLI no longer advertises retired remote mode')
-eq(nativeLaunchSpec('/checkout', ['--project', '/project']), {
-  command: 'bun', args: ['/checkout/scripts/start-native.mjs', '--project', '/project'], cwd: '/checkout'
-}, 'CLI launches the native backend with the requested project')
-const retired = spawnSync(process.execPath, [join(repoRoot, 'bin/trezi.mjs'), 'serve', '/tmp'], { encoding: 'utf8' })
+const version = spawnSync(cli, ['--version'], { encoding: 'utf8' })
+eq(version.stdout.trim(), `Trezi ${JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')).version}`, 'CLI prints the package version')
+const retired = spawnSync(cli, ['serve', '/tmp'], { encoding: 'utf8' })
 assert(retired.status === 1 && retired.stderr.includes('retired'), 'retired browser mode fails with migration guidance')
+const unknown = spawnSync(cli, ['--remote'], { encoding: 'utf8' })
+assert(unknown.status === 1 && unknown.stderr.includes('Unknown option'), 'unknown options are refused')
+// An install whose `trezi` link still points at bin/trezi.mjs reaches the same command.
+const delegated = spawnSync(process.execPath, [join(repoRoot, 'bin/trezi.mjs'), '--version'], { encoding: 'utf8' })
+eq(delegated.stdout, version.stdout, 'bin/trezi.mjs hands launch arguments to bin/trezi')
 
 if (failed) {
   console.error(`TREZI-CLI FAILED — ${failed} assertion(s)`)
   process.exit(1)
 }
-console.log('TREZI-CLI OK — lockfilesToRestore picks dirty tracked lockfiles, ignores the rest')
+console.log('TREZI-CLI OK — lockfilesToRestore picks dirty tracked lockfiles; bin/trezi help, version and refusals')

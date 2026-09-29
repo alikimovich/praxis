@@ -8,7 +8,7 @@ import { workflowOwner } from './workflow-owner'
  * distributed as a git checkout (`app.getAppPath()`), so `gh issue create` run
  * there targets the right repo via its `origin` remote. Bun only composes the
  * title and body; the workflow owner files the issue (service/WorkflowTools.swift,
- * journaled so a retry never files it twice; feedback-legacy.ts is the rollback twin).
+ * journaled so a retry never files it twice).
  *
  * GitHub exposes no API/gh way to upload an image attachment, so an opted-in
  * screenshot rides along inside the issue body as a downscaled base64 data URI

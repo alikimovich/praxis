@@ -1,5 +1,4 @@
 import '../shared/rename-compat'
-import { restartThroughLauncher } from './legacy-restart'
 import { removeSmokeDirectory, saveSmokeFailure, smokeDirectory, writeSmokeProject } from './smoke-fixture'
 import { NativeUpdateController } from './update-controller'
 import { installNativeInspector } from './inspector-runtime'
@@ -7,12 +6,11 @@ import { NativePreviewRecovery } from './preview-recovery'
 import { NativeLayersController } from './layers-controller'
 import { agentOptionsFor } from '../shared/chat-settings'
 import { NativeEditorController } from './editor-controller'
-import { join, resolve } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 import { conversationsClosed, projectHasRunningAgents, registerAgentIpc, setProjectMemoryOwner } from '../main/agent'
 import { registerAnnotationsIpc } from '../main/annotations'
 import { registerContentControlsIpc } from '../main/content-controls-ipc'
 import { registerControlsIpc } from '../main/control-panels'
-import { drainDevServers, forceStopDevServers } from '../main/devserver-processes'
 import { registerDevServerIpc } from '../main/devserver'
 import { registerDiagnoseIpc } from '../main/diagnose'
 import { registerFeedbackIpc } from '../main/feedback'
@@ -21,7 +19,6 @@ import { listProjectFiles } from '../main/file-tree'
 import { checkoutBranch, ensureBranch, listBranches, switchBranch } from '../main/git'
 import { registerGitRemoteIpc } from '../main/git-remote'
 import { registerGithubIpc } from '../main/github'
-import { nativeMediaPath } from '../main/media'
 import { type PreviewState, registerPreviewIpc } from '../main/preview-ipc'
 import { readProjectIcon } from '../main/project-icon'
 import { registerPropsIpc } from '../main/props'
@@ -36,9 +33,7 @@ import { app, dispatchIPC, ipcMain, NativeView, shell, views, serviceEvents } fr
 import { runNativeCoreSmoke } from './smoke-core'
 import { installShutdown } from './shutdown'
 import { parsePreferredModelState, resolvePreferredSettings } from '../shared/preferred-model'
-import { nativePreferences } from './preferences'
 import { servicePreferences } from './preferences-service'
-import { legacyWorkspace } from './workspace'
 import { serviceWorkspace } from './workspace-service'
 import { serviceProjectMemory } from './project-memory-service'
 import { type ProjectRuntime, serviceRuntime } from './runtime-service'
@@ -71,14 +66,14 @@ import { NativeSheetController } from './sheets-runtime'
 import { installNativeWorkspace } from './workspace-runtime'
 
 async function main() {
-  if (process.env.TREZI_SERVICE_SUPERVISED === '1') {
-    console.log = console.info = console.debug = (...args) => console.error(...args)
-  }
-  // The profile lock (`service.lock`, and the legacy `native.lock` reservation older
-  // builds check) is the service's, in both launches (LKM-102): an unsupervised Bun
-  // could share a profile with a running Trezi, so it refuses and writes nothing.
-  if (process.env.TREZI_SERVICE_LOCKED !== '1')
-    throw new Error('Trezi must be started by its service (trezi or bun run dev), which holds the profile lock. Nothing was changed.')
+  // The Swift service supervises this process and holds the profile lock
+  // (`service.lock`, and the `native.lock` reservation older builds check). A Bun
+  // started any other way could share a profile with a running Trezi, so it refuses
+  // and writes nothing.
+  if (process.env.TREZI_SERVICE_LOCKED !== '1' || process.env.TREZI_SERVICE_SUPERVISED !== '1')
+    throw new Error('Trezi must be started by its service (open -a Trezi, trezi, or bun run dev), which holds the profile lock. Nothing was changed.')
+  // stdout is the service's frame pipe: logs go to stderr.
+  console.log = console.info = console.debug = (...args) => console.error(...args)
   const testing = process.argv.includes('--test')
   const testDir = testing ? smokeDirectory() : null
   if (testDir) process.env.TREZI_USER_DATA = join(testDir, 'profile')
@@ -104,8 +99,8 @@ async function main() {
       host?.send('quit', { status: typeof process.exitCode === 'number' ? process.exitCode : 0 })
       // Keep the native profile separate from retired Electron installations.
       // Test profiles are disposable.
-      // Swift launch: the service stops its groups (and again if Bun dies first).
-      await Promise.all([drainDevServers(), runtime?.stopAll().catch(() => {})])
+      // The service stops its groups (and again if Bun dies first).
+      await runtime?.stopAll().catch(() => {})
       if (testDir) {
         await host?.closed
         removeSmokeDirectory(testDir)
@@ -113,62 +108,54 @@ async function main() {
     })
     return cleaning
   }
-  installShutdown(cleanup, forceStopDevServers)
-  const executable = join(__dirname, 'Trezi.app/Contents/MacOS/TreziHost')
-  process.env.TREZI_NATIVE_HOST = executable
-  host = new NativeBridge(executable, __dirname, testing ? 'ephemeral' : 'persistent')
+  installShutdown(cleanup)
+  host = new NativeBridge()
   setBridge(host)
   // Hold host events while the preference snapshot is awaited; released below,
   // once every handler (including 'ready' and 'closed') is registered.
   host.hold()
   const mainView = new NativeView('main')
-  // Swift service owner (supervised) or the legacy Bun writer (TREZI_BACKEND_OWNER=legacy).
-  // Never both, and never a local write when the service does not answer.
-  const preferences = process.env.TREZI_SERVICE_SUPERVISED === '1'
-    ? await servicePreferences(host).catch(error => { throw new Error(`Trezi could not read preferences from its service: ${error.message}`) })
-    : nativePreferences(profile)
-  const workspace = process.env.TREZI_SERVICE_SUPERVISED === '1'
-    ? await serviceWorkspace(host).catch(error => { throw new Error(`Trezi could not read the workspace from its service: ${error.message}`) })
-    : legacyWorkspace(profile)
+  // The Swift service owns every domain; there is no local fallback write, ever.
+  const preferences = await servicePreferences(host).catch(error => { throw new Error(`Trezi could not read preferences from its service: ${error.message}`) })
+  const workspace = await serviceWorkspace(host).catch(error => { throw new Error(`Trezi could not read the workspace from its service: ${error.message}`) })
   // Project memory (S05): read on demand, so there is no startup snapshot to await.
-  if (process.env.TREZI_SERVICE_SUPERVISED === '1') { const memory = serviceProjectMemory(host); setProjectMemoryOwner(() => memory) }
+  const memory = serviceProjectMemory(host)
+  setProjectMemoryOwner(() => memory)
   // Managed project runtimes (S06): the service runs servers, installs and static sites.
-  if (process.env.TREZI_SERVICE_SUPERVISED === '1') {
-    const owner = serviceRuntime(host)
-    runtime = owner
-    setDependencyInstaller(root => owner.install(root))
-  }
+  const runtimeOwner = serviceRuntime(host)
+  runtime = runtimeOwner
+  setDependencyInstaller(root => runtimeOwner.install(root))
   // Repository coordination (S07): every Trezi Git effect and repository lease goes
   // through the service's per-repository lane, journal and recovery refs.
-  let repository: RepositoryOwner | null = null
-  if (process.env.TREZI_SERVICE_SUPERVISED === '1') { repository = serviceRepository(host); setRepositoryOwner(repository) }
+  const repository: RepositoryOwner = serviceRepository(host)
+  setRepositoryOwner(repository)
+  const leases = { leases: () => repository.heldLeases() }
   // Source transactions (S08/S09): parsers propose, the service commits hash-bound
   // transactions in the repository's lane (inside the leases this chain holds) and
   // owns Undo, file operations and saved drafts.
-  let source: SourceOwner | null = null
-  if (repository) { const lanes = repository; source = serviceSource(host, { leases: () => lanes.heldLeases() }); setSourceOwner(source) }
+  const source: SourceOwner = serviceSource(host, leases)
+  setSourceOwner(source)
   // Conversation state (S11): the service owns chat records and History, live-chat
   // checkpoints, turn transitions, titles, model handoff, approvals and spawn admission.
-  let conversation: ConversationOwner | null = null
-  if (process.env.TREZI_SERVICE_SUPERVISED === '1') { conversation = serviceConversation(host); setConversationOwner(conversation) }
+  const conversation: ConversationOwner = serviceConversation(host)
+  setConversationOwner(conversation)
   // Provider sessions (S10): the service holds each session's grant, answers its
-  // permission requests and tool calls, owns Stop's deadline and persists resume ids.
+  // permission requests and tool calls, owns Stop's deadline and persists resume ids,
+  // and supervises the provider helpers every built-in adapter runs in (LKM-111).
   // It also writes the provider data: connections and their keys, the model catalog.
-  if (process.env.TREZI_SERVICE_SUPERVISED === '1') {
-    const provider = serviceProvider(host)
-    setProviderOwner(provider)
-    setProviderDataOwner(provider.data)
-  }
+  const provider = serviceProvider(host)
+  setProviderOwner(provider)
+  setProviderDataOwner(provider.data)
   // Editing workflows (S12): island history and activation, the controls sidecars
   // (hash-bound, in the repository lane), content drafts and deferred navigation.
-  if (repository) { const lanes = repository; setEditingOwner(serviceEditing(host, { leases: () => lanes.heldLeases() })) }
+  setEditingOwner(serviceEditing(host, leases))
   // Side-effecting workflows (S13): publication, remote Git actions, project setup,
   // Trezi's update and the diagnosis memory, journaled with receipts in the service.
-  if (repository) { const lanes = repository; setWorkflowOwner(serviceWorkflows(host, { leases: () => lanes.heldLeases() })) }
+  setWorkflowOwner(serviceWorkflows(host, leases))
   // Platform services (S14): the Simulator preview and its Metro group, scoped media
   // grants for the source editor, pasted attachments and the running-servers recovery.
-  let platform: PlatformOwner | null = null
-  if (process.env.TREZI_SERVICE_SUPERVISED === '1') { platform = servicePlatform(host); setPlatformOwner(platform) }
+  const platform: PlatformOwner = servicePlatform(host)
+  setPlatformOwner(platform)
   const refreshPreferences = () => {
     const values = preferences.snapshot()
     let preferred: unknown
@@ -214,7 +201,7 @@ async function main() {
       }
     }
   })
-  registerDevServerIpc(() => window, ipcMain, runtime)
+  registerDevServerIpc(() => window, ipcMain, runtimeOwner)
   registerAgentIpc(() => window)
   registerPropsIpc()
   registerStylesIpc()
@@ -246,9 +233,7 @@ async function main() {
   ipcMain.handle('source:tree', (_e, path) => listProjectFiles(path))
   ipcMain.handle('source:create-file', (_e, path, file) => createProjectFile(path, file))
   ipcMain.handle('source:rename-file', (_e, path, from, to) => renameProjectFile(path, from, to))
-  ipcMain.handle('source:delete-file', (_e, path, file) =>
-    deleteProjectFile(path, file, shell.trashItem)
-  )
+  ipcMain.handle('source:delete-file', (_e, path, file) => deleteProjectFile(path, file))
   ipcMain.handle('window:is-fullscreen', () => host!.request('fullscreen'))
   ipcMain.on('menu:native-edit', (_e, action) => host!.send('nativeEdit', { action }))
   ipcMain.on('menu:set-recents', (_e, recents) => host!.send('recents', { recents }))
@@ -284,21 +269,21 @@ async function main() {
   serviceEvents.on('event', (channel, line) => { if (channel === 'devserver:log' || channel === 'simulator:log') activityController.append(line, 'server') })
   // Work a previous service could not finish stays in the journal and its recovery refs;
   // nothing is replayed or reset. Say so once, where the user looks for background work.
-  if (repository) void repository.status().then(({ interrupted, journal }) => {
+  void repository.status().then(({ interrupted, journal }) => {
     if (journal) activityController.append(`Repository journal: ${journal}`, 'error')
     for (const entry of interrupted) activityController.append(
       `An earlier ${entry.kind} in ${entry.root} was interrupted; its work is kept${entry.refs.length ? ` at ${entry.refs.join(', ')}` : ''}.`, 'error')
   }, () => {})
   // A chat a crash cut off was saved from its checkpoint at launch (never over a newer
   // record, which is kept, with the checkpoint copied beside it).
-  if (conversation) void conversation.status().then(({ recovered }) => {
+  void conversation.status().then(({ recovered }) => {
     for (const entry of recovered) activityController.append(entry.outcome === 'damaged'
       ? `A damaged chat checkpoint was moved aside${entry.copy ? ` to ${entry.copy}` : ''}.`
       : `A chat was cut off${entry.interrupted ? ' mid-turn' : ''} when Trezi last stopped; ${entry.outcome === 'restored' ? 'its conversation was restored' : `a newer copy was kept and the checkpoint saved to ${entry.copy}`}.`, 'error')
   }, () => {})
   // A transaction a crash cut short was rolled back at launch where its own bytes were
   // still there; a file changed since was kept, with the pre-image beside the report.
-  if (source) void source.status().then(({ interrupted, journal }) => {
+  void source.status().then(({ interrupted, journal }) => {
     if (journal) activityController.append(`Source journal: ${journal}`, 'error')
     for (const entry of interrupted) activityController.append(
       `An earlier source ${entry.kind} in ${entry.root} was interrupted and rolled back${entry.kept.length ? `; ${entry.kept.length} file(s) changed since were kept, with their previous content under ${entry.copies[0]?.replace(/\/files\/[^/]+$/, '')}` : ''}.`, 'error')
@@ -329,7 +314,7 @@ async function main() {
     if (channel === 'layers:changed' || channel === 'preview:url-changed') void layersController.refresh()
     if (channel === 'layers:move-request') void layersController.move(value).catch(error => activityController.append(String(error), 'error'))
   })
-  // A media document is shown by path: the legacy registry, or the platform owner's
+  // A media document is shown by path: the platform owner's
   // grant for the source editor (re-issued when it expired or the file changed). Only
   // the newest state is delivered when a resolution is outstanding.
   let sourceStates = 0
@@ -337,7 +322,6 @@ async function main() {
     const media = state.document?.media, sequence = ++sourceStates
     const deliver = (mediaPath?: string) => { if (sequence === sourceStates) host!.send('sourceState', { state: { ...state, mediaPath } }) }
     if (!media) deliver()
-    else if (!platform) deliver(nativeMediaPath(media.url))
     else void platform.mediaPath(media.url, state.root, join(state.root, state.document!.file)).then(deliver, () => deliver())
     if (shellController && workspaceController.active?.root === state.root) { shellController.codeOpen = state.visible; shellController.schedule() }
   })
@@ -417,22 +401,15 @@ async function main() {
     const operation = action.action === 'branch' ? gitController.branch(key, action.value ?? '') : action.action === 'new-branch' ? gitController.branch(key, action.value ?? '', true) : action.action === 'publish' ? gitController.publish(key) : action.action === 'git-updates' ? gitController.updates(key) : null
     void operation?.catch(error => activityController.append(String(error), 'error'))
   })
-  const updates = new NativeUpdateController(sheetController, root, async () => {
-    const project = workspaceController.active?.root
-    if (process.env.TREZI_SERVICE_SUPERVISED === '1') {
-      host!.send('serviceRestart', { project })
-      return
-    }
-    await cleanup()
-    restartThroughLauncher(root, project)
-  },undefined, undefined, () => [...chatController.chats.values()].some(chat => chat.isRunning || chat.text || chat.attachments.length) ? 'Finish running chats and send or clear your drafts before restarting.' : [...editorController.sessions.values()].some(session => [...session.documents.values()].some(doc => doc.text !== doc.baseline)) ? 'Save source editor drafts before restarting.' : [...contentController.sessions.values()].some(session => session.dirty || session.busy) ? 'Save content editor drafts before restarting.' : null, workflowOwner())
+  // The service drains before it relaunches Trezi (with the active project).
+  const updates = new NativeUpdateController(sheetController, root, () => {
+    host!.send('serviceRestart', { project: workspaceController.active?.root })
+  }, workflowOwner(), () => [...chatController.chats.values()].some(chat => chat.isRunning || chat.text || chat.attachments.length) ? 'Finish running chats and send or clear your drafts before restarting.' : [...editorController.sessions.values()].some(session => [...session.documents.values()].some(doc => doc.text !== doc.baseline)) ? 'Save source editor drafts before restarting.' : [...contentController.sessions.values()].some(session => session.dirty || session.busy) ? 'Save content editor drafts before restarting.' : null)
   host.on('menu', ({ action }) => { if (action === 'updates') void updates.open().catch(error => activityController.append(String(error), 'error')) })
   host.on('download-error', ({ message }) => activityController.append(`Download failed: ${message}`, 'error'))
   host.on('download-finished', () => activityController.append('Download finished.', 'success'))
   const supportSheets = new NativeSupportSheets(sheetController, () => host!.request('captureFeedback'), url => shell.openExternal(url))
-  const previewRecovery = platform
-    ? new NativePreviewRecovery(sheetController, root => platform!.findServers(root), server => platform!.stopServer(server))
-    : new NativePreviewRecovery(sheetController)
+  const previewRecovery = new NativePreviewRecovery(sheetController, root => platform.findServers(root), server => platform.stopServer(server))
   host.on('menu', ({ action }) => { if (action === 'servers' && workspaceController.state.activeKey) previewRecovery.open(workspaceController.state.activeKey) })
   const reviewController = new NativeReviewController(sheetController, url => shell.openExternal(url))
   const settingsController = new NativeSettingsController(sheetController, preferences, refreshPreferences)
@@ -500,6 +477,15 @@ async function main() {
     await cleanup()
     process.exit(1)
   })
+  // Folders LaunchServices hands the host (`open -a Trezi <folder>`, `trezi <folder>`,
+  // a folder dropped on the Dock icon): opened once the workspace is attached.
+  let attached = false
+  const openRequests: string[] = []
+  const openRequested = (root: string) => workspaceController.command({ type: 'open', root }).catch(error => activityController.append(String(error), 'error'))
+  host.on('open-project', ({ root }) => {
+    if (typeof root !== 'string' || !isAbsolute(root) || testing) return
+    if (attached) void openRequested(root); else openRequests.push(root)
+  })
   host.once('ready', async () => {
     host!.send('preferences', { values: preferences.snapshot() })
     host!.send('layoutWidth', { width: Number(preferences.get('trezi:native-chat-width')) || 440 })
@@ -510,6 +496,8 @@ async function main() {
     await workspaceController.command({ type: 'attach', preferred: resolvePreferredSettings(parsePreferredModelState(preferred)) })
     await chatController.command({ type: 'attach' })
     if (requestedProject && !testing) await workspaceController.command({ type: 'open', root: resolve(requestedProject) })
+    attached = true
+    for (const root of openRequests.splice(0)) await openRequested(root)
     console.log('Trezi is running on Bun + system WebKit. ')
     if (testing) {
       try {

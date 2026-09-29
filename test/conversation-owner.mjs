@@ -4,24 +4,26 @@
 // sessions are a scripted fake provider.
 // - parity: one scripted owner session (concurrent chats, busy, duplicate and late
 //   terminals, continuation, cancellation, titles, handoff, approvals, spawns, History
-//   writes and pruning) gives identical answers and identical session files on the
-//   legacy owner and the Swift owner;
-// - agent: deterministic streaming through agent.ts on both owners — concurrent chats,
+//   writes and pruning) gives the answers and session files recorded from the Bun twin
+//   before LKM-111 removed it (test/fixtures/conversation-owner/parity-golden.json);
+// - agent: deterministic streaming through agent.ts on the Swift owner — concurrent chats,
 //   queued turn order, an error→done race whose late `done` cannot complete the next
 //   turn, a stray `done`, approvals, cancellation, titles, model handoff, reattach
 //   mid-turn and restore after close; Git landing and Undo go through the Swift
 //   repository and source owners;
 // - crash: SIGKILL mid-turn, inside a checkpoint and inside a History write; the next
 //   launch restores the chat, never over a newer record (kept, checkpoint copied aside);
-// - rollback, schema, drain, and a legacy suite (comment-agents) re-run on the owner.
+// - schema, drain, and the adapter boundary. comment-agents runs on the owner itself.
+import './helpers/with-provider-owner.mjs'
 import assert from 'node:assert/strict'
 import { mock } from 'bun:test'
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { compileConversationFixture, startConversationFixture } from './helpers/conversation-fixture.mjs'
+import { compileEditingFixture, startEditingFixture } from './helpers/editing-fixture.mjs'
 import { createRecordCapture } from '../src/main/backends/record.ts'
 import { projectKey } from '../src/shared/projectKey.ts'
 
@@ -75,10 +77,10 @@ mock.module('../src/main/providers.ts', () => ({ registerProviderIpc: () => {} }
 
 const { registerAgentIpc } = await import('../src/main/agent.ts')
 const { setConversationOwner } = await import('../src/main/conversation-owner.ts')
-const { legacyConversation } = await import('../src/main/conversation-model.ts')
 const { createSessionStore } = await import('../src/main/sessions-store.ts')
 const { setRepositoryOwner } = await import('../src/main/repository-owner.ts')
 const { setSourceOwner } = await import('../src/main/source-owner.ts')
+const { setEditingOwner } = await import('../src/main/editing-owner.ts')
 const { NativeChatController } = await import('../src/native/chat-controller.ts')
 
 const handlers = new Map()
@@ -209,17 +211,19 @@ try {
   binary = compileConversationFixture()
 
   await section('parity', async () => {
-    const legacyProfile = profile('legacy')
-    const legacy = await ownerScript(legacyConversation(() => createSessionStore(join(legacyProfile, 'trezi'))))
+    // The answers and session files are pinned to the ones the in-process twin gave
+    // before LKM-111 removed it (test/fixtures/conversation-owner/parity-golden.json).
+    const golden = JSON.parse(readFileSync(join(root, 'test/fixtures/conversation-owner/parity-golden.json'), 'utf8'))
     const home = profile('swift')
     const started = await fixture(home)
-    const swift = await ownerScript(started.owner())
-    for (let i = 0; i < legacy.length; i++) assert.deepEqual(swift[i], legacy[i], `step ${legacy[i][0]}`)
-    const legacyFiles = files(join(legacyProfile, 'trezi/sessions')), swiftFiles = files(join(home, 'trezi/sessions'))
-    assert.deepEqual(Object.keys(swiftFiles), Object.keys(legacyFiles))
-    for (const name of Object.keys(legacyFiles)) assert.equal(swiftFiles[name], legacyFiles[name], `bytes of ${name}`)
-    // Spot checks on what both agreed on.
-    const at = name => legacy.find(entry => entry[0] === name)[1]
+    const swift = JSON.parse(JSON.stringify(await ownerScript(started.owner())))
+    for (let i = 0; i < golden.log.length; i++) assert.deepEqual(swift[i], golden.log[i], `step ${golden.log[i][0]}`)
+    assert.equal(swift.length, golden.log.length)
+    const goldenFiles = golden.files, swiftFiles = files(join(home, 'trezi/sessions'))
+    assert.deepEqual(Object.keys(swiftFiles), Object.keys(goldenFiles))
+    for (const name of Object.keys(goldenFiles)) assert.equal(swiftFiles[name], goldenFiles[name], `bytes of ${name}`)
+    // Spot checks on the recorded answers.
+    const at = name => swift.find(entry => entry[0] === name)[1]
     assert.deepEqual(at('begin c1 again (busy)'), { error: 'busy' })
     assert.deepEqual(at('c1 late done of another turn (stale)'), { claimed: false, reason: 'stale' })
     assert.deepEqual(at('c1 done after error (duplicate)'), { claimed: false, reason: 'duplicate' })
@@ -231,11 +235,11 @@ try {
     assert.deepEqual(at('mode acceptEdits again'), ['perm-3'])
     assert.deepEqual(at('s1 done'), ['s5'])
     assert.equal(at('snapshot after').chats.length, 0)
-    assert.equal(Object.keys(legacyFiles).filter(name => name.startsWith('h-') && name !== 'h-current.json').length, 50)
-    assert.ok(!legacyFiles['h-0.json'] && !legacyFiles['h-1.json'], 'the two oldest History records are pruned')
-    assert.ok(!legacyFiles['old-current.json'], 'a new current record replaces the old (main-slot) one')
-    assert.equal(JSON.parse(legacyFiles['chat-2.json']).title, 'Renamed chat')
-    assert.equal(JSON.parse(legacyFiles['chat-1.json']).slot, 'current')
+    assert.equal(Object.keys(goldenFiles).filter(name => name.startsWith('h-') && name !== 'h-current.json').length, 50)
+    assert.ok(!goldenFiles['h-0.json'] && !goldenFiles['h-1.json'], 'the two oldest History records are pruned')
+    assert.ok(!goldenFiles['old-current.json'], 'a new current record replaces the old (main-slot) one')
+    assert.equal(JSON.parse(goldenFiles['chat-2.json']).title, 'Renamed chat')
+    assert.equal(JSON.parse(goldenFiles['chat-1.json']).slot, 'current')
     await stop(started)
   })
 
@@ -350,6 +354,15 @@ try {
     return summary
   }
 
+  // What the in-process twin streamed before LKM-111 removed it (LKM-102 proved the
+  // Swift owner identical); pinned here since there is no second owner to compare with.
+  const AGENT_SUMMARY = {
+    transcript: ['user:one', 'assistant:Hello', 'status:Read · a.txt', 'status:Edit · a.txt', 'assistant:world', 'user:two', 'user:three', 'assistant:Three', 'user:four'],
+    sends: [['one', 'two', 'three', 'four'], ['parallel', 'stop me'], ['after switch', 'plain'], []],
+    titles: ['Fixture title', 'Fixture title', 'My chat', 'My chat'],
+    stale: 1
+  }
+
   const repository = name => {
     const repo = join(scratch, name)
     mkdirSync(repo, { recursive: true })
@@ -359,21 +372,21 @@ try {
   }
 
   await section('agent', async () => {
-    setConversationOwner(null); setRepositoryOwner(null); setSourceOwner(null)
-    const legacy = await agentScenario(repository('repo-legacy'))
-    const started = await fixture(agentProfile)
+    // The editing fixture: the same conversation owner plus the editing owner a chat
+    // worktree's setup helpers go through.
+    const started = await startEditingFixture(compileEditingFixture(), agentProfile); fixtures.add(started)
     const sent = { conversation: 0, repository: 0, source: 0 }
     const send = started.link.sendService
     started.link.sendService = frame => { sent[frame.service]++; send(frame) }
     const owners = started.owners()
-    setConversationOwner(owners.conversation); setRepositoryOwner(owners.repository); setSourceOwner(owners.source)
+    setConversationOwner(owners.conversation); setRepositoryOwner(owners.repository); setSourceOwner(owners.source); setEditingOwner(owners.editing)
     const repo = repository('repo-swift')
     const swift = await agentScenario(repo)
     // Let fire-and-forget work (the orphan sweep after reopening, close-project's Undo
     // reset) be answered before the fixture stops.
     await started.settled()
-    setConversationOwner(null); setRepositoryOwner(null); setSourceOwner(null)
-    assert.deepEqual(swift, legacy)
+    setConversationOwner(null); setRepositoryOwner(null); setSourceOwner(null); setEditingOwner(null)
+    assert.deepEqual(swift, AGENT_SUMMARY)
     assert.ok(sent.conversation > 50 && sent.repository > 0 && sent.source > 0, `frames ${JSON.stringify(sent)}`)
     assert.match(git(repo, 'log', '--format=%s', '-n', '8'), /one/, 'the landed turn is committed by the repository owner')
     const saved = Object.values(files(join(agentProfile, 'trezi/sessions'))).map(text => JSON.parse(text))
@@ -401,7 +414,7 @@ try {
     assert.deepEqual(saved.transcript.map(e => `${e.role}:${e.text}`),
       ['user:build it', 'assistant:Working on', 'status:Trezi stopped before this turn finished. Send the message again to continue.'])
     assert.equal(saved.slot, 'current')
-    assert.equal(createSessionStore(join(home, 'trezi')).current('K').id, 'crash-1', 'the legacy reader restores it in place')
+    assert.equal(createSessionStore(join(home, 'trezi')).current('K').id, 'crash-1', 'Bun\'s reader restores it in place')
     assert.deepEqual(readdirSync(join(home, 'service/conversation/live')), [])
     await stop(started)
 
@@ -438,15 +451,16 @@ try {
     assert.equal(closed.slot, 'current')
     await stop(started)
 
-    // A newer record (a legacy launch continued the chat) is never replaced by the checkpoint.
+    // A newer record (another launch continued the chat) is never replaced by the checkpoint.
     const newer = profile('newer')
     started = await fixture(newer)
     o = started.owner()
     await o.open('N', 'N', R('newer-1', 'N'), {}, true)
     await o.begin('N', 't1'); await o.send('N', 't1', U('old', 1000))
     await started.kill(); fixtures.delete(started)
-    const later = R('newer-1', 'N', [U('old', 1000), U('continued in legacy', 2000)], { endedAt: Date.now() + 60_000, slot: 'current' })
-    createSessionStore(join(newer, 'trezi')).save(later)
+    const later = R('newer-1', 'N', [U('old', 1000), U('continued elsewhere', 2000)], { endedAt: Date.now() + 60_000, slot: 'current' })
+    mkdirSync(join(newer, 'trezi/sessions'), { recursive: true })
+    writeFileSync(join(newer, 'trezi/sessions/newer-1.json'), JSON.stringify(later))
     const before = readFileSync(join(newer, 'trezi/sessions/newer-1.json'), 'utf8')
     // A damaged checkpoint beside it is moved aside, not read.
     writeFileSync(join(newer, 'service/conversation/live/zz-damaged.json'), '{not json')
@@ -457,38 +471,6 @@ try {
     assert.ok(existsSync(kept.copy) && existsSync(damaged.copy))
     assert.equal(readFileSync(join(newer, 'trezi/sessions/newer-1.json'), 'utf8'), before)
     assert.deepEqual(readdirSync(join(newer, 'service/conversation/live')), [])
-    await stop(started)
-  })
-
-  await section('rollback', async () => {
-    // Swift writes; the legacy owner reads and continues them; the Swift files it
-    // never reads (checkpoints, reports) are untouched and still there after.
-    const home = profile('rollback')
-    let started = await fixture(home)
-    const o = started.owner()
-    await o.open('B', 'B', R('roll-1', 'B'), { provider: 'codex' }, true)
-    await o.open('B#2', 'B', R('roll-2', 'B'), {}, false)
-    await o.begin('B', 't1'); await o.send('B', 't1', U('hello', 1000))
-    await o.terminal('B', 't1', 0, 'done', R('roll-1', 'B', [U('hello', 1000), A('hi', 1100)]))
-    await o.landed('B', 't1', 1200)
-    await o.close('B', 'current', R('roll-1', 'B', [{ ...U('hello', 1000), completedAt: 1200 }, A('hi', 1100)], { endedAt: 1300 }))
-    await o.title('B#2', 'Open chat', 'user')
-    await o.begin('B#2', 'x1'); await o.send('B#2', 'x1', U('open question', 2000))
-    await started.kill(); fixtures.delete(started) // B#2 left open mid-turn, as a crash would
-    const live = files(join(home, 'service/conversation/live'))
-    const legacyStore = createSessionStore(join(home, 'trezi'))
-    assert.equal(legacyStore.current('B').id, 'roll-1')
-    assert.deepEqual(legacyStore.current('B').transcript[0], { role: 'user', text: 'hello', at: 1000, completedAt: 1200 })
-    const legacy = legacyConversation(() => legacyStore)
-    await legacy.open('B', 'B', legacyStore.current('B'), {}, true)
-    await legacy.begin('B', 'l1'); await legacy.send('B', 'l1', U('in legacy', 5000))
-    await legacy.close('B', 'current', { ...legacyStore.current('B'), transcript: [...legacyStore.current('B').transcript, U('in legacy', 5000)], endedAt: Date.now() + 60_000 })
-    assert.deepEqual(files(join(home, 'service/conversation/live')), live, 'the legacy owner never touches checkpoints')
-    started = await fixture(home)
-    const status = await started.owner().status()
-    assert.deepEqual(status.recovered.map(r => [r.id, r.outcome]), [['roll-2', 'restored']])
-    assert.equal(JSON.parse(readFileSync(join(home, 'trezi/sessions/roll-2.json'), 'utf8')).title, 'Open chat')
-    assert.equal(legacyStore.current('B').transcript.at(-1).text, 'in legacy', 'the legacy continuation is kept')
     await stop(started)
   })
 
@@ -527,23 +509,6 @@ try {
     await stop(started)
   })
 
-  await section('legacy-suite', async () => {
-    // comment-agents' own assertions (spawn admission, queue, cancel, duplicate
-    // terminals, landing) through the Swift conversation, repository and source owners.
-    const suite = await new Promise(resolve => {
-      const child = spawn('bun', ['--preload', './test/helpers/conversation-owner-preload.mjs', 'test/comment-agents.mjs'], {
-        cwd: root, env: { ...process.env, CONVERSATION_FIXTURE: binary, CONVERSATION_PROFILE: profile('comment-agents') }, stdio: ['ignore', 'pipe', 'pipe']
-      })
-      let output = ''
-      child.stdout.on('data', data => { output += data }); child.stderr.on('data', data => { output += data })
-      const timer = setTimeout(() => child.kill('SIGKILL'), 100_000)
-      child.on('exit', code => { clearTimeout(timer); resolve({ code, output }) })
-    })
-    assert.equal(suite.code, 0, `comment-agents against the Swift owner:\n${suite.output.slice(-3000)}`)
-    const frames = /CONVERSATION-PARITY frames=(\d+) repository=(\d+)/.exec(suite.output)
-    assert.ok(Number(frames?.[1] ?? 0) > 0 && Number(frames?.[2] ?? 0) > 0, `comment-agents sent no conversation/repository frames\n${suite.output.slice(-1000)}`)
-  })
-
   await section('adapters', async () => {
     // The provider adapters stay separate: no backend knows the owner, and agent.ts
     // no longer writes History or decides terminals itself.
@@ -554,7 +519,7 @@ try {
     for (const banned of ['store().saveCurrent(', 'TurnTerminalTracker', 'spawnQueue', 'titling.add', 'closeSession(existing']) assert.ok(!agent.includes(banned), banned)
   })
 
-  console.log('Conversation owner: parity, agent streaming, crash recovery, rollback, schema, drain, legacy suite and adapter boundary passed; no provider calls')
+  console.log('Conversation owner: parity, agent streaming, crash recovery, schema, drain and adapter boundary passed; no provider calls')
 } finally {
   for (const started of fixtures) await started.kill().catch(() => {})
   rmSync(scratch, { recursive: true, force: true })

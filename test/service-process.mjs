@@ -71,34 +71,6 @@ async function dead(pid) {
   }
   assert.fail(`fixture process ${pid} survived cleanup`)
 }
-/** The page's live-reload stream: `next` yields the next `data:` value, or null on timeout. */
-async function reloadStream(url, version) {
-  const abort = new AbortController()
-  const response = await fetch(`${url}/__trezi_reload?v=${version}`, { signal: abort.signal })
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  const timedOut = Symbol('timeout')
-  let buffer = ''
-  let pending = null // One outstanding read: a timed-out read keeps its chunk.
-  return {
-    async next(timeout) {
-      const deadline = Date.now() + timeout
-      while (true) {
-        const match = /^data: (.*)$/m.exec(buffer)
-        if (match) { buffer = buffer.slice(match.index + match[0].length); return match[1] }
-        const remaining = deadline - Date.now()
-        if (remaining <= 0) return null
-        pending ??= reader.read()
-        const chunk = await Promise.race([pending, pause(remaining).then(() => timedOut)])
-        if (chunk === timedOut) return null
-        pending = null
-        if (chunk.done) return null
-        buffer += decoder.decode(chunk.value, { stream: true })
-      }
-    },
-    close() { pending?.catch(() => {}); abort.abort(); reader.cancel().catch(() => {}) },
-  }
-}
 function control(connection, kind, extra = {}) { return { version, connection, requestID: randomUUID(), kind, ...extra } }
 function hello(connection, launch, extra = {}) {
   return control(connection, 'hello', { hello: { connection, role: 'ui', versions: [version], schemaHash: 'trezi-supervision-1', capabilities, ...extra }, launch })
@@ -119,10 +91,10 @@ try {
   } else {
     const compile = (sources, output) => run('xcrun', ['swiftc', '-module-cache-path', join(scratch, 'modules'), ...sources, '-o', output])
     const crashFixture = join(scratch, 'guardian-fixture')
-    compile(['src/service/LegacySupervisor.swift', 'src/service/ProcessGuardian.swift', 'test/fixtures/legacy-supervisor/main.swift'], crashFixture)
+    compile(['src/service/BackendSupervisor.swift', 'src/service/ProcessGuardian.swift', 'test/fixtures/backend-supervisor/main.swift'], crashFixture)
     console.log(run(crashFixture, [], { TREZI_TEST_BUN: bun }).trim())
     const supervisor = join(scratch, 'supervisor')
-    compile(['src/service/LegacySupervisor.swift', 'test/fixtures/service-process/SupervisorFixture.swift'], supervisor)
+    compile(['src/service/BackendSupervisor.swift', 'test/fixtures/service-process/SupervisorFixture.swift'], supervisor)
     const profile = join(scratch, 'profile')
     mkdirSync(profile)
     const state = join(profile, 'drafts.json')
@@ -172,7 +144,7 @@ try {
     mkdirSync(join(service, 'MacOS'), { recursive: true })
     const host = join(app, 'MacOS/TreziHost')
     const executable = join(service, 'MacOS/TreziService')
-    compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/service/LedgerStore.swift', 'src/service/OperationLedger.swift', 'src/service/PreferencesFile.swift', 'src/service/PreferencesOwner.swift', 'src/service/WorkspaceFile.swift', 'src/service/WorkspaceOwner.swift', 'src/service/MemoryFile.swift', 'src/service/MemoryOwner.swift', 'src/service/DomainChannel.swift', 'src/service/LegacySupervisor.swift', 'src/service/ManagedProcess.swift', 'src/service/RuntimeNet.swift', 'src/service/RuntimeDetect.swift', 'src/service/StaticSite.swift', 'src/service/StaticServer.swift', 'src/service/RuntimeServer.swift', 'src/service/RuntimeOwner.swift', 'src/service/RepositoryGit.swift', 'src/service/RepositoryJournal.swift', 'src/service/RepositoryEffects.swift', 'src/service/RepositoryLanding.swift', 'src/service/RepositoryOwner.swift', 'src/service/SourcePaths.swift', 'src/service/SourceJournal.swift', 'src/service/SourceHistory.swift', 'src/service/SourceStore.swift', 'src/service/SourceDrafts.swift', 'src/service/SourceOwner.swift', 'src/service/ConversationState.swift', 'src/service/ConversationStore.swift', 'src/service/ConversationOwner.swift', 'src/service/ProviderPolicy.swift', 'src/service/ProviderStore.swift', 'src/service/ProviderHelper.swift', 'src/service/ProviderFrames.swift', 'src/service/ProviderData.swift', 'src/service/ProviderOwner.swift', 'src/service/EditingIslands.swift', 'src/service/EditingStores.swift', 'src/service/EditingProject.swift', 'src/service/EditingOwner.swift', 'src/service/WorkflowJournal.swift', 'src/service/WorkflowContext.swift', 'src/service/WorkflowOwner.swift', 'src/service/WorkflowPublish.swift', 'src/service/WorkflowRemote.swift', 'src/service/WorkflowSetup.swift', 'src/service/WorkflowTools.swift', 'src/service/PlatformTools.swift', 'src/service/PlatformOpen.swift','src/service/PlatformMedia.swift', 'src/service/SimulatorTools.swift', 'src/service/SimulatorBridge.swift', 'src/service/SimulatorOwner.swift', 'src/service/PlatformOwner.swift', 'src/service/ServiceRuntime.swift', 'src/service/ProcessGuardian.swift', 'src/service/ProfilePaths.swift', 'src/service/ServiceMain.swift'], executable)
+    compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/service/LedgerStore.swift', 'src/service/OperationLedger.swift', 'src/service/PreferencesFile.swift', 'src/service/PreferencesOwner.swift', 'src/service/WorkspaceFile.swift', 'src/service/WorkspaceOwner.swift', 'src/service/MemoryFile.swift', 'src/service/MemoryOwner.swift', 'src/service/DomainChannel.swift', 'src/service/BackendSupervisor.swift', 'src/service/ManagedProcess.swift', 'src/service/RuntimeNet.swift', 'src/service/RuntimeDetect.swift', 'src/service/StaticSite.swift', 'src/service/StaticServer.swift', 'src/service/RuntimeServer.swift', 'src/service/RuntimeOwner.swift', 'src/service/RepositoryGit.swift', 'src/service/RepositoryJournal.swift', 'src/service/RepositoryEffects.swift', 'src/service/RepositoryLanding.swift', 'src/service/RepositoryOwner.swift', 'src/service/SourcePaths.swift', 'src/service/SourceJournal.swift', 'src/service/SourceHistory.swift', 'src/service/SourceStore.swift', 'src/service/SourceDrafts.swift', 'src/service/SourceOwner.swift', 'src/service/ConversationState.swift', 'src/service/ConversationStore.swift', 'src/service/ConversationOwner.swift', 'src/service/ProviderPolicy.swift', 'src/service/ProviderStore.swift', 'src/service/ProviderHelper.swift', 'src/service/ProviderFrames.swift', 'src/service/ProviderData.swift', 'src/service/ProviderOwner.swift', 'src/service/EditingIslands.swift', 'src/service/EditingStores.swift', 'src/service/EditingProject.swift', 'src/service/EditingOwner.swift', 'src/service/WorkflowJournal.swift', 'src/service/WorkflowContext.swift', 'src/service/WorkflowOwner.swift', 'src/service/WorkflowPublish.swift', 'src/service/WorkflowRemote.swift', 'src/service/WorkflowSetup.swift', 'src/service/WorkflowTools.swift', 'src/service/PlatformTools.swift', 'src/service/PlatformOpen.swift','src/service/PlatformMedia.swift', 'src/service/SimulatorTools.swift', 'src/service/SimulatorBridge.swift', 'src/service/SimulatorOwner.swift', 'src/service/PlatformOwner.swift', 'src/service/ServiceRuntime.swift', 'src/service/ProcessGuardian.swift', 'src/service/ProfilePaths.swift', 'src/service/ServiceMain.swift'], executable)
     compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/native/ServiceClient.swift', 'test/fixtures/service-process/XPCFixture.swift'], host)
     plist(join(app, 'Info.plist'), '<key>CFBundleIdentifier</key><string>dev.praxis.fixture</string><key>CFBundleExecutable</key><string>TreziHost</string><key>CFBundlePackageType</key><string>APPL</string><key>LSBackgroundOnly</key><true/>')
     plist(join(service, 'Info.plist'), '<key>CFBundleIdentifier</key><string>dev.praxis.service</string><key>CFBundleExecutable</key><string>TreziService</string><key>CFBundlePackageType</key><string>XPC!</string><key>XPCService</key><dict><key>ServiceType</key><string>Application</string><key>RunLoopType</key><string>dispatch_main</string></dict>')
@@ -182,42 +154,7 @@ try {
     run('codesign', ['--force', '--sign', '-', intruder])
     run('codesign', ['--force', '--sign', '-', join(service, '..')])
     run('codesign', ['--force', '--sign', '-', join(app, '..')])
-    // The explicit launch-time rollback uses the same lock and drains its child.
-    const rollbackPIDFile = join(scratch, 'rollback-child.pid')
-    const rollback = processFixture(executable, ['--legacy', '--bun', bun, '--backend', backend, '--profile', profile], { FIXTURE_PID: rollbackPIDFile })
-    const rollbackPID = await pidFile(rollbackPIDFile)
-    groups.add(rollbackPID)
-    const rollbackContender = processFixture(supervisor, ['lock', profile])
-    assert.notEqual((await rollbackContender.done).code, 0, 'rollback shares profile exclusion')
-    writeFileSync(state, '{"newer":"retained-after-rollback"}')
-    rollback.child.kill('SIGTERM')
-    assert.equal((await rollback.done).code, 0)
-    await dead(rollbackPID)
-    groups.delete(rollbackPID)
-    assert.equal(readFileSync(state, 'utf8'), '{"newer":"retained-after-rollback"}')
-    assert.ok(!existsSync(join(profile, 'service')), 'the legacy owner never opens the Swift ledger')
-    console.log('SERVICE-PROCESS rollback: launch, shared lock, drain and newest draft retention PASS')
-    // S06: the legacy launch sweeps the Swift runtime journal before Bun starts, and a
-    // recorded pid now held by an unrelated process (other start time) is left alone.
-    const sweepProfile = join(scratch, 'sweep-profile')
-    mkdirSync(join(sweepProfile, 'service/runtime'), { recursive: true })
-    const unrelated = spawn('/bin/sleep', ['300'], { detached: true, stdio: 'ignore' })
-    const journal = join(sweepProfile, 'service/runtime/processes.json')
-    writeFileSync(journal, JSON.stringify({ version: 1, groups: [{ pgid: unrelated.pid, started: '1' }] }))
-    try {
-      const sweepPIDFile = join(scratch, 'sweep-child.pid')
-      const sweeping = processFixture(executable, ['--legacy', '--bun', bun, '--backend', backend, '--profile', sweepProfile], { FIXTURE_PID: sweepPIDFile })
-      const sweepPID = await pidFile(sweepPIDFile)
-      groups.add(sweepPID)
-      assert.deepEqual(JSON.parse(readFileSync(journal, 'utf8')).groups, [], 'journal settled before the legacy owner started')
-      assert.doesNotThrow(() => process.kill(unrelated.pid, 0), 'an unrelated process with a recorded pid is never signalled')
-      sweeping.child.kill('SIGTERM')
-      assert.equal((await sweeping.done).code, 0)
-      await dead(sweepPID)
-      groups.delete(sweepPID)
-      assert.ok(!existsSync(join(sweepProfile, 'service/ledger')), 'the legacy owner never opens the Swift ledger')
-    } finally { unrelated.kill('SIGKILL') }
-    console.log('SERVICE-PROCESS rollback: runtime journal swept, unrelated pid untouched PASS')
+    writeFileSync(state, '{"newer":"retained-across-xpc"}')
     if (process.argv.includes('--supervision-only')) {
       console.log('SERVICE-PROCESS supervision-only PASS — XPC coverage requires the full fixture')
     } else {
@@ -274,12 +211,12 @@ try {
     assert.equal((await client.done).code, 0)
     await dead(firstBackend)
     groups.delete(firstBackend)
-    assert.equal(readFileSync(state, 'utf8'), '{"newer":"retained-after-rollback"}')
+    assert.equal(readFileSync(state, 'utf8'), '{"newer":"retained-across-xpc"}')
     await pause(300)
     const launchFile = join(scratch, 'launch.json')
     writeFileSync(launchFile, JSON.stringify(launch))
     rmSync(backendPID, { force: true })
-    // Swift (non-legacy) service: restart with epoch resume and stale-resume refusal.
+    // Production service: restart with epoch resume and stale-resume refusal.
     {
       const boot = processFixture(host, ['production', launchFile, executable])
       await boot.line(line => line === 'READY')
@@ -318,7 +255,7 @@ try {
       restarted.child.stdin.end()
       await restarted.done
     }
-    // Written by the previous (legacy) owner while no service ran: imported at launch.
+    // Written by an older Trezi build (before the service owned these files): imported at launch.
     writeFileSync(join(profile, 'preferences.json'), JSON.stringify({ version: 1, values: { 'trezi:chat-hidden': '1', 'trezi:future': null } }))
     writeFileSync(join(profile, 'workspace.json'), JSON.stringify({ projects: [{ root: '/legacy-project', key: '/legacy-project', name: 'legacy', touchedAt: 1 }], activeKey: '/legacy-project', recents: [] }))
     const production = processFixture(host, ['production', launchFile, executable])
@@ -352,37 +289,6 @@ try {
     assert.deepEqual([savedWorkspace.projects.map(p => p.key), savedWorkspace.activeKey], [['/legacy-project', '/second-project'], '/second-project'],
       'the service imported the legacy workspace and wrote the same format')
     assert.ok(!production.lines.some(line => line.startsWith('EVENT ') && JSON.parse(Buffer.from(line.slice(6), 'base64')).service), 'service frames never reach the host')
-    // Live reload from the product's static server running in the supervised
-    // backend: a real file edit must reach the page's reload stream, and a page
-    // that was served before the edit but connects after its broadcast (a page
-    // mid-reload) must still be told to reload.
-    const site = join(scratch, 'site')
-    mkdirSync(site)
-    writeFileSync(join(site, 'index.html'), '<h1 id="title">Before</h1>')
-    production.send({ event: 'fixtureStatic', root: site })
-    const started = await production.line(line => line.startsWith('EVENT ') && JSON.parse(Buffer.from(line.slice(6), 'base64')).method === 'fixtureStatic')
-    const siteURL = JSON.parse(Buffer.from(started.slice(6), 'base64')).url
-    await pause(300) // Let any event for the file written before the watch settle.
-    const served = /var v="(\d+)"/.exec(await (await fetch(siteURL)).text())?.[1]
-    assert.ok(served !== undefined, `served page carries its live-reload version\n${production.stderr}`)
-    const live = await reloadStream(siteURL, served)
-    assert.equal(await live.next(300), null, 'a current page is not told to reload')
-    writeFileSync(join(site, 'index.html'), '<h1 id="title">After</h1>')
-    const changed = await live.next(10_000)
-    live.close()
-    assert.ok(changed !== null && changed !== served, `a file edit under the supervised backend broadcasts a reload\n${production.stderr}`)
-    assert.match(await (await fetch(siteURL)).text(), /After/, 'the reloaded page is the edited file')
-    const late = await reloadStream(siteURL, served)
-    const missed = await late.next(1000)
-    late.close()
-    assert.ok(missed !== null && missed !== served, 'a page that missed the broadcast reloads when its stream connects')
-    await pause(300)
-    const current = /var v="(\d+)"/.exec(await (await fetch(siteURL)).text())?.[1]
-    const settled = await reloadStream(siteURL, current)
-    assert.equal(await settled.next(300), null, 'the reloaded page does not reload again')
-    settled.close()
-    assert.ok(!production.stderr.includes('Live reload'), `watcher reported no failure\n${production.stderr}`)
-    console.log('SERVICE-PROCESS live reload: supervised backend watch, broadcast and missed-broadcast recovery PASS')
     production.send('reconnect')
     production.send({ event: 'fixtureEcho', value: 'during-reconnect' })
     await production.line(line => line === 'RECONNECTED')

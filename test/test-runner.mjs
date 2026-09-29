@@ -106,6 +106,7 @@ try {
     writeFileSync(join(cli, `test/${name}.mjs`), `console.log('${name.toUpperCase()} PASS')`)
   }
   writeFileSync(join(cli, 'test/native-runtime-live.mjs'), "console.log('NATIVE-RUNTIME-LIVE SKIP — no credentials')")
+  writeFileSync(join(cli, 'test/provider-live-parity.mjs'), "console.log('PROVIDER-LIVE-PARITY SKIP: not authorized')")
   const invoke = args => spawnSync('node', [join(cli, 'test/run.mjs'), ...args], { cwd: cli, encoding: 'utf8', timeout: 10000 })
   const report = result => {
     const path = /^Report: (.+)$/m.exec(result.stdout)?.[1]
@@ -115,7 +116,7 @@ try {
   }
   const success = invoke(['native', 'live'])
   assert.equal(success.status, 0, success.stdout + success.stderr)
-  assert.deepEqual(report(success).counts, { PASS: nativeFixtures.length, SKIP: 1 })
+  assert.deepEqual(report(success).counts, { PASS: nativeFixtures.length, SKIP: 2 })
   writeFileSync(join(cli, 'test/native-runtime.mjs'), 'process.exit(1)')
   const failure = invoke(['native'])
   assert.equal(failure.status, 1)

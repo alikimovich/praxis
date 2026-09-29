@@ -43,7 +43,7 @@ ledger; Bun runs evaluations and may only propose. A proposal commits only on th
 revision it was evaluated against, so a manual save always wins; a damaged memory
 file is reported and left untouched instead of being read as empty. Injection
 compares the owner's digest, and unreadable memory never fails a chat.
-`TREZI_BACKEND_OWNER=legacy` keeps the Bun writer as the rollback owner. See
+There is no Bun writer since LKM-111 (the Bun rollback owner was removed). See
 [SWIFT-BACKEND-MEMORY.md](SWIFT-BACKEND-MEMORY.md).
 
 Implementation: `src/main/project-memory.ts`, `src/native/project-memory-service.ts`,

@@ -9,7 +9,7 @@ if CommandLine.arguments.dropFirst().first == "--lifetime-owner" {
     let ownerProfile = CommandLine.arguments[2]
     let ownerBun = CommandLine.arguments[3]
     let lease = try ProfileExclusion(profile: ownerProfile)
-    let supervisor = LegacySupervisor()
+    let supervisor = BackendSupervisor()
     let script = """
     require('node:fs').writeFileSync(process.env.OWNER_PROFILE + '/newer-state', 'newer durable work');
     require('node:fs').writeFileSync(process.env.OWNER_PROFILE + '/backend.pid', String(process.pid));
@@ -67,13 +67,13 @@ bridge.fileHandleForWriting.write(Data("{\"method\":\"short\"}\n".utf8))
 check(try! bridge.fileHandleForReading.readAvailable(upTo: 65536) == Data("{\"method\":\"short\"}\n".utf8), "short bridge line read without filling the buffer")
 bridge.fileHandleForWriting.closeFile()
 check(try! bridge.fileHandleForReading.readAvailable(upTo: 65536).isEmpty, "EOF reads empty")
-let failed = LegacySupervisor()
+let failed = BackendSupervisor()
 fails("missing executable must fail") {
     _ = try failed.start(executable: "/nonexistent/trezi", arguments: [], environment: [:], onExit: { _ in })
 }
 failed.shutdown()
 failed.shutdown()
-let echo = LegacySupervisor()
+let echo = BackendSupervisor()
 let ended = DispatchSemaphore(value: 0)
 let child = try echo.start(executable: "/bin/cat", arguments: [], environment: ProcessInfo.processInfo.environment, onExit: { _ in ended.signal() })
 try child.input.write(contentsOf: Data("handshake\n".utf8))
@@ -82,7 +82,7 @@ try child.input.close()
 check(ended.wait(timeout: .now() + 3) == .success, "child death observed")
 echo.shutdown(gracePeriod: 0.05)
 echo.shutdown()
-let tree = LegacySupervisor()
+let tree = BackendSupervisor()
 let stubborn = try tree.start(executable: "/bin/sh", arguments: ["-c", "trap '' TERM; /bin/sh -c 'trap \"\" TERM; while :; do sleep 1; done' & echo $!; wait"], environment: ProcessInfo.processInfo.environment, onExit: { _ in })
 let line = String(data: stubborn.output.availableData, encoding: .utf8)!.trimmingCharacters(in: .whitespacesAndNewlines)
 let descendant = Int32(line)!
@@ -103,7 +103,7 @@ let bun = ProcessInfo.processInfo.environment["TREZI_TEST_BUN"] ?? "/opt/homebre
 let binary = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL.path
 let targetFile = profile.appendingPathComponent("target.pid").path
 let grandchildFile = profile.appendingPathComponent("grandchild.pid").path
-let detached = LegacySupervisor()
+let detached = BackendSupervisor()
 let bunScript = """
 const {spawn} = require('node:child_process');
 spawn(process.env.GUARD_BINARY, ['--guard', '/bin/sh', '-c', 'trap \"\" TERM; echo $$ > \"$TARGET_PID_FILE\"; sleep 1000 & echo $! > \"$GRANDCHILD_PID_FILE\"; wait'], {detached:true, stdio:['ignore','ignore','inherit',3]});
@@ -150,7 +150,7 @@ recovered?.release()
 print("PASS: abrupt service death drains backend under inherited profile lease and preserves newer data")
 let earlyReleaseProfile = profile.appendingPathComponent("early-release")
 let earlyLease = try ProfileExclusion(profile: earlyReleaseProfile.path)
-let heldBackend = LegacySupervisor()
+let heldBackend = BackendSupervisor()
 let heldChild = try heldBackend.start(executable: "/bin/sh", arguments: ["-c", "trap '' TERM; echo ready; while :; do sleep 1; done"], environment: ProcessInfo.processInfo.environment,
                                      profileDescriptor: earlyLease.guardDescriptor, guardianExecutable: binary, onExit: { _ in })
 check(String(data: heldChild.output.availableData, encoding: .utf8) == "ready\n", "backend holds inherited lease")

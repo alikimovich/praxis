@@ -8,9 +8,8 @@ import type { AgentOptions, PermissionMode, SessionRecord, SessionTranscriptEntr
  * completion policy, titles, model handoff, pending approvals and spawn admission.
  * Bun's provider sessions are adapters: agent.ts reports typed events to the owner and
  * performs the effects its answers call for (landing goes through the repository
- * coordinator). With no Swift owner (`TREZI_BACKEND_OWNER=legacy`, unit tests) the
- * in-process twin in `conversation-model.ts` decides the same way and writes through
- * `sessions-store.ts`. Never both.
+ * coordinator). It is the only owner since LKM-111 removed the in-process twin: with
+ * no service, chats do not start and History is not written.
  */
 
 export type TurnOutcome = 'success' | 'failed'
@@ -52,8 +51,8 @@ export class ConversationError extends Error {
 }
 
 export interface ConversationOwner {
-  /** Which owner this is ('swift' | 'legacy'), for diagnostics and tests. */
-  readonly kind: 'swift' | 'legacy'
+  /** Which owner this is, for diagnostics and tests. */
+  readonly kind: 'swift'
   // Session records (History and each project's current chat).
   save(record: SessionRecord, current?: boolean): Promise<void>
   remove(id: string): Promise<void>

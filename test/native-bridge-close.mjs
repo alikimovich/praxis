@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { once } from 'node:events'
-import { NativeBridge } from '../src/native/bridge.ts'
+import { spawnHostBridge } from './helpers/host-bridge.mjs'
 
 const directory = mkdtempSync(join(tmpdir(), 'trezi-bridge-close-'))
 const executable = join(directory, 'host.mjs')
@@ -15,7 +15,7 @@ createInterface({input:process.stdin}).on('line', () => {
   process.exit(0)
 })
 `, { mode: 0o755 })
-const bridge = new NativeBridge(executable, directory, 'ephemeral')
+const bridge = spawnHostBridge(executable, directory, 'ephemeral')
 const errors = []
 let writes = 0
 bridge.on('host-error', error => errors.push(error))

@@ -21,7 +21,7 @@ import {
 import { recordEdit } from './edit-history'
 import { isRepoRoot } from './git'
 import { commitLiveTurn } from './live-commit'
-import { enqueueRepoWrite, resetRepoWriteQueues } from './repo-write-queue'
+import { enqueueRepoWrite } from './repo-write-queue'
 import type { SessionStore } from './sessions-store'
 import type { TurnTerminalOutcome } from './turn-terminal'
 import {
@@ -96,7 +96,6 @@ const states = new Map<string, ChatState>()
 export function initChatIsolation(d: Deps): void {
   deps = d
   states.clear()
-  resetRepoWriteQueues()
 }
 
 /** Emit an isolation event on the same webContents path other agent:* events use,

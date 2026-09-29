@@ -3,8 +3,7 @@ import Darwin
 
 /// Opening things outside Trezi (LKM-102), formerly Bun's own `/usr/bin/open` and editor
 /// CLI runs (`native/platform.ts` `shell.openExternal`/`openPath`, `main/props.ts`
-/// "Open in editor"; their legacy twins are `native/platform-legacy.ts` and
-/// `main/open-in-editor-legacy.ts`):
+/// "Open in editor"; the sole owner since LKM-111 removed the TS twins):
 /// - an external link: http(s) only, handed to `open` as one argument;
 /// - a file: an existing absolute path, opened with its default app;
 /// - "Open in editor": a file inside the project, tried with the editor CLIs in order

@@ -1,5 +1,10 @@
 # Swift-owned preferences (S03, first writer transfer)
 
+> **Since LKM-111 (2026-09-29):** the launch-time rollback (`TREZI_BACKEND_OWNER=legacy`,
+> `TreziService --legacy`) and the Bun twins it ran are removed. The Swift owner described
+> here is the only one; passages about the rollback, the legacy launch or the TS twins
+> are history. Current status: [SWIFT-BACKEND-RETIREMENT.md](SWIFT-BACKEND-RETIREMENT.md).
+
 LKM-91, the preferences half of S03 in the [canonical plan](SWIFT-BACKEND-PLAN.md)
 and [roadmap](SWIFT-BACKEND-ROADMAP.md). It is the first domain whose writer
 moves: under the default launch (`TREZI_BACKEND_OWNER=swift`) the Swift service is

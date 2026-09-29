@@ -45,17 +45,20 @@ for (const text of [`macOS ${MIN_MACOS} or later`, `macOS ${MIN_SDK} SDK`, `Bun 
 const spec = nativeServiceLaunchSpec(root, [], { TREZI_USER_DATA: '/tmp/trezi-distribution-profile' }, '/bun')
 const out = join(root, 'out/native')
 assert.equal(spec.command, join(out, 'Trezi.app/Contents/MacOS/TreziHost'))
-assert.ok(spec.args.includes(join(out, 'index.cjs')))
+assert.ok(spec.args.includes(join(out, 'Trezi.app/Contents/Resources/backend/index.cjs')))
+// The retained JS ships inside the app, beside the Bun that runs it.
+assert.match(build, /Resources\/backend/)
 assert.match(build, /XPCServices\/dev\.praxis\.service\.xpc\/Contents/)
 assert.match(build, /copyFileSync\(join\(serviceContents, 'MacOS\/TreziService'\), join\(out, 'TreziService'\)\)/)
-const legacy = nativeServiceLaunchSpec(root, [], { TREZI_USER_DATA: '/tmp/trezi-distribution-profile', TREZI_BACKEND_OWNER: 'legacy' }, '/bun')
-assert.equal(legacy.command, join(out, 'TreziService'))
+// Trezi.app carries the Bun it runs, so `open -a Trezi` needs no installed Bun.
+assert.ok(build.indexOf('bundleBun(contents)') > 0, 'the build bundles Bun into Trezi.app')
+assert.match(build, /src\/native\/HostLaunch\.swift/)
 
 // A present build carries the same values (skipped, and said so, when there is none).
 const plist = join(out, 'Trezi.app/Contents/Info.plist')
 if (existsSync(plist)) {
   assert.match(readFileSync(plist, 'utf8'), new RegExp(`LSMinimumSystemVersion</key><string>${MIN_MACOS.replace('.', '\\.')}</string>`))
-  for (const path of ['Trezi.app/Contents/MacOS/TreziHost', 'Trezi.app/Contents/XPCServices/dev.praxis.service.xpc/Contents/MacOS/TreziService', 'TreziService', 'index.cjs'])
+  for (const path of ['Trezi.app/Contents/MacOS/TreziHost', 'Trezi.app/Contents/Helpers/bun', 'Trezi.app/Contents/XPCServices/dev.praxis.service.xpc/Contents/MacOS/TreziService', 'TreziService', 'Trezi.app/Contents/Resources/backend/index.cjs', 'Trezi.app/Contents/Resources/backend/provider-helper.cjs'])
     assert.ok(existsSync(join(out, path)), `the build contains ${path}`)
   console.log('DISTRIBUTION OK — one platform source, enforced at build/launch/CLI/install; build layout matches the launch spec')
 } else {

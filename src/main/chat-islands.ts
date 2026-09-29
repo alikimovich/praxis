@@ -4,8 +4,7 @@ import { islandDefinition } from './chat-island-schema'
 import { islandSource, undoIsland, writeIsland } from './chat-island-source'
 import { selectControlCandidates } from './control-selection'
 import { cancelControlComposition } from './controls-jev'
-import { swiftEditingOwner, type EditingOwner } from './editing-owner'
-import { legacyEditing } from './editing-model'
+import { editingOwner, type EditingOwner } from './editing-owner'
 
 interface Session {
   root: string; recordId: string; records: IslandRecord[]; views: Map<string, IslandView>
@@ -18,19 +17,20 @@ interface Session {
  * The chat's islands as Bun shows and edits them. Every decision (definition
  * admission, activation by the defining turn's landing, command admission, the
  * revision chain of a queued batch, per-island Undo) and every history write belong to
- * the editing owner (S12: the Swift service, or the `editing-model.ts` twin); this
+ * the editing owner (S12: the Swift service; its history lives in the profile); this
  * class keeps the views, the composing preview and the JS helpers (definition
  * validation, Jev selection, literal resolution and hash-bound source proposals).
  */
 export class ChatIslands {
   readonly sessions = new Map<string, Session>()
-  readonly owner: EditingOwner
   readonly origin: (chat: string) => string | null
-  constructor(readonly directory: string, readonly changed: (chat: string) => void, readonly select = selectControlCandidates,
+  private readonly given?: EditingOwner
+  constructor(readonly changed: (chat: string) => void, readonly select = selectControlCandidates,
     options: { owner?: EditingOwner; origin?: (chat: string) => string | null } = {}) {
-    this.owner = options.owner ?? swiftEditingOwner() ?? legacyEditing({ islands: directory })
+    this.given = options.owner
     this.origin = options.origin ?? (() => null)
   }
+  get owner(): EditingOwner { return this.given ?? editingOwner() }
   register(chat: string, root: string, recordId: string, turn: () => number) {
     const existing = this.sessions.get(chat)
     if (existing?.root === root && existing.recordId === recordId) return

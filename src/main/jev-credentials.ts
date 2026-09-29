@@ -1,5 +1,4 @@
 import type { ProviderConnection } from '../shared/api'
-import type { ProviderStore } from './providers-store'
 
 export class MissingJevCredentialError extends Error {}
 
@@ -34,7 +33,10 @@ export function checkedJevKey(key: string | null): string {
 }
 
 /** Main-process only. Never send a custom endpoint's credential to Gateway. */
-export function savedJevKey(store: ProviderStore, connectionId?: string): string | undefined {
+export function savedJevKey(
+  store: { list: () => ProviderConnection[]; secretFor: (id: string) => string | null },
+  connectionId?: string
+): string | undefined {
   const connection = jevConnection(store.list(), connectionId)
   return connection && checkedJevKey(store.secretFor(connection.id))
 }

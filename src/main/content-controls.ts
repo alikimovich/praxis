@@ -4,7 +4,7 @@ import { join, relative } from 'node:path'
 import type { PanelRecipe } from '@alikimovich/content-controls/recipe'
 import type { ContentControlDocument, ContentControlPanel } from '../shared/api'
 import { enqueueRepoWrite } from './repo-write-queue'
-import { editingOwner } from './editing-model'
+import { editingOwner } from './editing-owner'
 
 const MAX_BYTES = 512 * 1024
 const digest = (text: string): string => createHash('sha256').update(text).digest('hex')

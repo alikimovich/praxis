@@ -1,8 +1,8 @@
 import type { NativeSheetController } from './sheets-runtime'
-import { findPreviewProcesses, stopPreviewProcess, type PreviewProcess } from './preview-processes'
+import type { PreviewProcess } from '../main/platform-owner'
 
 export class NativePreviewRecovery {
-  constructor(readonly sheets: NativeSheetController, readonly find = findPreviewProcesses, readonly stop = stopPreviewProcess) {}
+  constructor(readonly sheets: NativeSheetController, readonly find: (root: string) => Promise<PreviewProcess[]>, readonly stop: (server: PreviewProcess) => Promise<void>) {}
   open(key: string) {
     const entry = this.sheets.workspace.state.projects.find(p => p.key === key)
     if (!entry || this.sheets.current?.state.busy) return

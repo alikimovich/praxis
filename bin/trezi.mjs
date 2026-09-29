@@ -1,7 +1,11 @@
 #!/usr/bin/env bun
 
-import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { existsSync, readFileSync, realpathSync } from 'node:fs'
+// `trezi --update`: pull, reinstall and rebuild this checkout. The `trezi` command
+// itself is the shell script beside this file (bin/trezi), which runs this with the
+// Bun on PATH or the one bundled into Trezi.app. Any other arguments are handed to
+// bin/trezi, for installs whose `trezi` link still points here.
+import { execFileSync, spawnSync } from 'node:child_process'
+import { realpathSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { requireSupportedPlatform } from '../scripts/requirements.mjs'
@@ -44,48 +48,14 @@ export function lockfilesToRestore(porcelain) {
   return restore
 }
 
-function detectPackageManager() {
+/** The Bun on PATH, else the one running this (Trezi's bundled Bun). */
+function bun() {
   const check = spawnSync('bun', ['--version'], { stdio: 'ignore' })
-  if (check.error || check.status !== 0) throw new Error('Bun is required. Install it from https://bun.sh, then run bun install.')
-  return 'bun'
-}
-
-function usage() {
-  return `Usage: trezi [command]
-
-Commands:
-  trezi              Launch Trezi (builds first if needed)
-  trezi --project <repo>  Open a project in the native macOS app
-  trezi --update      Pull latest changes, reinstall, and rebuild
-  trezi --help        Show this help message
-  trezi --version      Print the installed version
-`
-}
-
-function printVersion() {
-  const pkgPath = join(repoRoot, 'package.json')
-  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
-  console.log(`Trezi ${pkg.version}`)
-}
-
-export function nativeLaunchSpec(root, args = []) {
-  return { command: 'bun', args: [join(root, 'scripts/start-native.mjs'), ...args], cwd: root }
-}
-
-function launch(args = []) {
-  requireSupportedPlatform()
-  const spec = nativeLaunchSpec(repoRoot, args)
-  const host = join(repoRoot, 'out/native/Trezi.app/Contents/MacOS/TreziHost')
-  if (!existsSync(join(repoRoot, 'out/native/index.cjs')) || !existsSync(host) || !existsSync(join(repoRoot, 'out/native/TreziService'))) {
-    const result = spawnSync(detectPackageManager(), ['run', 'build'], { cwd: repoRoot, stdio: 'inherit' })
-    if (result.error || result.status !== 0) throw new Error('Trezi build failed — see output above.')
-  }
-  const child = spawn(spec.command, spec.args, { cwd: spec.cwd, detached: true, stdio: 'ignore' })
-  child.once('error', error => { console.error(`Could not launch Trezi: ${error.message}`); process.exitCode = 1 })
-  child.once('spawn', () => { child.unref(); console.log('Launching Trezi…') })
+  return check.error || check.status !== 0 ? process.execPath : 'bun'
 }
 
 function update() {
+  requireSupportedPlatform()
   let before
   try {
     before = execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
@@ -117,7 +87,7 @@ function update() {
     }
   }
 
-  const pm = detectPackageManager()
+  const pm = bun()
   const steps = [
     ['git', ['pull', '--ff-only']],
     [pm, ['install']],
@@ -128,7 +98,7 @@ function update() {
     const result = spawnSync(cmd, args, { cwd: repoRoot, stdio: 'inherit' })
     if (result.status !== 0) {
       console.error(
-        `Update failed while running \`${cmd} ${args.join(' ')}\` (exit code ${result.status}).` +
+        `Update failed while running \`${cmd === pm ? 'bun' : cmd} ${args.join(' ')}\` (exit code ${result.status}).` +
           (cmd === 'git'
             ? ' If you have local changes, commit or stash them and try again.'
             : ''),
@@ -155,54 +125,17 @@ function update() {
 
 function main() {
   const args = process.argv.slice(2)
-  const command = args[0]
-
-  if (command === undefined) {
-    launch()
-    return
-  }
-
-  if (command === '--project') {
-    if (args.length !== 2) throw new Error('Usage: trezi --project <repo>')
-    launch(['--project', realpathSync(args[1])])
-    return
-  }
-
-  if (command === '--update' || command === 'update') {
-    // --no-launch is accepted (passed by the in-app updater) and ignored,
-    // since update() never auto-launches regardless.
-    update()
-    return
-  }
-
-  if (command === 'serve') {
-    console.error('Browser and Tailscale modes were retired with Electron. Use trezi --project <repo> for the native app.')
-    process.exitCode = 1
-    return
-  }
-
-  if (command === '--help' || command === '-h') {
-    console.log(usage())
-    process.exit(0)
-    return
-  }
-
-  if (command === '--version' || command === '-v') {
-    printVersion()
-    process.exit(0)
-    return
-  }
-
-  console.error(`Unknown command: ${command}\n`)
-  console.error(usage())
-  process.exit(1)
+  // --no-launch (older in-app updaters pass it) is accepted and ignored.
+  if (args[0] === '--update' || args[0] === 'update') return update()
+  const result = spawnSync(join(repoRoot, 'bin/trezi'), args, { stdio: 'inherit' })
+  process.exit(result.status ?? 1)
 }
 
-// Run the CLI only when invoked as a script (directly or via the PATH symlink
-// install.sh creates), not when imported by a test. realpath both sides so the
-// symlink and its target compare equal. Default to running on any error — a
-// real CLI invocation always has a resolvable argv[1], so a throw here only
-// happens in edge cases where no-op'ing the command would be worse.
+// Run the CLI only when invoked as a script (directly or via a PATH symlink), not
+// when imported by a test. realpath both sides so the symlink and its target compare
+// equal. Default to running on any error — a real CLI invocation always has a
+// resolvable argv[1], so a throw here only happens in edge cases where no-op'ing the
+// command would be worse.
 function invokedAsScript() {
   try {
     return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))

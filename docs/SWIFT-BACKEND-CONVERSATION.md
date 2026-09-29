@@ -1,5 +1,10 @@
 # Swift conversation coordinator: chat state and orchestration (S11)
 
+> **Since LKM-111 (2026-09-29):** the launch-time rollback (`TREZI_BACKEND_OWNER=legacy`,
+> `TreziService --legacy`) and the Bun twins it ran are removed. The Swift owner described
+> here is the only one; passages about the rollback, the legacy launch or the TS twins
+> are history. Current status: [SWIFT-BACKEND-RETIREMENT.md](SWIFT-BACKEND-RETIREMENT.md).
+
 LKM-97, roadmap row S11 ("Chat/turn/spawn orchestration and transcript state") of the
 [canonical plan](SWIFT-BACKEND-PLAN.md) and [roadmap](SWIFT-BACKEND-ROADMAP.md). It
 follows [source](SWIFT-BACKEND-SOURCE.md). Under the default launch
@@ -13,8 +18,9 @@ they supply typed events, and Bun performs the effects the owner's answers call 
 - `src/service/ConversationStore.swift`: session records and History, live
   checkpoints, crash recovery.
 - `src/native/conversation-service.ts`: Bun's client. `src/main/conversation-owner.ts`
-  is the seam; `src/main/conversation-model.ts` is the in-process twin, the rollback
-  owner. `src/main/chat-turns.ts` attributes provider events to turns.
+  is the seam (it throws without the service). The in-process twin
+  `conversation-model.ts` was removed in LKM-111;
+  `test/fixtures/conversation-owner/parity-golden.json` pins the answers it gave. `src/main/chat-turns.ts` attributes provider events to turns.
   `src/main/agent.ts` asks the owner before every transition.
 
 ## The domain, exactly
@@ -140,5 +146,5 @@ and source owners, into a fixture (`test/fixtures/conversation-owner/main.swift`
 - **crash:** SIGKILL mid-turn, inside a checkpoint write and inside a History write;
   newer records kept, damaged checkpoints moved aside;
 - **rollback**, **schema**, **drain**, the `comment-agents` suite re-run with the Swift
-  owners preloaded (`test/helpers/conversation-owner-preload.mjs`), and the adapter
+  owners installed (since LKM-111 `test/helpers/with-service-owners.mjs`), and the adapter
   boundary (no backend knows the owner).

@@ -1,6 +1,3 @@
-import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import type { Revision } from '../shared/service-contract/types'
 import { projectKey } from '../shared/projectKey'
 
@@ -12,13 +9,13 @@ export interface ProjectMemory {
   updatedAt: number
   /** SHA-256 of the file's bytes, or `absent`: the version this snapshot is. */
   digest: string
-  /** The Swift owner's revision for this project (absent from the legacy owner). */
+  /** The owner's revision for this project. */
   revision?: Revision
 }
 
 /**
- * The owner of project memory: the Swift service (S05, `project-memory-service.ts`)
- * or, under `TREZI_BACKEND_OWNER=legacy`, the Bun writer below. `save` is the
+ * The owner of project memory: the Swift service (S05, `project-memory-service.ts`),
+ * the only writer since LKM-111 (the file format is `MemoryFile.swift`). `save` is the
  * editor's manual save, the user's final override. `propose` is a generated
  * evaluation: it commits only if memory is still the `base` it was evaluated
  * against, and answers `null` (stale) otherwise, so it can never overwrite a
@@ -46,92 +43,9 @@ export class ProjectMemoryError extends Error {
   }
 }
 
-// --- The format, shared by both owners (MemoryFile.swift produces the same bytes) ---
-
-export const ABSENT = 'absent'
-export const memoryDigest = (bytes: Buffer | null): string =>
-  bytes ? createHash('sha256').update(bytes).digest('hex') : ABSENT
-/** The file name: hex SHA-256 of `projectKey(root)`. */
-export const memoryFileId = (root: string): string =>
-  createHash('sha256').update(projectKey(root)).digest('hex')
 /** The editor's value as stored: trimmed, then bounded. */
 export const normalizeProjectMemory = (content: string): string =>
   content.trim().slice(0, MAX_PROJECT_MEMORY_CHARS)
-export const encodeProjectMemory = (record: { content: string; updatedAt: number }): Buffer =>
-  Buffer.from(JSON.stringify({ content: record.content, updatedAt: record.updatedAt }), 'utf8')
-
-/**
- * Absent is empty. Anything but an object with a string `content` and a number
- * `updatedAt` is damaged: refused, and never replaced by either owner (the
- * pre-S05 reader treated it as empty and the next save overwrote it).
- */
-export function decodeProjectMemory(bytes: Buffer | null): { content: string; updatedAt: number } {
-  if (!bytes) return { content: '', updatedAt: 0 }
-  let raw: unknown
-  try {
-    raw = JSON.parse(bytes.toString('utf8'))
-  } catch {
-    throw damaged()
-  }
-  const record = raw as Partial<Record<'content' | 'updatedAt', unknown>> | null
-  if (!record || typeof record !== 'object' || Array.isArray(record)) throw damaged()
-  if (typeof record.content !== 'string' || typeof record.updatedAt !== 'number') throw damaged()
-  return { content: record.content.slice(0, MAX_PROJECT_MEMORY_CHARS), updatedAt: record.updatedAt }
-}
-
-const damaged = () =>
-  new ProjectMemoryError(
-    'recoveryRequired',
-    'Project memory is not a valid saved memory. It was left untouched; fix or remove it, then try again.'
-  )
-
-/**
- * The Bun writer: the `TREZI_BACKEND_OWNER=legacy` rollback owner. Durable,
- * per-machine memory under Trezi userData rather than `<repo>/.trezi`: memories
- * are model context, not project source, and must never sneak into a
- * commit/publish or participate in worktree merges. Reads, compares and writes are
- * synchronous, so each operation is atomic within this process.
- */
-export function createProjectMemoryStore(
-  baseDir: string,
-  now: () => number = Date.now
-): ProjectMemoryStore {
-  const dir = join(baseDir, 'project-memories')
-  const fileFor = (root: string): string => join(dir, `${memoryFileId(root)}.json`)
-  const read = (root: string): ProjectMemory => {
-    let bytes: Buffer | null = null
-    try {
-      bytes = readFileSync(fileFor(root))
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw new ProjectMemoryError('ioFailure', `Project memory could not be read (${String(error)}).`)
-      }
-    }
-    return { ...decodeProjectMemory(bytes), digest: memoryDigest(bytes) }
-  }
-  const write = (root: string, current: ProjectMemory, content: string): ProjectMemory => {
-    const next = normalizeProjectMemory(content)
-    if (next === current.content) return current
-    const record = { content: next, updatedAt: now() }
-    const bytes = encodeProjectMemory(record)
-    mkdirSync(dir, { recursive: true })
-    const target = fileFor(root)
-    const tmp = `${target}.${process.pid}.tmp`
-    writeFileSync(tmp, bytes)
-    renameSync(tmp, target)
-    return { ...record, digest: memoryDigest(bytes) }
-  }
-
-  return {
-    get: async (root) => read(root),
-    save: async (root, content) => write(root, read(root), content),
-    propose: async (root, base, content) => {
-      if (!normalizeProjectMemory(content)) throw new ProjectMemoryError('invalidRequest', 'A proposal cannot erase project memory.')
-      const current = read(root)
-      return current.digest === base.digest ? write(root, current, content) : null
-    }
-  }
-}
 
 /**
  * Serialize automatic memory evaluations per project. Each evaluator reads the

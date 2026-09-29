@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 /**
@@ -11,18 +11,20 @@ import { join } from 'node:path'
  * The two harnesses can both be ASKED — `codex debug models` prints its whole
  * model table as JSON, and the Claude Agent SDK's `Query.supportedModels()`
  * returns the same list the `/model` menu shows — so this module holds the pure
- * half of doing that: the parsers, plus a TTL cache that persists to disk.
+ * half of doing that: the parsers, plus a TTL cache over the file the service's
+ * provider owner persists.
  *
  * Pure on purpose (the `codex-retry.ts` / `providers-store.ts` pattern): NO
  * electron import, an injected `baseDir` and an injected clock, so the whole
  * thing unit-tests in the bun tier (test/model-catalog.mjs). The impure parts sit
- * around it — `codex-models.ts` finds and runs the CLI, `providers.ts` resolves
+ * around it — the provider owner runs the CLI probe (`ProviderData.swift`) and writes
+ * the cache, `providers.ts` resolves
  * the data dir, schedules the refresh and assembles `ModelChoice[]`, and
  * `backends/claude.ts` feeds the Claude side through `recordClaudeModels` once a
  * live query exists.
  *
- * NOTHING here throws. A model list is a nicety; a parse failure, an unwritable
- * cache dir or a hand-mangled cache file must degrade to "we don't know yet"
+ * NOTHING here throws. A model list is a nicety; a parse failure, a refused
+ * write or a hand-mangled cache file must degrade to "we don't know yet"
  * (→ the caller's last-resort curated list), never break the picker or a turn.
  */
 
@@ -188,9 +190,9 @@ export function createModelCatalog(opts: {
   baseDir: string
   now?: () => number
   ttlMs?: number
-  /** Another writer of the file (the Swift provider owner): true when it took the
-   *  write, so this module only updates its memory. */
-  persist?: (backend: CatalogBackend, models: CatalogModel[]) => boolean
+  /** The file's writer: the Swift provider owner (the only one since LKM-111). False
+   *  when it could not take the write; the list then lives in memory for this run. */
+  persist: (backend: CatalogBackend, models: CatalogModel[]) => boolean
 }): ModelCatalog {
   const file = join(opts.baseDir, 'model-catalog.json')
   const now = opts.now ?? Date.now
@@ -216,9 +218,9 @@ export function createModelCatalog(opts: {
   }
 
   /** Any unreadable/unparseable/mis-shaped file reads as "no cache". Unlike
-   *  providers-store there is nothing to preserve here — every value is
-   *  re-derivable from the harness, so the corrupt file is simply overwritten
-   *  on the next successful discovery. */
+   *  providers.json there is nothing to preserve here — every value is
+   *  re-derivable from the harness, so the owner simply overwrites the corrupt
+   *  file on the next successful discovery. */
   const load = (): Partial<Record<CatalogBackend, CacheEntry>> => {
     if (entries) return entries
     entries = {}
@@ -255,19 +257,9 @@ export function createModelCatalog(opts: {
     if (!models.length) return
     const current = load()
     current[backend] = { at: now(), models }
-    if (opts.persist?.(backend, models)) return
-    try {
-      mkdirSync(opts.baseDir, { recursive: true })
-      const body: CacheFile = { version: 1, entries: current }
-      // tmp+rename so a crash mid-write can't leave a half-file that then reads
-      // as corrupt on the next launch. Cheap — the file is well under a KB.
-      const tmp = `${file}.tmp`
-      writeFileSync(tmp, JSON.stringify(body), 'utf8')
-      renameSync(tmp, file)
-    } catch {
-      // A read-only or full disk costs us persistence, not correctness: the
-      // in-memory entry above still serves this whole app run.
-    }
+    // A refused write costs persistence, not correctness: the in-memory entry above
+    // still serves this whole app run.
+    opts.persist(backend, models)
   }
 
   return { get, isStale, set }

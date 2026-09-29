@@ -1,5 +1,10 @@
 # Swift repository coordinator: Git, worktrees and recovery (S07)
 
+> **Since LKM-111 (2026-09-29):** the launch-time rollback (`TREZI_BACKEND_OWNER=legacy`,
+> `TreziService --legacy`) and the Bun twins it ran are removed. The Swift owner described
+> here is the only one; passages about the rollback, the legacy launch or the TS twins
+> are history. Current status: [SWIFT-BACKEND-RETIREMENT.md](SWIFT-BACKEND-RETIREMENT.md).
+
 LKM-95, roadmap row S07 ("Git/worktrees/isolation policy and recovery; per-repository
 Swift coordinator") of the [canonical plan](SWIFT-BACKEND-PLAN.md) and
 [roadmap](SWIFT-BACKEND-ROADMAP.md). It follows [runtime](SWIFT-BACKEND-RUNTIME.md).
@@ -184,7 +189,9 @@ surrogates are refused before anything is journaled.
 inside an effect) and drives it through Bun's client and the unchanged TS entry points:
 - **Parity.** The legacy suites `chat-worktrees`, `worktrees`, `live-commit`, `git`,
   `chat-recovery`, `auto-reconciliation` and `setup-next` run unchanged with the Swift
-  owner preloaded (`test/helpers/repository-owner-preload.mjs`) and must send it frames.
+  owner preloaded (`test/helpers/repository-owner-preload.mjs`, which since LKM-111
+  starts the editing fixture so the conversation, source and editing owners are real
+  too) and must send it frames.
   `chat-islands` is left out: it assumes a lease is granted within one timer tick.
 - **Lanes.** A worktree root waits for its live checkout's lease; an effect outside a
   lease waits; another repository runs concurrently; nested leases and effects inside

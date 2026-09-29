@@ -1,9 +1,8 @@
-import { join } from 'node:path'
 import { ChatIslands, installChatIslands } from '../main/chat-islands'
 import { currentTurn } from '../main/agent'
 import { TurnBoundaries } from './turn-boundaries'
 import type { NativeChatSnapshot } from '../shared/native-chat-controller'
-import { app, views } from './platform'
+import { views } from './platform'
 import { chatAgentSettingsFromOptions } from '../shared/chat-settings'
 import type { AgentEvent } from '../shared/api'
 import type { NativeBridge } from './bridge'
@@ -16,7 +15,7 @@ const boundaries = new TurnBoundaries()
 export const turnBoundaries = new Set<(key: string, kind: 'begin' | 'landed' | 'failed', turn: string | null) => void>()
 export let nativeChat: NativeChatController
 export function installNativeChat(host: NativeBridge, view: NativeView) {
-  const islands = new ChatIslands(join(app.getPath('userData'), 'chat-islands'), key => {
+  const islands = new ChatIslands(key => {
     const chat = nativeChat.chats.get(key)
     if (chat) nativeChat.changed(chat)
   }, undefined, { origin: currentTurn })

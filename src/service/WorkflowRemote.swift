@@ -75,7 +75,7 @@ struct WorkflowRemote {
 
     // MARK: Trezi's own update check
 
-    /// `checkForUpdate` (src/main/update.ts): after a fetch, how far HEAD trails its tracked
+    /// The update check: after a fetch, how far HEAD trails its tracked
     /// upstream (`origin/main` when it has none). Every soft failure (not a checkout, no
     /// remote, offline) is `idle`, so a source install without a remote never nags.
     func updateCheck() -> JSValue {

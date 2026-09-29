@@ -1,11 +1,14 @@
 // S15 clean install, launch and update, end to end through the real `install.sh` and
-// `bin/trezi.mjs` against a local origin: only Bun's `install`/`run build` (scripted, so
-// nothing is downloaded or compiled) and `git clone` (redirected to the local origin, so
-// nothing leaves the machine) are stand-ins. Covers a clean install, an install re-run
+// `bin/trezi` (with `bin/trezi.mjs` for updates) against a local origin: only Bun's
+// `install`/`run build` (scripted, so nothing is downloaded or compiled), `git clone`
+// (redirected to the local origin, so nothing leaves the machine), `open` and
+// `lsregister` (recorded, so no app starts and LaunchServices is untouched) and the
+// Applications folder (a scratch one) are stand-ins. Covers a clean install, an install re-run
 // that updates, a launch (with the build present and with it missing), an update, an
 // update interrupted at its build that a second run completes without losing the earlier
 // build, a diverged checkout that stops before installing anything, and lockfile drift.
-// This proves the launcher and updater scripts, not a real Xcode build or a launched app.
+// This proves the launcher, installer and updater scripts, not a real Xcode build or a
+// launched app.
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
 import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
@@ -35,12 +38,18 @@ case "$1" in
   install) echo "install $(git rev-parse --short HEAD)" >> "$TEST_STATE/calls.log"; [ -f "$TEST_STATE/fail-install" ] && exit 1; exit 0;;
   run) echo "run $2 $(git rev-parse --short HEAD)" >> "$TEST_STATE/calls.log"
     if [ -f "$TEST_STATE/fail-build" ]; then echo "build failed (fixture)" >&2; exit 1; fi
-    mkdir -p out/native/Trezi.app/Contents/MacOS && : > out/native/index.cjs && : > out/native/TreziService && : > out/native/Trezi.app/Contents/MacOS/TreziHost; exit 0;;
+    mkdir -p out/native/Trezi.app/Contents/MacOS out/native/Trezi.app/Contents/Helpers out/native/Trezi.app/Contents/Resources/backend && : > out/native/Trezi.app/Contents/Resources/backend/index.cjs && : > out/native/TreziService
+    : > out/native/Trezi.app/Contents/MacOS/TreziHost && : > out/native/Trezi.app/Contents/Helpers/bun; exit 0;;
 esac
 exit 2`)
 shim('git', `if [ "$1" = clone ]; then shift 2; exec "${realGit}" clone "$TEST_ORIGIN" "$@"; fi\nexec "${realGit}" "$@"`)
+shim('open', 'printf "%s\\n" "$@" > "$TEST_STATE/opened"')
+shim('lsregister', 'echo "$@" >> "$TEST_STATE/lsregister.log"')
 shim('agent-browser', 'exit 0') // the installer's optional step is skipped when it is present (no terminal prompt)
+const applications = join(scratch, 'Applications')
+mkdirSync(applications)
 const env = { HOME: home, PATH: `${shims}:/usr/bin:/bin:/usr/sbin:/sbin`, SHELL: '/bin/zsh', TEST_STATE: state, TEST_ORIGIN: join(scratch, 'origin.git'),
+  TREZI_APPLICATIONS: applications, TREZI_LSREGISTER: join(shims, 'lsregister'),
   GIT_AUTHOR_NAME: 'T', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 'T', GIT_COMMITTER_EMAIL: 't@example.com' }
 
 /** Runs a command in its own session (no controlling terminal), bounded. */
@@ -60,20 +69,22 @@ const seed = join(scratch, 'seed')
 git(scratch, 'init', '-q', '--bare', '--initial-branch=main', 'origin.git')
 git(scratch, 'init', '-q', '--initial-branch=main', 'seed')
 for (const dir of ['bin', 'scripts']) mkdirSync(join(seed, dir))
-for (const file of ['bin/trezi.mjs', 'scripts/requirements.mjs']) copyFileSync(join(root, file), join(seed, file))
-writeFileSync(join(seed, 'bin/praxis.mjs'), '#!/usr/bin/env bun\n')
+for (const file of ['bin/trezi', 'bin/trezi.mjs', 'scripts/requirements.mjs']) copyFileSync(join(root, file), join(seed, file))
+chmodSync(join(seed, 'bin/trezi'), 0o755)
 writeFileSync(join(seed, 'package.json'), JSON.stringify({ name: 'trezi', version: '1.0.0', scripts: { build: 'x' } }))
 writeFileSync(join(seed, 'bun.lock'), 'lock 1\n')
-writeFileSync(join(seed, 'scripts/start-native.mjs'),
-  "import { writeFileSync } from 'node:fs'\nwriteFileSync(`${process.env.TEST_STATE}/launched.json`, JSON.stringify({ args: process.argv.slice(2), cwd: process.cwd() }))\n")
 git(seed, 'add', '-A'); git(seed, 'commit', '-qm', 'one'); git(seed, 'remote', 'add', 'origin', env.TEST_ORIGIN); git(seed, 'push', '-q', 'origin', 'main')
 const release = name => { writeFileSync(join(seed, `${name}.txt`), `${name}\n`); git(seed, 'add', '-A'); git(seed, 'commit', '-qm', name); git(seed, 'push', '-q', 'origin', 'main') }
-const built = () => existsSync(join(trezi, 'out/native/index.cjs')) && existsSync(join(trezi, 'out/native/TreziService')) && existsSync(join(trezi, 'out/native/Trezi.app/Contents/MacOS/TreziHost'))
+const app = join(trezi, 'out/native/Trezi.app')
+const built = () => ['out/native/Trezi.app/Contents/Resources/backend/index.cjs', 'out/native/TreziService', 'out/native/Trezi.app/Contents/MacOS/TreziHost', 'out/native/Trezi.app/Contents/Helpers/bun']
+  .every(path => existsSync(join(trezi, path)))
 const step = line => (line.startsWith('run') ? 'run build' : 'install')
 const head = () => git(trezi, 'rev-parse', '--short', 'HEAD')
-async function launched() {
-  for (let i = 0; i < 200; i++) { if (existsSync(join(state, 'launched.json'))) return JSON.parse(readFileSync(join(state, 'launched.json'), 'utf8')); await new Promise(r => setTimeout(r, 50)) }
-  throw new Error('the launcher never started scripts/start-native.mjs')
+/** What the command asked `open` for (and clears it). */
+function opened() {
+  const args = readFileSync(join(state, 'opened'), 'utf8').trim().split('\n')
+  rmSync(join(state, 'opened'))
+  return args
 }
 
 try {
@@ -84,20 +95,28 @@ try {
   assert.deepEqual(log().map(step), ['install', 'run build'])
   assert.ok(built(), 'the build produced the host, the service and the Bun bundle')
   assert.ok(lstatSync(join(home, '.local/bin/trezi')).isSymbolicLink())
-  assert.equal(realpathSync(join(home, '.local/bin/trezi')), join(trezi, 'bin/trezi.mjs'))
-  assert.equal(readlinkSync(join(home, '.local/bin/trezi')), join(trezi, 'bin/trezi.mjs'))
+  assert.equal(readlinkSync(join(home, '.local/bin/trezi')), join(trezi, 'bin/trezi'))
+  assert.equal(readlinkSync(join(home, '.local/bin/praxis')), join(trezi, 'bin/trezi'))
+  // Applications gets a link to the built app, and LaunchServices is told about it.
+  assert.ok(lstatSync(join(applications, 'Trezi.app')).isSymbolicLink())
+  assert.equal(readlinkSync(join(applications, 'Trezi.app')), app)
+  assert.equal(readFileSync(join(state, 'lsregister.log'), 'utf8'), `-f ${app}\n`)
 
-  // Launch through the installed command: with the build present nothing is rebuilt.
+  // Launch through the installed command (`open -a`): with the build present nothing is rebuilt.
   const calls = log().length
-  const first = await exec(join(home, '.local/bin/trezi'), ['--project', scratch])
+  const first = await exec(join(home, '.local/bin/trezi'), [scratch])
   assert.equal(first.code, 0, first.stderr)
-  assert.deepEqual((await launched()).args, ['--project', scratch]); assert.equal(log().length, calls)
-  // With the build missing the launcher builds first, then launches.
-  rmSync(join(state, 'launched.json')); rmSync(join(trezi, 'out'), { recursive: true })
+  assert.deepEqual(opened(), ['-a', app, scratch]); assert.equal(log().length, calls)
+  assert.equal((await exec(join(home, '.local/bin/trezi'), ['.'], { cwd: seed })).code, 0)
+  assert.deepEqual(opened(), ['-a', app, seed], 'trezi . opens the current folder')
+  const file = await exec(join(home, '.local/bin/trezi'), [join(seed, 'package.json')])
+  assert.equal(file.code, 1); assert.match(file.stderr, /Not a folder/); assert.ok(!existsSync(join(state, 'opened')))
+  // With the build missing the command builds first, then opens.
+  rmSync(join(trezi, 'out'), { recursive: true })
   assert.equal((await exec(join(home, '.local/bin/trezi'), [])).code, 0)
-  await launched()
+  assert.deepEqual(opened(), ['-a', app])
   assert.equal(step(log().at(-1)), 'run build'); assert.ok(built())
-  console.log('install-update: clean install, launch with and without a build')
+  console.log('install-update: clean install, Applications link, launch with and without a build')
 
   // Update: pull, install, build.
   release('two')
@@ -141,7 +160,7 @@ try {
   assert.equal(again.code, 0, `${again.stdout}\n${again.stderr}`); assert.match(again.stdout, /Updating existing install/)
   assert.equal(head(), git(seed, 'rev-parse', '--short', 'HEAD')); assert.ok(built())
   console.log('install-update: diverged checkout refused, lockfile drift, installer re-run')
-  console.log('INSTALL-UPDATE OK — clean install, launch, update, interrupted-update resume and installer re-run (build and clone are scripted; no real Xcode build or app launch)')
+  console.log('INSTALL-UPDATE OK — clean install, Applications link, open -a launch, update, interrupted-update resume and installer re-run (build and clone are scripted; no real Xcode build or app launch)')
 } finally {
   rmSync(scratch, { recursive: true, force: true })
 }

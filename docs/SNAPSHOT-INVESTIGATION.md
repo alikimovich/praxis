@@ -8,8 +8,9 @@ production behavior changed during this investigation.
 
 ## Results
 
-Run `bun scripts/benchmark-snapshot-index.mjs 5` and
-`bun scripts/probe-snapshot-index.mjs` to reproduce. Both use disposable repositories
+The scripts `scripts/benchmark-snapshot-index.mjs` and `scripts/probe-snapshot-index.mjs`
+reproduced these against the TS snapshot code; LKM-111 removed both with that code (the
+Swift repository owner's `RepositoryGit.swift` now takes the snapshot). Both used disposable repositories
 and remove their fixtures. Benchmark fixtures export committed source revision
 `49a159a15c239c773521e62e0fcd2a2bebd98eb6`; the user's live index is never used as
 cache input or changed. Recorded data: [snapshot-benchmark.jsonl](snapshot-benchmark.jsonl)

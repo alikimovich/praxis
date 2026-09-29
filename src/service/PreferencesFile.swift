@@ -292,8 +292,8 @@ private struct JSParser {
 }
 
 /// The legacy v1 preference store, `<profile>/preferences.json`:
-/// `{"version":1,"values":{key: string | null}}`. Same rules as the Bun owner
-/// (`src/native/preferences.ts`), which remains the launch-time rollback writer.
+/// `{"version":1,"values":{key: string | null}}`. Same rules as the retired Bun
+/// writer; the only writer since LKM-111.
 struct PreferenceValues: Equatable {
     static let maxKeyLength = 200        // exclusive, UTF-16 code units
     static let maxValueLength = 2_000_000 // inclusive, UTF-16 code units

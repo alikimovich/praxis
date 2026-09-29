@@ -23,8 +23,7 @@ enum SourcePaths {
         let exists: Bool
     }
 
-    /// Repo-relative POSIX path, or nil: empty, absolute, traversing, NUL or protected
-    /// (the twin of `normalizeRelPath` in file-ops.ts).
+    /// Repo-relative POSIX path, or nil: empty, absolute, traversing, NUL or protected.
     static func relative(_ input: String) -> String? {
         let posix = input.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\\", with: "/")
         guard !posix.isEmpty, !posix.contains("\0"), !posix.hasPrefix("/"),

@@ -1,3 +1,4 @@
+import './helpers/with-service-owners.mjs'
 import { execFileSync } from 'node:child_process'
 import {
   initChatIsolation,
@@ -13,11 +14,13 @@ import { dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
 import { detectNext, NEXT_LOADER_CONTENT, NEXT_ADAPTER_CONTENT } from '../src/main/setup-next.ts'
 import { REACT_HELPER_CONTENT } from '../src/main/setup-react.ts'
-import { syncSetupArtifacts } from '../src/main/setup-artifacts.ts'
+import { editingOwner } from '../src/main/editing-owner.ts'
 import { provisionNextDependencies } from '../src/main/worktree-dependencies.ts'
 import { setupPrompt } from '../src/shared/setup-prompt.ts'
 import { typescriptProps } from '../src/main/props-typescript.ts'
 const require = createRequire(import.meta.url)
+// The service's editing owner copies the helpers (LKM-111 removed the TS copy).
+const syncSetupArtifacts = (live, checkout) => editingOwner().syncSetupHelpers(live, checkout)
 const root = await mkdtemp(join(tmpdir(), 'trezi-next-unit-'))
 try {
   await mkdir(join(root, 'node_modules/next'), { recursive: true })

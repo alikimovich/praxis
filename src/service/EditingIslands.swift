@@ -16,7 +16,7 @@ import Foundation
 ///   apply while an external edit is refused.
 /// - Each island's last write is its Undo group; Undo reverts that group through the
 ///   source owner.
-/// The TypeScript twin (the rollback owner) is `src/main/editing-model.ts`.
+/// There is no TypeScript twin since LKM-111: test/fixtures/editing-owner/parity-golden.json pins the answers.
 struct EditingIslands {
     static let maxRecords = 30
     static let maxFileUnits = 1_000_000

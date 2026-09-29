@@ -49,7 +49,7 @@ if (process.platform !== 'darwin') {
     if (direct.error) throw direct.error
     assert.equal(direct.signal, null, 'Direct launch must not crash or trigger Crash Reporter')
     assert.equal(direct.status, 64)
-    assert.match(direct.stderr, /requires the Bun service launcher/)
+    assert.match(direct.stderr, /is started by Trezi/)
     assert.equal(direct.stdout, '')
   }
   console.log('Native host direct launch: missing arguments exit cleanly without a signal.')

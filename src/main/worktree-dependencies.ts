@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { editingOwner } from './editing-model'
+import { editingOwner } from './editing-owner'
 import { installProjectDependencies } from './project-dependencies'
 
 export async function isNextProject(root: string): Promise<boolean> {
@@ -27,6 +27,6 @@ export async function provisionNextDependencies(
   const owner = editingOwner()
   // Empty/uninstalled projects are provisioned by their ordinary setup turn.
   if (!(await owner.dependencyState(liveRoot, checkout))) return
-  await install(checkout, () => {})
+  await install(checkout)
   await owner.markDependencies(liveRoot, checkout)
 }

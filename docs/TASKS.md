@@ -3,6 +3,19 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Helpers by default, rollback removed, self-contained app and one start path (LKM-111)
+
+- [x] Built-in Claude, Codex and Gemini adapters always run in Swift-supervised provider helpers (`ProviderHelperCommand.builtIn`, bundled `provider-helper.cjs` on the bundled Bun); no switch, no in-process fallback; v10 connections stay in Bun.
+- [x] Removed `TREZI_BACKEND_OWNER`, `TREZI_PROVIDER_HELPERS`, `TreziService --legacy` (`LegacySupervisor.swift`) and every rollback twin (conversation/editing/provider models, workflow/feedback/platform/open-in-editor legacy, publish-reconcile, static-server, devserver-processes, managed-child, media, attachments, xcode, update, sidecar-migrate, setup-artifacts, codex-models, preview-processes, profile-path-legacy, legacy-restart); each Bun seam throws without the service.
+- [x] Parity-vs-twin tests became goldens (conversation, editing, provider policy/data, workspace); suites run on the real Swift owners (`test/helpers/with-service-owners.mjs`, `with-provider-owner.mjs`, `with-repository-owner.mjs`).
+- [x] Retirement census: classes helper/test/bun, gate open with 0 Bun-owned rows, and no shipped file may name the removed switches or `--legacy`.
+- [x] `Trezi.app` carries the backend (`Contents/Resources/backend/`) and a Bun binary (`Contents/Helpers/bun`, `scripts/bundle-bun.mjs`); the host derives its launch under LaunchServices (`src/native/HostLaunch.swift`).
+- [x] One start path: `open -a Trezi` and the thin `bin/trezi` (`trezi`, `trezi .`, `trezi <path>`, `--update`, `--help`, `--version`); `install.sh` links the app into Applications. README, AGENTS.md, agent guide and SWIFT-BACKEND docs updated.
+- [x] Bounded live parity check written: `test/provider-live-parity.mjs` (live tier, `TREZI_LIVE_PROVIDERS=1 bun run test:provider-live`): Claude haiku/low and Codex low, in-process vs helper, one no-tool prompt, token usage to `test/artifacts/provider-live-parity.json`.
+- [ ] Run the authorized live parity check on a machine with network access to Anthropic and OpenAI (the worker sandbox denied both); record the token usage in RETIREMENT's LKM-111 evidence.
+- [ ] Optional: replace the copied Bun binary with a `bun build --compile` single executable if a smaller app matters.
+- [ ] Manager: stage the new files, run configured verification (incl. `test:native` unsandboxed: XPC, ports, sockets) and independent review.
+
 ## AGENTS.md as the short canonical agent guide (LKM-112)
 
 - [x] Rewrite `AGENTS.md` (≤ 8 KB, tool-neutral): purpose, architecture map with links, commands, verification + Evidence budget, Git/worktree rules, head/grep-only reading of PROGRESS/TASKS.
@@ -115,8 +128,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] `test/install-update.mjs` (clean install, launch, update, interrupted update, diverged checkout, lockfile drift) and profile-lock recovery after a SIGKILLed owner in `test/service-process.mjs`.
 - [x] Transfer the remaining 7 Bun-owned census rows (each with its own rollback plan): `codex-models`, `model-catalog`, `providers-store` (ProviderOwner, `ProviderData.swift`); `props` editor CLIs and `native/platform` Keychain crypto/`open` (PlatformOwner `PlatformOpen.swift`, crypto in ProviderData); `native/profile-path` (`ProfilePaths.swift`), `native/index` and the legacy `native.lock` (the service's lock; Bun refuses without it). 7 → 0 Bun-owned rows (reduced acceptance, `docs/SWIFT-BACKEND-RETIREMENT.md`).
 - [x] Provider helper routing is an explicit opt-in (`TREZI_PROVIDER_HELPERS=1`); the default launch installs no helper and runs the adapters in Bun. v10 connections always stay in-process (`test/provider-data.mjs`).
-- [ ] Deferred to LKM-111: move the provider SDK adapters into supervised helpers after an authorized live parity run (LKM-98 follow-up); then a full native + live run with no legacy module loaded.
-- [ ] Deferred to LKM-111: delete `TREZI_BACKEND_OWNER=legacy`, `TreziService --legacy`, the rollback rows and old Bun copies, keeping every store, journal and worktree.
+- [x] Deferred to LKM-111: move the provider SDK adapters into supervised helpers (LKM-98 follow-up). Done in LKM-111; the authorized live parity run is its own open item there.
+- [x] Deferred to LKM-111: delete `TREZI_BACKEND_OWNER=legacy`, `TreziService --legacy`, the rollback rows and old Bun copies, keeping every store, journal and worktree. Done in LKM-111.
 - [x] After the LKM-102 + LKM-112 merge: `docs/agent-guide/` brought up to LKM-102 (done; the list below is what changed). `service-owners.md`: "Every other domain writer remains in Bun…" / annotation storage, the provider owner block (+ `ProviderData.swift`, adapters in Bun by default, helpers opt-in via `TREZI_PROVIDER_HELPERS=1`, connections in-process), the editing, workflow and platform blocks (+ `EditingProject.swift`, `WorkflowTools.swift`/`WorkflowContext.swift`, `PlatformOpen.swift`), a `ProfilePaths.swift` entry and the profile lock; `backend-map.md`: `providers-store`/`model-catalog`/`codex-models` are rollback twins of `main/provider-data.ts`, `annotation-store` renders and the editing owner commits; `architecture.md`: `platform.ts` has no Keychain helper (`platform-legacy.ts` is the twin), `profile-path.ts` only resolves; `verification.md`: `scripts/requirements.mjs` and the `docs/SWIFT-BACKEND-RETIREMENT.md` census.
 - [x] Worker native verification (latest run on the merged tree): configured verification passes, native smoke 20 passed, 0 failed, 0 skipped; no host/UI Swift changed here.
 - [ ] Manager: stage the new files (docs-links checks tracked paths), configured verification and independent review.
@@ -170,7 +183,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Helper runtime: `ProviderHelper.swift` (stdio only, allowlisted environment, own process group with watchdog and journal, bounded lines), frame validation and violations in `ProviderOwner.swift`, helper host `backends/helper-host.ts`, Bun's side `backends/helper-session.ts`.
 - [x] `test/provider-owner.mjs` (unit tier): policy parity, fake-provider helper (stream/tool/error/resume/permission/question/model), screenshot and pasted-image transport, privilege enforcement, crash/hang/stall/failed start, recovery, rollback, drain, adapter wrapper, schema.
 - [x] The helper runtime and entry are built (`provider-helper.cjs`, `ServiceRuntime` helper command, `pickProvider`); routing is opt-in only (`TREZI_PROVIDER_HELPERS=1`, default = adapters in Bun, v10 connections always in-process); fake-provider parity only — live Claude/Codex SKIP.
-- [ ] Deferred to LKM-111: move the Claude/Codex/Gemini adapters out of Bun into the helpers by default, after an authorized live parity run.
+- [x] Deferred to LKM-111: move the Claude/Codex/Gemini adapters out of Bun into the helpers by default. Done in LKM-111 (live parity: open item under LKM-111).
 - [ ] Hand a Codex connection's key to its helper in the open frame and route the Claude model-catalog update through Bun without Bun-owned catalog/store writes.
 - [ ] Unverified: real Claude/Codex sessions under the owner (permission answers, tool authorization, Stop escalation) need an authorized live run (`test:native-live`).
 - [ ] Title and memory generation still run in Bun beside the adapters (they move with them).

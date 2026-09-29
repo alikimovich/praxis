@@ -1,11 +1,8 @@
-import { execFile } from 'node:child_process'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
 import type { PackageManager } from '../shared/api'
 import { enqueueRepoWrite } from './repo-write-queue'
 
-const run = promisify(execFile)
 const exists = (path: string): Promise<boolean> =>
   access(path).then(
     () => true,
@@ -30,32 +27,18 @@ export async function projectPackageManager(root: string): Promise<PackageManage
 
 let serviceInstaller: ((root: string) => Promise<unknown>) | null = null
 
-/** Swift launch (S06): the service runs and supervises installs. Bun keeps the
- * repository write lease around each one until the S07 repository lane. */
+/** The service runs and supervises installs (S06); set by the native entry point.
+ * LKM-111 removed the in-process install that ran without one. */
 export function setDependencyInstaller(installer: ((root: string) => Promise<unknown>) | null): void {
   serviceInstaller = installer
 }
 
-/** Install in the live checkout: worktree-local node_modules are never landed by Git. */
-export async function installProjectDependencies(
-  root: string,
-  log: (line: string) => void
-): Promise<void> {
+/** Install in the live checkout (worktree-local node_modules are never landed by Git),
+ * in the repository's lane. The service logs its own progress and output. */
+export async function installProjectDependencies(root: string): Promise<void> {
+  if (!serviceInstaller) throw new Error('Trezi’s service is not running, so project dependencies cannot be installed.')
+  const install = serviceInstaller
   return enqueueRepoWrite(root, async () => {
-    // The service logs its own progress and output as runtime log lines.
-    if (serviceInstaller) {
-      await serviceInstaller(root)
-      return
-    }
-    if (!(await exists(join(root, 'package.json')))) return
-    const manager = await projectPackageManager(root)
-    log(`Installing project dependencies with ${manager}…`)
-    try {
-      await run(manager, ['install'], { cwd: root, timeout: 300_000, maxBuffer: 16 * 1024 * 1024 })
-    } catch (error) {
-      throw new Error(
-        `Could not install project dependencies with ${manager}: ${error instanceof Error ? error.message : String(error)}`
-      )
-    }
+    await install(root)
   })
 }

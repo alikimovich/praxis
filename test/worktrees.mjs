@@ -1,33 +1,30 @@
 /**
- * worktrees.ts unit test (pure — no Electron). The F1 crux: each comment-spawned
- * agent edits in its OWN git worktree so parallel runs never cross-write, the spawn
- * leaves a durable branch, and its diff applies back onto the live (possibly dirty)
- * working tree via 3-way patch — NOT `git merge` (which fails on uncommitted WIP).
+ * worktrees.ts through the Swift repository owner (run by test/repository-owner.mjs with
+ * the owner preloaded). The F1 crux: each comment-spawned agent edits in its OWN git
+ * worktree so parallel runs never cross-write, the spawn leaves a durable branch, and
+ * its change applies back onto the live (possibly dirty) working tree via 3-way patch —
+ * NOT `git merge` (which fails on uncommitted WIP).
  *
- * Asserts: captureBase returns a real sha snapshotting live WIP; create forks WIP
- * without touching the main tree; a custom branchName scheme (per-chat isolation)
- * lands on the expected branch; two concurrent creates are isolated; commit captures
- * the authoritative file list; diff→apply lands the change onto a DIRTY main tree;
- * remove reclaims the checkout (keeping the branch); pruneOrphans reclaims leftovers
- * and reports each as `{id, dirty, branch, repoRoot}` (dirty from `status --porcelain`,
- * not commit success; branch/repoRoot captured before removal) and FOLDS a parked
- * chat squash's recovery commit into one commit; pruneIntegratedChatBranches removes
- * only unattached/unparked chat refs whose patch already exists on live HEAD. Uses
- * real temp git repos.
+ * Asserts: the fork point snapshots live WIP; create forks WIP without touching the
+ * main tree; a custom branchName scheme (per-chat isolation) lands on the expected
+ * branch; two concurrent creates are isolated; commit captures the authoritative file
+ * list; the branch's change lands onto a DIRTY main tree; remove reclaims the checkout
+ * (keeping the branch); pruneOrphans reclaims leftovers and reports each as
+ * `{id, dirty, branch, repoRoot}` and FOLDS a parked chat squash's recovery commit into
+ * one commit; pruneIntegratedChatBranches removes only unattached/unparked chat refs
+ * whose patch already exists on live HEAD. Uses real temp git repos.
  *
- * Run with: bun run test:worktrees
+ * Run with: bun test/repository-owner.mjs
  */
 import {
   createWorktree,
   commitWorktree,
-  diffWorktree,
-  applyToWorkingTree,
+  applyBranchToWorkingTree,
   autoApplyWorktree,
   removeWorktree,
   branchPatch,
   pruneOrphans,
-  pruneIntegratedChatBranches,
-  captureBase
+  pruneIntegratedChatBranches
 } from '../src/main/worktrees.ts'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
@@ -37,7 +34,6 @@ import { join } from 'node:path'
 const base = mkdtempSync(join(tmpdir(), 'trezi-wt-'))
 const repo = join(base, 'repo')
 const worktreesDir = join(base, 'worktrees')
-const tmpDir = join(base, 'tmp')
 let failed = 0
 const ok = (cond, msg) => {
   if (!cond) {
@@ -85,12 +81,11 @@ try {
     'worktree base includes UNTRACKED live files (new components the agent just made)'
   )
 
-  // --- captureBase is exported and returns a real commit sha off the live tree ---
-  const captured = await captureBase(repo, join(base, '.index-capturebase-test'))
-  ok(/^[0-9a-f]{40}$/.test(captured), `captureBase returns a sha: ${captured}`)
+  // --- the fork point is a real commit snapshotting the live tree ---
+  ok(/^[0-9a-f]{40}$/.test(wtA.baseSha), `the base is a sha: ${wtA.baseSha}`)
   ok(
-    g(repo, 'show', `${captured}:App.tsx`).includes('// WIP'),
-    'captureBase snapshot includes the live WIP'
+    g(repo, 'show', `${wtA.baseSha}:App.tsx`).includes('// WIP'),
+    'the base snapshot includes the live WIP'
   )
 
   // --- createWorktree honors a custom branchName scheme (per-chat isolation) ---
@@ -136,10 +131,10 @@ try {
     `.trezi must be excluded from a spawn commit: ${JSON.stringify(committed.files)}`
   )
 
-  // --- diff → apply onto the DIRTY live tree (3-way, tolerates WIP) ---
-  const patch = await diffWorktree(wtA)
-  ok(/accent/.test(patch) && /New\.tsx/.test(patch), 'diff carries both changes')
-  const applied = await applyToWorkingTree(repo, patch, tmpDir)
+  // --- the branch's change → apply onto the DIRTY live tree (tolerates WIP) ---
+  const patch = await branchPatch(repo, wtA.branch)
+  ok(/accent/.test(patch) && /New\.tsx/.test(patch), 'the branch carries both changes')
+  const applied = await applyBranchToWorkingTree(repo, wtA.branch)
   ok(applied.ok && !applied.conflict, `apply onto dirty tree: ${JSON.stringify(applied)}`)
   const liveApp = readFileSync(appFile, 'utf8')
   ok(liveApp.includes('accent'), 'live App.tsx got the spawn edit')
@@ -329,10 +324,6 @@ try {
   await removeWorktree(pruneRepo, attachedWt, {})
   await removeWorktree(pruneRepo, uniqueWt, { keepBranch: false })
   await removeWorktree(pruneRepo, protectedWt, { keepBranch: false })
-
-  // --- empty patch applies as a no-op success ---
-  const noop = await applyToWorkingTree(repo, '', tmpDir)
-  ok(noop.ok && !noop.conflict, 'empty patch is a no-op success')
 
   // --- autoApplyWorktree: land a spawn's change straight on the live tree (v8 F1) ---
   // Fresh repo so the live README is unchanged since the worktree forked.

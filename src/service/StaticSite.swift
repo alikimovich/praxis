@@ -12,8 +12,8 @@ struct StaticResponse {
     var headOnly = false
 }
 
-/// The Swift static site for plain HTML/CSS/JS projects (S06, formerly
-/// `src/main/static-server.ts`): files under the project root, HTML stamped with
+/// The Swift static site for plain HTML/CSS/JS projects (S06, which replaced
+/// Bun's static server): files under the project root, HTML stamped with
 /// `data-trezi-source` by the JS stamping helper and given a live-reload snippet, an
 /// SSE stream at `/__trezi_reload`, and an FSEvents watcher that bumps the version.
 /// Paths are contained lexically (as before) and, new in S06, by real path: a

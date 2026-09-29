@@ -12,9 +12,9 @@ import Darwin
 /// - the built-in seats' model catalogs, `<profile>/trezi/model-catalog.json` (twin of
 ///   `main/model-catalog.ts`'s `set`): compact JSON, an empty list ignored, the other
 ///   seat's entry kept as it is on disk.
-/// - the Codex CLI's `debug models` probe (twin of `main/codex-models.ts`): the SDK's
+/// - the Codex CLI's `debug models` probe (the only one since LKM-111): the SDK's
 ///   vendored binary unless `TREZI_CODEX_BIN` names one, bounded to 8 s and 16 MiB.
-///   Bun parses the output (`parseCodexModels`), as before.
+///   Bun parses the output (`parseCodexModels` in `main/model-catalog.ts`).
 struct ProviderData {
     struct Tools {
         /// argv prefix of the Keychain helper (`[TreziHost]`); nil: no credential store.

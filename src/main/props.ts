@@ -1,6 +1,5 @@
 import { typescriptProps } from './props-typescript'
 import { ipcMain } from '../native/platform'
-import { openInEditorLegacy } from './open-in-editor-legacy'
 import { readFile, stat } from 'fs/promises'
 import { existsSync, readFileSync, statSync } from 'fs'
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve } from 'path'
@@ -20,8 +19,7 @@ import {
   removeSvelteProp
 } from './props-svelte'
 import { looksBinary, mediaTypeFor } from './media-types'
-import { mediaUrl } from './media'
-import { swiftPlatformOwner } from './platform-owner'
+import { platformOwner } from './platform-owner'
 import { spliceHtmlText } from './html-source'
 import { undo, redo, editAvailability, revertGroup, canRevertGroup } from './edit-history'
 import { proposeEdit } from './source-commit'
@@ -30,8 +28,8 @@ import { contentHash, sourceOwner } from './source-owner'
 /**
  * Hand a source-edit engine's result to the source owner (v8 F3b Undo included).
  * The engines only compute: `before` is the exact text they parsed and `after` their
- * proposal; `proposeEdit` is the one committing call (hash-bound under the Swift
- * owner, see source-commit.ts). `key` coalesces rapid edits of one target into one
+ * proposal; `proposeEdit` is the one committing call (hash-bound, see
+ * source-commit.ts). `key` coalesces rapid edits of one target into one
  * Undo step; `group` batches the distinct-key edits of one gesture (the four sides of
  * a linked padding scrub) into one atomic Undo. Shared by the React + Svelte + HTML
  * adapters so EVERY trezi source edit is reversible.
@@ -861,12 +859,11 @@ export async function readSourceView(root: string, source: string): Promise<Sour
     } catch {
       return null
     }
-    // Swift launch: a grant bound to the source editor, the file's size and hash, with
-    // an expiry. A file it refuses (too large, changed while read) shows as binary.
-    const platform = swiftPlatformOwner()
+    // A grant bound to the source editor, the file's size and hash, with an expiry. A
+    // file the platform owner refuses (too large, changed while read) shows as binary.
     let url: string
     try {
-      url = platform ? (await platform.grantMedia(root, loc.file)).url : mediaUrl(loc.file)
+      url = (await platformOwner().grantMedia(root, loc.file)).url
     } catch {
       return { file: rel, code: '', line: loc.line, binary: true, bytes }
     }
@@ -881,18 +878,12 @@ export async function readSourceView(root: string, source: string): Promise<Sour
 
   let code: string
   let hash: string | undefined
-  const owner = sourceOwner()
   try {
-    if (owner) {
-      // The owner authorizes the path (symlinks included) and issues the baseline hash.
-      const read = await owner.read(root, loc.file)
-      if (read.binary || read.content === undefined) return { file: rel, code: '', line: loc.line, binary: true, bytes: read.size }
-      code = read.content
-      hash = read.hash
-    } else {
-      code = await readFile(loc.file, 'utf8')
-      hash = contentHash(code)
-    }
+    // The owner authorizes the path (symlinks included) and issues the baseline hash.
+    const read = await sourceOwner().read(root, loc.file)
+    if (read.binary || read.content === undefined) return { file: rel, code: '', line: loc.line, binary: true, bytes: read.size }
+    code = read.content
+    hash = read.hash
   } catch {
     return null
   }
@@ -949,35 +940,22 @@ async function writeSourceFile(
   // could only ever be a utf8 round-trip that corrupts them.
   if (mediaTypeFor(loc.file)) return { ok: false, error: 'This file is not editable as text.' }
   const expected = typeof baseHash === 'string' && /^[0-9a-f]{64}$/.test(baseHash) ? baseHash : contentHash(baseline)
-  const owner = sourceOwner()
-  if (owner) {
-    try {
-      const current = await owner.read(root, loc.file)
-      if (current.binary || current.content === undefined || looksBinary(current.content)) {
-        return { ok: false, error: 'This file is not editable as text.' }
-      }
-      if (current.hash !== expected) return { ok: false, conflict: true }
-      if (current.content === content) return { ok: true, hash: expected }
-      const result = await owner.commit(root, [{ path: loc.file, expectedHash: expected, content }], { key: `${source}:drawer` })
-      return result.ok ? { ok: true, hash: result.hashes[0] } : { ok: false, conflict: true }
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : 'Could not write the source file.' }
-    }
-  }
-  let current: string
   try {
-    current = await readFile(loc.file, 'utf8')
-  } catch {
-    return { ok: false, error: 'Could not read the source file.' }
+    const owner = sourceOwner()
+    const current = await owner.read(root, loc.file)
+    if (current.binary || current.content === undefined || looksBinary(current.content)) {
+      return { ok: false, error: 'This file is not editable as text.' }
+    }
+    if (current.hash !== expected) return { ok: false, conflict: true }
+    if (current.content === content) return { ok: true, hash: expected }
+    const result = await owner.commit(root, [{ path: loc.file, expectedHash: expected, content }], { key: `${source}:drawer` })
+    return result.ok ? { ok: true, hash: result.hashes[0] } : { ok: false, conflict: true }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not write the source file.' }
   }
-  if (looksBinary(current)) return { ok: false, error: 'This file is not editable as text.' }
-  if (contentHash(current) !== expected) return { ok: false, conflict: true }
-  const res = await commitEdit(root, loc.file, current, content, `${source}:drawer`)
-  return res.applied ? { ok: true, hash: contentHash(content) } : { ok: false, error: res.error }
 }
 
-// "Open in editor": the Swift platform owner runs the editor CLIs (`PlatformOpen.swift`);
-// with none, `open-in-editor-legacy.ts` does.
+// "Open in editor": the platform owner runs the editor CLIs (`PlatformOpen.swift`).
 async function openInEditor(
   root: string,
   source: string
@@ -989,10 +967,8 @@ async function openInEditor(
   } catch {
     return { ok: false, error: 'The source file does not exist.' }
   }
-  const owner = swiftPlatformOwner()
-  if (!owner) return openInEditorLegacy(loc)
   try {
-    return await owner.openInEditor(root, loc.file, loc.line, loc.column)
+    return await platformOwner().openInEditor(root, loc.file, loc.line, loc.column)
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }
@@ -1117,13 +1093,12 @@ export function registerPropsIpc(): void {
     (_e, root: string, source: string, baseline: string, content: string, baseHash?: string) =>
       writeSourceFile(root, source, baseline, content, baseHash)
   )
-  // S08: unsaved editor drafts survive a restart under the Swift owner (the legacy
-  // owner keeps them in memory only, as before).
-  ipcMain.handle('source:drafts', (_e, root: string) => sourceOwner()?.drafts(root) ?? [])
+  // S08: unsaved editor drafts survive a restart in the source owner.
+  ipcMain.handle('source:drafts', (_e, root: string) => sourceOwner().drafts(root))
   ipcMain.handle('source:save-draft', (_e, root: string, file: string, base: string, text: string) =>
-    sourceOwner()?.saveDraft(root, file, base, text)
+    sourceOwner().saveDraft(root, file, base, text)
   )
-  ipcMain.handle('source:clear-draft', (_e, root: string, file: string) => sourceOwner()?.clearDraft(root, file))
+  ipcMain.handle('source:clear-draft', (_e, root: string, file: string) => sourceOwner().clearDraft(root, file))
   // v8 F3b: undo/redo over ALL trezi source edits (props, text, token swaps),
   // scoped to the active project root (the rail keeps several projects open).
   ipcMain.handle('edit:undo', (_e, root: string) => undo(root))

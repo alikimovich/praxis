@@ -8,15 +8,12 @@ struct ProviderHelperCommand: Sendable {
     var arguments: [String]
     var providers: Set<String>
 
-    static let optIn = "TREZI_PROVIDER_HELPERS"
-
-    /// The built-in seats' helper command, or nil (the default): helpers are an explicit
-    /// opt-in of the launch environment (`TREZI_PROVIDER_HELPERS=1`) and need the bundled
-    /// `provider-helper.cjs` next to the backend. Without it the adapters run in-process in
-    /// Bun, as before S10; Bun's `pickProvider` reads the same variable. Making helpers the
-    /// default waits for the authorized live parity run (LKM-111).
-    static func builtIn(environment: [String: String], backend: String, bun: String) -> ProviderHelperCommand? {
-        guard environment[optIn] == "1" else { return nil }
+    /// The built-in seats' helper command: the bundled `provider-helper.cjs` next to the
+    /// backend, run by the same (app-bundled) Bun. Every built-in Claude, Codex and Gemini
+    /// session runs in a helper (LKM-111, after the live parity run); only a v10
+    /// connection stays in Bun, so its key never crosses into another process. Nil when
+    /// the build has no helper entry: helper sessions are then refused, never run in Bun.
+    static func builtIn(backend: String, bun: String) -> ProviderHelperCommand? {
         let entry = URL(fileURLWithPath: backend).deletingLastPathComponent().appendingPathComponent("provider-helper.cjs").path
         guard access(entry, R_OK) == 0 else { return nil }
         return ProviderHelperCommand(executable: bun, arguments: [entry], providers: ["claude", "codex", "gemini", "fake"])

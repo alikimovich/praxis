@@ -13,15 +13,15 @@ supported platform (macOS 13.3, SDK 26.0, Bun 1.3.0) has one source,
 `test/distribution.mjs` keeps `package.json` and the docs in sync with it.
 
 The retirement census (`test/retirement-census.mjs`, `docs/SWIFT-BACKEND-RETIREMENT.md`)
-lists every Bun module with a file, process or signal effect as rollback / helper / test /
-Bun-owned and fails on an unlisted one. Add a row when you add such a module.
+lists every Bun module with a file, process or signal effect as helper / test / Bun-owned
+and fails on an unlisted one; the gate requires 0 Bun-owned rows and no rollback switch. Add a row when you add such a module.
 
 | Command | What |
 | --- | --- |
 | `bun run dev` / `bun run dev:native` | Build and launch the native app (Swift host + Bun services) |
-| `bun run build` / `bun run build:native` | Build Swift host, Bun services and preview to `out/native/` |
-| `bun run start` | Launch the existing native build |
-| `trezi --project <repo>` | Launch/open a project through the CLI |
+| `bun run build` / `bun run build:native` | Build `out/native/Trezi.app` (Swift host and service, bundled Bun, backend and preview) |
+| `bun run start` | Launch the existing native build (development launcher) |
+| `open -a Trezi` / `trezi [path]` | The start path: open the app, optionally on a project |
 | `bun run typecheck` | Type-check native/backend/shared code and isolated preview. Run after every change |
 | `bun run typecheck:native` | Native/backend/shared check only |
 | `node test/run.mjs unit` | Backend and controller tests, no desktop |
@@ -29,6 +29,7 @@ Bun-owned and fails on an unlisted one. Add a row when you add such a module.
 | `bun run test:native` | Disposable-profile native desktop integration |
 | `bun run test` | Unit + native UI tiers (via `test/run.mjs`) |
 | `bun run test:native-live` | Real provider fixture edit; requires authorization |
+| `bun run test:provider-live` | Bounded Claude + Codex parity, in-process vs helper (`TREZI_LIVE_PROVIDERS=1`); requires authorization |
 | `bun run verify` | Everything incl. live-agent e2e (needs display + creds) |
 | `bun run lint` | Biome lint over `src` + `test` |
 

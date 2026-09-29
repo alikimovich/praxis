@@ -28,7 +28,7 @@ let fault: @Sendable (String) -> Void = { point in
     if reached { kill(getpid(), SIGKILL); while true { pause() } }
 }
 let owner = ConversationOwner(options: ConversationOwner.Options(profile: profile, fault: fault), send: { emit($0) })
-// REPOSITORY_WORKTREES_ROOT widens where worktrees may live (the legacy suites use the temp dir).
+// REPOSITORY_WORKTREES_ROOT widens where worktrees may live (the chat and Git suites use the temp dir).
 let repository = RepositoryOwner(options: RepositoryOwner.Options(profile: profile, environment: env,
                                                                  worktreesRoot: env["REPOSITORY_WORKTREES_ROOT"]), send: { emit($0) })
 let source = SourceOwner(options: SourceOwner.Options(profile: profile), repository: repository, send: { emit($0) })

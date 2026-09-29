@@ -1,8 +1,8 @@
 /**
- * Unit test for the New Project scaffold (src/main/scaffold.ts): writes the
- * template into a temp dir, validates the files + package name sanitization,
- * git init, and the non-empty-dir guard. Install is skipped (network/slow) —
- * the template's shape is what matters here.
+ * Unit test for the New Project scaffold (src/main/scaffold.ts) through the Swift
+ * workflow owner that writes it (a fixture process): writes the template into a temp
+ * dir, validates the files + package name sanitization, git init, and the non-empty-dir
+ * guard. Install is skipped (network/slow) — the template's shape is what matters here.
  *
  * Run with: bun test/project-create.mjs
  */
@@ -10,6 +10,8 @@ import { mkdtempSync, rmSync, existsSync, readFileSync, mkdirSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { compileWorkflowFixture, startWorkflowFixture } from './helpers/workflow-fixture.mjs'
+import { setWorkflowOwner } from '../src/main/workflow-owner.ts'
 
 const { createProject, packageName } = await import('../src/main/scaffold.ts')
 
@@ -18,7 +20,10 @@ const assert = (cond, msg) => {
 }
 
 const base = mkdtempSync(join(tmpdir(), 'trezi-create-'))
+mkdirSync(join(base, 'profile'))
+const fixture = await startWorkflowFixture(compileWorkflowFixture(), join(base, 'profile'))
 try {
+  setWorkflowOwner(fixture.workflows())
   // Name sanitization.
   assert(packageName('/x/My App!') === 'my-app', `packageName: ${packageName('/x/My App!')}`)
   assert(packageName('/x/---') === 'my-app', 'degenerate names fall back')
@@ -77,5 +82,6 @@ try {
 
   console.log('PROJECT-CREATE OK — template, naming, git init, non-empty guard')
 } finally {
+  await fixture.stop().catch(() => {})
   rmSync(base, { recursive: true, force: true })
 }

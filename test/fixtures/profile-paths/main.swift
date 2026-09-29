@@ -1,7 +1,7 @@
 import Foundation
 
 // `profile-paths <profile|sessions> <path>`: one ProfilePaths call, the answer on stdout
-// or the refusal on stderr (exit 1), for test/rename-compat.mjs's parity with profile-path.ts.
+// or the refusal on stderr (exit 1): the service's migration in test/rename-compat.mjs.
 let arguments = CommandLine.arguments
 guard arguments.count == 3 else { fputs("usage: profile-paths <profile|sessions> <path>\n", stderr); exit(2) }
 do {

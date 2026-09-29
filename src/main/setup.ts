@@ -1,12 +1,11 @@
 import { MDX_HELPER, MDX_HELPER_CONTENT } from './setup-mdx'
 import { REACT_HELPER_CONTENT } from './setup-react'
-import { createHash } from 'node:crypto'
 import { detectNext, NEXT_LOADER, NEXT_ADAPTER, NEXT_LOADER_CONTENT, NEXT_ADAPTER_CONTENT } from './setup-next'
 import { ipcMain } from '../native/platform'
-import { access, mkdir, readFile, rm, writeFile } from 'fs/promises'
+import { readFile } from 'fs/promises'
 import { join } from 'path'
 import type { Frontend, SetupResult, SetupStrategy } from '../shared/api'
-import { workflowOwner, type HelperFile, type HelperWrite } from './workflow-owner'
+import { workflowOwner, type HelperFile } from './workflow-owner'
 
 /**
  * Project setup — make a repo trezi-ready, FRAMEWORK-FIRST. We detect the UI
@@ -17,22 +16,12 @@ import { workflowOwner, type HelperFile, type HelperWrite } from './workflow-own
  * the config wiring + prop typing with framework-correct instructions.
  */
 
-const TREZI_DIR = '.trezi'
 const REACT_HELPER = '.trezi/trezi-source.cjs'
 const RN_HELPER = '.trezi/trezi-rn-source.cjs'
 // `.mjs` pins ESM regardless of the repo's package.json `type` (plain Svelte+Vite
 // repos are often `type: commonjs`, where a bare `.js` ESM file fails to import) —
 // mirrors the React helper pinning CommonJS via `.cjs`.
 const SVELTE_HELPER = '.trezi/trezi-svelte-stamp.mjs'
-// Pre-rename (dsgn-era) files: the old root-level plugin plus the `.dsgn/`
-// helpers written before the 2026-07 dsgn→trezi rename. Removed on uninstall.
-const LEGACY_FILES = [
-  'dsgn-source-plugin.cjs', // the old (buggy) root-level file
-  '.dsgn/dsgn-source.cjs',
-  '.dsgn/dsgn-rn-source.cjs',
-  '.dsgn/dsgn-svelte-stamp.mjs'
-]
-
 // React/Solid: a JSX Babel plugin that stamps data-trezi-source. Structurally
 // dev-gated (returns an empty visitor in production — not trust-the-comment).
 // React Native: the data-trezi-source analog. RN host elements have no DOM, so we
@@ -124,15 +113,6 @@ export default function treziStamp() {
   }
 }
 `
-
-async function exists(p: string): Promise<boolean> {
-  try {
-    await access(p)
-    return true
-  } catch {
-    return false
-  }
-}
 
 /** Read package.json dependency names (deps + devDeps + peerDeps). */
 async function readDeps(root: string): Promise<Set<string>> {
@@ -232,43 +212,6 @@ async function scaffold(root: string): Promise<SetupResult> {
       written: write.written,
       ...(d.svelteMajor ? { svelteMajor: d.svelteMajor } : {})
     }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
-  }
-}
-
-/** The legacy writer (rollback twin of `WorkflowSetup.setup`): each helper only if absent. */
-export async function writeHelpersLegacy(root: string, files: HelperFile[]): Promise<HelperWrite> {
-  try {
-    await mkdir(join(root, TREZI_DIR), { recursive: true })
-    let written = false
-    for (const file of files) {
-      if (!(await exists(join(root, file.path)))) {
-        await writeFile(join(root, file.path), file.content, 'utf8')
-        written = true
-      }
-    }
-    const helpers = await Promise.all(files.map(async ({ path }) => ({
-      path, sha256: createHash('sha256').update(await readFile(join(root, path))).digest('hex')
-    })))
-    return { ok: true, written, helpers }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
-  }
-}
-
-/** The legacy remover (rollback twin of `WorkflowSetup.uninstall`). */
-export async function removeHelpersLegacy(root: string): Promise<SetupResult> {
-  try {
-    const removed: string[] = []
-    for (const f of [REACT_HELPER, RN_HELPER, SVELTE_HELPER, NEXT_LOADER, NEXT_ADAPTER, MDX_HELPER, ...LEGACY_FILES, ...[REACT_HELPER, RN_HELPER, SVELTE_HELPER, NEXT_LOADER, NEXT_ADAPTER, MDX_HELPER].map(path => path.replaceAll('trezi', 'praxis'))]) {
-      const abs = join(root, f)
-      if (await exists(abs)) {
-        await rm(abs)
-        removed.push(f)
-      }
-    }
-    return { ok: true, files: removed }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }

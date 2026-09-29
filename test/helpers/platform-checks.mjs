@@ -5,8 +5,6 @@ import { createHash, randomBytes } from 'node:crypto'
 import { appendFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { mediaTypeFor } from '../../src/main/media-types.ts'
-import { attachmentFileName, pruneAttachments } from '../../src/main/attachments.ts'
-import { findPreviewProcesses } from '../../src/native/preview-processes.ts'
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex')
 
@@ -42,7 +40,7 @@ export async function checkMedia({ fixture, scratch, log, rejects, sleep }) {
   }
   const linked = await owner.grantMedia(root, 'link-in.png')
   assert.equal((await resolve(linked.token)).payload.path, join(real, 'logo.png'), 'a link to a project file is followed')
-  // The same classification as the legacy table.
+  // The same classification as media-types.ts.
   for (const name of ['a.PNG', 'b.svg', 'c.heic', 'd.webm', 'e.flac', 'f.txt', 'g.ICO']) {
     writeFileSync(join(root, name), 'x')
     const result = await media.frame('mediaGrant', { root, path: name, view: 'source' })
@@ -90,7 +88,7 @@ export async function checkMedia({ fixture, scratch, log, rejects, sleep }) {
 }
 
 export async function checkAttachments({ fixture, scratch, log, rejects }) {
-  log('attachments: chunked, hash-checked uploads; legacy names and pruning')
+  log('attachments: chunked, hash-checked uploads; file names and pruning')
   const profile = join(scratch, 'attach-profile')
   const f = await fixture(profile, { PLATFORM_ATTACH_MAX: String(4 * 1024 * 1024), PLATFORM_ATTACH_IDLE: '1' })
   const owner = f.owner()
@@ -100,7 +98,7 @@ export async function checkAttachments({ fixture, scratch, log, rejects }) {
   assert.equal(join(saved, '..'), folder)
   assert.ok(readFileSync(saved).equals(image))
   const stamp = /^(\d+)-/.exec(basename(saved))[1]
-  assert.equal(basename(saved), attachmentFileName('image/png', 'Screen Shot 2026.png', stamp))
+  assert.equal(basename(saved), `${stamp}-Screen-Shot-2026.png`)
   assert.equal(await owner.saveAttachment({ mediaType: 'text/html', data: 'PGgxPg==' }, 'x.png'), '')
   assert.equal(await owner.saveAttachment({ mediaType: 'image/png', data: '' }), '')
   assert.equal(await owner.saveAttachment({ mediaType: 'image/png', data: randomBytes(5 * 1024 * 1024).toString('base64') }), '', 'over the service cap')
@@ -135,11 +133,6 @@ export async function checkAttachments({ fixture, scratch, log, rejects }) {
   await new Promise(resolve => setTimeout(resolve, 1100))
   assert.ok(await owner.saveAttachment({ mediaType: 'image/jpeg', data: Buffer.from('jpeg').toString('base64') }, 'a.jpg'))
   assert.ok(!existsSync(old) && existsSync(recent) && lstatSync(link).isSymbolicLink() && existsSync(target))
-  // Rollback: the legacy writer prunes the same folder by the same rule.
-  const legacyOld = join(folder, '4-legacy-old.png')
-  writeFileSync(legacyOld, 'l'); utimesSync(legacyOld, eightDays, eightDays)
-  assert.equal(await pruneAttachments(folder, Date.now()), 2, 'legacy prune removes the old file (and, following links, the old link)')
-  assert.ok(existsSync(saved), 'Swift-saved attachments stay readable after rollback')
   await f.stop()
 
   // A linked attachments folder is refused (nothing is written through it).
@@ -155,12 +148,10 @@ export async function checkAttachments({ fixture, scratch, log, rejects }) {
 
 /**
  * Opening links, files and "Open in editor" (LKM-102) through the owner, against the
- * rollback twins: scripted `open`/`code`/`zed` on a PATH with no real editor on it.
+ * scripted `open`/`code`/`zed` on a PATH with no real editor on it.
  */
 export async function checkOpen({ fixture, scratch, log, rejects }) {
-  log('open: links, files and Open in editor, parity with the legacy twins')
-  const { openInEditorLegacy } = await import('../../src/main/open-in-editor-legacy.ts')
-  const { openExternal } = await import('../../src/native/platform-legacy.ts')
+  log('open: links, files and Open in editor')
   const bin = join(scratch, 'open-bin'), record = join(scratch, 'open.log')
   mkdirSync(bin)
   for (const name of ['open', 'code', 'cursor', 'zed', 'subl']) {
@@ -175,13 +166,11 @@ export async function checkOpen({ fixture, scratch, log, rejects }) {
   mkdirSync(join(project, 'src'), { recursive: true }); writeFileSync(file, 'export {}\n')
   writeFileSync(join(scratch, 'outside.tsx'), 'x'); symlinkSync(join(scratch, 'outside.tsx'), join(project, 'escape.tsx'))
 
-  // Links: http(s) only, one argument, same refusal as the legacy twin.
+  // Links: http(s) only, one argument.
   await owner.openLink('https://example.com/a?b=c d')
   assert.deepEqual(ran(), ['open https://example.com/a?b=c d'])
   for (const url of ['javascript:alert(1)', 'file:///etc/passwd', '-a Calculator']) {
-    const legacy = await openExternal(url).then(() => null, error => error.message)
-    const swift = await owner.openLink(url).then(() => null, error => error.message)
-    assert.equal(swift, legacy, url)
+    assert.equal(await owner.openLink(url).then(() => null, error => error.message), 'Only HTTP(S) external links are supported', url)
     assert.equal((await started.frame('openLink', { url })).payload.code, 'invalidRequest', url)
   }
   assert.deepEqual(ran(), [], 'a refused link never ran open')
@@ -196,21 +185,14 @@ export async function checkOpen({ fixture, scratch, log, rejects }) {
   assert.equal(await owner.openFile('relative.tsx'), 'The file does not exist.')
   assert.deepEqual(ran(), [])
 
-  // Open in editor: the first CLI that works, with the same jump target as the legacy twin.
-  const saved = { PATH: process.env.PATH, FAKE_OPEN_LOG: process.env.FAKE_OPEN_LOG }
-  Object.assign(process.env, env)
-  try {
-    for (const [label, failing, loc] of [['code', [], { line: 12, column: 4 }], ['cursor after code', ['code'], { line: 3 }],
-      ['zed after code and cursor', ['code', 'cursor'], { line: 1, column: 1 }]]) {
-      for (const name of failing) fail(name)
-      assert.deepEqual(await owner.openInEditor(project, file, loc.line, loc.column), { ok: true }, label)
-      const swift = ran()
-      assert.deepEqual(await openInEditorLegacy({ file, ...loc }), { ok: true }, label)
-      assert.deepEqual(swift, ran(), `${label}: the same CLI runs`)
-      for (const name of failing) fail(name, false)
-    }
-  } finally {
-    for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value }
+  // Open in editor: the first CLI that works, with a file:line[:column] jump target.
+  for (const [label, failing, loc, expected] of [['code', [], { line: 12, column: 4 }, [`code -g ${file}:12:4`]],
+    ['cursor after code', ['code'], { line: 3 }, [`code -g ${file}:3`, `cursor -g ${file}:3`]],
+    ['zed after code and cursor', ['code', 'cursor'], { line: 1, column: 1 }, [`code -g ${file}:1:1`, `cursor -g ${file}:1:1`, `zed ${file}:1:1`]]]) {
+    for (const name of failing) fail(name)
+    assert.deepEqual(await owner.openInEditor(project, file, loc.line, loc.column), { ok: true }, label)
+    assert.deepEqual(ran(), expected, label)
+    for (const name of failing) fail(name, false)
   }
   assert.deepEqual((await owner.openInEditor(project, file, 7)), { ok: true })
   assert.deepEqual(ran(), [`code -g ${file}:7`])
@@ -260,9 +242,6 @@ export async function checkServers({ owner, scratch, log, rejects, gone }) {
     assert.equal(server.root, root)
     assert.match(server.identity, new RegExp(`^${server.pid}:\\d+$`))
     assert.ok(server.addresses.length && server.command.includes('Bun.serve'))
-    const legacy = await findPreviewProcesses(root)
-    assert.deepEqual(legacy.map(({ pid, root, command, addresses }) => ({ pid, root, command, addresses })),
-      found.map(({ pid, root, command, addresses }) => ({ pid, root, command, addresses })), 'the legacy inspection sees the same server')
     assert.ok(!(await owner.findServers(process.cwd())).some(s => s.pid === process.pid), 'the service\'s parent is never listed')
     await rejects(owner.stopServer({ ...server, identity: `${server.pid}:1` }), 'conflict', /changed or exited/)
     await rejects(owner.stopServer({ ...server, command: 'something else' }), 'conflict')

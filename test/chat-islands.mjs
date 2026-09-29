@@ -1,3 +1,4 @@
+import './helpers/with-service-owners.mjs'
 import assert from 'node:assert/strict'
 import { mkdtemp, readFile, writeFile, symlink, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -14,7 +15,7 @@ const code = 'const LIGHT_X = 0;\nconst LIGHT_Y = -0.5;\nconst SOFTNESS = 20;\nc
 const number = (id, anchor, min = -1, max = 1) => ({ id, label: id, kind: 'number', min, max, step: 0.01, apply: { strategy: 'literal', anchor } })
 const request = { action: 'define', engine: 'agent', manifest: { file: 'shadow.js', component: 'Card', title: 'Shadow lighting', params: [number('x', 'const LIGHT_X = '), number('y', 'const LIGHT_Y = '), number('blur', 'const SOFTNESS = ', 0, 100), { id: 'ease', label: 'Easing', kind: 'bezier', apply: { strategy: 'literal', anchor: 'const EASE = ' } }] }, blocks: [{ id: 'light', title: 'Light position', kind: 'point', params: ['x','y'] }, { id: 'layers', title: 'Softness and easing', kind: 'group', params: ['blur','ease'] }] }
 let changes = 0
-const islands = new ChatIslands(storage, () => changes++)
+const islands = new ChatIslands(() => changes++)
 try {
   // Catalog guidance is available before registration and stays within the wire catalog.
   const catalog = await islands.tool('not-registered', root, { action: 'catalog' })
@@ -26,7 +27,7 @@ try {
   await writeFile(join(root, 'shadow.js'), code)
   // Publish a disabled draft before a slow Jev response; do not persist drafts.
   let releaseSelection
-  const staged = new ChatIslands(storage, () => {}, async (_key, candidates) => {
+  const staged = new ChatIslands(() => {}, async (_key, candidates) => {
     await new Promise(resolve => { releaseSelection = resolve })
     return { controls: candidates, engine: 'jev' }
   })

@@ -44,7 +44,7 @@ actor MemoryOwner: PipeDomainOwner {
     /// write cannot be reconciled stays blocked alone; the others are unaffected.
     func open() async {
         guard let ledger else {
-            failure = Self.fail(.recoveryRequired, "The operation ledger could not be opened, so project memory cannot be saved. Quit and relaunch, or relaunch with TREZI_BACKEND_OWNER=legacy.")
+            failure = Self.fail(.recoveryRequired, "The operation ledger could not be opened, so project memory cannot be saved. Quit and relaunch Trezi.")
             return
         }
         for id in Set(await ledger.recoveries().map(\.domain).filter { $0.hasPrefix(Self.prefix) }.map { String($0.dropFirst(Self.prefix.count)) }) {
@@ -77,7 +77,7 @@ actor MemoryOwner: PipeDomainOwner {
 
     /// The project's domain, registered on first use from the file as found, and
     /// the record it holds. A file changed since the checkpoint (an external edit,
-    /// or the legacy owner's write) is adopted as a new revision, never rewritten.
+    /// or a write made while the service was down) is adopted as a new revision, never rewritten.
     private func ensure(_ id: String) async -> Ensured {
         guard let ledger else { return .failed(Self.fail(.recoveryRequired, "The operation ledger is unavailable.")) }
         let disk = store.disk(id), domain = Self.domain(id)

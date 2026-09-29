@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 const bridgePath = fileURLToPath(new URL('../src/native/bridge.ts', import.meta.url))
 const child = spawn(process.execPath, ['-e', `
   import { NativeBridge } from ${JSON.stringify(bridgePath)}
-  const bridge = new NativeBridge('/must-not-launch-host', '/', 'ephemeral')
+  const bridge = new NativeBridge()
   if (bridge.child !== undefined) process.exit(3)
   // Startup holds host events while it awaits the service; service frames still flow.
   bridge.hold()

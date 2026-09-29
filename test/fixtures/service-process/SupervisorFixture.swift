@@ -18,7 +18,7 @@ import Darwin
             return
         }
         if mode == "startup-failure" {
-            let supervisor = LegacySupervisor()
+            let supervisor = BackendSupervisor()
             do {
                 _ = try supervisor.start(executable: "/nonexistent/trezi-bun", arguments: [], environment: [:], onExit: { _ in })
                 fatalError("missing child unexpectedly started")
@@ -30,7 +30,7 @@ import Darwin
             reacquired.release()
             return
         }
-        let supervisor = LegacySupervisor()
+        let supervisor = BackendSupervisor()
         let exited = DispatchSemaphore(value: 0)
         let child = try supervisor.start(executable: args[3], arguments: [args[4]],
             environment: ProcessInfo.processInfo.environment, onExit: { _ in exited.signal() })

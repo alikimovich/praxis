@@ -1,10 +1,10 @@
 import Foundation
 
-/// Pure simulator helpers: the twins of `src/main/xcode.ts` and of the parsing half of
-/// `src/main/simulator.ts` (control commands, `testID` stamps, idb arguments, the
-/// bridge page). Kept free of effects so the fixture checks them directly.
+/// Pure simulator helpers (Xcode failures, control commands, `testID` stamps, idb
+/// arguments, the bridge page), ported from the retired TS simulator runner. Kept free
+/// of effects so the fixture checks them directly.
 enum SimulatorTools {
-    // MARK: xcode.ts
+    // MARK: Xcode failures
 
     static func xcodeFailureReason(message: String, stderr: String, missing: Bool) -> String {
         let text = "\(stderr) \(message)".lowercased()
@@ -195,7 +195,7 @@ enum SimulatorTools {
 
     static func css(_ value: Double) -> String { number(value) }
 
-    /// `pageHtml(interactive, token)` from simulator.ts, byte for byte apart from the
+    /// `pageHtml(interactive, token)` from the retired simulator.ts, byte for byte apart from the
     /// frame values it is handed.
     static func page(interactive: Bool, token: String, frame: Frame) -> String {
         let quoted = String(decoding: JSValue.string(JSText(token)).utf8(), as: UTF8.self)

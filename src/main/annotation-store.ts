@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Annotation, AnnotationInput } from '../shared/api'
 import { projectKey } from '../shared/projectKey'
-import { editingOwner } from './editing-model'
+import { editingOwner } from './editing-owner'
 import type { SidecarCommit } from './editing-owner'
 import { contentHash } from './source-owner'
 
@@ -12,8 +12,8 @@ import { contentHash } from './source-owner'
  * sidecar the agent may not write. This module reads the file and renders the next
  * list; it runs no Git and publishes nothing. Since S15 it no longer writes: the
  * editing owner commits the new text only if the file still holds the bytes read
- * here, in the repository lane (the Swift service, or its legacy twin under
- * `TREZI_BACKEND_OWNER=legacy`). See docs/SWIFT-BACKEND-RETIREMENT.md.
+ * here, in the repository lane (the Swift service, the only writer since LKM-111). See
+ * docs/SWIFT-BACKEND-RETIREMENT.md.
  */
 
 export const MAX_ANNOTATION_TEXT = 2000

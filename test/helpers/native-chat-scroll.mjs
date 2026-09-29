@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { once } from 'node:events'
 import { checkChatAcceptance } from './chat-acceptance.mjs'
-import { NativeBridge } from '../../src/native/bridge.ts'
+import { spawnHostBridge } from './host-bridge.mjs'
 
 const directory = resolve('out/native')
 const executable = `${directory}/Trezi.app/Contents/MacOS/TreziHost`
@@ -23,7 +23,7 @@ if (!existsSync(executable)) {
 }
 const artifacts = resolve('test/artifacts/native/chat-scroll')
 mkdirSync(artifacts, { recursive: true })
-const host = new NativeBridge(executable, directory, 'ephemeral')
+const host = spawnHostBridge(executable, directory, 'ephemeral')
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 // NSStringFromRect: "{{x, y}, {width, height}}"
 const rect = value => {

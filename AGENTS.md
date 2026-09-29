@@ -7,10 +7,12 @@ rule there is as binding as the ones here.
 ## What Trezi is
 
 A native macOS app: an AI chat on the left (Swift/AppKit/SwiftUI) that edits a user's
-repo, with that repo's dev server live-previewed on the right in system WebKit. Bun
-runs provider sessions, source parsers and the remaining services; a separate Swift
-XPC service holds the profile lock, the operation ledger and most domain writers.
-Distributed as source (clone, `bun install`, `bun run dev`); users authenticate with
+repo, with that repo's dev server live-previewed on the right in system WebKit. A
+separate Swift XPC service holds the profile lock, the operation ledger and every
+domain writer; retained JS (controllers, source parsers, provider adapters, the
+latter in supervised helpers) runs on the Bun bundled into `Trezi.app`.
+Distributed as source (clone, `bun install`, `bun run build`) and started with
+`open -a Trezi` or the thin `trezi` command (`bun run dev` for development); users authenticate with
 their own provider subscriptions or endpoint credentials. Electron, the React
 application renderer and browser/Tailscale mode are retired (`docs/NATIVE.md`).
 
@@ -74,10 +76,12 @@ Use **Bun**, not npm/yarn (Node 22 remains for tooling). Native builds need macO
   controllers behind it; `src/native/index.ts` is the Bun entrypoint.
 - `src/service/` — the Swift XPC service: profile lock, ledger and the domain owners
   (preferences, workspace, memory, runtime, repository, source, conversation,
-  providers, editing, workflows, platform). `TREZI_BACKEND_OWNER=legacy` is the
-  launch-time rollback. [service-owners](docs/agent-guide/service-owners.md)
-- `src/main/` — Bun backend: provider sessions, parsers, props/styles/tokens,
-  Git/worktrees, rollback twins. [backend-map](docs/agent-guide/backend-map.md)
+  providers, editing, workflows, platform); the only writers, with no Bun fallback.
+  Built-in provider adapters run in helpers it supervises.
+  [service-owners](docs/agent-guide/service-owners.md)
+- `src/main/` — retained Bun backend: provider adapters and sessions, parsers,
+  props/styles/tokens, Git/worktree orchestration and reads.
+  [backend-map](docs/agent-guide/backend-map.md)
 - `src/preview/` — isolated WKContentWorld instrumentation of the user's page, the
   only WebKit view. `src/shared/api.ts` — every cross-process type.
 - Tree, lifecycle, trust boundaries, design rationale:

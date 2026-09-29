@@ -1,49 +1,16 @@
 import type { AgentOptions } from '../../shared/api'
 import type { ModelProvider } from './types'
-import { claudeProvider } from './claude'
 import { codexProvider } from './codex'
-import { geminiProvider } from './gemini'
 import { helperProvider } from './helper-session'
 import { withSkillMenu } from './skill-menu'
 
 const codexWithSkills = withSkillMenu(codexProvider)
-const geminiWithSkills = withSkillMenu(geminiProvider)
-
-/** In-process adapters (legacy launch and unit tests without a helper command). */
-function inProcessProvider(options: AgentOptions): ModelProvider {
-  if (options.connectionId) return codexWithSkills
-  switch (options.provider) {
-    case 'codex':
-      return codexWithSkills
-    case 'gemini':
-      return geminiEnabled() ? geminiWithSkills : claudeProvider
-    case 'claude':
-    case undefined:
-    default:
-      return claudeProvider
-  }
-}
-
-/** Supervised helpers (opt-in, `TREZI_PROVIDER_HELPERS=1`): built-in seats run in a provider helper process. */
-function supervisedProvider(options: AgentOptions): ModelProvider {
-  switch (options.provider) {
-    case 'codex':
-      return helperProvider('codex')
-    case 'gemini':
-      return geminiEnabled() ? helperProvider('gemini') : helperProvider('claude')
-    case 'claude':
-    case undefined:
-    default:
-      return helperProvider('claude')
-  }
-}
 
 export type { ModelProvider, ProviderSession, PendingPrompt } from './types'
 
 /**
  * Pick the backend for a session from `options.provider` (the renderer sets it;
- * default = Claude). A backend is reachable only when the renderer explicitly
- * selects it, so the default runtime is byte-identical to pre-v7.
+ * default = Claude).
  *
  * HARNESS AND ENDPOINT ARE ORTHOGONAL (v10). `provider` names the HARNESS — who runs
  * the agent loop — while `connectionId` names an ENDPOINT the user added (an
@@ -56,10 +23,18 @@ export type { ModelProvider, ProviderSession, PendingPrompt } from './types'
  * 'claude'`. Routing to Claude there would run the turn on the Claude subscription
  * and silently ignore the endpoint the user picked.
  *
+ * WHERE THE ADAPTER RUNS (LKM-111). The built-in seats (Claude, Codex, Gemini) run in
+ * a provider helper: a separate process the Swift service spawns with only its stdio
+ * and a scrubbed environment, and holds to the session's grant
+ * (`src/service/ProviderHelper.swift`, `helper-session.ts`). A v10 connection stays
+ * in Bun: its key is resolved here and never crosses into another process. Bun only
+ * runs under the service (`src/native/index.ts` refuses otherwise), so there is no
+ * in-process fallback for a built-in seat.
+ *
  * Auth follows the same split: the two built-in seats log in with the user's own
  * subscription (Claude `setup-token`, Codex "sign in with ChatGPT"), while a
- * connection uses the user's own API key — encrypted at rest with safeStorage and
- * confined to main. No key is ever committed in-repo.
+ * connection uses the user's own API key — encrypted at rest and confined to Bun and
+ * the service. No key is ever committed in-repo.
  *
  * Gemini is EXPERIMENTAL and UNWIRED: unlike Claude/Codex it has NO SDK in
  * package.json (it shells out to an external `gemini` CLI that most installs
@@ -73,18 +48,19 @@ function geminiEnabled(): boolean {
   return v === '1' || v === 'true'
 }
 
-/**
- * The adapters run in-process in Bun by default, on both launches. Provider helpers are
- * an explicit opt-in of the Swift launch (`TREZI_PROVIDER_HELPERS=1`; the service
- * installs its helper command only then), and even then a v10 connection stays
- * in-process: its key is resolved here and never crosses into a helper. Moving the
- * adapters out of Bun by default waits for the authorized live parity run (LKM-111).
- */
-export function helpersEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.TREZI_PROVIDER_HELPER !== '1' && env.TREZI_SERVICE_SUPERVISED === '1' && env.TREZI_PROVIDER_HELPERS === '1'
-}
-
 export function pickProvider(options: AgentOptions): ModelProvider {
   if (options.connectionId) return codexWithSkills
-  return helpersEnabled() ? supervisedProvider(options) : inProcessProvider(options)
+  // A helper never routes again: its own sessions are the adapters themselves (`provider-helper-entry.ts`).
+  if (process.env.TREZI_PROVIDER_HELPER === '1') throw new Error('A provider helper does not pick providers.')
+  if (process.env.TREZI_SERVICE_SUPERVISED !== '1') throw new Error('Built-in providers run in helpers of the Trezi service; start Trezi with open -a Trezi or trezi.')
+  switch (options.provider) {
+    case 'codex':
+      return helperProvider('codex')
+    case 'gemini':
+      return helperProvider(geminiEnabled() ? 'gemini' : 'claude')
+    case 'claude':
+    case undefined:
+    default:
+      return helperProvider('claude')
+  }
 }

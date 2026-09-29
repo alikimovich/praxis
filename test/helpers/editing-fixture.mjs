@@ -1,7 +1,7 @@
 // The real Swift EditingOwner (S12) compiled into a line-driven fixture process with the
 // conversation, repository and source owners it works with, and Bun's real clients
-// wired to it. Used by test/editing-owner.mjs and the parity preload that re-runs the
-// legacy island/controls suites against the Swift owners.
+// wired to it. Used by test/editing-owner.mjs and test/helpers/with-service-owners.mjs,
+// which runs the island, controls, content and notes suites on the Swift owners.
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'

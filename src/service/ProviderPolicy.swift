@@ -1,7 +1,7 @@
 import Foundation
 
-/// The provider owner's policy (S10), pure: the exact mirror of `src/main/provider-policy.ts`,
-/// which the legacy twin uses. `test/provider-owner.mjs` checks both answer every case the same.
+/// The provider owner's policy (S10), pure: the exact mirror of `src/main/provider-policy.ts`.
+/// `test/provider-owner.mjs` pins every answer to a golden recorded from the Bun policy.
 /// A session's capabilities come from what the owner was told when it opened (provider,
 /// background or not, its roots), never from what the adapter or helper asks for later.
 enum ProviderPolicy {

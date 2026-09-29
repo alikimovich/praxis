@@ -18,7 +18,7 @@ func emit(_ fields: [(String, JSValue)]) { emit(JSValue.object(fields.map { (JST
 let crash = env["REPOSITORY_FAULT"]
 /// SIGKILL may land on another thread after kill() returns: never run past it.
 let fault: @Sendable (String) -> Void = { point in if point == crash { kill(getpid(), SIGKILL); while true { pause() } } }
-// REPOSITORY_WORKTREES_ROOT widens where worktrees may live (the legacy suites use the temp dir).
+// REPOSITORY_WORKTREES_ROOT widens where worktrees may live (the chat and Git suites use the temp dir).
 let owner = RepositoryOwner(options: RepositoryOwner.Options(profile: profile, environment: env, fault: fault,
                                                              worktreesRoot: env["REPOSITORY_WORKTREES_ROOT"]), send: { emit($0) })
 emit([("ready", .bool(true))])

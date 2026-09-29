@@ -16,9 +16,9 @@ import Darwin
 /// Bun and their results (screenshots included) are validated before the helper gets
 /// them. A helper that crashes or hangs past Stop's deadline ends its turn exactly once.
 ///
-/// The built-in SDK adapters (Claude, Codex) and every v10 connection run in-process in
-/// Bun and ask this owner. Helper hosting for the built-in seats is opt-in
-/// (`TREZI_PROVIDER_HELPERS=1`); moving them for good waits for a live parity run (LKM-111).
+/// The built-in SDK adapters (Claude, Codex, Gemini) always run in helpers (LKM-111,
+/// after the live parity run); only a v10 connection runs in Bun, so its key stays
+/// there, and asks this owner the same way.
 ///
 /// It also writes the provider data (`ProviderData.swift`): the connections store with
 /// its Keychain-encrypted keys, the model catalog cache, and the Codex model probe.

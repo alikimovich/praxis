@@ -17,12 +17,12 @@ let ipcMain: RpcHandlerRegistry = nativeIpcMain
 /**
  * Main-owned wiring for user-added model endpoints (v10) — the Electron half of
  * the pure `providers-store.ts` engine, mirroring the control-manifest.ts /
- * control-panels.ts split. Everything here needs `electron` (safeStorage, app
- * paths, ipcMain) or the network; everything testable without them lives next door.
+ * control-panels.ts split. Everything here needs the native platform (app paths,
+ * ipcMain) or the network; everything testable without them lives next door.
  *
  * Three jobs:
  *  1. Serve the connections store (`provider-data.ts`: the Swift provider owner
- *     writes it and holds the keys, or the rollback twin does), so a key is
+ *     writes it and holds the keys), so a key is
  *     encrypted at rest and only ever decrypted inside main.
  *  2. Probe an endpoint's `/models` (the settings dialog's "Connect" button) —
  *     one call that both validates the credential and returns the catalog.
@@ -151,8 +151,8 @@ export async function catalog(input: ModelCatalogInput): Promise<ModelCatalogRes
 // Built-in seats: live model discovery
 //
 // The halves this orchestrates live elsewhere: `model-catalog.ts` (pure — the
-// parsers and the TTL/disk cache) and `codex-models.ts` (finding and running the
-// CLI). What's here is WHEN to ask: one probe in flight, a floor between
+// parsers and the TTL/disk cache) and the provider owner (running the CLI probe,
+// `ProviderData.swift`). What's here is WHEN to ask: one probe in flight, a floor between
 // attempts, never on the render path. The Claude half needs no scheduler —
 // `backends/claude.ts` volunteers its answer whenever a session exists.
 // ---------------------------------------------------------------------------

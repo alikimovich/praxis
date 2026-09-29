@@ -1,13 +1,16 @@
+// The islands go through the service's editing and source owners: the real Swift ones.
+import './with-service-owners.mjs'
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import { ChatIslands } from '../../src/main/chat-islands.ts'
 import { mkdtemp, cp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { once } from 'node:events'
-import { registerDevServerIpc } from '../../src/main/devserver.ts'
-import { NativeBridge } from '../../src/native/bridge.ts'
+import { findFreePort, waitForReachable } from '../../src/main/devserver-net.ts'
+import { PREVIEW_HOST, withPort } from '../../src/main/project-detect.ts'
+import { spawnHostBridge } from './host-bridge.mjs'
 import { NEXT_ADAPTER_CONTENT, NEXT_LOADER_CONTENT } from '../../src/main/setup-next.ts'
 import { REACT_HELPER_CONTENT } from '../../src/main/setup-react.ts'
 import { MDX_HELPER_CONTENT } from '../../src/main/setup-mdx.ts'
@@ -19,12 +22,7 @@ if (
   process.exit(0)
 }
 const root = await mkdtemp(join(tmpdir(), 'trezi-hmr-'))
-const handlers = new Map()
-registerDevServerIpc(
-  () => ({ webContents: { isDestroyed: () => false, send: (_, line) => console.log(line) } }),
-  { handle: (name, fn) => handlers.set(name, fn) }
-)
-let host
+let host, server
 try {
   await cp(resolve('test/fixtures/next-app'), root, {
     recursive: true,
@@ -80,12 +78,17 @@ export default function Effect() {
   const installed = spawnSync('bun', ['install'], { cwd: root, stdio: 'inherit', timeout: 120000 })
   if (installed.error) throw installed.error
   if (installed.status !== 0) throw Error('install failed')
-  const info = await handlers.get('devserver:start')(null, {
-    root,
-    command: 'bun run dev --webpack',
-    framework: 'next'
+  // Trezi's runtime owner is tested in runtime-owner; here the project's own server,
+  // started with the same command and port, in its own process group.
+  const port = await findFreePort(7777)
+  server = spawn('/bin/sh', ['-c', withPort('bun run dev --webpack', 'next', port)], {
+    cwd: root, detached: true, stdio: 'inherit',
+    env: { ...process.env, FORCE_COLOR: '0', BROWSER: 'none', PORT: String(port), HOST: PREVIEW_HOST, HOSTNAME: PREVIEW_HOST }
   })
-  host = new NativeBridge(
+  const info = { url: `http://${PREVIEW_HOST}:${port}` }
+  const deadline = Date.now() + 120000
+  assert.ok(await waitForReachable([info.url], () => Date.now() > deadline || server.exitCode !== null), 'the Next dev server is reachable')
+  host = spawnHostBridge(
     resolve('out/native/Trezi.app/Contents/MacOS/TreziHost'),
     resolve('out/native'),
     'ephemeral'
@@ -131,7 +134,7 @@ export default function Effect() {
   const shadow = () => page('document.querySelector("button").style.boxShadow')
   await wait(async () => String(await shadow()).includes('12px'))
   const initial = await shadow()
-  const islands = new ChatIslands(join(root, '.island-test'), () => {})
+  const islands = new ChatIslands(() => {})
   islands.register('test', root, 'test', () => 1)
   const made = await islands.tool('test', root, {
     action: 'define',
@@ -227,6 +230,6 @@ export default function Effect() {
   )
 } finally {
   host?.send('quit')
-  await handlers.get('devserver:stop')(null, root)
+  try { if (server?.pid) process.kill(-server.pid, 'SIGTERM') } catch {}
   await rm(root, { recursive: true, force: true })
 }

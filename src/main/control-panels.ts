@@ -17,7 +17,7 @@ import {
   validateManifest
 } from './control-manifest'
 import { commitEdit, withinRoot } from './props'
-import { editingOwner } from './editing-model'
+import { editingOwner } from './editing-owner'
 import { contentHash } from './source-owner'
 
 /**

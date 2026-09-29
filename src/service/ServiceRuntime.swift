@@ -8,7 +8,7 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
     let writer = DispatchQueue(label: "dev.praxis.service.backend-writer")
     let epoch = UUID().uuidString
     let hostRequirement: String
-    let supervisor = LegacySupervisor()
+    let supervisor = BackendSupervisor()
     var exclusion: ProfileExclusion?
     /// S03 substrate, opened (and recovered) under the profile lock. No domain
     /// writes through it yet; nil if the store could not be proven whole, which
@@ -42,7 +42,7 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
     /// S14 platform owner (the Simulator preview and its Metro group, scoped media
     /// grants, pasted attachments, the running-servers recovery), on the same pipe.
     var platform: PlatformOwner?
-    var child: LegacyChild?
+    var child: BackendChild?
     var launch: ServiceLaunch?
     var peerPID: pid_t?
     var active: ServiceSession?
@@ -116,7 +116,7 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                         ledger = try OperationLedger(directory: URL(fileURLWithPath: requested.profile)
                             .appendingPathComponent("service/ledger"))
                     } catch {
-                        // Files are left exactly as found for diagnosis; legacy Bun is unaffected.
+                        // Files are left exactly as found for diagnosis.
                         try? session.diagnostics?.write(contentsOf: Data("Trezi service: operation ledger unavailable (\(error)); its files were left untouched.\n".utf8))
                     }
                     var environment = requested.environment
@@ -168,14 +168,16 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                             environment: requested.environment, bun: requested.bun), repository: repository, send: send)
                         var providerOptions = ProviderOwner.Options(profile: requested.profile, environment: requested.environment,
                             watchdog: CommandLine.arguments[0], journal: journal)
-                        // The Keychain helper is the host Bun used (`<out>/Trezi.app/…/TreziHost`); the checkout is `<out>/..`.
-                        let out = URL(fileURLWithPath: requested.backend).deletingLastPathComponent()
-                        let keychain = out.appendingPathComponent("Trezi.app/Contents/MacOS/TreziHost").path
+                        // The backend is `<out>/Trezi.app/Contents/Resources/backend/index.cjs`: the Keychain
+                        // helper is that app's TreziHost, and the checkout is `<out>/../..`.
+                        var app = URL(fileURLWithPath: requested.backend)
+                        for _ in 0..<4 { app.deleteLastPathComponent() }
+                        let keychain = app.appendingPathComponent("Contents/MacOS/TreziHost").path
                         providerOptions.data = ProviderData.Tools(crypto: access(keychain, X_OK) == 0 ? [keychain] : nil,
-                            checkout: out.deletingLastPathComponent().deletingLastPathComponent().path, environment: requested.environment)
-                        // Opt-in only: by default the adapters stay in-process in Bun (LKM-111 moves them).
-                        providerOptions.helper = ProviderHelperCommand.builtIn(environment: requested.environment,
-                            backend: requested.backend, bun: requested.bun)
+                            checkout: app.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().path,
+                            environment: requested.environment)
+                        // Built-in adapters always run in supervised helpers (LKM-111).
+                        providerOptions.helper = ProviderHelperCommand.builtIn(backend: requested.backend, bun: requested.bun)
                         provider = ProviderOwner(options: providerOptions, send: send)
                     }
                     readBackend()

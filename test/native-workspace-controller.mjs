@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { NativeWorkspaceController } from '../src/native/workspace-controller.ts'
-import { legacyWorkspace } from '../src/native/workspace.ts'
+import { workspaceService } from './helpers/workspace-fixture.mjs'
 const tick = () => new Promise(resolve => setTimeout(resolve, 0))
 const gate = () => { let resolve; const promise = new Promise(r => resolve = r); return { promise, resolve } }
 const projects = new Map(), calls = [], renders = [], active = []
@@ -51,7 +51,11 @@ const services = (store) => ({
     return { ok: true }
   }
 })
-const controller = new NativeWorkspaceController(services(logged(legacyWorkspace(profile))))
+// The real Swift owner on this profile (the only workspace writer).
+const running = []
+const owner = async dir => { const service = await workspaceService(dir); running.push(service); return service.store }
+const shared = await owner(profile)
+const controller = new NativeWorkspaceController(services(logged(shared)))
 await controller.command({ type: 'attach' })
 await controller.open('/one')
 assert.equal(controller.state.status.kind, 'running')
@@ -111,7 +115,16 @@ assert.deepEqual(calls.slice(serviceCalls).filter(call => !call[0].startsWith('s
 console.log('Native project reordering: both directions, persistence, invalid drops and session preservation passed')
 
 // --- S04: the store owns identity/order/selection; each is persisted first ------
-const flush = async () => { for (let i = 0; i < 5; i++) await tick() }
+// Metadata reaches the owner over its pipe: wait until the stored file stops changing.
+const flush = async (path = join(profile, 'workspace.json')) => {
+  let last
+  for (let stable = 0, i = 0; stable < 4 && i < 400; i++) {
+    await new Promise(resolve => setTimeout(resolve, 25))
+    const now = readFileSync(path, 'utf8')
+    stable = now === last ? stable + 1 : 0
+    last = now
+  }
+}
 {
   const at = (name, root) => calls.findIndex(call => call[0] === name && call[1] === root)
   const start = calls.length
@@ -139,7 +152,7 @@ const flush = async () => { for (let i = 0; i < 5; i++) await tick() }
 
 // A store that cannot persist the selection: nothing dependent runs.
 {
-  const store = legacyWorkspace(profile)
+  const store = shared
   const refusing = { ...store, select: async () => { throw new Error('The workspace was not saved') } }
   const blocked = new NativeWorkspaceController(services(refusing))
   await blocked.command({ type: 'attach' })
@@ -157,7 +170,8 @@ const flush = async () => { for (let i = 0; i < 5; i++) await tick() }
   const before = JSON.parse(saved())
   const order = before.projects.map(p => p.key)
   projects.clear()
-  const restarted = new NativeWorkspaceController(services(legacyWorkspace(profile)))
+  for (const service of running.splice(0)) await service.close()
+  const restarted = new NativeWorkspaceController(services(await owner(profile)))
   await restarted.command({ type: 'attach' })
   assert.deepEqual(restarted.state.projects.map(p => p.key), order, 'order survives restart')
   assert.equal(restarted.state.activeKey, before.activeKey, 'selection survives restart')
@@ -180,11 +194,11 @@ const flush = async () => { for (let i = 0; i < 5; i++) await tick() }
     null
   ], activeKey: '/legacy', extra: 1 }))
   projects.clear()
-  const legacy = new NativeWorkspaceController(services(legacyWorkspace(old)))
-  await legacy.command({ type: 'attach' })
-  const entry = legacy.state.projects[0]
+  const restored = new NativeWorkspaceController(services(await owner(old)))
+  await restored.command({ type: 'attach' })
+  const entry = restored.state.projects[0]
   assert.deepEqual([entry.key, entry.sessionKeys, entry.activeSessionKey, entry.previewKind], ['/legacy', ['/legacy'], '/legacy', 'web'])
-  await flush()
+  await flush(join(old, 'workspace.json'))
   const file = JSON.parse(readFileSync(join(old, 'workspace.json'), 'utf8'))
   assert.deepEqual(file.projects.slice(1), [{ root: 'relative', key: 'relative' }, null], 'invalid entries are kept, not deleted')
   assert.deepEqual(file.projects[0].future, { kept: true }, 'unknown entry fields are kept')
@@ -192,3 +206,5 @@ const flush = async () => { for (let i = 0; i < 5; i++) await tick() }
   rmSync(old, { recursive: true, force: true })
   console.log('Native workspace S04: old records get defaults; invalid entries and unknown fields are preserved passed')
 }
+
+for (const service of running) await service.close()

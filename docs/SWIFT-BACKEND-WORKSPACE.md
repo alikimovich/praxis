@@ -1,5 +1,10 @@
 # Swift-owned workspace identity and persistence (S04)
 
+> **Since LKM-111 (2026-09-29):** the launch-time rollback (`TREZI_BACKEND_OWNER=legacy`,
+> `TreziService --legacy`) and the Bun twins it ran are removed. The Swift owner described
+> here is the only one; passages about the rollback, the legacy launch or the TS twins
+> are history. Current status: [SWIFT-BACKEND-RETIREMENT.md](SWIFT-BACKEND-RETIREMENT.md).
+
 LKM-92, roadmap row S04 ("basic projects/workspaces; Swift workspace coordinator")
 of the [canonical plan](SWIFT-BACKEND-PLAN.md) and [roadmap](SWIFT-BACKEND-ROADMAP.md).
 This is the second writer transfer, after [preferences](SWIFT-BACKEND-PREFERENCES.md).
@@ -223,7 +228,8 @@ persisted before sessions, servers and Git start, and that a refused selection
 starts nothing. It also checks that restart and reattach preserve projects,
 order and selection without writes, that display state is never stored, and
 that old records get defaults while invalid entries and unknown fields survive.
-`test/native-workspace.test.ts` covers the legacy writer.
+`test/workspace-owner.mjs` pins the removed legacy writer's answers
+(`test/fixtures/workspace-owner/golden.json`, LKM-111).
 `test/service-process.mjs` (full, unsandboxed) opens and selects a project from
 the supervised backend through the real XPC service's pipe. It checks that the
 legacy workspace is imported, the same format is written, and no service frame

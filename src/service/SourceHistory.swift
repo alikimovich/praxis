@@ -1,11 +1,11 @@
 import Foundation
 
-/// Grouped Undo/redo for every Trezi source edit (S08), the twin of the legacy
-/// `edit-history.ts`: one pair of stacks per resolved project root, rapid edits of one
-/// target coalesced, a group (a comment spawn, a chat turn, a linked-padding gesture)
-/// undone as one step. Held for the service's lifetime, like the legacy history held
-/// for Bun's. Undo and redo themselves are transactions (`SourceStore.transact`), so
-/// an interrupted one is rolled back, never left half-applied.
+/// Grouped Undo/redo for every Trezi source edit (S08), ported from the retired
+/// `edit-history.ts` (the sole history since LKM-111): one pair of stacks per resolved
+/// project root, rapid edits of one target coalesced, a group (a comment spawn, a chat
+/// turn, a linked-padding gesture) undone as one step. Held for the service's lifetime.
+/// Undo and redo themselves are transactions (`SourceStore.transact`), so an
+/// interrupted one is rolled back, never left half-applied.
 final class SourceHistory: @unchecked Sendable {
     struct Entry: Sendable {
         /// The path as the caller recorded it (answered back, like the legacy history).

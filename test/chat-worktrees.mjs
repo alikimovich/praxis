@@ -1,5 +1,5 @@
 /**
- * chat-worktrees.ts unit test (pure — no Electron). Per-CHAT worktree isolation (v9):
+ * chat-worktrees.ts through the Swift repository owner (test/repository-owner.mjs runs\n * it with the owner preloaded). Per-CHAT worktree isolation (v9):
  * every interactive chat runs in its own `trezi/chat-<id>` worktree, and after each
  * completed turn its work auto-merges onto the LIVE tree; on mid-turn drift the turn
  * PARKS on the branch instead of clobbering the user's edit.
@@ -13,7 +13,7 @@
  * the worktree (keeping the branch); `clean -fd` spares the node_modules/.env symlinks.
  * Uses real temp git repos.
  *
- * Run with: bun run test:chat-worktrees
+ * Run with: bun test/repository-owner.mjs
  */
 
 import { execFileSync } from 'node:child_process'

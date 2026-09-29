@@ -6,7 +6,7 @@ import { readFile, readdir } from 'fs/promises'
 import { join } from 'path'
 import type { Token, TokenGroup, TokenScaffoldResult, TokenSet } from '../shared/api'
 import type { RpcHandlerRegistry } from './rpc-router'
-import { editingOwner } from './editing-model'
+import { editingOwner } from './editing-owner'
 
 /**
  * Design-token detection (the differentiator's last piece). A repo can expose

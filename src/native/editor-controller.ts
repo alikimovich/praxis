@@ -64,7 +64,7 @@ export class NativeEditorController {
     session.documents.set(view.file, doc)
     session.state.source = view.file
   }
-  /** Drafts the owner kept for this project, loaded once per session (none under the legacy owner). */
+  /** Drafts the owner kept for this project, loaded once per session. */
   restored(session: Session) {
     session.restored ??= this.invoke('source:drafts', session.state.root)
       .then((drafts: SourceDraft[] | undefined) => new Map((Array.isArray(drafts) ? drafts : []).map(d => [d.path, d])), () => new Map())

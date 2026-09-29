@@ -1,5 +1,6 @@
 /**
- * live-commit.ts unit test (pure — no Electron). Every agent turn that changes files
+ * live-commit.ts through the Swift repository owner (test/repository-owner.mjs runs it
+ * with the owner preloaded). Every agent turn that changes files
  * now lands as ONE commit on the user's live checkout, so a session reads as progress
  * in `git log` and any turn can be `git revert`ed on its own.
  *
@@ -15,7 +16,7 @@
  * would otherwise cause).
  * Uses real temp git repos.
  *
- * Run with: bun run test:live-commit
+ * Run with: bun test/repository-owner.mjs
  */
 import { commitLiveTurn, commitTitle, committableFiles } from '../src/main/live-commit.ts'
 import {

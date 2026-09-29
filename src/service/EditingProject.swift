@@ -6,8 +6,7 @@ import Darwin
 /// Next dependency marker. They run in the repository's lane beside the sidecar commits
 /// (`EditingSidecar`), and none of them ever follows a link out of the project: a
 /// `.trezi`/`.praxis`/`.dsgn` folder or a helper that is a link is refused.
-/// Rollback twins: sidecar-migrate.ts, setup-artifacts.ts, worktree-dependencies.ts's
-/// legacy half in editing-model.ts.
+/// The only implementation since LKM-111 removed the Bun twins.
 enum EditingProject {
     private static func refused(_ message: String) -> RepositoryRefusal { RepositoryRefusal(.invalidRequest, message) }
 

@@ -1,5 +1,10 @@
 # Swift-owned project memory; annotation storage split (S05)
 
+> **Since LKM-111 (2026-09-29):** the launch-time rollback (`TREZI_BACKEND_OWNER=legacy`,
+> `TreziService --legacy`) and the Bun twins it ran are removed. The Swift owner described
+> here is the only one; passages about the rollback, the legacy launch or the TS twins
+> are history. Current status: [SWIFT-BACKEND-RETIREMENT.md](SWIFT-BACKEND-RETIREMENT.md).
+
 LKM-93, roadmap row S05 ("memory, annotations and attachments; Swift state
 services") of the [canonical plan](SWIFT-BACKEND-PLAN.md) and
 [roadmap](SWIFT-BACKEND-ROADMAP.md). This is the third writer transfer, after

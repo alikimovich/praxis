@@ -1,19 +1,19 @@
 import type { ImageAttachment, RunningSimulator, SimElementPick, SimPreflight } from '../shared/api'
-import type { PreviewProcess } from '../native/preview-processes'
+
+/** A server listening from a project folder (the "Running servers" recovery sheet).
+ *  `identity` is the pid and kernel start time, which a stop must repeat unchanged. */
+export interface PreviewProcess { pid: number; root: string; command: string; started: string; addresses: string[]; identity?: string }
 
 /**
- * The platform owner seam (S14). Under the Swift launch the service's platform owner
- * performs the OS services Bun used to run itself:
+ * The platform owner seam (S14). The service's platform owner performs the OS
+ * services Bun used to run itself:
  * - the iOS Simulator preview: preflight, boot, the app's launch command as a
  *   supervised process group, the loopback bridge, idb input and element picks, stop;
  * - scoped media grants for the native source editor (view-bound, expiring, hashed);
  * - pasted composer images (uploaded in bounded chunks, hash-checked, written by it);
  * - the "Running servers" recovery sheet's inspection and SIGTERM;
  * - opening links, files and "Open in editor" (LKM-102).
- * With no Swift owner (`TREZI_BACKEND_OWNER=legacy`, unit tests) the original TS code
- * runs: `simulator.ts`, `media.ts`, `attachments.ts`, `preview-processes.ts`,
- * `native/platform-legacy.ts` and `open-in-editor-legacy.ts`. Call
- * sites choose one or the other, never both.
+ * There is no other owner (LKM-111 removed the TS twins).
  */
 
 export class PlatformError extends Error {
@@ -69,6 +69,7 @@ export function setPlatformOwner(next: PlatformOwner | null): void {
   owner = next
 }
 
-export function swiftPlatformOwner(): PlatformOwner | null {
+export function platformOwner(): PlatformOwner {
+  if (!owner) throw new Error('Trezi’s service is not running, so this system action is unavailable.')
   return owner
 }

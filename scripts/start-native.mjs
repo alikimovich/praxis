@@ -14,16 +14,22 @@ export function defaultProfile(out, support = join(homedir(), 'Library/Applicati
   return result.stdout.trim()
 }
 
+/** The Bun copied into Trezi.app by the build, else the one running this script. */
+export function launchBun(out, fallback = process.execPath) {
+  const bundled = join(out, 'Trezi.app/Contents/Helpers/bun')
+  return existsSync(bundled) ? bundled : fallback
+}
+
+/**
+ * The development and test launch: the host with the arguments `HostLaunch.swift`
+ * derives itself under `open -a Trezi`, plus the test profile and `--test` fixture.
+ */
 export function nativeServiceLaunchSpec(root, args, env, bun, testDirectory = null) {
-  const owner = env.TREZI_BACKEND_OWNER ?? 'swift'
-  if (!['swift', 'legacy'].includes(owner)) throw new Error('TREZI_BACKEND_OWNER must be swift or legacy')
   const out = join(root, 'out/native')
   const profile = resolve(testDirectory ? join(testDirectory, 'profile') : env.TREZI_USER_DATA || defaultProfile(out))
-  const host = join(out, 'Trezi.app/Contents/MacOS/TreziHost')
-  const common = ['--bun', bun, '--backend', join(out, 'index.cjs'), '--profile', profile, '--', ...args]
   return {
-    command: owner === 'legacy' ? join(out, 'TreziService') : host,
-    args: owner === 'legacy' ? ['--legacy', '--host', host, ...common] : [out, testDirectory ? 'ephemeral' : 'persistent', '--service', ...common],
+    command: join(out, 'Trezi.app/Contents/MacOS/TreziHost'),
+    args: [out, testDirectory ? 'ephemeral' : 'persistent', '--service', '--bun', bun, '--backend', join(out, 'Trezi.app/Contents/Resources/backend/index.cjs'), '--profile', profile, '--', ...args],
     env: { ...env, TREZI_USER_DATA: profile, ...(testDirectory ? { TREZI_NATIVE_TEST_DIR: testDirectory } : {}) },
     profile
   }
@@ -46,7 +52,7 @@ async function main() {
   const root = fileURLToPath(new URL('../', import.meta.url))
   const testDirectory = args.includes('--test') ? mkdtempSync(join(tmpdir(), 'trezi-native-')) : null
   try {
-    const spec = nativeServiceLaunchSpec(root, args, process.env, process.execPath, testDirectory)
+    const spec = nativeServiceLaunchSpec(root, args, process.env, launchBun(join(root, 'out/native')), testDirectory)
     mkdirSync(spec.profile, { recursive: true })
     const child = Bun.spawn([spec.command, ...spec.args], { cwd: root, env: spec.env, stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' })
     for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => child.kill(signal))

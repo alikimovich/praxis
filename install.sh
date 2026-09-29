@@ -48,13 +48,30 @@ echo "==> Building Trezi"
 
 echo "==> Linking the trezi command"
 mkdir -p "$HOME/.local/bin"
+chmod +x "$TREZI_HOME/bin/trezi"
+ln -sf "$TREZI_HOME/bin/trezi" "$HOME/.local/bin/trezi"
+ln -sf "$TREZI_HOME/bin/trezi" "$HOME/.local/bin/praxis"
 
-if [ -f "$TREZI_HOME/bin/trezi.mjs" ]; then
-  chmod +x "$TREZI_HOME/bin/trezi.mjs"
+# Trezi.app stays in the checkout (it runs the backend beside it); Applications gets a
+# link, so Finder, Spotlight and `open -a Trezi` find it. An existing app that is not
+# a link is never replaced.
+echo "==> Adding Trezi to Applications"
+app="$TREZI_HOME/out/native/Trezi.app"
+apps="${TREZI_APPLICATIONS:-/Applications}"
+if [ ! -w "$apps" ]; then
+  apps="$HOME/Applications"
+  mkdir -p "$apps"
 fi
-
-ln -sf "$TREZI_HOME/bin/trezi.mjs" "$HOME/.local/bin/trezi"
-ln -sf "$TREZI_HOME/bin/praxis.mjs" "$HOME/.local/bin/praxis"
+if [ -L "$apps/Trezi.app" ] || [ ! -e "$apps/Trezi.app" ]; then
+  ln -sfn "$app" "$apps/Trezi.app"
+  echo "Linked $apps/Trezi.app"
+else
+  echo "$apps/Trezi.app already exists and is not a link; left alone. Start Trezi with: trezi"
+fi
+lsregister="${TREZI_LSREGISTER:-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister}"
+if [ -x "$lsregister" ]; then
+  "$lsregister" -f "$app" >/dev/null 2>&1 || true
+fi
 
 case ":${PATH}:" in
   *":$HOME/.local/bin:"*)
@@ -117,5 +134,5 @@ else
 fi
 
 echo "==> Trezi installed to $TREZI_HOME"
-echo "Run:  trezi"
+echo "Run:  trezi   (or open Trezi from Applications; trezi <folder> opens a project)"
 echo "(Run this installer again, or 'trezi --update', to update later.)"

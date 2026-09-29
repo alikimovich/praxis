@@ -49,7 +49,7 @@ import type { ModelProvider, PendingPrompt, ProviderSession, SpawnContext } from
  *   OpenAI-compatible endpoint the user added (Vercel AI Gateway, Groq, a custom host)
  *   with the user's own key, so an open model like Kimi or DeepSeek can drive the chat.
  *   The key reaches main through `resolveConnection` (the Swift provider owner's
- *   Keychain helper, or safeStorage on the legacy launch; see `main/provider-data.ts`),
+ *   Keychain helper; see `main/provider-data.ts`),
  *   always in-process, and is handed to this one `Codex` instance — it is never written
  *   to the user's `~/.codex/config.toml`, never put in argv, never emitted, and never
  *   crosses to the renderer.

@@ -2,17 +2,18 @@
 // driven through Bun's real client, with a scripted fake provider running in the real
 // helper host as a supervised helper. No provider SDK, no network, no credentials.
 // - policy: permission and tool-authorization answers and the session lifecycle
-//   (cancel deadline, settle race, resume) are identical on the legacy twin and Swift;
+//   (cancel deadline, settle race, resume) match the answers the in-process twin gave
+//   before LKM-111 removed it (a recorded golden);
 // - helper: stream, tool, error, resume, permission, question and model behaviour;
 // - images: a preview screenshot tool result and pasted images keep their bytes and type;
 // - privilege: the helper's environment and descriptors, forged frames (another chat,
 //   raw approvals, user transcript entries, unknown types, oversized lines), tools
 //   outside the grant and a context naming another chat are all refused;
 // - failure: crash mid-turn, a hang that Stop escalates, a stalled or failed start;
-// - recovery, rollback, drain, the in-process adapter wrapper and schema refusals.
+// - recovery, drain, the in-process adapter wrapper and schema refusals.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -20,7 +21,6 @@ import { compileProviderFixture, startProviderFixture } from './helpers/provider
 import { interruptWithOwner } from '../src/main/backends/interrupt.ts'
 import { helperProvider } from '../src/main/backends/helper-session.ts'
 import { createRecordCapture } from '../src/main/backends/record.ts'
-import { legacyProviders } from '../src/main/provider-model.ts'
 import { providerOwner, setProviderOwner } from '../src/main/provider-owner.ts'
 import { LIMITS } from '../src/main/provider-policy.ts'
 import { pickProvider } from '../src/main/backends/index.ts'
@@ -49,6 +49,7 @@ const sha = base64 => createHash('sha256').update(Buffer.from(base64, 'base64'))
 // Real directories: a helper runs with the session root as its working directory.
 const WT = join(scratch, 'wt-1'), LIVE = join(scratch, 'app')
 mkdirSync(WT); mkdirSync(LIVE)
+const policyGolden = JSON.parse(readFileSync(join(root, 'test/fixtures/provider-owner/policy-golden.json'), 'utf8'))
 
 /** A helper-hosted chat on the installed owner; events collected in order. */
 async function helperChat(ctx = {}, options = { model: 'm1' }) {
@@ -72,41 +73,37 @@ try {
   binary = compileProviderFixture()
 
   await section('routing', async () => {
-    // Helpers are an explicit opt-in: the default Swift launch runs every adapter in-process
-    // in Bun, and a connection stays in-process in both modes (a fake connection's chat runs end to end in test/provider-data.mjs).
+    // Built-in seats run in helpers under the service (LKM-111); a connection stays in
+    // Bun (a fake connection's chat runs end to end in test/provider-data.mjs).
     const saved = { ...process.env }
     try {
       process.env.TREZI_SERVICE_SUPERVISED = '1'
-      delete process.env.TREZI_PROVIDER_HELPERS
-      for (const options of [{ provider: 'claude' }, { provider: 'codex' }, { connectionId: 'c1' }, {}])
-        assert.notEqual(pickProvider(options).host, 'helper', `default ${JSON.stringify(options)}`)
-      process.env.TREZI_PROVIDER_HELPERS = '1'
-      assert.equal(pickProvider({ provider: 'claude' }).host, 'helper')
-      assert.equal(pickProvider({ provider: 'codex' }).host, 'helper')
+      for (const options of [{ provider: 'claude' }, { provider: 'codex' }, {}])
+        assert.equal(pickProvider(options).host, 'helper', `default ${JSON.stringify(options)}`)
+      assert.equal(pickProvider({ provider: 'gemini' }).host, 'helper', 'gemini without its opt-in falls back to a Claude helper')
+      assert.equal(pickProvider({ provider: 'gemini' }).id, 'claude')
       assert.notEqual(pickProvider({ connectionId: 'c1' }).host, 'helper')
       assert.notEqual(pickProvider({ provider: 'claude', connectionId: 'c1' }).host, 'helper')
-      // Inside a helper, and on the legacy launch, the opt-in never nests or applies.
+      // Inside a helper the routing never nests.
       process.env.TREZI_PROVIDER_HELPER = '1'
-      assert.notEqual(pickProvider({ provider: 'claude' }).host, 'helper')
+      assert.throws(() => pickProvider({ provider: 'claude' }), /does not pick/)
       delete process.env.TREZI_PROVIDER_HELPER
+      // Without the service there is no owner to host a helper: Bun refuses to start (index.ts).
       delete process.env.TREZI_SERVICE_SUPERVISED
-      assert.notEqual(pickProvider({ provider: 'claude' }).host, 'helper')
+      assert.throws(() => pickProvider({ provider: 'claude' }), /Trezi service/)
     } finally {
-      for (const key of ['TREZI_SERVICE_SUPERVISED', 'TREZI_PROVIDER_HELPERS', 'TREZI_PROVIDER_HELPER']) {
+      for (const key of ['TREZI_SERVICE_SUPERVISED', 'TREZI_PROVIDER_HELPER']) {
         if (key in saved) process.env[key] = saved[key]; else delete process.env[key]
       }
     }
-    // The service installs a helper command only on the opt-in (ServiceRuntime's hello).
+    // The service installs the helper command whenever the build has the entry (ServiceRuntime's hello).
     const out = join(scratch, 'out'); mkdirSync(out, { recursive: true })
     const backend = join(out, 'index.cjs')
     const f = await fixture(profile('routing'))
-    const builtIn = environment => f.cmd({ cmd: 'builtIn', environment, backend, bun: process.execPath })
-    assert.equal((await builtIn({})).helper, null, 'the default launch installs no helper')
-    assert.equal((await builtIn({ TREZI_PROVIDER_HELPERS: '0' })).helper, null)
-    assert.equal((await builtIn({ TREZI_PROVIDER_HELPERS: '1' })).helper, null, 'no bundled helper entry, no helper')
+    const builtIn = () => f.cmd({ cmd: 'builtIn', backend, bun: process.execPath })
+    assert.equal((await builtIn()).helper, null, 'no bundled helper entry, no helper')
     writeFileSync(join(out, 'provider-helper.cjs'), '')
-    assert.equal((await builtIn({})).helper, null, 'a bundled entry alone does not opt in')
-    assert.deepEqual((await builtIn({ TREZI_PROVIDER_HELPERS: '1' })).helper,
+    assert.deepEqual((await builtIn()).helper,
       { executable: process.execPath, arguments: [join(out, 'provider-helper.cjs')], providers: ['claude', 'codex', 'fake', 'gemini'] })
     await stop(f)
   })
@@ -114,10 +111,11 @@ try {
   await section('policy', async () => {
     const home = profile('policy')
     const f = await fixture(home, { PROVIDER_GRACE: '0.3' })
-    const owners = { legacy: legacyProviders({ profile: home, graceMs: 300 }), swift: f.owner() }
-    const logs = {}
-    for (const [name, o] of Object.entries(owners)) {
-      const log = []
+    // The answers are pinned to the ones the in-process twin gave before LKM-111 removed
+    // it (test/fixtures/provider-owner/policy-golden.json; paths and names normalized).
+    const name = 'swift', o = f.owner()
+    const log = []
+    {
       const step = async (label, run) => log.push([label, await outcome(run())])
       const fg = `fg-${name}`, bg = `bg-${name}`
       await step('open fg', () => o.open({ session: fg, chat: 'chat-1', provider: 'claude', root: WT, liveRoot: LIVE, background: false }))
@@ -173,11 +171,10 @@ try {
       await step('question after close', () => o.permission(fg, 'AskUserQuestion', {}))
       await step('read after close', () => o.permission(fg, 'Read', {}))
       await step('authorize after close', () => o.authorize(fg, 'preview_location', {}))
-      logs[name] = log
     }
-    if (process.env.PROVIDER_DEBUG) console.log(JSON.stringify(logs.swift, null, 1))
-    assert.deepEqual(logs.swift, logs.legacy)
-    const answer = label => logs.swift.find(([l]) => l === label)[1]
+    const normal = JSON.parse(JSON.stringify(log).replaceAll(home, '<home>').replaceAll(scratch, '<scratch>').replaceAll(`-${name}`, '-N'))
+    assert.deepEqual(normal, policyGolden)
+    const answer = label => log.find(([l]) => l === label)[1]
     assert.ok(f.sent.filter(frame => frame.request?.method === 'permission').every(frame => !('input' in frame.request.body) && JSON.stringify(frame).length < 64 * 1024))
     assert.deepEqual(answer('huge content'), { ok: { decision: 'ask' } })
     assert.deepEqual(answer('huge target'), { ok: { decision: 'deny', message: 'The request is too large for Trezi to check.' } })
@@ -191,8 +188,6 @@ try {
     assert.deepEqual(answer('cancel again'), { ok: { escalate: true } }, 'no settle within the deadline escalates')
     assert.deepEqual(answer('recover'), { ok: { provider: 'claude', resume: 'thread-1' } })
     assert.deepEqual(answer('authorize after close'), { error: 'unauthorized' })
-    // The legacy twin hosts no helpers.
-    assert.equal((await outcome(owners.legacy.openHelper({ session: 'h', chat: 'c', provider: 'fake', root: WT, liveRoot: LIVE, background: false }, { options: {}, context: { emitKey: 'c' } }, {}))).error, 'unavailable')
     await stop(f)
   })
 
@@ -468,32 +463,6 @@ try {
     await stop(f)
   })
 
-  await section('rollback', async () => {
-    const home = profile('rollback')
-    // Swift writes its stores; the legacy twin never reads or writes them.
-    let f = await fixture(home)
-    await f.owner().open({ session: 'r-1', chat: 'c', provider: 'claude', root: LIVE, liveRoot: LIVE, background: false })
-    await f.owner().resume('r-1', 'thread-r', 'record-r')
-    await stop(f)
-    const files = () => Object.fromEntries(readdirSync(join(home, 'service/providers')).sort().map(n => [n, readFileSync(join(home, 'service/providers', n), 'utf8')]))
-    const snapshot = files()
-    const legacy = legacyProviders({ profile: home })
-    await legacy.open({ session: 'l-1', chat: 'c', provider: 'claude', root: LIVE, liveRoot: LIVE, background: false })
-    await legacy.resume('l-1', 'thread-l', 'record-l')
-    await legacy.close('l-1')
-    assert.equal(await legacy.recover('record-r'), null, 'the legacy owner does not read the Swift store')
-    assert.deepEqual(files(), snapshot, 'the legacy owner left the Swift store untouched')
-    const fresh = profile('rollback-legacy')
-    const other = legacyProviders({ profile: fresh })
-    await other.open({ session: 'l-2', chat: 'c', provider: 'claude', root: LIVE, liveRoot: LIVE, background: false })
-    await other.resume('l-2', 't', 'record-x')
-    assert.ok(!existsSync(join(fresh, 'service')), 'the legacy owner creates no Swift state')
-    // Back on Swift: its resume ids are still there.
-    f = await fixture(home)
-    assert.deepEqual(await f.owner().recover('record-r'), { provider: 'claude', resume: 'thread-r' })
-    await stop(f)
-  })
-
   await section('drain', async () => {
     const f = await fixture(profile('drain'), { PROVIDER_GRACE: '5' })
     const owner = f.owner()
@@ -512,9 +481,9 @@ try {
   })
 
   await section('wrapper', async () => {
-    // The in-process adapter path (Claude/Codex today) on both owners.
+    // The in-process adapter path (a v10 connection's Codex session).
     const f = await fixture(profile('wrapper'), { PROVIDER_GRACE: '0.3' })
-    for (const [name, owner] of [['legacy', legacyProviders({ profile: '/nowhere', graceMs: 300 })], ['swift', f.owner()]]) {
+    for (const [name, owner] of [['swift', f.owner()]]) {
       setProviderOwner(owner)
       assert.equal(providerOwner(), owner)
       let forced = 0
@@ -583,7 +552,7 @@ try {
     await stop(f)
   })
 
-  console.log('Provider owner: policy parity, helper protocol, image transport, privilege enforcement, failure escalation, recovery, rollback, drain, adapter wrapper and schema passed; no provider calls')
+  console.log('Provider owner: policy parity, helper protocol, image transport, privilege enforcement, failure escalation, recovery, drain, adapter wrapper and schema passed; no provider calls')
 } finally {
   setProviderOwner(null)
   for (const started of fixtures) await started.kill().catch(() => {})

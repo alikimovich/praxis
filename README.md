@@ -117,8 +117,9 @@ GitHub PR.
 
 ## Requirements
 
-- **Node 22** (`.nvmrc`) and **Bun** (`bun@1.3.x`). Distributed as source, run
-  locally — you need Node + Bun installed.
+- **Node 22** (`.nvmrc`) and **Bun** (`bun@1.3.x`) to build. Distributed as source,
+  built and run locally. The built app carries its own copy of Bun, so starting it
+  needs no installed Bun.
 - A provider subscription for the agent (e.g. Claude Pro/Max), authorized
   per-user (below) — or your own API key for a third-party endpoint, added in
   Settings. Either way it is per-user; there is no shared secret.
@@ -128,7 +129,7 @@ GitHub PR.
 ## Install
 
 One line — clones to `~/.trezi` (override with `TREZI_HOME`), installs, builds,
-and puts a `trezi` command on your `PATH`:
+links **Trezi** into Applications and puts a `trezi` command on your `PATH`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/alikimovich/praxis/main/install.sh | bash
@@ -148,9 +149,14 @@ Then authorize the agent once and launch:
 
 ```bash
 claude setup-token   # one-time: authorize the agent with your own subscription
-trezi               # launch the app (builds on first run)
-trezi --project ./my-app # open a project directly
+trezi                # open Trezi (builds it first if needed)
+trezi .              # open the current folder as a project
+trezi ~/code/my-app  # open that folder as a project
 ```
+
+That is the one way to start Trezi: open it like any app (Finder, the Dock, Spotlight,
+`open -a Trezi`), or with `trezi`, which builds a missing app and then opens it the same
+way. `trezi --help` lists the options and `trezi --version` prints the installed version.
 
 In the app, click **Open project…**, pick a repo with a `dev`/`start` script,
 and chat on the left. Trezi **owns the dev server** — quitting or pressing Ctrl-C stops its managed
@@ -176,20 +182,21 @@ Contributors work in the checkout directly instead of the installed copy:
 git clone https://github.com/alikimovich/praxis.git trezi
 cd trezi
 bun install
-bun run dev          # build and launch the native app
+bun run dev          # build and launch the native app (development launcher)
 bun link             # optional: expose the `trezi` command from this checkout
 ```
 
 ## Architecture
 
 Trezi has a Swift/AppKit/SwiftUI interface, a separate Swift XPC service supervising
-the legacy Bun backend, and one
+the retained Bun backend and the provider helpers, and one
 WebKit view for the user's project. See [Native architecture](docs/NATIVE.md).
 
 - **Swift** owns chat, composer, sidebar, toolbar, native dialog windows and inspectors. Settings and project memory
   save automatically; dialog windows use traffic lights instead of redundant Close buttons.
-- **Bun** owns provider sessions, source parsing and the remaining persistence. The
-  Swift service already writes preferences, the workspace (open projects, order,
+- **Bun** runs the controllers behind the native UI, source parsing and the provider
+  adapters (built-in ones inside supervised helpers); it persists nothing itself. The
+  Swift service writes preferences, the workspace (open projects, order,
   selection) and project memory, runs managed project servers, performs Trezi's Git
   effects, commits source edits that Bun's parsers propose, and owns chat records,
   checkpoints and turn transitions (Bun's provider sessions report typed events to it),
@@ -205,9 +212,12 @@ WebKit view for the user's project. See [Native architecture](docs/NATIVE.md).
   with private pipes to Bun. Swift holds the exclusive profile lock and supervises
   Bun and its managed child lifetimes. Preview messages retain their restricted allowlist.
 
-`TREZI_BACKEND_OWNER=legacy bun run start` selects the previous Bun/host launch
-path under the same Swift profile lock. Stop the current instance first; both paths
-retain the newest stores and worktrees. See [service migration and rollback](docs/SWIFT-BACKEND-SERVICE.md).
+Claude, Codex and Gemini sessions run in provider helpers the Swift service spawns and
+supervises; a connection you added in Settings runs in the backend, so its key never
+leaves it. The backend and the helpers are JavaScript run by the Bun bundled into
+`Trezi.app`. There is no older launch path to fall back to: without its service, Trezi
+does not start. See [service](docs/SWIFT-BACKEND-SERVICE.md) and
+[retirement](docs/SWIFT-BACKEND-RETIREMENT.md).
 
 Electron and the old React application UI have been removed. Browser/Tailscale
 mode (`trezi serve`) is retired; the CLI reports that explicitly. The native
@@ -231,12 +241,13 @@ Liquid Glass captures have limitations. See [Testing](docs/TESTING.md).
 | Command | Description |
 | --- | --- |
 | `bun run dev` | Build and launch the native app |
-| `bun run build` | Build Swift, Bun backend and isolated preview to `out/native/` |
-| `bun run start` | Launch the existing native build |
+| `bun run build` | Build `out/native/Trezi.app` (Swift, bundled Bun and backend) and the isolated preview |
+| `bun run start` | Launch the existing native build from the checkout (development) |
 | `bun run typecheck` | Check backend/native/shared code and preview code |
 | `bun run test` | Unit and native integration checks |
 | `bun run test:native` | Native integration only (native runtime + chat scroll/reveal) |
 | `bun run test:native-live` | Real provider fixture edit (credentials required) |
+| `bun run test:provider-live` | Claude/Codex parity, in-process vs helper (`TREZI_LIVE_PROVIDERS=1`) |
 | `bun run verify` | All tiers, including real provider calls |
 
 The `dev:native`, `build:native` and `typecheck:native` aliases remain supported.

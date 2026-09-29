@@ -11,7 +11,7 @@ import Darwin
 ///   500), so a chat restored after a crash resumes its provider thread even if its record
 ///   was saved before the provider reported one.
 ///
-/// Neither file is read or written by the legacy owner. A damaged file is moved aside
+/// Only the service reads or writes either file. A damaged file is moved aside
 /// (`*.damaged-<ms>.json`), never read as empty and overwritten in place.
 struct ProviderStore {
     struct Entry: Equatable {
