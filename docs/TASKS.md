@@ -3,6 +3,14 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Native verification reports all failures (LKM-109)
+
+- [x] Split the native smoke into named checks with declared dependencies; collect failures, skip dependents with `skipped: depends on X`, restore foreground/window state after each failure.
+- [x] Print and document the end-of-run summary (check, first assertion line, capture path); exit non-zero on any failure.
+- [x] Default per-test runner timeout 600 s → 120 s.
+- [x] Fixture unit test with a deliberately failing check (`test/native-smoke-runner.mjs`); `TREZI_NATIVE_SMOKE_FAIL` for real runs.
+- [ ] Manager: run configured verification (typechecks, unit, `test:native`) under the desktop lock; optionally `TREZI_NATIVE_SMOKE_FAIL=composer bun run test:native` to see a real collect-all summary.
+
 ## Experimental Gen UI (LKM-106)
 
 - [x] Rename settings, explain React/Svelte composition and conditionally show the explained engine while preserving saved choices.
