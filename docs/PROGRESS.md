@@ -2,6 +2,42 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — AGENTS.md is the short canonical agent guide (LKM-112)
+
+`CLAUDE.md` (41 KB) and `AGENTS.md` (15 KB) had drifted into two long, overlapping
+guides; every Claude session loaded 41 KB, and Cursor/Codex agents read a different,
+shorter set of rules. `AGENTS.md` is now the one tool-neutral guide (about 6 KB),
+`CLAUDE.md` is `@AGENTS.md` plus two Claude notes, and the long material moved,
+wording kept, into `docs/agent-guide/`. New rule: read PROGRESS/TASKS with head/grep only.
+`test/docs-links.mjs` now scans `AGENTS.md` and every `docs/agent-guide/*.md` too, and fails
+if `AGENTS.md` exceeds 8 KB, `CLAUDE.md` exceeds 1 KB or `CLAUDE.md` stops starting with
+`@AGENTS.md`. Docs and that check only; no product code.
+
+Section checklist (old → new; "AG" = `docs/agent-guide/`):
+
+- [x] CLAUDE intro (purpose, distribution, auth) → AGENTS "What Trezi is"; AG/conventions.md "Auth and secrets"
+- [x] CLAUDE intro (dsgn rename, legacy shims) → AGENTS "What Trezi is" (pointer); AG/conventions.md "The old name"
+- [x] CLAUDE "Start here every session" → AGENTS "Start here every session"
+- [x] CLAUDE "Commands" → AGENTS "Commands" (short); AG/verification.md "Commands" (full)
+- [x] CLAUDE "Verify your own work WITHOUT asking the user" → AGENTS "Verify your own work…"; AG/verification.md
+- [x] CLAUDE "Evidence budget" → AGENTS "Evidence budget" (verbatim)
+- [x] CLAUDE Electron/Tailscale retirement note → AGENTS "What Trezi is"; AG/architecture.md "Trust boundaries"
+- [x] CLAUDE architecture tree: `native/`, `preview/`, `shared/`, `bin/`, `test/`, `docs/` → AG/architecture.md; `service/` → AG/service-owners.md; `main/` → AG/backend-map.md
+- [x] CLAUDE lifecycle bullets (install/update, Swift launch, chat streaming, dev-server ownership) → AG/architecture.md "Lifecycle"; AG/service-owners.md "The launch path"
+- [x] CLAUDE "Why it's built this way" → AG/architecture.md
+- [x] CLAUDE "Conventions" → AGENTS "Conventions (summary)"; AG/conventions.md; commit rule → AG/git-worktrees.md
+- [x] CLAUDE Gotchas (shortcuts, interrupt/Stop, ESM/CJS, only WebKit view, isolation, prop gating, Styles ladder, Web Inspector, service exit status/XPC, Bun postinstall, `.trezi/` deny, manifests store no values, tool `root`, model lists) → AG/gotchas.md
+- [x] CLAUDE Gotchas (per-chat worktrees, symlinked node_modules/.env, one live commit per turn) → AGENTS "Git and worktrees"; AG/git-worktrees.md
+- [x] AGENTS intro (Swift service history LKM-91…101, Bun remaining writers, annotation storage) → AG/service-owners.md "Who writes what"
+- [x] AGENTS "Start here every session" → AGENTS "Start here every session"
+- [x] AGENTS "Commands and verification" (table incl. `start`, `trezi --project`, `--serial`, run logs) → AG/verification.md; AGENTS summary
+- [x] AGENTS "Evidence budget" → AGENTS (verbatim)
+- [x] AGENTS "Architecture" bullets (native files, service owners, `bridge.ts`, Sheets, Shadow Light, Gen UI, build script, CLI) → AG/architecture.md, AG/service-owners.md, AG/backend-map.md
+- [x] AGENTS transport/rollback, preview trust, profiles → AG/service-owners.md "The launch path"; AG/architecture.md "Trust boundaries"
+- [x] AGENTS dev-server ownership (one-second grace, drain, watchdogs, Swift rebuild) → AG/architecture.md "Lifecycle"
+- [x] AGENTS preview observation (Claude/Codex screenshots) and in-process SDKs/parsers/vendored package → AG/architecture.md "Trust boundaries"
+- [x] AGENTS "Conventions and hard-won constraints" (500 lines, ESM, secrets, test tiers, commits pre-authorized, prop gating, `.trezi/`/`.praxis/`/`.dsgn/` deny, dsgn strings, WORKTREES/PROVIDERS/MEMORY docs, rename MIGRATION) → AGENTS "Conventions (summary)" + "Git and worktrees"; AG/conventions.md; AG/git-worktrees.md; AG/gotchas.md
+
 ## 2026-09-29 — Swift platform owner: Simulator, media, attachments, server recovery (LKM-101 / S14)
 
 The eleventh transfer, on the LKM-100 candidate. Details, the protocol and the tightened
