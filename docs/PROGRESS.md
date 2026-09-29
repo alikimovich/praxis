@@ -2,6 +2,31 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-102 repair: service-process epoch resume test
+
+- `service-process.mjs`: after production shutdown, the XPC client first-launches a
+  fresh service and resumes its epoch (reconnect + new connection id, same as the
+  earlier XPC resume case; cannot handshake while production still holds the service).
+
+## 2026-09-29 — LKM-102 repair: feedback crash resume + stale test runner lock
+
+- `WorkflowTools.feedback` resumes after `WORKFLOW_FAULT=feedback.issue` by comparing
+  `title`/`body` fields on the prior record (not `JSValue` params equality), so the
+  retry reconciles `issues/1` instead of filing a duplicate.
+- `acquireRunLock` removes a stale `.runner-lock` when its `pid=` owner is gone.
+
+## 2026-09-29 — LKM-102 review repair: provider helpers, feedback parity, service-process (gate still blocked, 7 Bun-owned)
+
+- Built-in Claude, Codex and Gemini adapters run in supervised provider helpers under the
+  Swift launch (`provider-helper.cjs`, `pickProvider` + `ServiceRuntime` helper command).
+  Parity uses the existing fake-provider helper fixtures; live Claude/Codex inside helpers
+  is SKIP (not PASS).
+- `feedback-legacy.ts` accepts an injectable `gh`; `workflow-owner.mjs` parity covers
+  feedback argv/body/dedupe against the Swift owner with `fake-gh.mjs`.
+- `service-process.mjs`: Swift service restart with epoch resume, stale-resume
+  `recoveryRequired`, and `native.lock` not owned by the supervised Bun backend.
+- Retirement gate unchanged: seven Bun-owned census rows and legacy rollback remain.
+
 ## 2026-09-29 — LKM-102 second repair: feedback and skills to the workflow owner, launcher and recovery tests (gate still blocked, 7 Bun-owned)
 
 - WorkflowOwner recorded workflows `feedback` (`gh issue create`) and `skills` (`npx skills

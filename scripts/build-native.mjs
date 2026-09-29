@@ -34,6 +34,17 @@ const backend = await bundle({
   plugins: [recipeModule],
   sourcemap: true
 })
+await bundle({
+  entryPoints: [join(root, 'src/main/backends/provider-helper-entry.ts')],
+  outfile: join(out, 'provider-helper.cjs'),
+  bundle: true,
+  platform: 'node',
+  target: 'es2022',
+  format: 'cjs',
+  packages: 'external',
+  plugins: [recipeModule],
+  sourcemap: true
+})
 const inputs = Object.keys(backend.metafile.inputs)
 const externalImports = Object.values(backend.metafile.outputs).flatMap(output => output.imports).filter(item => item.external).map(item => item.path)
 if (inputs.some(path => /src\/renderer\//.test(path)) || externalImports.some(path => /^(electron|electron-vite|react|react-dom|@codemirror)(\/|$)/.test(path))) throw new Error('Native build unexpectedly depends on a retired application runtime')

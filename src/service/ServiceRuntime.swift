@@ -164,9 +164,15 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                             turn: { [weak conversation] chat in conversation?.turn(of: chat) ?? (false, nil) }), repository: repository, send: send)
                         workflow = WorkflowOwner(options: WorkflowOwner.Options(profile: requested.profile,
                             environment: requested.environment, bun: requested.bun), repository: repository, send: send)
-                        // No built-in adapter is helper-hosted yet (it needs a live parity run), so no helper command.
-                        provider = ProviderOwner(options: ProviderOwner.Options(profile: requested.profile, environment: requested.environment,
-                            watchdog: CommandLine.arguments[0], journal: journal), send: send)
+                        var providerOptions = ProviderOwner.Options(profile: requested.profile, environment: requested.environment,
+                            watchdog: CommandLine.arguments[0], journal: journal)
+                        let helperBackend = URL(fileURLWithPath: requested.backend).deletingLastPathComponent()
+                            .appendingPathComponent("provider-helper.cjs").path
+                        if access(helperBackend, R_OK) == 0 {
+                            providerOptions.helper = ProviderHelperCommand(executable: requested.bun, arguments: [helperBackend],
+                                providers: ["claude", "codex", "gemini", "fake"])
+                        }
+                        provider = ProviderOwner(options: providerOptions, send: send)
                     }
                     readBackend()
                 }

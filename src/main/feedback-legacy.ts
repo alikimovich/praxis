@@ -12,35 +12,48 @@ import type { FeedbackResult } from '../shared/api'
 
 const execFileP = promisify(execFile)
 
-/** A GUI-launched app inherits a minimal PATH, so `git`/`gh` may not resolve. */
-const toolPath = (): string =>
-  ['/opt/homebrew/bin', '/usr/local/bin', process.env.PATH ?? ''].filter(Boolean).join(':')
+export interface FeedbackLegacyOptions {
+  /** `gh` executable (tests inject a fake). */
+  gh?: string
+  /** Extra PATH prefix for `git` and `gh` when not absolute. */
+  pathPrefix?: string
+}
 
-const run = (cmd: string, args: string[], cwd: string): Promise<{ stdout: string }> =>
+/** A GUI-launched app inherits a minimal PATH, so `git`/`gh` may not resolve. */
+const toolPath = (prefix?: string): string =>
+  [prefix, '/opt/homebrew/bin', '/usr/local/bin', process.env.PATH ?? ''].filter(Boolean).join(':')
+
+const run = (cmd: string, args: string[], cwd: string, pathPrefix?: string): Promise<{ stdout: string }> =>
   execFileP(cmd, args, {
     cwd,
     maxBuffer: 10 * 1024 * 1024,
-    env: { ...process.env, PATH: toolPath() }
+    env: { ...process.env, PATH: toolPath(pathPrefix) }
   }) as Promise<{ stdout: string }>
 
-export async function fileFeedbackIssue(repoRoot: string, title: string, body: string): Promise<FeedbackResult> {
+export async function fileFeedbackIssue(
+  repoRoot: string,
+  title: string,
+  body: string,
+  options: FeedbackLegacyOptions = {}
+): Promise<FeedbackResult> {
+  const gh = options.gh ?? 'gh'
   try {
-    await run('git', ['-C', repoRoot, 'rev-parse', '--is-inside-work-tree'], repoRoot)
+    await run('git', ['-C', repoRoot, 'rev-parse', '--is-inside-work-tree'], repoRoot, options.pathPrefix)
   } catch {
     return { ok: false, error: 'Trezi isn’t a git checkout, so feedback can’t be filed.' }
   }
   try {
-    await run('git', ['-C', repoRoot, 'remote', 'get-url', 'origin'], repoRoot)
+    await run('git', ['-C', repoRoot, 'remote', 'get-url', 'origin'], repoRoot, options.pathPrefix)
   } catch {
     return { ok: false, error: 'No “origin” remote on the Trezi checkout.' }
   }
   try {
-    await run('gh', ['--version'], repoRoot)
+    await run(gh, ['--version'], repoRoot, options.pathPrefix)
   } catch {
     return { ok: false, error: 'GitHub CLI (gh) not found — install it to send feedback.' }
   }
   try {
-    const { stdout } = await run('gh', ['issue', 'create', '--title', title, '--body', body], repoRoot)
+    const { stdout } = await run(gh, ['issue', 'create', '--title', title, '--body', body], repoRoot, options.pathPrefix)
     const url = stdout
       .trim()
       .split('\n')

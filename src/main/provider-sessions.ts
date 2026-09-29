@@ -22,8 +22,8 @@ const ignore = (): void => {}
  *   the owner's deadline passes first does the adapter's kill switch run;
  * - shutdown closes the grant; nothing is authorized for the session afterwards.
  *
- * A helper-hosted provider (`host: 'helper'`) is already the owner's: it is started
- * as is.
+ * A helper-hosted provider (`host: 'helper'`) is already under the owner: the helper
+ * was opened through `openHelper` inside `helper-session.ts`.
  */
 export async function startProviderSession(
   provider: ModelProvider,

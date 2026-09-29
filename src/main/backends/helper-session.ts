@@ -7,9 +7,19 @@ import { runTreziTool } from '../session-tools'
 import type { TreziAgentToolAction } from '../trezi-agent-tools'
 import { createRecordCapture } from './record'
 import { sendToRenderer } from './tools'
+import { claudeProvider } from './claude'
+import { codexProvider } from './codex'
+import { geminiProvider } from './gemini'
 import type { ModelProvider, PendingPrompt, PendingQuestion, ProviderSession, SpawnContext } from './types'
+import { withSkillMenu } from './skill-menu'
 
 const ignore = (): void => {}
+
+const builtIn: Record<string, ModelProvider> = {
+  claude: claudeProvider,
+  codex: withSkillMenu(codexProvider),
+  gemini: withSkillMenu(geminiProvider)
+}
 
 /**
  * A provider whose sessions run in a provider helper (S10): a separate process the
@@ -17,15 +27,15 @@ const ignore = (): void => {}
  * Bun sees an ordinary `ProviderSession`; every command goes through the owner and
  * every event, record delta and tool call comes back from it already validated.
  * Trezi's tools run here, in Bun, after the owner authorized them.
- *
- * Only providers the service was built with can be hosted. No built-in adapter is
- * yet: Claude and Codex run in-process until a live parity run is authorized.
  */
 export function helperProvider(id: string): ModelProvider {
+  const adapter = builtIn[id]
   return {
     id,
     host: 'helper',
-    supportsSpawn: true,
+    supportsSpawn: adapter?.supportsSpawn ?? true,
+    generateTitle: adapter?.generateTitle,
+    updateProjectMemory: adapter?.updateProjectMemory,
     startSession: (root, options, getWindow, ctx) => startHelperSession(id, root, options, getWindow, ctx)
   }
 }

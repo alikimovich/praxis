@@ -23,6 +23,7 @@ import { createRecordCapture } from '../src/main/backends/record.ts'
 import { legacyProviders } from '../src/main/provider-model.ts'
 import { providerOwner, setProviderOwner } from '../src/main/provider-owner.ts'
 import { LIMITS } from '../src/main/provider-policy.ts'
+import { pickProvider } from '../src/main/backends/index.ts'
 import { startProviderSession } from '../src/main/provider-sessions.ts'
 import { registerPreviewSource } from '../src/main/preview-state.ts'
 import { authorizedTool } from '../src/main/session-tools.ts'
@@ -69,6 +70,13 @@ async function helperSession(owner) {
 
 try {
   binary = compileProviderFixture()
+
+  process.env.TREZI_SERVICE_SUPERVISED = '1'
+  assert.equal(pickProvider({ provider: 'claude' }).host, 'helper')
+  assert.equal(pickProvider({ provider: 'codex' }).host, 'helper')
+  assert.equal(pickProvider({ connectionId: 'c1' }).host, 'helper')
+  delete process.env.TREZI_SERVICE_SUPERVISED
+  assert.notEqual(pickProvider({ provider: 'claude' }).host, 'helper')
 
   await section('policy', async () => {
     const home = profile('policy')

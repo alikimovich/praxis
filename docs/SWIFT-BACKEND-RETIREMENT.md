@@ -56,9 +56,11 @@ Not moved, and why the gate stays closed:
 1. The Bun-owned rows below. Each needs its own transfer with a rollback plan; none
    is a two-line change, and several (provider store, catalog cache, Codex bridge)
    belong with the provider adapters' move into helpers.
-2. The provider SDK adapters still run in-process in Bun (LKM-98). Moving them into
-   supervised helpers needs an authorized live parity run, which this step does not
-   have. Until then Bun is the adapters' host and cannot stop being a service.
+2. Seven Bun-owned census rows remain (catalog, connections store, props editor CLIs,
+   platform crypto/`open`, profile-path, Bun orchestration and `native.lock`). Each needs
+   a Swift transfer with rollback and parity tests before the gate opens.
+   Built-in provider adapters run in supervised helpers under the Swift launch; live
+   Claude/Codex parity inside those helpers was not authorized (SKIP, not PASS).
 3. The Bun controllers in `src/native/` (chat, composer queue and drafts, workspace
    server fields, sheets and their routing) are still the application's orchestration.
    They are views and adapters over the Swift owners, but they are Bun code.
@@ -119,8 +121,10 @@ Deterministic (no provider, GitHub, Xcode build or app launch involved):
 - `test/service-process.mjs` (native tier): profile-lock contention; a lock holder
   SIGKILLed with no cleanup, after which a new owner acquires the profile and sees the
   crashed owner's data; the `--legacy` rollback launch sharing the same lock and keeping
-  a newer file (`{"newer":"retained-after-rollback"}`); the runtime journal sweep; and
-  XPC reconnect with the service epoch (`resume`), refusing a stale or wrong epoch.
+  a newer file (`{"newer":"retained-after-rollback"}`); the runtime journal sweep;
+  XPC reconnect with the service epoch (`resume`), refusing a stale or wrong epoch; a
+  Swift (non-legacy) service restart with epoch resume and stale-resume refusal; and an
+  assertion that the supervised Bun backend does not own `native.lock`.
 - `test/workflow-owner.mjs`: an in-app update interrupted after the pull resumes
   without pulling again; rollback both ways (Swift owner ⇄ legacy twin) never replaces
   newer work.

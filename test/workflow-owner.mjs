@@ -104,7 +104,7 @@ async function start(w, extra = {}) {
 function legacy(w) {
   process.env.FAKE_GH_STATE = w.ghState
   process.env.FAKE_PM_STATE = w.pmState
-  return createLegacyWorkflows({ bun: fakes.bun, userData: () => w.profile })
+  return createLegacyWorkflows({ bun: fakes.bun, userData: () => w.profile, gh: fakes.gh })
 }
 
 /** Runs `scenario` on a fresh world with each owner; answers and state must match. */
@@ -269,6 +269,15 @@ try {
 
   assert.equal(skills.ok.ok, true); assert.deepEqual(skills.ok.installed, ['frontend-design']); assert.equal(skills.failed.ok, false)
   assert.match(skills.refused.message, /not in the curated skill-pack allowlist/); assert.equal(skills.calls.length, 2)
+
+  await parity('feedback', async (owner, w) => {
+    const title = 'Sidebar focus'
+    const body = 'Steps to reproduce…'
+    const result = await owner.feedback(w.local, title, body)
+    const issue = w.gh().issues[0]
+    return { result, issue: issue ? { title: issue.title, body: issue.body } : null, create: w.gh().counts?.issueCreate }
+  })
+  log('parity feedback')
 
   // ───────────── durability (Swift owner) ─────────────
   await import('./helpers/workflow-tools-checks.mjs').then(module => module.toolChecks({ world, start, log }))

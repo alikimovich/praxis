@@ -49,7 +49,8 @@ struct WorkflowTools {
         guard context.hasOrigin() else { return WorkflowContext.fail("No “origin” remote on the Trezi checkout.") }
         guard context.ghInstalled() else { return WorkflowContext.fail("GitHub CLI (gh) not found — install it to send feedback.") }
         // An earlier attempt cut short between sending and its receipt: ask GitHub first.
-        if let prior, prior.params == record.params, let step = prior.step("issue"), step.state == "intent" || step.state == "uncertain", let url = existing(title: title, body: body) {
+        if let prior, Self.sameFeedback(prior, title: title, body: body), let step = prior.step("issue"),
+           step.state == "intent" || step.state == "uncertain", let url = existing(title: title, body: body) {
             try context.inherit(step)
             try context.done("issue", [("url", Self.text(url)), ("reconciled", .bool(true))])
             return .done(WorkflowOwner.object([("ok", .bool(true)), ("url", Self.text(url))]))
@@ -73,8 +74,16 @@ struct WorkflowTools {
         }
         let url = result.text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
             .first { $0.range(of: #"^https?://"#, options: .regularExpression) != nil }
-        try context.done("issue", url.map { [("url", Self.text($0))] } ?? [])
+        let reconciled = prior.map { Self.sameFeedback($0, title: title, body: body) && $0.step("issue")?.state == "uncertain" } ?? false
+        try context.done("issue", url.map { fields in
+            reconciled ? [("url", Self.text(fields)), ("reconciled", .bool(true))] : [("url", Self.text(fields))]
+        } ?? [])
         return .done(WorkflowOwner.object([("ok", .bool(true))] + (url.map { [("url", Self.text($0))] } ?? [])))
+    }
+
+    /// Same feedback title and body as a prior workflow (field-wise; not JSValue object identity).
+    static func sameFeedback(_ prior: WorkflowRecord, title: String, body: String) -> Bool {
+        prior.param("title") == title && prior.param("body") == body
     }
 
     /// The URL of a recent issue with exactly this title and body.

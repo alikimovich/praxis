@@ -3,10 +3,41 @@ import type { ModelProvider } from './types'
 import { claudeProvider } from './claude'
 import { codexProvider } from './codex'
 import { geminiProvider } from './gemini'
+import { helperProvider } from './helper-session'
 import { withSkillMenu } from './skill-menu'
 
 const codexWithSkills = withSkillMenu(codexProvider)
 const geminiWithSkills = withSkillMenu(geminiProvider)
+
+/** In-process adapters (legacy launch and unit tests without a helper command). */
+function inProcessProvider(options: AgentOptions): ModelProvider {
+  if (options.connectionId) return codexWithSkills
+  switch (options.provider) {
+    case 'codex':
+      return codexWithSkills
+    case 'gemini':
+      return geminiEnabled() ? geminiWithSkills : claudeProvider
+    case 'claude':
+    case undefined:
+    default:
+      return claudeProvider
+  }
+}
+
+/** Supervised helpers (default Swift launch): adapters run in a provider helper process. */
+function supervisedProvider(options: AgentOptions): ModelProvider {
+  if (options.connectionId) return helperProvider('codex')
+  switch (options.provider) {
+    case 'codex':
+      return helperProvider('codex')
+    case 'gemini':
+      return geminiEnabled() ? helperProvider('gemini') : helperProvider('claude')
+    case 'claude':
+    case undefined:
+    default:
+      return helperProvider('claude')
+  }
+}
 
 export type { ModelProvider, ProviderSession, PendingPrompt } from './types'
 
@@ -44,18 +75,9 @@ function geminiEnabled(): boolean {
 }
 
 export function pickProvider(options: AgentOptions): ModelProvider {
-  // A connection is an endpoint, not a harness — and Codex is the harness that can
-  // point at one. It wins the dispatch (see the note above); codex.ts fails the turn
-  // soft if the id no longer resolves.
-  if (options.connectionId) return codexWithSkills
-  switch (options.provider) {
-    case 'codex':
-      return codexWithSkills
-    case 'gemini':
-      return geminiEnabled() ? geminiWithSkills : claudeProvider
-    case 'claude':
-    case undefined:
-    default:
-      return claudeProvider
-  }
+  // Inside a helper subprocess: run the real adapter in-process for that helper only.
+  if (process.env.TREZI_PROVIDER_HELPER === '1') return inProcessProvider(options)
+  // Swift-supervised Bun: built-in seats run in provider helpers, not in the app backend.
+  if (process.env.TREZI_SERVICE_SUPERVISED === '1') return supervisedProvider(options)
+  return inProcessProvider(options)
 }

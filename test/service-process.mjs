@@ -279,6 +279,45 @@ try {
     const launchFile = join(scratch, 'launch.json')
     writeFileSync(launchFile, JSON.stringify(launch))
     rmSync(backendPID, { force: true })
+    // Swift (non-legacy) service: restart with epoch resume and stale-resume refusal.
+    {
+      const boot = processFixture(host, ['production', launchFile, executable])
+      await boot.line(line => line === 'READY')
+      const bootBackend = await pidFile(backendPID)
+      groups.add(bootBackend)
+      const staleClient = processFixture(host)
+      const staleConnection = randomUUID()
+      assert.equal(
+        (await staleClient.reply({ ...hello(staleConnection, launch), resume: randomUUID() })).failure,
+        'recoveryRequired',
+        'a fresh service refuses a stale client epoch'
+      )
+      staleClient.child.stdin.end()
+      await staleClient.done
+      boot.send('shutdown')
+      assert.equal((await boot.done).code, 0)
+      await dead(bootBackend)
+      groups.delete(bootBackend)
+      rmSync(backendPID, { force: true })
+      await pause(300)
+      // Production shutdown drained the service; a new XPC client can first-launch again.
+      const restarted = processFixture(host)
+      const restartedConnection = randomUUID()
+      const restartedReady = await restarted.reply(hello(restartedConnection, launch))
+      assert.ok(restartedReady.hello?.serviceEpoch, 'handshake after production shutdown returns service epoch')
+      restarted.send('reconnect')
+      await restarted.line(line => line === 'RECONNECTED')
+      await pause(200)
+      const resumedConnection = randomUUID()
+      const epochResumed = await restarted.reply({
+        ...hello(resumedConnection, launch),
+        resume: restartedReady.hello.serviceEpoch
+      })
+      assert.equal(epochResumed.hello?.serviceEpoch, restartedReady.hello.serviceEpoch, 'resume after service restart keeps the epoch')
+      await restarted.reply(control(resumedConnection, 'shutdown'))
+      restarted.child.stdin.end()
+      await restarted.done
+    }
     // Written by the previous (legacy) owner while no service ran: imported at launch.
     writeFileSync(join(profile, 'preferences.json'), JSON.stringify({ version: 1, values: { 'trezi:chat-hidden': '1', 'trezi:future': null } }))
     writeFileSync(join(profile, 'workspace.json'), JSON.stringify({ projects: [{ root: '/legacy-project', key: '/legacy-project', name: 'legacy', touchedAt: 1 }], activeKey: '/legacy-project', recents: [] }))
@@ -287,6 +326,11 @@ try {
     assert.equal(ledgerEpoch(), firstLedgerEpoch, 'the ledger survives a service restart')
     const productionBackend = await pidFile(backendPID)
     groups.add(productionBackend)
+    const nativeLock = join(profile, 'native.lock')
+    if (existsSync(nativeLock)) {
+      const lockPid = Number(readFileSync(nativeLock, 'utf8'))
+      assert.notEqual(lockPid, productionBackend, 'the supervised Bun backend must not own native.lock')
+    }
     production.send({ event: 'fixtureEcho', value: 'production-client', stderr: true })
     await production.line(line => line.startsWith('EVENT ') && JSON.parse(Buffer.from(line.slice(6), 'base64')).value === 'production-client')
     // The XPC service's own stderr is discarded; Bun's must reach the host's.

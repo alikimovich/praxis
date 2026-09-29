@@ -63,6 +63,8 @@ export interface LegacyWorkflowOptions {
   bun?: string
   /** Where the diagnosis memory lives (the profile). */
   userData?: () => string
+  /** `gh` for feedback (tests inject a fake). */
+  gh?: string
 }
 
 export function createLegacyWorkflows(options: LegacyWorkflowOptions = {}): WorkflowOwner {
@@ -98,7 +100,7 @@ export function createLegacyWorkflows(options: LegacyWorkflowOptions = {}): Work
         return { ok: false, error: error instanceof Error ? error.message : String(error) }
       }
     },
-    feedback: (root, title, body) => fileFeedbackIssue(root, title, body),
+    feedback: (root, title, body) => fileFeedbackIssue(root, title, body, { gh: options.gh }),
     installSkills: (input) => installSkillPackLegacy(input),
     recallDiagnosis: (root, signature) => recallSignature(userData(), root, signature),
     rememberDiagnosis: (root, diagnosis) => remember(userData(), root, diagnosis),

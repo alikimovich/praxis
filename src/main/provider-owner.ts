@@ -10,9 +10,10 @@ import type { PermissionVerdict } from './provider-policy'
  * with a scrubbed environment and only their stdio — and enforces their grant on
  * every frame they send (`ProviderHelper.swift`).
  *
- * The built-in SDK adapters (Claude, Codex) still run in-process in Bun: moving them
- * into helpers needs a live parity run, which is not authorized yet. They ask this
- * owner instead of deciding (`provider-sessions.ts` wires every session). With no
+ * Under the Swift launch the built-in adapters run in supervised helpers
+ * (`backends/helper-session.ts`); they ask this owner instead of deciding
+ * (`provider-sessions.ts` wires in-process grants only for tests and legacy).
+ * With no
  * Swift owner (`TREZI_BACKEND_OWNER=legacy`, unit tests) the in-process twin in
  * `provider-model.ts` decides the same way, persists nothing, and hosts no helpers.
  */
