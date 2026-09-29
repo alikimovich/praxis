@@ -1,7 +1,7 @@
 {
   "name": "@alikimovich/content-controls",
   "version": "0.1.0",
-  "description": "Recipe validation and agent API subset vendored for native Trezi",
+  "description": "Recipe validation and agent API subset vendored for Trezi",
   "type": "module",
   "license": "UNLICENSED",
   "exports": {

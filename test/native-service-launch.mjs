@@ -8,7 +8,7 @@ const directory = mkdtempSync(join(tmpdir(), 'trezi-launch-'))
 try {
   const env = { TREZI_USER_DATA: join(directory, 'profile') }
   const current = nativeServiceLaunchSpec('/checkout', ['--project', '/repo'], env, '/bun')
-  assert.equal(current.command, '/checkout/out/native/Trezi Native.app/Contents/MacOS/TreziHost')
+  assert.equal(current.command, '/checkout/out/native/Trezi.app/Contents/MacOS/TreziHost')
   assert.deepEqual(current.args, ['/checkout/out/native', 'persistent', '--service', '--bun', '/bun', '--backend', '/checkout/out/native/index.cjs', '--profile', env.TREZI_USER_DATA, '--', '--project', '/repo'])
   const legacy = nativeServiceLaunchSpec('/checkout', [], { ...env, TREZI_BACKEND_OWNER: 'legacy' }, '/bun')
   assert.equal(legacy.command, '/checkout/out/native/TreziService')

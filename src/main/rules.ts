@@ -50,7 +50,7 @@ export function treziRules(opts?: {
     `## Requests to surface controls`,
     `When asked to surface, show, expose or add controls for content, components or animations,`,
     `read and follow the bundled surface-controls skill at ${JSON.stringify(SURFACE_CONTROLS_SKILL)}.`,
-    `Use the native Trezi workflow even without a selected element. Do not build controls into`,
+    `Use Trezi's native workflow even without a selected element. Do not build controls into`,
     `the target page unless the user explicitly requests controls for the app's end users.`,
     ``,
     `## Scope of an element edit`,

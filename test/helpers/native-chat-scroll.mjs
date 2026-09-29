@@ -6,7 +6,7 @@ import { checkChatAcceptance } from './chat-acceptance.mjs'
 import { NativeBridge } from '../../src/native/bridge.ts'
 
 const directory = resolve('out/native')
-const executable = `${directory}/Trezi Native.app/Contents/MacOS/TreziHost`
+const executable = `${directory}/Trezi.app/Contents/MacOS/TreziHost`
 if (process.platform !== 'darwin') {
   console.log('NATIVE-CHAT-SCROLL SKIP — macOS native host required.')
   process.exit(0)
