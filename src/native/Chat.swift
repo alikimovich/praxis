@@ -37,8 +37,6 @@ final class ChatModel: ObservableObject {
     @Published var controlInteraction = 0
     @Published var followRevision = 0
     @Published var revealRevision = 0
-    // Test-only: follow and show the newest message (not an island reveal).
-    @Published var latestRevision = 0
     var revealMessage = ""
     var revealIsland = ""
     var revealBottom = false
@@ -221,7 +219,6 @@ struct ChatConversation: View {
                         if let event = NSApp.currentEvent, [.scrollWheel, .leftMouseDragged, .keyDown].contains(event.type) { follows = bottom <= readingHeight + 48 }
                     }
                     .onChange(of: model.composerHeight) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
-                    .onChange(of: model.latestRevision) { _ in follows = true; proxy.scrollTo("bottom", anchor: bottomAnchor) }
                     .onChange(of: model.revealRevision) { _ in
                         follows = false; sticky = nil
                         reveal(proxy, readingHeight: readingHeight, viewportHeight: viewport.size.height)

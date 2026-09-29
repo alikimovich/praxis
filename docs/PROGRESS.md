@@ -2,6 +2,40 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Rebase composer evidence on LKM-103's scroll work (LKM-104 repair)
+
+Manager verification failed with "latest message did not settle above composer".
+Its saved state (`composerInset` 196 = 128pt compact composer + 68, latest reply in
+`visibleMessageIDs`, `bottomPosition` 0, `revealAppliedRevision` 6) shows the
+composer HAD returned to compact height after the submit. `bottomPosition` is the
+lazily-realized "bottom" anchor's frame; a tall reply left it unpublished (0), so
+the old readiness check (`bottomPosition > 0`) could never pass. That was the wrong
+observable in the harness, not a composer that failed to shrink. Pinning the
+conversation to the latest row is now LKM-103's (candidate 4e3c4bf: the AppKit pin
+in ChatScrollStyle, latest button, chat acceptance).
+
+Merged onto candidate, LKM-104 keeps only the row/Send work. Dropped as LKM-103's:
+the `latestRevision` scroll hook and the scroller/inset reporting in Chat.swift and
+Host.swift. `smoke-composer.ts` now sits inside candidate's per-width structure
+(`chatAcceptance` sets 440/320pt); `smoke-core.ts`, `Composer.swift`, the layout
+fixture and `test/run.mjs` are candidate's plus LKM-104's edits only.
+
+The check stays strict but uses the right observable: `composerVerification` reports
+the newest message's measured frame and the composer top in one space; the fixture
+waits (no fixed sleep) until the message ends above the composer, rejects an
+unmeasured row, and requires the last painted line in a full-column capture
+(`captureVisibleChatColumn`) for the `sending` and `submitted` captures. At each width
+it also proves: Send disabled and inert (click and Return) when empty; Return submit at
+440pt, Send-click at 320pt; the compact composer and locked model while sending
+(Stop enabled); attachment, model and Auto interactions. Windowless regressions cover
+shrink-after-submit at both widths (`test/fixtures/composer-layout/main.swift`: compact
+height, bottom anchor and reading inset) and the settle logic
+(`test/native-composer-latest.mjs`).
+
+Checked in a scratch tree of candidate + these edits: typecheck, native typecheck,
+native build, composer layout/latest/controller pass. Unit tier there: only sandbox
+socket failures and the docs-link check (scratch has no git). No GUI suite ran.
+
 ## 2026-09-28 — Return LKM-103 scope; keep LKM-107 reveal intact (LKM-104 review)
 
 After updating onto candidate (LKM-107, LKM-89), remove everything this branch

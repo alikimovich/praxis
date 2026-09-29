@@ -18,7 +18,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Add foreground normal/narrow empty/multiline capture pairs including the full chat column and latest-reply OCR.
 - [x] Diagnose initial foreground capture timeout from empty/setup-card state; regress capture readiness while retaining populated latest-message checks and diagnostic geometry.
 - [x] Repeat attachment/model/Auto interactions, disabled empty Send/Return, Return (normal) and Send-click (narrow) multiline submission, and a Stop-state capture at each matrix width, so manager verification produces the evidence.
-- [ ] Manager: run `test:native` and inspect the six normal/narrow empty/multiline/sending capture pairs plus `restored`; complete independent review.
+- [x] Repair "latest message did not settle above composer": the check sampled the lazy bottom anchor (`bottomPosition`); it now waits on the newest message's measured frame against the composer top and requires the last painted line. Pinning itself is LKM-103's (candidate); regressions: shrink-after-submit at 440/320pt in the layout fixture and `native-composer-latest`.
+- [ ] Manager: after merging candidate, run `test:native`; inspect the 440/320 `initial`, `draft`, `sending` and `submitted` captures (`composer-visible-<width>-*`, `-chat.png` pairs) for the shared row, compact-after-submit composer and the latest line above it; complete independent review.
 
 ## Composer container (LKM-87)
 

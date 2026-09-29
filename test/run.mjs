@@ -14,7 +14,12 @@ const ROOT = dirname(TEST_DIR);
 // Backend logic checks run independently of the native desktop.
 const UNIT = [
   "service-contract",
+  "service-process",
+  "operation-ledger",
+  "preferences-owner",
+  "workspace-owner",
   "native-visible-capture",
+  "native-smoke-runner",
   "rename-compat",
   "source-stamp",
   "native-boundary",
@@ -22,6 +27,9 @@ const UNIT = [
   "codex-mcp",
   "native-shutdown",
   "native-bridge-close",
+  "native-service-launch",
+  "native-supervised-bridge",
+  "managed-child",
   "native-preview-recovery",
   "native-workspace",
   "native-workspace-controller",
@@ -29,10 +37,14 @@ const UNIT = [
   "native-support",
   "native-sheets",
   "native-settings",
+  "native-settings-layout",
+  "native-settings-evidence",
   "native-chat-controller",
   "native-composer-layout",
+  "native-smoke-wait",
   "native-chat-reveal",
   "native-composer-latest",
+  "no-system-preferences",
   "chat-islands",
   "native-context",
   "native-updates",
@@ -41,11 +53,16 @@ const UNIT = [
   "native-layers",
   "native-editor",
   "native-shell-controller",
+  "sidebar-evidence",
+  "sidebar-sizing",
+  "sidebar-icon",
+  "sidebar-focus",
   "native-git",
   "native-support-sheets",
   "native-cat-assets",
   "content-controls",
   "project-ui",
+  "project-ui-svelte",
   "project-ui-jev",
   "jev-pilot",
   "test-runner",
@@ -131,7 +148,7 @@ const LIVE = ['native-runtime-live'];
 const TIERS = { unit: UNIT, native: NATIVE, live: LIVE };
 const selected = new Set();
 const options = { jobs: Math.min(4, availableParallelism()),
-  'timeout-ms': 600_000, filter: null };
+  'timeout-ms': 120_000, filter: null };
 let serial = false;
 try {
   for (const arg of process.argv.slice(2)) {
@@ -156,7 +173,7 @@ try {
     for (const name of options.filter) if (!names.includes(name)) throw new Error(`test not in selected tiers: ${name}`);
   }
 } catch (error) {
-  console.error(`${error.message}\nusage: node test/run.mjs <unit|native|live|all> [--serial] [--jobs=4] [--timeout-ms=600000] [--filter=name,name]`);
+  console.error(`${error.message}\nusage: node test/run.mjs <unit|native|live|all> [--serial] [--jobs=4] [--timeout-ms=120000] [--filter=name,name]`);
   process.exit(2);
 }
 

@@ -1,40 +1,39 @@
 import assert from 'node:assert/strict'
-import { revealComposerLatest } from '../src/native/smoke-composer-latest.ts'
+import { latestAboveComposer, settleLatestAboveComposer } from '../src/native/smoke-composer-latest.ts'
 
-// Recorded first-capture failure: a setup card, no messages, no measured lazy
-// bottom target. Waiting for a latest message here can never satisfy the check.
-const empty = { messageCount: 0, messages: [], cards: ['tokens'], bottomPosition: 0, height: 776, composerInset: 206 }
-const populated = { ...empty, messageCount: 2, messages: [{ id: 'request' }, { id: 'reply' }] }
-const calls = []
-let snapshots = []
-const host = { request: async (command, args) => {
-  calls.push([command, args])
-  if (command === 'chatInspect') return snapshots.length > 1 ? snapshots.shift() : snapshots[0]
-  assert.equal(command, 'composerVerification')
-  assert.deepEqual(args, { latest: true })
-} }
-const wait = async check => {
-  for (let i = 0; i < 3; i++) if (await check()) return
-  throw new Error('Timed out')
-}
-snapshots = [empty]
-await revealComposerLatest(host, () => { throw new Error('Empty chat must not wait for a message') }, 'initial')
-assert.deepEqual(calls, [['chatInspect', undefined]])
+// Empty conversations (setup card, no messages) have nothing to place.
+assert.equal(latestAboveComposer({ id: '', measured: false, maxY: 0, composerTop: 0 }).ok, true)
+// A lazy row without a frame is not on screen; never accepted.
+assert.equal(latestAboveComposer({ id: 'reply', measured: false, maxY: 0, composerTop: 638 }).ok, false)
+assert.equal(latestAboveComposer({ id: 'reply', measured: true, maxY: 640, composerTop: 638 }).ok, false)
+assert.equal(latestAboveComposer({ id: 'reply', measured: true, maxY: 638.5, composerTop: 638 }).ok, true)
 
-// Once submitted, an unmeasured or occluded bottom must still wait. Only a
-// positive position above the composer satisfies the existing desktop check.
-calls.length = 0
-snapshots = [populated, populated, { ...populated, bottomPosition: 700 }, { ...populated, bottomPosition: 570 }]
-await revealComposerLatest(host, wait, 'normal-multiline')
-assert.equal(calls.filter(([command]) => command === 'chatInspect').length, 4)
-assert.deepEqual(calls[1], ['composerVerification', { latest: true }])
-for (const bottomPosition of [0, 700]) {
-  snapshots = [{ ...populated, bottomPosition }]
-  await assert.rejects(revealComposerLatest(host, wait, 'narrow-multiline'), error => {
-    assert.match(error.message, /narrow-multiline: latest message did not settle/)
-    assert.ok(error.message.includes(`"bottomPosition":${bottomPosition}`))
-    assert.equal(error.cause.message, 'Timed out')
-    return true
-  })
+// Shrink after submit at normal (440) and narrow (320) chat widths: the drafted
+// composer is tall, then compacts, then the conversation re-pins. Only the last
+// sample is settled; the intermediate ones (composer still tall, or compact but
+// the latest row not yet re-pinned) must keep waiting, and a pin that never
+// arrives must fail with the geometry.
+const height = 776
+for (const drafted of [200, 368]) {
+  const gap = 10
+  const top = composerHeight => height - gap - composerHeight
+  const samples = [
+    { id: 'reply', measured: true, maxY: 700, composerTop: top(drafted) },
+    { id: 'reply', measured: true, maxY: 700, composerTop: top(128) },
+    { id: 'reply', measured: true, maxY: 590, composerTop: top(128) },
+  ]
+  let index = 0
+  const host = { request: async command => { assert.equal(command, 'composerVerification'); return { latest: samples[Math.min(index++, samples.length - 1)] } } }
+  const wait = async check => { for (let i = 0; i < 5; i++) if (await check()) return; throw new Error('Timed out') }
+  const settled = await settleLatestAboveComposer(host, wait, `shrink-${drafted}`)
+  assert.equal(settled.maxY, 590)
+  assert.equal(index, 3, 'Waits through the tall-composer and unpinned samples')
 }
-console.log('Native composer latest-message readiness: empty setup card and strict populated reachability passed')
+const stuck = { request: async () => ({ latest: { id: 'reply', measured: true, maxY: 700, composerTop: 638 } }) }
+await assert.rejects(settleLatestAboveComposer(stuck, async check => { for (let i = 0; i < 3; i++) if (await check()) return; throw new Error('Timed out') }, 'narrow-sending'), error => {
+  assert.match(error.message, /narrow-sending: latest message ends 62\.0pt under the composer/)
+  assert.ok(error.message.includes('"maxY":700'))
+  assert.equal(error.cause.message, 'Timed out')
+  return true
+})
+console.log('Native composer latest-message readiness: settles above the composer after shrink at 440/320pt; unmeasured or occluded rows are rejected')

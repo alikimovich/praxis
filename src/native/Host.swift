@@ -305,33 +305,28 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "captureVisibleChat":
             guard ephemeral else { reply(id, error: "Test profile required"); return }
             Task { @MainActor in
-                do {
-                    if c["fullColumn"] as? Bool == true {
-                        reply(id, try await captureVisibleRegion(window: window, view: chat, region: chat.bounds))
-                    } else { reply(id, try await captureVisibleChat(window: window, chat: chat)) }
-                }
+                do { reply(id, try await captureVisibleChat(window: window, chat: chat)) }
                 catch { reply(id, error: error.localizedDescription) }
             }
         case "chatInspect": reply(id, chat.inspect())
         case "chatPerform": chat.model.action(c["action"] as? String ?? "", id: c["card"] as? String, value: c["value"] as? String, answers: c["answers"] as? [String: String]); reply(id)
         case "composerVerification":
             guard ephemeral else { reply(id, error: "Test profile required"); return }
-            if c["latest"] as? Bool == true { chat.model.latestRevision += 1 }
             var verification = composer.verifyInteraction(c)
-            // Exterior spacing and scrollbar styling belong to LKM-103; report
-            // them as evidence only. Scrollability proves the latest-message check.
-            verification["outerInsets"] = ["left": composer.frame.minX - chat.frame.minX,
-                "right": chat.frame.maxX - composer.frame.maxX, "bottom": chat.frame.maxY - composer.frame.maxY]
-            func scrollView(in view: NSView) -> NSScrollView? {
-                view as? NSScrollView ?? view.subviews.lazy.compactMap { scrollView(in: $0) }.first
-            }
-            let conversation = scrollView(in: chat)
-            verification["conversationScroller"] = ["found": conversation != nil,
-                "scrollable": (conversation?.documentView?.bounds.height ?? 0) > (conversation?.contentSize.height ?? 0),
-                "small": conversation?.verticalScroller?.controlSize == .small,
-                "overlay": conversation?.scrollerStyle == .overlay,
-                "autohides": conversation?.autohidesScrollers ?? false]
+            // Where the newest message sits relative to the composer. Frames are in
+            // the conversation's own space (top-left origin), as is the composer top.
+            let latest = chat.model.snapshot?.messages.last
+            let frame = latest.flatMap { chat.model.messageFrames[$0.id] }
+            verification["latest"] = ["id": latest?.id ?? "", "measured": frame != nil,
+                "maxY": Double(frame?.maxY ?? 0), "composerTop": Double(composer.frame.minY - chat.frame.minY)]
             reply(id, verification)
+        case "captureVisibleChatColumn":
+            // The whole conversation column, composer included, as painted on screen.
+            guard ephemeral else { reply(id, error: "Test profile required"); return }
+            Task { @MainActor in
+                do { reply(id, try await captureVisibleRegion(window: window, view: chat, region: chat.bounds)) }
+                catch { reply(id, error: error.localizedDescription) }
+            }
         case "captureVisibleComposer":
             guard ephemeral else { reply(id, error: "Test profile required"); return }
             Task { @MainActor in
@@ -342,7 +337,14 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
                 } catch { reply(id, error: error.localizedDescription) }
             }
         case "composerState": composer.update(c["state"] as? [String: Any] ?? [:])
-        case "composerInspect": reply(id, composer.inspect())
+        case "composerInspect":
+            var inspected = composer.inspect()
+            // Send lives in the shared controls row, not directly in the form bubble.
+            inspected["sendInsideForm"] = composer.sendButton.isDescendant(of: composer.content)
+            let clip = composer.scroll.contentSize
+            inspected["inputWidth"] = Double(clip.width); inspected["textMinimumHeight"] = Double(composer.text.minSize.height)
+            inspected["scrollerStyle"] = composer.scroll.scrollerStyle.rawValue
+            reply(id, inspected)
         case "composerIMECheck":
             guard ephemeral else { reply(id, error: "Test profile required"); return }
             let old = composer.text.string
