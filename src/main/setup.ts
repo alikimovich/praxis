@@ -6,6 +6,7 @@ import { ipcMain } from '../native/platform'
 import { access, mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import type { Frontend, SetupResult, SetupStrategy } from '../shared/api'
+import { workflowOwner, type HelperFile, type HelperWrite } from './workflow-owner'
 
 /**
  * Project setup — make a repo trezi-ready, FRAMEWORK-FIRST. We detect the UI
@@ -158,7 +159,7 @@ async function svelteMajorOf(root: string): Promise<number> {
   }
 }
 
-interface Detected {
+export interface Detected {
   framework: Frontend
   strategy: SetupStrategy
   svelteMajor?: number
@@ -166,7 +167,7 @@ interface Detected {
 }
 
 /** Detect the UI framework from deps FIRST — never assume React. */
-async function detect(root: string): Promise<Detected> {
+export async function detect(root: string): Promise<Detected> {
   const deps = await readDeps(root)
   const has = (n: string): boolean => deps.has(n)
   // Svelte / SvelteKit
@@ -198,53 +199,37 @@ async function detect(root: string): Promise<Detected> {
   return { framework: 'unknown', strategy: 'none' }
 }
 
+/** The helper files a framework needs (their sources are this module's constants). */
+export function helperFiles(d: Detected): HelperFile[] {
+  if (d.strategy === 'inspector' || d.strategy === 'none') return []
+  const helper = d.strategy === 'svelte-preprocess' ? SVELTE_HELPER : d.strategy === 'babel-plugin-rn' ? RN_HELPER : REACT_HELPER
+  const content =
+    d.strategy === 'svelte-preprocess' ? SVELTE_HELPER_CONTENT : d.strategy === 'babel-plugin-rn' ? RN_HELPER_CONTENT : REACT_HELPER_CONTENT
+  const files = [{ path: helper, content }]
+  if (d.framework === 'next') {
+    files.push({ path: NEXT_LOADER, content: NEXT_LOADER_CONTENT }, { path: NEXT_ADAPTER, content: NEXT_ADAPTER_CONTENT },
+      { path: MDX_HELPER, content: MDX_HELPER_CONTENT })
+  }
+  return files
+}
+
+/** Detect (JS helper), then have the workflow owner write the missing helpers. */
 async function scaffold(root: string): Promise<SetupResult> {
   try {
     const d = await detect(root)
     // Nothing to write for vue (use its inspector) or an unknown framework.
-    if (d.strategy === 'inspector' || d.strategy === 'none') {
-      return { ok: true, framework: d.framework, strategy: d.strategy, files: [], written: false }
-    }
-    const helper =
-      d.strategy === 'svelte-preprocess'
-        ? SVELTE_HELPER
-        : d.strategy === 'babel-plugin-rn'
-          ? RN_HELPER
-          : REACT_HELPER
-    const content =
-      d.strategy === 'svelte-preprocess'
-        ? SVELTE_HELPER_CONTENT
-        : d.strategy === 'babel-plugin-rn'
-          ? RN_HELPER_CONTENT
-          : REACT_HELPER_CONTENT
-    await mkdir(join(root, TREZI_DIR), { recursive: true })
-    const abs = join(root, helper)
-    let written = false
-    if (!(await exists(abs))) {
-      await writeFile(abs, content, 'utf8')
-      written = true
-    }
-    const files = [helper]
-    if (d.framework === 'next') {
-      for (const [file, text] of [[NEXT_LOADER, NEXT_LOADER_CONTENT], [NEXT_ADAPTER, NEXT_ADAPTER_CONTENT], [MDX_HELPER, MDX_HELPER_CONTENT]]) {
-        if (!(await exists(join(root, file)))) {
-          await writeFile(join(root, file), text, 'utf8')
-          written = true
-        }
-        files.push(file)
-      }
-    }
-    const helpers = await Promise.all(files.map(async (path) => ({
-      path, sha256: createHash('sha256').update(await readFile(join(root, path))).digest('hex')
-    })))
+    const files = helperFiles(d)
+    if (!files.length) return { ok: true, framework: d.framework, strategy: d.strategy, files: [], written: false }
+    const write = await workflowOwner().writeHelpers(root, files)
+    if (!write.ok) return { ok: false, error: write.error }
     return {
       ok: true,
       next: d.next,
-      helpers,
+      helpers: write.helpers,
       framework: d.framework,
       strategy: d.strategy,
-      files,
-      written,
+      files: files.map((file) => file.path),
+      written: write.written,
       ...(d.svelteMajor ? { svelteMajor: d.svelteMajor } : {})
     }
   } catch (err) {
@@ -252,7 +237,28 @@ async function scaffold(root: string): Promise<SetupResult> {
   }
 }
 
-async function uninstall(root: string): Promise<SetupResult> {
+/** The legacy writer (rollback twin of `WorkflowSetup.setup`): each helper only if absent. */
+export async function writeHelpersLegacy(root: string, files: HelperFile[]): Promise<HelperWrite> {
+  try {
+    await mkdir(join(root, TREZI_DIR), { recursive: true })
+    let written = false
+    for (const file of files) {
+      if (!(await exists(join(root, file.path)))) {
+        await writeFile(join(root, file.path), file.content, 'utf8')
+        written = true
+      }
+    }
+    const helpers = await Promise.all(files.map(async ({ path }) => ({
+      path, sha256: createHash('sha256').update(await readFile(join(root, path))).digest('hex')
+    })))
+    return { ok: true, written, helpers }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/** The legacy remover (rollback twin of `WorkflowSetup.uninstall`). */
+export async function removeHelpersLegacy(root: string): Promise<SetupResult> {
   try {
     const removed: string[] = []
     for (const f of [REACT_HELPER, RN_HELPER, SVELTE_HELPER, NEXT_LOADER, NEXT_ADAPTER, MDX_HELPER, ...LEGACY_FILES, ...[REACT_HELPER, RN_HELPER, SVELTE_HELPER, NEXT_LOADER, NEXT_ADAPTER, MDX_HELPER].map(path => path.replaceAll('trezi', 'praxis'))]) {
@@ -277,5 +283,5 @@ export function registerSetupIpc(): void {
     return { framework: d.framework, canInstrument: d.framework !== 'unknown' }
   })
   ipcMain.handle('setup:scaffold', (_e, root: string) => scaffold(root))
-  ipcMain.handle('setup:uninstall', (_e, root: string) => uninstall(root))
+  ipcMain.handle('setup:uninstall', (_e, root: string) => workflowOwner().removeHelpers(root))
 }

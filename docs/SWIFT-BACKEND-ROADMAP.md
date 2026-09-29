@@ -57,6 +57,12 @@ Undo), commits the controls sidecars hash-bound in the repository lane, persists
 content-editor drafts and holds deferred preview navigation until its turn lands. Bun
 keeps the JS helpers, the isolated DOM instrumentation and the inspector views; the TS
 twin is the rollback owner ([editing](SWIFT-BACKEND-EDITING.md)).
+The workflow transfer (LKM-100, row S13) is implemented for review: the service performs
+publication (Publish, handoff and saved-run PRs), Connect to GitHub, remote fetch/pull/switch,
+the instrumentation helpers, new projects, Trezi's own update and the diagnosis memory as
+journaled workflows with operation IDs and receipts, reconciling uncertain steps from GitHub
+and Git instead of repeating them; Bun keeps the proposing helpers and the sheets, and the
+original TS code is the rollback owner ([workflows](SWIFT-BACKEND-WORKFLOWS.md)).
 
 | Task | Canonical phase | Scope and future owner | Required exit evidence |
 | --- | --- | --- | --- |
@@ -72,7 +78,7 @@ twin is the rollback owner ([editing](SWIFT-BACKEND-EDITING.md)).
 | S10 | 6 | Provider adapters, authentication, catalogs and tools; Swift provider service plus supervised SDK/math helpers | Capability negotiation, secret/reference boundary, image semantics, helper privileges and deterministic failure/cancel fixtures. Paid/live provider checks require separate authorization. Implemented for review (LKM-98): `test/provider-owner.mjs`. The SDK adapters (and title/memory generation) stay in-process under the owner until a live parity run; catalogs stay in Bun; pure calculators stay with the adapter. |
 | S11 | 6 | Chat/turn/spawn orchestration and transcript state; Swift conversation coordinator | Queues, approvals, terminal deduplication, model handoff, cancellation, checkpointed transcripts and reconnect without draft loss; repository effects delegated to S07. Implemented for review (LKM-97): `test/conversation-owner.mjs`. The composer's queued-message list and drafts stay in the Bun chat controller (S12); provider sessions stay Bun adapters (S10). |
 | S12 | 7 | Editing/controls/content/composition/preview controllers; Swift coordinators, AppKit and isolated DOM JS | Originating chat/turn/document/revision checks, pending activation, saved-source Undo through S08, preserved drafts and DOM allowlist; test hooks never become helper capabilities. Implemented for review (LKM-99): `test/editing-owner.mjs`. Inspector/layers/style controllers stay Bun view controllers (no workflow state beyond their generation checks); the composer queue, drafts and attachments, the workspace controller's server fields and the preview DOM instrumentation stay where they are (TASKS). |
-| S13 | 7 | Publishing/remote actions/setup/diagnostics/support and shared sheet routing; Swift application services | Explicit side-effect intent, durable local/remote receipts, uncertain-result reconciliation, redacted logs and failure-preserving autosave; commits delegated to Repository/Source. |
+| S13 | 7 | Publishing/remote actions/setup/diagnostics/support and shared sheet routing; Swift application services | Explicit side-effect intent, durable local/remote receipts, uncertain-result reconciliation, redacted logs and failure-preserving autosave; commits delegated to Repository/Source. Implemented for review (LKM-100): `test/workflow-owner.mjs`. Feedback issues (`feedback:submit`), sheet routing and autosave, `github:status`/`setup:detect`/update check (reads) and the tokens sidecar stay in Bun (TASKS). |
 | S14 | 7 | Simulator and platform process integration; Swift simulator coordinator | Supervised xcrun/bridge lifecycle, failed preflight/build/boot/install and teardown recovery; platform/device verification recorded separately. |
 | S15 | 8 | Installation updates, launcher/distribution and legacy retirement; Swift lifecycle service | Reconcile every census row, no remaining Bun domain writers, retained narrow JS helpers, supported-macOS/package checks and restoration from current data without old-backup overwrite. |
 

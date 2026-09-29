@@ -7,6 +7,7 @@ import { getCurrentBranch, isRepoRoot } from './git'
 import { enqueueRepoWrite } from './repo-write-queue'
 import type { RpcHandlerRegistry } from './rpc-router'
 import { excludedWorktreePath } from './worktrees'
+import { workflowOwner } from './workflow-owner'
 
 const run = promisify(execFile)
 const git = async (root: string, args: string[]): Promise<string> =>
@@ -192,10 +193,12 @@ export function registerGitRemoteIpc(
   router: RpcHandlerRegistry,
   busy: (root: string) => boolean
 ): void {
+  // The workflow owner (S13) runs these in the repository lane; `busy` is Bun's view
+  // of the project's running agents when the request is made.
   router.handle('git:remote-status', (_event, root: string, fetch?: boolean) =>
-    remoteStatus(root, fetch)
+    workflowOwner().remoteStatus(root, fetch ?? false)
   )
   router.handle('git:remote-update', (_event, root: string, action: GitRemoteAction) =>
-    updateFromRemote(root, action, () => busy(root))
+    workflowOwner().remoteUpdate(root, action, busy(root))
   )
 }

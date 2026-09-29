@@ -2,6 +2,70 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — Workflow owner repair: bounded journal, best-effort diagnosis memory (LKM-100 / S13)
+
+Independent review found two defects. First, the journal grew without limit: `prune()` kept
+every failed/cancelled/interrupted record, and runs refused before their first effect
+(pull with busy agents or a dirty tree, "Not signed in", a dirty Trezi checkout) can never be
+resumed or pruned. Now such stepless runs keep the newest 20, runs that began a step keep the
+newest 5 per repository and kind, superseded/dismissed keep 10, results 100. Second,
+`diagnose:run` failed outright when the diagnosis memory refused a write (a damaged
+`diagnostics.json`, an oversized proposal, the service stopping), where the legacy write could
+never suppress the diagnosis. The memory read, write and `diagnose:record` are now best-effort
+(logged). `test/workflow-owner.mjs` gained a bounded-journal case (25 refused pulls, repeated
+"nothing to publish", refused Trezi updates, restart) and extends the damaged-file case
+through the real `diagnose:*` handlers.
+
+## 2026-09-29 — Swift workflow owner: publishing, remote Git, setup, diagnostics, update (LKM-100 / S13)
+
+The tenth transfer, on the LKM-99 candidate. Details, the protocol, the partial-effect
+table and the tightened rollback plan are in `docs/SWIFT-BACKEND-WORKFLOWS.md`.
+
+These workflows had no memory. Publish kept an in-process lock and nothing else: a crash
+after `gh pr create`, or a reply lost after it, left a PR the next click could not know
+about, and a crash after `gh pr merge` was worse. The branch looked unpublished, so the
+next Publish re-pushed the already merged branch and opened a second PR for merged work.
+Trezi's update and the new-project install had the same shape: a failed install left a
+checkout the retry pulled again, and a project folder the retry refused as "not empty".
+
+Under the Swift launch the service now runs them as durable workflows. Every step's intent
+is on disk before its effect and its receipt after. Requests carry an operation ID, and
+Bun's client asks again with the same ID when a reply does not come, so the owner answers
+from the receipt or joins the run. A later request resumes an unfinished run from what
+GitHub and Git hold. An open PR is adopted, and a merge is checked on the PR number the
+journal holds (if it merged, only the local cleanup runs). A repository this run asked
+GitHub for is adopted rather than failing on "already exists". A pull whose receipt still
+matches HEAD is skipped, and a project install resumes where it failed. Cancellation stops a
+running install or build and never starts another step. Stored messages and answers are
+redacted (URL credentials, GitHub tokens).
+
+Bun keeps the helpers that only propose: the PR description (a publication is two
+requests around it), framework detection and helper sources, starter files, diagnoses. It
+also keeps the sheets. The legacy publish code moved out of `annotations.ts` and `agent.ts`
+into `src/main/publish.ts`, and with the other original modules it is the rollback twin
+(`src/main/workflow-legacy.ts`). The diagnosis memory keeps its file and bytes; a damaged
+one is now kept instead of silently replaced. The setup writer refuses a linked `.trezi`.
+
+Still in Bun: feedback issues (`feedback:submit`), sheet routing and autosave, the read-only
+probes. Recorded in TASKS. No real GitHub or package-manager call was made: the fixture's
+`gh`, `bun` and `npm` are scripts, and the test re-runs itself with them on PATH and Bun's
+auto-install off. Bun resolves a spawned command with the PATH it started with, so setting
+PATH at runtime would have reached the real tools.
+
+Verification (worker sandbox): `test/workflow-owner.mjs` passes in about 35 s (cached
+fixture): 12 parity scenarios give identical answers and Git/GitHub state on the legacy twin
+and the Swift owner. The durability checks also pass: lost replies in both phases, crashes
+after the PR, merge, repository and pull, GitHub failing after acting, install/build
+failures resumed, cancellation, busy, restart/dismiss, rollback both ways, redaction, drain
+and schema. The related legacy suites (`git-remote`, `publish-reconcile`, `project-create`,
+`diag-cache`, `native-updates`, `github-connect`, `setup-stamps`) pass unchanged. Both
+typechecks pass, `bun run build:native` succeeds, and the new Swift files have zero
+diagnostics under `-strict-concurrency=complete`. Worker native verification (staged,
+desktop lock, full run): 138 unit checks including `workflow-owner` and `service-process`,
+both typechecks, native smoke 20 of 20, CHAT ACCEPTANCE PASS and chat scroll. The tool call
+itself timed out on the worker's side after 300 s; the result is from that run's log
+(`worker-verify-2.log`).
+
 ## 2026-09-29 — Swift editing coordinator: islands, controls sidecars, content drafts, navigation (LKM-99 / S12)
 
 The ninth transfer, on the LKM-98 candidate. Details, the protocol and the tightened

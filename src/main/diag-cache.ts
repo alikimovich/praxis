@@ -50,7 +50,11 @@ async function save(dir: string, store: Store): Promise<void> {
 
 /** A previously-seen fix for this exact error class (on this machine + project), or null. */
 export async function recall(dir: string, root: string, error: string): Promise<Diagnosis | null> {
-  const signature = signatureFor(error)
+  return recallSignature(dir, root, signatureFor(error))
+}
+
+/** The same lookup by signature (the workflow owner's seam: Bun computes the signature). */
+export async function recallSignature(dir: string, root: string, signature: string): Promise<Diagnosis | null> {
   const e = (await load(dir))[root]?.[signature]
   if (!e) return null
   return {

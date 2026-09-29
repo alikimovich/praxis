@@ -23,7 +23,12 @@ supervises provider helpers against their grant; the SDK adapters still run in B
 (docs/SWIFT-BACKEND-PROVIDERS.md). Since LKM-99 it owns the editing workflows' state:
 chat island histories and activation (bound to the defining turn), the controls
 sidecars (hash-bound commits), content-editor drafts and deferred preview navigation;
-Bun keeps the JS helpers and inspector views (docs/SWIFT-BACKEND-EDITING.md).
+Bun keeps the JS helpers and inspector views (docs/SWIFT-BACKEND-EDITING.md). Since
+LKM-100 it runs Trezi's side-effecting workflows outside a chat turn (Publish and PRs,
+Connect to GitHub, remote pull/switch, setup helpers, new projects, Trezi's update, the
+diagnosis memory) as journaled workflows with receipts, so a lost reply or crash never
+repeats a PR, merge or update; Bun keeps the proposing helpers and the sheets
+(docs/SWIFT-BACKEND-WORKFLOWS.md).
 Every other domain writer remains in Bun until a
 verified transfer; annotation storage is split from
 publication but stays in Bun until the S07 repository lane.
