@@ -1,7 +1,9 @@
+import { isGuardedChild } from './managed-child'
 import type { ChildProcess } from 'node:child_process'
 
 // Retain ownership after the shell exits: its descendants may still be alive.
 const groups = new Set<number>()
+const guardedGroups = new Set<number>()
 const stopping = new Map<number, Promise<void>>()
 const alive = (pid: number) => {
   try { process.kill(-pid, 0); return true } catch { return false }
@@ -13,6 +15,7 @@ export function trackDevServer(child: ChildProcess) {
   if (!child.pid) return
   const pid = child.pid
   groups.add(pid)
+  if (isGuardedChild(child)) guardedGroups.add(pid)
   child.once('exit', () => { void stopDevServer(child) })
 }
 export function stopDevServer(child: ChildProcess): Promise<void> {
@@ -29,6 +32,7 @@ export function stopDevServer(child: ChildProcess): Promise<void> {
     const killedDeadline = Date.now() + 500
     while (alive(pid) && Date.now() < killedDeadline) await new Promise(resolve => setTimeout(resolve, 25))
     groups.delete(pid)
+    guardedGroups.delete(pid)
   })().finally(() => { stopping.delete(pid) })
   stopping.set(pid, done)
   return done
@@ -38,6 +42,7 @@ export async function drainDevServers() {
 }
 /** Synchronous fallback for explicit process.exit()/fatal exit: timers cannot run. */
 export function forceStopDevServers() {
-  for (const pid of groups) signal(pid, 'SIGKILL')
+  for (const pid of groups) signal(pid, guardedGroups.has(pid) ? 'SIGTERM' : 'SIGKILL')
   groups.clear()
+  guardedGroups.clear()
 }

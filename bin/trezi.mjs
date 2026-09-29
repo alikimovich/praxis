@@ -68,14 +68,14 @@ function printVersion() {
 }
 
 export function nativeLaunchSpec(root, args = []) {
-  return { command: 'bun', args: [join(root, 'out/native/index.cjs'), ...args], cwd: root }
+  return { command: 'bun', args: [join(root, 'scripts/start-native.mjs'), ...args], cwd: root }
 }
 
 function launch(args = []) {
   if (process.platform !== 'darwin') throw new Error('Trezi requires macOS 13.3 or later.')
   const spec = nativeLaunchSpec(repoRoot, args)
   const host = join(repoRoot, 'out/native/Trezi Native.app/Contents/MacOS/TreziHost')
-  if (!existsSync(spec.args[0]) || !existsSync(host)) {
+  if (!existsSync(join(repoRoot, 'out/native/index.cjs')) || !existsSync(host) || !existsSync(join(repoRoot, 'out/native/TreziService'))) {
     const result = spawnSync(detectPackageManager(), ['run', 'build'], { cwd: repoRoot, stdio: 'inherit' })
     if (result.error || result.status !== 0) throw new Error('Trezi build failed — see output above.')
   }

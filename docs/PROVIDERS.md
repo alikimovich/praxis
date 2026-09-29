@@ -1,5 +1,10 @@
 # Provider capabilities
 
+S02 supervises the legacy Bun backend from a separate Swift XPC service. Provider
+SDKs, authentication and session writers remain in Bun; the UI connection grants
+no provider/parser role or preview capability. No provider call is required by the
+deterministic [service lifecycle fixtures](SWIFT-BACKEND-SERVICE.md).
+
 PR publishing uses a separate read-only Codex turn with `gpt-5.6-luna` and low
 reasoning effort through the built-in Codex account. It summarizes the committed
 merge-base diff after reconciliation, without chat or commit messages. Titles are

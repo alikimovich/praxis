@@ -64,7 +64,7 @@ assert(help.status === 0, 'CLI help exits successfully')
 assert(help.stdout.includes('--project'), 'CLI help documents native project launch')
 assert(!help.stdout.includes('--remote'), 'CLI no longer advertises retired remote mode')
 eq(nativeLaunchSpec('/checkout', ['--project', '/project']), {
-  command: 'bun', args: ['/checkout/out/native/index.cjs', '--project', '/project'], cwd: '/checkout'
+  command: 'bun', args: ['/checkout/scripts/start-native.mjs', '--project', '/project'], cwd: '/checkout'
 }, 'CLI launches the native backend with the requested project')
 const retired = spawnSync(process.execPath, [join(repoRoot, 'bin/trezi.mjs'), 'serve', '/tmp'], { encoding: 'utf8' })
 assert(retired.status === 1 && retired.stderr.includes('retired'), 'retired browser mode fails with migration guidance')

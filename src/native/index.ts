@@ -52,13 +52,17 @@ import { NativeSheetController } from './sheets-runtime'
 import { installNativeWorkspace } from './workspace-runtime'
 
 async function main() {
+  if (process.env.TREZI_SERVICE_SUPERVISED === '1') {
+    console.log = console.info = console.debug = (...args) => console.error(...args)
+  }
+  const serviceLocked = process.env.TREZI_SERVICE_LOCKED === '1'
   const testing = process.argv.includes('--test')
-  const testDir = testing ? mkdtempSync(join(tmpdir(), 'trezi-native-')) : null
+  const testDir = testing ? process.env.TREZI_NATIVE_TEST_DIR || mkdtempSync(join(tmpdir(), 'trezi-native-')) : null
   if (testDir) process.env.TREZI_USER_DATA = join(testDir, 'profile')
   const profile = app.getPath('userData')
   mkdirSync(profile, { recursive: true })
   const lock = join(profile, 'native.lock')
-  if (existsSync(lock)) {
+  if (!serviceLocked && existsSync(lock)) {
     const pid = Number(readFileSync(lock, 'utf8'))
     let running = true
     try {
@@ -70,14 +74,15 @@ async function main() {
       throw new Error('Trezi Native is already using this profile. Close that instance first.')
     rmSync(lock)
   }
-  writeFileSync(lock, String(process.pid), { flag: 'wx' })
+  if (!serviceLocked) writeFileSync(lock, String(process.pid), { flag: 'wx' })
   const projectIndex = process.argv.indexOf('--project')
   const requestedProject = projectIndex >= 0 ? process.argv[projectIndex + 1] : null
   if (projectIndex >= 0 && !requestedProject) throw new Error('--project requires a folder')
-  const fixture = testDir ? join(testDir, 'project') : null
+  const fixture = testDir ? join(testDir, 'Folder Alpha') : null
   if (fixture) {
     mkdirSync(fixture)
-    writeFileSync(join(fixture, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="red"/></svg>')
+    // A decodable raster icon exercises stored artwork in native sidebar verification.
+    writeFileSync(join(fixture, 'favicon.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=', 'base64'))
     writeFileSync(
       join(fixture, 'index.html'),
       '<!doctype html>\n<html><body>\n<h1 id="native-title" data-trezi-source="index.html:3:1">Native Trezi fixture</h1>\n<p>Bun owns this server.</p><script>window.previewInputs=[];for(const type of ["keydown","keyup","keypress","pointerdown","mousedown","click","dblclick","wheel","input"])window.addEventListener(type,event=>window.previewInputs.push(event.type),true)</script></body></html>'
@@ -94,14 +99,15 @@ async function main() {
     // Publish the promise before emitting quit: the host can close during cleanup.
     cleaning = Promise.resolve().then(async () => {
       app.emit('before-quit')
-      host?.send('quit')
-      rmSync(lock, { force: true })
+      // The service-mode host exits with this status; the launcher reports it.
+      host?.send('quit', { status: typeof process.exitCode === 'number' ? process.exitCode : 0 })
+      if (!serviceLocked) rmSync(lock, { force: true })
       // Keep the native profile separate from retired Electron installations.
       // Test profiles are disposable.
       await drainDevServers()
       if (testDir) {
         await host?.closed
-        rmSync(testDir, { recursive: true, force: true })
+        if (!process.env.TREZI_NATIVE_TEST_DIR) rmSync(testDir, { recursive: true, force: true })
       }
     })
     return cleaning
@@ -349,8 +355,15 @@ async function main() {
   })
   const updates = new NativeUpdateController(sheetController, root, async () => {
     const project = workspaceController.active?.root
+    if (process.env.TREZI_SERVICE_SUPERVISED === '1') {
+      host!.send('serviceRestart', { project })
+      return
+    }
     await cleanup()
-    const processNext = spawn(process.execPath, [join(root, 'out/native/index.cjs'), ...(project ? ['--project', project] : [])], { cwd: root, detached: true, stdio: 'ignore', env: process.env })
+    const restartEnvironment = { ...process.env }
+    for (const key of ['TREZI_SERVICE_LOCKED', 'TREZI_SERVICE_SUPERVISED', 'TREZI_SERVICE_PID', 'TREZI_SERVICE_EXECUTABLE', 'TREZI_NATIVE_TEST_DIR']) delete restartEnvironment[key]
+    const ownerPID = process.env.TREZI_SERVICE_PID || String(process.pid)
+    const processNext = spawn(process.execPath, [join(root, 'scripts/start-native.mjs'), '--wait-for-owner', ownerPID, ...(project ? ['--project', project] : [])], { cwd: root, detached: true, stdio: 'ignore', env: restartEnvironment })
     processNext.on('error', error => { console.error('Could not restart Trezi Native:', error); process.exit(1) }); processNext.once('spawn', () => { processNext.unref(); process.exit(0) })
   }, undefined, undefined, () => [...chatController.chats.values()].some(chat => chat.isRunning || chat.text || chat.attachments.length) ? 'Finish running chats and send or clear your drafts before restarting.' : [...editorController.sessions.values()].some(session => [...session.documents.values()].some(doc => doc.text !== doc.baseline)) ? 'Save source editor drafts before restarting.' : [...contentController.sessions.values()].some(session => session.dirty || session.busy) ? 'Save content editor drafts before restarting.' : null)
   host.on('menu', ({ action }) => { if (action === 'updates') void updates.open().catch(error => activityController.append(String(error), 'error')) })
@@ -437,9 +450,10 @@ async function main() {
     if (testing) {
       try {
         await runNativeCoreSmoke(host!, fixture!, root)
-        await cleanup()
         process.exitCode = 0
+        await cleanup()
       } catch (error) {
+        process.exitCode = 1
         console.error(error)
         try {
           writeFileSync(join(root, 'test/artifacts/native/failure.png'), Buffer.from(await host!.request('captureShell'), 'base64'))
