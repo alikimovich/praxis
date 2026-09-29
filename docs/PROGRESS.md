@@ -2,6 +2,23 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-102 reconciled with LKM-112's agent guide (merge conflict repair)
+
+The candidate merge aborted on `AGENTS.md` and `CLAUDE.md`: LKM-112 rewrote both
+(AGENTS.md canonical, CLAUDE.md = `@AGENTS.md`) and moved the long material into
+`docs/agent-guide/`, while LKM-102 had edited the old long versions. Root cause: two
+branches editing the same rewritten regions; PROGRESS/TASKS merge with `merge=union` and
+were never the problem. Fix: `AGENTS.md`, `CLAUDE.md`, `test/docs-links.mjs` and the seven
+`docs/agent-guide/*.md` pages are byte-identical to LKM-112's (an identical add/add or
+identical change merges cleanly; any divergence in a file absent from the merge base
+conflicts again), so LKM-102's old CLAUDE/AGENTS wording is dropped. The candidate
+`AGENTS.md` makes no claim LKM-102 contradicts. The guide pages still describe the
+pre-LKM-102 owners (listed as an open item under LKM-102 in `docs/TASKS.md`); they are
+updated after the merge, not here. The authoritative LKM-102 state stays in
+`docs/SWIFT-BACKEND-RETIREMENT.md`, `SWIFT-BACKEND-PLAN.md`, `-PROVIDERS.md` and
+`-PLATFORM.md`. `test/docs-links.mjs` (LKM-112's version, which also scans AGENTS.md and
+the guide) passes on this tree.
+
 ## 2026-09-29 — LKM-102 reduced acceptance: the last seven Bun rows, helper opt-in (census 0 Bun-owned; adapters → LKM-111)
 
 Scope reduced by a recorded decision (option A): the SDK adapter move, the live provider
