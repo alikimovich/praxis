@@ -26,6 +26,8 @@ export interface Chat extends NativeChatMirror {
   permissions: PermissionRequest[]; questions: QuestionRequest[]
   setup: boolean; awaitingLanding: boolean
   context?: NativeChatContext
+  /** The turn this chat last sent (the owner's turn id); terminal events of any other are late. */
+  turn?: string
 }
 export function newChat(chat: string): Chat {
   return {
@@ -94,6 +96,12 @@ export function finish(chat: Chat, landing = false) {
     chat.turnStartedAt = null
     chat.streamingId = null
   }
+}
+/** A terminal event that cannot belong to the turn this chat is running (S11). */
+export function late(chat: Chat, event: AgentEvent) {
+  if (!['done', 'error', 'landing-finished', 'reconciliation-started'].includes(event.type)) return false
+  if (event.type === 'done' && event.stale) return true
+  return !!(event.turn && chat.turn && event.turn !== chat.turn)
 }
 export function reduce(chat: Chat, event: AgentEvent) {
   chat.version++

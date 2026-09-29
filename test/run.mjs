@@ -22,6 +22,7 @@ const UNIT = [
   "runtime-owner",
   "repository-owner",
   "source-owner",
+  "conversation-owner",
   "native-visible-capture",
   "native-smoke-runner",
   "rename-compat",

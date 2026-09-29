@@ -56,6 +56,7 @@
     "test:runtime-owner": "bun test/runtime-owner.mjs",
     "test:repository-owner": "bun test/repository-owner.mjs",
     "test:source-owner": "bun test/source-owner.mjs",
+    "test:conversation-owner": "bun test/conversation-owner.mjs",
     "test:annotation-store": "bun test/annotation-store.mjs",
     "test:project-icon": "bun test/project-icon.mjs",
     "test:providers": "bun test/providers-store.mjs",
