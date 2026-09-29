@@ -2,6 +2,50 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — Swift source transactions, file operations, Undo and parser proposals (LKM-96 / S08+S09)
+
+The sixth transfer, on the LKM-95 candidate. Under the Swift launch the service is the
+only writer of a user's source files for Trezi's own edits. Details and the tightened
+rollback plan are in `docs/SWIFT-BACKEND-SOURCE.md`.
+
+Parsers now only propose. Every engine (props, text, styles, moves, islands, content,
+controls) already had the text it parsed, so `commitEdit` became `proposeEdit`
+(`src/main/source-commit.ts`): the file, the SHA-256 of those bytes, and the new text.
+The service commits only if the file still holds them. That one rule covers an
+external edit, two parses of the same text landing out of order, and a stale island.
+A proposal also carries Bun's deadline; one that waited past it behind a lease (an
+install) is refused, not committed after Bun reported failure. A static check keeps
+file writes and Undo state out of the engine modules.
+
+Commits are journaled multi-file transactions in the repository coordinator's lane,
+or inside the lease the calling chain holds, so Repository stays the serialization
+authority. Files are replaced atomically. A failure midway puts back what was written;
+a crash midway is rolled back at the next launch, but only for files that still hold
+the transaction's bytes. A file changed since is kept, and its previous content is
+copied beside the report. Undo, redo and revert are transactions too, so an
+interrupted Undo recovers the same way. The history (grouping, coalescing, addressable
+turn revert, drift refusal) moved with them; landed chat turns are recorded into it.
+
+Paths are authorized once, in Swift: repo-relative or under the root, no traversal,
+nothing in `.git`/`.trezi`/`.praxis`/`.dsgn`/`node_modules`, and inside the resolved
+root after symlinks. Before, a props edit or a save wrote through a symlink wherever it
+pointed. The editor's reads come from the owner with a hash, saves are bound to that
+hash, and unsaved drafts are saved to the service and restored after a restart. A
+draft whose file changed meanwhile opens as a conflict and cannot be saved over it.
+File-tree create/rename/delete moved too.
+
+Still in Bun: parsing itself (in-process, behind the seam; a separate helper process is
+a follow-up), file-tree listing, media and component resolution (read-only), sidecar
+stores, and setup/scaffold writers (S13). Recorded in TASKS.
+
+Verification (worker sandbox): `test/source-owner.mjs` passes parity on the real
+React, Svelte, HTML and layers fixtures (legacy and Swift byte-identical after every
+edit, Undo and redo) and re-runs `shadow-controls` on the owner, plus proposals, paths,
+transactions, crash (SIGKILL inside a commit and a grouped Undo, with a later user
+edit), history, files, drafts, lanes, rollback and drain, in about 12 s. The manager's
+quick verification (both typechecks, 134 unit checks) passes; the new Swift files have
+zero diagnostics under `-strict-concurrency=complete`.
+
 ## 2026-09-29 — Repository recovery review repairs (LKM-95 / S07)
 
 Independent review found startup orphan recovery could lose work. For a dirty

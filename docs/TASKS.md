@@ -96,6 +96,23 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
 
+## Swift source transactions, file operations, Undo and parser proposals (LKM-96 / S08+S09)
+
+- [x] Name the domain exactly (proposal commits, editor reads/saves, file-tree operations, Undo/redo/revert, drafts, journal; Bun-kept parsers, listing, media, sidecar stores, setup/scaffold) and tighten its rollback plan (`docs/SWIFT-BACKEND-SOURCE.md`).
+- [x] Parsers only propose `{path, expectedHash, content}` through `proposeEdit` (`src/main/source-commit.ts`); stale, external-edit, out-of-order and deadline-expired proposals write nothing; static check keeps writes and Undo state out of the engines.
+- [x] Canonical path authorization: root, traversal, protected folders, symlinked file/folder containment.
+- [x] Journaled multi-file transactions in the repository lanes (inside held leases); midway failure puts files back; crash rollback at launch never overwrites newer work and keeps pre-images; `status`/`acknowledge`.
+- [x] Grouped Undo/redo/revert in Swift (landed chat turns recorded into it); interrupted Undo rolled back like any transaction.
+- [x] Editor saves bound to owner-issued baseline hashes; unsaved drafts persisted and restored after restart (stale ones open as conflicts).
+- [x] `TREZI_BACKEND_OWNER=legacy` keeps the TS writers; journal, reports and drafts survive the switch; drain refuses queued writes.
+- [x] `test/source-owner.mjs` (unit tier): React/Svelte/HTML/layers fixture parity, `shadow-controls` re-run on the owner, proposals, paths, transactions, crash, history, files, drafts, lanes, rollback, drain.
+- [ ] S08 sub-boundary: file-tree listing (`source:tree`), media (`trezi-media://`), component resolution and open-in-editor stay Bun read-only; move with S12/S15.
+- [ ] S08 sub-boundary: sidecar stores (`.trezi/control-panels.json`, `content-controls.json`, `tokens.json`) stay Bun writers inside the repository lease.
+- [ ] S13: setup/scaffold instrumentation writers (`setup.ts`, `scaffold.ts`) stay Bun inside the lease; move with setup.
+- [ ] S09 follow-up: run the parsers in a separate supervised helper process (today they run in Bun and are bound by the seam, not by process privileges).
+- [ ] Follow-up: a UI to review and acknowledge interrupted source transactions (today they are listed in the Activity log at launch).
+- [ ] Manager: stage the new files (docs-links checks tracked paths), run the unit tier unsandboxed, `bun run test:native`, independent review.
+
 ## Swift repository coordinator: Git, worktrees and recovery (LKM-95 / S07)
 
 - [x] Name the domain exactly (lanes/leases, worktree lifecycle, landings, explicit apply/reconcile/discard, live commits, branch switches, startup recovery, journal, recovery refs; Bun-kept chat state, park records, Undo, setup helpers, reads) and tighten its rollback plan (`docs/SWIFT-BACKEND-REPOSITORY.md`).
@@ -107,7 +124,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] `test/repository-owner.mjs` (unit tier); `service-process` builds the owner.
 - [ ] S07 sub-boundary: remote fetch/pull/checkout (`git-remote.ts`) and publishing (`annotations.ts`) run in Bun inside the Swift lease; move their Git effects with S13.
 - [ ] S07 sub-boundary: the annotation sidecar writer can now move through the repository lane (unblocks the S05 item below).
-- [ ] S07 sub-boundary: content/island/control source writes and scaffolding stay in Bun inside the lease until S08.
+- [x] S07 sub-boundary: content/island/control source writes move to the S08 source service (LKM-96); scaffolding stays in Bun inside the lease (see S13 item under LKM-96).
 - [ ] Follow-up: a UI to review and acknowledge interrupted repository operations (today they are listed in the Activity log at launch).
 - [ ] Manager: stage the new files (docs-links checks tracked paths), run the unit tier unsandboxed (full `service-process`), `bun run test:native`, independent review.
 

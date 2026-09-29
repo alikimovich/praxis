@@ -2,14 +2,18 @@
 
 Trezi is a native macOS app: Swift/AppKit/SwiftUI chat and editing tools on the
 left, with the user's project in system WebKit on the right. Bun owns provider
-sessions, Git/worktrees, source editing, persistence and managed project servers.
+sessions, source parsing, chat orchestration and most remaining persistence.
 A separate Swift XPC service owns profile exclusion, supervises legacy Bun and
 holds the durable operation ledger (S03) and, since LKM-91, writes preferences
 through it (docs/SWIFT-BACKEND-PREFERENCES.md); since LKM-92 it also owns
 workspace identity, order and selection (docs/SWIFT-BACKEND-WORKSPACE.md), and
 since LKM-93 project memory (docs/SWIFT-BACKEND-MEMORY.md). Since LKM-94 it also
 runs managed project servers, installs and static sites
-(docs/SWIFT-BACKEND-RUNTIME.md). Every other domain writer remains in Bun until a
+(docs/SWIFT-BACKEND-RUNTIME.md). Since LKM-95 it performs every Trezi Git effect
+(docs/SWIFT-BACKEND-REPOSITORY.md), and since LKM-96 it commits source edits: Bun's
+parsers only propose hash-bound edits, and the service owns source transactions,
+Undo, file-tree operations and editor drafts (docs/SWIFT-BACKEND-SOURCE.md).
+Every other domain writer remains in Bun until a
 verified transfer; annotation storage is split from
 publication but stays in Bun until the S07 repository lane.
 Electron, the React application renderer and browser/Tailscale mode are retired.

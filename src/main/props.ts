@@ -2,7 +2,7 @@ import { typescriptProps } from './props-typescript'
 import { ipcMain, shell } from '../native/platform'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { readFile, stat, writeFile } from 'fs/promises'
+import { readFile, stat } from 'fs/promises'
 import { existsSync, readFileSync, statSync } from 'fs'
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve } from 'path'
 import type {
@@ -23,25 +23,20 @@ import {
 import { looksBinary, mediaTypeFor } from './media-types'
 import { mediaUrl } from './media'
 import { spliceHtmlText } from './html-source'
-import {
-  recordEdit,
-  undo,
-  redo,
-  canUndo,
-  canRedo,
-  revertGroup,
-  canRevertGroup
-} from './edit-history'
+import { undo, redo, editAvailability, revertGroup, canRevertGroup } from './edit-history'
+import { proposeEdit } from './source-commit'
+import { contentHash, sourceOwner } from './source-owner'
 
 /**
- * Write a source edit and record it for undo/redo (v8 F3b). A no-op (after ===
- * before) reports success without writing. `key` coalesces rapid edits of the same
- * target (e.g. retyping a prop) into one undo step; `group` batches distinct-key
- * edits of one gesture (e.g. the four sides of a linked padding scrub) into one
- * atomic undo. Shared by the React + Svelte adapters so EVERY trezi source edit
- * is reversible.
+ * Hand a source-edit engine's result to the source owner (v8 F3b Undo included).
+ * The engines only compute: `before` is the exact text they parsed and `after` their
+ * proposal; `proposeEdit` is the one committing call (hash-bound under the Swift
+ * owner, see source-commit.ts). `key` coalesces rapid edits of one target into one
+ * Undo step; `group` batches the distinct-key edits of one gesture (the four sides of
+ * a linked padding scrub) into one atomic Undo. Shared by the React + Svelte + HTML
+ * adapters so EVERY trezi source edit is reversible.
  */
-export async function commitEdit(
+export function commitEdit(
   root: string,
   file: string,
   before: string,
@@ -49,14 +44,7 @@ export async function commitEdit(
   key: string,
   group?: string
 ): Promise<PropEditResult> {
-  if (after === before) return { applied: true }
-  try {
-    await writeFile(file, after, 'utf8')
-  } catch {
-    return { applied: false, error: 'Could not write the source file.' }
-  }
-  recordEdit(root, file, before, after, key, group)
-  return { applied: true }
+  return proposeEdit(root, file, before, after, key, group)
 }
 
 /**
@@ -667,7 +655,7 @@ function renderAttr(name: string, kind: PropKind, value: string | number | boole
   return /^[^"\\\n<>{}]*$/.test(s) ? `${name}="${s}"` : `${name}={${JSON.stringify(s)}}`
 }
 
-async function applyPropEdit(root: string, edit: PropEdit): Promise<PropEditResult> {
+export async function applyPropEdit(root: string, edit: PropEdit): Promise<PropEditResult> {
   // Never splice an unvalidated name into source — don't trust the renderer
   // payload (defense in depth; inspection already drops non-identifier keys).
   if (!isValidAttrName(edit.name)) {
@@ -711,7 +699,7 @@ async function applyPropEdit(root: string, edit: PropEdit): Promise<PropEditResu
  * attribute, including expression-valued ones. Reversible via the F3b edit history;
  * an already-absent prop is a successful no-op. (v8 F2)
  */
-async function removeProp(root: string, source: string, name: string): Promise<PropEditResult> {
+export async function removeProp(root: string, source: string, name: string): Promise<PropEditResult> {
   if (!isValidAttrName(name)) return { applied: false, error: 'Invalid prop name.' }
   const loc = resolveSource(root, source)
   if (!loc) return { applied: false, error: 'Could not resolve the source location.' }
@@ -749,7 +737,7 @@ export function textAgentPrompt(source: string, text: string): string {
  * new text is splice-safe are applied directly — mixed/expression content,
  * self-closing elements, or `<{}>`-bearing text fall back to the agent.
  */
-async function applyTextEdit(
+export async function applyTextEdit(
   root: string,
   edit: { source: string; text: string }
 ): Promise<PropEditResult> {
@@ -860,7 +848,7 @@ export function classNameStringNode(v: BabelNode | null | undefined): BabelNode 
  * both carry an empty `code`. Before that, a `.png` opened here was decoded as
  * utf8 and rendered as thousands of lines of mojibake.
  */
-async function readSourceView(root: string, source: string): Promise<SourceView | null> {
+export async function readSourceView(root: string, source: string): Promise<SourceView | null> {
   const loc = resolveSource(root, source)
   if (!loc) return null
   const rel = relative(root, loc.file)
@@ -883,8 +871,19 @@ async function readSourceView(root: string, source: string): Promise<SourceView 
   }
 
   let code: string
+  let hash: string | undefined
+  const owner = sourceOwner()
   try {
-    code = await readFile(loc.file, 'utf8')
+    if (owner) {
+      // The owner authorizes the path (symlinks included) and issues the baseline hash.
+      const read = await owner.read(root, loc.file)
+      if (read.binary || read.content === undefined) return { file: rel, code: '', line: loc.line, binary: true, bytes: read.size }
+      code = read.content
+      hash = read.hash
+    } else {
+      code = await readFile(loc.file, 'utf8')
+      hash = contentHash(code)
+    }
   } catch {
     return null
   }
@@ -897,7 +896,7 @@ async function readSourceView(root: string, source: string): Promise<SourceView 
     }
     return { file: rel, code: '', line: loc.line, binary: true, bytes }
   }
-  const view: SourceView = { file: rel, code, line: loc.line }
+  const view: SourceView = { file: rel, code, line: loc.line, hash }
   if (!loc.file.endsWith('.svelte')) {
     try {
       const found = await findElementAtLine(code, loc.line, loc.column)
@@ -920,23 +919,42 @@ async function readSourceView(root: string, source: string): Promise<SourceView 
 }
 
 /**
- * Save the whole file from the v9 code drawer. The drawer loaded `baseline`; if
- * the on-disk content has drifted since (the user edited it in their own editor,
- * or the agent wrote it), refuse rather than clobber — same contract as undo/redo.
- * Otherwise route through `commitEdit` so the write lands in the undo/redo history
- * and the dev server's HMR refreshes the preview, exactly like a prop/text edit.
+ * Save the whole file from the v9 code drawer. The drawer loaded `baseline` (and,
+ * since S08, the hash the owner issued for it: `baseHash`, which wins — a draft
+ * restored after a restart only knows the hash it was typed against). If the file on
+ * disk no longer matches (the user edited it in their own editor, or the agent wrote
+ * it), refuse rather than clobber — same contract as undo/redo; the draft stays in
+ * the editor. Otherwise the save is a proposal like any other edit, so it lands in
+ * the Undo history and the dev server's HMR refreshes the preview.
  */
 async function writeSourceFile(
   root: string,
   source: string,
   baseline: string,
-  content: string
+  content: string,
+  baseHash?: string
 ): Promise<SourceWriteResult> {
   const loc = resolveSource(root, source)
   if (!loc) return { ok: false, error: 'Could not resolve the source location.' }
   // The drawer shows these as a preview/placeholder rather than text, so a save
   // could only ever be a utf8 round-trip that corrupts them.
   if (mediaTypeFor(loc.file)) return { ok: false, error: 'This file is not editable as text.' }
+  const expected = typeof baseHash === 'string' && /^[0-9a-f]{64}$/.test(baseHash) ? baseHash : contentHash(baseline)
+  const owner = sourceOwner()
+  if (owner) {
+    try {
+      const current = await owner.read(root, loc.file)
+      if (current.binary || current.content === undefined || looksBinary(current.content)) {
+        return { ok: false, error: 'This file is not editable as text.' }
+      }
+      if (current.hash !== expected) return { ok: false, conflict: true }
+      if (current.content === content) return { ok: true, hash: expected }
+      const result = await owner.commit(root, [{ path: loc.file, expectedHash: expected, content }], { key: `${source}:drawer` })
+      return result.ok ? { ok: true, hash: result.hashes[0] } : { ok: false, conflict: true }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Could not write the source file.' }
+    }
+  }
   let current: string
   try {
     current = await readFile(loc.file, 'utf8')
@@ -944,9 +962,9 @@ async function writeSourceFile(
     return { ok: false, error: 'Could not read the source file.' }
   }
   if (looksBinary(current)) return { ok: false, error: 'This file is not editable as text.' }
-  if (current !== baseline) return { ok: false, conflict: true }
+  if (contentHash(current) !== expected) return { ok: false, conflict: true }
   const res = await commitEdit(root, loc.file, current, content, `${source}:drawer`)
-  return res.applied ? { ok: true } : { ok: false, error: res.error }
+  return res.applied ? { ok: true, hash: contentHash(content) } : { ok: false, error: res.error }
 }
 
 const execFileP = promisify(execFile)
@@ -1101,14 +1119,21 @@ export function registerPropsIpc(): void {
   // v9 phase 2: save the whole file from the editable code drawer.
   ipcMain.handle(
     'source:write',
-    (_e, root: string, source: string, baseline: string, content: string) =>
-      writeSourceFile(root, source, baseline, content)
+    (_e, root: string, source: string, baseline: string, content: string, baseHash?: string) =>
+      writeSourceFile(root, source, baseline, content, baseHash)
   )
+  // S08: unsaved editor drafts survive a restart under the Swift owner (the legacy
+  // owner keeps them in memory only, as before).
+  ipcMain.handle('source:drafts', (_e, root: string) => sourceOwner()?.drafts(root) ?? [])
+  ipcMain.handle('source:save-draft', (_e, root: string, file: string, base: string, text: string) =>
+    sourceOwner()?.saveDraft(root, file, base, text)
+  )
+  ipcMain.handle('source:clear-draft', (_e, root: string, file: string) => sourceOwner()?.clearDraft(root, file))
   // v8 F3b: undo/redo over ALL trezi source edits (props, text, token swaps),
   // scoped to the active project root (the rail keeps several projects open).
   ipcMain.handle('edit:undo', (_e, root: string) => undo(root))
   ipcMain.handle('edit:redo', (_e, root: string) => redo(root))
-  ipcMain.handle('edit:can', (_e, root: string) => ({ undo: canUndo(root), redo: canRedo(root) }))
+  ipcMain.handle('edit:can', (_e, root: string) => editAvailability(root))
   // Per-turn "Revert changes" (chat): addressable revert of one recorded turn group
   // (chat:<wtId>:<turnNo>) — restores its pre-turn files unless any drifted since.
   ipcMain.handle('edit:revert', (_e, root: string, group: string) => revertGroup(root, group))

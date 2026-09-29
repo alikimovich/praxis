@@ -1,0 +1,415 @@
+// S08/S09 source transaction service: the real Swift SourceOwner (compiled into a
+// fixture process with the RepositoryOwner whose lanes serialize it), driven through
+// Bun's real clients and the unchanged TS engines.
+// - parity: real React/Svelte/HTML/layers fixtures edited, undone and redone by the
+//   legacy owner and by the Swift owner end byte-identical; a legacy suite re-runs on it;
+// - proposals: stale hash, external edit, out-of-order parses, a deadline-expired
+//   (cancelled) proposal and invalid schemas commit nothing;
+// - paths: traversal, protected folders and symlink escapes are refused;
+// - transactions: all-or-nothing validation, a write failing midway puts files back;
+// - crash: SIGKILL midway through a commit and an Undo is rolled back at the next
+//   launch without overwriting a file changed since (its pre-image is kept);
+// - history, files, drafts, lanes, rollback and drain; parsers own no writer.
+import assert from 'node:assert/strict'
+import { execFileSync, spawn } from 'node:child_process'
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { compileSourceFixture, startSourceFixture } from './helpers/source-fixture.mjs'
+import { setRepositoryOwner } from '../src/main/repository-owner.ts'
+import { contentHash, setSourceOwner } from '../src/main/source-owner.ts'
+import { proposeEdit } from '../src/main/source-commit.ts'
+import { enqueueRepoWrite } from '../src/main/repo-write-queue.ts'
+import { canRevertGroup, recordEdit, redo, revertGroup, undo } from '../src/main/edit-history.ts'
+import { applyPropEdit, applyTextEdit, readSourceView } from '../src/main/props.ts'
+import { applyStyleEdit } from '../src/main/styles.ts'
+import { applyMoveNode } from '../src/main/move-node.ts'
+import { createProjectFile, deleteProjectFile, renameProjectFile } from '../src/main/file-ops.ts'
+
+const root = fileURLToPath(new URL('..', import.meta.url))
+const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'trezi-source-owner-')))
+const fixtures = new Set()
+let count = 0
+const read = path => readFileSync(path, 'utf8')
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+const hash = contentHash
+const dir = (files = {}) => {
+  const path = join(scratch, `project-${++count}`)
+  for (const [name, content] of Object.entries(files)) { mkdirSync(join(path, name, '..'), { recursive: true }); writeFileSync(join(path, name), content) }
+  mkdirSync(path, { recursive: true })
+  return path
+}
+const profile = name => { const path = join(scratch, `profile-${name}`); mkdirSync(path, { recursive: true }); return path }
+const snapshot = (base, at = base) => Object.fromEntries(readdirSync(at, { withFileTypes: true }).flatMap(entry => {
+  const path = join(at, entry.name)
+  if (entry.name === '.git' || entry.name === 'node_modules') return []
+  return entry.isDirectory() ? Object.entries(snapshot(base, path)) : [[relative(base, path), readFileSync(path).toString('base64')]]
+}))
+
+let binary
+async function fixture(home, env = {}) { const started = await startSourceFixture(binary, home, env); fixtures.add(started); return started }
+async function stop(started) { await started.stop(); fixtures.delete(started) }
+function install(started) { const owners = started.owners(); setRepositoryOwner(owners.repository); setSourceOwner(owners.source); return owners }
+function legacy() { setRepositoryOwner(null); setSourceOwner(null) }
+async function section(name, run) { await run(); console.log(`SOURCE-OWNER ${name} PASS`) }
+
+const commit = (started, rootPath, edits, extra = {}) => started.frame('commit', { root: rootPath, edits, ...extra })
+const edit = (path, before, content) => ({ path, expectedHash: hash(before), content })
+
+try {
+  binary = compileSourceFixture()
+
+  await section('parity', async () => {
+    const line = (base, file, needle) => read(join(base, file)).split('\n').findIndex(text => text.includes(needle)) + 1
+    const cases = {
+      'propedit-app': base => [
+        () => applyPropEdit(base, { source: `src/Badge.tsx:${line(base, 'src/Badge.tsx', 'label="Ready"')}`, name: 'label', kind: 'string', value: 'Done' }),
+        () => applyTextEdit(base, { source: `src/Badge.tsx:${line(base, 'src/Badge.tsx', '>Welcome<')}`, text: 'Hello there' }),
+        () => applyStyleEdit(base, { source: `src/Badge.tsx:${line(base, 'src/Badge.tsx', "color: '#111827'")}`, prop: 'color', value: '#ff0000', classes: ['sw'] }),
+        () => undo(base), () => redo(base), () => undo(base), () => undo(base)
+      ],
+      'svelte-app': base => [
+        () => applyPropEdit(base, { source: `src/Card.svelte:${line(base, 'src/Card.svelte', 'label="Go"')}`, name: 'label', kind: 'string', value: 'Stop' }),
+        () => applyTextEdit(base, { source: `src/Card.svelte:${line(base, 'src/Card.svelte', '>Original<')}`, text: 'Changed' }),
+        () => undo(base), () => redo(base)
+      ],
+      'editable-app': base => [() => applyTextEdit(base, { source: 'index.html:4:3', text: 'New heading' }), () => undo(base), () => redo(base)],
+      'layers-app': base => [
+        () => applyMoveNode(base, { dragged: { source: 'src/Layers.tsx:9' }, target: { source: 'src/Layers.tsx:7' }, position: 'before', sessionId: 'parity' }),
+        () => undo(base), () => redo(base)
+      ]
+    }
+    const owned = await fixture(profile('parity'))
+    for (const [name, ops] of Object.entries(cases)) {
+      const runs = {}
+      for (const mode of ['legacy', 'swift']) {
+        const base = join(scratch, `parity-${name}-${mode}`)
+        cpSync(join(root, 'test/fixtures', name), base, { recursive: true, filter: path => !path.includes('node_modules') })
+        if (mode === 'swift') { execFileSync('git', ['init', '-q'], { cwd: base }); install(owned) } else legacy()
+        const trace = []
+        for (const op of ops(base)) trace.push({ result: JSON.parse(JSON.stringify(await op()).replaceAll(base, '<root>')), files: snapshot(base) })
+        legacy()
+        runs[mode] = trace
+      }
+      for (const [index, step] of runs.legacy.entries()) {
+        assert.ok(step.result.applied !== false && step.result.ok !== false, `${name} step ${index} applies (legacy): ${JSON.stringify(step.result)}`)
+        assert.deepEqual(runs.swift[index].result, step.result, `${name} step ${index} result`)
+        assert.deepEqual(runs.swift[index].files, step.files, `${name} step ${index} files`)
+      }
+      assert.notDeepEqual(runs.swift[0].files, snapshot(join(root, 'test/fixtures', name)), `${name}: the first edit changed source`)
+    }
+    // The legacy island/style suite's own assertions, through the Swift owner.
+    const suite = await new Promise(resolve => {
+      const child = spawn('bun', ['--preload', './test/helpers/source-owner-preload.mjs', 'test/shadow-controls.mjs'], {
+        cwd: root, env: { ...process.env, SOURCE_FIXTURE: binary, SOURCE_PROFILE: profile('parity-shadow') }, stdio: ['ignore', 'pipe', 'pipe']
+      })
+      let output = ''
+      child.stdout.on('data', data => { output += data }); child.stderr.on('data', data => { output += data })
+      const timer = setTimeout(() => child.kill('SIGKILL'), 100_000)
+      child.on('exit', code => { clearTimeout(timer); resolve({ code, output }) })
+    })
+    assert.equal(suite.code, 0, `shadow-controls against the Swift owner:\n${suite.output.slice(-3000)}`)
+    assert.ok(Number(/SOURCE-PARITY frames=(\d+)/.exec(suite.output)?.[1] ?? 0) > 0, 'shadow-controls sent no source frames')
+    await stop(owned)
+  })
+
+  await section('proposals', async () => {
+    const owned = await fixture(profile('proposals'))
+    install(owned)
+    const base = dir({ 'a.ts': 'export const a = 1\n' })
+    const file = join(base, 'a.ts')
+    // Two parses of the same text: the first commits, the second (out of order) is stale.
+    const first = proposeEdit(base, file, 'export const a = 1\n', 'export const a = 2\n', 'a')
+    const second = proposeEdit(base, file, 'export const a = 1\n', 'export const a = 3\n', 'a')
+    assert.deepEqual(await first, { applied: true })
+    assert.equal((await second).applied, false)
+    assert.equal(read(file), 'export const a = 2\n')
+    // An external edit after the parse: nothing is written over it.
+    writeFileSync(file, 'external\n')
+    assert.match((await proposeEdit(base, file, 'export const a = 2\n', 'x\n', 'a')).error, /changed since it was read/)
+    assert.equal(read(file), 'external\n')
+    // A cancelled (deadline-expired) proposal waiting for the lane never starts later.
+    const lease = await owned.frame('acquire', { root: base }, {}, 'repository')
+    const expired = owned.frame('commit', { root: base, edits: [edit('a.ts', 'external\n', 'late\n')] }, { timeoutMilliseconds: 150 })
+    await sleep(400)
+    await owned.frame('release', { lease: lease.payload.lease }, {}, 'repository')
+    assert.equal((await expired).payload.code, 'deadlineExceeded')
+    assert.equal(read(file), 'external\n')
+    // Invalid schemas are refused before anything runs.
+    const invalid = [
+      { root: base, edits: [{ path: 'a.ts', expectedHash: hash('external\n') }] },
+      { root: base, edits: [{ ...edit('a.ts', 'external\n', 'x'), extra: 1 }] },
+      { root: base, edits: [{ path: 'a.ts', expectedHash: 'abc', content: 'x' }] },
+      { root: base, edits: [edit('a.ts', 'external\n', 'x'), edit(join(base, 'a.ts'), 'external\n', 'y')] },
+      { root: base, edits: [] },
+      { root: base, edits: [edit('a.ts', 'external\n', '\ud800')] },
+      { root: base, edits: [edit('a.ts', 'external\n', 'nul\u0000')] },
+      { root: 'relative', edits: [edit('a.ts', 'external\n', 'x')] },
+      { root: base, edits: [edit('a.ts', 'external\n', 'x')], surprise: true }
+    ]
+    for (const body of invalid) assert.equal((await owned.frame('commit', body)).payload.code, 'invalidRequest', JSON.stringify(body))
+    assert.equal((await owned.frame('commit', { root: base, edits: [edit('a.ts', 'external\n', 'x')] }, { expectedRevision: { epoch: 'e', counter: '1' } })).payload.code, 'invalidRequest')
+    assert.equal((await owned.frame('commit', { root: base, edits: [edit('a.ts', 'external\n', 'x')] }, { scope: { project: 'p' } })).payload.code, 'unauthorized')
+    assert.equal((await owned.frame('deleteFile', { root: base, path: 'a.ts' })).payload.code, 'invalidRequest', 'delete needs its intent')
+    assert.equal(read(file), 'external\n')
+    legacy(); await stop(owned)
+  })
+
+  await section('paths', async () => {
+    const owned = await fixture(profile('paths'))
+    const base = dir({ 'src/a.ts': 'a\n', 'node_modules/x/index.js': 'dep\n' })
+    const outside = dir({ 'secret.txt': 'secret\n' })
+    symlinkSync(join(outside, 'secret.txt'), join(base, 'src/escape.ts'))
+    symlinkSync(outside, join(base, 'linked'))
+    symlinkSync(join(base, 'src/a.ts'), join(base, 'alias.ts'))
+    for (const path of ['../secret.txt', join(outside, 'secret.txt'), '.git/config', 'node_modules/x/index.js', 'src/escape.ts', 'linked/secret.txt', '.trezi/x.json']) {
+      assert.equal((await commit(owned, base, [edit(path, 'secret\n', 'owned\n')])).payload.code, 'unauthorized', path)
+      assert.equal((await owned.frame('read', { root: base, path })).payload.code, 'unauthorized', path)
+    }
+    assert.equal(read(join(outside, 'secret.txt')), 'secret\n')
+    for (const [op, body] of [['createFile', { path: 'linked/new.ts' }], ['renameFile', { path: 'src/a.ts', to: 'linked/a.ts' }], ['deleteFile', { path: 'src/escape.ts', intent: 'trash' }]]) {
+      assert.deepEqual((await owned.frame(op, { root: base, ...body })).payload, { ok: false, error: 'That path is not allowed.' }, op)
+    }
+    assert.deepEqual(readdirSync(outside), ['secret.txt'])
+    // A link to another project file writes that file; the link stays a link.
+    assert.equal((await commit(owned, base, [edit('alias.ts', 'a\n', 'b\n')])).payload.ok, true)
+    assert.equal(read(join(base, 'src/a.ts')), 'b\n')
+    assert.ok(execFileSync('stat', ['-f', '%HT', join(base, 'alias.ts')], { encoding: 'utf8' }).startsWith('Symbolic'))
+    const view = (await owned.frame('read', { root: base, path: join(base, 'src/a.ts') })).payload
+    assert.deepEqual(view, { path: 'src/a.ts', size: 2, hash: hash('b\n'), binary: false, content: 'b\n' })
+    await stop(owned)
+  })
+
+  await section('transactions', async () => {
+    const owned = await fixture(profile('transactions'))
+    const base = dir({ 'a.ts': 'a0\n', 'b.ts': 'b0\n', 'locked/c.ts': 'c0\n' })
+    // One stale file refuses the whole batch.
+    const stale = await commit(owned, base, [edit('a.ts', 'a0\n', 'a1\n'), edit('b.ts', 'bX\n', 'b1\n')])
+    assert.deepEqual(stale.payload, { ok: false, conflict: true, file: 'b.ts' })
+    assert.deepEqual([read(join(base, 'a.ts')), read(join(base, 'b.ts'))], ['a0\n', 'b0\n'])
+    // A write failing midway puts back the files already written.
+    chmodSync(join(base, 'locked'), 0o555)
+    const failed = await commit(owned, base, [edit('a.ts', 'a0\n', 'a1\n'), edit('b.ts', 'b0\n', 'b1\n'), edit('locked/c.ts', 'c0\n', 'c1\n')])
+    chmodSync(join(base, 'locked'), 0o755)
+    assert.equal(failed.payload.code, 'ioFailure')
+    assert.deepEqual([read(join(base, 'a.ts')), read(join(base, 'b.ts')), read(join(base, 'locked/c.ts'))], ['a0\n', 'b0\n', 'c0\n'])
+    assert.deepEqual((await owned.frame('history', { root: base })).payload, { undo: false, redo: false })
+    const applied = await commit(owned, base, [edit('a.ts', 'a0\n', 'a1\n'), edit('b.ts', 'b0\n', 'b1\n')], { group: 'g' })
+    assert.deepEqual(applied.payload, { ok: true, files: ['a.ts', 'b.ts'], hashes: [hash('a1\n'), hash('b1\n')] })
+    assert.deepEqual((await owned.frame('status', {})).payload, { interrupted: [] })
+    assert.deepEqual(readdirSync(join(profile('transactions'), 'service/source/journal')), [])
+    await stop(owned)
+  })
+
+  await section('crash', async () => {
+    const home = profile('crash')
+    const base = dir({ 'a.ts': 'a0\n', 'b.ts': 'b0\n', 'c.ts': 'c0\n' })
+    // SIGKILL after the first file of a commit: the next launch puts it back.
+    let owned = await fixture(home, { SOURCE_FAULT: 'commit.write.1' })
+    commit(owned, base, [edit('a.ts', 'a0\n', 'a1\n'), edit('b.ts', 'b0\n', 'b1\n')])
+    assert.equal((await owned.exited).signal, 'SIGKILL'); fixtures.delete(owned)
+    assert.equal(read(join(base, 'a.ts')), 'a1\n')
+    owned = await fixture(home)
+    assert.deepEqual([read(join(base, 'a.ts')), read(join(base, 'b.ts'))], ['a0\n', 'b0\n'])
+    let [report] = (await owned.frame('status', {})).payload.interrupted
+    assert.deepEqual([report.kind, report.restored, report.unchanged, report.kept], ['commit', [join(base, 'a.ts')], [join(base, 'b.ts')], []])
+    assert.equal((await owned.frame('acknowledge', { operationID: report.operationID })).payload.code, 'invalidRequest')
+    assert.equal((await owned.frame('acknowledge', { operationID: report.operationID, intent: 'acknowledge' })).kind, 'succeeded')
+    await stop(owned)
+
+    // SIGKILL midway through a grouped Undo, then the user edits one of its files before
+    // the relaunch: that file is kept (pre-image preserved), the other is put back.
+    owned = await fixture(home, { SOURCE_FAULT: 'undo.write.1' })
+    assert.equal((await commit(owned, base, [edit('b.ts', 'b0\n', 'b1\n'), edit('c.ts', 'c0\n', 'c1\n')], { group: 'turn' })).payload.ok, true)
+    owned.frame('undo', { root: base })
+    assert.equal((await owned.exited).signal, 'SIGKILL'); fixtures.delete(owned)
+    // Undo walks the group newest first: it wrote c.ts, then died before b.ts.
+    assert.equal(read(join(base, 'c.ts')), 'c0\n', 'the Undo wrote its first file')
+    writeFileSync(join(base, 'b.ts'), 'user\n')
+    const second = await fixture(home)
+    ;[report] = (await second.frame('status', {})).payload.interrupted
+    assert.equal(report.kind, 'undo')
+    // c.ts held the Undo's bytes and is put back; b.ts was never written by it and the
+    // user changed it since: kept as the user left it, the pre-image beside the report.
+    assert.deepEqual([report.restored, report.kept], [[join(base, 'c.ts')], [join(base, 'b.ts')]])
+    assert.deepEqual([read(join(base, 'b.ts')), read(join(base, 'c.ts'))], ['user\n', 'c1\n'])
+    assert.equal(read(report.copies[0]), 'b1\n')
+    await stop(second)
+
+    // A crash after an external edit to a file it already wrote: kept, pre-image copied.
+    owned = await fixture(home, { SOURCE_FAULT: 'commit.write.1' })
+    commit(owned, base, [edit('a.ts', 'a0\n', 'a2\n'), edit('b.ts', 'user\n', 'b2\n')])
+    await owned.exited; fixtures.delete(owned)
+    writeFileSync(join(base, 'a.ts'), 'newer\n')
+    const third = await fixture(home)
+    const reports = (await third.frame('status', {})).payload.interrupted
+    assert.equal(reports.length, 2, 'the unacknowledged Undo report is still listed')
+    report = reports.find(r => r.kind === 'commit')
+    assert.deepEqual([report.kept, report.unchanged], [[join(base, 'a.ts')], [join(base, 'b.ts')]])
+    assert.equal(read(join(base, 'a.ts')), 'newer\n', 'newer work is never overwritten')
+    assert.equal(read(report.copies[0]), 'a0\n', 'the pre-image is preserved beside the report')
+    // A damaged journal entry is refused untouched; file operations still work.
+    await stop(third)
+    const damaged = join(home, 'service/source/journal', `${crypto.randomUUID()}.json`)
+    writeFileSync(damaged, '{not json')
+    const fourth = await fixture(home)
+    assert.match((await fourth.frame('status', {})).payload.journal, /unreadable/)
+    assert.equal((await commit(fourth, base, [edit('b.ts', 'user\n', 'b3\n')])).payload.code, 'recoveryRequired')
+    assert.equal((await fourth.frame('createFile', { root: base, path: 'still.ts' })).payload.ok, true)
+    assert.equal(read(damaged), '{not json')
+    await stop(fourth)
+  })
+
+  await section('history', async () => {
+    const owned = await fixture(profile('history'))
+    install(owned)
+    const base = dir({ 'a.ts': 'A1', 'b.ts': 'B1', 'c.ts': 'C1' }), other = dir({ 'x.ts': 'X1' })
+    const at = name => join(base, name)
+    // Coalesced burst: one Undo restores the original.
+    for (const [from, to] of [['A1', 'A2'], ['A2', 'A3']]) assert.equal((await proposeEdit(base, at('a.ts'), from, to, 'k')).applied, true)
+    assert.equal((await proposeEdit(other, join(other, 'x.ts'), 'X1', 'X2', 'k')).applied, true)
+    assert.deepEqual(await undo(base), { ok: true, file: at('a.ts') })
+    assert.equal(read(at('a.ts')), 'A1')
+    assert.equal(read(join(other, 'x.ts')), 'X2', 'history is per project')
+    assert.deepEqual(await redo(base), { ok: true, file: at('a.ts') })
+    // A landed chat turn recorded after the fact is revertable as a group, addressably.
+    writeFileSync(at('b.ts'), 'B2'); writeFileSync(at('c.ts'), 'C2')
+    recordEdit(base, at('b.ts'), 'B1', 'B2', undefined, 'chat:wt:1')
+    recordEdit(base, at('c.ts'), 'C1', 'C2', undefined, 'chat:wt:1')
+    assert.equal((await proposeEdit(base, at('a.ts'), 'A3', 'A4', 'later')).applied, true)
+    assert.equal(await canRevertGroup(base, 'chat:wt:1'), true)
+    assert.deepEqual(await revertGroup(base, 'chat:wt:1'), { ok: true, file: at('c.ts') })
+    assert.deepEqual([read(at('b.ts')), read(at('c.ts')), read(at('a.ts'))], ['B1', 'C1', 'A4'])
+    // Drift refuses the whole group without writing.
+    writeFileSync(at('b.ts'), 'B5'); writeFileSync(at('c.ts'), 'C5')
+    recordEdit(base, at('b.ts'), 'B1', 'B5', undefined, 'turn2'); recordEdit(base, at('c.ts'), 'C1', 'C5', undefined, 'turn2')
+    writeFileSync(at('c.ts'), 'USER')
+    assert.deepEqual(await undo(base), { ok: false, conflict: true, file: at('c.ts') })
+    assert.equal(read(at('b.ts')), 'B5')
+    legacy(); await stop(owned)
+  })
+
+  await section('files', async () => {
+    const owned = await fixture(profile('files'))
+    install(owned)
+    const base = dir({ 'a.ts': 'a', 'adir/x.ts': 'x' })
+    assert.deepEqual(await createProjectFile(base, 'src/new/Thing.tsx'), { ok: true, path: 'src/new/Thing.tsx' })
+    assert.equal(read(join(base, 'src/new/Thing.tsx')), '')
+    assert.deepEqual(await createProjectFile(base, 'a.ts'), { ok: false, error: 'Something already exists at that path.' })
+    assert.deepEqual(await createProjectFile(base, '.git/hooks/pre-commit'), { ok: false, error: 'That path is not allowed.' })
+    assert.deepEqual(await renameProjectFile(base, 'a.ts', 'A.ts'), { ok: true, path: 'A.ts' })
+    assert.deepEqual(await renameProjectFile(base, 'A.ts', 'moved/deep/b.ts'), { ok: true, path: 'moved/deep/b.ts' })
+    assert.deepEqual(await renameProjectFile(base, 'adir', 'bdir'), { ok: false, error: 'Only files can be renamed.' })
+    assert.deepEqual(await deleteProjectFile(base, 'adir'), { ok: false, error: 'Only files can be deleted.' })
+    assert.deepEqual(await deleteProjectFile(base, 'moved/deep/b.ts'), { ok: true, path: 'moved/deep/b.ts' })
+    assert.equal(existsSync(join(base, 'moved/deep/b.ts')), false)
+    assert.deepEqual(await deleteProjectFile(base, 'gone.ts'), { ok: false, error: 'That file no longer exists.' })
+    legacy(); await stop(owned)
+  })
+
+  await section('drafts', async () => {
+    const home = profile('drafts')
+    const base = dir({ 'a.ts': 'saved\n' })
+    let owned = await fixture(home)
+    install(owned)
+    const view = await readSourceView(base, 'a.ts:1')
+    assert.equal(view.hash, hash('saved\n'))
+    assert.equal((await owned.frame('saveDraft', { root: base, path: 'a.ts', base: view.hash, text: 'draft one\n' })).kind, 'succeeded')
+    assert.equal((await owned.frame('saveDraft', { root: base, path: '../x', base: view.hash, text: 'x' })).payload.code, 'invalidRequest')
+    legacy(); await stop(owned)
+    // After a restart the draft comes back; with the file changed meanwhile it is stale.
+    writeFileSync(join(base, 'a.ts'), 'external\n')
+    owned = await fixture(home)
+    const [draft] = (await owned.frame('drafts', { root: base })).payload
+    assert.deepEqual(draft, { path: 'a.ts', base: hash('saved\n'), text: 'draft one\n', current: hash('external\n') })
+    // Saving the restored draft against its own base is refused: newer work survives.
+    assert.deepEqual((await commit(owned, base, [{ path: 'a.ts', expectedHash: draft.base, content: draft.text }])).payload,
+      { ok: false, conflict: true, file: 'a.ts' })
+    assert.equal(read(join(base, 'a.ts')), 'external\n')
+    assert.equal((await owned.frame('clearDraft', { root: base, path: 'a.ts' })).kind, 'succeeded')
+    assert.deepEqual((await owned.frame('drafts', { root: base })).payload, [])
+    await stop(owned)
+    // A damaged drafts file is refused and left as found.
+    const file = join(home, 'service/source/drafts', `${hash(base)}.json`)
+    writeFileSync(file, '{broken')
+    owned = await fixture(home)
+    assert.equal((await owned.frame('drafts', { root: base })).payload.code, 'recoveryRequired')
+    assert.equal((await owned.frame('saveDraft', { root: base, path: 'a.ts', base: hash('x'), text: 'y' })).payload.code, 'recoveryRequired')
+    assert.equal(read(file), '{broken')
+    await stop(owned)
+  })
+
+  await section('lanes', async () => {
+    const owned = await fixture(profile('lanes'))
+    install(owned)
+    const base = dir({ 'a.ts': 'one' })
+    execFileSync('git', ['init', '-q'], { cwd: base })
+    const log = []
+    // Another chain's lease holds the repository: the proposal waits for it.
+    const held = enqueueRepoWrite(base, async () => { await sleep(300); log.push('lease end') })
+    await sleep(30)
+    const waiting = proposeEdit(base, join(base, 'a.ts'), 'one', 'two', 'k').then(r => { log.push('commit'); return r })
+    await Promise.all([held, waiting])
+    assert.deepEqual(log, ['lease end', 'commit'])
+    // Inside the chain's own lease it runs in that lease (no deadlock).
+    const inside = await Promise.race([
+      enqueueRepoWrite(base, () => proposeEdit(base, join(base, 'a.ts'), 'two', 'three', 'k')),
+      sleep(10_000).then(() => 'deadlock')
+    ])
+    assert.deepEqual(inside, { applied: true })
+    legacy(); await stop(owned)
+  })
+
+  await section('rollback', async () => {
+    const home = profile('rollback')
+    const base = dir({ 'a.ts': 'one' })
+    let owned = await fixture(home)
+    install(owned)
+    assert.equal((await proposeEdit(base, join(base, 'a.ts'), 'one', 'two', 'k')).applied, true)
+    await owned.frame('saveDraft', { root: base, path: 'a.ts', base: hash('two'), text: 'draft' })
+    legacy(); await stop(owned)
+    const kept = snapshot(join(home, 'service/source'))
+    // The legacy owner writes where the Swift owner left off, and never touches its state.
+    assert.equal((await proposeEdit(base, join(base, 'a.ts'), 'two', 'three', 'k')).applied, true)
+    assert.deepEqual(await undo(base), { ok: true, file: join(base, 'a.ts') })
+    assert.equal(read(join(base, 'a.ts')), 'two')
+    assert.deepEqual(snapshot(join(home, 'service/source')), kept)
+    // Back to Swift: the draft is still there, nothing was interrupted.
+    owned = await fixture(home)
+    assert.equal((await owned.frame('drafts', { root: base })).payload[0].text, 'draft')
+    assert.deepEqual((await owned.frame('status', {})).payload, { interrupted: [] })
+    await stop(owned)
+  })
+
+  await section('drain', async () => {
+    const owned = await fixture(profile('drain'))
+    const base = dir({ 'a.ts': 'one' })
+    const lease = await owned.frame('acquire', { root: base }, {}, 'repository')
+    const queued = commit(owned, base, [edit('a.ts', 'one', 'two')])
+    await sleep(100)
+    assert.equal((await owned.cmd({ cmd: 'close' })).closed, true)
+    assert.equal((await queued).payload.code, 'unavailable')
+    assert.equal((await commit(owned, base, [edit('a.ts', 'one', 'two')])).payload.code, 'unavailable')
+    assert.equal(read(join(base, 'a.ts')), 'one')
+    assert.ok(lease.kind === 'succeeded')
+    await stop(owned)
+  })
+
+  await section('helpers', async () => {
+    // Parsers and edit engines only propose: none of them may write, rename or delete a file.
+    const engines = ['props', 'props-svelte', 'props-typescript', 'styles', 'styles-svelte', 'move-node', 'move-node-svelte', 'move-node-html',
+      'move-node-splice', 'html-source', 'tw-styles', 'tw-classes', 'inline-style', 'style-tokens', 'ast-walk', 'svelte-instance', 'chat-island-source']
+    for (const name of engines) {
+      const code = read(join(root, 'src/main', `${name}.ts`))
+      assert.doesNotMatch(code, /\b(writeFile|writeFileSync|appendFile|rename|renameSync|unlink|rm|rmSync|copyFile|truncate|open)\b\s*[,(}]/, `${name}.ts must not write files`)
+      assert.doesNotMatch(code, /recordEdit/, `${name}.ts must not own Undo state`)
+    }
+  })
+
+  console.log('SOURCE-OWNER OK')
+} finally {
+  legacy()
+  for (const started of fixtures) { try { started.child.kill('SIGKILL') } catch {} }
+  rmSync(scratch, { recursive: true, force: true })
+}

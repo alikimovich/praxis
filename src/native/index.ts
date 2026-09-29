@@ -46,6 +46,8 @@ import { type ProjectRuntime, serviceRuntime } from './runtime-service'
 import { setDependencyInstaller } from '../main/project-dependencies'
 import { type RepositoryOwner, setRepositoryOwner } from '../main/repository-owner'
 import { serviceRepository } from './repository-service'
+import { type SourceOwner, setSourceOwner } from '../main/source-owner'
+import { serviceSource } from './source-service'
 import { installNativeChat } from './chat-runtime'
 import { NativeShellController } from './shell-controller'
 import { NativeSupportSheets } from './support-sheets'
@@ -150,6 +152,11 @@ async function main() {
   // through the service's per-repository lane, journal and recovery refs.
   let repository: RepositoryOwner | null = null
   if (process.env.TREZI_SERVICE_SUPERVISED === '1') { repository = serviceRepository(host); setRepositoryOwner(repository) }
+  // Source transactions (S08/S09): parsers propose, the service commits hash-bound
+  // transactions in the repository's lane (inside the leases this chain holds) and
+  // owns Undo, file operations and saved drafts.
+  let source: SourceOwner | null = null
+  if (repository) { const lanes = repository; source = serviceSource(host, { leases: () => lanes.heldLeases() }); setSourceOwner(source) }
   const refreshPreferences = () => {
     const values = preferences.snapshot()
     let preferred: unknown
@@ -284,6 +291,13 @@ async function main() {
     if (journal) activityController.append(`Repository journal: ${journal}`, 'error')
     for (const entry of interrupted) activityController.append(
       `An earlier ${entry.kind} in ${entry.root} was interrupted; its work is kept${entry.refs.length ? ` at ${entry.refs.join(', ')}` : ''}.`, 'error')
+  }, () => {})
+  // A transaction a crash cut short was rolled back at launch where its own bytes were
+  // still there; a file changed since was kept, with the pre-image beside the report.
+  if (source) void source.status().then(({ interrupted, journal }) => {
+    if (journal) activityController.append(`Source journal: ${journal}`, 'error')
+    for (const entry of interrupted) activityController.append(
+      `An earlier source ${entry.kind} in ${entry.root} was interrupted and rolled back${entry.kept.length ? `; ${entry.kept.length} file(s) changed since were kept, with their previous content under ${entry.copies[0]?.replace(/\/files\/[^/]+$/, '')}` : ''}.`, 'error')
   }, () => {})
   const reportPreferences = (error: unknown) => activityController.append(`Could not save a preference: ${error instanceof Error ? error.message : String(error)}`, 'error')
   host.on('native-layout-width', ({ width }) => {

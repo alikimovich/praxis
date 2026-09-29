@@ -150,6 +150,18 @@ final class RepositoryOwner: @unchecked Sendable {
         }
     }
 
+    /// S08: runs `body` in `root`'s lane, or inside a lease the caller holds on it, so
+    /// source transactions are ordered with every Git effect on that repository.
+    /// Returns false (without running it) once the coordinator is closed.
+    func serialize(root: String, leases: [String], _ body: @escaping @Sendable () -> Void) -> Bool {
+        lock.lock(); let refused = closed; lock.unlock()
+        if refused { return false }
+        let key = effects.lane(root)
+        if let lease = held(leases, key: key) { lease.queue.async(execute: body) }
+        else { lanes.enter(key) { self.work.async { body(); self.lanes.leave(key) } } }
+        return true
+    }
+
     private func held(_ ids: [String], key: String) -> Lease? {
         lock.lock(); defer { lock.unlock() }
         return ids.lazy.compactMap { self.leases[$0] }.first { $0.key == key }
@@ -368,6 +380,7 @@ struct Body: Sendable {
     }
 
     func has(_ key: String) -> Bool { fields[key] != nil }
+    func value(_ key: String) -> JSValue? { fields[key] }
 
     /// Well-formed text (no lone surrogate), no NUL, at most 64 Ki UTF-16 units.
     static func text(_ value: JSValue?) throws -> String {

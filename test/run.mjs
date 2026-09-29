@@ -21,6 +21,7 @@ const UNIT = [
   "memory-owner",
   "runtime-owner",
   "repository-owner",
+  "source-owner",
   "native-visible-capture",
   "native-smoke-runner",
   "rename-compat",
