@@ -3,14 +3,15 @@ import { NativeSheetController } from '../src/native/sheets-runtime.ts'
 import { NativeSettingsController } from '../src/native/settings-controller.ts'
 const values = new Map(), sent = [], calls = []
 let connections = [], catalogWait
-let failNext = null, gate = null
+let failNext = null, gate = null, applyBlocked = false
 const preferences = {
   get: key => values.get(key) ?? null,
   snapshot: () => Object.fromEntries(values),
   async apply(batch) {
-    if (gate) await gate
+    const entries = typeof batch === 'function' ? batch(Object.fromEntries(values)) : batch
+    if (gate) { applyBlocked = true; await gate; applyBlocked = false }
     if (failNext) { const error = failNext; failNext = null; throw error }
-    for (const [key, value] of typeof batch === 'function' ? batch(Object.fromEntries(values)) : batch) values.set(key, value)
+    for (const [key, value] of entries) values.set(key, value)
   },
   set(key, value) { return this.apply([[key, value]]) },
   subscribe() {}
@@ -65,6 +66,7 @@ assert.equal(sheets.current, null, 'late catalog must not reopen canceled sheet'
 
 // A failed save keeps the draft; closing waits for the retried save to settle.
 await settings.open()
+values.set('trezi:project-ui:v1', 'false')
 failNext = new Error('disk full')
 await action('change', { default: 'last-used', projectUi: 'true', engine: 'agent' })
 assert.match(sheets.current.state.message, /Could not save: disk full.*draft is still here/)
@@ -72,7 +74,7 @@ assert.equal(values.get('trezi:project-ui:v1'), 'false', 'nothing was written by
 let release
 gate = new Promise(r => release = r)
 const closing = action('cancel')
-await new Promise(r => setTimeout(r, 400))
+while (!applyBlocked) await new Promise(r => setTimeout(r, 10))
 assert.ok(sheets.current, 'close waits for the pending save')
 release(); gate = null
 await closing

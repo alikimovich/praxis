@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — Manager verification: `native-sheets` timeout (LKM-91 / S03)
+
+119 unit checks passed; `native-sheets` hung until the 600 s cap (its first line
+printed, the autosave section never finished). Cause: an earlier repair made a
+cancelled autosaving sheet loop on `flushPending()` until a save succeeded. The
+existing check saves 16,001 characters, which can never succeed, so close retried
+forever instead of staying open with the failed draft ("try closing again to
+retry"). That loop was also unnecessary: `SheetAutosave.enqueue` on the next
+close already retries the retained draft, which `native-settings` proves (failed
+batch keeps the draft, close waits for the retried save). Reverted
+`sheet-autosave.ts` and `sheets-runtime.ts` to their original behavior; kept the
+`native-settings` synchronization hardening (wait for the blocked apply instead
+of a fixed sleep). `native-sheets` and `native-settings` (three repeats) pass.
+
 ## 2026-09-28 — Preferences move to the Swift service (LKM-91 / S03)
 
 The first writer transfer. Under the default launch the Swift service is the only
