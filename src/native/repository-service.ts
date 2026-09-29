@@ -82,6 +82,7 @@ export function serviceRepository(link: RepositoryLink, options: { timeout?: num
         await call('release', { lease: grant.lease }).catch(() => {})
       }
     },
+    heldLeases: () => (held.getStore() ?? []).map(lease => lease.id),
     createWorktree: (root, worktreesDir, opts) => effect('createWorktree', { root, worktreesDir, ...opts }),
     syncWorktree: wt => effect('syncWorktree', on(wt)),
     attachBranch: async wt => { await effect('attachBranch', on(wt)) },

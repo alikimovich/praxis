@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { readFile, realpath, writeFile } from 'node:fs/promises'
+import { readFile, realpath } from 'node:fs/promises'
 import { resolve, relative, isAbsolute } from 'node:path'
 import { lexLiteral, locateAnchor, renderLiteral, resolveLiteralValue } from './control-manifest'
 import { enqueueRepoWrite } from './repo-write-queue'
-import { recordEdit, revertGroup } from './edit-history'
+import { revertGroup } from './edit-history'
+import { proposeEdit } from './source-commit'
 import type { IslandRecord, IslandValue } from '../shared/chat-islands'
 import { jsxAttributeLiterals, renderJsxAttribute } from './jsx-attribute-literals'
 import { shadowOutput } from './shadow-controls'
@@ -76,9 +77,10 @@ export function writeIsland(root: string, record: IslandRecord, expected: string
     if (next === source.code) return undefined
     // Protect external edits observed during validation too.
     if (!guard() || await readFile(source.file, 'utf8') !== source.code) throw new Error('Source changed before the edit could be saved.')
-    await writeFile(source.file, next, 'utf8')
     const group = gestureGroup ?? `island:${randomUUID()}`
-    recordEdit(root, source.file, source.code, next, group, group, gestureGroup ? Infinity : undefined)
+    // A proposal bound to the text validated above; a gesture keeps coalescing into one Undo step.
+    const written = await proposeEdit(root, source.file, source.code, next, group, group, !!gestureGroup)
+    if (!written.applied) throw new Error(written.error ?? 'Source changed before the edit could be saved.')
     return { group, revision: sourceHash(next) }
   })
 }

@@ -38,10 +38,11 @@ to later slices: chat state, park records, Undo history, setup helpers.
 | Operation journal `<profile>/service/repository/journal.json` | Swift | untouched |
 | Recovery refs `refs/trezi/recovery/*` in each repository | Swift | untouched |
 | Chat isolation state (parked, turn numbers), park records in the session store | Bun (S11) | Bun |
-| Undo history for landed edits (`recordEdit`) | Bun (S08) | Bun |
+| Undo history for landed edits (`recordEdit`) | Swift source service (S08, LKM-96) | Bun |
 | Setup helpers into worktrees, Next dependency provisioning | Bun JS helpers inside the lease | Bun |
 | Git reads (branch lists, status, patches, marker scans, publish scope) | Bun (reads only) | Bun |
-| Remote fetch/pull/checkout (`git-remote.ts`), publishing, annotation sidecar, content/island/control source writes | Bun, inside the Swift lease | Bun |
+| Remote fetch/pull/checkout (`git-remote.ts`), publishing, annotation sidecar | Bun, inside the Swift lease | Bun |
+| Prop, text, style, move, island, content and control source writes, file-tree operations | Swift source service in this lane (S08, LKM-96) | Bun |
 
 The last row is deliberate. Those writers are other slices (S13 publishing and remote
 actions, S05's annotation writer, S08 source transactions); they now take the Swift

@@ -1,4 +1,7 @@
 import { readFile, writeFile } from 'fs/promises'
+import { sourceOwner, type UndoResult } from './source-owner'
+
+export type { UndoResult }
 
 /**
  * Undo/redo for ALL trezi source edits (v8 F3b) — props, inline text, token swaps,
@@ -11,6 +14,9 @@ import { readFile, writeFile } from 'fs/promises'
  * (v5-C), so Cmd+Z in project B must never revert a file in project A. The edits
  * write straight to source, so the dev server's HMR refreshes the preview on undo
  * just like apply.
+ *
+ * Under the Swift launch the source service owns the history (S08): every export
+ * here dispatches to it, and the stacks below stay empty (the rollback owner).
  */
 
 interface EditEntry {
@@ -57,6 +63,12 @@ export function recordEdit(
   coalesceMs = COALESCE_MS
 ): void {
   if (before === after) return
+  const owner = sourceOwner()
+  if (owner) {
+    // Ordered with later Undo requests by the pipe; a failure only loses this Undo step.
+    void owner.record(root, [{ path: file, before, after }], { key, group }).catch(() => {})
+    return
+  }
   const { undo: undoStack, redo: redoStack } = stacksFor(root)
   redoStack.length = 0 // a fresh edit invalidates the redo branch
   const last = undoStack[undoStack.length - 1]
@@ -69,16 +81,6 @@ export function recordEdit(
   }
   undoStack.push({ file, before, after, key, group, at: Date.now() })
   if (undoStack.length > MAX_HISTORY) undoStack.shift()
-}
-
-export interface UndoResult {
-  ok: boolean
-  /** The file reverted/re-applied (relative or absolute as recorded). */
-  file?: string
-  /** The stack was empty. */
-  empty?: boolean
-  /** The file changed on disk since the edit — refused to clobber. */
-  conflict?: boolean
 }
 
 async function move(from: EditEntry[], to: EditEntry[], expect: 'after' | 'before'): Promise<UndoResult> {
@@ -119,17 +121,24 @@ async function move(from: EditEntry[], to: EditEntry[], expect: 'after' | 'befor
 
 /** Revert the last edit in `root` (writes its `before`), unless it changed on disk. */
 export const undo = (root: string): Promise<UndoResult> => {
+  const owner = sourceOwner()
+  if (owner) return owner.undo(root)
   const s = stacksFor(root)
   return move(s.undo, s.redo, 'after')
 }
 /** Re-apply the last undone edit in `root` (writes its `after`), unless it changed. */
 export const redo = (root: string): Promise<UndoResult> => {
+  const owner = sourceOwner()
+  if (owner) return owner.redo(root)
   const s = stacksFor(root)
   return move(s.redo, s.undo, 'before')
 }
 
 export const canUndo = (root: string): boolean => (byRoot.get(root)?.undo.length ?? 0) > 0
 export const canRedo = (root: string): boolean => (byRoot.get(root)?.redo.length ?? 0) > 0
+/** `canUndo`/`canRedo` for whichever owner is installed. */
+export const editAvailability = (root: string): Promise<{ undo: boolean; redo: boolean }> =>
+  sourceOwner()?.history(root) ?? Promise.resolve({ undo: canUndo(root), redo: canRedo(root) })
 
 /**
  * Can the turn recorded under `group` be reverted right now? True iff its entries are
@@ -139,6 +148,8 @@ export const canRedo = (root: string): boolean => (byRoot.get(root)?.redo.length
  * would only conflict; `revertGroup` re-validates the same guard before it writes.
  */
 export async function canRevertGroup(root: string, group: string): Promise<boolean> {
+  const owner = sourceOwner()
+  if (owner) return owner.canRevert(root, group)
   const batch = byRoot.get(root)?.undo.filter((e) => e.group === group) ?? []
   if (!batch.length) return false
   for (const e of batch) {
@@ -163,6 +174,8 @@ export async function canRevertGroup(root: string, group: string): Promise<boole
  * undo/redo model, so nothing is pushed onto the redo stack.
  */
 export async function revertGroup(root: string, group: string): Promise<UndoResult> {
+  const owner = sourceOwner()
+  if (owner) return owner.revert(root, group)
   const s = byRoot.get(root)
   const batch = s?.undo.filter((e) => e.group === group) ?? []
   if (!s || !batch.length) return { ok: false, empty: true }
@@ -187,5 +200,7 @@ export async function revertGroup(root: string, group: string): Promise<UndoResu
 }
 /** Drop a project's history (e.g. when it's closed in the rail). */
 export const clearHistory = (root: string): void => {
+  const owner = sourceOwner()
+  if (owner) void owner.clearHistory(root).catch(() => {})
   byRoot.delete(root)
 }

@@ -747,6 +747,8 @@ export interface SourceView {
   binary?: boolean
   /** Size on disk, for the preview's footer. Present with `media` / `binary`. */
   bytes?: number
+  /** SHA-256 of the text as read: the baseline a save (or a restored draft) must still match. */
+  hash?: string
 }
 
 /** Result of a whole-file save from the v9 code drawer. */
@@ -756,6 +758,8 @@ export interface SourceWriteResult {
   conflict?: boolean
   /** Human-readable failure (unresolved path, write error). */
   error?: string
+  /** On success: the SHA-256 of the saved text (the drawer's next baseline). */
+  hash?: string
 }
 
 /**

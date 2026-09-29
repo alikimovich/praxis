@@ -32,6 +32,8 @@ export type RemoveIntent = 'landed' | 'release' | 'abandon'
 export interface RepositoryOwner {
   /** `enqueueRepoWrite` under the owner: holds the repository's lane for `operation`. */
   withLease<T>(root: string, operation: () => Promise<T>): Promise<T>
+  /** The leases the calling async chain holds (S08 source writes run inside them). */
+  heldLeases(): string[]
   createWorktree(root: string, worktreesDir: string, opts: { id: string; branch: string; linkNodeModules: boolean }): Promise<OwnedWorktree>
   syncWorktree(wt: OwnedWorktree): Promise<{ synced: boolean; baseSha: string }>
   attachBranch(wt: OwnedWorktree): Promise<void>

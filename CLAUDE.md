@@ -140,6 +140,16 @@ src/
                     client is native/repository-service.ts behind the seam
                     main/repository-owner.ts; the TS Git code is the rollback owner
                     (docs/SWIFT-BACKEND-REPOSITORY.md)
+    SourceOwner.swift / SourceStore.swift / SourceJournal.swift / SourceHistory.swift /
+    SourcePaths.swift / SourceDrafts.swift   the source transaction service (LKM-96):
+                    parsers only PROPOSE `{path, expectedHash, content}` via
+                    main/source-commit.ts `proposeEdit`; the service commits hash-bound,
+                    journaled multi-file transactions in the repository lane (crash
+                    rollback never overwrites newer work), authorizes paths (symlinks
+                    included), owns grouped Undo/redo/revert, file-tree create/rename/
+                    delete, editor reads/saves and persisted drafts. Bun's client is
+                    native/source-service.ts behind main/source-owner.ts; edit-history.ts
+                    and file-ops.ts are the rollback owner (docs/SWIFT-BACKEND-SOURCE.md)
   main/           Backend services (CJS bundle, Bun); historical directory name
     preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
                     bounds/load/reset/capture, the select + comment relays, the
@@ -310,7 +320,9 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   (`docs/SWIFT-BACKEND-WORKSPACE.md`) and project memory
   (`docs/SWIFT-BACKEND-MEMORY.md`), and runs managed project servers, installs
   and static sites (`docs/SWIFT-BACKEND-RUNTIME.md`), and performs and serializes
-  every Trezi Git effect in user repositories (`docs/SWIFT-BACKEND-REPOSITORY.md`);
+  every Trezi Git effect in user repositories (`docs/SWIFT-BACKEND-REPOSITORY.md`),
+  and commits every Trezi source edit, Undo and file-tree operation from hash-bound
+  parser proposals (`docs/SWIFT-BACKEND-SOURCE.md`);
   Bun is still the single writer of every other domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun
   spawns the host, still under Swift's lock, writes all three itself and runs its
   own servers after the launcher sweeps the runtime journal). See

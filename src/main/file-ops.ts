@@ -1,6 +1,7 @@
 import { mkdir, rename, rm, stat, writeFile } from 'fs/promises'
 import { dirname, normalize, relative, resolve, sep } from 'path'
 import type { FileOpResult } from '../shared/api'
+import { sourceOwner } from './source-owner'
 
 /**
  * Create / rename / delete for the pop-out editor's file-tree sidebar — the
@@ -14,6 +15,10 @@ import type { FileOpResult } from '../shared/api'
  * protected directory. The tree lists FILES, so these ops are file-only —
  * intermediate directories are created implicitly by a nested path
  * ("src/new/Thing.tsx"), and directories are never renamed or deleted.
+ *
+ * Under the Swift launch the source service performs all three (S08) with the same
+ * rules plus symlink containment, in the repository's lane; these functions are the
+ * legacy owner.
  */
 
 /**
@@ -74,6 +79,8 @@ async function exists(abs: string): Promise<boolean> {
  * created; an existing file is never clobbered.
  */
 export async function createProjectFile(root: string, path: string): Promise<FileOpResult> {
+  const owner = sourceOwner()
+  if (owner) return owner.createFile(root, path)
   const t = target(root, path)
   if (!t) return { ok: false, error: BAD_PATH }
   if (await exists(t.abs)) return { ok: false, error: 'Something already exists at that path.' }
@@ -98,6 +105,8 @@ export async function renameProjectFile(
   from: string,
   to: string
 ): Promise<FileOpResult> {
+  const owner = sourceOwner()
+  if (owner) return owner.renameFile(root, from, to)
   const src = target(root, from)
   const dst = target(root, to)
   if (!src || !dst) return { ok: false, error: BAD_PATH }
@@ -131,6 +140,8 @@ export async function deleteProjectFile(
   path: string,
   trash?: (abs: string) => Promise<void>
 ): Promise<FileOpResult> {
+  const owner = sourceOwner()
+  if (owner) return owner.deleteFile(root, path)
   const t = target(root, path)
   if (!t) return { ok: false, error: BAD_PATH }
   try {

@@ -11,7 +11,22 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
-**Current (2026-09-29, LKM-95):** S07 (roadmap row) moves repository coordination
+**Current (2026-09-29, LKM-96):** S08 and S09 (roadmap rows) move source
+transactions into the Swift service. Bun's parsers (React, Svelte, HTML, Tailwind,
+tokens, moves, islands, content, controls) only propose `{path, expectedHash,
+content}`; the service commits a proposal only if the file still holds the bytes it
+was computed from, in the repository's lane, as a journaled multi-file transaction.
+Path authorization (root, protected folders, symlink containment), editor reads and
+saves with owner-issued baseline hashes, file-tree create/rename/delete, grouped
+Undo/redo/revert and persisted editor drafts are Swift's. A crash midway through a
+commit or an Undo is rolled back at the next launch without overwriting anything
+changed since (pre-images are kept). A proposal whose deadline passed while it waited
+is never started. `TREZI_BACKEND_OWNER=legacy` keeps the TS writers as the rollback
+owner. This answers the open question on the parser helper contract and
+expected-content hashing. See [source](SWIFT-BACKEND-SOURCE.md). Implemented for review
+on the LKM-95 candidate; manager verification and acceptance are pending.
+
+**Earlier (2026-09-29, LKM-95):** S07 (roadmap row) moves repository coordination
 into the Swift service: one FIFO lane per repository common directory (the live
 checkout and all its worktrees), leases that replace Bun's process-local
 `enqueueRepoWrite` queue, and every Trezi Git effect — worktree create/sync/remove,
@@ -185,7 +200,8 @@ events, cancellation, and reconnection.
 ## Open questions
 
 - Exact provider integration boundary (native protocol vs SDK helper)
-- Source parser helper contract and expected-content hashing
+- ~~Source parser helper contract and expected-content hashing~~ (LKM-96: proposals
+  carry the SHA-256 of the bytes they were computed from; see [source](SWIFT-BACKEND-SOURCE.md))
 - Persistence format migration strategy
 
 ## Links
