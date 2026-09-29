@@ -1,8 +1,9 @@
 import { execFile } from 'child_process'
 import { mkdir, readdir, writeFile } from 'fs/promises'
-import { basename, join } from 'path'
+import { basename, dirname, join } from 'path'
 import { promisify } from 'util'
 import type { ProjectCreateOptions } from '../shared/api'
+import { workflowOwner } from './workflow-owner'
 
 /**
  * Create a new project: either an empty repository for a setup conversation,
@@ -155,6 +156,18 @@ async function hasBun(): Promise<boolean> {
   }
 }
 
+/** Starter files for a template (the JS helper's proposal). */
+export function starterFiles(root: string, template: ProjectCreateOptions['template'] | undefined): Record<string, string> {
+  return template === 'empty'
+    ? { '.gitignore': 'node_modules\n.next\n.svelte-kit\ndist\nbuild\n.env\n.env.*\n!.env.example\n.DS_Store\n' }
+    : templateFiles(packageName(root))
+}
+
+/**
+ * Create a project: the starter files and package manager are proposed here, the
+ * workflow owner (S13) writes them, makes the first commit and installs, and resumes
+ * a failed install on the next attempt instead of refusing a non-empty folder.
+ */
 export async function createProject(
   root: string,
   opts: { install?: boolean; template?: ProjectCreateOptions['template'] } = {}
@@ -162,6 +175,16 @@ export async function createProject(
   if (opts.template && !['react', 'empty'].includes(opts.template)) {
     return { ok: false, error: 'Unknown project starter.' }
   }
+  const install = opts.template !== 'empty' && opts.install !== false ? ((await hasBun()) ? 'bun' : 'npm') : null
+  return workflowOwner().createProject(root, starterFiles(root, opts.template), install)
+}
+
+/** The legacy writer (rollback twin of `WorkflowSetup.create`). */
+export async function createProjectLegacy(
+  root: string,
+  files: Record<string, string>,
+  install: 'bun' | 'npm' | null
+): Promise<CreateProjectResult> {
   // Never scaffold into a folder that already has content.
   try {
     const entries = await readdir(root)
@@ -171,14 +194,10 @@ export async function createProject(
   } catch {
     /* doesn't exist yet — good */
   }
-
-  const name = packageName(root)
   try {
-    const files = opts.template === 'empty'
-      ? { '.gitignore': 'node_modules\n.next\n.svelte-kit\ndist\nbuild\n.env\n.env.*\n!.env.example\n.DS_Store\n' }
-      : templateFiles(name)
-    await mkdir(opts.template === 'empty' ? root : join(root, 'src'), { recursive: true })
+    await mkdir(root, { recursive: true })
     for (const [file, content] of Object.entries(files)) {
+      await mkdir(dirname(join(root, file)), { recursive: true })
       await writeFile(join(root, file), content, 'utf8')
     }
   } catch (e) {
@@ -187,12 +206,8 @@ export async function createProject(
 
   // Git first (fast, and the initial commit captures the clean template even if
   // the install below fails). Still non-fatal — the project runs either way — but
-  // NOT silent any more. A swallowed failure here is invisible until the user
-  // hits Publish, which then reports "this folder isn't the repository root"
-  // (annotations.ts) without ever mentioning git: if the new folder sits inside
-  // some other repo, that parent is what git resolves to, so trezi looks like it
-  // is refusing for a reason the user can't act on. Say it here, while they're
-  // looking at the thing that just failed.
+  // NOT silent: a swallowed failure is invisible until the user hits Publish, which
+  // then reports "this folder isn't the repository root" without mentioning git.
   let warning: string | undefined
   try {
     await execFileP('git', ['init', '-b', 'main'], { cwd: root, timeout: 10000 })
@@ -218,16 +233,15 @@ export async function createProject(
     }
   }
 
-  if (opts.template !== 'empty' && opts.install !== false) {
-    const pm = (await hasBun()) ? 'bun' : 'npm'
+  if (install) {
     try {
-      await execFileP(pm, ['install'], {
+      await execFileP(install, ['install'], {
         cwd: root,
         timeout: 300000,
         maxBuffer: 16 * 1024 * 1024
       })
     } catch (e) {
-      return { ok: false, error: `Project created, but ${pm} install failed: ${msg(e)}` }
+      return { ok: false, error: `Project created, but ${install} install failed: ${msg(e)}` }
     }
   }
 

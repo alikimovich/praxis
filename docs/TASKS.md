@@ -96,6 +96,20 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
 
+## Swift workflow owner (LKM-100 / S13)
+
+- [x] Name the domain exactly (publication, remote Git actions, setup helpers, new projects, Trezi update, diagnosis memory; Bun-kept proposing helpers and sheets) and tighten its rollback and partial-effect recovery (`docs/SWIFT-BACKEND-WORKFLOWS.md`).
+- [x] Swift `WorkflowOwner` on the private pipe with a durable journal (`service/workflows/`), operation-ID dedupe, resume/busy/cancel/dismiss and redaction; Bun client `src/native/workflow-service.ts`, seam `src/main/workflow-owner.ts`, rollback twin `src/main/workflow-legacy.ts` (legacy publish code moved to `src/main/publish.ts`).
+- [x] Publish (merge / PR only), handoff and saved-run PRs in two phases around the description helper; open PRs adopted, merges checked on the journal's PR number, cleanup skipped if the branch moved.
+- [x] Connect (repository creation adopted only when this run asked for it), remote status/pull/switch in the repository lane.
+- [x] Setup helpers (create-only, plain `.trezi`), removal (fixed list, no linked folders), new projects (install resumed), Trezi update (retry never pulls twice), diagnoses (same file; damaged file kept).
+- [x] `test/workflow-owner.mjs` (unit tier): 12 parity scenarios, lost replies, crashes after PR/merge/repository/pull, GitHub failing after acting, install/build failures, cancellation, busy, restart, rollback both ways, redaction, drain, schema. Scripted `gh`/package manager only.
+- [ ] S13 sub-boundary: feedback issues (`feedback:submit`, a remote creation in Trezi's own repository) stay in Bun without a receipt; move with S15 or give them a journal entry.
+- [ ] S13 sub-boundary: shared sheet routing and autosave, and the read-only probes (`github:status`, `setup:detect`, update check) stay in Bun.
+- [ ] Follow-up: surface interrupted workflows (`workflows()`) in the UI with Resume/Dismiss; today the next explicit request resumes them.
+- [x] Worker native verification (staged, full): 138 unit checks, typechecks, native smoke 20/20, chat acceptance and chat scroll pass (read from the run log; the tool call timed out client-side).
+- [ ] Manager: configured verification and independent review. Real GitHub and installs are not exercised (no live publish authorized).
+
 ## Swift editing coordinator (LKM-99 / S12)
 
 - [x] Name the domain exactly (island histories and state machine, controls sidecars, content drafts, deferred navigation; Bun-kept JS helpers, inspector views, DOM instrumentation) and tighten its rollback plan (`docs/SWIFT-BACKEND-EDITING.md`).
@@ -148,7 +162,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] `test/source-owner.mjs` (unit tier): React/Svelte/HTML/layers fixture parity, `shadow-controls` re-run on the owner, proposals, paths, transactions, crash, history, files, drafts, lanes, rollback, drain.
 - [ ] S08 sub-boundary: file-tree listing (`source:tree`), media (`trezi-media://`), component resolution and open-in-editor stay Bun read-only; move with S12/S15.
 - [ ] S08 sub-boundary: sidecar stores stay Bun writers inside the repository lease — `control-panels.json` and `content-controls.json` moved to the Swift editing owner (LKM-99); `tokens.json` and annotations remain.
-- [ ] S13: setup/scaffold instrumentation writers (`setup.ts`, `scaffold.ts`) stay Bun inside the lease; move with setup.
+- [x] S13: setup/scaffold instrumentation writers (`setup.ts`, `scaffold.ts`) moved to the Swift workflow owner (LKM-100); the TS writers are its rollback twin.
 - [ ] S09 follow-up: run the parsers in a separate supervised helper process (today they run in Bun and are bound by the seam, not by process privileges).
 - [ ] Follow-up: a UI to review and acknowledge interrupted source transactions (today they are listed in the Activity log at launch).
 - [ ] Manager: stage the new files (docs-links checks tracked paths), run the unit tier unsandboxed, `bun run test:native`, independent review.
@@ -162,7 +176,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Landing hardened: byte comparison, no writes through symlinks or outside the checkout, partial writes restored, oversized batches park.
 - [x] `TREZI_BACKEND_OWNER=legacy` keeps the TS Git code; worktrees, journal and refs survive the switch; drain releases leases and settles running effects.
 - [x] `test/repository-owner.mjs` (unit tier); `service-process` builds the owner.
-- [ ] S07 sub-boundary: remote fetch/pull/checkout (`git-remote.ts`) and publishing (`annotations.ts`) run in Bun inside the Swift lease; move their Git effects with S13.
+- [x] S07 sub-boundary: remote fetch/pull/checkout (`git-remote.ts`) and publishing (`annotations.ts`, now `publish.ts`) moved to the Swift workflow owner in the repository lane (LKM-100).
 - [ ] S07 sub-boundary: the annotation sidecar writer can now move through the repository lane (unblocks the S05 item below).
 - [x] S07 sub-boundary: content/island/control source writes move to the S08 source service (LKM-96); scaffolding stays in Bun inside the lease (see S13 item under LKM-96).
 - [ ] Follow-up: a UI to review and acknowledge interrupted repository operations (today they are listed in the Activity log at launch).

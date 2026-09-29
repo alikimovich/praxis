@@ -9,7 +9,16 @@ struct GitFailure: Error, CustomStringConvertible {
     let status: Int32
     let stdout: String
     let stderr: String
-    var description: String { "Command failed: git \(arguments.joined(separator: " "))\n\(stderr)" }
+    /// The program's name (S13 runs gh and package managers through the same runner).
+    var tool = "git"
+    var description: String { "Command failed: \(tool) \(arguments.joined(separator: " "))\n\(stderr)" }
+}
+
+/// Watches a running command (S13): its process group once started (so a cancelled
+/// workflow can stop a long local step) and each chunk of its output (progress).
+struct ToolObserver: Sendable {
+    var started: @Sendable (pid_t) -> Void = { _ in }
+    var output: @Sendable (Data) -> Void = { _ in }
 }
 
 struct GitOutput {
@@ -32,20 +41,23 @@ final class RepositoryGit: @unchecked Sendable {
     let environment: [String: String]
     let timeout: TimeInterval
     let maxOutput: Int
+    let tool: String
 
-    init(environment: [String: String], timeout: TimeInterval = 60, maxOutput: Int = 64 * 1024 * 1024) {
+    init(environment: [String: String], timeout: TimeInterval = 60, maxOutput: Int = 64 * 1024 * 1024,
+         tool: String = "git", executable: String? = nil) {
         var clean = environment.filter { !Self.scrubbed.contains($0.key) }
         clean["GIT_TERMINAL_PROMPT"] = "0"
         // Status must never refresh (write) an index as a side effect of looking.
         clean["GIT_OPTIONAL_LOCKS"] = "0"
         self.environment = clean
-        executable = ManagedProcess.resolve("git", path: clean["PATH"]) ?? "/usr/bin/git"
+        self.tool = tool
+        self.executable = executable ?? ManagedProcess.resolve(tool, path: clean["PATH"]) ?? (tool == "git" ? "/usr/bin/git" : tool)
         self.timeout = timeout
         self.maxOutput = maxOutput
     }
 
     /// The raw result; throws only when git could not be run at all.
-    func run(_ directory: String, _ arguments: [String], env extra: [String: String] = [:]) throws -> GitOutput {
+    func run(_ directory: String, _ arguments: [String], env extra: [String: String] = [:], observer: ToolObserver? = nil) throws -> GitOutput {
         var environment = self.environment
         for (key, value) in extra { environment[key] = value }
         var out: [Int32] = [0, 0], err: [Int32] = [0, 0]
@@ -54,13 +66,14 @@ final class RepositoryGit: @unchecked Sendable {
         for fd in [out[0], err[0]] { _ = fcntl(fd, F_SETFD, FD_CLOEXEC) }
         let pid: pid_t
         do {
-            pid = try ManagedProcess.spawn(executable, ["git"] + arguments, environment: environment, directory: directory,
+            pid = try ManagedProcess.spawn(executable, [tool] + arguments, environment: environment, directory: directory,
                                            actions: [.null(0), .dup(out[1], 1), .dup(err[1], 2)], newGroup: true)
         } catch {
             for fd in out + err { close(fd) }
             throw error
         }
         close(out[1]); close(err[1])
+        observer?.started(pid)
         let limit = maxOutput
         let collected = DispatchGroup()
         final class Sink: @unchecked Sendable { var data = Data(); var overflow = false }
@@ -75,6 +88,7 @@ final class RepositoryGit: @unchecked Sendable {
                     if count <= 0 { break }
                     if sink.data.count + count > limit { sink.overflow = true; kill(-pid, SIGKILL); continue }
                     sink.data.append(contentsOf: buffer[..<count])
+                    observer?.output(Data(buffer[..<count]))
                 }
                 close(fd)
                 collected.leave()
@@ -93,28 +107,28 @@ final class RepositoryGit: @unchecked Sendable {
             kill(-pid, SIGKILL)
             exited.wait()
             collected.wait()
-            return GitOutput(status: 124, stdout: stdout.data, stderr: Data("git timed out after \(Int(timeout)) s".utf8))
+            return GitOutput(status: 124, stdout: stdout.data, stderr: Data("\(tool) timed out after \(Int(timeout)) s".utf8))
         }
         // A helper that outlived git (credential/fsmonitor) must not keep the pipes open.
         if collected.wait(timeout: .now() + 2) == .timedOut { kill(-pid, SIGKILL); collected.wait() }
         let code = ProcessGroup.exitCode(status.raw) ?? 128
-        if stdout.overflow { return GitOutput(status: 125, stdout: Data(), stderr: Data("git output exceeded \(limit) bytes".utf8)) }
+        if stdout.overflow { return GitOutput(status: 125, stdout: Data(), stderr: Data("\(tool) output exceeded \(limit) bytes".utf8)) }
         return GitOutput(status: code, stdout: stdout.data, stderr: stderr.data)
     }
 
     /// Stdout of a successful command; a non-zero exit throws `GitFailure`.
     @discardableResult
-    func data(_ directory: String, _ arguments: [String], env: [String: String] = [:]) throws -> Data {
-        let result = try run(directory, arguments, env: env)
+    func data(_ directory: String, _ arguments: [String], env: [String: String] = [:], observer: ToolObserver? = nil) throws -> Data {
+        let result = try run(directory, arguments, env: env, observer: observer)
         guard result.status == 0 else {
-            throw GitFailure(arguments: arguments, status: result.status, stdout: result.text, stderr: String(decoding: result.stderr, as: UTF8.self))
+            throw GitFailure(arguments: arguments, status: result.status, stdout: result.text, stderr: String(decoding: result.stderr, as: UTF8.self), tool: tool)
         }
         return result.stdout
     }
 
     @discardableResult
-    func text(_ directory: String, _ arguments: [String], env: [String: String] = [:]) throws -> String {
-        String(decoding: try data(directory, arguments, env: env), as: UTF8.self)
+    func text(_ directory: String, _ arguments: [String], env: [String: String] = [:], observer: ToolObserver? = nil) throws -> String {
+        String(decoding: try data(directory, arguments, env: env, observer: observer), as: UTF8.self)
     }
 
     /// `text(...)` trimmed, as `stdout.trim()` was.

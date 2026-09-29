@@ -11,7 +11,22 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
-**Current (2026-09-29, LKM-99):** S12 (roadmap row) moves the editing workflows' state
+**Current (2026-09-29, LKM-100):** S13 (roadmap row) moves Trezi's side-effecting
+workflows outside a chat turn into the Swift service's workflow owner: Publish (merge or
+PR only), the handoff and saved-run PRs, Connect to GitHub, remote fetch/pull/switch, the
+`.trezi/` instrumentation helpers, new projects (files, first commit, install), Trezi's own
+update and the diagnosis memory. Each run is a durable record: every step's intent is on
+disk before its effect and its receipt after, requests carry an operation ID, and a request
+re-sent after a lost reply is answered from its receipt. An uncertain step is reconciled
+from GitHub and Git (an open PR adopted, a merge checked on the journal's PR number, a
+repository this run created adopted, a pull skipped by receipt), so no PR, merge or update
+is repeated. Bun keeps the helpers that only propose (PR descriptions, detection and helper
+sources, starter files, diagnoses) and the sheets. `TREZI_BACKEND_OWNER=legacy` keeps the
+original TS code as the rollback owner. See [workflows](SWIFT-BACKEND-WORKFLOWS.md).
+Implemented for review on the LKM-99 candidate; manager verification and acceptance are
+pending, and real GitHub/installs are unverified (scripted `gh` and package manager only).
+
+**Earlier (2026-09-29, LKM-99):** S12 (roadmap row) moves the editing workflows' state
 into the Swift service. It is the only writer of chat island histories and decides every
 island step: a definition is bound to the turn the conversation owner says is in flight,
 only that turn's landing activates it (a late or another turn's terminal activates

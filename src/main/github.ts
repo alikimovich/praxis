@@ -17,6 +17,7 @@ import { basename } from 'path'
 import { promisify } from 'util'
 import type { GithubConnectOptions, GithubConnectResult, GithubStatus } from '../shared/api'
 import { planGitHubConnection, sanitizeRepoName } from '../shared/github'
+import { workflowOwner } from './workflow-owner'
 
 const execFileP = promisify(execFile)
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
@@ -158,7 +159,8 @@ export async function connectToGitHub(
 
 export function registerGithubIpc(): void {
   ipcMain.handle('github:status', (_e, root: string) => githubStatus(root))
+  // Creating the repository is a remote effect: the workflow owner journals it (S13).
   ipcMain.handle('github:connect', (_e, root: string, opts: GithubConnectOptions) =>
-    connectToGitHub(root, opts)
+    workflowOwner().connect(root, { ...opts, name: sanitizeRepoName(opts.name) })
   )
 }

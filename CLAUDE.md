@@ -184,6 +184,18 @@ src/
                     native/navigation-controller.ts, native/turn-boundaries.ts); Bun's
                     client is native/editing-service.ts behind main/editing-owner.ts;
                     main/editing-model.ts is the rollback twin (docs/SWIFT-BACKEND-EDITING.md)
+    WorkflowOwner.swift / WorkflowJournal.swift / WorkflowPublish.swift /
+    WorkflowRemote.swift / WorkflowSetup.swift   the workflow owner (LKM-100): Publish
+                    (merge / PR only), handoff and saved-run PRs, Connect to GitHub, remote
+                    fetch/pull/switch, `.trezi/` setup helpers, new projects, Trezi's own
+                    update and the diagnosis memory, each a durable record (intent before
+                    the effect, receipt after, operation-ID dedupe) reconciled from GitHub
+                    and Git instead of repeated. Bun's helpers only propose (PR
+                    descriptions, detection, starter files, diagnoses). Bun's client is
+                    native/workflow-service.ts behind main/workflow-owner.ts;
+                    main/workflow-legacy.ts (over main/publish.ts, github.ts, git-remote.ts,
+                    setup.ts, scaffold.ts, diag-cache.ts) is the rollback twin
+                    (docs/SWIFT-BACKEND-WORKFLOWS.md)
   main/           Backend services (CJS bundle, Bun); historical directory name
     preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
                     bounds/load/reset/capture, the select + comment relays, the
@@ -282,6 +294,8 @@ src/
                     .trezi/control-panels.json store (rendered here, committed
                     hash-bound by the editing owner) + controls:* IPC
     tokens.ts       design-token detection/scaffold   annotations.ts  comments → PR
+    publish.ts      the legacy Publish / handoff / saved-run PR code (rollback twin of
+                    service/WorkflowPublish.swift); the routes go through workflow-owner.ts
     annotation-store.ts  the notes sidecar's storage (list/add/remove; no Git), split
                     from publication; Bun-owned until the S07 repository lane
     spring.ts       pure spring→CSS linear() engine (vendored from ~/dev/spring2css);
@@ -368,7 +382,9 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   every provider session's grant, permission answers, tool authorization, Stop's
   deadline and resume ids (`docs/SWIFT-BACKEND-PROVIDERS.md`), and owns chat island
   histories and activation, the controls sidecars, content drafts and deferred preview
-  navigation (`docs/SWIFT-BACKEND-EDITING.md`);
+  navigation (`docs/SWIFT-BACKEND-EDITING.md`), and runs publication, remote Git actions,
+  setup, new projects, Trezi's update and the diagnosis memory as journaled workflows
+  (`docs/SWIFT-BACKEND-WORKFLOWS.md`);
   Bun is still the single writer of every other domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun
   spawns the host, still under Swift's lock, writes all three itself and runs its
   own servers after the launcher sweeps the runtime journal). See

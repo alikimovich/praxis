@@ -1,6 +1,6 @@
 import { nativeSessionPath } from '../native/profile-path'
 import { generatePublishDescription } from './publish-description'
-import { defaultBase } from './publish-scope'
+import { workflowOwner } from './workflow-owner'
 import { chatIslandContext } from './chat-islands'
 import { setProjectUiEnabled, projectUiInstructions, cancelProjectUi } from './project-ui'
 import type { AgentTurnOptions } from '../shared/api'
@@ -1445,52 +1445,17 @@ export function registerAgentIpc(
   // committed on the branch). Persists prUrl back onto the history record.
   ipcMain.handle(
     'agent:spawn-pr',
-    async (_e, root: string, branch: string, title: string, recordId: string) => {
-      if (!(await isRepoRoot(root))) return { ok: false, error: 'Not a git repository.' }
-      if (!(await branchExists(root, branch)))
-        return { ok: false, error: 'That branch no longer exists.' }
-      try {
-        await git(root, ['remote', 'get-url', 'origin'])
-      } catch {
-        return { ok: false, error: 'No “origin” remote — add one, then open a PR.' }
-      }
-      try {
-        await execFileP('gh', ['--version'])
-      } catch {
-        return { ok: false, error: 'GitHub CLI (gh) not found — install it to open a PR.' }
-      }
-      try {
-        await git(root, ['push', '-u', 'origin', branch])
-        const description = await generatePublishDescription(root, await defaultBase(root), branch)
-        const { stdout } = await execFileP(
-          'gh',
-          [
-            'pr',
-            'create',
-            '--head',
-            branch,
-            '--title',
-            description.title,
-            '--body',
-            description.body
-          ],
-          { cwd: root }
-        )
-        const prUrl =
-          stdout
-            .trim()
-            .split('\n')
-            .find((l) => /^https?:\/\//.test(l)) ?? stdout.trim()
+    async (_e, root: string, branch: string, _title: string, recordId: string) => {
+      const result = await workflowOwner().branchPr(root, branch, (base, head) => generatePublishDescription(root, base, head))
+      if (result.ok && result.prUrl) {
         // Persist prUrl onto the history record (overwrite by id).
         const rec = store().get(recordId)
         if (rec) {
-          rec.prUrl = prUrl
+          rec.prUrl = result.prUrl
           store().save(rec)
         }
-        return { ok: true, prUrl }
-      } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : String(e) }
       }
+      return result
     }
   )
 

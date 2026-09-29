@@ -54,6 +54,8 @@ import { serviceProvider } from './provider-service'
 import { setProviderOwner } from '../main/provider-owner'
 import { serviceEditing } from './editing-service'
 import { setEditingOwner } from '../main/editing-owner'
+import { serviceWorkflows } from './workflow-service'
+import { setWorkflowOwner, workflowOwner } from '../main/workflow-owner'
 import { installNativeChat } from './chat-runtime'
 import { NativeShellController } from './shell-controller'
 import { NativeSupportSheets } from './support-sheets'
@@ -176,6 +178,9 @@ async function main() {
   // Editing workflows (S12): island history and activation, the controls sidecars
   // (hash-bound, in the repository lane), content drafts and deferred navigation.
   if (repository) { const lanes = repository; setEditingOwner(serviceEditing(host, { leases: () => lanes.heldLeases() })) }
+  // Side-effecting workflows (S13): publication, remote Git actions, project setup,
+  // Trezi's update and the diagnosis memory, journaled with receipts in the service.
+  if (repository) { const lanes = repository; setWorkflowOwner(serviceWorkflows(host, { leases: () => lanes.heldLeases() })) }
   const refreshPreferences = () => {
     const values = preferences.snapshot()
     let preferred: unknown
@@ -443,7 +448,7 @@ async function main() {
     const ownerPID = process.env.TREZI_SERVICE_PID || String(process.pid)
     const processNext = spawn(process.execPath, [join(root, 'scripts/start-native.mjs'), '--wait-for-owner', ownerPID, ...(project ? ['--project', project] : [])], { cwd: root, detached: true, stdio: 'ignore', env: restartEnvironment })
     processNext.on('error', error => { console.error('Could not restart Trezi:', error); process.exit(1) }); processNext.once('spawn', () => { processNext.unref(); process.exit(0) })
-  }, undefined, undefined, () => [...chatController.chats.values()].some(chat => chat.isRunning || chat.text || chat.attachments.length) ? 'Finish running chats and send or clear your drafts before restarting.' : [...editorController.sessions.values()].some(session => [...session.documents.values()].some(doc => doc.text !== doc.baseline)) ? 'Save source editor drafts before restarting.' : [...contentController.sessions.values()].some(session => session.dirty || session.busy) ? 'Save content editor drafts before restarting.' : null)
+  }, undefined, undefined, () => [...chatController.chats.values()].some(chat => chat.isRunning || chat.text || chat.attachments.length) ? 'Finish running chats and send or clear your drafts before restarting.' : [...editorController.sessions.values()].some(session => [...session.documents.values()].some(doc => doc.text !== doc.baseline)) ? 'Save source editor drafts before restarting.' : [...contentController.sessions.values()].some(session => session.dirty || session.busy) ? 'Save content editor drafts before restarting.' : null, workflowOwner())
   host.on('menu', ({ action }) => { if (action === 'updates') void updates.open().catch(error => activityController.append(String(error), 'error')) })
   host.on('download-error', ({ message }) => activityController.append(`Download failed: ${message}`, 'error'))
   host.on('download-finished', () => activityController.append('Download finished.', 'success'))

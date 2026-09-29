@@ -1,13 +1,15 @@
-import { app, ipcMain } from '../native/platform'
+import { ipcMain } from '../native/platform'
 import type { Diagnosis, DiagStep } from '../shared/api'
-import { recall, remember, setStatus, signatureFor } from './diag-cache'
+import { signatureFor } from './diag-cache'
 import { matchKnownError } from './diag-rules'
+import { workflowOwner } from './workflow-owner'
 
 /**
  * AI-assisted diagnosis of an open/launch failure. Recall a per-machine cached
  * fix first (instant, no model call); otherwise run a single tool-less Agent SDK
  * turn that returns a structured fix plan. We only DIAGNOSE here — applying is
- * the user's explicit choice (propose-first).
+ * the user's explicit choice (propose-first). The diagnosis memory
+ * (`<userData>/diagnostics.json`) is written by the workflow owner (S13).
  */
 
 type SdkModule = typeof import('@anthropic-ai/claude-agent-sdk')
@@ -99,8 +101,8 @@ export function registerDiagnoseIpc(): void {
   ipcMain.handle(
     'diagnose:run',
     async (_e, root: string, error: string, context = ''): Promise<Diagnosis | null> => {
-      const dir = app.getPath('userData')
-      const cached = await recall(dir, root, error)
+      const owner = workflowOwner()
+      const cached = await owner.recallDiagnosis(root, signatureFor(error))
       if (cached) return cached
       // Layer 2: a known error signature → known fix, instant + offline, before
       // spending a model call. Falls through to the AI when nothing matches.
@@ -114,18 +116,18 @@ export function registerDiagnoseIpc(): void {
           seenBefore: false,
           status: 'proposed'
         }
-        await remember(dir, root, diag)
+        await owner.rememberDiagnosis(root, diag)
         return diag
       }
       const diag = await aiDiagnose(root, error, context)
-      if (diag) await remember(dir, root, diag)
+      if (diag) await owner.rememberDiagnosis(root, diag)
       return diag
     }
   )
   ipcMain.handle(
     'diagnose:record',
     async (_e, root: string, signature: string, status: 'applied' | 'dismissed') => {
-      await setStatus(app.getPath('userData'), root, signature, status)
+      await workflowOwner().diagnosisStatus(root, signature, status)
     }
   )
 }

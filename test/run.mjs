@@ -25,6 +25,7 @@ const UNIT = [
   "conversation-owner",
   "provider-owner",
   "editing-owner",
+  "workflow-owner",
   "native-visible-capture",
   "native-smoke-runner",
   "rename-compat",
