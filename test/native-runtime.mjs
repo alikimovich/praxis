@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseSmokeGroups } from '../src/native/smoke-groups.ts'
 
 function assertSidebarEvidence(dir, since) {
   const fresh = name => {
@@ -31,6 +32,8 @@ if (process.platform !== 'darwin') {
   console.log('NATIVE-RUNTIME SKIP — Xcode command-line tools are not installed.')
 } else {
   const cwd = fileURLToPath(new URL('../', import.meta.url))
+  // `--only=group,group` is forwarded to the smoke; see src/native/smoke-groups.ts.
+  const groups = parseSmokeGroups(process.argv.slice(2))
   const started = Date.now()
   const result = spawnSync('bun', ['run', 'dev:native', '--test', ...process.argv.slice(2)], {
     cwd,
@@ -39,7 +42,7 @@ if (process.platform !== 'darwin') {
   })
   if (result.error) throw result.error
   // A passing smoke run must have produced fresh sidebar folder evidence for review.
-  if (result.status === 0) assertSidebarEvidence(join(cwd, 'test/artifacts/native'), started)
+  if (result.status === 0 && groups.has('sidebar')) assertSidebarEvidence(join(cwd, 'test/artifacts/native'), started)
   const host = fileURLToPath(new URL('../out/native/Trezi Native.app/Contents/MacOS/TreziHost', import.meta.url))
   for (const args of [[], ['/tmp']]) {
     const direct = spawnSync(host, args, { encoding: 'utf8', timeout: 10000 })

@@ -2,6 +2,34 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — Merge-friendly docs and native smoke groups (LKM-110)
+
+Six of the last eight merge conflicts were only in the two append-style logs, so
+`.gitattributes` now union-merges `docs/TASKS.md` as well as `docs/PROGRESS.md`.
+`test/docs-merge-union.mjs` builds a disposable repo with this checkout's
+attributes, appends different lines on two branches and merges them: no conflict,
+both sets kept (it fails without the TASKS rule). Union can keep both versions of
+a line both sides edited, e.g. a checkbox ticked differently, so review those.
+
+AGENTS.md and CLAUDE.md gain an Evidence budget: a foreground capture plus JSON
+geometry/state from existing fixtures is enough. OCR of wrapped text, synthetic
+CGEvent/input-routing tests and `defaults write`/system preference changes need
+an explicit ticket requirement, and tests must never change the user's system
+settings.
+
+`--only=group,group` (`src/native/smoke-groups.ts`) filters which native smoke
+groups run: `core`, `islands`, `shadow-light`, `sidebar`, `settings`, `chat`,
+`composer`. It only wraps existing blocks of `runNativeCoreSmoke` in group
+guards. Failure handling is unchanged, which keeps it compatible with LKM-109's
+collect-all runner, where the same guards become a filter over its check list. The prelude
+(startup, open project, chat ready) always runs. `checkChatIslands` takes
+`{ islands, shadow }` so Shadow Light can run inside the same fixture scope
+without the generic island. `dev-native.mjs` rejects an unknown/empty group, or
+`--only` without `--test`, before building; `--live` requires `core`.
+`native-runtime` asserts sidebar evidence only when `sidebar` ran. With no flag,
+every group runs exactly as before. Group names are listed in `--help` and
+docs/TESTING.md.
+
 ## 2026-09-28 — Settings OCR returns wrapped lines out of order (LKM-106 repair)
 
 `settings-visible-800-on-chat` failed although its PNG shows the engine help

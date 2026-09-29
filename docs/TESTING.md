@@ -30,6 +30,26 @@ that exactly one WebKit view exists. `TREZI_NATIVE_BACKGROUND_TEST=1` skips real
 pointer gestures/animation timing, which must be reported as reduced coverage.
 `test:native-live` separately submits a real provider turn against a fixture.
 
+Native smoke groups: `bun run dev:native --test --only=group,group` (or
+`bun test/native-runtime.mjs --only=…`) runs only the named groups. The
+startup/open-project/chat-ready prelude and the final one-WebKit-view check always
+run; with no flag every group runs. Defined in `src/native/smoke-groups.ts`:
+
+| Group | Covers |
+| --- | --- |
+| `core` | mobile viewport/reload, source stamps, toolbar/preview surface, divider/expand, layers, selection input, inspector style edit, text edit + undo/redo, popped-out source editor, content editor, preview Web Inspector |
+| `islands` | generic chat island: Swift rendering, point commit, Undo, landing gate |
+| `shadow-light` | Shadow Light island (shares the islands fixture scope) |
+| `sidebar` | project switching and visible sidebar captures/interactions |
+| `settings` | sheets and forms: running servers, New project, project memory, Settings, AI providers, feedback, diagnose, activity |
+| `chat` | native chat streaming/queues/permissions (`smoke-chat.ts`) |
+| `composer` | composer growth/paste/attachments, per-chat drafts, slash commands, visible composer |
+
+An unknown or empty group name fails before the build. `--live` requires `core`
+(the live turn edits the heading the core group writes). `native-runtime` only
+demands fresh sidebar evidence when `sidebar` ran. Acceptance still needs the
+full suite.
+
 `node test/native-source-window.mjs` checks the popped-out editor's initial size,
 programmatic resizing, code viewport, docking/reopening and draft retention using
 a disposable native host. It requires an existing build and writes

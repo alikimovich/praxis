@@ -3,6 +3,13 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Merge-friendly docs and evidence budget (LKM-110)
+
+- [x] Union-merge `docs/TASKS.md` and `docs/PROGRESS.md` via `.gitattributes`; scripted two-branch merge check (`test/docs-merge-union.mjs`).
+- [x] Add the Evidence budget to AGENTS.md and CLAUDE.md.
+- [x] Add `--only=group,group` to the native smoke (`core`, `islands`, `shadow-light`, `sidebar`, `settings`, `chat`, `composer`); unknown names fail before the build; full suite stays the default.
+- [ ] Manager: run configured verification (full unit + native) and reconcile `smoke-core.ts` gating with LKM-109's check list if it lands first.
+
 ## Experimental Gen UI (LKM-106)
 
 - [x] Rename settings, explain React/Svelte composition and conditionally show the explained engine while preserving saved choices.
