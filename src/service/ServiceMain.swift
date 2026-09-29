@@ -8,6 +8,9 @@ import Darwin
             if CommandLine.arguments.count > 1, ["--guard", "--guard-backend"].contains(CommandLine.arguments[1]) {
                 runProcessGuardian(arguments: Array(CommandLine.arguments.dropFirst(2)), backend: CommandLine.arguments[1] == "--guard-backend")
             }
+            if CommandLine.arguments.count > 1, CommandLine.arguments[1] == "--watch-group" {
+                runGroupWatchdog(arguments: Array(CommandLine.arguments.dropFirst(2)))
+            }
             if CommandLine.arguments.contains("--legacy") { try legacy(); return }
             let bundle = Bundle.main.bundleURL
             let host = bundle.deletingLastPathComponent().deletingLastPathComponent()
@@ -30,6 +33,9 @@ import Darwin
         }
         let profile = try option("--profile")
         let exclusion = try ProfileExclusion(profile: profile)
+        // Rollback never overlaps a project group the Swift owner started: any it
+        // left behind after a crash is stopped before the legacy owner starts.
+        RuntimeJournal(profile: profile).sweep()
         let supervisor = LegacySupervisor()
         var environment = ProcessInfo.processInfo.environment
         environment["TREZI_USER_DATA"] = profile

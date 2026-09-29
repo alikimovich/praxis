@@ -7,8 +7,10 @@ A separate Swift XPC service owns profile exclusion, supervises legacy Bun and
 holds the durable operation ledger (S03) and, since LKM-91, writes preferences
 through it (docs/SWIFT-BACKEND-PREFERENCES.md); since LKM-92 it also owns
 workspace identity, order and selection (docs/SWIFT-BACKEND-WORKSPACE.md), and
-since LKM-93 project memory (docs/SWIFT-BACKEND-MEMORY.md). Every other domain
-writer remains in Bun until a verified transfer; annotation storage is split from
+since LKM-93 project memory (docs/SWIFT-BACKEND-MEMORY.md). Since LKM-94 it also
+runs managed project servers, installs and static sites
+(docs/SWIFT-BACKEND-RUNTIME.md). Every other domain writer remains in Bun until a
+verified transfer; annotation storage is split from
 publication but stays in Bun until the S07 repository lane.
 Electron, the React application renderer and browser/Tailscale mode are retired.
 Distributed as source: clone, `bun install`, `bun run dev`. Users authenticate
@@ -98,6 +100,15 @@ Groups are defined in `src/native/smoke-groups.ts`.
   shared rules, the rollback writer, the evaluation queue and injection.
   `src/main/annotation-store.ts` is annotation storage (Bun-owned, split from
   publication in `src/main/annotations.ts`).
+- `src/service/RuntimeOwner.swift`, `src/service/RuntimeServer.swift`,
+  `src/service/ManagedProcess.swift`, `src/service/RuntimeDetect.swift`,
+  `src/service/RuntimeNet.swift`, `src/service/StaticSite.swift`,
+  `src/service/StaticServer.swift`: the Swift managed project runtime (detection,
+  installs, process groups with watchdog + journal, readiness, static site and
+  watcher). Bun's client is `src/native/runtime-service.ts`, served on the
+  `devserver:*` routes by `src/main/devserver-service.ts`; `src/main/devserver.ts`
+  and `src/main/static-server.ts` are the rollback owner, `src/main/project-detect.ts`
+  the shared detection rules. HTML stamping stays a JS helper.
 - `src/native/Host.swift`: AppKit app lifecycle and host protocol.
 - `src/native/ProjectCell.swift`: sidebar row rendering and native project drag reordering.
 - `src/native/Shell.swift`: sidebar/project actions, split view and column-aligned
@@ -146,7 +157,9 @@ or implicitly migrate existing user data. See `docs/NATIVE.md`.
 
 Trezi **owns** target dev-server lifetimes: never run the target's `dev` manually.
 The app awaits managed process-group cleanup on quit and terminal shutdown,
-force-stopping survivors after a one-second grace period. Swift edits require
+force-stopping survivors after a one-second grace period. Under the Swift launch the
+service drains its groups before releasing the profile lock, and a crashed service's
+groups are stopped by their watchdogs or the next launch's journal sweep. Swift edits require
 rebuild/restart; the user's project retains its own HMR.
 
 Claude and Codex share on-demand preview location/screenshot observation. The Codex

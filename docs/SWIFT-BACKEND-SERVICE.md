@@ -34,8 +34,14 @@ scripts/start-native.mjs ── TreziHost (AppKit) ──XPC── TreziService 
 - `src/service/MemoryOwner.swift` (S05, LKM-93): the project memory writer, on
   the same pipe (`{"service":"memory"`) and the same `DomainChannel`, drained at
   stop like the other two. See [memory](SWIFT-BACKEND-MEMORY.md).
-- `src/main/managed-child.ts`: Bun keeps choosing server/Simulator commands but
-  spawns them through the Swift guardian when supervised.
+- `src/service/RuntimeOwner.swift` (S06, LKM-94): the managed project runtime,
+  on the same pipe (`{"service":"runtime"`, plus `runtime-helper` stamping answers).
+  It launches project groups itself, each with a `--watch-group` watchdog and a
+  journal entry, and is drained at stop after Bun exits and before the lock is
+  released. The `--legacy` launcher sweeps that journal before Bun starts. See
+  [runtime](SWIFT-BACKEND-RUNTIME.md).
+- `src/main/managed-child.ts`: Bun keeps choosing Simulator commands (and, in the
+  legacy launch, server commands) and spawns them through the Swift guardian.
 
 The XPC service is bundled at
 `Trezi Native.app/Contents/XPCServices/dev.praxis.service.xpc` and copied to

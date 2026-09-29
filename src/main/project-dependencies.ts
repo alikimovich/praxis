@@ -28,12 +28,25 @@ export async function projectPackageManager(root: string): Promise<PackageManage
   return 'npm'
 }
 
+let serviceInstaller: ((root: string) => Promise<unknown>) | null = null
+
+/** Swift launch (S06): the service runs and supervises installs. Bun keeps the
+ * repository write lease around each one until the S07 repository lane. */
+export function setDependencyInstaller(installer: ((root: string) => Promise<unknown>) | null): void {
+  serviceInstaller = installer
+}
+
 /** Install in the live checkout: worktree-local node_modules are never landed by Git. */
 export async function installProjectDependencies(
   root: string,
   log: (line: string) => void
 ): Promise<void> {
   return enqueueRepoWrite(root, async () => {
+    // The service logs its own progress and output as runtime log lines.
+    if (serviceInstaller) {
+      await serviceInstaller(root)
+      return
+    }
     if (!(await exists(join(root, 'package.json')))) return
     const manager = await projectPackageManager(root)
     log(`Installing project dependencies with ${manager}…`)

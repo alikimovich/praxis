@@ -42,6 +42,8 @@ import { servicePreferences } from './preferences-service'
 import { legacyWorkspace } from './workspace'
 import { serviceWorkspace } from './workspace-service'
 import { serviceProjectMemory } from './project-memory-service'
+import { type ProjectRuntime, serviceRuntime } from './runtime-service'
+import { setDependencyInstaller } from '../main/project-dependencies'
 import { installNativeChat } from './chat-runtime'
 import { NativeShellController } from './shell-controller'
 import { NativeSupportSheets } from './support-sheets'
@@ -96,6 +98,7 @@ async function main() {
   let pickedRoot = fixture || (requestedProject ? resolve(requestedProject) : null)
   const root = resolve(__dirname, '../..')
   let host: NativeBridge | undefined
+  let runtime: ProjectRuntime | undefined
   let cleaning: Promise<void> | undefined
   const cleanup = (): Promise<void> => {
     if (cleaning) return cleaning
@@ -107,7 +110,8 @@ async function main() {
       if (!serviceLocked) rmSync(lock, { force: true })
       // Keep the native profile separate from retired Electron installations.
       // Test profiles are disposable.
-      await drainDevServers()
+      // Swift launch: the service stops its groups (and again if Bun dies first).
+      await Promise.all([drainDevServers(), runtime?.stopAll().catch(() => {})])
       if (testDir) {
         await host?.closed
         if (!process.env.TREZI_NATIVE_TEST_DIR) rmSync(testDir, { recursive: true, force: true })
@@ -134,6 +138,12 @@ async function main() {
     : legacyWorkspace(profile)
   // Project memory (S05): read on demand, so there is no startup snapshot to await.
   if (process.env.TREZI_SERVICE_SUPERVISED === '1') { const memory = serviceProjectMemory(host); setProjectMemoryOwner(() => memory) }
+  // Managed project runtimes (S06): the service runs servers, installs and static sites.
+  if (process.env.TREZI_SERVICE_SUPERVISED === '1') {
+    const owner = serviceRuntime(host)
+    runtime = owner
+    setDependencyInstaller(root => owner.install(root))
+  }
   const refreshPreferences = () => {
     const values = preferences.snapshot()
     let preferred: unknown
@@ -179,7 +189,7 @@ async function main() {
       }
     }
   })
-  registerDevServerIpc(() => window)
+  registerDevServerIpc(() => window, ipcMain, runtime)
   registerAgentIpc(() => window)
   registerPropsIpc()
   registerStylesIpc()

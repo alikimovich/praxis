@@ -20,6 +20,8 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
     var workspace: WorkspaceChannel?
     /// S05 project memory writer (one ledger domain per project), on the same pipe.
     var memory: MemoryChannel?
+    /// S06 managed project runtimes (servers, installs, static site), on the same pipe.
+    var runtime: RuntimeOwner?
     var child: LegacyChild?
     var launch: ServiceLaunch?
     var peerPID: pid_t?
@@ -85,6 +87,10 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                         throw ServiceContractFailure.unavailable
                     }
                     exclusion = try ProfileExclusion(profile: requested.profile)
+                    // Under the lock, before Bun: stop any project group a crashed
+                    // owner left behind (never a pid that is now someone else's).
+                    let journal = RuntimeJournal(profile: requested.profile)
+                    journal.sweep()
                     do {
                         ledger = try OperationLedger(directory: URL(fileURLWithPath: requested.profile)
                             .appendingPathComponent("service/ledger"))
@@ -123,6 +129,8 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                         workspace = WorkspaceChannel(owner: WorkspaceOwner(
                             disk: PreferencesDisk(path: profile.appendingPathComponent("workspace.json").path), ledger: ledger), send: send)
                         memory = MemoryChannel(owner: MemoryOwner(store: MemoryStore(profile: profile), ledger: ledger), send: send)
+                        runtime = RuntimeOwner(options: RuntimeOwner.Options(environment: requested.environment,
+                            watchdog: CommandLine.arguments[0], journal: journal), send: send)
                     }
                     readBackend()
                 }
@@ -179,11 +187,12 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
     func readBackend() {
         guard let output = child?.output else { return }
         // Handed to the reader directly (not via `queue`), so Bun's preference,
-        // workspace and memory writes are still served while `stop` waits for Bun to exit.
-        let preferences = preferences, workspace = workspace, memory = memory
+        // workspace, memory and runtime requests are still served while `stop` waits for Bun to exit.
+        let preferences = preferences, workspace = workspace, memory = memory, runtime = runtime
         let preferencesPrefix = Data("{\"service\":\"preferences\"".utf8)
         let workspacePrefix = Data("{\"service\":\"workspace\"".utf8)
         let memoryPrefix = Data("{\"service\":\"memory\"".utf8)
+        let runtimePrefix = Data("{\"service\":\"runtime\"".utf8)
         DispatchQueue.global().async { [weak self] in
             var pending = Data()
             do {
@@ -197,6 +206,7 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                         if line.starts(with: preferencesPrefix) { preferences?.submit(line); continue }
                         if line.starts(with: workspacePrefix) { workspace?.submit(line); continue }
                         if line.starts(with: memoryPrefix) { memory?.submit(line); continue }
+                        if line.starts(with: runtimePrefix) || line.starts(with: RuntimeOwner.helperPrefix) { runtime?.submit(line); continue }
                         guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any], object["method"] is String else { continue }
                         self?.queue.async { [weak self] in self?.deliver(line) }
                     }
@@ -242,6 +252,9 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
         _ = drained.wait(timeout: .now() + 2)
         supervisor.shutdown()
         try? child?.input.close(); try? child?.output.close()
+        // Bun has exited; its project servers have not. Drain every owned group and
+        // site before anything is released (bounded), so no rollback overlaps them.
+        runtime?.close(timeout: 5); runtime = nil
         // Bun has exited: refuse new preference/workspace/memory requests and let accepted
         // ones finish (bounded). One still running at exit is recovered from the ledger.
         preferences?.close(timeout: 2); preferences = nil

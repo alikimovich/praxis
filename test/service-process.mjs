@@ -156,7 +156,7 @@ try {
     mkdirSync(join(service, 'MacOS'), { recursive: true })
     const host = join(app, 'MacOS/TreziHost')
     const executable = join(service, 'MacOS/TreziService')
-    compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/service/LedgerStore.swift', 'src/service/OperationLedger.swift', 'src/service/PreferencesFile.swift', 'src/service/PreferencesOwner.swift', 'src/service/WorkspaceFile.swift', 'src/service/WorkspaceOwner.swift', 'src/service/MemoryFile.swift', 'src/service/MemoryOwner.swift', 'src/service/DomainChannel.swift', 'src/service/LegacySupervisor.swift', 'src/service/ServiceRuntime.swift', 'src/service/ProcessGuardian.swift', 'src/service/ServiceMain.swift'], executable)
+    compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/service/LedgerStore.swift', 'src/service/OperationLedger.swift', 'src/service/PreferencesFile.swift', 'src/service/PreferencesOwner.swift', 'src/service/WorkspaceFile.swift', 'src/service/WorkspaceOwner.swift', 'src/service/MemoryFile.swift', 'src/service/MemoryOwner.swift', 'src/service/DomainChannel.swift', 'src/service/LegacySupervisor.swift', 'src/service/ManagedProcess.swift', 'src/service/RuntimeNet.swift', 'src/service/RuntimeDetect.swift', 'src/service/StaticSite.swift', 'src/service/StaticServer.swift', 'src/service/RuntimeServer.swift', 'src/service/RuntimeOwner.swift', 'src/service/ServiceRuntime.swift', 'src/service/ProcessGuardian.swift', 'src/service/ServiceMain.swift'], executable)
     compile(['src/service/ServiceContract.swift', 'src/service/ServiceXPC.swift', 'src/native/ServiceClient.swift', 'test/fixtures/service-process/XPCFixture.swift'], host)
     plist(join(app, 'Info.plist'), '<key>CFBundleIdentifier</key><string>dev.praxis.fixture</string><key>CFBundleExecutable</key><string>TreziHost</string><key>CFBundlePackageType</key><string>APPL</string><key>LSBackgroundOnly</key><true/>')
     plist(join(service, 'Info.plist'), '<key>CFBundleIdentifier</key><string>dev.praxis.service</string><key>CFBundleExecutable</key><string>TreziService</string><key>CFBundlePackageType</key><string>XPC!</string><key>XPCService</key><dict><key>ServiceType</key><string>Application</string><key>RunLoopType</key><string>dispatch_main</string></dict>')
@@ -181,6 +181,27 @@ try {
     assert.equal(readFileSync(state, 'utf8'), '{"newer":"retained-after-rollback"}')
     assert.ok(!existsSync(join(profile, 'service')), 'the legacy owner never opens the Swift ledger')
     console.log('SERVICE-PROCESS rollback: launch, shared lock, drain and newest draft retention PASS')
+    // S06: the legacy launch sweeps the Swift runtime journal before Bun starts, and a
+    // recorded pid now held by an unrelated process (other start time) is left alone.
+    const sweepProfile = join(scratch, 'sweep-profile')
+    mkdirSync(join(sweepProfile, 'service/runtime'), { recursive: true })
+    const unrelated = spawn('/bin/sleep', ['300'], { detached: true, stdio: 'ignore' })
+    const journal = join(sweepProfile, 'service/runtime/processes.json')
+    writeFileSync(journal, JSON.stringify({ version: 1, groups: [{ pgid: unrelated.pid, started: '1' }] }))
+    try {
+      const sweepPIDFile = join(scratch, 'sweep-child.pid')
+      const sweeping = processFixture(executable, ['--legacy', '--bun', bun, '--backend', backend, '--profile', sweepProfile], { FIXTURE_PID: sweepPIDFile })
+      const sweepPID = await pidFile(sweepPIDFile)
+      groups.add(sweepPID)
+      assert.deepEqual(JSON.parse(readFileSync(journal, 'utf8')).groups, [], 'journal settled before the legacy owner started')
+      assert.doesNotThrow(() => process.kill(unrelated.pid, 0), 'an unrelated process with a recorded pid is never signalled')
+      sweeping.child.kill('SIGTERM')
+      assert.equal((await sweeping.done).code, 0)
+      await dead(sweepPID)
+      groups.delete(sweepPID)
+      assert.ok(!existsSync(join(sweepProfile, 'service/ledger')), 'the legacy owner never opens the Swift ledger')
+    } finally { unrelated.kill('SIGKILL') }
+    console.log('SERVICE-PROCESS rollback: runtime journal swept, unrelated pid untouched PASS')
     if (process.argv.includes('--supervision-only')) {
       console.log('SERVICE-PROCESS supervision-only PASS — XPC coverage requires the full fixture')
     } else {

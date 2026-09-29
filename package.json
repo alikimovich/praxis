@@ -53,6 +53,7 @@
     "test:preferred-model": "bun test/preferred-model.mjs",
     "test:project-memory": "bun test/project-memory.mjs",
     "test:memory-owner": "bun test/memory-owner.mjs",
+    "test:runtime-owner": "bun test/runtime-owner.mjs",
     "test:annotation-store": "bun test/annotation-store.mjs",
     "test:project-icon": "bun test/project-icon.mjs",
     "test:providers": "bun test/providers-store.mjs",
