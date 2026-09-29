@@ -120,6 +120,16 @@ src/
                     client is native/project-memory-service.ts; main/project-memory.ts
                     is the rollback writer + evaluation queue + injection
                     (docs/SWIFT-BACKEND-MEMORY.md)
+    RuntimeOwner.swift / RuntimeServer.swift / ManagedProcess.swift   the managed
+                    project runtime (LKM-94): dev-server + install process groups
+                    (descendants stopped with their leader, `--watch-group`
+                    watchdog + journal for crash recovery, never adopting a pid),
+                    ports, readiness. RuntimeDetect.swift / RuntimeNet.swift mirror
+                    main/project-detect.ts + devserver-net.ts; StaticSite.swift /
+                    StaticServer.swift serve static projects (FSEvents, SSE,
+                    real-path containment). Bun's client is native/runtime-service.ts
+                    on the devserver:* routes (main/devserver-service.ts); HTML
+                    stamping stays a JS helper (docs/SWIFT-BACKEND-RUNTIME.md)
   main/           Backend services (CJS bundle, Bun); historical directory name
     preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
                     bounds/load/reset/capture, the select + comment relays, the
@@ -129,8 +139,11 @@ src/
                     re-arm reads). The sandboxed preload can only be READ by a
                     request/reply round trip; `requestReply` is that pattern
                     once, shared by styles:read and layers:read
-    devserver.ts    detect framework/PM, spawn dev server, parse URL, readiness
-    static-server.ts in-process static file server for vanilla HTML/JS projects
+    devserver.ts    legacy-launch runner: spawn dev server, parse URL, readiness
+                    (the Swift launch serves the same routes via devserver-service.ts)
+    project-detect.ts detect framework/PM + launch commands (pure; Swift mirror
+                    in service/RuntimeDetect.swift)
+    static-server.ts legacy-launch static file server for vanilla HTML/JS projects
                     (framework 'static': no package.json/dev command; live-reload)
     file-tree.ts    list a project's files (git ls-files / fs-walk) for the
                     native source editor's file tree (source:tree IPC)
@@ -283,14 +296,18 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   and supervises Bun over private pipes. The service writes `preferences.json`
   (`docs/SWIFT-BACKEND-PREFERENCES.md`), `workspace.json`
   (`docs/SWIFT-BACKEND-WORKSPACE.md`) and project memory
-  (`docs/SWIFT-BACKEND-MEMORY.md`); Bun is still the single writer of every
-  other domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun
-  spawns the host, still under Swift's lock, and writes all three itself). See
+  (`docs/SWIFT-BACKEND-MEMORY.md`), and runs managed project servers, installs
+  and static sites (`docs/SWIFT-BACKEND-RUNTIME.md`); Bun is still the single
+  writer of every other domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun
+  spawns the host, still under Swift's lock, writes all three itself and runs its
+  own servers after the launcher sweeps the runtime journal). See
   `docs/SWIFT-BACKEND-SERVICE.md`.
 - The chat runs in `main` via provider SDKs; output streams over `agent:*` IPC
   into Bun chat controllers, which send typed state to Swift.
 - Trezi **owns** the dev-server lifecycle of the target repo (never run the
-  target's `dev` manually); it's killed on app quit.
+  target's `dev` manually); it's killed on app quit. Under the Swift launch the
+  service owns those process groups and drains them before releasing the profile
+  lock.
 
 **Why it's built this way (non-obvious choices):**
 - **Agent core = SDK in-process** (not ACP/subprocess): the product's custom

@@ -122,3 +122,56 @@ private final class GuardianState {
         condition.unlock()
     }
 }
+
+/// `--watch-group <pgid>` (S06): the crash backstop for a project process group the
+/// Swift service launched itself. FD 3 is the read end of a lifetime pipe whose only
+/// writer is the service. EOF (the service died) or SIGTERM stops the group: TERM,
+/// a bounded grace, then KILL. It exits by itself once the group is gone. It never
+/// launches anything and never signals any other group.
+func runGroupWatchdog(arguments: [String]) -> Never {
+    guard let text = arguments.first, let pgid = pid_t(text), pgid > 1, fcntl(3, F_GETFD) >= 0 else {
+        fputs("Trezi group watchdog requires a process group and lifetime descriptor\n", stderr)
+        exit(64)
+    }
+    _ = fcntl(3, F_SETFD, FD_CLOEXEC)
+    signal(SIGINT, SIG_IGN)
+    signal(SIGHUP, SIG_IGN)
+    signal(SIGTERM, SIG_IGN)
+    let watchdog = GroupWatchdog(pgid: pgid)
+    let term = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global())
+    term.setEventHandler { watchdog.stopGroup() }
+    term.resume()
+    DispatchQueue.global(qos: .utility).async {
+        var byte: UInt8 = 0
+        while true {
+            let count = read(3, &byte, 1)
+            if count < 0 && errno == EINTR { continue }
+            if count <= 0 { watchdog.stopGroup() }
+        }
+    }
+    // An empty group (only an unreaped leader left answers EPERM) needs no watch.
+    while kill(-pgid, 0) == 0 { usleep(100_000) }
+    withExtendedLifetime(term) {}
+    exit(0)
+}
+
+private final class GroupWatchdog: @unchecked Sendable {
+    private let pgid: pid_t
+    private let lock = NSLock()
+    private var stopping = false
+    init(pgid: pid_t) { self.pgid = pgid }
+
+    /// TERM, 0.5 s grace, KILL, exit. A second caller parks until the first exits.
+    func stopGroup() -> Never {
+        lock.lock()
+        let first = !stopping
+        stopping = true
+        lock.unlock()
+        guard first else { while true { pause() } }
+        kill(-pgid, SIGTERM)
+        let deadline = Date().addingTimeInterval(0.5)
+        while Date() < deadline && kill(-pgid, 0) == 0 { usleep(10_000) }
+        kill(-pgid, SIGKILL)
+        exit(0)
+    }
+}

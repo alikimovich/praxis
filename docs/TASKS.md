@@ -96,6 +96,20 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
 
+## Swift-owned managed project runtime (LKM-94 / S06)
+
+- [x] Name the domain exactly (detection, process groups, ports, readiness, installs, static site, watcher, SSE, journal; Bun-owned command choice, install repository lease, stamping helper, sidecar migration, evidence mirror, persisted server fields) and tighten its rollback plan (`docs/SWIFT-BACKEND-RUNTIME.md`).
+- [x] Swift `RuntimeDetect`/`RuntimeNet` with parity to `project-detect.ts`/`devserver-net.ts`; the project's own package manager and the user's PATH preserved.
+- [x] Swift process groups: descendants stopped before the leader is reaped, repeated/concurrent stops joined, TERM grace then KILL, restart without overlap, failed readiness answered after the group is gone.
+- [x] Crash recovery without adoption: per-group `--watch-group` watchdog, journal with leader start time, sweep at Swift and `--legacy` launch; unrelated reused pids untouched.
+- [x] Swift static site: traversal (lexical + real path), MIME/404/405/431/400, live-reload SSE, FSEvents watcher; stamping through the JS helper with a bounded fallback.
+- [x] Installs in Swift under Bun's repository write lease; failures, timeouts and missing managers reported; `devserver:*` routes on the owner.
+- [x] Drain at quit before the profile lock is released; `TREZI_BACKEND_OWNER=legacy` keeps Bun's runner as the rollback owner.
+- [x] `test/runtime-owner.mjs` (unit tier); `service-process` legacy journal sweep.
+- [ ] Remaining S06 sub-boundary: the workspace controller's persisted server fields (`url`, `launchSpec`, dependency flags) stay on the S04 adapter until the controller moves (S12).
+- [ ] Remaining S06 sub-boundary: the user-driven "Servers" recovery sheet (`preview-processes.ts`, foreign listeners) stays in Bun; move it with S12/S14 platform process integration before S15.
+- [ ] Manager: stage the new files (docs-links checks tracked paths), run the unit tier unsandboxed (runtime-owner watcher + socket sections, full `service-process`, `devserver-net`), `bun run test:native` through the Swift static site, independent review.
+
 ## Swift-owned project memory; annotation storage split (LKM-93 / S05)
 
 - [x] Name the domain exactly (memory files, temp files, per-project ledger domains `memory/<id>`, evaluation helper, injection state, editor drafts, annotation sidecar) and tighten its rollback plan (`docs/SWIFT-BACKEND-MEMORY.md`).

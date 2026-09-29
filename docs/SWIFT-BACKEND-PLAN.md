@@ -11,7 +11,21 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
-**Current (2026-09-29, LKM-93):** S05 (roadmap row) moves project memory into the
+**Current (2026-09-29, LKM-94):** S06 (roadmap row) moves the managed project
+runtime into the Swift service as one unit: runtime detection, dependency installs,
+dev-server process groups, ports, readiness, the static site with its FSEvents
+watcher and live-reload stream, and shutdown and crash recovery. Bun still chooses
+what to run and keeps the repository write lease around installs until S07; HTML
+stamping stays a JS helper the static site asks. Each group has a watchdog and a
+journal entry, so descendants never outlive a leader, a service crash never leaves
+a server running, and nothing unrelated is signalled or adopted. At quit the
+service drains every owned group before it releases the profile lock, and the
+`--legacy` launcher sweeps the journal first, so `TREZI_BACKEND_OWNER=legacy`
+(Bun's runner as the rollback owner) never overlaps a Swift-started server. See
+[runtime](SWIFT-BACKEND-RUNTIME.md). Implemented for review on the LKM-93
+candidate; manager verification and acceptance are pending.
+
+**Earlier (2026-09-29, LKM-93):** S05 (roadmap row) moves project memory into the
 Swift service as the only writer of the unchanged `project-memories/<id>.json`
 files, through the ledger (one domain per project). A manual editor `save` always
 wins; a generated `propose` commits only on the revision it was evaluated against,

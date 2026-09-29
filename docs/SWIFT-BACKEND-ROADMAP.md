@@ -23,6 +23,11 @@ The memory transfer (LKM-93, row S05) is implemented for review: the service own
 project memory files and orders manual saves ahead of stale generated proposals;
 annotation storage is split from publication but stays legacy-owned until S07, and
 attachments are not yet moved ([memory](SWIFT-BACKEND-MEMORY.md)).
+The runtime transfer (LKM-94, row S06) is implemented for review: the service owns
+detection, installs, dev-server process groups, ports, readiness and the static
+site with its watcher, with a per-group watchdog and journal for crash recovery;
+Bun keeps command choice and the install's repository lease, and its runner is the
+rollback owner ([runtime](SWIFT-BACKEND-RUNTIME.md)).
 
 | Task | Canonical phase | Scope and future owner | Required exit evidence |
 | --- | --- | --- | --- |
@@ -31,7 +36,7 @@ attachments are not yet moved ([memory](SWIFT-BACKEND-MEMORY.md)).
 | S03 | 3 | Durable intent/checkpoint/snapshot substrate and preferences; Swift persistence service | Persist intent before effects, recover after each injected crash phase, deduplicate across restart, preserve v1 preferences/unknown keys/null and unsaved drafts; drain-and-restart restoration. Ledger substrate implemented for review (LKM-90): `test/operation-ledger.mjs`. Preferences transfer implemented for review (LKM-91): `test/preferences-owner.mjs`. |
 | S04 | 3 | Basic projects/workspaces; Swift workspace coordinator | Stable root/checkout identity, restore/open/close/reorder/suspend parity, revisioned snapshots and preservation of newer workspace state on rollback. AppKit retains picking and presentation. Implemented for review (LKM-92): `test/workspace-owner.mjs`. Root identity moved; checkout (worktree) identity stays with S07, and warm-project suspension keeps running in Bun on the Swift-owned `touchedAt` until S06/S11. |
 | S05 | 3 | Memory, annotations and attachments; Swift state services | Manual save beats stale evaluation, annotation publishing split, scratch/blob bounds, original data retained on corruption/failure and restart. Repository lane gates project sidecar changes. Memory implemented for review (LKM-93): `test/memory-owner.mjs`. Annotation storage split and hardened in Bun (`test/annotation-store.mjs`); its Swift writer is blocked on S07. Attachments (scratch/blob bounds) not started. |
-| S06 | 4 | Managed servers/dependencies/static serving; Swift process supervisor | Selected runtime preserved; process groups, descendants, watchers and logs stop on shutdown; readiness/port/restart failures and rollback tested without orphan adoption. |
+| S06 | 4 | Managed servers/dependencies/static serving; Swift process supervisor | Selected runtime preserved; process groups, descendants, watchers and logs stop on shutdown; readiness/port/restart failures and rollback tested without orphan adoption. Implemented for review (LKM-94): `test/runtime-owner.mjs`. Persisted server fields stay on the S04 adapter with the workspace controller (S12); the user-driven "Servers" recovery sheet (foreign listeners) and the Simulator (S14) stay in Bun. |
 | S07 | 5 | Git/worktrees/isolation policy and recovery; per-repository Swift coordinator | Explicit mutation intent, common-directory FIFO lease, private index, recovery refs and interrupted landing; preserve user index/worktrees and never blind-reset newer changes. |
 | S08 | 5 | Source transactions, file tree, media reads, drafts and Undo; Swift source service | Expected hashes, root/symlink checks, multi-file interrupted commit recovery, grouped Undo, blob scopes and newer external edits preserved; Repository remains serialization authority. |
 | S09 | 5 | Parser/source-edit helper extraction; read-only JS parsers under Swift source authority | Hash-bound patches/diagnostics, React/Svelte/HTML parity, unavailable/schema/ambiguous cases, cancelled/stale proposals; helpers cannot commit source. |

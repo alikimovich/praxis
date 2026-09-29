@@ -85,8 +85,8 @@ const serviceResult = Bun.spawnSync([
   'xcrun', 'swiftc', '-O', '-target',
   `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx13.3`,
   '-module-cache-path', join(out, 'module-cache'),
-  ...['ServiceContract', 'ServiceXPC', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile', 'WorkspaceOwner', 'MemoryFile', 'MemoryOwner', 'DomainChannel', 'LegacySupervisor', 'ProcessGuardian', 'ServiceRuntime', 'ServiceMain'].map(name => join(root, `src/service/${name}.swift`)),
-  '-o', join(serviceContents, 'MacOS/TreziService'), '-framework', 'Foundation', '-framework', 'Security'
+  ...['ServiceContract', 'ServiceXPC', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile', 'WorkspaceOwner', 'MemoryFile', 'MemoryOwner', 'DomainChannel', 'LegacySupervisor', 'ProcessGuardian', 'ManagedProcess', 'RuntimeNet', 'RuntimeDetect', 'StaticSite', 'StaticServer', 'RuntimeServer', 'RuntimeOwner', 'ServiceRuntime', 'ServiceMain'].map(name => join(root, `src/service/${name}.swift`)),
+  '-o', join(serviceContents, 'MacOS/TreziService'), '-framework', 'Foundation', '-framework', 'Security', '-framework', 'CoreServices'
 ], { stdout: 'inherit', stderr: 'inherit' })
 if (serviceResult.exitCode) process.exit(serviceResult.exitCode)
 copyFileSync(join(serviceContents, 'MacOS/TreziService'), join(out, 'TreziService'))

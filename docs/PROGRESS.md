@@ -2,6 +2,63 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — Swift-owned managed project runtime (LKM-94 / S06)
+
+The fourth transfer, on the LKM-93 candidate, and the first that moves processes
+rather than a file. Under the Swift launch the service owns everything that serves
+a user's project, as one unit: runtime detection, dependency installs, dev-server
+process groups, ports, readiness, the static site with its FSEvents watcher and
+live-reload stream, and shutdown and crash recovery. Details and the tightened
+rollback plan are in `docs/SWIFT-BACKEND-RUNTIME.md`.
+
+Bun still decides what to run: the detected command or the user's custom one. The
+service runs it with the launch environment Bun was given, so the user's PATH still
+selects the project's Bun, Node, pnpm or Yarn. The package manager still comes from
+the project's `packageManager` field or lockfile. Two things stay in Bun on purpose.
+The repository write lease around an install stays until S07, so Bun holds it while
+the service runs the install. HTML stamping (parse5) stays a JS helper, which the
+static site asks over the pipe; after 5 s, or on an error, it serves the page
+unstamped. Detection, commands and URL parsing are written twice
+(`RuntimeDetect.swift`/`project-detect.ts`, `RuntimeNet.swift`/`devserver-net.ts`)
+and tested against each other.
+
+Process ownership got stricter. Each server or install leads its own group. When the
+leader exits on its own, the rest of the group is stopped before the leader is
+reaped, so a descendant never outlives it and the group ID cannot be reused while
+anything could still signal it. Each group has a watchdog (`--watch-group`) holding
+a lifetime pipe from the service, and a journal entry with the leader's kernel start
+time. A service crash stops the group through the watchdog. If the watchdog died
+too, the next launch's sweep stops it: Swift, or the `--legacy` launcher before Bun
+starts. A recorded pid now held by an unrelated process is left alone. Nothing is
+adopted: a new service starts fresh servers.
+
+Behavior changes: `stop` answers once the group has ended, and a restart waits for
+its predecessor. Failed readiness is answered after the group is gone. A stop no
+longer races an install; Bun discards the start that was waiting on it. Install
+output reaches the Activity log. Port allocation also probes the IPv4 wildcard. The
+static site refuses a symlink that leads out of the project (403). Before, only the
+lexical path was checked, so a repository could serve any file on the machine to its
+own preview. Oversized (431) and malformed (400) requests are refused, and responses
+are `Connection: close`.
+
+What stays in Bun: the workspace controller's persisted server fields (`url`,
+`launchSpec`, dependency flags) stay on the S04 adapter. They are relaunch
+decisions and move with that controller. The "Servers" recovery sheet stays too: it
+owns no process, and signals a foreign listener only when the user picks it. The
+Simulator stays with S14. Each is recorded in TASKS.
+
+Verification (worker sandbox): `test/runtime-owner.mjs` passes parity (20 detection
+cases, launch commands, failure messages, URL helpers), process lifecycle, installs,
+routes, crash recovery, drain, static HTTP over a socketpair and the stamping helper.
+Its watcher section needs FSEvents and its socket section needs local port binding;
+the sandbox allows neither (Node and Bun get no FSEvents here either), so the test
+reports SKIP rather than PASS. `service-process --supervision-only` builds the real
+service with the owner and passes, including a new check that the legacy launcher
+sweeps the journal without signalling an unrelated pid. Both typechecks pass, and
+the new Swift files have zero diagnostics under `-strict-concurrency=complete`.
+`devserver-net` still fails here only on port binding. The manager's unsandboxed run
+covers the watcher and socket sections, the full `service-process`, and
+`test:native`, whose fixture project is a static site served by the Swift owner.
 ## 2026-09-28 — App is "Trezi", not "Trezi Native" (LKM-108)
 
 The app is native-only, so the qualifier was noise. The build now produces
@@ -21,6 +78,18 @@ one. The preview fixture strings in the native smoke (`Native Trezi fixture`,
 `Edited through Trezi Native`) are test content, not the app name, so they stay.
 The LKM-84/85 records under `docs/rename/` stay as written; COORDINATION and
 MIGRATION note the later rename.
+
+LKM-94 verification repair: the manager's unit run timed out `runtime-owner` at the
+120 s cap. Its `sockets` section used the 90 s default readiness timeout, and its
+port-conflict case bound `127.0.0.1` beside a `0.0.0.0` listener, which macOS
+allows under `SO_REUSEADDR`. The child stayed alive and silent, so readiness ended
+only on the 90 s timer with `deadlineExceeded`, not `conflict`. The runtime is
+unchanged. The test now uses a 12 s readiness timeout for that section, holds the
+port at the exact address the child binds so `EADDRINUSE` is certain, and asserts
+`conflict` within 10 s. It also caches the compiled fixture by source hash and
+compiler version. Cold under three other Swift compiles it takes 33 s and warm 9 s.
+The sockets section itself still cannot run in the worker sandbox (no local port
+binding), so it is the manager's check.
 
 ## 2026-09-29 — Swift-owned project memory; annotation storage split (LKM-93 / S05)
 

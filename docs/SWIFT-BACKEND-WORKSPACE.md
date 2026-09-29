@@ -46,7 +46,9 @@ before. The workspace controller sends the differences through `update`, which
 is typed: each field has one validation rule, applied by both owners. `root`,
 `key` and `touchedAt` are refused there. Swift persists these values but does not
 interpret them. Each moves to Swift with its own slice: sessions with S11,
-servers with S06, branches with S07. Checkout (worktree) identity also stays with
+servers with S06, branches with S07. (S06, LKM-94, moved the server processes but
+left these persisted fields on this adapter: they are the workspace controller's
+relaunch decisions, and move with that controller.) Checkout (worktree) identity also stays with
 S07. Warm-project suspension (the controller's `evictWarm`: stop the server and
 close the agent project beyond the three most recent) is unchanged in Bun. It is
 ordered by `touchedAt`, which is now stamped by Swift on `open` and `select`.
