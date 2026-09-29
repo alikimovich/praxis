@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## App name without "Native" (LKM-108)
+
+- [x] Build `out/native/Trezi.app` (`CFBundleName`/`CFBundleDisplayName` `Trezi`, window title `Trezi`); every launcher, test helper and doc path follows; the build removes a stale `Trezi Native.app`.
+- [x] Keep the bundle identifier, executable names and the `Trezi Native` profile directory (renaming that needs a migration).
+- [ ] Manager: run configured verification (typechecks, unit, `test:native`) under the desktop lock.
+
 ## Merge-friendly docs and evidence budget (LKM-110)
 
 - [x] Union-merge `docs/TASKS.md` and `docs/PROGRESS.md` via `.gitattributes`; scripted two-branch merge check (`test/docs-merge-union.mjs`).
@@ -596,7 +602,7 @@ Migration sequence and exit checks: [Native migration plan](NATIVE-MIGRATION.md)
 
 - [x] Bundle animation tuning guidance (superseded by `/surface-controls` and inline chat islands).
 - [x] Make the skill discoverable by Claude, Codex/custom endpoints, and Gemini.
-- [x] Add selection-independent panels (now native Trezi panels; supersedes the initial project UI approach).
+- [x] Add selection-independent panels (now native panels in Trezi; supersedes the initial project UI approach).
 - [x] Keep native inspector controls distinct and update the animation action prompt.
 
 ## Selection, message queues, and preview navigation (2026-09-17)

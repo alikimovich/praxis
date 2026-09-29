@@ -10,7 +10,7 @@ export function nativeServiceLaunchSpec(root, args, env, bun, testDirectory = nu
   if (!['swift', 'legacy'].includes(owner)) throw new Error('TREZI_BACKEND_OWNER must be swift or legacy')
   const profile = resolve(testDirectory ? join(testDirectory, 'profile') : env.TREZI_USER_DATA || nativeProfilePath(join(homedir(), 'Library/Application Support')))
   const out = join(root, 'out/native')
-  const host = join(out, 'Trezi Native.app/Contents/MacOS/TreziHost')
+  const host = join(out, 'Trezi.app/Contents/MacOS/TreziHost')
   const common = ['--bun', bun, '--backend', join(out, 'index.cjs'), '--profile', profile, '--', ...args]
   return {
     command: owner === 'legacy' ? join(out, 'TreziService') : host,

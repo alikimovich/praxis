@@ -7,7 +7,8 @@ requires a separately tested migration; no external account rename is implied.
 ## Profiles, sessions and ownership
 
 New installations use `~/.trezi`, `~/Library/Application Support/Trezi Native`
-and its `trezi` session directory. `TREZI_HOME` overrides installation location;
+and its `trezi` session directory. The profile directory keeps its `Trezi Native`
+name even though the built app is `Trezi.app` (LKM-108). `TREZI_HOME` overrides installation location;
 `TREZI_USER_DATA` explicitly selects a native profile. Every `PRAXIS_*` environment
 variable is accepted as a fallback to its `TREZI_*` counterpart; Trezi wins when
 both are supplied. The installer reuses an existing `~/.praxis` checkout rather
@@ -64,7 +65,7 @@ and existing absolute path values are preserved, not text-substituted.
 The bundle identifier `dev.praxis.native` and Keychain service
 `dev.praxis.native.secrets` deliberately remain stable OS identities. Changing
 these merely for branding would detach WebKit website data/permissions and the
-master encryption key. The displayed app/bundle/executable/icon names are Trezi.
+master encryption key. The displayed app/bundle/executable/icon names are Trezi; the bundle is `Trezi.app`.
 The rename does not read, export, rotate or log real user credentials; provider CLI
 logins remain in their provider-owned stores. Actual Keychain access still requires
 an unlocked macOS user session and was not exercised against personal credentials.

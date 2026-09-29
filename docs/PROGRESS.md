@@ -2,6 +2,26 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-28 — App is "Trezi", not "Trezi Native" (LKM-108)
+
+The app is native-only, so the qualifier was noise. The build now produces
+`out/native/Trezi.app` with `CFBundleName` and `CFBundleDisplayName` `Trezi` (the
+Dock, menu bar and About panel read these), and the main window title is `Trezi`
+instead of `Trezi · Native`. The app menu already said `Trezi`/`Quit Trezi`. Build
+and startup console lines, the profile-lock error, the restart error and the
+Safari Develop-menu hint drop "Native" too. `start-native.mjs`, `bin/trezi.mjs`,
+`native/index.ts` and the native test helpers find the new bundle path. The build
+deletes an old `out/native/Trezi Native.app` so no second app stays around.
+
+Unchanged on purpose: the bundle identifier `dev.praxis.native` (WebKit data,
+permissions, Keychain), the `TreziHost`/`TreziService` executables, and the
+profile directory `~/Library/Application Support/Trezi Native`. Renaming the
+profile would need a migration like LKM-85's alias, and the ticket doesn't ask for
+one. The preview fixture strings in the native smoke (`Native Trezi fixture`,
+`Edited through Trezi Native`) are test content, not the app name, so they stay.
+The LKM-84/85 records under `docs/rename/` stay as written; COORDINATION and
+MIGRATION note the later rename.
+
 ## 2026-09-29 — Swift-owned project memory; annotation storage split (LKM-93 / S05)
 
 The third writer transfer, on the LKM-92 candidate. Under the Swift launch the

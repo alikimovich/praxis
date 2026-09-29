@@ -5,7 +5,7 @@ import { once } from 'node:events'
 import { NativeBridge } from '../../src/native/bridge.ts'
 
 const directory = resolve('out/native')
-const executable = `${directory}/Trezi Native.app/Contents/MacOS/TreziHost`
+const executable = `${directory}/Trezi.app/Contents/MacOS/TreziHost`
 if (process.platform !== 'darwin' || !existsSync(executable)) {
   console.log('NATIVE-SOURCE-WINDOW SKIP — build the macOS native host first.')
   process.exit(0)
