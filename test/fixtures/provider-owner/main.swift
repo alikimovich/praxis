@@ -37,6 +37,11 @@ if let value = env["PROVIDER_GRACE"].flatMap(Double.init) { options.grace = valu
 if let value = env["PROVIDER_READY"].flatMap(Double.init) { options.readyTimeout = value }
 if let value = env["PROVIDER_TOOL_TIMEOUT"].flatMap(Double.init) { options.toolTimeout = value }
 if let value = env["PROVIDER_MAX_LINE"].flatMap(Int.init) { options.maxLine = value }
+// Provider data: PROVIDER_CRYPTO stands in for `TreziHost --crypto` (`\u{1f}`-separated
+// argv prefix), PROVIDER_NOW pins the catalog clock, the environment names TREZI_CODEX_BIN.
+options.data = ProviderData.Tools(crypto: env["PROVIDER_CRYPTO"].map { $0.split(separator: "\u{1f}").map(String.init) },
+    checkout: env["PROVIDER_CHECKOUT"], environment: env)
+if let value = env["PROVIDER_NOW"].flatMap(Double.init) { options.now = { value } }
 let owner = ProviderOwner(options: options, send: { emit($0) })
 emit([("ready", .bool(true)), ("swept", .array(swept.map { .number(Double($0)) }))])
 
@@ -50,6 +55,15 @@ while let line = readLine(strippingNewline: true) {
         switch name {
         case "close": emit([("closed", .bool(owner.close(timeout: 5)))])
         case "journal": emit([("groups", .array(RuntimeJournal.read(journal.path).map { .number(Double($0.pgid)) }))])
+        case "builtIn":
+            // The service's launch-time helper decision (ServiceRuntime's hello), for a given launch environment.
+            var launch: [String: String] = [:]
+            if case .object(let fields)? = command["environment"] { for (key, value) in fields { if let text = value.text { launch[key.string] = text.string } } }
+            let helper = ProviderHelperCommand.builtIn(environment: launch, backend: command["backend"]?.text?.string ?? "",
+                bun: command["bun"]?.text?.string ?? "")
+            emit([("helper", helper.map { .object([(JSText("executable"), .string(JSText($0.executable))),
+                (JSText("arguments"), .array($0.arguments.map { .string(JSText($0)) })),
+                (JSText("providers"), .array($0.providers.sorted().map { .string(JSText($0)) }))]) } ?? .null)])
         default: emit([("error", .string(JSText("unknown command \(name)")))])
         }
     }

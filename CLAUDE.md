@@ -89,7 +89,11 @@ src/
     WorkspaceLayout.swift        authoritative view/divider geometry
     SourceEditor.swift / Layers.swift / EditingInspector.swift / ContentWindow.swift
                     native source, layers, inspector and content editing
-    platform.ts     direct native service imports, Keychain, event routing
+    platform.ts     direct native service imports, event routing; opening links/files goes
+                    to the platform owner (platform-legacy.ts, `open` + Keychain crypto, is
+                    the rollback twin). index.ts refuses to start without the service's
+                    profile lock; profile-path.ts only resolves the profile aliases
+                    (profile-path-legacy.ts creates them without the service)
     preview-transport.ts   restricted isolated WKContentWorld transport
     assets/cat/     native animation artwork
   service/        separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
@@ -164,14 +168,19 @@ src/
                     main/conversation-owner.ts; main/conversation-model.ts is the rollback
                     twin (docs/SWIFT-BACKEND-CONVERSATION.md)
     ProviderOwner.swift / ProviderFrames.swift / ProviderPolicy.swift / ProviderHelper.swift /
-    ProviderStore.swift
+    ProviderStore.swift / ProviderData.swift
                     the provider owner (LKM-98): every provider session is opened here and
                     gets a grant (Trezi tools, roots, chat); it answers permission requests
                     (Claude's canUseTool asks it), authorizes Trezi tools (Claude's in-process
                     tools, Codex's MCP bridge), holds Stop's deadline, persists resume ids and
                     supervises provider helpers (stdio only, allowlisted env, own process
-                    group, every frame checked against the grant). The SDK adapters still
-                    run in Bun (main/provider-sessions.ts wires them); Bun's client is
+                    group, every frame checked against the grant). The SDK adapters run
+                    in Bun by default (main/provider-sessions.ts wires them); helpers are an
+                    explicit opt-in (`TREZI_PROVIDER_HELPERS=1`) and v10 connections stay
+                    in-process even then; the adapter move is LKM-111. ProviderData.swift
+                    (LKM-102) writes the connections store (keys via `TreziHost --crypto`),
+                    the model catalog cache and runs the Codex probe, behind
+                    main/provider-data.ts. Bun's client is
                     native/provider-service.ts behind main/provider-owner.ts;
                     main/provider-model.ts + provider-policy.ts are the rollback twin
                     (docs/SWIFT-BACKEND-PROVIDERS.md)
@@ -204,16 +213,22 @@ src/
                     setup.ts, scaffold.ts, diag-cache.ts) is the rollback twin
                     (docs/SWIFT-BACKEND-WORKFLOWS.md)
     PlatformOwner.swift / SimulatorOwner.swift / SimulatorBridge.swift /
-    SimulatorTools.swift / PlatformMedia.swift / PlatformTools.swift   the platform
+    SimulatorTools.swift / PlatformMedia.swift / PlatformTools.swift / PlatformOpen.swift   the platform
                     owner (LKM-101): the iOS Simulator preview (bounded, cancellable
                     xcrun/idb runs in a ToolScope, the app's launch command as a journaled
                     group, the loopback MJPEG bridge, idb input and picks), scoped media
                     grants for the source editor (view, identity, size, SHA-256, expiry),
-                    pasted attachments from hash-checked chunks, and the running-servers
-                    recovery. Bun's client is native/platform-service.ts behind
-                    main/platform-owner.ts; simulator.ts, media.ts, attachments.ts and
-                    native/preview-processes.ts are the rollback twin
+                    pasted attachments from hash-checked chunks, the running-servers
+                    recovery, and (PlatformOpen, LKM-102) opening links, files and
+                    "Open in editor". Bun's client is native/platform-service.ts behind
+                    main/platform-owner.ts; simulator.ts, media.ts, attachments.ts,
+                    native/preview-processes.ts, native/platform-legacy.ts and
+                    main/open-in-editor-legacy.ts are the rollback twin
                     (docs/SWIFT-BACKEND-PLATFORM.md)
+    ProfilePaths.swift   the profile and session-store rename aliases (LKM-102): the
+                    launcher asks `TreziService --resolve-profile`; the session alias is
+                    made under the profile lock before Bun starts
+                    (docs/SWIFT-BACKEND-RETIREMENT.md)
   main/           Backend services (CJS bundle, Bun); historical directory name
     preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
                     bounds/load/reset/capture, the select + comment relays, the
@@ -282,14 +297,18 @@ src/
                     it unit-tests without electron), while providers.ts owns the
                     safeStorage cipher, the providers:* IPC, the /models catalog probe,
                     the picker's ModelChoice list, and resolveConnection() — the seam
-                    backends/codex.ts aims the Codex SDK at
+                    backends/codex.ts aims the Codex SDK at. Under the Swift launch the
+                    store is written by the provider owner (provider-data.ts);
+                    providers-store.ts is its rollback twin
     model-catalog.ts / codex-models.ts   what the two BUILT-IN seats offer, discovered
                     instead of curated. model-catalog is the pure half (parsers + a TTL
                     cache with injected clock/baseDir, persisted under userData);
                     codex-models runs `codex debug models` on the SDK's OWN vendored
                     binary, not PATH. Claude needs a live session (Query.supportedModels()),
                     so backends/claude.ts hands its answer back via recordClaudeModels;
-                    providers.ts only schedules the refresh, never on the render path
+                    providers.ts only schedules the refresh, never on the render path.
+                    Under the Swift launch the provider owner writes the cache and runs
+                    the probe (provider-data.ts); these two are the rollback twins
     simulator.ts    iOS Simulator preview (Metro/Expo detect, MJPEG sim bridge); the
                     legacy-launch rollback of the Swift platform owner
     props.ts / props-svelte.ts   prop editing engines (React via react-docgen /
@@ -407,7 +426,11 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
   setup, new projects, Trezi's update and the diagnosis memory as journaled workflows
   (`docs/SWIFT-BACKEND-WORKFLOWS.md`), and runs the iOS Simulator preview, issues the source
   editor's media grants, writes pasted attachments and performs the running-servers
-  recovery (`docs/SWIFT-BACKEND-PLATFORM.md`);
+  recovery (`docs/SWIFT-BACKEND-PLATFORM.md`), and since LKM-102 writes the provider data
+  (connections, model catalog), opens links, files and the editor, makes the profile
+  aliases and alone holds the profile lock; the census in
+  `docs/SWIFT-BACKEND-RETIREMENT.md` has 0 Bun-owned rows, and the provider SDK adapters
+  remain in Bun by default (helpers opt-in; their move and live parity are LKM-111);
   Bun is still the single writer of every other domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun
   spawns the host, still under Swift's lock, writes all three itself and runs its
   own servers after the launcher sweeps the runtime journal). See

@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { compilePlatformFixture, http, installFakes, startPlatformFixture } from './helpers/platform-fixture.mjs'
-import { checkAttachments, checkMedia, checkServers } from './helpers/platform-checks.mjs'
+import { checkAttachments, checkMedia, checkOpen, checkServers } from './helpers/platform-checks.mjs'
 import { extractBuildError, simBuildDestination, xcodeFailureReason } from '../src/main/xcode.ts'
 import { findTreziStamp, idbUiArgs, parseControlCommand, parseTestId, preflight } from '../src/main/simulator.ts'
 import { attachmentFileName } from '../src/main/attachments.ts'
@@ -306,7 +306,8 @@ try {
   await checkMedia({ fixture, scratch, log, rejects, sleep })
   await checkAttachments({ fixture, scratch, log, rejects, profile })
   await checkServers({ owner: relaunched.owner(), scratch, log, rejects, gone })
-  console.log(`Platform owner: parity, simulator lifecycle (unavailable, bridge limits, idb, restart, cancel, supersede, failures, drain, crash), media, attachments, server recovery and schema passed in ${((Date.now() - began) / 1000).toFixed(1)}s`)
+  await checkOpen({ fixture, scratch, log, rejects })
+  console.log(`Platform owner: parity, simulator lifecycle (unavailable, bridge limits, idb, restart, cancel, supersede, failures, drain, crash), media, attachments, server recovery, opening and schema passed in ${((Date.now() - began) / 1000).toFixed(1)}s`)
 } finally {
   for (const started of fixtures) await started.stop().catch(() => {})
   for (const metro of metros()) for (const pid of [metro.pid, metro.child]) { try { process.kill(pid, 'SIGKILL') } catch {} }

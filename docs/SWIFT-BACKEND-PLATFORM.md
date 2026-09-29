@@ -90,6 +90,13 @@ Events: `{"event":"service-event","service":"platform","kind":"simulator-log","l
 | `mediaGrant` / `mediaResolve` | mutation / read | `{root, path, view}` / `{token, view}` |
 | `attachmentOpen` / `attachmentChunk` / `attachmentCommit` | mutation | `{mediaType, bytes, sha256, name?}` / `{upload, offset, data}` / `{upload}` |
 | `servers` / `serverStop` | read / mutation | `{root}` / `{server, intent:"stop"}` |
+| `openLink` / `openFile` (LKM-102) | mutation | `{url}` (http(s) only) → `{}` / `{path}` → `{error}` (`""` on success) |
+| `openInEditor` (LKM-102) | mutation | `{root, path, line, column?}`: a file inside the project; `code -g`, `cursor -g`, `zed`, `subl`, then `open` → `{ok, error?}` |
+
+`PlatformOpen.swift` replaced Bun's own `open` and editor CLI runs (`native/platform.ts`,
+`main/props.ts`); their rollback twins are `native/platform-legacy.ts` and
+`main/open-in-editor-legacy.ts`, and `test/helpers/platform-checks.mjs` (`checkOpen`)
+compares the two argv for argv.
 
 ## Rollback (tightened to this domain)
 

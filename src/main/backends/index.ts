@@ -24,9 +24,8 @@ function inProcessProvider(options: AgentOptions): ModelProvider {
   }
 }
 
-/** Supervised helpers (default Swift launch): adapters run in a provider helper process. */
+/** Supervised helpers (opt-in, `TREZI_PROVIDER_HELPERS=1`): built-in seats run in a provider helper process. */
 function supervisedProvider(options: AgentOptions): ModelProvider {
-  if (options.connectionId) return helperProvider('codex')
   switch (options.provider) {
     case 'codex':
       return helperProvider('codex')
@@ -74,10 +73,18 @@ function geminiEnabled(): boolean {
   return v === '1' || v === 'true'
 }
 
+/**
+ * The adapters run in-process in Bun by default, on both launches. Provider helpers are
+ * an explicit opt-in of the Swift launch (`TREZI_PROVIDER_HELPERS=1`; the service
+ * installs its helper command only then), and even then a v10 connection stays
+ * in-process: its key is resolved here and never crosses into a helper. Moving the
+ * adapters out of Bun by default waits for the authorized live parity run (LKM-111).
+ */
+export function helpersEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.TREZI_PROVIDER_HELPER !== '1' && env.TREZI_SERVICE_SUPERVISED === '1' && env.TREZI_PROVIDER_HELPERS === '1'
+}
+
 export function pickProvider(options: AgentOptions): ModelProvider {
-  // Inside a helper subprocess: run the real adapter in-process for that helper only.
-  if (process.env.TREZI_PROVIDER_HELPER === '1') return inProcessProvider(options)
-  // Swift-supervised Bun: built-in seats run in provider helpers, not in the app backend.
-  if (process.env.TREZI_SERVICE_SUPERVISED === '1') return supervisedProvider(options)
-  return inProcessProvider(options)
+  if (options.connectionId) return codexWithSkills
+  return helpersEnabled() ? supervisedProvider(options) : inProcessProvider(options)
 }

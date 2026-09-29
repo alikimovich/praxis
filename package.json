@@ -58,6 +58,7 @@
     "test:source-owner": "bun test/source-owner.mjs",
     "test:conversation-owner": "bun test/conversation-owner.mjs",
     "test:provider-owner": "bun test/provider-owner.mjs",
+    "test:provider-data": "bun test/provider-data.mjs",
     "test:editing-owner": "bun test/editing-owner.mjs",
     "test:workflow-owner": "bun test/workflow-owner.mjs",
     "test:platform-owner": "bun test/platform-owner.mjs",

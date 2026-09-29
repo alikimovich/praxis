@@ -38,14 +38,15 @@ and Codex adapters inside helpers is reported SKIP (not PASS). In this step:
 - the helper runtime is complete: the service spawns, supervises, bounds and polices
   helpers, and Bun hosts their sessions as ordinary `ProviderSession`s. It is verified
   with a scripted fake provider inside the real helper host (below);
-- under the Swift launch the built-in adapters (Claude, Codex, experimental Gemini) run
-  in supervised helpers (`provider-helper.cjs` via `ProviderOwner.Options.helper`). They
-  no longer decide anything the owner decides; they ask it for permission answers, tool
-  authorization and Stop's deadline, and report turns, terminal events and thread ids;
-- remaining before the retirement gate opens: move the provider catalog, connections
-  store and related Bun-owned census rows to the Swift owner; hand a Codex connection's
-  key to its helper over the open frame (today `resolveConnection` decrypts it in Bun);
-  route the Claude model-catalog update through Bun without Bun writing the cache file.
+- the built-in adapters (Claude, Codex, experimental Gemini) run in Bun by default.
+  Helper routing (`provider-helper.cjs` via `ProviderOwner.Options.helper`) is an
+  explicit opt-in of the Swift launch (`TREZI_PROVIDER_HELPERS=1`, LKM-102); v10
+  connections stay in-process even then. Wherever they run, adapters decide nothing the
+  owner decides; they ask it for permission answers, tool authorization and Stop's
+  deadline, and report turns, terminal events and thread ids;
+- the connections store, model catalog cache and Codex probe moved to the owner
+  (`ProviderData.swift`, LKM-102; see [retirement](SWIFT-BACKEND-RETIREMENT.md)). The
+  adapter move and the live parity run are LKM-111.
 
 ## The domain, exactly
 

@@ -1,7 +1,5 @@
-import { nativeSessionPath } from '../native/profile-path'
-import { savedJevKey } from './jev-credentials'
-import { join } from 'node:path'
-import { app, ipcMain as nativeIpcMain, safeStorage } from '../native/platform'
+import { checkedJevKey, jevConnection } from './jev-credentials'
+import { ipcMain as nativeIpcMain } from '../native/platform'
 import type {
   ModelCatalogInput,
   ModelCatalogResult,
@@ -9,23 +7,9 @@ import type {
   ProviderConnection,
   ProviderConnectionInput
 } from '../shared/api'
-import { discoverCodexModels } from './codex-models'
-import {
-  type CatalogBackend,
-  type CatalogModel,
-  createModelCatalog,
-  type ModelCatalog,
-  setModelCatalog
-} from './model-catalog'
-import {
-  createProviderStore,
-  modelsUrl,
-  type ProviderStore,
-  parseModelCatalog,
-  type SecretCipher,
-  sameOrigin,
-  scrubSecret
-} from './providers-store'
+import { type CatalogBackend, type CatalogModel, setModelCatalog } from './model-catalog'
+import { codexModels, connectionStore as store, modelCatalog, setProviderDataDir } from './provider-data'
+import { modelsUrl, parseModelCatalog, sameOrigin, scrubSecret } from './providers-store'
 import type { RpcHandlerRegistry } from './rpc-router'
 
 let ipcMain: RpcHandlerRegistry = nativeIpcMain
@@ -37,8 +21,9 @@ let ipcMain: RpcHandlerRegistry = nativeIpcMain
  * paths, ipcMain) or the network; everything testable without them lives next door.
  *
  * Three jobs:
- *  1. Own the store singleton + the `safeStorage` cipher, so a key is encrypted at
- *     rest and only ever decrypted inside main.
+ *  1. Serve the connections store (`provider-data.ts`: the Swift provider owner
+ *     writes it and holds the keys, or the rollback twin does), so a key is
+ *     encrypted at rest and only ever decrypted inside main.
  *  2. Probe an endpoint's `/models` (the settings dialog's "Connect" button) —
  *     one call that both validates the credential and returns the catalog.
  *  3. Build the chat picker's `ModelChoice[]`: main is now the single source of
@@ -48,55 +33,6 @@ let ipcMain: RpcHandlerRegistry = nativeIpcMain
  * never enter a log line or an error string — the one door to a key is
  * `secretFor()`, used only by main-process catalog, chat and Jev requests.
  */
-
-/**
- * `safeStorage` gives us Buffers; the store keeps plain JSON, so blobs ride as
- * base64. `available` is a GETTER on purpose: `isEncryptionAvailable()` throws
- * before the app is ready and can flip on Linux depending on the session's
- * keyring, so it has to be asked at save time rather than captured at import.
- */
-const cipher: SecretCipher = {
-  get available(): boolean {
-    try {
-      if (!safeStorage.isEncryptionAvailable()) return false
-      // On Linux `isEncryptionAvailable()` is also satisfied by the `basic_text`
-      // backend, which "encrypts" with a hardcoded, non-secret key — anything able
-      // to read providers.json could reverse it. That is not what the UI promises
-      // ("encrypted with the system keychain"), so treat it as unavailable and make
-      // the user install/unlock a real keyring rather than store a key we can only
-      // pretend is protected. The API is Linux-only, hence the optional call.
-      const backend = safeStorage.getSelectedStorageBackend?.()
-      return backend !== 'basic_text'
-    } catch {
-      return false
-    }
-  },
-  encrypt: (plain: string): string => safeStorage.encryptString(plain).toString('base64'),
-  decrypt: (blob: string): string | null => {
-    try {
-      return safeStorage.decryptString(Buffer.from(blob, 'base64'))
-    } catch {
-      return null
-    }
-  }
-}
-
-/**
- * The data dir is INJECTED by `registerProviderIpc` (agent.ts hands over its own
- * `dataDir()`) rather than recomputed here. Same directory either way — but
- * agent.ts's version also performs the one-time `<userData>/dsgn` → `trezi`
- * migration, gated on the trezi dir not existing yet. If this module created
- * that dir first, the migration would be skipped forever and a pre-rename user's
- * session history and worktrees would be stranded.
- */
-let getDataDir: () => string = () => nativeSessionPath(app.getPath('userData'))
-let _store: ProviderStore | null = null
-const store = (): ProviderStore => (_store ??= createProviderStore(getDataDir(), cipher))
-// Same lazy shape, same reason: `getDataDir` isn't final (and `app.getPath`
-// throws) until `registerProviderIpc` has run.
-let _modelCatalog: ModelCatalog | null = null
-const modelCatalog = (): ModelCatalog =>
-  (_modelCatalog ??= createModelCatalog({ baseDir: getDataDir() }))
 
 // ---------------------------------------------------------------------------
 // Catalog probe
@@ -135,8 +71,8 @@ function statusMessage(status: number, statusText: string): string {
  */
 export async function catalog(input: ModelCatalogInput): Promise<ModelCatalogResult> {
   const draftKey = input.apiKey?.trim()
-  const stored = !draftKey && input.id ? store().get(input.id) : null
-  const key = draftKey || (input.id ? store().secretFor(input.id) : null)
+  const stored = !draftKey && input.id ? store.get(input.id) : null
+  const key = draftKey || (input.id ? await store.secretFor(input.id) : null)
   if (!key) return { ok: false, models: [], error: 'No API key — enter one to connect.' }
 
   // A stored key may only ever be sent to its own stored endpoint (see above).
@@ -247,12 +183,12 @@ function refreshCodexModels(): Promise<void> {
   }
   if (codexProbedAt && Date.now() - codexProbedAt < CODEX_RETRY_MS) return Promise.resolve()
   codexProbedAt = Date.now()
-  codexProbe = discoverCodexModels()
+  codexProbe = codexModels()
     .then((models) => {
       modelCatalog().set('codex', models) // a no-op for the empty (failed) list
     })
     .catch(() => {
-      /* discoverCodexModels already swallows; belt-and-braces */
+      /* codexModels already swallows; belt-and-braces */
     })
     .finally(() => {
       codexProbe = null
@@ -380,7 +316,7 @@ function builtinChoices(
  *  totality rule as `builtinChoices`: `choices()` must never throw. */
 function connections(): ProviderConnection[] {
   try {
-    return store().list()
+    return store.list()
   } catch {
     return []
   }
@@ -421,8 +357,9 @@ export function choices(): ModelChoice[] {
   return out
 }
 
-export function resolveSavedJevKey(connectionId?: string): string | undefined {
-  return savedJevKey(store(), connectionId)
+export async function resolveSavedJevKey(connectionId?: string): Promise<string | undefined> {
+  const connection = jevConnection(store.list(), connectionId)
+  return connection && checkedJevKey(await store.secretFor(connection.id))
 }
 
 /**
@@ -433,26 +370,26 @@ export function resolveSavedJevKey(connectionId?: string): string | undefined {
  * the harness's own subscription, which would silently bill the wrong account and
  * answer with a different model than the picker shows.
  */
-export function resolveConnection(
+export async function resolveConnection(
   id: string
-): { baseUrl: string; apiKey: string; wireApi: 'responses' } | null {
-  const conn = store().get(id)
+): Promise<{ baseUrl: string; apiKey: string; wireApi: 'responses' } | null> {
+  const conn = store.get(id)
   if (!conn) return null
-  const apiKey = store().secretFor(id)
+  const apiKey = await store.secretFor(id)
   if (!apiKey) return null
   return { baseUrl: conn.baseUrl, apiKey, wireApi: conn.wireApi }
 }
 
 /**
  * `providers:*` IPC. `dataDirFn` is agent.ts's `dataDir` — see the note on
- * `getDataDir` for why it's injected instead of recomputed.
+ * `getDataDir` in provider-data.ts for why it's injected instead of recomputed.
  */
 export function registerProviderIpc(
   dataDirFn: () => string,
   router: RpcHandlerRegistry = nativeIpcMain
 ): void {
   ipcMain = router
-  getDataDir = dataDirFn
+  setProviderDataDir(dataDirFn)
   // From here on `getDataDir` is final, so the catalog can be built and shared.
   // `backends/claude.ts` feeds the Claude half through it (`recordClaudeModels`)
   // — the SDK will only name its models from inside a live query.
@@ -462,26 +399,26 @@ export function registerProviderIpc(
   // window exists, so by the time the renderer asks the answer is already there.
   void refreshCodexModels()
 
-  ipcMain.handle('providers:list', (): ProviderConnection[] => store().list())
+  ipcMain.handle('providers:list', (): ProviderConnection[] => store.list())
 
   // save() throws a user-readable message for a bad draft or an un-storable key
   // (no OS keyring) — turn it into the contract's { ok, error } instead of an IPC
   // rejection, so the dialog can render it inline.
   ipcMain.handle(
     'providers:save',
-    (
+    async (
       _e,
       input: ProviderConnectionInput
-    ): { ok: boolean; connection?: ProviderConnection; error?: string } => {
+    ): Promise<{ ok: boolean; connection?: ProviderConnection; error?: string }> => {
       try {
-        return { ok: true, connection: store().save(input) }
+        return { ok: true, connection: await store.save(input) }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
       }
     }
   )
 
-  ipcMain.handle('providers:remove', (_e, id: string): void => store().remove(id))
+  ipcMain.handle('providers:remove', (_e, id: string): Promise<void> => store.remove(id))
 
   ipcMain.handle(
     'providers:catalog',

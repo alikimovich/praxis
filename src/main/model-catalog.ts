@@ -188,12 +188,16 @@ export function createModelCatalog(opts: {
   baseDir: string
   now?: () => number
   ttlMs?: number
+  /** Another writer of the file (the Swift provider owner): true when it took the
+   *  write, so this module only updates its memory. */
+  persist?: (backend: CatalogBackend, models: CatalogModel[]) => boolean
 }): ModelCatalog {
   const file = join(opts.baseDir, 'model-catalog.json')
   const now = opts.now ?? Date.now
   const ttlMs = opts.ttlMs ?? CATALOG_TTL_MS
 
-  // Read-through, once. Nothing else writes this file, so re-reading it on every
+  // Read-through, once. Only this app run writes this file (itself, or through
+  // `persist` the Swift owner it hands each list to), so re-reading it on every
   // `choices()` call would be pure syscall tax on the picker's hot path.
   let entries: Partial<Record<CatalogBackend, CacheEntry>> | null = null
 
@@ -251,6 +255,7 @@ export function createModelCatalog(opts: {
     if (!models.length) return
     const current = load()
     current[backend] = { at: now(), models }
+    if (opts.persist?.(backend, models)) return
     try {
       mkdirSync(opts.baseDir, { recursive: true })
       const body: CacheFile = { version: 1, entries: current }

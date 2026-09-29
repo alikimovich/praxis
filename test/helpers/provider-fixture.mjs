@@ -14,7 +14,8 @@ import { serviceProvider } from '../../src/native/provider-service.ts'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 export const SOURCES = ['ServiceContract', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile',
-  'WorkspaceOwner', 'DomainChannel', 'ManagedProcess', 'ProviderPolicy', 'ProviderStore', 'ProviderHelper', 'ProviderFrames', 'ProviderOwner']
+  'WorkspaceOwner', 'DomainChannel', 'ManagedProcess', 'RuntimeNet', 'RuntimeDetect', 'StaticSite', 'StaticServer', 'PlatformTools', 'ProviderPolicy', 'ProviderStore', 'ProviderHelper', 'ProviderFrames',
+  'ProviderData', 'ProviderOwner']
   .map(name => `src/service/${name}.swift`)
 export const FAKE_HELPER = join(root, 'test/fixtures/provider-owner/fake-helper.mjs')
 

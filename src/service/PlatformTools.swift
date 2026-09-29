@@ -58,30 +58,58 @@ struct ToolResult {
 enum PlatformTool {
     static let maxOutput = 32 * 1024 * 1024
 
+    /// `input`, when given, is the tool's whole stdin (written from another thread, then
+    /// closed); otherwise stdin is /dev/null. Secrets travel this way, never in argv.
     static func run(_ executable: String, _ arguments: [String], environment: [String: String], directory: String? = nil,
-                    timeout: TimeInterval, scope: ToolScope? = nil) throws -> ToolResult {
+                    timeout: TimeInterval, scope: ToolScope? = nil, input: Data? = nil) throws -> ToolResult {
         guard let path = ManagedProcess.resolve(executable, path: environment["PATH"]) else {
             throw PlatformRefusal(.unavailable, "spawn \(executable) ENOENT")
         }
         if scope?.isCancelled == true { return ToolResult(status: nil, stdout: Data(), stderr: Data(), timedOut: false, cancelled: true) }
-        var out: [Int32] = [0, 0], err: [Int32] = [0, 0]
+        var out: [Int32] = [0, 0], err: [Int32] = [0, 0], inPipe: [Int32] = [-1, -1]
         guard pipe(&out) == 0 else { throw PlatformRefusal(.ioFailure, "output pipe: \(String(cString: strerror(errno)))") }
         guard pipe(&err) == 0 else {
             close(out[0]); close(out[1])
             throw PlatformRefusal(.ioFailure, "error pipe: \(String(cString: strerror(errno)))")
         }
+        if input != nil {
+            guard pipe(&inPipe) == 0 else {
+                for fd in out + err { close(fd) }
+                throw PlatformRefusal(.ioFailure, "input pipe: \(String(cString: strerror(errno)))")
+            }
+            _ = fcntl(inPipe[1], F_SETFD, FD_CLOEXEC)
+        }
         let outWrite = fcntl(out[1], F_DUPFD_CLOEXEC, 20), errWrite = fcntl(err[1], F_DUPFD_CLOEXEC, 20)
+        let inRead = input == nil ? -1 : fcntl(inPipe[0], F_DUPFD_CLOEXEC, 20)
         close(out[1]); close(err[1])
+        if input != nil { close(inPipe[0]) }
         for fd in [out[0], err[0]] { _ = fcntl(fd, F_SETFD, FD_CLOEXEC); _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) }
         let pid: pid_t
         do {
             pid = try ManagedProcess.spawn(path, [executable] + arguments, environment: environment, directory: directory,
-                                           actions: [.null(0), .dup(outWrite, 1), .dup(errWrite, 2)], newGroup: true)
+                                           actions: [input == nil ? .null(0) : .dup(inRead, 0), .dup(outWrite, 1), .dup(errWrite, 2)], newGroup: true)
         } catch {
             close(outWrite); close(errWrite); close(out[0]); close(err[0])
+            if input != nil { close(inRead); close(inPipe[1]) }
             throw PlatformRefusal(.unavailable, "spawn \(executable): \(error)")
         }
         close(outWrite); close(errWrite)
+        if let input {
+            close(inRead)
+            let fd = inPipe[1]
+            // A tool that exits without reading gets EPIPE here (SIGPIPE is ignored by the service).
+            Thread.detachNewThread {
+                input.withUnsafeBytes { raw in
+                    var offset = 0
+                    while offset < raw.count {
+                        let wrote = write(fd, raw.baseAddress! + offset, raw.count - offset)
+                        if wrote < 0 { if errno == EINTR { continue }; break }
+                        offset += wrote
+                    }
+                }
+                close(fd)
+            }
+        }
         let registered = scope?.register(pid) ?? true
         if !registered { kill(-pid, SIGTERM) }
 

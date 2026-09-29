@@ -34,8 +34,13 @@ issues scoped media grants to the source editor, writes pasted attachments and p
 running-servers recovery (docs/SWIFT-BACKEND-PLATFORM.md).
 Since LKM-102 (S15) the editing owner also commits the reviewer notes and starter
 tokens sidecars; the Bun modules that still write, spawn or signal are classified in
-docs/SWIFT-BACKEND-RETIREMENT.md, whose retirement gate is still blocked, so the
-legacy owners and `TREZI_BACKEND_OWNER=legacy` remain.
+docs/SWIFT-BACKEND-RETIREMENT.md, which has 0 Bun-owned rows: the provider data
+(connections, catalog, Codex probe), opening links/files/the editor, the profile
+aliases and the profile lock are the service's, each with a legacy twin. The provider
+SDK adapters remain in Bun by default; helper routing is an explicit opt-in
+(`TREZI_PROVIDER_HELPERS=1`) and v10 connections always stay in-process. The adapter
+move, the live parity run and removing the legacy owners and
+`TREZI_BACKEND_OWNER=legacy` are LKM-111, so the rollback path remains.
 Every other domain writer remains in Bun until a verified transfer.
 Electron, the React application renderer and browser/Tailscale mode are retired.
 Distributed as source: clone, `bun install`, `bun run dev`. Users authenticate
@@ -98,8 +103,13 @@ Groups are defined in `src/native/smoke-groups.ts`.
 ## Architecture
 
 - `src/native/index.ts`: Bun entrypoint, service registration and native lifecycle.
-- `src/native/platform.ts`: native event routing, WebKit proxy and Keychain helper.
+- `src/native/platform.ts`: native event routing and WebKit proxy; opening links and
+  files goes to the platform owner (`src/service/PlatformOpen.swift`), with
+  `src/native/platform-legacy.ts` (`open`, Keychain crypto) as the rollback twin.
   Services import it directly; there is no Electron alias or dependency.
+- `src/native/index.ts` refuses to start without the service's profile lock
+  (`TREZI_SERVICE_LOCKED=1`); the profile aliases are `src/service/ProfilePaths.swift`
+  (`src/native/profile-path.ts` only resolves).
 - `src/native/bridge.ts`: private legacy JSON bridge to the supervising service;
   direct host pipes remain available through launch-time legacy rollback.
 - `src/service/ServiceMain.swift`, `src/service/ServiceRuntime.swift`,

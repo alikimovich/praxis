@@ -11,14 +11,26 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
-**Current (2026-09-29, LKM-102):** S15 (roadmap row) reconciles the census and gates the
+**Current (2026-09-29, LKM-102, reduced acceptance):** the scope was reduced (a
+recorded decision): the SDK adapter move, the live provider parity run and the removal
+of the legacy launch path and old Bun copies are LKM-111. The last seven Bun-owned
+census rows moved to Swift, each with a rollback twin and parity tests: the connections
+store, model catalog and Codex probe (`ProviderData.swift`), opening links, files and the
+editor (`PlatformOpen.swift`), the profile and session-store aliases
+(`ProfilePaths.swift`), and the profile lock, which Bun no longer writes (it refuses to
+start without the service's). **The census has 0 Bun-owned rows**; the removal gate stays
+closed on LKM-111. Provider adapters remain in Bun by default; helper routing is an
+explicit opt-in (`TREZI_PROVIDER_HELPERS=1`), and v10 connections stay in-process even
+with it. See [retirement](SWIFT-BACKEND-RETIREMENT.md).
+
+**Earlier (2026-09-29, LKM-102, first pass):** S15 (roadmap row) reconciles the census and gates the
 legacy retirement. The last S05 sidecar writer (reviewer notes) and the starter tokens
 scaffold moved to the editing owner's hash-bound sidecar commit, and the supported
 platform (macOS 13.3+, macOS 26 SDK to build, Bun 1.3+) has one source enforced by the
 build, launcher, CLI and installer. Every Bun module that writes files, runs processes or
 sends signals is classified in [retirement](SWIFT-BACKEND-RETIREMENT.md) and checked by
-`test/retirement-census.mjs`. **The retirement gate is blocked** (13 Bun-owned rows; the
-provider adapters still run in Bun pending an authorized live parity run), so no legacy
+`test/retirement-census.mjs`. The retirement gate was then blocked (by Bun-owned rows,
+since moved; the provider adapters still run in Bun pending LKM-111), so no legacy
 owner, rollback twin or `TREZI_BACKEND_OWNER=legacy` was removed and Bun still hosts the
 application controllers. Implemented for review on the LKM-101 candidate.
 

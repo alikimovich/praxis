@@ -322,24 +322,5 @@ final class WorkflowDiagnoses: @unchecked Sendable {
     }
 
     /// `JSON.stringify(value, null, 2)`.
-    static func pretty(_ value: JSValue, indent: String = "") -> String {
-        let inner = indent + "  "
-        switch value {
-        case .array(let items):
-            if items.isEmpty { return "[]" }
-            return "[\n" + items.map { inner + pretty($0, indent: inner) }.joined(separator: ",\n") + "\n" + indent + "]"
-        case .object(let fields):
-            if fields.isEmpty { return "{}" }
-            var seen: [JSText] = [], unique: [(JSText, JSValue)] = []
-            for (key, item) in fields {
-                if let index = seen.firstIndex(of: key) { unique[index].1 = item } else { seen.append(key); unique.append((key, item)) }
-            }
-            return "{\n" + JSValue.enumerationOrder(unique).map { key, item -> String in
-                var quoted: JSText = []
-                JSValue.quote(key, into: &quoted)
-                return inner + quoted.string + ": " + pretty(item, indent: inner)
-            }.joined(separator: ",\n") + "\n" + indent + "}"
-        default: return value.serialized().string
-        }
-    }
+    static func pretty(_ value: JSValue, indent: String = "") -> String { JSValue.pretty(value, indent: indent) }
 }

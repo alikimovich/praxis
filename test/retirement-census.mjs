@@ -75,10 +75,14 @@ const bun = rows.filter(row => row.kind === 'bun')
 const gate = doc.match(/\*\*Retirement gate: (?:blocked by (\d+) Bun-owned rows?|open)\.\*\*/)
 assert.ok(gate, 'the status names the retirement gate')
 assert.equal(Number(gate[1] ?? 0), bun.length, 'the gate counts the Bun-owned rows')
-if (bun.length) {
+// An open census gate is not the whole removal gate: while the adapter move is recorded as
+// deferred (LKM-111), the switch and the rollback rows stay just as when it is blocked.
+const deferred = /deferred to LKM-111/.test(doc)
+if (bun.length || deferred) {
   const launcher = read('scripts/start-native.mjs')
   assert.match(launcher, /\['swift', 'legacy'\]/, 'TREZI_BACKEND_OWNER=legacy stays while the gate is blocked')
   assert.ok(rows.some(row => row.kind === 'rollback'), 'rollback owners stay while the gate is blocked')
+  assert.match(read('src/service/ServiceMain.swift'), /--legacy/, 'TreziService --legacy stays while the gate is blocked')
 }
 
 // Project sidecars: one set in Swift and TS; the moved modules only render.

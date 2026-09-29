@@ -7,6 +7,20 @@ struct ProviderHelperCommand: Sendable {
     var executable: String
     var arguments: [String]
     var providers: Set<String>
+
+    static let optIn = "TREZI_PROVIDER_HELPERS"
+
+    /// The built-in seats' helper command, or nil (the default): helpers are an explicit
+    /// opt-in of the launch environment (`TREZI_PROVIDER_HELPERS=1`) and need the bundled
+    /// `provider-helper.cjs` next to the backend. Without it the adapters run in-process in
+    /// Bun, as before S10; Bun's `pickProvider` reads the same variable. Making helpers the
+    /// default waits for the authorized live parity run (LKM-111).
+    static func builtIn(environment: [String: String], backend: String, bun: String) -> ProviderHelperCommand? {
+        guard environment[optIn] == "1" else { return nil }
+        let entry = URL(fileURLWithPath: backend).deletingLastPathComponent().appendingPathComponent("provider-helper.cjs").path
+        guard access(entry, R_OK) == 0 else { return nil }
+        return ProviderHelperCommand(executable: bun, arguments: [entry], providers: ["claude", "codex", "gemini", "fake"])
+    }
 }
 
 /// One provider helper process (S10). What it can reach is decided here, not assumed

@@ -24,6 +24,7 @@ const UNIT = [
   "source-owner",
   "conversation-owner",
   "provider-owner",
+  "provider-data",
   "editing-owner",
   "workflow-owner",
   "platform-owner",

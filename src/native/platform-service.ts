@@ -18,7 +18,7 @@ export interface PlatformLink {
 const TIMEOUTS: Record<string, number> = {
   status: 10_000, simulatorPreflight: 90_000, simulatorStart: 10 * 60_000, simulatorStop: 30_000, simulatorSelect: 10_000,
   mediaGrant: 60_000, mediaResolve: 15_000, attachmentOpen: 15_000, attachmentChunk: 15_000, attachmentCommit: 30_000,
-  servers: 120_000, serverStop: 60_000
+  servers: 120_000, serverStop: 60_000, openLink: 45_000, openFile: 45_000, openInEditor: 60_000
 }
 const READS = new Set(['status', 'simulatorPreflight', 'mediaResolve', 'servers'])
 /** The service's cap on a pasted image, as the legacy writer's. */
@@ -134,6 +134,13 @@ export function servicePlatform(link: PlatformLink, options: { timeouts?: Partia
     async stopServer(server) {
       await call('serverStop', { server: JSON.parse(JSON.stringify(server)), intent: 'stop' })
     },
-    status: () => call('status', {})
+    status: () => call('status', {}),
+    openLink: async url => {
+      if (!/^https?:\/\//i.test(url)) throw new Error('Only HTTP(S) external links are supported')
+      await call('openLink', { url })
+    },
+    openFile: async path => (await call('openFile', { path })).error as string,
+    openInEditor: (root, file, line, column) =>
+      call('openInEditor', { root, path: file, line, ...(column != null ? { column } : {}) })
   }
 }

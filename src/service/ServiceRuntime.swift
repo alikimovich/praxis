@@ -111,6 +111,7 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                     // owner left behind (never a pid that is now someone else's).
                     let journal = RuntimeJournal(profile: requested.profile)
                     journal.sweep()
+                    ProfilePaths.migrateSessions(profile: requested.profile) { try? session.diagnostics?.write(contentsOf: Data($0.utf8)) }
                     do {
                         ledger = try OperationLedger(directory: URL(fileURLWithPath: requested.profile)
                             .appendingPathComponent("service/ledger"))
@@ -153,7 +154,8 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                             watchdog: CommandLine.arguments[0], journal: journal), send: send)
                         let bun = child?.pid ?? 0, host = session.connection.processIdentifier
                         platform = PlatformOwner(options: PlatformOwner.Options(profile: requested.profile, environment: requested.environment,
-                            watchdog: CommandLine.arguments[0], journal: journal, protectedPIDs: { [bun, host] }), send: send)
+                            watchdog: CommandLine.arguments[0], journal: journal, protectedPIDs: { [bun, host] },
+                            open: PlatformOpen.Tools(environment: requested.environment)), send: send)
                         let repository = RepositoryOwner(options: RepositoryOwner.Options(profile: requested.profile,
                             environment: requested.environment), send: send)
                         self.repository = repository
@@ -166,12 +168,14 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                             environment: requested.environment, bun: requested.bun), repository: repository, send: send)
                         var providerOptions = ProviderOwner.Options(profile: requested.profile, environment: requested.environment,
                             watchdog: CommandLine.arguments[0], journal: journal)
-                        let helperBackend = URL(fileURLWithPath: requested.backend).deletingLastPathComponent()
-                            .appendingPathComponent("provider-helper.cjs").path
-                        if access(helperBackend, R_OK) == 0 {
-                            providerOptions.helper = ProviderHelperCommand(executable: requested.bun, arguments: [helperBackend],
-                                providers: ["claude", "codex", "gemini", "fake"])
-                        }
+                        // The Keychain helper is the host Bun used (`<out>/Trezi.app/…/TreziHost`); the checkout is `<out>/..`.
+                        let out = URL(fileURLWithPath: requested.backend).deletingLastPathComponent()
+                        let keychain = out.appendingPathComponent("Trezi.app/Contents/MacOS/TreziHost").path
+                        providerOptions.data = ProviderData.Tools(crypto: access(keychain, X_OK) == 0 ? [keychain] : nil,
+                            checkout: out.deletingLastPathComponent().deletingLastPathComponent().path, environment: requested.environment)
+                        // Opt-in only: by default the adapters stay in-process in Bun (LKM-111 moves them).
+                        providerOptions.helper = ProviderHelperCommand.builtIn(environment: requested.environment,
+                            backend: requested.backend, bun: requested.bun)
                         provider = ProviderOwner(options: providerOptions, send: send)
                     }
                     readBackend()

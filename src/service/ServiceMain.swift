@@ -11,6 +11,12 @@ import Darwin
             if CommandLine.arguments.count > 1, CommandLine.arguments[1] == "--watch-group" {
                 runGroupWatchdog(arguments: Array(CommandLine.arguments.dropFirst(2)))
             }
+            if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--resolve-profile" {
+                // The launcher's default profile, with the `Praxis Native` alias made first.
+                do { print(try ProfilePaths.profile(support: CommandLine.arguments[2])); exit(0) } catch {
+                    fputs("\(error)\n", stderr); exit(1)
+                }
+            }
             if CommandLine.arguments.contains("--legacy") { try legacy(); return }
             let bundle = Bundle.main.bundleURL
             let host = bundle.deletingLastPathComponent().deletingLastPathComponent()
@@ -36,6 +42,7 @@ import Darwin
         // Rollback never overlaps a project group the Swift owner started: any it
         // left behind after a crash is stopped before the legacy owner starts.
         RuntimeJournal(profile: profile).sweep()
+        ProfilePaths.migrateSessions(profile: profile) { fputs($0, stderr) }
         let supervisor = LegacySupervisor()
         var environment = ProcessInfo.processInfo.environment
         environment["TREZI_USER_DATA"] = profile

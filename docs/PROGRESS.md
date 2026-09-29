@@ -2,6 +2,34 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-102 reduced acceptance: the last seven Bun rows, helper opt-in (census 0 Bun-owned; adapters → LKM-111)
+
+Scope reduced by a recorded decision (option A): the SDK adapter move, the live provider
+parity run (not authorized) and removal of the legacy launch path and old Bun copies are
+LKM-111. What LKM-102 now delivers:
+
+- Helper routing is opt-in again. The earlier repair ran built-in adapters in helpers by
+  default; with no live parity run that changed real chats unverified. `ServiceRuntime`
+  installs a helper only on `TREZI_PROVIDER_HELPERS=1` (`ProviderHelperCommand.builtIn`),
+  `backends/index.ts` routes on the same opt-in, and v10 connections stay in-process
+  whatever the setting (a helper would carry the user's API key into another process).
+- Seven rows moved, each with its legacy twin and Swift/TS parity tests:
+  - `ProviderData.swift`: connections store (key through `TreziHost --crypto` on stdin),
+    catalog cache (file order kept for byte parity), Codex probe
+    (`test/provider-data.mjs`).
+  - `PlatformOpen.swift`: links, files, open-in-editor (`checkOpen` in
+    `platform-owner.mjs`). Twins: `platform-legacy.ts`, `open-in-editor-legacy.ts`.
+  - `ProfilePaths.swift`: the launcher asks `TreziService --resolve-profile`, and the
+    service makes the session alias under the lock before Bun
+    (`rename-compat.mjs` parity). Twin: `profile-path-legacy.ts`, which refuses under a
+    service launch.
+  - `native/index.ts`: no `native.lock` of its own. It refuses without the service's
+    lock and moved its test fixture to `smoke-fixture.ts` and the legacy restart to
+    `legacy-restart.ts`.
+- Census: 7 → 0 Bun-owned rows. The gate line reads open, but the census test keeps
+  `TREZI_BACKEND_OWNER=legacy`, `TreziService --legacy` and the rollback rows while the
+  LKM-111 deferral is recorded.
+
 ## 2026-09-29 — LKM-102 repair: service-process epoch resume test
 
 - `service-process.mjs`: after production shutdown, the XPC client first-launches a

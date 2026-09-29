@@ -1,9 +1,12 @@
-import { existsSync, lstatSync, mkdirSync, realpathSync, symlinkSync } from 'node:fs'
+import { existsSync, lstatSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
+import { aliasLegacyProfile, aliasLegacySessions } from './profile-path-legacy'
 
 /** Keep the physical profile in place: Git administrative paths and saved absolute
  * worktree references remain valid. Atomic alias creation has no partial-copy state.
- * Both app versions then acquire the same native.lock in the same physical directory.
+ * Both app versions then acquire the same profile lock in the same physical directory.
+ * This module only resolves and checks; the aliases are made by the service
+ * (`src/service/ProfilePaths.swift`), or by `profile-path-legacy.ts` without one.
  */
 export function nativeProfilePath(support: string): string {
   const current = join(support, 'Trezi Native')
@@ -20,10 +23,7 @@ export function nativeProfilePath(support: string): string {
   }
   if (present(legacy)) {
     if (!lstatSync(legacy).isDirectory()) throw new Error('Legacy native profile must be a real directory.')
-    mkdirSync(support, { recursive: true })
-    try { symlinkSync('Praxis Native', current, 'dir') } catch (e: any) {
-      if (e.code !== 'EEXIST' || realpathSync(current) !== realpathSync(legacy)) throw e
-    }
+    aliasLegacyProfile(support, current, legacy)
   }
   return current
 }
@@ -41,9 +41,7 @@ export function nativeSessionPath(profile: string): string {
     throw new Error('Both Praxis and dsgn session stores exist; reconcile them before opening chats. No data was changed.')
   if (candidates.length) {
     if (!lstatSync(candidates[0]).isDirectory()) throw new Error('Legacy session store must be a real directory.')
-    try { symlinkSync(realpathSync(candidates[0]), current, 'dir') } catch (e: any) {
-      if (e.code !== 'EEXIST' || realpathSync(current) !== realpathSync(candidates[0])) throw e
-    }
+    aliasLegacySessions(current, candidates[0])
   }
   return current
 }
