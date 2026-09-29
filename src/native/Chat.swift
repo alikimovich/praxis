@@ -48,6 +48,11 @@ final class ChatModel: ObservableObject {
     var messageFrames: [String: CGRect] = [:]
     var islandPositions: [String: CGRect] = [:]
     var bottomPosition: CGFloat = 0
+    var latestButtonFrame = CGRect.zero
+    /// What the conversation's SwiftUI views read (see ChatAccessibilityEcho).
+    var renderedAccessibility = ChatAccessibility()
+    /// Driven by the scroll probe: unpinned (or not following) and away from the end.
+    @Published var showsLatest = false
     // Preserve message/status clearance above the floating composer.
     static let statusHeight = ChatLayout.statusHeight
     var bottomInset: CGFloat { ChatLayout.bottomInset(composerHeight: composerHeight) }
@@ -126,9 +131,12 @@ struct IslandPositions: PreferenceKey {
 }
 struct ChatConversation: View {
     @ObservedObject var model: ChatModel
+    @ObservedObject var system = ChatSystemEnvironment.shared
     @State private var follows = true
     @State private var sticky: String?
     @State private var revealGeneration = 0
+    @State private var pinRequest = 0
+    @State private var attachRequest = 0
     private func reveal(_ proxy: ScrollViewProxy, readingHeight: CGFloat, viewportHeight: CGFloat) {
         revealGeneration += 1
         let generation = revealGeneration
@@ -197,7 +205,9 @@ struct ChatConversation: View {
                     .background(GeometryReader { geometry in Color.clear.preference(key: BottomPosition.self, value: geometry.frame(in: .named("chatScroll")).maxY) })
             }.padding(.horizontal, 18).padding(.top, 18).padding(.bottom, model.bottomInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(ChatScrollStyle())
+                .background(ChatScrollStyle(follows: { follows }, pinRequest: pinRequest, attachRequest: attachRequest,
+                                            onPinnedChange: { follows = $0 },
+                                            onLatestButtonChange: { if model.showsLatest != $0 { model.showsLatest = $0 } }))
         }
     }
     var body: some View {
@@ -217,20 +227,24 @@ struct ChatConversation: View {
                         stickyRequest(proxy: proxy)
                     }
                     .onPreferenceChange(BottomPosition.self) { bottom in
+                        // Pinned state follows user input only (see ChatScrollStyleProbe);
+                        // a stale NSApp.currentEvent would re-pin after a programmatic pin.
                         model.bottomPosition = bottom
-                        if let event = NSApp.currentEvent, [.scrollWheel, .leftMouseDragged, .keyDown].contains(event.type) { follows = bottom <= readingHeight + 48 }
                     }
-                    .onChange(of: viewport.size) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
-                    .onChange(of: model.composerHeight) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
+                    // Metric-only changes: the probe pins from settled AppKit bounds.
+                    .onChange(of: viewport.size) { _ in if follows { pinRequest += 1 } }
+                    .onChange(of: model.composerHeight) { _ in if follows { pinRequest += 1 } }
                     .onChange(of: model.revealRevision) { _ in
                         follows = false; sticky = nil
                         reveal(proxy, readingHeight: readingHeight, viewportHeight: viewport.size.height)
                     }
                     .onChange(of: model.controlInteraction) { _ in follows = false }
-                    .onChange(of: model.followRevision) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor) } }
-                    .onChange(of: model.snapshot?.chat) { _ in follows = true; sticky = nil; proxy.scrollTo("bottom", anchor: bottomAnchor) }
+                    .onChange(of: model.followRevision) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor); pinRequest += 1 } }
+                    .onChange(of: model.snapshot?.chat) { _ in follows = true; sticky = nil; proxy.scrollTo("bottom", anchor: bottomAnchor); attachRequest += 1 }
                     .overlay(alignment: .bottomTrailing) {
-                        if !follows { Button { follows = true; proxy.scrollTo("bottom", anchor: bottomAnchor) } label: { Image(systemName: "arrow.down") }.help("Scroll to latest message").padding(12).padding(.bottom, model.bottomInset) }
+                        if model.showsLatest { Button { follows = true; proxy.scrollTo("bottom", anchor: bottomAnchor); attachRequest += 1 } label: { Image(systemName: "arrow.down") }.help("Scroll to latest message")
+                            .reportsFrame(in: ChatLayout.rootSpace) { model.latestButtonFrame = $0 }
+                            .padding(12).padding(.bottom, model.bottomInset) }
                     }
                     .overlay(alignment: .bottomLeading) {
                         Text(model.snapshot?.status ?? "")
@@ -243,6 +257,12 @@ struct ChatConversation: View {
                 }
             }
         }.background(Color.clear)
+        .background(ChatAccessibilityEcho { model.renderedAccessibility = $0 })
+        // System accessibility options (or the acceptance override) for all
+        // SwiftUI views in the conversation, including the echo above.
+        .modifier(ChatAccessibilityEnvironment(accessibility: system.accessibility))
+        // The hosting view's own top-left space; the latest button reports here.
+        .coordinateSpace(name: ChatLayout.rootSpace)
     }
 }
 private struct NativeMessageRow: View {

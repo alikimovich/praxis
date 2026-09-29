@@ -308,6 +308,12 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
                 do { reply(id, try await captureVisibleChat(window: window, chat: chat)) }
                 catch { reply(id, error: error.localizedDescription) }
             }
+        case "chatAcceptance":
+            guard ephemeral else { reply(id, error: "Test profile required"); return }
+            Task { @MainActor in
+                do { reply(id, try await chatAcceptance(c)) }
+                catch { reply(id, error: error.localizedDescription) }
+            }
         case "chatInspect": reply(id, chat.inspect())
         case "chatPerform": chat.model.action(c["action"] as? String ?? "", id: c["card"] as? String, value: c["value"] as? String, answers: c["answers"] as? [String: String]); reply(id)
         case "composerVerification":

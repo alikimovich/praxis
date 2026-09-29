@@ -1,6 +1,8 @@
 import AppKit
+import SwiftUI
 
-// No application, window, run loop or desktop input. These bridge/clipboard
+// No desktop input and no visible window (input routing uses one offscreen
+// window that is never ordered in). These bridge/clipboard
 // callbacks are irrelevant to the real composer's synchronous layout path.
 func emit(_ value: [String: Any]) {}
 func copyChatText(_ value: String) {}
@@ -113,3 +115,471 @@ for style: NSScroller.Style in [.overlay, .legacy, .overlay] {
     require(conversation.contentSize == size, "Repeated configuration does not change layout")
 }
 print("Chat spacing and native scroller policy passed without a window")
+
+// Replay the manager's exact one-line -> six-line document geometry without
+// a window. A request against the old bounds cannot reach the new reading end.
+final class FlippedDocument: NSView { override var isFlipped: Bool { true } }
+func drainLayout() { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.2)) }
+func distanceFromEnd(_ scroll: NSScrollView) -> CGFloat {
+    scroll.documentView!.frame.maxY - scroll.contentView.bounds.maxY
+}
+let growingScroll = NSScrollView(frame: CGRect(x: 0, y: 0, width: 427, height: 776))
+let growingDocument = FlippedDocument(frame: CGRect(x: 0, y: 0, width: 427, height: 7413))
+growingScroll.documentView = growingDocument
+let probe = ChatScrollStyleProbe(frame: .zero)
+growingDocument.addSubview(probe)
+ChatScrollStyleProbe.pinToEnd(growingScroll)
+let oldOffset = growingScroll.contentView.bounds.minY
+growingDocument.setFrameSize(NSSize(width: 427, height: 7496))
+require(growingScroll.contentView.bounds.minY == oldOffset, "Document growth alone leaves the old scroll offset")
+require(distanceFromEnd(growingScroll) >= 83,
+    "Reproduces manager failure: 83 points of new clearance remain below the viewport")
+var following = true
+probe.follows = { following }
+probe.scheduleConfiguration()
+drainLayout()
+require(distanceFromEnd(growingScroll) < 1,
+    "Settled layout pin reaches new bottom: pins \(probe.pinCount), clip \(growingScroll.contentView.bounds), doc \(growingDocument.frame), attached \(probe.enclosingScrollView != nil)")
+for height: CGFloat in [7413, 7496, 7653, 7413] {
+    let before = probe.pinCount
+    let grows = height > growingDocument.frame.height
+    growingDocument.setFrameSize(NSSize(width: 427, height: height))
+    drainLayout()
+    // AppKit clamps a shrinking document itself; growth needs the settled pin.
+    if grows { require(probe.pinCount > before, "Growth pins after document bounds change") }
+    require(abs(distanceFromEnd(growingScroll)) < 1, "Following uses current document bounds")
+}
+let settled = probe.pinCount
+growingScroll.contentView.scroll(to: NSPoint(x: 0, y: 100))
+drainLayout()
+require(probe.pinCount == settled, "Scrolling history does not retrigger layout following")
+require(growingScroll.contentView.bounds.minY == 100, "History position remains under user control")
+print("Chat follow layout: reproduced stale bounds, growth/shrink correction and no history-scroll feedback passed without a window")
+
+// Manager failure at 440pt: a capped draft, then a short window. The composer
+// cap follows the viewport (368 -> 279), so the clearance changes with it. A
+// fractional anchor from the tall layout stopped 31pt short. Replay both
+// orders with real composer heights; the latest row must clear status+gap.
+let chatWidth: CGFloat = 440
+let contentEnd: CGFloat = 4700       // top padding + rows + "bottom" marker
+let latestBottom = contentEnd - 21   // 20pt stack spacing + 1pt marker
+let latestHeight: CGFloat = 40
+func composerHeight(_ draft: String, viewport: CGFloat) -> CGFloat {
+    composer.preferredHeight(for: draft, width: chatWidth - 2 * ChatLayout.composerInset,
+        availableHeight: viewport - ChatLayout.composerInset, hasContext: false)
+}
+final class ChatReplay {
+    let scroll = NSScrollView(frame: CGRect(x: 0, y: 0, width: chatWidth, height: 776))
+    let document = FlippedDocument(frame: .zero)
+    let probe = ChatScrollStyleProbe(frame: .zero)
+    var draft = ""
+    var follows = true
+    var viewport: CGFloat { scroll.contentView.bounds.height }
+    var composer: CGFloat { composerHeight(draft, viewport: viewport) }
+    init() {
+        scroll.documentView = document
+        document.addSubview(probe)
+        probe.follows = { [unowned self] in self.follows }
+        layoutDocument()
+        probe.scheduleConfiguration(); drainLayout()
+    }
+    // SwiftUI applies bottom padding = the composer's clearance.
+    func layoutDocument() {
+        document.setFrameSize(NSSize(width: chatWidth, height: contentEnd + ChatLayout.bottomInset(composerHeight: composer)))
+    }
+    func grow(_ value: String) { draft = value; layoutDocument() }
+    func resize(_ height: CGFloat) { scroll.setFrameSize(NSSize(width: chatWidth, height: height)); layoutDocument() }
+    // The SwiftUI request this replaces: marker at a fraction of the viewport
+    // computed from the previous viewport and composer clearance.
+    func staleAnchor(viewport old: CGFloat, composer oldComposer: CGFloat) {
+        let fraction = (old - ChatLayout.bottomInset(composerHeight: oldComposer)) / old
+        let clip = scroll.contentView
+        clip.scroll(to: NSPoint(x: 0, y: contentEnd - 1 - fraction * viewport))
+    }
+    func check(_ label: String) {
+        let offset = scroll.contentView.bounds.minY
+        let bottom = latestBottom - offset
+        let composerTop = viewport - ChatLayout.composerInset - composer
+        require(bottom - latestHeight >= 0, "\(label): latest row top visible (\(bottom - latestHeight))")
+        require(bottom <= composerTop - ChatLayout.statusHeight - 40 + 0.5,
+            "\(label): latest bottom \(bottom) above composer top \(composerTop) with status clearance")
+    }
+}
+for order in ["grow-then-resize", "resize-then-grow"] {
+    let replay = ChatReplay()
+    replay.check("\(order) initial")
+    let steps: [(String, () -> Void)] = order == "grow-then-resize"
+        ? [("grow", { replay.grow(longDraft) }), ("resize", { replay.resize(620) })]
+        : [("resize", { replay.resize(620) }), ("grow", { replay.grow(longDraft) })]
+    for (name, step) in steps {
+        let (viewport, height) = (replay.viewport, replay.composer)
+        step()
+        replay.staleAnchor(viewport: viewport, composer: height)
+        drainLayout()
+        replay.check("\(order) after \(name)")
+    }
+    require(replay.viewport == 620 && replay.composer == 305, "\(order): capped draft in the short window (\(replay.composer))")
+}
+// Reproduce the exact manager arithmetic, then show the settled pin wins.
+let tall = ChatReplay()
+tall.grow(longDraft); drainLayout()
+require(tall.composer == 368, "Long draft reaches the cap at 440pt")
+tall.resize(568)
+tall.staleAnchor(viewport: 776, composer: 368)
+let short = latestBottom - tall.scroll.contentView.bounds.minY
+    - (tall.viewport - ChatLayout.bottomInset(composerHeight: tall.composer))
+// Manager capture: latest bottom 220.9 vs reading height ~211.
+require(short > 5, "Stale fractional anchor leaves the latest row below clearance (\(short)pt)")
+drainLayout()
+tall.check("stale anchor corrected after settled resize")
+// A reader in history is never moved by growth or resize, in either order.
+let reader = ChatReplay()
+reader.follows = false
+reader.scroll.contentView.scroll(to: NSPoint(x: 0, y: 1200))
+reader.grow(longDraft); drainLayout()
+reader.resize(620); drainLayout()
+require(reader.scroll.contentView.bounds.minY == 1200, "History position survives growth and resize")
+let readerPins = reader.probe.pinCount
+reader.probe.requestPin(); drainLayout()
+require(reader.probe.pinCount == readerPins, "Explicit pin requests respect a reader in history")
+reader.follows = true
+reader.probe.requestPin(); drainLayout()
+reader.check("scroll-to-latest after history")
+print("Chat follow resize: 440pt capped draft with grow->resize and resize->grow, stale-anchor negative control and history preservation passed without a window")
+
+// Manager failure: a wheel scroll into history was pinned back to latest.
+// User input detaches at once and drops pending pins; settles, composer growth
+// and resizes then leave the reader alone until they return to the end or
+// click latest. Programmatic pins never count as user scrolling.
+func drainSettle() { RunLoop.main.run(until: Date(timeIntervalSinceNow: ChatScrollStyleProbe.settleDelay + 0.25)) }
+func scrollHistory(_ replay: ChatReplay, by delta: CGFloat) {
+    let clip = replay.scroll.contentView
+    clip.scroll(to: NSPoint(x: 0, y: clip.bounds.minY - delta))
+}
+func liveScroll(_ replay: ChatReplay, _ move: () -> Void) {
+    NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: replay.scroll)
+    move()
+    NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: replay.scroll)
+}
+// Negative control: the previous gate (follows only, re-derived as "true"
+// after each pin) yanks the reader back on the very next document settle.
+let yanked = ChatReplay()
+scrollHistory(yanked, by: 700)
+let yankedOffset = yanked.scroll.contentView.bounds.minY
+yanked.grow(longDraft); drainLayout()
+require(yanked.scroll.contentView.bounds.minY != yankedOffset,
+    "Negative control: without a user-input detach, composer growth re-pins history")
+for path in ["wheel", "live scroll"] {
+    let replay = ChatReplay()
+    var reported: [Bool] = []
+    replay.probe.onPinnedChange = { reported.append($0) }
+    require(replay.probe.isPinned && ChatScrollStyleProbe.distanceFromEnd(replay.scroll) < 1, "\(path): starts pinned at latest")
+    let pinsBefore = replay.probe.pinCount
+    replay.grow(wrappedDraft); drainLayout()
+    require(replay.probe.pinCount > pinsBefore && replay.probe.userScrollCount == 0,
+        "\(path): programmatic pins are not user scrolling")
+    replay.probe.requestPin()   // pending before the input; must be dropped
+    if path == "wheel" { replay.probe.userScrolled(); scrollHistory(replay, by: 700) }
+    else { liveScroll(replay) { scrollHistory(replay, by: 700) } }
+    require(!replay.probe.isPinned && reported == [false], "\(path): detaches immediately and reports it (\(reported))")
+    let offset = replay.scroll.contentView.bounds.minY
+    let unchanged = { (label: String) in
+        require(replay.scroll.contentView.bounds.minY == offset && !replay.probe.isPinned,
+            "\(path): \(label) leaves scrollY \(replay.scroll.contentView.bounds.minY) at \(offset), not pinned")
+    }
+    drainSettle(); unchanged("pending pin and input settle")
+    replay.probe.scheduleConfiguration(); drainLayout(); unchanged("document/viewport settle")
+    replay.grow(longDraft); drainLayout(); unchanged("composer growth")
+    replay.probe.requestPin(); drainLayout(); unchanged("composer-height pin request")
+    replay.resize(620); drainLayout(); unchanged("resize")
+    replay.grow(wrappedDraft); drainLayout(); unchanged("composer shrink")
+    require(reported == [false], "\(path): no re-attach without user return or latest")
+    // Returning to the end by user input re-attaches after the input rests.
+    liveScroll(replay) { ChatScrollStyleProbe.pinToEnd(replay.scroll) }
+    require(!replay.probe.isPinned, "\(path): mid-gesture stays detached")
+    drainSettle()
+    require(replay.probe.isPinned && reported == [false, true], "\(path): user return to end re-attaches (\(reported))")
+    replay.grow(longDraft); drainLayout(); replay.check("\(path) follows again after return")
+    // Latest button: explicit attach from history.
+    replay.probe.userScrolled(); scrollHistory(replay, by: 900); drainSettle()
+    require(!replay.probe.isPinned, "\(path): detached again")
+    replay.probe.attach(); drainLayout()
+    require(replay.probe.isPinned, "\(path): latest re-attaches")
+    replay.check("\(path) latest button")
+}
+print("Chat user scroll: wheel/live-scroll detach, dropped pending pins, settle/growth/resize preserve history, return-to-end and latest re-attach, negative control passed without a window")
+
+// Manager failure: the pid-posted acceptance wheel had no NSEvent.window, so
+// the probe dropped it (userScrollCount 0). Classify input without a desktop:
+// nil-window wheels count only when the pointer is over the conversation;
+// other windows never count; every drop leaves a diagnostic reason.
+let chatWindowIdentity = NSObject(), otherWindowIdentity = NSObject()
+let inside = NSPoint(x: 100, y: 100), bounds = NSRect(x: 0, y: 0, width: 440, height: 600)
+let cases: [(String, AnyObject?, Int, AnyObject?, NSPoint?, String?)] = [
+    ("chat window over conversation", chatWindowIdentity, 7, chatWindowIdentity, inside, nil),
+    ("nil window, pointer over conversation", nil, 0, chatWindowIdentity, inside, nil),
+    ("nil window, chat window number", nil, 7, chatWindowIdentity, inside, nil),
+    ("nil window, pointer outside", nil, 0, chatWindowIdentity, NSPoint(x: 100, y: 900), "nil window: pointer outside conversation"),
+    ("chat window, pointer outside", chatWindowIdentity, 7, chatWindowIdentity, NSPoint(x: -5, y: 10), "pointer outside conversation"),
+    ("other window object", otherWindowIdentity, 9, chatWindowIdentity, inside, "other window"),
+    ("nil window, other window number", nil, 9, chatWindowIdentity, inside, "other window number"),
+    ("conversation not in a window", nil, 0, nil, inside, "conversation not in a window"),
+    ("no pointer location", nil, 0, chatWindowIdentity, nil, "no pointer location"),
+]
+for (label, eventWindow, number, chatWindow, point, expected) in cases {
+    let reason = ChatScrollStyleProbe.wheelRejection(eventWindow: eventWindow, eventWindowNumber: number,
+        chatWindow: chatWindow, chatWindowNumber: 7, pointInScroll: point, scrollBounds: bounds)
+    require(reason == expected, "\(label): expected \(expected ?? "accepted"), got \(reason ?? "accepted")")
+}
+require(ChatScrollStyleProbe.screenPoint(quartz: CGPoint(x: 200, y: 300), primaryScreenHeight: 1000) == NSPoint(x: 200, y: 700),
+    "Quartz top-left location converts to AppKit screen coordinates")
+
+// The real monitor handler on an offscreen window that is never shown: a
+// pid-style (nil window) CGEvent wheel over the conversation detaches; outside
+// it, for another window number, or with no delta it is dropped with a reason.
+_ = NSApplication.shared
+let offscreen = NSWindow(contentRect: NSRect(x: 120, y: 80, width: 440, height: 776), styleMask: [.borderless],
+                         backing: .buffered, defer: true)
+let windowed = ChatReplay()
+offscreen.contentView = windowed.scroll
+windowed.probe.scheduleConfiguration(); drainLayout()
+require(windowed.probe.configuredScroll === windowed.scroll && windowed.scroll.window === offscreen, "Probe attached inside the offscreen window")
+func pidWheel(at point: NSPoint, in view: NSView, delta: Int32 = 700, windowNumber: Int? = nil) -> NSEvent {
+    let screen = offscreen.convertPoint(toScreen: view.convert(point, to: nil))
+    let event = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: delta, wheel2: 0, wheel3: 0)!
+    event.location = CGPoint(x: screen.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - screen.y)
+    if let windowNumber { event.setIntegerValueField(CGEventField(rawValue: 51)!, value: Int64(windowNumber)) }
+    return NSEvent(cgEvent: event)!
+}
+let probeInput = windowed.probe
+func expectDrop(_ event: NSEvent, _ reason: String) {
+    let (wheels, scrolls) = (probeInput.scrollWheelEventCount, probeInput.userScrollCount)
+    probeInput.handleInput(event)
+    require(probeInput.scrollWheelEventCount == wheels + 1, "Wheel counted before rejection")
+    require(probeInput.lastInputRejection == reason && probeInput.userScrollCount == scrolls && probeInput.isPinned,
+        "Dropped with '\(reason)', got '\(probeInput.lastInputRejection)'")
+}
+expectDrop(pidWheel(at: NSPoint(x: 100, y: 5000), in: windowed.scroll), "nil window: pointer outside conversation")
+expectDrop(pidWheel(at: NSPoint(x: 100, y: 100), in: windowed.scroll, windowNumber: offscreen.windowNumber + 100_000), "other window number")
+expectDrop(pidWheel(at: NSPoint(x: 100, y: 100), in: windowed.scroll, delta: 0), "no vertical delta")
+let mouseMoved = NSEvent.mouseEvent(with: .mouseMoved, location: .zero, modifierFlags: [], timestamp: 0,
+    windowNumber: 0, context: nil, eventNumber: 0, clickCount: 0, pressure: 0)!
+let beforeMoved = probeInput.scrollWheelEventCount
+probeInput.handleInput(mouseMoved)
+require(probeInput.scrollWheelEventCount == beforeMoved && probeInput.isPinned, "Non-scroll input is ignored")
+let accepted = pidWheel(at: NSPoint(x: 100, y: 100), in: windowed.scroll)
+require(accepted.window == nil, "Replays the manager's nil-window wheel")
+probeInput.handleInput(accepted)
+require(probeInput.lastInputRejection == "" && probeInput.userScrollCount == 1 && !probeInput.isPinned,
+    "Nil-window wheel over the conversation detaches ('\(probeInput.lastInputRejection)')")
+let detachedOffset = windowed.scroll.contentView.bounds.minY
+windowed.grow(longDraft); drainLayout()
+require(windowed.scroll.contentView.bounds.minY == detachedOffset, "Accepted wheel keeps growth from re-pinning")
+let orphan = ChatReplay().probe
+orphan.handleInput(pidWheel(at: NSPoint(x: 100, y: 100), in: windowed.scroll))
+require(orphan.lastInputRejection == "conversation not in a window" && orphan.isPinned, "Windowless conversation rejects with a reason")
+print("Chat input routing: nil-window wheel over/outside conversation, other window, zero delta, non-scroll and windowless reasons passed with an offscreen window")
+
+// Manager failure: the probe unpinned (pinned false, scrollY 3943 -> 3243)
+// but the latest button never appeared. Its visibility now comes from the
+// probe's pinned state and scroll position, not a SwiftUI flag or geometry.
+let visibility: [(Bool, Bool, CGFloat, Bool)] = [
+    (true, true, 0, false), (true, true, 700, false),     // following at/near the end
+    (false, true, 700, true), (false, true, 0, false),   // detached: away shows, end hides
+    (true, false, 400, true), (true, false, 0, false),   // reveal/control stopped following
+]
+for (pinned, follows, distance, expected) in visibility {
+    require(ChatScrollStyleProbe.showsLatestButton(pinned: pinned, follows: follows, distanceFromEnd: distance) == expected,
+        "Latest button for pinned \(pinned), follows \(follows), distance \(distance) should be \(expected)")
+}
+for path in ["wheel", "live scroll"] {
+    let replay = ChatReplay()
+    var shown: [Bool] = []
+    replay.probe.onLatestButtonChange = { shown.append($0) }
+    replay.grow(longDraft); drainLayout()
+    require(!replay.probe.showsLatestButton && shown.isEmpty, "\(path): hidden while following at latest")
+    // Detach first, then move: visibility follows the position change.
+    let away = { scrollHistory(replay, by: 700) }
+    if path == "wheel" { replay.probe.userScrolled(); away() } else { liveScroll(replay, away) }
+    drainLayout()
+    require(!replay.probe.isPinned && replay.probe.showsLatestButton && shown == [true],
+        "\(path): unpinned and scrolled away shows latest (\(shown))")
+    drainSettle()
+    require(replay.probe.showsLatestButton && shown == [true], "\(path): stays visible in history after input rests")
+    replay.grow(wrappedDraft); drainLayout()
+    require(replay.probe.showsLatestButton, "\(path): composer changes keep it visible in history")
+    // User scrolls back to the end: hidden immediately, re-pinned after rest.
+    let back = { _ = ChatScrollStyleProbe.pinToEnd(replay.scroll) }
+    if path == "wheel" { replay.probe.userScrolled(); back() } else { liveScroll(replay, back) }
+    drainLayout()
+    require(!replay.probe.showsLatestButton && shown == [true, false], "\(path): back at the bottom hides latest (\(shown))")
+    drainSettle()
+    require(replay.probe.isPinned && !replay.probe.showsLatestButton && shown == [true, false], "\(path): re-pinned stays hidden")
+    // Latest button click: attach pins to the end and hides it.
+    replay.probe.userScrolled(); scrollHistory(replay, by: 900); drainLayout()
+    require(replay.probe.showsLatestButton && shown == [true, false, true], "\(path): visible again in history")
+    replay.probe.attach(); drainLayout()
+    require(!replay.probe.showsLatestButton && shown == [true, false, true, false], "\(path): latest click hides it (\(shown))")
+}
+// A reveal (follows false) away from the end also offers latest, without unpinning.
+let revealed = ChatReplay()
+revealed.follows = false
+scrollHistory(revealed, by: 600); drainLayout()
+require(revealed.probe.isPinned && revealed.probe.showsLatestButton, "Reveal away from the end shows latest")
+print("Chat latest button: probe-driven show on unpin+scroll away, hide at bottom, re-pin, latest click and reveal passed without a window")
+
+// Manager failure: the latest button rendered, but latestButtonFrame stayed
+// zero (its PreferenceKey never reached the observer), so the harness could
+// neither see nor click it. Host the conversation's nesting in an offscreen
+// NSHostingView: the reported frame must be the real, nonzero rendered frame
+// in chatRoot (top-left) points while shown, and zero once hidden.
+final class LatestState: ObservableObject { @Published var shows = false }
+struct LatestHarness: View {
+    @ObservedObject var state: LatestState
+    let bottomInset: CGFloat
+    let report: (CGRect) -> Void
+    var body: some View {
+        VStack(spacing: 0) {
+            GeometryReader { _ in
+                ScrollViewReader { _ in
+                    ScrollView { Color.clear.frame(height: 3000) }
+                        .coordinateSpace(name: "chatScroll")
+                        .overlay(alignment: .bottomTrailing) {
+                            if state.shows {
+                                Button {} label: { Image(systemName: "arrow.down") }
+                                    .reportsFrame(in: ChatLayout.rootSpace, report)
+                                    .padding(12).padding(.bottom, bottomInset)
+                            }
+                        }
+                }
+            }
+        }.coordinateSpace(name: ChatLayout.rootSpace)
+    }
+}
+let latestState = LatestState()
+var latestFrame = CGRect.zero
+let hostSize = NSSize(width: 440, height: 600), harnessInset: CGFloat = 200
+let latestHost = NSHostingView(rootView: LatestHarness(state: latestState, bottomInset: harnessInset) { latestFrame = $0 })
+latestHost.frame = NSRect(origin: .zero, size: hostSize)
+offscreen.setContentSize(hostSize)
+offscreen.contentView = latestHost
+func settleHost() { for _ in 0..<5 { latestHost.layoutSubtreeIfNeeded(); RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05)) } }
+settleHost()
+latestState.shows = true
+settleHost()
+require(latestFrame.width > 0 && latestFrame.height > 0, "Shown latest button reports a nonzero rendered frame (\(latestFrame))")
+require(abs(latestFrame.maxX - (hostSize.width - 12)) < 1 && abs(latestFrame.maxY - (hostSize.height - 12 - harnessInset)) < 1,
+    "Frame is in chatRoot top-left points at the bottom-trailing overlay position (\(latestFrame))")
+// ChatAcceptance clicks the frame's centre converted from chatRoot to the host.
+let click = NSPoint(x: latestFrame.midX, y: latestHost.isFlipped ? latestFrame.midY : hostSize.height - latestFrame.midY)
+require(latestHost.bounds.contains(click), "Latest click point lies inside the hosting view")
+latestState.shows = false
+settleHost()
+require(latestFrame == .zero, "Hidden latest button resets its frame to zero (\(latestFrame))")
+latestState.shows = true
+settleHost()
+require(latestFrame.width > 0, "Re-shown latest button reports its frame again")
+print("Chat latest frame: shown button reports its real chatRoot frame, hidden resets to zero, in an offscreen NSHostingView")
+
+// Accessibility/scroller provider. With no override it must be exactly the
+// real macOS values (read-only here); overrides stay in-process and flow
+// through the probe's AppKit appearance/style and the SwiftUI environment.
+let workspace = NSWorkspace.shared
+let realSystem = ChatAccessibility(increaseContrast: workspace.accessibilityDisplayShouldIncreaseContrast,
+    reduceTransparency: workspace.accessibilityDisplayShouldReduceTransparency,
+    reduceMotion: workspace.accessibilityDisplayShouldReduceMotion)
+for provider in [ChatSystemEnvironment.shared, ChatSystemEnvironment()] {
+    require(!provider.isOverridden, "Provider starts without an override")
+    require(provider.accessibility == realSystem && provider.systemAccessibility() == realSystem,
+        "Default provider reports the real NSWorkspace accessibility values")
+    require(provider.scrollerStyle == NSScroller.preferredScrollerStyle, "Default provider reports the real scroller style")
+}
+var fakeSystem = ChatAccessibility(increaseContrast: false, reduceTransparency: true, reduceMotion: false)
+let injected = ChatSystemEnvironment(systemAccessibility: { fakeSystem }, systemScrollerStyle: { .overlay })
+var environmentNotes = 0
+let noteObserver = NotificationCenter.default.addObserver(forName: ChatSystemEnvironment.didChange, object: injected, queue: nil) { _ in environmentNotes += 1 }
+let allOn = ChatAccessibility(increaseContrast: true, reduceTransparency: true, reduceMotion: true)
+injected.override(accessibility: nil, scrollerStyle: .legacy)
+require(injected.scrollerStyle == .legacy && injected.accessibility == fakeSystem && injected.isOverridden,
+    "Scroller-only override keeps system accessibility")
+injected.override(accessibility: allOn, scrollerStyle: nil)
+require(injected.accessibility == allOn && injected.scrollerStyle == .overlay, "Accessibility-only override keeps system scroller style")
+injected.clearOverrides()
+require(!injected.isOverridden && injected.accessibility == fakeSystem && injected.scrollerStyle == .overlay, "Clearing returns to system values")
+fakeSystem.reduceMotion = true
+require(injected.accessibility.reduceMotion, "System values are read live, not cached")
+require(environmentNotes == 3, "Each override change notifies consumers (\(environmentNotes))")
+NotificationCenter.default.removeObserver(noteObserver)
+
+// The probe applies the scroller override to the real NSScrollView the way the macOS setting does.
+let styled = ChatReplay()
+styled.probe.environment = injected
+drainLayout()
+require(styled.scroll.scrollerStyle == .overlay && styled.scroll.appearance == nil, "System values: overlay, inherited appearance")
+let beforeOverride = styled.probe.configurationCount
+injected.override(accessibility: allOn, scrollerStyle: .legacy); drainLayout()
+require(styled.probe.configurationCount > beforeOverride, "Override change reconfigures the probe")
+require(styled.scroll.scrollerStyle == .legacy && !styled.scroll.autohidesScrollers, "Always override shows the legacy scroller")
+require(styled.scroll.appearance == nil, "Accessibility overrides never replace the inherited appearance (AppKit keeps macOS contrast)")
+injected.clearOverrides(); drainLayout()
+require(styled.scroll.scrollerStyle == .overlay && styled.scroll.autohidesScrollers && styled.scroll.appearance == nil,
+    "Clearing restores system style and inherited appearance")
+
+// SwiftUI views read the same environment keys the real settings populate.
+final class EchoBox { var value: ChatAccessibility? }
+struct EchoHarness: View {
+    let accessibility: ChatAccessibility
+    let box: EchoBox
+    var body: some View {
+        Color.clear.frame(width: 100, height: 100)
+            .background(ChatAccessibilityEcho { box.value = $0 })
+            .modifier(ChatAccessibilityEnvironment(accessibility: accessibility))
+    }
+}
+for value in [allOn, ChatAccessibility(), ChatAccessibility(increaseContrast: true, reduceTransparency: false, reduceMotion: true)] {
+    let box = EchoBox()
+    let host = NSHostingView(rootView: EchoHarness(accessibility: value, box: box))
+    host.frame = NSRect(x: 0, y: 0, width: 100, height: 100)
+    offscreen.contentView = host
+    for _ in 0..<5 { host.layoutSubtreeIfNeeded(); RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05)) }
+    require(box.value == value, "SwiftUI environment receives \(value), got \(String(describing: box.value))")
+}
+print("Chat accessibility provider: real system defaults, in-process overrides, probe scroller style with inherited appearance, and SwiftUI environment passed without changing system settings")
+
+// Manager failure: "Native thumb dragging moves content" (scrollY stayed 3306).
+// The drag's dragged/up events reached AppKit only after the scroller's own
+// tracking loop needed them. ScrollerDrag queues them first, then routes the
+// mouseDown to the hit-tested scroller, whose tracking loop consumes them.
+// Posting the same drag without routing the mouseDown must not move content.
+final class FlippedDragDocument: NSView { override var isFlipped: Bool { true } }
+func dragScroll(_ style: NSScroller.Style) -> (NSScrollView, NSScroller) {
+    let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 400, height: 600))
+    scroll.hasVerticalScroller = true
+    ChatScrollStyleProbe.configure(scroll, style: style)
+    scroll.documentView = FlippedDragDocument(frame: NSRect(x: 0, y: 0, width: 380, height: 5000))
+    offscreen.setContentSize(NSSize(width: 400, height: 600))
+    offscreen.contentView = scroll
+    scroll.tile(); scroll.layoutSubtreeIfNeeded()
+    scroll.contentView.scroll(to: NSPoint(x: 0, y: 3000)); scroll.reflectScrolledClipView(scroll.contentView)
+    return (scroll, scroll.verticalScroller!)
+}
+for style: NSScroller.Style in [.legacy, .overlay] {
+    let name = style == .legacy ? "Always" : "WhenScrolling"
+    var (scroll, scroller) = dragScroll(style)
+    // Routed: deliver the mouseDown to the view AppKit's hit-test picks (what
+    // window.sendEvent does in the app); it must be the scroller.
+    let routed = ScrollerDrag.perform(scroller: scroller, scroll: scroll, window: offscreen, dy: 96) { down in
+        let content = offscreen.contentView!
+        content.hitTest(content.superview?.convert(down.locationInWindow, from: nil) ?? down.locationInWindow)?.mouseDown(with: down)
+    }
+    require(routed.hitIsScroller, "\(name): the thumb location hit-tests to the scroller (\(routed.hitTarget))")
+    require(routed.windowRouted && routed.queued == 9, "\(name): window-targeted mouse events queued (\(routed.dictionary))")
+    require(routed.consumedByTracker == routed.queued && routed.leftover == 0, "\(name): scroller tracking consumed the drag (\(routed.dictionary))")
+    require(routed.scrollBefore - routed.scrollAfter > 40, "\(name): thumb drag up moves content toward history (\(routed.scrollBefore) -> \(routed.scrollAfter))")
+    // Negative control: the same drag posted without routing the mouseDown.
+    (scroll, scroller) = dragScroll(style)
+    let unrouted = ScrollerDrag.perform(scroller: scroller, scroll: scroll, window: offscreen, dy: 96) { NSApp.postEvent($0, atStart: false) }
+    require(unrouted.scrollBefore == unrouted.scrollAfter && unrouted.consumedByTracker == 0,
+        "\(name): an unrouted drag does not move content, so the acceptance drag check fails (\(unrouted.dictionary))")
+}
+print("Chat thumb drag: queued drag routed to the hit-tested scroller moves content toward history in Always and WhenScrolling; unrouted negative control does not")

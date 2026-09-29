@@ -9,6 +9,16 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Identify the SwiftUI conversation scroll view; configure its native small scroller using macOS preferences, including live Always-show changes.
 - [x] Extend windowless composer tests for spacing/clearance and native scrollbar policy; run focused controller and TypeScript checks.
 - [x] Repair CGFloat/Double bounds handoff causing empty composer captures; prove failure before the fix and pass through real windowless composer update/layout.
+- [x] Wire growth/resize/scroll acceptance into test:native; capture real SwiftUI probe identity, native preference transitions and wheel/thumb/latest-button interactions.
+- [x] Add normal/narrow multiline/capped foreground fixtures and preference restoration unit coverage, with PNG/OCR/geometry paths documented in TESTING.
+- [x] Diagnose stale document-bound clamping after composer growth; retry following on settled AppKit dimensions and add a windowless regression with a negative control.
+- [x] Fix capped-draft + short-resize follow shortfall: pin to the document end from settled AppKit metrics (no stale fractional anchor); cover grow→resize and resize→grow at 440pt windowless and in native acceptance.
+- [x] Probe-owned latest state: probe-owned pinned state changed only by user input (wheel/key monitor, live scroll) or explicit latest/chat attach; windowless regression + negative controls.
+- [x] Route the acceptance thumb drag through the scroller's own tracking loop (queue drag, window.sendEvent mouseDown); drag diagnostics; direction-strict assertion; fixture regression with unrouted negative control.
+- [x] Remove all system-preference writes from verification; in-process ChatSystemEnvironment override (scroller style + Increase Contrast/Reduce Transparency/Reduce Motion) through the probe and SwiftUI environment; system-settings guard test; provider defaults test.
+- [x] Report the latest button's rendered frame via onGeometryChange (PreferenceKey never arrived); offscreen NSHostingView regression with negative control.
+- [x] Drive the latest button from the probe's pinned state + scroll position; windowless visibility regression.
+- [x] Route the acceptance wheel/mouse input as window-targeted events through NSApp.postEvent (pid-posted events had no window and were dropped); accept nil-window wheels over the chat; add input diagnostics and windowless routing coverage.
 - [ ] Manager: run native verification and inspect foreground normal/narrow/multiline captures, latest-message reachability, scrollbar idle/hover/drag/wheel behavior and Always-show/accessibility preferences.
 
 ## Local Apple Intelligence exploration (2026-09-28)
