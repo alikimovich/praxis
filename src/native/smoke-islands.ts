@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import assert from 'node:assert/strict'
 import { checkShadowIsland } from './smoke-shadow-island'
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -20,7 +21,11 @@ export async function checkChatIslands(host: NativeBridge, fixture: string, arti
   if (context) chat.context = { ...context, tokens: { ...context.tokens, needed: false }, notes: [] }
   const session = nativeIslands.sessions.get(chat.chat)
   assert.ok(session, 'Chat islands registered against the durable session record')
-  const records = [...session.records]
+  // Smoke islands go to scratch histories, so the chat's own history (and every later
+  // check) never sees them; the owner writes each history, so nothing is reset by hand.
+  const { root: islandRoot, recordId, turn } = session
+  const scratch = () => nativeIslands.register(chat.chat, islandRoot, `smoke-islands-${randomUUID()}`, turn)
+  scratch()
   const file = join(fixture, 'island-light.js')
   const indexFile = join(fixture, 'index.html')
   const originalIndex = readFileSync(indexFile, 'utf8')
@@ -64,15 +69,20 @@ document.body.append(card);
       await wait(() => readFileSync(file, 'utf8') === code)
       writeFileSync(join(artifacts, 'chat-island.png'), Buffer.from(await host.request('captureShell'), 'base64'))
       assert.deepEqual(await host.request('webViews'), ['preview'])
-      session.records = records
+      scratch()
       await nativeIslands.refresh(chat.chat)
     }
     if (parts.shadow) await checkShadowIsland(host, fixture, artifacts)
     if (parts.islands) console.log('NATIVE ISLANDS PASS — Swift rendering, typed point action, source batch/Undo and landing gate; no live model calls.')
   } finally {
     writeFileSync(indexFile, originalIndex)
+    // Restoring the page reloads the preview; let that finish so the next check (in a
+    // filtered run, shell-layout directly) never styles a document about to be replaced.
+    try { await wait(async () => { try { return await page("document.readyState === 'complete' && !document.querySelector('#island-shadow-demo')") === true } catch { return false } }) } catch {}
     chat.context = context
-    chat.messages = messages; session.records = records; await nativeIslands.settle(chat.chat, true)
+    chat.messages = messages
+    nativeIslands.register(chat.chat, islandRoot, recordId, turn)
+    await nativeIslands.refresh(chat.chat)
     nativeChat.changed(chat)
   }
 }

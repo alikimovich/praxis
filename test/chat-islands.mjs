@@ -81,7 +81,8 @@ try {
   // Rebasing queued controls must never bless an unrelated source write.
   let unblock
   const held = enqueueRepoWrite(root, () => new Promise(r => { unblock = r }))
-  await new Promise(r => setTimeout(r, 0))
+  // The lease is held once its operation runs (a Swift repository lease is a round trip).
+  while (!unblock) await new Promise(r => setTimeout(r, 1))
   const racing = [.3, .7].map(x => islands.interact(command('commit', { x })))
   const rejected = Promise.all(racing.map(p => assert.rejects(p, /Source changed/)))
   await writeFile(join(root, 'shadow.js'), code + '// concurrent editor change\n')
@@ -129,11 +130,12 @@ try {
   const queued = await islands.tool('queued', root, request); await islands.settle('queued', true)
   let release
   const barrier = enqueueRepoWrite(root, () => new Promise(r => { release = r }))
-  await new Promise(r => setTimeout(r, 0))
+  while (!release) await new Promise(r => setTimeout(r, 1))
   const v = islands.attachments('queued')[0].view
-  const applying = islands.interact({ ...stale, chat: 'queued', id: queued.id, revision: v.revision, sourceRevision: v.sourceRevision })
+  // Handled at once: under the Swift owner the refusal can arrive before the barrier ends.
+  const applying = assert.rejects(islands.interact({ ...stale, chat: 'queued', id: queued.id, revision: v.revision, sourceRevision: v.sourceRevision }), /closed/)
   islands.close('queued'); release(); await barrier
-  await assert.rejects(applying, /closed/)
+  await applying
   // Installed json-render composition API: Jev chooses whole prepared blocks.
   let evaluations = 0
   const chosen = await chooseControlsWithJev('island-test', 'Light direction and shadow layers', request.blocks, {

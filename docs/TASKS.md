@@ -96,6 +96,21 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
 
+## Swift editing coordinator (LKM-99 / S12)
+
+- [x] Name the domain exactly (island histories and state machine, controls sidecars, content drafts, deferred navigation; Bun-kept JS helpers, inspector views, DOM instrumentation) and tighten its rollback plan (`docs/SWIFT-BACKEND-EDITING.md`).
+- [x] Swift `EditingOwner` on the private pipe; Bun client `src/native/editing-service.ts`, seam `src/main/editing-owner.ts`, rollback twin `src/main/editing-model.ts`.
+- [x] Islands: definitions bound to the conversation owner's turn (`origin`), activation only by that turn's terminal (`TurnBoundaries`; stale terminals ignored), command admission, batch revision chain, per-island Undo through the source owner; `ChatIslands` keeps views and JS helpers.
+- [x] Controls sidecars committed hash-bound in the repository lane (hand edits refused and kept; symlinks refused).
+- [x] Content-editor drafts persisted and restored; a stale draft stays bound to its base and cannot be saved over newer content.
+- [x] Deferred `open_preview` navigation restored (held until its turn lands; `NavigationController` loads it in the asking chat once the server runs).
+- [x] `test/editing-owner.mjs` (unit tier): parity, turns, legacy suites on the Swift owners, drafts, lanes, crash, rollback, drain, schema.
+- [ ] S12 sub-boundary: the composer's queued-message list, drafts and attachments stay in the Bun native chat controller.
+- [ ] S12 sub-boundary: the workspace controller's persisted server fields (S06 adapter) and project UI composition enablement (per-turn, in memory) stay in Bun.
+- [ ] Follow-up: an island removal action (today an island stays in its chat's history).
+- [x] Worker native verification (staged): full native smoke 20/20 and chat acceptance pass; the islands check now waits for the preview reload it causes (a filtered run had raced `shell-layout`).
+- [ ] Manager: stage the new files (docs-links checks tracked paths), run the unit tier unsandboxed, `bun run test:native`, inspect `chat-island.png` and `shadow-light-*.png`, independent review.
+
 ## Swift provider owner and helper capability enforcement (LKM-98 / S10)
 
 - [x] Decide the integration boundary (SDK adapters, one supervised helper per session in the end state), name the domain exactly (grants, permission decisions, tool authorization, Stop's deadline, sessions journal, resume ids, helpers; Bun-kept SDK sessions and credentials in their own stores) and tighten its rollback plan (`docs/SWIFT-BACKEND-PROVIDERS.md`).
@@ -116,7 +131,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Session records written only by the owner (byte-identical; overlay for read-your-writes); live-chat checkpoints; crash recovery that never replaces newer records.
 - [x] Completion policy, titles (user wins), model handoff once, approvals and permission mode, spawn admission (3 per project, FIFO) moved to the owner.
 - [x] `test/conversation-owner.mjs` (unit tier): owner parity, agent streaming on both owners (Swift repository/source owners for landing), crash, rollback, schema, drain, `comment-agents` re-run on the owner, adapter boundary.
-- [ ] S12: the composer's queued-message list, drafts and attachments stay in the Bun native chat controller (the owner enforces one turn at a time and turn identity).
+- [ ] S12: the composer's queued-message list, drafts and attachments stay in the Bun native chat controller (the owner enforces one turn at a time and turn identity). LKM-99 moved islands, sidecars, content drafts and navigation; this sub-boundary remains.
 - [ ] S10 (LKM-98): provider sessions are opened with the Swift provider owner; the SDK adapters, prompt assembly, title and memory generation stay in Bun until the helper move above.
 - [ ] Follow-up: a UI for chats recovered from checkpoints (today they are listed in the Activity log and restored to History or as the project's current chat).
 - [ ] Manager: stage the new files (docs-links checks tracked paths), run the unit tier unsandboxed, `bun run test:native`, independent review.
@@ -132,7 +147,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] `TREZI_BACKEND_OWNER=legacy` keeps the TS writers; journal, reports and drafts survive the switch; drain refuses queued writes.
 - [x] `test/source-owner.mjs` (unit tier): React/Svelte/HTML/layers fixture parity, `shadow-controls` re-run on the owner, proposals, paths, transactions, crash, history, files, drafts, lanes, rollback, drain.
 - [ ] S08 sub-boundary: file-tree listing (`source:tree`), media (`trezi-media://`), component resolution and open-in-editor stay Bun read-only; move with S12/S15.
-- [ ] S08 sub-boundary: sidecar stores (`.trezi/control-panels.json`, `content-controls.json`, `tokens.json`) stay Bun writers inside the repository lease.
+- [ ] S08 sub-boundary: sidecar stores stay Bun writers inside the repository lease — `control-panels.json` and `content-controls.json` moved to the Swift editing owner (LKM-99); `tokens.json` and annotations remain.
 - [ ] S13: setup/scaffold instrumentation writers (`setup.ts`, `scaffold.ts`) stay Bun inside the lease; move with setup.
 - [ ] S09 follow-up: run the parsers in a separate supervised helper process (today they run in Bun and are bound by the seam, not by process privileges).
 - [ ] Follow-up: a UI to review and acknowledge interrupted source transactions (today they are listed in the Activity log at launch).
