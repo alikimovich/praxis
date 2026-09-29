@@ -38,8 +38,17 @@ preserve its current wording unless a completed chat establishes a material addi
 the user explicitly reverses an existing decision. Claude and Codex/connection chats
 support evaluation; the experimental Gemini CLI backend currently does not.
 
-Implementation: `src/main/project-memory.ts`, `src/main/agent.ts`,
+Ownership (S05, LKM-93): the Swift service writes memory files through its operation
+ledger; Bun runs evaluations and may only propose. A proposal commits only on the
+revision it was evaluated against, so a manual save always wins; a damaged memory
+file is reported and left untouched instead of being read as empty. Injection
+compares the owner's digest, and unreadable memory never fails a chat.
+`TREZI_BACKEND_OWNER=legacy` keeps the Bun writer as the rollback owner. See
+[SWIFT-BACKEND-MEMORY.md](SWIFT-BACKEND-MEMORY.md).
+
+Implementation: `src/main/project-memory.ts`, `src/native/project-memory-service.ts`,
+`src/service/MemoryOwner.swift`, `src/service/MemoryFile.swift`, `src/main/agent.ts`,
 `src/main/backends/memory.ts`, `src/main/rules.ts`,
 `src/native/Sheets.swift` and `src/native/sheets-runtime.ts`. Regression coverage:
-`test/project-memory.mjs`, `test/project-memory-evaluation.mjs`,
+`test/project-memory.mjs`, `test/memory-owner.mjs`, `test/project-memory-evaluation.mjs`,
 `test/native-sheets.mjs`, `test/rules.mjs`.

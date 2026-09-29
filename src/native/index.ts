@@ -9,7 +9,7 @@ import { NativeEditorController } from './editor-controller'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { projectHasRunningAgents, registerAgentIpc } from '../main/agent'
+import { projectHasRunningAgents, registerAgentIpc, setProjectMemoryOwner } from '../main/agent'
 import { registerAnnotationsIpc } from '../main/annotations'
 import { registerContentControlsIpc } from '../main/content-controls-ipc'
 import { registerControlsIpc } from '../main/control-panels'
@@ -41,6 +41,7 @@ import { nativePreferences } from './preferences'
 import { servicePreferences } from './preferences-service'
 import { legacyWorkspace } from './workspace'
 import { serviceWorkspace } from './workspace-service'
+import { serviceProjectMemory } from './project-memory-service'
 import { installNativeChat } from './chat-runtime'
 import { NativeShellController } from './shell-controller'
 import { NativeSupportSheets } from './support-sheets'
@@ -131,6 +132,8 @@ async function main() {
   const workspace = process.env.TREZI_SERVICE_SUPERVISED === '1'
     ? await serviceWorkspace(host).catch(error => { throw new Error(`Trezi could not read the workspace from its service: ${error.message}`) })
     : legacyWorkspace(profile)
+  // Project memory (S05): read on demand, so there is no startup snapshot to await.
+  if (process.env.TREZI_SERVICE_SUPERVISED === '1') { const memory = serviceProjectMemory(host); setProjectMemoryOwner(() => memory) }
   const refreshPreferences = () => {
     const values = preferences.snapshot()
     let preferred: unknown

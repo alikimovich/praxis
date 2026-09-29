@@ -4,9 +4,9 @@ LKM-89, step S02 of the [canonical plan](SWIFT-BACKEND-PLAN.md) and
 [roadmap](SWIFT-BACKEND-ROADMAP.md). This step moves **process supervision and
 profile exclusion** to a separate Swift service. It moved **no domain writer**.
 Since LKM-91 the service writes preferences ([preferences](SWIFT-BACKEND-PREFERENCES.md)),
-and since LKM-92 workspace identity, order and selection ([workspace](SWIFT-BACKEND-WORKSPACE.md));
-Bun remains the single writer of sessions, memory, annotations, Git/worktrees,
-source edits and managed servers.
+since LKM-92 workspace identity, order and selection ([workspace](SWIFT-BACKEND-WORKSPACE.md)),
+and since LKM-93 project memory ([memory](SWIFT-BACKEND-MEMORY.md)); Bun remains the
+single writer of sessions, annotations, Git/worktrees, source edits and managed servers.
 
 ## Topology
 
@@ -31,6 +31,9 @@ scripts/start-native.mjs ── TreziHost (AppKit) ──XPC── TreziService 
   same pipe (`{"service":"workspace"`); `src/service/DomainChannel.swift` is the
   ordered inbox and bounded drain both domains share. See
   [workspace](SWIFT-BACKEND-WORKSPACE.md).
+- `src/service/MemoryOwner.swift` (S05, LKM-93): the project memory writer, on
+  the same pipe (`{"service":"memory"`) and the same `DomainChannel`, drained at
+  stop like the other two. See [memory](SWIFT-BACKEND-MEMORY.md).
 - `src/main/managed-child.ts`: Bun keeps choosing server/Simulator commands but
   spawns them through the Swift guardian when supervised.
 

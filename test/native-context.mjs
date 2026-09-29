@@ -51,3 +51,29 @@ assert.equal(chat.get('a').context.spawns.length, 0, 'Late start responses canno
 controller.queued('a', 'progress', 'Remove border', false)
 await controller.effect({ type: 'spawn', event: { type: 'status', projectKey: 'a', sessionId: 'progress', text: 'Editing border styles' } })
 assert.equal(chat.get('a').context.spawns[0].activity, 'Editing border styles')
+
+// Note reads after add/remove can finish out of order: a stale list never replaces a newer one.
+{
+  const lists = []
+  const notesInvoke = async (channel, ...args) => {
+    if (channel === 'annotations:list') return new Promise(resolve => lists.push(resolve))
+    if (channel === 'setup:detect') return { canInstrument: false }
+    return invoke(channel, ...args)
+  }
+  const sent = []
+  const notesChat = new NativeChatController({ invoke: notesInvoke, render() {}, effect() {} })
+  const notesWorkspace = { ...workspace, active: entries[0], services: { invoke: notesInvoke } }
+  const notes = new NativeContextController(notesWorkspace, notesChat, () => ({}), async (channel, ...args) => sent.push([channel, ...args]))
+  const activated = notes.activate(entries[0])
+  while (lists.length < 1) await new Promise(resolve => setTimeout(resolve, 0))
+  const older = notes.notes('/a'), newer = notes.notes('/a')
+  while (lists.length < 3) await new Promise(resolve => setTimeout(resolve, 0))
+  lists[2]([{ id: 'n2', text: 'After remove', selector: '.b' }])
+  await newer
+  lists[1]([{ id: 'n1', text: 'Before remove', selector: '.a' }, { id: 'n2', text: 'After remove', selector: '.b' }])
+  lists[0]([])
+  await Promise.all([older, activated])
+  assert.deepEqual(notesChat.get('a').context.notes, [{ id: 'n2', text: 'After remove' }], 'stale note lists are rejected')
+  assert.deepEqual(sent.filter(c => c[0] === 'preview:set-annotations').at(-1), ['preview:set-annotations', [{ id: 'n2', selector: '.b' }]], 'pins follow the newest list')
+  console.log('Native context: out-of-order note responses keep the newest list')
+}

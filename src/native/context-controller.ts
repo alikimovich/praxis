@@ -1,4 +1,4 @@
-import type { SelectedElement, AgentEvent } from '../shared/api'
+import type { Annotation, SelectedElement, AgentEvent } from '../shared/api'
 import type { NativeChatContext, NativeChatEffect } from '../shared/native-chat-controller'
 import { describeSelectionForPrompt, selectionForBubble } from '../shared/selection-context'
 import type { ProjectEntry } from '../shared/workspace'
@@ -10,6 +10,8 @@ interface ProjectContext {
   tokens: NativeChatContext['tokens']
   notes: NativeChatContext['notes']
   pins: { id: string; selector: string }[]
+  /** The newest notes read issued; an older response is stale and dropped. */
+  notesRead: number
   canInstrument?: boolean
   stamps?: number
   verifyingAfter?: number
@@ -23,7 +25,7 @@ export class NativeContextController {
   private get invoke() { return this.workspace.services.invoke }
   private project(root: string) {
     let state = this.projects.get(root)
-    if (!state) { state = { selection: null, setup: { needed: false, dismissed: false, status: null }, tokens: { needed: false, dismissed: false }, notes: [], pins: [] }; this.projects.set(root, state) }
+    if (!state) { state = { selection: null, setup: { needed: false, dismissed: false, status: null }, tokens: { needed: false, dismissed: false }, notes: [], pins: [], notesRead: 0 }; this.projects.set(root, state) }
     return state
   }
   private context(root: string | null, key: string): NativeChatContext {
@@ -46,12 +48,12 @@ export class NativeContextController {
     if (this.workspace.active?.root === entry.root) await this.send('preview:set-annotations', state.pins)
   }
   private async load(root: string) {
-    const state = this.project(root)
+    const state = this.project(root), read = ++state.notesRead
     const results = await Promise.allSettled([this.invoke('setup:detect', root), this.invoke('tokens:detect', root), this.invoke('annotations:list', root)])
     if (this.projects.get(root) !== state) return
     if (results[0].status === 'fulfilled') state.canInstrument = results[0].value.canInstrument
     if (results[1].status === 'fulfilled') state.tokens.needed = results[1].value.source === 'none'
-    if (results[2].status === 'fulfilled') { state.notes = results[2].value.map((n: any) => ({ id: n.id, text: n.text })); state.pins = results[2].value.map((n: any) => ({ id: n.id, selector: n.selector })) }
+    if (results[2].status === 'fulfilled' && read === state.notesRead) this.setNotes(state, results[2].value)
     if (state.stamps === 0 && state.canInstrument && !state.setup.dismissed) state.setup.needed = true
     this.changed(root)
   }
@@ -111,11 +113,16 @@ export class NativeContextController {
       this.workspace.changed()
     } else if (effect.type === 'spawn') this.spawn(effect.event)
   }
+  /** Re-reads after an add/remove. Reads can finish out of order; only the newest applies. */
   async notes(root: string) {
-    const state = this.project(root), notes = await this.invoke('annotations:list', root)
-    if (this.projects.get(root) !== state) return
-    state.notes = notes.map((n: any) => ({ id: n.id, text: n.text })); state.pins = notes.map((n: any) => ({ id: n.id, selector: n.selector })); this.changed(root)
+    const state = this.project(root), read = ++state.notesRead
+    const notes = await this.invoke('annotations:list', root)
+    if (this.projects.get(root) !== state || read !== state.notesRead) return
+    this.setNotes(state, notes); this.changed(root)
     if (this.workspace.active?.root === root) await this.send('preview:set-annotations', state.pins)
+  }
+  private setNotes(state: ProjectContext, notes: Annotation[]) {
+    state.notes = notes.map(n => ({ id: n.id, text: n.text })); state.pins = notes.map(n => ({ id: n.id, selector: n.selector }))
   }
   queued(key: string, id: string, label: string, queued: boolean) {
     if (this.finishedSpawns.has(id)) return
