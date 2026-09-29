@@ -76,6 +76,19 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Correct popup alignment-rectangle verification; add windowless layout/overlap regressions and retain captures on assertion failures.
 - [ ] Manager: verify native rendering and control interactions under the shared desktop lock; complete independent review and candidate integration.
 
+## Swift-owned project memory; annotation storage split (LKM-93 / S05)
+
+- [x] Name the domain exactly (memory files, temp files, per-project ledger domains `memory/<id>`, evaluation helper, injection state, editor drafts, annotation sidecar) and tighten its rollback plan (`docs/SWIFT-BACKEND-MEMORY.md`).
+- [x] Swift `MemoryFile`/`MemoryOwner` with byte parity to the shared TS rules; damaged files refused untouched; unchanged saves write nothing; session-store alias guard.
+- [x] Manual `save` vs generated `propose` ordered by revision in Swift; Bun retries manual intents and re-evaluates stale proposals; evaluation has no write authority.
+- [x] Injection keyed by the owner's digest (`createProjectMemoryInjection`); unreadable memory never fails a chat.
+- [x] `TREZI_BACKEND_OWNER=legacy` keeps the Bun writer; Swift adopts newer legacy writes; no old-version restore.
+- [x] Annotation storage split from publication (`annotation-store.ts`): CRUD parity, per-project serialization, unknown entries kept, damaged files kept, no Git side effects; stale note responses dropped in the context controller.
+- [x] `test/memory-owner.mjs`, `test/annotation-store.mjs` (unit tier); `project-memory` and `native-context` extended.
+- [ ] Blocked on S07: move the annotation sidecar writer to Swift through the repository lane (must land before S15).
+- [ ] S05 remainder: attachments (scratch/blob bounds) are not in this task.
+- [ ] Manager: stage the new files (docs-links checks tracked paths), run unit + unsandboxed `service-process` + `bun run test:native` through the service path, independent review.
+
 ## Swift-owned workspace identity (LKM-92 / S04)
 
 - [x] Name the domain exactly (`workspace.json` membership/order/root/key/`touchedAt`/`activeKey`/recents, temp file, ledger domain `workspace`, legacy-owned metadata slice, display state and drafts) and tighten its rollback plan (`docs/SWIFT-BACKEND-WORKSPACE.md`).

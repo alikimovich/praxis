@@ -113,6 +113,13 @@ src/
                     native/workspace.ts is the legacy-launch rollback writer and
                     native/workspace-model.ts the byte-identical TS operations
                     (docs/SWIFT-BACKEND-WORKSPACE.md)
+    MemoryOwner.swift / MemoryFile.swift   the project memory writer (LKM-93):
+                    unchanged project-memories/<id>.json, one ledger domain per
+                    project; a manual `save` always wins, a generated `propose`
+                    commits only on the revision it was evaluated against. Bun's
+                    client is native/project-memory-service.ts; main/project-memory.ts
+                    is the rollback writer + evaluation queue + injection
+                    (docs/SWIFT-BACKEND-MEMORY.md)
   main/           Backend services (CJS bundle, Bun); historical directory name
     preview-ipc.ts  every ipcMain handler that talks to (or about) that preview:
                     bounds/load/reset/capture, the select + comment relays, the
@@ -201,6 +208,8 @@ src/
                     validate + anchor-lex + render literals (pure) and the
                     main-owned .trezi/control-panels.json store + controls:* IPC
     tokens.ts       design-token detection/scaffold   annotations.ts  comments → PR
+    annotation-store.ts  the notes sidecar's storage (list/add/remove; no Git), split
+                    from publication; Bun-owned until the S07 repository lane
     spring.ts       pure spring→CSS linear() engine (vendored from ~/dev/spring2css);
                     powers the spring_to_css agent tool in backends/claude.ts
     apca.ts         APCA (Lc) contrast checker + accessible-color suggester
@@ -272,10 +281,11 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
 - `bun run dev`/`start`/`trezi` go through `scripts/start-native.mjs`: the host
   connects over XPC to the bundled Swift service, which takes the profile lock
   and supervises Bun over private pipes. The service writes `preferences.json`
-  (`docs/SWIFT-BACKEND-PREFERENCES.md`) and `workspace.json`
-  (`docs/SWIFT-BACKEND-WORKSPACE.md`); Bun is still the single writer of every
+  (`docs/SWIFT-BACKEND-PREFERENCES.md`), `workspace.json`
+  (`docs/SWIFT-BACKEND-WORKSPACE.md`) and project memory
+  (`docs/SWIFT-BACKEND-MEMORY.md`); Bun is still the single writer of every
   other domain. `TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun
-  spawns the host, still under Swift's lock, and writes both itself). See
+  spawns the host, still under Swift's lock, and writes all three itself). See
   `docs/SWIFT-BACKEND-SERVICE.md`.
 - The chat runs in `main` via provider SDKs; output streams over `agent:*` IPC
   into Bun chat controllers, which send typed state to Swift.

@@ -11,7 +11,21 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
-**Current (2026-09-29, LKM-92):** S04 (roadmap row) moves workspace identity,
+**Current (2026-09-29, LKM-93):** S05 (roadmap row) moves project memory into the
+Swift service as the only writer of the unchanged `project-memories/<id>.json`
+files, through the ledger (one domain per project). A manual editor `save` always
+wins; a generated `propose` commits only on the revision it was evaluated against,
+so a stale evaluation can never overwrite it. Evaluation stays a Bun helper with no
+write authority. Damaged files are refused untouched instead of read as empty, and
+injection uses the owner's digest. Annotation storage is split from publication and
+hardened (damaged files kept, per-project serialization, stale responses dropped),
+but its writer stays in Bun: the sidecar is inside the user's repository and waits
+for S07's repository lane, as this roadmap requires. `TREZI_BACKEND_OWNER=legacy`
+keeps the Bun memory writer as the rollback owner. See [memory](SWIFT-BACKEND-MEMORY.md).
+Implemented for review on the LKM-92 candidate; manager verification and acceptance
+are pending.
+
+**Earlier (2026-09-29, LKM-92):** S04 (roadmap row) moves workspace identity,
 membership, order, the selected project and recents into the Swift service as
 the only writer of the unchanged `workspace.json`, through the ledger. Keys stay
 as they were; an aliased root (symlink, trailing slash) resolves to the existing

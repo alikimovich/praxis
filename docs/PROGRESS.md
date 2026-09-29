@@ -2,6 +2,54 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — Swift-owned project memory; annotation storage split (LKM-93 / S05)
+
+The third writer transfer, on the LKM-92 candidate. Under the Swift launch the
+service is the only writer of project memory (`<profile>/trezi/project-memories/<id>.json`,
+format unchanged). Each project gets its own ledger domain `memory/<id>`, so
+revisions and FIFO lanes are per project. Details and the rollback plan are in
+`docs/SWIFT-BACKEND-MEMORY.md`.
+
+Ordering moved with the writer. The editor's `save` and an evaluation's `propose`
+are separate methods, and both commit only on the revision they name. A proposal
+evaluated before a manual save therefore fails `conflict`, and the Bun queue
+re-evaluates once against the new text. A manual save that loses a race is an
+intent: the client retries it on the newer revision, so the user's text wins in
+either order. Evaluation (model call, prompt, parse) stays in Bun as a helper that
+can only propose. It never erases memory, and a failed evaluation is a no-op.
+
+Behavior changes, shared by both owners: a damaged memory file is refused and left
+untouched. Before, it read as empty and the next save or evaluation replaced it.
+A save with unchanged content writes nothing; before, it re-stamped `updatedAt`
+and re-injected the same memory. Injection now compares the owner's digest instead
+of `updatedAt`. It moved into `createProjectMemoryInjection`, and unreadable
+memory never fails a chat. The service creates `<profile>/trezi` only on a fresh
+profile, never beside an older `praxis`/`dsgn` store. Bun resolves that alias
+before its first memory request.
+
+Annotations: the issue asked for annotation CRUD in Swift. The canonical roadmap
+keeps `.trezi/` sidecars legacy-owned until S07's repository lane, because
+publication runs Git on the same tree. The writer therefore stays in Bun, and the
+blocked sub-boundary is recorded in TASKS. What moved is storage:
+`annotation-store.ts` is now separate from publication and runs no Git. It
+serializes per project, keeps entries it does not understand, and refuses a
+damaged file instead of letting the next note overwrite it. Publication stops
+before any Git mutation if the notes file is damaged. The native context
+controller now drops stale note-list responses.
+
+Verification (worker sandbox): `test/memory-owner.mjs` passes all nine sections.
+They cover parity, basics, ordering, strict frames, damaged/external files, the
+session-store guard, injected faults plus SIGKILL at each boundary, restart and
+rollback, and Bun's client, queue and editor on the real owner. The editor check
+includes failed autosave keeping and then saving the draft. `project-memory`,
+`annotation-store` and `native-context` pass, the last with the new stale-response
+check. Both typechecks pass. The new Swift files have zero diagnostics under
+`-strict-concurrency=complete`. The unit tier passed 121 of 127. The 6 failures
+are sandbox limits: local port binding (`trezi-agent-tools`, `codex-mcp`,
+`native-shutdown`, `native-preview-recovery`, `devserver-net`) and the XPC lookup
+in `service-process`. `service-process` still built the real service with the
+memory owner and passed its supervision and rollback sections. `test:native` needs
+the manager's desktop run.
 ## 2026-09-28 — Merge-friendly docs and native smoke groups (LKM-110)
 
 Six of the last eight merge conflicts were only in the two append-style logs, so

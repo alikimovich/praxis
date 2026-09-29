@@ -1,82 +1,21 @@
 import { execFile } from 'child_process'
 import { ipcMain } from '../native/platform'
-import { mkdir, readFile, rename, writeFile } from 'fs/promises'
-import { join } from 'path'
 import { promisify } from 'util'
 import type { Annotation, AnnotationInput, PublishResult } from '../shared/api'
+import { createAnnotationStore } from './annotation-store'
 import { generatePublishDescription } from './publish-description'
 import { enclosingRepoRoot, ensureBranch } from './git'
 import { publishConflictFiles, pushReconciledBranch, withPublishLock } from './publish-reconcile'
 import { aheadOfBase, changedSince, defaultBase } from './publish-scope'
 
 /**
- * Annotation sidecar + engineer handoff (v3). Reviewer notes are pinned to
- * elements and stored in `<repo>/.trezi/annotations.json` — a sidecar the agent
- * is told not to touch (writes under `.trezi/` are denied in agent.ts). "Publish"
- * turns the trezi-related working changes + the notes into a branch and a PR.
+ * Engineer handoff (v3): "Publish" turns the trezi-related working changes + the
+ * reviewer notes into a branch and a PR. The notes themselves (`.trezi/annotations.json`)
+ * are stored by `annotation-store.ts`; publication only reads them.
  */
 
 const execFileP = promisify(execFile)
-const dir = (root: string): string => join(root, '.trezi')
-const file = (root: string): string => join(dir(root), 'annotations.json')
-
-let counter = 0
-const newId = (): string => `a${Date.now().toString(36)}${(counter++).toString(36)}`
-
-async function readAnnotations(root: string): Promise<Annotation[]> {
-  try {
-    const raw = await readFile(file(root), 'utf8')
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? (parsed as Annotation[]) : []
-  } catch {
-    return []
-  }
-}
-
-/** Atomic write (tmp + rename) so a crash can't leave a half-written file that
- *  readAnnotations would silently treat as "no notes". */
-async function writeAnnotations(root: string, list: Annotation[]): Promise<void> {
-  await mkdir(dir(root), { recursive: true })
-  const tmp = file(root) + '.tmp'
-  await writeFile(tmp, JSON.stringify(list, null, 2) + '\n', 'utf8')
-  await rename(tmp, file(root))
-}
-
-// Main is the only writer, but two IPC calls can interleave at their awaits.
-// Serialize all mutations through a promise chain so read-modify-write is atomic.
-let writeChain: Promise<unknown> = Promise.resolve()
-function serialize<T>(task: () => Promise<T>): Promise<T> {
-  const run = writeChain.then(task, task)
-  writeChain = run.catch(() => undefined)
-  return run
-}
-
-function addAnnotation(root: string, input: AnnotationInput): Promise<Annotation[]> {
-  return serialize(async () => {
-    const text = input.text.trim()
-    if (!text) return readAnnotations(root)
-    const list = await readAnnotations(root)
-    const annotation: Annotation = {
-      id: newId(),
-      source: input.source,
-      selector: input.selector,
-      tag: input.tag,
-      text: text.slice(0, 2000),
-      createdAt: new Date().toISOString()
-    }
-    const next = [...list, annotation]
-    await writeAnnotations(root, next)
-    return next
-  })
-}
-
-function removeAnnotation(root: string, id: string): Promise<Annotation[]> {
-  return serialize(async () => {
-    const next = (await readAnnotations(root)).filter((a) => a.id !== id)
-    await writeAnnotations(root, next)
-    return next
-  })
-}
+const annotations = createAnnotationStore()
 
 async function git(root: string, args: string[]): Promise<string> {
   const { stdout } = await execFileP('git', args, { cwd: root, maxBuffer: 10 * 1024 * 1024 })
@@ -129,9 +68,15 @@ async function publishToPr(root: string, opts: { title: string }): Promise<Publi
     return { ok: false, error: 'GitHub CLI (gh) not found — install it to publish a PR.' }
   }
 
-  const annotations = await readAnnotations(root)
+  // A damaged notes file stops publication before any Git mutation.
+  let notes: Annotation[]
+  try {
+    notes = await annotations.list(root)
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+  }
   const changedFiles = await changedSince(root)
-  if (!changedFiles.length && !annotations.length) {
+  if (!changedFiles.length && !notes.length) {
     return { ok: false, error: 'Nothing to publish — no changes or notes yet.' }
   }
 
@@ -356,11 +301,11 @@ async function shipToMain(
 }
 
 export function registerAnnotationsIpc(): void {
-  ipcMain.handle('annotations:list', (_e, root: string) => readAnnotations(root))
+  ipcMain.handle('annotations:list', (_e, root: string) => annotations.list(root))
   ipcMain.handle('annotations:add', (_e, root: string, input: AnnotationInput) =>
-    addAnnotation(root, input)
+    annotations.add(root, input)
   )
-  ipcMain.handle('annotations:remove', (_e, root: string, id: string) => removeAnnotation(root, id))
+  ipcMain.handle('annotations:remove', (_e, root: string, id: string) => annotations.remove(root, id))
   ipcMain.handle('publish:to-pr', (_e, root: string, opts: { title: string }) =>
     lockedPublish(root, () => publishToPr(root, opts))
   )

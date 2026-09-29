@@ -53,11 +53,11 @@ import { isRepoRoot } from './git'
 import { commitLiveTurn } from './live-commit'
 import { enqueueRepoWrite } from './repo-write-queue'
 import {
+  createProjectMemoryInjection,
   createProjectMemoryStore,
   createProjectMemoryUpdateQueue,
   type ProjectMemoryStore,
-  type ProjectMemoryUpdateQueue,
-  projectMemoryUpdate
+  type ProjectMemoryUpdateQueue
 } from './project-memory'
 import { registerProviderIpc } from './providers'
 import type { RpcHandlerRegistry } from './rpc-router'
@@ -94,23 +94,28 @@ function dataDir(): string {
 }
 let _store: SessionStore | null = null
 const store = (): SessionStore => (_store ??= createSessionStore(dataDir()))
+// The memory owner: the Swift service (set by the native entry point when it is
+// supervised) or the legacy Bun writer. `dataDir()` is resolved first either way:
+// it creates the session store's alias before the service is asked to write in it.
+let memoryOwner: (dir: string) => ProjectMemoryStore = createProjectMemoryStore
+export function setProjectMemoryOwner(owner: (dir: string) => ProjectMemoryStore): void {
+  memoryOwner = owner
+  _memoryStore = null
+  _memoryUpdateQueue = null
+}
 let _memoryStore: ProjectMemoryStore | null = null
-const memoryStore = (): ProjectMemoryStore => (_memoryStore ??= createProjectMemoryStore(dataDir()))
+const memoryStore = (): ProjectMemoryStore => (_memoryStore ??= memoryOwner(dataDir()))
 let _memoryUpdateQueue: ProjectMemoryUpdateQueue | null = null
 const memoryUpdateQueue = (): ProjectMemoryUpdateQueue =>
   (_memoryUpdateQueue ??= createProjectMemoryUpdateQueue(memoryStore()))
 
-/** The memory revision already present in each live provider's context. */
-const memoryRevisionBySession = new Map<string, number>()
-const contextWithMemory = (
+/** The memory version already present in each live provider's context. */
+const memoryInjection = createProjectMemoryInjection(memoryStore)
+const contextWithMemory = async (
   root: string,
   sessionKey: string | null,
   ctx: SpawnContext
-): SpawnContext => {
-  const memory = memoryStore().get(root)
-  if (sessionKey) memoryRevisionBySession.set(sessionKey, memory.updatedAt)
-  return { ...ctx, projectMemory: memory.content }
-}
+): Promise<SpawnContext> => ({ ...ctx, projectMemory: await memoryInjection.context(root, sessionKey) })
 
 /**
  * Agent sessions — one persistent multi-turn session per open project (keyed by
@@ -522,7 +527,7 @@ async function startSpawn(q: QueuedSpawn): Promise<string | null> {
       wt.path,
       opts,
       getWindow_,
-      contextWithMemory(q.root, null, {
+      await contextWithMemory(q.root, null, {
         sessionId: wt.id,
         emitKey: q.parentSessionKey,
         liveRoot: q.root,
@@ -660,7 +665,7 @@ export function registerAgentIpc(
         const terminal = runningKeys.has(sessionKey) ? 'failed' : 'success'
         closeSession(existing, sessionKey === currentKey ? 'current' : 'history')
         sessions.delete(sessionKey)
-        memoryRevisionBySession.delete(sessionKey)
+        memoryInjection.forget(sessionKey)
         setProjectUiEnabled(sessionKey, false)
         runningKeys.delete(sessionKey)
         preparingTurns.delete(sessionKey)
@@ -675,12 +680,12 @@ export function registerAgentIpc(
       // isolatedCwd returns the live root otherwise. adoptSession re-stamps the record
       // back to the live project so history/reattach see it under the real root.
       const cwd = await isolatedCwd(root, key)
-      const start = (resume?: string): Promise<ProviderSession> =>
+      const start = async (resume?: string): Promise<ProviderSession> =>
         pickProvider(options).startSession(
           cwd,
           options,
           getWindow,
-          contextWithMemory(root, key, {
+          await contextWithMemory(root, key, {
             emitKey: key,
             liveRoot: root,
             onEvent: interactiveEvents(key),
@@ -761,7 +766,7 @@ export function registerAgentIpc(
         const terminal = runningKeys.has(sk) ? 'failed' : 'success'
         closeSession(s, sk === currentSessionKey ? 'current' : 'history')
         sessions.delete(sk)
-        memoryRevisionBySession.delete(sk)
+        memoryInjection.forget(sk)
         setProjectUiEnabled(sk, false)
         runningKeys.delete(sk)
         preparingTurns.delete(sk)
@@ -830,7 +835,7 @@ export function registerAgentIpc(
           cwd,
           options,
           getWindow,
-          contextWithMemory(root, sessionKey, {
+          await contextWithMemory(root, sessionKey, {
             emitKey: sessionKey,
             liveRoot: root,
             onEvent: interactiveEvents(sessionKey)
@@ -881,14 +886,14 @@ export function registerAgentIpc(
         cwd,
         options,
         getWindow,
-        contextWithMemory(root, sessionKey, {
+        await contextWithMemory(root, sessionKey, {
           emitKey: sessionKey,
           liveRoot: root,
           onEvent: interactiveEvents(sessionKey)
         })
       )
       closeSession(existing, how.persist)
-      memoryRevisionBySession.delete(sessionKey)
+      memoryInjection.forget(sessionKey)
       setProjectUiEnabled(sessionKey, false)
       runningKeys.delete(sessionKey)
       preparingTurns.delete(sessionKey)
@@ -966,7 +971,7 @@ export function registerAgentIpc(
           cwd,
           opts,
           getWindow,
-          contextWithMemory(root, sessionKey, {
+          await contextWithMemory(root, sessionKey, {
             emitKey: sessionKey,
             liveRoot: root,
             resumeSessionId: rec.sdkSessionId,
@@ -1011,7 +1016,7 @@ export function registerAgentIpc(
         const terminal = runningKeys.has(sessionKey) ? 'failed' : 'success'
         closeSession(s, 'history')
         sessions.delete(sessionKey)
-        memoryRevisionBySession.delete(sessionKey)
+        memoryInjection.forget(sessionKey)
         setProjectUiEnabled(sessionKey, false)
         runningKeys.delete(sessionKey)
         preparingTurns.delete(sessionKey)
@@ -1147,11 +1152,7 @@ export function registerAgentIpc(
       // while this session remained open, inject the new snapshot exactly once on the
       // next turn (not every turn, which would needlessly inflate context).
       const root = session.record.projectRoot
-      const memory = memoryStore().get(root)
-      const knownRevision = key ? memoryRevisionBySession.get(key) : undefined
-      const prompt =
-        memory.updatedAt !== knownRevision ? projectMemoryUpdate(memory.content, text) : text
-      if (key) memoryRevisionBySession.set(key, memory.updatedAt)
+      const prompt = await memoryInjection.prompt(root, key ?? undefined, text)
       const supportsUi = !session.options.provider || ['claude', 'codex'].includes(session.options.provider)
       const useUi = turn?.projectUi === true && supportsUi
       const uiEngine = turn?.projectUiEngine === 'jev' ? 'jev' : 'agent'
@@ -1411,9 +1412,11 @@ export function registerAgentIpc(
   })
   ipcMain.handle('sessions:remove', (_e, id: string) => store().remove(id))
 
+  // The editor's read and manual save. A failure (damaged file, service unavailable)
+  // rejects, so the sheet keeps its draft and reports it; nothing falls back to Bun.
   ipcMain.handle('project-memory:get', (_e, root: string) => memoryStore().get(root))
   ipcMain.handle('project-memory:set', (_e, root: string, content: string) =>
-    memoryStore().set(root, typeof content === 'string' ? content : '')
+    memoryStore().save(root, typeof content === 'string' ? content : '')
   )
 
   // User-added model endpoints (v10, `providers:*`). Registered from here, next to
@@ -1502,7 +1505,7 @@ export function registerAgentIpc(
       )
     }
     sessions.clear()
-    memoryRevisionBySession.clear()
+    memoryInjection.clear()
     runningKeys.clear()
     preparingTurns.clear()
     activeKey = null

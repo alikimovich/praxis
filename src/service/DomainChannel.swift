@@ -2,7 +2,7 @@ import Foundation
 
 /// A Swift-owned domain served to supervised Bun over its private pipe. A Bun line
 /// beginning `{"service":"<domain>"` is handed to the domain's channel and never
-/// relayed to the host. (preferences: LKM-91; workspace: LKM-92)
+/// relayed to the host. (preferences: LKM-91; workspace: LKM-92; memory: LKM-93)
 protocol PipeDomainOwner: Actor {
     func open() async
     func onChange(_ handler: @escaping @Sendable (Data) -> Void)

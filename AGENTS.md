@@ -6,8 +6,10 @@ sessions, Git/worktrees, source editing, persistence and managed project servers
 A separate Swift XPC service owns profile exclusion, supervises legacy Bun and
 holds the durable operation ledger (S03) and, since LKM-91, writes preferences
 through it (docs/SWIFT-BACKEND-PREFERENCES.md); since LKM-92 it also owns
-workspace identity, order and selection (docs/SWIFT-BACKEND-WORKSPACE.md). Every
-other domain writer remains in Bun until a verified transfer.
+workspace identity, order and selection (docs/SWIFT-BACKEND-WORKSPACE.md), and
+since LKM-93 project memory (docs/SWIFT-BACKEND-MEMORY.md). Every other domain
+writer remains in Bun until a verified transfer; annotation storage is split from
+publication but stays in Bun until the S07 repository lane.
 Electron, the React application renderer and browser/Tailscale mode are retired.
 Distributed as source: clone, `bun install`, `bun run dev`. Users authenticate
 with their own provider subscriptions or endpoint credentials.
@@ -89,6 +91,13 @@ Groups are defined in `src/native/smoke-groups.ts`.
   `workspace.json`, ledger-backed; identity, order, selection, recents). Bun sends
   awaited intents via `src/native/workspace-service.ts`; `src/native/workspace.ts`
   is the rollback writer and `src/native/workspace-model.ts` the shared operations.
+- `src/service/MemoryOwner.swift`, `src/service/MemoryFile.swift`: the Swift project
+  memory writer (unchanged `project-memories/<id>.json`, one ledger domain per
+  project; manual `save` versus generated `propose`). Bun's client is
+  `src/native/project-memory-service.ts`; `src/main/project-memory.ts` holds the
+  shared rules, the rollback writer, the evaluation queue and injection.
+  `src/main/annotation-store.ts` is annotation storage (Bun-owned, split from
+  publication in `src/main/annotations.ts`).
 - `src/native/Host.swift`: AppKit app lifecycle and host protocol.
 - `src/native/ProjectCell.swift`: sidebar row rendering and native project drag reordering.
 - `src/native/Shell.swift`: sidebar/project actions, split view and column-aligned
