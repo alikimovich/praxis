@@ -2,6 +2,14 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-30 — LKM-124 (revision): Check login shows the Keychain and credentials file
+
+- **Why.** The user's terminal has no `CLAUDE_*`/`ANTHROPIC_*` variables, so the allowlist hardening (kept) does not explain their `loggedIn: false` inside the helper. The review asked for diagnostics from inside the helper context, and for the three-context reproduction to be recorded.
+- **Probes** (`src/main/backends/claude-login.ts`). `probeKeychain`: exit status of `security find-generic-password -s "Claude Code-credentials"` (no `-w`/`-g`, output discarded), plus `security list-keychains -d user` and `security default-keychain`. `probeCredentials`: existence, readability, size and mode of `<CLAUDE_CONFIG_DIR or $HOME/.claude>/.credentials.json`, with its absolute path, stat only. Both feed `detail` ("Keychain: readable / not readable from this context") and typed `ProviderLoginReport` fields (`keychain`, `keychainExit`, `keychainList`, `keychainDefault`, `credentialsPath/Exists/Readable/Size`). The seat token is removed from the environment of the `security` child. `security` missing or hung is "unknown", not a failure.
+- **Owner.** `loginReport` in `ProviderLaunch.swift` accepts the new fields (types and ranges checked, text fields refused if they contain the token) and allows up to 20.
+- **Proof.** `test/provider-login.mjs` (keychain): fake `security` (exit 0 and 44) that prints a secret on both streams, fixture HOMEs with, without and with an unreadable `.credentials.json`; asserts the lines and fields, the calls made (no `-w`/`-g`), and that no secret is in the report, service log or pipe.
+- **Docs.** `docs/PROVIDERS.md` "Keychain and credentials-file diagnostics" has the three-context table with who verified each cell. Only the Terminal and the `claude auth status` results come from the operator; the helper's Keychain and file lines and the TreziHost `OSStatus` are pending a live Check login, and no fix for the service context is chosen yet (LKM-125 direction).
+
 ## 2026-09-29 — LKM-124: helpers drop a parent Claude Code or Codex session's variables
 
 - **Why.** On the user's Mac both Claude CLIs said "not logged in" inside the helper and logged in from Terminal. The cause was not the Keychain but the helper allowlist: it passed every `CLAUDE_*` variable, and a Trezi started from a Claude Code session inherits `CLAUDE_CODE_SIMPLE=1` (bare mode, which never reads the login). `CLAUDE_CODE_SIMPLE=1 claude auth status` says logged out in Terminal too. The Keychain and host-spawn plan in the issue was dropped per the feedback. Note: `docs/PROVIDERS.md` "Claude seat login from a Claude Code session".

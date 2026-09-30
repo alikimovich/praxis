@@ -451,6 +451,130 @@ try {
     console.log('PROVIDER-LOGIN parent-session PASS')
   }
 
+  // Keychain and credentials-file diagnostics inside the helper's context (LKM-124): a fake
+  // `security` on the helper PATH and fixture HOMEs, so the results are deterministic.
+  {
+    const KEYCHAIN_SECRET = 'keychain-secret-that-must-never-be-shown'
+    const FILE_SECRET = 'credentials-file-secret-that-must-never-be-shown'
+    const credentials = JSON.stringify({ claudeAiOauth: { accessToken: FILE_SECRET } })
+    const argLog = join(scratch, 'security-args.log')
+    // A `security` directory whose `find-generic-password` exits with `exit` and, like a
+    // careless tool, prints the secret on stdout and stderr; the probe must discard both.
+    const fakeSecurity = (exit) => {
+      const dir = join(scratch, `sec-bin-${exit}`)
+      mkdirSync(dir)
+      writeFileSync(
+        join(dir, 'security'),
+        `#!/bin/sh
+echo "$@" >> '${argLog}'
+case "$1" in
+  find-generic-password) echo "password: ${KEYCHAIN_SECRET}"; echo "${KEYCHAIN_SECRET}" >&2; exit ${exit};;
+  list-keychains) echo '    "/fixture/login.keychain-db"'; echo '    "/Library/Keychains/System.keychain"';;
+  default-keychain) echo '    "/fixture/login.keychain-db"';;
+esac
+`
+      )
+      chmodSync(join(dir, 'security'), 0o755)
+      return dir
+    }
+    const secBins = { 0: fakeSecurity(0), 44: fakeSecurity(44) }
+    const homeWith = join(scratch, 'home-with')
+    const homeWithout = join(scratch, 'home-without')
+    const homeLocked = join(scratch, 'home-locked')
+    for (const home of [homeWith, homeWithout, homeLocked]) mkdirSync(home)
+    for (const home of [homeWith, homeLocked]) {
+      mkdirSync(join(home, '.claude'))
+      writeFileSync(join(home, '.claude/.credentials.json'), credentials, { mode: 0o600 })
+    }
+    chmodSync(join(homeLocked, '.claude/.credentials.json'), 0o000)
+    const probe = async (home, exit) => {
+      const run = await fixture({
+        bundled: loggedOut,
+        HOME: home,
+        CLAUDE_CONFIG_DIR: '',
+        PATH: `${secBins[exit]}:${process.env.PATH}`
+      })
+      try {
+        const report = await run.owner.data.checkLogin('claude', WT)
+        for (const [where, text] of [
+          ['report', JSON.stringify(report)],
+          ['service log', run.f.stderr],
+          ['pipe', run.said.join('\n')]
+        ])
+          for (const secret of [KEYCHAIN_SECRET, FILE_SECRET])
+            assert.ok(!text.includes(secret), `no secret in the ${where}`)
+        return report
+      } finally {
+        await stop(run)
+      }
+    }
+    const file = join(homeWith, '.claude/.credentials.json')
+    const readable = await probe(homeWith, 0)
+    assert.equal(readable.keychain, true)
+    assert.equal(readable.keychainExit, 0)
+    assert.equal(
+      readable.keychainList,
+      '"/fixture/login.keychain-db" "/Library/Keychains/System.keychain"'
+    )
+    assert.equal(readable.keychainDefault, '"/fixture/login.keychain-db"')
+    assert.deepEqual(
+      [
+        readable.credentialsPath,
+        readable.credentialsExists,
+        readable.credentialsReadable,
+        readable.credentialsSize
+      ],
+      [file, true, true, Buffer.byteLength(credentials)]
+    )
+    assert.match(readable.detail, /Keychain: readable from this context/)
+    assert.match(
+      readable.detail,
+      /Keychains searched \(security list-keychains -d user\): "\/fixture\/login\.keychain-db"/
+    )
+    assert.match(
+      readable.detail,
+      /Default keychain \(security default-keychain\): "\/fixture\/login\.keychain-db"/
+    )
+    assert.ok(
+      readable.detail.includes(
+        `Credentials file: ${file} exists, readable, ${Buffer.byteLength(credentials)} bytes, mode 600`
+      ),
+      readable.detail
+    )
+    // Item not found or not readable: exit 44, and no file under this HOME.
+    const missing = await probe(homeWithout, 44)
+    assert.equal(missing.keychain, false)
+    assert.equal(missing.keychainExit, 44)
+    assert.match(missing.detail, /Keychain: not readable from this context \(security exit 44\)/)
+    assert.deepEqual(
+      [missing.credentialsExists, missing.credentialsReadable, missing.credentialsSize],
+      [false, false, null]
+    )
+    assert.ok(
+      missing.detail.includes(
+        `Credentials file: ${join(homeWithout, '.claude/.credentials.json')} does not exist`
+      )
+    )
+    // A file that exists but cannot be read (skipped as root, which reads anything).
+    if (process.getuid?.() !== 0) {
+      const locked = await probe(homeLocked, 44)
+      assert.deepEqual(
+        [locked.credentialsExists, locked.credentialsReadable, locked.credentialsSize],
+        [true, false, Buffer.byteLength(credentials)]
+      )
+      assert.match(locked.detail, /exists, not readable, \d+ bytes, mode 0\b/)
+    }
+    // Only metadata probes: no -w, no -g, one item name.
+    const calls = readFileSync(argLog, 'utf8').trim().split('\n')
+    assert.ok(calls.includes('find-generic-password -s Claude Code-credentials'), calls.join('|'))
+    assert.ok(calls.includes('list-keychains -d user') && calls.includes('default-keychain'))
+    assert.ok(
+      !calls.some((call) => / -[a-z]*[wg]\b/.test(call.replace('-d user', ''))),
+      'no call asks for the secret'
+    )
+    console.log('PROVIDER-LOGIN keychain PASS')
+  }
+
   // The chat's login card, and the classifiers the helper uses.
   {
     const c = newChat('chat-1')

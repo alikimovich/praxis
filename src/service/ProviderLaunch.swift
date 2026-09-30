@@ -176,19 +176,24 @@ extension ProviderOwner {
 
     /// A helper's login report: known fields only, bounded, and never the token itself.
     static func loginReport(_ value: JSValue?, provider: String, token: String?) -> JSValue? {
-        guard case .object(let fields)? = value, fields.count <= 8, value?["detail"]?.text != nil else { return nil }
+        guard case .object(let fields)? = value, fields.count <= 20, value?["detail"]?.text != nil else { return nil }
         var out: [(String, JSValue)] = [("provider", .string(JSText(provider)))]
         for (name, field) in fields {
             let key = name.string
             switch key {
             case "provider": continue
-            case "loggedIn":
+            case "loggedIn", "keychain":
                 guard field == .null || field == .bool(true) || field == .bool(false) else { return nil }
-            case "token":
+            case "token", "credentialsExists", "credentialsReadable":
                 guard field == .bool(true) || field == .bool(false) else { return nil }
+            case "keychainExit", "credentialsSize":
+                // A `security` exit status or a byte count: null when it did not run or the file is absent.
+                if field != .null {
+                    guard case .number(let number) = field, number >= 0, number <= 1e12, number == number.rounded() else { return nil }
+                }
             case "source":
                 guard let source = field.text?.string, source == "bundled" || source == "installed" else { return nil }
-            case "executable", "authMethod", "detail":
+            case "executable", "authMethod", "detail", "keychainList", "keychainDefault", "credentialsPath":
                 guard let text = field.text, text.count <= 4096, !text.contains(0) else { return nil }
                 if let token, !token.isEmpty, text.string.contains(token) { return nil }
             default: return nil

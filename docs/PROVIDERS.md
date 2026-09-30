@@ -393,3 +393,62 @@ names, flags bare mode and never contains a value. A stand-in logged in only thr
 then works. The stand-in CLIs are now named by helper arguments
 (`--claude-bundled=`, `--claude-installed=`), because the old `CLAUDE_TEST_*` variables
 are dropped. No live calls.
+
+### Keychain and credentials-file diagnostics (LKM-124)
+
+The environment cause above does **not** explain the operator's case: their Terminal has
+no `CLAUDE_*`/`ANTHROPIC_*` variables, and both CLIs still report `loggedIn: false`
+inside the helper while Terminal says `true`. The allowlist hardening stays; the open
+question is whether a process started by the Trezi service can use the user's login
+Keychain. Check login now answers it from inside the helper, with the helper's own
+`HOME`, `PATH` and security session (`probeKeychain`, `probeCredentials` in
+`src/main/backends/claude-login.ts`). The report shows, and `ProviderLoginReport` types:
+
+- `Keychain: readable from this context` or `not readable from this context (security
+  exit N)` (`keychain`, `keychainExit`): the exit status of
+  `security find-generic-password -s "Claude Code-credentials"`, run **without** `-w`/`-g`
+  and with stdout and stderr discarded. `readable` means the item was found; its secret is
+  not read. "unknown" means `security` did not run.
+- `security list-keychains -d user` and `security default-keychain`, one line each
+  (`keychainList`, `keychainDefault`). A helper outside the GUI security session shows
+  an empty or different list here.
+- `Credentials file: <absolute path> exists|does not exist, readable|not readable,
+  <size> bytes, mode <octal>` (`credentialsPath`, `credentialsExists`,
+  `credentialsReadable`, `credentialsSize`): `<CLAUDE_CONFIG_DIR or $HOME/.claude>/.credentials.json`
+  through the helper's environment, stat and access checks only, never its content.
+
+The service refuses a report whose fields it does not know, are out of range, or
+contain the seat token. Nothing secret is read, so nothing secret can reach the report,
+the service log or the pipe. The text lives in `detail`, which Settings → AI providers →
+Claude… shows in a copyable field.
+
+**Reproduction, by context** (`security find-generic-password -s "Claude Code-credentials"`
+and the credentials file). Who verified each cell is stated; nothing below was run by
+this change on the operator Mac.
+
+| Context | Keychain item | Credentials file | `claude auth status` | Verified by |
+| --- | --- | --- | --- | --- |
+| Terminal (iTerm, user session) | found, in `login.keychain-db`, account `panda` | exists, 0600, 463 bytes | `loggedIn: true` | operator, live (LKM-124 evidence) |
+| Service / provider helper (child of the XPC service) | **pending**: read "Keychain:", the keychain lists and "Credentials file:" from Check login | **pending**: same report | `loggedIn: false` for the bundled and the installed CLI | `claude auth status`: operator, live. Keychain and file lines: not yet run |
+| TreziHost (`TreziHost --crypto`, run by the service) | Save token in Settings fails with "macOS Keychain encryption unavailable; unlock the keychain and retry." | not applicable | not applicable | operator, live. The `OSStatus` was not captured |
+| Agent shell used for this change (a sandboxed background session, not one of the three contexts) | `find-generic-password` (metadata only) exit 0 | not looked at | not run | this change, live |
+
+To complete the two pending cells on the operator Mac (no model call): open Trezi, then
+Settings → AI providers → Claude… → **Check login**, and copy the report into the
+issue. Compare it with, in Terminal:
+`security find-generic-password -s "Claude Code-credentials" >/dev/null; echo $?`,
+`security list-keychains -d user`, `security default-keychain` and
+`stat -f '%N %z bytes mode %Lp' ~/.claude/.credentials.json`. Interpretation: exit 0 in
+Terminal and non-zero (or an empty/different keychain list) in the helper means the
+service's process tree lost the user's security session, which is the LKM-125 direction
+(keep the service in the GUI session, or move Keychain work and the Claude helper spawn
+into TreziHost). A readable file with `loggedIn: false` would point at the CLI instead.
+No fix for that is chosen here: it needs these results first.
+
+**Tests.** `test/provider-login.mjs` (keychain): a fake `security` (exit 0 and exit 44)
+on the helper PATH prints the secret on stdout and stderr; fixture HOMEs with a 0600
+`.credentials.json`, without one, and with an unreadable one. It asserts the readable and
+not-readable lines, the exit code, both keychain lines, the file's path, existence,
+readability, size and mode, that only `find-generic-password -s`, `list-keychains -d user`
+and `default-keychain` are called (no `-w`/`-g`), and that neither the keychain secret nor
+the file's content appears in the report, the service log or the pipe.

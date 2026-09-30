@@ -290,6 +290,17 @@ export interface ProviderLoginReport {
   authMethod?: string
   /** A subscription token from Settings is in the helper's environment. */
   token?: boolean
+  /** Claude, from inside the helper (LKM-124): `security find-generic-password -s "Claude Code-credentials"` (no `-w`, output discarded) found the item; null: `security` did not run. */
+  keychain?: boolean | null
+  keychainExit?: number | null
+  /** `security list-keychains -d user` and `security default-keychain`, on one line each. */
+  keychainList?: string
+  keychainDefault?: string
+  /** `<config dir>/.credentials.json` through the helper's HOME: absolute path and metadata, never content. */
+  credentialsPath?: string
+  credentialsExists?: boolean
+  credentialsReadable?: boolean
+  credentialsSize?: number | null
   /** The provider's variables in Trezi's environment, by name (never values): passed to the helper, or dropped as a parent session's (LKM-124). */
   inherited?: string[]
   dropped?: string[]

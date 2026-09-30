@@ -9,6 +9,8 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Check login lists passed and dropped variable names (never values) and flags `CLAUDE_CODE_SIMPLE`.
 - [x] `test/provider-login.mjs` parent-session: env filtering (Claude and Codex), a bare-mode-aware stand-in CLI, the report and the setup-token path.
 - [x] Root cause and allowlist in `docs/PROVIDERS.md` and `docs/SWIFT-BACKEND-PROVIDERS.md`.
+- [x] Check login runs the Keychain probe (`security find-generic-password`, list-keychains, default-keychain) and a credentials-file stat inside the helper; typed report fields; deterministic test with a fake `security`.
+- [ ] Operator: run Check login on the operator Mac and record the helper's Keychain/credentials lines in the `docs/PROVIDERS.md` three-context table (live, no model call); pick the LKM-125 fix from the result.
 - [ ] Operator: start Trezi from a Claude Code shell with a normal `claude login` and confirm Check login says logged in (live, no model call).
 - [ ] `src/main/diagnose.ts` (preview "Find a fix…") still inherits Bun's environment.
 ## Inspector as a floating island over the preview (LKM-122)
