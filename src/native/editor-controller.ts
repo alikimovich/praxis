@@ -117,7 +117,6 @@ export class NativeEditorController {
         case 'hide': session.state.visible = false; ++session.generation; break
         case 'popout': session.state.popped = true; break
         case 'dock': session.state.popped = false; break
-        case 'external': await this.invoke('source:open-in-editor', action.root, `${session.state.source}:1:0`); break
         case 'component': {
           if (!action.name || !/^[A-Za-z_$][\w$]*$/.test(action.name)) return
           const source = await this.invoke('source:resolve-component', action.root, session.state.source, action.name)

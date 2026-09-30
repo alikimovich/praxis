@@ -6,7 +6,7 @@ export interface NativeEditorState {
 }
 export type NativeEditorAction = {
   root: string
-  action: 'back' | 'forward' | 'open' | 'edit' | 'save' | 'reload' | 'hide' | 'popout' | 'dock' | 'create' | 'rename' | 'delete' | 'external' | 'component'
+  action: 'back' | 'forward' | 'open' | 'edit' | 'save' | 'reload' | 'hide' | 'popout' | 'dock' | 'create' | 'rename' | 'delete' | 'component'
   source?: string; text?: string; name?: string; revision?: number
 }
 
