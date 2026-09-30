@@ -1,17 +1,18 @@
 // S12 editing coordinator: the real Swift EditingOwner (compiled into a fixture process
 // with the conversation, repository and source owners it works with), driven through
-// Bun's real client and the unchanged TS island/controls/content modules.
+// Bun's real client and the unchanged TS island/controls modules.
 // - parity: one scripted session (definitions, same-turn replacement, activation by the
 //   defining turn only, a late terminal, a composition cut short, command admission,
 //   the revision chain of a reordered batch, Undo/Reset, restart normalization,
-//   navigation, content drafts, sidecar commits, project files) gives the answers and
-//   island history bytes recorded from the Bun twin before LKM-111 removed it
-//   (test/fixtures/editing-owner/parity-golden.json);
+//   navigation, sidecar commits, project files) gives the answers and island history
+//   bytes recorded from the Bun twin before LKM-111 removed it
+//   (test/fixtures/editing-owner/parity-golden.json; LKM-114 dropped its content-draft
+//   entries with the feature);
 // - turns: the conversation coordinator is the authority for an island's origin and a
 //   navigation's turn;
-// - drafts (restart, stale base refused, damaged file), sidecars (stale bytes, symlinks,
-//   lanes), crash (SIGKILL inside an island write), drain, schema. The island, controls,
-//   content and notes suites run on the Swift owners themselves (with-service-owners.mjs).
+// - sidecars (stale bytes, symlinks, lanes), crash (SIGKILL inside an island write),
+//   drain, schema. The island, controls and notes suites run on the Swift owners
+//   themselves (with-service-owners.mjs).
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -20,7 +21,6 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { compileEditingFixture, startEditingFixture } from './helpers/editing-fixture.mjs'
 import { contentHash } from '../src/main/source-owner.ts'
-import { NativeContentController } from '../src/native/content-controller.ts'
 import { NavigationController } from '../src/native/navigation-controller.ts'
 import { TurnBoundaries } from '../src/native/turn-boundaries.ts'
 
@@ -113,16 +113,6 @@ async function script(owner, root, profile) {
   note('newer turn drops', [await owner.navigate('N', root, '/c', 'T3'), await owner.navigation('N', 'begin', 'T3'), await owner.navigation('N', 'begin', 'T4'), await owner.navigationState()])
   note('idle request opens now', [await owner.navigate('N', root, '/d', null), await owner.navigation('N', 'close', null), await owner.navigationTake('N')])
   for (const path of ['//evil.test/', 'https://x.test/', '/a b', '/a\\b', 'relative']) await rejects(`bad path ${path}`, owner.navigate('N', root, path, null))
-
-  // Content drafts
-  note('no drafts', await owner.contentDrafts(root))
-  await owner.saveContentDraft(root, 'hero', hex('r1'), { title: 'Draft', items: [{ id: 'a' }] })
-  await owner.saveContentDraft(root, 'other', hex('r1'), { title: 'Other' })
-  await owner.saveContentDraft(root, 'hero', hex('r2'), { title: 'Draft 2' })
-  note('drafts', (await owner.contentDrafts(root)).map(({ updated, ...d }) => { assert.ok(updated); return d }))
-  await owner.clearContentDraft(root, 'other'); await owner.clearContentDraft(root, 'missing')
-  note('cleared', (await owner.contentDrafts(root)).map(d => d.panel))
-  await rejects('oversized draft', owner.saveContentDraft(root, 'big', hex('r1'), { text: 'x'.repeat(600_000) }))
   return out
 }
 
@@ -148,9 +138,9 @@ async function sidecars(owner, root) {
   rmSync(file); symlinkSync(join(scratch, 'outside.json'), file)
   await attempt('symlinked file', owner.sidecar(root, 'control-panels.json', null, '{}'))
   rmSync(join(root, '.trezi'), { recursive: true }); symlinkSync(dir('outside-trezi'), join(root, '.trezi'))
-  await attempt('symlinked folder', owner.sidecar(root, 'content-controls.json', null, '{}'))
+  await attempt('symlinked folder', owner.sidecar(root, 'annotations.json', null, '{}'))
   rmSync(join(root, '.trezi'))
-  await attempt('oversized', owner.sidecar(root, 'content-controls.json', null, 'x'.repeat(1024 * 1024 + 1)))
+  await attempt('oversized', owner.sidecar(root, 'annotations.json', null, 'x'.repeat(1024 * 1024 + 1)))
   return out
 }
 
@@ -294,61 +284,6 @@ try {
     console.log('turns: origin and navigation bound to the conversation owner’s turn; loads only in the asking chat')
   }
 
-  // ── drafts: restart, stale base, damaged file ─────────────────────────
-  {
-    const profile = dir('drafts'), root = dir('drafts-project')
-    const recipe = { version: 1, id: 'hero', title: 'Hero', sections: [{ id: 'main', title: 'Main', fields: [{ key: 'title', label: 'Title', type: 'text', required: true }] }] }
-    let disk = { value: { title: 'Saved' }, revision: hex('v1') }
-    const saves = []
-    const invoke = async (channel, ...args) => {
-      if (channel === 'content-controls:get') return { panel: { id: 'hero', file: 'hero.json', recipe }, value: structuredClone(disk.value), revision: disk.revision }
-      if (channel === 'content-controls:save') {
-        saves.push(args[2])
-        if (args[2] !== disk.revision) throw new Error('Content changed on disk. Reload the panel before saving; your draft is preserved.')
-        disk = { value: args[3], revision: hex(JSON.stringify(args[3])) }
-        return { panel: { id: 'hero', file: 'hero.json', recipe }, value: disk.value, revision: disk.revision }
-      }
-    }
-    let fixture = await start(profile)
-    let controller = new NativeContentController(invoke, () => {}, fixture.owners().editing, 0)
-    await controller.open(root, 'hero')
-    const key = `${root}\nhero`
-    const act = (action, extra = {}) => controller.action(key, { root, generation: controller.sessions.get(key).generation, action, ...extra })
-    await act('draft', { field: 'main:title', value: 'Unsaved words' })
-    await controller.flush()
-    await fixture.kill()
-    fixture = await start(profile)
-    controller = new NativeContentController(invoke, () => {}, fixture.owners().editing, 0)
-    await controller.open(root, 'hero')
-    let session = controller.sessions.get(key)
-    assert.equal(session.draft.title, 'Unsaved words', 'The draft survives a service crash and restart')
-    assert.ok(session.dirty); assert.equal(session.error, '')
-    await act('save')
-    assert.equal(disk.value.title, 'Unsaved words'); await controller.flush()
-    assert.deepEqual(await fixture.owners().editing.contentDrafts(root), [], 'Save clears the draft')
-    // A draft whose document changed meanwhile is a conflict: its save stays bound to its base.
-    await act('draft', { field: 'main:title', value: 'Old draft' }); await controller.flush()
-    await fixture.stop()
-    disk = { value: { title: 'Changed elsewhere' }, revision: hex('v3') }
-    fixture = await start(profile)
-    controller = new NativeContentController(invoke, () => {}, fixture.owners().editing, 0)
-    await controller.open(root, 'hero')
-    session = controller.sessions.get(key)
-    assert.equal(session.draft.title, 'Old draft'); assert.match(session.error, /older version/)
-    await act('save')
-    assert.match(controller.sessions.get(key).error, /changed on disk/)
-    assert.equal(disk.value.title, 'Changed elsewhere', 'A stale draft is never saved over newer content')
-    await act('reload'); await controller.flush()
-    assert.deepEqual(await fixture.owners().editing.contentDrafts(root), [], 'Reload discards the draft')
-    const damaged = join(profile, 'service/editing/content-drafts', `${contentHash(root)}.json`)
-    mkdirSync(join(profile, 'service/editing/content-drafts'), { recursive: true })
-    writeFileSync(damaged, '{broken')
-    await assert.rejects(fixture.owners().editing.saveContentDraft(root, 'hero', hex(1), {}), /unreadable/)
-    assert.equal(readFileSync(damaged, 'utf8'), '{broken', 'A damaged drafts file is left untouched')
-    await fixture.stop()
-    console.log('drafts: restored after a crash, cleared on save/reload, stale base refused, damaged file untouched')
-  }
-
   // ── lanes: a sidecar commit waits for another chain's lease, runs inside its own ──
   {
     const profile = dir('lanes'), root = dir('lanes-project')
@@ -358,12 +293,12 @@ try {
     const held = repository.withLease(root, () => new Promise(resolve => { release = resolve }))
     while (!release) await new Promise(resolve => setTimeout(resolve, 5))
     let done = false
-    const outside = editing.sidecar(root, 'content-controls.json', null, '{"a":1}\n').then(value => { done = true; return value })
+    const outside = editing.sidecar(root, 'control-panels.json', null, '{"a":1}\n').then(value => { done = true; return value })
     await new Promise(resolve => setTimeout(resolve, 200))
     assert.equal(done, false, 'Queued behind the held lease')
     release(); await held
     assert.equal((await outside).ok, true)
-    const inside = await repository.withLease(root, () => editing.sidecar(root, 'content-controls.json', contentHash('{"a":1}\n'), '{"a":2}\n'))
+    const inside = await repository.withLease(root, () => editing.sidecar(root, 'control-panels.json', contentHash('{"a":1}\n'), '{"a":2}\n'))
     assert.equal(inside.ok, true, 'A chain holding the lease commits inside it')
     await fixture.stop()
     console.log('lanes: sidecar commits are ordered in the repository lane')
@@ -415,7 +350,6 @@ try {
     assert.equal(await code('islandCommand', { chat: 'A', id: 'x', revision: 1, action: 'replay', sourceRevision: 's' }), 'invalidRequest')
     assert.equal(await code('islandCommit', { chat: 'A', token: 't', definition: { manifest: {}, blocks: [], code: 'x' }, engine: 'agent', initial: {} }), 'invalidRequest')
     assert.equal(await code('islandCommit', { chat: 'A', token: 't', definition: { manifest: {}, blocks: [] }, engine: 'eval', initial: {} }), 'invalidRequest')
-    assert.equal(await code('saveContentDraft', { root, panel: 'p', revision: 'not-a-hash', value: {} }), 'invalidRequest')
     assert.equal(await code('sidecar', { root, name: '../x.json', expectedHash: null, content: '' }), 'invalidRequest')
     assert.equal(await code('islands', { chat: 'A' }, { expectedRevision: { epoch: 'e', counter: '1' }, mode: 'read' }), 'invalidRequest')
     assert.equal(await code('islands', { chat: 'A' }, { scope: { project: 'p' }, mode: 'read' }), 'unauthorized')
@@ -424,7 +358,7 @@ try {
     await fixture.stop()
     console.log('schema and drain: malformed, unknown, scoped and post-drain requests refused')
   }
-  console.log('EDITING-OWNER OK — parity, turns, drafts, lanes, crash, drain and schema')
+  console.log('EDITING-OWNER OK — parity, turns, lanes, crash, drain and schema')
 } finally {
   for (const fixture of fixtures) await fixture.kill().catch(() => {})
   rmSync(scratch, { recursive: true, force: true })

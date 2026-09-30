@@ -95,7 +95,7 @@ const swiftNames = read('src/service/EditingStores.swift').match(/static let nam
 const tsNames = read('src/main/editing-owner.ts').match(/export const SIDECAR_NAMES[^=]*= \[([^\]]*)\]/)[1]
 const names = text => [...text.matchAll(/["']([^"']+)["']/g)].map(match => match[1]).sort()
 assert.deepEqual(names(swiftNames), names(tsNames), 'Swift and TS commit the same sidecars')
-assert.deepEqual(names(tsNames), ['annotations.json', 'content-controls.json', 'control-panels.json', 'tokens.json'])
+assert.deepEqual(names(tsNames), ['annotations.json', 'control-panels.json', 'tokens.json'])
 for (const path of ['src/main/annotation-store.ts', 'src/main/tokens.ts'])
   assert.deepEqual([...effects(read(path))], [], `${path} writes through the editing owner only`)
 

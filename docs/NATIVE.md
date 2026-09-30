@@ -30,7 +30,7 @@ the source-built host requires launch arguments and its bundled XPC service.
 | Activity | AppKit selectable log, bounded buffer |
 | Source files, search/replace, media, pop-outs | AppKit outline/NSTextView/AVKit |
 | Layers | AppKit outline with selection and drag reordering |
-| Properties, styles, tokens, custom/animation/content controls | SwiftUI with shared editing services |
+| Properties, styles, tokens, custom/animation controls | SwiftUI with shared editing services |
 | Project website and DOM instrumentation | WKWebView with isolated preview script |
 
 The sidebar starts with Open Project and New Project buttons, separated by a gap
@@ -73,8 +73,7 @@ updates an open inspector without reopening a closed one.
 Native inspectors retain source/schema validation, token references, live style
 scrubbing and post-HMR reconciliation. Linked margin/padding writes share an undo
 group. Custom controls support repair/removal and animation Replay. Content
-windows use the shared recipe validator and revision-checked saves;
-collection IDs, extra JSON fields and draft undo are retained.
+editor windows were removed in LKM-114.
 
 ## Build and transport
 
@@ -131,7 +130,7 @@ second before group SIGKILL. Repeated shutdown joins existing cleanup. See the
 [service boundary](SWIFT-BACKEND-SERVICE.md) for protocol and rollback limits.
 Native dialog windows are dismissed during host shutdown. Updates
 use the current tracked branch, require a clean checkout and no running chat or
-unsaved source/content/composer drafts, fast-forward, install with Bun, rebuild native and
+unsaved source/composer drafts, fast-forward, install with Bun, rebuild native and
 restart. Failures remain in a native dialog window. Updates never discard work or switch
 branches automatically.
 

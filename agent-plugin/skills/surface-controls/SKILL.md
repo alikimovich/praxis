@@ -6,7 +6,7 @@ description: Generate interactive controls inside the Trezi chat for animations,
 # Surface controls inside chat
 
 Requested controls must appear as an interactive island in the conversation.
-Use `chat_island`; do not open a separate inspector/content panel or install a
+Use `chat_island`; do not open a separate inspector panel or install a
 control-panel dependency in the target project. Selection is optional context.
 
 ## Keep the path short

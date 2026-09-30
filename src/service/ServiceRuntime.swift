@@ -33,8 +33,8 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
     /// S10 provider owner (session grants, permissions, tool authorization, Stop's
     /// deadline, resume persistence, supervised helpers), on the same pipe.
     var provider: ProviderOwner?
-    /// S12 editing coordinator (islands, controls sidecars, content drafts, deferred
-    /// navigation), on the same pipe; sidecar commits run in the repository's lanes.
+    /// S12 editing coordinator (islands, controls sidecars, deferred navigation), on
+    /// the same pipe; sidecar commits run in the repository's lanes.
     var editing: EditingOwner?
     /// S13 workflow owner (publication, remote Git actions, project setup, Trezi's
     /// update and the diagnosis memory; durable receipts).

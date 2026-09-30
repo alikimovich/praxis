@@ -52,7 +52,6 @@ const requiredTools = [
   'preview_screenshot',
   'workspace_state',
   'prepare_conflict_resolution',
-  'content_controls',
   'project_ui_catalog',
   'compose_project_ui',
   'open_preview',

@@ -2,6 +2,28 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-114: content controls removed
+
+- **Why.** The user did not like how the content-editor panels looked, so the feature is removed end to end instead of restyled.
+- **Removed.**
+  - The `content_controls` agent tool: the Claude in-process tool, the Codex MCP bridge (`bin/trezi-agent-mcp.mjs`, `bin/content-control-tool-schema.*`), the custom-endpoint dispatch, and the provider policy lists in TS, Swift and the golden.
+  - `src/main/content-controls.ts`, `content-control-tools.ts` and `content-controls-ipc.ts`.
+  - The native content controller, `ContentWindow.swift`, the "Content Editors" menu, the host cases, the inspector "content" channel and the `content-editor` smoke check.
+  - The Swift content-drafts store (`EditingDrafts` and the `contentDrafts`/`saveContentDraft`/`clearContentDraft` methods).
+  - `content-controls.json` from the sidecar allowlist (Swift and TS).
+  - `PanelRecipe` and the content-control types in `src/shared/api.ts`.
+  - `vendor/content-controls`, including its package.json/bun.lock entries, `.gitignore` exceptions and the build's recipe plugin.
+  - `test/content-controls.mjs` and `test/native-content.mjs`.
+  - `docs/CONTENT_CONTROLS.md`, the README section and the agent-guide mentions.
+- **Rules v24.** Routing now covers only components, styling and animations. The Jev guidance moved into the chat_island section. The surface-controls skill no longer points to content editors.
+- **User data.** A project's `.trezi/content-controls.json` and a profile's `service/editing/content-drafts/` are never deleted or rewritten; nothing reads them any more.
+- **Kept.** Control panels, chat islands, the inspector and Styles are unchanged. `control-selection.ts` stays because chat islands use it.
+- **Tests.**
+  - The editing-owner parity golden lost its four draft steps (52 → 48).
+  - The sidecar and rename tests use other sidecars.
+  - The smoke-group floor is 19.
+- **History left in place.** The dated inventories (`SWIFT-BACKEND-AUDIT`, `MODULES`, `ROUTES`, `EVENTS`, `CONTRACTS`, `PLAN`, `ROADMAP`, `ELECTRON-REMOVAL`, `rename/*.json`) still mention the old files. `SWIFT-BACKEND-EDITING.md` has an LKM-114 banner, and its current-state rows are updated.
+
 ## 2026-09-29 — LKM-113 part 1: Trezi's Codex sessions ignore the user's personal MCP servers
 
 - **Why.** In LKM-111's parity run, the Codex session loaded `mcp.vercel.com` from the user's `~/.codex/config.toml` and logged `AuthRequired`. The SDK flattens `config` into dotted `--config` keys, and the CLI merges them into the user's tables. So adding Trezi's `praxis` server never replaced the user's servers, and even `-c mcp_servers={…}` merges (checked against the vendored CLI 0.154.0).

@@ -234,12 +234,12 @@ and never silently falls back to another engine. The selected Gateway connection
 wins; otherwise the sole saved Gateway is used. Environment overrides and ambiguous
 connection handling are documented in PROJECT_UI.md.
 
-Claude and Codex/custom endpoints expose `content_controls` (catalog/define) and
-Jev selection in `chat_island`. Their `auto`/`jev` modes fall back to the chat
-model’s validated candidates only when no Gateway key is configured, returning
-the actual engine and fallback reason. The bundled `surface-controls` skill is
-portable across providers; experimental Gemini explains its missing tools. See
-[CONTENT_CONTROLS.md](CONTENT_CONTROLS.md).
+Claude and Codex/custom endpoints expose Jev selection in `chat_island`. Its
+`auto`/`jev` modes fall back to the chat model’s validated candidates only when no
+Gateway key is configured, returning the actual engine and fallback reason. The
+bundled `surface-controls` skill is portable across providers; experimental Gemini
+explains its missing tools. The `content_controls` tool was removed with content
+controls in LKM-114.
 
 Codex's routine skill-description context-budget advisory is omitted from chat
 activity. Skill availability and provider context limits are unchanged. Other

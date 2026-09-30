@@ -47,7 +47,6 @@ export const TREZI_TOOLS = [
   'preview_screenshot',
   'open_preview',
   'open_code',
-  'content_controls',
   'chat_island',
   'spring_to_css',
   'check_contrast',

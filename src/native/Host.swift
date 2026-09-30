@@ -55,7 +55,6 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     let layers = NativeLayers()
     let downloads = PreviewDownloads()
     let activity = NativeActivity()
-    var contentWindows: [String: NativeContentWindow] = [:]
     var sourceEditors: [String: NativeSourceEditor] = [:]
     var sourceRoot = ""
     var dockedSource: NativeSourceEditor? { sourceEditors[sourceRoot].flatMap { $0.state["visible"] as? Bool == true && $0.state["popped"] as? Bool != true ? $0 : nil } }
@@ -163,7 +162,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         }
         let find = NSMenuItem(title: "Find…", action: #selector(NSTextView.performFindPanelAction(_:)), keyEquivalent: "f"); find.tag = NSTextFinder.Action.showFindInterface.rawValue; edit.addItem(find)
         let actions = submenu("Actions")
-        for (label, key, action) in [("Reload Preview", "r", "reload"), ("Toggle Logs", "l", "logs"), ("Toggle UI", ".", "toggle-chat"), ("Content Editors", "", "content"), ("Check for Updates…", "", "updates"), ("Diagnose Preview…", "", "diagnose"), ("Running Servers…", "", "servers"), ("Send Feedback…", "", "feedback")] {
+        for (label, key, action) in [("Reload Preview", "r", "reload"), ("Toggle Logs", "l", "logs"), ("Toggle UI", ".", "toggle-chat"),("Check for Updates…", "", "updates"), ("Diagnose Preview…", "", "diagnose"), ("Running Servers…", "", "servers"), ("Send Feedback…", "", "feedback")] {
             let item = NSMenuItem(title: label, action: #selector(menuAction(_:)), keyEquivalent: key); item.target = self; item.representedObject = action; actions.addItem(item)
         }
         let develop = submenu("Develop")
@@ -210,13 +209,6 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "layoutSizes": nativeLayout.restoreSizes(c["sizes"] as? [String: Double] ?? [:])
         case "layoutWidth": nativeLayout.desiredWidth = CGFloat(c["width"] as? Double ?? 440); nativeLayout.layout()
         case "layoutInspect": reply(id, nativeLayout.inspect())
-        case "contentState":
-            let key = c["documentID"] as? String ?? "", controller = contentWindows[c["documentID"] as? String ?? ""] ?? NativeContentWindow(id: c["documentID"] as? String ?? "")
-            contentWindows[key] = controller; controller.update(c["state"] as? [String: Any] ?? [:])
-        case "contentInspect": reply(id, contentWindows.map { key, controller in ["id":key, "visible":controller.window.isVisible, "generation":controller.editor.model.state?.generation ?? 0, "fields":controller.editor.model.state?.fields.count ?? 0] as [String: Any] })
-        case "captureContent":
-            guard let content = contentWindows[c["documentID"] as? String ?? ""]?.window.contentView, let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { reply(id, error: "No content editor"); return }
-            content.cacheDisplay(in: content.bounds, to: bitmap); reply(id, bitmap.representation(using: .png, properties: [:])?.base64EncodedString() ?? "")
         case "inspectorState": editingInspector.update(c["state"] as? [String: Any] ?? [:]); nativeLayout.layout()
         case "inspectorInspect": reply(id, ["native":true, "visible":!editingInspector.isHidden, "fields":editingInspector.model.state?.fields.count ?? 0, "error":editingInspector.model.state?.error ?? "", "generation":editingInspector.model.state?.generation ?? 0])
         case "inspectorPerform": guard ephemeral else { return }; emit((c["action"] as? [String: Any] ?? [:]).merging(["event":"inspector-action"]) { _, new in new }); reply(id)

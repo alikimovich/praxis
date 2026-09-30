@@ -9,13 +9,10 @@ struct InspectorField: Decodable, Identifiable {
 struct InspectorAction: Decodable, Identifiable { let id: String; let label: String }
 struct InspectorState: Decodable { let root: String; let generation: Int; let visible: Bool; let title: String; let tab: String; let fields: [InspectorField]; let actions: [InspectorAction]; let error: String; let busy: Bool }
 final class InspectorModel: ObservableObject {
-    var channel = "inspector-action"
-    var documentID: String?
     @Published var state: InspectorState?
     func send(_ action: String, field: String? = nil, value: String? = nil) {
         guard let state else { return }
-        var message: [String: Any] = ["event":channel, "root":state.root, "generation":state.generation, "action":action]
-        if let documentID { message["documentID"] = documentID }
+        var message: [String: Any] = ["event":"inspector-action", "root":state.root, "generation":state.generation, "action":action]
         if let field { message["field"] = field }; if let value { message["value"] = value }; emit(message)
     }
 }
@@ -62,7 +59,6 @@ struct InspectorFieldView: View {
             if let detail = field.detail, !detail.isEmpty { Text(detail).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
         }.disabled(field.disabled == true || model.state?.busy == true)
             .onAppear { value = field.value }
-            .onChange(of: value) { next in if model.state?.tab == "content" && next != field.value { model.send("draft", field: field.id, value: next) } }
             .onChange(of: field.value) { next in if !focused { value = next } }
     }
 }
@@ -104,7 +100,7 @@ struct EditingInspectorContent: View {
         if let state = model.state {
             VStack(alignment: .leading, spacing: 10) {
                 HStack { Text(state.title).font(.headline).lineLimit(1); Spacer(); Menu { ForEach(state.actions) { action in Button(action.label) { model.send(action.id) } } } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).fixedSize(); Button { model.send("close") } label: { Image(systemName: "xmark") }.buttonStyle(.plain) }
-                if state.tab != "content" { Picker("Inspector section", selection: Binding(get: { state.tab }, set: { model.send("tab", value: $0) })) { Text("Props").tag("props"); Text("Styles").tag("styles"); Text("Custom").tag("custom") }.pickerStyle(.segmented).labelsHidden() }
+                Picker("Inspector section", selection: Binding(get: { state.tab }, set: { model.send("tab", value: $0) })) { Text("Props").tag("props"); Text("Styles").tag("styles"); Text("Custom").tag("custom") }.pickerStyle(.segmented).labelsHidden()
                 if state.busy { ProgressView().controlSize(.small) }
                 if !state.error.isEmpty { Text(state.error).foregroundStyle(.red).font(.caption).textSelection(.enabled) }
                 ScrollView {
