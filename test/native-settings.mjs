@@ -39,7 +39,7 @@ assert.deepEqual(sheets.current.state.sections.map(s => [s.id, s.label, s.symbol
 assert.equal(sheets.current.state.section, 'general', 'first open shows General')
 assert.deepEqual(sheets.current.state.fields.map(f => [f.id, f.section]), [['default', 'general'], ['projectUi', 'experimental'], ['engine', 'experimental'], ['connections', 'providers']])
 assert.equal(sheets.current.state.actions.some(a => a.id === 'save' || a.id === 'cancel' || a.id === 'connections'), false)
-assert.deepEqual(sheets.current.state.actions.map(a => [a.id, a.section]), [['add', 'providers'], ['claude', 'providers']])
+assert.deepEqual(sheets.current.state.actions.map(a => [a.id, a.section]), [['add', 'providers']])
 await action('change', { default: 'codex:default', projectUi: 'false', engine: 'agent' })
 assert.equal(JSON.parse(values.get('trezi:preferred-model')).fixed.provider, 'codex')
 assert.equal(notified, 1)

@@ -1,7 +1,6 @@
 import type { ModelChoice, ProviderConnection } from '../shared/api'
 import type { NativeSheetAction, NativeSheetField, NativeSheetSection, NativeSheetState } from '../shared/native-sheet'
 import { parsePreferredModelState, preferredSelectValue, setFixedPreference, settingsFromChoice, setLastUsedMode } from '../shared/preferred-model'
-import { claudeAction } from './settings-claude'
 import type { NativePreferences } from './preferences'
 import type { NativeSheetController } from './sheets-runtime'
 const ids = (text: string) => [...new Set(text.split(/[\s,]+/).filter(Boolean))]
@@ -47,7 +46,6 @@ export class NativeSettingsController {
     }, action => this.handle(action), section => { void this.preferences.set(SETTINGS_SECTION_KEY, section).catch(() => {}) })
   }
   private async handle(action: NativeSheetAction) {
-    if (action.action.startsWith('claude')) return claudeAction(this.sheets, action, (id, pane) => this.show(id, pane))
     if (action.action === 'save') return this.save(action)
     if (action.action === 'back') return this.reload(action.id)
     if (action.action === 'add') { this.target = undefined; this.show(action.id, this.editor()); return }
@@ -112,7 +110,7 @@ export class NativeSettingsController {
       fields: connections.length
         ? [{ id: 'connection', label: 'Provider', kind: 'choice', value: connections[0].id, choices: connections.map(c => ({ value: c.id, label: `${c.label} · ${c.models.length} models · ${c.hasKey ? 'API key saved' : 'No API key'}` })) }]
         : [{ id: 'connections', label: 'Added providers', kind: 'readonly', value: 'None' }],
-      actions: [{ id: 'add', label: 'Add provider…', section: 'providers' }, { id: 'claude', label: 'Claude…', section: 'providers' }, ...(connections.length ? [{ id: 'edit', label: 'Edit…', section: 'providers' }, { id: 'delete', label: 'Remove…', section: 'providers' }] : [])]
+      actions: [{ id: 'add', label: 'Add provider…', section: 'providers' }, ...(connections.length ? [{ id: 'edit', label: 'Edit…', section: 'providers' }, { id: 'delete', label: 'Remove…', section: 'providers' }] : [])]
     }
   }
   private removal(connection: ProviderConnection): Pane {

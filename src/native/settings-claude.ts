@@ -1,10 +1,13 @@
 import type { ProviderLoginReport } from '../shared/api'
 import type { NativeSheetAction, NativeSheetField, NativeSheetState } from '../shared/native-sheet'
 import { loginSummary } from './chat-login'
+import type { NativeSettingsController } from './settings-controller'
 import type { NativeSheetController } from './sheets-runtime'
-/** The Claude pane of AI Providers, in the shape the Settings controller swaps in. */
+/** The Claude pane of AI Providers, in the shape of the other provider panes. */
 interface Pane { detail: string; fields: Omit<NativeSheetField, 'section' | 'draft'>[]; actions: NativeSheetState['actions'] }
-type Show = (id: string, pane: Pane) => void
+type Sheet = NonNullable<NativeSheetController['current']>
+const ENTRY = { id: 'claude', label: 'Claude…', section: 'providers' }
+const decorated = new WeakSet<Sheet>()
 /** The token goes to the service and never comes back into a sheet. */
 async function pane(sheets: NativeSheetController, report?: ProviderLoginReport): Promise<Pane> {
   const { hasToken }: { hasToken: boolean } = await sheets.invoke('providers:seat-token-status')
@@ -22,7 +25,7 @@ async function pane(sheets: NativeSheetController, report?: ProviderLoginReport)
   }
 }
 /** Claude's sign-in (LKM-119): open its pane, "Check login", save or remove the `claude setup-token` token. */
-export async function claudeAction(sheets: NativeSheetController, action: NativeSheetAction, show: Show) {
+async function claudeAction(sheets: NativeSheetController, sheet: Sheet, action: NativeSheetAction) {
   let report: ProviderLoginReport | undefined, message: string | undefined
   if (action.action === 'claude-check') report = await sheets.invoke('providers:check-login', 'claude')
   else if (action.action !== 'claude') {
@@ -33,6 +36,39 @@ export async function claudeAction(sheets: NativeSheetController, action: Native
     if (!result.ok) throw new Error(result.error ?? 'Could not save the token.')
     message = result.hasToken ? 'Token saved. New Claude chats use it.' : 'Token removed.'
   }
-  show(action.id, await pane(sheets, report))
-  if (message && sheets.current?.state.id === action.id) { sheets.current.state.message = message; sheets.refresh() }
+  const next = await pane(sheets, report)
+  if (sheets.current !== sheet) return
+  // Swap the AI Providers pane in place, like the provider editor does: other panes untouched.
+  sheet.state.fields = [...sheet.state.fields.filter(f => f.section !== 'providers'), ...next.fields.map(field => ({ ...field, section: 'providers', draft: true }))]
+  sheet.state.actions = next.actions
+  const section = sheet.state.sections?.find(s => s.id === 'providers')
+  if (section) section.detail = next.detail
+  sheet.state.message = message
+  sheets.refresh()
+}
+/** Add the Claude entry to the provider list, wherever the list is shown. */
+const offer = (sheet: Sheet) => {
+  const actions = sheet.state.actions
+  if (actions.some(a => a.id === 'add') && !actions.some(a => a.id === ENTRY.id)) sheet.state.actions = [actions[0], ENTRY, ...actions.slice(1)]
+}
+/**
+ * AI Providers → Claude… on top of the Settings window, without touching its controller:
+ * each opened Settings sheet gets the entry and routes `claude*` actions to the pane above.
+ */
+export function withClaudePane(settings: NativeSettingsController) {
+  const open = settings.open.bind(settings)
+  settings.open = async () => {
+    await open()
+    const sheets = settings.sheets, sheet = sheets.current
+    if (!sheet || decorated.has(sheet) || !sheet.state.sections?.some(s => s.id === 'providers')) return
+    decorated.add(sheet)
+    const handle = sheet.handle
+    sheet.handle = async action => {
+      if (action.action.startsWith('claude')) return claudeAction(sheets, sheet, action)
+      await handle(action)
+      offer(sheet)
+    }
+    offer(sheet); sheets.refresh()
+  }
+  return settings
 }

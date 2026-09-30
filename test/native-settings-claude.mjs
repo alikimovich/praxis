@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { NativeSheetController } from '../src/native/sheets-runtime.ts'
 import { NativeSettingsController } from '../src/native/settings-controller.ts'
+import { withClaudePane } from '../src/native/settings-claude.ts'
 // Claude's sign-in (LKM-119) is a pane of the Settings window: the subscription token is a
 // draft, saved or removed only by its own actions and never echoed back into the sheet.
 const values = new Map(), sent = [], calls = []
@@ -21,7 +22,7 @@ const sheets = new NativeSheetController({ send: (method, data) => sent.push([me
   if (channel === 'providers:check-login') return { provider: 'claude', loggedIn: false, source: 'bundled', token: false, detail: 'Bundled Claude CLI: not logged in' }
   return {}
 })
-const settings = new NativeSettingsController(sheets, preferences, () => {})
+const settings = withClaudePane(new NativeSettingsController(sheets, preferences, () => {}))
 const action = (name, values = {}) => sheets.action({ id: sheets.current.state.id, action: name, values })
 const field = id => sheets.current.state.fields.find(f => f.id === id)
 await settings.open()
