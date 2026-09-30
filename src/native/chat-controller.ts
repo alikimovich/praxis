@@ -1,5 +1,6 @@
 import type { AgentEvent, ModelChoice, WorkspaceSnapshot } from '../shared/api'
 import { agentOptionsFor, chatAgentSettingsFromOptions, type ChatAgentSettings } from '../shared/chat-settings'
+import { migrateChatTitle } from '../shared/chat-title'
 import type { NativeChatAction } from '../shared/native-chat'
 import type { NativeChatCommand, NativeChatEffect, NativeChatLayout, NativeChatSnapshot } from '../shared/native-chat-controller'
 import type { NativeComposerAction } from '../shared/native-composer'
@@ -64,7 +65,7 @@ export class NativeChatController {
         chat.isRunning = live.isRunning
         if (live.turn) chat.turn = live.turn
         hydrate(chat, live.record.transcript)
-        chat.title = live.record.title
+        chat.title = migrateChatTitle(live.record.title)
         chat.isolation = live.isolation?.state ?? 'live'
       }
       if (live.record.id) this.services.restoreIslands?.(chat.chat, chat.root, live.record.id)

@@ -8,6 +8,15 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] `NativeEditingInspector` is a Liquid Glass island (composer inset 10, radius 24; `NSVisualEffectView` popover before macOS 26) floating on the preview's right edge. `WorkspaceLayout` no longer subtracts it from the preview, so opening or closing it never reflows the page.
 - [x] The island's height is the preview area minus the insets (above a docked source editor, below the toolbar); its fields scroll inside it. Dragging its left edge resizes it within 220–500, saved through `native-layout-sizes`.
 - [x] Core smoke `inspector` runs `src/native/smoke-inspector-island.ts`: equal preview frames open/closed at the default and minimum windows, the clamped saved resize, toolbar clearance, hit targets around the island and scrolling at the minimum size. Evidence: `inspector-island-{default,narrow}-{open,closed}.png`, `inspector-island.json`.
+## Standard macOS Settings window with a sidebar (LKM-121)
+
+- [x] Source-list sidebar with SF Symbols (General, AI Providers, Experimental); detail pane with large title and grouped rows (label and description left, control right).
+- [x] General: default model. AI Providers: the providers sheet inline (button and sheet removed). Experimental: Gen UI, explanation, engine. Keys and autosave unchanged.
+- [x] Window remembers the last selected section (`trezi:settings-section:v1`).
+- [x] Gear removed from the main sidebar; Settings opens from Trezi → Settings… / Command-, with and without a project.
+- [x] Foreground captures of every section at the minimum and default size, the no-project open and the gear-free sidebar.
+- [ ] Back/forward buttons (skipped; optional in the issue).
+
 ## Simplify the code editor toolbar (LKM-118)
 
 - [x] `src/native/SourceEditor.swift`: no Save, Reload or Open in Editor buttons. Back/forward icons sit left of a selectable path; pop out/dock (`arrow.up.left.and.arrow.down.right` / `arrow.down.right.and.arrow.up.left`) and close (`xmark`) are icon buttons on the right edge, with tooltips and accessibility labels.

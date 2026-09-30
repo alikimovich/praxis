@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { SessionRecord } from '../shared/api'
+import { migrateChatTitle } from '../shared/chat-title'
 import { type ConversationOwner, swiftConversationOwner } from './conversation-owner'
 
 /**
@@ -57,6 +58,15 @@ export function createSessionStore(baseDir: string): SessionStore {
     writes.add(settled)
   }
   const fileFor = (id: string): string => join(dir, `${id}.json`)
+  // LKM-120: a title that came from an error or sign-in prompt is renamed to the
+  // neutral one when the record is loaded. Without a service it is only shown neutral.
+  const migrate = (rec: SessionRecord): SessionRecord => {
+    const title = migrateChatTitle(rec.title)
+    if (!title || title === rec.title || !SAFE_ID.test(rec.id)) return rec
+    rec.title = title
+    try { pend(rec.id, rec, writer().rename(rec.id, title).then(() => {})) } catch {}
+    return rec
+  }
 
   const readAll = (): SessionRecord[] => {
     let names: string[]
@@ -71,7 +81,8 @@ export function createSessionStore(baseDir: string): SessionStore {
       if (overlay.has(name.slice(0, -5))) continue
       try {
         const rec = JSON.parse(readFileSync(join(dir, name), 'utf8')) as SessionRecord
-        if (rec && typeof rec.id === 'string') out.push(rec)
+        // A renamed record now sits in the overlay, which is added below.
+        if (rec && typeof rec.id === 'string' && !overlay.has(migrate(rec).id)) out.push(rec)
       } catch {
         // Skip an unreadable/partial record rather than failing the whole list.
       }
@@ -107,7 +118,8 @@ export function createSessionStore(baseDir: string): SessionStore {
     const pending = overlay.get(id)
     if (pending) return pending.value && structuredClone(pending.value)
     try {
-      return JSON.parse(readFileSync(fileFor(id), 'utf8')) as SessionRecord
+      const rec = JSON.parse(readFileSync(fileFor(id), 'utf8')) as SessionRecord
+      return rec && typeof rec.id === 'string' ? migrate(rec) : rec
     } catch {
       return null
     }

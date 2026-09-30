@@ -3,28 +3,45 @@ import SwiftUI
 
 struct SheetChoice: Decodable, Identifiable { let value: String; let label: String; var id: String { value } }
 struct SheetFieldCondition: Decodable { let field: String; let value: String }
-struct SheetField: Decodable, Identifiable { let id: String; let label: String; let kind: String; let value: String; let choices: [SheetChoice]?; let help: String?; let visibleWhen: SheetFieldCondition? }
-struct SheetAction: Decodable, Identifiable { let id: String; let label: String; let primary: Bool?; let destructive: Bool? }
-struct SheetState: Decodable { let id: String; let title: String; let detail: String; let fields: [SheetField]; let actions: [SheetAction]; let busy: Bool; let autosave: Bool?; let dismissible: Bool?; let message: String? }
+struct SheetField: Decodable, Identifiable { let id: String; let label: String; let kind: String; let value: String; let choices: [SheetChoice]?; let help: String?; let visibleWhen: SheetFieldCondition?; let section: String?; let draft: Bool?; let placeholder: String? }
+struct SheetAction: Decodable, Identifiable { let id: String; let label: String; let primary: Bool?; let destructive: Bool?; let section: String? }
+struct SheetSection: Decodable, Identifiable { let id: String; let label: String; let symbol: String; let detail: String? }
+struct SheetState: Decodable { let id: String; let title: String; let detail: String; let fields: [SheetField]; let actions: [SheetAction]; let busy: Bool; let autosave: Bool?; let dismissible: Bool?; let message: String?; let sections: [SheetSection]?; let section: String? }
 final class SheetModel: ObservableObject {
     @Published var state: SheetState?
     @Published var filters: [String: String] = [:]
     @Published var values: [String: String] = [:]
+    /// The sidebar pane of a sectioned window. Bun only seeds it; the window owns it after that.
+    @Published var section: String?
     func update(_ next: SheetState) {
         if state?.id != next.id {
             filters = [:]
             values = Dictionary(uniqueKeysWithValues: next.fields.map { ($0.id, $0.value) })
+            section = next.sections.flatMap { sections in sections.first { $0.id == next.section }?.id ?? sections.first?.id }
+        } else if let previous = state {
+            // A pane swapped its fields in place (the provider editor): seed new ones, forget removed ones.
+            let known = Set(previous.fields.map(\.id)), current = Set(next.fields.map(\.id))
+            for field in next.fields where !known.contains(field.id) { values[field.id] = field.value }
+            values = values.filter { current.contains($0.key) }
         }
         state = next
     }
     func setValue(_ key: String, _ value: String) {
         values[key] = value
-        if state?.autosave == true { perform("change") }
+        if state?.autosave == true, state?.fields.first(where: { $0.id == key })?.draft != true { perform("change") }
     }
     func perform(_ action: String) {
         guard let state, !state.busy || action == "cancel" else { return }
         if action == "cancel" && !(state.dismissible ?? !state.actions.isEmpty) { return }
-        emit(["event":"sheet-action", "id":state.id, "action":action, "values":values])
+        var event: [String: Any] = ["event":"sheet-action", "id":state.id, "action":action, "values":values]
+        if let section { event["section"] = section }
+        emit(event)
+    }
+    /// Sidebar selection: switches panes at once and tells Bun, which remembers it.
+    func select(_ id: String) {
+        guard let state, section != id, state.sections?.contains(where: { $0.id == id }) == true else { return }
+        section = id
+        emit(["event":"sheet-action", "id":state.id, "action":"section", "values":values, "section":id])
     }
 }
 struct SheetContent: View {
@@ -42,7 +59,9 @@ struct SheetContent: View {
         }
     }
     var body: some View {
-        if let state = model.state {
+        if let state = model.state, let sections = state.sections {
+            SectionedSheetContent(model: model, state: state, sections: sections)
+        } else if let state = model.state {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
@@ -114,14 +133,14 @@ final class NativeSheets: NSObject, NSWindowDelegate {
         model.update(state)
         if panel == nil {
             let large = state.fields.contains { ["multiline", "multichoice", "readonly", "image"].contains($0.kind) }
-            let height = large ? 560 : min(500, max(220, 160 + state.fields.count * 76))
-            let sheet = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: height), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+            let size = state.sections != nil ? SectionedSheetContent.defaultSize : NSSize(width: 600, height: large ? 560 : min(500, max(220, 160 + state.fields.count * 76)))
+            let sheet = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
             sheet.isReleasedWhenClosed = false; sheet.animationBehavior = .none
             sheet.delegate = self; sheet.tabbingMode = .disallowed
-            sheet.contentMinSize = NSSize(width: 600, height: 220)
+            sheet.contentMinSize = state.sections != nil ? SectionedSheetContent.minimumSize : NSSize(width: 600, height: 220)
             sheet.collectionBehavior = [.fullScreenAuxiliary]
             sheet.contentViewController = NSHostingController(rootView: SheetContent(model: model))
-            sheet.setContentSize(NSSize(width: 600, height: height))
+            sheet.setContentSize(size)
             panel = sheet
             if let parent {
                 sheet.setFrameOrigin(NSPoint(x: parent.frame.midX - sheet.frame.width / 2, y: parent.frame.midY - sheet.frame.height / 2))
@@ -134,7 +153,7 @@ final class NativeSheets: NSObject, NSWindowDelegate {
     func close(_ id: String) {
         guard model.state?.id == id else { return }
         panel?.close()
-        panel = nil; model.state = nil; model.values = [:]; model.filters = [:]
+        panel = nil; model.state = nil; model.values = [:]; model.filters = [:]; model.section = nil
         parent?.makeKeyAndOrderFront(nil)
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
@@ -142,5 +161,5 @@ final class NativeSheets: NSObject, NSWindowDelegate {
         model.perform("cancel")
         return false // Bun owns dismissal, including stale-action and busy-operation guards.
     }
-    func inspect() -> [String: Any] { ["visible":panel?.isVisible ?? false, "attached":panel?.sheetParent != nil, "closable":panel?.styleMask.contains(.closable) ?? false, "resizable":panel?.styleMask.contains(.resizable) ?? false, "id":model.state?.id ?? "", "title":model.state?.title ?? "", "busy":model.state?.busy ?? false, "fields":model.state?.fields.map(\.id) ?? []] }
+    func inspect() -> [String: Any] { ["visible":panel?.isVisible ?? false, "attached":panel?.sheetParent != nil, "closable":panel?.styleMask.contains(.closable) ?? false, "resizable":panel?.styleMask.contains(.resizable) ?? false, "id":model.state?.id ?? "", "title":model.state?.title ?? "", "busy":model.state?.busy ?? false, "fields":model.state?.fields.map(\.id) ?? [], "section":model.section ?? "", "actions":model.state?.actions.map(\.id) ?? []] }
 }

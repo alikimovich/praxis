@@ -278,6 +278,12 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             guard ephemeral else { reply(id, error: "Test profile required"); return }
             do { reply(id, try sheets.verifySettings(c)) }
             catch { reply(id, error: error.localizedDescription) }
+        case "settingsMenu":
+            // Trezi → Settings… as the menu bar has it; `perform` chooses it like a click or Command-, would.
+            guard ephemeral, let app = NSApp.mainMenu?.items.first?.submenu, let index = app.items.firstIndex(where: { $0.representedObject as? String == "settings" }) else { reply(id, error: "Settings menu item unavailable"); return }
+            let item = app.items[index]
+            if c["perform"] as? Bool == true { app.performActionForItem(at: index) }
+            reply(id, ["menu":app.title, "title":item.title, "key":item.keyEquivalent, "command":item.keyEquivalentModifierMask == .command, "enabled":item.isEnabled])
         case "captureVisibleSettings":
             guard ephemeral, let panel = sheets.panel, let content = panel.contentView,
                   sheets.model.state?.title == "Settings" else { reply(id, error: "Test Settings window required"); return }
@@ -396,7 +402,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             let state = c["state"] as? [String: Any] ?? [:]
             shell.update(state); previewStatus.update(state); nativeLayout.update(state)
             if let home = state["homeState"] as? [String: Any] { welcome.update(home) }
-        case "shellInspect": reply(id, shell.inspect())
+        case "shellInspect": reply(id, shell.inspect().merging(shell.gateInspect()) { _, new in new })
         case "sidebarVerification":
             guard ephemeral else { reply(id, error: "Test profile required"); return }
             SidebarMenuMonitor.shared.install()
@@ -414,6 +420,12 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             guard ephemeral, !shell.sidebarItem.isCollapsed else { reply(id, error: "Visible test sidebar required"); return }
             Task { @MainActor in
                 do { reply(id, try await captureVisibleRegion(window: window, view: shell.sidebar.view, region: shell.sidebar.view.bounds)) }
+                catch { reply(id, error: error.localizedDescription) }
+            }
+        case "captureVisibleWindow":
+            guard ephemeral, let content = window.contentView else { reply(id, error: "Test profile required"); return }
+            Task { @MainActor in
+                do { reply(id, try await captureVisibleRegion(window: window, view: content, region: content.bounds, recognize: false)) }
                 catch { reply(id, error: error.localizedDescription) }
             }
         case "previewSurfaceInspect": reply(id, previewSurface.inspect())
