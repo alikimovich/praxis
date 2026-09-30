@@ -167,8 +167,7 @@ Settings is a standard macOS settings window, opened from Trezi → Settings…
 (Command-,) with or without a project; the main window's sidebar has no gear. A
 source list with SF Symbols selects General, AI Providers or Experimental; the
 detail pane shows a large title and grouped rows (label and description on the
-left, control on the right). AI Providers is edited inline (its **Claude…** pane holds
-the `claude setup-token` subscription token and **Check login**, LKM-119), and the window
+left, control on the right). AI Providers is edited inline, and the window
 reopens on the last selected section (`trezi:settings-section:v1`). Form windows
 without sections keep the layout above (`src/native/SheetSections.swift`).
 

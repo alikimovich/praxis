@@ -1,7 +1,7 @@
-import type { ModelChoice, ProviderConnection, ProviderLoginReport } from '../shared/api'
+import type { ModelChoice, ProviderConnection } from '../shared/api'
 import type { NativeSheetAction, NativeSheetField, NativeSheetSection, NativeSheetState } from '../shared/native-sheet'
 import { parsePreferredModelState, preferredSelectValue, setFixedPreference, settingsFromChoice, setLastUsedMode } from '../shared/preferred-model'
-import { loginSummary } from './chat-login'
+import { claudeAction } from './settings-claude'
 import type { NativePreferences } from './preferences'
 import type { NativeSheetController } from './sheets-runtime'
 const ids = (text: string) => [...new Set(text.split(/[\s,]+/).filter(Boolean))]
@@ -47,6 +47,7 @@ export class NativeSettingsController {
     }, action => this.handle(action), section => { void this.preferences.set(SETTINGS_SECTION_KEY, section).catch(() => {}) })
   }
   private async handle(action: NativeSheetAction) {
+    if (action.action.startsWith('claude')) return claudeAction(this.sheets, action, (id, pane) => this.show(id, pane))
     if (action.action === 'save') return this.save(action)
     if (action.action === 'back') return this.reload(action.id)
     if (action.action === 'add') { this.target = undefined; this.show(action.id, this.editor()); return }
@@ -62,37 +63,6 @@ export class NativeSettingsController {
       return this.reload(action.id)
     }
     if (action.action === 'connect' || action.action === 'save-provider') return this.submit(action)
-    if (action.action.startsWith('claude')) return this.claudeAction(action)
-  }
-  /** Claude's sign-in (LKM-119): open its pane, "Check login", save or remove the `claude setup-token` token. */
-  private async claudeAction(action: NativeSheetAction) {
-    if (action.action === 'claude') return this.claude(action.id)
-    if (action.action === 'claude-check') {
-      const report: ProviderLoginReport = await this.invoke('providers:check-login', 'claude')
-      return this.claude(action.id, report)
-    }
-    const remove = action.action === 'claude-remove'
-    const token = remove ? '' : action.values.token?.trim() ?? ''
-    if (!remove && !token) throw new Error('Paste the token that claude setup-token printed.')
-    const result = await this.invoke('providers:seat-token-save', token)
-    if (!result.ok) throw new Error(result.error ?? 'Could not save the token.')
-    return this.claude(action.id, undefined, result.hasToken ? 'Token saved. New Claude chats use it.' : 'Token removed.')
-  }
-  /** The token goes to the service and never comes back into a sheet. */
-  private async claude(id: string, report?: ProviderLoginReport, message?: string) {
-    const { hasToken }: { hasToken: boolean } = await this.invoke('providers:seat-token-status')
-    this.show(id, {
-      detail: 'Claude chats use the Claude CLI’s sign-in. If a chat says it is not logged in, run `claude auth login` in Terminal, or run `claude setup-token` and paste the token it prints here. The token is encrypted with your Keychain and given only to Claude chats.',
-      fields: [
-        { id: 'token', label: 'Subscription token', help: hasToken ? 'Saved. Paste a new token to replace it.' : 'From claude setup-token.', kind: 'secure', value: '', placeholder: hasToken ? 'Saved' : 'Paste token' },
-        ...(report ? [{ id: 'report', label: loginSummary(report), kind: 'readonly' as const, value: report.detail }] : [])
-      ],
-      actions: [
-        { id: 'back', label: 'Back', section: 'providers' }, { id: 'claude-check', label: 'Check login', section: 'providers' },
-        ...(hasToken ? [{ id: 'claude-remove', label: 'Remove token', destructive: true, section: 'providers' }] : []),
-        { id: 'claude-save', label: 'Save token', primary: true, section: 'providers' }
-      ]
-    }, message)
   }
   private async save(action: NativeSheetAction) {
     const choice = this.choices.find(c => c.value === action.values.default)
@@ -115,14 +85,14 @@ export class NativeSettingsController {
     if (this.sheets.current) this.sheets.current.state.message = 'Settings saved.'
   }
   /** Swap the AI Providers pane in place: same window, same section, the other panes untouched. */
-  private show(id: string, pane: Pane, message?: string) {
+  private show(id: string, pane: Pane) {
     const sheet = this.sheets.current
     if (!sheet || sheet.state.id !== id) return
     sheet.state.fields = [...sheet.state.fields.filter(f => f.section !== 'providers'), ...pane.fields.map(field => ({ ...field, section: 'providers', draft: true }))]
     sheet.state.actions = pane.actions
     const section = sheet.state.sections?.find(s => s.id === 'providers')
     if (section) section.detail = pane.detail
-    sheet.state.message = message
+    sheet.state.message = undefined
     this.sheets.refresh()
   }
   /** Back to the provider list; new or removed providers also change the default-model choices. */

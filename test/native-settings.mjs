@@ -3,7 +3,7 @@ import { NativeSheetController } from '../src/native/sheets-runtime.ts'
 import { NativeSettingsController } from '../src/native/settings-controller.ts'
 const values = new Map(), sent = [], calls = []
 let connections = [], catalogWait
-let failNext = null, gate = null, applyBlocked = false, applies = 0, seatToken = false
+let failNext = null, gate = null, applyBlocked = false, applies = 0
 const preferences = {
   get: key => values.get(key) ?? null,
   snapshot: () => Object.fromEntries(values),
@@ -27,9 +27,6 @@ const sheets = new NativeSheetController({ send: (method, data) => sent.push([me
     return { ok: true, connection: connections[0] }
   }
   if (channel === 'providers:remove') connections = []
-  if (channel === 'providers:seat-token-status') return { hasToken: seatToken }
-  if (channel === 'providers:seat-token-save') { seatToken = !!args[0]; return { ok: true, hasToken: seatToken } }
-  if (channel === 'providers:check-login') return { provider: 'claude', loggedIn: false, source: 'bundled', token: false, detail: 'Bundled Claude CLI: not logged in' }
   return {}
 })
 let notified = 0
@@ -71,39 +68,8 @@ await settings.open()
 assert.equal(sheets.current.state.section, 'providers', 'reopen restores the last section')
 assert.equal(field('projectUi').value, 'true')
 
-// Claude's sign-in (LKM-119) is a pane of the same window: the subscription token is a
-// draft, saved or removed only by its own actions and never echoed back into the sheet.
-const inPlace = sheets.current.state.id
-const providerFields = () => sheets.current.state.fields.filter(f => f.section === 'providers')
-await action('claude')
-assert.equal(sheets.current.state.id, inPlace)
-assert.deepEqual(providerFields().map(f => [f.id, f.kind, f.draft]), [['token', 'secure', true]])
-assert.deepEqual(sheets.current.state.actions.map(a => a.id), ['back', 'claude-check', 'claude-save'])
-// The general fields are unchanged here, so a token edit alone must not write anything.
-const unchanged = { default: field('default').value, projectUi: field('projectUi').value, engine: field('engine').value }
-await action('change', { ...unchanged, token: 'sk-ant-test-token' })
-assert.ok(!JSON.stringify([...values]).includes('sk-ant-test-token'), 'the token draft is never written as a preference')
-await action('claude-check')
-assert.match(providerFields().find(f => f.id === 'report').label, /not logged in/i)
-assert.match(providerFields().find(f => f.id === 'report').value, /Bundled Claude CLI/)
-assert.equal(calls.some(c => c[0] === 'providers:check-login' && c[1] === 'claude'), true)
-await action('claude-save', { token: '  ' })
-assert.match(sheets.current.state.message, /Paste the token/)
-assert.equal(calls.some(c => c[0] === 'providers:seat-token-save'), false, 'an empty token is refused before the service')
-await action('claude-save', { token: ' sk-ant-test-token ' })
-assert.deepEqual(calls.filter(c => c[0] === 'providers:seat-token-save').at(-1), ['providers:seat-token-save', 'sk-ant-test-token'])
-assert.equal(sheets.current.state.message, 'Token saved. New Claude chats use it.')
-assert.deepEqual(sheets.current.state.actions.map(a => a.id), ['back', 'claude-check', 'claude-remove', 'claude-save'])
-assert.equal(providerFields().find(f => f.id === 'token').value, '')
-assert.ok(!JSON.stringify(sent).includes('sk-ant-test-token'), 'the token must not return in sheet snapshots')
-await action('claude-remove')
-assert.deepEqual(calls.filter(c => c[0] === 'providers:seat-token-save').at(-1), ['providers:seat-token-save', ''])
-assert.equal(sheets.current.state.message, 'Token removed.')
-await action('back')
-assert.deepEqual(providerFields().map(f => f.id), ['connections'])
-assert.equal(field('default').section, 'general', 'other panes survive the Claude pane')
-
 // AI Providers is edited in place: the Settings window (same ID) stays open.
+const inPlace = sheets.current.state.id
 const saves = () => calls.length
 await action('add')
 assert.equal(sheets.current.state.id, inPlace)
