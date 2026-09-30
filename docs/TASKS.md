@@ -3,7 +3,9 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
-## Claude seat: parent session variables sign the CLI out (LKM-124)
+## Claude seat: read the subscription login from the user session (LKM-124)
+
+Root cause of the reported "not logged in" is open (Keychain/service context, see LKM-125); the allowlist below is hardening for one cause found on the way.
 
 - [x] Helper allowlist: explicit Claude/Codex user settings plus proxy/CA, instead of the `CLAUDE_`/`CODEX_` prefixes; a parent Claude Code or Codex session's variables (incl. `CLAUDE_CODE_SIMPLE`) are dropped.
 - [x] Check login lists passed and dropped variable names (never values) and flags `CLAUDE_CODE_SIMPLE`.

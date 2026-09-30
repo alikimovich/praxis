@@ -347,19 +347,26 @@ Tested deterministically by `test/provider-login.mjs` (fake helper and stand-in 
 in" inside the helper, while `claude auth status` in Terminal said logged in. The
 Keychain item and `~/.claude/.credentials.json` (0600) both existed.
 
-**Root cause.** Not the Keychain or the XPC service context. Trezi had been started from
-a shell inside a Claude Code session, and the helper allowlist passed every `CLAUDE_*`
-variable through. `CLAUDE_CODE_SIMPLE=1` makes the CLI run in bare mode, which never
-reads OAuth or the Keychain: `CLAUDE_CODE_SIMPLE=1 claude auth status` reports
-`loggedIn: false` in Terminal too (the operator reproduced this). The same pass-through
-carried the parent session's `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`,
-`CLAUDE_CODE_MESSAGING_SOCKET`/`_TOKEN`, `CLAUDE_CODE_SESSION_ID`,
-`CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_CODE_EXECPATH`, `CLAUDE_PID`, `CLAUDE_EFFORT` and
-others. For Codex, `CODEX_*` let a parent Codex session's `CODEX_SANDBOX` and
-`CODEX_SANDBOX_NETWORK_DISABLED` through in the same way. (For the record: from a
-Terminal shell, `security find-generic-password -s "Claude Code-credentials"` found the
-item, with exit 0. The service and TreziHost contexts were not compared, because this
-cause explains the report on its own.)
+**Cause found and hardened against (not the reported failure's root cause).** The helper
+allowlist passed every `CLAUDE_*` variable through, so a Trezi started from a shell
+inside a Claude Code session handed the helper that session's variables.
+`CLAUDE_CODE_SIMPLE=1` makes the CLI run in bare mode, which never reads OAuth or the
+Keychain: `CLAUDE_CODE_SIMPLE=1 claude auth status` reports `loggedIn: false` in
+Terminal too (the operator reproduced this). The same pass-through carried the parent
+session's `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_MESSAGING_SOCKET`/`_TOKEN`,
+`CLAUDE_CODE_SESSION_ID`, `CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_CODE_EXECPATH`,
+`CLAUDE_PID`, `CLAUDE_EFFORT` and others. For Codex, `CODEX_*` let a parent Codex
+session's `CODEX_SANDBOX` and `CODEX_SANDBOX_NETWORK_DISABLED` through in the same way.
+
+This is a real defect and is fixed below, but it does **not** explain the operator's
+report: their Terminal has no `CLAUDE_*`/`ANTHROPIC_*` variables, so
+`CLAUDE_CODE_SIMPLE` is not their failure. **The root cause of the reported failure is
+open.** The leading hypothesis is that processes started by the Trezi service (provider
+helpers, the Keychain helper) cannot use the user's login Keychain; see
+[Keychain and credentials-file diagnostics](#keychain-and-credentials-file-diagnostics-lkm-124)
+and LKM-125. (From a Terminal shell, `security find-generic-password -s "Claude
+Code-credentials"` found the item, exit 0; the service and TreziHost contexts are
+compared in the table there, with the live cells still pending.)
 
 **Fix.** `ProviderHelperProcess.providerVariables` (`src/service/ProviderHelper.swift`)
 is an explicit list per provider, not a prefix:
@@ -396,10 +403,10 @@ are dropped. No live calls.
 
 ### Keychain and credentials-file diagnostics (LKM-124)
 
-The environment cause above does **not** explain the operator's case: their Terminal has
-no `CLAUDE_*`/`ANTHROPIC_*` variables, and both CLIs still report `loggedIn: false`
-inside the helper while Terminal says `true`. The allowlist hardening stays; the open
-question is whether a process started by the Trezi service can use the user's login
+The environment pass-through above is not the root cause of the operator's case: their
+Terminal has no `CLAUDE_*`/`ANTHROPIC_*` variables, and both CLIs still report
+`loggedIn: false` inside the helper while Terminal says `true`. The allowlist hardening
+stays; the root cause is still open, and the question is whether a process started by the Trezi service can use the user's login
 Keychain. Check login now answers it from inside the helper, with the helper's own
 `HOME`, `PATH` and security session (`probeKeychain`, `probeCredentials` in
 `src/main/backends/claude-login.ts`). The report shows, and `ProviderLoginReport` types:
