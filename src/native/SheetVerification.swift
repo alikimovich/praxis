@@ -6,6 +6,15 @@ extension NativeSheets {
     private func renderedPickers(in view: NSView) -> [NSPopUpButton] {
         (view as? NSPopUpButton).map { [$0] } ?? view.subviews.flatMap { renderedPickers(in: $0) }
     }
+    private func renderedTables(in view: NSView) -> [NSTableView] {
+        (view as? NSTableView).map { [$0] } ?? view.subviews.flatMap { renderedTables(in: $0) }
+    }
+    /// The SwiftUI source list: the leftmost visible table with one row per section.
+    private func renderedSidebar(in content: NSView) -> NSTableView? {
+        let count = model.state?.sections?.count ?? -1
+        return renderedTables(in: content).filter { !$0.isHiddenOrHasHiddenAncestor && $0.numberOfRows == count }
+            .min { $0.convert($0.bounds, to: content).minX < $1.convert($1.bounds, to: content).minX }
+    }
 
     func verifySettings(_ command: [String: Any]) throws -> [String: Any] {
         func failure(_ message: String) -> NSError {
@@ -16,17 +25,26 @@ extension NativeSheets {
         }
         if command["prepare"] as? Bool == true {
             if let width = command["width"] as? Double {
-                guard width >= panel.contentMinSize.width, width <= 1000 else { throw failure("Invalid Settings test width") }
-                panel.setContentSize(NSSize(width: width, height: 600))
+                let height = command["height"] as? Double ?? 600
+                guard width >= panel.contentMinSize.width, width <= 1000,
+                      height >= panel.contentMinSize.height, height <= 800 else { throw failure("Invalid Settings test size") }
+                panel.setContentSize(NSSize(width: width, height: height))
                 panel.center()
             }
             NSApp.activate(ignoringOtherApps: true)
             panel.makeKeyAndOrderFront(nil)
         }
+        if let id = command["section"] as? String {
+            // Select the row of the rendered source list, as a click would.
+            guard let index = model.state?.sections?.firstIndex(where: { $0.id == id }),
+                  let sidebar = renderedSidebar(in: content) else { throw failure("Rendered Settings sidebar unavailable: \(id)") }
+            sidebar.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+        }
         content.layoutSubtreeIfNeeded()
         content.displayIfNeeded()
         let fields = model.state!.fields.filter { $0.kind == "choice" }
         let popups = renderedPickers(in: content).filter { !$0.isHiddenOrHasHiddenAncestor }
+        let sidebar = renderedSidebar(in: content)
         func picker(_ field: SheetField) -> NSPopUpButton? {
             // Match the complete option list, not subview order or private class names.
             popups.first { $0.itemTitles == (field.choices ?? []).map(\.label) }
@@ -52,7 +70,10 @@ extension NativeSheets {
         }
         return ["foreground": panel.isVisible && panel.isKeyWindow && NSApp.isActive,
                 "width": content.bounds.width, "height": content.bounds.height,
-                "minimumWidth": panel.contentMinSize.width, "controls": controls,
-                "values": model.values, "id": model.state!.id]
+                "minimumWidth": panel.contentMinSize.width, "minimumHeight": panel.contentMinSize.height, "controls": controls,
+                "values": model.values, "id": model.state!.id, "section": model.section ?? "",
+                "sections": model.state!.sections?.map { ["id": $0.id, "label": $0.label, "symbol": $0.symbol] } ?? [],
+                "sidebarRows": sidebar?.numberOfRows ?? 0, "sidebarSelected": sidebar?.selectedRow ?? -1,
+                "sidebarFrame": sidebar.map { NSStringFromRect($0.convert($0.bounds, to: content)) } ?? ""]
     }
 }

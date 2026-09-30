@@ -154,6 +154,7 @@ const result = Bun.spawnSync(
     join(root, 'src/native/Cat.swift'),
     join(root, 'src/native/Welcome.swift'),
     join(root, 'src/native/Sheets.swift'),
+    join(root, 'src/native/SheetSections.swift'),
     join(root, 'src/native/SheetVerification.swift'),
     join(root, 'src/native/Activity.swift'),
     join(root, 'src/native/SourceEditor.swift'),

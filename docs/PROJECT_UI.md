@@ -1,6 +1,6 @@
 # Experimental Gen UI
 
-Settings → **Experimental Gen UI** enables composition from existing React or Svelte
+Settings → Experimental → **Gen UI** enables composition from existing React or Svelte
 components and styles. The adjacent description reads: “Generate UI using your
 project’s existing components and styles. Experimental; supports React and Svelte.”
 It is off by default and saved on this device. A new message captures the current setting, including when queued.
@@ -134,9 +134,14 @@ Vision OCR, with no cacheDisplay fallback or background-mode skip. Test-only
 host hooks require an ephemeral profile. Picker interactions dispatch the real
 SwiftUI AppKit menu-item actions; the fixture never injects settings values.
 
-At the **live minimum (currently 540 points)**, **600-point normal width**, and
-**800-point wider width**, inspect each
-`test/artifacts/native/settings-visible-{width}-{state}.png` and matching `.json`:
+Settings is one sidebar window (General, AI Providers, Experimental; LKM-121).
+General and AI Providers are captured at the **live minimum (currently 680×420)**
+and the **780×540 default size** as
+`test/artifacts/native/settings-visible-{width}-{general|providers}.png`. The
+Experimental pane is selected through the rendered source list; at the live
+minimum, the **780-point default width** and the **960-point wider width**,
+inspect each `test/artifacts/native/settings-visible-{width}-experimental-{state}.png`
+and matching `.json`:
 
 | State suffix | Required evidence |
 | --- | --- |
@@ -149,9 +154,11 @@ At the **live minimum (currently 540 points)**, **600-point normal width**, and
 | `reopened-on-chat` | Immediate close after choosing Chat model flushes autosave |
 | `reopened-off-chat` | Immediate close after Off restores Off and Chat model |
 
-The current plan produces 24 PNG/JSON pairs. The interaction log records the
+The current plan produces 28 PNG/JSON pairs. The interaction log records the
 width plan derived from the live NSHostingController-managed window minimum.
-The JSON records foreground ownership, content/minimum width, picker selected
+Every reopen must return to the last selected section.
+The JSON records foreground ownership, content/minimum size, the selected
+section and source-list row, picker selected
 labels, containment, hit targets, saved form values and OCR text. The fixture
 requires all words of both visible explanations, rejects an engine rendered
 while Off, and saves evidence before assertions. The action/reopen/capture trail
@@ -162,9 +169,9 @@ automatic assertions. These new foreground captures are pending manager executio
 the worker does not claim to have observed them.
 
 `bun test/native-settings-layout.mjs` verifies the actual SwiftUI pickers,
-bindings, hidden controls, geometry and autosave emission without displaying a
-window. It uses the same NSHostingController as production and asserts its
-540-point minimum and 540/600/800-point layouts.
+bindings, source-list selection, hidden controls, geometry and autosave emission
+without displaying a window. It uses the same NSHostingController as production and
+asserts its 680-point minimum and 680/780/960-point layouts.
 `bun test/native-settings-evidence.mjs` injects missing text, wrong state,
 clipping, occlusion and lost foreground into evidence and requires rejection.
 Both are registered in the manager's unit tier.

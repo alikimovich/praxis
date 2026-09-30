@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-121: standard macOS Settings window with a sidebar
+
+- **Why.** Settings was a single form with a separate "AI providers…" sheet, and it opened from a gear at the bottom of the main sidebar. The issue asked for a standard macOS settings window.
+- **Window.** `src/native/SheetSections.swift` is the sectioned layout: a SwiftUI source list (`.sidebar`) with SF Symbols on the left. On the right, the selected section's large title and description, then grouped rows (label and help on the left, control on the right), with the section's actions below. The default size is 780×540 and the minimum 680×420. Any sheet state with `sections` uses it, and forms without sections are unchanged. A grouped Form draws its own Picker without an `NSPopUpButton`, so `ChoicePopUp` is a real AppKit popup whose menu items carry target/action. That keeps the foreground fixture driving the rendered control.
+- **Sections.** General has the default model (the app has no appearance setting). AI Providers is the old providers sheet, now inline: list, add, edit and remove, with confirmation. It swaps its own fields in place, in the same window, via `NativeSheetController.refresh()`. Its fields are `draft`: the model neither autosaves nor sends them until the pane's own action. Experimental has Gen UI, its explanation and the engine choice. No setting was dropped, and the keys and the autosave batch are unchanged. The last section is remembered in `trezi:settings-section:v1`; unknown sections are ignored.
+- **Entry point.** The gear and its glass surface are gone from the main sidebar (`shellInspect.sidebarActions` is now `new-project`/`open-project`). Settings opens from Trezi → Settings… (Command-,), with or without a project. A new ephemeral-only `settingsMenu` host hook reads that menu item and chooses it through `NSMenu.performActionForItem`. The smoke `startup` prelude uses it on the Welcome screen, with no project open, and saves `settings-no-project.png`.
+- **Evidence.**
+  - `checkVisibleSettings` selects sections through the rendered source list. It captures General and AI Providers in the foreground at 680×420 and 780×540, and runs the Experimental Off/On/Chat/Jev sequence at 680, 780 and 960 points: 28 PNG/JSON pairs. Every reopen must restore the last section.
+  - `smoke-sheets` adds a provider inline, then goes back (`settings-provider-editor.png`).
+  - The sidebar fixture asserts there is no gear.
+  - Unit: `native-settings` (sections, the remembered section, the inline provider flow, drafts never autosaved, key handling), `native-settings-evidence` (wrong section, sidebar and size evidence rejected) and `native-settings-layout` (a real source-list selection in the windowless host).
+  - Native groups chat/composer/core/islands/settings/shadow-light/sidebar: 19/19 passed.
+- **Not done.** No back/forward buttons: the issue asked for them only if cheap, and a source list already reaches every section in one click.
+
 ## 2026-09-29 — LKM-118: simpler code editor toolbar
 
 - **Toolbar.** The native editor header is now back and forward icons, the file path, then pop out/dock and close icons on the right edge. Save, Reload and Open in Editor are gone (with the controller's unused `external` action). Pop out uses `arrow.up.left.and.arrow.down.right` and turns into dock, `arrow.down.right.and.arrow.up.left`, while popped out. Every icon has a tooltip and an accessibility label. The path is a selectable label, so ⌘C copies it. The unsaved marker `•` is a separate label, so a copied path never includes it.

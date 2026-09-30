@@ -6,6 +6,10 @@ export interface SettingsEvidence {
   height: number
   minimumWidth: number
   values: Record<string, string>
+  section: string
+  sections: { id: string; label: string; symbol: string }[]
+  sidebarRows: number
+  sidebarSelected: number
   controls: {
     id: string
     selected: string
@@ -15,39 +19,86 @@ export interface SettingsEvidence {
   }[]
   text: string[]
 }
+/** The Settings window's content size when it opens (`SectionedSheetContent.defaultSize`). */
+export const SETTINGS_DEFAULT_SIZE = { width: 780, height: 540 }
+export const SETTINGS_SECTIONS = [
+  { id: 'general', label: 'General', symbol: 'gearshape' },
+  { id: 'providers', label: 'AI Providers', symbol: 'sparkles' },
+  { id: 'experimental', label: 'Experimental', symbol: 'testtube.2' }
+] as const
+export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
+
 /** Always exercise the live minimum plus the normal and wider window widths. */
 export function settingsVerificationWidths(minimumWidth: number): number[] {
   assert.ok(
-    Number.isFinite(minimumWidth) && minimumWidth > 0 && minimumWidth <= 600,
-    'Settings minimum must be valid and no wider than its normal 600-point window'
+    Number.isFinite(minimumWidth) && minimumWidth > 0 && minimumWidth <= SETTINGS_DEFAULT_SIZE.width,
+    `Settings minimum must be valid and no wider than its normal ${SETTINGS_DEFAULT_SIZE.width}-point window`
   )
-  return [...new Set([minimumWidth, 600, 800])]
+  return [...new Set([minimumWidth, SETTINGS_DEFAULT_SIZE.width, 960])]
 }
 
-/** Fail closed on missing pixels, clipped help, stale choices or hidden controls. */
-export function assertSettingsEvidence(
-  evidence: SettingsEvidence,
-  width: number,
-  enabled: boolean,
-  engine: 'agent' | 'jev'
-) {
+/** The source list shows every section, with the requested one selected and shown. */
+function assertSidebar(evidence: SettingsEvidence, section: SettingsSection) {
+  assert.deepEqual(evidence.sections, SETTINGS_SECTIONS.map((s) => ({ ...s })), 'Settings sidebar sections and symbols')
+  assert.equal(evidence.sidebarRows, SETTINGS_SECTIONS.length, 'Rendered source-list rows')
+  assert.equal(evidence.section, section, 'Selected Settings section')
+  assert.equal(
+    evidence.sidebarSelected,
+    SETTINGS_SECTIONS.findIndex((s) => s.id === section),
+    'Rendered source-list selection'
+  )
+}
+
+function assertUsable(evidence: SettingsEvidence, width: number) {
   assert.equal(evidence.foreground, true, 'Settings must own foreground focus')
   assert.ok(Math.abs(evidence.width - width) <= 1, 'Requested Settings content width')
   assert.ok(evidence.width >= evidence.minimumWidth)
-  assert.equal(evidence.values.projectUi, String(enabled))
-  assert.equal(evidence.values.engine, engine, 'Preserve saved engine even while Off')
-  const ids = evidence.controls.map((c) => c.id).sort()
-  assert.deepEqual(
-    ids,
-    (enabled ? ['default', 'projectUi', 'engine'] : ['default', 'projectUi']).sort(),
-    'Rendered picker visibility'
-  )
   for (const control of evidence.controls) {
     assert.ok(
       control.enabled && control.contained && control.hitTarget,
       `Usable, unclipped picker: ${control.id}`
     )
   }
+}
+
+/** General and AI Providers panes: titled, with their own rows and every sidebar label readable. */
+export function assertSectionEvidence(
+  evidence: SettingsEvidence,
+  width: number,
+  section: Exclude<SettingsSection, 'experimental'>
+) {
+  assertUsable(evidence, width)
+  assertSidebar(evidence, section)
+  const ids = evidence.controls.map((c) => c.id).sort()
+  if (section === 'general') assert.deepEqual(ids, ['default'], 'General shows the default model picker')
+  else assert.ok(ids.every((id) => id === 'connection'), 'AI Providers shows only its provider picker')
+  const lines = evidence.text.map(words)
+  for (const required of [
+    ...SETTINGS_SECTIONS.map((s) => s.label),
+    ...(section === 'general'
+      ? ['Default model', 'New chats start with this model.']
+      : ['Claude and Codex use your existing sign-ins.'])
+  ])
+    assert.ok(rendersText(lines, words(required)), `Missing complete foreground text: ${required}`)
+}
+
+/** Experimental pane: fail closed on missing pixels, clipped help, stale choices or hidden controls. */
+export function assertSettingsEvidence(
+  evidence: SettingsEvidence,
+  width: number,
+  enabled: boolean,
+  engine: 'agent' | 'jev'
+) {
+  assertUsable(evidence, width)
+  assertSidebar(evidence, 'experimental')
+  assert.equal(evidence.values.projectUi, String(enabled))
+  assert.equal(evidence.values.engine, engine, 'Preserve saved engine even while Off')
+  const ids = evidence.controls.map((c) => c.id).sort()
+  assert.deepEqual(
+    ids,
+    (enabled ? ['projectUi', 'engine'] : ['projectUi']).sort(),
+    'Rendered picker visibility'
+  )
   assert.equal(
     evidence.controls.find((c) => c.id === 'projectUi')?.selected,
     enabled ? 'On' : 'Off'
@@ -59,7 +110,8 @@ export function assertSettingsEvidence(
     )
   const lines = evidence.text.map(words)
   for (const required of [
-    'Experimental Gen UI',
+    'Experimental',
+    'Gen UI',
     'Generate UI using your project’s existing components and styles. Experimental; supports React and Svelte.',
     ...(enabled
       ? [
