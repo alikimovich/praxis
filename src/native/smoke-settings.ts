@@ -2,7 +2,14 @@ import assert from 'node:assert/strict'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { NativeBridge } from './bridge'
-import { assertSettingsEvidence, settingsVerificationWidths } from './settings-verification'
+import {
+  assertSectionEvidence,
+  assertSettingsEvidence,
+  SETTINGS_DEFAULT_SIZE,
+  SETTINGS_SECTIONS,
+  type SettingsSection,
+  settingsVerificationWidths
+} from './settings-verification'
 
 /** Manager-owned foreground fixture, reached by the standard native suite. */
 export async function checkVisibleSettings(host: NativeBridge, artifacts: string) {
@@ -27,6 +34,16 @@ export async function checkVisibleSettings(host: NativeBridge, artifacts: string
     await wait(async () => (await inspect()).values[field] === value)
     record({ action: 'native-picker-target-action', field, value, state: await inspect() })
   }
+  // Click the source-list row; the pane and the remembered section must follow.
+  const select = async (section: SettingsSection) => {
+    await host.request('settingsVerification', { section })
+    const index = SETTINGS_SECTIONS.findIndex((s) => s.id === section)
+    await wait(async () => {
+      const state = await inspect()
+      return state.section === section && state.sidebarSelected === index
+    })
+    record({ action: 'sidebar-select', section, state: await inspect() })
+  }
   const reopen = async () => {
     const before = await inspect()
     await host.request('sheetPerform', { action: 'closeWindow' })
@@ -44,15 +61,19 @@ export async function checkVisibleSettings(host: NativeBridge, artifacts: string
       before.values,
       'Close must flush autosave and reopen saved choices'
     )
+    assert.equal(after.section, before.section, 'Settings reopens on the last selected section')
     record({ action: 'close-reopen-autosave', before, after })
   }
-  const capture = async (
-    width: number,
-    name: string,
-    enabled: boolean,
-    engine: 'agent' | 'jev'
-  ) => {
-    await host.request('settingsVerification', { prepare: true, width })
+  // The live minimum opens at the minimum height; the normal width at the default size.
+  const heightFor = (width: number) =>
+    width === minimumWidth
+      ? minimumHeight
+      : width === SETTINGS_DEFAULT_SIZE.width
+        ? SETTINGS_DEFAULT_SIZE.height
+        : 600
+  const shoot = async (width: number, name: string) => {
+    const height = heightFor(width)
+    await host.request('settingsVerification', { prepare: true, width, height })
     await wait(async () => (await inspect()).foreground)
     await new Promise((resolve) => setTimeout(resolve, 350))
     const layout = await inspect()
@@ -70,20 +91,40 @@ export async function checkVisibleSettings(host: NativeBridge, artifacts: string
       image.width >= width && image.height >= layout.height,
       'Nonempty foreground Settings pixels'
     )
+    assert.ok(Math.abs(layout.height - height) <= 1, 'Requested Settings content height')
     assert.equal(
       layout.minimumWidth,
       minimumWidth,
       'Settings minimum must remain stable across state changes and reopen'
     )
-    assertSettingsEvidence(evidence, width, enabled, engine)
-    record({ action: 'capture-asserted', path: `${stem}.png`, enabled, engine })
+    record({ action: 'capture', path: `${stem}.png` })
+    return evidence
   }
-  // Disposable native profile starts Off/Chat model. Do not manufacture this state.
-  const minimumWidth = (await inspect()).minimumWidth
+  const capture = async (
+    width: number,
+    name: string,
+    enabled: boolean,
+    engine: 'agent' | 'jev'
+  ) => {
+    assertSettingsEvidence(await shoot(width, `experimental-${name}`), width, enabled, engine)
+  }
+  // Disposable native profile starts on General, Off/Chat model. Do not manufacture this state.
+  const initial = await inspect()
+  const minimumWidth = initial.minimumWidth
+  const minimumHeight = initial.minimumHeight
   const widths = settingsVerificationWidths(minimumWidth)
-  record({ action: 'width-plan', minimumWidth, widths })
-  assert.equal((await inspect()).values.projectUi, 'false')
-  assert.equal((await inspect()).values.engine, 'agent')
+  record({ action: 'width-plan', minimumWidth, minimumHeight, widths })
+  assert.equal(initial.section, 'general', 'A new profile opens Settings on General')
+  assert.equal(initial.values.projectUi, 'false')
+  assert.equal(initial.values.engine, 'agent')
+  // General and AI Providers at the minimum and default sizes.
+  for (const width of [minimumWidth, SETTINGS_DEFAULT_SIZE.width]) {
+    for (const section of ['general', 'providers'] as const) {
+      await select(section)
+      assertSectionEvidence(await shoot(width, section), width, section)
+    }
+  }
+  await select('experimental')
   for (const width of widths) {
     await capture(width, 'off', false, 'agent')
     await choose('projectUi', 'true')
@@ -104,7 +145,9 @@ export async function checkVisibleSettings(host: NativeBridge, artifacts: string
     await reopen()
     await capture(width, 'reopened-off-chat', false, 'agent')
   }
+  // Leave the next Settings open on General, as a new profile would.
+  await select('general')
   console.log(
-    `NATIVE SETTINGS PASS — foreground ${widths.join('/')} point captures and complete help OCR; native Off/On/Chat/Jev picker actions; hidden-engine preservation and close/reopen autosave. Inspect settings-visible-*.png for visual acceptance.`
+    `NATIVE SETTINGS PASS — sidebar sections General/AI Providers at ${minimumWidth}/${SETTINGS_DEFAULT_SIZE.width} and Experimental at ${widths.join('/')} point foreground captures with complete help OCR; native Off/On/Chat/Jev picker actions; hidden-engine preservation, remembered section and close/reopen autosave. Inspect settings-visible-*.png for visual acceptance.`
   )
 }

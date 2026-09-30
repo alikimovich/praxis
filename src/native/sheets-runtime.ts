@@ -9,18 +9,19 @@ import { dispatchIPC } from './platform'
 /** Trusted app sheets use fixed operations, never renderer-supplied IPC names. */
 export class NativeSheetController {
   generation = 0
-  current: { state: NativeSheetState; autosave?: SheetAutosave; handle(action: NativeSheetAction): Promise<void> } | null = null
+  current: { state: NativeSheetState; autosave?: SheetAutosave; handle(action: NativeSheetAction): Promise<void>; select?(section: string): void } | null = null
   constructor(readonly host: Pick<NativeBridge, 'send'>, readonly workspace: NativeWorkspaceController, readonly chat: NativeChatController, readonly invoke = (channel: string, ...args: any[]) => dispatchIPC('main', { type: 'invoke', channel, args })) {}
-  present(state: Omit<NativeSheetState, 'id' | 'busy'>, handle: (action: NativeSheetAction) => Promise<void>) {
+  /** `select` hears sidebar selections of a sectioned window (`state.sections`). */
+  present(state: Omit<NativeSheetState, 'id' | 'busy'>, handle: (action: NativeSheetAction) => Promise<void>, select?: (section: string) => void) {
     this.generation++
     if (this.current) this.host.send('sheetClose', { id: this.current.state.id })
     const value: NonNullable<NativeSheetController['current']> = {
       state: { ...state, dismissible: state.dismissible ?? (state.actions.length > 0 || !!state.autosave),
         actions: state.actions.filter(action => !(action.id === 'cancel' && action.label === 'Close')),
-        id: randomUUID(), busy: false }, handle
+        id: randomUUID(), busy: false }, handle, select
     }
     if (state.autosave) value.autosave = new SheetAutosave(
-      Object.fromEntries(state.fields.map(field => [field.id, field.value])),
+      Object.fromEntries(state.fields.filter(field => !field.draft).map(field => [field.id, field.value])),
       values => handle({ id: value.state.id, action: 'save', values }),
       message => { if (this.current === value) { value.state.message = message; this.host.send('sheetState', { state: value.state }) } }
     )
@@ -31,12 +32,21 @@ export class NativeSheetController {
     if (this.current) this.host.send('sheetClose', { id: this.current.state.id })
     this.current = null
   }
+  /** Re-send the open sheet after its state changed in place (same window and ID). */
+  refresh() { if (this.current) this.host.send('sheetState', { state: this.current.state }) }
   async action(action: NativeSheetAction) {
     const sheet = this.current
     if (!sheet || action.id !== sheet.state.id) return
+    if (action.section && action.section !== sheet.state.section && sheet.state.sections?.some(s => s.id === action.section)) {
+      sheet.state.section = action.section
+      sheet.select?.(action.section)
+    }
+    if (action.action === 'section') return
     if (sheet.autosave) {
       if (!['change', 'save', 'cancel'].includes(action.action) && !sheet.state.actions.some(a => a.id === action.action)) return
-      const saved = await sheet.autosave.enqueue(action.values)
+      // Draft fields (a provider form) are sent with their own action, never autosaved.
+      const drafts = new Set(sheet.state.fields.filter(field => field.draft).map(field => field.id))
+      const saved = await sheet.autosave.enqueue(Object.fromEntries(Object.entries(action.values).filter(([key]) => !drafts.has(key))))
       if (this.current !== sheet || !saved || action.action === 'change' || action.action === 'save') return
     }
     if (action.action === 'cancel') { if (sheet.state.dismissible) this.close(); return }

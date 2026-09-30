@@ -79,27 +79,13 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             button.heightAnchor.constraint(equalToConstant: SidebarRowStyle.height).isActive = true
             sidebarButtons[action] = button
         }
-        let settings = NSButton(title: "", target: self, action: #selector(sidebarAction(_:)))
-        settings.identifier = NSUserInterfaceItemIdentifier("settings"); settings.bezelStyle = .circular
-        settings.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil); settings.imagePosition = .imageOnly
-        settings.toolTip = "Settings"; settings.setAccessibilityLabel("Settings")
-        settings.frame = NSRect(x: 0, y: 0, width: 36, height: 36)
-        let settingsSurface: NSView
-        if #available(macOS 26.0, *) {
-            let glass = NSGlassEffectView(frame: settings.frame)
-            glass.cornerRadius = 18
-            settings.isBordered = false; settings.autoresizingMask = [.width, .height]
-            glass.contentView = settings; settingsSurface = glass
-        } else { settingsSurface = settings }
-        sidebarButtons["settings"] = settings
-        for view in [projectActions, scroll, settingsSurface] { view.translatesAutoresizingMaskIntoConstraints = false; sidebarContainer.addSubview(view) }
+        // Settings opens from Trezi → Settings… (Command-,), not from the sidebar.
+        for view in [projectActions, scroll] { view.translatesAutoresizingMaskIntoConstraints = false; sidebarContainer.addSubview(view) }
         NSLayoutConstraint.activate([
             projectActions.topAnchor.constraint(equalTo: sidebarContainer.safeAreaLayoutGuide.topAnchor, constant: 8),
             projectActions.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor, constant: 10),
             projectActions.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor, constant: -10),
-            scroll.topAnchor.constraint(equalTo: projectActions.bottomAnchor, constant: 16), scroll.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: settingsSurface.topAnchor, constant: -12),
-            settingsSurface.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor, constant: 12), settingsSurface.bottomAnchor.constraint(equalTo: sidebarContainer.bottomAnchor, constant: -12),
-            settingsSurface.widthAnchor.constraint(equalToConstant: 36), settingsSurface.heightAnchor.constraint(equalToConstant: 36)
+            scroll.topAnchor.constraint(equalTo: projectActions.bottomAnchor, constant: 16), scroll.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: sidebarContainer.bottomAnchor)
         ])
         sidebar.view = sidebarContainer
         sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebar)
@@ -474,7 +460,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
              return cell.more.convert(cell.more.bounds, to: clip).maxX
          }, "projectIconCount":rows.filter { $0.icon != nil }.count, "outlineClipWidth":outline.enclosingScrollView?.contentSize.width ?? 0, "outlineRows":outline.numberOfRows, "outlineWidth":outline.bounds.width,
          "toolbar":toolbar.items.map { $0.itemIdentifier.rawValue }, "branch":previewState["branch"] ?? "", "publishLabel":previewState["publishLabel"] ?? "", "codeOpen":previewState["codeOpen"] ?? false,
-         "toolbarGroupsMomentary":toolbar.items.compactMap { $0 as? NSToolbarItemGroup }.allSatisfy { ($0 as? MomentaryToolbarGroup)?.hasMomentaryControl == true }, "visibleToolbar":toolbar.visibleItems?.map { $0.itemIdentifier.rawValue } ?? [], "previewHeaderLightText":previewTextColor == .white, "address":previewAddress, "domain":address.stringValue, "viewport":previewState["viewport"] ?? "", "publishStandard":toolbarItems["publish"]?.view == nil, "toolGroup":(toolbar.items.first(where: { $0.itemIdentifier.rawValue == "tools" }) as? NSToolbarItemGroup)?.subitems.map { $0.itemIdentifier.rawValue } ?? [], "sidebarAutohidesScrollers":(outline.enclosingScrollView?.autohidesScrollers ?? false), "sidebarActions":["new-project", "open-project", "settings"], "chatActions":["history", "new-chat"], "historyIDs":chatActions.historyMenu?.items.compactMap { ($0.representedObject as? [String:String])?["id"] } ?? [], "chatTitle":chatTitle.stringValue, "chatTitlePlain":toolbarItems["chat"]?.action == nil, "chatHeaderWidth":chatHeader.bounds.width, "chatHeaderTrailing":chatHeader.convert(NSPoint(x: chatHeader.bounds.maxX, y: 0), to: nil).x, "detailLeading":split.splitViewItems[1].viewController.view.convert(.zero, to: nil).x, "chatWidth":previewState["chatWidth"] ?? 0, "enabled":toolbarItems.mapValues { $0.isEnabled }]
+         "toolbarGroupsMomentary":toolbar.items.compactMap { $0 as? NSToolbarItemGroup }.allSatisfy { ($0 as? MomentaryToolbarGroup)?.hasMomentaryControl == true }, "visibleToolbar":toolbar.visibleItems?.map { $0.itemIdentifier.rawValue } ?? [], "previewHeaderLightText":previewTextColor == .white, "address":previewAddress, "domain":address.stringValue, "viewport":previewState["viewport"] ?? "", "publishStandard":toolbarItems["publish"]?.view == nil, "toolGroup":(toolbar.items.first(where: { $0.itemIdentifier.rawValue == "tools" }) as? NSToolbarItemGroup)?.subitems.map { $0.itemIdentifier.rawValue } ?? [], "sidebarAutohidesScrollers":(outline.enclosingScrollView?.autohidesScrollers ?? false), "sidebarActions":sidebarButtons.keys.sorted(), "chatActions":["history", "new-chat"], "historyIDs":chatActions.historyMenu?.items.compactMap { ($0.representedObject as? [String:String])?["id"] } ?? [], "chatTitle":chatTitle.stringValue, "chatTitlePlain":toolbarItems["chat"]?.action == nil, "chatHeaderWidth":chatHeader.bounds.width, "chatHeaderTrailing":chatHeader.convert(NSPoint(x: chatHeader.bounds.maxX, y: 0), to: nil).x, "detailLeading":split.splitViewItems[1].viewController.view.convert(.zero, to: nil).x, "chatWidth":previewState["chatWidth"] ?? 0, "enabled":toolbarItems.mapValues { $0.isEnabled }]
     }
     func perform(_ action: String, id: String?) -> Bool {
         if action == "window-width", let width = Double(id ?? ""), let window, width >= 850 && width <= 2000 { var frame = window.frame; frame.size.width = width; window.setFrame(frame, display: true); return true }

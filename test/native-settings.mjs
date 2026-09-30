@@ -3,11 +3,12 @@ import { NativeSheetController } from '../src/native/sheets-runtime.ts'
 import { NativeSettingsController } from '../src/native/settings-controller.ts'
 const values = new Map(), sent = [], calls = []
 let connections = [], catalogWait
-let failNext = null, gate = null, applyBlocked = false
+let failNext = null, gate = null, applyBlocked = false, applies = 0, seatToken = false
 const preferences = {
   get: key => values.get(key) ?? null,
   snapshot: () => Object.fromEntries(values),
   async apply(batch) {
+    applies++
     const entries = typeof batch === 'function' ? batch(Object.fromEntries(values)) : batch
     if (gate) { applyBlocked = true; await gate; applyBlocked = false }
     if (failNext) { const error = failNext; failNext = null; throw error }
@@ -26,18 +27,27 @@ const sheets = new NativeSheetController({ send: (method, data) => sent.push([me
     return { ok: true, connection: connections[0] }
   }
   if (channel === 'providers:remove') connections = []
+  if (channel === 'providers:seat-token-status') return { hasToken: seatToken }
+  if (channel === 'providers:seat-token-save') { seatToken = !!args[0]; return { ok: true, hasToken: seatToken } }
+  if (channel === 'providers:check-login') return { provider: 'claude', loggedIn: false, source: 'bundled', token: false, detail: 'Bundled Claude CLI: not logged in' }
   return {}
 })
 let notified = 0
 const settings = new NativeSettingsController(sheets, preferences, () => notified++)
 const action = (name, values = {}) => sheets.action({ id: sheets.current.state.id, action: name, values })
+const field = id => sheets.current.state.fields.find(f => f.id === id)
 await settings.open()
-assert.equal(sheets.current.state.actions.some(a => a.id === 'save' || a.id === 'cancel'), false)
+// One sidebar window: General, AI Providers (inline, no separate sheet) and Experimental.
+assert.deepEqual(sheets.current.state.sections.map(s => [s.id, s.label, s.symbol]), [['general', 'General', 'gearshape'], ['providers', 'AI Providers', 'sparkles'], ['experimental', 'Experimental', 'testtube.2']])
+assert.equal(sheets.current.state.section, 'general', 'first open shows General')
+assert.deepEqual(sheets.current.state.fields.map(f => [f.id, f.section]), [['default', 'general'], ['projectUi', 'experimental'], ['engine', 'experimental'], ['connections', 'providers']])
+assert.equal(sheets.current.state.actions.some(a => a.id === 'save' || a.id === 'cancel' || a.id === 'connections'), false)
+assert.deepEqual(sheets.current.state.actions.map(a => [a.id, a.section]), [['add', 'providers'], ['claude', 'providers']])
 await action('change', { default: 'codex:default', projectUi: 'false', engine: 'agent' })
 assert.equal(JSON.parse(values.get('trezi:preferred-model')).fixed.provider, 'codex')
 assert.equal(notified, 1)
 const fields = sheets.current.state.fields
-assert.equal(fields.find(f => f.id === 'projectUi').label, 'Experimental Gen UI')
+assert.equal(fields.find(f => f.id === 'projectUi').label, 'Gen UI')
 assert.match(fields.find(f => f.id === 'projectUi').help, /existing components and styles.*React and Svelte/)
 assert.deepEqual(fields.find(f => f.id === 'engine').visibleWhen, { field: 'projectUi', value: 'true' })
 assert.match(fields.find(f => f.id === 'engine').help, /Chat model.*Jev.*Gateway/)
@@ -50,24 +60,83 @@ assert.equal(sheets.current.state.fields.find(f => f.id === 'engine').value, 'je
 await action('change', { default: 'codex:default', projectUi: 'true', engine: 'jev' })
 assert.equal(values.get('trezi:project-ui:v1'), 'true')
 assert.equal(values.get('trezi:project-ui-engine:v1'), 'jev')
-await action('connections')
+
+// The last selected section is remembered across reopen; unknown sections are ignored.
+const settingsId = sheets.current.state.id
+await sheets.action({ id: settingsId, action: 'section', values: {}, section: 'providers' })
+await sheets.action({ id: settingsId, action: 'section', values: {}, section: 'bogus' })
+assert.equal(values.get('trezi:settings-section:v1'), 'providers')
+assert.equal(sheets.current.state.section, 'providers')
+await settings.open()
+assert.equal(sheets.current.state.section, 'providers', 'reopen restores the last section')
+assert.equal(field('projectUi').value, 'true')
+
+// Claude's sign-in (LKM-119) is a pane of the same window: the subscription token is a
+// draft, saved or removed only by its own actions and never echoed back into the sheet.
+const inPlace = sheets.current.state.id
+const providerFields = () => sheets.current.state.fields.filter(f => f.section === 'providers')
+await action('claude')
+assert.equal(sheets.current.state.id, inPlace)
+assert.deepEqual(providerFields().map(f => [f.id, f.kind, f.draft]), [['token', 'secure', true]])
+assert.deepEqual(sheets.current.state.actions.map(a => a.id), ['back', 'claude-check', 'claude-save'])
+// The general fields are unchanged here, so a token edit alone must not write anything.
+const unchanged = { default: field('default').value, projectUi: field('projectUi').value, engine: field('engine').value }
+await action('change', { ...unchanged, token: 'sk-ant-test-token' })
+assert.ok(!JSON.stringify([...values]).includes('sk-ant-test-token'), 'the token draft is never written as a preference')
+await action('claude-check')
+assert.match(providerFields().find(f => f.id === 'report').label, /not logged in/i)
+assert.match(providerFields().find(f => f.id === 'report').value, /Bundled Claude CLI/)
+assert.equal(calls.some(c => c[0] === 'providers:check-login' && c[1] === 'claude'), true)
+await action('claude-save', { token: '  ' })
+assert.match(sheets.current.state.message, /Paste the token/)
+assert.equal(calls.some(c => c[0] === 'providers:seat-token-save'), false, 'an empty token is refused before the service')
+await action('claude-save', { token: ' sk-ant-test-token ' })
+assert.deepEqual(calls.filter(c => c[0] === 'providers:seat-token-save').at(-1), ['providers:seat-token-save', 'sk-ant-test-token'])
+assert.equal(sheets.current.state.message, 'Token saved. New Claude chats use it.')
+assert.deepEqual(sheets.current.state.actions.map(a => a.id), ['back', 'claude-check', 'claude-remove', 'claude-save'])
+assert.equal(providerFields().find(f => f.id === 'token').value, '')
+assert.ok(!JSON.stringify(sent).includes('sk-ant-test-token'), 'the token must not return in sheet snapshots')
+await action('claude-remove')
+assert.deepEqual(calls.filter(c => c[0] === 'providers:seat-token-save').at(-1), ['providers:seat-token-save', ''])
+assert.equal(sheets.current.state.message, 'Token removed.')
+await action('back')
+assert.deepEqual(providerFields().map(f => f.id), ['connections'])
+assert.equal(field('default').section, 'general', 'other panes survive the Claude pane')
+
+// AI Providers is edited in place: the Settings window (same ID) stays open.
+const saves = () => calls.length
 await action('add')
+assert.equal(sheets.current.state.id, inPlace)
+assert.deepEqual(sheets.current.state.fields.filter(f => f.section === 'providers').map(f => [f.id, f.draft]), [['label', true], ['url', true], ['key', true], ['models', true]])
+assert.equal(field('default').section, 'general', 'other panes survive the editor')
 const draft = { label: 'Test', url: 'https://provider.example/v1', key: 'fake-test-key', models: 'a,b' }
+// Typing in the provider form never autosaves the draft or its key.
+const applied = applies
+await action('change', { default: 'codex:default', projectUi: 'true', engine: 'jev', ...draft })
+assert.equal(applies, applied, 'draft provider fields are not autosaved')
 await action('connect', draft)
-assert.equal(sheets.current.state.fields.find(f => f.id === 'models').kind, 'multichoice')
+assert.equal(field('models').kind, 'multichoice')
 assert.ok(!JSON.stringify(sent).includes('fake-test-key'), 'keys must not return in form snapshots')
-await action('save', draft)
+const before = saves()
+await action('save-provider', draft)
+assert.ok(calls.slice(before).some(c => c[0] === 'providers:choices'), 'saving a provider refreshes the default-model choices')
 assert.equal(connections.length, 1)
 assert.deepEqual(connections[0].models, ['a', 'b'])
+assert.equal(sheets.current.state.id, inPlace)
+assert.equal(field('connection').value, 'connection-1')
 await action('edit', { connection: 'connection-1' })
-await action('save', { ...draft, url: 'https://different.example/v1', key: '' })
+assert.equal(field('key').help, 'Leave blank to keep the current key.')
+await action('save-provider', { ...draft, url: 'https://different.example/v1', key: '' })
 assert.match(sheets.current.state.message, /API key/)
-await action('save', { ...draft, key: '' })
+await action('save-provider', { ...draft, key: '' })
 assert.ok(!('apiKey' in calls.filter(c => c[0] === 'providers:save').at(-1)[1]), 'blank key preserves same-origin credentials')
 await action('delete', { connection: 'connection-1' })
 assert.equal(connections.length, 1, 'deletion requires confirmation screen')
-await action('delete')
+assert.match(field('remove-confirm').label, /Remove Test\?/)
+await action('remove')
 assert.equal(connections.length, 0)
+assert.equal(field('connections').value, 'None')
+assert.equal(sheets.current.state.id, inPlace)
 await action('add')
 let resolve
 catalogWait = new Promise(r => resolve = r)
@@ -95,4 +164,4 @@ await closing
 assert.equal(sheets.current, null)
 assert.equal(values.get('trezi:project-ui:v1'), 'true', 'the retained draft was saved on close')
 assert.equal(JSON.parse(values.get('trezi:preferred-model')).mode, 'last-used')
-console.log('Native settings: defaults, provider catalog/save/delete, key handling, cancellation, failed-draft retention and close-waits-for-save passed')
+console.log('Native settings: sidebar sections and remembered section, defaults, inline provider catalog/save/delete without autosaving drafts, key handling, cancellation, failed-draft retention and close-waits-for-save passed')
