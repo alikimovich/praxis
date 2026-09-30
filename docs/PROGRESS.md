@@ -2,6 +2,13 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-113 part 1: Trezi's Codex sessions ignore the user's personal MCP servers
+
+- **Why.** In LKM-111's parity run, the Codex session loaded `mcp.vercel.com` from the user's `~/.codex/config.toml` and logged `AuthRequired`. The SDK flattens `config` into dotted `--config` keys, and the CLI merges them into the user's tables. So adding Trezi's `praxis` server never replaced the user's servers, and even `-c mcp_servers={…}` merges (checked against the vendored CLI 0.154.0).
+- **Fix.** `isolatedCodexConfig` (`src/main/backends/codex-mcp.ts`) parses `$CODEX_HOME/config.toml` (default `~/.codex`) with Bun's TOML parser and adds `mcp_servers.<name>.enabled=false` for every declared server except Trezi's. It names only declared servers, because an unknown name makes the CLI reject the whole config ("invalid transport"). The SDK starts a new `codex exec` for every turn, so `codex.ts` rebuilds the `Codex` instance per turn (`resumeThread(id)`). That way a server added or removed mid-chat is handled. The project-memory pass gets the same treatment. Project `.codex/config.toml` layers are not changed: they load only for trusted projects, and naming a server the CLI didn't load would break the turn.
+- **Proof (no provider calls).** `test/codex-mcp.mjs` writes a fixture `CODEX_HOME/config.toml` with a `vercel` URL server (pointed at 127.0.0.1) and a stdio server. `codex mcp list --json` shows both enabled with Trezi's config alone and both disabled with the isolated config. The real `app-server` session reports them `disabled` with no tools while `praxis` connects. Missing, invalid and changed configs are covered too. The test needs a local unix socket, so in the worker sandbox it ran outside the sandbox.
+- **Part 2** (Codex live parity) stays with the operator after the quota reset; see `docs/TASKS.md`.
+
 ## 2026-09-30 — LKM-111 repair: Claude live parity recorded (operator run); Codex deferred to LKM-113
 
 - **Claude parity passed.** The operator ran `TREZI_LIVE_PROVIDERS=1 bun run test:provider-live` outside the worker sandbox on 2026-09-29 (`haiku`, low effort, one no-tool prompt, no Gemini). Both hosts answered `PONG` with one `delta` and one `done`, so the supervised helper emits the events the in-process adapter did:

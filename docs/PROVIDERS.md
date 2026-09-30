@@ -184,6 +184,15 @@ The SDK session explicitly allows the validated `open_preview`, `open_code` navi
 its per-tool approval configuration, matching Claude's in-process allowlist. Other
 MCP tools and shell approval policy keep their existing configuration.
 
+Trezi's Codex sessions (chat turns and the project-memory pass) run only the MCP
+servers Trezi passes. The CLI merges `--config` tables into the user's
+`$CODEX_HOME/config.toml` (default `~/.codex`), so `isolatedCodexConfig` in
+`src/main/backends/codex-mcp.ts` re-reads that file each turn and sends
+`mcp_servers.<name>.enabled=false` for every server it declares. It only names declared
+servers, because the CLI rejects the whole config ("invalid transport") for an unknown
+name. Project `.codex/config.toml` files in the target repo are not changed (LKM-113).
+`test/codex-mcp.mjs` proves this against the real CLI with a fixture `CODEX_HOME`.
+
 ## Framework setup context
 
 Next setup is separate from generic React/Vite setup. The agent receives the

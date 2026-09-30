@@ -1,5 +1,50 @@
+import { readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
+import type { CodexOptions } from '@openai/codex-sdk'
 import type { TreziAgentToolRegistration } from '../trezi-agent-tools'
+
+type CodexConfig = NonNullable<CodexOptions['config']>
+const isTable = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value)
+
+/**
+ * MCP server names declared in the user's own Codex config (`$CODEX_HOME/config.toml`,
+ * default `~/.codex`). Read per turn so a server added or removed mid-chat is handled.
+ */
+export function personalMcpServers(env: NodeJS.ProcessEnv = process.env): string[] {
+  const home = env.CODEX_HOME || join(homedir(), '.codex')
+  try {
+    const { TOML } = (globalThis as unknown as { Bun: { TOML: { parse(text: string): unknown } } })
+      .Bun
+    const parsed = TOML.parse(readFileSync(join(home, 'config.toml'), 'utf8'))
+    const servers = isTable(parsed) ? parsed.mcp_servers : null
+    return isTable(servers) ? Object.keys(servers).filter((name) => isTable(servers[name])) : []
+  } catch {
+    // No config, or one the CLI will refuse to load too: nothing of it can run.
+    return []
+  }
+}
+
+/**
+ * `config` with every personal MCP server switched off, so a Trezi session runs only
+ * the servers Trezi passes. The CLI merges `--config` tables into the user's config
+ * (replacing `mcp_servers` whole is not possible), and `enabled=false` on a name the
+ * user never declared fails config load ("invalid transport"), so only declared names
+ * are disabled.
+ */
+export function isolatedCodexConfig(
+  config: CodexConfig = {},
+  env: NodeJS.ProcessEnv = process.env
+): CodexConfig {
+  const ours = isTable(config.mcp_servers) ? (config.mcp_servers as CodexConfig) : {}
+  const mcp_servers: CodexConfig = {}
+  for (const name of personalMcpServers(env)) {
+    if (!(name in ours)) mcp_servers[name] = { enabled: false }
+  }
+  Object.assign(mcp_servers, ours)
+  return Object.keys(mcp_servers).length ? { ...config, mcp_servers } : config
+}
 
 const requiredTools = [
   'chat_island',
