@@ -5,6 +5,7 @@ import { interruptWithOwner } from './backends/interrupt'
 import type { ModelProvider, ProviderSession, SpawnContext } from './backends/types'
 import { providerOwner } from './provider-owner'
 import { INTERRUPT_GRACE_MS } from './provider-policy'
+import { noteCodexFallback, supportedSeatOptions } from './codex-seat'
 
 const ignore = (): void => {}
 
@@ -27,11 +28,30 @@ const ignore = (): void => {}
 export async function startProviderSession(
   provider: ModelProvider,
   root: string,
-  options: AgentOptions,
+  requested: AgentOptions,
   getWindow: () => NativeView | null,
-  ctx: SpawnContext
+  seatCtx: SpawnContext
 ): Promise<ProviderSession> {
-  if (provider.host === 'helper') return provider.startSession(root, options, getWindow, ctx)
+  // The Codex seat skips a model this login rejected, and main learns each new
+  // rejection from the session's fallback notice (LKM-126). The session keeps
+  // reporting the options the chat asked for, so its picker stays as chosen.
+  const codexSeat = provider.id === 'codex' && !requested.connectionId
+  const options = codexSeat ? supportedSeatOptions(requested) : requested
+  const ctx: SpawnContext = codexSeat
+    ? {
+        ...seatCtx,
+        onEvent: (event) => {
+          noteCodexFallback(requested, event)
+          seatCtx.onEvent?.(event)
+        }
+      }
+    : seatCtx
+  const asked = (s: ProviderSession): ProviderSession => {
+    if (s.options === options && options !== requested) s.options = requested
+    return s
+  }
+  if (provider.host === 'helper')
+    return asked(await provider.startSession(root, options, getWindow, ctx))
   const owner = providerOwner()
   const grant = randomUUID()
   await owner.open({
@@ -64,7 +84,7 @@ export async function startProviderSession(
     void owner.close(grant).catch(ignore)
     throw error
   }
-  const s = session
+  const s = asked(session)
   const send = s.send
   s.send = (text, images) => {
     void owner.turn(grant).catch(ignore)

@@ -193,6 +193,15 @@ servers, because the CLI rejects the whole config ("invalid transport") for an u
 name. Project `.codex/config.toml` files in the target repo are not changed (LKM-113).
 `test/codex-mcp.mjs` proves this against the real CLI with a fixture `CODEX_HOME`.
 
+`mcp_servers` is not the only source (LKM-126). An installed Codex plugin
+(`[plugins."vercel@openai-curated"]`) starts the servers in its own `.mcp.json`, which is
+where `https://mcp.vercel.com` and its rmcp `AuthRequired` came from, and the `apps`
+feature starts the ChatGPT account's connectors. Neither is declared in `mcp_servers`,
+so `isolatedCodexConfig` also sends `features.plugins=false` and `features.apps=false`
+on every run. Both paths use it, because the helper runs the same adapter.
+`test/codex-mcp.mjs` adds an installed-plugin fixture: the real CLI lists its server
+without isolation and not at all with it.
+
 ## Framework setup context
 
 Next setup is separate from generic React/Vite setup. The agent receives the
@@ -339,6 +348,37 @@ text) or stayed on "Thinking…" forever, although `claude` worked in Terminal. 
   which one chats use, whether a token is set, and `USER`/`HOME`/`PATH`/cwd.
 
 Tested deterministically by `test/provider-login.mjs` (fake helper and stand-in CLIs).
+
+## Codex seat models (LKM-126)
+
+**Symptom.** After a CLI update, every Codex seat turn that left the model to the CLI,
+or picked the top model, failed with "The 'gpt-6.1-sol' model is not supported when
+using Codex with a ChatGPT account." `gpt-6.1-sol` is priority 1 in `codex debug
+models`, while `gpt-6-sol` and `gpt-6-astra` worked.
+
+**Why no filter.** `codex debug models` lists every model the CLI knows about. It has
+no field that says which plans or logins may run a model, so the picker cannot know in
+advance.
+
+**Fallback** (`src/main/backends/codex-model.ts`, used by `backends/codex.ts`):
+
+- A seat turn whose run fails with that 400 before any output is retried on a fresh
+  copy of the thread with the next listed model. The chat gets one status line, e.g.
+  "Codex: gpt-6.1-sol isn't available with your ChatGPT login, so this chat uses
+  gpt-6-sol.", and that model is kept for the chat's later turns.
+- If every listed model is rejected, the turn ends with a visible error:
+  "…and no other Codex model was accepted. Choose another model in the model picker."
+- The rejection is remembered for the process. Main also learns it from the status
+  line, which crosses the helper boundary unchanged (`provider-sessions.ts` calls
+  `noteCodexFallback` in `src/main/codex-seat.ts`). After that, a new chat that asks for the rejected model or for
+  Default starts on the fallback (`supportedSeatOptions`), and the picker and the
+  persisted catalog leave the model out until the next `codex debug models` probe.
+- Connections never fall back: their models belong to the user's endpoint.
+
+`test/codex-model.mjs` drives the real adapter in-process and in the real helper host
+under the Swift owner fixture, against a stand-in `codex` CLI that rejects
+`gpt-6.1-sol`. The stand-in also asks the real CLI which MCP servers each run's
+`--config` leaves on.
 
 ## Claude seat login from a Claude Code session (LKM-124)
 

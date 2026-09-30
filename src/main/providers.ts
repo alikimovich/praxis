@@ -9,6 +9,7 @@ import type {
   ProviderLoginReport
 } from '../shared/api'
 import { homedir } from 'node:os'
+import { withoutRejected } from './codex-seat'
 import { type CatalogBackend, type CatalogModel, setModelCatalog } from './model-catalog'
 import { codexModels, connectionStore as store, modelCatalog, seatLogin, setProviderDataDir } from './provider-data'
 import { modelsUrl, parseModelCatalog, sameOrigin, scrubSecret } from './providers-store'
@@ -187,7 +188,8 @@ function refreshCodexModels(): Promise<void> {
   codexProbedAt = Date.now()
   codexProbe = codexModels()
     .then((models) => {
-      modelCatalog().set('codex', models) // a no-op for the empty (failed) list
+      // A no-op for the empty (failed) list. Models this login rejected stay out.
+      modelCatalog().set('codex', withoutRejected(models))
     })
     .catch(() => {
       /* codexModels already swallows; belt-and-braces */
@@ -299,9 +301,10 @@ function builtinChoices(
   } catch {
     /* data dir not resolvable yet — use the fallback */
   }
-  const models = discovered?.length
+  const listed = discovered?.length
     ? discovered
     : fallback.map(([id, label]) => ({ id, label }) as CatalogModel)
+  const models = provider === 'codex' ? withoutRejected(listed) : listed
   return [
     { id: DEFAULT_MODEL, label: 'Default' },
     ...models.filter((m) => m.id !== DEFAULT_MODEL)

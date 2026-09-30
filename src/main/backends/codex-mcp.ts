@@ -27,11 +27,19 @@ export function personalMcpServers(env: NodeJS.ProcessEnv = process.env): string
 }
 
 /**
+ * Codex features that bring MCP servers from outside `mcp_servers` (LKM-126): an
+ * installed plugin (`[plugins."vercel@openai-curated"]`) starts the servers in its own
+ * `.mcp.json`, e.g. `https://mcp.vercel.com`, and `apps` starts the ChatGPT account's
+ * connectors. Both are the user's, so a Trezi session turns them off.
+ */
+const personalFeatures = { plugins: false, apps: false }
+
+/**
  * `config` with every personal MCP server switched off, so a Trezi session runs only
  * the servers Trezi passes. The CLI merges `--config` tables into the user's config
  * (replacing `mcp_servers` whole is not possible), and `enabled=false` on a name the
  * user never declared fails config load ("invalid transport"), so only declared names
- * are disabled.
+ * are disabled. Plugin and app servers are not declared there; their features are off.
  */
 export function isolatedCodexConfig(
   config: CodexConfig = {},
@@ -43,7 +51,8 @@ export function isolatedCodexConfig(
     if (!(name in ours)) mcp_servers[name] = { enabled: false }
   }
   Object.assign(mcp_servers, ours)
-  return Object.keys(mcp_servers).length ? { ...config, mcp_servers } : config
+  const features = { ...(isTable(config.features) ? config.features : {}), ...personalFeatures }
+  return { ...config, features, ...(Object.keys(mcp_servers).length ? { mcp_servers } : {}) }
 }
 
 const requiredTools = [

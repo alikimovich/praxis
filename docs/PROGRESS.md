@@ -2,6 +2,20 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-30 — LKM-126: Codex seat model fallback and plugin MCP isolation
+
+- **Why.** After a CLI update, Codex seat turns (in-process and in the helper) failed with "The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account": the CLI's priority-1 model, which is also its default. Separately, the user's `mcp.vercel.com` server (rmcp `AuthRequired`) still started despite LKM-113 part 1.
+- **MCP root cause.** That server comes from an installed Codex plugin's `.mcp.json` (`[plugins."vercel@…"]`), not from `mcp_servers`, so LKM-113's name-based `enabled=false` never saw it. The `apps` feature likewise starts account connectors. `isolatedCodexConfig` now always adds `features.plugins=false` and `features.apps=false`, keeping any other caller features. Chat turns and the project-memory pass use it in-process and in the helper.
+- **Model.** `codex debug models` has no per-plan field, so the adapter falls back rather than filtering:
+  - A seat run that fails with that 400 before any output retries on a fresh thread with the next listed model (up to 3 times). It emits the status line "Codex: X isn't available with your ChatGPT login, so this chat uses Y." and keeps Y for the chat.
+  - If nothing is accepted, the turn ends with a plain `error` telling the user to choose another model. It has no code, so it is not a login card.
+  - The rejection is remembered in the process (`src/main/backends/codex-model.ts`). Main learns it from the status line that a helper forwards: `provider-sessions.ts` calls `noteCodexFallback` in `src/main/codex-seat.ts`. New chats that ask for the rejected model or Default start on the fallback (`supportedSeatOptions`), while the session still reports the model the chat asked for.
+  - The picker and the persisted catalog drop the model until the next probe.
+  - `TREZI_CODEX_BIN`, already the probe's binary, now also names the binary for turns.
+- **Proof.**
+  - `test/codex-mcp.mjs` adds an installed-plugin fixture: the real CLI lists `vercel-plugin` without isolation and not at all with it, and the app-server session does not start it.
+  - New `test/codex-model.mjs` (unit tier) covers the pure rules, then drives the real adapter in-process and in the real helper host under the Swift owner fixture, against a stand-in CLI that rejects `gpt-6.1-sol`. It checks the fallback notice, the answer and one `done`; turn 2 resuming on the fallback; new chats skipping the model; the picker; the all-rejected error as shown by `chat-state`; and, per run, the real CLI's MCP inventory under that run's `--config`.
+  - In the worker sandbox, the tool bridge's Unix socket is refused. With only that bridge mocked, the in-process half passed; the helper half ran up to that `listen`. Both tests need an unsandboxed run.
 ## 2026-09-30 — LKM-124: merged with the LKM-125 candidate (Check login `keychain` field)
 
 - **Overlap.** LKM-125 (candidate) added `ProviderLoginReport.keychain` as `{listKeychains, defaultKeychain}` exit codes, a "Keychain in this helper" detail line and `JoinExistingSession` for the service. LKM-124 had used `keychain` for the item lookup. Kept the candidate's name and shape; the item lookup is now `keychainItem`/`keychainItemExit` (`ProviderLaunch.loginReport` allows both).

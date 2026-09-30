@@ -19,12 +19,22 @@ import {
   usageDelta
 } from '../../shared/run-stats'
 import { type RolloutUsageWatch, watchRolloutUsage } from '../codex-usage'
+import { parseCodexModels } from '../model-catalog'
 import { type TreziAgentToolRegistration, registerTreziAgentTools } from '../trezi-agent-tools'
 import { resolveConnection } from '../providers'
 import { authorizedTool, runTreziTool } from '../session-tools'
 import { scrubSecret } from '../providers-store'
 import { treziRules } from '../rules'
 import { isolatedCodexConfig, treziMcpConfig, verifyTreziMcp } from './codex-mcp'
+import {
+  codexFallbackNotice,
+  codexModelUnavailable,
+  nextCodexModel,
+  rejectedCodexModels,
+  rememberCodexFallback,
+  supportedCodexModel,
+  unsupportedCodexModel
+} from './codex-model'
 import { createRetryCause } from './codex-retry'
 import { createItemTracker, codexItemWarning } from './codex-stream'
 import { parseProjectMemoryEvaluation, projectMemoryEvaluationPrompt } from './memory'
@@ -84,6 +94,41 @@ async function codexCliPresent(): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/** `TREZI_CODEX_BIN` also names the binary for turns, as for the service's model probe. */
+const codexPathOverride = (): CodexOptions =>
+  process.env.TREZI_CODEX_BIN ? { codexPathOverride: process.env.TREZI_CODEX_BIN } : {}
+
+let listedPromise: Promise<string[]> | null = null
+/**
+ * The seat's models in the CLI's own order (`codex debug models`, the probe the service
+ * runs for the picker), read only once a model was rejected. [] on any failure.
+ */
+function listedCodexModels(): Promise<string[]> {
+  listedPromise ??= (async () => {
+    const { Codex } = await loadCodex()
+    const bin =
+      process.env.TREZI_CODEX_BIN ||
+      (new Codex() as unknown as { exec: { executablePath: string } }).exec.executablePath
+    const { stdout } = await execFileP(bin, ['debug', 'models'], {
+      timeout: 8000,
+      maxBuffer: 16 * 1024 * 1024
+    })
+    return parseCodexModels(JSON.parse(stdout)).map((model) => model.id)
+  })().catch(() => [])
+  const listed = listedPromise
+  void listed.then((ids) => {
+    if (!ids.length && listedPromise === listed) listedPromise = null
+  })
+  return listed
+}
+
+/** The model a seat run asks for: the requested one unless this login rejected it. */
+async function seatModel(model: string | undefined): Promise<string | undefined> {
+  return rejectedCodexModels().size
+    ? supportedCodexModel(model || undefined, await listedCodexModels())
+    : model || undefined
 }
 
 /**
@@ -211,6 +256,8 @@ async function startSession(
   // Build the thread up front (the SDK spawns the `codex` CLI; auth = `codex login`,
   // or the connection's own key when `options.connectionId` is set).
   let thread: Thread | null = null
+  // Mutable: a model this login rejects is swapped for the fallback for later turns.
+  let threadOptions: ThreadOptions = {}
   let openThread: ((id: string | null) => Thread) | null = null
   let treziTools: TreziAgentToolRegistration | null = null
   let initErr: Error | null = null
@@ -248,12 +295,14 @@ async function startSession(
       authorizedTool(ctx?.grant, action, args, () => runTreziTool(action, args, scope)))
     const mcpConfig = treziMcpConfig(app.getAppPath(), treziTools)
     await verifyTreziMcp(mcpConfig)
-    const threadOptions: ThreadOptions = {
+    // The seat skips a model this login already rejected (`codex-model.ts`).
+    const model = conn ? options.model : await seatModel(options.model)
+    threadOptions = {
       workingDirectory: root,
       skipGitRepoCheck: true,
       sandboxMode: 'workspace-write',
       approvalPolicy: 'never',
-      ...(options.model ? { model: options.model } : {}),
+      ...(model ? { model } : {}),
       ...(isEffort(options.effort) ? { modelReasoningEffort: options.effort } : {})
     }
     // No connection ⇒ a bare `Codex()`, i.e. byte-identical to the pre-v10 seat.
@@ -262,6 +311,7 @@ async function startSession(
     // switched off per turn (`isolatedCodexConfig`); only Trezi's server runs.
     openThread = (id) => {
       const codex = new Codex({
+        ...codexPathOverride(),
         ...codexOptions,
         config: isolatedCodexConfig({ ...codexOptions.config, ...mcpConfig })
       })
@@ -377,11 +427,45 @@ async function startSession(
       emit({ type: 'done' })
       return
     }
+    const resumeId = thread.id
     if (thread.id && openThread) thread = openThread(thread.id)
     turnAbort = new AbortController()
     // On turn 2+ the thread id is already known, so the tail starts with the turn;
     // on turn 1 it starts at `thread.started`, a moment later.
     if (thread.id) startUsageWatch(thread.id)
+    // A model this ChatGPT login cannot use fails the turn before any output. Try the
+    // next listed model on a fresh copy of the thread, say so, and keep it for later
+    // turns; main reads the notice (`provider-sessions.ts`). Connections never do this.
+    const wasDefault = !threadOptions.model
+    let rejected = await attempt(thread, text)
+    for (let tries = 0; rejected && openThread && tries < 3; tries++) {
+      const fallback = nextCodexModel(
+        await listedCodexModels(),
+        new Set([...rejectedCodexModels(), rejected]),
+        rejected
+      )
+      rememberCodexFallback(rejected, fallback, wasDefault)
+      if (!fallback || disposed || aborted || turnAbort.signal.aborted) break
+      emit({ type: 'status', text: codexFallbackNotice(rejected, fallback) })
+      threadOptions = { ...threadOptions, model: fallback }
+      stopUsageWatch()
+      thread = openThread(resumeId)
+      if (thread.id) startUsageWatch(thread.id)
+      rejected = await attempt(thread, text)
+    }
+    if (rejected && !aborted && !turnAbort.signal.aborted)
+      emitError(codexModelUnavailable(rejected))
+    // One last read before the tail stops: an INTERRUPTED turn never reaches
+    // `turn.completed`, so the rollout is the only record of what it spent.
+    await usageWatch?.poll().catch(() => {})
+    stopUsageWatch()
+    cap.finalize()
+    emit({ type: 'done' })
+  }
+
+  /** One run of the turn's prompt: the model this login rejected, or null. */
+  const attempt = async (thread: Thread, text: string): Promise<string | null> => {
+    const signal = turnAbort?.signal
     // Per turn, not per session: a retry cause from an earlier turn must not be
     // grafted onto a later, unrelated failure.
     const retryCause = createRetryCause()
@@ -389,19 +473,29 @@ async function startSession(
     // this reset the tracker treats it as a continuation of turn 1's and emits
     // only the longer tail — which is why replies arrived starting mid-word.
     items.reset()
+    let rejected: string | null = null
+    let produced = false
+    // The seat's "not supported with a ChatGPT account" 400, before any output.
+    const rejection = (message: string): boolean => {
+      const model = options.connectionId || produced ? null : unsupportedCodexModel(message)
+      if (model) rejected = model
+      return !!model || !!rejected
+    }
     try {
-      const { events } = await thread.runStreamed(text, { signal: turnAbort.signal })
+      const { events } = await thread.runStreamed(text, { signal })
       for await (const ev of events) {
-        if (disposed || aborted || turnAbort.signal.aborted) break
+        if (disposed || aborted || signal?.aborted) break
         switch (ev.type) {
           case 'thread.started':
             startUsageWatch(ev.thread_id)
             break
           case 'item.started':
           case 'item.updated':
+            produced = true
             handleItem(ev.item, false)
             break
           case 'item.completed':
+            produced = true
             handleItem(ev.item, true)
             break
           case 'turn.completed':
@@ -410,9 +504,10 @@ async function startSession(
             noteUsage(readUsage((ev as { usage?: unknown }).usage))
             break
           case 'turn.failed':
-            emitError(retryCause.explain(ev.error.message))
+            if (!rejection(ev.error.message)) emitError(retryCause.explain(ev.error.message))
             break
           case 'error':
+            if (rejection(ev.message)) break
             // The CLI retries a failed request up to five times and emits EACH
             // attempt as its own `error` event ("Reconnecting... 3/5 (…)"). Left
             // alone that paints five red lines into the chat before the real
@@ -431,8 +526,9 @@ async function startSession(
         }
       }
     } catch (err) {
-      if (!aborted && !turnAbort.signal.aborted) {
-        const m = retryCause.explain(err instanceof Error ? err.message : String(err))
+      const raw = err instanceof Error ? err.message : String(err)
+      if (!aborted && !signal?.aborted && !rejection(raw)) {
+        const m = retryCause.explain(raw)
         // A missing/unauthenticated `codex` CLI surfaces here (e.g. spawn ENOENT).
         emitError(
           /codex/i.test(m)
@@ -441,12 +537,7 @@ async function startSession(
         )
       }
     }
-    // One last read before the tail stops: an INTERRUPTED turn never reaches
-    // `turn.completed`, so the rollout is the only record of what it spent.
-    await usageWatch?.poll().catch(() => {})
-    stopUsageWatch()
-    cap.finalize()
-    emit({ type: 'done' })
+    return rejected
   }
 
   return {
@@ -509,7 +600,9 @@ async function updateProjectMemory(
     if (!conn && !(await codexCliPresent())) return null
     const { Codex } = await loadCodex()
     const codexOptions = conn ? connectionCodexOptions(conn) : {}
+    const model = conn ? options.model : await seatModel(options.model)
     const thread = new Codex({
+      ...codexPathOverride(),
       ...codexOptions,
       config: isolatedCodexConfig(codexOptions.config)
     }).startThread({
@@ -519,7 +612,7 @@ async function updateProjectMemory(
       approvalPolicy: 'never',
       networkAccessEnabled: false,
       webSearchMode: 'disabled',
-      ...(options.model ? { model: options.model } : {}),
+      ...(model ? { model } : {}),
       ...(isEffort(options.effort) ? { modelReasoningEffort: options.effort } : {})
     })
     const result = await thread.run(prompt, { signal: abort.signal })
