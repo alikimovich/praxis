@@ -11,6 +11,18 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Tests: `test/codex-mcp.mjs` (installed-plugin fixture against the real CLI) and `test/codex-model.mjs` (stand-in CLI, in-process and helper, fallback, memory, picker, clear message, real-CLI MCP inventory per run).
 - [ ] Operator: after merge, rerun `TREZI_LIVE_PROVIDERS=1 bun run test:provider-live` (LKM-113 part 2).
 - [ ] Manager: run `test/codex-mcp.mjs` and `test/codex-model.mjs` unsandboxed. The worker sandbox refuses the Trezi tool bridge's Unix socket.
+## Claude seat: read the subscription login from the user session (LKM-124)
+
+Root cause of the reported "not logged in" is open (Keychain/service context, see LKM-125); the allowlist below is hardening for one cause found on the way.
+
+- [x] Helper allowlist: explicit Claude/Codex user settings plus proxy/CA, instead of the `CLAUDE_`/`CODEX_` prefixes; a parent Claude Code or Codex session's variables (incl. `CLAUDE_CODE_SIMPLE`) are dropped.
+- [x] Check login lists passed and dropped variable names (never values) and flags `CLAUDE_CODE_SIMPLE`.
+- [x] `test/provider-login.mjs` parent-session: env filtering (Claude and Codex), a bare-mode-aware stand-in CLI, the report and the setup-token path.
+- [x] Root cause and allowlist in `docs/PROVIDERS.md` and `docs/SWIFT-BACKEND-PROVIDERS.md`.
+- [x] Check login runs the Keychain probe (`security find-generic-password`, list-keychains, default-keychain) and a credentials-file stat inside the helper; typed report fields; deterministic test with a fake `security`.
+- [ ] Operator: run Check login on the operator Mac and record the helper's Keychain/credentials lines in the `docs/PROVIDERS.md` three-context table (live, no model call); pick the LKM-125 fix from the result.
+- [ ] Operator: start Trezi from a Claude Code shell with a normal `claude login` and confirm Check login says logged in (live, no model call).
+- [ ] `src/main/diagnose.ts` (preview "Find a fix…") still inherits Bun's environment.
 ## Service keeps the user's Keychain (LKM-125)
 
 - [x] The XPC service plist sets `JoinExistingSession` (`scripts/service-info.mjs`): the service, Bun, the `TreziHost --crypto` helper and provider helpers stay in the host's security session under `bun run dev` and `open -a`.

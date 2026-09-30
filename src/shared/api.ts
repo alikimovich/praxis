@@ -293,6 +293,22 @@ export interface ProviderLoginReport {
   /** Exit codes of `security list-keychains` / `security default-keychain` run in the
    *  helper (null: could not run). Non-zero: the helper has no user keychain (LKM-125). */
   keychain?: { listKeychains: number | null; defaultKeychain: number | null }
+  /** Claude, from inside the helper (LKM-124): `security find-generic-password -s "Claude Code-credentials"` (no `-w`, output discarded) found the item; null: `security` did not run. */
+  keychainItem?: boolean | null
+  keychainItemExit?: number | null
+  /** `security list-keychains -d user` and `security default-keychain`, on one line each. */
+  keychainList?: string
+  keychainDefault?: string
+  /** `<config dir>/.credentials.json` through the helper's HOME: absolute path and metadata, never content. */
+  credentialsPath?: string
+  credentialsExists?: boolean
+  credentialsReadable?: boolean
+  credentialsSize?: number | null
+  /** The provider's variables in Trezi's environment, by name (never values): passed to the helper, or dropped as a parent session's (LKM-124). */
+  inherited?: string[]
+  dropped?: string[]
+  /** CLAUDE_CODE_SIMPLE (bare mode, which never reads the login) was set and dropped. */
+  bare?: boolean
   /** One line per probe, human-readable. */
   detail: string
 }

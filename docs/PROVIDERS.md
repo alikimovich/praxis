@@ -380,6 +380,128 @@ under the Swift owner fixture, against a stand-in `codex` CLI that rejects
 `gpt-6.1-sol`. The stand-in also asks the real CLI which MCP servers each run's
 `--config` leaves on.
 
+## Claude seat login from a Claude Code session (LKM-124)
+
+**Symptom.** After LKM-119, on the user's Mac, Check login showed the right `USER`,
+`HOME`, `PATH` and cwd, yet the bundled and the installed `claude` both said "not logged
+in" inside the helper, while `claude auth status` in Terminal said logged in. The
+Keychain item and `~/.claude/.credentials.json` (0600) both existed.
+
+**Cause found and hardened against (not the reported failure's root cause).** The helper
+allowlist passed every `CLAUDE_*` variable through, so a Trezi started from a shell
+inside a Claude Code session handed the helper that session's variables.
+`CLAUDE_CODE_SIMPLE=1` makes the CLI run in bare mode, which never reads OAuth or the
+Keychain: `CLAUDE_CODE_SIMPLE=1 claude auth status` reports `loggedIn: false` in
+Terminal too (the operator reproduced this). The same pass-through carried the parent
+session's `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_MESSAGING_SOCKET`/`_TOKEN`,
+`CLAUDE_CODE_SESSION_ID`, `CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_CODE_EXECPATH`,
+`CLAUDE_PID`, `CLAUDE_EFFORT` and others. For Codex, `CODEX_*` let a parent Codex
+session's `CODEX_SANDBOX` and `CODEX_SANDBOX_NETWORK_DISABLED` through in the same way.
+
+This is a real defect and is fixed below, but it does **not** explain the operator's
+report: their Terminal has no `CLAUDE_*`/`ANTHROPIC_*` variables, so
+`CLAUDE_CODE_SIMPLE` is not their failure. The reported failure is a service-context
+one: processes started by the Trezi service (provider helpers, the Keychain helper)
+could not use the user's login Keychain. LKM-125 ([below](#the-service-keeps-the-users-security-session-lkm-125))
+fixes that in the service's plist; the live confirmation is still pending, see
+[Keychain and credentials-file diagnostics](#keychain-and-credentials-file-diagnostics-lkm-124).
+(From a Terminal shell, `security find-generic-password -s "Claude
+Code-credentials"` found the item, exit 0; the service and TreziHost contexts are
+compared in the table there, with the live cells still pending.)
+
+**Fix.** `ProviderHelperProcess.providerVariables` (`src/service/ProviderHelper.swift`)
+is an explicit list per provider, not a prefix:
+
+- Claude: `ANTHROPIC_*`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_OAUTH_TOKEN` (a setup-token
+  exported in the shell), `CLAUDE_CODE_USE_BEDROCK`/`_VERTEX`/`_FOUNDRY` and their
+  `_SKIP_*_AUTH`, `AWS_REGION`, `AWS_PROFILE`, `CLOUD_ML_REGION`, `VERTEX_REGION_*`,
+  `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, `CLAUDE_CODE_API_KEY_HELPER_TTL_MS`, the mTLS client
+  certificate variables and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`.
+- Codex: `OPENAI_*`, `CODEX_HOME`, `CODEX_API_KEY`, `CODEX_CA_CERTIFICATE`.
+- Every helper: proxy (`HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, `ALL_PROXY`, lower case
+  too) and CA (`NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `SSL_CERT_DIR`) variables.
+
+Any other `CLAUDE*`/`CODEX*` name is dropped, including `CLAUDE_CODE_SIMPLE`. Gemini is
+unchanged (`GEMINI_*`, `GOOGLE_*`). The Settings token still overrides
+`CLAUDE_CODE_OAUTH_TOKEN` for Claude helpers only.
+
+**Check login** now ends with the provider variable names from Trezi's environment:
+"Passed to the helper" and "Dropped (a parent session's or not a user setting)". It
+shows names only, never values; the owner adds them (`variableReport`), because the
+helper cannot see what it did not get. When `CLAUDE_CODE_SIMPLE` was set, the report
+says so (`bare: true`).
+
+**Tests** (`test/provider-login.mjs`, parent-session). A fixture environment carries a
+parent Claude Code and Codex session's variables plus user settings. The Claude helper
+gets the settings but none of the session variables. A stand-in `claude` that is
+logged out in bare mode lets the chat log in. The Codex environment
+(`{"cmd":"environment"}` on the fixture) drops `CODEX_SANDBOX*`. Check login lists the
+names, flags bare mode and never contains a value. A stand-in logged in only through
+`CLAUDE_CODE_OAUTH_TOKEN` refuses a chat until the setup-token is saved in Settings,
+then works. The stand-in CLIs are now named by helper arguments
+(`--claude-bundled=`, `--claude-installed=`), because the old `CLAUDE_TEST_*` variables
+are dropped. No live calls.
+
+### Keychain and credentials-file diagnostics (LKM-124)
+
+The environment pass-through above is not the root cause of the operator's case: their
+Terminal has no `CLAUDE_*`/`ANTHROPIC_*` variables, and both CLIs still report
+`loggedIn: false` inside the helper while Terminal says `true`. The allowlist hardening
+stays; the root cause is still open, and the question is whether a process started by the Trezi service can use the user's login
+Keychain. Check login now answers it from inside the helper, with the helper's own
+`HOME`, `PATH` and security session (`probeKeychain`, `probeCredentials` in
+`src/main/backends/claude-login.ts`). The report shows, and `ProviderLoginReport` types:
+
+- `Keychain: readable from this context` or `not readable from this context (security
+  exit N)` (`keychainItem`, `keychainItemExit`): the exit status of
+  `security find-generic-password -s "Claude Code-credentials"`, run **without** `-w`/`-g`
+  and with stdout and stderr discarded. `readable` means the item was found; its secret is
+  not read. "unknown" means `security` did not run.
+- `security list-keychains -d user` and `security default-keychain`, one line each
+  (`keychainList`, `keychainDefault`). A helper outside the GUI security session shows
+  an empty or different list here.
+- `Credentials file: <absolute path> exists|does not exist, readable|not readable,
+  <size> bytes, mode <octal>` (`credentialsPath`, `credentialsExists`,
+  `credentialsReadable`, `credentialsSize`): `<CLAUDE_CONFIG_DIR or $HOME/.claude>/.credentials.json`
+  through the helper's environment, stat and access checks only, never its content.
+
+The service refuses a report whose fields it does not know, are out of range, or
+contain the seat token. Nothing secret is read, so nothing secret can reach the report,
+the service log or the pipe. The text lives in `detail`, which Settings → AI providers →
+Claude… shows in a copyable field.
+
+**Reproduction, by context** (`security find-generic-password -s "Claude Code-credentials"`
+and the credentials file). Who verified each cell is stated; nothing below was run by
+this change on the operator Mac.
+
+| Context | Keychain item | Credentials file | `claude auth status` | Verified by |
+| --- | --- | --- | --- | --- |
+| Terminal (iTerm, user session) | found, in `login.keychain-db`, account `panda` | exists, 0600, 463 bytes | `loggedIn: true` | operator, live (LKM-124 evidence) |
+| Service / provider helper (child of the XPC service) | **pending**: read "Keychain:", the keychain lists and "Credentials file:" from Check login | **pending**: same report | `loggedIn: false` for the bundled and the installed CLI | `claude auth status`: operator, live. Keychain and file lines: not yet run |
+| TreziHost (`TreziHost --crypto`, run by the service) | Save token in Settings fails with "macOS Keychain encryption unavailable; unlock the keychain and retry." | not applicable | not applicable | operator, live. The `OSStatus` was not captured |
+| Agent shell used for this change (a sandboxed background session, not one of the three contexts) | `find-generic-password` (metadata only) exit 0 | not looked at | not run | this change, live |
+
+To complete the two pending cells on the operator Mac (no model call): open Trezi, then
+Settings → AI providers → Claude… → **Check login**, and copy the report into the
+issue. Compare it with, in Terminal:
+`security find-generic-password -s "Claude Code-credentials" >/dev/null; echo $?`,
+`security list-keychains -d user`, `security default-keychain` and
+`stat -f '%N %z bytes mode %Lp' ~/.claude/.credentials.json`. Interpretation: exit 0 in
+Terminal and non-zero (or an empty/different keychain list) in the helper means the
+service's process tree lost the user's security session, which LKM-125 fixes with
+`JoinExistingSession` (below): after that fix the helper's line should read exit 0 too,
+and a non-zero one means the fix did not take effect. A readable file with
+`loggedIn: false` would point at the CLI instead. Whether the fix works on the operator
+Mac is not verified by this change.
+
+**Tests.** `test/provider-login.mjs` (keychain): a fake `security` (exit 0 and exit 44)
+on the helper PATH prints the secret on stdout and stderr; fixture HOMEs with a 0600
+`.credentials.json`, without one, and with an unreadable one. It asserts the readable and
+not-readable lines, the exit code, both keychain lines, the file's path, existence,
+readability, size and mode, that only `find-generic-password -s`, `list-keychains -d user`
+and `default-keychain` are called (no `-w`/`-g`), and that neither the keychain secret nor
+the file's content appears in the report, the service log or the pipe.
+
 ## The service keeps the user's security session (LKM-125)
 
 **Symptom.** Save token (Settings → AI Providers → Claude…) and adding or updating a
@@ -403,9 +525,11 @@ seen by chats, with no token.
 
 **Check login** (the chat card and Settings → AI Providers → Claude…) now also reports,
 from inside the helper, the exit codes of `security list-keychains` and
-`security default-keychain` (`keychain` in the report, and a line in its detail; their
-output is never read). A non-zero code means the helper has no user keychain. The
-service accepts only those two integer fields.
+`security default-keychain` (`keychain` in the report, and a "Keychain in this helper"
+line in its detail). A non-zero code means the helper has no user keychain. The service
+accepts only those two integer fields there. The LKM-124 diagnostics above run the same
+two commands (the list with `-d user`) and also show their one-line output
+(`keychainList`, `keychainDefault`); security's error output is never shown.
 
 **Proof.** `test/service-session.mjs` (unit) parses the plist the build writes and checks
 the session probe (`src/native/SecuritySession.swift`, the host's `securitySession`
