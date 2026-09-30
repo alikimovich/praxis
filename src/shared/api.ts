@@ -290,6 +290,9 @@ export interface ProviderLoginReport {
   authMethod?: string
   /** A subscription token from Settings is in the helper's environment. */
   token?: boolean
+  /** Exit codes of `security list-keychains` / `security default-keychain` run in the
+   *  helper (null: could not run). Non-zero: the helper has no user keychain (LKM-125). */
+  keychain?: { listKeychains: number | null; defaultKeychain: number | null }
   /** One line per probe, human-readable. */
   detail: string
 }

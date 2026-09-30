@@ -294,6 +294,41 @@ try {
       [true, 'installed', loggedIn, 'claude.ai']
     )
     assert.match(installed.detail, new RegExp(`Chats use: ${loggedIn}`))
+    // LKM-125: keychain availability from the helper, exit codes only (output never read).
+    const keychainPath = join(scratch, 'secret-keychain-path.keychain-db')
+    const reachable = await check({
+      CLAUDE_TEST_BUNDLED: loggedIn,
+      CLAUDE_TEST_SECURITY: cli('security-ok', `echo '    "${keychainPath}"'`)
+    })
+    assert.deepEqual(reachable.keychain, { listKeychains: 0, defaultKeychain: 0 })
+    assert.match(
+      reachable.detail,
+      /Keychain in this helper: security list-keychains exit 0; security default-keychain exit 0\n/
+    )
+    const lost = await check({
+      CLAUDE_TEST_BUNDLED: loggedOut,
+      CLAUDE_TEST_SECURITY: cli(
+        'security-lost',
+        `echo '${keychainPath}'; [ "$1" = default-keychain ] && { echo 'SecKeychainCopyDefault: A default keychain could not be found.' >&2; exit 50; }; exit 0`
+      )
+    })
+    assert.deepEqual(lost.keychain, { listKeychains: 0, defaultKeychain: 50 })
+    assert.match(lost.detail, /security default-keychain exit 50 \(no user keychain/)
+    for (const report of [reachable, lost])
+      assert.ok(
+        !JSON.stringify(report).includes('secret-keychain-path') &&
+          !report.detail.includes('SecKeychainCopyDefault'),
+        'the report carries exit codes, never the output'
+      )
+    const absent = await check({
+      CLAUDE_TEST_BUNDLED: loggedOut,
+      CLAUDE_TEST_SECURITY: join(BIN, 'no-such-security')
+    })
+    assert.deepEqual(absent.keychain, { listKeychains: null, defaultKeychain: null })
+    assert.match(absent.detail, /list-keychains did not run/)
+    // The real `security` in this environment: a number or null, whatever the session.
+    for (const code of Object.values(missing.keychain))
+      assert.ok(code === null || Number.isInteger(code))
     const none = await check({}, 'fake')
     assert.deepEqual([none.provider, none.loggedIn], ['fake', null])
     assert.match(none.detail, /no login check/)

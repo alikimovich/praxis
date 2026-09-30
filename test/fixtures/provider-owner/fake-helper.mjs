@@ -24,7 +24,8 @@
 // running after its stdin closes (a helper the journal sweep must stop).
 // The same fake is also hosted as `claude` (for the Claude-only subscription token); its
 // "Check provider login" is the real Claude check, run against stand-in CLIs named by
-// CLAUDE_TEST_BUNDLED and CLAUDE_TEST_INSTALLED (`:`-separated).
+// CLAUDE_TEST_BUNDLED and CLAUDE_TEST_INSTALLED (`:`-separated), and a stand-in
+// `security` named by CLAUDE_TEST_SECURITY (the real one otherwise).
 import { createHash } from 'node:crypto'
 import { fstatSync } from 'node:fs'
 import { checkClaudeLogin, isAuthFailure } from '../../../src/main/backends/claude-login.ts'
@@ -122,7 +123,8 @@ const claude = {
   id: 'claude',
   checkLogin: () => checkClaudeLogin({
     bundled: process.env.CLAUDE_TEST_BUNDLED || null,
-    installed: (process.env.CLAUDE_TEST_INSTALLED ?? '').split(':').filter(Boolean)
+    installed: (process.env.CLAUDE_TEST_INSTALLED ?? '').split(':').filter(Boolean),
+    ...(process.env.CLAUDE_TEST_SECURITY ? { security: process.env.CLAUDE_TEST_SECURITY } : {})
   })
 }
 
