@@ -2,6 +2,16 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-116: one install command for users and development
+
+- **Why.** `install.sh` stopped when Bun or the command-line tools were missing, always cloned main (the pre-native app, far behind candidate), always used `~/.trezi`, and left `claude setup-token` and the first launch as manual steps.
+- **Installer.** Everything runs from `main`, so a piped script is read completely before it starts. Missing command-line tools: `xcode-select --install`, a message, then it polls `xcode-select -p` until they are there. Missing Bun: an existing `~/.bun/bin/bun` or `curl -fsSL https://bun.sh/install | bash`, then `$BUN_INSTALL/bin` goes on PATH. `scripts/requirements.mjs --build` still checks the versions.
+- **Channels.** `--channel main|candidate` (or `TREZI_CHANNEL`) clones that branch; on an existing install it switches only when a channel is given, so a tester's re-run without the flag stays on candidate. The installer also discards `bun.lock` drift before pulling, like `trezi --update`.
+- **Dev mode.** When the script sits in a checkout (`.git`, `bin/trezi`, `package.json` beside it), it uses that checkout: no clone, fetch, branch switch or pull unless `--update`. `bun run setup` runs it. The `trezi`/`praxis` links and the Applications link go to the last-installed checkout, and the summary names it (and the previous one).
+- **Finish.** If `claude auth --help` lists `status` and `claude auth status` fails, it offers `claude setup-token` on `/dev/tty`; without a terminal it prints the command instead. Then `open -a` the built app unless `--no-open`.
+- **Proof.** `test/install-update.mjs` pipes the real script into `bash -s --` like the one-liner and runs `./install.sh` in a clone. Fake `curl` serves a fake Bun installer, fake `xcode-select` simulates a missing-then-installed toolchain, and fake `git` logs every call and redirects the clone. Fake `claude` is signed out. It checks the default main clone, `TREZI_CHANNEL`, a kept channel, `--channel=main`, a fresh `--channel candidate`, an unknown channel refused, the dev checkout untouched without `--update` and pulled with it, the idempotent re-run, `--no-open`, and `setup-token` never running unattended.
+- **Open.** The documented one-liner downloads `install.sh` from main, so the tester variant works from that URL once this reaches main.
+
 ## 2026-09-29 — LKM-115: no tick marks under inspector and chat-island sliders
 
 - **Why.** A SwiftUI `Slider` with `step:` makes AppKit draw one tick mark per step. The inspector (`step ?? 1`, e.g. 0…200 px padding) and chat islands (`step ?? range/1000`) drew hundreds of them, a dense dotted line under the track.
