@@ -1,3 +1,4 @@
+import type { SessionToolHost } from './backends/types'
 import { agentWorkspaceEvidence, agentWorkspaceState, resolveParkedChat } from './chat-isolation'
 import { runChatIslandTool } from './chat-islands'
 import { openAgentCode } from './code-tools'
@@ -5,11 +6,13 @@ import { observeAgentPreview } from './preview-observation-tools'
 import { openAgentPreview } from './preview-tools'
 import { runProjectUiTool } from './project-ui'
 import { ProviderError, providerOwner } from './provider-owner'
+import { findPack } from './skill-packs'
 import type { TreziAgentToolAction } from './trezi-agent-tools'
+import { workflowOwner } from './workflow-owner'
 
 /**
  * Trezi's session-scoped agent tools that act on app state (the preview, islands,
- * the editor, workspace landing), run in Bun for one chat. The
+ * the editor, workspace landing, skill installs), run in Bun for one chat. The
  * Codex MCP bridge and helper-hosted sessions dispatch here; Claude's in-process
  * tools call the same functions. Pure calculators are not here: they need nothing
  * from Bun and run wherever the provider runs.
@@ -24,7 +27,16 @@ export interface ToolScope {
   notify: (channel: string, payload: unknown) => void
 }
 
-export async function runTreziTool(action: TreziAgentToolAction, args: unknown, s: ToolScope): Promise<unknown> {
+/** Every tool that needs main's state; `runTreziTool` runs exactly these (LKM-131). */
+export type SessionTool = TreziAgentToolAction | 'install_skills'
+export const SESSION_TOOLS: readonly SessionTool[] = [
+  'workspace_state', 'prepare_conflict_resolution', 'chat_island', 'open_code', 'open_preview',
+  'preview_location', 'preview_screenshot', 'project_ui_catalog', 'compose_project_ui', 'install_skills'
+]
+
+export async function runTreziTool(action: SessionTool, args: unknown, s: ToolScope): Promise<unknown> {
+  // The owner grants more names than run here (the calculators run in the provider).
+  if (!SESSION_TOOLS.includes(action)) return { error: `${String(action)} is not one of Trezi's session tools.` }
   if (action === 'preview_location' || action === 'preview_screenshot') return observeAgentPreview(action)
   if (action === 'project_ui_catalog' || action === 'compose_project_ui')
     return runProjectUiTool(s.root, s.emitKey, action, args as never, s.connectionId)
@@ -35,6 +47,7 @@ export async function runTreziTool(action: TreziAgentToolAction, args: unknown, 
     return s.background
       ? { error: 'Background edits cannot navigate the user editor.' }
       : openAgentCode(s.root, s.liveRoot, s.emitKey, args as never, s.notify)
+  if (action === 'install_skills') return installSkills(args, s)
   if (s.background)
     return { ok: false, guidance: 'This background edit lands automatically. Do not change the parent chat workspace.' }
   if (action === 'workspace_state') return agentWorkspaceEvidence(s.emitKey, s.liveRoot)
@@ -53,6 +66,40 @@ export async function runTreziTool(action: TreziAgentToolAction, args: unknown, 
         : 'Trezi combined and landed both sides without requiring manual resolution.'
       : `Trezi could not prepare the conflict: ${prepared.error ?? 'unknown error'}`
   }
+}
+
+/**
+ * A curated skill pack into the project or user scope, through the workflow owner. The
+ * pack id is checked against the allowlist before anything runs, and skills land in the
+ * live root, not the chat worktree.
+ */
+async function installSkills(raw: unknown, s: ToolScope): Promise<{ ok: boolean; message: string }> {
+  const args = (raw ?? {}) as { packId?: unknown; scope?: unknown }
+  const pack = typeof args.packId === 'string' ? findPack(args.packId) : undefined
+  if (!pack) {
+    return {
+      ok: false,
+      message: `install_skills failed: '${String(args.packId)}' is not in the curated skill-pack allowlist. Call list_recommended_skills and use one of its ids.`
+    }
+  }
+  if (args.scope !== undefined && args.scope !== 'project' && args.scope !== 'user')
+    return { ok: false, message: "install_skills failed: scope must be 'project' or 'user'." }
+  const result = await workflowOwner().installSkills({ packId: pack.id, scope: args.scope ?? pack.recommendedScope, liveRoot: s.liveRoot })
+  return { ok: result.ok, message: result.message }
+}
+
+/**
+ * How an adapter runs a session tool. Inside a provider helper (`ctx.tools` set) the call
+ * leaves as a `tool` frame: the Swift owner checks it against the helper's grant, Bun runs
+ * it here with main's state and the session's scope, and the result comes back. The helper
+ * itself holds none of that state, so a local call there would only find missing services
+ * (LKM-131). A refusal or failure comes back as the tool's `{ error }`. In Bun, `run` runs.
+ */
+export function sessionTool(host: SessionToolHost | undefined, run: (action: SessionTool, args: unknown) => Promise<unknown>) {
+  return (action: SessionTool, args: unknown): Promise<unknown> =>
+    host
+      ? host.invoke(action, args ?? {}).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }))
+      : run(action, args)
 }
 
 /**

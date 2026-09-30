@@ -22,7 +22,7 @@ import { type RolloutUsageWatch, watchRolloutUsage } from '../codex-usage'
 import { parseCodexModels } from '../model-catalog'
 import { type TreziAgentToolRegistration, registerTreziAgentTools } from '../trezi-agent-tools'
 import { resolveConnection } from '../providers'
-import { authorizedTool, runTreziTool } from '../session-tools'
+import { authorizedTool, runTreziTool, sessionTool } from '../session-tools'
 import { scrubSecret } from '../providers-store'
 import { treziRules } from '../rules'
 import { isolatedCodexConfig, treziMcpConfig, verifyTreziMcp } from './codex-mcp'
@@ -297,12 +297,13 @@ async function startSession(
     const { Codex } = await loadCodex()
     // Trezi's tools for this chat, each authorized by the provider owner against the
     // session's grant first (a background edit is not granted the editor or islands).
+    // In a provider helper they run in Bun, reached through the owner (`sessionTool`).
     const scope = {
       root, liveRoot: ctx?.liveRoot ?? root, emitKey, background: !!ctx?.sessionId, connectionId: options.connectionId,
       notify: (channel: string, payload: unknown): void => sendToRenderer(getWindow, channel, payload)
     }
-    treziTools = await registerTreziAgentTools((action, args) =>
-      authorizedTool(ctx?.grant, action, args, () => runTreziTool(action, args, scope)))
+    treziTools = await registerTreziAgentTools(sessionTool(ctx?.tools, (action, args) =>
+      authorizedTool(ctx?.grant, action, args, () => runTreziTool(action, args, scope))))
     const mcpConfig = treziMcpConfig(app.getAppPath(), treziTools)
     await verifyTreziMcp(mcpConfig)
     // The seat skips a model this login already rejected (`codex-model.ts`).

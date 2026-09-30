@@ -3,6 +3,13 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Trezi tools work from provider helpers (LKM-131)
+
+- [x] Audit every agent-exposed Trezi tool (Claude's in-process `praxis` server and the Codex bridge). The tools that need main's state are `chat_island`, the preview observers, `open_preview`/`open_code`, Gen UI, `workspace_state`/`prepare_conflict_resolution` and `install_skills`; the calculators are pure. Table in `docs/PROVIDERS.md`.
+- [x] In a helper, `sessionTool` (`src/main/session-tools.ts`) sends those tools to main as helper `tool` frames. The Swift owner authorizes them against the grant first, and main runs them with the session's scope. The helper host settles tool answers outside its frame queue, since Codex's bridge check runs while opening.
+- [x] `test/provider-helper-tools.mjs` (unit): the real helper with stand-in CLIs calls every tool. The test checks main's real answers, an island round trip, owner refusals for a background session, and that no tool answers with a missing-service error.
+- [ ] Manager: run `bun run test:provider-helper-tools` unsandboxed (the Codex bridge listens on a Unix socket).
+
 ## Web Inspector must not cover the chat (LKM-129)
 
 - [x] The preview's inspector attachment view (WebKit SPI `_setInspectorAttachmentView:`) sits in `PreviewInspectorSlot` (`src/native/Inspector.swift`), sized to the preview area, so a docked Web Inspector stays right of the chat and below the toolbar and resizes with the preview. The page and the LKM-122 island take the rest of the area. No detached fallback was needed.
