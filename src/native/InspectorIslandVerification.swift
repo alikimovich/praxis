@@ -13,7 +13,7 @@ extension Host {
         if let delta = c["drag"] as? Double { nativeLayout.inspectorDivider.changed?(CGFloat(delta)) }
         window.contentView?.superview?.layoutSubtreeIfNeeded(); nativeLayout.layout(); editingInspector.layoutSubtreeIfNeeded()
         let island = editingInspector.frame, divider = nativeLayout.inspectorDivider
-        let preview = views["preview"]?.frame ?? .zero, area = previewStatus.frame
+        let preview = views["preview"]?.frame ?? .zero, area = nativeLayout.previewArea
         func target(_ point: NSPoint) -> String {
             guard let hit = canvas.hitTest(canvas.convert(point, to: canvas.superview)) else { return "none" }
             if hit.isDescendant(of: editingInspector) { return "inspector" }
@@ -54,6 +54,6 @@ extension Host {
     }
     @MainActor func captureInspectorIsland() async throws -> [String: Any] {
         guard let content = window.contentView?.superview else { throw NSError(domain: "InspectorIsland", code: 1, userInfo: [NSLocalizedDescriptionKey: "No window content"]) }
-        return try await captureVisibleRegion(window: window, view: content, region: content.bounds, recognizeText: false)
+        return try await captureVisibleRegion(window: window, view: content, region: content.bounds, recognize: false)
     }
 }
