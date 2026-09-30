@@ -20,6 +20,8 @@ to later slices: chat state, park records, Undo history, setup helpers.
 - `src/service/RepositoryLanding.swift`: explicit apply, reconciliation staging,
   discard, live commits, branch switching, orphan and branch recovery (twins of
   `applyToWorkingTree`, `stageResolve`, `commitLiveTurn`, `git.ts`, `pruneOrphans`).
+- `src/service/RepositoryMerge.swift`: the file-by-file three-way merge an apply falls
+  back to when `git apply --3way` refuses a patch that is really a conflict (LKM-130).
 - `src/service/RepositoryJournal.swift`: the operation journal, recovery refs and
   the per-common-directory lanes.
 - `src/service/RepositoryGit.swift`: the git runner, private-index snapshots and path
@@ -99,7 +101,21 @@ commands. Each is recorded in `docs/TASKS.md`.
   or already the target; refuse the whole batch otherwise), with these changes: files
   are compared as bytes; a symlink or a path resolving outside the checkout is refused;
   missing parent directories are created; a failed write restores the files already
-  written; a batch over 16 MiB parks instead of crossing the pipe.
+  written; a batch over 16 MiB parks instead of crossing the pipe. A turn's file list
+  names both sides of a rename (`--no-renames`), so a renamed file's old name is a
+  deletion the landing refuses (parks) instead of a file left behind on live.
+- **Conflicts, not errors (LKM-130).** `git apply --3way` refuses a whole patch, writing
+  nothing, for add/add, modify/delete, delete/modify and a rename whose source is gone.
+  Explicit apply (`applyParked`, `applyBranch`) and Resolve (`stageResolve`) then merge
+  file by file from the commits the patch came from (`RepositoryMerge.swift`: `diff-tree
+  -M`, `git merge-file`). Every conflict ends as markers in the file; a deleted side is an
+  empty side labelled `live (deleted)` or `chat (deleted)`; the chat's rename wins and
+  a live rename is followed. A binary file or symlink changed on both sides keeps the
+  chat's version under Resolve and the project's under an explicit apply (reported as a
+  conflict). A patch Git cannot read, a submodule, or a folder in the way stays an
+  error: the message is bounded (600 characters) and names the path and Git's reason
+  (`<path>: corrupt patch at line N`), and Git's full output goes to the service log.
+  Not handled: rename/rename to two different names (the chat's name wins, content merged).
 - **Live commits.** The same pathspec commit (`add -- paths`, `commit --no-verify --
   paths`), so the user's staged work elsewhere stays staged. A foreign index lock or a
   concurrent Git process makes it fail with the files left landed and uncommitted, as

@@ -6,14 +6,19 @@ import Darwin
 /// `applyParked`, `stageResolve`, `discardParked`, `commitLiveTurn`,
 /// `checkoutBranch`/`switchBranch`, `pruneOrphans` and `pruneIntegratedChatBranches`.
 extension RepositoryEffects {
-    struct Applied { var ok: Bool; var conflict: Bool; var error: String?; var empty = false }
+    /// `conflicted`: files the merge fallback left with markers or, for a binary file
+    /// changed on both sides, kept as they were.
+    struct Applied { var ok: Bool; var conflict: Bool; var error: String?; var empty = false; var conflicted: [String] = [] }
 
     /// Plain `git apply` (tolerates dirty work, atomic), else a three-way apply
     /// through a PRIVATE index seeded from a snapshot of the checkout, so the user's
     /// real index is never read or written. `beforeThreeWay` receives that snapshot
-    /// before the three-way apply can write conflict markers.
-    func applyToWorkingTree(_ c: RepositoryContext, _ directory: String, patch: Data,
-                            beforeThreeWay: (String) throws -> Void = { _ in }) throws -> Applied {
+    /// before the three-way apply can write conflict markers. When Git refuses the
+    /// patch as a whole (add/add, modify/delete, a renamed file's source gone) and the
+    /// commits it came from are known (`merge`), a per-file three-way merge lays the
+    /// change instead (`mergeChange`). Only a patch Git cannot read stays an error.
+    func applyToWorkingTree(_ c: RepositoryContext, _ directory: String, patch: Data, merge: (base: String, tip: String)? = nil,
+                            binary: BinaryPolicy = .live, beforeThreeWay: (String) throws -> Void = { _ in }) throws -> Applied {
         if String(decoding: patch, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return Applied(ok: true, conflict: false)
         }
@@ -36,22 +41,73 @@ extension RepositoryEffects {
             return Applied(ok: true, conflict: false)
         } catch let failure as GitFailure {
             // `git apply --3way` exits non-zero on overlap but still writes the markers.
+            // Any `error:` line means it refused the whole patch and wrote nothing.
+            let errors = Self.applyErrors(failure.stderr)
             let text = failure.description + "\n" + failure.stdout
-            let conflict = text.contains("with conflicts") || text.contains("<<<<<<<")
-                || text.range(of: #"U \w"#, options: .regularExpression) != nil
-            return Applied(ok: false, conflict: conflict, error: failure.description)
+            if errors.isEmpty && (text.contains("with conflicts") || text.contains("<<<<<<<")
+                || text.range(of: #"U \w"#, options: .regularExpression) != nil) {
+                return Applied(ok: false, conflict: true, error: failure.description)
+            }
+            log("Trezi repository: git apply --3way refused a patch in \(directory) (\(c.kind) \(c.operationID)):\n\(failure.description)\(failure.stdout)")
+            let unreadable = errors.contains { $0.range(of: #"corrupt patch|unrecognized input|No valid patches|without header|malformed|garbage"#,
+                                                        options: [.regularExpression, .caseInsensitive]) != nil }
+            guard let merge, !unreadable, isRepoRoot(directory) else {
+                return Applied(ok: false, conflict: false, error: Self.applyReason(errors, failure.stderr, patch: patch))
+            }
+            do {
+                let merged = try mergeChange(directory, base: merge.base, tip: merge.tip, live: live, binary: binary)
+                let conflicted = merged.conflicted + merged.kept
+                if conflicted.isEmpty { return Applied(ok: true, conflict: false) }
+                let kept = merged.kept.isEmpty ? "" : "; binary on both sides, kept the project's version: " + merged.kept.joined(separator: ", ")
+                return Applied(ok: false, conflict: true, error: Self.bounded("conflicts in " + merged.conflicted.joined(separator: ", ") + kept),
+                               conflicted: conflicted)
+            } catch {
+                log("Trezi repository: the three-way merge fallback failed in \(directory): \(error)")
+                return Applied(ok: false, conflict: false, error: Self.bounded("\(error)"))
+            }
         }
     }
+
+    /// Git's `error:` lines, without the prefix.
+    static func applyErrors(_ stderr: String) -> [String] {
+        stderr.split(separator: "\n").compactMap { $0.hasPrefix("error: ") ? String($0.dropFirst(7)) : nil }
+    }
+
+    /// Git's reasons, each naming its path: a reason Git gives by patch line only
+    /// ("corrupt patch at line 12") gets the file whose part of the patch that is.
+    static func applyReason(_ errors: [String], _ stderr: String, patch: Data) -> String {
+        let fallback = stderr.split(separator: "\n").last.map(String.init) ?? "git apply failed"
+        var seen = Set<String>()
+        let reasons = (errors.isEmpty ? [fallback] : errors).map { reason -> String in
+            guard let range = reason.range(of: #"at line \d+"#, options: .regularExpression),
+                  let number = Int(reason[range].dropFirst(8)), let path = patchPath(patch, line: number) else { return reason }
+            return "\(path): \(reason)"
+        }.filter { seen.insert($0).inserted }
+        return bounded(reasons.joined(separator: "; "))
+    }
+
+    /// The file a patch line belongs to (its `diff --git a/… b/…` header's new name).
+    static func patchPath(_ patch: Data, line number: Int) -> String? {
+        var path: String?
+        for (index, line) in String(decoding: patch, as: UTF8.self).split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+            if index >= number { break }
+            if line.hasPrefix("diff --git "), let range = line.range(of: " b/", options: .backwards) { path = String(line[range.upperBound...]) }
+        }
+        return path
+    }
+
+    static func bounded(_ text: String, limit: Int = 600) -> String { text.count <= limit ? text : String(text.prefix(limit - 1)) + "…" }
 
     /// The explicit "Apply" of a parked chat: its cumulative diff, three-way onto the
     /// live checkout. The chat's tip and the live pre-image are kept until it is clean.
     func applyParked(_ c: RepositoryContext, _ wt: RepositoryWorktree) throws -> (applied: Applied, files: [String], newBase: String?) {
         try linked(c, wt)
         let patch = try git.data(wt.path, ["diff", "--full-index", "--binary", "\(wt.baseSha)..HEAD"])
-        let files = try git.paths(wt.path, ["diff", "--name-only", "-z", "\(wt.baseSha)..HEAD"])
-        let tip = try c.preserve(try head(wt.path), label: "target")
+        let files = try git.paths(wt.path, ["diff", "--name-only", "--no-renames", "-z", "\(wt.baseSha)..HEAD"])
+        let chatHead = try head(wt.path)
+        let tip = try c.preserve(chatHead, label: "target")
         var before: String?
-        let result = try applyToWorkingTree(c, c.root, patch: patch) { before = try c.preserve($0, label: "live") }
+        let result = try applyToWorkingTree(c, c.root, patch: patch, merge: (wt.baseSha, chatHead)) { before = try c.preserve($0, label: "live") }
         guard result.ok else { return (result, files, nil) }
         c.release(tip); before.map(c.release)
         return (result, files, try head(wt.path))
@@ -67,7 +123,9 @@ extension RepositoryEffects {
             return Applied(ok: false, conflict: false, error: nil, empty: true)
         }
         var before: String?
-        let result = try applyToWorkingTree(c, c.root, patch: patch) { before = try c.preserve($0, label: "live") }
+        let merge: (base: String, tip: String)? = git.revision(c.root, "refs/heads/\(branch)^")
+            .flatMap { base in git.revision(c.root, "refs/heads/\(branch)").map { (base, $0) } }
+        let result = try applyToWorkingTree(c, c.root, patch: patch, merge: merge) { before = try c.preserve($0, label: "live") }
         if result.ok { before.map(c.release) }
         return result
     }
@@ -83,20 +141,23 @@ extension RepositoryEffects {
         }
         let chatHead = try head(wt.path)
         let patch = try git.data(wt.path, ["diff", "--full-index", "--binary", "\(wt.baseSha)..HEAD"])
-        let files = try git.paths(wt.path, ["diff", "--name-only", "-z", "\(wt.baseSha)..HEAD"])
+        let files = try git.paths(wt.path, ["diff", "--name-only", "--no-renames", "-z", "\(wt.baseSha)..HEAD"])
         try c.preserve(chatHead, label: "parked")
         let live = try RepositoryPaths.snapshot(git, c.root, index: c.index(), message: "trezi: spawn base (WIP snapshot)")
         try git.data(wt.path, RepositoryPaths.cleanArguments)
         try git.data(wt.path, ["reset", "--hard", live])
         c.point("resolve.reset")
-        let laid = try applyToWorkingTree(c, wt.path, patch: patch)
+        let laid = try applyToWorkingTree(c, wt.path, patch: patch, merge: (wt.baseSha, chatHead), binary: .chat)
         if !laid.ok && !laid.conflict {
             _ = git.succeeds(wt.path, ["reset", "--hard", chatHead])
-            let detail = laid.error.map { ": " + String($0.prefix(200)) } ?? ""
+            // `laid.error` is already bounded and names the path; the service log has Git's full output.
+            let detail = laid.error.map { ": " + $0 } ?? ""
             throw RepositoryRefusal(.conflict, "couldn't re-apply this chat's changes onto the current project state\(detail)")
         }
         var conflicted: [String] = []
-        for rel in files where Self.relative(rel) {
+        // The merge fallback may put markers outside `files` (a file live renamed).
+        var seen = Set<String>()
+        for rel in files + laid.conflicted where Self.relative(rel) && seen.insert(rel).inserted {
             guard let current = FileManager.default.contents(atPath: wt.path + "/" + rel) else { continue }
             let text = String(decoding: current, as: UTF8.self)
             if text.contains("<<<<<<<") && text.contains(">>>>>>>") { conflicted.append(rel); continue }

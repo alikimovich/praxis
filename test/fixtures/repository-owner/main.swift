@@ -35,6 +35,18 @@ while let line = readLine(strippingNewline: true) {
             var timeout: TimeInterval = 5
             if case .number(let value)? = command["timeout"] { timeout = value }
             emit([("closed", .bool(owner.close(timeout: timeout)))])
+        case "apply":
+            // A raw patch through the landing's apply: no request can carry one, so a
+            // patch Git cannot read is only reachable here.
+            guard let root = command["root"]?.text?.string, let patch = command["patch"]?.text?.string else {
+                return emit([("error", .string(JSText("apply needs root and patch")))])
+            }
+            let effects = owner.effects
+            let context = RepositoryContext(operationID: UUID().uuidString, kind: "applyBranch", lane: effects.lane(root), root: root, effects: effects)
+            do {
+                let applied = try effects.applyToWorkingTree(context, root, patch: Data(patch.utf8))
+                emit([("ok", .bool(applied.ok)), ("conflict", .bool(applied.conflict)), ("message", applied.error.map { .string(JSText($0)) } ?? .null)])
+            } catch { emit([("error", .string(JSText("\(error)")))]) }
         default: emit([("error", .string(JSText("unknown command \(name)")))])
         }
     }

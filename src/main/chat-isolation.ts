@@ -562,9 +562,8 @@ export async function resolveParkedChat(
         emitIsolation(sessionKey, 'merged', st.wt.branch, res.files)
         return
       }
-      throw new Error(
-        `the merged result couldn't be written onto the project${res.error ? ` (${res.error.slice(0, 200)})` : ''}`
-      )
+      // `res.error` is bounded by the owner and names the path and Git's reason.
+      throw new Error(`the merged result couldn't be written onto the project${res.error ? ` (${res.error})` : ''}`)
     })
   )
   st.chain = merge.catch(() => {})
