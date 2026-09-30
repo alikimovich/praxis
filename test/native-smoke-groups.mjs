@@ -33,7 +33,7 @@ const source = readFileSync(fileURLToPath(new URL('../src/native/smoke-core.ts',
 const names = [...source.matchAll(/^\s*\{ name: '([\w-]+)'(?:, dependsOn: \[([^\]]*)\])?/gm)].map(m => ({
   name: m[1], dependsOn: [...(m[2] ?? '').matchAll(/'([\w-]+)'/g)].map(d => d[1])
 }))
-assert.ok(names.length >= 20, `Found smoke-core checks (${names.length})`)
+assert.ok(names.length >= 19,`Found smoke-core checks (${names.length})`)
 assert.ok(SMOKE_PRELUDE.every(name => names.some(check => check.name === name)), 'Prelude names real checks')
 for (const { name } of names) assert.ok(SMOKE_PRELUDE.includes(name) || SMOKE_CHECK_GROUPS[name], `Check ${name} needs a group`)
 for (const name of Object.keys(SMOKE_CHECK_GROUPS)) assert.ok(name === 'live-provider' || names.some(check => check.name === name), `Group map names a real check: ${name}`)

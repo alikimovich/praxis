@@ -31,9 +31,8 @@ src/
     ChatActivity.swift / StreamingText.swift   text-only live activity and native
                     word reveal. Cat.swift supplies cats for other app surfaces
     WorkspaceLayout.swift        authoritative view/divider geometry and AppKit divider input
-    SourceEditor.swift / Layers.swift / EditingInspector.swift / ContentWindow.swift
-                    native source, layers, property/style inspector and recipe-driven
-                    content editing
+    SourceEditor.swift / Layers.swift / EditingInspector.swift
+                    native source, layers and property/style inspector
     Sheets.swift    New Project, memory, settings and provider forms; Bun controllers
                     own service operations. Forms use standalone titled, resizable
                     windows with traffic lights and an action bar only when needed.
@@ -133,8 +132,9 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
 - Provider SDKs remain in process in Bun. Source editing still uses JavaScript parsers
   (TypeScript/Babel/React Docgen/Svelte/parse5); React-related names do not imply a
   remaining application renderer. React/React DOM are development-only fixtures for
-  generated project component tests. The vendored content-controls package contains
-  only its used recipe/API modules and supporting declarations.
+  generated project component tests. Content controls (recipe-driven content editors)
+  were removed in LKM-114; a project's old `.trezi/content-controls.json` is left
+  untouched and no longer read.
 - Experimental Gen UI (the `project-ui` modules in `src/main/`, e.g.
   `src/main/project-ui.ts`): discovery, strict React/Svelte composition export and
   optional Jev topology selection. Helpers return source proposals only; supported

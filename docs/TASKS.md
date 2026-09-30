@@ -7,6 +7,11 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
 - [x] Inspector and chat-island sliders use `SnappedSlider` (`src/native/SnappedSlider.swift`): no `step:` and so no tick marks, with snapping in the binding setter using the same default steps.
 - [x] Windowless regression `test/native-slider-ticks.mjs`: no stepped `Slider` in `src/native`, `numberOfTickMarks == 0` on the real inspector field and on an island slider, and values still snap to the step. Evidence: `inspector.png`, `chat-island.png`, `shadow-light-*.png`.
+## Remove content controls (LKM-114)
+
+- [x] Removed the `content_controls` agent tool (Claude, Codex MCP bridge, custom endpoints, provider policy), `src/main/content-controls*.ts`, the native content controller and `ContentWindow.swift`, the Swift content-drafts store and the `content-controls.json` sidecar allowance, `PanelRecipe`, `vendor/content-controls` (package.json, bun.lock, .gitignore), the surface-controls skill wiring, the tests and `docs/CONTENT_CONTROLS.md`. Rules v24.
+- [x] Users' `.trezi/content-controls.json` and profile `service/editing/content-drafts/` are left untouched and no longer read.
+- [ ] Optional cleanup: the dated inventories (`SWIFT-BACKEND-AUDIT/MODULES/ROUTES/EVENTS/CONTRACTS/PLAN/ROADMAP`, `ELECTRON-REMOVAL`, `rename/*.json`) still list content-controls files as history.
 
 ## Codex live parity and MCP isolation for Codex sessions (LKM-113)
 

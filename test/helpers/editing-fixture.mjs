@@ -1,7 +1,7 @@
 // The real Swift EditingOwner (S12) compiled into a line-driven fixture process with the
 // conversation, repository and source owners it works with, and Bun's real clients
 // wired to it. Used by test/editing-owner.mjs and test/helpers/with-service-owners.mjs,
-// which runs the island, controls, content and notes suites on the Swift owners.
+// which runs the island, controls and notes suites on the Swift owners.
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -56,7 +56,7 @@ export async function startEditingFixture(binary, profile, env = {}) {
       fixture.link.on('service-reply', listener)
       fixture.link.sendService({ service: 'editing', id, request: {
         connection: crypto.randomUUID(), requestID: crypto.randomUUID(), operationID: crypto.randomUUID(), scope: {},
-        mode: ['islands', 'contentDrafts', 'navigationState'].includes(method) ? 'read' : 'mutation', service: 'editing', method, body, ...request
+        mode: ['islands', 'navigationState'].includes(method) ? 'read' : 'mutation', service: 'editing', method, body, ...request
       }, ...top })
     })
   }

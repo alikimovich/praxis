@@ -1,6 +1,6 @@
 // Import first in a suite that runs chats through agent.ts, writes chat History, or
-// uses chat islands, project sidecars (controls, content, notes, tokens), content
-// drafts or the project's other `.trezi/` files: installs the real Swift conversation,
+// uses chat islands, project sidecars (controls, notes, tokens) or the project's
+// other `.trezi/` files: installs the real Swift conversation,
 // editing, repository and source owners (the only ones since LKM-111 removed the Bun
 // twins) from one fixture process on a scratch profile (`serviceProfile`; History
 // lives in `<profile>/trezi/sessions`). Worktrees may live anywhere under the temp

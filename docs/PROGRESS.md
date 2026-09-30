@@ -7,6 +7,27 @@ Newest first. Append a dated entry when you finish a chunk of work.
 - **Why.** A SwiftUI `Slider` with `step:` makes AppKit draw one tick mark per step. The inspector (`step ?? 1`, e.g. 0…200 px padding) and chat islands (`step ?? range/1000`) drew hundreds of them, a dense dotted line under the track.
 - **Fix.** `SnappedSlider` (`src/native/SnappedSlider.swift`) wraps an unstepped `Slider` and snaps in its binding setter with `snapSliderValue`. The snapping is SwiftUI's own, measured in a probe: `lower + k * step`, where `k` stops at the last whole step (1…20 by 4 tops out at 17). Both call sites keep their default steps, live updates and `onEditingChanged` applies.
 - **Proof.** `test/native-slider-ticks.mjs` (unit tier) fails on any `Slider(` in `src/native` that passes `step:` at the top level. Its windowless fixture (`test/fixtures/slider-ticks/main.swift`) first checks that a stepped SwiftUI slider does report ticks. Then it hosts the real `InspectorFieldView` and an island-default `SnappedSlider`, finds each `NSSlider` with `numberOfTickMarks == 0`, and drags it through its action: the inspector previews `37.0` (default step) and `35.0` (step 5), and the island value snaps to 1/1000 of the range. The core `inspector` smoke step now saves `inspector.png`; the island captures are the existing `chat-island.png` and `shadow-light-*.png`.
+## 2026-09-29 — LKM-114: content controls removed
+
+- **Why.** The user did not like how the content-editor panels looked, so the feature is removed end to end instead of restyled.
+- **Removed.**
+  - The `content_controls` agent tool: the Claude in-process tool, the Codex MCP bridge (`bin/trezi-agent-mcp.mjs`, `bin/content-control-tool-schema.*`), the custom-endpoint dispatch, and the provider policy lists in TS, Swift and the golden.
+  - `src/main/content-controls.ts`, `content-control-tools.ts` and `content-controls-ipc.ts`.
+  - The native content controller, `ContentWindow.swift`, the "Content Editors" menu, the host cases, the inspector "content" channel and the `content-editor` smoke check.
+  - The Swift content-drafts store (`EditingDrafts` and the `contentDrafts`/`saveContentDraft`/`clearContentDraft` methods).
+  - `content-controls.json` from the sidecar allowlist (Swift and TS).
+  - `PanelRecipe` and the content-control types in `src/shared/api.ts`.
+  - `vendor/content-controls`, including its package.json/bun.lock entries, `.gitignore` exceptions and the build's recipe plugin.
+  - `test/content-controls.mjs` and `test/native-content.mjs`.
+  - `docs/CONTENT_CONTROLS.md`, the README section and the agent-guide mentions.
+- **Rules v24.** Routing now covers only components, styling and animations. The Jev guidance moved into the chat_island section. The surface-controls skill no longer points to content editors.
+- **User data.** A project's `.trezi/content-controls.json` and a profile's `service/editing/content-drafts/` are never deleted or rewritten; nothing reads them any more.
+- **Kept.** Control panels, chat islands, the inspector and Styles are unchanged. `control-selection.ts` stays because chat islands use it.
+- **Tests.**
+  - The editing-owner parity golden lost its four draft steps (52 → 48).
+  - The sidecar and rename tests use other sidecars.
+  - The smoke-group floor is 19.
+- **History left in place.** The dated inventories (`SWIFT-BACKEND-AUDIT`, `MODULES`, `ROUTES`, `EVENTS`, `CONTRACTS`, `PLAN`, `ROADMAP`, `ELECTRON-REMOVAL`, `rename/*.json`) still mention the old files. `SWIFT-BACKEND-EDITING.md` has an LKM-114 banner, and its current-state rows are updated.
 
 ## 2026-09-29 — LKM-113 part 1: Trezi's Codex sessions ignore the user's personal MCP servers
 

@@ -26,12 +26,6 @@ copyFileSync(join(root, 'build/icon.icns'), join(contents, 'Resources/Trezi.icns
 writeFileSync(join(contents, 'Resources/cat.json'), JSON.stringify(nativeCatAssets(root)))
 const device = readFileSync(join(root, 'src/shared/iphone-frame.ts'), 'utf8').match(/FRAME_DATA_URI = '([^']+)'/)[1]
 writeFileSync(join(out, 'device.png'), Buffer.from(device.split(',')[1], 'base64'))
-const recipeModule = {
-  name: 'trezi-native-transport',
-  setup(build) {
-    build.onResolve({ filter: /^@alikimovich\/content-controls\/recipe$/ }, () => ({ path: join(root, 'node_modules/@alikimovich/content-controls/dist/recipe.js') }))
-  }
-}
 const backend = await bundle({
   metafile: true,
   entryPoints: [join(root, 'src/native/index.ts')],
@@ -41,7 +35,6 @@ const backend = await bundle({
   target: 'es2022',
   format: 'cjs',
   packages: 'external',
-  plugins: [recipeModule],
   sourcemap: true,
   ...outDirname
 })
@@ -53,7 +46,6 @@ await bundle({
   target: 'es2022',
   format: 'cjs',
   packages: 'external',
-  plugins: [recipeModule],
   sourcemap: true,
   ...outDirname
 })
@@ -168,7 +160,6 @@ const result = Bun.spawnSync(
     join(root, 'src/native/SourceFileTree.swift'),
     join(root, 'src/native/Layers.swift'),
     join(root, 'src/native/EditingInspector.swift'),
-    join(root, 'src/native/ContentWindow.swift'),
     join(root, 'src/native/PreviewPlatform.swift'),
     join(root, 'src/native/WorkspaceLayout.swift'),
     join(root, 'src/native/PreviewStatus.swift'),

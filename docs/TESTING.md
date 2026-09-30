@@ -225,7 +225,7 @@ check to its group, and a check with no group there is an error:
 
 | Group | Covers |
 | --- | --- |
-| `core` | mobile viewport/reload, source stamps, toolbar/preview surface, divider/expand, layers, selection input, inspector style edit, text edit + undo/redo, popped-out source editor, content editor, preview Web Inspector |
+| `core` | mobile viewport/reload, source stamps, toolbar/preview surface, divider/expand, layers, selection input, inspector style edit, text edit + undo/redo, popped-out source editor, preview Web Inspector |
 | `islands` | `chat-islands`, generic part: Swift rendering, point commit, Undo, landing gate |
 | `shadow-light` | `chat-islands`, Shadow Light part (same fixture scope; the check runs when either group is selected) |
 | `sidebar` | project switching and visible sidebar captures/interactions |

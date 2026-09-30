@@ -278,24 +278,6 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
       if ((await host.request('sourceInspect')).popped) await host.request('sourcePerform',{action:{root:fixture,action:'dock'}})
       if ((await host.request('sourceInspect')).visible) await host.request('sourcePerform',{action:{root:fixture,action:'hide'}})
     } },
-    { name: 'content-editor', dependsOn: ['open-project'], run: async () => {
-      mkdirSync(join(fixture,'.trezi'),{recursive:true})
-      writeFileSync(join(fixture,'content.json'), JSON.stringify({title:'Native content',items:[{id:'one',name:'First item'}]}))
-      writeFileSync(join(fixture,'.trezi/content-controls.json'), JSON.stringify({version:1,panels:[{id:'qa',file:'content.json',recipe:{version:1,id:'qa',title:'Native content editor',sections:[{id:'main',title:'Main',fields:[{key:'title',label:'Title',type:'text',required:true}]},{id:'items',title:'Items',collection:{key:'items',itemLabelKey:'name',defaults:{name:'New'},fields:[{key:'name',label:'Name',type:'text'}]}}]}}]}))
-      serviceEvents.emit('event','content-controls:updated',{root:fixture})
-      const content = await wait(async()=> (await host.request('contentInspect')).find((s:any)=>s.visible&&s.fields>2),'native content editor')
-      const contentAction = (action: string, extra: any = {}) => host.emit('content-action',{documentID:content.id,root:fixture,generation:content.generation,action,...extra})
-      contentAction('draft',{field:'main:title',value:'Saved in Swift'})
-      contentAction('save')
-      await wait(()=>JSON.parse(readFileSync(join(fixture,'content.json'),'utf8')).title==='Saved in Swift','native content save')
-      await delay(200)
-      writeFileSync(join(artifacts,'native-content.png'),Buffer.from(await host.request('captureContent',{documentID:content.id}),'base64'))
-      contentAction('close');await wait(async()=>!(await host.request('contentInspect')).some((s:any)=>s.visible),'content close')
-      await geometry('content')
-    }, cleanup: async () => {
-      for (const doc of await host.request('contentInspect'))
-        if (doc.visible) host.emit('content-action',{documentID:doc.id,root:fixture,generation:doc.generation,action:'close'})
-    } },
     { name: 'visible-composer', dependsOn: ['chat-ready'], run: async () => {
       await checkVisibleComposer(host, fixture, artifacts)
     }, cleanup: async () => {

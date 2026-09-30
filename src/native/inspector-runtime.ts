@@ -1,4 +1,3 @@
-import { NativeContentController } from './content-controller'
 import type { NativeBridge } from './bridge'
 import type { NativeWorkspaceController } from './workspace-controller'
 import type { NativeChatController } from './chat-controller'
@@ -20,7 +19,6 @@ export function installNativeInspector(host: NativeBridge, workspace: NativeWork
     if (submit) await chat.command({ type: 'submit', chat: entry.activeSessionKey, text: prompt })
     else await visualEdit(root, prompt)
   }, () => chat.action({ chat: chat.active, action: 'setup' }), () => chat.chats.get(chat.active)?.settings.provider ?? 'claude')
-  const content = new NativeContentController(workspace.services.invoke, (documentID, state) => host.send('contentState', { documentID, state }), editingOwner())
   // Deferred preview navigation (S12): the editing owner holds an agent's request
   // until its turn lands; this only loads it in the chat and project that asked.
   const navigation = new NavigationController(editingOwner(), {
@@ -35,15 +33,9 @@ export function installNativeInspector(host: NativeBridge, workspace: NativeWork
   turnBoundaries.add((key, kind, turn) => { void navigation.boundary(key, kind, turn).catch(report) })
   const render = workspace.services.render
   workspace.services.render = state => { render(state); navigation.poke() }
-  const openContent = async (root: string) => {
-    const panels = await workspace.services.invoke('content-controls:list', root)
-    for (const panel of panels) if (!content.sessions.has(root + '\n' + panel.id)) await content.open(root, panel.id).catch(report)
-  }
-  host.on('content-action', action => { void content.action(action.documentID, action).catch(report) })
-  host.on('menu', ({ action }) => { if (action === 'content' && workspace.active) { for (const [key, session] of content.sessions) if (session.root === workspace.active.root) { session.visible = true; content.publish(key, session) }; void openContent(workspace.active.root).catch(report) } })
   host.on('inspector-action', action => { void controller.action(action).catch(report) })
   const activate = workspace.services.activate
-  workspace.services.activate = async entry => { void controller.activate(entry?.root ?? '').catch(report); if (entry) void openContent(entry.root).catch(report); await activate(entry) }
+  workspace.services.activate = async entry => { void controller.activate(entry?.root ?? '').catch(report); await activate(entry) }
   const effect = chat.services.effect
   chat.services.effect = value => {
     const selection = chat.chats.get(chat.active)?.context?.selection
@@ -54,8 +46,7 @@ export function installNativeInspector(host: NativeBridge, workspace: NativeWork
     if (channel === 'preview:open') { void navigation.request(value).catch(report); return }
     const entry = workspace.active
     if (!entry) return
-    if (channel === 'content-controls:updated' && value.root === entry.root) { void openContent(entry.root).catch(report) }
-    else if (channel === 'preview:element-picked') void controller.select(value).catch(report)
+    if (channel === 'preview:element-picked') void controller.select(value).catch(report)
     else if (channel === 'preview:select-cancelled') { context.selection(null); void controller.select(null).catch(report) }
     else if (channel === 'preview:toolbar-action') {
       if (value === 'props') { controller.state.visible = !controller.state.visible; controller.publish() }
@@ -73,10 +64,10 @@ export function installNativeInspector(host: NativeBridge, workspace: NativeWork
           if (!result.ok) report(result.reason ?? 'Could not start the comment agent.')
         }).catch(report)
       }
-    } else if (channel === 'controls:updated' && (value?.root ?? value) === entry.root || channel === 'agent:event' && ['done', 'landing-finished', 'spawn-finished'].includes(value.type)) { void controller.refresh().catch(report); void openContent(entry.root).catch(report) }
+    } else if (channel === 'controls:updated' && (value?.root ?? value) === entry.root || channel === 'agent:event' && ['done', 'landing-finished', 'spawn-finished'].includes(value.type)) void controller.refresh().catch(report)
     else if (channel === 'controls:open' && value.root === entry.root) {
       controller.requestedFile = value.file ?? null; controller.state.tab = value.tab; controller.publish(); void controller.refresh().catch(report)
     }
   })
-  return { inspector: controller, content, navigation }
+  return { inspector: controller, navigation }
 }

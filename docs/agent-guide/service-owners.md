@@ -19,7 +19,7 @@ writers from Bun:
 | LKM-96 | source commits: Bun's parsers only propose hash-bound edits; the service owns source transactions, Undo, file-tree operations and editor drafts | `docs/SWIFT-BACKEND-SOURCE.md` |
 | LKM-97 | conversation state: session records and History, live-chat checkpoints, turn transitions and completion policy, titles, model handoff, approvals and spawn admission; Bun's provider sessions report typed events to it | `docs/SWIFT-BACKEND-CONVERSATION.md` |
 | LKM-98 | every provider session is opened with its provider owner, which fixes the session's grant, answers its permission requests, authorizes Trezi tools, holds Stop's deadline, persists resume ids and supervises provider helpers against their grant; the SDK adapters still run in Bun | `docs/SWIFT-BACKEND-PROVIDERS.md` |
-| LKM-99 | the editing workflows' state: chat island histories and activation (bound to the defining turn), the controls sidecars (hash-bound commits), content-editor drafts and deferred preview navigation; Bun keeps the JS helpers and inspector views | `docs/SWIFT-BACKEND-EDITING.md` |
+| LKM-99 | the editing workflows' state: chat island histories and activation (bound to the defining turn), the controls sidecars (hash-bound commits) and deferred preview navigation (content-editor drafts until LKM-114 removed content controls); Bun keeps the JS helpers and inspector views | `docs/SWIFT-BACKEND-EDITING.md` |
 | LKM-100 | Trezi's side-effecting workflows outside a chat turn (Publish and PRs, Connect to GitHub, remote pull/switch, setup helpers, new projects, Trezi's update, the diagnosis memory) as journaled workflows with receipts, so a lost reply or crash never repeats a PR, merge or update; Bun keeps the proposing helpers and the sheets | `docs/SWIFT-BACKEND-WORKFLOWS.md` |
 | LKM-101 | the iOS Simulator preview (bounded, cancellable xcrun/idb runs, the launch command as a journaled group, the loopback bridge), scoped media grants to the source editor, pasted attachments and the running-servers recovery | `docs/SWIFT-BACKEND-PLATFORM.md` |
 | LKM-102 | the last census rows: provider data (connections store, model catalog cache, Codex model discovery: `ProviderData.swift`), opening links, files and the editor (`PlatformOpen.swift`), the profile and session-store aliases (`ProfilePaths.swift`), the profile lock (Bun no longer takes one), the `annotations.json` and `tokens.json` sidecars (`EditingProject.swift`), the feedback issue and skill-pack installs (`WorkflowTools.swift`, `WorkflowContext.swift`) | `docs/SWIFT-BACKEND-RETIREMENT.md` |
@@ -44,8 +44,7 @@ and serializes every Trezi Git effect in user repositories, commits every Trezi 
 edit, Undo and file-tree operation from hash-bound parser proposals, owns chat records,
 live-chat checkpoints and turn transitions, holds every provider session's grant,
 permission answers, tool authorization, Stop's deadline and resume ids, owns chat island
-histories and activation, the project sidecars, content drafts and deferred preview
-navigation, runs publication, remote Git actions, setup, new projects, Trezi's update, the
+histories and activation, the project sidecars and deferred preview navigation, runs publication, remote Git actions, setup, new projects, Trezi's update, the
 feedback issue, skill-pack installs and the diagnosis memory as journaled workflows, and
 runs the iOS Simulator preview, issues the source editor's media grants, writes pasted
 attachments and performs the running-servers recovery. Since LKM-102 it also writes the
@@ -161,13 +160,11 @@ src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
                   only by the defining turn, which it asks the conversation owner;
                   command admission, a queued batch's revision chain, per-island
                   Undo); hash-bound commits of the project sidecars in .trezi/
-                  (control-panels.json, content-controls.json, and since LKM-102
-                  annotations.json and tokens.json) in the repository lane, plus the
-                  sidecar migration, setup helpers and Next dependency marker
-                  (EditingProject); persisted content-editor
-                  drafts; deferred open_preview navigation. Bun keeps the JS helpers
-                  and views (main/chat-islands.ts, native/content-controller.ts,
-                  native/navigation-controller.ts, native/turn-boundaries.ts); Bun's
+                  (control-panels.json, and since LKM-102 annotations.json and
+                  tokens.json) in the repository lane, plus the sidecar migration,
+                  setup helpers and Next dependency marker (EditingProject);
+                  deferred open_preview navigation. Bun keeps the JS helpers
+                  and views (main/chat-islands.ts, native/navigation-controller.ts, native/turn-boundaries.ts); Bun's
                   client is native/editing-service.ts behind main/editing-owner.ts;
                   test/fixtures/editing-owner/parity-golden.json pins its answers
                   (docs/SWIFT-BACKEND-EDITING.md)

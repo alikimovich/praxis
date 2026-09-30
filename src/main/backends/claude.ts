@@ -1,7 +1,5 @@
 import { chatIslandShape, chatIslandDescription } from '../../../bin/chat-island-schema.mjs'
 import { runChatIslandTool } from '../chat-islands'
-import { runContentControlTool } from '../content-control-tools'
-import { contentControlsShape } from '../../../bin/content-control-tool-schema.mjs'
 import { runProjectUiTool } from '../project-ui'
 import { openAgentPreview } from '../preview-tools'
 import { openAgentCode } from '../code-tools'
@@ -81,7 +79,6 @@ const PREVIEW_TOOL_NAMES = new Set([
 const TREZI_TOOL_NAMES = new Set([
   ...PREVIEW_TOOL_NAMES,
   'mcp__praxis__chat_island',
-  'mcp__praxis__content_controls',
   'mcp__praxis__open_code',
   'mcp__praxis__open_preview',
   'mcp__praxis__project_ui_catalog',
@@ -640,23 +637,6 @@ async function startSession(
             : await openAgentCode(root, ctx?.liveRoot ?? root, emitKey, args,
                 (channel, payload) => sendToRenderer(getWindow, channel, payload))
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
-        }
-      ),
-      tool(
-        'content_controls',
-        'Discover or surface content editors and collections. Call catalog first, then define ' +
-          'after binding the page to JSON. Optional Jev selects relevant sections.',
-        contentControlsShape,
-        async (args) => {
-          const result = await runContentControlTool(
-            root, ctx?.liveRoot ?? root, emitKey, args,
-            (channel, payload) => sendToRenderer(getWindow, channel, payload),
-            options.connectionId
-          )
-          return {
-            content: [{ type: 'text' as const, text: JSON.stringify(result) }],
-            isError: !!(result as { error?: string }).error
-          }
         }
       ),
       tool('chat_island', chatIslandDescription, chatIslandShape, async (args) => {

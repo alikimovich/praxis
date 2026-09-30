@@ -6,7 +6,6 @@ import { join } from 'node:path'
 export type TreziAgentToolAction =
   | 'workspace_state'
   | 'prepare_conflict_resolution'
-  | 'content_controls'
   | 'chat_island'
   | 'open_code'
   | 'open_preview'
@@ -74,7 +73,6 @@ async function startServer(): Promise<string> {
         if (
           parsed.action !== 'workspace_state' &&
           parsed.action !== 'prepare_conflict_resolution' &&
-          parsed.action !== 'content_controls' &&
           parsed.action !== 'chat_island' &&
           parsed.action !== 'open_code' &&
           parsed.action !== 'open_preview' &&

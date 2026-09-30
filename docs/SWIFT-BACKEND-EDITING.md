@@ -1,9 +1,15 @@
-# Swift editing coordinator: islands, controls sidecars, content drafts, navigation (S12)
+# Swift editing coordinator: islands, controls sidecars, navigation (S12)
 
 > **Since LKM-111 (2026-09-29):** the launch-time rollback (`TREZI_BACKEND_OWNER=legacy`,
 > `TreziService --legacy`) and the Bun twins it ran are removed. The Swift owner described
 > here is the only one; passages about the rollback, the legacy launch or the TS twins
 > are history. Current status: [SWIFT-BACKEND-RETIREMENT.md](SWIFT-BACKEND-RETIREMENT.md).
+
+> **Since LKM-114 (2026-09-29):** content controls (content editors) are removed. The
+> owner no longer has content drafts (`contentDrafts`/`saveContentDraft`/`clearContentDraft`)
+> and `content-controls.json` is no longer an allowed sidecar. A project's existing
+> `.trezi/content-controls.json` and a profile's old `service/editing/content-drafts/`
+> are left untouched and simply not read. Passages below about them are history.
 
 LKM-99, roadmap row S12 ("Editing/controls/content/composition/preview controllers") of
 the [canonical plan](SWIFT-BACKEND-PLAN.md) and [roadmap](SWIFT-BACKEND-ROADMAP.md). It
@@ -22,14 +28,13 @@ and the inspector views. Source writes are still proposals to the
   marker, in the repository lane (its Bun twins were removed in LKM-111).
 - `src/service/EditingIslands.swift`: island history files and the island state machine.
 - `src/service/EditingStores.swift`: the project sidecar commit (controls; since S15 also
-  `annotations.json` and `tokens.json`, see [retirement](SWIFT-BACKEND-RETIREMENT.md)), content drafts,
+  `annotations.json` and `tokens.json`, see [retirement](SWIFT-BACKEND-RETIREMENT.md)),
   deferred navigation.
 - `src/native/editing-service.ts`: Bun's client. `src/main/editing-owner.ts` is the
   seam: `editingOwner()` answers the installed owner and throws without the service.
   `test/fixtures/editing-owner/parity-golden.json` pins the removed twin's answers.
 - Bun's users: `src/main/chat-islands.ts` (views, composition preview, JS helpers),
-  `src/main/control-panels.ts` and `src/main/content-controls.ts` (render the next
-  store), `src/native/content-controller.ts` (drafts), `src/native/navigation-controller.ts`
+  `src/main/control-panels.ts` (renders the next store), `src/native/navigation-controller.ts`
   (performs a released navigation), `src/native/turn-boundaries.ts` (which turn an
   agent event begins or ends).
 
@@ -39,12 +44,11 @@ and the inspector views. Source writes are still proposals to the
 | --- | --- | --- |
 | Island history `<profile>/chat-islands/<sha256(root\0record)>.json` (unchanged `JSON.stringify(records)`) | Swift | Bun twin |
 | Island admission, activation, command admission, batch revision chain, per-island Undo group | Swift (service lifetime) | Bun twin (process lifetime) |
-| `.trezi/control-panels.json`, `.trezi/content-controls.json` writes | Swift, hash-bound, in the repository lane | Bun twin, hash-bound, in the Bun chain / lease |
-| Unsaved content-editor drafts `<profile>/service/editing/content-drafts/` | Swift (persisted) | Bun memory only (as before) |
+| `.trezi/control-panels.json` writes | Swift, hash-bound, in the repository lane | Bun twin, hash-bound, in the Bun chain / lease |
 | Pending `open_preview` navigation | Swift | Bun twin |
 | Manifest/recipe/definition validation, Jev composition, literal lex/render, island source reads | Bun JS helpers | Bun |
-| Island, content and control source edits | Bun proposes, Swift source owner commits | Bun writes |
-| Inspector views (styles, props, custom controls), content forms, composing preview | Bun controllers, rendered by AppKit | Bun |
+| Island and control source edits | Bun proposes, Swift source owner commits | Bun writes |
+| Inspector views (styles, props, custom controls), composing preview | Bun controllers, rendered by AppKit | Bun |
 | Preview DOM instrumentation (selection, styles, layers, comments) and its message allowlist | isolated WebKit JS | same |
 | Composer queue, drafts and attachments; project UI composition enablement | Bun (not moved, see TASKS) | Bun |
 
@@ -83,11 +87,6 @@ and the inspector views. Source writes are still proposals to the
   holds. A hand edit in between is refused and kept. `.trezi` must be a plain folder of
   the resolved root and the store a regular file: a symlink is refused (the legacy
   writer followed a link that stayed inside the project; it now refuses too). 1 MiB cap.
-- **Content drafts.** `{panel, revision, value}` per project root, saved (debounced) while
-  the form is dirty, cleared on save, reload and removal. A restored draft stays bound
-  to the revision it was edited against, so if the document changed meanwhile the form
-  shows the conflict and Save is refused by the revision check; Reload discards it. A
-  damaged drafts file is refused, never overwritten.
 - **Navigation.** `open_preview` from a turn waits for that turn to land; failure or park,
   a newer user turn and leaving the chat drop it; one made outside a turn opens now.
   Bun loads it only in the chat and project that asked, once the web server runs,
@@ -110,7 +109,6 @@ Private pipe, S01 frames, no revision, empty scope:
 | `islandSettle` | mutation | `{chat, successful, turn?}` | `{records \| null, cancelled}` |
 | `islandCommand` / `islandFinish` | mutation | `{chat, id, revision, action, sourceRevision}` / `{chat, ticket, ok, last, group?, revision?}` | `{ticket, expected, group?, initial?}` / `{}` |
 | `navigate` / `navigation` / `navigationTake` / `navigationState` | mutation ×3 / read | `{chat, root, path, turn?}` / `{chat, kind, turn?}` / `{chat}` / `{}` | `{ready}` / `{ready}` / `{root, path} \| {path:null}` / `[…]` |
-| `contentDrafts` / `saveContentDraft` / `clearContentDraft` | read / mutation / mutation | `{root}` / `{root, panel, revision, value}` / `{root, panel}` | `[{panel, revision, value, updated}]` / `{}` / `{}` |
 | `sidecar` | mutation (lane) | `{root, name, expectedHash \| null, content, leases?}` | `{ok, hash}` / `{ok:false, conflict}` |
 
 ## Rollback (tightened to this domain)
@@ -138,22 +136,20 @@ Private pipe, S01 frames, no revision, empty scope:
 `test/editing-owner.mjs` (unit tier) compiles the real owners into a fixture
 (`test/fixtures/editing-owner/main.swift`, with the conversation, repository and source
 owners) and drives them through Bun's clients:
-- **parity:** one scripted session (52 steps: definitions, same-turn replacement,
+- **parity:** one scripted session (48 steps: definitions, same-turn replacement,
   another turn's late terminal, its own landing, a reordered batch and its chain, Undo,
   Reset, reload, a later turn, a stopped turn cutting its composition short, duplicate
   success, origin-less records, two chats on one history, restart normalization,
-  navigation, content drafts) gives identical answers and identical history bytes on the
+  navigation) gives identical answers and identical history bytes on the
   legacy twin and the Swift owner; 9 sidecar steps (create, stale, bound update, hand
   edit kept, name, symlinked file and folder, size) are identical too;
 - **turns:** the conversation owner decides the origin (a stale attribution refused, the
   turn in flight recorded), activation waits for that turn, navigation waits and then
   loads only in the asking chat once its server runs; `TurnBoundaries` attributes a
   landing that finishes after the next turn began to the earlier turn;
-- **suites:** `chat-islands`, `shadow-controls`, `control-panels`, `content-controls` and
-  `native-content` re-run unchanged with the Swift owners preloaded
-  (since LKM-111 `test/helpers/with-service-owners.mjs`);
-- **drafts** (crash and restart, save/reload clear, stale base refused, damaged file
-  untouched), **lanes** (a sidecar waits for another chain's lease, runs inside its own),
+- **suites:** `chat-islands`, `shadow-controls` and `control-panels` re-run unchanged
+  with the Swift owners preloaded (since LKM-111 `test/helpers/with-service-owners.mjs`);
+- **lanes** (a sidecar waits for another chain's lease, runs inside its own),
   **crash** (SIGKILL before and after the history rename), **rollback**, **drain** and
   **schema**.
 

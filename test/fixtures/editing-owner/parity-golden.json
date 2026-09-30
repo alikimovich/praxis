@@ -1181,40 +1181,6 @@
    "bad path relative",
    "invalidRequest",
    "Invalid preview path."
-  ],
-  [
-   "no drafts",
-   []
-  ],
-  [
-   "drafts",
-   [
-    {
-     "panel": "other",
-     "revision": "82f3e9c695dc6b8d1b11818d5701919e286de8d47f7c3eb3100c485f79e57828",
-     "value": {
-      "title": "Other"
-     }
-    },
-    {
-     "panel": "hero",
-     "revision": "db77fd01af957221a4989b64b3770a83a3c56068405b9f0e9408feae57fd17e4",
-     "value": {
-      "title": "Draft 2"
-     }
-    }
-   ]
-  ],
-  [
-   "cleared",
-   [
-    "hero"
-   ]
-  ],
-  [
-   "oversized draft",
-   "invalidRequest",
-   "The draft exceeds 512 KB."
   ]
  ],
  "sidecars": [
