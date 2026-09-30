@@ -10,17 +10,24 @@
 //   resume <id>           reports a resumable thread id + done
 //   whoami                reports model, mode and the resumed thread + done
 //   error <message>       error + done
+//   auth <text>           the CLI's own synthetic reply <text>, classified like the Claude
+//                         adapter does: a sign-in failure is an `auth` error + done,
+//                         anything else is said + done
 //   images                reports each pasted image's type and SHA-256 + done
 //   env                   reports environment names and open descriptors + done
-//   hang                  never finishes (Stop decides)
+//   hang                  never finishes and emits nothing (Stop or the first-event deadline decides)
 //   crash                 exits mid-turn
 //   forge <json>          writes a raw frame to stdout, bypassing the host
 //   flood <bytes>         writes one line of that many bytes
 // FAKE_PROVIDER_STALL=1 never becomes ready; FAKE_PROVIDER_FAIL=1 fails to start;
 // FAKE_PROVIDER_WEDGE=1 makes interrupt never answer; FAKE_PROVIDER_IGNORE_EOF=1 keeps
 // running after its stdin closes (a helper the journal sweep must stop).
+// The same fake is also hosted as `claude` (for the Claude-only subscription token); its
+// "Check provider login" is the real Claude check, run against stand-in CLIs named by
+// CLAUDE_TEST_BUNDLED and CLAUDE_TEST_INSTALLED (`:`-separated).
 import { createHash } from 'node:crypto'
 import { fstatSync } from 'node:fs'
+import { checkClaudeLogin, isAuthFailure } from '../../../src/main/backends/claude-login.ts'
 import { runProviderHelper } from '../../../src/main/backends/helper-host.ts'
 import { createRecordCapture } from '../../../src/main/backends/record.ts'
 
@@ -76,6 +83,9 @@ const fake = {
         case 'resume': cap.setSdkSessionId(arg); return done()
         case 'whoami': say(`model=${model} mode=${mode} resumed=${ctx.resumeSessionId ?? 'none'}`); return done()
         case 'error': emit({ type: 'error', message: arg }); return done()
+        case 'auth':
+          if (!isAuthFailure({ message: { model: '<synthetic>', content: [{ type: 'text', text: arg }] } })) { say(arg); return done() }
+          emit({ type: 'error', code: 'auth', message: arg }); return done()
         case 'images': say(`images ${JSON.stringify((images ?? []).map((image) => [image.mediaType, sha(image.data)]))}`); return done()
         case 'env': {
           const inodes = []
@@ -107,10 +117,19 @@ const fake = {
   }
 }
 
+const claude = {
+  ...fake,
+  id: 'claude',
+  checkLogin: () => checkClaudeLogin({
+    bundled: process.env.CLAUDE_TEST_BUNDLED || null,
+    installed: (process.env.CLAUDE_TEST_INSTALLED ?? '').split(':').filter(Boolean)
+  })
+}
+
 if (process.env.FAKE_PROVIDER_IGNORE_EOF === '1') {
   process.on('SIGTERM', () => {})
   setInterval(() => {}, 1000)
-  runProviderHelper({ fake }, { input: process.stdin, output: process.stdout, exit: () => {} })
+  runProviderHelper({ fake, claude }, { input: process.stdin, output: process.stdout, exit: () => {} })
 } else {
-  runProviderHelper({ fake })
+  runProviderHelper({ fake, claude })
 }

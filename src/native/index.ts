@@ -61,6 +61,7 @@ import { NativeContextController } from './context-controller'
 import { NativeReviewController } from './review-controller'
 import { NativeActivityController } from './activity-controller'
 import { NativeSettingsController } from './settings-controller'
+import { withClaudePane } from './settings-claude'
 import { NativeSheetController } from './sheets-runtime'
 import { installNativeWorkspace } from './workspace-runtime'
 
@@ -410,7 +411,7 @@ async function main() {
   const previewRecovery = new NativePreviewRecovery(sheetController, root => platform.findServers(root), server => platform.stopServer(server))
   host.on('menu', ({ action }) => { if (action === 'servers' && workspaceController.state.activeKey) previewRecovery.open(workspaceController.state.activeKey) })
   const reviewController = new NativeReviewController(sheetController, url => shell.openExternal(url))
-  const settingsController = new NativeSettingsController(sheetController, preferences, refreshPreferences)
+  const settingsController = withClaudePane(new NativeSettingsController(sheetController, preferences, refreshPreferences))
   // An external edit adopted by the service reaches the controllers and the host.
   preferences.subscribe(() => { refreshPreferences(); shellController?.render() })
   host.on('sheet-action', action => { void sheetController.action(action) })

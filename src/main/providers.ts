@@ -5,10 +5,12 @@ import type {
   ModelCatalogResult,
   ModelChoice,
   ProviderConnection,
-  ProviderConnectionInput
+  ProviderConnectionInput,
+  ProviderLoginReport
 } from '../shared/api'
+import { homedir } from 'node:os'
 import { type CatalogBackend, type CatalogModel, setModelCatalog } from './model-catalog'
-import { codexModels, connectionStore as store, modelCatalog, setProviderDataDir } from './provider-data'
+import { codexModels, connectionStore as store, modelCatalog, seatLogin, setProviderDataDir } from './provider-data'
 import { modelsUrl, parseModelCatalog, sameOrigin, scrubSecret } from './providers-store'
 import type { RpcHandlerRegistry } from './rpc-router'
 
@@ -419,6 +421,26 @@ export function registerProviderIpc(
   )
 
   ipcMain.handle('providers:remove', (_e, id: string): Promise<void> => store.remove(id))
+
+  // The Claude subscription token (LKM-119): saved by the service, never read back.
+  ipcMain.handle('providers:seat-token-status', async (): Promise<{ hasToken: boolean }> => ({ hasToken: await seatLogin.hasToken() }))
+  ipcMain.handle('providers:seat-token-save', async (_e, token: string): Promise<{ ok: boolean; hasToken?: boolean; error?: string }> => {
+    try {
+      return { ok: true, hasToken: await seatLogin.save(typeof token === 'string' ? token : '') }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+  // "Check provider login": run in a helper launched like a chat's, in `root` (a chat's
+  // project) or the home folder.
+  ipcMain.handle('providers:check-login', async (_e, provider: string, root?: string): Promise<ProviderLoginReport> => {
+    const id = typeof provider === 'string' ? provider : 'claude'
+    try {
+      return await seatLogin.check(id, typeof root === 'string' && root ? root : homedir())
+    } catch (err) {
+      return { provider: id, loggedIn: null, detail: err instanceof Error ? err.message : String(err) }
+    }
+  })
 
   ipcMain.handle(
     'providers:catalog',

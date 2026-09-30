@@ -31,7 +31,9 @@ struct ProviderHelperCommand: Sendable {
 ///   Claude, `OPENAI_*`/`CODEX_*` for Codex). Every `TREZI_*` variable (the profile path,
 ///   the service pid, the agent tool socket and its token) and other providers'
 ///   credentials are left out. Credentials stay in their own stores (the Keychain,
-///   `~/.claude`, `~/.codex`); the owner never passes a secret to a helper.
+///   `~/.claude`, `~/.codex`). The one secret the owner passes is the Claude
+///   subscription token saved in Settings (LKM-119): `CLAUDE_CODE_OAUTH_TOKEN`, to
+///   Claude helpers only (`helperEnvironment` in `ProviderLaunch.swift`).
 /// - **Process group.** Its own group with a watchdog (`--watch-group`) and an entry
 ///   in the runtime journal, so descendants are stopped with it, on a service crash too.
 /// - **Output.** Line frames of at most `maxLine` bytes; a longer one is a violation
@@ -61,13 +63,23 @@ final class ProviderHelperProcess: @unchecked Sendable {
         "fake": ["FAKE_PROVIDER_"],
     ]
 
-    /// The helper's environment: the allowlist above, nothing else.
+    /// The helper's environment: the allowlist above, nothing else. USER, LOGNAME and
+    /// HOME come from the account database when the launch environment lacks them: the
+    /// Claude CLI names its Keychain item after $USER and reports "Not logged in"
+    /// without it (LKM-119).
     static func environment(base: [String: String], provider: String) -> [String: String] {
         let prefixes = providerPrefixes[provider] ?? []
         var out: [String: String] = [:]
         for (key, value) in base where baseVariables.contains(key) || prefixes.contains(where: { key.hasPrefix($0) }) {
             out[key] = value
         }
+        if let account = getpwuid(getuid()) {
+            let name = String(cString: account.pointee.pw_name), home = String(cString: account.pointee.pw_dir)
+            if out["USER"]?.isEmpty ?? true { out["USER"] = name }
+            if out["LOGNAME"]?.isEmpty ?? true { out["LOGNAME"] = name }
+            if out["HOME"]?.isEmpty ?? true { out["HOME"] = home }
+        }
+        if out["PATH"]?.isEmpty ?? true { out["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin" }
         out["TREZI_PROVIDER_HELPER"] = "1"
         return out
     }

@@ -39,6 +39,8 @@ final class ProviderOwner: @unchecked Sendable {
         var journal: RuntimeJournal?
         var grace: TimeInterval = ProviderPolicy.grace
         var readyTimeout: TimeInterval = 15
+        /// A helper turn with no event by then is ended with a visible error (LKM-119).
+        var firstEventTimeout: TimeInterval = 90
         var toolTimeout: TimeInterval = 120
         var maxLine: Int = ProviderPolicy.Limits.helperLine
         var now: @Sendable () -> Double = { (Date().timeIntervalSince1970 * 1000).rounded(.down) }
@@ -63,6 +65,8 @@ final class ProviderOwner: @unchecked Sendable {
         var opening: PipeFrame?
         var waiters: [PipeFrame] = []
         var deadline = 0
+        /// The first-event timer's token, and whether the turn has produced anything.
+        var silence = 0, heard = true
         var approvals: [String: String] = [:]
         var tools = 0
         var violated = false
@@ -122,7 +126,9 @@ final class ProviderOwner: @unchecked Sendable {
         }
     }
 
-    static let reads: Set<String> = ["recover", "snapshot", "status", "connectionSecret", "codexModels"]
+    static let reads: Set<String> = ["recover", "snapshot", "status", "connectionSecret", "codexModels", "seatTokenStatus", "diagnose"]
+    static let dataMethods: Set<String> = ["connectionSave", "connectionRemove", "connectionSecret", "catalogSave", "codexModels"]
+    static let loginMethods: Set<String> = ["seatTokenSave", "seatTokenStatus", "diagnose"]
     static let methods: [String: (required: Set<String>, optional: Set<String>)] = [
         "open": (["session", "chat", "provider", "root", "liveRoot", "background"], []),
         "openHelper": (["session", "chat", "provider", "root", "liveRoot", "background", "options", "context"], []),
@@ -134,6 +140,7 @@ final class ProviderOwner: @unchecked Sendable {
         "snapshot": ([], []), "status": ([], []),
         "connectionSave": (["input"], []), "connectionRemove": (["id"], []), "connectionSecret": (["id"], []),
         "catalogSave": (["backend", "models"], []), "codexModels": ([], []),
+        "seatTokenSave": (["provider", "token"], []), "seatTokenStatus": ([], []), "diagnose": (["provider", "root"], []),
     ]
 
     /// Provider data requests, answered off the session queue.
@@ -164,7 +171,7 @@ final class ProviderOwner: @unchecked Sendable {
         }
     }
 
-    private func settle(_ frame: PipeFrame, _ run: () throws -> JSValue) {
+    func settle(_ frame: PipeFrame, _ run: () throws -> JSValue) {
         do { answer(frame, .succeeded(try run())) } catch { answer(frame, .failed(Self.failure(error))) }
     }
 
@@ -173,10 +180,11 @@ final class ProviderOwner: @unchecked Sendable {
         guard frame.expectedRevision == nil, let rule = Self.methods[frame.method],
               frame.mode == (Self.reads.contains(frame.method) ? "read" : "mutation") else { throw ServiceContractFailure.invalidRequest }
         let body = try ProviderBody(frame, required: rule.required, optional: rule.optional)
-        if ["connectionSave", "connectionRemove", "connectionSecret", "catalogSave", "codexModels"].contains(frame.method) {
+        if Self.dataMethods.contains(frame.method) {
             try handleData(frame, body)
             return nil
         }
+        if Self.loginMethods.contains(frame.method) { return try handleLogin(frame, body) }
         let ok = JSValue.object([])
         switch frame.method {
         case "open":
@@ -215,6 +223,7 @@ final class ProviderOwner: @unchecked Sendable {
             if body.has("images") { fields.append(("images", try Self.images(body.value("images")))) }
             session.phase = .running; session.turnOpen = true
             session.helper?.write(Self.object(fields).utf8())
+            armFirstEvent(session)
             persist()
             return ok
         case "cancel":
@@ -349,40 +358,14 @@ final class ProviderOwner: @unchecked Sendable {
               value["liveRoot"] == nil || value["liveRoot"]?.text?.string == liveRoot,
               (value["sessionId"] != nil) == background else { throw ProviderRefusal(.unauthorized, "The helper context is outside its grant.") }
         let session = try opened(body, host: "helper", spawn: value["sessionId"]?.text?.string)
-        let environment = ProviderHelperProcess.environment(base: options.environment, provider: provider)
-        let helper: ProviderHelperProcess
-        do {
-            helper = try ProviderHelperProcess.launch(command, directory: session.root, environment: environment, watchdog: options.watchdog,
-                maxLine: options.maxLine,
-                onFrame: { [weak self] data in
-                    guard let owner = self else { return }
-                    owner.queue.async { owner.helperFrame(session, data) }
-                },
-                onOversize: { [weak self] in
-                    guard let owner = self else { return }
-                    owner.queue.async { owner.violation(session, "a frame larger than the limit") }
-                },
-                onExit: { [weak self] status, tail in
-                    guard let owner = self else { return }
-                    owner.queue.async { owner.exited(session, status: status, tail: tail) }
-                })
-        } catch { throw ProviderRefusal(.unavailable, "The provider helper could not start: \(error).") }
-        if let identity = helper.identity { options.journal?.add(identity) }
-        session.helper = helper
+        let open = Self.object([("type", .string(JSText("open"))), ("session", .string(JSText(session.id))),
+                                ("provider", .string(JSText(provider))), ("root", .string(JSText(session.root))),
+                                ("options", body.value("options")!), ("context", value)]).utf8()
         session.opening = frame
         sessions[session.id] = session
-        helper.write(Self.object([("type", .string(JSText("open"))), ("session", .string(JSText(session.id))),
-                                  ("provider", .string(JSText(provider))), ("root", .string(JSText(session.root))),
-                                  ("options", body.value("options")!), ("context", value)]).utf8())
         persist()
-        queue.asyncAfter(deadline: .now() + options.readyTimeout) {
-            guard let opening = session.opening, self.sessions[session.id] === session else { return }
-            session.opening = nil
-            self.sessions[session.id] = nil
-            self.answer(opening, .failed(PreferencesOwner.fail(.deadlineExceeded, "The provider helper did not start in time.")))
-            self.end(session, reason: "did not start")
-            self.persist()
-        }
+        // A Claude helper gets the subscription token saved in Settings (`ProviderLaunch.swift`).
+        withSeatToken(provider) { token in self.launchHelper(session, command, open: open, token: token) }
         return nil
     }
 
@@ -428,7 +411,7 @@ final class ProviderOwner: @unchecked Sendable {
             sessions[session.id] = nil
             answer(opening, .failed(PreferencesOwner.fail(.unavailable, "The provider helper exited before it was ready (\(code))\(detail).")))
         }
-        finishTurn(session, "The provider helper stopped unexpectedly (\(code)). Start a new chat to continue.")
+        finishTurn(session, "The provider helper stopped unexpectedly (\(code)). Send your message again to continue.")
         session.phase = .stopped
         wake(session, escalate: true)
         relay(session, "exit", [("reason", .string(JSText(session.violated ? "violation" : code)))])
@@ -436,10 +419,12 @@ final class ProviderOwner: @unchecked Sendable {
     }
 
     /// A turn the helper can no longer finish ends here: one `error`, one `done`.
-    func finishTurn(_ session: Session, _ message: String) {
+    func finishTurn(_ session: Session, _ message: String, code: String? = nil) {
         guard session.turnOpen else { return }
         session.turnOpen = false
-        relay(session, "event", [("value", Self.object([("type", .string(JSText("error"))), ("message", .string(JSText(message)))]))])
+        var error: [(String, JSValue)] = [("type", .string(JSText("error"))), ("message", .string(JSText(message)))]
+        if let code { error.append(("code", .string(JSText(code)))) }
+        relay(session, "event", [("value", Self.object(error))])
         relay(session, "event", [("value", Self.object([("type", .string(JSText("done")))]))])
     }
 
