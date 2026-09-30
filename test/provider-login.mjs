@@ -177,7 +177,7 @@ try {
       crash.map((e) => e.type),
       ['error', 'done']
     )
-    assert.match(crash[0].message, /stopped unexpectedly \(status 7\)/)
+    assert.match(crash[0].message, /stopped unexpectedly \(status 7\)\. Send your message again to continue\./)
     await sleep(200)
     assert.equal(
       c.delta(await c.turn('say after the crash')),

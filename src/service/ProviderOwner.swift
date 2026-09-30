@@ -411,7 +411,7 @@ final class ProviderOwner: @unchecked Sendable {
             sessions[session.id] = nil
             answer(opening, .failed(PreferencesOwner.fail(.unavailable, "The provider helper exited before it was ready (\(code))\(detail).")))
         }
-        finishTurn(session, "The provider helper stopped unexpectedly (\(code)). Start a new chat to continue.")
+        finishTurn(session, "The provider helper stopped unexpectedly (\(code)). Send your message again to continue.")
         session.phase = .stopped
         wake(session, escalate: true)
         relay(session, "exit", [("reason", .string(JSText(session.violated ? "violation" : code)))])

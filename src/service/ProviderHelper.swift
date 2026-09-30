@@ -33,7 +33,7 @@ struct ProviderHelperCommand: Sendable {
 ///   credentials are left out. Credentials stay in their own stores (the Keychain,
 ///   `~/.claude`, `~/.codex`). The one secret the owner passes is the Claude
 ///   subscription token saved in Settings (LKM-119): `CLAUDE_CODE_OAUTH_TOKEN`, to
-///   Claude helpers only (`ProviderLogin.swift`).
+///   Claude helpers only (`helperEnvironment` in `ProviderLaunch.swift`).
 /// - **Process group.** Its own group with a watchdog (`--watch-group`) and an entry
 ///   in the runtime journal, so descendants are stopped with it, on a service crash too.
 /// - **Output.** Line frames of at most `maxLine` bytes; a longer one is a violation
