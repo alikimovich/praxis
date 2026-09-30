@@ -127,6 +127,8 @@ export function claudeAuthStatus(path: string, timeout = PROBE_TIMEOUT): Promise
 export interface ClaudeCandidates {
   bundled?: string | null
   installed?: string[]
+  /** The `security` tool; by default the first one on PATH, else `/usr/bin/security`. */
+  security?: string
 }
 
 let cached: Promise<ClaudeCli> | null = null
@@ -174,6 +176,8 @@ export interface KeychainProbe {
   /** `security list-keychains -d user` and `security default-keychain`, one line each. */
   list: string
   default: string
+  /** Exit codes of those two (LKM-125); null: could not run. Non-zero: no user keychain here. */
+  codes: { listKeychains: number | null; defaultKeychain: number | null }
   error?: string
 }
 
@@ -235,13 +239,18 @@ const oneLine = (text: string): string =>
     .slice(0, 500)
 
 /** Whether the login Keychain item can be found from this process, and which keychains it searches. */
-export async function probeKeychain(env: NodeJS.ProcessEnv = process.env): Promise<KeychainProbe> {
+export async function probeKeychain(
+  explicit?: string,
+  env: NodeJS.ProcessEnv = process.env
+): Promise<KeychainProbe> {
   const security =
+    explicit ??
     (env.PATH ?? '')
       .split(':')
       .filter(Boolean)
       .map((dir) => join(dir, 'security'))
-      .find(executable) ?? '/usr/bin/security'
+      .find(executable) ??
+    '/usr/bin/security'
   const [find, list, fallback] = await Promise.all([
     runTool(security, ['find-generic-password', '-s', KEYCHAIN_ITEM], false),
     runTool(security, ['list-keychains', '-d', 'user'], true),
@@ -254,6 +263,7 @@ export async function probeKeychain(env: NodeJS.ProcessEnv = process.env): Promi
     exit: find.code,
     list: shown(list),
     default: shown(fallback),
+    codes: { listKeychains: list.code, defaultKeychain: fallback.code },
     ...(find.error ? { error: find.error } : {})
   }
 }
@@ -298,8 +308,12 @@ const describe = (auth: ClaudeAuth): string =>
 export async function checkClaudeLogin(
   candidates: ClaudeCandidates = {}
 ): Promise<Omit<ProviderLoginReport, 'provider'>> {
-  const [cli, keychain] = await Promise.all([resolveClaudeCli(true, candidates), probeKeychain()])
+  const [cli, keychain] = await Promise.all([
+    resolveClaudeCli(true, candidates),
+    probeKeychain(candidates.security)
+  ])
   const credentials = probeCredentials()
+  const exit = (code: number | null) => (code === null ? 'did not run' : `exit ${code}`)
   const used =
     cli.source === 'installed' ? cli.installed.find((c) => c.path === cli.executable) : undefined
   const auth = used?.auth ?? cli.bundled.auth
@@ -313,6 +327,11 @@ export async function checkClaudeLogin(
       : ['No installed claude CLI found.']),
     `Chats use: ${cli.source === 'installed' ? cli.executable : 'the bundled CLI'}`,
     describeKeychain(keychain),
+    `Keychain in this helper: security list-keychains ${exit(keychain.codes.listKeychains)}; security default-keychain ${exit(keychain.codes.defaultKeychain)}${
+      keychain.codes.listKeychains === 0 && keychain.codes.defaultKeychain === 0
+        ? ''
+        : ' (no user keychain: a login kept in the Keychain cannot be read here)'
+    }`,
     `Keychains searched (security list-keychains -d user): ${keychain.list}`,
     `Default keychain (security default-keychain): ${keychain.default}`,
     describeCredentials(credentials),
@@ -327,8 +346,9 @@ export async function checkClaudeLogin(
     ...(path ? { executable: path } : {}),
     ...(auth.authMethod ? { authMethod: auth.authMethod } : {}),
     token: !!env.CLAUDE_CODE_OAUTH_TOKEN,
-    keychain: keychain.readable,
-    keychainExit: keychain.exit,
+    keychain: keychain.codes,
+    keychainItem: keychain.readable,
+    keychainItemExit: keychain.exit,
     keychainList: keychain.list,
     keychainDefault: keychain.default,
     credentialsPath: credentials.path,

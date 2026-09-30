@@ -290,9 +290,12 @@ export interface ProviderLoginReport {
   authMethod?: string
   /** A subscription token from Settings is in the helper's environment. */
   token?: boolean
+  /** Exit codes of `security list-keychains` / `security default-keychain` run in the
+   *  helper (null: could not run). Non-zero: the helper has no user keychain (LKM-125). */
+  keychain?: { listKeychains: number | null; defaultKeychain: number | null }
   /** Claude, from inside the helper (LKM-124): `security find-generic-password -s "Claude Code-credentials"` (no `-w`, output discarded) found the item; null: `security` did not run. */
-  keychain?: boolean | null
-  keychainExit?: number | null
+  keychainItem?: boolean | null
+  keychainItemExit?: number | null
   /** `security list-keychains -d user` and `security default-keychain`, on one line each. */
   keychainList?: string
   keychainDefault?: string

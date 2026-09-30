@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { nativeCatAssets } from './native-cat-assets.mjs'
 import { bundleBun } from './bundle-bun.mjs'
+import { serviceInfoPlist } from './service-info.mjs'
 import { build as bundle } from 'esbuild'
 import { MIN_MACOS, requireSupportedPlatform } from './requirements.mjs'
 
@@ -92,15 +93,7 @@ writeFileSync(
 )
 const serviceContents = join(contents, 'XPCServices/dev.praxis.service.xpc/Contents')
 mkdirSync(join(serviceContents, 'MacOS'), { recursive: true })
-writeFileSync(join(serviceContents, 'Info.plist'), `<?xml version="1.0" encoding="UTF-8"?>
-<plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>dev.praxis.service</string>
-<key>CFBundleName</key><string>Trezi Service</string>
-<key>CFBundleExecutable</key><string>TreziService</string>
-<key>CFBundlePackageType</key><string>XPC!</string>
-<key>CFBundleVersion</key><string>1</string>
-<key>XPCService</key><dict><key>ServiceType</key><string>Application</string><key>RunLoopType</key><string>dispatch_main</string></dict>
-</dict></plist>`)
+writeFileSync(join(serviceContents, 'Info.plist'), serviceInfoPlist())
 const serviceResult = Bun.spawnSync([
   'xcrun', 'swiftc', '-O', '-target', target,
   '-module-cache-path', join(out, 'module-cache'),
@@ -125,6 +118,7 @@ const result = Bun.spawnSync(
     join(root, 'src/native/ServiceClient.swift'),
     join(root, 'src/native/HostService.swift'),
     join(root, 'src/native/HostLaunch.swift'),
+    join(root, 'src/native/SecuritySession.swift'),
     join(root, 'src/native/Shell.swift'),
     join(root, 'src/native/ProjectCell.swift'),
     join(root, 'src/native/SidebarVerification.swift'),

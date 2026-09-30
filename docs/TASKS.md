@@ -15,6 +15,12 @@ Root cause of the reported "not logged in" is open (Keychain/service context, se
 - [ ] Operator: run Check login on the operator Mac and record the helper's Keychain/credentials lines in the `docs/PROVIDERS.md` three-context table (live, no model call); pick the LKM-125 fix from the result.
 - [ ] Operator: start Trezi from a Claude Code shell with a normal `claude login` and confirm Check login says logged in (live, no model call).
 - [ ] `src/main/diagnose.ts` (preview "Find a fix…") still inherits Bun's environment.
+## Service keeps the user's Keychain (LKM-125)
+
+- [x] The XPC service plist sets `JoinExistingSession` (`scripts/service-info.mjs`): the service, Bun, the `TreziHost --crypto` helper and provider helpers stay in the host's security session under `bun run dev` and `open -a`.
+- [x] Check login reports `security list-keychains` / `default-keychain` exit codes from the helper (`keychain` field and detail line), never their output.
+- [x] Tests: `service-session` (plist, probe), `provider-login` (keychain fields), native settings step `security-session` (host and service child share one session).
+
 ## Inspector as a floating island over the preview (LKM-122)
 
 - [x] `NativeEditingInspector` is a Liquid Glass island (composer inset 10, radius 24; `NSVisualEffectView` popover before macOS 26) floating on the preview's right edge. `WorkspaceLayout` no longer subtracts it from the preview, so opening or closing it never reflows the page.

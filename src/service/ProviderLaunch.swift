@@ -182,17 +182,25 @@ extension ProviderOwner {
             let key = name.string
             switch key {
             case "provider": continue
-            case "loggedIn", "keychain":
+            case "loggedIn", "keychainItem":
                 guard field == .null || field == .bool(true) || field == .bool(false) else { return nil }
             case "token", "credentialsExists", "credentialsReadable":
                 guard field == .bool(true) || field == .bool(false) else { return nil }
-            case "keychainExit", "credentialsSize":
+            case "keychainItemExit", "credentialsSize":
                 // A `security` exit status or a byte count: null when it did not run or the file is absent.
                 if field != .null {
                     guard case .number(let number) = field, number >= 0, number <= 1e12, number == number.rounded() else { return nil }
                 }
             case "source":
                 guard let source = field.text?.string, source == "bundled" || source == "installed" else { return nil }
+            case "keychain":
+                // LKM-125: `security list-keychains` / `default-keychain` exit codes only.
+                guard case .object(let codes) = field, codes.count <= 2 else { return nil }
+                for (probe, code) in codes {
+                    guard ["listKeychains", "defaultKeychain"].contains(probe.string) else { return nil }
+                    if code == .null { continue }
+                    guard case .number(let n) = code, n == n.rounded(), abs(n) <= 255 else { return nil }
+                }
             case "executable", "authMethod", "detail", "keychainList", "keychainDefault", "credentialsPath":
                 guard let text = field.text, text.count <= 4096, !text.contains(0) else { return nil }
                 if let token, !token.isEmpty, text.string.contains(token) { return nil }

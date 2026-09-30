@@ -26,6 +26,7 @@ const UNIT = [
   "provider-owner",
   "provider-data",
   "provider-login",
+  "service-session",
   "native-settings-claude",
   "editing-owner",
   "workflow-owner",

@@ -26,7 +26,8 @@
 // running after its stdin closes (a helper the journal sweep must stop).
 // The same fake is also hosted as `claude` (for the Claude-only subscription token); its
 // "Check provider login" is the real Claude check, run against stand-in CLIs named by the
-// arguments --claude-bundled=<path> and --claude-installed=<path:path>.
+// arguments --claude-bundled=<path> and --claude-installed=<path:path>, and a stand-in
+// `security` named by --claude-security=<path> (else the first on PATH, then the real one).
 import { createHash } from 'node:crypto'
 import { fstatSync } from 'node:fs'
 import { checkClaudeLogin, isAuthFailure, resolveClaudeCli } from '../../../src/main/backends/claude-login.ts'
@@ -130,7 +131,11 @@ const fake = {
 // Arguments, not variables: a Claude helper gets only the allowlisted CLAUDE_* names (LKM-124).
 function claudeCandidates() {
   const flag = (name) => process.argv.find((arg) => arg.startsWith(`--${name}=`))?.slice(name.length + 3) ?? ''
-  return { bundled: flag('claude-bundled') || null, installed: flag('claude-installed').split(':').filter(Boolean) }
+  return {
+    bundled: flag('claude-bundled') || null,
+    installed: flag('claude-installed').split(':').filter(Boolean),
+    ...(flag('claude-security') ? { security: flag('claude-security') } : {})
+  }
 }
 
 const claude = {

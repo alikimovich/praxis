@@ -360,11 +360,12 @@ session's `CODEX_SANDBOX` and `CODEX_SANDBOX_NETWORK_DISABLED` through in the sa
 
 This is a real defect and is fixed below, but it does **not** explain the operator's
 report: their Terminal has no `CLAUDE_*`/`ANTHROPIC_*` variables, so
-`CLAUDE_CODE_SIMPLE` is not their failure. **The root cause of the reported failure is
-open.** The leading hypothesis is that processes started by the Trezi service (provider
-helpers, the Keychain helper) cannot use the user's login Keychain; see
-[Keychain and credentials-file diagnostics](#keychain-and-credentials-file-diagnostics-lkm-124)
-and LKM-125. (From a Terminal shell, `security find-generic-password -s "Claude
+`CLAUDE_CODE_SIMPLE` is not their failure. The reported failure is a service-context
+one: processes started by the Trezi service (provider helpers, the Keychain helper)
+could not use the user's login Keychain. LKM-125 ([below](#the-service-keeps-the-users-security-session-lkm-125))
+fixes that in the service's plist; the live confirmation is still pending, see
+[Keychain and credentials-file diagnostics](#keychain-and-credentials-file-diagnostics-lkm-124).
+(From a Terminal shell, `security find-generic-password -s "Claude
 Code-credentials"` found the item, exit 0; the service and TreziHost contexts are
 compared in the table there, with the live cells still pending.)
 
@@ -412,7 +413,7 @@ Keychain. Check login now answers it from inside the helper, with the helper's o
 `src/main/backends/claude-login.ts`). The report shows, and `ProviderLoginReport` types:
 
 - `Keychain: readable from this context` or `not readable from this context (security
-  exit N)` (`keychain`, `keychainExit`): the exit status of
+  exit N)` (`keychainItem`, `keychainItemExit`): the exit status of
   `security find-generic-password -s "Claude Code-credentials"`, run **without** `-w`/`-g`
   and with stdout and stderr discarded. `readable` means the item was found; its secret is
   not read. "unknown" means `security` did not run.
@@ -447,10 +448,11 @@ issue. Compare it with, in Terminal:
 `security list-keychains -d user`, `security default-keychain` and
 `stat -f '%N %z bytes mode %Lp' ~/.claude/.credentials.json`. Interpretation: exit 0 in
 Terminal and non-zero (or an empty/different keychain list) in the helper means the
-service's process tree lost the user's security session, which is the LKM-125 direction
-(keep the service in the GUI session, or move Keychain work and the Claude helper spawn
-into TreziHost). A readable file with `loggedIn: false` would point at the CLI instead.
-No fix for that is chosen here: it needs these results first.
+service's process tree lost the user's security session, which LKM-125 fixes with
+`JoinExistingSession` (below): after that fix the helper's line should read exit 0 too,
+and a non-zero one means the fix did not take effect. A readable file with
+`loggedIn: false` would point at the CLI instead. Whether the fix works on the operator
+Mac is not verified by this change.
 
 **Tests.** `test/provider-login.mjs` (keychain): a fake `security` (exit 0 and exit 44)
 on the helper PATH prints the secret on stdout and stderr; fixture HOMEs with a 0600
@@ -459,3 +461,40 @@ not-readable lines, the exit code, both keychain lines, the file's path, existen
 readability, size and mode, that only `find-generic-password -s`, `list-keychains -d user`
 and `default-keychain` are called (no `-w`/`-g`), and that neither the keychain secret nor
 the file's content appears in the report, the service log or the pipe.
+
+## The service keeps the user's security session (LKM-125)
+
+**Symptom.** Save token (Settings → AI Providers → Claude…) and adding or updating a
+connection key failed with "macOS Keychain encryption unavailable; unlock the keychain
+and retry", a chat on a saved connection said its key "could not be read", and a Claude
+helper reported `loggedIn: false` while `claude auth status` in Terminal said `true`.
+
+**Root cause.** The XPC service's `Info.plist` had no `XPCService.JoinExistingSession`,
+so launchd started the service in a **new security session**, one without the user's
+login keychain. Every process it starts inherits that session: Bun, the
+`TreziHost --crypto` Keychain helper (connection keys, the subscription token) and the
+provider helpers with the Claude CLI (its login is the Keychain item
+`Claude Code-credentials`). That held for `bun run dev` and `open -a` alike, since both
+reach the service through XPC. Only the `~/.claude/.credentials.json` fallback or an
+exported `CLAUDE_CODE_OAUTH_TOKEN` worked there.
+
+**Fix.** `scripts/service-info.mjs` writes the service plist with
+`JoinExistingSession` set, so the service runs in its caller's (the host's) session and
+its children reach the same keychains. A plain `claude auth login` in Terminal is then
+seen by chats, with no token.
+
+**Check login** (the chat card and Settings → AI Providers → Claude…) now also reports,
+from inside the helper, the exit codes of `security list-keychains` and
+`security default-keychain` (`keychain` in the report, and a "Keychain in this helper"
+line in its detail). A non-zero code means the helper has no user keychain. The service
+accepts only those two integer fields there. The LKM-124 diagnostics above run the same
+two commands (the list with `-d user`) and also show their one-line output
+(`keychainList`, `keychainDefault`); security's error output is never shown.
+
+**Proof.** `test/service-session.mjs` (unit) parses the plist the build writes and checks
+the session probe (`src/native/SecuritySession.swift`, the host's `securitySession`
+command and `TreziHost --session`: session id, graphic-access bit, the two exit codes).
+The native settings group's `security-session` step (`src/native/smoke-session.ts`) runs
+`TreziHost --session` from Bun under the real service and requires the same report as
+the host's (`security-session.json`). `test/provider-login.mjs` covers the Check login
+fields with stand-in `security` commands. No test writes to the user's keychain.
