@@ -25,6 +25,8 @@ const UNIT = [
   "conversation-owner",
   "provider-owner",
   "provider-data",
+  "provider-login",
+  "native-settings-claude",
   "editing-owner",
   "workflow-owner",
   "platform-owner",

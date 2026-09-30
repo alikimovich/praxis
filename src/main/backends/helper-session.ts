@@ -48,7 +48,7 @@ async function startHelperSession(
   ctx?: SpawnContext
 ): Promise<ProviderSession> {
   const owner = providerOwner()
-  const session = randomUUID()
+  let session = randomUUID()
   const key = projectKey(root)
   const emitKey = ctx?.emitKey ?? key
   const cap = createRecordCapture(root, key)
@@ -112,20 +112,22 @@ async function startHelperSession(
     }
   }
 
-  await owner.openHelper(
-    { session, chat: emitKey, provider, root, liveRoot: ctx?.liveRoot ?? root, background: !!ctx?.sessionId },
-    {
-      options,
-      context: {
-        emitKey,
-        ...(ctx?.sessionId ? { sessionId: ctx.sessionId } : {}),
-        ...(ctx?.resumeSessionId ? { resumeSessionId: ctx.resumeSessionId } : {}),
-        ...(ctx?.liveRoot ? { liveRoot: ctx.liveRoot } : {}),
-        ...(ctx?.projectMemory ? { projectMemory: ctx.projectMemory } : {})
-      }
-    },
-    handlers
-  )
+  const open = (resume: string | undefined): Promise<unknown> =>
+    owner.openHelper(
+      { session, chat: emitKey, provider, root, liveRoot: ctx?.liveRoot ?? root, background: !!ctx?.sessionId },
+      {
+        options,
+        context: {
+          emitKey,
+          ...(ctx?.sessionId ? { sessionId: ctx.sessionId } : {}),
+          ...(resume ? { resumeSessionId: resume } : {}),
+          ...(ctx?.liveRoot ? { liveRoot: ctx.liveRoot } : {}),
+          ...(ctx?.projectMemory ? { projectMemory: ctx.projectMemory } : {})
+        }
+      },
+      handlers
+    )
+  await open(ctx?.resumeSessionId)
 
   /** A turn the helper can no longer take still ends: one `error`, one `done`. */
   const refuse = (message: string): void => {
@@ -133,13 +135,33 @@ async function startHelperSession(
     emit({ type: 'done' })
   }
 
+  // After its helper stopped (a crash, or the owner ending a turn that never answered,
+  // LKM-119), an interactive chat's next message starts a new helper on the same
+  // conversation. A helper that broke its grant, or a background run's, is not restarted.
+  let reopening: Promise<void> | null = null
+  const reopen = (): Promise<void> => {
+    reopening ??= (async () => {
+      void owner.close(session).catch(ignore)
+      session = randomUUID()
+      gone = null
+      await open(reportedResume ?? ctx?.resumeSessionId)
+    })().finally(() => {
+      reopening = null
+    })
+    return reopening
+  }
+
   return {
     key,
     root,
     options,
     send: (text, images) => {
-      if (gone) return refuse(`The provider helper is not running (${gone}). Start a new chat to continue.`)
-      void owner.send(session, text, images).catch((error) => refuse(error instanceof Error ? error.message : String(error)))
+      if (gone && (gone === 'violation' || ctx?.sessionId)) {
+        return refuse(`The provider helper is not running (${gone}). Start a new chat to continue.`)
+      }
+      void (gone || reopening ? reopen() : Promise.resolve())
+        .then(() => owner.send(session, text, images))
+        .catch((error) => refuse(error instanceof Error ? error.message : String(error)))
     },
     pending,
     pendingQuestions,

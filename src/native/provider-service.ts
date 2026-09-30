@@ -146,7 +146,10 @@ export function serviceProvider(link: ProviderLink, options: { timeout?: number 
       codexModels: async () => {
         const { stdout } = await call('codexModels', {}, 'read')
         try { return typeof stdout === 'string' ? parseCodexModels(JSON.parse(stdout)) : [] } catch { return [] }
-      }
+      },
+      saveSeatToken: async (provider, token) => (await call('seatTokenSave', { provider, token })).hasToken === true,
+      seatTokenStatus: () => call('seatTokenStatus', {}, 'read'),
+      checkLogin: async (provider, root) => (await call('diagnose', { provider, root }, 'read')).report
     }
   }
 }

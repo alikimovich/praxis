@@ -274,6 +274,26 @@ export interface SlashCommandItem {
  * shared, but the renderer uses the origin to choose the right completion UX. */
 export type BackgroundSpawnOrigin = 'comment' | 'text-edit'
 
+/** Why a turn failed, when the chat shows a card for it (LKM-119). */
+export type ProviderErrorCode = 'auth' | 'no-response'
+
+/**
+ * "Check provider login" (LKM-119): the provider's auth status as its helper sees it
+ * (same environment allowlist, PATH and cwd as a chat). Names only, never a secret.
+ */
+export interface ProviderLoginReport {
+  provider: string
+  loggedIn: boolean | null
+  /** The CLI the chats use: `bundled` (the SDK's) or `installed` (e.g. ~/.local/bin/claude). */
+  source?: 'bundled' | 'installed'
+  executable?: string
+  authMethod?: string
+  /** A subscription token from Settings is in the helper's environment. */
+  token?: boolean
+  /** One line per probe, human-readable. */
+  detail: string
+}
+
 export type AgentEvent = (
   | { type: 'delta'; text: string }
   | { type: 'status'; text: string }
@@ -291,7 +311,10 @@ export type AgentEvent = (
    *  the share of `input` served from the prompt cache, not an extra amount. */
   | { type: 'usage'; input: number; output: number; cached: number }
   | { type: 'done'; landingPending?: boolean }
-  | { type: 'error'; message: string }
+  /** `code` (LKM-119): `auth` — the provider is not signed in (a login card, not
+   *  assistant text); `no-response` — the turn produced nothing within the owner's
+   *  first-event deadline and was ended. */
+  | { type: 'error'; message: string; code?: ProviderErrorCode }
   /** An auto-generated name for this chat, summarising what the conversation is
    *  about (not its opening words). Emitted once per chat after the first turn
    *  completes; the renderer stores it on the chat slice and the rail shows it. */

@@ -29,6 +29,7 @@ import { oklchScale } from '../oklch'
 import { observeAgentPreview } from '../preview-observation-tools'
 import { discoverPortableSkills } from '../bundled-skills'
 import { withSkillReferences } from './skill-menu'
+import { checkClaudeLogin, isAuthFailure, isLoginCommand, LOGIN_COMMAND_MESSAGE, resolveClaudeCli } from './claude-login'
 import { treziRules } from '../rules'
 import { elevationScale, layeredShadow } from '../shadows'
 import { findPack, SKILL_PACKS } from '../skill-packs'
@@ -1052,10 +1053,14 @@ async function startSession(
     ])
   })
 
+  // In a provider helper: an installed `claude` that is logged in when the bundled
+  // one is not (LKM-119, `claude-login.ts`).
+  const cli = process.env.TREZI_PROVIDER_HELPER === '1' ? await resolveClaudeCli() : null
   const q: Query = query({
     prompt: input,
     options: {
       cwd: root,
+      ...(cli?.executable ? { pathToClaudeCodeExecutable: cli.executable } : {}),
       settingSources: ['user', 'project', 'local'],
       // The repo's CLAUDE.md + skills load via settingSources; Trezi's own
       // operating rules (v8 R) are appended to the Claude Code preset, with the
@@ -1267,6 +1272,8 @@ async function startSession(
   // Drive the output stream for the life of the session.
   void (async () => {
     let streamedText = false
+    // The turn's login card is out; if the CLI then exits, the turn only needs its `done`.
+    let authFailed = false
     // Token accounting for the API request in flight. The SDK reports the SAME
     // request's usage repeatedly and cumulatively — `message_start` (the input
     // side), then each `message_delta` (the running output total), then the
@@ -1322,6 +1329,14 @@ async function startSession(
             // The final, authoritative usage for this request — a no-op delta
             // when the stream events above already reported all of it.
             reportUsage((msg.message as { usage?: unknown }).usage)
+            // "Not logged in · Please run /login" is the CLI's, not the model's: a login
+            // card, never assistant text (LKM-119).
+            if (isAuthFailure(msg as never)) {
+              const said = msg.message.content.map((block) => (block.type === 'text' ? block.text : '')).join(' ').trim()
+              emit({ type: 'error', code: 'auth', message: said || 'Claude is not logged in.' })
+              authFailed = true
+              break
+            }
             for (const block of msg.message.content) {
               if (block.type === 'text' && !streamedText) {
                 cap.appendAssistant(block.text)
@@ -1340,12 +1355,14 @@ async function startSession(
             cap.finalize()
             emit({ type: 'done' })
             streamedText = false
+            authFailed = false
             break
           }
         }
       }
     } catch (err) {
-      if (!abort.signal.aborted) {
+      if (authFailed) emit({ type: 'done' })
+      else if (!abort.signal.aborted) {
         emit({ type: 'error', message: err instanceof Error ? err.message : String(err) })
       }
     }
@@ -1355,7 +1372,15 @@ async function startSession(
     key,
     root,
     options,
-    send: (text, images) => input.push(withSkillReferences(text, availablePortableSkills()), images),
+    send: (text, images) => {
+      // Claude's /login needs its terminal UI: the chat shows the login card instead.
+      if (isLoginCommand(text)) {
+        emit({ type: 'error', code: 'auth', message: LOGIN_COMMAND_MESSAGE })
+        emit({ type: 'done' })
+        return
+      }
+      input.push(withSkillReferences(text, availablePortableSkills()), images)
+    },
     pending,
     pendingQuestions,
     emit,
@@ -1505,5 +1530,6 @@ export const claudeProvider: ModelProvider = {
   supportsSpawn: true,
   startSession,
   generateTitle,
-  updateProjectMemory
+  updateProjectMemory,
+  checkLogin: checkClaudeLogin
 }

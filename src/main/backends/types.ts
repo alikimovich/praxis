@@ -4,6 +4,7 @@ import type {
   AgentOptions,
   ImageAttachment,
   PermissionMode,
+  ProviderLoginReport,
   QuestionAnswers,
   SessionRecord,
   SessionTranscriptEntry
@@ -193,4 +194,9 @@ export interface ModelProvider {
     transcript: SessionTranscriptEntry[],
     options: AgentOptions
   ) => Promise<string | null>
+  /**
+   * "Check provider login" (LKM-119): the provider CLI's auth status, run inside a
+   * provider helper (its environment and cwd are a chat's). Optional.
+   */
+  checkLogin?: () => Promise<Omit<ProviderLoginReport, 'provider'>>
 }

@@ -130,7 +130,11 @@ decided by the service and checked:
 - **Environment.** Rebuilt from an allowlist: HOME, PATH, user, shell, locale, temp,
   plus its own provider's prefixes (`ANTHROPIC_`/`CLAUDE_`, `OPENAI_`/`CODEX_`). Every
   `TREZI_*` variable (profile path, service pid, the agent tool socket token) and other
-  providers' keys are left out. Tested with planted secrets.
+  providers' keys are left out. Tested with planted secrets. Since LKM-119 a missing
+  `USER`, `LOGNAME` or `HOME` is filled from the account record and a missing `PATH`
+  gets `/usr/bin:/bin:/usr/sbin:/sbin` (the Claude CLI finds its Keychain login by
+  `$USER`). A Claude helper also gets the subscription token saved in Settings as
+  `CLAUDE_CODE_OAUTH_TOKEN`; no other helper does (`src/service/ProviderLaunch.swift`).
 - **Process group.** Its own group, a `--watch-group` watchdog and a runtime journal
   entry, so a crashed service's helper is stopped at the next launch (tested with a
   helper that ignores EOF and SIGTERM).
@@ -152,7 +156,10 @@ decided by the service and checked:
   `done`. One that is not ready within 15 s is stopped (`deadlineExceeded`). One that
   reports a failed start answers `providerFailure`. One whose graceful stop does not
   answer by the deadline is killed, its turn ended once, and Bun rebuilds the chat
-  (`hardStopped`).
+  (`hardStopped`). A turn that produces nothing but its command list within 90 s
+  (`firstEventTimeout`) ends with a `no-response` error ("Claude did not respond —
+  check login (claude auth status) and retry") and its helper is stopped; the chat's
+  next message starts a new helper that resumes the thread (not after a violation).
 
 The helper host (`helper-host.ts`) imports no Bun module (tested): Trezi's tools reach
 it only as authorized `tool` frames.
@@ -185,6 +192,8 @@ Bun ↔ service: private pipe, S01 frames, no revision, empty scope:
 | `answer` / `configure` (helper) | `{session, id, kind, value}` / `{session, model?, mode?}` | `{}` |
 | `close` | `{session}` | `{}` |
 | `snapshot` / `status` (read) | `{}` | `{sessions}` / `{recovered, violations}` |
+| `seatTokenSave` / `seatTokenStatus` (read) | `{provider: "claude", token}` (empty removes) / `{}` | `{hasToken}` / `{claude: {hasToken}}` |
+| `diagnose` (read) | `{provider, root}` | `{report}` (`ProviderLoginReport`, never containing the token) |
 
 For helper sessions the service pushes
 `{"event":"service-event","service":"provider","kind":"event"|"record"|"tool"|"exit","session",…}`.
@@ -194,7 +203,9 @@ Service ↔ helper (stdin/stdout, one JSON object per line). Service to helper: 
 `send`, `interrupt`, `permission-result`, `question-result`, `configure`, `tool-result`,
 `tool-error`, `shutdown`. Helper to service: `ready`, `failed`, `event`, `record` (new
 assistant and status entries, files touched, thread id), `permission`, `question`,
-`tool`, `settled`.
+`tool`, `settled`. A helper started for "Check provider login" gets only `diagnose`
+and answers one `diagnosis`. An `error` event may carry `code: "auth" | "no-response"`
+(the chat shows a login card instead of text); any other code is a violation.
 
 ## Rollback (tightened to this domain; history, removed in LKM-111)
 
