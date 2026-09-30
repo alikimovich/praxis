@@ -173,6 +173,16 @@ for (const width of [680, 780]) {
   reject(providers, 'providers', (e) => (e.text = e.text.slice(0, 4)))
   reject(providers, 'providers', (e) => e.controls.push(control('default', 'Use last selected model')))
   reject(providers, 'providers', (e) => (e.section = 'general'))
+  // Verbatim OCR from the manager's General capture (settings-visible-680-general): the
+  // pixels show "Default model"; Vision returned "Detault model" (f read as t). Must
+  // pass, while a missing or different word must still fail.
+  const misread = structuredClone(general)
+  misread.text = misread.text.map((line) => line.replace('Default model', 'Detault model'))
+  assert.ok(misread.text.includes('Detault model'))
+  assertSectionEvidence(misread, width, 'general')
+  reject(misread, 'general', (e) => (e.text[4] = 'Model'))
+  reject(misread, 'general', (e) => (e.text[4] = 'Detault'))
+  reject(misread, 'general', (e) => (e.text[4] = 'Detault models'))
 }
 // Verbatim OCR lines from the manager's earlier foreground Off capture (the pixels
 // render "UI"/"AI" correctly; Vision returned "Ul"/"Al"). Must still pass.

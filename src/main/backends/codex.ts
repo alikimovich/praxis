@@ -199,6 +199,16 @@ const REASONING_EFFORTS = new Set<ModelReasoningEffort>([
 const isEffort = (e: string | undefined): e is ModelReasoningEffort =>
   !!e && REASONING_EFFORTS.has(e as ModelReasoningEffort)
 const oneLine = (s: string, n = 120): string => s.replace(/\s+/g, ' ').trim().slice(0, n)
+/** Items that are the model's own output; after one, a failed turn is not retried. */
+const OUTPUT_ITEMS = new Set<string>([
+  'agent_message',
+  'reasoning',
+  'command_execution',
+  'file_change',
+  'web_search',
+  'mcp_tool_call',
+  'todo_list'
+])
 
 async function startSession(
   root: string,
@@ -475,12 +485,16 @@ async function startSession(
     items.reset()
     let rejected: string | null = null
     let produced = false
-    // The seat's "not supported with a ChatGPT account" 400, before any output.
-    const rejection = (message: string): boolean => {
-      const model = options.connectionId || produced ? null : unsupportedCodexModel(message)
+    // The seat's "not supported with a ChatGPT account" 400, before any output: in a
+    // stream `error` or `turn.failed` event (the real CLI's JSON body) or the exec error.
+    const rejection = (payload: unknown): boolean => {
+      const model = options.connectionId || produced ? null : unsupportedCodexModel(payload)
       if (model) rejected = model
       return !!model || !!rejected
     }
+    // The real CLI's `error` event text; an event without one is shown as it came.
+    const errorText = (ev: { message?: unknown }): string =>
+      typeof ev.message === 'string' ? ev.message : JSON.stringify(ev)
     try {
       const { events } = await thread.runStreamed(text, { signal })
       for await (const ev of events) {
@@ -489,13 +503,16 @@ async function startSession(
           case 'thread.started':
             startUsageWatch(ev.thread_id)
             break
+          // A warning item (e.g. the skills-budget note the CLI prints before the
+          // request) or an item type this adapter does not show is not output: the
+          // model may still be rejected after it.
           case 'item.started':
           case 'item.updated':
-            produced = true
+            if (OUTPUT_ITEMS.has(ev.item.type)) produced = true
             handleItem(ev.item, false)
             break
           case 'item.completed':
-            produced = true
+            if (OUTPUT_ITEMS.has(ev.item.type)) produced = true
             handleItem(ev.item, true)
             break
           case 'turn.completed':
@@ -504,10 +521,11 @@ async function startSession(
             noteUsage(readUsage((ev as { usage?: unknown }).usage))
             break
           case 'turn.failed':
-            if (!rejection(ev.error.message)) emitError(retryCause.explain(ev.error.message))
+            if (!rejection(ev.error)) emitError(retryCause.explain(errorText(ev.error ?? ev)))
             break
-          case 'error':
-            if (rejection(ev.message)) break
+          case 'error': {
+            if (rejection(ev)) break
+            const message = errorText(ev)
             // The CLI retries a failed request up to five times and emits EACH
             // attempt as its own `error` event ("Reconnecting... 3/5 (…)"). Left
             // alone that paints five red lines into the chat before the real
@@ -516,12 +534,13 @@ async function startSession(
             // is only stated inside the attempts. So: keep the attempts out of the
             // error stream (they're progress, not outcomes) while remembering WHY,
             // and let the terminal error borrow that reason.
-            if (retryCause.note(ev.message)) {
-              emit({ type: 'status', text: oneLine(ev.message, 100) })
+            if (retryCause.note(message)) {
+              emit({ type: 'status', text: oneLine(message, 100) })
             } else {
-              emitError(retryCause.explain(ev.message))
+              emitError(retryCause.explain(message))
             }
             break
+          }
           // turn.started needs no extra handling.
         }
       }

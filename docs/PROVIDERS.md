@@ -380,6 +380,29 @@ under the Swift owner fixture, against a stand-in `codex` CLI that rejects
 `gpt-6.1-sol`. The stand-in also asks the real CLI which MCP servers each run's
 `--config` leaves on.
 
+**Where the real CLI says it (LKM-128).** Live on CLI 0.159.1 the fallback never
+started. The CLI reports the rejection as two stream `error` events whose message is
+the API's JSON body (`{"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The '…' model is not supported…"}}`),
+then exits 1 with only "Reading prompt from stdin..." on stderr. The adapter only
+retries before any output, and it counted every item as output, including the warning
+items the CLI can emit before the request (e.g. the skills-budget note, which the chat
+hides). With a warning item first, the old rule gives exactly the operator's result:
+two JSON errors, then the exec error. Now:
+
+- `unsupportedCodexModel` takes a message, an event or its `error` and also looks
+  inside JSON text and nested `message`/`detail`/`error` fields, so a stream `error`,
+  `turn.failed` or the exec error is detected. It also accepts `'`-escaped and
+  typographic quotes.
+- Only items the adapter shows as the model's output (`OUTPUT_ITEMS` in
+  `backends/codex.ts`) count as output. Warning items and unknown item types do not.
+- The stand-in reproduces the real sequence and can put the body only in
+  `turn.failed` or only in the exec error, or emit a warning item first. The test
+  covers each, in-process, plus a turn with an explicit model. The helper run uses the
+  warning item and the real stream errors.
+
+The root cause is inferred from the reproduction; the live CLI output was not
+captured item by item. The operator's rerun of `test:provider-live` confirms it.
+
 ## Claude seat login from a Claude Code session (LKM-124)
 
 **Symptom.** After LKM-119, on the user's Mac, Check login showed the right `USER`,
