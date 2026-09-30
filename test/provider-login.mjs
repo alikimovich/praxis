@@ -9,8 +9,12 @@
 //   CLAUDE_CODE_OAUTH_TOKEN, and never comes back in a reply, an event or a report;
 // - diagnose: "Check provider login" through the helper path, with missing and invalid
 //   auth, an installed CLI that is logged in, and a provider with no check;
+// - parent-session (LKM-124): a Trezi started from a Claude Code or Codex session; its
+//   runtime variables (CLAUDE_CODE_SIMPLE, CLAUDECODE, CODEX_SANDBOX, …) never reach a
+//   helper, user settings do, Check login lists the names, and the setup-token still works;
 // - card: the chat's login card (steps, Check login, Retry) and the pure classifiers.
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import {
   chmodSync,
   mkdirSync,
@@ -34,7 +38,11 @@ import { setProviderOwner } from '../src/main/provider-owner.ts'
 import { loginAction } from '../src/native/chat-login.ts'
 import { snapshot } from '../src/native/chat-snapshot.ts'
 import { newChat, reduce } from '../src/native/chat-state.ts'
-import { compileProviderFixture, startProviderFixture } from './helpers/provider-fixture.mjs'
+import {
+  compileProviderFixture,
+  FAKE_HELPER,
+  startProviderFixture
+} from './helpers/provider-fixture.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'trezi-provider-login-')))
@@ -67,11 +75,19 @@ const loggedOut = cli('logged-out', `echo '{"loggedIn":false,"authMethod":"none"
 const loggedIn = cli('logged-in', `echo '{"loggedIn":true,"authMethod":"claude.ai"}'`)
 const invalid = cli('invalid', `echo 'Invalid API key · Please run /login' >&2; exit 1`)
 
-async function fixture(env = {}) {
+/** `bundled`/`installed`/`security` name the stand-in tools (helper arguments); the rest is the fixture's environment. */
+async function fixture({ bundled, installed, security, ...env } = {}) {
   const home = join(scratch, `p-${++count}`)
   mkdirSync(home)
+  const args = [
+    FAKE_HELPER,
+    ...(bundled ? [`--claude-bundled=${bundled}`] : []),
+    ...(installed ? [`--claude-installed=${installed}`] : []),
+    ...(security ? [`--claude-security=${security}`] : [])
+  ]
   const started = await startProviderFixture(compileProviderFixture(), home, {
     PROVIDER_HELPER_PROVIDERS: 'fake,claude',
+    PROVIDER_HELPER_ARGS: args.join('\u001f'),
     PROVIDER_CRYPTO: `${process.execPath}\u001f${CRYPTO}`,
     ...env
   })
@@ -177,7 +193,10 @@ try {
       crash.map((e) => e.type),
       ['error', 'done']
     )
-    assert.match(crash[0].message, /stopped unexpectedly \(status 7\)\. Send your message again to continue\./)
+    assert.match(
+      crash[0].message,
+      /stopped unexpectedly \(status 7\)\. Send your message again to continue\./
+    )
     await sleep(200)
     assert.equal(
       c.delta(await c.turn('say after the crash')),
@@ -209,7 +228,7 @@ try {
 
   // The subscription token: encrypted at rest, only in a Claude helper, never echoed.
   {
-    const run = await fixture({ CLAUDE_TEST_BUNDLED: loggedOut })
+    const run = await fixture({ bundled: loggedOut })
     const data = run.owner.data
     assert.deepEqual(await data.seatTokenStatus(), { claude: { hasToken: false } })
     await assert.rejects(data.saveSeatToken('claude', 'two words'), /setup-token/)
@@ -243,7 +262,7 @@ try {
     // A report that would carry the token is refused, not relayed.
     await stop(run)
     const leak = await fixture({
-      CLAUDE_TEST_BUNDLED: loggedOut,
+      bundled: loggedOut,
       CLAUDE_CONFIG_DIR: `/tmp/${TOKEN}`
     })
     assert.equal(await leak.owner.data.saveSeatToken('claude', TOKEN), true)
@@ -274,31 +293,32 @@ try {
         await stop(run)
       }
     }
-    const missing = await check({ CLAUDE_TEST_BUNDLED: loggedOut })
+    const missing = await check({ bundled: loggedOut })
     assert.equal(missing.provider, 'claude')
-    assert.equal(missing.loggedIn, false)
+    assert.equal(missing.loggedIn, false, missing.detail)
     assert.equal(missing.source, 'bundled')
     assert.equal(missing.token, false)
     assert.match(missing.detail, /Bundled Claude CLI .*: not logged in/)
     assert.match(missing.detail, /No installed claude CLI found/)
     assert.match(missing.detail, new RegExp(`cwd: ${WT}`), 'the helper runs in the chat root')
-    const bad = await check({ CLAUDE_TEST_BUNDLED: invalid })
+    const bad = await check({ bundled: invalid })
     assert.equal(bad.loggedIn, null)
     assert.match(bad.detail, /unknown \(Command failed/)
     const installed = await check({
-      CLAUDE_TEST_BUNDLED: loggedOut,
-      CLAUDE_TEST_INSTALLED: `${invalid}:${loggedIn}`
+      bundled: loggedOut,
+      installed: `${invalid}:${loggedIn}`
     })
     assert.deepEqual(
       [installed.loggedIn, installed.source, installed.executable, installed.authMethod],
       [true, 'installed', loggedIn, 'claude.ai']
     )
     assert.match(installed.detail, new RegExp(`Chats use: ${loggedIn}`))
-    // LKM-125: keychain availability from the helper, exit codes only (output never read).
-    const keychainPath = join(scratch, 'secret-keychain-path.keychain-db')
+    // LKM-125: keychain availability from the helper as exit codes (`keychain`). The
+    // keychain list and default paths are shown too (LKM-124), never a stderr message.
+    const keychainPath = join(scratch, 'fixture-login.keychain-db')
     const reachable = await check({
-      CLAUDE_TEST_BUNDLED: loggedIn,
-      CLAUDE_TEST_SECURITY: cli('security-ok', `echo '    "${keychainPath}"'`)
+      bundled: loggedIn,
+      security: cli('security-ok', `echo '    "${keychainPath}"'`)
     })
     assert.deepEqual(reachable.keychain, { listKeychains: 0, defaultKeychain: 0 })
     assert.match(
@@ -306,8 +326,8 @@ try {
       /Keychain in this helper: security list-keychains exit 0; security default-keychain exit 0\n/
     )
     const lost = await check({
-      CLAUDE_TEST_BUNDLED: loggedOut,
-      CLAUDE_TEST_SECURITY: cli(
+      bundled: loggedOut,
+      security: cli(
         'security-lost',
         `echo '${keychainPath}'; [ "$1" = default-keychain ] && { echo 'SecKeychainCopyDefault: A default keychain could not be found.' >&2; exit 50; }; exit 0`
       )
@@ -316,13 +336,12 @@ try {
     assert.match(lost.detail, /security default-keychain exit 50 \(no user keychain/)
     for (const report of [reachable, lost])
       assert.ok(
-        !JSON.stringify(report).includes('secret-keychain-path') &&
-          !report.detail.includes('SecKeychainCopyDefault'),
-        'the report carries exit codes, never the output'
+        !report.detail.includes('SecKeychainCopyDefault'),
+        'security’s error output never reaches the report'
       )
     const absent = await check({
-      CLAUDE_TEST_BUNDLED: loggedOut,
-      CLAUDE_TEST_SECURITY: join(BIN, 'no-such-security')
+      bundled: loggedOut,
+      security: join(BIN, 'no-such-security')
     })
     assert.deepEqual(absent.keychain, { listKeychains: null, defaultKeychain: null })
     assert.match(absent.detail, /list-keychains did not run/)
@@ -339,6 +358,258 @@ try {
     )
     await stop(run)
     console.log('PROVIDER-LOGIN diagnose PASS')
+  }
+
+  // A Trezi started from a Claude Code or Codex session (LKM-124): that session's runtime
+  // variables, CLAUDE_CODE_SIMPLE above all, never reach a helper; user settings do.
+  {
+    // Logged in, except in bare mode (CLAUDE_CODE_SIMPLE), which never reads the login.
+    const bare = cli(
+      'bare-aware',
+      `if [ -n "$CLAUDE_CODE_SIMPLE" ]; then echo '{"loggedIn":false,"authMethod":"none"}'; exit 1; fi\necho '{"loggedIn":true,"authMethod":"claude.ai"}'`
+    )
+    // Logged in only through a setup-token, and not in bare mode either.
+    const tokenOnly = cli(
+      'token-only',
+      `if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] && [ -z "$CLAUDE_CODE_SIMPLE" ]; then echo '{"loggedIn":true,"authMethod":"oauth_token"}'; exit 0; fi\necho '{"loggedIn":false,"authMethod":"none"}'; exit 1`
+    )
+    const SECRET = 'parent-session-secret-value'
+    const parent = {
+      CLAUDE_CODE_SIMPLE: '1',
+      CLAUDECODE: '1',
+      CLAUDE_CODE_ENTRYPOINT: 'cli',
+      CLAUDE_CODE_SESSION_ID: 'parent-session',
+      CLAUDE_CODE_MESSAGING_SOCKET: join(scratch, 'parent.sock'),
+      CLAUDE_CODE_MESSAGING_TOKEN: SECRET,
+      CLAUDE_CODE_CHILD_SESSION: '1',
+      CLAUDE_CODE_BRIDGE_SESSION_ID: 'bridge',
+      CLAUDE_CODE_EXECPATH: join(scratch, 'parent-claude'),
+      CLAUDE_PID: '42',
+      CLAUDE_EFFORT: 'high',
+      CODEX_SANDBOX: 'seatbelt',
+      CODEX_SANDBOX_NETWORK_DISABLED: '1',
+      CODEX_THREAD_ID: 'parent-thread',
+      CODEX_MANAGED_BY_NPM: '1'
+    }
+    const settings = {
+      CLAUDE_CONFIG_DIR: join(scratch, 'claude-config'),
+      ANTHROPIC_BASE_URL: 'https://anthropic.invalid',
+      CLAUDE_CODE_USE_BEDROCK: '1',
+      AWS_REGION: 'us-east-1',
+      HTTPS_PROXY: 'http://proxy.invalid:8080',
+      NODE_EXTRA_CA_CERTS: join(scratch, 'ca.pem'),
+      CODEX_HOME: join(scratch, 'codex-home'),
+      OPENAI_BASE_URL: 'https://openai.invalid/v1'
+    }
+    assert.equal(
+      parseAuthStatus(
+        spawnSync(bare, ['auth', 'status', '--json'], {
+          env: { ...process.env, CLAUDE_CODE_SIMPLE: '1' },
+          encoding: 'utf8'
+        }).stdout
+      )?.loggedIn,
+      false,
+      'the stand-in is logged out in bare mode'
+    )
+    const run = await fixture({ ...parent, ...settings, bundled: bare })
+    const c = await chat('claude')
+    const names = JSON.parse(c.delta(await c.turn('env')).slice(4)).names
+    for (const name of Object.keys(parent))
+      assert.ok(!names.includes(name), `a Claude helper does not get ${name}`)
+    for (const name of [
+      'CLAUDE_CONFIG_DIR',
+      'ANTHROPIC_BASE_URL',
+      'CLAUDE_CODE_USE_BEDROCK',
+      'AWS_REGION',
+      'HTTPS_PROXY',
+      'NODE_EXTRA_CA_CERTS'
+    ])
+      assert.ok(names.includes(name), `a Claude helper gets ${name}`)
+    assert.ok(!names.includes('CODEX_HOME') && !names.includes('OPENAI_BASE_URL'))
+    // The chat works: the CLI it runs is logged in.
+    assert.equal(c.delta(await c.turn('login')), 'logged in bundled')
+    c.s.shutdown()
+    const codex = (await run.f.cmd({ cmd: 'environment', provider: 'codex' })).names
+    for (const name of Object.keys(parent))
+      assert.ok(!codex.includes(name), `a Codex helper does not get ${name}`)
+    for (const name of ['CODEX_HOME', 'OPENAI_BASE_URL', 'HTTPS_PROXY', 'NODE_EXTRA_CA_CERTS'])
+      assert.ok(codex.includes(name), `a Codex helper gets ${name}`)
+    assert.ok(!codex.some((name) => name.startsWith('CLAUDE') || name.startsWith('ANTHROPIC_')))
+    // Check login lists the names (never a value) and names CLAUDE_CODE_SIMPLE.
+    const report = await run.owner.data.checkLogin('claude', WT)
+    assert.equal(report.loggedIn, true)
+    assert.equal(report.bare, true)
+    for (const name of [
+      'CLAUDE_CODE_SIMPLE',
+      'CLAUDECODE',
+      'CLAUDE_CODE_MESSAGING_TOKEN',
+      'CLAUDE_PID'
+    ])
+      assert.ok(report.dropped.includes(name), `dropped lists ${name}`)
+    for (const name of ['CLAUDE_CONFIG_DIR', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_BEDROCK'])
+      assert.ok(report.inherited.includes(name), `inherited lists ${name}`)
+    assert.ok(!report.dropped.some((name) => name.startsWith('CODEX')), 'only Claude names')
+    assert.match(
+      report.detail,
+      /Passed to the helper from Trezi’s environment: .*CLAUDE_CONFIG_DIR/
+    )
+    assert.match(
+      report.detail,
+      /Dropped \(a parent session’s or not a user setting\): .*CLAUDE_CODE_SIMPLE/
+    )
+    assert.match(report.detail, /CLAUDE_CODE_SIMPLE was set where Trezi started/)
+    assert.ok(!JSON.stringify(report).includes(SECRET), 'names only, never values')
+    assert.ok(!run.said.some((line) => line.includes(SECRET)) && !run.f.stderr.includes(SECRET))
+    await stop(run)
+    // The setup-token path under the same parent session.
+    const token = await fixture({ ...parent, bundled: tokenOnly })
+    const signedOut = await chat('claude')
+    const refused = await signedOut.turn('login')
+    assert.deepEqual(
+      refused.map((e) => [e.type, e.code]),
+      [
+        ['error', 'auth'],
+        ['done', undefined]
+      ],
+      'no token, no login'
+    )
+    signedOut.s.shutdown()
+    assert.equal(await token.owner.data.saveSeatToken('claude', TOKEN), true)
+    await sleep(200)
+    const signedIn = await chat('claude')
+    assert.equal(signedIn.delta(await signedIn.turn('login')), 'logged in bundled')
+    signedIn.s.shutdown()
+    const tokenReport = await token.owner.data.checkLogin('claude', WT)
+    assert.deepEqual([tokenReport.loggedIn, tokenReport.token], [true, true])
+    assert.ok(!JSON.stringify(tokenReport).includes(TOKEN))
+    assert.ok(!token.said.some((line) => line.includes(TOKEN)) && !token.f.stderr.includes(TOKEN))
+    await stop(token)
+    console.log('PROVIDER-LOGIN parent-session PASS')
+  }
+
+  // Keychain and credentials-file diagnostics inside the helper's context (LKM-124): a fake
+  // `security` on the helper PATH and fixture HOMEs, so the results are deterministic.
+  {
+    const KEYCHAIN_SECRET = 'keychain-secret-that-must-never-be-shown'
+    const FILE_SECRET = 'credentials-file-secret-that-must-never-be-shown'
+    const credentials = JSON.stringify({ claudeAiOauth: { accessToken: FILE_SECRET } })
+    const argLog = join(scratch, 'security-args.log')
+    // A `security` directory whose `find-generic-password` exits with `exit` and, like a
+    // careless tool, prints the secret on stdout and stderr; the probe must discard both.
+    const fakeSecurity = (exit) => {
+      const dir = join(scratch, `sec-bin-${exit}`)
+      mkdirSync(dir)
+      writeFileSync(
+        join(dir, 'security'),
+        `#!/bin/sh
+echo "$@" >> '${argLog}'
+case "$1" in
+  find-generic-password) echo "password: ${KEYCHAIN_SECRET}"; echo "${KEYCHAIN_SECRET}" >&2; exit ${exit};;
+  list-keychains) echo '    "/fixture/login.keychain-db"'; echo '    "/Library/Keychains/System.keychain"';;
+  default-keychain) echo '    "/fixture/login.keychain-db"';;
+esac
+`
+      )
+      chmodSync(join(dir, 'security'), 0o755)
+      return dir
+    }
+    const secBins = { 0: fakeSecurity(0), 44: fakeSecurity(44) }
+    const homeWith = join(scratch, 'home-with')
+    const homeWithout = join(scratch, 'home-without')
+    const homeLocked = join(scratch, 'home-locked')
+    for (const home of [homeWith, homeWithout, homeLocked]) mkdirSync(home)
+    for (const home of [homeWith, homeLocked]) {
+      mkdirSync(join(home, '.claude'))
+      writeFileSync(join(home, '.claude/.credentials.json'), credentials, { mode: 0o600 })
+    }
+    chmodSync(join(homeLocked, '.claude/.credentials.json'), 0o000)
+    const probe = async (home, exit) => {
+      const run = await fixture({
+        bundled: loggedOut,
+        HOME: home,
+        CLAUDE_CONFIG_DIR: '',
+        PATH: `${secBins[exit]}:${process.env.PATH}`
+      })
+      try {
+        const report = await run.owner.data.checkLogin('claude', WT)
+        for (const [where, text] of [
+          ['report', JSON.stringify(report)],
+          ['service log', run.f.stderr],
+          ['pipe', run.said.join('\n')]
+        ])
+          for (const secret of [KEYCHAIN_SECRET, FILE_SECRET])
+            assert.ok(!text.includes(secret), `no secret in the ${where}`)
+        return report
+      } finally {
+        await stop(run)
+      }
+    }
+    const file = join(homeWith, '.claude/.credentials.json')
+    const readable = await probe(homeWith, 0)
+    assert.equal(readable.keychainItem, true)
+    assert.equal(readable.keychainItemExit, 0)
+    assert.deepEqual(readable.keychain, { listKeychains: 0, defaultKeychain: 0 })
+    assert.equal(
+      readable.keychainList,
+      '"/fixture/login.keychain-db" "/Library/Keychains/System.keychain"'
+    )
+    assert.equal(readable.keychainDefault, '"/fixture/login.keychain-db"')
+    assert.deepEqual(
+      [
+        readable.credentialsPath,
+        readable.credentialsExists,
+        readable.credentialsReadable,
+        readable.credentialsSize
+      ],
+      [file, true, true, Buffer.byteLength(credentials)]
+    )
+    assert.match(readable.detail, /Keychain: readable from this context/)
+    assert.match(
+      readable.detail,
+      /Keychains searched \(security list-keychains -d user\): "\/fixture\/login\.keychain-db"/
+    )
+    assert.match(
+      readable.detail,
+      /Default keychain \(security default-keychain\): "\/fixture\/login\.keychain-db"/
+    )
+    assert.ok(
+      readable.detail.includes(
+        `Credentials file: ${file} exists, readable, ${Buffer.byteLength(credentials)} bytes, mode 600`
+      ),
+      readable.detail
+    )
+    // Item not found or not readable: exit 44, and no file under this HOME.
+    const missing = await probe(homeWithout, 44)
+    assert.equal(missing.keychainItem, false)
+    assert.equal(missing.keychainItemExit, 44)
+    assert.match(missing.detail, /Keychain: not readable from this context \(security exit 44\)/)
+    assert.deepEqual(
+      [missing.credentialsExists, missing.credentialsReadable, missing.credentialsSize],
+      [false, false, null]
+    )
+    assert.ok(
+      missing.detail.includes(
+        `Credentials file: ${join(homeWithout, '.claude/.credentials.json')} does not exist`
+      )
+    )
+    // A file that exists but cannot be read (skipped as root, which reads anything).
+    if (process.getuid?.() !== 0) {
+      const locked = await probe(homeLocked, 44)
+      assert.deepEqual(
+        [locked.credentialsExists, locked.credentialsReadable, locked.credentialsSize],
+        [true, false, Buffer.byteLength(credentials)]
+      )
+      assert.match(locked.detail, /exists, not readable, \d+ bytes, mode 0\b/)
+    }
+    // Only metadata probes: no -w, no -g, one item name.
+    const calls = readFileSync(argLog, 'utf8').trim().split('\n')
+    assert.ok(calls.includes('find-generic-password -s Claude Code-credentials'), calls.join('|'))
+    assert.ok(calls.includes('list-keychains -d user') && calls.includes('default-keychain'))
+    assert.ok(
+      !calls.some((call) => / -[a-z]*[wg]\b/.test(call.replace('-d user', ''))),
+      'no call asks for the secret'
+    )
+    console.log('PROVIDER-LOGIN keychain PASS')
   }
 
   // The chat's login card, and the classifiers the helper uses.

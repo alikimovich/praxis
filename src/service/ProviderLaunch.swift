@@ -11,7 +11,8 @@ import Darwin
 ///   environment as `CLAUDE_CODE_OAUTH_TOKEN` (never another helper's, never a reply,
 ///   never an error text);
 /// - "Check provider login": a helper started exactly like a chat's (same allowlisted
-///   environment, token, cwd) that reports the provider CLI's auth status and exits.
+///   environment, token, cwd) that reports the provider CLI's auth status and exits;
+///   the owner adds which provider variables were passed and dropped (LKM-124).
 extension ProviderOwner {
     static let seatTokenVariable = "CLAUDE_CODE_OAUTH_TOKEN"
 
@@ -141,12 +142,13 @@ extension ProviderOwner {
             helper = try ProviderHelperProcess.launch(command, directory: root, environment: helperEnvironment(provider, token: token),
                 watchdog: options.watchdog, maxLine: options.maxLine,
                 onFrame: { [weak self] data in
-                    self?.queue.async {
+                    guard let owner = self else { return }
+                    owner.queue.async {
                         guard let value = try? JSValue.parse(data, maxDepth: 16), value["type"]?.text?.string == "diagnosis" else { return }
                         guard let report = Self.loginReport(value["report"], provider: provider, token: token) else {
                             return finish(.failed(PreferencesOwner.fail(.providerFailure, "The provider helper sent a malformed login report.")))
                         }
-                        finish(.succeeded(Self.object([("report", report)])))
+                        finish(.succeeded(Self.object([("report", owner.variableReport(report, provider: provider))])))
                     }
                 },
                 onOversize: { [weak self] in
@@ -174,16 +176,21 @@ extension ProviderOwner {
 
     /// A helper's login report: known fields only, bounded, and never the token itself.
     static func loginReport(_ value: JSValue?, provider: String, token: String?) -> JSValue? {
-        guard case .object(let fields)? = value, fields.count <= 8, value?["detail"]?.text != nil else { return nil }
+        guard case .object(let fields)? = value, fields.count <= 20, value?["detail"]?.text != nil else { return nil }
         var out: [(String, JSValue)] = [("provider", .string(JSText(provider)))]
         for (name, field) in fields {
             let key = name.string
             switch key {
             case "provider": continue
-            case "loggedIn":
+            case "loggedIn", "keychainItem":
                 guard field == .null || field == .bool(true) || field == .bool(false) else { return nil }
-            case "token":
+            case "token", "credentialsExists", "credentialsReadable":
                 guard field == .bool(true) || field == .bool(false) else { return nil }
+            case "keychainItemExit", "credentialsSize":
+                // A `security` exit status or a byte count: null when it did not run or the file is absent.
+                if field != .null {
+                    guard case .number(let number) = field, number >= 0, number <= 1e12, number == number.rounded() else { return nil }
+                }
             case "source":
                 guard let source = field.text?.string, source == "bundled" || source == "installed" else { return nil }
             case "keychain":
@@ -194,7 +201,7 @@ extension ProviderOwner {
                     if code == .null { continue }
                     guard case .number(let n) = code, n == n.rounded(), abs(n) <= 255 else { return nil }
                 }
-            case "executable", "authMethod", "detail":
+            case "executable", "authMethod", "detail", "keychainList", "keychainDefault", "credentialsPath":
                 guard let text = field.text, text.count <= 4096, !text.contains(0) else { return nil }
                 if let token, !token.isEmpty, text.string.contains(token) { return nil }
             default: return nil
@@ -202,6 +209,28 @@ extension ProviderOwner {
             out.append((key, field))
         }
         return object(out)
+    }
+
+    /// The report plus which of the provider's variables Trezi's environment had: those
+    /// the helper got and those it dropped, by name only, never a value (LKM-124).
+    func variableReport(_ report: JSValue, provider: String) -> JSValue {
+        guard case .object(var fields) = report, ProviderHelperProcess.providerFamilies[provider] != nil else { return report }
+        let names = ProviderHelperProcess.variableNames(base: options.environment, provider: provider)
+        let list = { (names: [String]) in names.isEmpty ? "none" : names.prefix(40).joined(separator: ", ") }
+        var lines = ["Passed to the helper from Trezi’s environment: \(list(names.inherited))",
+                     "Dropped (a parent session’s or not a user setting): \(list(names.dropped))"]
+        let bare = names.dropped.contains("CLAUDE_CODE_SIMPLE")
+        if bare {
+            lines.append("CLAUDE_CODE_SIMPLE was set where Trezi started. It makes the Claude CLI skip its login (bare mode), so Trezi drops it.")
+        }
+        let strings = { (names: [String]) in JSValue.array(names.prefix(40).map { .string(JSText($0)) }) }
+        for index in fields.indices where fields[index].0.string == "detail" {
+            fields[index].1 = .string(JSText((fields[index].1.text?.string ?? "") + "\n" + lines.joined(separator: "\n")))
+        }
+        fields.append((JSText("inherited"), strings(names.inherited)))
+        fields.append((JSText("dropped"), strings(names.dropped)))
+        if bare { fields.append((JSText("bare"), .bool(true))) }
+        return .object(fields)
     }
 }
 

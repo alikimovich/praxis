@@ -27,8 +27,10 @@ struct ProviderHelperCommand: Sendable {
 ///   (`POSIX_SPAWN_CLOEXEC_DEFAULT`): no Bun pipe, no XPC connection, no profile lock,
 ///   no listening socket of the service's.
 /// - **Environment.** Rebuilt from an allowlist: the basics a CLI needs (HOME, PATH,
-///   locale, temp) plus the variables of its own provider (`ANTHROPIC_*`/`CLAUDE_*` for
-///   Claude, `OPENAI_*`/`CODEX_*` for Codex). Every `TREZI_*` variable (the profile path,
+///   locale, temp, proxy and CA) plus the user settings of its own provider
+///   (`providerVariables`: e.g. `ANTHROPIC_*` and `CLAUDE_CONFIG_DIR` for Claude,
+///   `OPENAI_*` and `CODEX_HOME` for Codex). A parent Claude Code or Codex session's
+///   runtime variables are not on it (LKM-124). Every `TREZI_*` variable (the profile path,
 ///   the service pid, the agent tool socket and its token) and other providers'
 ///   credentials are left out. Credentials stay in their own stores (the Keychain,
 ///   `~/.claude`, `~/.codex`). The one secret the owner passes is the Claude
@@ -56,23 +58,50 @@ final class ProviderHelperProcess: @unchecked Sendable {
         self.pid = pid; self.input = input; identity = GroupIdentity.of(pid)
     }
 
-    static let baseVariables: Set<String> = ["HOME", "PATH", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "NODE_ENV"]
-    static let providerPrefixes: [String: [String]] = [
-        "claude": ["ANTHROPIC_", "CLAUDE_"], "codex": ["OPENAI_", "CODEX_"], "gemini": ["GEMINI_", "GOOGLE_"],
+    static let baseVariables: Set<String> = ["HOME", "PATH", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "NODE_ENV",
+        // Proxy and CA settings, which every provider CLI honours.
+        "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "no_proxy", "all_proxy",
+        "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "SSL_CERT_DIR"]
+    /// Per provider, what a user sets on purpose: exact names, then prefixes. A whole
+    /// `CLAUDE_*`/`CODEX_*` prefix is not allowed (LKM-124): a Trezi started from a Claude
+    /// Code or Codex session inherits that session's runtime variables, and
+    /// `CLAUDE_CODE_SIMPLE` alone makes every Claude CLI skip its login (bare mode).
+    static let providerVariables: [String: (names: Set<String>, prefixes: [String])] = [
+        "claude": (["CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
+                    "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_SKIP_BEDROCK_AUTH", "CLAUDE_CODE_SKIP_VERTEX_AUTH",
+                    "CLAUDE_CODE_SKIP_FOUNDRY_AUTH", "CLAUDE_CODE_MAX_OUTPUT_TOKENS", "CLAUDE_CODE_API_KEY_HELPER_TTL_MS",
+                    "CLAUDE_CODE_CLIENT_CERT", "CLAUDE_CODE_CLIENT_KEY", "CLAUDE_CODE_CLIENT_KEY_PASSPHRASE",
+                    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "AWS_REGION", "AWS_PROFILE", "CLOUD_ML_REGION"],
+                   ["ANTHROPIC_", "VERTEX_REGION_"]),
+        "codex": (["CODEX_HOME", "CODEX_API_KEY", "CODEX_CA_CERTIFICATE"], ["OPENAI_"]),
+        "gemini": ([], ["GEMINI_", "GOOGLE_"]),
         // The fake provider of the test harness.
-        "fake": ["FAKE_PROVIDER_"],
+        "fake": ([], ["FAKE_PROVIDER_"]),
     ]
+    /// The names a provider's CLI or a parent session of it uses. Those not allowed
+    /// above are dropped, and Check login lists them by name.
+    static let providerFamilies: [String: [String]] = ["claude": ["CLAUDE", "ANTHROPIC_"], "codex": ["CODEX", "OPENAI_"]]
+
+    static func allowed(_ key: String, provider: String) -> Bool {
+        if baseVariables.contains(key) { return true }
+        guard let allow = providerVariables[provider] else { return false }
+        return allow.names.contains(key) || allow.prefixes.contains(where: { key.hasPrefix($0) })
+    }
+
+    /// The provider's variables in `base`, by name only: those a helper gets and those it does not.
+    static func variableNames(base: [String: String], provider: String) -> (inherited: [String], dropped: [String]) {
+        let family = providerFamilies[provider] ?? []
+        let names = base.keys.filter { key in family.contains(where: { key.hasPrefix($0) }) }.sorted()
+        return (names.filter { allowed($0, provider: provider) }, names.filter { !allowed($0, provider: provider) })
+    }
 
     /// The helper's environment: the allowlist above, nothing else. USER, LOGNAME and
     /// HOME come from the account database when the launch environment lacks them: the
     /// Claude CLI names its Keychain item after $USER and reports "Not logged in"
     /// without it (LKM-119).
     static func environment(base: [String: String], provider: String) -> [String: String] {
-        let prefixes = providerPrefixes[provider] ?? []
         var out: [String: String] = [:]
-        for (key, value) in base where baseVariables.contains(key) || prefixes.contains(where: { key.hasPrefix($0) }) {
-            out[key] = value
-        }
+        for (key, value) in base where allowed(key, provider: provider) { out[key] = value }
         if let account = getpwuid(getuid()) {
             let name = String(cString: account.pointee.pw_name), home = String(cString: account.pointee.pw_dir)
             if out["USER"]?.isEmpty ?? true { out["USER"] = name }

@@ -15,6 +15,8 @@
 //                         anything else is said + done
 //   images                reports each pasted image's type and SHA-256 + done
 //   env                   reports environment names and open descriptors + done
+//   login                 probes the stand-in Claude CLIs like the Claude adapter: an
+//                         `auth` error when none is logged in, else "logged in <source>"
 //   hang                  never finishes and emits nothing (Stop or the first-event deadline decides)
 //   crash                 exits mid-turn
 //   forge <json>          writes a raw frame to stdout, bypassing the host
@@ -23,12 +25,12 @@
 // FAKE_PROVIDER_WEDGE=1 makes interrupt never answer; FAKE_PROVIDER_IGNORE_EOF=1 keeps
 // running after its stdin closes (a helper the journal sweep must stop).
 // The same fake is also hosted as `claude` (for the Claude-only subscription token); its
-// "Check provider login" is the real Claude check, run against stand-in CLIs named by
-// CLAUDE_TEST_BUNDLED and CLAUDE_TEST_INSTALLED (`:`-separated), and a stand-in
-// `security` named by CLAUDE_TEST_SECURITY (the real one otherwise).
+// "Check provider login" is the real Claude check, run against stand-in CLIs named by the
+// arguments --claude-bundled=<path> and --claude-installed=<path:path>, and a stand-in
+// `security` named by --claude-security=<path> (else the first on PATH, then the real one).
 import { createHash } from 'node:crypto'
 import { fstatSync } from 'node:fs'
-import { checkClaudeLogin, isAuthFailure } from '../../../src/main/backends/claude-login.ts'
+import { checkClaudeLogin, isAuthFailure, resolveClaudeCli } from '../../../src/main/backends/claude-login.ts'
 import { runProviderHelper } from '../../../src/main/backends/helper-host.ts'
 import { createRecordCapture } from '../../../src/main/backends/record.ts'
 
@@ -87,6 +89,14 @@ const fake = {
         case 'auth':
           if (!isAuthFailure({ message: { model: '<synthetic>', content: [{ type: 'text', text: arg }] } })) { say(arg); return done() }
           emit({ type: 'error', code: 'auth', message: arg }); return done()
+        case 'login': {
+          // What the Claude adapter does before its first query: probe the CLIs, then the
+          // CLI's own "Not logged in" reply when none is signed in.
+          const cli = await resolveClaudeCli(true, claudeCandidates())
+          const used = cli.installed.find((c) => c.path === cli.executable)?.auth ?? cli.bundled.auth
+          if (used.loggedIn !== true) { emit({ type: 'error', code: 'auth', message: 'Not logged in · Please run /login' }); return done() }
+          say(`logged in ${cli.source}`); return done()
+        }
         case 'images': say(`images ${JSON.stringify((images ?? []).map((image) => [image.mediaType, sha(image.data)]))}`); return done()
         case 'env': {
           const inodes = []
@@ -118,14 +128,20 @@ const fake = {
   }
 }
 
+// Arguments, not variables: a Claude helper gets only the allowlisted CLAUDE_* names (LKM-124).
+function claudeCandidates() {
+  const flag = (name) => process.argv.find((arg) => arg.startsWith(`--${name}=`))?.slice(name.length + 3) ?? ''
+  return {
+    bundled: flag('claude-bundled') || null,
+    installed: flag('claude-installed').split(':').filter(Boolean),
+    ...(flag('claude-security') ? { security: flag('claude-security') } : {})
+  }
+}
+
 const claude = {
   ...fake,
   id: 'claude',
-  checkLogin: () => checkClaudeLogin({
-    bundled: process.env.CLAUDE_TEST_BUNDLED || null,
-    installed: (process.env.CLAUDE_TEST_INSTALLED ?? '').split(':').filter(Boolean),
-    ...(process.env.CLAUDE_TEST_SECURITY ? { security: process.env.CLAUDE_TEST_SECURITY } : {})
-  })
+  checkLogin: () => checkClaudeLogin(claudeCandidates())
 }
 
 if (process.env.FAKE_PROVIDER_IGNORE_EOF === '1') {
