@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { EventEmitter } from 'node:events'
 import { serviceWorkspace } from '../src/native/workspace-service.ts'
 import { NativeWorkspaceController } from '../src/native/workspace-controller.ts'
+import { skipUnlessDarwin } from './helpers/darwin.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const scratch = mkdtempSync(join(tmpdir(), 'trezi-workspace-owner-'))
@@ -24,6 +25,7 @@ const live = new Set()
 let cases = 0
 
 function compile() {
+  skipUnlessDarwin('the Swift workspace owner')
   const sources = ['ServiceContract', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile', 'WorkspaceOwner', 'DomainChannel']
     .map(name => `src/service/${name}.swift`)
   const result = spawnSync('xcrun', ['swiftc', '-module-cache-path', join(scratch, 'module-cache'), ...sources,

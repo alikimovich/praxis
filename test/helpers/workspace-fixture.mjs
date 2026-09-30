@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { serviceWorkspace } from '../../src/native/workspace-service.ts'
+import { skipUnlessDarwin } from './darwin.mjs'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 const live = new Set()
@@ -18,6 +19,7 @@ let binary
 process.on('exit', () => { for (const child of live) child.kill('SIGKILL') })
 
 function compile() {
+  skipUnlessDarwin('the Swift workspace owner')
   const scratch = mkdtempSync(join(tmpdir(), 'trezi-workspace-fixture-'))
   process.on('exit', () => rmSync(scratch, { recursive: true, force: true }))
   const sources = ['ServiceContract', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile', 'WorkspaceOwner', 'DomainChannel']

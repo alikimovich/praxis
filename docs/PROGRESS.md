@@ -2,6 +2,14 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-117: GitHub CI on macOS 26, clean Swift skips off macOS
+
+- **Why.** CI had been red since the Swift migration. It ran on `ubuntu-latest`, where about 20 unit tests that compile the Swift service owners (through `xcrun swiftc`) failed instead of skipping.
+- **Runner.** The workflow now runs on `macos-26`. That image's default Xcode 26 ships the macOS 26 SDK the owners need (`MIN_SDK`), so the job has no `xcode-select` step. The "Toolchain" step runs `bun scripts/requirements.mjs --build` and fails the job if the image ever ships an older SDK. The steps are a frozen install, `typecheck`, `typecheck:native` and `node test/run.mjs unit --timeout-ms=120000`. If a step fails, the run uploads the logs. There is no GUI tier.
+- **Triggers.** Push to `main`/`candidate` and `pull_request` only. Worker and throwaway branches no longer start runs.
+- **Skips.** `test/helpers/darwin.mjs`: `skipUnlessDarwin` sits at every owner-fixture compile site (the eight `test/helpers/*-fixture.mjs` files plus the ledger, preferences, memory, workspace and platform owner tests). Off macOS it prints `<NAME> SKIP — <reason>` and exits 0, which `test/run.mjs` reports as SKIP. `service-contract` uses `skipUnlessSwift`: it still runs on Linux when `swiftc` is on `PATH`. On macOS nothing skips, so a broken toolchain stays red.
+- **Proof.** I had no Linux machine. A simulated Linux unit run used a Bun preload that sets `process.platform = 'linux'` and a `PATH` without `xcrun`, `swiftc` or the macOS tools. Before the fix it showed 28 FAIL; after it, 34 SKIP (each with a reason), 87 PASS and 4 FAIL. Those four were simulation or sandbox artifacts: `native-boundary` hit esbuild's platform check under the spoof and passes unspoofed; `codex-mcp`, `trezi-agent-tools` and `devserver-net` fail the same way unspoofed because the worker sandbox refuses to listen. On macOS the gated tests still PASS. `actionlint` was not installed; the workflow was checked by parsing it with `Bun.YAML`.
+
 ## 2026-09-29 — LKM-115: no tick marks under inspector and chat-island sliders
 
 - **Why.** A SwiftUI `Slider` with `step:` makes AppKit draw one tick mark per step. The inspector (`step ?? 1`, e.g. 0…200 px padding) and chat islands (`step ?? range/1000`) drew hundreds of them, a dense dotted line under the track.

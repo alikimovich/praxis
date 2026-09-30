@@ -16,6 +16,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { compilePlatformFixture, http, installFakes, startPlatformFixture } from './helpers/platform-fixture.mjs'
 import { checkAttachments, checkMedia, checkOpen, checkServers } from './helpers/platform-checks.mjs'
+import { skipUnlessDarwin } from './helpers/darwin.mjs'
+
+skipUnlessDarwin('the Swift platform owner')
 
 // Run under the scripted tools (xcrun, idb, pkill first on the PATH). The real ones are never reached.
 if (!process.env.TREZI_PLATFORM_FAKES) {

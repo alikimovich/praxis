@@ -13,6 +13,7 @@ import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { EventEmitter } from 'node:events'
 import { servicePreferences } from '../src/native/preferences-service.ts'
+import { skipUnlessDarwin } from './helpers/darwin.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const scratch = mkdtempSync(join(tmpdir(), 'trezi-preferences-owner-'))
@@ -21,6 +22,7 @@ const live = new Set()
 let cases = 0
 
 function compile() {
+  skipUnlessDarwin('the Swift preferences owner')
   const sources = ['ServiceContract', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner'].map(name => `src/service/${name}.swift`)
   const result = spawnSync('xcrun', ['swiftc', '-module-cache-path', join(scratch, 'module-cache'), ...sources,
     'test/fixtures/preferences-owner/main.swift', '-o', binary], { cwd: root, encoding: 'utf8', timeout: 300_000 })

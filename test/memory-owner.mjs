@@ -17,6 +17,7 @@ import { createProjectMemoryUpdateQueue } from '../src/main/project-memory.ts'
 import { projectKey } from '../src/shared/projectKey.ts'
 import { serviceProjectMemory } from '../src/native/project-memory-service.ts'
 import { NativeSheetController } from '../src/native/sheets-runtime.ts'
+import { skipUnlessDarwin } from './helpers/darwin.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const scratch = mkdtempSync(join(tmpdir(), 'trezi-memory-owner-'))
@@ -26,6 +27,7 @@ const live = new Set()
 let cases = 0
 
 function compile() {
+  skipUnlessDarwin('the Swift memory owner')
   const sources = ['ServiceContract', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile', 'WorkspaceOwner', 'DomainChannel', 'MemoryFile', 'MemoryOwner']
     .map(name => `src/service/${name}.swift`)
   const result = spawnSync('xcrun', ['swiftc', '-module-cache-path', join(scratch, 'module-cache'), ...sources,

@@ -237,3 +237,43 @@ An unknown or empty group name fails before the build. `--live` requires `core`
 (the live turn edits the heading the core group writes). `native-runtime` only
 demands fresh sidebar evidence when `sidebar` ran. Acceptance still needs the
 full suite.
+
+## GitHub CI
+
+`.github/workflows/ci.yml` runs one job, "typecheck + unit tests".
+
+- **Triggers.** It runs on a push to `main` or `candidate` and on every pull
+  request. Pushes to other branches (throwaway and worker branches) do not start
+  a run.
+- **Runner.** The job runs on `macos-26`, GitHub's hosted macOS 26 (Tahoe) arm64
+  image. The Swift service owners compile against the macOS 26 SDK
+  (`MIN_SDK` in `scripts/requirements.mjs`). That image's default Xcode 26
+  provides it, so the job needs no `xcode-select`. An Ubuntu runner cannot build
+  them, and an older macOS image ships an older SDK. The "Toolchain" step prints
+  the selected Xcode and `swiftc --version`, then runs
+  `bun scripts/requirements.mjs --build`. If the image ever ships an older SDK,
+  that step fails before any tests run.
+- **Commands**, in order:
+
+  ```sh
+  bun install --frozen-lockfile
+  bun run typecheck
+  bun run typecheck:native
+  node test/run.mjs unit --timeout-ms=120000
+  ```
+
+  If a step fails, the run uploads `test/artifacts/runs/` as `unit-test-logs`.
+  CI runs no native GUI tier and no live tier. The runner has no desktop session
+  for the smoke suite and no provider credentials. Run those tiers on a Mac.
+- **Skips off macOS.** Unit tests that compile Swift call the gates in
+  `test/helpers/darwin.mjs`. The service-owner fixtures in `test/helpers/*-fixture.mjs`,
+  the ledger, preferences, memory, workspace and platform owner tests, and every
+  suite that loads `with-service-owners.mjs` use `skipUnlessDarwin`. The
+  AppKit fixture tests (sidebar, slider, composer, settings layout, chat reveal)
+  check `process.platform` themselves. On Linux each of these tests prints
+  `<NAME> SKIP — <reason>` and exits 0. `test/run.mjs` reports it as `SKIP`, never
+  `PASS`, and a unit run with only PASS and SKIP exits 0. `service-contract` uses
+  `skipUnlessSwift`: the contract builds with swift-corelibs-foundation, so on
+  Linux it still runs when `swiftc` is on `PATH`. On macOS a missing or broken
+  toolchain fails instead of skipping, so the macOS job cannot go green by
+  skipping Swift checks.

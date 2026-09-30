@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { serviceWorkflows } from '../../src/native/workflow-service.ts'
+import { skipUnlessDarwin } from './darwin.mjs'
 import { SOURCES as SOURCE_SOURCES } from './source-fixture.mjs'
 import { startRepositoryFixture } from './repository-fixture.mjs'
 
@@ -20,6 +21,7 @@ export const SOURCES = [...SOURCE_SOURCES,
 
 /** Compiles the fixture once per source hash and compiler version; returns the binary path. */
 export function compileWorkflowFixture() {
+  skipUnlessDarwin('the Swift workflow owner')
   const files = [...SOURCES, 'test/fixtures/workflow-owner/main.swift']
   const compiler = spawnSync('xcrun', ['swiftc', '--version'], { encoding: 'utf8' })
   const key = createHash('sha256')
