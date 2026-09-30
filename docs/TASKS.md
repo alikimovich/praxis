@@ -3,6 +3,10 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Slider tick marks in the inspector and chat islands (LKM-115)
+
+- [x] Inspector and chat-island sliders use `SnappedSlider` (`src/native/SnappedSlider.swift`): no `step:` and so no tick marks, with snapping in the binding setter using the same default steps.
+- [x] Windowless regression `test/native-slider-ticks.mjs`: no stepped `Slider` in `src/native`, `numberOfTickMarks == 0` on the real inspector field and on an island slider, and values still snap to the step. Evidence: `inspector.png`, `chat-island.png`, `shadow-light-*.png`.
 ## Remove content controls (LKM-114)
 
 - [x] Removed the `content_controls` agent tool (Claude, Codex MCP bridge, custom endpoints, provider policy), `src/main/content-controls*.ts`, the native content controller and `ContentWindow.swift`, the Swift content-drafts store and the `content-controls.json` sidecar allowance, `PanelRecipe`, `vendor/content-controls` (package.json, bun.lock, .gitignore), the surface-controls skill wiring, the tests and `docs/CONTENT_CONTROLS.md`. Rules v24.

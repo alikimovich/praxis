@@ -166,6 +166,7 @@ const result = Bun.spawnSync(
     join(root, 'src/native/ChatDivider.swift'),
     join(root, 'src/native/ChatMarkdown.swift'),
     join(root, 'src/native/ChatQuestion.swift'),
+    join(root, 'src/native/SnappedSlider.swift'),
     '-o',
     join(contents, 'MacOS/TreziHost'),
     '-framework',

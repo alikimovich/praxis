@@ -2,6 +2,11 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-115: no tick marks under inspector and chat-island sliders
+
+- **Why.** A SwiftUI `Slider` with `step:` makes AppKit draw one tick mark per step. The inspector (`step ?? 1`, e.g. 0…200 px padding) and chat islands (`step ?? range/1000`) drew hundreds of them, a dense dotted line under the track.
+- **Fix.** `SnappedSlider` (`src/native/SnappedSlider.swift`) wraps an unstepped `Slider` and snaps in its binding setter with `snapSliderValue`. The snapping is SwiftUI's own, measured in a probe: `lower + k * step`, where `k` stops at the last whole step (1…20 by 4 tops out at 17). Both call sites keep their default steps, live updates and `onEditingChanged` applies.
+- **Proof.** `test/native-slider-ticks.mjs` (unit tier) fails on any `Slider(` in `src/native` that passes `step:` at the top level. Its windowless fixture (`test/fixtures/slider-ticks/main.swift`) first checks that a stepped SwiftUI slider does report ticks. Then it hosts the real `InspectorFieldView` and an island-default `SnappedSlider`, finds each `NSSlider` with `numberOfTickMarks == 0`, and drags it through its action: the inspector previews `37.0` (default step) and `35.0` (step 5), and the island value snaps to 1/1000 of the range. The core `inspector` smoke step now saves `inspector.png`; the island captures are the existing `chat-island.png` and `shadow-light-*.png`.
 ## 2026-09-29 — LKM-114: content controls removed
 
 - **Why.** The user did not like how the content-editor panels looked, so the feature is removed end to end instead of restyled.

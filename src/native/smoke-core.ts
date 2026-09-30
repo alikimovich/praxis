@@ -230,6 +230,8 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
         if (next.generation === inspector.generation) { inspector = next; break }
         inspector = next
       }
+      // Visual evidence for the Styles tab's Layout sliders (LKM-115: no tick marks).
+      writeFileSync(join(artifacts,'inspector.png'),Buffer.from(await host.request('captureShell'),'base64'))
       await host.request('inspectorPerform',{action:{root:fixture,generation:inspector.generation,action:'apply',field:'style:opacity',value:'0.8'}})
       try { await wait(()=>readFileSync(join(fixture,'native-style.tsx'),'utf8').includes('0.8'),'native style source edit') } catch (error) { console.error('Native inspector failure', { expected: inspector, actual: await host.request('inspectorInspect') }); throw error }
       await host.request('inspectorPerform',{action:{root:fixture,generation:inspector.generation,action:'close'}})

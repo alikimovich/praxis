@@ -112,7 +112,7 @@ struct NativeChatIsland: View {
             VStack(alignment: .leading, spacing: 4) {
                 IslandInput(label: field.label + (field.unit.map { " (\($0))" } ?? ""), value: value(field).text, numeric: true) { if let n = Double($0), n.isFinite { commit(field, .number(n)) } }
                 if let lower = field.min, let upper = field.max, lower < upper {
-                    Slider(value: Binding(get: { Swift.min(upper, Swift.max(lower, value(field).number)) }, set: { live([field.id: .number($0)]) }), in: lower...upper, step: field.step ?? (upper-lower)/1000, onEditingChanged: { editing in
+                    SnappedSlider(value: Binding(get: { Swift.min(upper, Swift.max(lower, value(field).number)) }, set: { live([field.id: .number($0)]) }), bounds: lower...upper, step: field.step ?? (upper-lower)/1000, onEditingChanged: { editing in
                         dragging = editing
                         if !editing { live([field.id: value(field)], ended: true) }
                     }).accessibilityLabel(field.label)

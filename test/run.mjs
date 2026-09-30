@@ -54,6 +54,7 @@ const UNIT = [
   "native-context",
   "native-updates",
   "native-inspector",
+  "native-slider-ticks",
   "native-layers",
   "native-editor",
   "native-shell-controller",
