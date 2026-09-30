@@ -4,6 +4,7 @@ import { checkSourceStamps } from './smoke-source-stamp'
 import { checkSourceEditor } from './smoke-source-editor'
 import { checkChatIslands } from './smoke-islands'
 import { checkInspectorIsland } from './smoke-inspector-island'
+import { checkPreviewInspector } from './smoke-preview-inspector'
 import assert from 'node:assert/strict'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -308,6 +309,7 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
     { name: 'preview-inspector', dependsOn: ['open-project'], run: async () => {
       await host.request('previewInspector',{action:'show'});await inspect('previewInspector',s=>s.visible&&s.inspectable)
       await host.request('previewInspector',{action:'close'})
+      await checkPreviewInspector(host,artifacts,()=>serviceEvents.emit('event','preview:toolbar-action','props'))
     }, cleanup: async () => {
       await host.request('previewInspector',{action:'close'})
     } },
