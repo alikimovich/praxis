@@ -109,16 +109,47 @@ struct EditingInspectorContent: View {
                             if index == 0 || field.group != state.fields[index - 1].group { if !field.group.isEmpty { Text(field.group.capitalized).font(.headline).padding(.top, 5) } }
                             InspectorFieldView(field: field, model: model)
                         }
-                    }.id("\(state.root):\(state.generation)").padding(2)
+                    // Trailing room keeps units and apply buttons clear of the overlay scroller.
+                    }.id("\(state.root):\(state.generation)").padding(2).padding(.trailing, 10)
                 }
-            }.padding(12).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(nsColor: .windowBackgroundColor))
+            }.padding(14).frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }
-final class NativeEditingInspector: NSHostingView<EditingInspectorContent> {
-    let model = InspectorModel()
-    init() { super.init(rootView: EditingInspectorContent(model: model)); sizingOptions = []; isHidden = true }
-    required init(rootView: EditingInspectorContent) { fatalError() }
+/// Floats over the preview's right edge like the composer island: the same inset,
+/// corner radius and Liquid Glass, so opening it never narrows the preview.
+final class NativeEditingInspector: NSView {
+    // ChatLayout.composerInset and the composer's radius; literal so fixtures compile this file alone.
+    static let inset: CGFloat = 10, cornerRadius: CGFloat = 24
+    let model: InspectorModel
+    let content: NSHostingView<EditingInspectorContent>
+    private(set) var glass = false
+    init() {
+        let model = InspectorModel(); self.model = model
+        content = NSHostingView(rootView: EditingInspectorContent(model: model))
+        super.init(frame: .zero)
+        content.sizingOptions = []
+        let backdrop: NSView
+        if #available(macOS 26.0, *) {
+            let effect = NSGlassEffectView(); effect.style = .regular
+            effect.cornerRadius = Self.cornerRadius; effect.contentView = content
+            backdrop = effect; glass = true
+        } else {
+            let effect = NSVisualEffectView(); effect.material = .popover
+            effect.blendingMode = .withinWindow; effect.state = .followsWindowActiveState
+            effect.wantsLayer = true; effect.layer?.cornerRadius = Self.cornerRadius; effect.layer?.masksToBounds = true
+            effect.addSubview(content); backdrop = effect
+        }
+        content.frame = backdrop.bounds; content.autoresizingMask = [.width, .height]
+        backdrop.frame = bounds; backdrop.autoresizingMask = [.width, .height]; addSubview(backdrop)
+        isHidden = true
+    }
     required init?(coder: NSCoder) { fatalError() }
     func update(_ value: [String: Any]) { guard let data = try? JSONSerialization.data(withJSONObject: value), let state = try? JSONDecoder().decode(InspectorState.self, from: data) else { return }; model.state = state; isHidden = !state.visible }
+    /// The island's frame over `area` (the preview's full, unchanged frame), or zero when closed.
+    static func frame(in area: NSRect, width preferred: CGFloat, visible: Bool) -> NSRect {
+        guard visible else { return .zero }
+        let width = max(0, min(preferred, area.width - 2 * inset))
+        return NSRect(x: area.maxX - inset - width, y: area.minY + inset, width: width, height: max(0, area.height - 2 * inset))
+    }
 }

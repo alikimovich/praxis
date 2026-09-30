@@ -11,7 +11,7 @@ func captureVisibleChat(window: NSWindow, chat: NativeChat) async throws -> [Str
 }
 
 @MainActor
-func captureVisibleRegion(window: NSWindow, view: NSView, region: NSRect) async throws -> [String: Any] {
+func captureVisibleRegion(window: NSWindow, view: NSView, region: NSRect, recognizeText: Bool = true) async throws -> [String: Any] {
     guard window.isVisible, window.isKeyWindow, NSApp.isActive, !view.isHidden else {
         throw NSError(domain: "VisibleChatCapture", code: 1, userInfo: [NSLocalizedDescriptionKey: "Chat window is not in the foreground"])
     }
@@ -41,6 +41,7 @@ func captureVisibleRegion(window: NSWindow, view: NSView, region: NSRect) async 
     guard let pixels = image.cropping(to: crop), let png = NSBitmapImageRep(cgImage: pixels).representation(using: .png, properties: [:]) else {
         throw NSError(domain: "VisibleChatCapture", code: 3, userInfo: [NSLocalizedDescriptionKey: "Chat screenshot crop failed"])
     }
+    guard recognizeText else { return ["png": png.base64EncodedString(), "width": pixels.width, "height": pixels.height] }
     let request = VNRecognizeTextRequest()
     request.recognitionLevel = .accurate
     request.usesLanguageCorrection = false

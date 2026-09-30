@@ -499,7 +499,7 @@ async function main() {
     console.log('Trezi is running on Bun + system WebKit. ')
     if (testing) {
       try {
-        await runNativeCoreSmoke(host!, fixture!, root)
+        await runNativeCoreSmoke(host!, fixture!, root, key => preferences.get(key))
         process.exitCode = 0
         await cleanup()
       } catch (error) {

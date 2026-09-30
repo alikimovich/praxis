@@ -3,6 +3,7 @@ import { checkVisibleComposer } from './smoke-composer'
 import { checkSourceStamps } from './smoke-source-stamp'
 import { checkSourceEditor } from './smoke-source-editor'
 import { checkChatIslands } from './smoke-islands'
+import { checkInspectorIsland } from './smoke-inspector-island'
 import assert from 'node:assert/strict'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -21,7 +22,7 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve,ms))
 /** Named checks run by smoke-runner: a failure no longer stops the run. `dependsOn`
  *  lists the checks whose app/window state a check builds on; an independent check
  *  still runs after a failure (the restore hook resets the foreground first). */
-export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, root: string) {
+export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, root: string, preference: (key: string) => string | null) {
   const invoke = (channel: string, ...args: any[]) => dispatchIPC('main',{type:'invoke',channel,args})
   const send = (channel: string, ...args: any[]) => dispatchIPC('main',{type:'send',channel,args})
   const page = (code: string) => host.request('evaluate',{view:'preview',code})
@@ -237,6 +238,7 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
       try { await wait(()=>readFileSync(join(fixture,'native-style.tsx'),'utf8').includes('0.8'),'native style source edit') } catch (error) { console.error('Native inspector failure', { expected: inspector, actual: await host.request('inspectorInspect') }); throw error }
       await host.request('inspectorPerform',{action:{root:fixture,generation:inspector.generation,action:'close'}})
       await inspect('inspectorInspect',s=>!s.visible)
+      await checkInspectorIsland(host,artifacts,()=>serviceEvents.emit('event','preview:toolbar-action','props'),()=>preference('trezi:native-panel-sizes'))
     }, cleanup: async () => {
       const state = await host.request('inspectorInspect')
       if (state.visible) await host.request('inspectorPerform',{action:{root:fixture,generation:state.generation,action:'close'}})
