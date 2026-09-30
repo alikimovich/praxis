@@ -219,6 +219,7 @@ retirement). LKM-111 removed the `rollback` class with the writers it listed.
 
 | Module | Class | Final owner | Effect |
 | --- | --- | --- | --- |
+| `src/main/backends/claude-login.ts` | helper | ProviderOwner (provider helper) | `claude auth status` probes (LKM-119), inside the supervised helper |
 | `src/main/backends/codex.ts` | helper | ProviderOwner (provider helper) | Codex SDK process, inside the supervised helper |
 | `src/main/backends/gemini.ts` | helper | ProviderOwner (provider helper) | Gemini CLI process, inside the supervised helper |
 | `src/main/chat-isolation.ts` | helper | RepositoryOwner | Git reads (diff, show, status) |

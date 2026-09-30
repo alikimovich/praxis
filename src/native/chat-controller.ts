@@ -219,6 +219,7 @@ export class NativeChatController {
     chat.phase = 'thinking'; chat.activityDetail = ''; chat.stopping = false
     chat.sending = true; chat.isRunning = true; chat.turnStartedAt = Date.now(); chat.streamingId = null
     chat.turn = submission.id
+    chat.last = submission; chat.login = undefined
     const cancellation = chat.cancellation
     const { text, attachments, selection, turn } = submission
     chat.messages.push({ id: crypto.randomUUID(), role: 'user', at: Date.now(), text, statuses: [], segments: text ? [{ kind: 'text', text }] : [],

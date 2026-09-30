@@ -2,12 +2,16 @@ import type { NativeChatAction } from '../shared/native-chat'
 import { setupPrompt } from '../shared/setup-prompt'
 import { assistant, type Chat } from './chat-state'
 import type { NativeChatController } from './chat-controller'
+import { loginAction } from './chat-login'
 
 /** Card actions call application services directly; shell effects only refresh web panels. */
 export async function cardAction(controller: NativeChatController, chat: Chat, action: NativeChatAction) {
   const { invoke, effect } = controller.services
   switch (action.action) {
     case 'error-dismiss': chat.error = undefined; break
+    case 'login-dismiss':
+    case 'login-check':
+    case 'login-retry': await loginAction(controller, chat, action.action); break
     case 'model-cancel': chat.pendingModel = undefined; break
     case 'model-confirm': {
       const settings = chat.pendingModel; chat.pendingModel = undefined

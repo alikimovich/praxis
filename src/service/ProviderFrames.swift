@@ -10,6 +10,11 @@ extension ProviderOwner {
         guard let frame = try? JSValue.parse(data, maxDepth: 64), case .object(let fields) = frame,
               let type = frame["type"]?.text?.string else { return violation(session, "a frame that is not a JSON object") }
         let keys = Set(fields.map { $0.0.string })
+        // Anything the turn produced (not the slash menu a session posts on its own) stops
+        // the first-event timer.
+        if ["record", "permission", "question", "tool"].contains(type) || (type == "event" && frame["event"]?["type"]?.text?.string != "commands") {
+            session.heard = true
+        }
         func only(_ allowed: Set<String>) -> Bool { keys.isSubset(of: allowed.union(["type"])) }
         switch type {
         case "ready":
@@ -179,6 +184,9 @@ extension ProviderOwner {
         "delta": ["text"], "status": ["text"], "error": ["message"], "done": [], "usage": ["input", "output", "cached"],
         "commands": ["commands"], "permission-resolved": ["id"], "question-resolved": ["id"],
     ]
+    /// Fields an event may leave out: an error's card code (LKM-119).
+    static let optionalEventFields: [String: Set<String>] = ["error": ["code"]]
+    static let errorCodes: Set<String> = ["auth", "no-response"]
 
     /// A helper's event: a type the protocol relays, its own fields only, bounded, for its own chat.
     static func event(_ value: JSValue, session: Session) -> Result<JSValue, EventRefusal> {
@@ -193,8 +201,12 @@ extension ProviderOwner {
         for (name, field) in fields {
             let key = name.string
             if key == "type" || key == "projectKey" || key == "sessionId" { continue }
-            guard allowed.contains(key) else { return .failure(EventRefusal("an event field it may not send")) }
+            guard allowed.contains(key) || optionalEventFields[type]?.contains(key) == true else {
+                return .failure(EventRefusal("an event field it may not send"))
+            }
             switch key {
+            case "code":
+                guard let code = field.text?.string, errorCodes.contains(code) else { return .failure(EventRefusal("an unknown error code")) }
             case "text", "message", "id":
                 guard let text = field.text, text.count <= ProviderPolicy.Limits.eventText else { return .failure(EventRefusal("an oversized event")) }
             case "input", "output", "cached":

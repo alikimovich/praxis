@@ -1,4 +1,5 @@
-import type { ModelChoice, ProviderConnection } from '../shared/api'
+import type { ModelChoice, ProviderConnection, ProviderLoginReport } from '../shared/api'
+import { loginSummary } from './chat-login'
 import { parsePreferredModelState, preferredSelectValue, setFixedPreference, settingsFromChoice, setLastUsedMode } from '../shared/preferred-model'
 import type { NativePreferences } from './preferences'
 import type { NativeSheetController } from './sheets-runtime'
@@ -50,11 +51,12 @@ export class NativeSettingsController {
     if (generation !== this.sheets.generation) return
     this.sheets.present({
       title: 'AI providers',
-      detail: 'Claude and Codex use your existing sign-ins. Add another provider to use its models in chats.',
+      detail: 'Claude and Codex use your existing sign-ins; Claude can also use a subscription token. Add another provider to use its models in chats.',
       fields: connections.length ? [{ id: 'connection', label: 'Provider', kind: 'choice', value: connections[0].id, choices: connections.map(c => ({ value: c.id, label: c.label + ' · ' + c.models.length + ' models · ' + (c.hasKey ? 'API key saved' : 'No API key') })) }] : [],
-      actions: [{ id: 'back', label: 'Back' }, { id: 'add', label: 'Add provider…', primary: true }, ...(connections.length ? [{ id: 'edit', label: 'Edit…' }, { id: 'delete', label: 'Remove…' }] : [])]
+      actions: [{ id: 'back', label: 'Back' }, { id: 'claude', label: 'Claude…' }, { id: 'add', label: 'Add provider…', primary: true }, ...(connections.length ? [{ id: 'edit', label: 'Edit…' }, { id: 'delete', label: 'Remove…' }] : [])]
     }, async action => {
       if (action.action === 'back') { await this.open(); return }
+      if (action.action === 'claude') { await this.claude(); return }
       if (action.action === 'add') { this.edit(); return }
       const connection = connections.find(c => c.id === action.values.connection)
       if (!connection) throw new Error('Choose a provider first.')
@@ -66,6 +68,36 @@ export class NativeSettingsController {
         if (action.action === 'delete') await this.invoke('providers:remove', connection.id)
         if (this.sheets.current?.state.id === action.id) await this.connections()
       })
+    })
+  }
+  /** Claude's sign-in (LKM-119): the `claude setup-token` token and "Check login". The token goes
+   *  to the service and never comes back into a sheet. */
+  async claude(report?: ProviderLoginReport) {
+    const generation = this.sheets.generation
+    const { hasToken }: { hasToken: boolean } = await this.invoke('providers:seat-token-status')
+    if (generation !== this.sheets.generation) return
+    this.sheets.present({
+      title: 'Claude',
+      detail: 'Claude chats use the Claude CLI’s sign-in. If a chat says it is not logged in, run `claude auth login` in Terminal, or run `claude setup-token` and paste the token it prints here. The token is encrypted with your Keychain and given only to Claude chats.',
+      fields: [
+        { id: 'token', label: hasToken ? 'Subscription token (saved; paste a new one to replace it)' : 'Subscription token (from claude setup-token)', kind: 'secure', value: '' },
+        ...(report ? [{ id: 'report', label: loginSummary(report), kind: 'readonly' as const, value: report.detail }] : [])
+      ],
+      actions: [{ id: 'back', label: 'Back' }, { id: 'check', label: 'Check login' }, ...(hasToken ? [{ id: 'remove', label: 'Remove token', destructive: true }] : []), { id: 'save', label: 'Save token', primary: true }]
+    }, async action => {
+      if (action.action === 'back') { await this.connections(); return }
+      if (action.action === 'check') {
+        const result: ProviderLoginReport = await this.invoke('providers:check-login', 'claude')
+        if (this.sheets.current?.state.id === action.id) await this.claude(result)
+        return
+      }
+      const token = action.action === 'remove' ? '' : action.values.token?.trim() ?? ''
+      if (action.action === 'save' && !token) throw new Error('Paste the token that claude setup-token printed.')
+      const result = await this.invoke('providers:seat-token-save', token)
+      if (!result.ok) throw new Error(result.error ?? 'Could not save the token.')
+      if (this.sheets.current?.state.id !== action.id) return
+      await this.claude()
+      if (this.sheets.current) this.sheets.current.state.message = result.hasToken ? 'Token saved. New Claude chats use it.' : 'Token removed.'
     })
   }
   edit(connection?: ProviderConnection) {

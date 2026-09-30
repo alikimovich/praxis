@@ -188,7 +188,7 @@ struct ProviderData {
 
     /// `<profile>/trezi`, created for a first write, but never beside an older session
     /// store the service has not aliased yet (that would split the store in two).
-    private func prepareDirectory() throws {
+    func prepareDirectory() throws {
         var status = stat()
         if lstat(directory, &status) != 0 {
             guard errno == ENOENT else { throw ProviderRefusal(.ioFailure, "Trezi's session store is unreadable.") }

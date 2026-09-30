@@ -1,6 +1,7 @@
 import type { AgentEvent, PermissionRequest, QuestionRequest, SessionTranscriptEntry, SlashCommandItem } from '../shared/api'
 import { defaultChatAgentSettings, type ChatAgentSettings } from '../shared/chat-settings'
 import type { NativeChatContext, NativeChatMirror } from '../shared/native-chat-controller'
+import type { ChatLogin } from './chat-login'
 
 export interface Attachment {
   id: string; name: string; path: string; type: string; data: string
@@ -28,6 +29,10 @@ export interface Chat extends NativeChatMirror {
   context?: NativeChatContext
   /** The turn this chat last sent (the owner's turn id); terminal events of any other are late. */
   turn?: string
+  /** The message that turn sent, for the login card's Retry. */
+  last?: Submission
+  /** The provider login card (`chat-login.ts`), from an `error` with a code. */
+  login?: ChatLogin
 }
 export function newChat(chat: string): Chat {
   return {
@@ -115,7 +120,14 @@ export function reduce(chat: Chat, event: AgentEvent) {
     case 'usage':
       for (const key of ['input', 'output', 'cached'] as const) chat.usage[key] += event[key]
       break
-    case 'error': append(chat, `\n\n⚠️ ${event.message}`); chat.paused = true; finish(chat); break
+    case 'error':
+      if (event.code) {
+        // Not signed in, or no answer: the login card, not a warning in the transcript.
+        chat.login = { code: event.code, message: event.message }
+        const message = chat.messages.find(m => m.id === chat.streamingId)
+        if (message && !message.text && !message.statuses.length) chat.messages = chat.messages.filter(m => m !== message)
+      } else append(chat, `\n\n⚠️ ${event.message}`)
+      chat.paused = true; finish(chat); break
     case 'done': finish(chat, event.landingPending); break
     case 'landing-finished': finish(chat); break
     case 'reconciliation-started':

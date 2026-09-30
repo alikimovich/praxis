@@ -12,8 +12,9 @@ import type { ModelProvider, ProviderSession } from './types'
  * frames, which the owner authorizes and Bun runs.
  *
  * owner → helper: open, send, interrupt, permission-result, question-result,
- *   configure, tool-result, tool-error, shutdown.
- * helper → owner: ready, failed, event, record, permission, question, tool, settled.
+ *   configure, tool-result, tool-error, shutdown; or, alone, diagnose.
+ * helper → owner: ready, failed, event, record, permission, question, tool, settled;
+ *   diagnosis (the answer to diagnose, then the helper exits).
  */
 export function runProviderHelper(
   providers: Record<string, ModelProvider>,
@@ -127,6 +128,21 @@ export function runProviderHelper(
         if (frame.type === 'tool-result') call.resolve(frame.result)
         else call.reject(new Error(String(frame.message ?? 'The tool failed.')))
         return
+      }
+      case 'diagnose': {
+        // "Check provider login" (LKM-119): a helper of its own, launched like a chat's.
+        if (opening || session) return
+        const provider = providers[frame.provider]
+        let report: object
+        try {
+          report = provider?.checkLogin
+            ? await provider.checkLogin()
+            : { loggedIn: null, detail: `This helper has no login check for ${String(frame.provider)}.` }
+        } catch (error) {
+          report = { loggedIn: null, detail: error instanceof Error ? error.message : String(error) }
+        }
+        write({ type: 'diagnosis', report })
+        return stop(0)
       }
       case 'shutdown':
         return stop(0)

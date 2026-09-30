@@ -159,6 +159,10 @@ Run the same command again to update and rebuild. Options: `--channel main|candi
 (or `TREZI_CHANNEL`; default `main`, and a re-run keeps the installed channel),
 `--update` and `--no-open`. Unattended installs skip every prompt.
 
+If Claude chats say you are not logged in, run `claude auth login` in Terminal, or run
+`claude setup-token` and paste the token in **Settings → AI providers → Claude…**.
+Its **Check login** button shows what Trezi's Claude sees.
+
 The installer recommends **agent-browser** for automated browser checks, including
 different screen sizes, and asks whether to install its global CLI and browser.
 It uses Bun, skips the offer when the CLI is
