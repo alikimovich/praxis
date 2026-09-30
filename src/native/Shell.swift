@@ -25,6 +25,8 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     var ready = false
     var selecting = false
     var chatHidden = false
+    /// The selected project finished opening; the chat header's title and actions show only then.
+    var chatReady = false
     var toolbar: NSToolbar!
     private var toolbarLayout: ToolbarLayout!
     weak var window: NSWindow?
@@ -165,7 +167,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         let leading = chatHeader.convert(.zero, to: nil).x
         let width = min(max(100, target - leading), max(100, (window?.frame.width ?? 1320) - leading - 500))
         addressWidth?.constant = min(180, max(80, (window?.frame.width ?? 1320) - leading - width - 400))
-        chatTitle.isHidden = currentProject == nil || chatHidden || width < 150
+        chatTitle.isHidden = !chatReady || chatHidden || width < 150
         if abs(chatHeaderWidth.constant - width) > 0.5 { chatHeaderWidth.constant = width }
     }
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -299,7 +301,9 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         if chatHeaderWidth != nil {
             alignChatHeader()
         }
-        chatTitle.isHidden = currentProject == nil || chatHidden || (chatHeaderWidth?.constant ?? 0) < 150
+        chatTitle.isHidden = !chatReady || chatHidden || (chatHeaderWidth?.constant ?? 0) < 150
+        // The header item stays in the toolbar (so the address never shifts); only its contents hide.
+        chatActions.isHidden = !chatReady
         let chatMenu = NSMenu(); chatMenu.autoenablesItems = false
         for row in rows.first(where: { $0.project == currentProject })?.children ?? [] {
             let entry = NSMenuItem(title: row.title + (row.running ? " · Working" : ""), action: #selector(contextAction(_:)), keyEquivalent: "")
@@ -315,7 +319,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             let close = NSMenuItem(title: "Close current chat", action: #selector(contextAction(_:)), keyEquivalent: "")
             close.target = self; close.representedObject = ["event":"shell-action", "action":"close", "id":selectedID]; chatMenu.addItem(close)
         }
-        chatActions.historyMenu = chatMenu; chatActions.updateEnabled(project: currentProject != nil, history: currentProject != nil && !chatMenu.items.isEmpty)
+        chatActions.historyMenu = chatMenu; chatActions.updateEnabled(project: chatReady, history: chatReady && !chatMenu.items.isEmpty)
         address.isEnabled = ready
         if address.currentEditor() == nil { showAddress() }
         toolbarItems["device"]?.isEnabled = previewState["deviceEnabled"] as? Bool ?? false
@@ -371,6 +375,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         if nextProject != currentProject && address.currentEditor() != nil { window?.makeFirstResponder(nil) }
         let projectChanged = nextProject != currentProject
         currentProject = nextProject
+        chatReady = nextProject != nil && state["chatReady"] as? Bool == true
         selectedID = state["selected"] as? String
         ready = state["previewReady"] as? Bool ?? false
         selecting = state["selectMode"] as? Bool ?? false
@@ -474,7 +479,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
              return cell.more.convert(cell.more.bounds, to: clip).maxX
          }, "projectIconCount":rows.filter { $0.icon != nil }.count, "outlineClipWidth":outline.enclosingScrollView?.contentSize.width ?? 0, "outlineRows":outline.numberOfRows, "outlineWidth":outline.bounds.width,
          "toolbar":toolbar.items.map { $0.itemIdentifier.rawValue }, "branch":previewState["branch"] ?? "", "publishLabel":previewState["publishLabel"] ?? "", "codeOpen":previewState["codeOpen"] ?? false,
-         "toolbarGroupsMomentary":toolbar.items.compactMap { $0 as? NSToolbarItemGroup }.allSatisfy { ($0 as? MomentaryToolbarGroup)?.hasMomentaryControl == true }, "visibleToolbar":toolbar.visibleItems?.map { $0.itemIdentifier.rawValue } ?? [], "previewHeaderLightText":previewTextColor == .white, "address":previewAddress, "domain":address.stringValue, "viewport":previewState["viewport"] ?? "", "publishStandard":toolbarItems["publish"]?.view == nil, "toolGroup":(toolbar.items.first(where: { $0.itemIdentifier.rawValue == "tools" }) as? NSToolbarItemGroup)?.subitems.map { $0.itemIdentifier.rawValue } ?? [], "sidebarAutohidesScrollers":(outline.enclosingScrollView?.autohidesScrollers ?? false), "sidebarActions":["new-project", "open-project", "settings"], "chatActions":["history", "new-chat"], "historyIDs":chatActions.historyMenu?.items.compactMap { ($0.representedObject as? [String:String])?["id"] } ?? [], "chatTitle":chatTitle.stringValue, "chatTitlePlain":toolbarItems["chat"]?.action == nil, "chatHeaderWidth":chatHeader.bounds.width, "chatHeaderTrailing":chatHeader.convert(NSPoint(x: chatHeader.bounds.maxX, y: 0), to: nil).x, "detailLeading":split.splitViewItems[1].viewController.view.convert(.zero, to: nil).x, "chatWidth":previewState["chatWidth"] ?? 0, "enabled":toolbarItems.mapValues { $0.isEnabled }]
+         "toolbarGroupsMomentary":toolbar.items.compactMap { $0 as? NSToolbarItemGroup }.allSatisfy { ($0 as? MomentaryToolbarGroup)?.hasMomentaryControl == true }, "visibleToolbar":toolbar.visibleItems?.map { $0.itemIdentifier.rawValue } ?? [], "previewHeaderLightText":previewTextColor == .white, "address":previewAddress, "domain":address.stringValue, "viewport":previewState["viewport"] ?? "", "publishStandard":toolbarItems["publish"]?.view == nil, "toolGroup":(toolbar.items.first(where: { $0.itemIdentifier.rawValue == "tools" }) as? NSToolbarItemGroup)?.subitems.map { $0.itemIdentifier.rawValue } ?? [], "sidebarAutohidesScrollers":(outline.enclosingScrollView?.autohidesScrollers ?? false), "sidebarActions":["new-project", "open-project", "settings"], "chatActions":["history", "new-chat"], "chatReady":chatReady, "chatHeaderContentVisible":!chatActions.isHidden || !chatTitle.isHidden,"historyIDs":chatActions.historyMenu?.items.compactMap { ($0.representedObject as? [String:String])?["id"] } ?? [], "chatTitle":chatTitle.stringValue, "chatTitlePlain":toolbarItems["chat"]?.action == nil, "chatHeaderWidth":chatHeader.bounds.width, "chatHeaderTrailing":chatHeader.convert(NSPoint(x: chatHeader.bounds.maxX, y: 0), to: nil).x, "detailLeading":split.splitViewItems[1].viewController.view.convert(.zero, to: nil).x, "chatWidth":previewState["chatWidth"] ?? 0, "enabled":toolbarItems.mapValues { $0.isEnabled }]
     }
     func perform(_ action: String, id: String?) -> Bool {
         if action == "window-width", let width = Double(id ?? ""), let window, width >= 850 && width <= 2000 { var frame = window.frame; frame.size.width = width; window.setFrame(frame, display: true); return true }
@@ -486,7 +491,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             // AppKit animations even though the collapsed state already changed.
             sidebarItem.isCollapsed.toggle(); split.view.layoutSubtreeIfNeeded(); return true
         }
-        if action == "new-chat", currentProject != nil { chatActions.onNewChat?(); return true }
+        if action == "new-chat", chatReady { chatActions.onNewChat?(); return true }
         if action == "history-select", let entry = chatActions.historyMenu?.items.first(where: { ($0.representedObject as? [String:String])?["id"] == id }) {
             contextAction(entry); return true
         }

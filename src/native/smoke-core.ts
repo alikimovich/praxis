@@ -10,6 +10,7 @@ import { dispatchIPC, serviceEvents } from './platform'
 import { nativeWorkspace } from './workspace-runtime'
 import { nativeChat } from './chat-runtime'
 import { checkProjectSwitching } from './smoke-projects'
+import { captureChatGate, checkChatGate, restoreChatGate } from './smoke-chat-gate'
 import { checkNativeSheets } from './smoke-sheets'
 import { checkNativeChat } from './smoke-chat'
 import { checkSelectionInput, preparePreviewInput } from './smoke-input'
@@ -43,6 +44,7 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
       assert.deepEqual(await host.request('webViews'),['preview'])
       const welcome=await host.request('welcomeInspect');assert.ok(welcome.visible&&welcome.catFrames>=10)
       writeFileSync(join(artifacts,'welcome.png'),Buffer.from(await host.request('captureShell'),'base64'))
+      await captureChatGate(host, artifacts, 'no-project', false)
     } },
     { name: 'open-project', run: async () => {
       await host.request('shellPerform',{action:'open-project'})
@@ -156,6 +158,11 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
     { name: 'project-switching', dependsOn: ['chat-ready'], run: async () => {
       await checkProjectSwitching(host, fixture, artifacts)
       assert.equal((await host.request('composerInspect')).readyBeam, false, 'Returning to a ready chat replayed its beam')
+    } },
+    { name: 'chat-gate', dependsOn: ['chat-ready'], run: async () => {
+      await checkChatGate(host, fixture, artifacts)
+    }, cleanup: async () => {
+      await restoreChatGate(firstProject)
     } },
     { name: 'sheets', dependsOn: ['open-project'], run: async () => {
       await checkNativeSheets(host,nativeWorkspace.state.activeKey!,artifacts)

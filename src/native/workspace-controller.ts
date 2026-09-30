@@ -167,7 +167,8 @@ export class NativeWorkspaceController {
     if (command.type === 'restart') {
       const entry = this.find(command.key), intent = this.intent
       if (this.active?.key !== entry.key) return
-      if (entry.url && !entry.launchSpec && !command.command) {
+      // A project that never finished opening retries the whole open, so its chat can appear.
+      if (entry.url && !entry.launchSpec && !command.command && this.state.loadedKey === entry.key) {
         await this.services.invoke('preview:load', entry.url)
         return
       }
@@ -255,6 +256,8 @@ export class NativeWorkspaceController {
   async select(key: string, command?: string, restart = false) {
     const entry = this.find(key), intent = ++this.intent
     this.state.status = { kind: 'busy', label: 'Opening ' + entry.name + '…' }
+    // Another project hides the chat until it has opened; a restart of this one keeps it.
+    if (this.state.loadedKey !== key) this.state.loadedKey = null
     this.changed()
     const current = () => this.intent === intent && !this.closing.has(key) && this.state.projects.includes(entry)
     try {
@@ -311,6 +314,7 @@ export class NativeWorkspaceController {
       await this.services.invoke(entry.url ? 'preview:load' : 'preview:reset', ...(entry.url ? [entry.url] : []))
       if (!current()) return
       this.state.status = entry.url ? { kind: 'running', name: entry.name, url: entry.url } : { kind: 'setup', name: entry.name }
+      this.state.loadedKey = key
       this.changed()
       await this.services.activate(entry)
       await this.evictWarm()
@@ -318,7 +322,8 @@ export class NativeWorkspaceController {
       if (!current()) return
       this.state.status = { kind: 'error', message: String(error) }
       this.changed()
-      // Keep the agent usable for fixing a failed preview.
+      // A failed open shows the error and Retry, not the chat (`loadedKey` stays unset);
+      // the agent stays attached so "Draft fix in chat" can reveal it.
       await this.services.activate(entry)
     }
   }
@@ -364,7 +369,7 @@ export class NativeWorkspaceController {
       if (next) await this.select(next.key)
       else {
         await this.services.invoke('preview:reset')
-        this.state.status = { kind: 'idle' }; this.changed(); await this.services.activate(null)
+        this.state.status = { kind: 'idle' }; this.state.loadedKey = null; this.changed(); await this.services.activate(null)
       }
     }
   }

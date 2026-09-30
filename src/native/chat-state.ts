@@ -1,5 +1,6 @@
 import type { AgentEvent, PermissionRequest, QuestionRequest, SessionTranscriptEntry, SlashCommandItem } from '../shared/api'
 import { defaultChatAgentSettings, type ChatAgentSettings } from '../shared/chat-settings'
+import { migrateChatTitle } from '../shared/chat-title'
 import type { NativeChatContext, NativeChatMirror } from '../shared/native-chat-controller'
 
 export interface Attachment {
@@ -110,7 +111,7 @@ export function reduce(chat: Chat, event: AgentEvent) {
       chat.phase = 'writing'; chat.activityDetail = ''; append(chat, event.text); break
     case 'status':
       chat.phase = 'working'; chat.activityDetail = event.text; append(chat, event.text, true); break
-    case 'title': chat.title = event.title; break
+    case 'title': chat.title = migrateChatTitle(event.title); break
     case 'commands': chat.commands = event.commands; break
     case 'usage':
       for (const key of ['input', 'output', 'cached'] as const) chat.usage[key] += event[key]

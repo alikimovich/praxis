@@ -16,6 +16,8 @@ export interface NativeShellState {
   rows: NativeShellRow[]
   selected: string | null
   project: string | null
+  /** The selected project finished opening: only then are the chat column and its toolbar actions shown. */
+  chatReady: boolean
   selectMode: boolean
   previewReady: boolean
   chatWidth: number

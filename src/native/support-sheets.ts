@@ -40,6 +40,9 @@ export class NativeSupportSheets {
           if (!this.sheets.workspace.state.projects.includes(entry)) throw new Error('Reopen this project before preparing its fix.')
           const steps = diagnosis.steps.filter(s => s.scope === 'repo')
           await this.sheets.chat.command({ type: 'seed', chat: entry.activeSessionKey, text: `Fix this so the project runs: ${diagnosis.summary}\n` + steps.map(s => `- ${s.text}${s.command ? ' (e.g. ' + s.command + ')' : ''}`).join('\n') })
+          // A failed open hides the chat; choosing to fix it in chat shows it for this project.
+          const workspace = this.sheets.workspace
+          if (workspace.state.activeKey === entry.key && workspace.state.loadedKey !== entry.key) { workspace.state.loadedKey = entry.key; workspace.changed() }
         }
         await this.sheets.invoke('diagnose:record', entry.root, diagnosis.signature, choice.action === 'apply' ? 'applied' : 'dismissed')
         if (this.sheets.current?.state.id === choice.id) this.sheets.close()
