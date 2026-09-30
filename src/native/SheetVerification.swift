@@ -6,14 +6,18 @@ extension NativeSheets {
     private func renderedPickers(in view: NSView) -> [NSPopUpButton] {
         (view as? NSPopUpButton).map { [$0] } ?? view.subviews.flatMap { renderedPickers(in: $0) }
     }
-    private func renderedTables(in view: NSView) -> [NSTableView] {
-        (view as? NSTableView).map { [$0] } ?? view.subviews.flatMap { renderedTables(in: $0) }
-    }
-    /// The SwiftUI source list: the leftmost visible table with one row per section.
-    private func renderedSidebar(in content: NSView) -> NSTableView? {
-        let count = model.state?.sections?.count ?? -1
-        return renderedTables(in: content).filter { !$0.isHiddenOrHasHiddenAncestor && $0.numberOfRows == count }
-            .min { $0.convert($0.bounds, to: content).minX < $1.convert($1.bounds, to: content).minX }
+    /// The window's split view: its sidebar item and source-list outline.
+    private var split: SheetSplit? { panel?.contentViewController as? SheetSplit }
+    /// An arrow key as the keyboard delivers it: through the window to the focused outline.
+    private func press(_ key: String, in window: NSWindow, outline: NSOutlineView) -> Bool {
+        guard let (code, scalar) = ["down": (UInt16(125), NSDownArrowFunctionKey), "up": (UInt16(126), NSUpArrowFunctionKey)][key],
+              let character = UnicodeScalar(scalar), window.makeFirstResponder(outline),
+              let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.numericPad, .function],
+                                           timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
+                                           characters: String(Character(character)), charactersIgnoringModifiers: String(Character(character)),
+                                           isARepeat: false, keyCode: code) else { return false }
+        window.sendEvent(event)
+        return true
     }
 
     func verifySettings(_ command: [String: Any]) throws -> [String: Any] {
@@ -37,14 +41,20 @@ extension NativeSheets {
         if let id = command["section"] as? String {
             // Select the row of the rendered source list, as a click would.
             guard let index = model.state?.sections?.firstIndex(where: { $0.id == id }),
-                  let sidebar = renderedSidebar(in: content) else { throw failure("Rendered Settings sidebar unavailable: \(id)") }
+                  let sidebar = split?.outline, index < sidebar.numberOfRows else { throw failure("Rendered Settings sidebar unavailable: \(id)") }
             sidebar.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+        }
+        if let key = command["key"] as? String {
+            guard let sidebar = split?.outline, press(key, in: panel, outline: sidebar) else { throw failure("Settings sidebar key unavailable: \(key)") }
         }
         content.layoutSubtreeIfNeeded()
         content.displayIfNeeded()
         let fields = model.state!.fields.filter { $0.kind == "choice" }
         let popups = renderedPickers(in: content).filter { !$0.isHiddenOrHasHiddenAncestor }
-        let sidebar = renderedSidebar(in: content)
+        let sidebar = split?.outline
+        let sidebarView = split?.sidebarItem.viewController.view
+        let sidebarFrame = sidebarView.map { $0.convert($0.bounds, to: nil) } ?? .zero
+        let close = panel.standardWindowButton(.closeButton).map { $0.convert($0.bounds, to: nil) } ?? .zero
         func picker(_ field: SheetField) -> NSPopUpButton? {
             // Match the complete option list, not subview order or private class names.
             popups.first { $0.itemTitles == (field.choices ?? []).map(\.label) }
@@ -74,6 +84,16 @@ extension NativeSheets {
                 "values": model.values, "id": model.state!.id, "section": model.section ?? "",
                 "sections": model.state!.sections?.map { ["id": $0.id, "label": $0.label, "symbol": $0.symbol] } ?? [],
                 "sidebarRows": sidebar?.numberOfRows ?? 0, "sidebarSelected": sidebar?.selectedRow ?? -1,
-                "sidebarFrame": sidebar.map { NSStringFromRect($0.convert($0.bounds, to: content)) } ?? ""]
+                "sidebarFrame": sidebar.map { NSStringFromRect($0.convert($0.bounds, to: content)) } ?? "",
+                "sidebarFocused": sidebar.map { panel.firstResponder === $0 } ?? false,
+                "sourceList": split.map { SourceList.inspect($0.outline, item: $0.sidebarItem) } ?? [:],
+                "sidebarCollapsible": split?.sidebarItem.canCollapse ?? true,
+                "sidebarMinimum": split?.sidebarItem.minimumThickness ?? 0, "sidebarMaximum": split?.sidebarItem.maximumThickness ?? 0,
+                "sidebarWidth": sidebarView?.bounds.width ?? 0,
+                "fullSizeContent": panel.styleMask.contains(.fullSizeContentView),
+                "trafficLightsOverSidebar": !close.isEmpty && sidebarFrame.contains(close),
+                // Full height: the sidebar rises through the titlebar, above the content layout rect.
+                "sidebarFullHeight": sidebarFrame.maxY > panel.contentLayoutRect.maxY,
+                "windowTitle": panel.title]
     }
 }

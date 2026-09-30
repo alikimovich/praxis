@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {
   assertSectionEvidence,
   assertSettingsEvidence,
+  assertSidebarParity,
   settingsVerificationWidths
 } from '../src/native/settings-verification.ts'
 
@@ -25,8 +26,36 @@ const sidebar = (section) => ({
   section,
   sections: structuredClone(sections),
   sidebarRows: 3,
-  sidebarSelected: sections.findIndex((s) => s.id === section)
+  sidebarSelected: sections.findIndex((s) => s.id === section),
+  windowTitle: sections.find((s) => s.id === section).label,
+  sourceList: structuredClone(sourceList),
+  fullSizeContent: true,
+  trafficLightsOverSidebar: true,
+  sidebarFullHeight: true
 })
+const sourceList = {
+  style: 'sourceList',
+  behavior: 'sidebar',
+  fullHeight: true,
+  rowHeight: 28,
+  rowSizeStyle: 0,
+  indentation: 0,
+  highlight: 1,
+  transparentScroll: true,
+  row: { height: 28, iconWidth: 16, iconHeight: 16, iconLeading: 2, labelGap: 7, fontSize: 13 }
+}
+assertSidebarParity(structuredClone(sourceList), structuredClone(sourceList))
+for (const mutate of [
+  (s) => (s.style = 'other'),
+  (s) => (s.rowHeight = 24),
+  (s) => (s.row.iconWidth = 18),
+  (s) => (s.row.iconLeading = 8),
+  (s) => delete s.row
+]) {
+  const bad = structuredClone(sourceList)
+  mutate(bad)
+  assert.throws(() => assertSidebarParity(bad, structuredClone(sourceList)))
+}
 assert.deepEqual(settingsVerificationWidths(680), [680, 780, 960])
 assert.deepEqual(settingsVerificationWidths(780), [780, 960])
 for (const invalid of [0, -1, NaN, Infinity, 781])
@@ -76,6 +105,12 @@ for (const width of settingsVerificationWidths(680))
       reject((e) => (e.sidebarSelected = 0))
       reject((e) => (e.sidebarRows = 2))
       reject((e) => (e.sections[2].symbol = 'flask'))
+      // The native split-view sidebar, titled by its section.
+      reject((e) => (e.windowTitle = 'Settings'))
+      reject((e) => (e.sourceList.style = 'other'))
+      reject((e) => (e.sourceList.behavior = 'other'))
+      reject((e) => (e.trafficLightsOverSidebar = false))
+      reject((e) => (e.sidebarFullHeight = false))
       // Vision reads SF Pro's identical I/l glyphs either way; only that pair folds.
       const homoglyphs = (e) => (e.text = e.text.map((line) => line.replace(/I/g, 'l')))
       const ocrRead = structuredClone(good)

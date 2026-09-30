@@ -10,6 +10,13 @@ export interface SettingsEvidence {
   sections: { id: string; label: string; symbol: string }[]
   sidebarRows: number
   sidebarSelected: number
+  /** The window title, which names the selected section. */
+  windowTitle: string
+  /** `SourceList.inspect` of the Settings outline and its split item. */
+  sourceList: SourceListEvidence
+  fullSizeContent: boolean
+  trafficLightsOverSidebar: boolean
+  sidebarFullHeight: boolean
   controls: {
     id: string
     selected: string
@@ -18,6 +25,15 @@ export interface SettingsEvidence {
     hitTarget: boolean
   }[]
   text: string[]
+}
+/** The shared source-list setup as `SourceList.inspect` reports it, for either sidebar. */
+export interface SourceListEvidence {
+  style: string
+  behavior: string
+  fullHeight?: boolean
+  rowHeight?: number
+  row?: Record<string, number>
+  [key: string]: unknown
 }
 /** The Settings window's content size when it opens (`SectionedSheetContent.defaultSize`). */
 export const SETTINGS_DEFAULT_SIZE = { width: 780, height: 540 }
@@ -37,7 +53,7 @@ export function settingsVerificationWidths(minimumWidth: number): number[] {
   return [...new Set([minimumWidth, SETTINGS_DEFAULT_SIZE.width, 960])]
 }
 
-/** The source list shows every section, with the requested one selected and shown. */
+/** The source list shows every section, with the requested one selected, shown and titled. */
 function assertSidebar(evidence: SettingsEvidence, section: SettingsSection) {
   assert.deepEqual(evidence.sections, SETTINGS_SECTIONS.map((s) => ({ ...s })), 'Settings sidebar sections and symbols')
   assert.equal(evidence.sidebarRows, SETTINGS_SECTIONS.length, 'Rendered source-list rows')
@@ -47,6 +63,24 @@ function assertSidebar(evidence: SettingsEvidence, section: SettingsSection) {
     SETTINGS_SECTIONS.findIndex((s) => s.id === section),
     'Rendered source-list selection'
   )
+  assert.equal(
+    evidence.windowTitle,
+    SETTINGS_SECTIONS.find((s) => s.id === section)?.label,
+    'Window title names the selected section'
+  )
+  // A native split-view sidebar (NSSplitViewItem .sidebar, NSOutlineView .sourceList) under the traffic lights.
+  assert.equal(evidence.sourceList?.style, 'sourceList', 'Settings outline style')
+  assert.equal(evidence.sourceList?.behavior, 'sidebar', 'Settings split item behavior')
+  assert.ok(
+    evidence.fullSizeContent && evidence.trafficLightsOverSidebar && evidence.sidebarFullHeight,
+    'Full-height sidebar under the traffic lights'
+  )
+}
+
+/** Both sidebars come from the same source-list setup: equal configuration and row geometry. */
+export function assertSidebarParity(settings: SourceListEvidence, projects: SourceListEvidence) {
+  assert.ok(settings.row && projects.row, 'Both sidebars report a rendered row')
+  assert.deepEqual(settings, projects, 'Settings and projects sidebars share the source-list configuration')
 }
 
 function assertUsable(evidence: SettingsEvidence, width: number) {

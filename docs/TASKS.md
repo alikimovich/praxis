@@ -8,6 +8,13 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] `NativeEditingInspector` is a Liquid Glass island (composer inset 10, radius 24; `NSVisualEffectView` popover before macOS 26) floating on the preview's right edge. `WorkspaceLayout` no longer subtracts it from the preview, so opening or closing it never reflows the page.
 - [x] The island's height is the preview area minus the insets (above a docked source editor, below the toolbar); its fields scroll inside it. Dragging its left edge resizes it within 220–500, saved through `native-layout-sizes`.
 - [x] Core smoke `inspector` runs `src/native/smoke-inspector-island.ts`: equal preview frames open/closed at the default and minimum windows, the clamped saved resize, toolbar clearance, hit targets around the island and scrolling at the minimum size. Evidence: `inspector-island-{default,narrow}-{open,closed}.png`, `inspector-island.json`.
+## Settings: the native split-view sidebar (LKM-123)
+
+- [x] Settings is a full-size-content window whose `NSSplitViewController` (`src/native/SheetSidebar.swift`) starts with a non-collapsible `NSSplitViewItem(sidebarWithViewController:)` (180–260 points) under the traffic lights, hosting a `.sourceList` `NSOutlineView`.
+- [x] `src/native/SourceList.swift`: outline setup, symbol/label cell, scroll view and sidebar item shared with the projects sidebar (same row height, icon size, selection style, insets).
+- [x] Arrow keys change the section; the window title names it. Detail pane, autosave, Command-, and Trezi → Settings… unchanged.
+- [x] Tests: `native-settings-layout` (sidebar behavior/style, shared geometry, arrow keys, title), `native-settings-evidence` (parity and title rejection), native `sheets` step (parity with `shellInspect.sourceList`, arrows, foreground captures of every section, `settings-parity-projects-sidebar.png`).
+
 ## Claude seat: login detection and stuck turns (LKM-119)
 
 - [x] Helper environment: allowlist unchanged, `USER`/`LOGNAME`/`HOME` from the account record and a default `PATH`; same cwd. Root-cause note in `docs/PROVIDERS.md`.
