@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url'
 import { serviceConversation } from '../../src/native/conversation-service.ts'
 import { serviceRepository } from '../../src/native/repository-service.ts'
 import { serviceSource } from '../../src/native/source-service.ts'
+import { skipUnlessDarwin } from './darwin.mjs'
 import { SOURCES as SOURCE_SOURCES } from './source-fixture.mjs'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
@@ -21,6 +22,7 @@ export const SOURCES = [...SOURCE_SOURCES,
 
 /** Compiles the fixture once per source hash and compiler version; returns the binary path. */
 export function compileConversationFixture() {
+  skipUnlessDarwin('the Swift conversation owner')
   const files = [...SOURCES, 'test/fixtures/conversation-owner/main.swift']
   const compiler = spawnSync('xcrun', ['swiftc', '--version'], { encoding: 'utf8' })
   const key = createHash('sha256')

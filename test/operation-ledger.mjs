@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
+import { skipUnlessDarwin } from './helpers/darwin.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const scratch = mkdtempSync(join(tmpdir(), 'trezi-ledger-'))
@@ -16,6 +17,7 @@ const live = new Set()
 let cases = 0
 
 function compile() {
+  skipUnlessDarwin('the Swift operation ledger')
   const args = ['swiftc', '-module-cache-path', join(scratch, 'module-cache'),
     ...['ServiceContract', 'LedgerStore', 'OperationLedger', 'LedgerMirror'].map(name => `src/service/${name}.swift`),
     'test/fixtures/operation-ledger/main.swift', '-o', binary]

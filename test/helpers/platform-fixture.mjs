@@ -13,6 +13,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { servicePlatform } from '../../src/native/platform-service.ts'
+import { skipUnlessDarwin } from './darwin.mjs'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 export const SOURCES = ['ServiceContract', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile',
@@ -22,6 +23,7 @@ export const SOURCES = ['ServiceContract', 'LedgerStore', 'OperationLedger', 'Pr
 
 /** Compiles the fixture once per source hash and compiler version; returns the binary path. */
 export function compilePlatformFixture() {
+  skipUnlessDarwin('the Swift platform owner')
   const files = [...SOURCES, 'test/fixtures/platform-owner/main.swift']
   const compiler = spawnSync('/usr/bin/xcrun', ['swiftc', '--version'], { encoding: 'utf8' })
   const key = createHash('sha256')

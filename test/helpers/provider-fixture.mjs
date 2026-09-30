@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { serviceProvider } from '../../src/native/provider-service.ts'
+import { skipUnlessDarwin } from './darwin.mjs'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 export const SOURCES = ['ServiceContract', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile',
@@ -21,6 +22,7 @@ export const FAKE_HELPER = join(root, 'test/fixtures/provider-owner/fake-helper.
 
 /** Compiles the fixture once per source hash and compiler version; returns the binary path. */
 export function compileProviderFixture() {
+  skipUnlessDarwin('the Swift provider owner')
   const files = [...SOURCES, 'test/fixtures/provider-owner/main.swift']
   const compiler = spawnSync('xcrun', ['swiftc', '--version'], { encoding: 'utf8' })
   const key = createHash('sha256')

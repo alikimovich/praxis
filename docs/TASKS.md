@@ -3,6 +3,14 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## GitHub CI green for the native app (LKM-117)
+
+- [x] `.github/workflows/ci.yml` runs on `macos-26` (Xcode 26, macOS 26 SDK, asserted by `bun scripts/requirements.mjs --build`): frozen install, `typecheck`, `typecheck:native`, unit tier with `--timeout-ms=120000`. No native GUI or live tier.
+- [x] Triggers: push to `main`/`candidate` and pull requests only.
+- [x] Swift-compiling unit tests SKIP with a reason off macOS (`test/helpers/darwin.mjs`); a Linux unit run exits 0 with SKIP reported apart from PASS.
+- [x] `docs/TESTING.md` "GitHub CI".
+- [ ] Operator: confirm a green GitHub run on the next `candidate` push.
+
 ## Slider tick marks in the inspector and chat islands (LKM-115)
 
 - [x] Inspector and chat-island sliders use `SnappedSlider` (`src/native/SnappedSlider.swift`): no `step:` and so no tick marks, with snapping in the binding setter using the same default steps.
