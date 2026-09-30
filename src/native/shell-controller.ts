@@ -27,7 +27,7 @@ export class NativeShellController {
     let url = active?.url ?? null
     try { if (url && this.location && new URL(url).origin === new URL(this.location).origin) url = this.location } catch {}
     const state = this.git.decorate({
-      previewStatus: ws.status, rows, project: active?.key ?? null, selected: active ? `chat:${active.activeSessionKey}` : null,
+      previewStatus: ws.status, rows, project: active?.key ?? null, chatReady: !!active && ws.loadedKey === active.key, selected: active ? `chat:${active.activeSessionKey}` : null,
       homeState: { visible: !active, busy: ws.status.kind === 'busy', label: ws.status.kind === 'busy' ? ws.status.label : ws.status.kind === 'error' ? ws.status.message : '', recents: ws.recents },
       selectMode: this.selecting, previewReady: ws.status.kind === 'running', chatWidth: Number(this.preferences.get('trezi:native-chat-width')) || 440, chatHidden: this.hidden,
       branch: active?.branch ?? null, branches: [], publishLabel: 'Publish', publishing: false, publishMode: this.git.mode, codeOpen: this.codeOpen,

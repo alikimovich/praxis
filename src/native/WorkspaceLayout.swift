@@ -63,11 +63,14 @@ final class WorkspaceLayout {
         var state = chatState
         let top: CGFloat = host.layers.isHidden ? 0 : min(layersHeight, host.canvas.bounds.height * 0.7)
         let full = width(), shown = full * fraction
-        let visible = shellState["project"] is String && shown > 60 && host.canvas.bounds.height > 30
+        let visible = chatReady && shown > 60 && host.canvas.bounds.height > 30
         state["visible"] = visible
         state["bounds"] = ["x":0.0, "y":Double(top), "width":Double(full), "height":Double(max(0, host.canvas.bounds.height - top))]
         return state
     }
+    /// The selected project finished opening. Before that (opening, failed open) the
+    /// column keeps its width, so nothing moves when the chat appears, but stays empty.
+    var chatReady: Bool { shellState["project"] is String && shellState["chatReady"] as? Bool == true }
     func layout() {
         guard let host, !layingOut else { return }
         layingOut = true; defer { layingOut = false }
@@ -83,7 +86,7 @@ final class WorkspaceLayout {
         host.chat.model.cat.show(!host.chat.isHidden)
         // Clip the disappearing column while retaining the text and glass layout.
         host.chatColumn.frame = NSRect(x: 0, y: 0, width: leading, height: bounds.height)
-        host.chatColumn.isHidden = leading < 1
+        host.chatColumn.isHidden = leading < 1 || !chatReady
         var dividerState = state
         dividerState["bounds"] = ["x":0, "y":0, "width":Double(leading), "height":Double(bounds.height)]
         host.chatDivider.update(dividerState)
@@ -93,10 +96,13 @@ final class WorkspaceLayout {
         host.dockedSource?.frame = NSRect(x: leading, y: bounds.height - bottom, width: max(0, bounds.width - leading), height: bottom)
         host.editingInspector.frame = NSRect(x: bounds.width - right, y: 0, width: right, height: max(0, bounds.height - bottom))
         let available = NSRect(x: leading, y: 0, width: max(0, bounds.width - leading - right), height: max(0, bounds.height - bottom))
-        host.previewStatus.frame = available
+        // Opening and failed-open states own the whole content area, the chat column included.
+        host.previewStatus.frame = chatReady ? available : NSRect(x: 0, y: 0, width: available.maxX, height: available.height)
         var page = available
         let mobile = shellState["viewport"] as? String == "mobile"
-        device.isHidden = !mobile || !previewVisible
+        // Opening, setup and error own the content area: the last project's page must not cover them.
+        let shown = previewVisible && host.previewStatus.isHidden
+        device.isHidden = !mobile || !shown
         if mobile {
             let height = min(880, max(120, available.height - 32), max(120, available.width - 32) * 1252 / 606)
             let bezel = NSRect(x: available.midX - height * 606 / 1252 / 2, y: available.midY - height / 2, width: height * 606 / 1252, height: height)
@@ -107,7 +113,7 @@ final class WorkspaceLayout {
             preview.autoresizingMask = []; preview.frame = page
             preview.layer?.cornerRadius = mobile ? page.width * 0.12 : 0
             preview.layer?.masksToBounds = mobile
-            preview.isHidden = !previewVisible || page.width <= 0 || page.height <= 0
+            preview.isHidden = !shown || page.width <= 0 || page.height <= 0
         }
         sourceDivider.isHidden = bottom == 0; sourceDivider.frame = NSRect(x: leading, y: bounds.height - bottom - 3, width: bounds.width - leading, height: 6)
         layersDivider.isHidden = host.layers.isHidden; layersDivider.frame = NSRect(x: 0, y: host.layers.frame.maxY - 3, width: leading, height: 6)
@@ -120,5 +126,7 @@ final class WorkspaceLayout {
             emit(["event":"native-layout-frame", "frame":["x":Double(page.minX), "y":Double(page.minY), "width":Double(page.width), "height":Double(page.height), "radius":mobile ? Double(page.width * 0.12) : 0, "leading":Double(leading)]])
         }
     }
-    func inspect() -> [String: Any] { ["native":true, "windowHeight":Double(host?.window.frame.height ?? 0), "canvasHeight":Double(host?.canvas.bounds.height ?? 0), "captureHeight":Double(host?.window.contentView?.superview?.bounds.height ?? 0), "width":Double(width()), "fraction":Double(fraction), "preview":NSStringFromRect(host?.views["preview"]?.frame ?? .zero), "panel":NSStringFromRect(host?.editingInspector.frame ?? .zero)] }
+    func inspect() -> [String: Any] { ["native":true, "windowHeight":Double(host?.window.frame.height ?? 0), "canvasHeight":Double(host?.canvas.bounds.height ?? 0), "captureHeight":Double(host?.window.contentView?.superview?.bounds.height ?? 0), "width":Double(width()), "fraction":Double(fraction), "preview":NSStringFromRect(host?.views["preview"]?.frame ?? .zero), "panel":NSStringFromRect(host?.editingInspector.frame ?? .zero),
+        "leading":Double(lastLeading), "chatReady":chatReady, "chatColumnHidden":host?.chatColumn.isHidden ?? true, "chatHidden":host?.chat.isHidden ?? true,
+        "status":NSStringFromRect(host?.previewStatus.frame ?? .zero), "statusHidden":host?.previewStatus.isHidden ?? true, "previewHidden":host?.views["preview"]?.isHidden ?? true,"statusKind":host?.previewStatus.model.kind ?? ""] }
 }

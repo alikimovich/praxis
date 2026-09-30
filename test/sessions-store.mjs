@@ -9,7 +9,7 @@
 import { serviceProfile } from './helpers/with-service-owners.mjs'
 import { createSessionStore } from '../src/main/sessions-store.ts'
 import { setConversationOwner, swiftConversationOwner } from '../src/main/conversation-owner.ts'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const base = join(serviceProfile, 'trezi')
@@ -106,6 +106,20 @@ try {
   // A corrupt record is skipped, not fatal.
   writeFileSync(join(base, 'sessions/broken.json'), '{nope')
   ok(store.list('/p/a').length === 2, 'a corrupt record is skipped')
+
+  // LKM-120: a title that came from an error is renamed to the neutral one on load.
+  writeFileSync(join(base, 'sessions/err-title.json'), JSON.stringify(rec('err-title', '/p/titles', 5, { title: 'Not logged in · Please run /login' })))
+  writeFileSync(join(base, 'sessions/real-title.json'), JSON.stringify(rec('real-title', '/p/titles', 6, { title: 'Make Header Sticky' })))
+  const titled = store.list('/p/titles')
+  ok(titled.length === 2, `a renamed record is listed once (${titled.length})`)
+  ok(titled.find((r) => r.id === 'err-title')?.title === 'New chat', 'an error title lists as New chat')
+  ok(titled.find((r) => r.id === 'real-title')?.title === 'Make Header Sticky', 'a real title is kept')
+  await store.flush()
+  const onDisk = JSON.parse(readFileSync(join(base, 'sessions/err-title.json'), 'utf8'))
+  ok(onDisk.title === 'New chat', `the neutral title is saved through the owner (${onDisk.title})`)
+  writeFileSync(join(base, 'sessions/err-get.json'), JSON.stringify(rec('err-get', '/p/titles', 7, { title: 'Invalid API key · Please run /login' })))
+  ok(store.get('err-get')?.title === 'New chat', 'get renames an error title too')
+  await store.flush()
 
   // Unsafe ids are rejected on save and ignored on get/remove (id → filename).
   let threw = false

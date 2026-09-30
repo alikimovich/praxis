@@ -13,6 +13,14 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Installed `claude` used when it is logged in and the bundled CLI is not.
 - [x] Deterministic `test/provider-login.mjs` (silent, missing/invalid auth, token, diagnose, card). No live calls.
 - [ ] Operator: confirm with a real signed-in and signed-out Claude seat (live, needs authorization).
+## Standard macOS Settings window with a sidebar (LKM-121)
+
+- [x] Source-list sidebar with SF Symbols (General, AI Providers, Experimental); detail pane with large title and grouped rows (label and description left, control right).
+- [x] General: default model. AI Providers: the providers sheet inline (button and sheet removed). Experimental: Gen UI, explanation, engine. Keys and autosave unchanged.
+- [x] Window remembers the last selected section (`trezi:settings-section:v1`).
+- [x] Gear removed from the main sidebar; Settings opens from Trezi → Settings… / Command-, with and without a project.
+- [x] Foreground captures of every section at the minimum and default size, the no-project open and the gear-free sidebar.
+- [ ] Back/forward buttons (skipped; optional in the issue).
 
 ## Simplify the code editor toolbar (LKM-118)
 
