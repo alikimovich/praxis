@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { serviceEditing } from '../../src/native/editing-service.ts'
 import { SOURCES as CONVERSATION_SOURCES, startConversationFixture } from './conversation-fixture.mjs'
+import { skipUnlessDarwin } from './darwin.mjs'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 export const SOURCES = [...CONVERSATION_SOURCES,
@@ -18,6 +19,7 @@ export const SOURCES = [...CONVERSATION_SOURCES,
 
 /** Compiles the fixture once per source hash and compiler version; returns the binary path. */
 export function compileEditingFixture() {
+  skipUnlessDarwin('the Swift editing owner')
   const files = [...SOURCES, 'test/fixtures/editing-owner/main.swift']
   const compiler = spawnSync('xcrun', ['swiftc', '--version'], { encoding: 'utf8' })
   const key = createHash('sha256')

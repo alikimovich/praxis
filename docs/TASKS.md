@@ -8,6 +8,22 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] `src/native/SourceEditor.swift`: no Save, Reload or Open in Editor buttons. Back/forward icons sit left of a selectable path; pop out/dock (`arrow.up.left.and.arrow.down.right` / `arrow.down.right.and.arrow.up.left`) and close (`xmark`) are icon buttons on the right edge, with tooltips and accessibility labels.
 - [x] ⌘S saves and ⌘R reloads while focus is inside the editor (same dirty-reload prompt and conflict handling); elsewhere ⌘R stays Reload Preview.
 - [x] Core smoke `source-editor` (`src/native/smoke-source-editor.ts`): toolbar layout docked and popped, the shortcuts through the window's key-equivalent pass, conflict, discard prompt and path copy. Evidence: `source-toolbar-popped.png`, `source-toolbar-docked.png`.
+## GitHub CI green for the native app (LKM-117)
+
+- [x] `.github/workflows/ci.yml` runs on `macos-26` (Xcode 26, macOS 26 SDK, asserted by `bun scripts/requirements.mjs --build`): frozen install, `typecheck`, `typecheck:native`, unit tier with `--timeout-ms=120000`. No native GUI or live tier.
+- [x] Triggers: push to `main`/`candidate` and pull requests only.
+- [x] Swift-compiling unit tests SKIP with a reason off macOS (`test/helpers/darwin.mjs`); a Linux unit run exits 0 with SKIP reported apart from PASS.
+- [x] `docs/TESTING.md` "GitHub CI".
+- [ ] Operator: confirm a green GitHub run on the next `candidate` push.
+## One-command install for users and development (LKM-116)
+
+- [x] `install.sh` installs missing Bun (official installer, then on PATH) and starts and waits for the Xcode command-line tools; the version checks stay.
+- [x] `--channel main|candidate` (and `TREZI_CHANNEL`), default main; a re-run keeps the installed channel unless one is given.
+- [x] Inside a checkout (`./install.sh`, `bun run setup`): that checkout as it is (no clone, branch switch or pull without `--update`); links follow the last install and the script says which.
+- [x] Finish: `claude setup-token` offered when the CLI is signed out (skipped unattended), then Trezi opens (`--no-open`). Re-runs update and rebuild.
+- [x] README Install section: the user, tester and dev commands. `test/install-update.mjs` covers all of it with fake bun/curl/xcode-select/git/claude.
+- [ ] The one-liner fetches `install.sh` from main, so `--channel candidate` works from that URL only once this installer reaches main.
+
 ## Slider tick marks in the inspector and chat islands (LKM-115)
 
 - [x] Inspector and chat-island sliders use `SnappedSlider` (`src/native/SnappedSlider.swift`): no `step:` and so no tick marks, with snapping in the binding setter using the same default steps.

@@ -5,7 +5,9 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { build, stop } from 'esbuild'
+import { skipUnlessSwift } from './helpers/darwin.mjs'
 
+skipUnlessSwift('the Swift half of the contract parity check')
 const root = fileURLToPath(new URL('..', import.meta.url))
 const scratch = mkdtempSync(join(tmpdir(), 'trezi-contract-'))
 function run(command, args) {

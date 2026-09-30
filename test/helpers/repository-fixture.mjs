@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { serviceRepository } from '../../src/native/repository-service.ts'
+import { skipUnlessDarwin } from './darwin.mjs'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 export const SOURCES = ['ServiceContract', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile',
@@ -19,6 +20,7 @@ export const SOURCES = ['ServiceContract', 'LedgerStore', 'OperationLedger', 'Pr
 
 /** Compiles the fixture once per source hash and compiler version; returns the binary path. */
 export function compileRepositoryFixture() {
+  skipUnlessDarwin('the Swift repository owner')
   const files = [...SOURCES, 'test/fixtures/repository-owner/main.swift']
   const compiler = spawnSync('xcrun', ['swiftc', '--version'], { encoding: 'utf8' })
   const key = createHash('sha256')
