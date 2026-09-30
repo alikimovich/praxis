@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import type { NativeBridge } from './bridge'
 import { checkVisibleSettings } from './smoke-settings'
 import { dispatchIPC, serviceEvents } from './platform'
+import { preparePreviewInput } from './smoke-input'
 export async function checkNativeSheets(host: NativeBridge, key: string, artifacts: string) {
   const wait = async (check: (state: any) => boolean) => {
     for (let i = 0; i < 80; i++) {
@@ -39,11 +40,18 @@ export async function checkNativeSheets(host: NativeBridge, key: string, artifac
   writeFileSync(join(artifacts, 'project-memory.png'), Buffer.from(await host.request('captureSheet'), 'base64'))
   await host.request('sheetPerform', { action: 'cancel' })
   await wait(state => !state.visible)
+  // The projects sidebar in the foreground, for side-by-side parity with the Settings captures.
+  await preparePreviewInput(host, true)
+  await new Promise(resolve => setTimeout(resolve, 350))
+  const shell = await host.request('shellInspect')
+  const projectsSidebar = await host.request('captureVisibleSidebar')
+  writeFileSync(join(artifacts, 'settings-parity-projects-sidebar.png'), Buffer.from(projectsSidebar.png, 'base64'))
+  writeFileSync(join(artifacts, 'settings-parity-projects-sidebar.json'), JSON.stringify({ sourceList: shell.sourceList, sidebarWidth: shell.sidebarWidth, imageWidth: projectsSidebar.width, imageHeight: projectsSidebar.height }, null, 2))
   host.emit('menu', { action: 'settings' })
-  await wait(state => state.visible && state.title === 'Settings')
+  await wait(state => state.visible && state.title === 'Settings' && state.windowTitle === 'General')
   await new Promise(resolve => setTimeout(resolve, 250))
   writeFileSync(join(artifacts, 'settings.png'), Buffer.from(await host.request('captureSheet'), 'base64'))
-  await checkVisibleSettings(host, artifacts)
+  await checkVisibleSettings(host, artifacts, shell.sourceList)
   await host.request('sheetPerform', { action: 'change', values: { default: 'last-used', projectUi: 'false', engine: 'agent' } })
   await wait(state => !state.busy)
   // AI Providers is inline: its editor replaces the pane inside the same Settings window.

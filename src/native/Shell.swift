@@ -53,22 +53,13 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         super.init(); self.window = window
         split.splitView.isVertical = true
         split.view.frame = window.contentLayoutRect
-        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
-        column.minWidth = 0; column.width = 230; column.resizingMask = .autoresizingMask
-        outline.frame = NSRect(x: 0, y: 0, width: 230, height: 600)
-        outline.autoresizingMask = [.width]
-        outline.addTableColumn(column); outline.outlineTableColumn = column
-        outline.headerView = nil; outline.rowSizeStyle = .custom; outline.style = .sourceList
-        outline.rowHeight = SidebarRowStyle.height
-        outline.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
-        outline.indentationPerLevel = 0; outline.allowsEmptySelection = true
+        SourceList.configure(outline, label: "Projects")
+        outline.allowsEmptySelection = true
         outline.dataSource = self; outline.delegate = self
-        outline.setAccessibilityLabel("Projects")
         outline.registerForDraggedTypes([.treziProject])
         outline.setDraggingSourceOperationMask(.move, forLocal: true)
         let menu = NSMenu(); menu.delegate = self; outline.menu = menu
-        let scroll = ProjectScrollView(); scroll.documentView = outline; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay
-        scroll.drawsBackground = false
+        let scroll = SourceList.scrollView(outline)
         let sidebarContainer = NSView()
         let projectActions = NSStackView()
         projectActions.orientation = .vertical; projectActions.alignment = .leading; projectActions.spacing = 2
@@ -92,10 +83,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             scroll.topAnchor.constraint(equalTo: projectActions.bottomAnchor, constant: 16), scroll.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: sidebarContainer.bottomAnchor)
         ])
         sidebar.view = sidebarContainer
-        sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebar)
-        sidebarItem.minimumThickness = 180; sidebarItem.maximumThickness = 340
-        sidebarItem.allowsFullHeightLayout = true
-        sidebarItem.titlebarSeparatorStyle = .none
+        sidebarItem = SourceList.sidebarItem(sidebar, minimum: 180, maximum: 340)
         sidebarItem.canCollapse = true
         sidebarItem.collapseBehavior = .preferResizingSiblingsWithFixedSplitView
         let detail = NSViewController(); detail.view = NSView()
@@ -401,17 +389,10 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         let row = item as! ShellRow
         let cell = ProjectCell(); cell.selected = row.project == currentProject
-        let text = NSTextField(labelWithString: row.title + (row.running ? " · Working" : ""))
-        text.font = SidebarRowStyle.font
-        text.lineBreakMode = .byTruncatingTail
         let symbol = row.kind == "project" ? "folder" : row.kind == "history" ? "clock" : "bubble.left"
         // Project rows share Open Project's symbol, regardless of stored artwork.
         let artwork = (row.kind == "project" ? nil : row.icon)
             ?? NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!
-        let icon = SidebarIconView(image: artwork)
-        icon.imageScaling = .scaleProportionallyDown
-        icon.contentTintColor = artwork.isTemplate ? .labelColor : nil
-        text.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let more = cell.more
         more.bezelStyle = .inline; more.setAccessibilityLabel("Actions for " + row.title)
         (more.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
@@ -420,9 +401,8 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         trigger.image = NSImage(systemSymbolName: "ellipsis", accessibilityDescription: "Project actions")
         menu.insertItem(trigger, at: 0); more.menu = menu
         more.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(more)
-        cell.addSubview(icon); cell.addSubview(text); cell.textField = text; cell.imageView = icon
-        icon.translatesAutoresizingMaskIntoConstraints = false; text.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate(SidebarIconLayout.constraints(icon: icon, label: text, in: cell, leading: 2) + [
+        let text = cell.install(title: row.title + (row.running ? " · Working" : ""), image: artwork)
+        NSLayoutConstraint.activate([
             text.trailingAnchor.constraint(equalTo: more.leadingAnchor, constant: -4),
             more.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4), more.centerYAnchor.constraint(equalTo: cell.centerYAnchor), more.widthAnchor.constraint(equalToConstant: 28)
         ])
@@ -459,7 +439,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
          "sidebarTop":sidebarFrame.maxY, "contentTop":window?.contentLayoutRect.maxY ?? 0,
          "detailTop":contentCanvas.convert(contentCanvas.bounds, to: nil).maxY,
          "sidebarListTop":outline.enclosingScrollView.map { $0.convert($0.bounds, to: nil).maxY } ?? 0,
-         "rows":allRows.map { ["id":$0.id, "title":$0.title, "kind":$0.kind] }, "selected":selectedID ?? "", "sidebarCollapsed":sidebarItem.isCollapsed,
+         "rows":allRows.map { ["id":$0.id, "title":$0.title, "kind":$0.kind] }, "selected":selectedID ?? "", "sidebarCollapsed":sidebarItem.isCollapsed, "sourceList":SourceList.inspect(outline, item: sidebarItem),
          "sidebarWidth":sidebar.view.bounds.width, "detailWidth":split.splitViewItems[1].viewController.view.bounds.width,
          "projectMoreRightEdges":(0..<outline.numberOfRows).compactMap { index -> CGFloat? in
              guard let cell = outline.view(atColumn: 0, row: index, makeIfNecessary: true) as? ProjectCell, let clip = outline.enclosingScrollView?.contentView else { return nil }

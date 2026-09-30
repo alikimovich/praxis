@@ -1,12 +1,13 @@
 import AppKit
 import SwiftUI
 
-/// A sectioned app window (Settings): a source-list sidebar with SF Symbols on the left;
-/// on the right the selected section's large title and its fields as grouped form rows
-/// (label and help on the left, control on the right) with the section's actions below.
+/// The detail pane of a sectioned app window (Settings; the sidebar is `SheetSplit`):
+/// the selected section's large title and its fields as grouped form rows (label and
+/// help on the left, control on the right) with the section's actions below.
 struct SectionedSheetContent: View {
     static let defaultSize = NSSize(width: 780, height: 540)
-    static let minimumSize = NSSize(width: 680, height: 420)
+    /// Full-size content: the height includes the unified toolbar over the pane.
+    static let minimumSize = NSSize(width: 680, height: 460)
     @ObservedObject var model: SheetModel
     let state: SheetState
     let sections: [SheetSection]
@@ -17,18 +18,10 @@ struct SectionedSheetContent: View {
         return model.values[condition.field] == condition.value
     }
     var body: some View {
-        HStack(spacing: 0) {
-            List(selection: Binding(get: { current?.id }, set: { if let id = $0 { model.select(id) } })) {
-                ForEach(sections) { section in
-                    Label(section.label, systemImage: section.symbol).tag(section.id as String?)
-                }
-            }
-            .listStyle(.sidebar).frame(width: 200).accessibilityLabel(state.title + " sections")
-            Divider()
+        Group {
             if let section = current { pane(section).id(section.id) }
         }
-        .frame(minWidth: Self.minimumSize.width, maxWidth: .infinity, minHeight: Self.minimumSize.height, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onExitCommand { model.perform("cancel") }
     }
     func pane(_ section: SheetSection) -> some View {
