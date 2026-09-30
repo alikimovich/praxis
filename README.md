@@ -38,8 +38,8 @@ GitHub PR.
   launched them. After successful turns, Trezi conservatively learns durable
   decisions into unified project memory shared by every chat; it lives outside Git
   and remains directly editable. See [`docs/MEMORY.md`](docs/MEMORY.md).
-- **Bring your own model.** Beyond the two subscription seats, Settings →
-  Models & Providers connects any OpenAI-compatible endpoint serving the
+- **Bring your own model.** Beyond the two subscription seats, Settings
+  (Trezi → Settings…, Command-,) → AI Providers connects any OpenAI-compatible endpoint serving the
   `/responses` API — Vercel AI Gateway, Groq, or a custom host — so open models
   like Kimi or DeepSeek can drive a chat. Paste a key, Trezi fetches that
   endpoint's model catalog, and you tick which models to offer in the picker.
@@ -269,7 +269,7 @@ still need release validation; see [current limits](docs/NATIVE.md).
 
 ### Compose UI from project components
 
-Enable **Settings → Experimental Gen UI** to have Claude or Codex compose React or Svelte
+Enable **Settings → Experimental → Gen UI** to have Claude or Codex compose React or Svelte
 UI from the opened project’s components and styles using json-render. This is
 experimental and off by default. The setting is saved on this device and captured
 when you submit a message. Turning it off restores ordinary editing and keeps

@@ -14,6 +14,7 @@ Newest first. Append a dated entry when you finish a chunk of work.
 - **Proof.** `test/chat-title.mjs` covers the rule, real-title false positives and the migration. `test/sessions-store.mjs` covers the persisted rename.
   - The native `startup` and `chat-gate` checks (sidebar group) save foreground window captures and JSON for four states: `chat-gate-{no-project,loaded,opening,failed-open}`. The failing project uses the custom command `sleep 8; exit 1`.
   - They assert the chat is hidden, the status covers the column, and the preview is hidden. They check that the leading edge, preview frame and detail pane stay put. They also check that Retry loads the project with its chat, and that switching back hides the chat until the project is ready.
+- **Candidate sync.** After LKM-121 (no sidebar gear, `settingsMenu` hook) the chat-gate keys moved out of `NativeShell.inspect()` into `gateInspect()`, merged by the `shellInspect` route, so the `sidebarActions` line stays as the candidate has it. The `no-project` capture runs before the Settings prelude in `startup`. A 3-way `git merge-file` of Shell.swift, Host.swift and smoke-core.ts against the candidate is conflict-free. The full native suite passes 20/20 on the merged tree.
 
 ## 2026-09-29 — LKM-118: simpler code editor toolbar
 

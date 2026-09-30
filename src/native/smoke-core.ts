@@ -44,8 +44,18 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
       await geometry('startup')
       assert.deepEqual(await host.request('webViews'),['preview'])
       const welcome=await host.request('welcomeInspect');assert.ok(welcome.visible&&welcome.catFrames>=10)
-      writeFileSync(join(artifacts,'welcome.png'),Buffer.from(await host.request('captureShell'),'base64'))
       await captureChatGate(host, artifacts, 'no-project', false)
+      writeFileSync(join(artifacts,'welcome.png'),Buffer.from(await host.request('captureShell'),'base64'))
+      // No gear in the sidebar: Settings opens from Trezi → Settings… (Command-,), even with no project.
+      assert.deepEqual((await host.request('shellInspect')).sidebarActions,['new-project','open-project'])
+      assert.deepEqual(await host.request('settingsMenu'),{menu:'Trezi',title:'Settings…',key:',',command:true,enabled:true})
+      await host.request('settingsMenu',{perform:true})
+      await inspect('sheetInspect',s=>s.visible&&s.title==='Settings'&&s.section==='general'&&s.fields.includes('default'))
+      assert.equal(nativeWorkspace.state.activeKey ?? null,null,'Settings opened without a project')
+      await delay(250)
+      writeFileSync(join(artifacts,'settings-no-project.png'),Buffer.from(await host.request('captureSheet'),'base64'))
+      await host.request('sheetPerform',{action:'closeWindow'})
+      await inspect('sheetInspect',s=>!s.visible)
     } },
     { name: 'open-project', run: async () => {
       await host.request('shellPerform',{action:'open-project'})
