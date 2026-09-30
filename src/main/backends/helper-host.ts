@@ -158,8 +158,13 @@ export function runProviderHelper(
     } catch {
       return
     }
+    if (!frame || typeof frame !== 'object') return
+    const received = frame as Record<string, any>
+    // A tool answer settles at once: the frame waiting on it may be `open` itself (Codex
+    // checks its Trezi tool bridge while starting, LKM-131).
+    if (received.type === 'tool-result' || received.type === 'tool-error') return void handle(received).catch(() => {})
     // In order: a mode change lands before the turn sent after it.
-    if (frame && typeof frame === 'object') queue = queue.then(() => handle(frame as Record<string, any>)).catch(() => {})
+    queue = queue.then(() => handle(received)).catch(() => {})
   })
   // The owner closed our stdin: it is gone or stopping us.
   lines.once('close', () => stop(0))

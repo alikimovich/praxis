@@ -1,8 +1,5 @@
 import { chatIslandShape, chatIslandDescription } from '../../../bin/chat-island-schema.mjs'
-import { runChatIslandTool } from '../chat-islands'
-import { runProjectUiTool } from '../project-ui'
-import { openAgentPreview } from '../preview-tools'
-import { openAgentCode } from '../code-tools'
+import { runTreziTool, sessionTool } from '../session-tools'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -26,15 +23,13 @@ import { checkContrast, suggestAccessible } from '../apca'
 import { fluidClamp, fluidScale } from '../fluid'
 import { recordClaudeModels } from '../model-catalog'
 import { oklchScale } from '../oklch'
-import { observeAgentPreview } from '../preview-observation-tools'
 import { discoverPortableSkills } from '../bundled-skills'
 import { withSkillReferences } from './skill-menu'
 import { checkClaudeLogin, isAuthFailure, isLoginCommand, LOGIN_COMMAND_MESSAGE, resolveClaudeCli } from './claude-login'
 import { treziRules } from '../rules'
 import { elevationScale, layeredShadow } from '../shadows'
-import { findPack, SKILL_PACKS } from '../skill-packs'
+import { SKILL_PACKS } from '../skill-packs'
 import { discoverProjectSkills, mergeSlashCommands } from '../skills'
-import { workflowOwner } from '../workflow-owner'
 import {
   analyze,
   fromBounceDuration,
@@ -571,6 +566,24 @@ async function startSession(
         return def.handler(args, extra)
       }
     }))
+  // The tools that need main's state (the preview, islands, the editor, Gen UI, skill
+  // installs) run in Bun: from a provider helper they go there through the owner, which
+  // checks the helper's grant (`sessionTool`, LKM-131); in Bun they run here.
+  const scope = {
+    root, liveRoot: ctx?.liveRoot ?? root, emitKey, background: !!ctx?.sessionId, connectionId: options.connectionId,
+    notify: (channel: string, payload: unknown): void => sendToRenderer(getWindow, channel, payload)
+  }
+  const treziTool = sessionTool(ctx?.tools, (action, args) => runTreziTool(action, args, scope))
+  const failed = (result: unknown): boolean => !!(result as { error?: unknown } | null)?.error
+  const asText = async (pending: Promise<unknown>) => {
+    const result = await pending
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], ...(failed(result) ? { isError: true } : {}) }
+  }
+  // The preview observers already answer as MCP content (text or a JPEG); a failure is text.
+  const observed = async (action: 'preview_location' | 'preview_screenshot') => {
+    const result = (await treziTool(action, {})) as { content?: unknown } | null
+    return Array.isArray(result?.content) ? (result as { content: never[] }) : asText(Promise.resolve(result))
+  }
   const previewServer = createSdkMcpServer({
     name: 'praxis',
     version: '1.0.0',
@@ -579,11 +592,7 @@ async function startSession(
         'project_ui_catalog',
         'Discover supported React and Svelte components, literal props and styles for UI composition. Requires Experimental Gen UI enabled.',
         {},
-        async () => ({
-          content: [{ type: 'text' as const, text: JSON.stringify(
-            await runProjectUiTool(root, emitKey, 'project_ui_catalog')
-          ) }]
-        })
+        async () => asText(treziTool('project_ui_catalog', {}))
       ),
       tool(
         'compose_project_ui',
@@ -599,51 +608,33 @@ async function startSession(
             }).strict())
           }).strict().optional()
         },
-        async (args) => ({
-          content: [{ type: 'text' as const, text: JSON.stringify(
-            await runProjectUiTool(root, emitKey, 'compose_project_ui', args, options.connectionId)
-          ) }]
-        })
+        async (args) => asText(treziTool('compose_project_ui', args))
       ),
       tool(
         'preview_location',
         "The page/route currently shown in the user's live preview pane.",
         {},
-        async () => observeAgentPreview('preview_location')
+        async () => observed('preview_location')
       ),
       tool(
         'preview_screenshot',
         'A screenshot of exactly what the user sees in their preview pane right now (their route, viewport, simulator included).',
         {},
-        async () => observeAgentPreview('preview_screenshot')
+        async () => observed('preview_screenshot')
       ),
       tool(
         'open_preview',
         'Open a project page in the user preview. Pass a root-relative path with optional query/hash. Navigation waits for this turn to land.',
         { path: z.string() },
-        async (args) => ({
-          content: [{ type: 'text' as const, text: JSON.stringify(
-            openAgentPreview(ctx?.liveRoot ?? root, emitKey, args,
-              (channel, payload) => sendToRenderer(getWindow, channel, payload), !!ctx?.sessionId)
-          ) }]
-        })
+        async (args) => asText(treziTool('open_preview', args))
       ),
       tool(
         'open_code',
         'Open the mini code editor at an exact project file and highlight inclusive source lines. Read the file first; use when asked to show the exact code or implementation.',
         { file: z.string(), startLine: z.number().int().min(1), endLine: z.number().int().min(1).optional() },
-        async (args) => {
-          const result = ctx?.sessionId
-            ? { error: 'Background edits cannot navigate the user editor.' }
-            : await openAgentCode(root, ctx?.liveRoot ?? root, emitKey, args,
-                (channel, payload) => sendToRenderer(getWindow, channel, payload))
-          return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
-        }
+        async (args) => asText(treziTool('open_code', args))
       ),
-      tool('chat_island', chatIslandDescription, chatIslandShape, async (args) => {
-        const result = ctx?.sessionId ? { error: 'Background edits cannot create chat islands.' } : await runChatIslandTool(emitKey, root, args, options.connectionId)
-        return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], isError: !!(result as { error?: string }).error }
-      }),
+      tool('chat_island', chatIslandDescription, chatIslandShape, async (args) => asText(treziTool('chat_island', args))),
       // Pure spring→CSS calculator. LLMs can't reliably integrate a spring in
       // their head, so this computes the EXACT `linear()` easing + duration the
       // agent should paste into the target repo's CSS. No state, no disk, no
@@ -1021,31 +1012,14 @@ async function startSession(
             )
         },
         async (args) => {
-          const pack = findPack(args.packId)
-          if (!pack) {
-            return {
-              content: [
-                {
-                  type: 'text' as const,
-                  text:
-                    `install_skills failed: '${args.packId}' is not in the curated skill-pack allowlist. ` +
-                    'Call list_recommended_skills and use one of its ids.'
-                }
-              ],
-              isError: true
-            }
-          }
-          const scope = args.scope ?? pack.recommendedScope
-          const result = await workflowOwner().installSkills({
-            packId: args.packId,
-            scope,
-            liveRoot: ctx?.liveRoot ?? root
-          })
+          // Main checks the allowlist, then the workflow owner installs (`session-tools.ts`).
+          const result = (await treziTool('install_skills', args)) as { ok?: boolean; message?: string; error?: string }
+          const message = result.message ?? `install_skills failed: ${result.error ?? 'no result'}`
           const restart =
             'Newly installed skills are discovered when the agent starts its next turn — they take ' +
             'effect on your next message (or a fresh session), not mid-turn.'
           return {
-            content: [{ type: 'text' as const, text: `${result.message}\n\n${restart}` }],
+            content: [{ type: 'text' as const, text: result.ok ? `${message}\n\n${restart}` : message }],
             ...(result.ok ? {} : { isError: true })
           }
         }

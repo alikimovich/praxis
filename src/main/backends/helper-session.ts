@@ -3,8 +3,7 @@ import type { NativeView } from '../../native/platform'
 import type { AgentEvent, AgentOptions } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
 import { type HelperHandlers, providerOwner } from '../provider-owner'
-import { runTreziTool } from '../session-tools'
-import type { TreziAgentToolAction } from '../trezi-agent-tools'
+import { runTreziTool, type SessionTool } from '../session-tools'
 import { createRecordCapture } from './record'
 import { sendToRenderer } from './tools'
 import { claudeProvider } from './claude'
@@ -106,7 +105,9 @@ async function startHelperSession(
         void owner.resume(session, delta.sdkSessionId, record.id).catch(ignore)
       }
     },
-    tool: (tool, args) => runTreziTool(tool as TreziAgentToolAction, args, scope),
+    // Already authorized by the owner against this helper's grant (LKM-131: the helper's
+    // adapters send every tool that needs main's state here).
+    tool: (tool, args) => runTreziTool(tool as SessionTool, args, scope),
     exit: (reason) => {
       gone = reason
     }

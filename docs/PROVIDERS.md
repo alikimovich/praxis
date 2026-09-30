@@ -569,3 +569,48 @@ The native settings group's `security-session` step (`src/native/smoke-session.t
 `TreziHost --session` from Bun under the real service and requires the same report as
 the host's (`security-session.json`). `test/provider-login.mjs` covers the Check login
 fields with stand-in `security` commands. No test writes to the user's keychain.
+
+## Trezi tools from provider helpers (LKM-131)
+
+Since LKM-111 the Claude and Codex adapters run in a provider helper, a separate process
+that holds none of main's (Bun's) services. The adapters called their Trezi tools in
+place, so in a helper `chat_island` answered "Native chat islands are not available",
+the preview observers found no preview, Gen UI read as off, and `open_preview` and
+`open_code` went to a window that did not exist.
+
+**Routing.** The helper host gives each session `ctx.tools.invoke` (`SessionToolHost`).
+`sessionTool` in `src/main/session-tools.ts` sends every tool that needs main through
+it as a helper `tool` frame. The Swift owner checks the frame against the session's
+grant (`ProviderPolicy.authorize` in `src/service/ProviderPolicy.swift`: a granted name,
+arguments up to 256 KB, and no `open_code` or `chat_island` for background runs). A
+refused call goes back to the helper as `tool-error` and never reaches Bun. An authorized
+call is relayed to Bun. `src/native/provider-service.ts` runs it with the helper
+session's scope (`runTreziTool` from `src/main/backends/helper-session.ts`: live root,
+chat key, background, window). The owner then validates the result and returns it. The
+helper gains no capability: it only asks, and what it gets back is data. Outside a
+helper (`ctx.tools` absent) the same functions run in place behind `authorizedTool`.
+`runTreziTool` answers any name that is not one of its own with an error. Tool answers
+(`tool-result`, `tool-error`) settle outside the helper's ordered frame queue, because
+Codex checks its bridge (`workspace_state`) while its helper is still opening.
+
+**Audit.** Gemini exposes no Trezi tools.
+
+| Tool | Claude (`praxis` in-process MCP) | Codex (Trezi MCP bridge) | Needs main for |
+| --- | --- | --- | --- |
+| `chat_island` | routed | routed | the chat-island service on the Swift editing owner |
+| `preview_location`, `preview_screenshot` | routed | routed | the preview registry (URL, capture) |
+| `open_preview`, `open_code` | routed | routed | the window that navigates the preview or reveals code |
+| `project_ui_catalog`, `compose_project_ui` | routed | routed | the chat's Experimental Gen UI state |
+| `workspace_state`, `prepare_conflict_resolution` | — | routed | chat-isolation state (worktree, parked batch) |
+| `install_skills` | routed | — | the workflow owner |
+| `spring_to_css`, `check_contrast`, `fluid_clamp`, `color_scale`, `layered_shadow`, `line_height`, `list_recommended_skills` | in the helper | — | nothing (pure) |
+
+**Proof.** `test/provider-helper-tools.mjs` (unit) runs the real helper entry under the
+Swift owner fixture. It uses stand-in `claude` and `codex` CLIs (no model, no network),
+and each calls every Trezi tool its session lists. The test fails when a listed tool is
+neither pure nor routed, or when a routed tool answers with a missing-service error. It
+checks main's real answers: an island that renders and whose commit and undo round-trip
+through the source, the preview URL and capture, navigation, Gen UI and the install.
+It also checks that a background session's `chat_island` and `open_code` are refused
+by the owner before main. The Codex half needs a Unix-socket listen, which some
+sandboxes forbid.
