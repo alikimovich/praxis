@@ -1,6 +1,7 @@
 import { inspectUntil, waitFor } from './smoke-wait'
 import { checkVisibleComposer } from './smoke-composer'
 import { checkSourceStamps } from './smoke-source-stamp'
+import { checkSourceEditor } from './smoke-source-editor'
 import { checkChatIslands } from './smoke-islands'
 import assert from 'node:assert/strict'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -275,13 +276,8 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
     { name: 'source-editor', dependsOn: ['open-project'], run: async () => {
       await geometry('before popout')
       await invoke('source:popout',fixture,'index.html:3:1')
-      const editor=await inspect('sourceInspect',s=>s.popped&&s.source==='index.html')
-      await host.request('sourcePerform',{action:{root:fixture,action:'edit',source:'index.html',revision:100,text:editor.text+'\n<!-- native editor save -->'}})
-      await inspect('sourceInspect',s=>s.dirty)
-      await host.request('sourcePerform',{action:{root:fixture,action:'save'}})
-      await inspect('sourceInspect',s=>!s.dirty&&!s.error)
-      assert.ok(readFileSync(join(fixture,'index.html'),'utf8').includes('native editor save'))
-      await host.request('sourcePerform',{action:{root:fixture,action:'dock'}});await inspect('sourceInspect',s=>s.visible&&!s.popped)
+      await inspect('sourceInspect',s=>s.popped&&s.source==='index.html')
+      await checkSourceEditor(host,fixture,artifacts,inspect)
       await host.request('sourcePerform',{action:{root:fixture,action:'hide'}});await inspect('sourceInspect',s=>!s.visible)
       await geometry('after docking')
     }, cleanup: async () => {

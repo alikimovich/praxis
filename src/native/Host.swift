@@ -260,6 +260,11 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             editor.cacheDisplay(in: editor.bounds, to: bitmap); reply(id, bitmap.representation(using: .png, properties: [:])?.base64EncodedString() ?? "")
         case "sourcePerform":
             guard ephemeral else { return }; emit((c["action"] as? [String: Any] ?? [:]).merging(["event":"source-action"]) { _, new in new }); reply(id)
+        case "sourceVerification":
+            guard ephemeral, let editor = sourceEditors[c["root"] as? String ?? sourceRoot] else { reply(id, error: "Test source editor required"); return }
+            if c["prepare"] as? Bool == true { reply(id, editor.prepareForeground()) }
+            else if c["capture"] as? Bool == true { Task { @MainActor in do { reply(id, try await editor.captureToolbar()) } catch { reply(id, error: error.localizedDescription) } } }
+            else { reply(id, editor.verifyShortcut(c["key"] as? String ?? "", focus: c["focus"] as? String ?? "code").merging(["toolbar": editor.inspectToolbar()]) { _, new in new }) }
         case "activityState": activity.update(c)
         case "activityInspect": reply(id, ["visible":activity.window?.isVisible ?? false, "count":activity.count])
         case "sheetState": sheets.update(c["state"] as? [String: Any] ?? [:])
