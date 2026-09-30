@@ -156,8 +156,11 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                         platform = PlatformOwner(options: PlatformOwner.Options(profile: requested.profile, environment: requested.environment,
                             watchdog: CommandLine.arguments[0], journal: journal, protectedPIDs: { [bun, host] },
                             open: PlatformOpen.Tools(environment: requested.environment)), send: send)
+                        let diagnostics = session.diagnostics
                         let repository = RepositoryOwner(options: RepositoryOwner.Options(profile: requested.profile,
-                            environment: requested.environment), send: send)
+                            environment: requested.environment, log: { line in
+                                if let diagnostics { try? diagnostics.write(contentsOf: Data((line + "\n").utf8)) } else { fputs(line + "\n", stderr) }
+                            }), send: send)
                         self.repository = repository
                         source = SourceOwner(options: SourceOwner.Options(profile: requested.profile), repository: repository, send: send)
                         let conversation = ConversationOwner(options: ConversationOwner.Options(profile: requested.profile), send: send)

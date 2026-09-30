@@ -33,6 +33,8 @@ idle (detached worktree, no chat branch)
 
 parked
   → Resolve (UI or agent tool): rebase both sides into the worktree; AI resolves markers
+      (add/add, modify/delete and rename conflicts are markers too, a deleted side
+       labelled "(deleted)"; only an unreadable patch is an error — LKM-130)
   → Discard: reset worktree, detach, delete chat branch
   → successful resolution: land once, detach, delete chat branch
 ```

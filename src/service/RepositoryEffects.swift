@@ -56,9 +56,12 @@ final class RepositoryEffects: @unchecked Sendable {
     /// Resolved profile: every worktree this owner touches lives under it.
     let worktreesRoot: String
     let fault: (@Sendable (String) -> Void)?
+    /// The service log: full Git output that the user-facing messages only summarize.
+    let log: @Sendable (String) -> Void
 
-    init(git: RepositoryGit, journal: RepositoryJournal, scratch: String, worktreesRoot: String, fault: (@Sendable (String) -> Void)?) {
-        self.git = git; self.journal = journal; self.scratch = scratch; self.worktreesRoot = worktreesRoot; self.fault = fault
+    init(git: RepositoryGit, journal: RepositoryJournal, scratch: String, worktreesRoot: String, fault: (@Sendable (String) -> Void)?,
+         log: @escaping @Sendable (String) -> Void = { fputs($0 + "\n", stderr) }) {
+        self.git = git; self.journal = journal; self.scratch = scratch; self.worktreesRoot = worktreesRoot; self.fault = fault; self.log = log
     }
 
     // MARK: Validation
@@ -223,7 +226,8 @@ final class RepositoryEffects: @unchecked Sendable {
         _ = git.succeeds(wt.path, ["reset", "--soft", wt.baseSha])
         try git.data(wt.path, ["add", "-A"])
         try RepositoryPaths.unstageExcluded(git, wt.path)
-        let staged = try git.paths(wt.path, ["diff", "--cached", "--name-only", "-z"])
+        // Both names of a rename (LKM-130): the old one is a deletion the landing must see.
+        let staged = try git.paths(wt.path, ["diff", "--cached", "--name-only", "--no-renames", "-z"])
         if staged.isEmpty { if let guardRef { c.release(guardRef) }; return (false, []) }
         try git.data(wt.path, ["-c", "user.name=Trezi", "-c", "user.email=trezi@local", "commit", "--no-verify", "-m",
                                message.isEmpty ? "Trezi comment edit" : message])

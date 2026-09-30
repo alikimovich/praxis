@@ -2,6 +2,24 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-30 — LKM-130: Resolve handles add/add, modify/delete and rename conflicts
+
+- **Why.** Resolve on a parked chat failed with "couldn't re-apply this chat's changes … Command failed: git apply --3way …", cut at 200 characters before any path or reason. `git apply --3way` refuses the whole patch, writing nothing, when a file the chat adds already exists live (add/add), one side deleted a file the other changed, or a rename's source is gone. The owner treated every such refusal as an error. A mixed failure (conflicts plus `error:` lines) was also reported as a conflict although nothing was written. Separately, a turn's file list used `diff --name-only` with rename detection, so it named only a rename's new name. Landing then added the new file and left the old one on live, even when live had edited it.
+- **Fix.** `applyToWorkingTree` is a conflict only when Git wrote its conflicts with no `error:` line. Otherwise `applyParked`, `applyBranch` and `stageResolve` fall back to `RepositoryMerge.swift`, a file-by-file three-way merge from the commits the patch came from (`diff-tree -M`, `ls-tree`, `git merge-file`), computed in full before anything is written:
+  - every conflict ends as markers, and a deleted side is an empty side labelled `live (deleted)` / `chat (deleted)`;
+  - the chat's rename wins, and a live rename is followed;
+  - binary or symlink conflicts keep the chat's version under Resolve (existing policy) and the project's version under explicit apply, reported as a conflict;
+  - an unreadable patch, a submodule, or a folder or symlinked folder in the way still errors.
+
+  The error names the path and Git's reason (`a.txt: corrupt patch at line 7`), bounded at 600 characters, and `chat-isolation.ts` no longer cuts it to 200. Git's full output goes to the service log (`RepositoryOwner.Options.log`, the session diagnostics file under XPC). The turn and parked file lists use `--no-renames`. The resolver prompt explains "(deleted)" sides.
+- **Proof.** New suite `test/resolve-conflicts.mjs`, run by `test/repository-owner.mjs` against the Swift owner:
+  - Resolve end to end for add/add, modify/delete, delete/modify, rename/delete, a rename with an overlapping live edit, a live rename (clean), and a mixed chat (add/add + delete + content conflict + binary + uncontested delete);
+  - each ends with markers in the worktree, and the reconciled result lands;
+  - Discard restores the prior state, with a `discarded` recovery ref;
+  - explicit apply onto live gives a conflict naming both files.
+
+  New `malformed-patch` section: a corrupt patch errors with `a.txt: corrupt patch at line N`, `git apply --3way refused a patch` plus Git's stderr is in the service log, and the file is unchanged. `bun run test:repository-owner` passes every section (chat-worktrees included). Not handled: rename/rename to two different names (the chat's name wins, content merged).
+
 ## 2026-09-30 — LKM-129: the docked Web Inspector stays in the preview area
 
 - **Why.** A docked Web Inspector spanned the whole window bottom, over the chat. WebKit docks beside the page's *attachment view*, inside that view's superview, and resizes both to that superview's bounds. The default attachment view was the preview `WKWebView`, and its superview is the window's content canvas. The `detach` sent before `show` did nothing before the first open, so the inspector opened docked.

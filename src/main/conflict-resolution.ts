@@ -87,7 +87,8 @@ export function conflictResolutionPrompt(files: string[]): string {
     `both versions in your private worktree and marked overlapping spots with conflict markers ` +
     `(\`<<<<<<<\`, \`=======\`, \`>>>>>>>\`) in: ${files.join(', ')}. ` +
     `Open each file, reconcile both sides while preserving the recent edits AND the change ` +
-    `this chat was making, and remove every conflict marker. Use the conversation to infer ` +
+    `this chat was making, and remove every conflict marker. A side labelled "(deleted)" ` +
+    `removed the file: keep the combined content, or delete the file if that is the intent. Use the conversation to infer ` +
     `intent. Do not discard either side wholesale. Verify the combined result with relevant ` +
     `checks, then briefly say what you reconciled. If the intent is genuinely incompatible, ` +
     `leave the unresolved markers and explain the decision needed. Do not edit the live ` +

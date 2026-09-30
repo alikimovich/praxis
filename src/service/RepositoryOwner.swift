@@ -26,6 +26,8 @@ final class RepositoryOwner: @unchecked Sendable {
         var gitTimeout: TimeInterval = 60
         /// Where worktrees may live; the profile unless a fixture widens it.
         var worktreesRoot: String?
+        /// The service log (the host's diagnostics under XPC, stderr in a fixture).
+        var log: @Sendable (String) -> Void = { fputs($0 + "\n", stderr) }
     }
 
     /// method → (required body fields, optional fields, required intent values)
@@ -77,7 +79,7 @@ final class RepositoryOwner: @unchecked Sendable {
         try? FileManager.default.createDirectory(atPath: scratch, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         effects = RepositoryEffects(git: RepositoryGit(environment: options.environment, timeout: options.gitTimeout), journal: journal,
                                     scratch: scratch, worktreesRoot: RepositoryPaths.realpath(options.worktreesRoot ?? options.profile) ?? options.profile,
-                                    fault: options.fault)
+                                    fault: options.fault, log: options.log)
     }
 
     // MARK: Requests (from the backend reader thread, in pipe order)

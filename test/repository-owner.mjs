@@ -1,7 +1,8 @@
 // S07 repository coordinator: the real Swift RepositoryOwner (compiled into a fixture
 // process) driven through Bun's real client and the unchanged TS entry points.
-// - suites: the Git suites (git, worktrees, chat-worktrees, live-commit, recovery,
-//   reconciliation, Next setup) run with the Swift owner installed;
+// - suites: the Git suites (git, worktrees, chat-worktrees, resolve-conflicts,
+//   live-commit, recovery, reconciliation, Next setup) run with the Swift owner installed;
+// - malformed-patch: a patch Git cannot read errors with its path and reason, logged in full;
 // - lanes: FIFO per common directory (live checkout and worktrees share one), leases,
 //   re-entrancy, unrelated repositories concurrent, competing chats landing;
 // - external: a foreign index lock, an external commit and the user's staged work;
@@ -85,7 +86,7 @@ try {
     // The Git suites' own assertions, through the Swift owner. (setup-next installs the
     // Swift owners itself: test/helpers/with-service-owners.mjs.)
     // Chat worktrees also need the editing owner, so these run on the editing fixture.
-    const suites = ['chat-worktrees', 'worktrees', 'live-commit', 'git', 'chat-recovery', 'auto-reconciliation']
+    const suites = ['chat-worktrees', 'resolve-conflicts', 'worktrees', 'live-commit', 'git', 'chat-recovery', 'auto-reconciliation']
     const results = await Promise.all(suites.map(suite => new Promise(resolve => {
       const child = spawn('bun', ['--preload', './test/helpers/repository-owner-preload.mjs', `test/${suite}.mjs`], {
         cwd: root, env: { ...process.env, REPOSITORY_FIXTURE: suiteFixture, REPOSITORY_PROFILE: profile(`parity-${suite}`) }, stdio: ['ignore', 'pipe', 'pipe']
@@ -454,6 +455,24 @@ try {
     assert.equal(lease.kind, 'succeeded')
     assert.equal((await owned.frame('release', { lease: lease.payload.lease })).kind, 'succeeded')
     assert.equal(read(damagedJournal), '{not json')
+    await stop(owned)
+  })
+
+  // LKM-130: a patch Git cannot read is still an error (conflicts are not, see the
+  // resolve-conflicts suite). The message names the file and Git's reason instead of
+  // the command line; Git's full output goes to the service log.
+  await section('malformed-patch', async () => {
+    const owned = await fixture(profile('malformed'))
+    const live = repo()
+    const patch = 'diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,3 +1,3 @@\n-one\n+ONE\n'
+    const applied = await owned.cmd({ cmd: 'apply', root: live, patch })
+    assert.equal(applied.ok, false, JSON.stringify(applied))
+    assert.equal(applied.conflict, false, JSON.stringify(applied))
+    assert.match(applied.message, /^a\.txt: corrupt patch at line \d+$/)
+    assert.ok(owned.stderr.includes('git apply --3way refused a patch') && owned.stderr.includes('Command failed: git apply --3way'),
+      `service log: ${owned.stderr}`)
+    assert.ok(/error: corrupt patch at line \d+/.test(owned.stderr), 'the service log has Git\'s full error output')
+    assert.equal(read(join(live, 'a.txt')), 'one\n')
     await stop(owned)
   })
 
