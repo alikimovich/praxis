@@ -19,8 +19,9 @@ seam throws without the service. The retirement gate is open (0 Bun-owned rows, 
 rollback switch in a shipped file, both checked by `test/retirement-census.mjs`). The
 retained JS and a Bun binary ship inside `Trezi.app`, so no installed Bun is needed to
 run it, and `open -a Trezi` or the thin `trezi` command is the one start path. The bounded
-live Claude + Codex parity check exists (`test/provider-live-parity.mjs`) but has not run
-yet: live parity is SKIP, not PASS. Passages below that name the rollback are history.
+live Claude + Codex parity check (`test/provider-live-parity.mjs`) passed for Claude on
+both hosts in the operator's run; Codex hit its usage limit and is deferred to LKM-113
+(numbers in the retirement evidence). Passages below that name the rollback are history.
 See [retirement](SWIFT-BACKEND-RETIREMENT.md).
 
 **Earlier (2026-09-29, LKM-102, reduced acceptance):** the scope was reduced (a

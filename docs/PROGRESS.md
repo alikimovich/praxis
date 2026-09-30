@@ -2,6 +2,15 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-30 — LKM-111 repair: Claude live parity recorded (operator run); Codex deferred to LKM-113
+
+- **Claude parity passed.** The operator ran `TREZI_LIVE_PROVIDERS=1 bun run test:provider-live` outside the worker sandbox on 2026-09-29 (`haiku`, low effort, one no-tool prompt, no Gemini). Both hosts answered `PONG` with one `delta` and one `done`, so the supervised helper emits the events the in-process adapter did:
+  - in-process: 3066 ms, 32665 input / 53 output tokens (32655 cached);
+  - helper: 1886 ms, 32447 input / 59 output tokens (32437 cached).
+- **Codex did not run.** It hit its ChatGPT/Codex usage limit (until 2026-10-03 10:10), so both Codex runs returned no answer and 0 tokens. The Codex live parity moves to LKM-113, together with isolating Trezi's Codex sessions from the user's personal Codex MCP config (the SDK loaded `mcp.vercel.com` during the run; its `AuthRequired` noise is in the Codex errors).
+- Decision (user): LKM-111 is accepted on the Claude parity. The evidence file `test/artifacts/provider-live-parity.json` is gitignored (`test/artifacts/`), so it is cited and its numbers copied here and into `docs/SWIFT-BACKEND-RETIREMENT.md`, not committed. `test/provider-live-parity.mjs` is unchanged; no rerun is needed.
+- Supersedes the entry below ("still blocked by the worker sandbox"); that entry stays as history. `docs/TASKS.md` ticks the Claude item and keeps Codex open under LKM-113.
+
 ## 2026-09-29 — LKM-111 repair: live parity attempted, still blocked by the worker sandbox
 
 - Ran `TREZI_LIVE_PROVIDERS=1 bun run test:provider-live` for real. The harness itself had a bug (it never created the fixture's profile directory, so the Swift fixture hit a precondition before any provider call); fixed in `test/provider-live-parity.mjs`.

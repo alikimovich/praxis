@@ -45,8 +45,9 @@ live tier), runs Claude (haiku, low effort) and Codex (low effort) once each
 in-process and once in a supervised helper with one no-tool prompt, compares the
 events and answers, and records token usage in
 `test/artifacts/provider-live-parity.json`. Real provider calls need the user's
-authorization; until it has run, live parity is SKIP, not PASS (see
-[retirement](SWIFT-BACKEND-RETIREMENT.md#lkm-111-evidence)).
+authorization. The operator's run passed for Claude on both hosts; Codex hit its usage
+limit and is deferred to LKM-113, so without `TREZI_LIVE_PROVIDERS=1` the test is SKIP,
+not PASS (see [retirement](SWIFT-BACKEND-RETIREMENT.md#lkm-111-evidence)).
 
 ## The integration boundary, decided
 

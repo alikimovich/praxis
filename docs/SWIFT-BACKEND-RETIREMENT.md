@@ -29,8 +29,8 @@ of the [gate](#gate-for-removing-the-legacy-owners):
   Bun. The start path is `open -a Trezi` or the thin `trezi` command.
 - Live parity: `test/provider-live-parity.mjs` (live tier, `TREZI_LIVE_PROVIDERS=1`) runs
   Claude and Codex, in-process and in the helper, on one minimal prompt and records the
-  token usage. It could not reach the providers from the LKM-111 worker's sandbox, so
-  it has not produced a PASS yet ([evidence](#lkm-111-evidence)).
+  token usage. The operator's run passed for Claude (in-process and helper); Codex hit
+  its usage limit and is deferred to LKM-113 ([evidence](#lkm-111-evidence)).
 
 `test/retirement-census.mjs` now fails if a shipped file names the removed launch
 switch or service flag, or if a Bun-owned row appears.
@@ -255,9 +255,8 @@ first and that the removed switch and flag stay gone):
 1. No `bun` row. Each transfer names its files, journals and drafts and tests
    restoration, as every earlier step did. (Done in LKM-102.)
 2. The provider adapters run in supervised helpers after an authorized live parity run
-   (`test/provider-live-parity.mjs`). The adapters moved in LKM-111; the parity run is
-   written and bounded but has not reached the providers yet (see
-   [evidence](#lkm-111-evidence)).
+   (`test/provider-live-parity.mjs`). The adapters moved in LKM-111; the Claude parity
+   run passed, and Codex's is deferred to LKM-113 (see [evidence](#lkm-111-evidence)).
 3. A full native and live verification of the Swift launch with no legacy module
    loaded, then the removal of the rollback switch, the `rollback` rows and the
    service's rollback launch, keeping every store, journal and worktree as is. The
@@ -327,6 +326,15 @@ unix-socket listening, fixed local ports or LaunchServices, which bounds what ra
 - Live parity (`TREZI_LIVE_PROVIDERS=1 bun run test:provider-live`): Claude (`haiku`,
   low effort) and Codex (account default, low effort), each in-process and in the
   supervised helper, one prompt (`PONG`), no tools, no Gemini: four calls, token usage
-  written to `test/artifacts/provider-live-parity.json`. **Not run yet**: the worker
-  sandbox denied `api.anthropic.com` and `chatgpt.com`. Until it passes, the helper
-  path is proven by the fake-provider helper suite only (`test/provider-owner.mjs`).
+  written to `test/artifacts/provider-live-parity.json`. The worker sandbox denied
+  `api.anthropic.com` and `chatgpt.com`, so the operator ran it outside the sandbox
+  (2026-09-29):
+  - **Claude passed on both hosts**: in-process `PONG` in 3066 ms (32665 input / 53
+    output tokens, 32655 cached); helper `PONG` in 1886 ms (32447 / 59, 32437 cached);
+    both emitted `delta` then one `done`, no errors.
+  - **Codex did not run**: usage limit until 2026-10-03 10:10 (0 tokens, both hosts).
+    The Codex live parity and isolating Trezi's Codex sessions from the personal Codex
+    MCP config (the SDK loaded `mcp.vercel.com`) move to LKM-113.
+  - The raw file is gitignored (`test/artifacts/`), so these numbers are the tracked
+    record. Until Codex passes, its helper path is proven by the fake-provider helper
+    suite only (`test/provider-owner.mjs`).
