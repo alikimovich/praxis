@@ -290,6 +290,11 @@ export interface ProviderLoginReport {
   authMethod?: string
   /** A subscription token from Settings is in the helper's environment. */
   token?: boolean
+  /** The provider's variables in Trezi's environment, by name (never values): passed to the helper, or dropped as a parent session's (LKM-124). */
+  inherited?: string[]
+  dropped?: string[]
+  /** CLAUDE_CODE_SIMPLE (bare mode, which never reads the login) was set and dropped. */
+  bare?: boolean
   /** One line per probe, human-readable. */
   detail: string
 }

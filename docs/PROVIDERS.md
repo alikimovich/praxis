@@ -339,3 +339,57 @@ text) or stayed on "Thinking…" forever, although `claude` worked in Terminal. 
   which one chats use, whether a token is set, and `USER`/`HOME`/`PATH`/cwd.
 
 Tested deterministically by `test/provider-login.mjs` (fake helper and stand-in CLIs).
+
+## Claude seat login from a Claude Code session (LKM-124)
+
+**Symptom.** After LKM-119, on the user's Mac, Check login showed the right `USER`,
+`HOME`, `PATH` and cwd, yet the bundled and the installed `claude` both said "not logged
+in" inside the helper, while `claude auth status` in Terminal said logged in. The
+Keychain item and `~/.claude/.credentials.json` (0600) both existed.
+
+**Root cause.** Not the Keychain or the XPC service context. Trezi had been started from
+a shell inside a Claude Code session, and the helper allowlist passed every `CLAUDE_*`
+variable through. `CLAUDE_CODE_SIMPLE=1` makes the CLI run in bare mode, which never
+reads OAuth or the Keychain: `CLAUDE_CODE_SIMPLE=1 claude auth status` reports
+`loggedIn: false` in Terminal too (the operator reproduced this). The same pass-through
+carried the parent session's `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`,
+`CLAUDE_CODE_MESSAGING_SOCKET`/`_TOKEN`, `CLAUDE_CODE_SESSION_ID`,
+`CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_CODE_EXECPATH`, `CLAUDE_PID`, `CLAUDE_EFFORT` and
+others. For Codex, `CODEX_*` let a parent Codex session's `CODEX_SANDBOX` and
+`CODEX_SANDBOX_NETWORK_DISABLED` through in the same way. (For the record: from a
+Terminal shell, `security find-generic-password -s "Claude Code-credentials"` found the
+item, with exit 0. The service and TreziHost contexts were not compared, because this
+cause explains the report on its own.)
+
+**Fix.** `ProviderHelperProcess.providerVariables` (`src/service/ProviderHelper.swift`)
+is an explicit list per provider, not a prefix:
+
+- Claude: `ANTHROPIC_*`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_OAUTH_TOKEN` (a setup-token
+  exported in the shell), `CLAUDE_CODE_USE_BEDROCK`/`_VERTEX`/`_FOUNDRY` and their
+  `_SKIP_*_AUTH`, `AWS_REGION`, `AWS_PROFILE`, `CLOUD_ML_REGION`, `VERTEX_REGION_*`,
+  `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, `CLAUDE_CODE_API_KEY_HELPER_TTL_MS`, the mTLS client
+  certificate variables and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`.
+- Codex: `OPENAI_*`, `CODEX_HOME`, `CODEX_API_KEY`, `CODEX_CA_CERTIFICATE`.
+- Every helper: proxy (`HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, `ALL_PROXY`, lower case
+  too) and CA (`NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `SSL_CERT_DIR`) variables.
+
+Any other `CLAUDE*`/`CODEX*` name is dropped, including `CLAUDE_CODE_SIMPLE`. Gemini is
+unchanged (`GEMINI_*`, `GOOGLE_*`). The Settings token still overrides
+`CLAUDE_CODE_OAUTH_TOKEN` for Claude helpers only.
+
+**Check login** now ends with the provider variable names from Trezi's environment:
+"Passed to the helper" and "Dropped (a parent session's or not a user setting)". It
+shows names only, never values; the owner adds them (`variableReport`), because the
+helper cannot see what it did not get. When `CLAUDE_CODE_SIMPLE` was set, the report
+says so (`bare: true`).
+
+**Tests** (`test/provider-login.mjs`, parent-session). A fixture environment carries a
+parent Claude Code and Codex session's variables plus user settings. The Claude helper
+gets the settings but none of the session variables. A stand-in `claude` that is
+logged out in bare mode lets the chat log in. The Codex environment
+(`{"cmd":"environment"}` on the fixture) drops `CODEX_SANDBOX*`. Check login lists the
+names, flags bare mode and never contains a value. A stand-in logged in only through
+`CLAUDE_CODE_OAUTH_TOKEN` refuses a chat until the setup-token is saved in Settings,
+then works. The stand-in CLIs are now named by helper arguments
+(`--claude-bundled=`, `--claude-installed=`), because the old `CLAUDE_TEST_*` variables
+are dropped. No live calls.

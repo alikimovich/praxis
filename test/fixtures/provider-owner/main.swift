@@ -65,6 +65,10 @@ while let line = readLine(strippingNewline: true) {
             emit([("helper", helper.map { .object([(JSText("executable"), .string(JSText($0.executable))),
                 (JSText("arguments"), .array($0.arguments.map { .string(JSText($0)) })),
                 (JSText("providers"), .array($0.providers.sorted().map { .string(JSText($0)) }))]) } ?? .null)])
+        case "environment":
+            // The names a provider's helper would get from this process's environment (LKM-124).
+            let provider = command["provider"]?.text?.string ?? ""
+            emit([("names", .array(ProviderHelperProcess.environment(base: env, provider: provider).keys.sorted().map { .string(JSText($0)) }))])
         default: emit([("error", .string(JSText("unknown command \(name)")))])
         }
     }

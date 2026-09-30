@@ -11,7 +11,8 @@ import Darwin
 ///   environment as `CLAUDE_CODE_OAUTH_TOKEN` (never another helper's, never a reply,
 ///   never an error text);
 /// - "Check provider login": a helper started exactly like a chat's (same allowlisted
-///   environment, token, cwd) that reports the provider CLI's auth status and exits.
+///   environment, token, cwd) that reports the provider CLI's auth status and exits;
+///   the owner adds which provider variables were passed and dropped (LKM-124).
 extension ProviderOwner {
     static let seatTokenVariable = "CLAUDE_CODE_OAUTH_TOKEN"
 
@@ -141,12 +142,13 @@ extension ProviderOwner {
             helper = try ProviderHelperProcess.launch(command, directory: root, environment: helperEnvironment(provider, token: token),
                 watchdog: options.watchdog, maxLine: options.maxLine,
                 onFrame: { [weak self] data in
-                    self?.queue.async {
+                    guard let owner = self else { return }
+                    owner.queue.async {
                         guard let value = try? JSValue.parse(data, maxDepth: 16), value["type"]?.text?.string == "diagnosis" else { return }
                         guard let report = Self.loginReport(value["report"], provider: provider, token: token) else {
                             return finish(.failed(PreferencesOwner.fail(.providerFailure, "The provider helper sent a malformed login report.")))
                         }
-                        finish(.succeeded(Self.object([("report", report)])))
+                        finish(.succeeded(Self.object([("report", owner.variableReport(report, provider: provider))])))
                     }
                 },
                 onOversize: { [weak self] in
@@ -194,6 +196,28 @@ extension ProviderOwner {
             out.append((key, field))
         }
         return object(out)
+    }
+
+    /// The report plus which of the provider's variables Trezi's environment had: those
+    /// the helper got and those it dropped, by name only, never a value (LKM-124).
+    func variableReport(_ report: JSValue, provider: String) -> JSValue {
+        guard case .object(var fields) = report, ProviderHelperProcess.providerFamilies[provider] != nil else { return report }
+        let names = ProviderHelperProcess.variableNames(base: options.environment, provider: provider)
+        let list = { (names: [String]) in names.isEmpty ? "none" : names.prefix(40).joined(separator: ", ") }
+        var lines = ["Passed to the helper from Trezi’s environment: \(list(names.inherited))",
+                     "Dropped (a parent session’s or not a user setting): \(list(names.dropped))"]
+        let bare = names.dropped.contains("CLAUDE_CODE_SIMPLE")
+        if bare {
+            lines.append("CLAUDE_CODE_SIMPLE was set where Trezi started. It makes the Claude CLI skip its login (bare mode), so Trezi drops it.")
+        }
+        let strings = { (names: [String]) in JSValue.array(names.prefix(40).map { .string(JSText($0)) }) }
+        for index in fields.indices where fields[index].0.string == "detail" {
+            fields[index].1 = .string(JSText((fields[index].1.text?.string ?? "") + "\n" + lines.joined(separator: "\n")))
+        }
+        fields.append((JSText("inherited"), strings(names.inherited)))
+        fields.append((JSText("dropped"), strings(names.dropped)))
+        if bare { fields.append((JSText("bare"), .bool(true))) }
+        return .object(fields)
     }
 }
 

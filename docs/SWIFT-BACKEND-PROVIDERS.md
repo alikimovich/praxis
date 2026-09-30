@@ -128,7 +128,12 @@ decided by the service and checked:
   (`POSIX_SPAWN_CLOEXEC_DEFAULT`). No Bun pipe, XPC connection or profile lock. Tested:
   a descriptor the service holds open without close-on-exec is not in the helper.
 - **Environment.** Rebuilt from an allowlist: HOME, PATH, user, shell, locale, temp,
-  plus its own provider's prefixes (`ANTHROPIC_`/`CLAUDE_`, `OPENAI_`/`CODEX_`). Every
+  proxy and CA, plus its own provider's user settings (`providerVariables` in
+  `src/service/ProviderHelper.swift`: `ANTHROPIC_*`, `CLAUDE_CONFIG_DIR`, Bedrock/Vertex
+  switches and regions for Claude; `OPENAI_*`, `CODEX_HOME`, `CODEX_API_KEY` for Codex).
+  Since LKM-124 there is no `CLAUDE_`/`CODEX_` prefix pass-through: a parent Claude Code
+  or Codex session's runtime variables (`CLAUDE_CODE_SIMPLE`, `CLAUDECODE`,
+  `CODEX_SANDBOX`, …) are dropped, and Check login lists them by name. Every
   `TREZI_*` variable (profile path, service pid, the agent tool socket token) and other
   providers' keys are left out. Tested with planted secrets. Since LKM-119 a missing
   `USER`, `LOGNAME` or `HOME` is filled from the account record and a missing `PATH`

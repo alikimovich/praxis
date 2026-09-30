@@ -3,6 +3,15 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Claude seat: parent session variables sign the CLI out (LKM-124)
+
+- [x] Helper allowlist: explicit Claude/Codex user settings plus proxy/CA, instead of the `CLAUDE_`/`CODEX_` prefixes; a parent Claude Code or Codex session's variables (incl. `CLAUDE_CODE_SIMPLE`) are dropped.
+- [x] Check login lists passed and dropped variable names (never values) and flags `CLAUDE_CODE_SIMPLE`.
+- [x] `test/provider-login.mjs` parent-session: env filtering (Claude and Codex), a bare-mode-aware stand-in CLI, the report and the setup-token path.
+- [x] Root cause and allowlist in `docs/PROVIDERS.md` and `docs/SWIFT-BACKEND-PROVIDERS.md`.
+- [ ] Operator: start Trezi from a Claude Code shell with a normal `claude login` and confirm Check login says logged in (live, no model call).
+- [ ] `src/main/diagnose.ts` (preview "Find a fix…") still inherits Bun's environment.
+
 ## Claude seat: login detection and stuck turns (LKM-119)
 
 - [x] Helper environment: allowlist unchanged, `USER`/`LOGNAME`/`HOME` from the account record and a default `PATH`; same cwd. Root-cause note in `docs/PROVIDERS.md`.

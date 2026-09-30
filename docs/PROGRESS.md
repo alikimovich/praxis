@@ -2,6 +2,14 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-124: helpers drop a parent Claude Code or Codex session's variables
+
+- **Why.** On the user's Mac both Claude CLIs said "not logged in" inside the helper and logged in from Terminal. The cause was not the Keychain but the helper allowlist: it passed every `CLAUDE_*` variable, and a Trezi started from a Claude Code session inherits `CLAUDE_CODE_SIMPLE=1` (bare mode, which never reads the login). `CLAUDE_CODE_SIMPLE=1 claude auth status` says logged out in Terminal too. The Keychain and host-spawn plan in the issue was dropped per the feedback. Note: `docs/PROVIDERS.md` "Claude seat login from a Claude Code session".
+- **Allowlist.** `ProviderHelperProcess.providerVariables` lists names per provider instead of the `CLAUDE_`/`CODEX_` prefixes. Claude: `ANTHROPIC_*`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_OAUTH_TOKEN`, Bedrock/Vertex/Foundry switches and regions, and a few output, mTLS and traffic settings. Codex: `OPENAI_*`, `CODEX_HOME`, `CODEX_API_KEY`, `CODEX_CA_CERTIFICATE`. Proxy and CA variables go to every helper. Session variables (`CLAUDE_CODE_SIMPLE`, `CLAUDECODE`, `CLAUDE_CODE_MESSAGING_*`, `CLAUDE_PID`, `CODEX_SANDBOX*`, `CODEX_THREAD_ID`, …) are dropped. Gemini is unchanged.
+- **Check login.** The owner adds which provider variable names were passed and which were dropped (`inherited`, `dropped`, `bare`), never values, and flags `CLAUDE_CODE_SIMPLE`.
+- **Proof.** `test/provider-login.mjs` parent-session: the fixture environment carries a parent session's variables and user settings. The Claude helper gets only the settings. A stand-in CLI that is logged out in bare mode lets the chat log in. The Codex names come from a new fixture `environment` command. The report lists names and never values. The setup-token path works under the same parent session (refused without a token, logged in with one). The stand-in CLIs are now helper arguments, because `CLAUDE_TEST_*` is dropped too. provider-owner and provider-data still pass. No live calls.
+- **Open.** `src/main/diagnose.ts` (the preview's "Find a fix…") still runs the Claude SDK in Bun with Bun's own environment. It is outside the helper allowlist, so an inherited `CLAUDE_CODE_SIMPLE` can still sign it out.
+
 ## 2026-09-29 — LKM-119: Claude seat login detection and stuck turns
 
 - **Why.** Claude chats in the helper answered "Not logged in · Please run /login" as assistant text or sat on "Thinking…" forever while `claude` worked in Terminal, and `/login` in the chat did the same. Root-cause note: `docs/PROVIDERS.md` "Claude seat login". Short version: the bundled and installed CLIs share one credential store (version skew not reproduced), but both are logged out without `USER`; shell-only tokens or `CLAUDE_CONFIG_DIR` are the other candidates; there was no first-event deadline.
