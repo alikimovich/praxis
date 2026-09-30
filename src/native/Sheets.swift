@@ -131,6 +131,11 @@ final class NativeSheets: NSObject, NSWindowDelegate {
     func update(_ raw: [String: Any]) {
         guard let data = try? JSONSerialization.data(withJSONObject: raw), let state = try? JSONDecoder().decode(SheetState.self, from: data) else { return }
         model.update(state)
+        // A sectioned window and a plain form have different window content; never reuse one for the other.
+        if let panel, (state.sections != nil) != (panel.contentViewController is SheetSplit) {
+            (panel.contentViewController as? SheetSplit)?.detach()
+            panel.orderOut(nil); self.panel = nil
+        }
         if panel == nil {
             let large = state.fields.contains { ["multiline", "multichoice", "readonly", "image"].contains($0.kind) }
             let size = state.sections != nil ? SectionedSheetContent.defaultSize : NSSize(width: 600, height: large ? 560 : min(500, max(220, 160 + state.fields.count * 76)))
@@ -139,7 +144,7 @@ final class NativeSheets: NSObject, NSWindowDelegate {
             sheet.delegate = self; sheet.tabbingMode = .disallowed
             sheet.contentMinSize = state.sections != nil ? SectionedSheetContent.minimumSize : NSSize(width: 600, height: 220)
             sheet.collectionBehavior = [.fullScreenAuxiliary]
-            sheet.contentViewController = NSHostingController(rootView: SheetContent(model: model))
+            install(in: sheet)
             sheet.setContentSize(size)
             panel = sheet
             if let parent {
@@ -147,11 +152,23 @@ final class NativeSheets: NSObject, NSWindowDelegate {
             } else { sheet.center() }
             sheet.makeKeyAndOrderFront(nil)
         }
-        panel?.title = state.title
+        // A sectioned window is titled by its selected section (`SheetSplit`).
+        if state.sections == nil { panel?.title = state.title }
         panel?.standardWindowButton(.closeButton)?.isEnabled = state.dismissible ?? !state.actions.isEmpty
+    }
+    /// The window's content: the split view with a source-list sidebar for a sectioned
+    /// state (Settings), otherwise the SwiftUI form.
+    func install(in window: NSWindow) {
+        guard model.state?.sections != nil else {
+            window.contentViewController = NSHostingController(rootView: SheetContent(model: model)); return
+        }
+        let split = SheetSplit(model: model)
+        window.contentViewController = split
+        split.attach(to: window)
     }
     func close(_ id: String) {
         guard model.state?.id == id else { return }
+        (panel?.contentViewController as? SheetSplit)?.detach()
         panel?.close()
         panel = nil; model.state = nil; model.values = [:]; model.filters = [:]; model.section = nil
         parent?.makeKeyAndOrderFront(nil)
@@ -161,5 +178,5 @@ final class NativeSheets: NSObject, NSWindowDelegate {
         model.perform("cancel")
         return false // Bun owns dismissal, including stale-action and busy-operation guards.
     }
-    func inspect() -> [String: Any] { ["visible":panel?.isVisible ?? false, "attached":panel?.sheetParent != nil, "closable":panel?.styleMask.contains(.closable) ?? false, "resizable":panel?.styleMask.contains(.resizable) ?? false, "id":model.state?.id ?? "", "title":model.state?.title ?? "", "busy":model.state?.busy ?? false, "fields":model.state?.fields.map(\.id) ?? [], "section":model.section ?? "", "actions":model.state?.actions.map(\.id) ?? []] }
+    func inspect() -> [String: Any] { ["visible":panel?.isVisible ?? false, "attached":panel?.sheetParent != nil, "closable":panel?.styleMask.contains(.closable) ?? false, "resizable":panel?.styleMask.contains(.resizable) ?? false, "id":model.state?.id ?? "", "title":model.state?.title ?? "", "windowTitle":panel?.title ?? "", "busy":model.state?.busy ?? false, "fields":model.state?.fields.map(\.id) ?? [], "section":model.section ?? "", "actions":model.state?.actions.map(\.id) ?? []] }
 }

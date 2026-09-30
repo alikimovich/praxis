@@ -5,14 +5,17 @@ import type { NativeBridge } from './bridge'
 import {
   assertSectionEvidence,
   assertSettingsEvidence,
+  assertSidebarParity,
   SETTINGS_DEFAULT_SIZE,
   SETTINGS_SECTIONS,
   type SettingsSection,
+  type SourceListEvidence,
   settingsVerificationWidths
 } from './settings-verification'
 
-/** Manager-owned foreground fixture, reached by the standard native suite. */
-export async function checkVisibleSettings(host: NativeBridge, artifacts: string) {
+/** Manager-owned foreground fixture, reached by the standard native suite. `projects`
+ *  is the main window's sidebar (`shellInspect.sourceList`), for the parity check. */
+export async function checkVisibleSettings(host: NativeBridge, artifacts: string, projects: SourceListEvidence) {
   const wait = async (check: () => Promise<boolean>) => {
     for (let i = 0; i < 100; i++) {
       if (await check()) return
@@ -117,6 +120,27 @@ export async function checkVisibleSettings(host: NativeBridge, artifacts: string
   assert.equal(initial.section, 'general', 'A new profile opens Settings on General')
   assert.equal(initial.values.projectUi, 'false')
   assert.equal(initial.values.engine, 'agent')
+  assertSidebarParity(initial.sourceList, projects)
+  writeFileSync(
+    join(artifacts, 'settings-sidebar-parity.json'),
+    JSON.stringify({ settings: initial.sourceList, projects }, null, 2)
+  )
+  // Arrow keys in the focused outline move through the sections; the pane and title follow.
+  record({ action: 'opened', sidebarFocused: initial.sidebarFocused })
+  for (const [key, section] of [
+    ['down', 'providers'],
+    ['down', 'experimental'],
+    ['up', 'providers'],
+    ['up', 'general']
+  ] as const) {
+    await host.request('settingsVerification', { key })
+    const label = SETTINGS_SECTIONS.find((s) => s.id === section)?.label
+    await wait(async () => {
+      const state = await inspect()
+      return state.section === section && state.windowTitle === label
+    })
+    record({ action: 'arrow-key', key, section, state: await inspect() })
+  }
   // General and AI Providers at the minimum and default sizes.
   for (const width of [minimumWidth, SETTINGS_DEFAULT_SIZE.width]) {
     for (const section of ['general', 'providers'] as const) {

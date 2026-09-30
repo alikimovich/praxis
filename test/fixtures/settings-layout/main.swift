@@ -30,8 +30,8 @@ let list: [[String: Any]] = [["id":"connection", "section":"providers", "draft":
 let listActions: [[String: Any]] = [["id":"add", "label":"Add provider…", "section":"providers"], ["id":"edit", "label":"Edit…", "section":"providers"], ["id":"delete", "label":"Remove…", "section":"providers"]]
 let state = try settingsState(list, listActions)
 sheets.model.update(state)
-// Match production: NSHostingController propagates SwiftUI minimum sizing to NSWindow.
-window.contentViewController = NSHostingController(rootView: SheetContent(model: sheets.model))
+// Match production: the split view with the source-list sidebar, installed the way NativeSheets does.
+sheets.install(in: window)
 window.setContentSize(NSSize(width: 780, height: 600))
 func settle() {
     for _ in 0..<8 {
@@ -67,11 +67,29 @@ func select(_ section: String) throws {
     let result = try report()
     require(result["section"] as? String == section, "Sidebar row selection must switch the pane: \(section)")
     require(result["sidebarSelected"] as? Int == sections.firstIndex { $0["id"] as? String == section }, "Rendered sidebar selection")
+    require(result["windowTitle"] as? String == sections.first { $0["id"] as? String == section }?["label"] as? String, "Window title follows the section")
 }
 settle()
-require(window.contentMinSize.width == SectionedSheetContent.minimumSize.width, "NSHostingController must expose the actual SwiftUI minimum: \(window.contentMinSize)")
+require(window.contentMinSize.width == SectionedSheetContent.minimumSize.width, "The Settings minimum must hold with the split view: \(window.contentMinSize)")
 let first = try report()
 require(first["sidebarRows"] as? Int == 3 && first["section"] as? String == "general", "Seeded General pane with a three-row source list")
+// A native split-view sidebar: NSSplitViewItem(.sidebar) with a .sourceList outline under the traffic lights.
+let sourceList = first["sourceList"] as? [String: Any] ?? [:]
+require(sourceList["style"] as? String == "sourceList" && sourceList["behavior"] as? String == "sidebar" && sourceList["fullHeight"] as? Bool == true, "Settings sidebar is a source list in a sidebar split item: \(sourceList)")
+require(sourceList["rowHeight"] as? CGFloat == SidebarRowStyle.height, "Shared source-list row height")
+let row = sourceList["row"] as? [String: Any] ?? [:]
+require(row["iconWidth"] as? CGFloat == SidebarIconLayout.size && row["iconLeading"] as? CGFloat == SourceList.iconLeading && row["labelGap"] as? CGFloat == SidebarIconLayout.gap, "Shared source-list icon size and insets: \(row)")
+require(first["fullSizeContent"] as? Bool == true && first["trafficLightsOverSidebar"] as? Bool == true && first["sidebarFullHeight"] as? Bool == true, "Full-height sidebar under the traffic lights: \(first)")
+require(first["sidebarCollapsible"] as? Bool == false && first["sidebarMinimum"] as? CGFloat == 180 && first["sidebarMaximum"] as? CGFloat == 260, "Fixed sidebar range")
+require(first["sidebarFocused"] as? Bool == true, "The outline takes keyboard focus")
+require(first["windowTitle"] as? String == "General", "Window title shows the selected section")
+// Arrow keys through the window move the outline selection, the pane and the title.
+for (key, section, title) in [("down", "providers", "AI Providers"), ("down", "experimental", "Experimental"), ("up", "providers", "AI Providers"), ("up", "general", "General")] {
+    _ = try report(["key": key]); settle()
+    let result = try report()
+    require(result["section"] as? String == section && result["windowTitle"] as? String == title, "Arrow \(key) selects \(section): \(result["section"] ?? "") \(result["windowTitle"] ?? "")")
+    require(emitted.last?["action"] as? String == "section" && emitted.last?["section"] as? String == section, "Arrow selection tells Bun the section")
+}
 require(try ids() == ["default"], "General renders the default model picker only")
 snapshot("general-780")
 try select("providers")

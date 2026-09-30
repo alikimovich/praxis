@@ -2,6 +2,17 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-123: Settings uses the native split-view sidebar
+
+- **Why.** LKM-121's Settings sidebar was a SwiftUI `List(.sidebar)` in an `HStack`, and it did not look like the projects sidebar (an `NSSplitViewItem` sidebar with a `.sourceList` outline).
+- **Window.** A sectioned sheet now installs `SheetSplit` (`src/native/SheetSidebar.swift`), an `NSSplitViewController`. The window gets `.fullSizeContentView` and a unified toolbar whose only item is `.sidebarTrackingSeparator`, so the title sits over the pane. The first item is a non-collapsible `NSSplitViewItem(sidebarWithViewController:)` (200 points, 180–260) under the traffic lights. The second is an `NSHostingController` with `sizingOptions = []`, so the window sets its own minimum. `SectionedSheetContent` is now only the pane. The minimum height went from 420 to 460, because the toolbar now covers the top of the content. A switch between a sectioned state and a plain form rebuilds the window.
+- **Shared setup.** `src/native/SourceList.swift` has the outline configuration, `SourceListCell` (symbol and label with the `SidebarIconLayout` rhythm and selection tint; `ProjectCell` subclasses it), `SourceListScrollView` (it was `ProjectScrollView`) and the sidebar split item. `NativeShell` and `SheetSplit` both use it. `SourceList.inspect` reports style, behavior, row height, highlight, and the first row's icon and label geometry. It does not report the scroller style, because AppKit resets that to the system preference on the long-lived main sidebar.
+- **Selection.** The outline's items are stable `NSString` ids. A click or an arrow key calls `SheetModel.select`, which switches the pane and tells Bun. A Combine sink on `section`/`state` updates the outline selection and the window title, with a `syncing` guard so it does not emit. The outline is the initial first responder. Escape reaches `cancelOperation` on the split controller.
+- **Proof.**
+  - `native-settings-layout`: `.sidebar` behavior, `.sourceList` style, the shared row geometry, the traffic lights over a full-height sidebar, the fixed range, and focus. Arrow keys sent through `NSWindow.sendEvent` go down, down, up, up, and the section, title and Bun event follow each one.
+  - `native-settings-evidence`: rejects a wrong title, style or behavior, and a parity mismatch.
+  - The native `sheets` step captures the projects sidebar in the foreground (`settings-parity-projects-sidebar.png` and `.json`). It then asserts `SourceList.inspect` is equal for both sidebars (`settings-sidebar-parity.json`), runs the arrow keys, and keeps every earlier Settings capture and autosave check. The settings group passes. Earlier, core and sidebar passed alongside it on the first run.
+
 ## 2026-09-29 — LKM-120: chat only for a loaded project; no titles from errors
 
 - **Why.** The chat column appeared while a project was still opening, and after an open had failed. A signed-out Claude also answered the title prompt with "Not logged in · Please run /login", and that text became the chat's name.

@@ -164,12 +164,18 @@ Escape, Command-W and the close traffic light dismiss through the Bun controller
 System file pickers and permission alerts retain their standard AppKit presentation.
 
 Settings is a standard macOS settings window, opened from Trezi → Settings…
-(Command-,) with or without a project; the main window's sidebar has no gear. A
-source list with SF Symbols selects General, AI Providers or Experimental; the
-detail pane shows a large title and grouped rows (label and description on the
-left, control on the right). AI Providers is edited inline, and the window
-reopens on the last selected section (`trezi:settings-section:v1`). Form windows
-without sections keep the layout above (`src/native/SheetSections.swift`).
+(Command-,) with or without a project; the main window's sidebar has no gear. Like
+Xcode's, it is a full-size-content window whose `NSSplitViewController`
+(`src/native/SheetSidebar.swift`) starts with a non-collapsible
+`NSSplitViewItem(sidebarWithViewController:)` (180–260 points) under the traffic
+lights. Its `.sourceList` outline selects General, AI Providers or Experimental
+with SF Symbols, by click or arrow keys, and the window title names the selected
+section. It shares the projects sidebar's source-list setup, row cells and scroll
+view (`src/native/SourceList.swift`). The detail pane shows a large title and
+grouped rows (label and description on the left, control on the right). AI
+Providers is edited inline, and the window reopens on the last selected section
+(`trezi:settings-section:v1`). Form windows without sections keep the layout above
+(`src/native/SheetSections.swift`).
 
 Settings and project memory save automatically after edits, coalescing typing and
 serializing writes. Closing or navigating within the form waits for the latest

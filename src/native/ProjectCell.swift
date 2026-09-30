@@ -1,7 +1,7 @@
 import AppKit
 
 /// Keep project selection on the row and its actions on a separate hover control.
-final class ProjectCell: NSTableCellView {
+final class ProjectCell: SourceListCell {
     let more = NSPopUpButton(frame: .zero, pullsDown: true)
     private var tracking: NSTrackingArea?
     var selected = false { didSet { updateVisibility() } }
@@ -20,29 +20,7 @@ final class ProjectCell: NSTableCellView {
     private func updateVisibility() {
         let emphasized = backgroundStyle == .emphasized
         more.alphaValue = hovered || selected || emphasized ? 1 : 0
-        imageView?.contentTintColor = imageView?.image?.isTemplate == true
-            ? (emphasized ? .alternateSelectedControlTextColor : .labelColor) : nil
         more.contentTintColor = emphasized ? .alternateSelectedControlTextColor : .labelColor
-    }
-}
-
-
-/// Keep the source-list document and column inside their actual clip viewport.
-final class ProjectScrollView: NSScrollView {
-    override func tile() {
-        super.tile()
-        fitRows()
-    }
-    override func layout() {
-        super.layout()
-        fitRows()
-    }
-    private func fitRows() {
-        guard let table = documentView as? NSTableView, contentSize.width > 0 else { return }
-        if abs(table.frame.width - contentSize.width) > 0.5 {
-            table.setFrameSize(NSSize(width: contentSize.width, height: table.frame.height))
-            table.sizeLastColumnToFit()
-        }
     }
 }
 

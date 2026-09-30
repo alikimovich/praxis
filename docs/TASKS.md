@@ -3,6 +3,13 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Settings: the native split-view sidebar (LKM-123)
+
+- [x] Settings is a full-size-content window whose `NSSplitViewController` (`src/native/SheetSidebar.swift`) starts with a non-collapsible `NSSplitViewItem(sidebarWithViewController:)` (180–260 points) under the traffic lights, hosting a `.sourceList` `NSOutlineView`.
+- [x] `src/native/SourceList.swift`: outline setup, symbol/label cell, scroll view and sidebar item shared with the projects sidebar (same row height, icon size, selection style, insets).
+- [x] Arrow keys change the section; the window title names it. Detail pane, autosave, Command-, and Trezi → Settings… unchanged.
+- [x] Tests: `native-settings-layout` (sidebar behavior/style, shared geometry, arrow keys, title), `native-settings-evidence` (parity and title rejection), native `sheets` step (parity with `shellInspect.sourceList`, arrows, foreground captures of every section, `settings-parity-projects-sidebar.png`).
+
 ## Standard macOS Settings window with a sidebar (LKM-121)
 
 - [x] Source-list sidebar with SF Symbols (General, AI Providers, Experimental); detail pane with large title and grouped rows (label and description left, control right).
