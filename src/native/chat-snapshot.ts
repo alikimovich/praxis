@@ -5,6 +5,7 @@ import { providerOptions, resolveSelection } from '../shared/provider-choices'
 import { parseSlashToken } from '../shared/slash-token'
 import { rankSlashMatches } from '../shared/slash-menu'
 import type { Chat } from './chat-state'
+import { loginCard } from './chat-login'
 export const permissionModes = [
   { value: 'auto', label: 'Auto' }, { value: 'acceptEdits', label: 'Allow edits' }, { value: 'default', label: 'Ask always' }
 ]
@@ -28,6 +29,8 @@ export function snapshot(chat: Chat, choices: ModelChoice[]): NativeChatState {
   const { provider, model, permissionMode } = chat.settings
   const cards: NativeChatCard[] = []
   if (chat.error) cards.push({ id: 'error', title: 'Unable to complete action', detail: chat.error, actions: [{ label: 'Dismiss', action: 'error-dismiss' }] })
+  const login = loginCard(chat)
+  if (login) cards.push(login)
   if (chat.pendingModel) cards.push({ id: 'model-confirm', title: 'Change model for this chat?', detail: 'The conversation will be preserved and the agent restarted with the selected model.', actions: [{ label: 'Cancel', action: 'model-cancel' }, { label: 'Change model', action: 'model-confirm' }] })
   const context = chat.context
   if (context?.setup.needed && !context.setup.dismissed) cards.push({ id: 'setup', title: 'Connect this project to Trezi', detail: context.setup.status ?? undefined, actions: [{ label: 'Not now', action: 'setup-dismiss', disabled: chat.setup }, { label: chat.setup ? 'Stop' : 'Set up', action: chat.setup ? 'stop' : 'setup', disabled: chat.isRunning && !chat.setup }] })

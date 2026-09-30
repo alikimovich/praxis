@@ -1,6 +1,6 @@
 import { app } from '../native/platform'
 import { nativeSessionPath } from '../native/profile-path'
-import type { ProviderConnection, ProviderConnectionInput } from '../shared/api'
+import type { ProviderConnection, ProviderConnectionInput, ProviderLoginReport } from '../shared/api'
 import { type CatalogBackend, type CatalogModel, createModelCatalog, type ModelCatalog } from './model-catalog'
 import { createProviderStore, type ProviderStore } from './providers-store'
 
@@ -24,6 +24,12 @@ export interface ProviderDataOwner {
   saveCatalog(backend: CatalogBackend, models: CatalogModel[]): Promise<boolean>
   /** `codex debug models`, parsed; [] on any failure. */
   codexModels(): Promise<CatalogModel[]>
+  /** A built-in seat's subscription token (`claude setup-token`, LKM-119); '' removes it.
+   *  Answers whether one is saved. The token itself never comes back. */
+  saveSeatToken(provider: 'claude', token: string): Promise<boolean>
+  seatTokenStatus(): Promise<{ claude: { hasToken: boolean } }>
+  /** "Check provider login": the provider's auth status, from a helper launched like a chat's in `root`. */
+  checkLogin(provider: string, root: string): Promise<ProviderLoginReport>
 }
 
 let owner: ProviderDataOwner | null = null
@@ -75,6 +81,13 @@ export function modelCatalog(): ModelCatalog {
     }
   })
   return catalog
+}
+
+/** The Claude subscription token and the login check (LKM-119); both need the service. */
+export const seatLogin = {
+  save: (token: string): Promise<boolean> => dataOwner().saveSeatToken('claude', token),
+  hasToken: async (): Promise<boolean> => (owner ? (await owner.seatTokenStatus().catch(() => null))?.claude.hasToken === true : false),
+  check: (provider: string, root: string): Promise<ProviderLoginReport> => dataOwner().checkLogin(provider, root)
 }
 
 /** [] on any failure, including no service: the picker keeps its cached list. */

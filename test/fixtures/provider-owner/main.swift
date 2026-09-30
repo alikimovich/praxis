@@ -38,6 +38,7 @@ if let executable = env["PROVIDER_HELPER_EXEC"] {
 if let value = env["PROVIDER_GRACE"].flatMap(Double.init) { options.grace = value }
 if let value = env["PROVIDER_READY"].flatMap(Double.init) { options.readyTimeout = value }
 if let value = env["PROVIDER_TOOL_TIMEOUT"].flatMap(Double.init) { options.toolTimeout = value }
+if let value = env["PROVIDER_FIRST_EVENT"].flatMap(Double.init) { options.firstEventTimeout = value }
 if let value = env["PROVIDER_MAX_LINE"].flatMap(Int.init) { options.maxLine = value }
 // Provider data: PROVIDER_CRYPTO stands in for `TreziHost --crypto` (`\u{1f}`-separated
 // argv prefix), PROVIDER_NOW pins the catalog clock, the environment names TREZI_CODEX_BIN.

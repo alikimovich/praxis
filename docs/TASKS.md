@@ -8,6 +8,16 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] `NativeEditingInspector` is a Liquid Glass island (composer inset 10, radius 24; `NSVisualEffectView` popover before macOS 26) floating on the preview's right edge. `WorkspaceLayout` no longer subtracts it from the preview, so opening or closing it never reflows the page.
 - [x] The island's height is the preview area minus the insets (above a docked source editor, below the toolbar); its fields scroll inside it. Dragging its left edge resizes it within 220–500, saved through `native-layout-sizes`.
 - [x] Core smoke `inspector` runs `src/native/smoke-inspector-island.ts`: equal preview frames open/closed at the default and minimum windows, the clamped saved resize, toolbar clearance, hit targets around the island and scrolling at the minimum size. Evidence: `inspector-island-{default,narrow}-{open,closed}.png`, `inspector-island.json`.
+## Claude seat: login detection and stuck turns (LKM-119)
+
+- [x] Helper environment: allowlist unchanged, `USER`/`LOGNAME`/`HOME` from the account record and a default `PATH`; same cwd. Root-cause note in `docs/PROVIDERS.md`.
+- [x] First-event deadline (90 s): "Claude did not respond — check login (claude auth status) and retry"; crash/exit/auth always an error; the next message reopens the helper.
+- [x] "Not logged in" and `/login` are a login card (steps, Check login, Retry), not assistant text.
+- [x] Check provider login through the helper path (`diagnose`), from the card and Settings → AI providers → Claude….
+- [x] Subscription token field (Keychain-encrypted), injected only into Claude helpers as `CLAUDE_CODE_OAUTH_TOKEN`.
+- [x] Installed `claude` used when it is logged in and the bundled CLI is not.
+- [x] Deterministic `test/provider-login.mjs` (silent, missing/invalid auth, token, diagnose, card). No live calls.
+- [ ] Operator: confirm with a real signed-in and signed-out Claude seat (live, needs authorization).
 ## Standard macOS Settings window with a sidebar (LKM-121)
 
 - [x] Source-list sidebar with SF Symbols (General, AI Providers, Experimental); detail pane with large title and grouped rows (label and description left, control right).

@@ -290,3 +290,52 @@ up these guidance changes.
 Trezi compatibility: see [migration policy](rename/MIGRATION.md) for legacy
 profile/worktree paths, retained identities and rollback, and [LKM-84 mapping](rename/COORDINATION.md)
 for integration ordering.
+
+## Claude seat login (LKM-119)
+
+**Symptom.** Claude chats answered "Not logged in · Please run /login" (as assistant
+text) or stayed on "Thinking…" forever, although `claude` worked in Terminal. Typing
+`/login` in the chat gave the same reply.
+
+**Root cause (what was checked, without live calls).**
+
+- The helper runs the SDK's bundled CLI (2.1.186 at the time), not the installed one
+  (2.1.285 here). Both read the same credentials: the Keychain item
+  `Claude Code-credentials` for account `$USER` (fallback `claude-code-user`), then
+  `~/.claude/.credentials.json`, or `CLAUDE_CODE_OAUTH_TOKEN`. The bundled CLI read a
+  login written by the installed one, so version skew was **not** reproduced.
+- Both CLIs report `loggedIn: false` when `USER` is missing: the Keychain lookup is
+  keyed by it. A missing `HOME` or `PATH` did not matter. The helper allowlist passed
+  `USER` only when Trezi's own environment had it, so a launch without it (launchd,
+  `open -a` in some setups) logs the helper out. The helper now fills
+  `USER`/`LOGNAME`/`HOME` from the account record and gives `PATH` a default.
+- Other causes that match the report: a login that exists only in the shell, i.e. a
+  `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` exported in `.zshrc` (Trezi sees
+  it only if its 5 s login-shell environment read succeeds), or a `CLAUDE_CONFIG_DIR`
+  set only in the shell. Trezi does not override `CLAUDE_CONFIG_DIR`.
+- `/login` cannot work under the SDK: it needs Claude's interactive terminal UI.
+- The endless "Thinking…" was a helper turn with no deadline: a CLI that never sent a
+  first event kept the turn open.
+
+**What Trezi does now.**
+
+- Settings → AI providers → Claude… stores a **subscription token** from
+  `claude setup-token` (encrypted like a connection key, `<profile>/trezi/seat-tokens.json`).
+  Only Claude helpers get it, as `CLAUDE_CODE_OAUTH_TOKEN`; it is never logged, never
+  in `TREZI_*` variables, other helpers, replies or reports.
+- Before its first query a Claude helper runs `claude auth status --json` with the
+  bundled CLI. When that is logged out and an installed `claude` (PATH,
+  `~/.local/bin`, `~/.claude/local`, `/opt/homebrew/bin`, `/usr/local/bin`) is logged
+  in, the session uses the installed one (`pathToClaudeCodeExecutable`,
+  `src/main/backends/claude-login.ts`).
+- A sign-in failure (and `/login` or `/logout` typed in the chat, which never reach the
+  model) is an `auth` error: the chat shows a "Not logged in to Claude" card with the
+  steps (`claude auth login`, or `claude setup-token` plus Settings), **Check login**
+  and **Retry** (a fresh helper, then the last message again). A turn with no first
+  event within 90 s ends with "Claude did not respond — check login (claude auth
+  status) and retry" in the same card. A helper crash or exit is always an error.
+- **Check login** (the card and Settings → AI providers → Claude…) starts a helper
+  exactly like a chat's (environment, token, cwd) that reports each CLI's auth status,
+  which one chats use, whether a token is set, and `USER`/`HOME`/`PATH`/cwd.
+
+Tested deterministically by `test/provider-login.mjs` (fake helper and stand-in CLIs).
