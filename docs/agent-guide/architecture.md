@@ -96,8 +96,13 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
 
 ## Lifecycle
 
-- `install.sh` (curl one-liner) clones to `~/.trezi`, builds, links `Trezi.app` into
-  Applications and puts `trezi` (`bin/trezi`) on PATH. The one start path is
+- `install.sh` is the one install command (LKM-116). Piped (curl one-liner) it
+  clones the `--channel` branch (main by default) to `~/.trezi` and updates it on
+  re-runs; run from a checkout (`./install.sh`, `bun run setup`) it uses that checkout
+  as it is (pull only with `--update`). Either way it installs missing Bun and
+  command-line tools, builds, links `Trezi.app` into Applications and puts `trezi`
+  (`bin/trezi`) on PATH, pointing at the last-installed checkout, offers
+  `claude setup-token` and opens Trezi (not with `--no-open`). The one start path is
   `open -a Trezi` or `trezi` / `trezi .` / `trezi <path>` (a thin `open -a`);
   `trezi --update` pulls + rebuilds. The app carries its own Bun
   (`Contents/Helpers/bun`) and backend (`Contents/Resources/backend/`), so no

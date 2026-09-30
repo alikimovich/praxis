@@ -119,21 +119,45 @@ GitHub PR.
 
 - **Node 22** (`.nvmrc`) and **Bun** (`bun@1.3.x`) to build. Distributed as source,
   built and run locally. The built app carries its own copy of Bun, so starting it
-  needs no installed Bun.
+  needs no installed Bun. The installer installs Bun when it is missing.
 - A provider subscription for the agent (e.g. Claude Pro/Max), authorized
-  per-user (below) — or your own API key for a third-party endpoint, added in
+  per-user (the installer offers `claude setup-token`) — or your own API key for a third-party endpoint, added in
   Settings. Either way it is per-user; there is no shared secret.
-- **macOS 13.3+**, Xcode command-line tools with the **macOS 26 SDK**.
+- **macOS 13.3+**, Xcode command-line tools with the **macOS 26 SDK** (the installer
+  starts the command-line tools install when they are missing).
   Liquid Glass requires macOS 26; older releases use native fallback materials.
 
 ## Install
 
-One line — clones to `~/.trezi` (override with `TREZI_HOME`), installs, builds,
-links **Trezi** into Applications and puts a `trezi` command on your `PATH`:
+One command, the same for users and for development:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/alikimovich/praxis/main/install.sh | bash
 ```
+
+Testers install the `candidate` branch with the same command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/alikimovich/praxis/main/install.sh | bash -s -- --channel candidate
+```
+
+To work on Trezi itself, run it inside your clone instead (`bun run setup` does the same):
+
+```bash
+./install.sh
+```
+
+The installer installs Bun (official installer) and the Xcode command-line tools when
+they are missing, clones Trezi to `~/.trezi` (override with `TREZI_HOME`), then installs,
+builds, links **Trezi** into Applications and puts a `trezi` command on your `PATH`.
+If the `claude` CLI is present but not authorized, it offers to run `claude setup-token`;
+then it opens Trezi. Inside a clone it uses that checkout as it is: no clone, branch
+switch or pull (add `--update` to pull first). The `trezi` command and Trezi.app point
+to whichever checkout was installed last, and the installer says which.
+
+Run the same command again to update and rebuild. Options: `--channel main|candidate`
+(or `TREZI_CHANNEL`; default `main`, and a re-run keeps the installed channel),
+`--update` and `--no-open`. Unattended installs skip every prompt.
 
 The installer recommends **agent-browser** for automated browser checks, including
 different screen sizes, and asks whether to install its global CLI and browser.
@@ -145,10 +169,9 @@ Trezi's built-in agent instructions require its use when available for web UI
 verification, including phone/tablet/desktop checks for layout changes. Agents
 must report missing browser support or a preview that cannot yet show their edits.
 
-Then authorize the agent once and launch:
+Later, start Trezi from Applications or the terminal:
 
 ```bash
-claude setup-token   # one-time: authorize the agent with your own subscription
 trezi                # open Trezi (builds it first if needed)
 trezi .              # open the current folder as a project
 trezi ~/code/my-app  # open that folder as a project
@@ -173,18 +196,6 @@ trezi --update      # git pull + bun install + rebuild
 The native Settings update workflow checks the remote, guards unsaved work,
 then pulls, installs, rebuilds and restarts. There's no signed app or auto-download — updates are
 always a git pull of your checkout.
-
-## Develop on Trezi itself
-
-Contributors work in the checkout directly instead of the installed copy:
-
-```bash
-git clone https://github.com/alikimovich/praxis.git trezi
-cd trezi
-bun install
-bun run dev          # build and launch the native app (development launcher)
-bun link             # optional: expose the `trezi` command from this checkout
-```
 
 ## Architecture
 
@@ -240,6 +251,7 @@ Liquid Glass captures have limitations. See [Testing](docs/TESTING.md).
 
 | Command | Description |
 | --- | --- |
+| `bun run setup` | Run `install.sh` on this checkout (install, build, link, open) |
 | `bun run dev` | Build and launch the native app |
 | `bun run build` | Build `out/native/Trezi.app` (Swift, bundled Bun and backend) and the isolated preview |
 | `bun run start` | Launch the existing native build from the checkout (development) |

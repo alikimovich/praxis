@@ -10,6 +10,14 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Swift-compiling unit tests SKIP with a reason off macOS (`test/helpers/darwin.mjs`); a Linux unit run exits 0 with SKIP reported apart from PASS.
 - [x] `docs/TESTING.md` "GitHub CI".
 - [ ] Operator: confirm a green GitHub run on the next `candidate` push.
+## One-command install for users and development (LKM-116)
+
+- [x] `install.sh` installs missing Bun (official installer, then on PATH) and starts and waits for the Xcode command-line tools; the version checks stay.
+- [x] `--channel main|candidate` (and `TREZI_CHANNEL`), default main; a re-run keeps the installed channel unless one is given.
+- [x] Inside a checkout (`./install.sh`, `bun run setup`): that checkout as it is (no clone, branch switch or pull without `--update`); links follow the last install and the script says which.
+- [x] Finish: `claude setup-token` offered when the CLI is signed out (skipped unattended), then Trezi opens (`--no-open`). Re-runs update and rebuild.
+- [x] README Install section: the user, tester and dev commands. `test/install-update.mjs` covers all of it with fake bun/curl/xcode-select/git/claude.
+- [ ] The one-liner fetches `install.sh` from main, so `--channel candidate` works from that URL only once this installer reaches main.
 
 ## Slider tick marks in the inspector and chat islands (LKM-115)
 
