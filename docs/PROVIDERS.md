@@ -379,3 +379,38 @@ advance.
 under the Swift owner fixture, against a stand-in `codex` CLI that rejects
 `gpt-6.1-sol`. The stand-in also asks the real CLI which MCP servers each run's
 `--config` leaves on.
+
+## The service keeps the user's security session (LKM-125)
+
+**Symptom.** Save token (Settings → AI Providers → Claude…) and adding or updating a
+connection key failed with "macOS Keychain encryption unavailable; unlock the keychain
+and retry", a chat on a saved connection said its key "could not be read", and a Claude
+helper reported `loggedIn: false` while `claude auth status` in Terminal said `true`.
+
+**Root cause.** The XPC service's `Info.plist` had no `XPCService.JoinExistingSession`,
+so launchd started the service in a **new security session**, one without the user's
+login keychain. Every process it starts inherits that session: Bun, the
+`TreziHost --crypto` Keychain helper (connection keys, the subscription token) and the
+provider helpers with the Claude CLI (its login is the Keychain item
+`Claude Code-credentials`). That held for `bun run dev` and `open -a` alike, since both
+reach the service through XPC. Only the `~/.claude/.credentials.json` fallback or an
+exported `CLAUDE_CODE_OAUTH_TOKEN` worked there.
+
+**Fix.** `scripts/service-info.mjs` writes the service plist with
+`JoinExistingSession` set, so the service runs in its caller's (the host's) session and
+its children reach the same keychains. A plain `claude auth login` in Terminal is then
+seen by chats, with no token.
+
+**Check login** (the chat card and Settings → AI Providers → Claude…) now also reports,
+from inside the helper, the exit codes of `security list-keychains` and
+`security default-keychain` (`keychain` in the report, and a line in its detail; their
+output is never read). A non-zero code means the helper has no user keychain. The
+service accepts only those two integer fields.
+
+**Proof.** `test/service-session.mjs` (unit) parses the plist the build writes and checks
+the session probe (`src/native/SecuritySession.swift`, the host's `securitySession`
+command and `TreziHost --session`: session id, graphic-access bit, the two exit codes).
+The native settings group's `security-session` step (`src/native/smoke-session.ts`) runs
+`TreziHost --session` from Bun under the real service and requires the same report as
+the host's (`security-session.json`). `test/provider-login.mjs` covers the Check login
+fields with stand-in `security` commands. No test writes to the user's keychain.

@@ -11,6 +11,11 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Tests: `test/codex-mcp.mjs` (installed-plugin fixture against the real CLI) and `test/codex-model.mjs` (stand-in CLI, in-process and helper, fallback, memory, picker, clear message, real-CLI MCP inventory per run).
 - [ ] Operator: after merge, rerun `TREZI_LIVE_PROVIDERS=1 bun run test:provider-live` (LKM-113 part 2).
 - [ ] Manager: run `test/codex-mcp.mjs` and `test/codex-model.mjs` unsandboxed. The worker sandbox refuses the Trezi tool bridge's Unix socket.
+## Service keeps the user's Keychain (LKM-125)
+
+- [x] The XPC service plist sets `JoinExistingSession` (`scripts/service-info.mjs`): the service, Bun, the `TreziHost --crypto` helper and provider helpers stay in the host's security session under `bun run dev` and `open -a`.
+- [x] Check login reports `security list-keychains` / `default-keychain` exit codes from the helper (`keychain` field and detail line), never their output.
+- [x] Tests: `service-session` (plist, probe), `provider-login` (keychain fields), native settings step `security-session` (host and service child share one session).
 
 ## Inspector as a floating island over the preview (LKM-122)
 

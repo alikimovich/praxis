@@ -16,6 +16,13 @@ Newest first. Append a dated entry when you finish a chunk of work.
   - `test/codex-mcp.mjs` adds an installed-plugin fixture: the real CLI lists `vercel-plugin` without isolation and not at all with it, and the app-server session does not start it.
   - New `test/codex-model.mjs` (unit tier) covers the pure rules, then drives the real adapter in-process and in the real helper host under the Swift owner fixture, against a stand-in CLI that rejects `gpt-6.1-sol`. It checks the fallback notice, the answer and one `done`; turn 2 resuming on the fallback; new chats skipping the model; the picker; the all-rejected error as shown by `chat-state`; and, per run, the real CLI's MCP inventory under that run's `--config`.
   - In the worker sandbox, the tool bridge's Unix socket is refused. With only that bridge mocked, the in-process half passed; the helper half ran up to that `listen`. Both tests need an unsandboxed run.
+## 2026-09-29 — LKM-125: the service keeps the user's Keychain
+
+- **Why.** Save token, adding or updating a connection key, chats on a saved connection key and the Claude CLI's own login all failed inside Trezi on the user's Mac, while Terminal worked. Every one of them uses the Keychain from a process the XPC service started.
+- **Root cause.** The service's `Info.plist` had no `XPCService.JoinExistingSession`, so launchd started it in a new security session with no login keychain. Bun, the `TreziHost --crypto` helper and the provider helpers inherit it. `bun run dev` and `open -a` both reach the service through XPC, so both were affected.
+- **Fix.** `scripts/service-info.mjs` writes the plist with `JoinExistingSession` (`build-native.mjs` uses it). The service now runs in the host's session and so do its children.
+- **Check login.** The Claude helper's report adds `keychain: { listKeychains, defaultKeychain }`, the exit codes of `security list-keychains` and `security default-keychain`, with a detail line (output never read). `ProviderLaunch.loginReport` accepts only those two integer fields.
+- **Proof.** `test/service-session.mjs` (unit): the plist as built, the build wiring, and `SecuritySessionProbe` (`src/native/SecuritySession.swift`: session id, graphic bit, both exit codes; a child reports the same session). Native settings step `security-session` (`src/native/smoke-session.ts`): `TreziHost --session`, started by Bun under the real service, must match the host's `securitySession` report (`security-session.json`). `test/provider-login.mjs`: reachable, lost and absent `security` stand-ins; the report never carries their output. No test writes to the user's keychain. Root-cause note: `docs/PROVIDERS.md`.
 
 ## 2026-09-29 — LKM-122: the inspector floats over the preview
 

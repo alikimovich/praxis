@@ -127,6 +127,37 @@ export function claudeAuthStatus(path: string, timeout = PROBE_TIMEOUT): Promise
 export interface ClaudeCandidates {
   bundled?: string | null
   installed?: string[]
+  /** `/usr/bin/security` by default. */
+  security?: string
+}
+
+/** Exit code of `security <command>` (output discarded); null when it could not run or timed out. */
+export function securityExit(
+  command: 'list-keychains' | 'default-keychain',
+  path = '/usr/bin/security',
+  timeout = PROBE_TIMEOUT
+): Promise<number | null> {
+  return new Promise((resolve) => {
+    execFile(path, [command], { timeout, maxBuffer: 64 * 1024, env: process.env }, (error) => {
+      if (!error) return resolve(0)
+      resolve(!error.killed && typeof error.code === 'number' ? error.code : null)
+    })
+  })
+}
+
+/**
+ * Whether this helper reaches the user's keychains (LKM-125). A helper outside the
+ * user's security session sees none, so the Claude CLI cannot read the login it keeps
+ * there. Exit codes only: the keychain paths are never read into the report.
+ */
+export async function keychainAccess(
+  path?: string
+): Promise<{ listKeychains: number | null; defaultKeychain: number | null }> {
+  const [listKeychains, defaultKeychain] = await Promise.all([
+    securityExit('list-keychains', path),
+    securityExit('default-keychain', path)
+  ])
+  return { listKeychains, defaultKeychain }
 }
 
 let cached: Promise<ClaudeCli> | null = null
@@ -168,7 +199,11 @@ const describe = (auth: ClaudeAuth): string =>
 export async function checkClaudeLogin(
   candidates: ClaudeCandidates = {}
 ): Promise<Omit<ProviderLoginReport, 'provider'>> {
-  const cli = await resolveClaudeCli(true, candidates)
+  const [cli, keychain] = await Promise.all([
+    resolveClaudeCli(true, candidates),
+    keychainAccess(candidates.security)
+  ])
+  const exit = (code: number | null) => (code === null ? 'did not run' : `exit ${code}`)
   const used =
     cli.source === 'installed' ? cli.installed.find((c) => c.path === cli.executable) : undefined
   const auth = used?.auth ?? cli.bundled.auth
@@ -181,6 +216,11 @@ export async function checkClaudeLogin(
       ? []
       : ['No installed claude CLI found.']),
     `Chats use: ${cli.source === 'installed' ? cli.executable : 'the bundled CLI'}`,
+    `Keychain in this helper: security list-keychains ${exit(keychain.listKeychains)}; security default-keychain ${exit(keychain.defaultKeychain)}${
+      keychain.listKeychains === 0 && keychain.defaultKeychain === 0
+        ? ''
+        : ' (no user keychain: a login kept in the Keychain cannot be read here)'
+    }`,
     `Subscription token from Settings: ${env.CLAUDE_CODE_OAUTH_TOKEN ? 'set' : 'not set'}`,
     `ANTHROPIC_API_KEY: ${env.ANTHROPIC_API_KEY ? 'set' : 'not set'}; CLAUDE_CONFIG_DIR: ${env.CLAUDE_CONFIG_DIR || 'default (~/.claude)'}`,
     `USER: ${env.USER || 'missing'}; HOME: ${env.HOME || 'missing'}; cwd: ${process.cwd()}`,
@@ -192,6 +232,7 @@ export async function checkClaudeLogin(
     ...(path ? { executable: path } : {}),
     ...(auth.authMethod ? { authMethod: auth.authMethod } : {}),
     token: !!env.CLAUDE_CODE_OAUTH_TOKEN,
+    keychain,
     detail: lines.join('\n').slice(0, 4000)
   }
 }
