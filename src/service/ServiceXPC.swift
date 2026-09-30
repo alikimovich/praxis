@@ -42,7 +42,7 @@ struct ServiceControlReply: Codable {
 }
 
 enum ServiceXPC {
-    static let name = "dev.praxis.service"
+    static let name = "dev.trezi.service"
     static let schema = "trezi-supervision-1"
     static let version = ServiceVersion(major: 1, minor: 0)
     static let capabilities = [ServiceCapability(name: "legacy.ui", version: 1),

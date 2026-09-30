@@ -66,36 +66,36 @@ const PLUGIN_PATH = join(__dirname, '../../agent-plugin')
 // The two in-process `trezi` MCP tools, fully-qualified (mcp__<server>__<tool>).
 // Read-only observers of the user's preview — auto-allowed so they never prompt.
 const PREVIEW_TOOL_NAMES = new Set([
-  'mcp__praxis__preview_location',
-  'mcp__praxis__preview_screenshot'
+  'mcp__trezi__preview_location',
+  'mcp__trezi__preview_screenshot'
 ])
 // Validated in-process tools are auto-allowed by both allowedTools and
 // canUseTool. Chat islands persist through the island service; main remains
 // the sole writer of app state under `.trezi/`.
 const TREZI_TOOL_NAMES = new Set([
   ...PREVIEW_TOOL_NAMES,
-  'mcp__praxis__chat_island',
-  'mcp__praxis__open_code',
-  'mcp__praxis__open_preview',
-  'mcp__praxis__project_ui_catalog',
-  'mcp__praxis__compose_project_ui',
+  'mcp__trezi__chat_island',
+  'mcp__trezi__open_code',
+  'mcp__trezi__open_preview',
+  'mcp__trezi__project_ui_catalog',
+  'mcp__trezi__compose_project_ui',
   // Pure, deterministic spring→CSS calculator. No state, no side effects, so
   // it's auto-allowed like the observers — it never touches disk or the repo.
-  'mcp__praxis__spring_to_css',
+  'mcp__trezi__spring_to_css',
   // APCA accessible-contrast checker + color suggester. Also pure (reads no repo
   // state, writes nothing) — auto-allowed for the same reason.
-  'mcp__praxis__check_contrast',
+  'mcp__trezi__check_contrast',
   // Design-system calculators (fluid clamp() sizing, OKLCH color ramps, layered
   // shadows, size-aware line-height). All pure math — no state, no disk — so
   // auto-allowed like the rest.
-  'mcp__praxis__fluid_clamp',
-  'mcp__praxis__color_scale',
-  'mcp__praxis__layered_shadow',
-  'mcp__praxis__line_height',
+  'mcp__trezi__fluid_clamp',
+  'mcp__trezi__color_scale',
+  'mcp__trezi__layered_shadow',
+  'mcp__trezi__line_height',
   // Lists the curated skill-pack catalog — pure/read-only (no install, no
   // network), so auto-allowed. Its sibling `install_skills` is deliberately NOT
   // here: it writes files + hits the network, so it must surface a permission card.
-  'mcp__praxis__list_recommended_skills'
+  'mcp__trezi__list_recommended_skills'
 ])
 
 // `spring_to_css` input — three interchangeable ways to describe the spring
@@ -585,7 +585,7 @@ async function startSession(
     return Array.isArray(result?.content) ? (result as { content: never[] }) : asText(Promise.resolve(result))
   }
   const previewServer = createSdkMcpServer({
-    name: 'praxis',
+    name: 'trezi',
     version: '1.0.0',
     tools: guarded([
       tool(
@@ -1050,7 +1050,7 @@ async function startSession(
       // are auto-allowed here so they never surface a permission card (canUseTool also
       // short-circuits them, belt-and-suspenders) — main validates everything
       // chat_island persists, and install_skills prompts (writes files + network).
-      mcpServers: { praxis: previewServer },
+      mcpServers: { trezi: previewServer },
       allowedTools: [...TREZI_TOOL_NAMES],
       // The bundled Trezi skill plugin (only when present in this build).
       ...(existsSync(PLUGIN_PATH)
@@ -1180,7 +1180,7 @@ async function startSession(
   const emitCommands = (): void => {
     const merged = mergeSlashCommands(
       [...projectSkills, ...availablePortableSkills()],
-      sdkCommandNames.filter((name) => !portableSkills.some((skill) => name === `praxis:${skill.name}`))
+      sdkCommandNames.filter((name) => !portableSkills.some((skill) => name === `trezi:${skill.name}`))
     )
     if (merged.length) emit({ type: 'commands', commands: merged })
   }

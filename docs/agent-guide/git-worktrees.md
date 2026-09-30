@@ -20,8 +20,8 @@ Moved from the old `CLAUDE.md` ("Gotchas", "Conventions") and `AGENTS.md`
   per repository common directory; the TS Git code (`git.ts`, `worktrees.ts`,
   `chat-worktrees.ts`, `chat-isolation.ts`, `repo-write-queue.ts`) dispatches to it
   and throws without the service (there is no Bun fallback since LKM-111). Recovery refs are `refs/trezi/recovery/*`.
-- Work branches are `trezi/*`; `git.ts` also recognizes legacy `dsgn/*` work branches
-  (a deliberate shim — see [conventions.md](conventions.md)).
+- Work branches are `trezi/*`; `git.ts` also recognizes the legacy work-branch
+  prefixes (a deliberate shim — see [legacy names](legacy-names.md)).
 - **Chats run in per-chat worktrees (trezi/chat-<id>), auto-merged back to the
   live tree on each turn's done/error.** The preview ALWAYS serves the live
   checkout, never a worktree. Non-repo-root projects (subdirs, non-git) run on

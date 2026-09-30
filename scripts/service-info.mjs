@@ -1,5 +1,5 @@
 /**
- * Info.plist of the XPC service (`Trezi.app/Contents/XPCServices/dev.praxis.service.xpc`).
+ * Info.plist of the XPC service (`Trezi.app/Contents/XPCServices/dev.trezi.service.xpc`).
  *
  * `JoinExistingSession` (LKM-125): without it launchd starts the service in a new
  * security session, which has no login keychain. Every process the service starts
@@ -11,7 +11,7 @@
 export function serviceInfoPlist() {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>dev.praxis.service</string>
+<key>CFBundleIdentifier</key><string>dev.trezi.service</string>
 <key>CFBundleName</key><string>Trezi Service</string>
 <key>CFBundleExecutable</key><string>TreziService</string>
 <key>CFBundlePackageType</key><string>XPC!</string>

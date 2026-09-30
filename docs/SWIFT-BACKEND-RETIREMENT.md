@@ -64,12 +64,12 @@ Moved in this step:
   refused (the old writers followed a link out of the project) and a store is capped at
   1 MiB (about 500 notes at the 2000-character maximum).
 - The other `.trezi/` files, by the editing owner in the repository lane
-  (`EditingProject.swift`): the `.dsgn`/`.praxis` sidecar migration, the setup helpers a
+  (`EditingProject.swift`): the legacy sidecar migration ([legacy names](agent-guide/legacy-names.md)), the setup helpers a
   chat worktree carries (with `setup-helpers.json`) and the Next dependency marker
   (`.trezi/dependencies.sha256`). Bun keeps only the orchestration: it asks the owner,
   runs the install through the service installer, then asks it to record the marker.
   The legacy twins are `sidecar-migrate.ts`, `setup-artifacts.ts` and
-  `editing-model.ts`. A `.trezi`/`.praxis`/`.dsgn` folder or a helper that is a link is
+  `editing-model.ts`. A `.trezi` (or legacy) folder or a helper that is a link is
   refused (the old code followed it).
 - Trezi's own update check (`git fetch` and the behind count) is a workflow-owner lane
   request, `updateCheck`; `update-controller.ts` reaches `checkForUpdate` only with no
@@ -110,7 +110,7 @@ unchanged, and the Swift owner is their only writer.
   draft is added: each commit is a single atomic, hash-bound replace.
 - The setup helpers and the dependency marker keep their bytes and names
   (`.trezi/setup-helpers.json`, `.trezi/dependencies.sha256`); the migration only ever
-  copies (exclusive, then link) before it unlinks the `.dsgn` original, so an interrupted
+  copies (exclusive, then link) before it unlinks the legacy original, so an interrupted
   run repeats safely and a file that already exists in `.trezi/` always wins.
 - Owner switch: quit (the service drains the editing owner before it releases the
   profile), relaunch with `TREZI_BACKEND_OWNER=legacy`; the legacy twin writes the same
@@ -153,7 +153,7 @@ Settings ▸ Updates ─ workflow owner: pull, install, build (journaled) ─ re
   `install.sh` refuse with one message instead of failing inside swiftc or dyld.
 - Package layout (checked by `test/distribution.mjs`): `out/native/Trezi.app` with
   `Contents/MacOS/TreziHost`, the XPC service at
-  `Contents/XPCServices/dev.praxis.service.xpc`, the bundled Bun at
+  `Contents/XPCServices/dev.trezi.service.xpc`, the bundled Bun at
   `Contents/Helpers/bun` and the backend at `Contents/Resources/backend/`; a copy of the
   service at `out/native/TreziService` answers the development launcher's
   `--resolve-profile`.

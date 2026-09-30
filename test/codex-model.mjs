@@ -260,7 +260,7 @@ const statuses = (events) => of(events, 'status').map((e) => e.text)
 const isolated = (run) => {
   assert.equal(run.mcp.personal, false, 'the declared server is switched off')
   assert.equal(run.mcp['vercel-plugin'], undefined, 'the plugin server is not loaded')
-  assert.equal(run.mcp.praxis, true, "only Trezi's server runs")
+  assert.equal(run.mcp.trezi, true, "only Trezi's server runs")
 }
 
 async function fallbackChat(provider, where, warn = false) {

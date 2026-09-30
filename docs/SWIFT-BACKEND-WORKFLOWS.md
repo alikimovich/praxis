@@ -98,7 +98,7 @@ coordinator's lane.
 - **Setup files.** Only the six known helper paths are written, each only if absent, in a
   `.trezi` that must be a plain folder of the project (a linked `.trezi` is refused; the
   legacy writer followed it). Removal takes the fixed list only and never goes through a
-  linked `.trezi`, `.praxis` or `.dsgn`. A hand-edited helper is kept.
+  linked `.trezi` or legacy folder. A hand-edited helper is kept.
 - **Diagnoses.** Same file and bytes as the legacy store; a damaged file is refused and
   kept (the legacy store read it as empty and overwrote it on the next save). Bun treats the
   memory as best-effort, as before: a refused read or write is logged and the user still gets

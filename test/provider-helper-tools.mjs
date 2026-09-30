@@ -1,7 +1,7 @@
 // LKM-131: Trezi's agent tools work from provider helpers. The real Claude and Codex
 // adapters run in the real helper host under the Swift ProviderOwner fixture, each driven
 // by a stand-in CLI (no model, network or credential) that calls EVERY Trezi tool its
-// session exposes: Claude's through the SDK's in-process `praxis` MCP server, Codex's
+// session exposes: Claude's through the SDK's in-process `trezi` MCP server, Codex's
 // through the Trezi MCP bridge. Main (this process) holds the services those tools need:
 // chat islands on the real Swift editing owner, a preview source, Gen UI, the workflow
 // owner and a window. The test fails when
@@ -60,7 +60,7 @@ const PLAN = join(scratch, 'plan.json'), LOG = join(scratch, 'calls.log')
 writeFileSync(PLAN, JSON.stringify({ calls: CALLS, log: LOG }))
 
 // --- the stand-in `claude`: the SDK's stream-json control protocol, no model -------------
-// Each user turn lists the in-process `praxis` MCP server's tools (or `only a,b`) and
+// Each user turn lists the in-process `trezi` MCP server's tools (or `only a,b`) and
 // calls each through `mcp_message` control requests, as the real CLI does for SDK servers.
 const CLAUDE = join(scratch, 'claude')
 writeFileSync(CLAUDE, `#!${process.execPath}
@@ -76,13 +76,13 @@ let sequence = 0, rpc = 0
 const control = (request) => new Promise((resolve) => { const id = 'fake-' + ++sequence; waiting.set(id, resolve); out({ type: 'control_request', request_id: id, request }) })
 const mcp = async (method, params) => {
   const id = method.startsWith('notifications/') ? undefined : ++rpc
-  const r = await control({ subtype: 'mcp_message', server_name: 'praxis', message: { jsonrpc: '2.0', ...(id ? { id } : {}), method, params } })
+  const r = await control({ subtype: 'mcp_message', server_name: 'trezi', message: { jsonrpc: '2.0', ...(id ? { id } : {}), method, params } })
   if (r.subtype !== 'success') throw new Error(r.error)
   return r.response.mcp_response
 }
 const meta = { session_id: 'fake-claude', uuid: '00000000-0000-4000-8000-000000000000' }
 const turn = async (text) => {
-  out({ type: 'system', subtype: 'init', slash_commands: [], tools: [], mcp_servers: [{ name: 'praxis', status: 'connected' }], model: 'fake', permissionMode: 'default', cwd: process.cwd(), apiKeySource: 'none', ...meta })
+  out({ type: 'system', subtype: 'init', slash_commands: [], tools: [], mcp_servers: [{ name: 'trezi', status: 'connected' }], model: 'fake', permissionMode: 'default', cwd: process.cwd(), apiKeySource: 'none', ...meta })
   await mcp('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'fake-claude', version: '0' } })
   await mcp('notifications/initialized', {})
   const listed = (await mcp('tools/list', {})).result.tools.map((t) => t.name)
@@ -126,7 +126,7 @@ if (args[0] !== 'exec') process.exit(2)
 const text = readFileSync(0, 'utf8')
 const plan = JSON.parse(readFileSync(${JSON.stringify(PLAN)}, 'utf8'))
 const toml = args.flatMap((arg, i) => (arg === '--config' ? [args[i + 1].replace('=', ' = ')] : [])).join('\\n')
-const server = Bun.TOML.parse(toml).mcp_servers.praxis
+const server = Bun.TOML.parse(toml).mcp_servers.trezi
 const { Client } = await import(${JSON.stringify(client)})
 const { StdioClientTransport } = await import(${JSON.stringify(stdio)})
 const mcp = new Client({ name: 'fake-codex', version: '0' })

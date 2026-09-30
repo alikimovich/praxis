@@ -15,7 +15,7 @@ import { skipUnlessDarwin } from './darwin.mjs'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 export const SOURCES = [...CONVERSATION_SOURCES,
-  ...['EditingIslands', 'EditingStores', 'EditingProject', 'EditingOwner'].map(name => `src/service/${name}.swift`)]
+  ...['EditingIslands', 'EditingStores', 'EditingProject', 'EditingLegacyNames', 'EditingOwner'].map(name => `src/service/${name}.swift`)]
 
 /** Compiles the fixture once per source hash and compiler version; returns the binary path. */
 export function compileEditingFixture() {

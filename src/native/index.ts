@@ -3,6 +3,7 @@ import { removeSmokeDirectory, saveSmokeFailure, smokeDirectory, writeSmokeProje
 import { NativeUpdateController } from './update-controller'
 import { installNativeInspector } from './inspector-runtime'
 import { NativePreviewRecovery } from './preview-recovery'
+import { NativeLegacyNames } from './legacy-names'
 import { NativeLayersController } from './layers-controller'
 import { agentOptionsFor } from '../shared/chat-settings'
 import { NativeEditorController } from './editor-controller'
@@ -392,7 +393,13 @@ async function main() {
   })
   serviceEvents.on('command', (channel, args) => { if (channel === 'preview:set-select-mode') { shellController!.selecting = !!args[0]; shellController!.schedule() } })
   const activateContext = workspaceController.services.activate
-  workspaceController.services.activate = async entry => { await activateContext(entry); if (entry) void gitController.refresh(entry.root).catch(error => activityController.append(String(error), 'error')) }
+  const legacyNames = new NativeLegacyNames(sheetController, (channel, ...args) => workspaceController.services.invoke(channel, ...args), (text, kind) => activityController.append(text, kind))
+  workspaceController.services.activate = async entry => {
+    await activateContext(entry)
+    if (!entry) return
+    void gitController.refresh(entry.root).catch(error => activityController.append(String(error), 'error'))
+    void legacyNames.check(entry.key, entry.root).catch(error => activityController.append(String(error), 'error'))
+  }
   host.on('shell-action', action => {
     const key = action.project ?? workspaceController.state.activeKey
     if (action.action === 'publish-mode') { void gitController.setMode(action.value).then(refreshPreferences, reportPreferences); return }

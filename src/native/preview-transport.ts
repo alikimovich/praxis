@@ -13,7 +13,6 @@ type Delivery =
 const nativeGlobal = globalThis as unknown as {
   webkit: { messageHandlers: { trezi: { postMessage: (value: unknown) => void } } }
   __treziNativeDispatch: (message: Delivery) => void
-  __praxisNativeDispatch: (message: Delivery) => void
 }
 const host = nativeGlobal.webkit.messageHandlers.trezi
 nativeGlobal.__treziNativeDispatch = (message: Delivery) => {
@@ -25,10 +24,9 @@ nativeGlobal.__treziNativeDispatch = (message: Delivery) => {
     if (message.error) request.reject(new Error(message.error))
     else request.resolve(message.value)
   } else {
-    for (const listener of listeners.get(message.channel.replace(/^praxis:/, 'trezi:')) ?? []) listener({}, ...message.args)
+    for (const listener of listeners.get(message.channel) ?? []) listener({}, ...message.args)
   }
 }
-nativeGlobal.__praxisNativeDispatch = nativeGlobal.__treziNativeDispatch
 export const ipcRenderer = {
   send(channel: string, ...args: unknown[]) {
     host.postMessage({

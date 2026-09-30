@@ -6,8 +6,7 @@
   "main": "./out/native/Trezi.app/Contents/Resources/backend/index.cjs",
   "license": "MIT",
   "bin": {
-    "trezi": "bin/trezi",
-    "praxis": "bin/trezi"
+    "trezi": "bin/trezi"
   },
   "engines": {
     "node": ">=20",
@@ -40,6 +39,7 @@
     "test:project-ui": "bun test/project-ui.mjs",
     "test:devnet": "bun test/devserver-net.mjs",
     "test:sidecar-migrate": "bun test/sidecar-migrate.mjs",
+    "test:legacy-names": "bun test/legacy-names-migrate.mjs",
     "test:trezi-cli": "bun test/trezi-cli.mjs",
     "test:diag-cache": "bun test/diag-cache.mjs",
     "test:diag-rules": "bun test/diag-rules.mjs",
@@ -105,9 +105,7 @@
     "start": "bun scripts/start-native.mjs",
     "setup": "bash ./install.sh",
     "test": "node test/run.mjs unit native",
-    "test:trezi-agent-tools": "bun test/trezi-agent-tools.mjs",
-    "test:praxis-cli": "bun test/trezi-cli.mjs",
-    "test:praxis-agent-tools": "bun test/trezi-agent-tools.mjs"
+    "test:trezi-agent-tools": "bun test/trezi-agent-tools.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.186",

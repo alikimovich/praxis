@@ -2,10 +2,10 @@ import Foundation
 import Darwin
 
 final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
-    let queue = DispatchQueue(label: "dev.praxis.service.owner")
+    let queue = DispatchQueue(label: "dev.trezi.service.owner")
     /// Pipe writes never block the owner queue: a full stdin pipe must not stop the
     /// reader from draining Bun's stdout, or the two pipes deadlock.
-    let writer = DispatchQueue(label: "dev.praxis.service.backend-writer")
+    let writer = DispatchQueue(label: "dev.trezi.service.backend-writer")
     let epoch = UUID().uuidString
     let hostRequirement: String
     let supervisor = BackendSupervisor()

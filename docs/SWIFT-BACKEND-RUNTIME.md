@@ -50,7 +50,7 @@ lease around an install until S07.
 | Which command to run; custom commands; restart and warm eviction policy | Bun (workspace controller, S12) | Bun |
 | Repository write lease around an install | Bun (`enqueueRepoWrite`, until S07) | Bun |
 | HTML stamping (`data-trezi-source`, parse5) | Bun JS helper, asked by the static site | Bun |
-| `.dsgn/` → `.trezi/` sidecar migration before detection | Bun (repository sidecar, S07) | Bun |
+| Legacy → `.trezi/` sidecar migration before detection | Bun (repository sidecar, S07) | Bun |
 | Preview-evidence URL mirror for agent tools | Bun (from replies and `exit` events) | Bun |
 | Persisted `url`, `launchSpec`, `dependenciesPending`, `environmentRevision` in `workspace.json` | Bun's workspace controller, through the S04 `update` adapter | Bun |
 | iOS Simulator and Metro | Bun through the guardian (S14) | Bun |

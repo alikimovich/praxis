@@ -132,13 +132,13 @@ GitHub PR.
 One command, the same for users and for development:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alikimovich/praxis/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/alikimovich/trezi/main/install.sh | bash
 ```
 
 Testers install the `candidate` branch with the same command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alikimovich/praxis/main/install.sh | bash -s -- --channel candidate
+curl -fsSL https://raw.githubusercontent.com/alikimovich/trezi/main/install.sh | bash -s -- --channel candidate
 ```
 
 To work on Trezi itself, run it inside your clone instead (`bun run setup` does the same):
@@ -292,9 +292,11 @@ macOS 15+; older systems show text immediately. Reduce Motion disables the revea
 and status animation. The composer button beam runs only during active generation,
 not idle drafts, approval waits, stopping or applying completed changes.
 
-### Renamed from Praxis
+### Projects and data from earlier versions
 
-Existing native data is preserved through in-place aliases; old `praxis` commands
-and `PRAXIS_*` settings remain supported. See [migration and rollback](docs/rename/MIGRATION.md)
-and the [rename audit](docs/rename/AUDIT.md). The public GitHub repository and
-installer URLs retain their existing names.
+Trezi had earlier names. Profiles, conversations, settings, environment variables,
+installs and project setup files from those versions keep working; the
+compatibility rules are listed in [legacy names](docs/agent-guide/legacy-names.md). When
+you open a project that still uses the earlier setup file names, Trezi renames them.
+It does this automatically when the Git tree is clean. When the tree has
+uncommitted changes, it asks first. It never commits.

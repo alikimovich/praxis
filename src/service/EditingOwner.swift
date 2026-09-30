@@ -73,6 +73,7 @@ final class EditingOwner: @unchecked Sendable {
         "sidecar": (["root", "name", "expectedHash", "content"], ["leases"]),
         // Project files (EditingProject): `root` is the live project, whose lane they run in.
         "migrateSidecar": (["root"], ["leases"]),
+        "legacyNames": (["root"], ["leases"]), "migrateNames": (["root", "confirmed"], ["leases"]),
         "syncSetupHelpers": (["root", "worktree"], ["leases"]),
         "dependencyState": (["root", "checkout"], ["leases"]),
         "markDependencies": (["root", "checkout"], ["leases"]),
@@ -185,6 +186,14 @@ final class EditingOwner: @unchecked Sendable {
             let root = try SourcePaths.root(try body.path("root"))
             return Effect(root: root, leases: try body.strings("leases")) {
                 Self.object([("collisions", .array(try EditingProject.migrate(root: root).map { .string(JSText($0)) }))])
+            }
+        case "legacyNames", "migrateNames":
+            // Answered from the lane, so the clean check sees no turn landing halfway.
+            let root = try SourcePaths.root(try body.path("root")), git = repository.effects.git
+            let confirmed = frame.method == "migrateNames" ? try body.bool("confirmed") : nil
+            return Effect(root: root, leases: try body.strings("leases")) {
+                guard let confirmed else { return try EditingLegacyNames.plan(root: root, git: git).value }
+                return try EditingLegacyNames.migrate(root: root, git: git, confirmed: confirmed)
             }
         case "syncSetupHelpers":
             let root = try SourcePaths.root(try body.path("root")), worktree = try SourcePaths.root(try body.path("worktree"))

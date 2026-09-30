@@ -36,18 +36,12 @@ and hard-won constraints"). Linked from [AGENTS.md](../../AGENTS.md).
   It must never reach the renderer, argv, a log line, or an error string; the UI
   only ever observes `hasKey`.
 
-## The old name (dsgn) and the rename
+## Earlier names
 
-The project's original name was **dsgn**. A repo-wide rename (2026-07) swept it out of
-the code — the stamp is `data-trezi-source`, the sidecar is `.trezi/`, work branches
-are `trezi/*`. The old name survives only in deliberate legacy shims: setup uninstall
-removes old `.dsgn/` helpers, `git.ts` recognizes `dsgn/*` work branches,
-the editing owner (`src/service/EditingProject.swift`) moves old sidecar data, `agent.ts` migrates the old
-`<userData>/dsgn` dir, and the agent sidecar write-deny covers the legacy dir names
-(`.dsgn/` and `.praxis/`). Don't "fix" those dsgn strings — preserve intentional
-legacy migration and cleanup strings in setup, git, sidecar migration and agent
-persistence — and keep `docs/PROGRESS.md` history as written (do not rewrite
-historical entries).
-
-Trezi rename compatibility and rollback: `docs/rename/MIGRATION.md`. Keep stable
-OS/MCP identities and legacy aliases until a separately verified migration exists.
+Trezi had two earlier names. Code, UI and docs use only Trezi names: the stamp is
+`data-trezi-source`, the sidecar is `.trezi/`, work branches are `trezi/*`, env vars
+are `TREZI_*`. The earlier names survive only as the read-compatibility shims listed
+in [legacy names](legacy-names.md), each in the files named there. Don't
+"fix" those strings, and don't add new ones: `test/legacy-names-audit.mjs` fails when
+an earlier name appears in a file the list does not name. Keep `docs/PROGRESS.md`
+history as written (do not rewrite historical entries).

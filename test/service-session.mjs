@@ -28,7 +28,7 @@ try {
   })
   assert.equal(parsed.status, 0, parsed.stderr)
   const plist = JSON.parse(parsed.stdout)
-  assert.equal(plist.CFBundleIdentifier, 'dev.praxis.service')
+  assert.equal(plist.CFBundleIdentifier, 'dev.trezi.service')
   assert.deepEqual(plist.XPCService, {
     ServiceType: 'Application',
     RunLoopType: 'dispatch_main',

@@ -78,7 +78,7 @@ export function servicePlatform(link: PlatformLink, options: { timeouts?: Partia
   }
 
   const grantMedia = (root: string, file: string): Promise<MediaGrant> => call('mediaGrant', { root, path: file, view: 'source' })
-  const token = (url: string) => /^(?:trezi|praxis)-media:\/\/f\/([0-9a-f]{16,128})$/.exec(url)?.[1] ?? null
+  const token = (url: string) => /^trezi-media:\/\/f\/([0-9a-f]{16,128})$/.exec(url)?.[1] ?? null
   const resolve = async (url: string) => {
     const value = token(url)
     if (!value) throw new PlatformError('invalidRequest', 'Not a media link.')

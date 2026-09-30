@@ -56,7 +56,7 @@ proposals; they cannot commit files or hold Undo state.
   (or aliased) paths in one batch, NUL, lone surrogates and oversized content (16 MiB
   per batch) are refused before anything runs.
 - **Paths.** A path is repo-relative or absolute under the project root. It must not
-  traverse, and must not lie in `.git`, `.trezi`, `.praxis`, `.dsgn` or `node_modules`.
+  traverse, and must not lie in `.git`, `.trezi` (or a legacy metadata folder) or `node_modules`.
   After every symlink is resolved the file (and, for a new file, its deepest existing
   folder) must be inside the resolved root. A link to another project file writes that
   file and stays a link; a link out of the project is refused (`unauthorized`).

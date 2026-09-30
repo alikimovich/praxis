@@ -50,7 +50,6 @@ export const previewSendChannels = new Set([
 export async function dispatchIPC(view: string, message: any) {
   if (!message || typeof message.channel !== 'string' || !Array.isArray(message.args))
     throw new Error('Invalid IPC message')
-  message = { ...message, channel: message.channel.replace(/^praxis:/, 'trezi:') }
   if (view === 'preview' && (message.type !== 'send' || !previewSendChannels.has(message.channel)))
     throw new Error('Preview cannot invoke application commands')
   const sender = views.get(view)?.webContents

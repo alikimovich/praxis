@@ -93,6 +93,8 @@ const UNIT = [
   "project-icon",
   "devserver-net",
   "sidecar-migrate",
+  "legacy-names-migrate",
+  "legacy-names-audit",
   "diag-cache",
   "diag-rules",
   "sessions-store",

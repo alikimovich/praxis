@@ -15,7 +15,7 @@
 // launched app.
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
-import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -33,7 +33,7 @@ const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'trezi-install-update-')
 const home = join(scratch, 'home'), shims = join(scratch, 'shims'), bunDir = join(scratch, 'bun-bin'), state = join(scratch, 'state')
 for (const dir of [home, shims, bunDir, state]) mkdirSync(dir)
 const trezi = join(home, '.trezi')
-const REPO_URL = 'https://github.com/alikimovich/praxis.git'
+const REPO_URL = 'https://github.com/alikimovich/trezi.git'
 const lines = name => (existsSync(join(state, name)) ? readFileSync(join(state, name), 'utf8').trim().split('\n').filter(Boolean) : [])
 const log = () => lines('calls.log')
 const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim()
@@ -136,6 +136,8 @@ try {
   // Clean install through the one-liner on a Mac without Bun or the command-line tools:
   // both are installed first, then clone (main), platform check, install, build, links, open.
   writeFileSync(join(state, 'clt-missing'), '')
+  // The retired pre-rename alias goes when it points at this checkout; another is kept.
+  mkdirSync(join(home, '.local/bin'), { recursive: true }); symlinkSync(join(trezi, 'bin/trezi'), join(home, '.local/bin/praxis'))
   const install = await piped([], { PATH: `${shims}:${system}` })
   assert.equal(install.code, 0, `install.sh: ${install.stdout}\n${install.stderr}`)
   assert.deepEqual(lines('xcode-select.log'), ['--install', 'wait'], 'the tools installer ran and the script waited for it')
@@ -150,7 +152,7 @@ try {
   assert.ok(built(), 'the build produced the host, the service and the Bun bundle')
   assert.ok(lstatSync(join(home, '.local/bin/trezi')).isSymbolicLink())
   assert.equal(readlinkSync(join(home, '.local/bin/trezi')), join(trezi, 'bin/trezi'))
-  assert.equal(readlinkSync(join(home, '.local/bin/praxis')), join(trezi, 'bin/trezi'))
+  assert.throws(() => lstatSync(join(home, '.local/bin/praxis')), /ENOENT/, 'the pre-rename alias is removed')
   assert.match(install.stdout, new RegExp(`The trezi command and Trezi\\.app now point to this checkout: ${trezi}`))
   // Applications gets a link to the built app, and LaunchServices is told about it.
   assert.ok(lstatSync(join(applications, 'Trezi.app')).isSymbolicLink())

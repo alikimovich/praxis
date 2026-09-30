@@ -3,7 +3,7 @@
 // point enforces; the launch spec points at the package layout the build produces.
 // Pure, plus a read of out/native when a build exists.
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { compareVersions, MIN_BUN, MIN_MACOS, MIN_SDK, platformProblems } from '../scripts/requirements.mjs'
@@ -48,7 +48,7 @@ assert.equal(spec.command, join(out, 'Trezi.app/Contents/MacOS/TreziHost'))
 assert.ok(spec.args.includes(join(out, 'Trezi.app/Contents/Resources/backend/index.cjs')))
 // The retained JS ships inside the app, beside the Bun that runs it.
 assert.match(build, /Resources\/backend/)
-assert.match(build, /XPCServices\/dev\.praxis\.service\.xpc\/Contents/)
+assert.match(build, /XPCServices\/dev\.trezi\.service\.xpc\/Contents/)
 assert.match(build, /copyFileSync\(join\(serviceContents, 'MacOS\/TreziService'\), join\(out, 'TreziService'\)\)/)
 // Trezi.app carries the Bun it runs, so `open -a Trezi` needs no installed Bun.
 assert.ok(build.indexOf('bundleBun(contents)') > 0, 'the build bundles Bun into Trezi.app')
@@ -58,8 +58,10 @@ assert.match(build, /src\/native\/HostLaunch\.swift/)
 const plist = join(out, 'Trezi.app/Contents/Info.plist')
 if (existsSync(plist)) {
   assert.match(readFileSync(plist, 'utf8'), new RegExp(`LSMinimumSystemVersion</key><string>${MIN_MACOS.replace('.', '\\.')}</string>`))
-  for (const path of ['Trezi.app/Contents/MacOS/TreziHost', 'Trezi.app/Contents/Helpers/bun', 'Trezi.app/Contents/XPCServices/dev.praxis.service.xpc/Contents/MacOS/TreziService', 'TreziService', 'Trezi.app/Contents/Resources/backend/index.cjs', 'Trezi.app/Contents/Resources/backend/provider-helper.cjs'])
+  for (const path of ['Trezi.app/Contents/MacOS/TreziHost', 'Trezi.app/Contents/Helpers/bun', 'Trezi.app/Contents/XPCServices/dev.trezi.service.xpc/Contents/MacOS/TreziService', 'TreziService', 'Trezi.app/Contents/Resources/backend/index.cjs', 'Trezi.app/Contents/Resources/backend/provider-helper.cjs'])
     assert.ok(existsSync(join(out, path)), `the build contains ${path}`)
+  // An upgrade leaves no service registered under an earlier identifier.
+  assert.deepEqual(readdirSync(join(out, 'Trezi.app/Contents/XPCServices')), ['dev.trezi.service.xpc'])
   console.log('DISTRIBUTION OK — one platform source, enforced at build/launch/CLI/install; build layout matches the launch spec')
 } else {
   console.log('DISTRIBUTION OK — one platform source, enforced at build/launch/CLI/install (no build present: layout check SKIPPED)')

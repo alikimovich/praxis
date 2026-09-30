@@ -296,9 +296,8 @@ running redundant builds when no source was changed. Required project checks sti
 apply to code changes. Existing provider sessions need fresh instructions to pick
 up these guidance changes.
 
-Trezi compatibility: see [migration policy](rename/MIGRATION.md) for legacy
-profile/worktree paths, retained identities and rollback, and [LKM-84 mapping](rename/COORDINATION.md)
-for integration ordering.
+Legacy profile/worktree paths and the identities kept on purpose are listed in
+[legacy names](agent-guide/legacy-names.md).
 
 ## Claude seat login (LKM-119)
 
@@ -595,7 +594,7 @@ Codex checks its bridge (`workspace_state`) while its helper is still opening.
 
 **Audit.** Gemini exposes no Trezi tools.
 
-| Tool | Claude (`praxis` in-process MCP) | Codex (Trezi MCP bridge) | Needs main for |
+| Tool | Claude (`trezi` in-process MCP) | Codex (Trezi MCP bridge) | Needs main for |
 | --- | --- | --- | --- |
 | `chat_island` | routed | routed | the chat-island service on the Swift editing owner |
 | `preview_location`, `preview_screenshot` | routed | routed | the preview registry (URL, capture) |

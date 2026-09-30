@@ -90,7 +90,7 @@
   }
  ],
  [
-  "fg mcp__praxis__preview_screenshot {}",
+  "fg mcp__trezi__preview_screenshot {}",
   {
    "ok": {
     "decision": "allow"
@@ -98,7 +98,7 @@
   }
  ],
  [
-  "bg mcp__praxis__preview_screenshot {}",
+  "bg mcp__trezi__preview_screenshot {}",
   {
    "ok": {
     "decision": "allow"
@@ -106,7 +106,7 @@
   }
  ],
  [
-  "fg mcp__praxis__open_code {}",
+  "fg mcp__trezi__open_code {}",
   {
    "ok": {
     "decision": "allow"
@@ -114,7 +114,7 @@
   }
  ],
  [
-  "bg mcp__praxis__open_code {}",
+  "bg mcp__trezi__open_code {}",
   {
    "ok": {
     "decision": "deny",
@@ -123,7 +123,7 @@
   }
  ],
  [
-  "fg mcp__praxis__install_skills {}",
+  "fg mcp__trezi__install_skills {}",
   {
    "ok": {
     "decision": "ask"
@@ -131,7 +131,7 @@
   }
  ],
  [
-  "bg mcp__praxis__install_skills {}",
+  "bg mcp__trezi__install_skills {}",
   {
    "ok": {
     "decision": "ask"
@@ -139,7 +139,7 @@
   }
  ],
  [
-  "fg mcp__praxis__workspace_state {}",
+  "fg mcp__trezi__workspace_state {}",
   {
    "ok": {
     "decision": "ask"
@@ -147,7 +147,7 @@
   }
  ],
  [
-  "bg mcp__praxis__workspace_state {}",
+  "bg mcp__trezi__workspace_state {}",
   {
    "ok": {
     "decision": "ask"

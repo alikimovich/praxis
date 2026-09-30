@@ -125,8 +125,8 @@ try {
       await step('open bad provider', () => o.open({ session: `x-${name}`, chat: 'chat-1', provider: 'Claude!', root: WT, liveRoot: LIVE, background: false }))
       await step('open relative root', () => o.open({ session: `y-${name}`, chat: 'chat-1', provider: 'claude', root: 'wt', liveRoot: LIVE, background: false }))
       const cases = [
-        ['AskUserQuestion', {}], ['mcp__praxis__preview_screenshot', {}], ['mcp__praxis__open_code', {}], ['mcp__praxis__install_skills', {}],
-        ['mcp__praxis__workspace_state', {}], ['mcp__other__tool', {}],
+        ['AskUserQuestion', {}], ['mcp__trezi__preview_screenshot', {}], ['mcp__trezi__open_code', {}], ['mcp__trezi__install_skills', {}],
+        ['mcp__trezi__workspace_state', {}], ['mcp__other__tool', {}],
         ['Edit', { file_path: `${WT}/src/a.ts` }], ['Edit', { file_path: '.trezi/notes.json' }], ['Write', { path: 'x/.praxis/y' }],
         ['Bash', { command: 'cat .trezi/control-panels.json' }], ['Bash', { command: 'ls' }], ['MultiEdit', { file_path: `${home}/sessions/x.json` }],
         ['Write', { file_path: `${home}/trezi/worktrees/other/a.ts` }], ['Write', { file_path: `${home}/../elsewhere/a.ts` }],
@@ -180,7 +180,7 @@ try {
     assert.deepEqual(answer('huge target'), { ok: { decision: 'deny', message: 'The request is too large for Trezi to check.' } })
     assert.deepEqual(answer('fg Edit {"file_path":".trezi/notes.json"}'), { ok: { decision: 'deny', message: 'The .trezi/ sidecar is managed by trezi, not the agent.' } })
     assert.deepEqual(answer(`fg Write {"file_path":"${home}/trezi/worktrees/other/a.ts"}`).ok.decision, 'deny', "another chat's worktree is Trezi's data")
-    assert.deepEqual(answer('bg mcp__praxis__open_code {}'), { ok: { decision: 'deny', message: 'Background edits cannot navigate the user editor.' } })
+    assert.deepEqual(answer('bg mcp__trezi__open_code {}'), { ok: { decision: 'deny', message: 'Background edits cannot navigate the user editor.' } })
     assert.deepEqual(answer('authorize bg open_code'), { error: 'unauthorized' })
     assert.deepEqual(answer('authorize fg rm_rf'), { error: 'unauthorized' })
     assert.deepEqual(answer('authorize fg compose_project_ui'), { error: 'invalidRequest' })

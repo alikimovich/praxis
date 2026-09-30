@@ -79,7 +79,7 @@ commands. Each is recorded in `docs/TASKS.md`.
   and is a *linked* worktree of the request's repository. The user's main checkout, a
   worktree the user made elsewhere and an arbitrary folder are refused
   (`unauthorized`). Branch names must pass `check-ref-format`; deletions and
-  `trezi/`-switches only touch work branches (`trezi/`, `praxis/`, `dsgn/`).
+  `trezi/`-switches only touch work branches (`trezi/` and the legacy prefixes).
 - **Private index.** Snapshots (a worktree's fork point, the live tree before a
   three-way apply, recovery snapshots) are built in a private index under
   `<profile>/service/repository/scratch`; the user's index is never read or written

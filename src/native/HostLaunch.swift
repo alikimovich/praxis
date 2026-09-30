@@ -45,7 +45,7 @@ enum HostLaunch {
         let profile: String
         if let data = environment["TREZI_USER_DATA"], data.hasPrefix("/") { profile = data } else {
             let support = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support").path
-            let service = bundle.appendingPathComponent("Contents/XPCServices/dev.praxis.service.xpc/Contents/MacOS/TreziService").path
+            let service = bundle.appendingPathComponent("Contents/XPCServices/dev.trezi.service.xpc/Contents/MacOS/TreziService").path
             let result = run(service, ["--resolve-profile", support], environment: environment, timeout: 10)
             guard let result, result.status == 0, let path = result.output.split(separator: "\n").first.map(String.init), path.hasPrefix("/") else {
                 fail("Trezi could not find its profile folder. \(result?.error ?? "")")

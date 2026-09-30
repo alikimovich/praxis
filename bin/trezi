@@ -1,6 +1,6 @@
 #!/bin/sh
 # The trezi command: a thin front for `open -a Trezi`, Trezi's one start path.
-# install.sh links it as ~/.local/bin/trezi (and praxis, the original name). The app
+# install.sh links it as ~/.local/bin/trezi. The app
 # finds its own bundled Bun, backend and profile (src/native/HostLaunch.swift); this
 # script only builds a missing app, opens it (with a folder as the project), and hands
 # --update to bin/trezi.mjs.

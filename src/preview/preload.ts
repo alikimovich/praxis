@@ -73,7 +73,7 @@ type CommentMode = 'comment' | 'annotate' | null
 // isolated world and can't see the page's `window`, but `location` is shared.
 // Phase 2/3 add the simulator-specific overlay separately.
 const IS_SIM_BRIDGE =
-  typeof location !== 'undefined' && /[?&](?:trezi|praxis)Sim=1\b/.test(location.search)
+  typeof location !== 'undefined' && /[?&]treziSim=1\b/.test(location.search)
 
 /** Computed styles worth surfacing in the inspector + Styles panel: the v1
  *  longhand set (curated, not the whole CSSOM). Longhands, not shorthands, so
