@@ -2,6 +2,12 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-118: simpler code editor toolbar
+
+- **Toolbar.** The native editor header is now back and forward icons, the file path, then pop out/dock and close icons on the right edge. Save, Reload and Open in Editor are gone (with the controller's unused `external` action). Pop out uses `arrow.up.left.and.arrow.down.right` and turns into dock, `arrow.down.right.and.arrow.up.left`, while popped out. Every icon has a tooltip and an accessibility label. The path is a selectable label, so ⌘C copies it. The unsaved marker `•` is a separate label, so a copied path never includes it.
+- **Shortcuts.** `NativeSourceEditor.performKeyEquivalent` handles plain ⌘S (save) and ⌘R (reload, with the existing discard prompt when dirty), but only while the window's first responder is inside the editor. The window offers key equivalents to its views before the main menu, so with focus elsewhere ⌘R still reaches Actions ▸ Reload Preview. The old ⌘S override on the text view caught ⌘S anywhere in the window, including ⌘⇧S; it is removed.
+- **Proof.** The core `source-editor` smoke step now runs `src/native/smoke-source-editor.ts`. It checks the toolbar order, symbols, tooltips, labels and right-edge placement both popped out and docked. Through a test-only `sourceVerification` host command, it offers ⌘S and ⌘R to the window's key-equivalent pass. It checks that ⌘S saves, that ⌘R reloads a file changed on disk, that ⌘S over a conflicting draft refuses to overwrite, and that ⌘R over a draft opens the prompt (Cancel keeps the draft). It also checks that ⌘R with focus outside the docked editor is left to Reload Preview, and that the path selects and copies (to a private pasteboard, not the user's clipboard). Foreground captures: `source-toolbar-popped.png` and `source-toolbar-docked.png`, with JSON.
+
 ## 2026-09-29 — LKM-115: no tick marks under inspector and chat-island sliders
 
 - **Why.** A SwiftUI `Slider` with `step:` makes AppKit draw one tick mark per step. The inspector (`step ?? 1`, e.g. 0…200 px padding) and chat islands (`step ?? range/1000`) drew hundreds of them, a dense dotted line under the track.

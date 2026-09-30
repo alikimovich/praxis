@@ -2,12 +2,7 @@ import AppKit
 import AVKit
 
 final class SourceTextView: NSTextView {
-    var save: (() -> Void)?
     var component: ((String) -> Void)?
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "s" { save?(); return true }
-        return super.performKeyEquivalent(with: event)
-    }
     override func mouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.command) {
             let point = convert(event.locationInWindow, from: nil)
@@ -52,21 +47,25 @@ final class NativeSourceEditor: NSView, NSTextViewDelegate, NSSearchFieldDelegat
     var root = "", source = "", revision = 0, state: [String: Any] = [:]
     var files: [String] = [], filtered: [String] = []
     let code = SourceTextView(), scroll = NSScrollView(), tree = SourceFileTree(), search = NSSearchField()
-    let status = NSTextField(labelWithString: ""), filename = NSTextField(labelWithString: "")
+    let status = NSTextField(labelWithString: ""), filename = NSTextField(labelWithString: ""), edited = NSTextField(labelWithString: "•")
     let image = NSImageView(), player = AVPlayerView(), binary = NSTextField(labelWithString: "")
+    let header = NSStackView(), spacer = NSView()
     var popout: NSWindow?, updating = false
     var highlightWork: DispatchWorkItem?
     var dock: (() -> Void)?
-    var controls: [String: NSButton] = [:]
+    var controls: [String: NSButton] = [:], symbols: [String: String] = [:]
     var documentKey = "", reveal = -1
     init() {
         super.init(frame: .zero); wantsLayer = true; layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-        let header = NSStackView(); header.orientation = .horizontal; header.spacing = 6
-        filename.lineBreakMode = .byTruncatingMiddle; filename.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        header.addArrangedSubview(filename)
-        for (name, label) in [("back", "←"), ("forward", "→"), ("save", "Save"), ("reload", "Reload"), ("external", "Open in Editor"), ("popout", "Pop Out"), ("hide", "Close")] {
-            let button = NSButton(title: label, target: self, action: #selector(buttonAction(_:))); button.identifier = NSUserInterfaceItemIdentifier(name); button.controlSize = .small; header.addArrangedSubview(button); controls[name] = button
-        }
+        header.orientation = .horizontal; header.spacing = 6
+        // The path is selectable (⌘C copies it); the unsaved marker sits outside it so it is never copied.
+        filename.isSelectable = true; filename.lineBreakMode = .byTruncatingMiddle
+        filename.setContentCompressionResistancePriority(.defaultLow, for: .horizontal); filename.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        edited.textColor = .secondaryLabelColor; edited.isHidden = true; edited.setAccessibilityLabel("Unsaved changes")
+        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        for (name, symbol, label) in [("back", "chevron.left", "Back"), ("forward", "chevron.right", "Forward")] { header.addArrangedSubview(iconButton(name, symbol, label)) }
+        for view in [filename, edited, spacer] { header.addArrangedSubview(view) }
+        for (name, symbol, label) in [("popout", "arrow.up.left.and.arrow.down.right", "Pop Out Editor"), ("hide", "xmark", "Close Editor")] { header.addArrangedSubview(iconButton(name, symbol, label)) }
         let split = NSSplitView(); split.isVertical = true; split.dividerStyle = .thin
         let sidebar = NSView(), content = NSView(); split.addArrangedSubview(sidebar); split.addArrangedSubview(content)
         search.placeholderString = "Filter files"; search.delegate = self
@@ -84,7 +83,7 @@ final class NativeSourceEditor: NSView, NSTextViewDelegate, NSSearchFieldDelegat
         code.layoutManager?.allowsNonContiguousLayout = true
         code.delegate = self; scroll.documentView = code
         scroll.verticalRulerView = SourceLineRuler(scroll: scroll, text: code); scroll.hasVerticalRuler = true; scroll.rulersVisible = true
-        code.save = { [weak self] in self?.send("save") }; code.component = { [weak self] name in self?.send("component", ["name":name]) }
+        code.component = { [weak self] name in self?.send("component", ["name":name]) }
         image.imageScaling = .scaleProportionallyUpOrDown
         binary.alignment = .center; binary.textColor = .secondaryLabelColor
         status.lineBreakMode = .byTruncatingMiddle; status.font = .systemFont(ofSize: 11); status.textColor = .secondaryLabelColor
@@ -112,8 +111,28 @@ final class NativeSourceEditor: NSView, NSTextViewDelegate, NSSearchFieldDelegat
     }
     required init?(coder: NSCoder) { fatalError() }
     func send(_ action: String, _ extra: [String: Any] = [:]) { var payload: [String: Any] = ["event":"source-action", "root":root, "action":action, "source":source]; payload.merge(extra) { _, new in new }; emit(payload) }
-    @objc func buttonAction(_ sender: NSButton) {
-        let action = sender.identifier?.rawValue ?? ""
+    func iconButton(_ name: String, _ symbol: String, _ label: String) -> NSButton {
+        let button = NSButton(image: NSImage(), target: self, action: #selector(buttonAction(_:))); button.identifier = NSUserInterfaceItemIdentifier(name); button.title = ""; button.isBordered = false; button.imagePosition = .imageOnly
+        controls[name] = button; setIcon(name, symbol, label); return button
+    }
+    func setIcon(_ name: String, _ symbol: String, _ label: String) {
+        guard let button = controls[name], symbols[name] != symbol else { return }
+        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label); button.toolTip = label; button.setAccessibilityLabel(label); symbols[name] = symbol
+    }
+    /// ⌘S saves and ⌘R reloads only while focus is inside this editor, so ⌘R
+    /// elsewhere still reaches the menu's Reload Preview. The window offers key
+    /// equivalents to its views before the main menu.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command, !isHiddenOrHasHiddenAncestor,
+              let focus = window?.firstResponder as? NSView, focus.isDescendant(of: self) else { return super.performKeyEquivalent(with: event) }
+        switch event.charactersIgnoringModifiers {
+        case "s": send("save"); return true
+        case "r": perform("reload"); return true
+        default: return super.performKeyEquivalent(with: event)
+        }
+    }
+    @objc func buttonAction(_ sender: NSButton) { perform(sender.identifier?.rawValue ?? "") }
+    func perform(_ action: String) {
         if action == "popout" { send(state["popped"] as? Bool == true ? "dock" : "popout"); return }
         if action == "reload" && state["dirty"] as? Bool == true || action == "delete" {
             let alert = NSAlert(); alert.messageText = action == "delete" ? "Move this file to Trash?" : "Discard unsaved changes?"; alert.informativeText = action == "delete" ? source : "Reload \(source) from disk. Your unsaved edits will be lost."; alert.addButton(withTitle: action == "delete" ? "Move to Trash" : "Discard and reload"); alert.addButton(withTitle: "Cancel")
@@ -128,13 +147,14 @@ final class NativeSourceEditor: NSView, NSTextViewDelegate, NSSearchFieldDelegat
     func update(_ value: [String: Any]) {
         state = value; root = value["root"] as? String ?? ""; source = value["source"] as? String ?? ""
         let newFiles = value["files"] as? [String] ?? []; if files != newFiles { files = newFiles; filter() }
-        filename.stringValue = source + (value["dirty"] as? Bool == true ? " •" : "")
-        let error = value["error"] as? String ?? ""; status.stringValue = !error.isEmpty ? error : value["busy"] as? Bool == true ? "Working…" : "⌘S Save · ⌘F Find · ⌘Click component to navigate"
+        // Rewriting an unchanged path would drop the user's selection in it.
+        if filename.stringValue != source { filename.stringValue = source; filename.toolTip = source }
+        edited.isHidden = value["dirty"] as? Bool != true
+        let error = value["error"] as? String ?? ""; status.stringValue = !error.isEmpty ? error : value["busy"] as? Bool == true ? "Working…" : "⌘S Save · ⌘R Reload · ⌘F Find · ⌘Click component to navigate"
         status.toolTip = status.stringValue; status.textColor = error.isEmpty ? .secondaryLabelColor : .systemRed
         controls["back"]?.isEnabled = value["canBack"] as? Bool == true
         controls["forward"]?.isEnabled = value["canForward"] as? Bool == true
-        controls["save"]?.isEnabled = value["busy"] as? Bool != true && value["dirty"] as? Bool == true
-        controls["popout"]?.title = value["popped"] as? Bool == true ? "Dock" : "Pop Out"
+        if value["popped"] as? Bool == true { setIcon("popout", "arrow.down.right.and.arrow.up.left", "Dock Editor") } else { setIcon("popout", "arrow.up.left.and.arrow.down.right", "Pop Out Editor") }
         let document = value["document"] as? [String: Any] ?? [:], incoming = value["text"] as? String ?? "", nextRevision = value["revision"] as? Int ?? 0
         let key = root + "/" + source, changed = key != documentKey
         if changed || nextRevision >= revision && incoming != code.string {
@@ -175,4 +195,49 @@ final class NativeSourceEditor: NSView, NSTextViewDelegate, NSSearchFieldDelegat
     func filter() { tree.update(files, query: search.stringValue) }
     func controlTextDidChange(_ obj: Notification) { filter() }
     func windowShouldClose(_ sender: NSWindow) -> Bool { send("hide"); return false }
+}
+
+/// Test-profile hooks for the smoke's source-editor check.
+extension NativeSourceEditor {
+    func inspectToolbar() -> [String: Any] {
+        layoutSubtreeIfNeeded()
+        let items = header.arrangedSubviews.filter { !$0.isHidden && $0 !== spacer }.map { view -> [String: Any] in
+            let name = view === filename ? "path" : view === edited ? "edited" : view.identifier?.rawValue ?? "", rect = view.convert(view.bounds, to: self)
+            return ["id": name, "symbol": symbols[name] ?? "", "toolTip": view.toolTip ?? "", "label": view.accessibilityLabel() ?? "", "title": (view as? NSButton)?.title ?? "", "minX": rect.minX, "maxX": rect.maxX]
+        }
+        return ["items": items, "width": bounds.width, "pathSelectable": filename.isSelectable, "pathEditable": filename.isEditable, "path": filename.stringValue]
+    }
+    /// Offers a ⌘-key to the window's key-equivalent pass (which AppKit runs before
+    /// the main menu) with focus in the code, the path or outside the editor. A
+    /// discard prompt is answered Cancel. Path focus also selects and copies the
+    /// path to a private pasteboard, never the user's clipboard.
+    func verifyShortcut(_ key: String, focus: String) -> [String: Any] {
+        guard let window else { return ["error": "Source editor has no window"] }
+        // A label refuses keyboard focus; a click selects it through `selectText`, as here.
+        if focus == "path" { filename.selectText(nil) } else { window.makeFirstResponder(focus == "code" ? code : nil) }
+        var copied: String?
+        if focus == "path", let field = filename.currentEditor() as? NSTextView {
+            field.selectAll(nil)
+            let board = NSPasteboard(name: NSPasteboard.Name("dev.trezi.source-path-test")); board.clearContents()
+            copied = field.writeSelection(to: board, types: field.writablePasteboardTypes) ? board.string(forType: .string) : nil; board.releaseGlobally()
+        }
+        let focused = (window.firstResponder as? NSView)?.isDescendant(of: self) ?? false
+        if focus == "path" { window.makeFirstResponder(code) }
+        guard !key.isEmpty, let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: key, charactersIgnoringModifiers: key, isARepeat: false, keyCode: key == "s" ? 1 : key == "r" ? 15 : 0) else { return ["focused": focused, "copied": copied ?? NSNull()] }
+        let handled = window.performKeyEquivalent(with: event), sheet = window.attachedSheet
+        if let sheet { window.endSheet(sheet, returnCode: .alertSecondButtonReturn) }
+        let entries: [NSMenuItem] = (NSApp.mainMenu?.items ?? []).flatMap { $0.submenu?.items ?? [] }
+        let menu: [String] = entries.filter { $0.keyEquivalent == key && $0.keyEquivalentModifierMask == .command }.map { $0.title }
+        return ["handled": handled, "guarded": sheet != nil, "focused": focused, "menu": menu, "copied": copied ?? NSNull()]
+    }
+    /// Brings the editor's window forward; `capture` then grabs its toolbar strip through WindowServer.
+    func prepareForeground() -> [String: Any] {
+        NSApp.activate(ignoringOtherApps: true); window?.makeKeyAndOrderFront(nil); layoutSubtreeIfNeeded()
+        return ["active": NSApp.isActive, "key": window?.isKeyWindow ?? false, "visible": window?.isVisible == true && !isHiddenOrHasHiddenAncestor]
+    }
+    @MainActor func captureToolbar() async throws -> [String: Any] {
+        guard let window else { throw NSError(domain: "SourceEditor", code: 1, userInfo: [NSLocalizedDescriptionKey: "Source editor has no window"]) }
+        let strip = NSRect(x: 0, y: max(0, header.frame.minY - 6), width: bounds.width, height: min(bounds.height, header.frame.height + 12))
+        return try await captureVisibleRegion(window: window, view: self, region: strip)
+    }
 }

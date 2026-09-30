@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Simplify the code editor toolbar (LKM-118)
+
+- [x] `src/native/SourceEditor.swift`: no Save, Reload or Open in Editor buttons. Back/forward icons sit left of a selectable path; pop out/dock (`arrow.up.left.and.arrow.down.right` / `arrow.down.right.and.arrow.up.left`) and close (`xmark`) are icon buttons on the right edge, with tooltips and accessibility labels.
+- [x] ⌘S saves and ⌘R reloads while focus is inside the editor (same dirty-reload prompt and conflict handling); elsewhere ⌘R stays Reload Preview.
+- [x] Core smoke `source-editor` (`src/native/smoke-source-editor.ts`): toolbar layout docked and popped, the shortcuts through the window's key-equivalent pass, conflict, discard prompt and path copy. Evidence: `source-toolbar-popped.png`, `source-toolbar-docked.png`.
 ## Slider tick marks in the inspector and chat islands (LKM-115)
 
 - [x] Inspector and chat-island sliders use `SnappedSlider` (`src/native/SnappedSlider.swift`): no `step:` and so no tick marks, with snapping in the binding setter using the same default steps.
