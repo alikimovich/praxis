@@ -80,9 +80,6 @@ export function serviceEditing(link: EditingLink, options: { timeout?: number; l
       return taken.path === null ? null : taken
     },
     navigationState: () => call('navigationState', {}, 'read'),
-    contentDrafts: root => call('contentDrafts', { root }, 'read'),
-    saveContentDraft: async (root, panel, revision, value) => { await call('saveContentDraft', { root, panel, revision, value: plain(value) }) },
-    clearContentDraft: async (root, panel) => { await call('clearContentDraft', { root, panel }) },
     sidecar: (root, name, expectedHash, content) => {
       const leases = options.leases?.() ?? []
       return call('sidecar', { root, name, expectedHash, content, ...(leases.length ? { leases } : {}) }, 'mutation', true)

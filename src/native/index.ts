@@ -9,7 +9,6 @@ import { NativeEditorController } from './editor-controller'
 import { isAbsolute, join, resolve } from 'node:path'
 import { conversationsClosed, projectHasRunningAgents, registerAgentIpc, setProjectMemoryOwner } from '../main/agent'
 import { registerAnnotationsIpc } from '../main/annotations'
-import { registerContentControlsIpc } from '../main/content-controls-ipc'
 import { registerControlsIpc } from '../main/control-panels'
 import { registerDevServerIpc } from '../main/devserver'
 import { registerDiagnoseIpc } from '../main/diagnose'
@@ -147,7 +146,7 @@ async function main() {
   setProviderOwner(provider)
   setProviderDataOwner(provider.data)
   // Editing workflows (S12): island history and activation, the controls sidecars
-  // (hash-bound, in the repository lane), content drafts and deferred navigation.
+  // (hash-bound, in the repository lane) and deferred navigation.
   setEditingOwner(serviceEditing(host, leases))
   // Side-effecting workflows (S13): publication, remote Git actions, project setup,
   // Trezi's update and the diagnosis memory, journaled with receipts in the service.
@@ -206,7 +205,6 @@ async function main() {
   registerPropsIpc()
   registerStylesIpc()
   registerControlsIpc()
-  registerContentControlsIpc(ipcMain)
   registerAnnotationsIpc()
   registerGithubIpc()
   registerTokensIpc()
@@ -366,7 +364,7 @@ async function main() {
     if (channel === 'annotations:add' || channel === 'annotations:remove') void contextController.notes(args[0]).catch(error => workspaceController.reportError(error))
     if (channel === 'agent:close-project') contextController.projects.delete(args[0])
   })
-  const { inspector: inspectorController, content: contentController } = installNativeInspector(host!, workspaceController, chatController, contextController, visualEdit, openSource, error => activityController.append(String(error), 'error'))
+  const { inspector: inspectorController } = installNativeInspector(host!, workspaceController, chatController, contextController, visualEdit, openSource, error => activityController.append(String(error), 'error'))
   const sheetController = new NativeSheetController(host!, workspaceController, chatController)
   const gitController = new NativeGitController(sheetController, activityController, preferences, renderShell)
   shellController = new NativeShellController(workspaceController, chatController, gitController, preferences,
@@ -404,7 +402,7 @@ async function main() {
   // The service drains before it relaunches Trezi (with the active project).
   const updates = new NativeUpdateController(sheetController, root, () => {
     host!.send('serviceRestart', { project: workspaceController.active?.root })
-  }, workflowOwner(), () => [...chatController.chats.values()].some(chat => chat.isRunning || chat.text || chat.attachments.length) ? 'Finish running chats and send or clear your drafts before restarting.' : [...editorController.sessions.values()].some(session => [...session.documents.values()].some(doc => doc.text !== doc.baseline)) ? 'Save source editor drafts before restarting.' : [...contentController.sessions.values()].some(session => session.dirty || session.busy) ? 'Save content editor drafts before restarting.' : null)
+  }, workflowOwner(), () => [...chatController.chats.values()].some(chat => chat.isRunning || chat.text || chat.attachments.length) ? 'Finish running chats and send or clear your drafts before restarting.' : [...editorController.sessions.values()].some(session => [...session.documents.values()].some(doc => doc.text !== doc.baseline)) ? 'Save source editor drafts before restarting.' : null)
   host.on('menu', ({ action }) => { if (action === 'updates') void updates.open().catch(error => activityController.append(String(error), 'error')) })
   host.on('download-error', ({ message }) => activityController.append(`Download failed: ${message}`, 'error'))
   host.on('download-finished', () => activityController.append('Download finished.', 'success'))

@@ -8,10 +8,6 @@ test/artifacts/
 .env
 .env.local
 
-# Unpublished content-controls runtime distributed with Trezi.
-!vendor/content-controls/dist/
-!vendor/content-controls/dist/**
-
 # Local output from the retired standalone prototype.
 experimental/native-runtime/build/
 experimental/native-runtime/artifacts/

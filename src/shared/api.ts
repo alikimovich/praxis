@@ -1,4 +1,3 @@
-import type { PanelRecipe } from '@alikimovich/content-controls/recipe'
 /**
  * Types shared by backend services, native controllers and preview instrumentation.
  * This module is neutral (no runtime or node imports) so every tsconfig can include it
@@ -1230,6 +1229,3 @@ export interface UpdateStatus {
   progress?: string
   error?: string
 }
-
-export interface ContentControlPanel { id: string; file: string; recipe: PanelRecipe }
-export interface ContentControlDocument { panel: ContentControlPanel; value: Record<string, unknown>; revision: string }

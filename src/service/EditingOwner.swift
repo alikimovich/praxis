@@ -4,12 +4,10 @@ import Foundation
 /// the editing workflows between the preview, the inspectors and the chat:
 /// - chat islands: their history files, pending activation bound to the originating
 ///   turn, command admission, revision chains and per-island Undo (`EditingIslands`);
-/// - the project sidecars (`.trezi/control-panels.json`, `content-controls.json`,
-///   `annotations.json`, `tokens.json`), committed hash-bound in the repository's
-///   lane (`EditingSidecar`);
-/// - unsaved content-editor drafts, persisted across restarts (`EditingDrafts`);
+/// - the project sidecars (`.trezi/control-panels.json`, `annotations.json`,
+///   `tokens.json`), committed hash-bound in the repository's lane (`EditingSidecar`);
 /// - deferred preview navigation, released when the requesting turn lands.
-/// Bun keeps the JS helpers (manifest/recipe validation, Jev composition, literal
+/// Bun keeps the JS helpers (manifest validation, Jev composition, literal
 /// resolution and splicing), the isolated WebKit instrumentation, and the inspector
 /// views; source writes stay proposals to `SourceOwner`, turns are the
 /// `ConversationOwner`'s.
@@ -33,13 +31,11 @@ final class EditingOwner: @unchecked Sendable {
     private let inflight = DispatchGroup()
     private var islands: EditingIslands
     private var navigation = EditingNavigation()
-    let drafts: EditingDrafts
 
     init(options: Options, repository: RepositoryOwner, send: @escaping @Sendable (Data) -> Void) {
         self.send = send; self.repository = repository; turnOf = options.turn
         islands = EditingIslands(profile: options.profile)
         islands.fault = options.fault
-        drafts = EditingDrafts(profile: options.profile)
     }
 
     // MARK: Requests (from the backend reader thread, in pipe order)
@@ -64,7 +60,7 @@ final class EditingOwner: @unchecked Sendable {
         }
     }
 
-    static let reads: Set<String> = ["islands", "contentDrafts", "navigationState"]
+    static let reads: Set<String> = ["islands", "navigationState"]
     static let methods: [String: (required: Set<String>, optional: Set<String>)] = [
         "islandsOpen": (["chat", "root", "record"], []), "islandsClose": (["chat"], []), "islands": (["chat"], []),
         "islandDefine": (["chat", "turn"], ["origin", "id", "revision"]),
@@ -74,8 +70,6 @@ final class EditingOwner: @unchecked Sendable {
         "islandFinish": (["chat", "ticket", "ok", "last"], ["group", "revision"]),
         "navigate": (["chat", "root", "path"], ["turn"]), "navigation": (["chat", "kind"], ["turn"]),
         "navigationTake": (["chat"], []), "navigationState": ([], []),
-        "contentDrafts": (["root"], []), "saveContentDraft": (["root", "panel", "revision", "value"], []),
-        "clearContentDraft": (["root", "panel"], []),
         "sidecar": (["root", "name", "expectedHash", "content"], ["leases"]),
         // Project files (EditingProject): `root` is the live project, whose lane they run in.
         "migrateSidecar": (["root"], ["leases"]),
@@ -170,19 +164,6 @@ final class EditingOwner: @unchecked Sendable {
                                     ("turn", request.turn.map { .string(JSText($0)) } ?? .null), ("awaiting", .bool(request.awaiting))])
             }
             return result(.array(pending))
-
-        // Content drafts
-        case "contentDrafts":
-            return result(.array(try drafts.list(root: try SourcePaths.root(try body.path("root")))))
-        case "saveContentDraft":
-            guard case .object? = body.value("value") else { throw ServiceContractFailure.invalidRequest }
-            try drafts.save(root: try SourcePaths.root(try body.path("root")), panel: try Self.key(body, "panel"),
-                            revision: try SourceOwner.hash(body.value("revision")), value: body.value("value")!,
-                            updated: ISO8601DateFormatter().string(from: Date()))
-            return result(ok)
-        case "clearContentDraft":
-            try drafts.clear(root: try SourcePaths.root(try body.path("root")), panel: try Self.key(body, "panel"))
-            return result(ok)
 
         // Controls sidecars
         case "sidecar":

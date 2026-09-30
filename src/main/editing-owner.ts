@@ -8,16 +8,15 @@ import type { ControlPanelManifest } from '../shared/api'
  * - chat islands: the only writer of their history files (`<userData>/chat-islands`),
  *   pending activation bound to the turn that defined them, command admission, the
  *   revision chain of a queued batch and each island's Undo group;
- * - the project sidecars (`.trezi/control-panels.json`, `content-controls.json`, and
- *   since S15 `annotations.json` and `tokens.json`), committed only if the file still
- *   holds the bytes Bun read, in the repository lane;
+ * - the project sidecars (`.trezi/control-panels.json` and since S15
+ *   `annotations.json` and `tokens.json`), committed only if the file still holds the
+ *   bytes Bun read, in the repository lane;
  * - the project's other `.trezi/` files (S15): the pre-rename sidecar migration, the
  *   setup helpers a chat worktree carries and the Next dependency marker, run in the
  *   same lane (`EditingProject.swift`; Bun still runs the install between the two
  *   dependency calls);
- * - unsaved content-editor drafts, kept across restarts;
  * - deferred preview navigation (`open_preview`), released when its turn lands.
- * Bun keeps the JS helpers (manifest/recipe validation, Jev composition, literal
+ * Bun keeps the JS helpers (manifest validation, Jev composition, literal
  * resolution and splicing, source proposals), the isolated WebKit instrumentation and
  * the inspector views. It is the only owner since LKM-111 removed the in-process twin:
  * with no service, these workflows refuse.
@@ -43,16 +42,8 @@ export interface IslandCommandAdmission {
   initial?: Record<string, IslandValue>
 }
 
-export interface ContentDraft {
-  panel: string
-  /** The document revision the draft was edited against. */
-  revision: string
-  value: Record<string, unknown>
-  updated: string
-}
-
-export type SidecarName = 'control-panels.json' | 'content-controls.json' | 'annotations.json' | 'tokens.json'
-export const SIDECAR_NAMES: readonly SidecarName[] = ['control-panels.json', 'content-controls.json', 'annotations.json', 'tokens.json']
+export type SidecarName = 'control-panels.json' | 'annotations.json' | 'tokens.json'
+export const SIDECAR_NAMES: readonly SidecarName[] = ['control-panels.json', 'annotations.json', 'tokens.json']
 export type SidecarCommit = { ok: true; hash: string } | { ok: false; conflict: true }
 export type NavigationEvent = 'landed' | 'failed' | 'begin' | 'close'
 
@@ -81,10 +72,6 @@ export interface EditingOwner {
   navigation(chat: string, kind: NavigationEvent, turn: string | null): Promise<boolean>
   navigationTake(chat: string): Promise<{ root: string; path: string } | null>
   navigationState(): Promise<Array<{ chat: string; root: string; path: string; turn: string | null; awaiting: boolean }>>
-  // Content-editor drafts
-  contentDrafts(root: string): Promise<ContentDraft[]>
-  saveContentDraft(root: string, panel: string, revision: string, value: Record<string, unknown>): Promise<void>
-  clearContentDraft(root: string, panel: string): Promise<void>
   /** Hash-bound project sidecar commit; `expectedHash` null means the file must not exist. */
   sidecar(root: string, name: SidecarName, expectedHash: string | null, content: string): Promise<SidecarCommit>
   // Project files in `.trezi/` (S15), each in the project's repository lane
@@ -110,7 +97,7 @@ export function swiftEditingOwner(): EditingOwner | null {
   return owner
 }
 
-/** The Swift owner; with no service there is none (no drafts, islands or sidecar writes). */
+/** The Swift owner; with no service there is none (no islands or sidecar writes). */
 export function editingOwner(): EditingOwner {
   if (!owner) throw new EditingError('unavailable', 'Trezi’s service is not running, so this project cannot be edited.')
   return owner

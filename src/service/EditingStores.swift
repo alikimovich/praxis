@@ -1,15 +1,15 @@
 import Foundation
 import Darwin
 
-/// The project sidecars in a user's `.trezi/`: the controls stores (S12,
-/// `control-panels.json`, `content-controls.json`), the reviewer notes
+/// The project sidecars in a user's `.trezi/`: the controls store (S12,
+/// `control-panels.json`), the reviewer notes
 /// (`annotations.json`, S05's writer, moved with S15) and the starter design tokens
 /// (`tokens.json`, S15). Bun validates and renders the next store text; the service
 /// commits it only if the file still holds the bytes Bun read (`expectedHash`, nil for
 /// "absent"), in the repository's lane. The agent can never write these (its sandbox
 /// denies `.trezi/`), and no other Trezi path writes them.
 enum EditingSidecar {
-    static let names: Set<String> = ["control-panels.json", "content-controls.json", "annotations.json", "tokens.json"]
+    static let names: Set<String> = ["control-panels.json", "annotations.json", "tokens.json"]
     static let maxBytes = 1024 * 1024
 
     enum Outcome { case written(String), conflict }
@@ -36,64 +36,6 @@ enum EditingSidecar {
         guard current.map(SourcePaths.hash) == expected else { return .conflict }
         try SourcePaths.write(content, to: path)
         return .written(SourcePaths.hash(content))
-    }
-}
-
-/// Unsaved content-editor drafts (S12): `<profile>/service/editing/content-drafts/
-/// <root>.json`, one per resolved project root. A draft keeps the document revision
-/// it was edited against, so after a restart Bun reopens it as a conflict (never
-/// saved over newer content) when the document changed in the meantime. Only the
-/// editor's own save, reload or removal clears one. A damaged file is refused.
-final class EditingDrafts: @unchecked Sendable {
-    static let maxDrafts = 20
-    static let maxBytes = 512 * 1024
-
-    let directory: URL
-    private let lock = NSLock()
-
-    init(profile: String) {
-        directory = URL(fileURLWithPath: profile).appendingPathComponent("service/editing/content-drafts")
-    }
-
-    private func url(_ root: String) -> URL { directory.appendingPathComponent(SourcePaths.hash(Data(root.utf8)) + ".json") }
-
-    private func load(_ root: String) throws -> [JSValue] {
-        guard let data = try? Data(contentsOf: url(root)) else { return [] }
-        guard let file = try? JSValue.parse(data, maxDepth: 128), file["root"]?.text?.string == root,
-              case .array(let drafts)? = file["drafts"] else {
-            throw RepositoryRefusal(.recoveryRequired, "The saved content drafts for this project are unreadable; they were left untouched.")
-        }
-        return drafts
-    }
-
-    func list(root: String) throws -> [JSValue] {
-        lock.lock(); defer { lock.unlock() }
-        return try load(root)
-    }
-
-    func save(root: String, panel: String, revision: String, value: JSValue, updated: String) throws {
-        lock.lock(); defer { lock.unlock() }
-        var drafts = try load(root).filter { $0["panel"]?.text?.string != panel }
-        let draft = RepositoryOwner.object([("panel", .string(JSText(panel))), ("revision", .string(JSText(revision))),
-                                            ("value", value), ("updated", .string(JSText(updated)))])
-        guard draft.utf8().count <= Self.maxBytes else { throw RepositoryRefusal(.invalidRequest, "The draft exceeds 512 KB.") }
-        drafts.append(draft)
-        guard drafts.count <= Self.maxDrafts else { throw RepositoryRefusal(.invalidRequest, "Too many unsaved content drafts in this project.") }
-        try store(root, drafts)
-    }
-
-    func clear(root: String, panel: String) throws {
-        lock.lock(); defer { lock.unlock() }
-        let drafts = try load(root)
-        let next = drafts.filter { $0["panel"]?.text?.string != panel }
-        guard next.count != drafts.count else { return }
-        if next.isEmpty { try? FileManager.default.removeItem(at: url(root)); return }
-        try store(root, next)
-    }
-
-    private func store(_ root: String, _ drafts: [JSValue]) throws {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        try SourcePaths.write(RepositoryOwner.object([("root", .string(JSText(root))), ("drafts", .array(drafts))]).utf8(), to: url(root).path)
     }
 }
 

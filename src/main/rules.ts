@@ -18,7 +18,7 @@ import { chatIslandGuidance } from '../shared/chat-island-guidance'
 import { SURFACE_CONTROLS_SKILL } from './bundled-skills'
 import { projectMemoryRules } from './project-memory'
 
-export const TREZI_RULES_VERSION = 23
+export const TREZI_RULES_VERSION = 24
 
 export function treziRules(opts?: {
   previewTools?: boolean
@@ -48,7 +48,7 @@ export function treziRules(opts?: {
     `start a competing dev server. Failed or parked work does not refresh the preview.`,
     ``,
     `## Requests to surface controls`,
-    `When asked to surface, show, expose or add controls for content, components or animations,`,
+    `When asked to surface, show, expose or add controls for components, styling or animations,`,
     `read and follow the bundled surface-controls skill at ${JSON.stringify(SURFACE_CONTROLS_SKILL)}.`,
     `Use Trezi's native workflow even without a selected element. Do not build controls into`,
     `the target page unless the user explicitly requests controls for the app's end users.`,
@@ -146,25 +146,12 @@ export function treziRules(opts?: {
   }
   if (opts?.previewTools || opts?.controlTools) {
     lines.push(
-      `## Content editors (content_controls)`,
-      `When asked to surface controls for content (copy, headings, project lists, cards, FAQs),`,
-      `call content_controls action:catalog, read the source, and bind the requested content`,
-      `to a repo-relative JSON object consumed by the actual page. Preserve existing values,`,
-      `unknown fields, stable collection ids, design and behavior. Then call action:define`,
-      `with file and a version-1 recipe. The content-controls editor opens in the preview area`,
-      `independently of selection. Do not add editor dependencies to the target project.`,
-      `Save writes JSON through Trezi edit history; drafts, collection edits, Undo and Reset`,
-      `are provided by the editor. Verify Save updates the actual page through HMR/reload.`,
-      `Use engine:auto and the original request as prompt to prefer Jev with a configured key; engine:agent skips Jev.`,
-      `Prepare focused sections with real bindings; Jev selects/orders sections. For animation`,
-      `or component controls in chat use chat_island with engine:auto and prompt; Jev`,
-      `selects/orders the validated params. Never claim Jev was used without a successful tool result.`,
-      `Missing keys automatically retain the chat model prepared controls; report the returned engine/fallback. Other Jev failures remain errors. These tools work independently of project UI composition settings.`,
-      ``,
       `## Interactive islands inside chat (chat_island)`,
       `For on-demand controls in chat, call chat_island action:catalog, inspect source, expose`,
       `literal parameters consumed by the project, then action:define with manifest, blocks,`,
       `engine:auto and prompt. Jev selects/orders prepared groups; point blocks bind bounded x/y numbers.`,
+      `engine:auto with the original request as prompt prefers Jev with a configured key; engine:agent skips Jev.`,
+      `Never claim Jev was used without a successful tool result. Missing keys automatically retain the chat model prepared controls; report the returned engine/fallback. Other Jev failures remain errors. This tool works independently of project UI composition settings.`,
       chatIslandGuidance,
       `The project must compute shadows from light coordinates deterministically. Never add a tuning UI to it.`,
       `Use action:read and the returned id/revision when revising an island. Keep compatible bindings.`,
@@ -176,7 +163,7 @@ export function treziRules(opts?: {
       `and end before its value, e.g. const STAGGER_MS = . Do not write .trezi/ yourself.`,
       `When the user already has instrumented values, reuse those constants and define an island.`,
       `If the requested control is unsupported, explain it and expose supported fields in chat;`,
-      `do not route the request to a content editor or create a target-project tuning UI.`,
+      `do not create a target-project tuning UI.`,
       ``
     )
   }

@@ -24,7 +24,7 @@ enum ProviderPolicy {
 
     static let treziTools = [
         "project_ui_catalog", "compose_project_ui", "preview_location", "preview_screenshot", "open_preview", "open_code",
-        "content_controls", "chat_island", "spring_to_css", "check_contrast", "fluid_clamp", "color_scale", "layered_shadow",
+        "chat_island", "spring_to_css", "check_contrast", "fluid_clamp", "color_scale", "layered_shadow",
         "line_height", "list_recommended_skills", "install_skills", "workspace_state", "prepare_conflict_resolution",
     ]
     static let foregroundOnly = [

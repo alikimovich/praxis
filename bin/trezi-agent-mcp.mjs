@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 for (const [key, value] of Object.entries(process.env)) { if (key.startsWith('PRAXIS_')) process.env[key.replace(/^PRAXIS_/, 'TREZI_')] ??= value }
 import { chatIslandShape, chatIslandDescription } from './chat-island-schema.mjs'
-import { contentControlsShape } from './content-control-tool-schema.mjs'
 import { z } from 'zod'
 import { request } from 'node:http'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -81,8 +80,6 @@ server.registerTool(
 )
 
 server.registerTool('chat_island', { description: chatIslandDescription, inputSchema: chatIslandShape }, async (args) => result(await invoke('chat_island', args)))
-
-server.registerTool('content_controls', { description: 'Discover or surface content editors and collections in the Trezi preview area. Call catalog first, then define after binding page content to JSON; optional Jev selects sections.', inputSchema: contentControlsShape }, async (args) => result(await invoke('content_controls', args)))
 
 server.registerTool(
   'open_code',

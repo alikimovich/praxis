@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Remove content controls (LKM-114)
+
+- [x] Removed the `content_controls` agent tool (Claude, Codex MCP bridge, custom endpoints, provider policy), `src/main/content-controls*.ts`, the native content controller and `ContentWindow.swift`, the Swift content-drafts store and the `content-controls.json` sidecar allowance, `PanelRecipe`, `vendor/content-controls` (package.json, bun.lock, .gitignore), the surface-controls skill wiring, the tests and `docs/CONTENT_CONTROLS.md`. Rules v24.
+- [x] Users' `.trezi/content-controls.json` and profile `service/editing/content-drafts/` are left untouched and no longer read.
+- [ ] Optional cleanup: the dated inventories (`SWIFT-BACKEND-AUDIT/MODULES/ROUTES/EVENTS/CONTRACTS/PLAN/ROADMAP`, `ELECTRON-REMOVAL`, `rename/*.json`) still list content-controls files as history.
+
 ## Codex live parity and MCP isolation for Codex sessions (LKM-113)
 
 - [x] Part 1: Trezi's Codex sessions (chat turns and the project-memory pass) switch off every MCP server declared in the user's `$CODEX_HOME/config.toml`, re-read per turn (`isolatedCodexConfig`, `src/main/backends/codex-mcp.ts`). Proven without provider calls in `test/codex-mcp.mjs`: a fixture `CODEX_HOME` declaring `vercel` and a stdio server; the real CLI loads both without isolation, and the session reports both `disabled` with it.

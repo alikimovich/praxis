@@ -1,7 +1,6 @@
 import { agentWorkspaceEvidence, agentWorkspaceState, resolveParkedChat } from './chat-isolation'
 import { runChatIslandTool } from './chat-islands'
 import { openAgentCode } from './code-tools'
-import { runContentControlTool } from './content-control-tools'
 import { observeAgentPreview } from './preview-observation-tools'
 import { openAgentPreview } from './preview-tools'
 import { runProjectUiTool } from './project-ui'
@@ -10,7 +9,7 @@ import type { TreziAgentToolAction } from './trezi-agent-tools'
 
 /**
  * Trezi's session-scoped agent tools that act on app state (the preview, islands,
- * content controls, the editor, workspace landing), run in Bun for one chat. The
+ * the editor, workspace landing), run in Bun for one chat. The
  * Codex MCP bridge and helper-hosted sessions dispatch here; Claude's in-process
  * tools call the same functions. Pure calculators are not here: they need nothing
  * from Bun and run wherever the provider runs.
@@ -29,7 +28,6 @@ export async function runTreziTool(action: TreziAgentToolAction, args: unknown, 
   if (action === 'preview_location' || action === 'preview_screenshot') return observeAgentPreview(action)
   if (action === 'project_ui_catalog' || action === 'compose_project_ui')
     return runProjectUiTool(s.root, s.emitKey, action, args as never, s.connectionId)
-  if (action === 'content_controls') return runContentControlTool(s.root, s.liveRoot, s.emitKey, args as never, s.notify, s.connectionId)
   if (action === 'chat_island')
     return s.background ? { error: 'Background edits cannot create chat islands.' } : runChatIslandTool(s.emitKey, s.root, args as never, s.connectionId)
   if (action === 'open_preview') return openAgentPreview(s.liveRoot, s.emitKey, args as never, s.notify, s.background)
