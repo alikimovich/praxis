@@ -31,6 +31,7 @@ Newest first. Append a dated entry when you finish a chunk of work.
     - a second run changes nothing;
     - a folder outside git needs confirmation.
   - `rename-compat`, `sidecar-migrate`, `editing-owner`, `service-contract`, `install-update` (alias removal), `distribution` (single `.xpc`) and `docs-links` pass. `codex-mcp`, `codex-model` and `provider-helper-tools` pass unsandboxed; in the sandbox they can't listen on their Unix socket.
+  - Native smoke, `text-edit` check (`src/native/smoke-legacy-project.ts`): the live fixture gets a `.praxis/praxis-source.cjs` helper and an element with only a `data-praxis-source` stamp. The fixture is not a git repo, so it is never clean and the migration leaves it alone. The check asserts that `project:legacy-names` reports `legacy: true` with the helper listed and `clean: false`, that the preview renders the element after the managed reload, that `sourceStamp` returns the old stamp and nothing restamps it, that `text:apply` on that location edits the element in the preview and `edit:undo` reverts it. It logs `Native legacy project: .praxis/ helper and data-praxis-* stamp open, preview and edit` and restores the fixture afterwards. Not run by the worker (the manager runs GUI checks).
 
 ## 2026-09-30 — LKM-131: Trezi tools work from provider helpers
 

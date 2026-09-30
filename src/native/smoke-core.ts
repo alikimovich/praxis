@@ -1,6 +1,7 @@
 import { inspectUntil, waitFor } from './smoke-wait'
 import { checkVisibleComposer } from './smoke-composer'
 import { checkSourceStamps } from './smoke-source-stamp'
+import { checkLegacyProject } from './smoke-legacy-project'
 import { checkSourceEditor } from './smoke-source-editor'
 import { checkChatIslands } from './smoke-islands'
 import { checkInspectorIsland } from './smoke-inspector-island'
@@ -266,6 +267,7 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
       if (state.visible) await host.request('inspectorPerform',{action:{root:fixture,generation:state.generation,action:'close'}})
     } },
     { name: 'text-edit', dependsOn: ['open-project'], run: async () => {
+      await checkLegacyProject(fixture,invoke,page,wait)
       const edited=await invoke('text:apply',fixture,{source:'index.html:3:1',text:'Edited through Trezi Native'});assert.ok(edited.applied)
       await wait(()=>page(`document.querySelector('#native-title')?.textContent==='Edited through Trezi Native'`),'managed reload')
       assert.ok((await invoke('edit:undo',fixture)).ok);assert.ok((await invoke('edit:redo',fixture)).ok)
