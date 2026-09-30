@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Slider tick marks in the inspector and chat islands (LKM-115)
+
+- [x] Inspector and chat-island sliders use `SnappedSlider` (`src/native/SnappedSlider.swift`): no `step:` and so no tick marks, with snapping in the binding setter using the same default steps.
+- [x] Windowless regression `test/native-slider-ticks.mjs`: no stepped `Slider` in `src/native`, `numberOfTickMarks == 0` on the real inspector field and on an island slider, and values still snap to the step. Evidence: `inspector.png`, `chat-island.png`, `shadow-light-*.png`.
+
 ## Codex live parity and MCP isolation for Codex sessions (LKM-113)
 
 - [x] Part 1: Trezi's Codex sessions (chat turns and the project-memory pass) switch off every MCP server declared in the user's `$CODEX_HOME/config.toml`, re-read per turn (`isolatedCodexConfig`, `src/main/backends/codex-mcp.ts`). Proven without provider calls in `test/codex-mcp.mjs`: a fixture `CODEX_HOME` declaring `vercel` and a stdio server; the real CLI loads both without isolation, and the session reports both `disabled` with it.

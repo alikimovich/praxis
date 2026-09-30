@@ -168,6 +168,7 @@ const result = Bun.spawnSync(
     join(root, 'src/native/SourceFileTree.swift'),
     join(root, 'src/native/Layers.swift'),
     join(root, 'src/native/EditingInspector.swift'),
+    join(root, 'src/native/SnappedSlider.swift'),
     join(root, 'src/native/ContentWindow.swift'),
     join(root, 'src/native/PreviewPlatform.swift'),
     join(root, 'src/native/WorkspaceLayout.swift'),

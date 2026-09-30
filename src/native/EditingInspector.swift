@@ -55,7 +55,7 @@ struct InspectorFieldView: View {
                     Button { apply() } label: { Image(systemName: "checkmark") }.buttonStyle(.borderless).accessibilityLabel("Apply " + field.label).help("Apply value")
                 }
                 if field.kind == "number", let minimum = field.min, let maximum = field.max, maximum > minimum, let number = Double(value) {
-                    Slider(value: Binding(get: { Swift.min(maximum, Swift.max(minimum, Double(value) ?? number)) }, set: { value = String($0); model.send("preview", field: field.id, value: value) }), in: minimum...maximum, step: field.step ?? 1, onEditingChanged: { editing in if !editing { apply() } }).accessibilityLabel(field.label)
+                    SnappedSlider(value: Binding(get: { Swift.min(maximum, Swift.max(minimum, Double(value) ?? number)) }, set: { value = String($0); model.send("preview", field: field.id, value: value) }), bounds: minimum...maximum, step: field.step ?? 1, onEditingChanged: { editing in if !editing { apply() } }).accessibilityLabel(field.label)
                 }
                 if field.kind == "bezier" { NativeBezier(value: $value, preview: { model.send("preview", field: field.id, value: value) }, commit: apply).frame(height: 110) }
             }
