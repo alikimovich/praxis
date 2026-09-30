@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-30 — LKM-128 (repair): Settings OCR check folds Vision's f/t misread
+
+- **Why.** Manager verification failed the native `sheets` step with "Missing complete foreground text: Default model". The capture's PNG shows the label correctly; Vision read "Detault model". The label (`src/native/settings-controller.ts`) has nothing to do with Codex fallback.
+- **Fix.** `words()` in `src/native/settings-verification.ts` also folds f to t after lowercasing, documented next to the existing I/l fold. It applies to the OCR text and the required text alike, so the comparison stays word for word: no word can be dropped or reordered, and there is no fuzzy matching.
+- **Proof.** `test/native-settings-evidence.mjs`: a General fixture with "Detault model" passes at both widths; "Model", "Detault" and "Detault models" still throw. Full `bun run test:native` passed (21/21, `sheets` included). The LKM-128 changes in `codex-model.ts`, `codex.ts` and `test/codex-model.mjs` are unchanged.
+
+## 2026-09-30 — LKM-128: Codex model fallback reads the real CLI's error stream
+
+- **Why.** Live on candidate 5b72bf2 (CLI 0.159.1, ChatGPT login), both Codex paths ended empty with two stream errors carrying the API's 400 JSON body, then "Codex Exec exited with code 1: Reading prompt from stdin...". The LKM-126 fallback never started.
+- **Cause (inferred from a reproduction).** The rejection text matched, but the adapter retries only before any output, and it counted every item as output, including warning items the CLI can emit before the request (the skills-budget note, hidden from the chat). The stand-in with a warning item first gives exactly the operator's three errors under the old rule.
+- **Fix.** `unsupportedCodexModel` takes a message, an event or its `error`, and also reads JSON text and nested `message`/`detail`/`error` fields (bounded), with `'`-escaped or typographic quotes. `codex.ts` passes whole `error` events and `turn.failed`'s `error`, and only `OUTPUT_ITEMS` (items it shows) count as output. An `error` event without a string message is shown as its JSON instead of throwing. The status line and the no-model-left error are unchanged.
+- **Proof.** `test/codex-model.mjs`: the stand-in emits the real sequence (two stream `error` events with the JSON body, exit 1, "Reading prompt from stdin..." on stderr), or the body only in `turn.failed` or only in the exec error, optionally after a warning item. In-process: the default (no model) and every variant fall back and answer, as does an explicit `gpt-6.1-sol` pick; all models rejected still ends in the no-model-left error. Helper: warning item plus stream errors, the full LKM-126 fallback checks. With the old output rule restored, the warning run fails with the operator's exact errors. Needs an unsandboxed run (tool-bridge Unix socket). No live calls; the operator reruns `test:provider-live`.
+
 ## 2026-09-30 — LKM-126: Codex seat model fallback and plugin MCP isolation
 
 - **Why.** After a CLI update, Codex seat turns (in-process and in the helper) failed with "The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account": the CLI's priority-1 model, which is also its default. Separately, the user's `mcp.vercel.com` server (rmcp `AuthRequired`) still started despite LKM-113 part 1.

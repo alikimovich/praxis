@@ -4,6 +4,8 @@
 // real helper host under the Swift ProviderOwner fixture.
 // - fallback: the turn retries on the next listed model, says so in a status line and
 //   answers; later turns and chats skip the rejected model, and the picker drops it;
+// - where it is said (LKM-128): the real CLI's stream `error` events, `turn.failed`
+//   only, the exec error only, after a warning item, with and without a model asked for;
 // - clear message: with every listed model rejected, the turn ends in a visible error;
 // - MCP: every CLI run gets a config under which the real Codex CLI loads none of the
 //   fixture user's `~/.codex` MCP servers (declared or plugin-provided), only Trezi's.
@@ -43,14 +45,50 @@ for (const dir of [HOME, DATA, WT]) mkdirSync(dir)
 const LOG = join(scratch, 'exec.log'),
   REJECT = join(scratch, 'reject.json')
 const MODELS = ['gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra']
-const reject = (models) => writeFileSync(REJECT, JSON.stringify(models))
+/**
+ * Which models the stand-in rejects, and where it says so (LKM-128): `stream` is the
+ * real CLI 0.159.1 (two `error` events carrying the API's JSON body, then exit 1 with
+ * only "Reading prompt from stdin..." on stderr); `turn.failed` and `exec` put the body
+ * only in that event or only in the exec error. `warn` first emits the CLI's
+ * skills-budget warning item, which is not output.
+ */
+const reject = (models, via = 'stream', warn = false) =>
+  writeFileSync(REJECT, JSON.stringify({ models, via, warn }))
 const RULE = "The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account."
+const body = (message) =>
+  JSON.stringify({
+    type: 'error',
+    status: 400,
+    error: { type: 'invalid_request_error', message }
+  })
 
 // --- the pure rules ---------------------------------------------------------------
 assert.equal(
   unsupportedCodexModel(`Codex Exec exited with code 1: {"detail":"${RULE}"}`),
   'gpt-6.1-sol'
 )
+assert.equal(
+  unsupportedCodexModel({ type: 'error', message: body(RULE) }),
+  'gpt-6.1-sol',
+  'a stream error'
+)
+assert.equal(unsupportedCodexModel(JSON.parse(body(RULE))), 'gpt-6.1-sol', 'the body as the event')
+assert.equal(unsupportedCodexModel({ message: body(RULE) }), 'gpt-6.1-sol', "turn.failed's error")
+assert.equal(
+  unsupportedCodexModel({ message: body(RULE).replaceAll("'", '\\u0027') }),
+  'gpt-6.1-sol',
+  'escaped quotes'
+)
+assert.equal(
+  unsupportedCodexModel(`Codex Exec exited with code 1: ${body(RULE)}\n`),
+  'gpt-6.1-sol',
+  'the exec error'
+)
+assert.equal(
+  unsupportedCodexModel('Codex Exec exited with code 1: Reading prompt from stdin...'),
+  null
+)
+assert.equal(unsupportedCodexModel({ type: 'error', message: body('Rate limited') }), null)
 assert.equal(unsupportedCodexModel('unexpected status 401 Unauthorized'), null)
 assert.equal(unsupportedCodexModel(RULE.replace('gpt-6.1-sol', 'x; rm')), null, 'only a model slug')
 const notice = codexFallbackNotice('gpt-6.1-sol', 'gpt-6-sol')
@@ -98,7 +136,7 @@ writeFileSync(
 // --- the stand-in CLI -----------------------------------------------------------------
 // `debug models` is the catalog probe; each `exec` asks the real CLI which MCP servers
 // its `--config` leaves on, logs it with the model, and fails a rejected model like the
-// real one: an `error`, `turn.failed` and exit 1, before any item.
+// real one (see `reject`), before any output.
 const REAL = new Codex().exec.executablePath
 const CLI = join(scratch, 'codex.mjs')
 writeFileSync(
@@ -124,11 +162,13 @@ appendFileSync(${JSON.stringify(LOG)}, JSON.stringify({ model, resume, mcp: Obje
 const effective = model ?? models[0]
 out({ type: 'thread.started', thread_id: resume ?? 'thread-' + process.pid })
 out({ type: 'turn.started' })
-if (JSON.parse(readFileSync(${JSON.stringify(REJECT)}, 'utf8')).includes(effective)) {
-  const message = JSON.stringify({ detail: "The '" + effective + "' model is not supported when using Codex with a ChatGPT account." })
-  out({ type: 'error', message })
-  out({ type: 'turn.failed', error: { message } })
-  process.stderr.write(message + '\\n')
+const { models: rejected, via, warn } = JSON.parse(readFileSync(${JSON.stringify(REJECT)}, 'utf8'))
+if (rejected.includes(effective)) {
+  if (warn) out({ type: 'item.completed', item: { id: 'item_0', type: 'error', message: 'Skill descriptions were shortened to fit the skills context budget.' } })
+  const message = JSON.stringify({ type: 'error', status: 400, error: { type: 'invalid_request_error', message: "The '" + effective + "' model is not supported when using Codex with a ChatGPT account." } })
+  if (via === 'stream') for (let i = 0; i < 2; i++) out({ type: 'error', message })
+  if (via === 'turn.failed') out({ type: 'turn.failed', error: { message } })
+  process.stderr.write('Reading prompt from stdin...\\n' + (via === 'exec' ? message + '\\n' : ''))
   process.exit(1)
 }
 out({ type: 'item.completed', item: { id: 'item_0', type: 'agent_message', text: 'PONG from ' + effective } })
@@ -223,8 +263,8 @@ const isolated = (run) => {
   assert.equal(run.mcp.praxis, true, "only Trezi's server runs")
 }
 
-async function fallbackChat(provider, where) {
-  reject(['gpt-6.1-sol'])
+async function fallbackChat(provider, where, warn = false) {
+  reject(['gpt-6.1-sol'], 'stream', warn)
   const first = await chat(provider)
   const one = await first.turn('ping')
   assert.deepEqual(
@@ -315,6 +355,33 @@ try {
     'the chat shows the message'
   )
 
+  // The rejection in `turn.failed` only, in the exec error only, and after a warning
+  // item; and a turn that asked for the model by name. Each falls back the same way.
+  for (const [via, warn, model] of [
+    ['turn.failed', false, undefined],
+    ['exec', false, undefined],
+    ['stream', true, undefined],
+    ['stream', false, 'gpt-6.1-sol']
+  ]) {
+    const where = `in-process via ${via}${warn ? ' after a warning' : ''}${model ? ` asking for ${model}` : ''}`
+    resetCodexModelMemory()
+    reject(['gpt-6.1-sol'], via, warn)
+    const run = await (await chat(codexProvider, model ? { model } : {})).turn('ping')
+    assert.deepEqual(
+      run.runs.map((r) => r.model),
+      [model ?? null, 'gpt-6-sol'],
+      `${where}: events ${JSON.stringify(run.events)}`
+    )
+    assert.deepEqual(
+      statuses(run.events).filter((t) => t.startsWith('Codex:')),
+      [notice],
+      where
+    )
+    assert.equal(said(run.events), 'PONG from gpt-6-sol', where)
+    assert.equal(of(run.events, 'error').length, 0, `${where}: no error`)
+    assert.equal(of(run.events, 'done').length, 1, where)
+  }
+
   // --- in the real helper host, under the real Swift owner ------------------------------
   resetCodexModelMemory()
   probed()
@@ -325,7 +392,8 @@ try {
     PROVIDER_HELPER_PROVIDERS: 'codex'
   })
   setProviderOwner(fixture.owner())
-  await fallbackChat(helperProvider('codex'), 'helper')
+  // The operator's run: a warning item, then the real CLI's stream errors.
+  await fallbackChat(helperProvider('codex'), 'helper', true)
   console.log(
     'CODEX-MODEL OK — seat fallback, memory, picker, clear message and no personal MCP, in-process and in the helper'
   )
