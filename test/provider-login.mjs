@@ -75,14 +75,15 @@ const loggedOut = cli('logged-out', `echo '{"loggedIn":false,"authMethod":"none"
 const loggedIn = cli('logged-in', `echo '{"loggedIn":true,"authMethod":"claude.ai"}'`)
 const invalid = cli('invalid', `echo 'Invalid API key · Please run /login' >&2; exit 1`)
 
-/** `bundled`/`installed` name the stand-in CLIs (helper arguments); the rest is the fixture's environment. */
-async function fixture({ bundled, installed, ...env } = {}) {
+/** `bundled`/`installed`/`security` name the stand-in tools (helper arguments); the rest is the fixture's environment. */
+async function fixture({ bundled, installed, security, ...env } = {}) {
   const home = join(scratch, `p-${++count}`)
   mkdirSync(home)
   const args = [
     FAKE_HELPER,
     ...(bundled ? [`--claude-bundled=${bundled}`] : []),
-    ...(installed ? [`--claude-installed=${installed}`] : [])
+    ...(installed ? [`--claude-installed=${installed}`] : []),
+    ...(security ? [`--claude-security=${security}`] : [])
   ]
   const started = await startProviderFixture(compileProviderFixture(), home, {
     PROVIDER_HELPER_PROVIDERS: 'fake,claude',
@@ -312,11 +313,12 @@ try {
       [true, 'installed', loggedIn, 'claude.ai']
     )
     assert.match(installed.detail, new RegExp(`Chats use: ${loggedIn}`))
-    // LKM-125: keychain availability from the helper, exit codes only (output never read).
-    const keychainPath = join(scratch, 'secret-keychain-path.keychain-db')
+    // LKM-125: keychain availability from the helper as exit codes (`keychain`). The
+    // keychain list and default paths are shown too (LKM-124), never a stderr message.
+    const keychainPath = join(scratch, 'fixture-login.keychain-db')
     const reachable = await check({
-      CLAUDE_TEST_BUNDLED: loggedIn,
-      CLAUDE_TEST_SECURITY: cli('security-ok', `echo '    "${keychainPath}"'`)
+      bundled: loggedIn,
+      security: cli('security-ok', `echo '    "${keychainPath}"'`)
     })
     assert.deepEqual(reachable.keychain, { listKeychains: 0, defaultKeychain: 0 })
     assert.match(
@@ -324,8 +326,8 @@ try {
       /Keychain in this helper: security list-keychains exit 0; security default-keychain exit 0\n/
     )
     const lost = await check({
-      CLAUDE_TEST_BUNDLED: loggedOut,
-      CLAUDE_TEST_SECURITY: cli(
+      bundled: loggedOut,
+      security: cli(
         'security-lost',
         `echo '${keychainPath}'; [ "$1" = default-keychain ] && { echo 'SecKeychainCopyDefault: A default keychain could not be found.' >&2; exit 50; }; exit 0`
       )
@@ -334,13 +336,12 @@ try {
     assert.match(lost.detail, /security default-keychain exit 50 \(no user keychain/)
     for (const report of [reachable, lost])
       assert.ok(
-        !JSON.stringify(report).includes('secret-keychain-path') &&
-          !report.detail.includes('SecKeychainCopyDefault'),
-        'the report carries exit codes, never the output'
+        !report.detail.includes('SecKeychainCopyDefault'),
+        'security’s error output never reaches the report'
       )
     const absent = await check({
-      CLAUDE_TEST_BUNDLED: loggedOut,
-      CLAUDE_TEST_SECURITY: join(BIN, 'no-such-security')
+      bundled: loggedOut,
+      security: join(BIN, 'no-such-security')
     })
     assert.deepEqual(absent.keychain, { listKeychains: null, defaultKeychain: null })
     assert.match(absent.detail, /list-keychains did not run/)
@@ -545,8 +546,9 @@ esac
     }
     const file = join(homeWith, '.claude/.credentials.json')
     const readable = await probe(homeWith, 0)
-    assert.equal(readable.keychain, true)
-    assert.equal(readable.keychainExit, 0)
+    assert.equal(readable.keychainItem, true)
+    assert.equal(readable.keychainItemExit, 0)
+    assert.deepEqual(readable.keychain, { listKeychains: 0, defaultKeychain: 0 })
     assert.equal(
       readable.keychainList,
       '"/fixture/login.keychain-db" "/Library/Keychains/System.keychain"'
@@ -578,8 +580,8 @@ esac
     )
     // Item not found or not readable: exit 44, and no file under this HOME.
     const missing = await probe(homeWithout, 44)
-    assert.equal(missing.keychain, false)
-    assert.equal(missing.keychainExit, 44)
+    assert.equal(missing.keychainItem, false)
+    assert.equal(missing.keychainItemExit, 44)
     assert.match(missing.detail, /Keychain: not readable from this context \(security exit 44\)/)
     assert.deepEqual(
       [missing.credentialsExists, missing.credentialsReadable, missing.credentialsSize],

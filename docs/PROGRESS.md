@@ -2,6 +2,13 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-30 — LKM-124: merged with the LKM-125 candidate (Check login `keychain` field)
+
+- **Overlap.** LKM-125 (candidate) added `ProviderLoginReport.keychain` as `{listKeychains, defaultKeychain}` exit codes, a "Keychain in this helper" detail line and `JoinExistingSession` for the service. LKM-124 had used `keychain` for the item lookup. Kept the candidate's name and shape; the item lookup is now `keychainItem`/`keychainItemExit` (`ProviderLaunch.loginReport` allows both).
+- **One probe.** `probeKeychain(security?)` runs `find-generic-password`, `list-keychains -d user` and `default-keychain` once each; the two exit codes fill the LKM-125 `keychain` object and the two output lines fill `keychainList`/`keychainDefault`. `securityExit`/`keychainAccess` are gone; the stand-in `security` is `candidates.security` (the fake helper takes `--claude-security=`), else the first on PATH.
+- **Tests.** The LKM-125 assertions in `test/provider-login.mjs` are kept, moved to the helper-argument fixture (`bundled`/`security`); the check that the report never contains the keychain path is dropped, because LKM-124 shows the list and default paths on purpose (security's error output is still asserted absent).
+- **Docs.** `docs/PROVIDERS.md` keeps both sections; the LKM-124 text now points at the LKM-125 fix, still unverified live.
+
 ## 2026-09-30 — LKM-124 (revision): Check login shows the Keychain and credentials file
 
 - **Why.** The user's terminal has no `CLAUDE_*`/`ANTHROPIC_*` variables, so the allowlist hardening (kept) does not explain their `loggedIn: false` inside the helper. The review asked for diagnostics from inside the helper context, and for the three-context reproduction to be recorded.
