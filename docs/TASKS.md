@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Codex live parity and MCP isolation for Codex sessions (LKM-113)
+
+- [x] Part 1: Trezi's Codex sessions (chat turns and the project-memory pass) switch off every MCP server declared in the user's `$CODEX_HOME/config.toml`, re-read per turn (`isolatedCodexConfig`, `src/main/backends/codex-mcp.ts`). Proven without provider calls in `test/codex-mcp.mjs`: a fixture `CODEX_HOME` declaring `vercel` and a stdio server; the real CLI loads both without isolation, and the session reports both `disabled` with it.
+- [ ] Part 2 (operator): after the Codex quota resets (2026-10-03 10:10), run `TREZI_LIVE_PROVIDERS=1 bun run test:provider-live`, confirm no MCP auth errors from personal servers, and record the Codex result next to Claude's in `test/artifacts/provider-live-parity.json`, `docs/PROGRESS.md` and the issue.
+
 ## Helpers by default, rollback removed, self-contained app and one start path (LKM-111)
 
 - [x] Built-in Claude, Codex and Gemini adapters always run in Swift-supervised provider helpers (`ProviderHelperCommand.builtIn`, bundled `provider-helper.cjs` on the bundled Bun); no switch, no in-process fallback; v10 connections stay in Bun.

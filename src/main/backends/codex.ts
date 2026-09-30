@@ -24,7 +24,7 @@ import { resolveConnection } from '../providers'
 import { authorizedTool, runTreziTool } from '../session-tools'
 import { scrubSecret } from '../providers-store'
 import { treziRules } from '../rules'
-import { treziMcpConfig, verifyTreziMcp } from './codex-mcp'
+import { isolatedCodexConfig, treziMcpConfig, verifyTreziMcp } from './codex-mcp'
 import { createRetryCause } from './codex-retry'
 import { createItemTracker, codexItemWarning } from './codex-stream'
 import { parseProjectMemoryEvaluation, projectMemoryEvaluationPrompt } from './memory'
@@ -211,6 +211,7 @@ async function startSession(
   // Build the thread up front (the SDK spawns the `codex` CLI; auth = `codex login`,
   // or the connection's own key when `options.connectionId` is set).
   let thread: Thread | null = null
+  let openThread: ((id: string | null) => Thread) | null = null
   let treziTools: TreziAgentToolRegistration | null = null
   let initErr: Error | null = null
   try {
@@ -257,10 +258,16 @@ async function startSession(
     }
     // No connection ⇒ a bare `Codex()`, i.e. byte-identical to the pre-v10 seat.
     const codexOptions = conn ? connectionCodexOptions(conn) : {}
-    thread = new Codex({
-      ...codexOptions,
-      config: { ...codexOptions.config, ...mcpConfig }
-    }).startThread(threadOptions)
+    // Each turn spawns the CLI again, so the user's own MCP servers are re-read and
+    // switched off per turn (`isolatedCodexConfig`); only Trezi's server runs.
+    openThread = (id) => {
+      const codex = new Codex({
+        ...codexOptions,
+        config: isolatedCodexConfig({ ...codexOptions.config, ...mcpConfig })
+      })
+      return id ? codex.resumeThread(id, threadOptions) : codex.startThread(threadOptions)
+    }
+    thread = openThread(null)
   } catch (err) {
     treziTools?.dispose()
     treziTools = null
@@ -370,6 +377,7 @@ async function startSession(
       emit({ type: 'done' })
       return
     }
+    if (thread.id && openThread) thread = openThread(thread.id)
     turnAbort = new AbortController()
     // On turn 2+ the thread id is already known, so the tail starts with the turn;
     // on turn 1 it starts at `thread.started`, a moment later.
@@ -501,7 +509,10 @@ async function updateProjectMemory(
     if (!conn && !(await codexCliPresent())) return null
     const { Codex } = await loadCodex()
     const codexOptions = conn ? connectionCodexOptions(conn) : {}
-    const thread = new Codex(codexOptions).startThread({
+    const thread = new Codex({
+      ...codexOptions,
+      config: isolatedCodexConfig(codexOptions.config)
+    }).startThread({
       workingDirectory: app.getPath('temp'),
       skipGitRepoCheck: true,
       sandboxMode: 'read-only',

@@ -34,7 +34,11 @@ class FakeCodex {
   }
 }
 mock.module('@openai/codex-sdk', () => ({ Codex: FakeCodex }))
-mock.module('../src/main/backends/codex-mcp.ts', () => ({ treziMcpConfig: () => ({ mcp_servers: {} }), verifyTreziMcp: async () => {} }))
+mock.module('../src/main/backends/codex-mcp.ts', () => ({
+  treziMcpConfig: () => ({ mcp_servers: {} }),
+  verifyTreziMcp: async () => {},
+  isolatedCodexConfig: (config = {}) => config
+}))
 mock.module('../src/main/trezi-agent-tools.ts', () => ({
   registerTreziAgentTools: async () => ({ socketPath: '/nowhere', token: 'fake', dispose() {} }),
   shutdownTreziAgentTools: async () => {}
