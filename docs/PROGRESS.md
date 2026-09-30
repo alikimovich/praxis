@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-29 — LKM-120: chat only for a loaded project; no titles from errors
+
+- **Why.** The chat column appeared while a project was still opening, and after an open had failed. A signed-out Claude also answered the title prompt with "Not logged in · Please run /login", and that text became the chat's name.
+- **Gate.** The workspace snapshot has `loadedKey`, the project whose open finished (running or setup). `select()` clears it for any other project and sets it on success. Shell state carries `chatReady`, and when it is false Swift hides the transcript, composer, token counters, chat title, and the history and new-chat actions.
+  - The column keeps its width and the toolbar keeps its chat item, so nothing moves.
+  - The preview status (opening, or the error with Retry) covers the whole content area. The last project's page is hidden while that status shows, so it no longer covers the loading or error view.
+  - A failed open retries the whole open. A later preview load error, or a restart of the same project, keeps the chat.
+  - Diagnose → "Draft fix in chat" reveals the chat for a failed project.
+- **Titles.** `src/shared/chat-title.ts` matches error, auth and system text. Error-only assistant turns are dropped from the title digest, and `sanitizeTitle` rejects such text. On load, `sessions-store` renames stored error titles to "New chat" through the conversation owner, and the chat mirror shows the neutral title at once.
+- **Proof.** `test/chat-title.mjs` covers the rule, real-title false positives and the migration. `test/sessions-store.mjs` covers the persisted rename.
+  - The native `startup` and `chat-gate` checks (sidebar group) save foreground window captures and JSON for four states: `chat-gate-{no-project,loaded,opening,failed-open}`. The failing project uses the custom command `sleep 8; exit 1`.
+  - They assert the chat is hidden, the status covers the column, and the preview is hidden. They check that the leading edge, preview frame and detail pane stay put. They also check that Retry loads the project with its chat, and that switching back hides the chat until the project is ready.
+- **Candidate sync.** After LKM-121 (no sidebar gear, `settingsMenu` hook) the chat-gate keys moved out of `NativeShell.inspect()` into `gateInspect()`, merged by the `shellInspect` route, so the `sidebarActions` line stays as the candidate has it. The `no-project` capture runs before the Settings prelude in `startup`. A 3-way `git merge-file` of Shell.swift, Host.swift and smoke-core.ts against the candidate is conflict-free. The full native suite passes 20/20 on the merged tree.
 ## 2026-09-29 — LKM-121: standard macOS Settings window with a sidebar
 
 - **Why.** Settings was a single form with a separate "AI providers…" sheet, and it opened from a gear at the bottom of the main sidebar. The issue asked for a standard macOS settings window.

@@ -42,6 +42,7 @@ export const SMOKE_CHECK_GROUPS: Readonly<Record<string, readonly NativeSmokeGro
   // One fixture scope covers both; smoke-islands reads the selection to run either part.
   'chat-islands': ['islands', 'shadow-light'],
   'project-switching': ['sidebar'],
+  'chat-gate': ['sidebar'],
   sheets: ['settings'],
   'native-chat': ['chat'],
   composer: ['composer'],

@@ -398,7 +398,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             let state = c["state"] as? [String: Any] ?? [:]
             shell.update(state); previewStatus.update(state); nativeLayout.update(state)
             if let home = state["homeState"] as? [String: Any] { welcome.update(home) }
-        case "shellInspect": reply(id, shell.inspect())
+        case "shellInspect": reply(id, shell.inspect().merging(shell.gateInspect()) { _, new in new })
         case "sidebarVerification":
             guard ephemeral else { reply(id, error: "Test profile required"); return }
             SidebarMenuMonitor.shared.install()
@@ -416,6 +416,12 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             guard ephemeral, !shell.sidebarItem.isCollapsed else { reply(id, error: "Visible test sidebar required"); return }
             Task { @MainActor in
                 do { reply(id, try await captureVisibleRegion(window: window, view: shell.sidebar.view, region: shell.sidebar.view.bounds)) }
+                catch { reply(id, error: error.localizedDescription) }
+            }
+        case "captureVisibleWindow":
+            guard ephemeral, let content = window.contentView else { reply(id, error: "Test profile required"); return }
+            Task { @MainActor in
+                do { reply(id, try await captureVisibleRegion(window: window, view: content, region: content.bounds, recognize: false)) }
                 catch { reply(id, error: error.localizedDescription) }
             }
         case "previewSurfaceInspect": reply(id, previewSurface.inspect())

@@ -25,6 +25,10 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     var ready = false
     var selecting = false
     var chatHidden = false
+    /// The selected project finished opening; the chat header's title and actions show only then.
+    var chatReady = false
+    /// What the chat gate shows in the header, merged into `shellInspect`.
+    func gateInspect() -> [String: Any] { ["chatReady":chatReady, "chatHeaderContentVisible":!chatActions.isHidden || !chatTitle.isHidden] }
     var toolbar: NSToolbar!
     private var toolbarLayout: ToolbarLayout!
     weak var window: NSWindow?
@@ -151,7 +155,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         let leading = chatHeader.convert(.zero, to: nil).x
         let width = min(max(100, target - leading), max(100, (window?.frame.width ?? 1320) - leading - 500))
         addressWidth?.constant = min(180, max(80, (window?.frame.width ?? 1320) - leading - width - 400))
-        chatTitle.isHidden = currentProject == nil || chatHidden || width < 150
+        chatTitle.isHidden = !chatReady || chatHidden || width < 150
         if abs(chatHeaderWidth.constant - width) > 0.5 { chatHeaderWidth.constant = width }
     }
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -285,7 +289,9 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         if chatHeaderWidth != nil {
             alignChatHeader()
         }
-        chatTitle.isHidden = currentProject == nil || chatHidden || (chatHeaderWidth?.constant ?? 0) < 150
+        chatTitle.isHidden = !chatReady || chatHidden || (chatHeaderWidth?.constant ?? 0) < 150
+        // The header item stays in the toolbar (so the address never shifts); only its contents hide.
+        chatActions.isHidden = !chatReady
         let chatMenu = NSMenu(); chatMenu.autoenablesItems = false
         for row in rows.first(where: { $0.project == currentProject })?.children ?? [] {
             let entry = NSMenuItem(title: row.title + (row.running ? " · Working" : ""), action: #selector(contextAction(_:)), keyEquivalent: "")
@@ -301,7 +307,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             let close = NSMenuItem(title: "Close current chat", action: #selector(contextAction(_:)), keyEquivalent: "")
             close.target = self; close.representedObject = ["event":"shell-action", "action":"close", "id":selectedID]; chatMenu.addItem(close)
         }
-        chatActions.historyMenu = chatMenu; chatActions.updateEnabled(project: currentProject != nil, history: currentProject != nil && !chatMenu.items.isEmpty)
+        chatActions.historyMenu = chatMenu; chatActions.updateEnabled(project: chatReady, history: chatReady && !chatMenu.items.isEmpty)
         address.isEnabled = ready
         if address.currentEditor() == nil { showAddress() }
         toolbarItems["device"]?.isEnabled = previewState["deviceEnabled"] as? Bool ?? false
@@ -357,6 +363,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         if nextProject != currentProject && address.currentEditor() != nil { window?.makeFirstResponder(nil) }
         let projectChanged = nextProject != currentProject
         currentProject = nextProject
+        chatReady = nextProject != nil && state["chatReady"] as? Bool == true
         selectedID = state["selected"] as? String
         ready = state["previewReady"] as? Bool ?? false
         selecting = state["selectMode"] as? Bool ?? false
@@ -472,7 +479,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             // AppKit animations even though the collapsed state already changed.
             sidebarItem.isCollapsed.toggle(); split.view.layoutSubtreeIfNeeded(); return true
         }
-        if action == "new-chat", currentProject != nil { chatActions.onNewChat?(); return true }
+        if action == "new-chat", chatReady { chatActions.onNewChat?(); return true }
         if action == "history-select", let entry = chatActions.historyMenu?.items.first(where: { ($0.representedObject as? [String:String])?["id"] == id }) {
             contextAction(entry); return true
         }

@@ -14,6 +14,9 @@ export interface NativeWorkspaceSnapshot {
   projects: ProjectEntry[]
   activeKey: string | null
   status: NativeProjectStatus
+  /** The project whose open finished (running or setup); the chat shows only for it.
+   *  A later preview error or a restart of the same project keeps it. */
+  loadedKey?: string | null
   history: Record<string, SessionRecord[]>
   recents: { root: string; name: string; at: number }[]
 }
