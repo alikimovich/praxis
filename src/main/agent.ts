@@ -22,8 +22,7 @@ import type {
 } from '../shared/api'
 import { projectKey } from '../shared/projectKey'
 import { backgroundAgentOptions } from '../shared/background-model'
-import { pruneAttachments, saveImageAttachment } from './attachments'
-import { swiftPlatformOwner } from './platform-owner'
+import { platformOwner } from './platform-owner'
 import { type ProviderSession, pickProvider } from './backends'
 import { handoffPrompt } from './backends/conversation-handoff'
 import { seedFromRecord } from './backends/record'
@@ -52,8 +51,8 @@ import { commitLiveTurn } from './live-commit'
 import { enqueueRepoWrite } from './repo-write-queue'
 import {
   createProjectMemoryInjection,
-  createProjectMemoryStore,
   createProjectMemoryUpdateQueue,
+  ProjectMemoryError,
   type ProjectMemoryStore,
   type ProjectMemoryUpdateQueue
 } from './project-memory'
@@ -61,7 +60,6 @@ import { registerProviderIpc } from './providers'
 import type { RpcHandlerRegistry } from './rpc-router'
 import { createSessionStore, type SessionStore } from './sessions-store'
 import { ConversationError, type ConversationOwner, type Persist, swiftConversationOwner } from './conversation-owner'
-import { legacyConversation } from './conversation-model'
 import { TurnTracker } from './chat-turns'
 import { providerOwner } from './provider-owner'
 import { startProviderSession } from './provider-sessions'
@@ -92,21 +90,22 @@ function dataDir(): string {
 }
 let _store: SessionStore | null = null
 const store = (): SessionStore => (_store ??= createSessionStore(dataDir()))
-// The conversation owner (S11): the Swift service's coordinator when it supervises Bun,
-// else the in-process twin writing through the legacy store. Every chat transition —
-// a turn's start, its terminal event, landing, titles, handoff, approvals, spawn
-// admission — is decided there; this module performs the effects.
-let _legacyConversation: ConversationOwner | null = null
+// The conversation owner (S11): the Swift service's coordinator, the only one since
+// LKM-111 removed the in-process twin. Every chat transition — a turn's start, its
+// terminal event, landing, titles, handoff, approvals, spawn admission — is decided
+// there; this module performs the effects.
 function conversation(): ConversationOwner {
   const swift = swiftConversationOwner()
-  if (swift) return swift
-  _legacyConversation ??= legacyConversation(store)
-  return _legacyConversation
+  if (!swift) throw new ConversationError('unavailable', 'Trezi’s service is not running, so chats cannot start.')
+  return swift
 }
-// The memory owner: the Swift service (set by the native entry point when it is
-// supervised) or the legacy Bun writer. `dataDir()` is resolved first either way:
-// it creates the session store's alias before the service is asked to write in it.
-let memoryOwner: (dir: string) => ProjectMemoryStore = createProjectMemoryStore
+// The memory owner: the Swift service, set by the native entry point (LKM-111 removed
+// the Bun writer). `dataDir()` is resolved first: it creates the session store's
+// alias before the service is asked to write in it.
+const noMemoryOwner = async (): Promise<never> => {
+  throw new ProjectMemoryError('unavailable', 'Trezi’s service is not running, so project memory is unavailable.')
+}
+let memoryOwner: (dir: string) => ProjectMemoryStore = () => ({ get: noMemoryOwner, save: noMemoryOwner, propose: noMemoryOwner })
 export function setProjectMemoryOwner(owner: (dir: string) => ProjectMemoryStore): void {
   memoryOwner = owner
   _memoryStore = null
@@ -1263,13 +1262,8 @@ export function registerAgentIpc(
   ipcMain.handle(
     'attachments:save',
     async (_e, image: ImageAttachment, name?: string): Promise<string> => {
-      // Swift launch: uploaded in bounded chunks and written by the platform owner.
-      const platform = swiftPlatformOwner()
-      if (platform) return platform.saveAttachment(image, name)
-      const dir = join(dataDir(), 'attachments')
-      const saved = await saveImageAttachment(dir, image, name, String(Date.now()))
-      void pruneAttachments(dir, Date.now())
-      return saved
+      // Uploaded in bounded chunks and written by the platform owner.
+      return platformOwner().saveAttachment(image, name)
     }
   )
 
@@ -1398,7 +1392,7 @@ export function registerAgentIpc(
     if (!(await isRepoRoot(root))) return { ok: false, error: 'Not a git repository.' }
     if (!(await branchExists(root, branch)))
       return { ok: false, error: 'That branch no longer exists.' }
-    const res = await applyBranchToWorkingTree(root, branch, worktreesDir())
+    const res = await applyBranchToWorkingTree(root, branch)
     if (res.empty) return { ok: false, error: 'That run made no changes to apply.' }
     if (res.ok) return { ok: true }
     return {
@@ -1468,7 +1462,7 @@ export function registerAgentIpc(
   ipcMain.handle('sessions:rename', async (_e, id: string, title: string) => {
     const result = await conversation().rename(id, title)
     // The next read must see it, like every other write through the store.
-    if (result.ok) await store().flush?.()
+    if (result.ok) await store().flush()
     return result
   })
   ipcMain.handle('sessions:remove', (_e, id: string) => store().remove(id))
@@ -1590,7 +1584,7 @@ export function registerAgentIpc(
     for (const { session } of spawns.values()) closeSession(session)
     spawns.clear()
     queuedSpawns.clear()
-    closing.push(store().flush?.() ?? Promise.resolve())
+    closing.push(store().flush())
     quitting = Promise.all(closing).then(() => {})
     // v9: forget chat-isolation state (mirror of spawns) — checkouts stay on disk for
     // the next launch's crash recovery, never committed/removed during the quit race.

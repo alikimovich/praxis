@@ -1,5 +1,10 @@
 # Swift-owned managed project runtime (S06)
 
+> **Since LKM-111 (2026-09-29):** the launch-time rollback (`TREZI_BACKEND_OWNER=legacy`,
+> `TreziService --legacy`) and the Bun twins it ran are removed. The Swift owner described
+> here is the only one; passages about the rollback, the legacy launch or the TS twins
+> are history. Current status: [SWIFT-BACKEND-RETIREMENT.md](SWIFT-BACKEND-RETIREMENT.md).
+
 LKM-94, roadmap row S06 ("managed servers/dependencies/static serving; Swift
 process supervisor") of the [canonical plan](SWIFT-BACKEND-PLAN.md) and
 [roadmap](SWIFT-BACKEND-ROADMAP.md). It follows [preferences](SWIFT-BACKEND-PREFERENCES.md),
@@ -27,9 +32,9 @@ lease around an install until S07.
 - `src/service/StaticSite.swift` / `src/service/StaticServer.swift`: the static
   site (files, traversal rules, live reload, FSEvents watcher) and its HTTP layer.
 - `src/native/runtime-service.ts`: Bun's client. `src/main/devserver-service.ts`
-  serves the unchanged `devserver:*` routes on it. `src/main/devserver.ts`,
-  `devserver-processes.ts`, `managed-child.ts` and `static-server.ts` are the
-  rollback owner.
+  serves the unchanged `devserver:*` routes on it; `src/main/devserver.ts` registers
+  them. The rollback owner (`devserver-processes.ts`, `managed-child.ts`,
+  `static-server.ts`) was removed in LKM-111.
 
 ## The domain, exactly
 

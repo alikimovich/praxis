@@ -1,22 +1,20 @@
-// S05 project memory transfer: the Swift owner (real MemoryOwner + OperationLedger
-// compiled into a fixture process) against the legacy Bun writer, on real files.
-// Byte parity, manual-versus-generated ordering, receipts, strict frames, damaged
-// and external files, injected write failures, SIGKILL at every durable boundary,
-// service restart, launch-time rollback, Bun's client, the evaluation queue and the
-// editor's failed-autosave draft retention.
+// S05 project memory: the Swift owner (real MemoryOwner + OperationLedger compiled
+// into a fixture process), the only writer since LKM-111, on real files. The recorded
+// format (file IDs, stored bytes, reader verdicts), manual-versus-generated ordering,
+// receipts, strict frames, damaged and external files, injected write failures,
+// SIGKILL at every durable boundary, service restart, Bun's client, the evaluation
+// queue and the editor's failed-autosave draft retention.
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { EventEmitter } from 'node:events'
-import {
-  createProjectMemoryStore, createProjectMemoryUpdateQueue, decodeProjectMemory, encodeProjectMemory,
-  memoryFileId, normalizeProjectMemory
-} from '../src/main/project-memory.ts'
+import { createProjectMemoryUpdateQueue } from '../src/main/project-memory.ts'
+import { projectKey } from '../src/shared/projectKey.ts'
 import { serviceProjectMemory } from '../src/native/project-memory-service.ts'
 import { NativeSheetController } from '../src/native/sheets-runtime.ts'
 
@@ -43,6 +41,8 @@ function profile(files = {}, { sessions = true } = {}) {
   for (const [project, content] of Object.entries(files)) writeFileSync(memoryFile(dir, project), content)
   return dir
 }
+/** The file name: hex SHA-256 of the project key. */
+const memoryFileId = project => createHash('sha256').update(projectKey(project)).digest('hex')
 const memoryFile = (dir, project) => join(dir, 'trezi/project-memories', `${memoryFileId(project)}.json`)
 const bytes = (dir, project) => existsSync(memoryFile(dir, project)) ? readFileSync(memoryFile(dir, project)) : null
 const record = (content, updatedAt = 1) => JSON.stringify({ content, updatedAt })
@@ -94,10 +94,9 @@ async function start(dir, env = {}) {
 
 const ok = reply => { assert.equal(reply.reply.result.kind, 'succeeded', JSON.stringify(reply)); return reply.reply.result.payload }
 const code = reply => { assert.equal(reply.reply.result.kind, 'failed', JSON.stringify(reply)); return reply.reply.result.payload.code }
-/** What the legacy Bun writer stores for this content at NOW. */
-const legacyBytes = content => encodeProjectMemory({ content: normalizeProjectMemory(content), updatedAt: NOW })
+/** What the owner stores for this content at NOW: trimmed, bounded to 16,000 characters. */
+const storedBytes = content => Buffer.from(JSON.stringify({ content: content.trim().slice(0, 16_000), updatedAt: NOW }))
 
-/** Bun's end of the private pipe, speaking to the fixture. */
 function link(dir, env = {}) {
   const child = spawn(binary, [dir], { env: { ...process.env, ...env }, stdio: ['pipe', 'pipe', 'inherit'] })
   live.add(child); child.on('exit', () => live.delete(child))
@@ -122,7 +121,7 @@ try {
   compile()
   const alpha = '/Users/me/alpha', beta = '/Users/me/beta'
 
-  // --- Byte parity with the legacy Bun writer: file IDs, stored bytes, reader verdicts ---
+  // --- The recorded format (the retired Bun writer's answers): file IDs, stored bytes, reader verdicts ---
   {
     const dir = profile()
     const fx = await start(dir)
@@ -133,21 +132,25 @@ try {
       '{"content":1,"updatedAt":2}', '{"content":"a"}', '[]', 'null', '"text"', '{"content":"a","updatedAt":"1"}', '\ufeff{"content":"a","updatedAt":1}',
       '{"content":"a","updatedAt":1} trailing', `{"content":"${'z'.repeat(16_010)}","updatedAt":3}`, '{"content":"\\ud800","updatedAt":4}']
     const swift = await fx.raw(JSON.stringify({ cmd: 'parity', roots, contents, files: files.map(f => Buffer.from(f).toString('base64')) }))
-    assert.deepEqual(swift.ids, roots.map(memoryFileId), 'file IDs')
-    assert.deepEqual(swift.encoded.map(b => Buffer.from(b, 'base64').toString('utf8')), contents.map(c => legacyBytes(c).toString('utf8')), 'stored bytes')
-    const bun = files.map(f => { try { return decodeProjectMemory(f ? Buffer.from(f) : Buffer.alloc(0)) } catch { return null } })
-    assert.deepEqual(swift.decoded, bun, 'reader verdicts and bounded content')
+    const alphaID = '6b529731176ae2d54c86846c3e4bd5c26f91359808d8bf7f8d0b517787bdf7ea'
+    assert.deepEqual(swift.ids, [alphaID, alphaID, alphaID, alphaID, '5f1d07c00650a7ef1a17bb15492c9450c24aa2f31f7272cca67b83c32937b651',
+      '8a5edab282632443219e051e4ade2d1d5bbc671c781051bf1437897cbdfea0f1', '7001dee080df793ac1b55969c808a5ebb474399c28909b6f81b55c4773624e0c'], 'file IDs')
+    assert.deepEqual(swift.ids, roots.map(memoryFileId))
+    assert.deepEqual(swift.encoded.map(b => Buffer.from(b, 'base64').toString('utf8')), contents.map(c => storedBytes(c).toString('utf8')), 'stored bytes')
+    const verdicts = [null, { content: 'a', updatedAt: 1 }, { content: 'a', updatedAt: 1.5e300 }, { content: 'b', updatedAt: 2 }, null, null, null, null, null, null, null, null,
+      { content: 'z'.repeat(16_000), updatedAt: 3 }, { content: '\ud800', updatedAt: 4 }]
+    assert.deepEqual(swift.decoded, verdicts, 'reader verdicts and bounded content')
     await fx.close()
-    console.log('MEMORY-OWNER parity: file IDs, stored bytes and reader verdicts match the legacy writer PASS')
+    console.log('MEMORY-OWNER format: file IDs, stored bytes and reader verdicts match the recorded format PASS')
   }
 
   // --- Owner basics: import, save, receipts, stale revisions, no-op, isolation ---
   {
-    const dir = profile({ [alpha]: record('- Legacy decision', 7) })
+    const dir = profile({ [alpha]: record('- Earlier decision', 7) })
     const before = bytes(dir, alpha)
     const fx = await start(dir)
     const first = ok(await fx.read(alpha))
-    assert.equal(first.content, '- Legacy decision')
+    assert.equal(first.content, '- Earlier decision')
     assert.equal(first.updatedAt, 7)
     assert.deepEqual(bytes(dir, alpha), before, 'import writes nothing')
     const empty = ok(await fx.read(beta))
@@ -156,7 +159,7 @@ try {
     const opID = randomUUID()
     const saved = await fx.op('save', alpha, '  - Manual decision  ', first.revision, opID)
     const payload = ok(saved)
-    assert.deepEqual(bytes(dir, alpha), legacyBytes('- Manual decision'), 'Swift writes the legacy bytes')
+    assert.deepEqual(bytes(dir, alpha), storedBytes('- Manual decision'), 'Swift writes the recorded bytes')
     assert.equal(saved.snapshot.content, '- Manual decision')
     assert.equal(payload.changed, true)
     assert.deepEqual(ok(await fx.op('save', alpha, '  - Manual decision  ', first.revision, opID)), payload, 'a retried operation returns its receipt')
@@ -164,14 +167,14 @@ try {
     const stale = await fx.op('save', alpha, 'Stale write', first.revision)
     assert.equal(code(stale), 'conflict')
     assert.equal(stale.snapshot.content, '- Manual decision', 'a conflict carries the current record')
-    assert.deepEqual(bytes(dir, alpha), legacyBytes('- Manual decision'))
+    assert.deepEqual(bytes(dir, alpha), storedBytes('- Manual decision'))
     const noop = ok(await fx.op('save', alpha, '- Manual decision', payload.revision))
     assert.equal(noop.changed, false, 'an unchanged save commits without writing')
     assert.equal(bytes(dir, beta), null, 'other projects are untouched')
     assert.equal(ok(await fx.read(`${alpha}/`)).content, '- Manual decision', 'a trailing slash is the same project')
     assert.deepEqual(readdirSync(join(dir, 'trezi/project-memories')).sort(), [`${memoryFileId(alpha)}.json`], 'no temp files left')
     await fx.close()
-    console.log('MEMORY-OWNER basics: import without writing, legacy bytes, receipts, idempotency, stale revision, no-op PASS')
+    console.log('MEMORY-OWNER basics: import without writing, recorded bytes, receipts, idempotency, stale revision, no-op PASS')
   }
 
   // --- Manual edit wins against a stale evaluation ---
@@ -183,7 +186,7 @@ try {
     const late = await fx.op('propose', alpha, '- Keep\n- Generated', evaluated.revision)
     assert.equal(code(late), 'conflict', 'a proposal evaluated before the manual save is refused')
     assert.equal(late.snapshot.content, '- Keep\n- Manual')
-    assert.deepEqual(bytes(dir, alpha), legacyBytes('- Keep\n- Manual'))
+    assert.deepEqual(bytes(dir, alpha), storedBytes('- Keep\n- Manual'))
     ok(await fx.op('propose', alpha, '- Keep\n- Manual\n- Generated', manual.revision))
     assert.equal(ok(await fx.read(alpha)).content, '- Keep\n- Manual\n- Generated', 'a current proposal commits')
     const current = ok(await fx.read(alpha))
@@ -273,7 +276,7 @@ try {
     const fresh = profile({}, { sessions: false })
     fx = await start(fresh)
     ok(await fx.op('save', alpha, '- Fresh', ok(await fx.read(alpha)).revision))
-    assert.deepEqual(bytes(fresh, alpha), legacyBytes('- Fresh'), 'a fresh profile gets its store')
+    assert.deepEqual(bytes(fresh, alpha), storedBytes('- Fresh'), 'a fresh profile gets its store')
     await fx.close()
     console.log('MEMORY-OWNER session store: refuses beside a legacy store, writes through the alias, creates a fresh one PASS')
   }
@@ -290,14 +293,14 @@ try {
       assert.equal(bytes(dir, alpha).toString(), record('- Before'), `${step}: nothing changed`)
       assert.deepEqual(readdirSync(join(dir, 'trezi/project-memories')).length, 1, `${step}: no temp file`)
       ok(await fx.op('save', alpha, '- After', base.revision))
-      assert.deepEqual(bytes(dir, alpha), legacyBytes('- After'), `${step}: the retry succeeds`)
+      assert.deepEqual(bytes(dir, alpha), storedBytes('- After'), `${step}: the retry succeeds`)
       await fx.close()
     }
     {
       const dir = profile({ [alpha]: record('- Before') })
       const fx = await start(dir, { MEMORY_FAIL: 'directory' })
       ok(await fx.op('save', alpha, '- After', ok(await fx.read(alpha)).revision))
-      assert.deepEqual(bytes(dir, alpha), legacyBytes('- After'), 'a directory-sync failure keeps the visible commit')
+      assert.deepEqual(bytes(dir, alpha), storedBytes('- After'), 'a directory-sync failure keeps the visible commit')
       await fx.close()
     }
     const expected = { intent: ['- Before', 'failed'], effect: ['- Before', 'failed'], 'after-rename': ['- After', 'succeeded'], receipt: ['- After', 'succeeded'] }
@@ -315,21 +318,21 @@ try {
       assert.equal(ok(await fx.read(alpha)).content, content, `${point}: never replayed`)
       await fx.close()
     }
-    // A crash after the rename, then a legacy-owner write: the legacy write is kept.
+    // A crash after the rename, then an edit outside Trezi before the relaunch: that edit is kept.
     {
       const dir = profile({ [alpha]: record('- Before') })
       let fx = await start(dir, { MEMORY_CRASH: 'after-rename' })
       await fx.crash(fx.frame('save', { root: alpha, content: '- Swift' }, ok(await fx.read(alpha)).revision))
-      await createProjectMemoryStore(join(dir, 'trezi'), () => NOW + 5).save(alpha, '- Legacy newer')
+      writeFileSync(memoryFile(dir, alpha), record('- External newer', NOW + 5))
       fx = await start(dir)
-      assert.equal(ok(await fx.read(alpha)).content, '- Legacy newer')
-      assert.equal(bytes(dir, alpha).toString(), record('- Legacy newer', NOW + 5))
+      assert.equal(ok(await fx.read(alpha)).content, '- External newer')
+      assert.equal(bytes(dir, alpha).toString(), record('- External newer', NOW + 5))
       await fx.close()
     }
-    console.log('MEMORY-OWNER interrupted persistence: failed steps change nothing, SIGKILL at intent/effect/after-rename/receipt reconciled, newer legacy write kept PASS')
+    console.log('MEMORY-OWNER interrupted persistence: failed steps change nothing, SIGKILL at intent/effect/after-rename/receipt reconciled, newer external write kept PASS')
   }
 
-  // --- Service restart and launch-time rollback ---
+  // --- Service restart ---
   {
     const dir = profile({ [alpha]: record('- Old') })
     let fx = await start(dir)
@@ -343,17 +346,15 @@ try {
     assert.deepEqual(ok(await fx.op('save', alpha, '- Swift newest', base.revision, opID)), saved, 'and receipts')
     await fx.close()
 
-    const legacy = createProjectMemoryStore(join(dir, 'trezi'), () => NOW + 10)
-    const backup = bytes(dir, alpha)
-    assert.equal((await legacy.get(alpha)).content, '- Swift newest', 'the legacy owner reads the newest Swift write')
-    await legacy.save(alpha, '- Legacy newer')
+    // A write made while the service was down is adopted at the next launch.
+    assert.deepEqual(bytes(dir, alpha), storedBytes('- Swift newest'))
+    writeFileSync(memoryFile(dir, alpha), record('- Offline newer', NOW + 10))
     const newest = bytes(dir, alpha)
     fx = await start(dir)
-    assert.equal(ok(await fx.read(alpha)).content, '- Legacy newer', 'Swift adopts the newer legacy write')
+    assert.equal(ok(await fx.read(alpha)).content, '- Offline newer', 'the newer file is adopted')
     assert.deepEqual(bytes(dir, alpha), newest, 'adoption rewrites nothing')
-    assert.notDeepEqual(bytes(dir, alpha), backup, 'the old version is never restored')
     await fx.close()
-    console.log('MEMORY-OWNER restart/rollback: content, revision and receipts survive; legacy reads Swift; Swift adopts legacy; no old-version restore PASS')
+    console.log('MEMORY-OWNER restart: content, revision and receipts survive; an offline write is adopted, not replaced PASS')
   }
 
   // --- Bun's client, the evaluation queue and the editor against the real owner ---

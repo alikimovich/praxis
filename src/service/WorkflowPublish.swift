@@ -1,9 +1,8 @@
 import Foundation
 import Darwin
 
-/// Publication (S13): the Swift twin of `src/main/annotations.ts` (`shipToMain`,
-/// `publishToPr`), `publish-reconcile.ts` and `agent:spawn-pr`, with the same checks,
-/// Git sequence and messages. Each runs in two phases around Bun's description helper:
+/// Publication (S13): Publish (merge or PR only), the notes handoff and a saved run's PR
+/// (`agent:spawn-pr`), the sole owner since LKM-111 removed the TS twin. Each runs in two phases around Bun's description helper:
 /// phase one commits and pushes (answering `describe` with the pushed range), phase
 /// two creates or reuses the PR, merges and cleans up. Remote steps are journaled and
 /// reconciled from GitHub before anything is repeated: an open PR for the branch is
@@ -299,7 +298,7 @@ struct WorkflowPublish {
         }
     }
 
-    // MARK: Reconciled push (publish-reconcile.ts)
+    // MARK: Reconciled push
 
     struct Pushed { var ok: Bool; var action = ""; var attempts = 0; var refs: [String] = []; var files: [String] = [] }
 

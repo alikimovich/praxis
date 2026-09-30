@@ -1,3 +1,4 @@
+import './helpers/with-service-owners.mjs'
 import assert from 'node:assert/strict'
 import { parse } from '@babel/parser'
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises'
@@ -69,7 +70,7 @@ try {
       blocks: [{ id: 'shadow', title: 'Shadow Light', kind: 'shadow', output, params: [...keys, 'output'] }] }
     assert.equal(islandDefinition(request).blocks[0].output, output)
     assert.throws(() => islandDefinition({ ...request, manifest: { ...request.manifest, params: request.manifest.params.map(p => p.id === 'layers' ? { ...p, step: .1 } : p) } }), /integer/)
-    const islands = new ChatIslands(store, () => {})
+    const islands = new ChatIslands(() => {})
     islands.register(output, root, output, () => 1)
     const made = await islands.tool(output, root, request)
     assert.ok(made.id, JSON.stringify(made))

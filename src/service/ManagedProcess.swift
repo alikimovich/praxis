@@ -247,7 +247,7 @@ final class RuntimeJournal: @unchecked Sendable {
     func remove(_ pgid: pid_t) { lock.lock(); groups.removeAll { $0.pgid == pgid }; persist(); lock.unlock() }
 
     /// Stops groups a previous owner left behind, then empties the journal. With no
-    /// journal it creates nothing (the legacy launch never creates Swift state).
+    /// journal it creates nothing.
     @discardableResult
     func sweep() -> [pid_t] {
         lock.lock(); defer { lock.unlock() }

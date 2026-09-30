@@ -15,7 +15,7 @@ src/
     ServiceClient.swift / HostService.swift   the host's versioned XPC connection to
                     the Swift service (handshake, reattach, bounded outbox) and its
                     AppKit quit/restart/exit-status integration
-    bridge.ts       private legacy JSON bridge to the supervising service
+    bridge.ts       private JSON bridge to the supervising service
     Shell.swift     sidebar/project actions, project/chat navigation, split view and
                     the column-aligned toolbar (sidebar toggle, chat actions, preview
                     controls, Publish)
@@ -42,14 +42,12 @@ src/
     platform.ts     direct native service imports, native event routing, WebKit proxy.
                     Services import it directly; there is no Electron alias or
                     dependency. Opening links and files goes to the platform owner
-                    (src/service/PlatformOpen.swift); Keychain crypto and `open` live
-                    in platform-legacy.ts, the rollback twin (`TREZI_BACKEND_OWNER=legacy`)
+                    (src/service/PlatformOpen.swift); Keychain crypto runs in
+                    `TreziHost --crypto`, which the service calls
     profile-path.ts   only resolves the profile aliases; the service creates them
                     (src/service/ProfilePaths.swift, `TreziService --resolve-profile`,
-                    made under the profile lock before Bun starts);
-                    profile-path-legacy.ts creates them without the service and
-                    refuses under `TREZI_SERVICE_LOCKED=1`. index.ts refuses to start
-                    without the service's profile lock
+                    made under the profile lock before Bun starts). index.ts refuses
+                    to start without the service's profile lock
     preview-transport.ts   restricted isolated WKContentWorld transport
     assets/cat/     original native animation artwork consumed by the native build
   preview/preload.ts  isolated WKWebView instrumentation: selection, comments,
@@ -99,14 +97,19 @@ docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec
 
 ## Lifecycle
 
-- `install.sh` (curl one-liner) clones to `~/.trezi`, builds, and puts `trezi` on
-  PATH. `trezi` launches the built app; `trezi --update` pulls + rebuilds. Native
+- `install.sh` (curl one-liner) clones to `~/.trezi`, builds, links `Trezi.app` into
+  Applications and puts `trezi` (`bin/trezi`) on PATH. The one start path is
+  `open -a Trezi` or `trezi` / `trezi .` / `trezi <path>` (a thin `open -a`);
+  `trezi --update` pulls + rebuilds. The app carries its own Bun
+  (`Contents/Helpers/bun`) and backend (`Contents/Resources/backend/`), so no
+  installed Bun is needed at runtime. Native
   Settings uses `src/native/update-controller.ts` to guard unsaved work,
   check/pull/install/build, and restart.
-- `bun run dev`/`start`/`trezi` go through `scripts/start-native.mjs`; see
-  [service-owners.md](service-owners.md) for what the Swift service owns and the
-  `TREZI_BACKEND_OWNER=legacy` rollback.
-- The chat runs in `main` via provider SDKs; output streams over `agent:*` IPC into
+- `bun run dev`/`start` (development) go through `scripts/start-native.mjs`; see
+  [service-owners.md](service-owners.md) for what the Swift service owns (there is
+  no Bun rollback launch since LKM-111).
+- The chat runs via provider SDKs (built-in adapters in Swift-supervised provider
+  helpers, v10 connections in `main`); output streams over `agent:*` IPC into
   Bun chat controllers, which send typed state to Swift.
 - Trezi **owns** the dev-server lifecycle of the target repo: never run the target's
   `dev` manually; it's killed on app quit. The app awaits managed process-group

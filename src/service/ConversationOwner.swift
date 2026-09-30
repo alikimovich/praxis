@@ -133,7 +133,7 @@ final class ConversationOwner: @unchecked Sendable {
             if state.chats[key] != nil { _ = try adopt(key, record: record, sequence: sequence) }
             let (chat, released) = state.close(key)
             var saved = false
-            // Only engaged chats (≥1 prompt) are kept, as the legacy owner does.
+            // Only engaged chats (≥1 prompt) are kept.
             if let chat, persist != "none", Self.engaged(chat.record) {
                 var final = chat.record
                 if persist == "history" { ConversationState.set(&final, "slot", nil) }

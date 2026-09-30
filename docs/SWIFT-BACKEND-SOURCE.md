@@ -1,5 +1,10 @@
 # Swift source transactions, file operations, Undo and parser proposals (S08/S09)
 
+> **Since LKM-111 (2026-09-29):** the launch-time rollback (`TREZI_BACKEND_OWNER=legacy`,
+> `TreziService --legacy`) and the Bun twins it ran are removed. The Swift owner described
+> here is the only one; passages about the rollback, the legacy launch or the TS twins
+> are history. Current status: [SWIFT-BACKEND-RETIREMENT.md](SWIFT-BACKEND-RETIREMENT.md).
+
 LKM-96, roadmap rows S08 ("Source transactions, file tree, media reads, drafts and
 Undo") and S09 ("Parser/source-edit helper extraction") of the
 [canonical plan](SWIFT-BACKEND-PLAN.md) and [roadmap](SWIFT-BACKEND-ROADMAP.md). It
@@ -128,7 +133,8 @@ transaction) and drives them through Bun's clients and the unchanged TS engines:
   (props, text), `editable-app` (HTML text) and `layers-app` (move) fixtures are edited,
   undone and redone by the legacy owner and the Swift owner with identical results and
   identical bytes after every step; `shadow-controls` (islands, Styles, Undo) re-runs
-  unchanged with the Swift owner preloaded (`test/helpers/source-owner-preload.mjs`);
+  unchanged with the Swift owner installed (since LKM-111
+  `test/helpers/with-service-owners.mjs`, the only owner; the legacy side is history);
 - **proposals:** out-of-order parses, an external edit, a deadline-expired proposal
   behind a held lease and invalid schemas write nothing;
 - **paths:** traversal, protected folders, symlinked file and folder escapes; a link

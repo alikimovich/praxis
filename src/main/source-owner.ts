@@ -9,8 +9,7 @@ import type { FileOpResult } from '../shared/api'
  * and the new text — and it commits the proposal only if the file still holds those
  * bytes, in the repository's lane, as a journaled transaction that enters the
  * grouped Undo history. File-tree operations, Undo/redo/revert and the editor's
- * drafts go through it too. With no owner (the `TREZI_BACKEND_OWNER=legacy` launch
- * and the pure unit tests) the legacy writers run exactly as before. Never both.
+ * drafts go through it too. There is no other writer (LKM-111 removed the TS twin).
  */
 
 /** SHA-256 hex of the exact bytes (a string is hashed as UTF-8, as it is written). */
@@ -96,6 +95,7 @@ export function setSourceOwner(next: SourceOwner | null): void {
   owner = next
 }
 
-export function sourceOwner(): SourceOwner | null {
+export function sourceOwner(): SourceOwner {
+  if (!owner) throw new Error('Trezi’s service is not running, so the source cannot be changed.')
   return owner
 }

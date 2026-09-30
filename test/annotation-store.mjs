@@ -2,16 +2,17 @@
 // pre-S05 format, damaged files preserved, unknown entries kept, per-project
 // serialization and no Git or publication side effect. Since S15 the store only
 // renders: every write is a hash-bound sidecar commit by the editing owner (here
-// its legacy twin; test/editing-owner.mjs proves the Swift owner commits the same),
+// the real Swift one, the only writer since LKM-111),
 // so a hand edit between read and commit is re-read, never overwritten. The
 // starter tokens scaffold uses the same create-only commit.
+import './helpers/with-service-owners.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createAnnotationStore } from '../src/main/annotation-store.ts'
-import { commitSidecarLocally } from '../src/main/editing-model.ts'
+import { editingOwner } from '../src/main/editing-owner.ts'
 import { registerTokensIpc } from '../src/main/tokens.ts'
 
 const scratch = mkdtempSync(join(tmpdir(), 'trezi-annotation-store-'))
@@ -84,7 +85,7 @@ try {
     newId: () => 'r1',
     commit: async (root, expected, content) => {
       if (!raced++) writeFileSync(join(root, '.trezi/annotations.json'), JSON.stringify([{ id: 'hand', text: 'Hand edit' }]))
-      return commitSidecarLocally(root, 'annotations.json', expected, content)
+      return editingOwner().sidecar(root, 'annotations.json', expected, content)
     }
   })
   mkdirSync(join(racy, '.trezi'))

@@ -2,8 +2,8 @@ import Foundation
 import CryptoKit
 import Darwin
 
-/// Scoped media capabilities for the native source editor (S14, formerly the Bun
-/// `trezi-media://` token registry in `src/main/media.ts`). A grant names one file the
+/// Scoped media capabilities for the native source editor (S14, which replaced
+/// Bun's `trezi-media://` token registry). A grant names one file the
 /// owner authorized inside a project (the source service's path rules: no traversal,
 /// no Git store, sidecars or dependencies, symlinks only to project files), one view
 /// (the source editor), its size, identity (device, inode, modification time) and
@@ -155,7 +155,7 @@ final class MediaScopes: @unchecked Sendable {
     }
 }
 
-/// Pasted composer images (formerly `attachments:save` in Bun, `src/main/attachments.ts`):
+/// Pasted composer images (formerly `attachments:save` in Bun):
 /// the bytes arrive in bounded chunks against an upload scope that fixes their media
 /// type, size and SHA-256 and expires when idle; only a complete, matching upload is
 /// written, under `<profile>/trezi/attachments` (a real directory, never a link), with
@@ -184,7 +184,7 @@ final class AttachmentUploads: @unchecked Sendable {
 
     var count: Int { lock.lock(); defer { lock.unlock() }; return uploads.count }
 
-    /// `safeStem` + `attachmentFileName` in attachments.ts.
+    /// `safeStem` + `attachmentFileName` from the retired attachments.ts.
     static func fileName(mediaType: String, name: String?, stamp: String) -> String {
         let ext = extensions[mediaType.lowercased()] ?? "png"
         var stem = ""

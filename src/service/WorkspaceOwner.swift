@@ -5,7 +5,7 @@ import Foundation
 /// membership, order, the selected project and recents. Per-project metadata owned
 /// by legacy Bun slices (sessions, servers, Git, display) arrives through the typed
 /// `update` adapter and is persisted, never interpreted. The file keeps its legacy
-/// format, so the `TREZI_BACKEND_OWNER=legacy` Bun writer can take it back unchanged.
+/// format; this is its only writer since LKM-111.
 ///
 /// Same commit protocol as preferences, inside the ledger's FIFO lane: re-read (an
 /// external edit conflicts and is adopted), apply, write a 0600 temp file and
@@ -42,7 +42,7 @@ actor WorkspaceOwner: PipeDomainOwner {
     /// workspace is never replaced: the domain stays unavailable and the file untouched.
     func open() async {
         guard let ledger else {
-            failure = Self.fail(.recoveryRequired, "The operation ledger could not be opened, so the workspace cannot be saved. Quit and relaunch, or relaunch with TREZI_BACKEND_OWNER=legacy.")
+            failure = Self.fail(.recoveryRequired, "The operation ledger could not be opened, so the workspace cannot be saved. Quit and relaunch Trezi.")
             return
         }
         let data: Data?, parsed: WorkspaceDocument
@@ -64,8 +64,8 @@ actor WorkspaceOwner: PipeDomainOwner {
         digest = current.value["digest"]?.string ?? PreferencesDisk.absent
         revision = current.revision
         failure = nil
-        // Changed since the last checkpoint (e.g. the legacy owner saved newer
-        // projects): adopted as a new revision, never overwritten.
+        // Changed since the last checkpoint (e.g. an edit made while the service was down
+        // saved newer projects): adopted as a new revision, never overwritten.
         if let problem = await adopt() { failure = problem }
     }
 

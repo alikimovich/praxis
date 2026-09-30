@@ -4,8 +4,8 @@ import Darwin
 
 /// One project's memory, `<profile>/trezi/project-memories/<id>.json`, in its
 /// unchanged legacy format `{"content":…,"updatedAt":ms}`. `id` is the SHA-256 of
-/// `projectKey(root)`. The rules are the Bun rollback writer's
-/// (`src/main/project-memory.ts`) and produce the same bytes. (S05, LKM-93)
+/// `projectKey(root)`. The rules and bytes are the retired Bun writer's
+/// (recorded in `test/memory-owner.mjs`); the only writer since LKM-111. (S05, LKM-93)
 struct MemoryRecord: Equatable, Sendable {
     /// Model context, not document storage: JS `.length` bound on read and write.
     static let maxContent = 16_000

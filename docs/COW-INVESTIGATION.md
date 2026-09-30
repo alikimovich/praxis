@@ -10,10 +10,11 @@ capture costs, measures private-index reuse, and reproduces its correctness haza
 
 ## Measurements
 
-Run `bun scripts/benchmark-workspace-cow.mjs 5` on macOS with Command Line Tools.
-The script exports this repository's committed HEAD into disposable repositories,
-adds staged and untracked WIP, imports the actual production workspace functions,
-and removes its fixtures afterwards. It never changes the original repo's Git state.
+`scripts/benchmark-workspace-cow.mjs 5` produced these on macOS with Command Line Tools;
+LKM-111 removed it with the TS workspace functions it imported. The script exported
+this repository's committed HEAD into disposable repositories, added staged and
+untracked WIP, imported the production workspace functions of the time and removed its
+fixtures afterwards. It never changed the original repo's Git state.
 Raw output is in [cow-benchmark.jsonl](cow-benchmark.jsonl).
 
 Machine: macOS 26.4.1, arm64, APFS (filesystem type 26), Bun 1.3.13,

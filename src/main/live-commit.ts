@@ -1,5 +1,3 @@
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 import { repositoryOwner } from './repository-owner'
 import { excludedWorktreePath } from './worktrees'
 
@@ -25,17 +23,10 @@ import { excludedWorktreePath } from './worktrees'
  *    up the enclosing repo, which is exactly the surprise `isRepoRoot` exists to avoid;
  *  - best-effort: any git failure (mid-merge partial commit, hooks, missing identity)
  *    returns `committed: false` and never throws. A failed commit just leaves the
- *    change in the working tree, i.e. the behavior before this existed.
+ *    change in the working tree.
  *
- * Pure (child_process + git only, no electron) so it's unit-testable against temp repos.
+ * The service's repository owner makes the commit (S07); this module shapes it.
  */
-
-const execFileP = promisify(execFile)
-
-const git = (root: string, args: string[]): Promise<{ stdout: string }> =>
-  execFileP('git', args, { cwd: root, timeout: 15000, maxBuffer: 16 * 1024 * 1024 }) as Promise<{
-    stdout: string
-  }>
 
 /** Longest commit SUBJECT we write — keeps `git log --oneline` readable when the turn's
  *  prompt was a paragraph. The full prompt is not repeated in the body (the chat has it). */
@@ -67,20 +58,6 @@ export interface LiveCommit {
   files: string[]
 }
 
-/** Is `root` the TOP LEVEL of a git repo? (Local copy of `git.ts`'s check without the
- *  realpath round-trip: a mismatch here just means we skip the commit.) */
-async function atRepoRoot(root: string): Promise<boolean> {
-  try {
-    const inside = (await git(root, ['rev-parse', '--is-inside-work-tree'])).stdout.trim()
-    if (inside !== 'true') return false
-    // `--show-cdup` is empty exactly at the top level — cheaper and symlink-proof
-    // compared with comparing `--show-toplevel` against `root`.
-    return (await git(root, ['rev-parse', '--show-cdup'])).stdout.trim() === ''
-  } catch {
-    return false
-  }
-}
-
 /**
  * Commit the files a finished turn changed onto the live checkout. `files` are
  * repo-relative (git's own staged list from `commitWorktree`, not a tool heuristic).
@@ -94,46 +71,6 @@ export async function commitLiveTurn(
 ): Promise<LiveCommit> {
   const paths = committableFiles(files)
   if (!paths.length) return { committed: false, files: [] }
-  const owner = repositoryOwner()
-  if (owner) {
-    // Same pathspec commit, in the repository's lane; the service re-checks the paths.
-    return owner.commitLive(root, paths, commitTitle(message.title), message.body).catch(() => ({ committed: false, files: [] }))
-  }
-  if (!(await atRepoRoot(root))) return { committed: false, files: [] }
-  const pathArgs = ['--', ...paths]
-  try {
-    // Stage first: a pathspec commit only matches paths git already knows, so a file
-    // the turn CREATED needs the add. `add` also records deletions.
-    await git(root, ['add', ...pathArgs])
-    const staged = (await git(root, ['diff', '--cached', '--name-only', ...pathArgs])).stdout
-      .split('\n')
-      .map((s) => s.trim())
-      .filter(Boolean)
-    // The merge wrote content identical to HEAD (e.g. the user had already made the
-    // same edit by hand) — nothing to record.
-    if (!staged.length) return { committed: false, files: [] }
-    await git(root, [
-      // Forced identity so a repo with no user.name still commits, and `--no-verify`
-      // so a target repo's pre-commit hook (husky/lint-staged on a half-finished
-      // refactor) can't abort the turn's commit. Same reasoning as `commitWorktree`.
-      '-c',
-      'user.name=Trezi',
-      '-c',
-      'user.email=trezi@local',
-      'commit',
-      '--no-verify',
-      '-m',
-      commitTitle(message.title),
-      ...(message.body ? ['-m', message.body] : []),
-      // Pathspec ⇒ partial commit: commits these files' working-tree content and
-      // leaves the rest of the index (the user's own staged work) alone.
-      ...pathArgs
-    ])
-    const sha = (await git(root, ['rev-parse', 'HEAD'])).stdout.trim()
-    return { committed: true, sha, files: staged }
-  } catch {
-    // Best-effort: the change is already merged into the working tree, so a failed
-    // commit is exactly the pre-existing behavior, not lost work.
-    return { committed: false, files: [] }
-  }
+  // A pathspec commit in the repository's lane; the service re-checks the paths.
+  return repositoryOwner().commitLive(root, paths, commitTitle(message.title), message.body).catch(() => ({ committed: false, files: [] }))
 }

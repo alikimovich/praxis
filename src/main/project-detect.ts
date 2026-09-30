@@ -2,13 +2,25 @@ import { access, readFile, readdir } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type { DetectedProject, Framework, PreviewKind } from '../shared/api'
 import { projectPackageManager } from './project-dependencies'
-import { findStaticEntry } from './static-server'
 
 /**
- * Project runtime detection and launch commands, shared by the legacy Bun runner
- * (`devserver.ts`) and mirrored byte for byte by the Swift owner
- * (`src/service/RuntimeDetect.swift`, S06). Pure: file reads only.
+ * Project runtime detection and launch commands: the reference the Swift owner
+ * (`src/service/RuntimeDetect.swift`, S06) mirrors byte for byte, checked by
+ * `test/runtime-owner.mjs`. Pure: file reads only.
  */
+
+/** Find the entry HTML to serve for the directory root: index.html, else the first *.html. */
+export async function findStaticEntry(root: string): Promise<string | null> {
+  try {
+    const names = await readdir(root)
+    if (names.includes('index.html')) return 'index.html'
+    if (names.includes('index.htm')) return 'index.htm'
+    const html = names.filter((n) => /\.html?$/i.test(n)).sort()
+    return html[0] ?? null
+  } catch {
+    return null
+  }
+}
 
 // The preview always runs on a free port we pick (from this base) bound to IPv4
 // loopback — so it never collides with the framework default (5173/3000), never

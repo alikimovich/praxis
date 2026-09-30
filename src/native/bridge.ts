@@ -1,7 +1,18 @@
-import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import type { Writable } from 'node:stream'
+import type { Readable, Writable } from 'node:stream'
 import { createInterface } from 'node:readline'
+
+/**
+ * Where the host's frames come from. In Trezi that is always the Swift service's
+ * private pipe (this process's stdin/stdout). Tests that drive a bare `TreziHost`
+ * pass the child they spawned (`test/helpers/host-bridge.mjs`).
+ */
+export interface HostTransport {
+  input: Readable
+  output: Writable
+  child?: ChildProcessWithoutNullStreams
+}
 
 export class NativeBridge extends EventEmitter {
   child?: ChildProcessWithoutNullStreams
@@ -18,14 +29,12 @@ export class NativeBridge extends EventEmitter {
       timer: ReturnType<typeof setTimeout>
     }
   >()
-  constructor(executable: string, directory: string, profile: string) {
+  constructor(transport: HostTransport = { input: process.stdin, output: process.stdout }) {
     super()
-    const supervised = process.env.TREZI_SERVICE_SUPERVISED === '1'
-    this.child = supervised ? undefined : spawn(executable, [directory, profile], { stdio: 'pipe' })
-    const input = this.child?.stdout ?? process.stdin
-    this.output = this.child?.stdin ?? process.stdout
-    const lines = createInterface({ input })
-    // In service mode EOF is sent only after the host's final events drain.
+    this.child = transport.child
+    this.output = transport.output
+    const lines = createInterface({ input: transport.input })
+    // Under the service EOF is sent only after the host's final events drain.
     this.closed = new Promise(resolve => {
       if (this.child) this.child.once('close', () => resolve())
       else lines.once('close', () => resolve())
@@ -33,7 +42,6 @@ export class NativeBridge extends EventEmitter {
     this.output.on('error', (error) => {
       if ((error as NodeJS.ErrnoException).code !== 'EPIPE') this.emit('host-error', error)
     })
-    this.child?.stderr.pipe(process.stderr)
     lines.on('line', (line) => {
       try {
         const message = JSON.parse(line)
@@ -77,7 +85,7 @@ export class NativeBridge extends EventEmitter {
     if (this.output.destroyed) return
     this.output.write(`${JSON.stringify({ method, ...data })}\n`)
   }
-  /** Supervised only: a frame for the Swift service itself (no `method`, so it never reaches the host). */
+  /** A frame for the Swift service itself (no `method`, so it never reaches the host). */
   sendService(frame: { service: string }) {
     if (this.output.destroyed) return
     this.output.write(`${JSON.stringify(frame)}\n`)

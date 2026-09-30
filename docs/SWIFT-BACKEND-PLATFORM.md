@@ -1,5 +1,10 @@
 # Swift platform owner: Simulator, media, attachments, server recovery (S14)
 
+> **Since LKM-111 (2026-09-29):** the launch-time rollback (`TREZI_BACKEND_OWNER=legacy`,
+> `TreziService --legacy`) and the Bun twins it ran are removed. The Swift owner described
+> here is the only one; passages about the rollback, the legacy launch or the TS twins
+> are history. Current status: [SWIFT-BACKEND-RETIREMENT.md](SWIFT-BACKEND-RETIREMENT.md).
+
 LKM-101, roadmap row S14 ("Simulator and platform process integration") of the
 [canonical plan](SWIFT-BACKEND-PLAN.md) and [roadmap](SWIFT-BACKEND-ROADMAP.md). It follows
 [workflows](SWIFT-BACKEND-WORKFLOWS.md). Under the default launch (`TREZI_BACKEND_OWNER=swift`)
@@ -13,14 +18,15 @@ Simulator preview, the source editor's media access, pasted composer images and 
   the app's launch command as a supervised group, idb, picks, stop, supersede) and `MetroGate`.
 - `src/service/SimulatorBridge.swift`: the loopback bridge (page, MJPEG stream, control) and
   `FrameCapture`.
-- `src/service/SimulatorTools.swift`: pure twins of `src/main/xcode.ts` and the parsing half of
-  `src/main/simulator.ts`, and the bridge page.
+- `src/service/SimulatorTools.swift`: the xcrun/idb parsing (Bun's `xcode.ts` twin was removed in
+  LKM-111) and the bridge page.
 - `src/service/PlatformMedia.swift`: `MediaScopes` (media grants) and `AttachmentUploads`.
 - `src/service/PlatformTools.swift`: `PlatformTool` (bounded tool runs), `ToolScope`
   (cancellation) and `PreviewServers` (the recovery sheet's inspection and stop).
-- `src/native/platform-service.ts`: Bun's client; `src/main/platform-owner.ts` is the seam. The
-  rollback owner is the original TS code: `simulator.ts`, `media.ts`, `attachments.ts`,
-  `src/native/preview-processes.ts`.
+- `src/native/platform-service.ts`: Bun's client; `src/main/platform-owner.ts` is the seam and
+  `src/main/simulator.ts` wires the Simulator views. The rollback owner (`media.ts`,
+  `attachments.ts`, `preview-processes.ts` and the process half of `simulator.ts`) was
+  removed in LKM-111.
 
 ## The domain, exactly
 
@@ -94,9 +100,9 @@ Events: `{"event":"service-event","service":"platform","kind":"simulator-log","l
 | `openInEditor` (LKM-102) | mutation | `{root, path, line, column?}`: a file inside the project; `code -g`, `cursor -g`, `zed`, `subl`, then `open` → `{ok, error?}` |
 
 `PlatformOpen.swift` replaced Bun's own `open` and editor CLI runs (`native/platform.ts`,
-`main/props.ts`); their rollback twins are `native/platform-legacy.ts` and
-`main/open-in-editor-legacy.ts`, and `test/helpers/platform-checks.mjs` (`checkOpen`)
-compares the two argv for argv.
+`main/props.ts`). Their rollback twins were removed in LKM-111;
+`test/helpers/platform-checks.mjs` (`checkOpen`) checks the owner's argv against
+scripted `open`/editor commands.
 
 ## Rollback (tightened to this domain)
 

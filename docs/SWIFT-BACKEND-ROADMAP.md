@@ -1,5 +1,10 @@
 # Swift backend implementation roadmap
 
+> **History note (LKM-111, 2026-09-29):** this document predates LKM-111, which removed
+> the Bun rollback launch (`TREZI_BACKEND_OWNER=legacy`, `TreziService --legacy`), its
+> twins and several modules named here. The current census is in
+> [SWIFT-BACKEND-RETIREMENT.md](SWIFT-BACKEND-RETIREMENT.md).
+
 LKM-88, 2026-09-28. This expands the eight phases of the
 [canonical plan](SWIFT-BACKEND-PLAN.md) into 15 implementation boundaries.
 S01 is LKM-88; S02–S15 are stable local task IDs, not assertions about external

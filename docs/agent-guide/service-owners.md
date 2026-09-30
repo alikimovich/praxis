@@ -5,7 +5,7 @@ Moved from the old `CLAUDE.md` (architecture tree, `src/service/`) and `AGENTS.m
 
 ## Who writes what
 
-A separate Swift XPC service owns profile exclusion, supervises legacy Bun and holds
+A separate Swift XPC service owns profile exclusion, supervises the Bun backend and holds
 the durable operation ledger (S03). One transfer at a time it has taken over domain
 writers from Bun:
 
@@ -22,19 +22,23 @@ writers from Bun:
 | LKM-99 | the editing workflows' state: chat island histories and activation (bound to the defining turn), the controls sidecars (hash-bound commits), content-editor drafts and deferred preview navigation; Bun keeps the JS helpers and inspector views | `docs/SWIFT-BACKEND-EDITING.md` |
 | LKM-100 | Trezi's side-effecting workflows outside a chat turn (Publish and PRs, Connect to GitHub, remote pull/switch, setup helpers, new projects, Trezi's update, the diagnosis memory) as journaled workflows with receipts, so a lost reply or crash never repeats a PR, merge or update; Bun keeps the proposing helpers and the sheets | `docs/SWIFT-BACKEND-WORKFLOWS.md` |
 | LKM-101 | the iOS Simulator preview (bounded, cancellable xcrun/idb runs, the launch command as a journaled group, the loopback bridge), scoped media grants to the source editor, pasted attachments and the running-servers recovery | `docs/SWIFT-BACKEND-PLATFORM.md` |
-| LKM-102 | the last census rows: provider data (connections store, model catalog cache, Codex model discovery: `ProviderData.swift`), opening links, files and the editor (`PlatformOpen.swift`), the profile and session-store aliases (`ProfilePaths.swift`), the profile lock (Bun no longer takes one), the `annotations.json` and `tokens.json` sidecars (`EditingProject.swift`), the feedback issue and skill-pack installs (`WorkflowTools.swift`, `WorkflowContext.swift`). The SDK adapters run in Bun by default; provider helpers are an explicit opt-in (`TREZI_PROVIDER_HELPERS=1`) and v10 connections stay in-process | `docs/SWIFT-BACKEND-RETIREMENT.md` |
+| LKM-102 | the last census rows: provider data (connections store, model catalog cache, Codex model discovery: `ProviderData.swift`), opening links, files and the editor (`PlatformOpen.swift`), the profile and session-store aliases (`ProfilePaths.swift`), the profile lock (Bun no longer takes one), the `annotations.json` and `tokens.json` sidecars (`EditingProject.swift`), the feedback issue and skill-pack installs (`WorkflowTools.swift`, `WorkflowContext.swift`) | `docs/SWIFT-BACKEND-RETIREMENT.md` |
+| LKM-111 | the built-in Claude, Codex and Gemini adapters run by default in provider helpers the service supervises (v10 connections stay in Bun); the Bun rollback launch and its twins are gone; the retained JS and a Bun binary ship inside `Trezi.app` | `docs/SWIFT-BACKEND-RETIREMENT.md` |
 
 The census in `docs/SWIFT-BACKEND-RETIREMENT.md` has 0 Bun-owned rows: every Bun module
-that writes a file, spawns a process or signals is a rollback twin, a helper or a test.
-Bun still hosts the provider SDK adapters, the source parsers and the UI-side
-controllers; moving the adapters, the live parity run and removing the legacy owners
-(`TREZI_BACKEND_OWNER=legacy`) are LKM-111.
+that writes a file, spawns a process or signals is a helper or a test. There is no
+fallback: without the service, each owner seam throws ("Trezi’s service is not
+running, so …"). Bun still hosts the UI-side controllers, the source parsers and (in
+helpers) the provider SDK adapters.
 
 ## The launch path
 
-`bun run dev`/`start`/`trezi` go through `scripts/start-native.mjs`: the host
-connects over XPC to the bundled Swift service, which takes the profile lock and
-supervises Bun over private pipes. The service writes `preferences.json`, `workspace.json`
+`open -a Trezi` and the `trezi` command start `Trezi.app` under LaunchServices
+(`src/native/HostLaunch.swift` derives the launch); `bun run dev` goes through
+`scripts/start-native.mjs` for development. Either way the host connects over XPC to
+the bundled Swift service, which takes the profile lock and supervises the retained
+Bun backend (`Contents/Resources/backend/index.cjs` on `Contents/Helpers/bun`) over
+private pipes. The service writes `preferences.json`, `workspace.json`
 and project memory, runs managed project servers, installs and static sites, performs
 and serializes every Trezi Git effect in user repositories, commits every Trezi source
 edit, Undo and file-tree operation from hash-bound parser proposals, owns chat records,
@@ -50,24 +54,22 @@ profile aliases (the launcher asks `TreziService --resolve-profile`) and alone h
 profile lock: `src/native/index.ts` refuses to start without it
 (`TREZI_SERVICE_LOCKED=1`). Docs per row in the table above.
 
-`TREZI_BACKEND_OWNER=legacy` is the launch-time rollback (Bun spawns the host, still under
-Swift's lock, writes all three itself and runs its own servers after the launcher sweeps the
-runtime journal). See `docs/SWIFT-BACKEND-SERVICE.md` for rollback and verification limits.
+There is no launch-time rollback since LKM-111: the Bun-writer launch
+(`TreziService --legacy`) and its switch were removed with the Bun twins. See
+`docs/SWIFT-BACKEND-SERVICE.md` for verification limits.
 
-The host and Swift service communicate over authenticated XPC; the service and legacy Bun use
-private pipes. `TREZI_BACKEND_OWNER=legacy` selects the previous Bun/host transport at launch
-under the same Swift profile exclusion. `src/native/bridge.ts` is the private legacy JSON
-bridge to the supervising service; direct host pipes remain available through launch-time
-legacy rollback.
+The host and Swift service communicate over authenticated XPC; the service and Bun use
+private pipes. `src/native/bridge.ts` is the private JSON bridge to the supervising
+service (tests that drive a bare `TreziHost` hand it the child they spawned).
 
 ## `src/service/` file map
 
 ```
 src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
   ServiceMain.swift / ServiceRuntime.swift / ServiceXPC.swift   XPC listener,
-                  signed-peer + hello validation, legacy relay, drain; also the
-                  `--legacy` launch-time rollback owner
-  LegacySupervisor.swift / ProcessGuardian.swift   exclusive profile lock, Bun
+                  signed-peer + hello validation, the Bun relay (`legacy` frame kinds),
+                  drain; `--resolve-profile` for the dev launcher
+  BackendSupervisor.swift / ProcessGuardian.swift   exclusive profile lock, the Bun backend
                   process group, lifetime-pipe guardians for detached servers,
                   Bun/descendant lifetimes and crash cleanup
   ServiceContract.swift   S01 shared DTOs (TS twin: src/shared/service-contract/)
@@ -78,24 +80,22 @@ src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
   PreferencesOwner.swift / PreferencesFile.swift   the preferences writer (LKM-91):
                   byte-compatible v1 preferences.json, ledger-backed batches,
                   external-edit adoption. Bun reads and sends awaited batches via
-                  native/preferences-service.ts; native/preferences.ts is the
-                  legacy-launch (TREZI_BACKEND_OWNER=legacy) rollback writer
+                  native/preferences-service.ts (native/preferences.ts is its interface)
                   (docs/SWIFT-BACKEND-PREFERENCES.md)
   WorkspaceOwner.swift / WorkspaceFile.swift / DomainChannel.swift   the
                   workspace writer (LKM-92): project identity (canonical root →
                   key), order, selection and recents in the unchanged workspace.json;
                   session/server/Git fields arrive through a typed `update`
                   adapter. Bun sends awaited intents via native/workspace-service.ts;
-                  native/workspace.ts is the legacy-launch rollback writer and
-                  native/workspace-model.ts the byte-identical TS operations
+                  native/workspace.ts is its interface and
+                  native/workspace-model.ts the TS operations and validation
                   (docs/SWIFT-BACKEND-WORKSPACE.md)
   MemoryOwner.swift / MemoryFile.swift   the project memory writer (LKM-93):
                   unchanged project-memories/<id>.json, one ledger domain per
                   project; a manual `save` always wins, a generated `propose`
                   commits only on the revision it was evaluated against. Bun's
                   client is native/project-memory-service.ts; main/project-memory.ts
-                  holds the shared rules, the rollback writer, the evaluation queue
-                  and injection (docs/SWIFT-BACKEND-MEMORY.md)
+                  holds the shared rules, the evaluation queue and injection (docs/SWIFT-BACKEND-MEMORY.md)
   RuntimeOwner.swift / RuntimeServer.swift / ManagedProcess.swift   the managed
                   project runtime (LKM-94): dev-server + install process groups
                   (descendants stopped with their leader, `--watch-group`
@@ -105,8 +105,8 @@ src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
                   StaticSite.swift / StaticServer.swift serve static projects (FSEvents,
                   SSE, real-path containment, watcher). Bun's client is
                   native/runtime-service.ts on the devserver:* routes
-                  (main/devserver-service.ts); main/devserver.ts and main/static-server.ts
-                  are the rollback owner. HTML stamping stays a JS helper
+                  (main/devserver-service.ts, wired by main/devserver.ts). HTML stamping
+                  stays a JS helper
                   (docs/SWIFT-BACKEND-RUNTIME.md)
   RepositoryOwner.swift / RepositoryEffects.swift / RepositoryLanding.swift /
   RepositoryJournal.swift / RepositoryGit.swift   the repository coordinator
@@ -116,7 +116,7 @@ src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
                   journaled intent, `refs/trezi/recovery/*` before anything could
                   orphan work, explicit intents for landing/discard/removal. Bun's
                   client is native/repository-service.ts behind the seam
-                  main/repository-owner.ts; the TS Git code is the rollback owner
+                  main/repository-owner.ts; the TS Git code only reads and orchestrates
                   (docs/SWIFT-BACKEND-REPOSITORY.md)
   SourceOwner.swift / SourceStore.swift / SourceJournal.swift / SourceHistory.swift /
   SourcePaths.swift / SourceDrafts.swift   the source transaction service (LKM-96):
@@ -126,8 +126,8 @@ src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
                   rollback never overwrites newer work), authorizes paths (symlinks
                   included), owns grouped Undo/redo/revert, file-tree create/rename/
                   delete, editor reads/saves and persisted drafts. Bun's client is
-                  native/source-service.ts behind main/source-owner.ts; edit-history.ts
-                  and file-ops.ts are the rollback owner (docs/SWIFT-BACKEND-SOURCE.md)
+                  native/source-service.ts behind main/source-owner.ts, which edit-history.ts
+                  and file-ops.ts call (docs/SWIFT-BACKEND-SOURCE.md)
   ConversationOwner.swift / ConversationState.swift / ConversationStore.swift   the
                   conversation coordinator (LKM-97): the only writer of session records
                   and History (unchanged sessions/*.json), live-chat checkpoints with
@@ -136,8 +136,8 @@ src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
                   policy, titles, model handoff, approvals, spawn admission. Bun's
                   provider sessions are adapters (main/chat-turns.ts tags events with
                   their turn); Bun's client is native/conversation-service.ts behind
-                  main/conversation-owner.ts; main/conversation-model.ts is the rollback
-                  twin (docs/SWIFT-BACKEND-CONVERSATION.md)
+                  main/conversation-owner.ts; test/fixtures/conversation-owner/parity-golden.json
+                  pins its answers (docs/SWIFT-BACKEND-CONVERSATION.md)
   ProviderOwner.swift / ProviderFrames.swift / ProviderPolicy.swift / ProviderHelper.swift /
   ProviderStore.swift / ProviderData.swift
                   the provider owner (LKM-98): every provider session is opened here and
@@ -145,16 +145,15 @@ src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
                   (Claude's canUseTool asks it), authorizes Trezi tools (Claude's in-process
                   tools, Codex's MCP bridge), holds Stop's deadline, persists resume ids and
                   supervises provider helpers (stdio only, allowlisted env, own process
-                  group, every frame checked against the grant). The SDK adapters run in
-                  Bun by default (main/provider-sessions.ts wires them — every provider
-                  session starts there); helpers are an explicit opt-in
-                  (`TREZI_PROVIDER_HELPERS=1`) and v10 connections stay in-process even
-                  then; the adapter move is LKM-111. ProviderData.swift (LKM-102) writes
+                  group, every frame checked against the grant). Since LKM-111 the built-in
+                  Claude, Codex and Gemini adapters always run in those helpers
+                  (main/backends/provider-helper-entry.ts); v10 connections stay in Bun
+                  (main/provider-sessions.ts wires every session). ProviderData.swift (LKM-102) writes
                   the connections store (keys via `TreziHost --crypto`), the model catalog
                   cache and runs the Codex model probe on the SDK's vendored binary, behind
                   main/provider-data.ts. Bun's client is native/provider-service.ts behind
-                  main/provider-owner.ts; main/provider-model.ts + provider-policy.ts are
-                  the rollback twin (docs/SWIFT-BACKEND-PROVIDERS.md)
+                  main/provider-owner.ts; the provider-owner goldens pin its answers
+                  (docs/SWIFT-BACKEND-PROVIDERS.md)
   EditingOwner.swift / EditingIslands.swift / EditingStores.swift / EditingProject.swift
                   the editing
                   coordinator (LKM-99): the only writer of chat island histories
@@ -170,7 +169,8 @@ src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
                   and views (main/chat-islands.ts, native/content-controller.ts,
                   native/navigation-controller.ts, native/turn-boundaries.ts); Bun's
                   client is native/editing-service.ts behind main/editing-owner.ts;
-                  main/editing-model.ts is the rollback twin (docs/SWIFT-BACKEND-EDITING.md)
+                  test/fixtures/editing-owner/parity-golden.json pins its answers
+                  (docs/SWIFT-BACKEND-EDITING.md)
   WorkflowOwner.swift / WorkflowJournal.swift / WorkflowPublish.swift /
   WorkflowRemote.swift / WorkflowSetup.swift / WorkflowTools.swift / WorkflowContext.swift
                   the workflow owner (LKM-100): Publish
@@ -181,9 +181,7 @@ src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
                   the effect, receipt after, operation-ID dedupe) reconciled from GitHub
                   and Git instead of repeated. Bun's helpers only propose (PR
                   descriptions, detection, starter files, diagnoses). Bun's client is
-                  native/workflow-service.ts behind main/workflow-owner.ts;
-                  main/workflow-legacy.ts (over main/publish.ts, github.ts, git-remote.ts,
-                  setup.ts, scaffold.ts, diag-cache.ts) is the rollback twin
+                  native/workflow-service.ts behind main/workflow-owner.ts
                   (docs/SWIFT-BACKEND-WORKFLOWS.md)
   PlatformOwner.swift / SimulatorOwner.swift / SimulatorBridge.swift /
   SimulatorTools.swift / PlatformMedia.swift / PlatformTools.swift / PlatformOpen.swift
@@ -195,9 +193,7 @@ src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
                   pasted attachments from hash-checked chunks, the running-servers
                   recovery, and (PlatformOpen, LKM-102) opening links, files and "Open
                   in editor". Bun's client is native/platform-service.ts behind
-                  main/platform-owner.ts; simulator.ts, media.ts, attachments.ts,
-                  native/preview-processes.ts, native/platform-legacy.ts and
-                  main/open-in-editor-legacy.ts are the rollback twin
+                  main/platform-owner.ts (main/simulator.ts wires the Simulator views)
                   (docs/SWIFT-BACKEND-PLATFORM.md)
   ProfilePaths.swift   the profile and session-store rename aliases (LKM-102): the
                   launcher asks `TreziService --resolve-profile`; the session alias is

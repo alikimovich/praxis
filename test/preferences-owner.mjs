@@ -1,17 +1,17 @@
-// S03 preferences transfer: the Swift owner (real PreferencesOwner + OperationLedger
-// compiled into a fixture process) against the legacy Bun owner, on real files.
-// Parity, batches, idempotency, conflicts, injected write failures, SIGKILL at
-// every durable boundary and launch-time rollback to the Bun writer.
+// The preferences owner (real PreferencesOwner + OperationLedger compiled into a
+// fixture process), the only writer of preferences.json since LKM-111, on real files.
+// The v1 format is pinned by answers recorded from the retired Bun writer. Batches,
+// idempotency, conflicts, injected write failures, SIGKILL at every durable boundary,
+// offline edits and Bun's client.
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { EventEmitter } from 'node:events'
-import { nativePreferences } from '../src/native/preferences.ts'
 import { servicePreferences } from '../src/native/preferences-service.ts'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
@@ -86,18 +86,13 @@ async function start(dir, env = {}) {
 const ok = reply => { assert.equal(reply.reply.result.kind, 'succeeded', JSON.stringify(reply)); return reply.reply.result.payload }
 const code = reply => { assert.equal(reply.reply.result.kind, 'failed', JSON.stringify(reply)); return reply.reply.result.payload.code }
 const entries = snapshot => snapshot.entries.map(({ key, value }) => [key, value])
-const legacyEntries = dir => Object.entries(nativePreferences(dir).snapshot())
-/** What the legacy Bun writer puts on disk for the same batch from the same file. */
-function legacyWrite(initial, batch) {
-  const dir = profile(initial)
-  const store = nativePreferences(dir)
-  return store.apply(batch).then(() => readFileSync(file(dir)))
-}
+const stored = dir => JSON.parse(readFileSync(file(dir), 'utf8')).values
+const sha256 = value => createHash('sha256').update(value).digest('hex')
 
 try {
   compile()
 
-  // --- Reader/writer parity with the legacy Bun owner ------------------------
+  // --- The v1 reader/writer: the retired Bun writer's recorded answers ----------
   {
     const wide = '😀'.repeat(96) // 192 UTF-16 units, 96 scalars
     const files = {
@@ -117,23 +112,36 @@ try {
       nullValues: '{"version":1,"values":null}', stringValues: '{"version":1,"values":"x"}', missing: '{"version":1}', array: '[1]',
       truncated: '{"version":1,"values":{', trailingComma: '{"version":1,"values":{},}', text: 'null', leadingZero: '{"version":01,"values":{}}',
     }
+    // Entries, order, nulls and code units; `praxis` names gain a canonical `trezi` copy.
+    const expected = {
+      mixed: { keys: ['trezi:a', 'praxis:b', 'trezi:null', 'praxis.c', 'trezi.c', 'trezi:max', 'trezi:' + 'k'.repeat(193),
+        'trezi:' + wide.slice(0, 190), 'trezi:' + wide + 'a', 'trezi:ctl', 'trezi:b'],
+      sha256: '81b8e432116061d7890981fe1a390341015e0a4143cf4e65bcfdda40bc947919' },
+      duplicate: [['trezi:a', '3'], ['trezi:b', '2']],
+      surrogate: [['trezi:lone', '\ud800x'], ['trezi:low', '\udfff'], ['trezi:pair', '😀'], ['trezi:proto', 'A']],
+      decimal: [['trezi:a', '1']],
+      arrayValues: [],
+      badUtf8: [['trezi:a', '��(�']],
+      empty: [],
+    }
     const fixture = await start(profile())
     for (const [name, content] of Object.entries(files)) {
-      const dir = profile(content)
-      const swift = await fixture.send({ cmd: 'decode', path: file(dir) })
+      const swift = await fixture.send({ cmd: 'decode', path: file(profile(content)) })
       assert.equal(swift.ok, true, name)
-      const expected = legacyEntries(dir)
-      assert.deepEqual(swift.entries, expected, `${name}: same entries, order, nulls and code units as Bun`)
-      assert.equal(Buffer.from(swift.encoded, 'base64').toString('hex'), Buffer.from(JSON.stringify({ version: 1, values: Object.fromEntries(expected) })).toString('hex'),
+      const golden = expected[name]
+      if (Array.isArray(golden)) assert.deepEqual(swift.entries, golden, `${name}: the recorded entries`)
+      else {
+        assert.deepEqual(swift.entries.map(([key]) => key), golden.keys, `${name}: the recorded keys`)
+        assert.equal(sha256(JSON.stringify(swift.entries)), golden.sha256, `${name}: the recorded values`)
+      }
+      assert.equal(Buffer.from(swift.encoded, 'base64').toString('hex'), Buffer.from(JSON.stringify({ version: 1, values: Object.fromEntries(swift.entries) })).toString('hex'),
         `${name}: byte-identical v1 output`)
     }
     for (const [name, content] of Object.entries(refused)) {
-      const dir = profile(content)
-      assert.throws(() => nativePreferences(dir), undefined, `${name}: Bun refuses`)
-      assert.equal((await fixture.send({ cmd: 'decode', path: file(dir) })).ok, false, `${name}: Swift refuses`)
+      assert.equal((await fixture.send({ cmd: 'decode', path: file(profile(content)) })).ok, false, `${name}: refused, as Bun refused it`)
     }
     await fixture.close()
-    console.log('PREFERENCES-OWNER parity: v1 reader/writer, unknown keys, null, UTF-16 limits, lone surrogates and refusals match Bun PASS')
+    console.log('PREFERENCES-OWNER format: v1 reader/writer, unknown keys, null, UTF-16 limits, lone surrogates and refusals as recorded PASS')
   }
 
   // --- Snapshot, batches, idempotency, validation, restart --------------------
@@ -143,7 +151,8 @@ try {
     let prefs = await start(dir)
     const first = ok(await prefs.snapshot())
     assert.equal(first.revision.counter, '0')
-    assert.deepEqual(entries(first), legacyEntries(dir), 'imported exactly as the Bun owner reads it')
+    assert.deepEqual(entries(first), [['praxis:legacy', 'old'], ['trezi:unknown-future', '{"x":1}'], ['trezi:gone', null], ['trezi:legacy', 'old']],
+      'imported exactly as the Bun owner read it')
     assert.equal(bytes(dir).toString(), initial, 'import writes nothing')
 
     const batch = [['trezi:native-chat-width', '500'], ['praxis:legacy', 'new'], ['trezi:unknown-future', null]]
@@ -151,7 +160,8 @@ try {
     const committed = await prefs.set(batch, first.revision, op)
     assert.equal(ok(committed).revision.counter, '1')
     assert.equal(committed.snapshot.revision.counter, '1')
-    assert.equal(bytes(dir).toString('hex'), (await legacyWrite(initial, batch)).toString('hex'), 'byte-identical to the legacy writer')
+    assert.equal(bytes(dir).toString(), '{"version":1,"values":{"praxis:legacy":"old","trezi:unknown-future":null,"trezi:gone":null,"trezi:legacy":"new","trezi:native-chat-width":"500"}}',
+      'byte-identical to the retired Bun writer')
     const retry = await prefs.set(batch, first.revision, op)
     assert.deepEqual(retry.reply.result, committed.reply.result, 'a duplicate returns the recorded result')
     assert.equal(code(await prefs.set([['trezi:native-chat-width', '600']], first.revision, op)), 'idempotencyMismatch')
@@ -263,16 +273,16 @@ try {
   console.log('PREFERENCES-OWNER faults: temp create/write/flush/rename failures change nothing and retry; directory-sync failure keeps the visible commit PASS')
 
   // --- SIGKILL at each durable boundary, then restart --------------------------
-  for (const boundary of ['intent', 'effect', 'after-rename', 'receipt', 'after-rename-then-legacy']) {
+  for (const boundary of ['intent', 'effect', 'after-rename', 'receipt', 'after-rename-then-external']) {
     const initial = JSON.stringify({ version: 1, values: { 'trezi:keep': 'yes' } })
     const dir = profile(initial)
-    let prefs = await start(dir, { PREFS_CRASH: boundary.replace('-then-legacy', '') })
+    let prefs = await start(dir, { PREFS_CRASH: boundary.replace('-then-external', '') })
     const base = ok(await prefs.snapshot())
     const op = randomUUID()
     await prefs.crash(prefs.frame('set', { entries: [{ key: 'trezi:new', value: 'v' }] }, base.revision, op))
-    if (boundary === 'after-rename-then-legacy') {
-      // Rollback owner runs in between and writes newer state.
-      await nativePreferences(dir).set('trezi:legacy', 'newer')
+    if (boundary === 'after-rename-then-external') {
+      // Another writer runs in between and writes newer state.
+      writeFileSync(file(dir), JSON.stringify({ version: 1, values: { ...stored(dir), 'trezi:external': 'newer' } }))
     }
     const onDisk = readFileSync(file(dir))
     prefs = await start(dir)
@@ -284,9 +294,9 @@ try {
       assert.equal(code(again), boundary === 'intent' ? 'unavailable' : 'ioFailure', `${boundary}: the same ID is never replayed`)
       assert.equal(readFileSync(file(dir), 'utf8'), initial)
       assert.equal(ok(await prefs.set([['trezi:new', 'v']], base.revision)).revision.counter, '1', `${boundary}: the domain is not blocked`)
-    } else if (boundary === 'after-rename-then-legacy') {
-      assert.equal(code(again), 'conflict', 'an uncertain write superseded by the legacy owner is not claimed')
-      assert.deepEqual(entries(snap), [['trezi:keep', 'yes'], ['trezi:new', 'v'], ['trezi:legacy', 'newer']], 'the newer legacy state is adopted')
+    } else if (boundary === 'after-rename-then-external') {
+      assert.equal(code(again), 'conflict', 'an uncertain write superseded by another writer is not claimed')
+      assert.deepEqual(entries(snap), [['trezi:keep', 'yes'], ['trezi:new', 'v'], ['trezi:external', 'newer']], 'the newer state is adopted')
       assert.deepEqual(readFileSync(file(dir)), onDisk, 'and never overwritten')
     } else {
       assert.equal(snap.revision.counter, '1', `${boundary}: restart reveals the committed write`)
@@ -298,7 +308,7 @@ try {
   }
   console.log('PREFERENCES-OWNER crashes: SIGKILL at intent/effect/after-rename/receipt reconciles from the file, never replays PASS')
 
-  // --- Launch-time rollback to the Bun owner and back --------------------------
+  // --- An edit while the service is down is adopted, never overwritten ---------
   {
     const dir = profile(JSON.stringify({ version: 1, values: { 'trezi:chat-hidden': '0', 'trezi:future-key': 'kept' } }))
     const backup = join(scratch, 'old-backup.json'); copyFileSync(file(dir), backup)
@@ -306,20 +316,17 @@ try {
     const base = ok(await prefs.snapshot())
     const swift = await prefs.set([['trezi:chat-hidden', '1'], ['trezi:publish-mode', 'pr'], ['trezi:empty', null]], base.revision)
     await prefs.close()
-    // TREZI_BACKEND_OWNER=legacy: the Bun writer reads Swift's newest file as is.
-    const legacy = nativePreferences(dir)
-    assert.deepEqual(Object.entries(legacy.snapshot()), entries(swift.snapshot), 'the legacy owner reads the newest Swift state exactly')
-    await legacy.set('trezi:publish-mode', 'merge')
+    assert.deepEqual(Object.entries(stored(dir)), entries(swift.snapshot), 'the file holds the newest committed state')
+    writeFileSync(file(dir), JSON.stringify({ version: 1, values: { ...stored(dir), 'trezi:publish-mode': 'merge' } }))
     const newest = readFileSync(file(dir))
     prefs = await start(dir)
     const back = ok(await prefs.snapshot())
-    assert.equal(back.revision.counter, '2', 'the newer legacy file is adopted as a new revision')
-    assert.equal(nativePreferences(dir).get('trezi:publish-mode'), 'merge')
-    assert.deepEqual(entries(back), Object.entries(nativePreferences(dir).snapshot()))
+    assert.equal(back.revision.counter, '2', 'the offline edit is adopted as a new revision')
+    assert.deepEqual(entries(back), Object.entries(stored(dir)))
     assert.deepEqual(readFileSync(file(dir)), newest, 'adoption rewrites nothing')
     assert.notDeepEqual(readFileSync(file(dir)), readFileSync(backup), 'the old backup was never restored')
     await prefs.close()
-    console.log('PREFERENCES-OWNER rollback: legacy owner reads the newest Swift file; Swift adopts newer legacy writes; no backup overwrite PASS')
+    console.log('PREFERENCES-OWNER offline edit: an edit made while the service is down is adopted; no rewrite, no backup restore PASS')
   }
 
   // --- Bun's client against the real owner, over the pipe's line protocol ------
@@ -350,21 +357,28 @@ try {
     assert.equal(prefs.get('praxis:native-chat-width'), '480', 'canonical praxis names read through')
     assert.ok(Object.hasOwn(prefs.snapshot(), 'trezi:unknown'), 'explicit null survives the client')
     await assert.rejects(prefs.set('trezi:bad', 1), /Invalid/, 'invalid values never leave Bun')
+    const untouched = readFileSync(file(dir))
+    await assert.rejects(prefs.set('__proto__', 'bad'), /Invalid/)
+    await assert.rejects(prefs.set('trezi:too-large', 'x'.repeat(2_000_001)), /Invalid/)
+    await assert.rejects(prefs.apply([['trezi:a', '1'], ['trezi:b', 2]]), /Invalid/)
+    assert.deepEqual(readFileSync(file(dir)), untouched, 'an invalid batch writes nothing')
+    const copy = prefs.snapshot(); copy['praxis:native-chat-width'] = 'changed'
+    assert.equal(prefs.get('praxis:native-chat-width'), '480', 'a snapshot is a copy')
 
     // Queued batches go one at a time, each on the revision the previous one committed.
     await Promise.all([prefs.set('trezi:a', '1'), prefs.set('trezi:b', '2'), prefs.apply(current => [['trezi:c', (current['trezi:a'] ?? '?') + (current['trezi:b'] ?? '?')]])])
     assert.equal(prefs.get('trezi:c'), '12', 'a function batch is built from the committed state when it is sent')
-    assert.equal(nativePreferences(dir).get('trezi:c'), '12')
+    assert.equal(stored(dir)['trezi:c'], '12')
 
     // An external edit rejects the batch, is adopted and announced; the retry works.
     let notified = 0
     prefs.subscribe(() => notified++)
-    writeFileSync(file(dir), JSON.stringify({ version: 1, values: { ...nativePreferences(dir).snapshot(), 'trezi:external': 'yes' } }))
+    writeFileSync(file(dir), JSON.stringify({ version: 1, values: { ...stored(dir), 'trezi:external': 'yes' } }))
     await assert.rejects(prefs.set('trezi:a', 'mine'), error => error.code === 'conflict' && /changed outside Trezi/.test(error.message))
     assert.equal(prefs.get('trezi:external'), 'yes')
     assert.equal(notified, 1, 'the adoption reaches subscribers')
     await prefs.set('trezi:a', 'mine')
-    assert.equal(nativePreferences(dir).get('trezi:external'), 'yes', 'the external value is preserved')
+    assert.equal(stored(dir)['trezi:external'], 'yes', 'the external value is preserved')
 
     // A service that does not answer: the batch fails and nothing is written locally.
     const before = readFileSync(file(dir))
@@ -375,7 +389,7 @@ try {
     pipe.flush()
     const deadline = Date.now() + 10_000
     while (prefs.get('trezi:a') !== 'late') { assert.ok(Date.now() < deadline, 'late reply'); await new Promise(r => setTimeout(r, 20)) }
-    assert.equal(nativePreferences(dir).get('trezi:a'), 'late', 'the late commit is reflected, not replayed')
+    assert.equal(stored(dir)['trezi:a'], 'late', 'the late commit is reflected, not replayed')
     await prefs.set('trezi:a', 'after')
     await pipe.close()
 

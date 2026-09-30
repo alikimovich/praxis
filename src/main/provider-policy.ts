@@ -3,8 +3,9 @@ import { AUTO_ALLOW_TOOLS, EDIT_TOOLS } from './backends/tools'
 
 /**
  * The provider owner's policy (S10), pure. The Swift service mirrors it exactly in
- * `src/service/ProviderPolicy.swift`; the legacy twin (`provider-model.ts`) calls it
- * directly. `test/provider-owner.mjs` checks both give the same answer for every case.
+ * `src/service/ProviderPolicy.swift`; `test/provider-owner.mjs` pins the owner's answers
+ * to the ones this module gave through the in-process twin LKM-111 removed. Adapters
+ * without a grant (inside a helper) and the tool limits still call it directly.
  *
  * A provider session's capabilities are decided by the owner from facts it was told
  * when the session opened (provider, background or not, its root) — never from what

@@ -1,8 +1,8 @@
 // The Swift workflow owner's durability checks (S13), run by test/workflow-owner.mjs with
 // its scratch worlds: a remote effect whose reply is lost, crashes between an effect
 // and its receipt, GitHub failing after acting, install/build failures and their
-// resumption, cancellation, busy, restart listing and dismissal, drain, rollback to the
-// legacy owner and back, redaction and schema.
+// resumption, cancellation, busy, restart listing and dismissal, drain, a relaunch that
+// finishes an interrupted publish, redaction and schema.
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -10,7 +10,7 @@ import { ipcMain } from '../../src/native/platform.ts'
 import { registerDiagnoseIpc } from '../../src/main/diagnose.ts'
 import { setWorkflowOwner } from '../../src/main/workflow-owner.ts'
 
-export async function durability({ world, start, legacy, snapshot, git, write, commit, describe, log }) {
+export async function durability({ world, start, snapshot, git, write, commit, describe, log }) {
   const gh = w => w.gh().counts ?? {}
   const setGh = (w, change) => { const state = w.gh(); change(state); writeFileSync(w.ghState, JSON.stringify(state)) }
   const setPm = (w, value) => writeFileSync(w.pmState, JSON.stringify(value))
@@ -192,24 +192,22 @@ export async function durability({ world, start, legacy, snapshot, git, write, c
     log('durability cancellation and busy')
   }
 
-  // Rollback: a Swift publish cut short, finished by the legacy owner (it reuses the PR),
-  // then the Swift owner again: no duplicate, its journal and the diagnoses survive.
+  // A Swift publish cut short after the PR, finished by the relaunched owner (it reuses
+  // the PR); its journal and the diagnoses survive the relaunch.
   {
-    const w = world('rollback')
+    const w = world('relaunch')
     write(w.local, 'a.txt', 'two\n')
     const f1 = await start(w, { WORKFLOW_FAULT: 'publish.pr' })
     await crashed(f1, f1.workflows({ timeout: 3000, retries: 0 }).publish(w.local, 'merge', describe))
-    const old = legacy(w)
-    assert.equal((await old.publish(w.local, 'merge', describe)).ok, true)
-    await old.rememberDiagnosis(w.local, { signature: 'abc1', summary: 'Written by the legacy owner', steps: [], seenBefore: false })
-    assert.deepEqual(gh(w), { prCreate: 1, prEdit: 1, prMerge: 1 })
     const owner = (await start(w)).workflows()
     assert.equal((await owner.workflows())[0].state, 'interrupted')
-    assert.equal((await owner.publish(w.local, 'merge', describe)).error, 'Nothing to publish — no changes since main.')
-    assert.deepEqual(gh(w), { prCreate: 1, prEdit: 1, prMerge: 1 })
-    assert.equal((await owner.recallDiagnosis(w.local, 'abc1')).summary, 'Written by the legacy owner')
+    assert.equal((await owner.publish(w.local, 'merge', describe)).ok, true)
+    assert.equal(gh(w).prCreate, 1)
+    assert.equal(gh(w).prMerge, 1)
+    await owner.rememberDiagnosis(w.local, { signature: 'abc1', summary: 'Written before the relaunch', steps: [], seenBefore: false })
+    assert.equal((await owner.recallDiagnosis(w.local, 'abc1')).summary, 'Written before the relaunch')
     await owner.diagnosisStatus(w.local, 'abc1', 'dismissed')
-    assert.equal((await old.recallDiagnosis(w.local, 'abc1')).status, 'dismissed')
+    assert.equal((await owner.recallDiagnosis(w.local, 'abc1')).status, 'dismissed')
     // A damaged diagnoses file is never overwritten.
     writeFileSync(join(w.profile, 'diagnostics.json'), '{broken')
     await assert.rejects(owner.rememberDiagnosis(w.local, { signature: 'abc2', summary: 'x', steps: [], seenBefore: false }), error => error.code === 'recoveryRequired')
@@ -232,7 +230,7 @@ export async function durability({ world, start, legacy, snapshot, git, write, c
       assert.equal(readFileSync(join(w.profile, 'diagnostics.json'), 'utf8'), '{broken', 'still never overwritten')
       await assert.rejects(owner.rememberDiagnosis(w.local, { ...diagnosis, steps: Array.from({ length: 51 }, (_, i) => ({ text: `step ${i}`, scope: 'repo' })) }), error => error.code === 'invalidRequest')
     } finally { setWorkflowOwner(null) }
-    log('durability rollback both ways')
+    log('durability relaunch finishes the publish')
   }
 
   // The journal stays bounded: runs refused before their first effect (nothing to resume)

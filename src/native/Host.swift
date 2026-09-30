@@ -4,7 +4,7 @@ import CryptoKit
 import Security
 
 var serviceClient: ServiceClient?
-let serviceMode = CommandLine.arguments.contains("--service")
+let serviceMode = HostLaunch.arguments.contains("--service")
 /// Service mode: setup-time events wait for the client instead of reaching the terminal.
 var earlyServiceFrames: [Data] = []
 func emit(_ value: [String: Any]) {
@@ -532,9 +532,6 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
                 let panel = NSSavePanel(); panel.nameFieldStringValue = "my-app"; panel.canCreateDirectories = true
                 panel.beginSheetModal(for: sheets.panel ?? window) { result in self.reply(id, result == .OK ? panel.url?.path as Any? ?? NSNull() : NSNull()) }
             }
-        case "trash":
-            do { try FileManager.default.trashItem(at: URL(fileURLWithPath: c["path"] as? String ?? ""), resultingItemURL: nil); reply(id) }
-            catch { reply(id, error: error.localizedDescription) }
         case "fullscreen": reply(id, window.styleMask.contains(.fullScreen))
         case "nativeEdit": NSApp.sendAction(Selector((c["action"] as? String ?? "undo") + ":"), to: nil, from: nil)
         case "quit":
@@ -594,10 +591,10 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
 }
-guard CommandLine.arguments.count >= 3 else {
-    fputs("TreziHost requires the Bun service launcher. Start Trezi with bun run dev:native.\n", stderr)
+guard HostLaunch.arguments.count >= 3 else {
+    fputs("TreziHost is started by Trezi: open -a Trezi, the trezi command, or bun run dev.\n", stderr)
     exit(64)
 }
 let application = NSApplication.shared
-let host = Host(directory: CommandLine.arguments[1], ephemeral: CommandLine.arguments[2] == "ephemeral")
+let host = Host(directory: HostLaunch.arguments[1], ephemeral: HostLaunch.arguments[2] == "ephemeral")
 application.setActivationPolicy(.regular); application.delegate = host; application.run()

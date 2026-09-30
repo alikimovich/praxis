@@ -5,7 +5,8 @@ import Foundation
 /// admission queue. Pure: no files, no pipe. `ConversationOwner` persists what must
 /// survive a crash (the chat's record) in `ConversationStore`; everything here is
 /// rebuilt from Bun's live sessions after a restart, like the provider sessions it
-/// describes. The TypeScript twin (the rollback owner) is `src/main/conversation-model.ts`.
+/// describes. There is no TypeScript twin since LKM-111; a recorded golden pins the
+/// answers (`test/fixtures/conversation-owner/parity-golden.json`).
 struct ConversationChat {
     enum Phase: String { case idle, preparing, running, landing }
 

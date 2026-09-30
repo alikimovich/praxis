@@ -1,8 +1,8 @@
 // S15 retirement census (docs/SWIFT-BACKEND-RETIREMENT.md), executable:
 // - every Bun module under src/main, src/native and src/shared that writes files, runs a
 //   process or sends a signal has exactly one census row, and every row still has one;
-// - the gate line counts the Bun-owned rows, so the doc cannot claim readiness while
-//   one remains, and the legacy rollback switch is still present while any does;
+// - the gate line counts the Bun-owned rows and must stay open: LKM-111 removed the
+//   rollback launch, so no shipped file may name its switch or flag again;
 // - the project sidecars the editing owner commits are the same set in Swift and TS,
 //   and the modules moved to it (notes, starter tokens) write nothing themselves.
 import assert from 'node:assert/strict'
@@ -53,7 +53,7 @@ const walk = directory => readdirSync(join(root, directory)).flatMap(name => {
 const scanned = new Map(['src/main', 'src/native', 'src/shared'].flatMap(walk).map(path => [relative('.', path), effects(read(path))]).filter(([, found]) => found.size))
 
 const doc = read('docs/SWIFT-BACKEND-RETIREMENT.md')
-const CLASSES = new Set(['rollback', 'helper', 'test', 'bun'])
+const CLASSES = new Set(['helper', 'test', 'bun'])
 const rows = [...doc.matchAll(/^\| `(src\/[^`]+)` \| (\w+) \| ([^|]+) \| ([^|]+) \|$/gm)].map(([, path, kind, owner, effect]) => ({ path, kind, owner: owner.trim(), effect: effect.trim() }))
 assert.ok(rows.length > 0, 'the census table parses')
 
@@ -70,19 +70,24 @@ for (const row of rows) {
 const missing = [...scanned.keys()].filter(path => !listed.has(path))
 assert.deepEqual(missing, [], `modules with effects missing from the census: ${missing.join(', ')}`)
 
-// The gate line agrees with the rows, and blocked means the rollback switch stays.
+// The gate line agrees with the rows. LKM-111 removed the rollback launch and its Bun
+// twins, so there is nothing to fall back to: the gate stays open (no Bun-owned row),
+// and no launcher, service flag or module may bring the rollback back.
 const bun = rows.filter(row => row.kind === 'bun')
 const gate = doc.match(/\*\*Retirement gate: (?:blocked by (\d+) Bun-owned rows?|open)\.\*\*/)
 assert.ok(gate, 'the status names the retirement gate')
 assert.equal(Number(gate[1] ?? 0), bun.length, 'the gate counts the Bun-owned rows')
-// An open census gate is not the whole removal gate: while the adapter move is recorded as
-// deferred (LKM-111), the switch and the rollback rows stay just as when it is blocked.
-const deferred = /deferred to LKM-111/.test(doc)
-if (bun.length || deferred) {
-  const launcher = read('scripts/start-native.mjs')
-  assert.match(launcher, /\['swift', 'legacy'\]/, 'TREZI_BACKEND_OWNER=legacy stays while the gate is blocked')
-  assert.ok(rows.some(row => row.kind === 'rollback'), 'rollback owners stay while the gate is blocked')
-  assert.match(read('src/service/ServiceMain.swift'), /--legacy/, 'TreziService --legacy stays while the gate is blocked')
+assert.deepEqual(bun.map(row => row.path), [], 'with no rollback launch, every effect has its Swift owner')
+const shipped = [...['src', 'scripts', 'bin'].flatMap(function files(directory) {
+  return readdirSync(join(root, directory)).flatMap(name => {
+    const path = join(directory, name)
+    return statSync(join(root, path)).isDirectory() ? files(path) : /\.(ts|mjs|cjs|js|swift)$|^trezi$/.test(name) ? [path] : []
+  })
+}), 'package.json', 'install.sh']
+for (const path of shipped) {
+  const text = read(path)
+  assert.doesNotMatch(text, /TREZI_BACKEND_OWNER|TREZI_PROVIDER_HELPERS/, `${path} still names a removed launch switch`)
+  assert.doesNotMatch(text, /["'`]--legacy["'`]/, `${path} still passes TreziService --legacy`)
 }
 
 // Project sidecars: one set in Swift and TS; the moved modules only render.
@@ -94,12 +99,14 @@ assert.deepEqual(names(tsNames), ['annotations.json', 'content-controls.json', '
 for (const path of ['src/main/annotation-store.ts', 'src/main/tokens.ts'])
   assert.deepEqual([...effects(read(path))], [], `${path} writes through the editing owner only`)
 
-// `.trezi/` project files moved to the editing owner: the same helper list and legacy files in Swift and TS.
+// `.trezi/` project files belong to the editing owner: the helpers a chat worktree
+// carries are the ones setup installs, and the migration moves the three .dsgn files.
 const literals = text => [...text.matchAll(/["']([^"']+)["']/g)].map(match => match[1])
-const swiftProject = read('src/service/EditingProject.swift'), tsSetup = read('src/main/setup-artifacts.ts')
-assert.deepEqual(literals(swiftProject.match(/static let helpers = \[([^\]]*)\]/)[1]), literals(tsSetup.match(/export const SETUP_HELPERS[^=]*= \[([^\]]*)\]/)[1]), 'Swift and TS sync the same setup helpers')
+const swiftProject = read('src/service/EditingProject.swift'), swiftSetup = read('src/service/WorkflowSetup.swift')
+assert.deepEqual(literals(swiftProject.match(/static let helpers = \[([^\]]*)\]/)[1]).sort(),
+  literals(swiftSetup.match(/static let helpers: Set<String> = \[([^\]]*)\]/)[1]).map(path => path.replace(/^\.trezi\//, '')).sort(),
+  'worktrees carry the helpers setup installs')
 assert.deepEqual(literals(swiftProject.match(/static let dsgnFiles = \[([^\]]*)\]/)[1]), ['annotations.json', 'tokens.json', 'control-panels.json'])
-assert.match(read('src/main/sidecar-migrate.ts'), /\['annotations\.json', 'tokens\.json', 'control-panels\.json'\]/, 'the TS migration moves the same .dsgn files')
 
 const count = kind => rows.filter(row => row.kind === kind).length
-console.log(`RETIREMENT CENSUS OK — ${rows.length} modules with effects classified (${count('rollback')} rollback, ${count('helper')} helper, ${count('test')} test, ${bun.length} Bun-owned: gate ${bun.length ? 'blocked' : 'open'})`)
+console.log(`RETIREMENT CENSUS OK — ${rows.length} modules with effects classified (${count('helper')} helper, ${count('test')} test, ${bun.length} Bun-owned: gate ${bun.length ? 'blocked' : 'open'}; no rollback launch)`)

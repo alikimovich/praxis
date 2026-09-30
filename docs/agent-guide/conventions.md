@@ -42,7 +42,7 @@ The project's original name was **dsgn**. A repo-wide rename (2026-07) swept it 
 the code — the stamp is `data-trezi-source`, the sidecar is `.trezi/`, work branches
 are `trezi/*`. The old name survives only in deliberate legacy shims: setup uninstall
 removes old `.dsgn/` helpers, `git.ts` recognizes `dsgn/*` work branches,
-`sidecar-migrate.ts` moves old sidecar data, `agent.ts` migrates the old
+the editing owner (`src/service/EditingProject.swift`) moves old sidecar data, `agent.ts` migrates the old
 `<userData>/dsgn` dir, and the agent sidecar write-deny covers the legacy dir names
 (`.dsgn/` and `.praxis/`). Don't "fix" those dsgn strings — preserve intentional
 legacy migration and cleanup strings in setup, git, sidecar migration and agent

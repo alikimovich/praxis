@@ -1,6 +1,7 @@
 // S07 repository coordinator: the real Swift RepositoryOwner (compiled into a fixture
 // process) driven through Bun's real client and the unchanged TS entry points.
-// - parity: the legacy Git suites re-run with the Swift owner installed;
+// - suites: the Git suites (git, worktrees, chat-worktrees, live-commit, recovery,
+//   reconciliation, Next setup) run with the Swift owner installed;
 // - lanes: FIFO per common directory (live checkout and worktrees share one), leases,
 //   re-entrancy, unrelated repositories concurrent, competing chats landing;
 // - external: a foreign index lock, an external commit and the user's staged work;
@@ -8,15 +9,17 @@
 //   aimed at the main checkout, a folder outside the profile or a path-like name;
 // - crash: SIGKILL inside a landing, a reconciliation reset and a removal leaves the
 //   work reachable from journaled recovery refs, reported (not replayed) next launch;
-// - rollback: the legacy owner continues on Swift-made worktrees; journal and refs are
-//   kept; a damaged journal is refused untouched; drain refuses queued work.
+// - relaunch: a new owner continues on the worktrees; journal and refs are kept; a
+//   damaged journal is refused untouched; drain refuses queued work.
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { compileEditingFixture, startEditingFixture } from './helpers/editing-fixture.mjs'
 import { compileRepositoryFixture, startRepositoryFixture } from './helpers/repository-fixture.mjs'
+import { setEditingOwner } from '../src/main/editing-owner.ts'
 import { setRepositoryOwner } from '../src/main/repository-owner.ts'
 import { enqueueRepoWrite } from '../src/main/repo-write-queue.ts'
 import { completeTurn, createChatWorktree, discardParked, stageResolve, syncFromLive } from '../src/main/chat-worktrees.ts'
@@ -71,13 +74,21 @@ async function chat(live, dir, id) {
 
 try {
   binary = compileRepositoryFixture()
+  const suiteFixture = compileEditingFixture()
+  // Creating a chat worktree copies the setup helpers through the editing owner: one
+  // editing process serves every section (the repository owner under test is swapped).
+  const editing = await startEditingFixture(suiteFixture, profile('editing'), { REPOSITORY_WORKTREES_ROOT: scratch })
+  fixtures.add(editing)
+  setEditingOwner(editing.owners().editing)
 
-  await section('parity', async () => {
-    // The legacy suites' own assertions, through the Swift owner.
-    const suites = ['chat-worktrees', 'worktrees', 'live-commit', 'git', 'chat-recovery', 'auto-reconciliation', 'setup-next']
+  await section('suites', async () => {
+    // The Git suites' own assertions, through the Swift owner. (setup-next installs the
+    // Swift owners itself: test/helpers/with-service-owners.mjs.)
+    // Chat worktrees also need the editing owner, so these run on the editing fixture.
+    const suites = ['chat-worktrees', 'worktrees', 'live-commit', 'git', 'chat-recovery', 'auto-reconciliation']
     const results = await Promise.all(suites.map(suite => new Promise(resolve => {
       const child = spawn('bun', ['--preload', './test/helpers/repository-owner-preload.mjs', `test/${suite}.mjs`], {
-        cwd: root, env: { ...process.env, REPOSITORY_FIXTURE: binary, REPOSITORY_PROFILE: profile(`parity-${suite}`) }, stdio: ['ignore', 'pipe', 'pipe']
+        cwd: root, env: { ...process.env, REPOSITORY_FIXTURE: suiteFixture, REPOSITORY_PROFILE: profile(`parity-${suite}`) }, stdio: ['ignore', 'pipe', 'pipe']
       })
       let output = ''
       child.stdout.on('data', data => { output += data })
@@ -394,8 +405,8 @@ try {
     await stop(owned)
   })
 
-  await section('rollback', async () => {
-    const home = profile('rollback')
+  await section('relaunch', async () => {
+    const home = profile('relaunch')
     const dir = join(home, 'trezi', 'worktrees')
     const live = repo()
     let owned = await fixture(home)
@@ -416,20 +427,16 @@ try {
     assert.equal(g(live, 'show', `${refs[0]}:b.txt`), 'dirty, reset by a sync')
     setRepositoryOwner(null)
     await stop(owned)
-    const journal = join(home, 'service', 'repository', 'journal.json')
-    const before = readFileSync(journal)
-    // The legacy owner continues on the Swift-made worktree; journal and refs are untouched.
-    writeFileSync(join(wt.path, 'b.txt'), 'legacy turn\n')
-    const legacy = await completeTurn(live, wt, 'legacy turn')
-    assert.equal(legacy.outcome, 'merged')
-    assert.equal(read(join(live, 'b.txt')), 'legacy turn\n')
-    assert.deepEqual(readFileSync(journal), before)
-    assert.deepEqual(recovery(live), refs)
-    // Back to Swift: nothing was interrupted, every ref is still there.
+    // A relaunched owner continues on the worktree: nothing was interrupted, every ref is kept.
     owned = await fixture(home)
-    const status = (await owned.frame('status', {})).payload
-    assert.deepEqual(status.interrupted, [])
+    await install(owned)
+    assert.deepEqual((await owned.frame('status', {})).payload.interrupted, [])
+    writeFileSync(join(wt.path, 'b.txt'), 'relaunched turn\n')
+    const next = await completeTurn(live, wt, 'relaunched turn')
+    assert.equal(next.outcome, 'merged')
+    assert.equal(read(join(live, 'b.txt')), 'relaunched turn\n')
     assert.deepEqual(recovery(live), refs)
+    setRepositoryOwner(null)
     await stop(owned)
 
     // A damaged journal is refused and left exactly as found; leases still work.

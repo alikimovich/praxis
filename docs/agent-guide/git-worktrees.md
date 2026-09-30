@@ -19,7 +19,7 @@ Moved from the old `CLAUDE.md` ("Gotchas", "Conventions") and `AGENTS.md`
   recovery) is performed and serialized by the Swift repository owner — one FIFO lane
   per repository common directory; the TS Git code (`git.ts`, `worktrees.ts`,
   `chat-worktrees.ts`, `chat-isolation.ts`, `repo-write-queue.ts`) dispatches to it
-  when installed and is the rollback owner. Recovery refs are `refs/trezi/recovery/*`.
+  and throws without the service (there is no Bun fallback since LKM-111). Recovery refs are `refs/trezi/recovery/*`.
 - Work branches are `trezi/*`; `git.ts` also recognizes legacy `dsgn/*` work branches
   (a deliberate shim — see [conventions.md](conventions.md)).
 - **Chats run in per-chat worktrees (trezi/chat-<id>), auto-merged back to the

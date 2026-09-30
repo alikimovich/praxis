@@ -5,7 +5,8 @@ import Darwin
 // the service wires it: `{"service":"provider"…` and `{"service":"provider-helper"…`
 // lines are Bun frames (answers and pushed events go to stdout); `{"cmd"…}` lines are
 // fixture commands. The helper command is the fake provider helper
-// (PROVIDER_HELPER_EXEC + PROVIDER_HELPER_ARGS, `\u{1f}`-separated). Like the service,
+// (PROVIDER_HELPER_EXEC + PROVIDER_HELPER_ARGS, `\u{1f}`-separated; the live parity run
+// names the real helper entry and PROVIDER_HELPER_PROVIDERS=claude,codex). Like the service,
 // it sweeps the runtime journal before anything starts. The base environment helpers
 // are filtered from is this process's own.
 // PROVIDER_FAULT=<point> SIGKILLs the process at that named point inside a write.
@@ -31,7 +32,8 @@ let swept = journal.sweep()
 var options = ProviderOwner.Options(profile: profile, environment: env, journal: journal, fault: fault)
 if let executable = env["PROVIDER_HELPER_EXEC"] {
     options.helper = ProviderHelperCommand(executable: executable,
-        arguments: (env["PROVIDER_HELPER_ARGS"] ?? "").split(separator: "\u{1f}").map(String.init), providers: ["fake"])
+        arguments: (env["PROVIDER_HELPER_ARGS"] ?? "").split(separator: "\u{1f}").map(String.init),
+        providers: Set((env["PROVIDER_HELPER_PROVIDERS"] ?? "fake").split(separator: ",").map(String.init)))
 }
 if let value = env["PROVIDER_GRACE"].flatMap(Double.init) { options.grace = value }
 if let value = env["PROVIDER_READY"].flatMap(Double.init) { options.readyTimeout = value }
@@ -56,10 +58,8 @@ while let line = readLine(strippingNewline: true) {
         case "close": emit([("closed", .bool(owner.close(timeout: 5)))])
         case "journal": emit([("groups", .array(RuntimeJournal.read(journal.path).map { .number(Double($0.pgid)) }))])
         case "builtIn":
-            // The service's launch-time helper decision (ServiceRuntime's hello), for a given launch environment.
-            var launch: [String: String] = [:]
-            if case .object(let fields)? = command["environment"] { for (key, value) in fields { if let text = value.text { launch[key.string] = text.string } } }
-            let helper = ProviderHelperCommand.builtIn(environment: launch, backend: command["backend"]?.text?.string ?? "",
+            // The service's launch-time helper decision (ServiceRuntime's hello).
+            let helper = ProviderHelperCommand.builtIn(backend: command["backend"]?.text?.string ?? "",
                 bun: command["bun"]?.text?.string ?? "")
             emit([("helper", helper.map { .object([(JSText("executable"), .string(JSText($0.executable))),
                 (JSText("arguments"), .array($0.arguments.map { .string(JSText($0)) })),

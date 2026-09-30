@@ -86,7 +86,7 @@ and provider-seat rules are here.
   `.praxis/` and `.dsgn/` directories) — annotations, scaffolded instrumentation, and
   control-panel manifests live there. The `define_controls` tool exists precisely
   because of this: the agent hands main a manifest, main validates it, and the
-  editing owner (the Swift service, or its legacy twin) is the only writer —
+  editing owner (the Swift service) is the only writer —
   hash-bound, so a hand edit is never overwritten.
 - **A control-panel manifest stores no values.** Every value is re-resolved from
   source on lookup (literal → lex the literal after the anchor; prop → the live

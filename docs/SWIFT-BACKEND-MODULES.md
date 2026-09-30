@@ -1,10 +1,17 @@
 # Bun dependency and responsibility census
 
+> **History note (LKM-111, 2026-09-29):** this document predates LKM-111, which removed
+> the Bun rollback launch (`TREZI_BACKEND_OWNER=legacy`, `TreziService --legacy`), its
+> twins and several modules named here. The current census is in
+> [SWIFT-BACKEND-RETIREMENT.md](SWIFT-BACKEND-RETIREMENT.md).
+
 2026-09-27. Every TypeScript file under `src/main/` and production TypeScript under `src/native/` is listed, including declarations and retained helpers. Direct imports are edges: follow relative names from the row directory. Export line numbers identify implementation entry points, including non-RPC helpers. Effect lines are search leads, not a claim that pure callers cannot mutate through imports. Interpret with the domain responsibilities and failure semantics in the [audit](SWIFT-BACKEND-AUDIT.md). Smoke fixtures are verification code, excluded from production ownership.
 
 Task IDs and future-owner meanings are defined in the [15-step roadmap](SWIFT-BACKEND-ROADMAP.md). Assignments are future migration accountability, not current ownership or permission to transfer a writer.
 
 **LKM-101 reconciliation (2026-09-29):** the S14 rows (simulator, xcode), the running-servers recovery (S06 remainder), media (S08 media reads) and attachments (S05 remainder) are now performed by the Swift platform owner under the Swift launch; the listed TS modules are its rollback owner. New modules: `src/main/platform-owner.ts` (seam) and `src/native/platform-service.ts` (client). Remaining Bun-owned OS effects are listed in TASKS (S15). See [platform](SWIFT-BACKEND-PLATFORM.md).
+
+**LKM-111 reconciliation (2026-09-29):** the rollback launch is gone, and with it these rows' files: `src/main/devserver-processes.ts`, `static-server.ts`, `managed-child.ts`, `codex-models.ts`, `attachments.ts`, `media.ts`, `xcode.ts`, `update.ts`, `setup-artifacts.ts`, `sidecar-migrate.ts`, `publish-reconcile.ts`, `workflow-legacy.ts`, `feedback-legacy.ts`, `open-in-editor-legacy.ts`, `conversation-model.ts`, `editing-model.ts`, `provider-model.ts`, and `src/native/preview-processes.ts`, `platform-legacy.ts`, `profile-path-legacy.ts`, `legacy-restart.ts`. Their rows (and line links) are kept as the 2026-09-27 record. `src/main/devserver.ts` now only registers the `devserver:*` routes on the runtime owner, and `model-catalog.ts` holds the Codex model parser. The Swift owners are the only writers; the built-in provider adapters run in Swift-supervised helpers.
 
 The historical `praxis-agent-tools.ts` row links to its renamed `trezi-agent-tools.ts` implementation; its audited identity and dependency text remain preserved.
 

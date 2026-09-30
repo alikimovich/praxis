@@ -6,8 +6,9 @@
  * `settingSources: ['user','project','local']`).
  *
  * This module is PURE data + arg-building only — no filesystem, no network, no
- * spawning (that lives in skills-install.ts). Keeping it pure makes the catalog
- * and the `npx skills add` argv fully unit-testable.
+ * spawning (the service's workflow owner does that; skills-install.ts is its
+ * contract). Keeping it pure makes the catalog and the `npx skills add` argv fully
+ * unit-testable.
  *
  * SECURITY: installing a skill fetches a repo whose SKILL.md becomes instructions
  * the agent later follows (a prompt-injection / RCE-adjacent surface). The

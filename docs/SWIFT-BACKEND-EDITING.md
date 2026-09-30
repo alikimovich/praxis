@@ -1,5 +1,10 @@
 # Swift editing coordinator: islands, controls sidecars, content drafts, navigation (S12)
 
+> **Since LKM-111 (2026-09-29):** the launch-time rollback (`TREZI_BACKEND_OWNER=legacy`,
+> `TreziService --legacy`) and the Bun twins it ran are removed. The Swift owner described
+> here is the only one; passages about the rollback, the legacy launch or the TS twins
+> are history. Current status: [SWIFT-BACKEND-RETIREMENT.md](SWIFT-BACKEND-RETIREMENT.md).
+
 LKM-99, roadmap row S12 ("Editing/controls/content/composition/preview controllers") of
 the [canonical plan](SWIFT-BACKEND-PLAN.md) and [roadmap](SWIFT-BACKEND-ROADMAP.md). It
 follows [providers](SWIFT-BACKEND-PROVIDERS.md). Under the default launch
@@ -14,14 +19,14 @@ and the inspector views. Source writes are still proposals to the
 - `src/service/EditingOwner.swift`: requests, validation, turn binding, lanes, drain.
 - `src/service/EditingProject.swift` (S15): the `.dsgn`/`.praxis` sidecar migration, the
   setup helpers copied into a chat worktree (`setup-helpers.json`) and the Next dependency
-  marker, in the repository lane; twins `sidecar-migrate.ts`, `setup-artifacts.ts`, `editing-model.ts`.
+  marker, in the repository lane (its Bun twins were removed in LKM-111).
 - `src/service/EditingIslands.swift`: island history files and the island state machine.
 - `src/service/EditingStores.swift`: the project sidecar commit (controls; since S15 also
   `annotations.json` and `tokens.json`, see [retirement](SWIFT-BACKEND-RETIREMENT.md)), content drafts,
   deferred navigation.
 - `src/native/editing-service.ts`: Bun's client. `src/main/editing-owner.ts` is the
-  seam, `src/main/editing-model.ts` the rollback twin (`editingOwner()` answers the
-  installed owner or the twin).
+  seam: `editingOwner()` answers the installed owner and throws without the service.
+  `test/fixtures/editing-owner/parity-golden.json` pins the removed twin's answers.
 - Bun's users: `src/main/chat-islands.ts` (views, composition preview, JS helpers),
   `src/main/control-panels.ts` and `src/main/content-controls.ts` (render the next
   store), `src/native/content-controller.ts` (drafts), `src/native/navigation-controller.ts`
@@ -146,7 +151,7 @@ owners) and drives them through Bun's clients:
   landing that finishes after the next turn began to the earlier turn;
 - **suites:** `chat-islands`, `shadow-controls`, `control-panels`, `content-controls` and
   `native-content` re-run unchanged with the Swift owners preloaded
-  (`test/helpers/editing-owner-preload.mjs`);
+  (since LKM-111 `test/helpers/with-service-owners.mjs`);
 - **drafts** (crash and restart, save/reload clear, stale base refused, damaged file
   untouched), **lanes** (a sidecar waits for another chain's lease, runs inside its own),
   **crash** (SIGKILL before and after the history rename), **rollback**, **drain** and

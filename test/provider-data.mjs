@@ -1,14 +1,15 @@
-// LKM-102 provider data: the Swift provider owner (compiled fixture, `ProviderData.swift`)
-// against its rollback twins, and a v10 connection end to end. No provider SDK, no
-// network, no Keychain: a scripted stand-in for `TreziHost --crypto`, a fake `codex`
-// binary and a fake Codex SDK.
-// - connections: the same saves and removes write byte-identical `providers.json` on both
-//   writers (key kept on a path edit, dropped on an origin change, a corrupt file kept as
-//   `.corrupt`); refusals carry the same messages and never the key;
-// - catalog: the same lists write a byte-identical `model-catalog.json`;
-// - probe: `codex debug models` through the owner parses like `discoverCodexModels`;
+// LKM-102 provider data: the Swift provider owner (compiled fixture, `ProviderData.swift`),
+// the only writer since LKM-111, against the answers and bytes its removed Bun twins
+// recorded (`fixtures/provider-owner/data-golden.json`), and a v10 connection end to end.
+// No provider SDK, no network, no Keychain: a scripted stand-in for `TreziHost --crypto`,
+// a fake `codex` binary and a fake Codex SDK.
+// - connections: saves and removes write the recorded `providers.json` bytes (key kept on
+//   a path edit, dropped on an origin change, a corrupt file kept as `.corrupt`); refusals
+//   carry the recorded messages and never the key;
+// - catalog: the same lists write the recorded `model-catalog.json` bytes; Bun never writes;
+// - probe: `codex debug models` through the owner parses like `parseCodexModels`;
 // - in-process: a connection chat resolves its key and runs in Bun, never in a helper,
-//   with the helper opt-in off and on, and on the legacy owner.
+//   while every built-in seat runs in a helper.
 import { mock } from 'bun:test'
 import assert from 'node:assert/strict'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
@@ -56,18 +57,14 @@ const until = async (condition, label, ms = 10_000) => {
 }
 /** An executable script (`#!<this bun>`) at `path`. */
 const script = (path, source) => { writeFileSync(path, `#!${process.execPath}\n${source}`); chmodSync(path, 0o755); return path }
-// The legacy cipher's blob for the same stand-in: base64 of what the helper prints.
-const legacyCipher = {
-  available: true,
-  encrypt: plain => { if (plain.includes('locked')) throw new Error('macOS Keychain encryption unavailable; unlock the keychain and retry.'); return Buffer.from(`enc:${plain}`).toString('base64') },
-  decrypt: blob => { const bytes = Buffer.from(blob, 'base64'); return bytes.subarray(0, 4).toString() === 'enc:' ? bytes.subarray(4).toString() : null }
-}
+const golden = JSON.parse(readFileSync(join(root, 'test/fixtures/provider-owner/data-golden.json'), 'utf8'))
+// A void answer reads as `{ ok: null }`, as it was recorded.
+const normalized = answer => JSON.parse(JSON.stringify('error' in answer ? answer : { ok: answer.ok ?? null }))
 
 const { createProviderStore } = await import('../src/main/providers-store.ts')
 const { createModelCatalog, parseCodexModels } = await import('../src/main/model-catalog.ts')
 const { setProviderDataOwner, setProviderDataDir } = await import('../src/main/provider-data.ts')
 const { setProviderOwner, providerOwner } = await import('../src/main/provider-owner.ts')
-const { legacyProviders } = await import('../src/main/provider-model.ts')
 const { pickProvider } = await import('../src/main/backends/index.ts')
 const { startProviderSession } = await import('../src/main/provider-sessions.ts')
 const { resolveConnection } = await import('../src/main/providers.ts')
@@ -82,17 +79,17 @@ try {
   binary = compileProviderFixture()
 
   await section('connections', async () => {
-    const legacyHome = profile('legacy'), swiftHome = profile('swift')
-    const legacy = createProviderStore(join(legacyHome, 'trezi'), legacyCipher)
-    const f = await fixture(swiftHome)
+    const home = profile('swift')
+    const f = await fixture(home)
     const swift = f.owner().data
-    const file = home => join(home, 'trezi/providers.json')
-    const same = async (label, legacyRun, swiftRun) => {
-      const a = await outcome(Promise.resolve().then(legacyRun)), b = await outcome(swiftRun())
-      assert.deepEqual(JSON.parse(JSON.stringify(b)), JSON.parse(JSON.stringify(a)), `${label}: same answer`)
-      assert.equal(existsSync(file(swiftHome)), existsSync(file(legacyHome)), `${label}: same file presence`)
-      if (existsSync(file(legacyHome))) assert.equal(readFileSync(file(swiftHome), 'utf8'), readFileSync(file(legacyHome), 'utf8'), `${label}: byte-identical providers.json`)
-      return b
+    const file = join(home, 'trezi/providers.json')
+    const steps = new Map(golden.connections.map(step => [step.label, step]))
+    const same = async (label, run) => {
+      const expected = steps.get(label)
+      const answer = normalized(await outcome(Promise.resolve().then(run)))
+      assert.deepEqual(answer, expected.answer, `${label}: the recorded answer`)
+      assert.equal(existsSync(file) ? readFileSync(file, 'utf8') : null, expected.file, `${label}: the recorded providers.json bytes`)
+      return answer
     }
     const saves = [
       ['create', { id: 'gw', label: ' AI Gateway ', baseUrl: ' https://ai-gateway.vercel.sh/v1// ', apiKey: ' sk-one ', models: ['kimi', ' kimi', 'deepseek', 3, ''] }],
@@ -102,42 +99,38 @@ try {
       ['a key for a keyless one', { id: 'groq', label: 'Groq', preset: 'custom', baseUrl: 'https://api.groq.com/openai/v1', apiKey: 'gsk-two' }],
       ['origin change drops the key', { id: 'groq', label: 'Groq', preset: 'custom', baseUrl: 'https://attacker.example/v1' }],
       ['port change drops the key', { id: 'gw', label: 'Gateway (work)', baseUrl: 'https://ai-gateway.vercel.sh:444/v1' }],
-      ['unicode label', { id: 'local', label: 'Local ✨  ', preset: 'custom', baseUrl: 'http://127.0.0.1:1234/v1/', apiKey: 'lk' }]
+      ['unicode label', { id: 'local', label: 'Local ✨  ', preset: 'custom', baseUrl: 'http://127.0.0.1:1234/v1/', apiKey: 'lk' }]
     ]
-    for (const [label, input] of saves) await same(label, () => legacy.save(input), () => swift.save(input))
-    for (const id of ['gw', 'groq', 'local', 'missing', '../x']) {
-      assert.equal(await swift.secretFor(id), legacy.secretFor(id), `secret ${id}`)
-    }
+    for (const [label, input] of saves) await same(label, () => swift.save(input))
+    for (const [id, secret] of Object.entries(golden.secrets)) assert.equal(await swift.secretFor(id), secret, `secret ${id}`)
     assert.equal(await swift.secretFor('local'), 'lk')
     assert.equal(await swift.secretFor('gw'), null, 'the key did not follow the port change')
-    // Refusals: same message, never the key.
+    // Refusals: the recorded message, never the key.
     for (const [label, input] of [
       ['no label', { label: '  ', baseUrl: 'https://x.example' }],
       ['no url', { label: 'X', baseUrl: ' / ' }],
       ['unsafe id', { id: '../etc', label: 'X', baseUrl: 'https://x.example' }],
       ['locked keychain', { id: 'gw', label: 'X', baseUrl: 'https://x.example', apiKey: 'sk-locked-secret' }]
     ]) {
-      const answer = await same(label, () => legacy.save(input), () => swift.save(input))
+      const answer = await same(label, () => swift.save(input))
       assert.ok(answer.error, `${label} refused`)
       assert.ok(!answer.error.includes('sk-locked-secret'), `${label}: the key is not in the error`)
     }
-    await same('remove unknown', () => legacy.remove('missing'), () => swift.remove('missing'))
-    await same('remove', () => legacy.remove('groq'), () => swift.remove('groq'))
+    await same('remove unknown', () => swift.remove('missing'))
+    await same('remove', () => swift.remove('groq'))
     // The file Swift wrote reads the same through Bun's reader (what providers.ts lists).
-    assert.deepEqual(createProviderStore(join(swiftHome, 'trezi'), legacyCipher).list(), legacy.list())
-    // A file neither can parse is kept beside the new one, never overwritten.
-    for (const home of [legacyHome, swiftHome]) writeFileSync(file(home), '{"connections": nope')
-    await same('corrupt', () => legacy.save({ id: 'n', label: 'N', baseUrl: 'https://n.example' }), () => swift.save({ id: 'n', label: 'N', baseUrl: 'https://n.example' }))
-    assert.equal(readFileSync(`${file(swiftHome)}.corrupt`, 'utf8'), '{"connections": nope')
-    assert.equal(readFileSync(`${file(legacyHome)}.corrupt`, 'utf8'), '{"connections": nope')
+    assert.deepEqual(createProviderStore(join(home, 'trezi')).list(), golden.list)
+    // A file the owner cannot parse is kept beside the new one, never overwritten.
+    writeFileSync(file, '{"connections": nope')
+    await same('corrupt', () => swift.save({ id: 'n', label: 'N', baseUrl: 'https://n.example' }))
+    assert.equal(readFileSync(`${file}.corrupt`, 'utf8'), '{"connections": nope')
     // Without a credential store a key is refused, never written in plain text.
     const bare = profile('bare')
     const g = await startProviderFixture(binary, bare, { PROVIDER_CRYPTO: '' })
     fixtures.add(g)
     const refused = await outcome(g.owner().data.save({ label: 'X', baseUrl: 'https://x.example', apiKey: 'sk-plain' }))
-    assert.equal(refused.error, (await outcome(Promise.resolve().then(() => createProviderStore(join(bare, 'legacy'), { ...legacyCipher, available: false })
-      .save({ label: 'X', baseUrl: 'https://x.example', apiKey: 'sk-plain' })))).error)
-    assert.ok(!existsSync(file(bare)))
+    assert.equal(refused.error, golden.noStore)
+    assert.ok(!existsSync(join(bare, 'trezi/providers.json')))
     // A write before the service aliased an older session store would split it: refused.
     const older = join(scratch, 'older'); mkdirSync(join(older, 'praxis'), { recursive: true })
     const h = await startProviderFixture(binary, older, {})
@@ -149,28 +142,28 @@ try {
   })
 
   await section('catalog', async () => {
-    const legacyHome = profile('catalog-legacy'), swiftHome = profile('catalog-swift')
-    const seed = JSON.stringify({ version: 1, entries: { claude: { at: 5, models: [{ id: 'x' }] }, codex: { at: 7, models: [{ id: 'old', label: 'Old' }] }, other: {} } })
-    for (const home of [legacyHome, swiftHome]) writeFileSync(join(home, 'trezi/model-catalog.json'), seed)
-    const legacy = createModelCatalog({ baseDir: join(legacyHome, 'trezi'), now: () => 1234 })
-    const f = await fixture(swiftHome, { PROVIDER_NOW: '1234' })
+    const home = profile('catalog-swift')
+    writeFileSync(join(home, 'trezi/model-catalog.json'), golden.catalogSeed)
+    const f = await fixture(home, { PROVIDER_NOW: '1234' })
     const swift = f.owner().data
-    const read = home => readFileSync(join(home, 'trezi/model-catalog.json'), 'utf8')
-    const steps = [['claude', [{ id: 'default', label: 'Default (recommended)' }, { id: 'claude-fable-5', label: 'Fable 5 "quoted" ✨' }]],
-      ['codex', [{ id: 'gpt-5.6-sol', label: 'GPT-5.6-Sol' }]], ['codex', []], ['claude', [{ id: 'opus', label: 'Opus' }]]]
-    for (const [backend, models] of steps) {
-      legacy.set(backend, models)
+    const read = () => readFileSync(join(home, 'trezi/model-catalog.json'), 'utf8')
+    for (const { backend, models, file } of golden.catalog) {
       assert.equal(await swift.saveCatalog(backend, models), models.length > 0, `${backend} saved`)
-      assert.equal(read(swiftHome), read(legacyHome), `byte-identical after ${backend} (${models.length})`)
+      assert.equal(read(), file, `the recorded bytes after ${backend} (${models.length})`)
     }
     // Bun's reader, handed the Swift writer (`persist`), keeps serving from memory.
     const taken = []
-    const routed = createModelCatalog({ baseDir: join(swiftHome, 'trezi'), now: () => 1234, persist: (backend, models) => { taken.push([backend, models]); return true } })
-    const before = read(swiftHome)
+    const routed = createModelCatalog({ baseDir: join(home, 'trezi'), now: () => 1234, persist: (backend, models) => { taken.push([backend, models]); return true } })
+    const before = read()
     routed.set('codex', [{ id: 'm', label: 'M' }])
     assert.deepEqual(routed.get('codex'), [{ id: 'm', label: 'M' }])
     assert.deepEqual(taken, [['codex', [{ id: 'm', label: 'M' }]]])
-    assert.equal(read(swiftHome), before, 'the Bun twin did not write')
+    assert.equal(read(), before, 'Bun did not write')
+    // A write the owner refused leaves the list in memory only; Bun never writes.
+    const refusing = createModelCatalog({ baseDir: join(home, 'trezi'), now: () => 1234, persist: () => false })
+    refusing.set('claude', [{ id: 'n', label: 'N' }])
+    assert.deepEqual(refusing.get('claude'), [{ id: 'n', label: 'N' }])
+    assert.equal(read(), before, 'Bun did not write after a refusal')
     assert.equal((await f.frame('catalogSave', { backend: 'gemini', models: [] })).payload.code, 'invalidRequest')
     assert.equal((await f.frame('catalogSave', { backend: 'codex', models: [{ id: 1, label: 'x' }] })).payload.code, 'invalidRequest')
     await f.stop(); fixtures.delete(f)
@@ -192,70 +185,58 @@ try {
   })
 
   await section('in-process', async () => {
-    // A connection chat on the Swift owner, with the helper opt-in off and on, and on the
-    // legacy owner: the key is resolved in Bun and the adapter runs in-process.
+    // A connection chat on the Swift owner: the key is resolved in Bun and the adapter
+    // runs in-process, while a built-in seat routes to a provider helper.
     const WT = join(scratch, 'wt'), LIVE = join(scratch, 'live')
     mkdirSync(WT, { recursive: true }); mkdirSync(LIVE, { recursive: true })
     const saved = { ...process.env }
     process.env.CODEX_HOME = join(scratch, 'codex-home')
-    process.env.TREZI_NATIVE_HOST = script(join(scratch, 'trezi-host'), readFileSync(CRYPTO, 'utf8'))
     try {
-      for (const mode of ['swift', 'swift+helpers', 'legacy']) {
-        const home = profile(`chat-${mode}`)
-        setProviderDataDir(() => join(home, 'trezi'))
-        let f = null
-        if (mode === 'legacy') {
-          delete process.env.TREZI_SERVICE_SUPERVISED
-          delete process.env.TREZI_PROVIDER_HELPERS
-          setProviderOwner(legacyProviders({ profile: home }))
-          setProviderDataOwner(null)
-        } else {
-          process.env.TREZI_SERVICE_SUPERVISED = '1'
-          if (mode === 'swift+helpers') process.env.TREZI_PROVIDER_HELPERS = '1'; else delete process.env.TREZI_PROVIDER_HELPERS
-          f = await fixture(home)
-          const owner = f.owner()
-          setProviderOwner(owner)
-          setProviderDataOwner(owner.data)
-        }
-        // Saved through the store the settings dialog uses (providers:save).
-        const { connectionStore } = await import('../src/main/provider-data.ts')
-        const conn = await connectionStore.save({ id: 'fake-conn', label: 'Fake', preset: 'custom', baseUrl: 'https://fake.example/v1', apiKey: 'sk-fake-connection', models: ['fake-model'] })
-        assert.equal(conn.hasKey, true)
-        assert.ok(!readFileSync(join(home, 'trezi/providers.json'), 'utf8').includes('sk-fake-connection'), `${mode}: no plaintext key on disk`)
-        assert.deepEqual(await resolveConnection('fake-conn'), { baseUrl: 'https://fake.example/v1', apiKey: 'sk-fake-connection', wireApi: 'responses' })
-        const options = { provider: 'claude', connectionId: 'fake-conn', model: 'fake-model' }
-        const provider = pickProvider(options)
-        assert.notEqual(provider.host, 'helper', `${mode}: a connection is never helper-hosted`)
-        assert.equal(provider.id, 'codex', `${mode}: a connection runs on the Codex harness`)
-        if (mode === 'swift+helpers') assert.equal(pickProvider({ provider: 'codex' }).host, 'helper', 'the opt-in is on')
-        const events = []
-        aimed.length = 0
-        const session = await startProviderSession(provider, WT, options, () => null, { emitKey: `chat-${mode}`, liveRoot: LIVE, onEvent: e => events.push(e) })
-        session.send('hi')
-        await until(() => events.some(e => e.type === 'done'), `${mode} turn`)
-        assert.equal(events.filter(e => e.type === 'delta').map(e => e.text).join(''), 'hello from the connection')
-        assert.ok(!events.some(e => e.type === 'error'), `${mode}: ${JSON.stringify(events)}`)
-        assert.equal(aimed.length, 1)
-        assert.equal(aimed[0].apiKey, 'sk-fake-connection', `${mode}: the key reached the in-process SDK`)
-        assert.equal(Object.values(aimed[0].config.model_providers)[0].base_url, 'https://fake.example/v1')
-        assert.ok(!JSON.stringify(events).includes('sk-fake-connection'), `${mode}: the key is never emitted`)
-        const sessions = (await providerOwner().snapshot()).sessions
-        assert.equal(sessions.length, 1)
-        assert.equal(sessions[0].host, 'bun', `${mode}: the owner sees an in-process session`)
-        session.shutdown()
-        await sleep(50)
-        if (f) { await f.stop(); fixtures.delete(f) }
-      }
+      const home = profile('chat-swift')
+      setProviderDataDir(() => join(home, 'trezi'))
+      process.env.TREZI_SERVICE_SUPERVISED = '1'
+      const f = await fixture(home)
+      const owner = f.owner()
+      setProviderOwner(owner)
+      setProviderDataOwner(owner.data)
+      // Saved through the store the settings dialog uses (providers:save).
+      const { connectionStore } = await import('../src/main/provider-data.ts')
+      const conn = await connectionStore.save({ id: 'fake-conn', label: 'Fake', preset: 'custom', baseUrl: 'https://fake.example/v1', apiKey: 'sk-fake-connection', models: ['fake-model'] })
+      assert.equal(conn.hasKey, true)
+      assert.ok(!readFileSync(join(home, 'trezi/providers.json'), 'utf8').includes('sk-fake-connection'), 'no plaintext key on disk')
+      assert.deepEqual(await resolveConnection('fake-conn'), { baseUrl: 'https://fake.example/v1', apiKey: 'sk-fake-connection', wireApi: 'responses' })
+      const options = { provider: 'claude', connectionId: 'fake-conn', model: 'fake-model' }
+      const provider = pickProvider(options)
+      assert.notEqual(provider.host, 'helper', 'a connection is never helper-hosted')
+      assert.equal(provider.id, 'codex', 'a connection runs on the Codex harness')
+      for (const seat of ['claude', 'codex', undefined]) assert.equal(pickProvider({ provider: seat }).host, 'helper', `${seat ?? 'default'} runs in a helper`)
+      const events = []
+      aimed.length = 0
+      const session = await startProviderSession(provider, WT, options, () => null, { emitKey: 'chat-swift', liveRoot: LIVE, onEvent: e => events.push(e) })
+      session.send('hi')
+      await until(() => events.some(e => e.type === 'done'), 'connection turn')
+      assert.equal(events.filter(e => e.type === 'delta').map(e => e.text).join(''), 'hello from the connection')
+      assert.ok(!events.some(e => e.type === 'error'), JSON.stringify(events))
+      assert.equal(aimed.length, 1)
+      assert.equal(aimed[0].apiKey, 'sk-fake-connection', 'the key reached the in-process SDK')
+      assert.equal(Object.values(aimed[0].config.model_providers)[0].base_url, 'https://fake.example/v1')
+      assert.ok(!JSON.stringify(events).includes('sk-fake-connection'), 'the key is never emitted')
+      const sessions = (await providerOwner().snapshot()).sessions
+      assert.equal(sessions.length, 1)
+      assert.equal(sessions[0].host, 'bun', 'the owner sees an in-process session')
+      session.shutdown()
+      await sleep(50)
+      await f.stop(); fixtures.delete(f)
     } finally {
       setProviderOwner(null)
       setProviderDataOwner(null)
-      for (const key of ['CODEX_HOME', 'TREZI_NATIVE_HOST', 'TREZI_SERVICE_SUPERVISED', 'TREZI_PROVIDER_HELPERS']) {
+      for (const key of ['CODEX_HOME', 'TREZI_SERVICE_SUPERVISED']) {
         if (key in saved) process.env[key] = saved[key]; else delete process.env[key]
       }
     }
   })
 
-  console.log('Provider data: connections, catalog and probe parity with the rollback twins, and in-process connection chats passed; no provider calls')
+  console.log('Provider data: connections, catalog and probe against the recorded answers, and in-process connection chats passed; no provider calls')
 } finally {
   for (const started of fixtures) await started.kill().catch(() => {})
   rmSync(scratch, { recursive: true, force: true })

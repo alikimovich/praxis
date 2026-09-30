@@ -2,6 +2,66 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-30 — LKM-111 repair: Claude live parity recorded (operator run); Codex deferred to LKM-113
+
+- **Claude parity passed.** The operator ran `TREZI_LIVE_PROVIDERS=1 bun run test:provider-live` outside the worker sandbox on 2026-09-29 (`haiku`, low effort, one no-tool prompt, no Gemini). Both hosts answered `PONG` with one `delta` and one `done`, so the supervised helper emits the events the in-process adapter did:
+  - in-process: 3066 ms, 32665 input / 53 output tokens (32655 cached);
+  - helper: 1886 ms, 32447 input / 59 output tokens (32437 cached).
+- **Codex did not run.** It hit its ChatGPT/Codex usage limit (until 2026-10-03 10:10), so both Codex runs returned no answer and 0 tokens. The Codex live parity moves to LKM-113, together with isolating Trezi's Codex sessions from the user's personal Codex MCP config (the SDK loaded `mcp.vercel.com` during the run; its `AuthRequired` noise is in the Codex errors).
+- Decision (user): LKM-111 is accepted on the Claude parity. The evidence file `test/artifacts/provider-live-parity.json` is gitignored (`test/artifacts/`), so it is cited and its numbers copied here and into `docs/SWIFT-BACKEND-RETIREMENT.md`, not committed. `test/provider-live-parity.mjs` is unchanged; no rerun is needed.
+- Supersedes the entry below ("still blocked by the worker sandbox"); that entry stays as history. `docs/TASKS.md` ticks the Claude item and keeps Codex open under LKM-113.
+
+## 2026-09-29 — LKM-111 repair: live parity attempted, still blocked by the worker sandbox
+
+- Ran `TREZI_LIVE_PROVIDERS=1 bun run test:provider-live` for real. The harness itself had a bug (it never created the fixture's profile directory, so the Swift fixture hit a precondition before any provider call); fixed in `test/provider-live-parity.mjs`.
+- With that fixed, the run reached the providers but the sandbox refused them: `api.anthropic.com` was denied ("user denied") for Claude, and Codex could not open its local unix socket (`EPERM` on `/tmp/trezi-agent-tools-*.sock`). All four runs returned no answer and 0 tokens, so this is **not** a parity result. No provider call succeeded.
+- The live-parity item in `docs/TASKS.md` stays open: run the command above on a machine that can reach Anthropic and OpenAI, then tick it and record the `PROVIDER-LIVE-PARITY OK` line, the total token count and `test/artifacts/provider-live-parity.json` here.
+- Also removed the last comment naming the deleted `src/native/preview-processes.ts` (`src/service/PlatformTools.swift`).
+
+## 2026-09-29 — LKM-111: adapters in supervised helpers, the Bun rollback removed, a self-contained Trezi.app and one start path
+
+Scope A (user decision): the plan scope, no JS-to-Swift rewrite.
+
+- **Helpers by default.** `ServiceRuntime` always installs
+  `ProviderHelperCommand.builtIn(backend:bun:)`: the bundled Bun running
+  `provider-helper.cjs` for Claude, Codex and Gemini. `pickProvider` returns
+  `helperProvider` for every built-in seat and throws outside the service; v10
+  connections keep their Codex-SDK adapter in Bun (the key is resolved in Bun's main).
+  Why: the helper runtime and its policing were proven in LKM-98/102 with a fake
+  provider; keeping an opt-in meant two provider paths to maintain.
+- **Rollback removed.** `TREZI_BACKEND_OWNER`, `TREZI_PROVIDER_HELPERS`,
+  `TreziService --legacy` (`LegacySupervisor.swift`) and every Bun twin it ran are
+  deleted (list in TASKS). Each seam (`xxxOwner()`) throws "Trezi’s service is not
+  running, so …". Parity-vs-twin tests became goldens under `test/fixtures/*/`, and the
+  suites that used the preloads now start the real Swift owners
+  (`test/helpers/with-service-owners.mjs`, `with-provider-owner.mjs`,
+  `with-repository-owner.mjs`; `repository-owner-preload.mjs` starts the editing
+  fixture too). The XPC kinds `legacy`/`legacy.ui` and the `native.lock` legacy
+  reservation are protocol names, not the rollback, and stay.
+- **Census.** Classes are helper/test/bun (13 helper, 11 test, 0 Bun-owned: gate open).
+  The census also fails if src/scripts/bin, package.json or install.sh name a removed
+  switch or pass `--legacy`, and it now compares the worktree setup helpers with
+  `WorkflowSetup.helpers`.
+- **Self-contained app.** The build writes the backend to
+  `Trezi.app/Contents/Resources/backend/` and copies its Bun to
+  `Contents/Helpers/bun` (`scripts/bundle-bun.mjs`; a copy, not
+  `bun build --compile`). `HostLaunch.swift` derives the launch when LaunchServices
+  starts the host. `ServiceRuntime` finds the Keychain helper and checkout from the
+  new backend path.
+- **One start path.** `open -a Trezi` or `bin/trezi` (a shell front for `open -a`
+  that builds a missing app and hands `--update` to `bin/trezi.mjs`). `install.sh`
+  links the app into Applications. `bun run dev` stays the development launcher.
+- **Live parity.** `test/provider-live-parity.mjs` (live tier) runs Claude haiku/low and
+  Codex low, each in-process and in a supervised helper, with one no-tool prompt. It
+  compares events and answers and records token usage. It was **not run**: the worker
+  sandbox denied network to api.anthropic.com and chatgpt.com. Live parity is SKIP, not
+  PASS, and the fake-helper suite is the current proof.
+- **Docs.** README, AGENTS.md, the agent guide (docs-links now validates against the
+  working tree, so a deleted file fails before its deletion is committed), RETIREMENT
+  (status, gate, census, launcher, evidence), PROVIDERS, SERVICE, PLAN (current status),
+  NATIVE, MEMORY and WORKTREES. The other SWIFT-BACKEND docs carry an LKM-111 note, and
+  their rollback passages are history.
+
 ## 2026-09-29 — LKM-102 review repair: agent guide and TASKS brought up to the reduced scope
 
 Docs only. With LKM-112 merged, the byte-identical constraint on `docs/agent-guide/` is

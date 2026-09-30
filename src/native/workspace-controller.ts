@@ -9,7 +9,7 @@ import { MAX_PATCHES, METADATA_FIELDS, projectName, type WorkspaceEntryRecord, t
 
 export interface WorkspaceServices {
   invoke(channel: string, ...args: any[]): Promise<any>
-  /** The workspace owner: the Swift service, or the legacy writer under TREZI_BACKEND_OWNER=legacy. */
+  /** The workspace owner: the Swift service. */
   store: WorkspaceStore
   render(state: NativeWorkspaceSnapshot): void
   activate(entry: ProjectEntry | null): Promise<void>

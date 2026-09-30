@@ -4,23 +4,21 @@
 // - parity: one scripted session (definitions, same-turn replacement, activation by the
 //   defining turn only, a late terminal, a composition cut short, command admission,
 //   the revision chain of a reordered batch, Undo/Reset, restart normalization,
-//   navigation, content drafts, sidecar commits) gives identical answers and identical
-//   island history bytes on the legacy twin and the Swift owner;
+//   navigation, content drafts, sidecar commits, project files) gives the answers and
+//   island history bytes recorded from the Bun twin before LKM-111 removed it
+//   (test/fixtures/editing-owner/parity-golden.json);
 // - turns: the conversation coordinator is the authority for an island's origin and a
 //   navigation's turn;
-// - suites: chat-islands, shadow-controls, control-panels, content-controls,
-//   native-content and annotation-store (S15: notes and starter tokens) re-run
-//   unchanged with the Swift owners preloaded;
 // - drafts (restart, stale base refused, damaged file), sidecars (stale bytes, symlinks,
-//   lanes), crash (SIGKILL inside an island write), rollback, drain, schema.
+//   lanes), crash (SIGKILL inside an island write), drain, schema. The island, controls,
+//   content and notes suites run on the Swift owners themselves (with-service-owners.mjs).
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { compileEditingFixture, startEditingFixture } from './helpers/editing-fixture.mjs'
-import { islandFile, legacyEditing } from '../src/main/editing-model.ts'
 import { contentHash } from '../src/main/source-owner.ts'
 import { NativeContentController } from '../src/native/content-controller.ts'
 import { NavigationController } from '../src/native/navigation-controller.ts'
@@ -37,6 +35,8 @@ const fixtures = []
 const began = Date.now()
 const log = console.log
 console.log = (...args) => log(`[${((Date.now() - began) / 1000).toFixed(1)}s]`, ...args)
+/** Where `EditingIslands` keeps a chat record's island history. */
+const islandFile = (directory, root, record) => join(directory, `${createHash('sha256').update(`${root}\0${record}`).digest('hex')}.json`)
 const start = async (profile, env) => { const fixture = await startEditingFixture(binary, profile, env); fixtures.push(fixture); return fixture }
 
 /** The scripted session. Random ids/tokens are mapped to stable names before comparing. */
@@ -126,7 +126,7 @@ async function script(owner, root, profile) {
   return out
 }
 
-/** Sidecar commits on `root`: identical outcomes on both owners. */
+/** Sidecar commits on `root`. */
 async function sidecars(owner, root) {
   const out = []
   const attempt = async (label, promise) => { try { out.push([label, await promise]) } catch (error) { out.push([label, error.code]) } }
@@ -154,7 +154,7 @@ async function sidecars(owner, root) {
   return out
 }
 
-/** The other `.trezi/` files (S15): migration, setup helpers, dependency marker; identical on both owners. */
+/** The other `.trezi/` files (S15): migration, setup helpers, dependency marker. */
 async function project(owner, base) {
   const out = []
   const attempt = async (label, promise) => { try { out.push([label, await promise]) } catch (error) { out.push([label, error.code ?? String(error)]) } }
@@ -215,34 +215,33 @@ async function project(owner, base) {
 try {
   // ── parity ──────────────────────────────────────────────────────────────
   {
-    const legacyProfile = dir('parity-legacy'), swiftProfile = dir('parity-swift'), root = dir('parity-project')
-    const legacy = await script(legacyEditing({ islands: join(legacyProfile, 'chat-islands') }), root, legacyProfile)
+    const golden = JSON.parse(readFileSync(join(repo, 'test/fixtures/editing-owner/parity-golden.json'), 'utf8'))
+    const replace = (value, from, to) => JSON.parse(JSON.stringify(value).replaceAll(from, to))
+    const swiftProfile = dir('parity-swift'), root = dir('parity-project')
     const fixture = await start(swiftProfile)
     const { editing } = fixture.owners()
     assert.equal(editing.kind, 'swift')
-    const swift = await script(editing, root, swiftProfile)
-    for (let i = 0; i < Math.max(legacy.length, swift.length); i++) assert.deepEqual(swift[i], legacy[i], `step ${legacy[i]?.[0] ?? swift[i]?.[0]}`)
-    const legacySide = await sidecars(legacyEditing(), dir('sidecar-legacy'))
+    const swift = replace(await script(editing, root, swiftProfile), root, '<root>')
+    for (let i = 0; i < Math.max(golden.script.length, swift.length); i++) assert.deepEqual(swift[i], golden.script[i], `step ${golden.script[i]?.[0] ?? swift[i]?.[0]}`)
     const swiftSide = await sidecars(editing, dir('sidecar-swift'))
-    assert.deepEqual(swiftSide, legacySide)
+    assert.deepEqual(swiftSide, golden.sidecars)
     assert.deepEqual(swiftSide.map(([label, value]) => [label, value?.ok ?? value]).slice(0, 5),
       [['create', true], ['create again is stale', false], ['bound update', true], ['hand edit refused', false], ['hand edit kept', '{"hand":"edit"}\n']])
     assert.deepEqual(swiftSide.slice(5).map(([label, value]) => [label, value?.ok ?? value]), [
       ['not a sidecar', 'invalidRequest'], ['notes create', true], ['notes bound update', true], ['notes stale', false],
       ['tokens create-only', true], ['tokens exists', false], ['notes kept', '[{"id":"a1","text":"x"}]\n'],
       ['symlinked file', 'unauthorized'], ['symlinked folder', 'unauthorized'], ['oversized', 'invalidRequest']])
-    const legacyProject = await project(legacyEditing(), dir('project-legacy'))
-    const swiftProject = await project(editing, dir('project-swift'))
-    const swiftBase = dir('project-swift'), legacyBase = dir('project-legacy')
-    const relative = (steps, base) => JSON.parse(JSON.stringify(steps).replaceAll(base, '<base>'))
-    assert.deepEqual(relative(swiftProject, swiftBase), relative(legacyProject, legacyBase), 'project files: identical on both owners')
+    const swiftBase = dir('project-swift')
+    const swiftProject = await project(editing, swiftBase)
+    const relative = (steps, base) => replace(steps, base, '<base>')
+    assert.deepEqual(relative(swiftProject, swiftBase), golden.project, 'project files: as recorded')
     const answer = label => relative(swiftProject, swiftBase).find(step => step[0] === label)[1]
     assert.deepEqual([answer('migrate'), answer('migrate again')], [[], []])
     assert.deepEqual(answer('migrate collision'), ['<base>/live/.praxis/notes.json'])
     assert.deepEqual([answer('migrate linked .trezi'), answer('sync linked target')], ['invalidRequest', 'invalidRequest'])
     assert.deepEqual([answer('needs install (link)'), answer('needs install (no marker)'), answer('skip when marked'),
       answer('install after manifest change'), answer('no live dependencies')], [true, true, false, true, false])
-    console.log(`parity: ${legacy.length} island/navigation/draft steps and ${legacySide.length} sidecar steps identical on both owners`)
+    console.log(`parity: ${swift.length} island/navigation/draft steps and ${swiftSide.length} sidecar steps match the recorded golden`)
     await fixture.stop()
   }
 
@@ -293,22 +292,6 @@ try {
       { type: 'done', turn: 'T2', landingPending: false }]), ['failed:T2', 'landed:T2'])
     assert.deepEqual(seen([{ type: 'done', turn: 'T3', landingPending: true }, { type: 'isolation', state: 'parked' }]), ['begin:T3', 'failed:T3'])
     console.log('turns: origin and navigation bound to the conversation owner’s turn; loads only in the asking chat')
-  }
-
-  // ── suites: legacy island/controls/content suites on the Swift owners ────
-  for (const suite of ['chat-islands', 'shadow-controls', 'control-panels', 'content-controls', 'native-content', 'annotation-store']) {
-    const profile = dir(`suite-${suite}`)
-    const result = await new Promise(resolve => {
-      const child = spawn('bun', ['--preload', './test/helpers/editing-owner-preload.mjs', `test/${suite}.mjs`], {
-        cwd: repo, env: { ...process.env, EDITING_FIXTURE: binary, EDITING_PROFILE: profile }, stdio: ['ignore', 'pipe', 'pipe'] })
-      let text = ''
-      child.stdout.on('data', data => { text += data }); child.stderr.on('data', data => { text += data })
-      child.on('exit', code => resolve({ code, text }))
-    })
-    assert.equal(result.code, 0, `${suite} on the Swift owners:\n${result.text}`)
-    const frames = Number(result.text.match(/EDITING-PARITY editing=(\d+)/)?.[1] ?? 0)
-    if (['chat-islands', 'shadow-controls', 'annotation-store'].includes(suite)) assert.ok(frames > 0, `${suite} went through the editing owner`)
-    console.log(`suite ${suite}: passes on the Swift owners (${frames} editing frames)`)
   }
 
   // ── drafts: restart, stale base, damaged file ─────────────────────────
@@ -417,37 +400,6 @@ try {
     console.log('crash: an island write killed midway leaves the previous history whole')
   }
 
-  // ── rollback: both owners continue on the other's files ───────────────
-  {
-    const profile = dir('rollback'), root = dir('rollback-project')
-    let fixture = await start(profile)
-    const swift = fixture.owners().editing
-    await swift.islandsOpen('A', root, 'rec')
-    const made = await swift.islandDefine('A', 1, 'T1')
-    await swift.islandCommit('A', made.token, def('swift'), 'agent', { x: 1 })
-    await swift.islandSettle('A', 'T1', true)
-    await swift.saveContentDraft(root, 'hero', hex(1), { title: 'kept' })
-    await fixture.stop()
-    const draftsDir = join(profile, 'service/editing/content-drafts')
-    const draftBytes = readFileSync(join(draftsDir, `${contentHash(root)}.json`), 'utf8')
-    // Launch-time switch to the legacy owner: it reads and continues the same history.
-    const legacy = legacyEditing({ islands: join(profile, 'chat-islands') })
-    const records = await legacy.islandsOpen('A', root, 'rec')
-    assert.deepEqual(records.map(r => [r.manifest.title, r.status]), [['swift', 'ready']])
-    const later = await legacy.islandDefine('A', 2, 'T2')
-    await legacy.islandCommit('A', later.token, def('legacy'), 'agent', {})
-    await legacy.islandSettle('A', 'T2', true)
-    assert.deepEqual(await legacy.contentDrafts(root), [], 'The legacy owner keeps drafts in memory only')
-    assert.equal(readFileSync(join(draftsDir, `${contentHash(root)}.json`), 'utf8'), draftBytes, 'and never touches the Swift drafts')
-    // Back to Swift: newer work written by the legacy owner is kept.
-    fixture = await start(profile)
-    const back = fixture.owners().editing
-    assert.deepEqual((await back.islandsOpen('A', root, 'rec')).map(r => [r.manifest.title, r.status]), [['swift', 'ready'], ['legacy', 'ready']])
-    assert.deepEqual((await back.contentDrafts(root)).map(d => d.value.title), ['kept'])
-    await fixture.stop()
-    console.log('rollback: history continues across owners; Swift drafts preserved through a legacy launch')
-  }
-
   // ── drain and schema ─────────────────────────────────────────────────
   {
     const profile = dir('schema'), root = dir('schema-project')
@@ -472,7 +424,7 @@ try {
     await fixture.stop()
     console.log('schema and drain: malformed, unknown, scoped and post-drain requests refused')
   }
-  console.log('EDITING-OWNER OK — parity, turns, suites, drafts, lanes, crash, rollback, drain and schema')
+  console.log('EDITING-OWNER OK — parity, turns, drafts, lanes, crash, drain and schema')
 } finally {
   for (const fixture of fixtures) await fixture.kill().catch(() => {})
   rmSync(scratch, { recursive: true, force: true })

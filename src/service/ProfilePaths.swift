@@ -2,8 +2,8 @@ import Foundation
 import Darwin
 
 /// The profile and session-store rename migrations (LKM-102), formerly Bun's
-/// `native/profile-path.ts` (its creating half is now the rollback twin
-/// `native/profile-path-legacy.ts`). Both keep the physical directory in place and add
+/// `native/profile-path.ts`, which now only resolves and refuses an unmigrated store
+/// (LKM-111 removed its creating twin). Both keep the physical directory in place and add
 /// one atomic alias, so Git administrative paths and saved absolute worktree paths stay
 /// valid and there is no partial-copy state:
 /// - `profile(support:)`: `Trezi Native` → `Praxis Native` (relative link), for the

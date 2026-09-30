@@ -5,8 +5,8 @@ import Darwin
 /// Chat persistence for the conversation coordinator (S11, LKM-97).
 ///
 /// - `<profile>/trezi/sessions/<id>.json`: the unchanged session records ("previous
-///   agents" and each project's current chat), byte-identical to `sessions-store.ts`
-///   (`JSON.stringify(record)`), so the legacy owner reads and continues them as is.
+///   agents" and each project's current chat) as `JSON.stringify(record)`, the shape
+///   `sessions-store.ts` reads, so records written before the service still read as is.
 ///   Same rules: a `current` save replaces the project's other current record, and
 ///   History keeps the newest 50 per project. Bun reads the directory directly (it is
 ///   written atomically); only the service writes it.

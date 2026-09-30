@@ -98,7 +98,7 @@ final class EditingOwner: @unchecked Sendable {
         switch frame.method {
         // Islands
         case "islandsOpen":
-            // The history file is named from the root as Bun gives it (unchanged from the legacy owner).
+            // The history file is named from the root as Bun gives it (unchanged from the Bun store it replaced).
             let records = islands.open(chat: try Self.key(body, "chat"), root: try body.path("root"), record: try Self.key(body, "record"))
             return result(Self.object([("records", .array(records))]))
         case "islandsClose":

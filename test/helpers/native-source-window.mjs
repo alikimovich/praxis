@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { once } from 'node:events'
-import { NativeBridge } from '../../src/native/bridge.ts'
+import { spawnHostBridge } from './host-bridge.mjs'
 
 const directory = resolve('out/native')
 const executable = `${directory}/Trezi.app/Contents/MacOS/TreziHost`
@@ -10,7 +10,7 @@ if (process.platform !== 'darwin' || !existsSync(executable)) {
   console.log('NATIVE-SOURCE-WINDOW SKIP — build the macOS native host first.')
   process.exit(0)
 }
-const host = new NativeBridge(executable, directory, 'ephemeral')
+const host = spawnHostBridge(executable, directory, 'ephemeral')
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 const root = '/tmp/trezi-source-window-fixture'
 const state = { root, visible: true, popped: false, source: 'src/Example.tsx', files: ['src/Example.tsx'], text: Array.from({ length: 100 }, (_, i) => `const line${i} = "Editable source line ${i}"`).join('\n'), revision: 1 }

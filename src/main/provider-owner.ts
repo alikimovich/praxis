@@ -10,13 +10,10 @@ import type { PermissionVerdict } from './provider-policy'
  * with a scrubbed environment and only their stdio — and enforces their grant on
  * every frame they send (`ProviderHelper.swift`).
  *
- * The built-in adapters run in Bun by default and ask this owner through
- * `provider-sessions.ts`. Helper routing (`backends/helper-session.ts`) is an explicit
- * opt-in of the Swift launch (`TREZI_PROVIDER_HELPERS=1`), verified with a fake provider
- * only; v10 connections stay in-process even then. Moving the adapters for good and the
- * live parity run are LKM-111. With no Swift owner (`TREZI_BACKEND_OWNER=legacy`, unit
- * tests) the in-process twin in `provider-model.ts` decides the same way, persists
- * nothing, and hosts no helpers.
+ * The built-in adapters (Claude, Codex, Gemini) run in helpers by default since LKM-111
+ * (`backends/helper-session.ts`); a v10 connection's Codex session stays in Bun and asks
+ * this owner through `provider-sessions.ts`. LKM-111 also removed the in-process twin:
+ * with no Swift owner installed nothing can start a provider session.
  */
 
 export type ProviderPhase = 'idle' | 'running' | 'cancelling' | 'stopped'
@@ -96,7 +93,7 @@ export class ProviderError extends Error {
 }
 
 export interface ProviderOwner {
-  readonly kind: 'swift' | 'legacy'
+  readonly kind: 'swift'
   /** Registers an in-process (Bun) adapter's session; answers its granted Trezi tools. */
   open(grant: ProviderGrant): Promise<{ tools: string[] }>
   /** Starts a helper-hosted session: the owner spawns and supervises the helper. */
@@ -127,23 +124,14 @@ export interface ProviderOwner {
 }
 
 let owner: ProviderOwner | null = null
-let fallback: (() => ProviderOwner) | null = null
 
 /** Installed once by the native entry point when the Swift service is supervising Bun. */
 export function setProviderOwner(next: ProviderOwner | null): void {
   owner = next
 }
 
-/** How to build the legacy twin (registered by provider-model.ts to avoid an import cycle). */
-export function setLegacyProviderOwner(create: () => ProviderOwner): void {
-  fallback = create
-}
-
-let legacy: ProviderOwner | null = null
-/** The Swift owner when installed, else the in-process twin. */
+/** The Swift owner; with none installed (Bun outside the service) no session can start. */
 export function providerOwner(): ProviderOwner {
-  if (owner) return owner
-  if (!fallback) throw new ProviderError('unavailable', 'No provider owner is installed.')
-  legacy ??= fallback()
-  return legacy
+  if (!owner) throw new ProviderError('unavailable', 'Trezi’s service is not running, so provider sessions cannot start.')
+  return owner
 }

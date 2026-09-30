@@ -11,7 +11,20 @@ parsing helpers.
 Initiated 2026-09-27. This is the canonical plan document; update it as
 phases complete.
 
-**Current (2026-09-29, LKM-102, reduced acceptance):** the scope was reduced (a
+**Current (2026-09-29, LKM-111):** the built-in Claude, Codex and Gemini adapters run by
+default in provider helpers the Swift service supervises (v10 connections stay in Bun).
+The launch-time rollback (`TREZI_BACKEND_OWNER=legacy`, `TreziService --legacy`) and
+every Bun twin it ran are removed; their recorded answers became goldens, and each Bun
+seam throws without the service. The retirement gate is open (0 Bun-owned rows, no
+rollback switch in a shipped file, both checked by `test/retirement-census.mjs`). The
+retained JS and a Bun binary ship inside `Trezi.app`, so no installed Bun is needed to
+run it, and `open -a Trezi` or the thin `trezi` command is the one start path. The bounded
+live Claude + Codex parity check (`test/provider-live-parity.mjs`) passed for Claude on
+both hosts in the operator's run; Codex hit its usage limit and is deferred to LKM-113
+(numbers in the retirement evidence). Passages below that name the rollback are history.
+See [retirement](SWIFT-BACKEND-RETIREMENT.md).
+
+**Earlier (2026-09-29, LKM-102, reduced acceptance):** the scope was reduced (a
 recorded decision): the SDK adapter move, the live provider parity run and the removal
 of the legacy launch path and old Bun copies are LKM-111. The last seven Bun-owned
 census rows moved to Swift, each with a rollback twin and parity tests: the connections

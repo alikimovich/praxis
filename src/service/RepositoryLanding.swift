@@ -2,7 +2,7 @@ import Foundation
 import Darwin
 
 /// Explicit landings and reconciliation, discards, live commits, branch switching
-/// and startup recovery (S07). The TS twins are `applyToWorkingTree`,
+/// and startup recovery (S07), ported from the retired TS `applyToWorkingTree`,
 /// `applyParked`, `stageResolve`, `discardParked`, `commitLiveTurn`,
 /// `checkoutBranch`/`switchBranch`, `pruneOrphans` and `pruneIntegratedChatBranches`.
 extension RepositoryEffects {

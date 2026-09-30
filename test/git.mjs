@@ -1,6 +1,6 @@
 /**
- * Unit test for branch management against a real temp git repo (no electron).
- * Run via bun so the .ts import transpiles: bun run test:git
+ * Branch management against a real temp git repo, through the Swift repository owner.
+ * Run by test/repository-owner.mjs with the owner preloaded.
  */
 import assert from 'node:assert'
 import { execFileSync } from 'node:child_process'

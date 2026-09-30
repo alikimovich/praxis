@@ -5,10 +5,8 @@ import type { BranchResult } from '../shared/api'
  * coordinator performs every Git effect Trezi makes in a user's repository, one FIFO
  * lane per repository common directory, with journaled intent and recovery refs;
  * the mutating functions in `worktrees.ts`, `chat-worktrees.ts`, `live-commit.ts` and
- * `git.ts` dispatch here when an owner is installed. With no owner (the
- * `TREZI_BACKEND_OWNER=legacy` launch and the pure unit tests) they run their own Git
- * commands exactly as before. Never both: an owner that fails is an error, not a
- * reason to run Git locally.
+ * `git.ts` dispatch here. There is no other owner (LKM-111 removed the TS twin): without
+ * the service a Git effect fails rather than running Git locally.
  */
 
 /** Same shape as `Worktree` in worktrees.ts (kept here to avoid an import cycle). */
@@ -79,6 +77,8 @@ export function setRepositoryOwner(next: RepositoryOwner | null): void {
   owner = next
 }
 
-export function repositoryOwner(): RepositoryOwner | null {
+/** The installed Swift owner; without the service there is none, and no Git effect runs. */
+export function repositoryOwner(): RepositoryOwner {
+  if (!owner) throw new Error('Trezi’s service is not running, so the repository cannot be changed.')
   return owner
 }

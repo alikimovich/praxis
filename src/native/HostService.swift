@@ -4,7 +4,7 @@ import AppKit
 extension Host {
     func connectService() {
             do {
-                let args = CommandLine.arguments
+                let args = HostLaunch.arguments
                 func option(_ key: String) throws -> String {
                     guard let index = args.firstIndex(of: key), index + 1 < args.count else { throw ServiceContractFailure.invalidRequest }
                     return args[index + 1]
@@ -12,7 +12,7 @@ extension Host {
                 let launch = try ServiceLaunch(bun: option("--bun"), backend: option("--backend"),
                     profile: option("--profile"),
                     arguments: args.firstIndex(of: "--").map { Array(args.dropFirst($0 + 1)) } ?? [],
-                    environment: ProcessInfo.processInfo.environment)
+                    environment: HostLaunch.environment)
                 let executable = Bundle.main.bundleURL.appendingPathComponent("Contents/XPCServices/dev.praxis.service.xpc/Contents/MacOS/TreziService").path
                 let client = try ServiceClient(launch: launch, serviceExecutable: executable)
                 serviceClient = client
@@ -34,6 +34,15 @@ extension Host {
             } catch { fputs("Service launch failed: \(error)\n", stderr); serviceFailed = true; terminateHost() }
 
     }
+    // `open -a Trezi <folder>`, `trezi <folder>`, or a folder dropped on the Dock icon:
+    // Bun opens it as a project once attached (queued until then, like every early frame).
+    func application(_ sender: NSApplication, open urls: [URL]) {
+        for url in urls where url.isFileURL {
+            var directory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &directory), directory.boolValue else { continue }
+            emit(["event": "open-project", "root": url.resolvingSymlinksInPath().path])
+        }
+    }
     // NSApp.terminate exits the process itself; a failure status must be applied here.
     func applicationWillTerminate(_ notification: Notification) {
         let status = serviceFailed ? 1 : exitStatus
@@ -54,17 +63,8 @@ extension Host {
         client.shutdown { [weak self] in
             guard let self else { return }
             self.serviceTerminated = true
-            if self.restartRequested {
-                let args = CommandLine.arguments
-                if let index = args.firstIndex(of: "--bun"), index + 1 < args.count {
-                    let process = Process()
-                    process.executableURL = URL(fileURLWithPath: args[index + 1])
-                    process.arguments = [URL(fileURLWithPath: self.directory).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("scripts/start-native.mjs").path] + (self.restartProject.map { ["--project", $0] } ?? [])
-                    process.environment = ProcessInfo.processInfo.environment
-                    // Shutdown acknowledgement follows drain and profile release.
-                    try? process.run()
-                }
-            }
+            // Shutdown acknowledgement follows drain and profile release.
+            if self.restartRequested { HostLaunch.relaunch(directory: self.directory, project: self.restartProject) }
             NSApp.terminate(nil)
         }
         return .terminateCancel

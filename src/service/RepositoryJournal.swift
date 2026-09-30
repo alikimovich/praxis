@@ -53,8 +53,8 @@ enum RepositoryJournalError: Error, CustomStringConvertible {
     }
 }
 
-/// `<profile>/service/repository/journal.json`, service-private. The legacy owner
-/// never reads or writes it; a rollback keeps it (and every recovery ref) in place.
+/// `<profile>/service/repository/journal.json`, service-private: Bun
+/// never reads or writes it, and recovery refs stay until the user resolves them.
 final class RepositoryJournal: @unchecked Sendable {
     static let maxInterrupted = 200
     let path: String

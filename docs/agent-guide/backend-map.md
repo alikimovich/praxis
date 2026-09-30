@@ -7,9 +7,10 @@ retained backend services"). Linked from [AGENTS.md](../../AGENTS.md).
 is historical): agent/provider sessions, dev servers, Git/worktrees, setup, source
 parsers, props/styles/tokens, annotations, diagnostics, media and iOS Simulator. Every
 provider session starts through `src/main/provider-sessions.ts` (the provider owner's
-grant; see `docs/SWIFT-BACKEND-PROVIDERS.md`). Where the Swift service owns a domain,
-the TS module listed here is its client or its legacy-launch rollback twin — see
-[service-owners.md](service-owners.md).
+grant; see `docs/SWIFT-BACKEND-PROVIDERS.md`); the built-in adapters then run in a
+provider helper (`src/main/backends/provider-helper-entry.ts`). Where the Swift service
+owns a domain, the TS module listed here is its client: there is no Bun fallback since
+LKM-111 — see [service-owners.md](service-owners.md).
 
 ```
 src/main/
@@ -21,12 +22,10 @@ src/main/
                   re-arm reads). The sandboxed preload can only be READ by a
                   request/reply round trip; `requestReply` is that pattern
                   once, shared by styles:read and layers:read
-  devserver.ts    legacy-launch runner: spawn dev server, parse URL, readiness
-                  (the Swift launch serves the same routes via devserver-service.ts)
+  devserver.ts    registers the devserver:* routes, served by the runtime owner
+                  through devserver-service.ts
   project-detect.ts detect framework/PM + launch commands (pure; Swift mirror
                   in service/RuntimeDetect.swift)
-  static-server.ts legacy-launch static file server for vanilla HTML/JS projects
-                  (framework 'static': no package.json/dev command; live-reload)
   file-tree.ts    list a project's files (git ls-files / fs-walk) for the
                   native source editor's file tree (source:tree IPC)
   project-icon.ts the project's own favicon, kept as project metadata (project:icon)
@@ -41,20 +40,12 @@ src/main/
                   .git/.trezi/.dsgn/node_modules), delete goes to the OS trash
   media.ts / media-types.ts   the editor's media viewer: opening a .png/.mp4 must
                   SHOW it, not decode its bytes as utf8. media-types is the pure
-                  half (ext→kind/MIME, binary sniff); media.ts is the legacy
-                  registry of opaque `trezi-media://f/<token>` URLs that only trusted
-                  native code turns back into a path (AppKit shows the file). Under the
-                  Swift launch the platform owner issues these grants instead. No
-                  WebKit view serves the scheme (the Electron-era stream is retired)
+                  half (ext→kind/MIME, binary sniff); the platform owner issues the
+                  opaque `trezi-media://f/<token>` grants that only trusted native
+                  code turns back into a path (AppKit shows the file). No WebKit view
+                  serves the scheme (the Electron-era stream is retired)
   agent.ts        persistent multi-turn agent session (streams over agent:* IPC);
                   asks the conversation owner before every chat transition
-  attachments.ts  gives a PASTED composer image a path (attachments:save writes
-                  the clipboard bytes under <userData>/trezi/attachments so the
-                  turn can tell the agent where the image it can see lives; a
-                  DROPPED image needs no call — the renderer already has its
-                  path). Pure fs+path; sanitizes the renderer-supplied name.
-                  Legacy-launch writer: under the Swift launch the platform owner
-                  writes the same folder and names from hash-checked chunks
   backends/       provider seam: claude.ts, codex.ts, gemini.ts behind pickProvider
                   (gemini currently has NO SDK dep — treat as experimental). A set
                   AgentOptions.connectionId routes to codex.ts whatever `provider` says.
@@ -64,7 +55,8 @@ src/main/
                   "Stop must always work" helper — ask the backend nicely, then kill
                   (see the Gotcha on the SDK's untimed interrupt). helper-host.ts runs a
                   provider inside a supervised helper; helper-session.ts is Bun's view of
-                  such a session (verified with a fake provider only, see
+                  such a session. Since LKM-111 every built-in session runs there
+                  (provider-helper-entry.ts is the helper's entrypoint; see
                   docs/SWIFT-BACKEND-PROVIDERS.md)
   session-tools.ts  Trezi's session tools for Codex's MCP bridge and helper sessions,
                   each authorized by the provider owner first (`authorizedTool`)
@@ -75,28 +67,21 @@ src/main/
                   total, so codex.ts DIFFS them (`usageDelta`), never sums
   providers-store.ts / providers.ts   v10 "connections" — user-added OpenAI-compatible
                   endpoints (AI Gateway, Groq, custom) so open models like Kimi/DeepSeek
-                  can drive a chat. Same pure/main split as control-manifest vs
-                  control-panels: the store takes an injected baseDir + SecretCipher (so
-                  it unit-tests without electron), while providers.ts owns the
-                  safeStorage cipher, the providers:* IPC, the /models catalog probe,
-                  the picker's ModelChoice list, and resolveConnection() — the seam
-                  backends/codex.ts aims the Codex SDK at. Under the Swift launch the
-                  service's provider owner writes the connections store (keys through
-                  `TreziHost --crypto`, not the safeStorage cipher) via
-                  src/service/ProviderData.swift behind main/provider-data.ts;
-                  providers-store.ts and the cipher are the legacy-launch rollback twin
-  model-catalog.ts / codex-models.ts   what the two BUILT-IN seats offer, discovered
-                  instead of curated. model-catalog is the pure half (parsers + a TTL
-                  cache with injected clock/baseDir, persisted under userData);
-                  codex-models runs `codex debug models` on the SDK's OWN vendored
-                  binary, not PATH. Claude needs a live session (Query.supportedModels()),
+                  can drive a chat. providers-store.ts only reads the store; the service's
+                  provider owner writes it (keys through `TreziHost --crypto`) via
+                  src/service/ProviderData.swift behind main/provider-data.ts.
+                  providers.ts owns the providers:* IPC, the /models catalog probe, the
+                  picker's ModelChoice list, and resolveConnection() — the seam
+                  backends/codex.ts aims the Codex SDK at. These sessions stay in Bun
+  model-catalog.ts what the two BUILT-IN seats offer, discovered instead of
+                  curated: the parsers + a TTL cache with injected clock/baseDir over
+                  the file the provider owner persists (it runs `codex debug models` on
+                  the SDK's OWN vendored binary, not PATH). Claude needs a live session (Query.supportedModels()),
                   so backends/claude.ts hands its answer back via recordClaudeModels;
-                  providers.ts only schedules the refresh, never on the render path.
-                  Under the Swift launch the provider owner writes the cache and runs
-                  the probe (src/service/ProviderData.swift via main/provider-data.ts);
-                  these two are the legacy-launch rollback twins
-  simulator.ts    iOS Simulator preview (Metro/Expo detect, MJPEG sim bridge); the
-                  legacy-launch rollback of the Swift platform owner
+                  providers.ts only schedules the refresh, never on the render path
+                  (src/service/ProviderData.swift via main/provider-data.ts)
+  simulator.ts    iOS Simulator preview views and routes; the platform owner runs
+                  xcrun/idb and the MJPEG bridge (src/service/SimulatorOwner.swift)
   props.ts / props-svelte.ts   prop editing engines (React via react-docgen /
                   Svelte 5); they mirror each other's splice/apply contract
   styles.ts / styles-svelte.ts  CSS editing for the island's Styles tab: one
@@ -120,8 +105,9 @@ src/main/
                   .trezi/control-panels.json store (rendered here, committed
                   hash-bound by the editing owner) + controls:* IPC
   tokens.ts       design-token detection/scaffold   annotations.ts  comments → PR
-  publish.ts      the legacy Publish / handoff / saved-run PR code (rollback twin of
-                  service/WorkflowPublish.swift); the routes go through workflow-owner.ts
+  publish.ts      Publication's one Bun step (a checkout on its base branch moves to a
+                  work branch) and the PR description helper; the workflow owner
+                  (service/WorkflowPublish.swift) publishes through workflow-owner.ts
   annotation-store.ts  the notes sidecar's storage (list/add/remove; no Git), split
                   from publication in annotations.ts; it renders only, the editing
                   owner commits the sidecar (since LKM-102)
@@ -141,16 +127,16 @@ src/main/
   git.ts, worktrees.ts, chat-worktrees.ts, chat-isolation.ts
                   git/worktree primitives; worktrees: per-chat isolation + sync/merge/recovery;
                   chat-worktrees: turn-scoped ops (sync, commit, apply); chat-isolation: lifecycle.
-                  Their mutating functions dispatch to the Swift repository owner when
-                  one is installed (repository-owner.ts); repo-write-queue.ts likewise
+                  Their mutating functions dispatch to the Swift repository owner
+                  (repository-owner.ts; without the service they throw);
+                  repo-write-queue.ts likewise
   live-commit.ts  one commit per turn on the LIVE checkout (pure): stages only the
                   files that turn changed, partial-commits so the user's own staged
                   work is untouched, skips non-repo-root projects, never throws
   publish-scope.ts  what a session changed / is there anything to publish (pure) —
                   measured against the default branch, since committed turns leave
                   nothing to see in a HEAD-relative diff. Used by annotations.ts
-  setup.ts, scaffold.ts, xcode.ts
+  setup.ts, scaffold.ts
   diagnose.ts, diag-cache.ts, diag-rules.ts         sessions-store.ts, edit-history.ts
-  update.ts       self-update detection (pure: fetch + rev-list behind-count)
   project-ui*.ts  Experimental Gen UI (see architecture.md and docs/PROJECT_UI.md)
 ```

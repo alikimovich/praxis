@@ -8,7 +8,34 @@ writes files, runs a process or sends a signal) and the gate the removal waits o
 `test/retirement-census.mjs` (unit tier) keeps it executable: a new effect in an
 unlisted module, a stale row, or a gate line that disagrees with the rows fails.
 
-## Status (2026-09-29)
+## Status (2026-09-29, LKM-111)
+
+**Retirement gate: open.** The census has no Bun-owned row, and LKM-111 closed the rest
+of the [gate](#gate-for-removing-the-legacy-owners):
+
+- Built-in Claude, Codex and Gemini sessions always run in provider helpers the Swift
+  service supervises (`ProviderHelperCommand.builtIn`, `backends/index.ts`); only a v10
+  connection stays in Bun, so its key never crosses into another process. There is no
+  opt-in and no in-process fallback: an unsupervised Bun refuses built-in providers.
+- The rollback is gone: the launcher switch, the service's rollback launch and every
+  Bun twin (provider, conversation, editing, preferences, workspace, memory, runtime,
+  repository, source, workflow and platform writers, the profile alias creator and the
+  in-app restart of that launch). With no service, those workflows refuse with
+  "Trezi's service is not running" instead of writing. The parity suites that compared
+  the owners with their twins now compare them with goldens recorded from the twins
+  (`test/fixtures/*/…golden.json`).
+- The retained JS ships inside the app (`Trezi.app/Contents/Resources/backend/`) with
+  the Bun that built it (`Contents/Helpers/bun`), so `open -a Trezi` needs no installed
+  Bun. The start path is `open -a Trezi` or the thin `trezi` command.
+- Live parity: `test/provider-live-parity.mjs` (live tier, `TREZI_LIVE_PROVIDERS=1`) runs
+  Claude and Codex, in-process and in the helper, on one minimal prompt and records the
+  token usage. The operator's run passed for Claude (in-process and helper); Codex hit
+  its usage limit and is deferred to LKM-113 ([evidence](#lkm-111-evidence)).
+
+`test/retirement-census.mjs` now fails if a shipped file names the removed launch
+switch or service flag, or if a Bun-owned row appears.
+
+## LKM-102 status (2026-09-29, history)
 
 **Retirement gate: open.** The census has no Bun-owned row. That is the first
 condition of the [gate](#gate-for-removing-the-legacy-owners) only: the provider adapter
@@ -75,6 +102,9 @@ Not moved, and why the gate stays closed:
 
 ## Rollback for this step's domain
 
+History: LKM-111 removed the owner switch described here. The file formats below are
+unchanged, and the Swift owner is their only writer.
+
 - Files: `<project>/.trezi/annotations.json` and `<project>/.trezi/tokens.json`, bytes
   unchanged (`JSON.stringify(value, null, 2)` plus a newline). No journal, receipt or
   draft is added: each commit is a single atomic, hash-bound replace.
@@ -90,6 +120,26 @@ Not moved, and why the gate stays closed:
 
 ## Launcher and distribution
 
+Since LKM-111 (the one start path):
+
+```
+install.sh ─ git clone/pull ─ bun scripts/requirements.mjs --build ─ bun install ─ bun run build
+open -a Trezi  (Finder, Dock, Spotlight)  ─ TreziHost ─XPC─ TreziService ─ bundled Bun ─ backend/index.cjs
+trezi [. | <folder>] (bin/trezi) ─ build if missing ─ open -a Trezi [folder]
+trezi --update ─ bin/trezi.mjs: git pull --ff-only ─ bun install ─ bun run build   (the app is not running)
+Settings ▸ Updates ─ workflow owner: pull, install, build (journaled) ─ restart the same way Trezi started
+```
+
+Under LaunchServices the host derives its own launch (`src/native/HostLaunch.swift`):
+the Bun at `Trezi.app/Contents/Helpers/bun` (copied from the Bun that built the app,
+`scripts/bundle-bun.mjs`), the backend at `Trezi.app/Contents/Resources/backend/`
+(`index.cjs` and `provider-helper.cjs`), the profile `TreziService --resolve-profile`
+names, and the login shell's environment. An installed Bun is needed only to build.
+`bun run dev`/`bun run start` (`scripts/start-native.mjs`) remain the development
+launcher with the same arguments on the command line.
+
+Before LKM-111:
+
 ```
 install.sh ─ git clone/pull ─ bun scripts/requirements.mjs --build ─ bun install ─ bun run build
 trezi (bin/trezi.mjs) ─ build if missing ─ scripts/start-native.mjs ─ TreziHost ─XPC─ TreziService ─ Bun
@@ -102,9 +152,11 @@ Settings ▸ Updates ─ workflow owner: pull, install, build (journaled) ─ re
   source, `scripts/requirements.mjs`: the build, the launcher, `bun run dev`, the CLI and
   `install.sh` refuse with one message instead of failing inside swiftc or dyld.
 - Package layout (checked by `test/distribution.mjs`): `out/native/Trezi.app` with
-  `Contents/MacOS/TreziHost` and the XPC service at
-  `Contents/XPCServices/dev.praxis.service.xpc`, a copy at `out/native/TreziService`
-  for the rollback launcher and guardians, and the Bun bundle `out/native/index.cjs`.
+  `Contents/MacOS/TreziHost`, the XPC service at
+  `Contents/XPCServices/dev.praxis.service.xpc`, the bundled Bun at
+  `Contents/Helpers/bun` and the backend at `Contents/Resources/backend/`; a copy of the
+  service at `out/native/TreziService` answers the development launcher's
+  `--resolve-profile`.
 - Shutdown: the host quits through the service, which drains Bun, every owner and every
   managed process group before it releases the profile lock
   ([service](SWIFT-BACKEND-SERVICE.md)). In-app restart waits for that drain.
@@ -113,6 +165,9 @@ Settings ▸ Updates ─ workflow owner: pull, install, build (journaled) ─ re
   runs only while the app is closed.
 
 ## Distribution and recovery evidence
+
+History (LKM-102). LKM-111 removed the rollback launch and the twin these tests
+switched to; its own evidence is [below](#lkm-111-evidence).
 
 Deterministic (no provider, GitHub, Xcode build or app launch involved):
 
@@ -157,59 +212,26 @@ commit nothing themselves:
 
 ## Census
 
-Classes: `rollback` (the legacy writer, used only when no Swift owner is installed:
-`TREZI_BACKEND_OWNER=legacy` and unit tests); `helper` (retained JS whose effects are
-reads, a provider SDK's own process, or a scratch directory it removes); `test` (native
-smoke fixtures, never in the product path); `bun` (a Bun-owned effect in the Swift
-launch, which blocks retirement).
+Classes: `helper` (retained JS whose effects are reads, a provider SDK's own process
+inside its supervised helper, or a scratch directory it removes); `test` (native smoke
+fixtures, never in the product path); `bun` (a Bun-owned effect, which blocks
+retirement). LKM-111 removed the `rollback` class with the writers it listed.
 
 | Module | Class | Final owner | Effect |
 | --- | --- | --- | --- |
-| `src/main/attachments.ts` | rollback | PlatformOwner | pasted image writes and pruning |
-| `src/main/backends/codex.ts` | helper | ProviderOwner (helper process, deferred to LKM-111) | Codex SDK process; in Bun by default, helper opt-in |
-| `src/main/backends/gemini.ts` | helper | ProviderOwner (helper process, deferred to LKM-111) | Gemini CLI process; in Bun by default, helper opt-in |
+| `src/main/backends/codex.ts` | helper | ProviderOwner (provider helper) | Codex SDK process, inside the supervised helper |
+| `src/main/backends/gemini.ts` | helper | ProviderOwner (provider helper) | Gemini CLI process, inside the supervised helper |
 | `src/main/chat-isolation.ts` | helper | RepositoryOwner | Git reads (diff, show, status) |
-| `src/main/chat-worktrees.ts` | rollback | RepositoryOwner | worktree sync, commit, clean |
-| `src/main/codex-models.ts` | rollback | ProviderOwner (ProviderData) | `codex debug models` probe without the service |
-| `src/main/devserver-processes.ts` | rollback | RuntimeOwner | legacy server group signals |
-| `src/main/diag-cache.ts` | rollback | WorkflowOwner | diagnosis memory |
-| `src/main/edit-history.ts` | rollback | SourceOwner | Undo history |
-| `src/main/editing-model.ts` | rollback | EditingOwner | sidecars, island histories |
-| `src/main/feedback-legacy.ts` | rollback | WorkflowOwner | `gh issue create` without a journal |
-| `src/main/file-ops.ts` | rollback | SourceOwner | file-tree create/rename/delete |
+| `src/main/chat-worktrees.ts` | helper | RepositoryOwner | `git show` reads of the live checkout |
 | `src/main/file-tree.ts` | helper | SourceOwner | `git ls-files` read |
-| `src/main/git-remote.ts` | rollback | WorkflowOwner | fetch, pull, switch |
-| `src/main/git.ts` | rollback | RepositoryOwner | Git effects without an owner; reads |
-| `src/main/github.ts` | rollback | WorkflowOwner | Connect to GitHub; `gh` status read |
-| `src/main/live-commit.ts` | rollback | RepositoryOwner | per-turn live commit |
-| `src/main/managed-child.ts` | rollback | RuntimeOwner / PlatformOwner | guarded legacy spawns |
-| `src/main/model-catalog.ts` | rollback | ProviderOwner (ProviderData) | catalog cache file without the service |
-| `src/main/project-dependencies.ts` | rollback | RuntimeOwner | install without the service installer |
-| `src/main/project-memory.ts` | rollback | MemoryOwner | memory files |
-| `src/main/open-in-editor-legacy.ts` | rollback | PlatformOwner (PlatformOpen) | open-in-editor CLIs and `open` without the service |
-| `src/main/providers-store.ts` | rollback | ProviderOwner (ProviderData) | connections store without the service |
+| `src/main/git.ts` | helper | RepositoryOwner | Git reads (work tree, top level, branches) |
+| `src/main/github.ts` | helper | WorkflowOwner | `git remote` and `gh` status reads |
 | `src/main/publish-description.ts` | helper | WorkflowOwner | scratch directory for the description run |
-| `src/main/publish-reconcile.ts` | rollback | WorkflowOwner | PR reconciliation |
 | `src/main/publish-scope.ts` | helper | WorkflowOwner | Git reads |
-| `src/main/publish.ts` | rollback | WorkflowOwner | publish, handoff, saved-run PRs |
-| `src/main/scaffold.ts` | rollback | WorkflowOwner | new projects |
-| `src/main/sessions-store.ts` | rollback | ConversationOwner | session records |
-| `src/main/setup-artifacts.ts` | rollback | EditingOwner | worktree setup helpers in `.trezi/` |
-| `src/main/setup.ts` | rollback | WorkflowOwner | setup helpers |
-| `src/main/sidecar-migrate.ts` | rollback | EditingOwner | `.dsgn`/`.praxis` sidecar migration |
-| `src/main/simulator.ts` | rollback | PlatformOwner | Simulator tools, Metro |
-| `src/main/skills-install.ts` | rollback | WorkflowOwner | `npx skills add` without a journal |
-| `src/main/source-commit.ts` | rollback | SourceOwner | source writes without an owner |
-| `src/main/trezi-agent-tools.ts` | helper | ProviderOwner (helper process, deferred to LKM-111) | Codex tool bridge socket |
-| `src/main/update.ts` | rollback | WorkflowOwner | update check's `git fetch` |
-| `src/main/workflow-legacy.ts` | rollback | WorkflowOwner | legacy workflow runner |
-| `src/main/worktrees.ts` | rollback | RepositoryOwner | worktree lifecycle |
-| `src/native/bridge.ts` | rollback | ServiceRuntime | legacy transport spawns the host |
-| `src/native/legacy-restart.ts` | rollback | ServiceRuntime (`serviceRestart`) | in-app restart of the `--legacy` launch |
-| `src/native/platform-legacy.ts` | rollback | PlatformOwner (PlatformOpen) / ProviderOwner (ProviderData) | `open` and Keychain crypto via `TreziHost --crypto` without the service |
-| `src/native/preferences.ts` | rollback | PreferencesOwner | preferences file |
-| `src/native/preview-processes.ts` | rollback | PlatformOwner | running-servers SIGTERM |
-| `src/native/profile-path-legacy.ts` | rollback | ServiceRuntime (ProfilePaths) | profile and session-store alias links without the service |
+| `src/main/publish.ts` | helper | WorkflowOwner | Git reads (work tree, branch) |
+| `src/main/scaffold.ts` | helper | WorkflowOwner | `bun --version` probe |
+| `src/main/trezi-agent-tools.ts` | helper | ProviderOwner (provider helper) | Codex tool bridge socket |
+| `src/main/worktrees.ts` | helper | RepositoryOwner | Git reads (a branch's diff, chat refs) |
 | `src/native/smoke-chat.ts` | test | — | smoke fixture |
 | `src/native/smoke-composer.ts` | test | — | smoke fixture |
 | `src/native/smoke-core.ts` | test | — | smoke fixture |
@@ -221,24 +243,24 @@ launch, which blocks retirement).
 | `src/native/smoke-shadow-island.ts` | test | — | smoke fixture |
 | `src/native/smoke-sheets.ts` | test | — | smoke fixture |
 | `src/native/smoke-sidebar.ts` | test | — | smoke fixture |
-| `src/native/update-controller.ts` | rollback | WorkflowOwner | update commands without an owner |
-| `src/native/workspace.ts` | rollback | WorkspaceOwner | workspace file |
 
 A row whose module no longer has an effect fails the test too, so a transfer removes
 its row and the gate count in the same change.
 
 ## Gate for removing the legacy owners
 
-All of these, in order; the census test checks the first and the switch's presence:
+All of these, in order. LKM-111 completed the list (the census test now checks the
+first and that the removed switch and flag stay gone):
 
 1. No `bun` row. Each transfer names its files, journals and drafts and tests
-   restoration, as every earlier step did.
+   restoration, as every earlier step did. (Done in LKM-102.)
 2. The provider adapters run in supervised helpers after an authorized live parity run
-   (`test:native-live`). Deferred to LKM-111; the provider store and catalogs already
-   moved (LKM-102).
+   (`test/provider-live-parity.mjs`). The adapters moved in LKM-111; the Claude parity
+   run passed, and Codex's is deferred to LKM-113 (see [evidence](#lkm-111-evidence)).
 3. A full native and live verification of the Swift launch with no legacy module
-   loaded. Only then may `TREZI_BACKEND_OWNER=legacy`, the `rollback` rows and
-   `TreziService --legacy` be deleted, keeping every store, journal and worktree as is.
+   loaded, then the removal of the rollback switch, the `rollback` rows and the
+   service's rollback launch, keeping every store, journal and worktree as is. The
+   removal is done (LKM-111); every store keeps its name and bytes.
 
 ## LKM-102 reduced acceptance: the seven Bun rows
 
@@ -278,3 +300,41 @@ replaced from an old copy: the connections store rewrites untouched entries exac
 parsed, the catalog keeps the other seat's entry as it is on disk, a corrupt store is
 kept as `.corrupt`, and the alias migrations only add a link (never move, copy or
 delete) and refuse a state they cannot reconcile with the same message as before.
+
+## LKM-111 evidence
+
+Recorded 2026-09-29 by the LKM-111 worker. Its sandbox allowed no provider network,
+unix-socket listening, fixed local ports or LaunchServices, which bounds what ran.
+
+- Twins to goldens: every owner suite that compared the Swift owner with its Bun twin
+  now compares it with the answers the twin gave, recorded once before the twin was
+  deleted (`test/fixtures/conversation-owner/parity-golden.json`,
+  `editing-owner/parity-golden.json`, `provider-owner/data-golden.json` and
+  `policy-golden.json`, `workspace-owner/golden.json`; paths normalized to `<root>`).
+- Suites that wrote through a twin run on the real Swift owners instead:
+  `test/helpers/with-service-owners.mjs` (conversation, editing, repository and source
+  from one fixture process), `with-provider-owner.mjs` and `with-repository-owner.mjs`. The Git suites run through
+  `test/repository-owner.mjs` on the same owners (`repository-owner-preload.mjs`).
+- With no service, History, sidecars, chat islands and provider data refuse with
+  "Trezi’s service is not running" (`test/sessions-store.mjs`,
+  `test/editing-owner.mjs`, `test/provider-owner.mjs`).
+- `test/retirement-census.mjs`: the gate is open, no Bun row, and no shipped file names
+  the removed launch switch or service flag.
+- `test/distribution.mjs`, `test/trezi-cli.mjs` and `test/install-update.mjs`: the
+  backend and Bun inside the app, `open -a Trezi` as the start path, and the `trezi`
+  command's arguments.
+- Live parity (`TREZI_LIVE_PROVIDERS=1 bun run test:provider-live`): Claude (`haiku`,
+  low effort) and Codex (account default, low effort), each in-process and in the
+  supervised helper, one prompt (`PONG`), no tools, no Gemini: four calls, token usage
+  written to `test/artifacts/provider-live-parity.json`. The worker sandbox denied
+  `api.anthropic.com` and `chatgpt.com`, so the operator ran it outside the sandbox
+  (2026-09-29):
+  - **Claude passed on both hosts**: in-process `PONG` in 3066 ms (32665 input / 53
+    output tokens, 32655 cached); helper `PONG` in 1886 ms (32447 / 59, 32437 cached);
+    both emitted `delta` then one `done`, no errors.
+  - **Codex did not run**: usage limit until 2026-10-03 10:10 (0 tokens, both hosts).
+    The Codex live parity and isolating Trezi's Codex sessions from the personal Codex
+    MCP config (the SDK loaded `mcp.vercel.com`) move to LKM-113.
+  - The raw file is gitignored (`test/artifacts/`), so these numbers are the tracked
+    record. Until Codex passes, its helper path is proven by the fake-provider helper
+    suite only (`test/provider-owner.mjs`).

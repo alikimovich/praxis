@@ -1,5 +1,10 @@
 # Swift workflow owner: publishing, remote Git actions, setup, diagnostics, update (S13)
 
+> **Since LKM-111 (2026-09-29):** the launch-time rollback (`TREZI_BACKEND_OWNER=legacy`,
+> `TreziService --legacy`) and the Bun twins it ran are removed. The Swift owner described
+> here is the only one; passages about the rollback, the legacy launch or the TS twins
+> are history. Current status: [SWIFT-BACKEND-RETIREMENT.md](SWIFT-BACKEND-RETIREMENT.md).
+
 LKM-100, roadmap row S13 ("Publishing/remote actions/setup/diagnostics/support and shared
 sheet routing") of the [canonical plan](SWIFT-BACKEND-PLAN.md) and
 [roadmap](SWIFT-BACKEND-ROADMAP.md). It follows [editing](SWIFT-BACKEND-EDITING.md).
@@ -14,7 +19,7 @@ coordinator's lane.
 - `src/service/WorkflowJournal.swift`: the durable records and their recovery at launch;
   redaction.
 - `src/service/WorkflowPublish.swift`: Publish (merge / PR only), the notes handoff PR, a
-  saved run's PR, the reconciled push (`publish-reconcile.ts` twin).
+  saved run's PR, the reconciled push.
 - `src/service/WorkflowRemote.swift`: Connect to GitHub, remote status, pull and switch.
 - `src/service/WorkflowSetup.swift`: instrumentation helpers, their removal, new projects,
   Trezi's own update, and `WorkflowDiagnoses` (the diagnosis memory).
@@ -23,11 +28,12 @@ coordinator's lane.
   with the same title and body before filing) and curated skill-pack installs
   (`npx skills add`, argv built by the owner from a GitHub `owner/name` and plain skill
   names). `src/service/WorkflowContext.swift` holds the outcome type and per-run context.
-  Twins: `src/main/feedback-legacy.ts`, `src/main/skills-install.ts`.
+  `src/main/skills-install.ts` builds the install request.
 - `src/native/workflow-service.ts`: Bun's client. `src/main/workflow-owner.ts` is the seam;
-  `src/main/workflow-legacy.ts` is the rollback twin over the original TS code, which now
-  lives in `src/main/publish.ts` (moved from `annotations.ts` and `agent.ts`),
-  `github.ts`, `git-remote.ts`, `setup.ts`, `scaffold.ts` and `diag-cache.ts`.
+  the proposing helpers stay in `src/main/publish.ts`, `github.ts`, `git-remote.ts`,
+  `setup.ts`, `scaffold.ts` and `diag-cache.ts`. The rollback twin over them
+  (`workflow-legacy.ts`, `feedback-legacy.ts`, `publish-reconcile.ts`) was removed in
+  LKM-111.
 
 ## The domain, exactly
 

@@ -131,8 +131,9 @@ attempts. Content conflicts remain in the live checkout with both recovery refs 
 are surfaced as an exact file list. Publish never force-pushes, rebases, resets, or
 chooses ours/theirs across the repository.
 
-Implementation: `src/main/publish-reconcile.ts`, integrated by
-`src/main/annotations.ts`. Regression coverage: `test/publish-reconcile.mjs`.
+Implementation: the workflow owner, `src/service/WorkflowPublish.swift` (since LKM-111
+the only one; the Bun twin `publish-reconcile.ts` was removed). Regression coverage:
+`test/workflow-owner.mjs`.
 
 Model/provider changes keep the selected chat's worktree and require confirmation
 when the chat contains messages. The replacement session receives a one-time

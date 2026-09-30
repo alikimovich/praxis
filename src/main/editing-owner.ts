@@ -19,8 +19,8 @@ import type { ControlPanelManifest } from '../shared/api'
  * - deferred preview navigation (`open_preview`), released when its turn lands.
  * Bun keeps the JS helpers (manifest/recipe validation, Jev composition, literal
  * resolution and splicing, source proposals), the isolated WebKit instrumentation and
- * the inspector views. With no Swift owner (`TREZI_BACKEND_OWNER=legacy`, unit tests)
- * the in-process twin in `editing-model.ts` decides the same way. Never both.
+ * the inspector views. It is the only owner since LKM-111 removed the in-process twin:
+ * with no service, these workflows refuse.
  */
 
 export interface IslandAdmission {
@@ -61,7 +61,7 @@ export class EditingError extends Error {
 }
 
 export interface EditingOwner {
-  readonly kind: 'swift' | 'legacy'
+  readonly kind: 'swift'
   // Chat islands
   islandsOpen(chat: string, root: string, record: string): Promise<IslandRecord[]>
   islandsClose(chat: string): Promise<void>
@@ -107,5 +107,11 @@ export function setEditingOwner(next: EditingOwner | null): void {
 
 /** The Swift owner, when installed. */
 export function swiftEditingOwner(): EditingOwner | null {
+  return owner
+}
+
+/** The Swift owner; with no service there is none (no drafts, islands or sidecar writes). */
+export function editingOwner(): EditingOwner {
+  if (!owner) throw new EditingError('unavailable', 'Trezi’s service is not running, so this project cannot be edited.')
   return owner
 }

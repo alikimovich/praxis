@@ -2,8 +2,8 @@ import Foundation
 import CryptoKit
 
 /// The single writer of `<profile>/preferences.json` when the Swift service owns
-/// the profile (S03 domain `preferences`). The file keeps the legacy v1 format, so
-/// the `TREZI_BACKEND_OWNER=legacy` Bun writer can take it back unchanged.
+/// the profile (S03 domain `preferences`). The file keeps the legacy v1 format; this
+/// is its only writer since LKM-111.
 ///
 /// Commit protocol for one batch, inside the ledger's FIFO lane for the domain:
 /// re-read the file (a digest other than the checkpoint's is an external edit:
@@ -37,7 +37,7 @@ actor PreferencesOwner {
     /// v1 is never replaced: the domain stays unavailable and the file untouched.
     func open() async {
         guard let ledger else {
-            failure = Self.fail(.recoveryRequired, "The operation ledger could not be opened, so preferences cannot be saved. Quit and relaunch, or relaunch with TREZI_BACKEND_OWNER=legacy.")
+            failure = Self.fail(.recoveryRequired, "The operation ledger could not be opened, so preferences cannot be saved. Quit and relaunch Trezi.")
             return
         }
         let data: Data?, parsed: PreferenceValues
@@ -59,8 +59,8 @@ actor PreferencesOwner {
         digest = current.value["digest"]?.string ?? PreferencesDisk.absent
         revision = current.revision
         failure = nil
-        // The file changed since the last checkpoint (e.g. the legacy owner wrote
-        // newer values): it is adopted, never overwritten.
+        // The file changed since the last checkpoint (e.g. an edit made while the service
+        // was down): it is adopted, never overwritten.
         if let problem = await adopt() { failure = problem }
     }
 

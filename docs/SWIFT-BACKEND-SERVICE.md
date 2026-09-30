@@ -1,5 +1,10 @@
 # Swift service, XPC connection and legacy supervision (S02)
 
+> **Since LKM-111 (2026-09-29):** the launch-time rollback (`TREZI_BACKEND_OWNER=legacy`,
+> `TreziService --legacy`) and the Bun twins it ran are removed. The Swift owner described
+> here is the only one; passages about the rollback, the legacy launch or the TS twins
+> are history. Current status: [SWIFT-BACKEND-RETIREMENT.md](SWIFT-BACKEND-RETIREMENT.md).
+
 LKM-89, step S02 of the [canonical plan](SWIFT-BACKEND-PLAN.md) and
 [roadmap](SWIFT-BACKEND-ROADMAP.md). This step moves **process supervision and
 profile exclusion** to a separate Swift service. It moved **no domain writer**.
@@ -11,16 +16,17 @@ single writer of sessions, annotations, Git/worktrees, source edits and managed 
 ## Topology
 
 ```
-scripts/start-native.mjs ── TreziHost (AppKit) ──XPC── TreziService ──pipes── Bun (out/native/index.cjs)
-                                                        │                      └─ TreziService --guard … (detached servers)
-                                                        └─ TreziService --guard-backend (holds profile lease)
+open -a Trezi / trezi ── TreziHost (AppKit) ──XPC── TreziService ──pipes── Contents/Helpers/bun Contents/Resources/backend/index.cjs
+(bun run dev: scripts/start-native.mjs)                 │                      └─ TreziService --guard … (detached servers)
+                                                        ├─ TreziService --guard-backend (holds profile lease)
+                                                        └─ provider helpers (bun provider-helper.cjs, one per session)
 ```
 
 - `src/native/ServiceClient.swift` / `src/native/HostService.swift`: the host's
   connection, handshake, reattach and AppKit quit/restart integration.
 - `src/service/ServiceRuntime.swift`: listener, peer checks, launch, legacy relay,
   drain. `src/service/ServiceXPC.swift`: the control frame codec and limits.
-- `src/service/LegacySupervisor.swift`: `ProfileExclusion` and the Bun process
+- `src/service/BackendSupervisor.swift`: `ProfileExclusion` and the Bun process
   group. `src/service/ProcessGuardian.swift`: lifetime-pipe guardians.
 - `src/service/OperationLedger.swift` (S03): opened under the profile lock at the
   first launch hello, before Bun starts. See [the ledger](SWIFT-BACKEND-LEDGER.md).
@@ -38,14 +44,15 @@ scripts/start-native.mjs ── TreziHost (AppKit) ──XPC── TreziService 
   on the same pipe (`{"service":"runtime"`, plus `runtime-helper` stamping answers).
   It launches project groups itself, each with a `--watch-group` watchdog and a
   journal entry, and is drained at stop after Bun exits and before the lock is
-  released. The `--legacy` launcher sweeps that journal before Bun starts. See
+  released; the service sweeps that journal before Bun starts. See
   [runtime](SWIFT-BACKEND-RUNTIME.md).
-- `src/main/managed-child.ts`: Bun keeps choosing Simulator commands (and, in the
-  legacy launch, server commands) and spawns them through the Swift guardian.
+- The later owners (repository, source, conversation, providers, editing, workflows,
+  platform) ride the same pipe; since LKM-111 Bun spawns no managed process itself
+  (`managed-child.ts` was removed with the rollback launch).
 
 The XPC service is bundled at
 `Trezi.app/Contents/XPCServices/dev.praxis.service.xpc` and copied to
-`out/native/TreziService` for the rollback launcher and guardians. The build
+`out/native/TreziService` for the development launcher's `--resolve-profile`. The build
 ad-hoc signs all three.
 
 ## Connection contract
@@ -120,9 +127,14 @@ No filesystem, provider or preview selectors are exported.
 - In-app restart (updates) asks the host to quit, waits for the service's drain
   acknowledgement, then relaunches `scripts/start-native.mjs`.
 
-## Launch-time owner selection and rollback
+## Launch-time owner selection and rollback (history)
 
-`TREZI_BACKEND_OWNER` is read once, at launch, by `scripts/start-native.mjs`:
+LKM-111 removed this: there is one launch (host → XPC service → Bun), `TreziService`
+has no `--legacy` mode and nothing reads `TREZI_BACKEND_OWNER`
+(`test/retirement-census.mjs` fails if a shipped file names it). What follows is the
+S02 record.
+
+`TREZI_BACKEND_OWNER` was read once, at launch, by `scripts/start-native.mjs`:
 
 | Value | Launch |
 | --- | --- |
@@ -148,8 +160,9 @@ this step is the profile-owner lock and process lifetime only:
 `test/service-process.mjs` (unit tier) compiles the real Swift sources and
 proves, with real processes: profile lock contention and legacy-lock refusal,
 startup failure, child death, repeated/concurrent shutdown, descendant and
-detached-server cleanup, service-crash drain under the inherited lease, the
-rollback launcher, the control codec, signed-peer rejection, closed version /
+detached-server cleanup, service-crash drain under the inherited lease
+(profile recovery after a SIGKILLed holder; the rollback launcher it once also
+launched is gone since LKM-111), the control codec, signed-peer rejection, closed version /
 schema / capability / role negotiation, startup failure over XPC, legacy frame
 relay, cancellation, same-epoch reattach, refused stale/duplicate hellos,
 reconnect with a queued frame, and backend death → `serviceStopped {status: 1}`

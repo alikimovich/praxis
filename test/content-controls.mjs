@@ -1,3 +1,4 @@
+import './helpers/with-service-owners.mjs'
 import { selectControlCandidates } from '../src/main/control-selection.ts'
 import { MissingJevCredentialError } from '../src/main/jev-credentials.ts'
 import assert from 'node:assert/strict'

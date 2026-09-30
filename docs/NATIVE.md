@@ -113,8 +113,8 @@ renaming it would need a profile migration. Swift holds a shared-launcher flock 
 before starting Bun. A guardian retains the flock during service-crash cleanup.
 Workspace state
 lives in `workspace.json` and versioned native UI preferences in
-`preferences.json`; the Swift service writes both (Bun under
-`TREZI_BACKEND_OWNER=legacy`). Earlier hybrid builds imported legacy native browser values
+`preferences.json`; the Swift service alone writes both (the Bun rollback writers
+were removed in LKM-111). Earlier hybrid builds imported legacy native browser values
 once; the React-free build retains those files and no longer creates a WebView to
 read browser storage. It does not import Electron history or custom endpoints.
 Existing provider CLI sign-ins can be reused.

@@ -1,8 +1,9 @@
 import Foundation
 import Darwin
 
-/// Shared by the XPC launcher and the explicit legacy rollback launcher. The file
-/// is never unlinked: replacing its inode could admit a second profile owner.
+/// The service's exclusive profile lock (`service.lock`), plus the `native.lock` PID
+/// reservation older Trezi builds honour. The file is never unlinked: replacing its
+/// inode could admit a second profile owner.
 final class ProfileExclusion {
     private let mutex = NSLock()
     private var descriptor: Int32 = -1
@@ -106,7 +107,7 @@ extension FileHandle {
     }
 }
 
-struct LegacyChild {
+struct BackendChild {
     let pid: pid_t
     /// Parent writes to the child's stdin.
     let input: FileHandle
@@ -116,9 +117,9 @@ struct LegacyChild {
 
 /// Owns one process group, including descendants which survive the direct child.
 /// Call shutdown before releasing ProfileExclusion. Each instance may launch once.
-final class LegacySupervisor {
+final class BackendSupervisor {
     private let condition = NSCondition()
-    private var child: LegacyChild?
+    private var child: BackendChild?
     private var reaped = false
     private var stopping = false
     private var stopped = false
@@ -128,7 +129,7 @@ final class LegacySupervisor {
 
     func start(executable: String, arguments: [String], environment: [String: String],
                profileDescriptor: Int32? = nil, guardianExecutable: String? = nil,
-               diagnostics: Int32? = nil, onExit: @escaping (Int32) -> Void) throws -> LegacyChild {
+               diagnostics: Int32? = nil, onExit: @escaping (Int32) -> Void) throws -> BackendChild {
         condition.lock()
         defer { condition.unlock() }
         guard !started && !stopping else { throw SupervisorError.system("supervisor already started or stopped", EALREADY) }
@@ -211,7 +212,7 @@ final class LegacySupervisor {
         lifetimeWriter = lifetime.fileHandleForWriting
         input.fileHandleForReading.closeFile()
         output.fileHandleForWriting.closeFile()
-        let launched = LegacyChild(pid: pid, input: input.fileHandleForWriting, output: output.fileHandleForReading)
+        let launched = BackendChild(pid: pid, input: input.fileHandleForWriting, output: output.fileHandleForReading)
         child = launched
         started = true
         guarded = guardianExecutable != nil

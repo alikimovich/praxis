@@ -7,9 +7,8 @@ import { EventEmitter } from 'node:events'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import * as channels from '../shared/preview-channels'
-import { swiftPlatformOwner } from '../main/platform-owner'
+import { platformOwner } from '../main/platform-owner'
 import { bridge } from './bridge'
-import * as legacy from './platform-legacy'
 
 export const app = Object.assign(new EventEmitter(), {
   getPath(name: string) {
@@ -73,19 +72,13 @@ export async function dispatchIPC(view: string, message: any) {
   ipcMain.emit(message.channel, event, ...args)
 }
 
-/** Opening outside Trezi: the Swift platform owner runs `open` (LKM-102); with none,
- *  the rollback twin in `platform-legacy.ts` does. */
+/** Opening outside Trezi: the platform owner runs `open` (LKM-102). */
 export const shell = {
   async openExternal(url: string) {
-    const owner = swiftPlatformOwner()
-    await (owner ? owner.openLink(url) : legacy.openExternal(url))
+    await platformOwner().openLink(url)
   },
   async openPath(path: string) {
-    const owner = swiftPlatformOwner()
-    return owner ? owner.openFile(resolve(path)).catch((error) => String(error)) : legacy.openPath(path)
-  },
-  async trashItem(path: string) {
-    await bridge().request('trash', { path: resolve(path) })
+    return platformOwner().openFile(resolve(path)).catch((error) => String(error))
   }
 }
 

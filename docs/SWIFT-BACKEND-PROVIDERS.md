@@ -1,9 +1,13 @@
 # Swift provider owner: provider adapters and helper capability enforcement (S10)
 
+> **Since LKM-111 (2026-09-29):** the launch-time rollback (`TREZI_BACKEND_OWNER=legacy`,
+> `TreziService --legacy`) and the Bun twins it ran are removed. The Swift owner described
+> here is the only one; passages about the rollback, the legacy launch or the TS twins
+> are history. Current status: [SWIFT-BACKEND-RETIREMENT.md](SWIFT-BACKEND-RETIREMENT.md).
+
 LKM-98, roadmap row S10 ("Provider adapters, authentication, catalogs and tools") of the
 [canonical plan](SWIFT-BACKEND-PLAN.md) and [roadmap](SWIFT-BACKEND-ROADMAP.md). It
-follows [conversation](SWIFT-BACKEND-CONVERSATION.md). Under the default launch
-(`TREZI_BACKEND_OWNER=swift`) every provider session is opened in the Swift service
+follows [conversation](SWIFT-BACKEND-CONVERSATION.md). Every provider session is opened in the Swift service
 first and gets its grant there. The service answers the session's permission requests
 and tool authorizations, holds Stop's deadline, persists the provider thread a restored
 chat resumes, and supervises provider helpers, holding them to their grant.
@@ -17,12 +21,33 @@ chat resumes, and supervises provider helpers, holding them to their grant.
   process group, bounded frames).
 - `src/service/ProviderStore.swift`: `sessions.json` and `resume.json`.
 - `src/native/provider-service.ts`: Bun's client. `src/main/provider-owner.ts` is the
-  seam; `src/main/provider-model.ts` is the in-process twin (the rollback owner), and
-  `src/main/provider-policy.ts` the twin's policy (the Swift policy mirrors it).
+  seam (it throws without the service); `src/main/provider-policy.ts` is the pure
+  policy helpers and tool limits still call (the Swift policy mirrors it). The
+  in-process twin `provider-model.ts` was removed in LKM-111;
+  `test/fixtures/provider-owner/policy-golden.json` pins the answers it gave.
 - `src/main/provider-sessions.ts` opens every session agent.ts starts with the owner.
   `src/main/session-tools.ts` runs Trezi's tools for Codex's bridge and for helpers.
-- `src/main/backends/helper-host.ts` runs inside a helper;
+- `src/main/backends/helper-host.ts` runs inside a helper (entry:
+  `src/main/backends/provider-helper-entry.ts`, bundled as
+  `Trezi.app/Contents/Resources/backend/provider-helper.cjs`);
   `src/main/backends/helper-session.ts` is Bun's view of a helper-hosted session.
+
+## Since LKM-111: adapters in helpers by default
+
+The service always starts with `ProviderHelperCommand.builtIn(backend:bun:)`: the
+bundled Bun (`Contents/Helpers/bun`) running `provider-helper.cjs`, for `claude`,
+`codex` and `gemini`. There is no switch and no in-process fallback for them; a v10
+connection (`connectionId`) still runs its Codex-SDK adapter in Bun under the same
+grant, because its key is resolved in Bun's main. The fake-provider helper suite
+(`test/provider-owner.mjs`) is the automated proof. The live parity check,
+`test/provider-live-parity.mjs` (`TREZI_LIVE_PROVIDERS=1 bun run test:provider-live`,
+live tier), runs Claude (haiku, low effort) and Codex (low effort) once each
+in-process and once in a supervised helper with one no-tool prompt, compares the
+events and answers, and records token usage in
+`test/artifacts/provider-live-parity.json`. Real provider calls need the user's
+authorization. The operator's run passed for Claude on both hosts; Codex hit its usage
+limit and is deferred to LKM-113, so without `TREZI_LIVE_PROVIDERS=1` the test is SKIP,
+not PASS (see [retirement](SWIFT-BACKEND-RETIREMENT.md#lkm-111-evidence)).
 
 ## The integration boundary, decided
 
@@ -46,7 +71,7 @@ and Codex adapters inside helpers is reported SKIP (not PASS). In this step:
   deadline, and report turns, terminal events and thread ids;
 - the connections store, model catalog cache and Codex probe moved to the owner
   (`ProviderData.swift`, LKM-102; see [retirement](SWIFT-BACKEND-RETIREMENT.md)). The
-  adapter move and the live parity run are LKM-111.
+  adapter move and the live parity check are LKM-111 (above).
 
 ## The domain, exactly
 
@@ -171,7 +196,7 @@ Service ↔ helper (stdin/stdout, one JSON object per line). Service to helper: 
 assistant and status entries, files touched, thread id), `permission`, `question`,
 `tool`, `settled`.
 
-## Rollback (tightened to this domain)
+## Rollback (tightened to this domain; history, removed in LKM-111)
 
 - **Launch-time switch only.** Quit, relaunch with `TREZI_BACKEND_OWNER=legacy`; the
   profile lock admits one owner. No provider decision is hot-switched.

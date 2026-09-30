@@ -1,7 +1,7 @@
 /** Await cleanup once, even when a terminal and its launcher both forward signals. */
-export function installShutdown(cleanup: () => void | Promise<void>, forceExit: () => void = () => {}) {
+export function installShutdown(cleanup: () => void | Promise<void>) {
   let stopping = false
-  process.once('exit', () => { void cleanup(); forceExit() })
+  process.once('exit', () => { void cleanup() })
   for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143], ['SIGHUP', 129]] as const) {
     process.on(signal, () => {
       if (stopping) return

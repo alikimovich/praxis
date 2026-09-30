@@ -1,8 +1,9 @@
-// S04 workspace transfer: the Swift owner (real WorkspaceOwner + OperationLedger
-// compiled into a fixture process) against the legacy Bun writer, on real files.
-// Legacy/current profile fixtures, byte parity, canonical-root identity, concurrent
-// updates, unknown/corrupt data, injected write failures, SIGKILL at every durable
-// boundary, service restart, launch-time rollback and Bun's client + controller.
+// S04 workspace: the Swift owner (real WorkspaceOwner + OperationLedger compiled into
+// a fixture process), the only writer since LKM-111, on real files. Current/old
+// profile fixtures against the retired Bun writer's recorded answers, canonical-root
+// identity, concurrent updates, unknown/corrupt data, injected write failures, SIGKILL
+// at every durable boundary, service restart, offline edits and Bun's client +
+// controller.
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -12,9 +13,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { EventEmitter } from 'node:events'
-import { legacyWorkspace, resolveRoot } from '../src/native/workspace.ts'
 import { serviceWorkspace } from '../src/native/workspace-service.ts'
-import { applyWorkspace, decodeWorkspace, encodeWorkspace, workspaceView } from '../src/native/workspace-model.ts'
 import { NativeWorkspaceController } from '../src/native/workspace-controller.ts'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
@@ -92,18 +91,8 @@ async function start(dir, env = {}) {
 const ok = reply => { assert.equal(reply.reply.result.kind, 'succeeded', JSON.stringify(reply)); return reply.reply.result.payload }
 const code = reply => { assert.equal(reply.reply.result.kind, 'failed', JSON.stringify(reply)); return reply.reply.result.payload.code }
 const keys = view => view.projects.map(p => p.key)
-/** The Bun model applied to the same file with the same clock: results and bytes. */
-function bunApply(content, ops) {
-  const doc = decodeWorkspace(content)
-  const results = ops.map(op => {
-    try {
-      const { method, ...body } = op
-      const result = applyWorkspace(doc, { method, ...body }, { now: NOW, resolve: resolveRoot })
-      return { changed: result.changed, ...(result.key !== undefined ? { key: result.key } : {}), ...(result.created !== undefined ? { created: result.created } : {}) }
-    } catch (error) { return error.code ?? 'invalidRequest' }
-  })
-  return { results, encoded: encodeWorkspace(doc), view: workspaceView(doc) }
-}
+/** The retired Bun writer's answers for the parity profiles, recorded with `<scratch>` for this run's folder. */
+const golden = () => JSON.parse(readFileSync(join(root, 'test/fixtures/workspace-owner/golden.json'), 'utf8').replaceAll('<scratch>', scratch))
 
 try {
   compile()
@@ -138,26 +127,19 @@ try {
       { method: 'close', key: beta }, { method: 'close', key: beta }, { method: 'select', key: alpha }, { method: 'close', key: alpha },
     ]
     const fixture = await start(profile())
+    const recorded = golden()
     for (const [name, content] of Object.entries({ current, old, odd, empty })) {
       const dir = profile(content)
-      const expected = bunApply(content, ops)
+      const expected = recorded[name]
       const decoded = await fixture.send({ cmd: 'apply', path: file(dir), ops: [] })
       assert.equal(decoded.ok, true, name)
-      assert.deepEqual(decoded.view, JSON.parse(JSON.stringify(workspaceView(decodeWorkspace(content)))), `${name}: same projects, selection and recents as Bun reads`)
-      assert.equal(Buffer.from(decoded.encoded, 'base64').toString(), encodeWorkspace(decodeWorkspace(content)), `${name}: re-encoding is byte-identical`)
+      assert.deepEqual(decoded.view, expected.read.view, `${name}: same projects, selection and recents as the recorded reader`)
+      assert.equal(Buffer.from(decoded.encoded, 'base64').toString(), expected.read.encoded, `${name}: re-encoding is byte-identical`)
       const swift = await fixture.send({ cmd: 'apply', path: file(dir), ops })
-      assert.deepEqual(swift.results, expected.results, `${name}: same operation results`)
-      assert.equal(Buffer.from(swift.encoded, 'base64').toString('hex'), Buffer.from(expected.encoded).toString('hex'), `${name}: byte-identical after every operation`)
-      // The Bun rollback writer on a real file ends with exactly these bytes.
-      const store = legacyWorkspace(dir, { now: () => NOW })
-      for (const op of ops) {
-        const { method, ...body } = op
-        await (method === 'open' ? store.open(body.root, body.chatSettings) : method === 'reorder' ? store.reorder(body.key, body.before)
-          : method === 'recent' ? store.recent(body.root, body.name) : method === 'update' ? store.update(body.projects) : store[method](body.key)).catch(() => {})
-      }
-      assert.equal(readFileSync(file(dir), 'utf8'), expected.encoded, `${name}: the legacy writer produces the same file`)
+      assert.deepEqual(swift.results, expected.applied.results, `${name}: same operation results`)
+      assert.equal(Buffer.from(swift.encoded, 'base64').toString('hex'), Buffer.from(expected.applied.encoded).toString('hex'), `${name}: byte-identical after every operation`)
     }
-    const oddView = workspaceView(decodeWorkspace(odd))
+    const oddView = recorded.odd.read.view
     assert.deepEqual(keys(oddView), ['/x/y', gamma, alpha], 'valid entries only, first per key, canonical keys')
     assert.equal(oddView.projects[2].name, 'first-wins')
     assert.equal(oddView.activeKey, null, 'a non-project selection reads as none')
@@ -166,11 +148,10 @@ try {
     assert.deepEqual((await fixture.send({ cmd: 'number', values: numbers })).out, numbers.map(String), 'JavaScript number formatting')
     for (const refused of ['invalid', 'null', '[]', '{"projects":{}}', '{"projects":null}', '﻿{"projects":[]}', '{"projects":[]} x', '{}']) {
       const dir = profile(refused)
-      assert.throws(() => legacyWorkspace(dir), undefined, `Bun refuses ${refused}`)
       assert.equal((await fixture.send({ cmd: 'apply', path: file(dir), ops: [] })).ok, false, `Swift refuses ${refused}`)
     }
     await fixture.close()
-    console.log('WORKSPACE-OWNER parity: current/old/odd profiles, unknown fields, invalid entries, JS numbers and key order, every operation byte-identical to Bun PASS')
+    console.log('WORKSPACE-OWNER format: current/old/odd profiles, unknown fields, invalid entries, JS numbers and key order, every operation byte-identical to the recorded writer PASS')
   }
 
   // --- Canonical-root identity, operations, idempotency, validation, concurrency, restart ---
@@ -249,10 +230,10 @@ try {
     const ws = await start(dir)
     const base = ok(await ws.snapshot())
     const one = await ws.op('open', { root: alpha }, base.revision)
-    const legacyDoc = JSON.parse(readFileSync(file(dir), 'utf8'))
-    legacyDoc.projects.push({ root: beta, key: beta, name: 'beta', touchedAt: 9, sessionKeys: [beta], activeSessionKey: beta })
-    legacyDoc.activeKey = beta
-    writeFileSync(file(dir), JSON.stringify(legacyDoc))
+    const edited = JSON.parse(readFileSync(file(dir), 'utf8'))
+    edited.projects.push({ root: beta, key: beta, name: 'beta', touchedAt: 9, sessionKeys: [beta], activeSessionKey: beta })
+    edited.activeKey = beta
+    writeFileSync(file(dir), JSON.stringify(edited))
     const conflict = await ws.op('select', { key: alpha }, one.snapshot.revision)
     assert.equal(code(conflict), 'conflict', 'an external edit conflicts')
     assert.deepEqual([keys(conflict.snapshot), conflict.snapshot.activeKey], [[alpha, beta], beta], 'the external file is adopted, not overwritten')
@@ -305,14 +286,18 @@ try {
   console.log('WORKSPACE-OWNER faults: temp create/write/flush/rename failures change nothing and retry; directory-sync failure keeps the visible commit PASS')
 
   // --- SIGKILL at each durable boundary, then restart --------------------------
-  for (const boundary of ['intent', 'effect', 'after-rename', 'receipt', 'after-rename-then-legacy']) {
+  for (const boundary of ['intent', 'effect', 'after-rename', 'receipt', 'after-rename-then-external']) {
     const initial = JSON.stringify({ projects: [{ root: alpha, key: alpha, name: 'alpha', touchedAt: 1, sessionKeys: [alpha], activeSessionKey: alpha }], activeKey: alpha, recents: [] })
     const dir = profile(initial)
-    let ws = await start(dir, { WORKSPACE_CRASH: boundary.replace('-then-legacy', '') })
+    let ws = await start(dir, { WORKSPACE_CRASH: boundary.replace('-then-external', '') })
     const base = ok(await ws.snapshot())
     const op = randomUUID()
     await ws.crash(ws.frame('open', { root: beta }, base.revision, op))
-    if (boundary === 'after-rename-then-legacy') await legacyWorkspace(dir).open(gamma)
+    if (boundary === 'after-rename-then-external') {
+      const edited = JSON.parse(readFileSync(file(dir), 'utf8'))
+      edited.projects.push({ root: gamma, key: gamma, name: 'gamma', touchedAt: 2, sessionKeys: [gamma], activeSessionKey: gamma })
+      writeFileSync(file(dir), JSON.stringify(edited))
+    }
     const onDisk = readFileSync(file(dir))
     ws = await start(dir)
     const snap = ok(await ws.snapshot())
@@ -323,9 +308,9 @@ try {
       assert.equal(code(again), boundary === 'intent' ? 'unavailable' : 'ioFailure', `${boundary}: the same ID is never replayed`)
       assert.equal(readFileSync(file(dir), 'utf8'), initial)
       assert.equal(ok(await ws.op('open', { root: beta }, base.revision)).revision.counter, '1', `${boundary}: the domain is not blocked`)
-    } else if (boundary === 'after-rename-then-legacy') {
-      assert.equal(code(again), 'conflict', 'an uncertain write superseded by the legacy owner is not claimed')
-      assert.deepEqual(keys(snap), [alpha, beta, gamma], 'the newer legacy state is adopted')
+    } else if (boundary === 'after-rename-then-external') {
+      assert.equal(code(again), 'conflict', 'an uncertain write superseded by an external edit is not claimed')
+      assert.deepEqual(keys(snap), [alpha, beta, gamma], 'the newer external state is adopted')
       assert.deepEqual(readFileSync(file(dir)), onDisk, 'and never overwritten')
     } else {
       assert.deepEqual([snap.revision.counter, keys(snap), snap.activeKey], ['1', [alpha, beta], alpha], `${boundary}: restart reveals the committed write`)
@@ -336,7 +321,7 @@ try {
   }
   console.log('WORKSPACE-OWNER crashes: SIGKILL at intent/effect/after-rename/receipt reconciles from the file, never replays PASS')
 
-  // --- Launch-time rollback to the Bun writer and back ---------------------------
+  // --- An edit made while the service was down is adopted at the next launch ------
   {
     const dir = profile(JSON.stringify({ projects: [{ root: alpha, key: alpha, name: 'alpha', touchedAt: 1, sessionKeys: [alpha], activeSessionKey: alpha, future: 'kept' }], activeKey: alpha, recents: [] }))
     const backup = join(scratch, 'old-workspace-backup.json'); copyFileSync(file(dir), backup)
@@ -345,22 +330,21 @@ try {
     const opened = await ws.op('open', { root: beta }, base.revision)
     const selected = await ws.op('select', { key: beta }, opened.snapshot.revision)
     await ws.close()
-    // TREZI_BACKEND_OWNER=legacy: the Bun writer reads Swift's newest file as is.
-    const legacy = legacyWorkspace(dir)
-    const { revision, digest, ...swiftView } = selected.snapshot
-    assert.deepEqual(legacy.snapshot(), swiftView, 'the legacy owner reads the newest Swift state exactly')
-    await legacy.reorder(beta, alpha)
-    await legacy.open(gamma)
+    const saved = JSON.parse(readFileSync(file(dir), 'utf8'))
+    assert.deepEqual([keys(saved), saved.activeKey], [keys(selected.snapshot), beta], 'the file holds the newest committed state')
+    saved.projects.reverse()
+    saved.projects.push({ root: gamma, key: gamma, name: 'gamma', touchedAt: 2, sessionKeys: [gamma], activeSessionKey: gamma })
+    writeFileSync(file(dir), JSON.stringify(saved))
     const newest = readFileSync(file(dir))
     ws = await start(dir)
     const back = ok(await ws.snapshot())
-    assert.equal(back.revision.counter, '3', 'the newer legacy file is adopted as a new revision')
+    assert.equal(back.revision.counter, '3', 'the newer file is adopted as a new revision')
     assert.deepEqual([keys(back), back.activeKey], [[beta, alpha, gamma], beta])
-    assert.equal(JSON.parse(newest).projects[1].future, 'kept', 'unknown fields survived both owners')
+    assert.equal(JSON.parse(newest).projects[1].future, 'kept', 'unknown fields survived')
     assert.deepEqual(readFileSync(file(dir)), newest, 'adoption rewrites nothing')
     assert.notDeepEqual(readFileSync(file(dir)), readFileSync(backup), 'the old backup was never restored')
     await ws.close()
-    console.log('WORKSPACE-OWNER rollback: legacy owner reads the newest Swift file; Swift adopts newer legacy writes; no backup overwrite PASS')
+    console.log('WORKSPACE-OWNER offline edit: the file holds the newest commit; a newer file is adopted, never overwritten PASS')
   }
 
   // --- Bun's client and controller against the real owner, over the pipe protocol ---
@@ -394,7 +378,7 @@ try {
     assert.deepEqual(b, { key: beta, created: true })
     assert.deepEqual(await store.open(alias), { key: alpha, created: false }, 'canonical-root identity through the client')
     await store.select(beta)
-    assert.equal(legacyWorkspace(dir).snapshot().activeKey, beta)
+    assert.equal(JSON.parse(readFileSync(file(dir), 'utf8')).activeKey, beta)
 
     // An external edit is adopted and announced; the intent is retried on it.
     let notified = 0
@@ -415,7 +399,7 @@ try {
     pipe.flush()
     const deadline = Date.now() + 10_000
     while (store.snapshot().activeKey !== alpha) { assert.ok(Date.now() < deadline, 'late reply'); await new Promise(r => setTimeout(r, 20)) }
-    assert.equal(legacyWorkspace(dir).snapshot().activeKey, alpha, 'the late commit is reflected, not replayed')
+    assert.equal(JSON.parse(readFileSync(file(dir), 'utf8')).activeKey, alpha, 'the late commit is reflected, not replayed')
     await pipe.close()
 
     // The controller on the Swift owner; a service restart and a UI reattach keep projects and selection.

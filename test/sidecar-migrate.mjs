@@ -1,5 +1,6 @@
 /**
- * Legacy sidecar migration (2026-07 dsgn→trezi rename) — pure-bun unit test.
+ * Legacy sidecar migration (2026-07 dsgn→trezi rename), run by the real Swift editing
+ * owner (`EditingProject.swift`, the only one since LKM-111 removed the TS copy).
  *
  *  - `.dsgn/annotations.json` + `.dsgn/tokens.json` move into `.trezi/`
  *  - the old stamping helpers stay in `.dsgn/` (the repo's build config may
@@ -9,12 +10,14 @@
  *
  * Run with: bun test/sidecar-migrate.mjs
  */
+import './helpers/with-service-owners.mjs'
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { migrateLegacySidecar } from '../src/main/sidecar-migrate'
+import { editingOwner } from '../src/main/editing-owner.ts'
 
+const migrateLegacySidecar = root => editingOwner().migrateSidecar(root)
 const work = mkdtempSync(join(tmpdir(), 'trezi-sidecar-'))
 
 try {

@@ -1,5 +1,10 @@
 # Bun ownership audit for the Swift backend migration
 
+> **History note (LKM-111, 2026-09-29):** this document predates LKM-111, which removed
+> the Bun rollback launch (`TREZI_BACKEND_OWNER=legacy`, `TreziService --legacy`), its
+> twins and several modules named here. The current census is in
+> [SWIFT-BACKEND-RETIREMENT.md](SWIFT-BACKEND-RETIREMENT.md).
+
 Status: review proposal, 2026-09-27, LKM-84. Documentation only. Current source in
 this worktree is authoritative; historical Electron/browser descriptions are not
 runtime evidence. No migration, storage change, automatic merge, or worktree removal

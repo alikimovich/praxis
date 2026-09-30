@@ -1,24 +1,25 @@
-import { spawn } from 'node:child_process'
-import { checkForUpdate } from '../main/update'
 import type { UpdateStatus } from '../shared/api'
-import type { WorkflowOwner } from '../main/workflow-owner'
 import type { NativeSheetController } from './sheets-runtime'
+
+/** The workflow owner's update calls (`WorkflowOwner`, S13). */
+export interface UpdateOwner {
+  updateCheck(root: string): Promise<UpdateStatus>
+  update(root: string, progress?: (text: string) => void): Promise<{ ok: boolean; error?: string }>
+}
+
 /**
- * Update the current tracked checkout; never discard work or switch branches. With a
- * workflow owner (S13) the pull, install and build are its journaled workflow (a retry
- * after a failed install or build does not pull again); without one (tests) the
- * commands run here through `run`.
+ * Update the current tracked checkout; never discard work or switch branches. The
+ * pull, install and build are the workflow owner's journaled workflow (a retry after a
+ * failed install or build does not pull again, and a checkout with local changes is
+ * refused there); the restart is the service's (`serviceRestart`).
  */
 export class NativeUpdateController {
-  constructor(readonly sheets: NativeSheetController, readonly root: string, readonly restart: () => void | Promise<void>, readonly run: (command: string, args: string[]) => Promise<string> = (command,args) => new Promise((resolve,reject)=>{
-    const child=spawn(command,args,{cwd:root,env:process.env,stdio:['ignore','pipe','pipe']});let output=''
-    const data=(chunk: Buffer)=>{output=(output+chunk.toString()).slice(-16000);this.progress(output.split('\n').filter(Boolean).slice(-4).join('\n'))}
-    child.stdout.on('data',data);child.stderr.on('data',data);child.on('error',reject);child.on('exit',code=>code===0?resolve(output):reject(new Error(output||`Update exited with ${code}`)))
-  }), readonly check: ((root: string) => Promise<UpdateStatus>) | undefined = undefined, readonly canRestart: () => string | null = () => null, readonly owner: WorkflowOwner | null = null) {}
+  constructor(readonly sheets: NativeSheetController, readonly root: string, readonly restart: () => void | Promise<void>,
+    readonly owner: UpdateOwner, readonly canRestart: () => string | null = () => null) {}
   async open() {
     this.sheets.present({title:'Trezi updates',detail:'Check for updates to this installation of Trezi.',fields:[],actions:[{id:'cancel',label:'Close'},{id:'check',label:'Check for updates',primary:true}]},async()=>{
       const generation=this.sheets.generation
-      const status=await (this.check ? this.check(this.root) : this.owner ? this.owner.updateCheck(this.root) : checkForUpdate(this.root))
+      const status=await this.owner.updateCheck(this.root)
       if(generation!==this.sheets.generation)return
       this.sheets.present({title:'Trezi updates',detail:status.status==='available'?`${status.behind} new ${status.behind === 1 ? 'change' : 'changes'} available. Trezi will restart after updating.${status.subject ? '\n\nLatest change: ' + status.subject : ''}`:'No updates found. If you are offline, reconnect and check again.',fields:[],actions:[{id:'cancel',label:'Close'},...(status.status==='available'?[{id:'apply',label:'Update and restart',primary:true}]:[])]},async()=>this.apply())
     })
@@ -29,24 +30,12 @@ export class NativeUpdateController {
   }
   async apply() {
     const blocked = this.canRestart(); if (blocked) throw new Error(blocked)
-    const generation = this.sheets.generation
-    if (!this.owner) {
-      const dirty=await this.run('git',['status','--porcelain'])
-      if (generation !== this.sheets.generation) return
-      if(dirty.trim())throw new Error('Your Trezi installation has local changes. Commit or stash them before updating.')
-    }
     this.sheets.present({title:'Updating Trezi',detail:'Downloading changes and rebuilding Trezi. The app will restart when ready.',fields:[],actions:[]},async()=>{})
     const current=this.sheets.current!
     current.state.busy=true;this.sheets.host.send('sheetState', { state: current.state })
     try {
-      if (this.owner) {
-        const result = await this.owner.update(this.root, text => this.progress(text))
-        if (!result.ok) throw new Error(result.error ?? 'The update could not finish.')
-      } else {
-        await this.run('git',['pull','--ff-only'])
-        await this.run(process.execPath,['install','--frozen-lockfile'])
-        await this.run(process.execPath,['run','build:native'])
-      }
+      const result = await this.owner.update(this.root, text => this.progress(text))
+      if (!result.ok) throw new Error(result.error ?? 'The update could not finish.')
       const restartBlocked = this.canRestart()
       if (restartBlocked) throw new Error(restartBlocked)
       await this.restart()

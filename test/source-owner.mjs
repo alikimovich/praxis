@@ -1,17 +1,18 @@
 // S08/S09 source transaction service: the real Swift SourceOwner (compiled into a
 // fixture process with the RepositoryOwner whose lanes serialize it), driven through
-// Bun's real clients and the unchanged TS engines.
-// - parity: real React/Svelte/HTML/layers fixtures edited, undone and redone by the
-//   legacy owner and by the Swift owner end byte-identical; a legacy suite re-runs on it;
+// Bun's real clients and the unchanged TS engines. It is the only writer (LKM-111).
+// - engines: real React/Svelte/HTML/layers fixtures edited, undone and redone end on
+//   the exact bytes of each step; the island/style suite (shadow-controls) runs on it itself;
 // - proposals: stale hash, external edit, out-of-order parses, a deadline-expired
 //   (cancelled) proposal and invalid schemas commit nothing;
 // - paths: traversal, protected folders and symlink escapes are refused;
 // - transactions: all-or-nothing validation, a write failing midway puts files back;
 // - crash: SIGKILL midway through a commit and an Undo is rolled back at the next
 //   launch without overwriting a file changed since (its pre-image is kept);
-// - history, files, drafts, lanes, rollback and drain; parsers own no writer.
+// - history, files, drafts, lanes, relaunch (nothing writes without the service) and
+//   drain; parsers own no writer.
 import assert from 'node:assert/strict'
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
@@ -51,7 +52,7 @@ let binary
 async function fixture(home, env = {}) { const started = await startSourceFixture(binary, home, env); fixtures.add(started); return started }
 async function stop(started) { await started.stop(); fixtures.delete(started) }
 function install(started) { const owners = started.owners(); setRepositoryOwner(owners.repository); setSourceOwner(owners.source); return owners }
-function legacy() { setRepositoryOwner(null); setSourceOwner(null) }
+function reset() { setRepositoryOwner(null); setSourceOwner(null) }
 async function section(name, run) { await run(); console.log(`SOURCE-OWNER ${name} PASS`) }
 
 const commit = (started, rootPath, edits, extra = {}) => started.frame('commit', { root: rootPath, edits, ...extra })
@@ -60,57 +61,46 @@ const edit = (path, before, content) => ({ path, expectedHash: hash(before), con
 try {
   binary = compileSourceFixture()
 
-  await section('parity', async () => {
+  await section('engines', async () => {
     const line = (base, file, needle) => read(join(base, file)).split('\n').findIndex(text => text.includes(needle)) + 1
     const cases = {
       'propedit-app': base => [
         () => applyPropEdit(base, { source: `src/Badge.tsx:${line(base, 'src/Badge.tsx', 'label="Ready"')}`, name: 'label', kind: 'string', value: 'Done' }),
         () => applyTextEdit(base, { source: `src/Badge.tsx:${line(base, 'src/Badge.tsx', '>Welcome<')}`, text: 'Hello there' }),
         () => applyStyleEdit(base, { source: `src/Badge.tsx:${line(base, 'src/Badge.tsx', "color: '#111827'")}`, prop: 'color', value: '#ff0000', classes: ['sw'] }),
-        () => undo(base), () => redo(base), () => undo(base), () => undo(base)
+        'undo', 'redo', 'undo', 'undo'
       ],
       'svelte-app': base => [
         () => applyPropEdit(base, { source: `src/Card.svelte:${line(base, 'src/Card.svelte', 'label="Go"')}`, name: 'label', kind: 'string', value: 'Stop' }),
         () => applyTextEdit(base, { source: `src/Card.svelte:${line(base, 'src/Card.svelte', '>Original<')}`, text: 'Changed' }),
-        () => undo(base), () => redo(base)
+        'undo', 'redo'
       ],
-      'editable-app': base => [() => applyTextEdit(base, { source: 'index.html:4:3', text: 'New heading' }), () => undo(base), () => redo(base)],
+      'editable-app': base => [() => applyTextEdit(base, { source: 'index.html:4:3', text: 'New heading' }), 'undo', 'redo'],
       'layers-app': base => [
-        () => applyMoveNode(base, { dragged: { source: 'src/Layers.tsx:9' }, target: { source: 'src/Layers.tsx:7' }, position: 'before', sessionId: 'parity' }),
-        () => undo(base), () => redo(base)
+        () => applyMoveNode(base, { dragged: { source: 'src/Layers.tsx:9' }, target: { source: 'src/Layers.tsx:7' }, position: 'before', sessionId: 'engines' }),
+        'undo', 'redo'
       ]
     }
-    const owned = await fixture(profile('parity'))
+    const owned = await fixture(profile('engines'))
+    install(owned)
     for (const [name, ops] of Object.entries(cases)) {
-      const runs = {}
-      for (const mode of ['legacy', 'swift']) {
-        const base = join(scratch, `parity-${name}-${mode}`)
-        cpSync(join(root, 'test/fixtures', name), base, { recursive: true, filter: path => !path.includes('node_modules') })
-        if (mode === 'swift') { execFileSync('git', ['init', '-q'], { cwd: base }); install(owned) } else legacy()
-        const trace = []
-        for (const op of ops(base)) trace.push({ result: JSON.parse(JSON.stringify(await op()).replaceAll(base, '<root>')), files: snapshot(base) })
-        legacy()
-        runs[mode] = trace
+      const base = join(scratch, `engines-${name}`)
+      cpSync(join(root, 'test/fixtures', name), base, { recursive: true, filter: path => !path.includes('node_modules') })
+      execFileSync('git', ['init', '-q'], { cwd: base })
+      // Every edit changes source; Undo and Redo walk back to the exact bytes of each step.
+      const states = [snapshot(base)]
+      let at = 0
+      for (const [index, op] of ops(base).entries()) {
+        const result = op === 'undo' ? await undo(base) : op === 'redo' ? await redo(base) : await op()
+        assert.ok(result.applied !== false && result.ok !== false, `${name} step ${index} applies: ${JSON.stringify(result)}`)
+        if (op === 'undo') at--
+        else if (op === 'redo') at++
+        else { states.splice(++at, states.length, snapshot(base)); assert.notDeepEqual(states[at], states[at - 1], `${name} step ${index} changed source`) }
+        assert.deepEqual(snapshot(base), states[at], `${name} step ${index} files`)
       }
-      for (const [index, step] of runs.legacy.entries()) {
-        assert.ok(step.result.applied !== false && step.result.ok !== false, `${name} step ${index} applies (legacy): ${JSON.stringify(step.result)}`)
-        assert.deepEqual(runs.swift[index].result, step.result, `${name} step ${index} result`)
-        assert.deepEqual(runs.swift[index].files, step.files, `${name} step ${index} files`)
-      }
-      assert.notDeepEqual(runs.swift[0].files, snapshot(join(root, 'test/fixtures', name)), `${name}: the first edit changed source`)
     }
-    // The legacy island/style suite's own assertions, through the Swift owner.
-    const suite = await new Promise(resolve => {
-      const child = spawn('bun', ['--preload', './test/helpers/source-owner-preload.mjs', 'test/shadow-controls.mjs'], {
-        cwd: root, env: { ...process.env, SOURCE_FIXTURE: binary, SOURCE_PROFILE: profile('parity-shadow') }, stdio: ['ignore', 'pipe', 'pipe']
-      })
-      let output = ''
-      child.stdout.on('data', data => { output += data }); child.stderr.on('data', data => { output += data })
-      const timer = setTimeout(() => child.kill('SIGKILL'), 100_000)
-      child.on('exit', code => { clearTimeout(timer); resolve({ code, output }) })
-    })
-    assert.equal(suite.code, 0, `shadow-controls against the Swift owner:\n${suite.output.slice(-3000)}`)
-    assert.ok(Number(/SOURCE-PARITY frames=(\d+)/.exec(suite.output)?.[1] ?? 0) > 0, 'shadow-controls sent no source frames')
+    reset()
+    // The island/style suite (shadow-controls) runs on the Swift owners itself.
     await stop(owned)
   })
 
@@ -153,7 +143,7 @@ try {
     assert.equal((await owned.frame('commit', { root: base, edits: [edit('a.ts', 'external\n', 'x')] }, { scope: { project: 'p' } })).payload.code, 'unauthorized')
     assert.equal((await owned.frame('deleteFile', { root: base, path: 'a.ts' })).payload.code, 'invalidRequest', 'delete needs its intent')
     assert.equal(read(file), 'external\n')
-    legacy(); await stop(owned)
+    reset(); await stop(owned)
   })
 
   await section('paths', async () => {
@@ -287,7 +277,7 @@ try {
     writeFileSync(at('c.ts'), 'USER')
     assert.deepEqual(await undo(base), { ok: false, conflict: true, file: at('c.ts') })
     assert.equal(read(at('b.ts')), 'B5')
-    legacy(); await stop(owned)
+    reset(); await stop(owned)
   })
 
   await section('files', async () => {
@@ -305,7 +295,7 @@ try {
     assert.deepEqual(await deleteProjectFile(base, 'moved/deep/b.ts'), { ok: true, path: 'moved/deep/b.ts' })
     assert.equal(existsSync(join(base, 'moved/deep/b.ts')), false)
     assert.deepEqual(await deleteProjectFile(base, 'gone.ts'), { ok: false, error: 'That file no longer exists.' })
-    legacy(); await stop(owned)
+    reset(); await stop(owned)
   })
 
   await section('drafts', async () => {
@@ -317,7 +307,7 @@ try {
     assert.equal(view.hash, hash('saved\n'))
     assert.equal((await owned.frame('saveDraft', { root: base, path: 'a.ts', base: view.hash, text: 'draft one\n' })).kind, 'succeeded')
     assert.equal((await owned.frame('saveDraft', { root: base, path: '../x', base: view.hash, text: 'x' })).payload.code, 'invalidRequest')
-    legacy(); await stop(owned)
+    reset(); await stop(owned)
     // After a restart the draft comes back; with the file changed meanwhile it is stale.
     writeFileSync(join(base, 'a.ts'), 'external\n')
     owned = await fixture(home)
@@ -358,28 +348,31 @@ try {
       sleep(10_000).then(() => 'deadlock')
     ])
     assert.deepEqual(inside, { applied: true })
-    legacy(); await stop(owned)
+    reset(); await stop(owned)
   })
 
-  await section('rollback', async () => {
-    const home = profile('rollback')
+  await section('relaunch', async () => {
+    const home = profile('relaunch')
     const base = dir({ 'a.ts': 'one' })
     let owned = await fixture(home)
     install(owned)
     assert.equal((await proposeEdit(base, join(base, 'a.ts'), 'one', 'two', 'k')).applied, true)
     await owned.frame('saveDraft', { root: base, path: 'a.ts', base: hash('two'), text: 'draft' })
-    legacy(); await stop(owned)
+    reset(); await stop(owned)
+    // Without the service nothing writes: there is no other owner to fall back to.
     const kept = snapshot(join(home, 'service/source'))
-    // The legacy owner writes where the Swift owner left off, and never touches its state.
-    assert.equal((await proposeEdit(base, join(base, 'a.ts'), 'two', 'three', 'k')).applied, true)
-    assert.deepEqual(await undo(base), { ok: true, file: join(base, 'a.ts') })
-    assert.equal(read(join(base, 'a.ts')), 'two')
+    assert.match((await proposeEdit(base, join(base, 'a.ts'), 'two', 'three', 'k')).error, /service is not running/)
+    await assert.rejects(async () => undo(base), /service is not running/)
+    await assert.rejects(async () => createProjectFile(base, 'b.ts'), /service is not running/)
+    assert.deepEqual(snapshot(base), { 'a.ts': Buffer.from('two').toString('base64') })
     assert.deepEqual(snapshot(join(home, 'service/source')), kept)
-    // Back to Swift: the draft is still there, nothing was interrupted.
+    // Relaunched: it writes where it left off, the draft is still there, nothing was interrupted.
     owned = await fixture(home)
+    install(owned)
+    assert.equal((await proposeEdit(base, join(base, 'a.ts'), 'two', 'three', 'k2')).applied, true)
     assert.equal((await owned.frame('drafts', { root: base })).payload[0].text, 'draft')
     assert.deepEqual((await owned.frame('status', {})).payload, { interrupted: [] })
-    await stop(owned)
+    reset(); await stop(owned)
   })
 
   await section('drain', async () => {
@@ -409,7 +402,7 @@ try {
 
   console.log('SOURCE-OWNER OK')
 } finally {
-  legacy()
+  reset()
   for (const started of fixtures) { try { started.child.kill('SIGKILL') } catch {} }
   rmSync(scratch, { recursive: true, force: true })
 }

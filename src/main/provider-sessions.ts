@@ -3,7 +3,6 @@ import type { NativeView } from '../native/platform'
 import type { AgentOptions } from '../shared/api'
 import { interruptWithOwner } from './backends/interrupt'
 import type { ModelProvider, ProviderSession, SpawnContext } from './backends/types'
-import './provider-model'
 import { providerOwner } from './provider-owner'
 import { INTERRUPT_GRACE_MS } from './provider-policy'
 

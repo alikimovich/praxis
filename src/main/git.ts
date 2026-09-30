@@ -7,8 +7,8 @@ import { repositoryOwner } from './repository-owner'
 
 /**
  * Branch management for the opened project: trezi does its work on a `trezi/<…>`
- * branch so the user's main branch stays clean. Pure (child_process + git only,
- * no electron) so it's unit-testable against a temp repo.
+ * branch so the user's main branch stays clean. Reads run Git here; every switch goes
+ * through the service's repository owner (S07).
  */
 
 const execFileP = promisify(execFile)
@@ -68,47 +68,11 @@ export async function enclosingRepoRoot(root: string): Promise<string | null> {
   }
 }
 
-async function headRevision(root: string): Promise<string | null> {
-  try {
-    return (await git(root, ['rev-parse', '--verify', 'HEAD'])).stdout.trim()
-  } catch {
-    return null
-  }
-}
-
-async function changedBranchFiles(root: string, before: string | null): Promise<string[] | undefined> {
-  if (!before) return undefined
-  try {
-    return (await git(root, ['diff', '--name-only', '-z', before, 'HEAD'])).stdout
-      .split('\0')
-      .filter(Boolean)
-  } catch {
-    return undefined
-  }
-}
-
 /** Check out an EXISTING branch by its exact name (no trezi/ coercion) — for the
  *  titlebar branch switcher. Carries uncommitted changes across like git does. */
 export async function checkoutBranch(root: string, branch: string): Promise<BranchResult> {
-  const owner = repositoryOwner()
-  if (owner) {
-    // Only an existing local branch; the service refuses anything Git could read as a path.
-    return owner.checkout(root, branch).catch((e) => ({ isRepo: true, branch, created: false, error: msg(e) }))
-  }
-  try {
-    // `--` end-of-options so a branch name that happens to start with `-` can't
-    // be parsed as a git flag (defense-in-depth; the value comes from the IPC).
-    const before = await headRevision(root)
-    await git(root, ['checkout', '--end-of-options', branch])
-    return { isRepo: true, branch, created: false, files: await changedBranchFiles(root, before) }
-  } catch (e) {
-    return {
-      isRepo: true,
-      branch: (await getCurrentBranch(root)) ?? branch,
-      created: false,
-      error: msg(e)
-    }
-  }
+  // Only an existing local branch; the service refuses anything Git could read as a path.
+  return repositoryOwner().checkout(root, branch).catch((e) => ({ isRepo: true, branch, created: false, error: msg(e) }))
 }
 
 /** Local branches (current first, then trezi/* newest-active, then the rest). */
@@ -159,36 +123,10 @@ export function normalizeBranchName(requested: string): string {
   return TREZI_PREFIX + (suffix || 'work')
 }
 
-async function branchExists(root: string, name: string): Promise<boolean> {
-  try {
-    await git(root, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`])
-    return true
-  } catch {
-    return false
-  }
-}
-
 /** Switch to (creating if needed) a specific trezi/* branch. */
 export async function switchBranch(root: string, requested: string): Promise<BranchResult> {
-  const owner = repositoryOwner()
-  if (owner) {
-    const name = normalizeBranchName(requested)
-    return owner.switchBranch(root, name).catch(async (e) => ({ isRepo: true, branch: await getCurrentBranch(root), created: false, error: msg(e) }))
-  }
-  if (!(await isRepoRoot(root))) return { isRepo: false, branch: null, created: false }
   const name = normalizeBranchName(requested)
-  const cur = await getCurrentBranch(root)
-  if (cur === name) return { isRepo: true, branch: name, created: false }
-  const existed = await branchExists(root, name)
-  try {
-    // checkout -b carries uncommitted changes onto the new branch (nothing lost);
-    // checking out an existing branch can fail if changes conflict — report that.
-    const before = await headRevision(root)
-    await git(root, existed ? ['checkout', name] : ['checkout', '-b', name])
-    return { isRepo: true, branch: name, created: !existed, files: await changedBranchFiles(root, before) }
-  } catch (e) {
-    return { isRepo: true, branch: cur, created: false, error: msg(e) }
-  }
+  return repositoryOwner().switchBranch(root, name).catch(async (e) => ({ isRepo: true, branch: await getCurrentBranch(root), created: false, error: msg(e) }))
 }
 
 /**
@@ -196,14 +134,11 @@ export async function switchBranch(root: string, requested: string): Promise<Bra
  * create `trezi/<current-branch>` (or `trezi/work` when detached) off HEAD.
  */
 export async function ensureBranch(root: string): Promise<BranchResult> {
-  // Under the Swift owner the read and the switch share one lease on the repository's lane.
-  if (repositoryOwner()) return enqueueRepoWrite(root, () => ensureLegacyOrOwned(root))
-  return ensureLegacyOrOwned(root)
-}
-
-async function ensureLegacyOrOwned(root: string): Promise<BranchResult> {
-  if (!(await isRepoRoot(root))) return { isRepo: false, branch: null, created: false }
-  const cur = await getCurrentBranch(root)
-  if (cur && isWorkBranch(cur)) return { isRepo: true, branch: cur, created: false }
-  return switchBranch(root, TREZI_PREFIX + (cur ?? 'work'))
+  // The read and the switch share one lease on the repository's lane.
+  return enqueueRepoWrite(root, async () => {
+    if (!(await isRepoRoot(root))) return { isRepo: false, branch: null, created: false }
+    const cur = await getCurrentBranch(root)
+    if (cur && isWorkBranch(cur)) return { isRepo: true, branch: cur, created: false }
+    return switchBranch(root, TREZI_PREFIX + (cur ?? 'work'))
+  })
 }

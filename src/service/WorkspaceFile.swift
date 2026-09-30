@@ -3,7 +3,7 @@ import Darwin
 
 /// `<profile>/workspace.json` in its unchanged legacy format:
 /// `{"projects":[entry…],"activeKey":key|null,"recents":[…]}`. The operations are
-/// the Bun rollback writer's (`src/native/workspace-model.ts`) and produce the
+/// the retired Bun writer's (recorded in `test/workspace-owner.mjs`) and produce the
 /// same bytes. Nothing is dropped: unknown fields, invalid entries and invalid
 /// recents stay where they are. A project is a valid entry: an object whose
 /// `root` is absolute and whose `key` is `projectKey(root)`; the first per key.

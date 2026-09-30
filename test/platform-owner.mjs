@@ -1,7 +1,7 @@
 // S14 platform owner: the real Swift PlatformOwner (compiled into a fixture process)
 // driven through Bun's real client, with a scripted xcrun / idb / pkill and a scripted
 // Metro. No Xcode, simulator, device or network beyond loopback is used.
-// - pure helpers and preflight give the legacy TS answers (modes: Xcode missing, license,
+// - pure helpers and preflight give the answers the retired TS runner gave (modes: Xcode missing, license,
 //   no runtimes, no devices, SDK/runtime mismatch, a failing list, available);
 // - simulator: unavailable, a view-only and an interactive bridge (host/token/size/stream
 //   limits, idb input, select picks, stale-companion recovery), restart, cancel during
@@ -16,12 +16,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { compilePlatformFixture, http, installFakes, startPlatformFixture } from './helpers/platform-fixture.mjs'
 import { checkAttachments, checkMedia, checkOpen, checkServers } from './helpers/platform-checks.mjs'
-import { extractBuildError, simBuildDestination, xcodeFailureReason } from '../src/main/xcode.ts'
-import { findTreziStamp, idbUiArgs, parseControlCommand, parseTestId, preflight } from '../src/main/simulator.ts'
-import { attachmentFileName } from '../src/main/attachments.ts'
 
-// The legacy preflight resolves `xcrun` and `idb` on the PATH Bun started with: re-run
-// under the scripted tools. The real ones are never reached.
+// Run under the scripted tools (xcrun, idb, pkill first on the PATH). The real ones are never reached.
 if (!process.env.TREZI_PLATFORM_FAKES) {
   const bin = realpathSync(mkdtempSync(join(tmpdir(), 'trezi-platform-fakes-')))
   const sim = realpathSync(mkdtempSync(join(tmpdir(), 'trezi-platform-sim-')))
@@ -82,40 +78,51 @@ try {
   const picks = []
   owner.onSimulatorPick(pick => picks.push(pick))
 
-  log('pure helpers: parity with xcode.ts / simulator.ts / attachments.ts')
+  // The answers below are the retired TS runner's (xcode.ts, simulator.ts, attachments.ts),
+  // recorded when LKM-111 removed it.
+  log('pure helpers: the answers of the retired TS runner')
+  const NOT_SELECTED = 'Xcode is not installed or not selected. Install the full Xcode app, then run `sudo xcode-select -s /Applications/Xcode.app` and `xcodebuild -runFirstLaunch`.'
+  const LICENSE = 'Xcode is installed, but its license has not been accepted. Run `sudo xcodebuild -license accept` in a terminal, then reopen the project.'
+  const mismatch = (sdk, newest) => `Xcode's iOS SDK is ${sdk}, but no matching simulator runtime is installed (newest installed is iOS ${newest}). Builds need a runtime ≥ the SDK version. Download it with \`xcodebuild -downloadPlatform iOS\` (or Xcode → Settings → Components → Get the iOS simulator), then reopen the project.`
   const buildLog = 'Explicit dependency on target Foo\nCompiling\nerror: no such module \'React\'\n  in App.swift\nnext\nlater\nPhaseScriptExecution failed with a nonzero exit code\n'
   const pure = (await f.cmd({ cmd: 'pure', log: buildLog, sdk: '26.5', runtimes: ['26.0', '26.1'] })).pure
-  assert.equal(pure.extract, extractBuildError(buildLog))
-  assert.equal(pure.destination, simBuildDestination('26.5', ['26.0', '26.1']).reason)
+  assert.equal(pure.extract, 'error: no such module \'React\'\n  in App.swift\nnext\nPhaseScriptExecution failed with a nonzero exit code')
+  assert.equal(pure.destination, mismatch('26.5', '26.1'))
   assert.equal((await f.cmd({ cmd: 'pure', sdk: '26.0', runtimes: ['26.0'] })).pure.destination, null)
   assert.equal((await f.cmd({ cmd: 'pure', sdk: 'unknown', runtimes: [] })).pure.destination, null)
-  for (const id of ['trezi:src/App.tsx:12:4', 'praxis:a/b.tsx:3', 'trezi:../x', 'trezi:src/a b.tsx:1', 'button', 'trezi:src/App.tsx'])
-    assert.equal((await f.cmd({ cmd: 'pure', testID: id })).pure.source, parseTestId(id)?.source ?? null, id)
+  for (const [id, source] of [['trezi:src/App.tsx:12:4', 'src/App.tsx:12:4'], ['praxis:a/b.tsx:3', 'a/b.tsx:3'], ['trezi:../x', null],
+    ['trezi:src/a b.tsx:1', null], ['button', null], ['trezi:src/App.tsx', null]])
+    assert.equal((await f.cmd({ cmd: 'pure', testID: id })).pure.source, source, id)
   const node = { type: 'View', children: [{ AXLabel: 'x' }, { nested: [{ AXUniqueId: 'trezi:src/A.tsx:1:2' }] }] }
-  assert.equal((await f.cmd({ cmd: 'pure', node })).pure.stamp, findTreziStamp(node))
-  for (const control of [{ type: 'tap', x: 0.5, y: 0.5 }, { type: 'tap', x: -1, y: 2 }, { type: 'swipe', x: 0.1, y: 0.2, x2: 0.3, y2: 0.4, duration: 0.1 },
-    { type: 'swipe', x: 0, y: 0, x2: 1, y2: 1 }, { type: 'text', text: 'é'.repeat(600) }, { type: 'tap', x: 'a', y: 1 }, { type: 'pinch' }]) {
-    const parsed = parseControlCommand(control)
-    assert.deepEqual((await f.cmd({ cmd: 'pure', control })).pure.args, parsed ? idbUiArgs('U', parsed, { width: 402, height: 874 }) : null, JSON.stringify(control))
-  }
-  for (const name of ['Screen Shot 2026-09-29 at 10.00.00.png', '../../etc/passwd', '.hidden', `${'a'.repeat(80)}.jpg`, 'émoji 😀 name.gif', 'x.tar.gz', '---', ''])
-    assert.equal((await f.cmd({ cmd: 'pure', attachment: name, mediaType: 'image/JPEG' })).pure.fileName, attachmentFileName('image/JPEG', name, '1'), name)
-  for (const [message, stderr, missing] of [['Command failed: xcrun simctl help', 'unable to find utility "simctl"', false],
-    ['x', 'You have not agreed to the Xcode license agreements', false], ['spawn xcrun ENOENT', '', true], ['boom', 'other', false]]) {
-    assert.equal((await f.cmd({ cmd: 'pure', xcodeMessage: message, stderr, missing })).pure.reason,
-      xcodeFailureReason({ message, stderr, code: missing ? 'ENOENT' : 1 }), message)
+  assert.equal((await f.cmd({ cmd: 'pure', node })).pure.stamp, 'trezi:src/A.tsx:1:2')
+  const ui = (...args) => ['ui', args[0], '--udid', 'U', ...args.slice(1)]
+  for (const [control, args] of [[{ type: 'tap', x: 0.5, y: 0.5 }, ui('tap', '201', '437')], [{ type: 'tap', x: -1, y: 2 }, ui('tap', '0', '874')],
+    [{ type: 'swipe', x: 0.1, y: 0.2, x2: 0.3, y2: 0.4, duration: 0.1 }, ui('swipe', '40', '175', '121', '350', '--duration', '0.1')],
+    [{ type: 'swipe', x: 0, y: 0, x2: 1, y2: 1 }, ui('swipe', '0', '0', '402', '874', '--duration', '0.25')],
+    [{ type: 'text', text: 'é'.repeat(600) }, ui('text', 'é'.repeat(500))], [{ type: 'tap', x: 'a', y: 1 }, null], [{ type: 'pinch' }, null]])
+    assert.deepEqual((await f.cmd({ cmd: 'pure', control })).pure.args, args, JSON.stringify(control).slice(0, 80))
+  for (const [name, fileName] of [['Screen Shot 2026-09-29 at 10.00.00.png', '1-Screen-Shot-2026-09-29-at-10.00.00.jpg'], ['../../etc/passwd', '1-passwd.jpg'],
+    ['.hidden', '1-hidden.jpg'], [`${'a'.repeat(80)}.jpg`, `1-${'a'.repeat(40)}.jpg`], ['émoji 😀 name.gif', '1-moji-name.jpg'], ['x.tar.gz', '1-x.tar.jpg'],
+    ['---', '1-pasted-image.jpg'], ['', '1-pasted-image.jpg']])
+    assert.equal((await f.cmd({ cmd: 'pure', attachment: name, mediaType: 'image/JPEG' })).pure.fileName, fileName, name)
+  for (const [message, stderr, missing, reason] of [['Command failed: xcrun simctl help', 'unable to find utility "simctl"', false, NOT_SELECTED],
+    ['x', 'You have not agreed to the Xcode license agreements', false, LICENSE], ['spawn xcrun ENOENT', '', true, NOT_SELECTED],
+    ['boom', 'other', false, 'Could not run the iOS simulator tools: boom']]) {
+    assert.equal((await f.cmd({ cmd: 'pure', xcodeMessage: message, stderr, missing })).pure.reason, reason, message)
   }
 
-  log('preflight: parity with the legacy preflight in every mode')
-  for (const value of [{ xcode: 'missing' }, { xcode: 'license' }, { runtimes: [] }, { devices: {} }, { sdk: '27.0' }, { list: 'broken' }, {}]) {
+  log('preflight: the retired TS runner\'s answer in every mode')
+  const devices = [{ udid: '11111111-1111-4111-8111-111111111111', name: 'iPhone 15', runtime: 'com.apple.CoreSimulator.SimRuntime.iOS-26-0' },
+    { udid: '22222222-2222-4222-8222-222222222222', name: 'iPhone 16 Pro', runtime: 'com.apple.CoreSimulator.SimRuntime.iOS-26-0' }]
+  const answer = (ok, tools, runtimes, listed, reason) => ({ ok, isMac: true, hasXcode: tools, hasIdb: tools, runtimes, devices: listed, ...(reason ? { reason } : {}) })
+  for (const [value, expected] of [[{ xcode: 'missing' }, answer(false, false, [], [], NOT_SELECTED)], [{ xcode: 'license' }, answer(false, false, [], [], LICENSE)],
+    [{ runtimes: [] }, answer(false, true, [], devices, 'No iOS runtimes installed. Add one in Xcode → Settings → Platforms.')],
+    [{ devices: {} }, answer(false, true, ['iOS 26.0'], [], 'No iPhone/iPad simulators found. Create one in Xcode → Settings → Platforms.')],
+    [{ sdk: '27.0' }, answer(false, true, ['iOS 26.0'], devices, mismatch('27.0', '26.0'))],
+    [{ list: 'broken' }, answer(false, true, [], [], 'Couldn\'t list simulators: Command failed: xcrun simctl list runtimes -j\nsimctl list failed\n')],
+    [{}, answer(true, true, ['iOS 26.0'], devices)]]) {
     mode(value)
-    const legacy = await preflight(), swift = await owner.simulatorPreflight()
-    if (value.list) {
-      // Node's execFile message and the service's carry the same command and stderr.
-      assert.match(legacy.reason, /^Couldn't list simulators: Command failed: xcrun simctl list runtimes -j/)
-      assert.equal(swift.reason, 'Couldn\'t list simulators: Command failed: xcrun simctl list runtimes -j\nsimctl list failed\n')
-      assert.deepEqual({ ...swift, reason: '' }, { ...legacy, reason: '' })
-    } else assert.deepEqual(swift, legacy, JSON.stringify(value))
+    assert.deepEqual(await owner.simulatorPreflight(), expected, JSON.stringify(value))
   }
   assert.equal((await owner.simulatorPreflight()).ok, true)
   assert.deepEqual((await owner.simulatorPreflight()).devices.map(d => d.name), ['iPhone 15', 'iPhone 16 Pro'])

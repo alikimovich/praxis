@@ -11,7 +11,6 @@ import type {
 } from '../shared/api'
 import type { PublishMessage } from '../shared/publish-message'
 import type { InstallInput, InstallResult } from './skills-install'
-import { legacyWorkflows } from './workflow-legacy'
 
 /**
  * The workflow owner seam (S13). Under the Swift launch the service's workflow owner
@@ -26,9 +25,8 @@ import { legacyWorkflows } from './workflow-legacy'
  * a merge or an update: the owner answers from its receipt, or reconciles an uncertain
  * step from what GitHub and Git hold. Bun keeps the helpers that only propose bounded
  * results (PR descriptions, framework detection and helper sources, starter files,
- * diagnoses) and the sheets that collect the user's explicit intent. With no Swift
- * owner (`TREZI_BACKEND_OWNER=legacy`, unit tests) `workflow-legacy.ts` runs the
- * original TS code. Never both.
+ * diagnoses) and the sheets that collect the user's explicit intent. There is no other
+ * owner: LKM-111 removed the TS twin, so without the service a workflow fails.
  */
 
 /** Bun's description helper: a PR title and body for the pushed range. */
@@ -59,7 +57,7 @@ export class WorkflowError extends Error {
 }
 
 export interface WorkflowOwner {
-  readonly kind: 'swift' | 'legacy'
+  readonly kind: 'swift'
   publish(root: string, mode: 'merge' | 'pr', describe: Describe): Promise<PublishResult>
   handoff(root: string, title: string, notes: number, describe: Describe): Promise<PublishResult>
   branchPr(root: string, branch: string, describe: Describe): Promise<{ ok: boolean; prUrl?: string; error?: string }>
@@ -95,11 +93,8 @@ export function setWorkflowOwner(next: WorkflowOwner | null): void {
   owner = next
 }
 
-export function swiftWorkflowOwner(): WorkflowOwner | null {
-  return owner
-}
-
-/** The installed Swift owner, else the legacy twin. */
+/** The installed Swift owner; without the service there is none, and nothing runs. */
 export function workflowOwner(): WorkflowOwner {
-  return owner ?? legacyWorkflows
+  if (!owner) throw new Error('Trezi’s service is not running, so the workflow cannot run.')
+  return owner
 }

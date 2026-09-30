@@ -18,7 +18,7 @@
  * Run with: bun test/docs-links.mjs
  */
 import { execFileSync } from 'node:child_process'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -41,10 +41,12 @@ const DOCS = [
 // placeholders (test/<name>.mjs) fall out naturally.
 const PATH_RE = /(?<![\w/.-])(?:src|test|scripts|docs|build|\.github)\/[A-Za-z0-9_./-]+/g
 
-// Valid set = every tracked file + all its ancestor directories.
-const tracked = execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' })
+// Valid set = every file the next commit would carry (tracked or new and not ignored,
+// and still on disk, so a deleted file fails before its deletion is committed) + all
+// its ancestor directories. In a clean checkout this is exactly the tracked files.
+const tracked = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd: root, encoding: 'utf8' })
   .split('\n')
-  .filter(Boolean)
+  .filter((f) => f && existsSync(join(root, f)))
 const valid = new Set()
 for (const f of tracked) {
   valid.add(f)
