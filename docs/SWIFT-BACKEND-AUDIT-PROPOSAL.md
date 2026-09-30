@@ -83,7 +83,7 @@ not be used to infer those later properties.
 
 Current implementation is only 31 lines:
 [preferences.ts:3](../src/native/preferences.ts#L3) reads version-1
-`preferences.json`, accepts `praxis:`/`praxis.` names shorter than 200 characters,
+`preferences.json`, accepts legacy-prefixed names shorter than 200 characters,
 string values at most 2,000,000 characters or null, and writes mode-0600 temp file
 then renames. Unknown valid keys are retained; invalid persisted entries are
 filtered; malformed/version-mismatched files throw. Preserve those behaviors and

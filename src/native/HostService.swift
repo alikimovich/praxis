@@ -13,7 +13,7 @@ extension Host {
                     profile: option("--profile"),
                     arguments: args.firstIndex(of: "--").map { Array(args.dropFirst($0 + 1)) } ?? [],
                     environment: HostLaunch.environment)
-                let executable = Bundle.main.bundleURL.appendingPathComponent("Contents/XPCServices/dev.praxis.service.xpc/Contents/MacOS/TreziService").path
+                let executable = Bundle.main.bundleURL.appendingPathComponent("Contents/XPCServices/dev.trezi.service.xpc/Contents/MacOS/TreziService").path
                 let client = try ServiceClient(launch: launch, serviceExecutable: executable)
                 serviceClient = client
                 // Terminal signals drain through the service instead of killing the host.

@@ -94,10 +94,8 @@ function profileParity() {
 }
 try {
   buildProfilePaths()
-  for (const executable of ['praxis', 'trezi']) {
-    const result = spawnSync(process.execPath, [new URL(`../bin/${executable}.mjs`, import.meta.url).pathname, '--version'], { encoding: 'utf8' })
-    assert.equal(result.status, 0); assert.match(result.stdout, /^Trezi /)
-  }
+  const version = spawnSync(process.execPath, [new URL('../bin/trezi.mjs', import.meta.url).pathname, '--version'], { encoding: 'utf8' })
+  assert.equal(version.status, 0); assert.match(version.stdout, /^Trezi /)
   const fresh = join(root, 'fresh'); mkdirSync(fresh)
   assert.equal(nativeProfilePath(fresh), join(fresh, 'Trezi Native'))
   assert(!existsSync(join(fresh, 'Praxis Native')))

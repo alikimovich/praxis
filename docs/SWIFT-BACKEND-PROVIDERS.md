@@ -96,8 +96,8 @@ and Codex adapters inside helpers is reported SKIP (not PASS). In this step:
 - **Permissions.** In order, exactly as the pre-S10 Claude adapter decided (so its
   behaviour is unchanged): `AskUserQuestion` → question (deny if the session is
   closed); Trezi's own tools → allow (a background session is denied `open_code` and
-  `chat_island`); an edit path or Bash command touching `.trezi/`, `.praxis/` or
-  `.dsgn/` → deny; an edit path inside Trezi's profile but outside the session's own
+  `chat_island`); an edit path or Bash command touching `.trezi/` or a legacy
+  metadata folder → deny; an edit path inside Trezi's profile but outside the session's own
   roots → deny (new: another chat's worktree, the session files, the service
   stores); read-only tools → allow; a closed session → deny; else ask the user. An
   owner that cannot answer fails closed. Only the path or command crosses Bun's pipe

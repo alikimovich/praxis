@@ -70,7 +70,7 @@ const requiredTools = [
 export function treziMcpConfig(appRoot: string, registration: TreziAgentToolRegistration) {
   return {
     mcp_servers: {
-      praxis: {
+      trezi: {
         command: process.execPath,
         args: [join(appRoot, 'bin/trezi-agent-mcp.mjs')],
         cwd: appRoot,
@@ -98,7 +98,7 @@ export async function verifyTreziMcp(config: ReturnType<typeof treziMcpConfig>):
     import('@modelcontextprotocol/sdk/client/index.js'),
     import('@modelcontextprotocol/sdk/client/stdio.js')
   ])
-  const server = config.mcp_servers.praxis
+  const server = config.mcp_servers.trezi
   const client = new Client({ name: 'trezi-startup', version: '1' })
   const transport = new StdioClientTransport({
     command: server.command,

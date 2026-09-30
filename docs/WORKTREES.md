@@ -57,7 +57,7 @@ from growing with every chat.
 - Three-way resolution uses a temporary index seeded from the working tree. The user's
   real staged state is not a resolver input and is never mutated.
 - `.env` and non-template `.env.*`, `node_modules`, `*.tsbuildinfo`, `.trezi/`, and
-  legacy `.dsgn/` are excluded from snapshots, worktree commits, and live commits.
+  the [legacy](agent-guide/legacy-names.md) sidecar folders are excluded from snapshots, worktree commits, and live commits.
 - Parked work keeps a durable branch. Successfully landed or discarded work does not.
 - Comment-created and automatic visual-edit background agents are attributed to their
   exact parent chat in the rail, but still count against the repository-wide concurrency
@@ -249,6 +249,5 @@ interrupts and app quit await termination of each owned process group, escalatin
 to SIGKILL after one second. Shell exit does not release ownership while descendants
 survive. Shutdown does not land or discard worktree edits or target unrelated servers.
 
-Trezi compatibility: see [migration policy](rename/MIGRATION.md) for legacy
-profile/worktree paths, retained identities and rollback, and [LKM-84 mapping](rename/COORDINATION.md)
-for integration ordering.
+Legacy profile/worktree paths and the identities kept on purpose are listed in
+[legacy names](agent-guide/legacy-names.md).

@@ -82,7 +82,7 @@ try {
   assert.deepEqual(isolated.mcp_servers, {
     vercel: { enabled: false },
     'personal-stdio': { enabled: false },
-    praxis: config.mcp_servers.praxis
+    trezi: config.mcp_servers.trezi
   })
   assert.deepEqual(isolated.features, features)
 
@@ -112,7 +112,7 @@ try {
   const loaded = listed(flatten(isolated))
   for (const name of personal) assert.equal(loaded[name], false, `${name} is switched off`)
   assert.equal(loaded['vercel-plugin'], undefined, 'the plugin server is not loaded at all')
-  assert.equal(loaded.praxis, true, "Trezi's server stays on")
+  assert.equal(loaded.trezi, true, "Trezi's server stays on")
 
   // Use the exact production config and SDK-selected CLI, not a substitute server.
   const overrides = flatten(isolated)
@@ -159,19 +159,19 @@ try {
     assert.equal(entry?.runtimeStatus ?? 'disabled', 'disabled', `the session never starts ${name}`)
     assert.equal(Object.keys(entry?.tools ?? {}).length, 0, `${name} exposes no tools`)
   }
-  const server = status.data.find((entry) => entry.name === 'praxis')
+  const server = status.data.find((entry) => entry.name === 'trezi')
   assert.ok(server, 'Codex connects to the Trezi MCP server')
   assert.ok(!server.toolsError, 'Codex can list the tools')
   for (const tool of ['chat_island', 'preview_screenshot', 'preview_location', 'workspace_state']) {
     assert.ok(server.tools[tool], `Codex exposes ${tool}`)
   }
-  assert.equal(config.mcp_servers.praxis.required, true, 'future turns cannot silently omit Trezi')
+  assert.equal(config.mcp_servers.trezi.required, true, 'future turns cannot silently omit Trezi')
   // Read per turn: a server removed mid-chat is no longer named (naming it would fail).
   await writeFile(
     join(home, 'config.toml'),
     '[mcp_servers.vercel]\nurl = "http://127.0.0.1:9/mcp"\n'
   )
-  assert.deepEqual(Object.keys(isolatedCodexConfig(config, env).mcp_servers), ['vercel', 'praxis'])
+  assert.deepEqual(Object.keys(isolatedCodexConfig(config, env).mcp_servers), ['vercel', 'trezi'])
   console.log(
     'CODEX-MCP OK — real helper, socket authentication, Codex tool inventory and personal MCP servers off'
   )

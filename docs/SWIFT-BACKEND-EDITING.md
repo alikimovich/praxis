@@ -23,9 +23,13 @@ and the inspector views. Source writes are still proposals to the
 [conversation owner's](SWIFT-BACKEND-CONVERSATION.md).
 
 - `src/service/EditingOwner.swift`: requests, validation, turn binding, lanes, drain.
-- `src/service/EditingProject.swift` (S15): the `.dsgn`/`.praxis` sidecar migration, the
+- `src/service/EditingProject.swift` (S15): the legacy sidecar migration ([legacy names](agent-guide/legacy-names.md)), the
   setup helpers copied into a chat worktree (`setup-helpers.json`) and the Next dependency
   marker, in the repository lane (its Bun twins were removed in LKM-111).
+- `src/service/EditingLegacyNames.swift` (LKM-132): `legacyNames`/`migrateNames`, the
+  one-time rename of a project's old setup helpers, imports and stamps. It runs in the
+  repository lane, and a dirty tree is refused unless the user confirmed. It never
+  commits.
 - `src/service/EditingIslands.swift`: island history files and the island state machine.
 - `src/service/EditingStores.swift`: the project sidecar commit (controls; since S15 also
   `annotations.json` and `tokens.json`, see [retirement](SWIFT-BACKEND-RETIREMENT.md)),

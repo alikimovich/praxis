@@ -6,7 +6,7 @@ import '../src/shared/rename-compat.ts'
 import { spawnSync } from 'node:child_process'
 import { requireSupportedPlatform } from './requirements.mjs'
 
-/** The default profile, with the `Praxis Native` alias made by the service (`ProfilePaths.swift`). */
+/** The default profile, with the legacy-profile alias made by the service (`ProfilePaths.swift`). */
 export function defaultProfile(out, support = join(homedir(), 'Library/Application Support')) {
   const result = spawnSync(join(out, 'TreziService'), ['--resolve-profile', support], { encoding: 'utf8' })
   if (result.error) throw new Error(`Could not run TreziService to find the profile (${result.error.message}); run bun run build.`)

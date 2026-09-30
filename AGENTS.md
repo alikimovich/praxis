@@ -16,8 +16,8 @@ Distributed as source (clone, `bun install`, `bun run build`) and started with
 their own provider subscriptions or endpoint credentials. Electron, the React
 application renderer and browser/Tailscale mode are retired (`docs/NATIVE.md`).
 
-The original name was **dsgn**. Its remaining strings are deliberate legacy shims:
-don't "fix" them ([conventions](docs/agent-guide/conventions.md)).
+Trezi had earlier names. Their remaining strings are deliberate read-compatibility
+shims, all listed in [legacy names](#legacy-names): don't "fix" them.
 
 ## Start here every session
 
@@ -115,5 +115,15 @@ XPC/quit, shortcuts, Styles, control panels or model lists.
 - Keep files under ~500 lines. SDKs are ESM-only in a CJS bundle: dynamic `import()`.
 - New `.mjs` test → register it in its tier in `test/run.mjs`.
 - Never commit secrets; a connection's API key never leaves main (UI sees `hasKey`).
-- Agents cannot write a target's `.trezi/` (or legacy `.praxis/`, `.dsgn/`).
+- Agents cannot write a target's `.trezi/` (or the [legacy](docs/agent-guide/legacy-names.md) sidecar folders).
 - Keep `docs/WORKTREES.md`, `docs/PROVIDERS.md` and `docs/MEMORY.md` current.
+
+## Legacy names
+
+Trezi had earlier names. They survive only as read-compatibility shims. Every shim
+and every file that carries one is listed in one place:
+[legacy names](docs/agent-guide/legacy-names.md). `test/legacy-names-audit.mjs`
+enforces that list. Projects that still use the old setup names are migrated once
+on open: automatically on a clean Git tree, otherwise only after the user confirms.
+The migration never commits.
+

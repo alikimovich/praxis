@@ -42,7 +42,7 @@ below). Attachments are not part of this task.
 | Annotations `.trezi/annotations.json` | inside the user's repository | **Swift** editing owner since S15 (hash-bound sidecar commit; `annotation-store.ts` renders), see [retirement](SWIFT-BACKEND-RETIREMENT.md) | Bun |
 
 `<profile>/trezi` is the session store. It may be Bun's alias of an older
-`praxis`/`dsgn` store (`nativeSessionPath`). The service never creates `trezi`
+pre-rename store (`nativeSessionPath`). The service never creates `trezi`
 beside one of those, so it cannot split the store in two. Bun resolves the alias
 before its first memory request. The file format is unchanged and no store is
 migrated. The checkpoint holds only a SHA-256 of the file's bytes (or `absent`).

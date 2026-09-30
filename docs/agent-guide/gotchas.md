@@ -82,8 +82,8 @@ and provider-seat rules are here.
   An element with no class and no `style` is SUPPOSED to cost an agent turn.
   (Note S1 has the mirror-image gap: it can only rewrite an existing class
   string, never add one, so Tailwind projects pay that turn too.)
-- **The agent is denied writes under a target repo's `.trezi/`** (and the legacy
-  `.praxis/` and `.dsgn/` directories) — annotations, scaffolded instrumentation, and
+- **The agent is denied writes under a target repo's `.trezi/`** (and the
+  [legacy](legacy-names.md) sidecar directories) — annotations, scaffolded instrumentation, and
   control-panel manifests live there. The `define_controls` tool exists precisely
   because of this: the agent hands main a manifest, main validates it, and the
   editing owner (the Swift service) is the only writer —

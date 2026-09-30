@@ -37,7 +37,7 @@ src/main/
   file-ops.ts     the same sidebar's file MANAGER — create/rename/delete
                   (source:create-file/rename-file/delete-file). Pure; every
                   renderer-supplied path is re-validated (no traversal, no
-                  .git/.trezi/.dsgn/node_modules), delete goes to the OS trash
+                  .git/.trezi/legacy sidecars/node_modules), delete goes to the OS trash
   media.ts / media-types.ts   the editor's media viewer: opening a .png/.mp4 must
                   SHOW it, not decode its bytes as utf8. media-types is the pure
                   half (ext→kind/MIME, binary sniff); the platform owner issues the

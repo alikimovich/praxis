@@ -3,6 +3,16 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Trezi names only, read compatibility kept (LKM-132)
+
+- [x] XPC service `dev.trezi.service`; the build leaves no other service in `Trezi.app/Contents/XPCServices` (checked by `test/distribution.mjs`).
+- [x] Agent tools `mcp__trezi__*` (Claude MCP server, Codex bridge, plugin namespace, provider policy in TS and Swift).
+- [x] `bin/praxis` alias and old MCP entrypoint removed; `install.sh` stops linking it and removes its own old link; installer and README URLs use `alikimovich/trezi`.
+- [x] Preview IPC aliases and legacy code identifiers removed; `PRAXIS_*` env, `~/.praxis` installs, profile, preference, branch, sidecar and stamp readers kept as documented shims.
+- [x] One list of shims: `docs/agent-guide/legacy-names.md`, linked from AGENTS.md and enforced by `test/legacy-names-audit.mjs`; `docs/rename/` and `scripts/audit-rename.mjs` deleted.
+- [x] One-time project migration (`EditingLegacyNames.swift`): automatic on a clean tree. On a dirty tree only after the user confirms in a sheet (`src/native/legacy-names.ts`). Never commits. Covered by `test/legacy-names-migrate.mjs`.
+- [ ] Manager: run `codex-mcp`, `codex-model` and `provider-helper-tools` unsandboxed (Unix socket listen).
+
 ## Trezi tools work from provider helpers (LKM-131)
 
 - [x] Audit every agent-exposed Trezi tool (Claude's in-process `praxis` server and the Codex bridge). The tools that need main's state are `chat_island`, the preview observers, `open_preview`/`open_code`, Gen UI, `workspace_state`/`prepare_conflict_resolution` and `install_skills`; the calculators are pure. Table in `docs/PROVIDERS.md`.

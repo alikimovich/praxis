@@ -51,7 +51,7 @@ open -a Trezi / trezi ── TreziHost (AppKit) ──XPC── TreziService ─
   (`managed-child.ts` was removed with the rollback launch).
 
 The XPC service is bundled at
-`Trezi.app/Contents/XPCServices/dev.praxis.service.xpc` and copied to
+`Trezi.app/Contents/XPCServices/dev.trezi.service.xpc` and copied to
 `out/native/TreziService` for the development launcher's `--resolve-profile`. The build
 ad-hoc signs all three.
 

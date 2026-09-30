@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Trezi's one install command, the same for users and for development:
 #
-#   curl -fsSL https://raw.githubusercontent.com/alikimovich/praxis/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/alikimovich/trezi/main/install.sh | bash
 #   curl -fsSL …/install.sh | bash -s -- --channel candidate   (testers)
 #   ./install.sh   or   bun run setup                          (inside a checkout)
 #
@@ -11,7 +11,7 @@
 # builds, links `trezi` and Trezi.app to the checkout and opens Trezi.
 set -euo pipefail
 
-REPO_URL="https://github.com/alikimovich/praxis.git"
+REPO_URL="https://github.com/alikimovich/trezi.git"
 
 usage() {
   cat <<'EOF'
@@ -185,7 +185,10 @@ main() {
   mkdir -p "$HOME/.local/bin"
   chmod +x "$TREZI_HOME/bin/trezi"
   ln -sf "$TREZI_HOME/bin/trezi" "$HOME/.local/bin/trezi"
-  ln -sf "$TREZI_HOME/bin/trezi" "$HOME/.local/bin/praxis"
+  # The pre-rename command alias is retired (LKM-132): remove it only when it is ours.
+  if [ -L "$HOME/.local/bin/praxis" ] && [ "$(readlink "$HOME/.local/bin/praxis")" = "$TREZI_HOME/bin/trezi" ]; then
+    rm "$HOME/.local/bin/praxis"
+  fi
 
   # Trezi.app stays in the checkout (it runs the backend beside it); Applications gets a
   # link, so Finder, Spotlight and `open -a Trezi` find it. An existing app that is not

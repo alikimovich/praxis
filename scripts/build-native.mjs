@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { nativeCatAssets } from './native-cat-assets.mjs'
@@ -73,6 +73,10 @@ rmSync(join(out, 'preload.js'), { force: true })
 for (const name of ['index.cjs', 'index.cjs.map', 'provider-helper.cjs', 'provider-helper.cjs.map']) rmSync(join(out, name), { force: true })
 // The bundle was "Trezi Native.app" before LKM-108; don't leave a second app behind.
 rmSync(join(out, 'Trezi Native.app'), { recursive: true, force: true })
+// Only the current service stays embedded: launchd must not find a service under an
+// earlier identifier (LKM-132 renamed it to dev.trezi.service).
+const services = join(contents, 'XPCServices')
+if (existsSync(services)) for (const name of readdirSync(services)) if (name !== 'dev.trezi.service.xpc') rmSync(join(services, name), { recursive: true, force: true })
 writeFileSync(
   join(contents, 'Info.plist'),
   `<?xml version="1.0" encoding="UTF-8"?>
@@ -91,13 +95,13 @@ writeFileSync(
 <key>NSMicrophoneUsageDescription</key><string>Allow your local project preview to test microphone features when you approve.</string>
 </dict></plist>`
 )
-const serviceContents = join(contents, 'XPCServices/dev.praxis.service.xpc/Contents')
+const serviceContents = join(contents, 'XPCServices/dev.trezi.service.xpc/Contents')
 mkdirSync(join(serviceContents, 'MacOS'), { recursive: true })
 writeFileSync(join(serviceContents, 'Info.plist'), serviceInfoPlist())
 const serviceResult = Bun.spawnSync([
   'xcrun', 'swiftc', '-O', '-target', target,
   '-module-cache-path', join(out, 'module-cache'),
-  ...['ServiceContract', 'ServiceXPC', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile', 'WorkspaceOwner', 'MemoryFile', 'MemoryOwner', 'DomainChannel', 'BackendSupervisor', 'ProcessGuardian', 'ManagedProcess', 'RuntimeNet', 'RuntimeDetect', 'StaticSite', 'StaticServer', 'RuntimeServer', 'RuntimeOwner', 'RepositoryGit', 'RepositoryJournal', 'RepositoryEffects', 'RepositoryLanding', 'RepositoryMerge', 'RepositoryOwner', 'SourcePaths', 'SourceJournal', 'SourceHistory', 'SourceStore', 'SourceDrafts', 'SourceOwner', 'ConversationState', 'ConversationStore', 'ConversationOwner', 'ProviderPolicy', 'ProviderStore', 'ProviderHelper', 'ProviderFrames', 'ProviderData', 'ProviderLaunch', 'ProviderOwner', 'EditingIslands', 'EditingStores', 'EditingProject', 'EditingOwner', 'WorkflowJournal', 'WorkflowContext', 'WorkflowOwner', 'WorkflowPublish', 'WorkflowRemote', 'WorkflowSetup', 'WorkflowTools', 'PlatformTools', 'PlatformOpen', 'PlatformMedia', 'SimulatorTools', 'SimulatorBridge', 'SimulatorOwner', 'PlatformOwner', 'ProfilePaths', 'ServiceRuntime', 'ServiceMain'].map(name => join(root, `src/service/${name}.swift`)),
+  ...['ServiceContract', 'ServiceXPC', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile', 'WorkspaceOwner', 'MemoryFile', 'MemoryOwner', 'DomainChannel', 'BackendSupervisor', 'ProcessGuardian', 'ManagedProcess', 'RuntimeNet', 'RuntimeDetect', 'StaticSite', 'StaticServer', 'RuntimeServer', 'RuntimeOwner', 'RepositoryGit', 'RepositoryJournal', 'RepositoryEffects', 'RepositoryLanding', 'RepositoryMerge', 'RepositoryOwner', 'SourcePaths', 'SourceJournal', 'SourceHistory', 'SourceStore', 'SourceDrafts', 'SourceOwner', 'ConversationState', 'ConversationStore', 'ConversationOwner', 'ProviderPolicy', 'ProviderStore', 'ProviderHelper', 'ProviderFrames', 'ProviderData', 'ProviderLaunch', 'ProviderOwner', 'EditingIslands', 'EditingStores', 'EditingProject', 'EditingLegacyNames', 'EditingOwner', 'WorkflowJournal', 'WorkflowContext', 'WorkflowOwner', 'WorkflowPublish', 'WorkflowRemote', 'WorkflowSetup', 'WorkflowTools', 'PlatformTools', 'PlatformOpen', 'PlatformMedia', 'SimulatorTools', 'SimulatorBridge', 'SimulatorOwner', 'PlatformOwner', 'ProfilePaths', 'ServiceRuntime', 'ServiceMain'].map(name => join(root, `src/service/${name}.swift`)),
   '-o', join(serviceContents, 'MacOS/TreziService'), '-framework', 'Foundation', '-framework', 'Security', '-framework', 'CoreServices'
 ], { stdout: 'inherit', stderr: 'inherit' })
 if (serviceResult.exitCode) process.exit(serviceResult.exitCode)
@@ -182,7 +186,7 @@ const result = Bun.spawnSync(
 )
 if (result.exitCode) process.exit(result.exitCode)
 bundleBun(contents)
-for (const path of [join(out, 'TreziService'), join(contents, 'XPCServices/dev.praxis.service.xpc'), join(out, 'Trezi.app')]) {
+for (const path of [join(out, 'TreziService'), join(contents, 'XPCServices/dev.trezi.service.xpc'), join(out, 'Trezi.app')]) {
   const signed = Bun.spawnSync(['codesign', '--force', '--sign', '-', path], { stdout: 'inherit', stderr: 'inherit' })
   if (signed.exitCode) process.exit(signed.exitCode)
 }

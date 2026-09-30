@@ -85,6 +85,8 @@ export function serviceEditing(link: EditingLink, options: { timeout?: number; l
       return call('sidecar', { root, name, expectedHash, content, ...(leases.length ? { leases } : {}) }, 'mutation', true)
     },
     migrateSidecar: async root => (await call('migrateSidecar', held({ root }), 'mutation', true)).collisions,
+    legacyNames: root => call('legacyNames', held({ root }), 'mutation', true),
+    migrateNames: (root, confirmed) => call('migrateNames', held({ root, confirmed }), 'mutation', true),
     syncSetupHelpers: async (root, worktree) => { await call('syncSetupHelpers', held({ root, worktree }), 'mutation', true) },
     dependencyState: async (root, checkout) => (await call('dependencyState', held({ root, checkout }), 'mutation', true)).install,
     markDependencies: async (root, checkout) => { await call('markDependencies', held({ root, checkout }), 'mutation', true) }

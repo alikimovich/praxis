@@ -92,7 +92,6 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         config.websiteDataStore = .nonPersistent()
         let contentWorld = world
         config.userContentController.add(self, contentWorld: contentWorld, name: "trezi")
-        config.userContentController.add(self, contentWorld: contentWorld, name: "praxis")
         let file = directory + "/preview.js"
         let script = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
         // Selection must intercept input before the project's capture listeners.

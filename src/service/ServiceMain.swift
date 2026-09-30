@@ -12,7 +12,7 @@ import Darwin
                 runGroupWatchdog(arguments: Array(CommandLine.arguments.dropFirst(2)))
             }
             if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--resolve-profile" {
-                // The launcher's default profile, with the `Praxis Native` alias made first.
+                // The launcher's default profile, with the legacy-profile alias made first.
                 do { print(try ProfilePaths.profile(support: CommandLine.arguments[2])); exit(0) } catch {
                     fputs("\(error)\n", stderr); exit(1)
                 }

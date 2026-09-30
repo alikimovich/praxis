@@ -183,6 +183,5 @@ draft; a failed save keeps it open with an error. Close-only buttons are omitted
 and actionless windows omit the footer. Provider credentials, source commits,
 creation and destructive operations retain explicit actions.
 
-Trezi compatibility: see [migration policy](rename/MIGRATION.md) for legacy
-profile/worktree paths, retained identities and rollback, and [LKM-84 mapping](rename/COORDINATION.md)
-for integration ordering.
+Legacy profile/worktree paths and the identities kept on purpose are listed in
+[legacy names](agent-guide/legacy-names.md).

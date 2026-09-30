@@ -46,6 +46,10 @@ export type SidecarName = 'control-panels.json' | 'annotations.json' | 'tokens.j
 export const SIDECAR_NAMES: readonly SidecarName[] = ['control-panels.json', 'annotations.json', 'tokens.json']
 export type SidecarCommit = { ok: true; hash: string } | { ok: false; conflict: true }
 export type NavigationEvent = 'landed' | 'failed' | 'begin' | 'close'
+/** `files`: project-relative paths with a legacy reference; `helpers`: legacy helper files. */
+export interface LegacyNamesPlan { legacy: boolean; clean: boolean; files: string[]; helpers: string[] }
+/** `dirty` with `migrated: false`: refused, nothing changed. `kept`: differing legacy copies. */
+export type LegacyNamesResult = { migrated: false; dirty: boolean } | { migrated: true; dirty: boolean; files: string[]; kept: string[] }
 
 export class EditingError extends Error {
   constructor(readonly code: string, message: string) { super(message) }
@@ -75,8 +79,12 @@ export interface EditingOwner {
   /** Hash-bound project sidecar commit; `expectedHash` null means the file must not exist. */
   sidecar(root: string, name: SidecarName, expectedHash: string | null, content: string): Promise<SidecarCommit>
   // Project files in `.trezi/` (S15), each in the project's repository lane
-  /** Moves pre-rename `.praxis/`/`.dsgn/` metadata into `.trezi/`; answers the legacy copies a differing file won over. */
+  /** Moves legacy sidecar metadata into `.trezi/`; answers the legacy copies a differing file won over. */
   migrateSidecar(root: string): Promise<string[]>
+  /** Legacy names the project still uses (`EditingLegacyNames`) and whether its tree is clean. */
+  legacyNames(root: string): Promise<LegacyNamesPlan>
+  /** Rewrites them to Trezi names; a dirty tree changes only when `confirmed`. Never commits. */
+  migrateNames(root: string, confirmed: boolean): Promise<LegacyNamesResult>
   /** Copies the live project's setup helpers into a worktree (verified, hashes recorded). */
   syncSetupHelpers(liveRoot: string, worktree: string): Promise<void>
   /** Removes a Next checkout's shared `node_modules` link; answers whether it needs its own install. */

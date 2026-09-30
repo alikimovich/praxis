@@ -35,7 +35,7 @@ export const AUTO_ALLOW_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'Notebook
 // Tools that 'acceptEdits' auto-approves (mirrors the SDK's edit semantics).
 export const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 
-// `.dsgn` is the sidecar's pre-rename name — old repos still carry it.
+// The legacy sidecar names stay protected: old repos still carry them.
 const SIDECAR_RE = /(^|[\s/\\"'])\.(trezi|praxis|dsgn)([/\\]|$)/
 
 /** Does this tool target the .trezi/ sidecar (edit-tool path or a Bash command)? */

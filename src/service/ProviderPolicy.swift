@@ -34,7 +34,7 @@ enum ProviderPolicy {
     static let autoTrezi = Set(treziTools).subtracting(["install_skills", "workspace_state", "prepare_conflict_resolution"])
     static let autoAllow: Set<String> = ["Read", "Glob", "Grep", "LS", "NotebookRead"]
     static let edit: Set<String> = ["Edit", "Write", "MultiEdit", "NotebookEdit"]
-    static let mcpPrefix = "mcp__praxis__"
+    static let mcpPrefix = "mcp__trezi__"
     static let sidecar = try! NSRegularExpression(pattern: #"(^|[\s/\\"'])\.(trezi|praxis|dsgn)([/\\]|$)"#)
 
     enum Message {

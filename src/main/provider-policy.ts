@@ -39,7 +39,7 @@ export const LIMITS = {
 
 export const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const
 
-/** Trezi's own agent tools, bare names (Claude sees them as `mcp__praxis__<name>`). */
+/** Trezi's own agent tools, bare names (Claude sees them as `mcp__trezi__<name>`). */
 export const TREZI_TOOLS = [
   'project_ui_catalog',
   'compose_project_ui',
@@ -71,7 +71,7 @@ const AUTO_TREZI = new Set<string>(TREZI_TOOLS.filter((t) => t !== 'install_skil
 const AUTO_ALLOW = AUTO_ALLOW_TOOLS
 const EDIT = EDIT_TOOLS
 const SIDECAR = /(^|[\s/\\"'])\.(trezi|praxis|dsgn)([/\\]|$)/
-const MCP_PREFIX = 'mcp__praxis__'
+const MCP_PREFIX = 'mcp__trezi__'
 
 export const MESSAGES = {
   inactive: 'Session no longer active.',

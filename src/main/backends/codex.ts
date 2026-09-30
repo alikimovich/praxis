@@ -138,7 +138,7 @@ async function seatModel(model: string | undefined): Promise<string | undefined>
  * `openai`, so a connection cannot be expressed by patching the built-in provider.
  */
 // Stable provider ID keeps saved Codex endpoint sessions resumable.
-const CONNECTION_PROVIDER_ID = 'praxis-connection'
+const CONNECTION_PROVIDER_ID = 'trezi-connection'
 
 /**
  * Point one `Codex` instance at a user connection instead of the ChatGPT seat.

@@ -266,7 +266,7 @@ manager verification and independent re-review; ownership remains unchanged.
 |---|---|
 | Swift AppKit/SwiftUI app | Presentation, user input, WebKit, native dialogs, OS integrations. Holds display state, not authoritative workflow state. |
 | Swift service process | Workspace/chat coordination, persistence, provider sessions, Git/worktrees, source transactions, managed servers, recovery. |
-| Provider adapters | Translate provider events/commands into a typed Praxis contract. Native protocols where sufficient; SDK helpers where needed. |
+| Provider adapters | Translate provider events/commands into a typed Trezi contract. Native protocols where sufficient; SDK helpers where needed. |
 | Source-analysis helpers | Parse framework sources, resolve types/schemas, propose edits. No authority to commit changes or manage app state. |
 | Project processes / preview | User project servers and their runtimes; JavaScript instrumentation inside WebKit. |
 

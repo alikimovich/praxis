@@ -35,10 +35,10 @@ itself stays the single copy of the values and the rollback artifact. No store i
 migrated and the file format does not change.
 
 Format rules, identical in both owners (checked byte-for-byte by the tests):
-keys match `^(trezi|praxis)[:.]` and are shorter than 200 UTF-16 code units;
+keys start with `trezi:`/`trezi.` or the legacy prefix and are shorter than 200 UTF-16 code units;
 values are `null` or strings of at most 2,000,000 code units. Invalid persisted
 entries are dropped, unknown valid keys are kept, `null` is stored (it is not a
-deletion), a legacy `praxis` key is kept and copied to its `trezi` name when that
+deletion), a legacy-prefixed key is kept and copied to its `trezi` name when that
 is absent. A repeated JSON key keeps its first position and takes its last value.
 Lone surrogates survive. A file that is not `version === 1` with an object
 `values` is refused, as are a BOM and trailing garbage. A deliberate divergence:
@@ -145,7 +145,7 @@ damaged) or the file cannot be read as v1, every request answers
 
 `test/preferences-owner.mjs` (unit tier) compiles the real Swift sources into a
 fixture process and checks, against the legacy Bun owner on real files:
-- Reader/writer parity: unknown keys, `null`, `praxis` copies, repeated keys,
+- Reader/writer parity: unknown keys, `null`, legacy-prefix copies, repeated keys,
   UTF-16 key/value boundaries (astral characters included), lone surrogates,
   invalid UTF-8, and the refused files. Written bytes are identical to Bun's.
 - Import without writing, atomic batches, duplicate receipts, `idempotencyMismatch`,

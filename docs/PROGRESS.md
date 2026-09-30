@@ -2,6 +2,37 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-30 — LKM-132: Trezi names only; the earlier names are read-compat shims
+
+- **Why.** After the LKM-84/85 rename, the Praxis name was still live across Trezi. It was in the XPC service ID, the MCP server and tool names (`mcp__praxis__*`), the `praxis` command, preview IPC aliases, code identifiers, and docs pointing at a `docs/rename/` audit. Old projects kept `.praxis/praxis-*` helpers and `data-praxis-*` stamps with no path forward.
+- **Renamed.**
+  - The service is now `dev.trezi.service`. The build removes any other `.xpc` from `Trezi.app/Contents/XPCServices`, so launchd can't find the old one.
+  - MCP server, tools, plugin and Codex provider ID are `trezi` / `mcp__trezi__*` / `trezi-connection`. A CLI can't call tools of a server that no longer runs, so no old prefix is kept. Old sessions get the Trezi tools on their next turn.
+  - Removed: `bin/praxis`, `bin/praxis-agent-mcp.mjs`, the duplicate `praxis-preview` skill, the preview `praxis:` channel and handler aliases, `__praxisNativeDispatch`, `praxis-media:` tokens and the `praxisSim` flag. Media grants are in-memory, so no old token outlives a launch.
+  - `install.sh` and the README use `alikimovich/trezi`. The installer removes a `~/.local/bin/praxis` link, but only when it points at its own `bin/trezi`.
+  - The service-contract golden uses `trezi:` preference keys.
+  - `docs/rename/` and `scripts/audit-rename.mjs` are deleted.
+- **Kept, on purpose.** Every remaining earlier-name string is a read shim listed with its files in `docs/agent-guide/legacy-names.md` (linked from AGENTS.md). That includes:
+  - the bundle ID `dev.praxis.native` and Keychain service `dev.praxis.native.secrets`: changing them detaches WebKit data, TCC grants and the master key;
+  - `PRAXIS_*` env, and `PRAXIS_HOME`/`~/.praxis` installs through the `TREZI_HOME` fallback;
+  - profile and store aliases, preference keys, work branches, sidecar folders, stamps, React Native test IDs and the replay event.
+
+  The new `test/legacy-names-audit.mjs` (unit) fails when `git grep -i 'praxis|dsgn'` hits a file the page does not list. Tests, PROGRESS/TASKS and `build/Assets.car` are exempt. It also fails when a listed file has no hit left.
+- **Project migration.** New `EditingLegacyNames.swift`, with editing-owner methods `legacyNames`/`migrateNames` that run in the repository lane.
+  - What it rewrites: `.praxis/praxis-*` helpers become `.trezi/trezi-*`, with case-preserving content. `.praxis/` imports, `data-praxis-*` stamps and `praxis:animation-replay` listeners are rewritten in the files `git grep --untracked` finds; a folder outside git gets a bounded walk. Binary, ignored and linked files and the metadata folders are skipped.
+  - Order: new helpers are published first, then references, then the old helpers are retired, so an interrupted run leaves a working, resumable project.
+  - A helper that differs from the current one is kept under `.trezi/legacy/praxis/`.
+  - When: `project:detect` migrates only a clean tree (no meaningful `git status` change). A dirty tree is refused before any file is read, and a folder outside git is never clean. On activation, `src/native/legacy-names.ts` offers a dirty project an "Update files?" sheet once per launch, which calls `project:migrate-names` (confirmed). Nothing is committed.
+- **Proof.**
+  - New `test/legacy-names-migrate.mjs` (unit), against the Swift owner fixture:
+    - a dirty tree is refused byte-for-byte unchanged, and confirmation rewrites it and keeps the user's edit;
+    - a clean tree migrates automatically, keeping a differing helper;
+    - binary files are untouched, and nothing is committed;
+    - a second run changes nothing;
+    - a folder outside git needs confirmation.
+  - `rename-compat`, `sidecar-migrate`, `editing-owner`, `service-contract`, `install-update` (alias removal), `distribution` (single `.xpc`) and `docs-links` pass. `codex-mcp`, `codex-model` and `provider-helper-tools` pass unsandboxed; in the sandbox they can't listen on their Unix socket.
+  - Native smoke, `text-edit` check (`src/native/smoke-legacy-project.ts`): the live fixture gets a `.praxis/praxis-source.cjs` helper and an element with only a `data-praxis-source` stamp. The fixture is not a git repo, so it is never clean and the migration leaves it alone. The check asserts that `project:legacy-names` reports `legacy: true` with the helper listed and `clean: false`, that the preview renders the element after the managed reload, that `sourceStamp` returns the old stamp and nothing restamps it, that `text:apply` on that location edits the element in the preview and `edit:undo` reverts it. It logs `Native legacy project: .praxis/ helper and data-praxis-* stamp open, preview and edit` and restores the fixture afterwards. Not run by the worker (the manager runs GUI checks).
+
 ## 2026-09-30 — LKM-131: Trezi tools work from provider helpers
 
 - **Why.** In Claude chats, `chat_island` answered "Native chat islands are not available." Since LKM-111 the Claude and Codex adapters run in a provider helper, and they still called their Trezi tools in place, where main's services do not exist: the island service, the preview registry, Gen UI state, the window, chat isolation and the workflow owner. The helper host already offered `ctx.tools.invoke`, and the owner already relayed and authorized `tool` frames, but no adapter used them. So in helper mode the preview observers found nothing, Gen UI read as off, `open_preview`/`open_code` went nowhere and `install_skills` had no owner.
@@ -9098,7 +9129,7 @@ Swept the pre-rename `dsgn` name out of the code (~900 occurrences, 111 files):
 `data-praxis-source` / `data-praxis-component-source` stamps (RN testID prefix
 `praxis:`), `.praxis/` sidecar, `PraxisApi`, `praxis/*` work branches,
 `<userData>/praxis` data dir, `PRAXIS_DEBUG_PORT`, `__praxis*` test hooks,
-`mcp__praxis__*` tools. Entries in THIS file keep their historical wording.
+`mcp__trezi__*` tools. Entries in THIS file keep their historical wording.
 
 **Clean break for stamped target repos** (per user call): the old
 `data-dsgn-source` attribute is NOT read anymore — old instrumented repos get
@@ -9475,10 +9506,10 @@ GONE (ChatPanel no longer prepends it; `describePreviewLocationForPrompt`
 removed; `usePreviewLocation` stays for UI). Instead the Claude backend now
 registers Praxis's first in-process SDK tools via `createSdkMcpServer`:
 
-- `mcp__praxis__preview_location` — the agent asks where the user is when the
+- `mcp__trezi__preview_location` — the agent asks where the user is when the
   page actually matters (live SPA URL from the preview webContents; "No project
   preview is open." on the placeholder).
-- `mcp__praxis__preview_screenshot` — exactly what the user sees (their route,
+- `mcp__trezi__preview_screenshot` — exactly what the user sees (their route,
   viewport, simulator): `capturePage()` downscaled to ≤1200px JPEG, returned as
   an MCP image block.
 
