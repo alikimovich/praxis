@@ -14,6 +14,7 @@ import { nativeChat } from './chat-runtime'
 import { checkProjectSwitching } from './smoke-projects'
 import { captureChatGate, checkChatGate, restoreChatGate } from './smoke-chat-gate'
 import { checkNativeSheets } from './smoke-sheets'
+import { checkSecuritySession } from './smoke-session'
 import { checkNativeChat } from './smoke-chat'
 import { checkSelectionInput, preparePreviewInput } from './smoke-input'
 import { formatSmokeSummary, parseInjectedFailures, runSmokeChecks, type SmokeCheck } from './smoke-runner'
@@ -180,6 +181,9 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
       await checkNativeSheets(host,nativeWorkspace.state.activeKey!,artifacts)
     }, cleanup: async () => {
       host.emit('activity-action', { action: 'hide' })
+    } },
+    { name: 'security-session', run: async () => {
+      await checkSecuritySession(host, artifacts)
     } },
     { name: 'shell-layout', dependsOn: ['open-project'], run: async () => {
       if (process.env.TREZI_NATIVE_BACKGROUND_TEST !== '1') await preparePreviewInput(host)

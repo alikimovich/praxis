@@ -41,6 +41,10 @@ if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--crypto" {
         FileHandle.standardOutput.write(output); exit(0)
     } catch { exit(1) }
 }
+if CommandLine.arguments.count == 2 && CommandLine.arguments[1] == "--session" {
+    if let data = try? JSONSerialization.data(withJSONObject: SecuritySessionProbe.report()) { FileHandle.standardOutput.write(data) }
+    exit(0)
+}
 
 final class Canvas: NSView { var changed: (() -> Void)?; override var isFlipped: Bool { true }; override func layout() { super.layout(); changed?() } }
 final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate {
@@ -199,6 +203,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "preferences":
             preferences = c["values"] as? [String: Any] ?? [:]
         case "webViews": reply(id, views.keys.sorted())
+        case "securitySession": reply(id, SecuritySessionProbe.report())
         case "previewInspector":
             if let action = c["action"] as? String { reply(id, PreviewInspector.perform(action, on: views["preview"])) }
             else { reply(id, PreviewInspector.status(views["preview"])) }
