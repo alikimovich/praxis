@@ -3,6 +3,15 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Codex seat: supported default model and MCP isolation (LKM-126)
+
+- [x] A seat turn rejected with "not supported when using Codex with a ChatGPT account" falls back to the next listed model, says so in a status line, and keeps it for the chat (`src/main/backends/codex-model.ts`).
+- [x] The rejection is remembered in-process and in main (read from the helper's status line). Later chats and Default skip the model, and the picker and persisted catalog drop it until the next probe. With every model rejected, the turn ends in a clear error.
+- [x] Personal MCP root cause: plugin `.mcp.json` servers (mcp.vercel.com) and `apps` connectors are outside `mcp_servers`. `isolatedCodexConfig` now also sends `features.plugins=false` and `features.apps=false`, for both the in-process and helper paths.
+- [x] Tests: `test/codex-mcp.mjs` (installed-plugin fixture against the real CLI) and `test/codex-model.mjs` (stand-in CLI, in-process and helper, fallback, memory, picker, clear message, real-CLI MCP inventory per run).
+- [ ] Operator: after merge, rerun `TREZI_LIVE_PROVIDERS=1 bun run test:provider-live` (LKM-113 part 2).
+- [ ] Manager: run `test/codex-mcp.mjs` and `test/codex-model.mjs` unsandboxed. The worker sandbox refuses the Trezi tool bridge's Unix socket.
+
 ## Inspector as a floating island over the preview (LKM-122)
 
 - [x] `NativeEditingInspector` is a Liquid Glass island (composer inset 10, radius 24; `NSVisualEffectView` popover before macOS 26) floating on the preview's right edge. `WorkspaceLayout` no longer subtracts it from the preview, so opening or closing it never reflows the page.

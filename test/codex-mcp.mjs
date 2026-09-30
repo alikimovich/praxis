@@ -1,7 +1,7 @@
 // Real MCP handshake + Codex inventory, with no model request or account access.
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -37,10 +37,32 @@ try {
   // The user's own ~/.codex declares MCP servers (a Vercel-style URL server and a stdio
   // one). Trezi's sessions must switch them off; only undeclared names would break.
   const env = { CODEX_HOME: home }
-  assert.deepEqual(isolatedCodexConfig(config, env), config, 'no personal config, no change')
+  // Plugins and apps bring servers from outside `mcp_servers`: always off (LKM-126).
+  const features = { plugins: false, apps: false }
+  const unchanged = { ...config, features }
+  assert.deepEqual(isolatedCodexConfig(config, env), unchanged, 'no personal config, no servers')
   await writeFile(join(home, 'config.toml'), 'not = [valid')
-  assert.deepEqual(isolatedCodexConfig(config, env), config, 'an unreadable config adds nothing')
+  assert.deepEqual(isolatedCodexConfig(config, env), unchanged, 'an unreadable config adds nothing')
+  assert.deepEqual(
+    isolatedCodexConfig({ features: { plugins: true, shell_tool: true } }, env).features,
+    { plugins: false, apps: false, shell_tool: true },
+    "a caller's features are kept, but plugins and apps stay off"
+  )
   const personal = ['vercel', 'personal-stdio']
+  // An installed plugin, laid out as `codex plugin add` leaves it: its `.mcp.json`
+  // server (the mcp.vercel.com one in the report) is not in `mcp_servers`.
+  const plugin = join(home, 'plugins/cache/fixture/vercel/1.0.0')
+  await mkdir(join(plugin, '.codex-plugin'), { recursive: true })
+  await writeFile(
+    join(plugin, '.codex-plugin/plugin.json'),
+    JSON.stringify({ name: 'vercel', version: '1.0.0', mcpServers: './.mcp.json' })
+  )
+  await writeFile(
+    join(plugin, '.mcp.json'),
+    JSON.stringify({
+      mcpServers: { 'vercel-plugin': { type: 'http', url: 'http://127.0.0.1:9/mcp' } }
+    })
+  )
   await writeFile(
     join(home, 'config.toml'),
     [
@@ -49,6 +71,9 @@ try {
       '',
       '[mcp_servers.personal-stdio]',
       'command = "false"',
+      '',
+      '[plugins."vercel@fixture"]',
+      'enabled = true',
       ''
     ].join('\n')
   )
@@ -59,6 +84,7 @@ try {
     'personal-stdio': { enabled: false },
     praxis: config.mcp_servers.praxis
   })
+  assert.deepEqual(isolated.features, features)
 
   const codexBin = new Codex().exec.executablePath
   const flatten = (value, path = '', overrides = []) => {
@@ -82,8 +108,10 @@ try {
   // Baseline: the CLI does load the fixture, and merely adding Trezi's server keeps it.
   const merged = listed(flatten(config))
   for (const name of personal) assert.equal(merged[name], true, `${name} loads without isolation`)
+  assert.equal(merged['vercel-plugin'], true, 'the plugin server loads without isolation')
   const loaded = listed(flatten(isolated))
   for (const name of personal) assert.equal(loaded[name], false, `${name} is switched off`)
+  assert.equal(loaded['vercel-plugin'], undefined, 'the plugin server is not loaded at all')
   assert.equal(loaded.praxis, true, "Trezi's server stays on")
 
   // Use the exact production config and SDK-selected CLI, not a substitute server.
@@ -126,7 +154,7 @@ try {
     approvalPolicy: 'never'
   })
   const status = await request('mcpServerStatus/list', { threadId: thread.id })
-  for (const name of personal) {
+  for (const name of [...personal, 'vercel-plugin']) {
     const entry = status.data.find((candidate) => candidate.name === name)
     assert.equal(entry?.runtimeStatus ?? 'disabled', 'disabled', `the session never starts ${name}`)
     assert.equal(Object.keys(entry?.tools ?? {}).length, 0, `${name} exposes no tools`)

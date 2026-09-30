@@ -37,6 +37,7 @@ const UNIT = [
   "native-boundary",
   "trezi-agent-tools",
   "codex-mcp",
+  "codex-model",
   "native-bridge-close",
   "native-service-launch",
   "native-supervised-bridge",
