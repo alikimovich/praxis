@@ -143,11 +143,6 @@ for (const width of [680, 780]) {
     text: ['General', 'Al Providers', 'Experimental', 'General', 'Default model', 'New chats start with this model.', 'Use last selected model']
   }
   assertSectionEvidence(general, width, 'general')
-  // Verbatim OCR from the manager's foreground General capture (LKM-127): the pixels render
-  // "Default model"; Vision returned "Detault model". Only the f/t pair folds.
-  const ocrRead = structuredClone(general)
-  ocrRead.text = ['General', 'Al Providers', 'BE Experimental', 'General', 'General', 'Changes save automatically.', 'Detault model', 'New chats start with this model.', 'Use last selected model']
-  assertSectionEvidence(ocrRead, width, 'general')
   const providers = {
     ...structuredClone(general),
     ...sidebar('providers'),
@@ -173,13 +168,21 @@ for (const width of [680, 780]) {
   reject(general, 'general', (e) => e.controls.push(control('projectUi', 'Off')))
   reject(general, 'general', (e) => (e.text = e.text.filter((line) => line !== 'Experimental')))
   reject(general, 'general', (e) => (e.text[5] = 'New chats start with'))
-  reject(general, 'general', (e) => (e.text[4] = 'Detault modal'))
-  reject(general, 'general', (e) => (e.text[4] = 'model'))
   reject(general, 'general', (e) => (e.sidebarSelected = 1))
   reject(general, 'general', (e) => (e.foreground = false))
   reject(providers, 'providers', (e) => (e.text = e.text.slice(0, 4)))
   reject(providers, 'providers', (e) => e.controls.push(control('default', 'Use last selected model')))
   reject(providers, 'providers', (e) => (e.section = 'general'))
+  // Verbatim OCR from the manager's General capture (settings-visible-680-general): the
+  // pixels show "Default model"; Vision returned "Detault model" (f read as t). Must
+  // pass, while a missing or different word must still fail.
+  const misread = structuredClone(general)
+  misread.text = misread.text.map((line) => line.replace('Default model', 'Detault model'))
+  assert.ok(misread.text.includes('Detault model'))
+  assertSectionEvidence(misread, width, 'general')
+  reject(misread, 'general', (e) => (e.text[4] = 'Model'))
+  reject(misread, 'general', (e) => (e.text[4] = 'Detault'))
+  reject(misread, 'general', (e) => (e.text[4] = 'Detault models'))
 }
 // Verbatim OCR lines from the manager's earlier foreground Off capture (the pixels
 // render "UI"/"AI" correctly; Vision returned "Ul"/"Al"). Must still pass.

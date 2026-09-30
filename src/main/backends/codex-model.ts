@@ -16,16 +16,43 @@
 
 const SLUG = '[A-Za-z0-9][A-Za-z0-9._:-]{0,127}'
 const REJECTED = new RegExp(
-  `The '(${SLUG})' model is not supported when using Codex with a ChatGPT account`,
+  `The ['‘’"](${SLUG})['‘’"] model is not supported when using Codex with a ChatGPT account`,
   'i'
 )
 const NOTICE = new RegExp(
   `^Codex: (${SLUG}) isn't available with your ChatGPT login, so this chat uses (${SLUG})\\.$`
 )
 
-/** The model a Codex error rejected for this login, or null for any other error. */
-export function unsupportedCodexModel(message: string): string | null {
-  return REJECTED.exec(message)?.[1] ?? null
+/**
+ * The model a Codex error rejected for this login, or null for any other error.
+ *
+ * The real CLI (0.159.1, LKM-128) reports the rejection in its stream `error` events
+ * (and possibly `turn.failed`) as the API's JSON body,
+ * `{"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The '…' model is not supported…"}}`,
+ * while the exec error says only "Reading prompt from stdin...". So this takes a
+ * message, an event or its `error`, and looks through JSON text and nested
+ * `message`/`detail`/`error` fields (bounded) as well as the text itself.
+ */
+export function unsupportedCodexModel(payload: unknown, depth = 0): string | null {
+  if (depth > 4 || payload == null) return null
+  if (typeof payload === 'string') {
+    const found = REJECTED.exec(payload)?.[1]
+    if (found) return found
+    const start = payload.indexOf('{')
+    if (start < 0) return null
+    try {
+      return unsupportedCodexModel(JSON.parse(payload.slice(start)), depth + 1)
+    } catch {
+      return null
+    }
+  }
+  if (typeof payload !== 'object') return null
+  const fields = payload as Record<string, unknown>
+  for (const key of ['message', 'detail', 'error']) {
+    const found = unsupportedCodexModel(fields[key], depth + 1)
+    if (found) return found
+  }
+  return null
 }
 
 /** The status line a fallback turn shows; main reads it back with `parseCodexFallback`. */
