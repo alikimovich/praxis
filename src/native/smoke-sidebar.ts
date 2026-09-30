@@ -43,6 +43,7 @@ export async function withSidebarCleanup(host: FocusHost, body: () => Promise<vo
 /** Runs in checkProjectSwitching's two-project fixture, inside the normal native suite. */
 export async function checkVisibleSidebar(host: NativeBridge, artifacts: string) {
   const initial = await host.request('shellInspect')
+  assert.deepEqual(initial.sidebarActions, ['new-project', 'open-project'], 'No Settings gear in the sidebar')
   const entries = [...nativeWorkspace.state.projects]
   assert.equal(entries.length, 2, 'Sidebar fixture requires two projects')
   const rowID = (key: string) => `project:${key}`

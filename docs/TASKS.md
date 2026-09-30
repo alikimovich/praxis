@@ -3,6 +3,15 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Standard macOS Settings window with a sidebar (LKM-121)
+
+- [x] Source-list sidebar with SF Symbols (General, AI Providers, Experimental); detail pane with large title and grouped rows (label and description left, control right).
+- [x] General: default model. AI Providers: the providers sheet inline (button and sheet removed). Experimental: Gen UI, explanation, engine. Keys and autosave unchanged.
+- [x] Window remembers the last selected section (`trezi:settings-section:v1`).
+- [x] Gear removed from the main sidebar; Settings opens from Trezi → Settings… / Command-, with and without a project.
+- [x] Foreground captures of every section at the minimum and default size, the no-project open and the gear-free sidebar.
+- [ ] Back/forward buttons (skipped; optional in the issue).
+
 ## GitHub CI green for the native app (LKM-117)
 
 - [x] `.github/workflows/ci.yml` runs on `macos-26` (Xcode 26, macOS 26 SDK, asserted by `bun scripts/requirements.mjs --build`): frozen install, `typecheck`, `typecheck:native`, unit tier with `--timeout-ms=120000`. No native GUI or live tier.
