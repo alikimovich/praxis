@@ -3,6 +3,11 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Inspector as a floating island over the preview (LKM-122)
+
+- [x] `NativeEditingInspector` is a Liquid Glass island (composer inset 10, radius 24; `NSVisualEffectView` popover before macOS 26) floating on the preview's right edge. `WorkspaceLayout` no longer subtracts it from the preview, so opening or closing it never reflows the page.
+- [x] The island's height is the preview area minus the insets (above a docked source editor, below the toolbar); its fields scroll inside it. Dragging its left edge resizes it within 220–500, saved through `native-layout-sizes`.
+- [x] Core smoke `inspector` runs `src/native/smoke-inspector-island.ts`: equal preview frames open/closed at the default and minimum windows, the clamped saved resize, toolbar clearance, hit targets around the island and scrolling at the minimum size. Evidence: `inspector-island-{default,narrow}-{open,closed}.png`, `inspector-island.json`.
 ## Claude seat: login detection and stuck turns (LKM-119)
 
 - [x] Helper environment: allowlist unchanged, `USER`/`LOGNAME`/`HOME` from the account record and a default `PATH`; same cwd. Root-cause note in `docs/PROVIDERS.md`.

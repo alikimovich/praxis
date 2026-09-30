@@ -212,6 +212,10 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "inspectorState": editingInspector.update(c["state"] as? [String: Any] ?? [:]); nativeLayout.layout()
         case "inspectorInspect": reply(id, ["native":true, "visible":!editingInspector.isHidden, "fields":editingInspector.model.state?.fields.count ?? 0, "error":editingInspector.model.state?.error ?? "", "generation":editingInspector.model.state?.generation ?? 0])
         case "inspectorPerform": guard ephemeral else { return }; emit((c["action"] as? [String: Any] ?? [:]).merging(["event":"inspector-action"]) { _, new in new }); reply(id)
+        case "inspectorIsland":
+            guard ephemeral else { reply(id, error: "Test profile required"); return }
+            if c["capture"] as? Bool == true { Task { @MainActor in do { reply(id, try await captureInspectorIsland()) } catch { reply(id, error: error.localizedDescription) } } }
+            else { reply(id, verifyInspectorIsland(c)) }
         case "layersState": layers.update(c["state"] as? [String: Any] ?? [:]); nativeLayout.layout()
         case "layersInspect": reply(id, ["native":true, "visible":!layers.isHidden, "count":layers.nodes.count])
         case "sourceActive":

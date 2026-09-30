@@ -1,0 +1,169 @@
+import assert from 'node:assert/strict'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import type { NativeBridge } from './bridge'
+import { waitFor } from './smoke-wait'
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+type Rect = { x: number; y: number; width: number; height: number }
+// biome-ignore lint/suspicious/noExplicitAny: host inspection payloads are untyped JSON
+type Island = any
+const near = (a: number, b: number, label: string) =>
+  assert.ok(Math.abs(a - b) < 0.5, `${label}: ${a} vs ${b}`)
+const sameRect = (a: Rect, b: Rect, label: string) => {
+  for (const key of ['x', 'y', 'width', 'height'] as const) near(a[key], b[key], `${label} ${key}`)
+}
+
+/** The open island floats inside the preview area, below the toolbar, and only its own frame takes the pointer. */
+function checkOpen(state: Island, label: string) {
+  const { island, area, inset } = state
+  assert.ok(
+    state.visible && island.width > 0 && island.height > 0,
+    `${label}: island visible ${JSON.stringify(island)}`
+  )
+  near(state.cornerRadius, 24, `${label} corner radius`)
+  near(inset, 10, `${label} inset`)
+  near(island.x + island.width, area.x + area.width - inset, `${label} right inset`)
+  near(island.y, area.y + inset, `${label} top inset`)
+  near(island.y + island.height, area.y + area.height - inset, `${label} bottom inset`)
+  assert.ok(
+    island.x >= area.x + inset - 0.5,
+    `${label}: the island stays over the preview ${JSON.stringify({ island, area })}`
+  )
+  near(island.width, Math.min(state.inspectorWidth, area.width - 2 * inset), `${label} width`)
+  assert.ok(
+    state.toolbarGap >= inset - 0.5,
+    `${label}: the island clears the toolbar and address bar (${state.toolbarGap})`
+  )
+  assert.equal(state.hits.inside, 'inspector', `${label}: inside the island`)
+  assert.equal(state.hits.above, 'preview', `${label}: above the island reaches the preview`)
+  if (state.hits.left)
+    assert.equal(state.hits.left, 'preview', `${label}: left of the island reaches the preview`)
+  assert.equal(state.hits.edge, 'divider', `${label}: the left edge resizes`)
+}
+
+/** LKM-122: the inspector floats over the preview's right edge; the preview keeps its
+ *  width open and closed, at the default and minimum window sizes. */
+export async function checkInspectorIsland(
+  host: NativeBridge,
+  artifacts: string,
+  toggle: () => void,
+  saved: () => string | null
+) {
+  const island = (params: Record<string, unknown> = {}): Promise<Island> =>
+    host.request('inspectorIsland', params)
+  const foreground = process.env.TREZI_NATIVE_BACKGROUND_TEST !== '1'
+  const evidence: Record<string, unknown> = {}
+  const capture = async (stem: string, state: Island) => {
+    evidence[stem] = state
+    if (!foreground) {
+      console.log(
+        `SKIP foreground ${stem} capture: TREZI_NATIVE_BACKGROUND_TEST (offscreen capture saved instead)`
+      )
+      writeFileSync(
+        join(artifacts, `${stem}.png`),
+        Buffer.from(await host.request('captureShell'), 'base64')
+      )
+      return
+    }
+    await island({ prepare: true })
+    await delay(350)
+    const image = await island({ capture: true })
+    writeFileSync(join(artifacts, `${stem}.png`), Buffer.from(image.png, 'base64'))
+  }
+  const setOpen = async (open: boolean) => {
+    if ((await island()).visible !== open) toggle()
+    await waitFor(
+      async () => (await island()).visible === open,
+      `inspector ${open ? 'open' : 'closed'}`
+    )
+    await delay(150)
+  }
+  const initial = await island()
+  const restore = { windowWidth: initial.window.width, windowHeight: initial.window.height }
+  try {
+    for (const [name, size] of [
+      ['default', restore],
+      ['narrow', { windowWidth: initial.minWindow.width, windowHeight: initial.minWindow.height }]
+    ] as const) {
+      await island(size)
+      await setOpen(true)
+      const open = await island()
+      evidence[`${name}-open-state`] = open
+      checkOpen(open, name)
+      await capture(`inspector-island-${name}-open`, open)
+      await setOpen(false)
+      const closed = await island()
+      assert.deepEqual(closed.island, { x: 0, y: 0, width: 0, height: 0 })
+      assert.deepEqual(closed.hits, {})
+      sameRect(
+        open.preview,
+        closed.preview,
+        `${name}: the preview frame is the same open and closed`
+      )
+      await capture(`inspector-island-${name}-closed`, closed)
+      await setOpen(true)
+      if (name === 'default') {
+        // Drag the left edge both ways past the limits: the width clamps to 220…500 and is saved.
+        const start = open.inspectorWidth
+        for (const [delta, expected] of [
+          [-1000, 500],
+          [1000, 220],
+          [220 - start, start]
+        ]) {
+          const dragged = await island({ drag: delta })
+          near(dragged.inspectorWidth, expected, `drag ${delta}`)
+          checkOpen(dragged, `drag ${delta}`)
+          sameRect(dragged.preview, open.preview, `drag ${delta}: the preview does not change`)
+          await waitFor(() => {
+            try {
+              return JSON.parse(saved() ?? '{}').inspector === expected
+            } catch {
+              return false
+            }
+          }, `inspector width ${expected} saved`)
+          evidence[`drag ${delta}`] = {
+            inspectorWidth: dragged.inspectorWidth,
+            island: dragged.island,
+            preview: dragged.preview
+          }
+        }
+      } else {
+        // Minimum window: the island's height fits the preview area and its fields scroll inside it.
+        const small = await island({ scroll: true })
+        const { scroll } = small
+        assert.ok(scroll, 'The island has its own scroll view')
+        assert.ok(
+          scroll.frame.y >= small.island.y &&
+            scroll.frame.y + scroll.frame.height <= small.island.y + small.island.height + 0.5,
+          `The scroll view sits inside the island: ${JSON.stringify({ scroll, island: small.island })}`
+        )
+        assert.ok(
+          scroll.document > scroll.visible && scroll.scrolled > 0,
+          `The fields scroll at the minimum window size: ${JSON.stringify(scroll)}`
+        )
+        evidence.minimumScroll = scroll
+        // At its minimum width the island leaves the preview's left side exposed and pointable.
+        const start = small.inspectorWidth
+        const narrowest = await island({ drag: 1000 })
+        evidence.minimumNarrowest = narrowest
+        near(narrowest.inspectorWidth, 220, 'narrow drag')
+        checkOpen(narrowest, 'narrow drag')
+        sameRect(narrowest.preview, open.preview, 'narrow drag: the preview does not change')
+        assert.equal(
+          narrowest.hits.left,
+          'preview',
+          'narrow drag: left of the island reaches the preview'
+        )
+        near((await island({ drag: 220 - start })).inspectorWidth, start, 'narrow drag back')
+      }
+    }
+    await setOpen(false)
+  } finally {
+    await island(restore)
+    writeFileSync(join(artifacts, 'inspector-island.json'), JSON.stringify(evidence, null, 2))
+  }
+  console.log(
+    'Native inspector island: preview width unchanged open/closed at default and minimum widths, 220–500 saved resize, toolbar clearance, pointer targets and scrolling pass.'
+  )
+}

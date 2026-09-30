@@ -15,6 +15,8 @@ final class WorkspaceLayout {
     private var layingOut = false
     private var lastFrame = NSRect.zero
     private var lastLeading: CGFloat = -1
+    /// The area right of the chat and above a docked source editor; the inspector island floats inside it.
+    private(set) var previewArea = NSRect.zero
     init(host: Host) {
         self.host = host
         for divider in [sourceDivider, layersDivider, inspectorDivider] { divider.isHidden = true; host.canvas.addSubview(divider) }
@@ -91,14 +93,18 @@ final class WorkspaceLayout {
         dividerState["bounds"] = ["x":0, "y":0, "width":Double(leading), "height":Double(bounds.height)]
         host.chatDivider.update(dividerState)
         host.chatDivider.isHidden = host.chat.isHidden || fraction < 1
-        let right: CGFloat = host.editingInspector.isHidden ? 0 : min(inspectorWidth, max(200, bounds.width - leading - 120))
+        // No docked column takes width from the preview: the inspector floats over it.
+        let right: CGFloat = 0
         let bottom = host.dockedSource != nil ? min(sourceHeight, bounds.height * 0.8) : 0
         host.dockedSource?.frame = NSRect(x: leading, y: bounds.height - bottom, width: max(0, bounds.width - leading), height: bottom)
-        host.editingInspector.frame = NSRect(x: bounds.width - right, y: 0, width: right, height: max(0, bounds.height - bottom))
         let available = NSRect(x: leading, y: 0, width: max(0, bounds.width - leading - right), height: max(0, bounds.height - bottom))
         // Opening and failed-open states own the whole content area, the chat column included.
         host.previewStatus.frame = chatReady ? available : NSRect(x: 0, y: 0, width: available.maxX, height: available.height)
         var page = available
+        previewArea = available
+        // The inspector floats over the preview, so opening it never reflows the page.
+        let island = NativeEditingInspector.frame(in: available, width: inspectorWidth, visible: !host.editingInspector.isHidden)
+        host.editingInspector.frame = island
         let mobile = shellState["viewport"] as? String == "mobile"
         // Opening, setup and error own the content area: the last project's page must not cover them.
         let shown = previewVisible && host.previewStatus.isHidden
@@ -117,7 +123,9 @@ final class WorkspaceLayout {
         }
         sourceDivider.isHidden = bottom == 0; sourceDivider.frame = NSRect(x: leading, y: bounds.height - bottom - 3, width: bounds.width - leading, height: 6)
         layersDivider.isHidden = host.layers.isHidden; layersDivider.frame = NSRect(x: 0, y: host.layers.frame.maxY - 3, width: leading, height: 6)
-        inspectorDivider.isHidden = right == 0; inspectorDivider.frame = NSRect(x: bounds.width - right - 3, y: 0, width: 6, height: bounds.height - bottom)
+        // Straddles the island's left edge below and above its rounded corners.
+        let corner = min(NativeEditingInspector.cornerRadius, island.height / 2)
+        inspectorDivider.isHidden = island.width == 0; inspectorDivider.frame = NSRect(x: island.minX - 3, y: island.minY + corner, width: 6, height: max(0, island.height - 2 * corner))
         for divider in [sourceDivider, layersDivider, inspectorDivider] { host.canvas.addSubview(divider, positioned: .above, relativeTo: nil); divider.window?.invalidateCursorRects(for: divider) }
         // The isolated preview owns the single readout, using CSS viewport pixels.
         host.previewSurface.needsDisplay = true
