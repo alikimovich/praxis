@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## provider-login test independent of the machine's keychain (LKM-127)
+
+- [x] Every `test/provider-login.mjs` fixture gets a stand-in `security` through `--claude-security=` unless a part names one; no report depends on the default login keychain. No production change.
+- [x] New `real-keychain` part: `/usr/bin/security` from the test and through Check login must agree (list, default, item lookup); with no user keychain it prints `PROVIDER-LOGIN real-keychain SKIP` and both exit codes. No keychain is created and the search list is never changed.
+- [x] Native `sheets` smoke: Settings OCR check tolerates Vision reading "Default model" as "Detault model" (`f`/`t` fold in `src/native/settings-verification.ts`, cases in `test/native-settings-evidence.mjs`).
+- [ ] Manager: the next candidate CI run is green on `macos-26` (the CI failure itself was not reproduced locally, see PROGRESS).
 ## Codex model fallback: detect the real CLI error stream (LKM-128)
 
 - [x] Detect the rejection in stream `error` and `turn.failed` events (JSON body with nested `error.message`) and in the exec error (`unsupportedCodexModel`).
