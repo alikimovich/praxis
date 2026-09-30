@@ -12,6 +12,10 @@
 // - parent-session (LKM-124): a Trezi started from a Claude Code or Codex session; its
 //   runtime variables (CLAUDE_CODE_SIMPLE, CLAUDECODE, CODEX_SANDBOX, …) never reach a
 //   helper, user settings do, Check login lists the names, and the setup-token still works;
+// - keychain: the Keychain and credentials-file probes against a fake `security` (every
+//   other part gets a fixture `security` too, LKM-127);
+// - real-keychain: the real `security` against this session's keychains, or SKIP when the
+//   session has no user keychain (headless CI);
 // - card: the chat's login card (steps, Check login, Retry) and the pure classifiers.
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
@@ -74,9 +78,18 @@ const cli = (name, script) => {
 const loggedOut = cli('logged-out', `echo '{"loggedIn":false,"authMethod":"none"}'; exit 1`)
 const loggedIn = cli('logged-in', `echo '{"loggedIn":true,"authMethod":"claude.ai"}'`)
 const invalid = cli('invalid', `echo 'Invalid API key · Please run /login' >&2; exit 1`)
+// The `security` every fixture gets unless a part names another (LKM-127): the report
+// never depends on this machine's keychains; `real-keychain` exercises the real one.
+const fixtureSecurity = cli(
+  'security-fixture',
+  `case "$1" in find-generic-password) exit 44;; *) echo '    "/fixture/login.keychain-db"';; esac`
+)
 
-/** `bundled`/`installed`/`security` name the stand-in tools (helper arguments); the rest is the fixture's environment. */
-async function fixture({ bundled, installed, security, ...env } = {}) {
+/**
+ * `bundled`/`installed`/`security` name the stand-in tools (helper arguments); the rest is
+ * the fixture's environment. `security: null` lets the helper find `security` on its PATH.
+ */
+async function fixture({ bundled, installed, security = fixtureSecurity, ...env } = {}) {
   const home = join(scratch, `p-${++count}`)
   mkdirSync(home)
   const args = [
@@ -345,9 +358,6 @@ try {
     })
     assert.deepEqual(absent.keychain, { listKeychains: null, defaultKeychain: null })
     assert.match(absent.detail, /list-keychains did not run/)
-    // The real `security` in this environment: a number or null, whatever the session.
-    for (const code of Object.values(missing.keychain))
-      assert.ok(code === null || Number.isInteger(code))
     const none = await check({}, 'fake')
     assert.deepEqual([none.provider, none.loggedIn], ['fake', null])
     assert.match(none.detail, /no login check/)
@@ -526,6 +536,7 @@ esac
     const probe = async (home, exit) => {
       const run = await fixture({
         bundled: loggedOut,
+        security: null,
         HOME: home,
         CLAUDE_CONFIG_DIR: '',
         PATH: `${secBins[exit]}:${process.env.PATH}`
@@ -610,6 +621,60 @@ esac
       'no call asks for the secret'
     )
     console.log('PROVIDER-LOGIN keychain PASS')
+  }
+
+  // The real `/usr/bin/security` against this session's own keychains (LKM-127): the helper
+  // sees what this process sees. A session with no user keychain (a headless CI runner)
+  // cannot exercise it, so the part says SKIP and why; it never passes on a fake.
+  {
+    const SECURITY = '/usr/bin/security'
+    const real = (args, capture) =>
+      spawnSync(SECURITY, args, {
+        encoding: 'utf8',
+        timeout: 4000,
+        stdio: ['ignore', capture ? 'pipe' : 'ignore', 'ignore']
+      })
+    const list = real(['list-keychains', '-d', 'user'], true)
+    const fallback = real(['default-keychain'], true)
+    const line = (run) =>
+      (run.stdout ?? '')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .join(' ')
+        .slice(0, 500)
+    if (list.status !== 0 || fallback.status !== 0 || !line(fallback)) {
+      const exit = (run) =>
+        run.status === null
+          ? `did not run (${run.error?.code ?? run.signal})`
+          : `exit ${run.status}`
+      console.log(
+        `PROVIDER-LOGIN real-keychain SKIP — no usable user keychain in this session (security list-keychains ${exit(list)}, default-keychain ${exit(fallback)}), so the real Keychain probe is not exercised here; the fake-security parts above still ran`
+      )
+    } else {
+      const run = await fixture({ bundled: loggedOut, security: SECURITY })
+      try {
+        const report = await run.owner.data.checkLogin('claude', WT)
+        const find = real(['find-generic-password', '-s', 'Claude Code-credentials'], false)
+        assert.deepEqual(report.keychain, { listKeychains: 0, defaultKeychain: 0 }, report.detail)
+        assert.equal(report.keychainList, line(list) || 'none')
+        assert.equal(report.keychainDefault, line(fallback))
+        // The item lookup matches this process's (null only if one of them timed out).
+        if (find.status !== null && report.keychainItemExit !== null)
+          assert.equal(report.keychainItemExit, find.status)
+        assert.equal(
+          report.keychainItem,
+          report.keychainItemExit === null ? null : report.keychainItemExit === 0
+        )
+        assert.match(
+          report.detail,
+          /Keychain in this helper: security list-keychains exit 0; security default-keychain exit 0\n/
+        )
+      } finally {
+        await stop(run)
+      }
+      console.log('PROVIDER-LOGIN real-keychain PASS')
+    }
   }
 
   // The chat's login card, and the classifiers the helper uses.

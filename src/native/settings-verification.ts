@@ -164,11 +164,14 @@ export function assertSettingsEvidence(
 // Normalize typography only; every word is still required, in order.
 // SF Pro draws capital I and lowercase l as the same glyph, so Vision reads the
 // rendered "UI"/"AI" as "Ul"/"Al". Fold only that pair before lowercasing; a
-// dotted lowercase i stays distinct. Every comparison goes through words().
+// dotted lowercase i stays distinct. Vision also reads the small "f" of the General
+// pane's "Default model" as "t" ("Detault model", LKM-127); fold that pair the same way.
+// Every comparison goes through words().
 function words(text: string): string[] {
   return text
     .replace(/I/g, 'l')
     .toLowerCase()
+    .replace(/f/g, 't')
     .replace(/[’']/g, '')
     .split(/[^a-z0-9]+/)
     .filter(Boolean)

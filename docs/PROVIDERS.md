@@ -502,6 +502,14 @@ readability, size and mode, that only `find-generic-password -s`, `list-keychain
 and `default-keychain` are called (no `-w`/`-g`), and that neither the keychain secret nor
 the file's content appears in the report, the service log or the pipe.
 
+Since LKM-127 every other part of that test also gets a stand-in `security`
+(`--claude-security=`), so no result depends on the machine's keychains. Its
+`real-keychain` part runs `/usr/bin/security` from the test and through Check login and
+requires the same list, default and item-lookup result. When the session has no user
+keychain (`list-keychains` or `default-keychain` fails, as on a headless runner) that part
+prints `PROVIDER-LOGIN real-keychain SKIP` with both exit codes instead of passing. The
+test never creates a keychain or changes the search list.
+
 ## The service keeps the user's security session (LKM-125)
 
 **Symptom.** Save token (Settings → AI Providers → Claude…) and adding or updating a
