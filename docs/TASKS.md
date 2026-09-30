@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Web Inspector must not cover the chat (LKM-129)
+
+- [x] The preview's inspector attachment view (WebKit SPI `_setInspectorAttachmentView:`) sits in `PreviewInspectorSlot` (`src/native/Inspector.swift`), sized to the preview area, so a docked Web Inspector stays right of the chat and below the toolbar and resizes with the preview. The page and the LKM-122 island take the rest of the area. No detached fallback was needed.
+- [x] `show` no longer calls `detach` first (it did nothing before the first open, so the inspector opened docked over the whole window). Open, close, show again and the ⌥⌘I / ⌥⌘C shortcuts are unchanged.
+- [x] Core smoke `preview-inspector` runs `src/native/smoke-preview-inspector.ts`: the docked frame lies within the preview area and clears the chat column and page at the default, minimum, wider and restored window sizes, with the island open. Chat and inspector hit targets, and the page after closing, are checked too. Evidence: `preview-inspector-docked.png`, `preview-inspector.json`.
+
 ## provider-login test independent of the machine's keychain (LKM-127)
 
 - [x] Every `test/provider-login.mjs` fixture gets a stand-in `security` through `--claude-security=` unless a part names one; no report depends on the default login keychain. No production change.

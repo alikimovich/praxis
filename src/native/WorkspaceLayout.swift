@@ -15,7 +15,8 @@ final class WorkspaceLayout {
     private var layingOut = false
     private var lastFrame = NSRect.zero
     private var lastLeading: CGFloat = -1
-    /// The area right of the chat and above a docked source editor; the inspector island floats inside it.
+    /// The area right of the chat, above a docked source editor and beside a docked Web
+    /// Inspector; the inspector island floats inside it.
     private(set) var previewArea = NSRect.zero
     init(host: Host) {
         self.host = host
@@ -97,7 +98,10 @@ final class WorkspaceLayout {
         let right: CGFloat = 0
         let bottom = host.dockedSource != nil ? min(sourceHeight, bounds.height * 0.8) : 0
         host.dockedSource?.frame = NSRect(x: leading, y: bounds.height - bottom, width: max(0, bounds.width - leading), height: bottom)
-        let available = NSRect(x: leading, y: 0, width: max(0, bounds.width - leading - right), height: max(0, bounds.height - bottom))
+        // A docked Web Inspector lives in this slot (never over the chat); the page and island take the rest.
+        host.inspectorSlot.frame = NSRect(x: leading, y: 0, width: max(0, bounds.width - leading - right), height: max(0, bounds.height - bottom))
+        host.inspectorSlot.fit()
+        let available = host.canvas.convert(host.inspectorSlot.page, from: host.inspectorSlot)
         // Opening and failed-open states own the whole content area, the chat column included.
         host.previewStatus.frame = chatReady ? available : NSRect(x: 0, y: 0, width: available.maxX, height: available.height)
         var page = available

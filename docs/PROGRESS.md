@@ -2,6 +2,12 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-30 — LKM-129: the docked Web Inspector stays in the preview area
+
+- **Why.** A docked Web Inspector spanned the whole window bottom, over the chat. WebKit docks beside the page's *attachment view*, inside that view's superview, and resizes both to that superview's bounds. The default attachment view was the preview `WKWebView`, and its superview is the window's content canvas. The `detach` sent before `show` did nothing before the first open, so the inspector opened docked.
+- **Fix.** `PreviewInspector.confine` points `_setInspectorAttachmentView:` (guarded SPI) at an empty view inside `PreviewInspectorSlot`. The slot is unflipped, as WebKit's docking math expects, and passes the pointer through except over the docked inspector. `WorkspaceLayout` sizes the slot to the preview area (right of the chat, below the toolbar, above a docked source editor). The page, the device bezel, the status view and the LKM-122 island use what the docked inspector leaves. WebKit docks and resizes asynchronously, so the slot relayouts once it does. `show` keeps WebKit's docked/detached choice, and the pre-show `detach` is gone. The detached-window fallback was not needed.
+- **Proof.** Core smoke `preview-inspector` (`src/native/smoke-preview-inspector.ts`) opens and docks the inspector and asserts, in window coordinates, that it lies within the slot and does not overlap the chat column or the page. It also checks that the slot does not reach under the toolbar, that the open island stays off the inspector and the chat, and that the chat's bottom-left hits the chat. These checks run at the default, minimum, wider and restored window sizes. Then it closes the inspector, checks that the page takes the whole area again, and reopens it. Evidence: `preview-inspector-docked.png` (foreground), `preview-inspector.json`. Native `core` passed.
+
 ## 2026-09-30 — LKM-127: provider-login test does not depend on the machine's keychain
 
 - **Why.** CI run 36684523667 (5b72bf2) failed only `[unit] provider-login` on `macos-26`, and the suspect was the real `security` probe from LKM-124/125. Most fixtures in the test still ran the machine's own `security` through Check login.

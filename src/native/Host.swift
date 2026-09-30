@@ -56,6 +56,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var previewStatus: NativePreviewStatus!
     var sheets: NativeSheets!
     let editingInspector = NativeEditingInspector()
+    let inspectorSlot = PreviewInspectorSlot()
     let layers = NativeLayers()
     let downloads = PreviewDownloads()
     let activity = NativeActivity()
@@ -99,6 +100,8 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = self; view.uiDelegate = self; view.isInspectable = true
         views[id] = view; canvas.addSubview(view)
+        canvas.addSubview(inspectorSlot, positioned: .above, relativeTo: view); PreviewInspector.confine(view, to: inspectorSlot)
+        inspectorSlot.changed = { [weak self] in self?.nativeLayout?.layout() }
         urlObservers[id] = view.observe(\.url, options: [.new]) { view, _ in
             emit(["event":"url", "view":id, "url":view.url?.absoluteString ?? ""])
         }
@@ -206,7 +209,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "securitySession": reply(id, SecuritySessionProbe.report())
         case "previewInspector":
             if let action = c["action"] as? String { reply(id, PreviewInspector.perform(action, on: views["preview"])) }
-            else { reply(id, PreviewInspector.status(views["preview"])) }
+            else { reply(id, previewInspectorReport()) }
         case "chatState":
             let state = c["state"] as? [String: Any] ?? [:]
             nativeLayout.chatState = state
