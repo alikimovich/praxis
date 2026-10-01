@@ -498,7 +498,7 @@ could not use the user's login Keychain. LKM-125 ([below](#the-service-keeps-the
 fixes that in the service's plist; the live confirmation is still pending, see
 [Keychain and credentials-file diagnostics](#keychain-and-credentials-file-diagnostics-lkm-124).
 (From a Terminal shell, `security find-generic-password -s "Claude
-Code-credentials"` found the item, exit 0; the service and TreziHost contexts are
+Code-credentials"` found the item, exit 0; the service and `TreziSecrets` contexts are
 compared in the table there, with the live cells still pending.)
 
 **Fix.** `ProviderHelperProcess.providerVariables` (`src/service/ProviderHelper.swift`)
@@ -570,7 +570,7 @@ this change on the operator Mac.
 | --- | --- | --- | --- | --- |
 | Terminal (iTerm, user session) | found, in `login.keychain-db`, account `panda` | exists, 0600, 463 bytes | `loggedIn: true` | operator, live (LKM-124 evidence) |
 | Service / provider helper (child of the XPC service) | **pending**: read "Keychain:", the keychain lists and "Credentials file:" from Check login | **pending**: same report | `loggedIn: false` for the bundled and the installed CLI | `claude auth status`: operator, live. Keychain and file lines: not yet run |
-| TreziHost (`TreziHost --crypto`, run by the service) | Save token in Settings fails with "macOS Keychain encryption unavailable; unlock the keychain and retry." | not applicable | not applicable | operator, live. The `OSStatus` was not captured |
+| `Contents/Helpers/TreziSecrets` (`TreziSecrets --crypto`, run by the service) | Save token in Settings fails with "macOS Keychain encryption unavailable; unlock the keychain and retry." | not applicable | not applicable | operator, live. The `OSStatus` was not captured |
 | Agent shell used for this change (a sandboxed background session, not one of the three contexts) | `find-generic-password` (metadata only) exit 0 | not looked at | not run | this change, live |
 
 To complete the two pending cells on the operator Mac (no model call): open Trezi, then
@@ -612,8 +612,8 @@ helper reported `loggedIn: false` while `claude auth status` in Terminal said `t
 **Root cause.** The XPC service's `Info.plist` had no `XPCService.JoinExistingSession`,
 so launchd started the service in a **new security session**, one without the user's
 login keychain. Every process it starts inherits that session: Bun, the
-`TreziHost --crypto` Keychain helper (connection keys, the subscription token) and the
-provider helpers with the Claude CLI (its login is the Keychain item
+`Contents/Helpers/TreziSecrets` helper (`TreziSecrets --crypto`; connection keys, the
+subscription token) and the provider helpers with the Claude CLI (its login is the Keychain item
 `Claude Code-credentials`). That held for `bun run dev` and `open -a` alike, since both
 reach the service through XPC. Only the `~/.claude/.credentials.json` fallback or an
 exported `CLAUDE_CODE_OAUTH_TOKEN` worked there.
