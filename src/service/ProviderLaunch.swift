@@ -13,6 +13,27 @@ import Darwin
 /// - "Check provider login": a helper started exactly like a chat's (same allowlisted
 ///   environment, token, cwd) that reports the provider CLI's auth status and exits;
 ///   the owner adds which provider variables were passed and dropped (LKM-124).
+///
+/// LKM-135 split that deadline by cold-start phase, from the helper's `phase` frames: a
+/// turn sent before the provider CLI started gets `firstEventTimeout`; once it is up, the
+/// session init and the first model output get `replyTimeout`, renewed by every phase or
+/// progress report, with "Still thinking…" shown after `stillThinking`. Each phase's
+/// timing is logged at debug level, and the error names the phase it stopped in.
+/// Providers that report no phases (Codex, Gemini) keep the LKM-119 deadline.
+enum Liveness: Int, Comparable {
+    case cli, initialization, model
+
+    static func < (lhs: Liveness, rhs: Liveness) -> Bool { lhs.rawValue < rhs.rawValue }
+
+    func label(_ provider: String) -> String {
+        switch self {
+        case .cli: return provider == "claude" ? "starting the Claude CLI" : "starting the turn"
+        case .initialization: return "waiting for the session to start"
+        case .model: return "waiting for the model's first reply"
+        }
+    }
+}
+
 extension ProviderOwner {
     static let seatTokenVariable = "CLAUDE_CODE_OAUTH_TOKEN"
 
@@ -44,6 +65,7 @@ extension ProviderOwner {
         }
         if let identity = helper.identity { options.journal?.add(identity) }
         session.helper = helper
+        session.launchedAt = Self.clock()
         helper.write(open)
         queue.asyncAfter(deadline: .now() + options.readyTimeout) {
             guard let opening = session.opening, self.sessions[session.id] === session else { return }
@@ -71,7 +93,7 @@ extension ProviderOwner {
         }
     }
 
-    // MARK: First event
+    // MARK: First event (LKM-119) and cold-start phases (LKM-135)
 
     static func noResponse(_ provider: String) -> String {
         switch provider {
@@ -81,21 +103,133 @@ extension ProviderOwner {
         }
     }
 
-    func armFirstEvent(_ session: Session) {
-        session.heard = false
-        session.silence += 1
-        let token = session.silence
-        queue.asyncAfter(deadline: .now() + options.firstEventTimeout) { self.silent(session, token) }
+    /// Milliseconds on a monotonic clock (`options.now` may be pinned in fixtures).
+    static func clock() -> Double { Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000 }
+
+    func debug(_ session: Session, _ text: String) {
+        options.log("debug provider \(session.provider) \(session.id.prefix(8)): \(text)")
     }
 
-    func silent(_ session: Session, _ token: Int) {
-        guard session.silence == token, !session.heard, session.turnOpen, session.phase == .running,
-              sessions[session.id] === session else { return }
-        finishTurn(session, Self.noResponse(session.provider), code: "no-response")
+    func since(_ start: Double) -> Int { Int((Self.clock() - start).rounded()) }
+
+    /// A sent turn waits first for the CLI to start (the short LKM-119 deadline: a hang
+    /// at the process level), then, once the CLI is up, for its session and the model's
+    /// first output with a much longer deadline that every phase or progress report renews.
+    func armFirstEvent(_ session: Session) {
+        session.heard = false
+        session.still = false
+        session.sentAt = Self.clock()
+        session.waiting = !session.alive ? .cli : session.initialized ? .model : .initialization
+        session.silence += 1
+        let token = session.silence
+        rearm(session)
+        queue.asyncAfter(deadline: .now() + options.stillThinking) { self.thinking(session, token) }
+    }
+
+    func rearm(_ session: Session) {
+        let token = session.silence, waiting = session.waiting
+        let timeout = waiting == .cli ? options.firstEventTimeout : options.replyTimeout
+        session.renewals += 1
+        let renewal = session.renewals
+        queue.asyncAfter(deadline: .now() + timeout) { self.silent(session, token, renewal, waited: timeout) }
+    }
+
+    func waitingTurn(_ session: Session, _ token: Int) -> Bool {
+        session.silence == token && !session.heard && session.turnOpen && session.phase == .running && sessions[session.id] === session
+    }
+
+    func silent(_ session: Session, _ token: Int, _ renewal: Int, waited: TimeInterval) {
+        guard waitingTurn(session, token), session.renewals == renewal else { return }
+        let phase = session.waiting.label(session.provider)
+        debug(session, "no-response while \(phase), \(since(session.sentAt)) ms after send")
+        let seconds = waited >= 10 || waited == waited.rounded() ? "\(Int(waited.rounded()))" : String(format: "%.1f", waited)
+        finishTurn(session, "\(Self.noResponse(session.provider)). Stopped while \(phase) (no answer in \(seconds) s).", code: "no-response")
         session.phase = .stopped
         wake(session, escalate: true)
         stop(session)
         persist()
+    }
+
+    /// A helper that exits during a turn with no output yet: the phase it died in.
+    func exitPhase(_ session: Session, _ code: String) -> String {
+        guard session.turnOpen, !session.heard else { return "" }
+        let phase = session.waiting.label(session.provider)
+        debug(session, "helper exited (\(code)) while \(phase), \(since(session.sentAt)) ms after send")
+        return " It exited while \(phase)."
+    }
+
+    /// "Still thinking…" instead of silence (or an error) while a started CLI works.
+    func thinking(_ session: Session, _ token: Int) {
+        guard waitingTurn(session, token), session.alive, !session.still,
+              Self.clock() - session.sentAt >= options.stillThinking * 1000 - 1 else { return }
+        session.still = true
+        let text = session.waiting == .model ? "Still thinking…" : "Still starting \(session.provider == "claude" ? "Claude" : "the provider")…"
+        relay(session, "event", [("value", Self.object([("type", .string(JSText("status"))), ("text", .string(JSText(text)))]))])
+    }
+
+    /// The turn produced its first output: the deadline is over (logged once per turn).
+    func heard(_ session: Session) {
+        guard !session.heard else { return }
+        session.heard = true
+        if session.turnOpen && session.sentAt > 0 { debug(session, "first model event \(since(session.sentAt)) ms after send") }
+    }
+
+    /// `{"type":"phase","phase":…}` from a helper: progress before any output (LKM-135).
+    func helperPhase(_ session: Session, _ frame: JSValue) {
+        guard case .object(let fields) = frame, fields.count <= 6, let name = frame["phase"]?.text?.string,
+              Set(fields.map { $0.0.string }).isSubset(of: ["type", "phase", "ms", "cached", "cli", "loggedIn"]) else {
+            return violation(session, "a malformed phase report")
+        }
+        var ms = ""
+        if let value = frame["ms"] {
+            guard case .number(let n) = value, n.isFinite, n >= 0, n <= 1e9 else { return violation(session, "a malformed phase report") }
+            ms = " \(Int(n)) ms"
+        }
+        let waiting = session.turnOpen && !session.heard
+        switch name {
+        case "auth":
+            let cached = frame["cached"] == .bool(true)
+            debug(session, "auth probe\(ms) (\(cached ? "cached choice" : "probed"))")
+            if !cached, session.provider == "claude", frame["loggedIn"] == .bool(true), let cli = frame["cli"] {
+                claudeCli = Self.claudeChoice(cli)
+            }
+        case "cli":
+            session.alive = true
+            debug(session, "CLI started\(ms) after spawn, \(since(session.launchedAt)) ms after the helper launched")
+            if waiting && session.waiting == .cli { advance(session, to: .initialization) }
+        case "init":
+            session.alive = true
+            session.initialized = true
+            if waiting { debug(session, "session init \(since(session.sentAt)) ms after send") }
+            if waiting { advance(session, to: .model) }
+        case "progress":
+            session.alive = true
+            if waiting { advance(session, to: max(session.waiting, .initialization)) }
+        default:
+            violation(session, "an unknown phase")
+        }
+    }
+
+    func advance(_ session: Session, to waiting: Liveness) {
+        session.waiting = waiting
+        rearm(session)
+        thinking(session, session.silence)
+    }
+
+    /// A probed choice the owner may hand to later helpers: the bundled CLI, or an
+    /// installed `claude` executable by absolute path.
+    static func claudeChoice(_ value: JSValue) -> JSValue? {
+        guard case .object(let fields) = value, fields.count <= 2, let source = value["source"]?.text?.string else { return nil }
+        if source == "bundled" { return fields.count == 1 ? object([("source", .string(JSText("bundled")))]) : nil }
+        guard source == "installed", let path = bounded(value["executable"], 4096), path.hasPrefix("/"), path.hasSuffix("/claude") else { return nil }
+        return object([("source", .string(JSText("installed"))), ("executable", .string(JSText(path)))])
+    }
+
+    /// The cached choice, while an installed executable is still there.
+    func cachedClaudeCli() -> JSValue? {
+        guard let cli = claudeCli else { return nil }
+        if let path = cli["executable"]?.text?.string, access(path, X_OK) != 0 { claudeCli = nil; return nil }
+        return cli
     }
 
     // MARK: Login requests
@@ -105,6 +239,8 @@ extension ProviderOwner {
         case "seatTokenSave":
             let provider = try body.string("provider", max: 32), token = try body.string("token", max: 8192, empty: true)
             guard ProviderData.seatProviders.contains(provider) else { throw ServiceContractFailure.invalidRequest }
+            // Another token can change which CLI is signed in: the next helper probes again.
+            if provider == "claude" { claudeCli = nil }
             dataWrites.async {
                 self.settle(frame) { Self.object([("hasToken", .bool(try self.data.saveSeatToken(provider, token)))]) }
             }
@@ -115,6 +251,7 @@ extension ProviderOwner {
             let provider = try body.string("provider", max: 32), root = try body.path("root")
             guard let command = options.helper else { throw ProviderRefusal(.unavailable, "Provider helpers are not available in this service.") }
             guard command.providers.contains(provider) else { throw ProviderRefusal(.unauthorized, "This service does not host the \(provider) provider.") }
+            if provider == "claude" { claudeCli = nil }
             withSeatToken(provider) { token in self.diagnose(frame, command, provider: provider, root: root, token: token) }
             return nil
         }

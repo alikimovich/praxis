@@ -11,6 +11,22 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Closing a chat removes its clean checkout; old-name worktree folders removed once migrated or empty.
 - [x] Settings shows the chat workspaces' disk use and "Clean up now".
 - [ ] Manager: foreground check of Settings → General (usage row and Clean up now) in the native capture.
+## Claude first turn: no false "did not respond" (LKM-135)
+
+- [x] Cold-start phases (helper ready, auth probe, CLI started, session init, first model event, no-response/exit) logged at debug level in the service log.
+- [x] Deadline by phase: 90 s only until the CLI starts; then 10 min for the session init and the first output, renewed by `phase`/`progress` reports; "Still starting Claude…"/"Still thinking…" after 20 s instead of an error.
+- [x] The no-response card (and a pre-output exit) names the phase it stopped in.
+- [x] Auth probes once per app session (owner cache passed in `open`), bundled and installed in parallel, re-probed after a sign-in failure, a saved token or Check login.
+- [x] Pre-warm: the Claude helper and CLI start when the chat opens (checked by the `cli` phase before any send).
+- [x] `test/provider-cold-start.mjs` (unit): slow init/think/progress pass, three kinds of hang still fail with the named phase, probes parallel and cached.
+- [ ] Codex and Gemini helpers report no phases yet (they keep the LKM-119 90 s deadline).
+## Startup recovery reports each interrupted operation once (LKM-134)
+
+- [x] Journal version 2: the service resolves every open interrupted entry when it opens the journal (synced first), so `status.recovered` reports each at exactly one launch; refs are kept.
+- [x] Version 1 journals: open entries (already reported at every earlier launch) are closed silently and counted in `closedEarlier`; one summary line.
+- [x] Saved work is reported at info level (missing/unreadable refs as a warning, not red); only a damaged journal is an error (`recoveryNotices`).
+- [x] Activity › Recovery Refs… lists kept refs and deletes only selected, confirmed refs still at the listed commit (`recoveryRefs` / `deleteRecoveryRefs`). Nothing deletes them automatically.
+- [x] `test/repository-recovery.mjs` (unit): once across two restarts, legacy close with one summary line, explicit delete.
 
 ## Shadow Light without a preview box; islands apply live (LKM-133)
 

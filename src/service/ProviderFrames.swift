@@ -10,15 +10,18 @@ extension ProviderOwner {
         guard let frame = try? JSValue.parse(data, maxDepth: 64), case .object(let fields) = frame,
               let type = frame["type"]?.text?.string else { return violation(session, "a frame that is not a JSON object") }
         let keys = Set(fields.map { $0.0.string })
-        // Anything the turn produced (not the slash menu a session posts on its own) stops
-        // the first-event timer.
-        if ["record", "permission", "question", "tool"].contains(type) || (type == "event" && frame["event"]?["type"]?.text?.string != "commands") {
-            session.heard = true
+        // Anything the turn produced (not the slash menu a session posts on its own, nor the
+        // resume id its session init records, LKM-135) stops the first-event timer.
+        let resumeOnly = type == "record" && frame["entries"] == .array([]) && frame["filesTouched"] == nil
+        if ["record", "permission", "question", "tool"].contains(type) && !resumeOnly
+            || (type == "event" && frame["event"]?["type"]?.text?.string != "commands") {
+            heard(session)
         }
         func only(_ allowed: Set<String>) -> Bool { keys.isSubset(of: allowed.union(["type"])) }
         switch type {
         case "ready":
             guard let opening = session.opening, only([]) else { return violation(session, "an unexpected ready") }
+            debug(session, "helper ready \(since(session.launchedAt)) ms after launch")
             session.opening = nil
             answer(opening, .succeeded(Self.object([("tools", Self.strings(ProviderPolicy.granted(background: session.background)))])))
         case "failed":
@@ -41,6 +44,9 @@ extension ProviderOwner {
                     if session.phase == .running { session.phase = .idle; persist() }
                 } else if kind == "permission-resolved" || kind == "question-resolved", let id = relayed["id"]?.text?.string {
                     session.approvals[id] = nil
+                } else if kind == "error", relayed["code"]?.text?.string == "auth", session.provider == "claude" {
+                    // A sign-in failure: the next Claude helper probes the CLIs again (LKM-135).
+                    claudeCli = nil
                 }
                 relay(session, "event", [("value", relayed)])
             }
@@ -110,6 +116,8 @@ extension ProviderOwner {
             guard only([]) else { return violation(session, "a malformed settled report") }
             if session.phase == .cancelling { session.phase = .idle; persist() }
             wake(session, escalate: false)
+        case "phase":
+            helperPhase(session, frame)
         default:
             violation(session, "an unknown frame type")
         }

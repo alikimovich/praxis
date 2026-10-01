@@ -15,6 +15,8 @@ final class NativeActivity: NSObject, NSWindowDelegate {
             let content = NSView(); panel.contentView = content
             let clear = NSButton(title: "Clear", target: self, action: #selector(clearLog))
             let copy = NSButton(title: "Copy All", target: self, action: #selector(copyLog))
+            // Lists the kept refs/trezi/recovery/* refs; deleting any is an explicit, confirmed choice there.
+            let recovery = NSButton(title: "Recovery Refs…", target: self, action: #selector(showRecovery))
             let scroll = NSScrollView(); scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true
             text.isEditable = false; text.isSelectable = true; text.isRichText = false
             text.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
@@ -22,10 +24,11 @@ final class NativeActivity: NSObject, NSWindowDelegate {
             text.isVerticallyResizable = true; text.isHorizontallyResizable = false
             text.autoresizingMask = [.width]; text.textContainer?.widthTracksTextView = true
             scroll.documentView = text
-            for view in [clear, copy, scroll] { view.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(view) }
+            for view in [clear, copy, recovery, scroll] { view.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(view) }
             NSLayoutConstraint.activate([
                 clear.topAnchor.constraint(equalTo: content.topAnchor, constant: 8), clear.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12),
                 copy.centerYAnchor.constraint(equalTo: clear.centerYAnchor), copy.trailingAnchor.constraint(equalTo: clear.leadingAnchor, constant: -8),
+                recovery.centerYAnchor.constraint(equalTo: clear.centerYAnchor), recovery.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12),
                 scroll.topAnchor.constraint(equalTo: clear.bottomAnchor, constant: 8), scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: content.bottomAnchor)
             ])
             panel.center(); window = panel
@@ -35,7 +38,8 @@ final class NativeActivity: NSObject, NSWindowDelegate {
         let output = NSMutableAttributedString()
         var full = ""
         for line in lines {
-            let color: NSColor = line["kind"] as? String == "error" ? .systemRed : line["kind"] as? String == "success" ? .systemGreen : .labelColor
+            let kind = line["kind"] as? String
+            let color: NSColor = kind == "error" ? .systemRed : kind == "warning" ? .systemOrange : kind == "success" ? .systemGreen : .labelColor
             // Lines show collapsed paths (`display`); the tooltip and Copy All keep the full text.
             let time = line["time"] as? String ?? "", original = line["text"] as? String ?? ""
             let shown = line["display"] as? String ?? original
@@ -50,6 +54,7 @@ final class NativeActivity: NSObject, NSWindowDelegate {
         if window?.isVisible != true { window?.makeKeyAndOrderFront(nil) }
     }
     @objc func clearLog() { emit(["event":"activity-action", "action":"clear"]) }
+    @objc func showRecovery() { emit(["event":"activity-action", "action":"recovery"]) }
     @objc func copyLog() { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(fullText, forType: .string) }
     func windowWillClose(_ notification: Notification) { emit(["event":"activity-action", "action":"hide"]) }
 }

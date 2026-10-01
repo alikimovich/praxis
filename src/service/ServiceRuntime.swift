@@ -157,10 +157,11 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                             watchdog: CommandLine.arguments[0], journal: journal, protectedPIDs: { [bun, host] },
                             open: PlatformOpen.Tools(environment: requested.environment)), send: send)
                         let diagnostics = session.diagnostics
+                        let log: @Sendable (String) -> Void = { line in
+                            if let diagnostics { try? diagnostics.write(contentsOf: Data((line + "\n").utf8)) } else { fputs(line + "\n", stderr) }
+                        }
                         let repository = RepositoryOwner(options: RepositoryOwner.Options(profile: requested.profile,
-                            environment: requested.environment, log: { line in
-                                if let diagnostics { try? diagnostics.write(contentsOf: Data((line + "\n").utf8)) } else { fputs(line + "\n", stderr) }
-                            }), send: send)
+                            environment: requested.environment, log: log), send: send)
                         self.repository = repository
                         source = SourceOwner(options: SourceOwner.Options(profile: requested.profile), repository: repository, send: send)
                         let conversation = ConversationOwner(options: ConversationOwner.Options(profile: requested.profile), send: send)
@@ -171,6 +172,8 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                             environment: requested.environment, bun: requested.bun), repository: repository, send: send)
                         var providerOptions = ProviderOwner.Options(profile: requested.profile, environment: requested.environment,
                             watchdog: CommandLine.arguments[0], journal: journal)
+                        // Debug-level cold-start timings go to the service log (LKM-135).
+                        providerOptions.log = log
                         // The backend is `<out>/Trezi.app/Contents/Resources/backend/index.cjs`: the Keychain
                         // helper is that app's TreziHost, and the checkout is `<out>/../..`.
                         var app = URL(fileURLWithPath: requested.backend)

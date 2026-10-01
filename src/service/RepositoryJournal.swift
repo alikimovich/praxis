@@ -4,7 +4,8 @@ import Darwin
 /// One repository operation's durable intent. Written (and synced) before the first
 /// effect and removed when the operation settles. An entry still `active` when a new
 /// service opens the journal was interrupted: it moves to `interrupted` with its
-/// recovery refs, and nothing is replayed, reset or deleted on its behalf.
+/// recovery refs, and nothing is replayed, reset or deleted on its behalf. It is
+/// reported once, at the launch that finds it, and `resolved` from then on.
 struct RepositoryEntry: Equatable {
     var operationID: String
     var kind: String
@@ -15,6 +16,8 @@ struct RepositoryEntry: Equatable {
     var branch: String?
     var refs: [String]
     var started: String
+    /// When a launch closed (reported) the interrupted entry; nil while still open.
+    var resolved: String?
 
     func value() -> JSValue {
         var fields: [(JSText, JSValue)] = [("operationID", operationID), ("kind", kind), ("intent", intent), ("lane", lane), ("root", root)]
@@ -23,13 +26,14 @@ struct RepositoryEntry: Equatable {
         if let branch { fields.append((JSText("branch"), .string(JSText(branch)))) }
         fields.append((JSText("refs"), .array(refs.map { .string(JSText($0)) })))
         fields.append((JSText("started"), .string(JSText(started))))
+        if let resolved { fields.append((JSText("resolved"), .string(JSText(resolved)))) }
         return .object(fields)
     }
 
     init(operationID: String, kind: String, intent: String, lane: String, root: String, worktree: String?, branch: String?,
-         refs: [String] = [], started: String) {
+         refs: [String] = [], started: String, resolved: String? = nil) {
         self.operationID = operationID; self.kind = kind; self.intent = intent; self.lane = lane; self.root = root
-        self.worktree = worktree; self.branch = branch; self.refs = refs; self.started = started
+        self.worktree = worktree; self.branch = branch; self.refs = refs; self.started = started; self.resolved = resolved
     }
 
     init?(_ value: JSValue) {
@@ -39,7 +43,8 @@ struct RepositoryEntry: Equatable {
         var refs: [String] = []
         if case .array(let items)? = value["refs"] { refs = items.compactMap { $0.text?.string } }
         self.init(operationID: operationID, kind: kind, intent: intent, lane: lane, root: root,
-                  worktree: value["worktree"]?.text?.string, branch: value["branch"]?.text?.string, refs: refs, started: started)
+                  worktree: value["worktree"]?.text?.string, branch: value["branch"]?.text?.string, refs: refs, started: started,
+                  resolved: value["resolved"]?.text?.string)
     }
 }
 
@@ -57,10 +62,18 @@ enum RepositoryJournalError: Error, CustomStringConvertible {
 /// never reads or writes it, and recovery refs stay until the user resolves them.
 final class RepositoryJournal: @unchecked Sendable {
     static let maxInterrupted = 200
+    /// 2 (LKM-134): interrupted entries carry `resolved` once reported. A version 1
+    /// journal reported every interrupted entry again at each launch.
+    static let version = 2
     let path: String
     private let lock = NSLock()
     private(set) var active: [RepositoryEntry] = []
     private(set) var interrupted: [RepositoryEntry] = []
+    /// This launch's report: the entries `open` closed, each reported here once.
+    private(set) var recovered: [RepositoryEntry] = []
+    /// Open entries of a version 1 journal, closed without a new report: every earlier
+    /// launch already reported them.
+    private(set) var closedEarlier = 0
     /// Test hook: called after each durable write with the entry's kind and phase.
     var afterWrite: (@Sendable (String, String) -> Void)?
 
@@ -68,8 +81,10 @@ final class RepositoryJournal: @unchecked Sendable {
         path = URL(fileURLWithPath: profile).appendingPathComponent("service/repository/journal.json").path
     }
 
-    /// Reads the previous owner's journal. Its active entries were interrupted. A
-    /// damaged file is refused (left as found) and no mutation is accepted.
+    /// Reads the previous owner's journal. Its active entries were interrupted. Every
+    /// open interrupted entry is resolved here, durably, before anything reports it,
+    /// so it is reported at most once however often Trezi restarts. A damaged file is
+    /// refused (left as found) and no mutation is accepted.
     func open() throws {
         lock.lock(); defer { lock.unlock() }
         guard FileManager.default.fileExists(atPath: path) else { return }
@@ -77,11 +92,29 @@ final class RepositoryJournal: @unchecked Sendable {
               case .array(let activeItems)? = value["active"], case .array(let interruptedItems)? = value["interrupted"] else {
             throw RepositoryJournalError.damaged(path)
         }
-        let previous = activeItems.compactMap(RepositoryEntry.init)
-        interrupted = interruptedItems.compactMap(RepositoryEntry.init) + previous
+        let legacy: Bool
+        if case .number(let version)? = value["version"] { legacy = version < Double(Self.version) } else { legacy = true }
+        let now = ISO8601DateFormatter().string(from: Date())
+        var report: [RepositoryEntry] = [], closed = 0
+        let earlier = interruptedItems.compactMap(RepositoryEntry.init).map { entry -> RepositoryEntry in
+            guard entry.resolved == nil else { return entry }
+            var entry = entry
+            entry.resolved = now
+            // Interrupted mid-session under this version: not reported yet.
+            if legacy { closed += 1 } else { report.append(entry) }
+            return entry
+        }
+        let previous = activeItems.compactMap(RepositoryEntry.init).map { entry -> RepositoryEntry in
+            var entry = entry
+            entry.resolved = now
+            return entry
+        }
+        interrupted = earlier + previous
         if interrupted.count > Self.maxInterrupted { interrupted.removeFirst(interrupted.count - Self.maxInterrupted) }
         active = []
-        if !previous.isEmpty { try persist() }
+        if legacy || closed > 0 || !report.isEmpty || !previous.isEmpty { try persist() }
+        recovered = report + previous
+        closedEarlier = closed
     }
 
     func begin(_ entry: RepositoryEntry) throws {
@@ -134,7 +167,7 @@ final class RepositoryJournal: @unchecked Sendable {
     }
 
     private func persist() throws {
-        let body = JSValue.object([(JSText("version"), .number(1)),
+        let body = JSValue.object([(JSText("version"), .number(Double(Self.version))),
                                    (JSText("active"), .array(active.map { $0.value() })),
                                    (JSText("interrupted"), .array(interrupted.map { $0.value() }))])
         let data = body.utf8()
@@ -186,6 +219,37 @@ enum RecoveryRefs {
             .split(separator: "\n").map(String.init).filter { !$0.isEmpty }.sorted()
     }
 
+    /// Every recovery ref of `root`'s repository with what it points at, for the user
+    /// to inspect (nil: not a readable repository).
+    static func describe(_ git: RepositoryGit, _ root: String) -> [JSValue]? {
+        guard let text = try? git.text(root, ["for-each-ref", "--format=%(refname)%00%(objectname)%00%(creatordate:iso-strict)%00%(subject)", namespace])
+        else { return nil }
+        return text.split(separator: "\n").compactMap { line -> JSValue? in
+            let parts = line.split(separator: "\0", omittingEmptySubsequences: false).map(String.init)
+            guard parts.count >= 4 else { return nil }
+            return .object([("ref", parts[0]), ("sha", parts[1]), ("date", parts[2]), ("subject", parts[3...].joined(separator: " "))]
+                .map { (JSText($0.0), .string(JSText($0.1))) })
+        }
+    }
+
+    /// A name this owner could have made, and nothing else (never another namespace).
+    static func valid(_ git: RepositoryGit, _ root: String, _ ref: String) -> Bool {
+        ref.hasPrefix(namespace) && ref.count > namespace.count && !ref.contains("..") && !ref.hasPrefix("-")
+            && git.succeeds(root, ["check-ref-format", ref])
+    }
+
+    /// Explicit user intent only: deletes each ref that still points at the commit the
+    /// user saw. A ref that moved or is gone is left alone and reported.
+    static func delete(_ git: RepositoryGit, _ root: String, refs: [String], shas: [String]) throws -> (deleted: [String], kept: [String]) {
+        guard refs.count == shas.count, refs.count <= 10_000,
+              shas.allSatisfy({ $0.range(of: #"^([0-9a-f]{40}|[0-9a-f]{64})$"#, options: .regularExpression) != nil }),
+              refs.allSatisfy({ valid(git, root, $0) }) else { throw ServiceContractFailure.invalidRequest }
+        var deleted: [String] = [], kept: [String] = []
+        for (ref, sha) in zip(refs, shas) {
+            if git.succeeds(root, ["update-ref", "-d", ref, sha]) { deleted.append(ref) } else { kept.append(ref) }
+        }
+        return (deleted, kept)
+    }
 }
 
 /// FIFO serialization per repository common directory: the live checkout and every

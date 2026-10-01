@@ -49,6 +49,7 @@ final class RepositoryOwner: @unchecked Sendable {
         "pruneOrphans": (["root", "worktreesDir", "skip", "parked", "intent"], ["leases"], ["recover"]),
         "pruneBranches": (["root", "protected", "intent"], ["leases"], ["integrated"]),
         "removeLegacyFolder": (["root", "intent"], ["leases"], ["legacy"]),
+        "deleteRecoveryRefs": (["root", "refs", "shas", "intent"], ["leases"], ["discard"]),
         "commitLive": (["root", "files", "title"], ["body", "leases"], nil),
         "checkout": (["root", "branch"], ["leases"], nil),
         "switchBranch": (["root", "branch"], ["leases"], nil),
@@ -109,7 +110,13 @@ final class RepositoryOwner: @unchecked Sendable {
             switch (frame.method, frame.mode) {
             case ("status", "read"):
                 _ = try Body(frame, required: [], optional: [])
-                return answer(frame, .succeeded(status()))
+                // Reads Git (the recovered refs), so off the intake queue.
+                work.async { self.answer(frame, .succeeded(self.status())) }
+            case ("recoveryRefs", "read"):
+                let body = try Body(frame, required: [], optional: ["roots"])
+                let roots = try body.strings("roots")
+                guard roots.count <= 1_000 else { throw ServiceContractFailure.invalidRequest }
+                work.async { self.answer(frame, .succeeded(self.recoveryRefs(roots))) }
             case ("acknowledge", "mutation"):
                 let body = try Body(frame, required: ["operationID", "intent"], optional: [])
                 guard try body.string("intent") == "acknowledge" else { throw ServiceContractFailure.invalidRequest }
@@ -183,11 +190,36 @@ final class RepositoryOwner: @unchecked Sendable {
         return true
     }
 
+    /// `recovered` is this launch's one report of the entries the journal closed at open,
+    /// each with the journaled refs that are not in its repository (a crash between
+    /// naming a ref and creating it, before the effect it guards; or the user deleted
+    /// it). `closedEarlier` counts open entries of an older journal closed silently.
     private func status() -> JSValue {
         let (active, interrupted) = journal.snapshot()
-        var fields: [(String, JSValue)] = [("active", .array(active.map { $0.value() })), ("interrupted", .array(interrupted.map { $0.value() }))]
+        let recovered: [JSValue] = journal.recovered.map { entry in
+            let readable = effects.git.succeeds(entry.root, ["rev-parse", "--git-common-dir"])
+            let missing = readable ? entry.refs.filter { effects.git.revision(entry.root, $0) == nil } : entry.refs
+            guard case .object(var fields) = entry.value() else { return entry.value() }
+            fields.append((JSText("missing"), Self.strings(missing)))
+            if !readable { fields.append((JSText("unreadable"), .bool(true))) }
+            return .object(fields)
+        }
+        var fields: [(String, JSValue)] = [("active", .array(active.map { $0.value() })), ("interrupted", .array(interrupted.map { $0.value() })),
+                                           ("recovered", .array(recovered)), ("closedEarlier", .number(Double(journal.closedEarlier)))]
         if let journalFailure { fields.append(("journal", .string(JSText(journalFailure)))) }
         return Self.object(fields)
+    }
+
+    /// Every recovery ref in `roots` and in the journal's repositories, one entry per
+    /// repository (its common directory), for the user to view or delete.
+    private func recoveryRefs(_ roots: [String]) -> JSValue {
+        var seen = Set<String>(), repositories: [JSValue] = []
+        for root in roots + journal.snapshot().interrupted.map(\.root) where root.hasPrefix("/") {
+            guard effects.git.succeeds(root, ["rev-parse", "--git-common-dir"]) else { continue }
+            guard seen.insert(effects.lane(root)).inserted, let refs = RecoveryRefs.describe(effects.git, root), !refs.isEmpty else { continue }
+            repositories.append(Self.object([("root", .string(JSText(root))), ("refs", .array(refs))]))
+        }
+        return .array(repositories)
     }
 
     // MARK: Operations (inside the lane or lease)
@@ -283,6 +315,9 @@ final class RepositoryOwner: @unchecked Sendable {
         case "pruneBranches":
             let (deleted, preserved) = e.pruneBranches(c, protected: Set(try body.strings("protected")))
             return Self.object([("deleted", Self.strings(deleted)), ("preserved", Self.strings(preserved))])
+        case "deleteRecoveryRefs":
+            let (deleted, kept) = try RecoveryRefs.delete(e.git, c.root, refs: try body.strings("refs"), shas: try body.strings("shas"))
+            return Self.object([("deleted", Self.strings(deleted)), ("kept", Self.strings(kept))])
         case "commitLive":
             let (sha, files) = e.commitLive(c, files: try body.strings("files"), title: try body.string("title"),
                                             body: body.has("body") ? try body.string("body") : nil)

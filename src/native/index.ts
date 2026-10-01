@@ -4,6 +4,7 @@ import { NativeUpdateController } from './update-controller'
 import { installNativeInspector } from './inspector-runtime'
 import { NativePreviewRecovery } from './preview-recovery'
 import { NativeLegacyNames } from './legacy-names'
+import { NativeRecoveryRefs, recoveryNotices } from './repository-recovery'
 import { NativeLayersController } from './layers-controller'
 import { agentOptionsFor } from '../shared/chat-settings'
 import { NativeEditorController } from './editor-controller'
@@ -277,12 +278,11 @@ async function main() {
   host.on('activity-action', ({ action }) => activityController.action(action))
   host.on('menu', ({ action }) => { if (action === 'logs') activityController.action('toggle') })
   serviceEvents.on('event', (channel, line) => { if (channel === 'devserver:log' || channel === 'simulator:log') activityController.append(line, 'server') })
-  // Work a previous service could not finish stays in the journal and its recovery refs;
-  // nothing is replayed or reset. Say so once, where the user looks for background work.
-  void repository.status().then(({ interrupted, journal }) => {
-    if (journal) activityController.append(`Repository journal: ${journal}`, 'error')
-    for (const entry of interrupted) activityController.append(
-      `An earlier ${entry.kind} in ${entry.root} was interrupted; its work is kept${entry.refs.length ? ` at ${entry.refs.join(', ')}` : ''}.`, 'error')
+  // Work a previous service could not finish stays at its recovery refs; nothing is
+  // replayed or reset. The service closes each interrupted entry at the launch that
+  // finds it, so this reports it once (LKM-134), not as an error: nothing was lost.
+  void repository.status().then(status => {
+    for (const notice of recoveryNotices(status)) activityController.append(notice.text, notice.kind)
   }, () => {})
   // A chat a crash cut off was saved from its checkpoint at launch (never over a newer
   // record, which is kept, with the checkpoint copied beside it).
@@ -404,6 +404,8 @@ async function main() {
   serviceEvents.on('command', (channel, args) => { if (channel === 'preview:set-select-mode') { shellController!.selecting = !!args[0]; shellController!.schedule() } })
   const activateContext = workspaceController.services.activate
   const legacyNames = new NativeLegacyNames(sheetController, (channel, ...args) => workspaceController.services.invoke(channel, ...args), (text, kind) => activityController.append(text, kind))
+  const recoveryRefs = new NativeRecoveryRefs(sheetController, repository, () => workspaceController.state.projects.map(p => p.root), (text, kind) => activityController.append(text, kind))
+  host.on('activity-action', ({ action }) => { if (action === 'recovery') void recoveryRefs.open().catch(error => activityController.append(`Could not list recovery refs: ${error instanceof Error ? error.message : String(error)}`, 'error')) })
   workspaceController.services.activate = async entry => {
     await activateContext(entry)
     if (!entry) return
