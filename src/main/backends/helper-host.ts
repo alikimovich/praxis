@@ -13,8 +13,9 @@ import type { ModelProvider, ProviderSession } from './types'
  *
  * owner → helper: open, send, interrupt, permission-result, question-result,
  *   configure, tool-result, tool-error, shutdown; or, alone, diagnose.
- * helper → owner: ready, failed, event, record, permission, question, tool, settled;
- *   diagnosis (the answer to diagnose, then the helper exits).
+ * helper → owner: ready, failed, event, record, permission, question, tool, settled,
+ *   phase (cold-start progress, LKM-135); diagnosis (the answer to diagnose, then the
+ *   helper exits).
  */
 export function runProviderHelper(
   providers: Record<string, ModelProvider>,
@@ -83,6 +84,9 @@ export function runProviderHelper(
         try {
           session = await provider.startSession(frame.root, frame.options ?? {}, () => null, {
             ...(frame.context ?? {}),
+            // The owner's cached Claude CLI choice (LKM-135), and the phases its deadlines follow.
+            ...(frame.cli && typeof frame.cli === 'object' ? { claudeCli: frame.cli } : {}),
+            onPhase: (phase, detail) => write({ type: 'phase', phase, ...(detail ?? {}) }),
             onEvent,
             tools: {
               invoke: (tool, args) =>

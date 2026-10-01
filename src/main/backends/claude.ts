@@ -27,8 +27,16 @@ import { recordClaudeModels } from '../model-catalog'
 import { oklchScale } from '../oklch'
 import { discoverPortableSkills } from '../bundled-skills'
 import { withSkillReferences } from './skill-menu'
-import { checkClaudeLogin, isAuthFailure, isLoginCommand, LOGIN_COMMAND_MESSAGE, resolveClaudeCli } from './claude-login'
 import { claudeIsolationOptions } from './claude-isolation'
+import {
+  checkClaudeLogin,
+  claudeCliChoice,
+  forgetClaudeCli,
+  isAuthFailure,
+  isLoginCommand,
+  LOGIN_COMMAND_MESSAGE,
+  resolveClaudeCli
+} from './claude-login'
 import { treziRules } from '../rules'
 import { elevationScale, layeredShadow } from '../shadows'
 import { SKILL_PACKS } from '../skill-packs'
@@ -1041,13 +1049,27 @@ async function startSession(
   })
 
   // In a provider helper: an installed `claude` that is logged in when the bundled
-  // one is not (LKM-119, `claude-login.ts`).
-  const cli = process.env.TREZI_PROVIDER_HELPER === '1' ? await resolveClaudeCli() : null
+  // one is not (LKM-119, `claude-login.ts`). The owner passes the choice an earlier
+  // helper made this app session, so the probes run once (LKM-135).
+  const phase = ctx?.onPhase ?? (() => {})
+  let executable: string | undefined
+  if (process.env.TREZI_PROVIDER_HELPER === '1') {
+    if (ctx?.claudeCli) {
+      executable = ctx.claudeCli.executable
+      phase('auth', { ms: 0, cached: true })
+    } else {
+      const probing = Date.now()
+      const cli = await resolveClaudeCli()
+      executable = cli.executable
+      phase('auth', { ms: Date.now() - probing, cached: false, ...claudeCliChoice(cli) })
+    }
+  }
+  const spawned = Date.now()
   const q: Query = query({
     prompt: input,
     options: {
       cwd: root,
-      ...(cli?.executable ? { pathToClaudeCodeExecutable: cli.executable } : {}),
+      ...(executable ? { pathToClaudeCodeExecutable: executable } : {}),
       settingSources: ['user', 'project', 'local'],
       // The repo's CLAUDE.md + skills load via settingSources; Trezi's own
       // operating rules (v8 R) are appended to the Claude Code preset, with the
@@ -1210,9 +1232,24 @@ async function startSession(
   // system message (which carries slash_commands) only arrives after the FIRST
   // user message — so a freshly-opened project's "/" menu would be empty until you
   // chat once. supportedCommands() (captured at initialize) fetches them eagerly.
+  // Its answer also means the CLI is up (LKM-135): the session starts with the chat,
+  // so a cold CLI warms while the user types and the owner's short deadline ends there.
+  let started = false
+  const cliStarted = (): void => {
+    if (started) return
+    started = true
+    phase('cli', { ms: Date.now() - spawned })
+  }
+  let progressAt = 0
+  const progress = (): void => {
+    if (Date.now() - progressAt < 1000) return
+    progressAt = Date.now()
+    phase('progress')
+  }
   void q
     .supportedCommands()
     .then((cmds) => {
+      cliStarted()
       if (disposed || !cmds.length) return
       sdkCommandNames = cmds.map((c) => c.name)
       emitCommands()
@@ -1279,9 +1316,14 @@ async function startSession(
     }
     try {
       for await (const msg of q) {
+        cliStarted()
         switch (msg.type) {
           case 'system': {
             const sys = msg as { subtype?: string; slash_commands?: string[]; session_id?: string }
+            // The turn's session began, or the CLI reports work (a request, a retry,
+            // thinking) before any output: the owner keeps waiting (LKM-135).
+            if (sys.subtype === 'init') phase('init')
+            else progress()
             if (sys.subtype === 'init') {
               // v9 resume: capture the SDK's own resumable session id off the init
               // message — this is what a later `agent:resume-session` forwards back
@@ -1324,6 +1366,7 @@ async function startSession(
               const said = msg.message.content.map((block) => (block.type === 'text' ? block.text : '')).join(' ').trim()
               emit({ type: 'error', code: 'auth', message: said || 'Claude is not logged in.' })
               authFailed = true
+              forgetClaudeCli()
               break
             }
             for (const block of msg.message.content) {

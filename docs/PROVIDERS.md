@@ -381,6 +381,43 @@ text) or stayed on "Thinking…" forever, although `claude` worked in Terminal. 
 
 Tested deterministically by `test/provider-login.mjs` (fake helper and stand-in CLIs).
 
+## Claude cold first turn (LKM-135)
+
+**Symptom.** A healthy but slow first turn ended with "Claude did not respond": the
+LKM-119 90 s deadline counted the whole cold path (helper spawn, two `claude auth status`
+probes one after the other, a cold CLI start, the model thinking) as silence.
+
+**What Trezi does now.**
+
+- **Phases.** A Claude helper reports `phase` frames to the owner: `auth` (the probe, or
+  the cached choice), `cli` (the CLI answered `initialize`), `init` (the turn's session
+  started) and `progress` (system messages such as a request or retry before any output,
+  at most one per second). The owner logs each one at debug level in the service log
+  (`debug provider claude <id>: helper ready … / auth probe … / CLI started … / session
+  init … / first model event … ms after send`). The token is never logged.
+- **Deadlines follow the phase.** A turn sent while the CLI has not started keeps the
+  90 s deadline (a hang at the process level). Once the CLI is up, the wait for the
+  session init and the model's first output is 10 minutes (`replyTimeout`), renewed by
+  every phase or progress report, so a helper that is alive and making progress is
+  never stopped. After 20 s without output the chat shows "Still starting Claude…" or
+  "Still thinking…" instead of an error. A real hang still ends with the no-response
+  card, and its message names the phase, e.g. "Stopped while starting the Claude CLI
+  (no answer in 90 s)". A helper that exits before any output also names its phase.
+  The init's resume-id record no longer counts as output.
+- **Probes once, in parallel.** The bundled and installed CLIs are probed at the same
+  time. The owner keeps the logged-in choice for the app session and passes it in each
+  Claude helper's `open` frame (`cli`), so later chats skip the probes. An installed
+  executable must still be executable. A sign-in failure (`auth` error), a saved token
+  and **Check login** clear the cache, so the next chat probes again.
+- **Pre-warm.** Opening a project or chat starts its Claude helper and CLI right away
+  (the session starts with the chat), so the cold start overlaps the user's typing; the
+  `cli` phase is logged before anything is sent.
+- Codex and Gemini report no phases yet and keep the 90 s deadline.
+
+Tested deterministically by `test/provider-cold-start.mjs`: the real adapter in the real
+helper under the owner fixture, with stand-in CLIs and scaled deadlines (0.5 s for 90 s,
+2.5 s for 10 min).
+
 ## Codex seat models (LKM-126)
 
 **Symptom.** After a CLI update, every Codex seat turn that left the model to the CLI,
