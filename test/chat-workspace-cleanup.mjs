@@ -116,6 +116,18 @@ try {
   assert.ok(existsSync(parked) && existsSync(running) && existsSync(dirty))
   assert.equal(now.usage.workspaces, 3)
 
+  // A session restarted with no turn (model change, rebuild after a stop) goes through
+  // isolatedCwd: it gets the checkout back before any provider starts in it.
+  assert.equal(existsSync(idle), false)
+  const restarted = await isolatedCwd(live, 'idle')
+  assert.equal(restarted, idle, 'the same path comes back')
+  assert.ok(existsSync(restarted), 'the restarted session has a checkout to run in')
+  assert.equal(git(restarted, 'rev-parse', '--show-toplevel'), idle, 'it is a working checkout')
+  assert.equal(read(join(restarted, 'after.txt')), 'after cleanup\n', 'it starts from the live tree')
+  assert.deepEqual(await sweepIdleWorkspaces(7 * DAY), { removed: 0, keptDirty: 0, skipped: 4 }, 'a restarted chat is in use, not idle')
+  await beforeTurn('idle', 'edit')
+  assert.equal(await isolatedCwd(live, 'idle'), idle, 'an existing checkout is returned as is')
+
   // Closing (archiving) a chat removes its clean checkout; a reclaimed chat closes cleanly.
   busy.delete('running')
   await releaseChat('running')

@@ -2,7 +2,7 @@ import type { SessionToolHost } from './backends/types'
 import { agentWorkspaceEvidence, agentWorkspaceState, resolveParkedChat } from './chat-isolation'
 import { runChatIslandTool } from './chat-islands'
 import { openAgentCode } from './code-tools'
-import { observeAgentPreview } from './preview-observation-tools'
+import { isPreviewObserver, observeAgentPreview } from './preview-observation-tools'
 import { openAgentPreview } from './preview-tools'
 import { runProjectUiTool } from './project-ui'
 import { ProviderError, providerOwner } from './provider-owner'
@@ -31,13 +31,16 @@ export interface ToolScope {
 export type SessionTool = TreziAgentToolAction | 'install_skills'
 export const SESSION_TOOLS: readonly SessionTool[] = [
   'workspace_state', 'prepare_conflict_resolution', 'chat_island', 'open_code', 'open_preview',
-  'preview_location', 'preview_screenshot', 'project_ui_catalog', 'compose_project_ui', 'install_skills'
+  'preview_location', 'preview_screenshot', 'preview_inspect', 'preview_evaluate', 'preview_console',
+  'preview_viewport', 'project_ui_catalog', 'compose_project_ui', 'install_skills'
 ]
 
 export async function runTreziTool(action: SessionTool, args: unknown, s: ToolScope): Promise<unknown> {
   // The owner grants more names than run here (the calculators run in the provider).
   if (!SESSION_TOOLS.includes(action)) return { error: `${String(action)} is not one of Trezi's session tools.` }
-  if (action === 'preview_location' || action === 'preview_screenshot') return observeAgentPreview(action)
+  if (action === 'preview_viewport' && s.background)
+    return { error: 'Background edits cannot resize the user preview.' }
+  if (isPreviewObserver(action)) return observeAgentPreview(action, args)
   if (action === 'project_ui_catalog' || action === 'compose_project_ui')
     return runProjectUiTool(s.root, s.emitKey, action, args as never, s.connectionId)
   if (action === 'chat_island')

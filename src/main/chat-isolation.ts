@@ -139,7 +139,12 @@ function emitIsolation(
  */
 export async function isolatedCwd(liveRoot: string, sessionKey: string): Promise<string> {
   const existing = states.get(sessionKey)
-  if (existing) return existing.wt.path
+  if (existing) {
+    // Idle cleanup removed the checkout: a session restarted without a turn (model
+    // change, rebuild after a stop) needs it back before a provider starts in it.
+    if (existing.reclaimed) await recreateReclaimed(existing)
+    return existing.wt.path
+  }
   if (!deps) return liveRoot
   if (!(await isRepoRoot(liveRoot))) return liveRoot
   try {
@@ -186,6 +191,24 @@ export function adoptSession(sessionKey: string, record: SessionRecord, liveRoot
   if (st) st.record = record
 }
 
+/** Recreate a checkout idle cleanup removed, at the same path and id. Call inside the
+ *  repository lease (`enqueueRepoWrite`) on the chat's chain; a no-op otherwise. */
+async function recreateWorkspace(st: ChatState): Promise<void> {
+  if (!st.reclaimed) return
+  const created = await createChatWorktree(st.liveRoot, st.wt.id, dirname(st.wt.path))
+  await retireWorktreeBranch(created)
+  st.wt = created
+  st.reclaimed = false
+}
+
+/** `recreateWorkspace` queued behind the chat's in-flight work, like a turn start. */
+function recreateReclaimed(st: ChatState): Promise<void> {
+  st.lastUsed = Date.now()
+  const task = st.chain.then(() => enqueueRepoWrite(st.liveRoot, () => recreateWorkspace(st)))
+  st.chain = task.catch(() => {})
+  return task
+}
+
 /**
  * Turn-start hook: sync the live tree into the worktree so the agent sees the user's
  * between-turn edits. Queued on the chat's chain so it waits out any in-flight
@@ -199,12 +222,7 @@ export async function beforeTurn(sessionKey: string, _text: string): Promise<voi
   st.lastUsed = Date.now()
   const task = st.chain.then(() =>
     enqueueRepoWrite(st.liveRoot, async () => {
-      if (st.reclaimed) {
-        const created = await createChatWorktree(st.liveRoot, st.wt.id, dirname(st.wt.path))
-        await retireWorktreeBranch(created)
-        st.wt = created
-        st.reclaimed = false
-      }
+      await recreateWorkspace(st)
       if (st.parked) return
       await syncFromLive(st.liveRoot, st.wt)
     })
