@@ -3,6 +3,14 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Shadow Light without a preview box; islands apply live (LKM-133)
+
+- [x] Root cause of "Source changed. Reload before applying your adjustment." (also right after Reload): writes were checked against the whole-file hash the UI last rendered, and the owner's batch chain was dropped before the refreshed view reached Swift. Writes now check the island's own bindings (`writeIsland` + `ChatIslands.seen`); unrelated edits in the file are kept.
+- [x] A bound value changed outside the island: nothing is written, no error card; the controls refresh to the source with an inline notice and the rest of that gesture is dropped.
+- [x] One island's queued commits of a gesture coalesce (latest value wins).
+- [x] Every control writes through one path (`IslandLiveWrites`, 80 ms throttle, one gesture id = one Undo group); typed fields apply on Return and blur and never write invalid values (`IslandEntry`).
+- [x] Shadow Light panel has no Preview box; the capture semantics fail on a "Preview" label.
+
 ## Trezi names only, read compatibility kept (LKM-132)
 
 - [x] XPC service `dev.trezi.service`; the build leaves no other service in `Trezi.app/Contents/XPCServices` (checked by `test/distribution.mjs`).

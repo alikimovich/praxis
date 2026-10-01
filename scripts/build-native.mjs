@@ -147,6 +147,7 @@ const result = Bun.spawnSync(
     join(root, 'src/native/ScrollerDrag.swift'),
     join(root, 'src/native/VisibleChatCapture.swift'),
     join(root, 'src/native/ChatIsland.swift'),
+    join(root, 'src/native/IslandEditing.swift'),
     join(root, 'src/native/ShadowIsland.swift'),
     join(root, 'src/native/ChatActivity.swift'),
     join(root, 'src/native/StreamingText.swift'),

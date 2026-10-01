@@ -34,6 +34,8 @@ export interface IslandView {
   detail: string
   engine: string
   replay: boolean
+  /** Inline note, e.g. a bound value changed outside the island and the controls were refreshed. */
+  notice?: string
 }
 export interface IslandCommand {
   chat: string
