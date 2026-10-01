@@ -199,8 +199,8 @@ for width: CGFloat in [320, 420, 520] {
             require(bottomGap == bounds.maxX - frame.maxX, "Bottom matches right exterior gap")
             require(bounds.contains(frame), "Growing composer stays within chat bounds")
             let readingBottom = bounds.maxY - ChatLayout.bottomInset(composerHeight: height)
-            require(readingBottom + ChatLayout.statusHeight + 40 == frame.minY,
-                "Follow target clears status and composer at every draft height")
+            require(readingBottom + ChatLayout.latestClearance + 40 == frame.minY,
+                "Follow target clears the latest button and composer at every draft height")
         }
     }
 }
@@ -309,8 +309,8 @@ final class ChatReplay {
         let bottom = latestBottom - offset
         let composerTop = viewport - ChatLayout.composerInset - composer
         require(bottom - latestHeight >= 0, "\(label): latest row top visible (\(bottom - latestHeight))")
-        require(bottom <= composerTop - ChatLayout.statusHeight - 40 + 0.5,
-            "\(label): latest bottom \(bottom) above composer top \(composerTop) with status clearance")
+        require(bottom <= composerTop - ChatLayout.latestClearance - 40 + 0.5,
+            "\(label): latest bottom \(bottom) above composer top \(composerTop) with latest-button clearance")
     }
 }
 for order in ["grow-then-resize", "resize-then-grow"] {
@@ -590,12 +590,23 @@ let latest = ChatLatestButton()
 column.addSubview(latest, positioned: .above, relativeTo: latestChat)
 offscreen.setContentSize(column.frame.size)
 offscreen.contentView = column
-let inset = ChatLayout.bottomInset(composerHeight: 128)
-require(latest.place(over: latestChat, bottomInset: inset, visible: false) == .zero && latest.isHidden, "Hidden latest button reports a zero frame")
-let shownFrame = latest.place(over: latestChat, bottomInset: inset, visible: true)
+require(latest.place(over: latestChat, composerHeight: 128, visible: false) == .zero && latest.isHidden, "Hidden latest button reports a zero frame")
+// LKM-141: centered over the column, `gap` above the composer bubble, inside the
+// composer clearance (never over the reading area), at every width and draft.
+for (width, composerHeight) in [(CGFloat(320), CGFloat(56)), (440, 128), (521, 400)] {
+    latestChat.frame = NSRect(x: 0, y: 0, width: width, height: 748)
+    let placed = latest.place(over: latestChat, composerHeight: composerHeight, visible: true)
+    let composerTop = ChatLayout.composerFrame(in: latestChat.bounds, height: composerHeight).minY
+    let readingBottom = 748 - ChatLayout.bottomInset(composerHeight: composerHeight)
+    require(placed.width == ChatLatestButton.diameter && placed.height == ChatLatestButton.diameter, "Latest button is round (\(placed))")
+    require(abs(placed.midX - width / 2) <= 0.5, "Latest button is centered over the \(width)pt column (\(placed))")
+    require(abs(composerTop - placed.maxY - ChatLatestButton.gap) < 0.5, "Latest button sits gap above the composer (\(placed), composer top \(composerTop))")
+    require(placed.minY >= readingBottom, "Latest button stays below the reading area (\(placed), reading bottom \(readingBottom))")
+    require(latest.accessibilityLabel() == "Scroll to latest message", "Latest button keeps its accessibility label")
+}
+latestChat.frame = column.bounds
+let shownFrame = latest.place(over: latestChat, composerHeight: 128, visible: true)
 require(!latest.isHidden && shownFrame.width > 0 && shownFrame.height > 0, "Shown latest button has a real frame (\(shownFrame))")
-require(abs(shownFrame.maxX - (320 - ChatLatestButton.margin)) < 0.5 && abs(shownFrame.maxY - (748 - inset - ChatLatestButton.margin)) < 0.5,
-    "Latest button sits margin above the composer clearance at the trailing edge (\(shownFrame))")
 // Same conversion as ChatAcceptance: chat top-left frame centre -> window point.
 let latestPoint = latestChat.convert(NSPoint(x: shownFrame.midX, y: shownFrame.midY), to: nil)
 let latestHit = column.hitTest(column.superview?.convert(latestPoint, from: nil) ?? latestPoint)
@@ -608,7 +619,7 @@ let strayUp = NSApp.nextEvent(matching: .leftMouseUp, until: .distantPast, inMod
 require(tracked && strayUp == nil, "The button's tracking loop consumes the queued mouseUp and recognises the click")
 require(presses == 1, "The queued synthetic click runs the button's action exactly once (\(presses))")
 latestChat.isHidden = true
-require(latest.place(over: latestChat, bottomInset: inset, visible: true) == .zero && latest.isHidden, "Hidden chat hides the latest button")
+require(latest.place(over: latestChat, composerHeight: 128, visible: true) == .zero && latest.isHidden, "Hidden chat hides the latest button")
 // Negative control: the SwiftUI Button this replaced. A click there hit-tests
 // to the hosting view, not a control that runs its own tracking loop.
 final class SwiftUIClicks { var count = 0 }
@@ -622,7 +633,7 @@ offscreen.contentView = swiftUIHost
 for _ in 0..<5 { swiftUIHost.layoutSubtreeIfNeeded(); RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05)) }
 let swiftUIHit = swiftUIHost.hitTest(NSPoint(x: 320 - 12 - 10, y: 12 + 10))
 require(!(swiftUIHit is NSControl), "Negative control: the SwiftUI latest button is not a native control (\(String(describing: swiftUIHit.map { type(of: $0) })))")
-print("Chat latest button: native button frame above the composer clearance, click hit-test and tracking loop, hidden states; SwiftUI negative control")
+print("Chat latest button: round native button centered gap above the composer inside its clearance at 320/440/521pt, click hit-test and tracking loop, hidden states; SwiftUI negative control")
 
 // Accessibility/scroller provider. With no override it must be exactly the
 // real macOS values (read-only here); overrides stay in-process and flow

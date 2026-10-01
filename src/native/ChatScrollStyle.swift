@@ -3,7 +3,13 @@ import SwiftUI
 
 enum ChatLayout {
     static let composerInset: CGFloat = 10
-    static let statusHeight: CGFloat = 28
+    /// Clearance between the reading area and the composer. The latest button
+    /// sits in it (ChatLatestButton), so it never covers pinned message text.
+    static let latestClearance: CGFloat = 28
+    /// Row height of a response's live status and of its Copy/Revert buttons
+    /// (ChatTurnFooter), so completion swaps rows without a layout jump.
+    static let footerRowHeight: CGFloat = 28
+    static let footerCountHeight: CGFloat = 14
     static func composerFrame(in bounds: CGRect, height: CGFloat) -> CGRect {
         CGRect(x: bounds.minX + composerInset,
                y: bounds.minY + max(0, bounds.height - composerInset - height),
@@ -17,7 +23,7 @@ enum ChatLayout {
                 "width": Double(frame.width), "height": Double(frame.height)]
     }
     static func bottomInset(composerHeight: CGFloat) -> CGFloat {
-        composerHeight + composerInset + statusHeight + 40
+        composerHeight + composerInset + latestClearance + 40
     }
 }
 

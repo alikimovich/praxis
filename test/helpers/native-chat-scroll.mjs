@@ -162,6 +162,57 @@ try {
     writeFileSync(`${artifacts}/reveal-${width}.json`, JSON.stringify(record, null, 2))
   }
 
+  // LKM-141: a turn's token counter follows its live status while it runs, then
+  // sits under Copy/Revert. The footer keeps one height, so completion moves
+  // nothing. Foreground captures at the default and the narrowest width.
+  for (const width of [440, 320]) {
+    stage = `tokens-${width}`
+    const foreground = async (name, args = {}) => {
+      const { image, ...state } = await host.request('chatAcceptance', { prepare: true, capture: true, ...args })
+      writeFileSync(`${artifacts}/${name}.png`, Buffer.from(image.png, 'base64'))
+      return state
+    }
+    const answer = message('tokens-answer', 'assistant', 'The button radius now follows the design token. '.repeat(4))
+    answer.tokens = { label: '↑ 3.9M  ↓ 66k', detail: 'Tokens across this turn’s model calls, not current context size.' }
+    const turn = { chat: `tokens-${width}`, cards: [], questions: [], running: true, streamingId: answer.id,
+      // Enough history to overflow, so the conversation is pinned to its end.
+      messages: [...Array.from({ length: 16 }, (_, i) => message(`tokens-old-${i}`, i % 2 ? 'assistant' : 'user', `Earlier message ${i}. ${'Some project history. '.repeat(10)}`)),
+        message('tokens-question', 'user', 'Tighten the button radius.'), answer],
+      activity: { kind: 'thinking', label: 'Thinking…', animated: true },
+      composer: { enabled: true, text: '', thinking: true, stop: true, revision: 1 } }
+    const footer = async (running, label, settled = () => true) => {
+      let last
+      for (let i = 0; i < 60; i++) {
+        last = await host.request('chatInspect')
+        const frames = last.footerFrames ?? {}
+        if (last.activity === (running ? 'Thinking…' : '') && frames[answer.id] && frames[`${answer.id}-tokens`] &&
+            last.messages.find(m => m.id === answer.id)?.tokens === answer.tokens.label) {
+          const result = { footer: rect(frames[answer.id]), tokens: rect(frames[`${answer.id}-tokens`]) }
+          if (i > 2 && settled(result)) return result
+        }
+        await delay(50)
+      }
+      await capture(`failure-${stage}`)
+      assert.fail(`${label}: ${JSON.stringify(last)}`)
+    }
+    host.send('chatState', { state: turn })
+    await foreground(`tokens-${width}-layout`, { width })
+    const running = await footer(true, `${width}pt running footer`)
+    await foreground(`tokens-running-${width}`)
+    assert(running.tokens.y + running.tokens.height <= running.footer.y + 28 + 0.5, `${width}pt: running counter is on the status line ${JSON.stringify(running)}`)
+    assert(running.tokens.x >= running.footer.x + 40, `${width}pt: running counter follows the Thinking… label ${JSON.stringify(running)}`)
+    Object.assign(turn, { running: false, activity: null, composer: { enabled: true, text: '', revision: 2 } })
+    Object.assign(answer, { workedMs: 42000, at: Date.now(), revertGroup: 'tokens-group' })
+    host.send('chatState', { state: turn })
+    const done = await footer(false, `${width}pt completed footer keeps its place`,
+      result => Math.abs(result.footer.y + result.footer.height - (running.footer.y + running.footer.height)) <= 1)
+    await foreground(`tokens-done-${width}`)
+    assert(done.tokens.y >= done.footer.y + 28 - 0.5, `${width}pt: completed counter is under Copy/Revert ${JSON.stringify(done)}`)
+    assert(Math.abs(done.tokens.x - done.footer.x) <= 1, `${width}pt: completed counter is leading-aligned ${JSON.stringify(done)}`)
+    assert(Math.abs(done.footer.height - running.footer.height) <= 0.5, `${width}pt: footer height unchanged on completion ${JSON.stringify({ running, done })}`)
+    writeFileSync(`${artifacts}/tokens-${width}.json`, JSON.stringify({ width, running, done }, null, 2))
+  }
+
   await checkChatAcceptance(host, artifacts)
 
   console.log('Native chat scroll: sent questions and streamed responses stay visible across short/long history and shrinking composers; nested island reveals settle at both edges and overlapping reveals reject the superseded request at 440pt and 320pt chat widths.')

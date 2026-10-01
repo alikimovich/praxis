@@ -10,6 +10,7 @@ struct ChatMessage: Decodable, Identifiable {
     let id: String; let role: String; let text: String; let segments: [ChatSegment]
     let at: Double?; let workedMs: Double?
     let attachments: [ChatAttachment]?; let selection: ChatSelection?; let revertGroup: String?
+    let tokens: ChatTokens?
 }
 struct ChatAction: Decodable { let label: String; let action: String; let value: String?; let disabled: Bool? }
 struct ChatCard: Decodable, Identifiable { let id: String; let title: String; let detail: String?; let fullDetail: String?; let actions: [ChatAction] }
@@ -19,7 +20,7 @@ struct ChatQuestionRequest: Decodable, Identifiable { let id: String; let questi
 struct ChatSnapshot: Decodable {
     let activity: ChatActivityState?; let streamingId: String?
     let chat: String; let messages: [ChatMessage]; let running: Bool; let cards: [ChatCard]
-    let questions: [ChatQuestionRequest]; let status: String; let statusDetail: String?
+    let questions: [ChatQuestionRequest]
 }
 private extension ChatSnapshot {
     // Source-value refreshes and composer updates are not new conversation content.
@@ -50,6 +51,8 @@ final class ChatModel: ObservableObject {
     @Published var composerHeight: CGFloat = 0
     var messageFrames: [String: CGRect] = [:]
     var islandPositions: [String: CGRect] = [:]
+    /// Response footers and their token counters (`<id>-tokens`), for inspection.
+    var footerFrames: [String: CGRect] = [:]
     var bottomPosition: CGFloat = 0
     var latestButtonFrame = CGRect.zero
     /// What the conversation's SwiftUI views read (see ChatAccessibilityEcho).
@@ -60,9 +63,10 @@ final class ChatModel: ObservableObject {
     /// Bumped by the native latest button; the conversation scrolls to latest.
     @Published var latestRequest = 0
     func pressLatest() { latestButtonClickCount += 1; latestRequest += 1 }
-    // Preserve message/status clearance above the floating composer.
-    static let statusHeight = ChatLayout.statusHeight
+    // Preserve message clearance above the floating composer.
     var bottomInset: CGFloat { ChatLayout.bottomInset(composerHeight: composerHeight) }
+    /// Bottom band of the conversation masked out while the latest button is shown, else 0.
+    var latestClearHeight: CGFloat { showsLatest ? ChatLatestButton.clearHeight(composerHeight: composerHeight) : 0 }
     /// `gesture` groups a control's live writes into one Undo step (`IslandLiveWrites`).
     func islandAction(_ island: IslandView, action: String, values: [String: Any] = [:], gesture: String? = nil) {
         guard let chat = snapshot?.chat else { return }
@@ -104,7 +108,7 @@ final class NativeChat: NSHostingView<ChatConversation> {
     }
     override func layout() { super.layout(); layoutLatestButton() }
     func layoutLatestButton() {
-        model.latestButtonFrame = latestButton.place(over: self, bottomInset: model.bottomInset, visible: model.showsLatest)
+        model.latestButtonFrame = latestButton.place(over: self, composerHeight: model.composerHeight, visible: model.showsLatest)
     }
     required init(rootView: ChatConversation) { fatalError("init(rootView:) has not been implemented") }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -149,7 +153,8 @@ final class NativeChat: NSHostingView<ChatConversation> {
         let tail = model.snapshot?.messages.suffix(3).map { ["id":$0.id, "frame":NSStringFromRect(model.messageFrames[$0.id] ?? .zero)] } ?? []
         return ["scroll":conversationScroll.map(ChatScrollStyleProbe.metrics) ?? [:], "realizedRows":model.messageFrames.count, "latestSettleAttempts":model.latestSettleAttempts, "tailFrames":tail,
          "followRevision":model.followRevision, "controlInteraction":model.controlInteraction, "visibleMessageIDs":model.messageFrames.filter { $0.value.maxY > 0 && $0.value.minY < bounds.height - model.bottomInset }.map(\.key), "bottomPosition":model.bottomPosition, "composerInset":model.bottomInset, "height":bounds.height, "revealRevision":model.revealRevision, "revealAppliedRevision":model.revealAppliedRevision, "revealAttempt":model.revealAttempt, "islandPositions":model.islandPositions.mapValues { NSStringFromRect($0) }, "catPose":model.cat.pose, "catFrame":model.cat.frame, "catArtwork":!CatArtwork.frames.isEmpty, "frame":NSStringFromRect(frame), "native":true, "visible":!isHidden, "chat":model.snapshot?.chat ?? "", "messageCount":model.snapshot?.messages.count ?? 0,
-         "messages":model.snapshot?.messages.map { ["id":$0.id,"role":$0.role,"text":$0.text] } ?? [],
+         "messages":model.snapshot?.messages.map { ["id":$0.id,"role":$0.role,"text":$0.text,"tokens":$0.tokens?.label ?? ""] } ?? [],
+         "footerFrames":model.footerFrames.mapValues { NSStringFromRect($0) }, "messageFrames":model.messageFrames.mapValues { NSStringFromRect($0) },
          "activity":model.snapshot?.activity?.label ?? "", "activityKind":model.snapshot?.activity?.kind ?? "", "activityAnimated":model.snapshot?.activity?.animated ?? false,
          "islands":model.snapshot?.messages.flatMap { $0.segments.compactMap { $0.island }.map { ["id":$0.id,"revision":$0.revision,"status":$0.status,"title":$0.title,"blocks":$0.blocks.count,"blockKinds":$0.blocks.map(\.kind),"fields":$0.fields.count,"sourceRevision":$0.sourceRevision] as [String: Any] } } ?? [],
          "cards":model.snapshot?.cards.map(\.id) ?? [], "questionCount":model.snapshot?.questions.count ?? 0]
@@ -166,6 +171,19 @@ private struct MessagePositions: PreferenceKey {
 struct IslandPositions: PreferenceKey {
     static var defaultValue: [String: CGRect] = [:]
     static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) { value.merge(nextValue()) { _, new in new } }
+}
+/// Opaque except for the bottom `clear` points, with a short fade above them.
+private struct LatestClearanceMask: View {
+    let clear: CGFloat
+    var body: some View {
+        VStack(spacing: 0) {
+            Color.black
+            if clear > 0 {
+                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: ChatLatestButton.fade)
+                Color.clear.frame(height: clear)
+            }
+        }
+    }
 }
 struct ChatConversation: View {
     @ObservedObject var model: ChatModel
@@ -288,12 +306,16 @@ struct ChatConversation: View {
                     let bottomAnchor = UnitPoint(x: 0.5, y: readingHeight / max(1, viewport.size.height))
                     let settle = { settleLatest(proxy) }
                     conversationScroll(onMovedToEnd: { if follows { settle() } })
+                    // The latest button only shows while history scrolls under that
+                    // spot: keep that band free of text and controls (LKM-141).
+                    .mask { LatestClearanceMask(clear: model.latestClearHeight) }
                     .coordinateSpace(name: "chatScroll")
                     .onPreferenceChange(MessagePositions.self) { positions in
                         model.messageFrames = positions
                         sticky = model.snapshot?.messages.last(where: { $0.role == "user" && (positions[$0.id]?.maxY ?? 1) < 0 })?.id
                     }
                     .onPreferenceChange(IslandPositions.self) { model.islandPositions = $0 }
+                    .onPreferenceChange(TurnFooterPositions.self) { model.footerFrames = $0 }
                     .overlay(alignment: .top) {
                         stickyRequest(proxy: proxy)
                     }
@@ -315,14 +337,6 @@ struct ChatConversation: View {
                     .onChange(of: model.snapshot?.chat) { _ in follows = true; sticky = nil; proxy.scrollTo("bottom", anchor: bottomAnchor); attachRequest += 1; settle() }
                     // The latest button itself is native (NativeChat.latestButton).
                     .onChange(of: model.latestRequest) { _ in follows = true; proxy.scrollTo("bottom", anchor: bottomAnchor); attachRequest += 1; settle() }
-                    .overlay(alignment: .bottomLeading) {
-                        Text(model.snapshot?.status ?? "")
-                            .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-                            .lineLimit(1).help(model.snapshot?.statusDetail ?? model.snapshot?.status ?? "")
-                            .padding(.horizontal, 18).frame(height: ChatModel.statusHeight)
-                            .padding(.bottom, model.composerHeight + ChatLayout.composerInset)
-                            .allowsHitTesting(false)
-                    }
                 }
             }
         }.background(Color.clear)
@@ -362,13 +376,14 @@ private struct NativeMessageRow: View {
                         else { ChatMarkdown(source: text, streaming: running).help(messageTime(segment.at ?? message.at)) }
                     }
                 }
-                if let activity { ChatActivity(activity: activity, visible: model.visible) }
-                if !running && message.role == "assistant" {
-                    HStack {
-                        Button { copyChatText(message.text) } label: { Image(systemName: "doc.on.doc") }.help("Copy response")
-                        if message.revertGroup != nil { Button { model.action("revert", id: message.id) } label: { Image(systemName: "arrow.uturn.backward") }.help("Revert this turn's edits") }
-                    }.buttonStyle(ChatActionButtonStyle())
-                }
+                if message.role == "assistant" && (activity != nil || !running) {
+                    ChatTurnFooter(id: message.id, activity: activity, tokens: message.tokens, visible: model.visible) {
+                        HStack {
+                            Button { copyChatText(message.text) } label: { Image(systemName: "doc.on.doc") }.help("Copy response")
+                            if message.revertGroup != nil { Button { model.action("revert", id: message.id) } label: { Image(systemName: "arrow.uturn.backward") }.help("Revert this turn's edits") }
+                        }.buttonStyle(ChatActionButtonStyle())
+                    }
+                } else if let activity { ChatActivity(activity: activity, visible: model.visible) }
             }.padding(message.role == "user" ? 12 : 0)
                 .background { if message.role == "user" { RoundedRectangle(cornerRadius: 14).fill(.quaternary) } }
             if message.role == "assistant" { Spacer(minLength: 0) }
