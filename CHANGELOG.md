@@ -18,6 +18,9 @@ Every change that alters user-visible behaviour adds one line under Unreleased.
 - Editor toolbar and a popped-out source editor with a file tree.
 - Versioning: Settings › General and `trezi --version` show "Trezi X.Y.Z (build N, short sha)"; About Trezi shows the same; `bun run release` cuts tagged releases with this changelog.
 
+### Fixed
+- Shadow Light drags on the iPhone Frame Shadow island no longer flicker in the live preview while the source is written once at the end of the gesture (LKM-140).
+
 ### Changed
 - Settings redesign: one native window with a General, AI Providers and Experimental sidebar that saves automatically.
 - Renamed the app to Trezi; projects that use the earlier setup names are migrated once on open.

@@ -174,7 +174,8 @@ Gaps, out-of-order values and foreign values must all be 0, and the source must
 not change before the release. It writes `shadow-light-drag.png` (mid-drag),
 `shadow-light-released.png` and `shadow-light-drag.json` (the counts). The unit
 test `test/island-flicker.mjs` models a gap HMR to record the same counts before
-and after the fix.
+and after the fix. With TreziHost built, `test/island-flicker-frameworks.mjs` runs
+the same drag on real Next.js Webpack HMR and a Vite/CSS module fixture.
 
 Read screenshots in `test/artifacts/native/` for UI verification. Offscreen
 AppKit captures do not faithfully paint Liquid Glass; visible inspection may be
