@@ -120,6 +120,8 @@ export async function checkVisibleSettings(host: NativeBridge, artifacts: string
   assert.equal(initial.section, 'general', 'A new profile opens Settings on General')
   assert.equal(initial.values.projectUi, 'false')
   assert.equal(initial.values.engine, 'agent')
+  // LKM-143: General shows the version stamped into this build, as `trezi --version` prints it.
+  assert.match(initial.values.version ?? '', /^Trezi \d+\.\d+\.\d+\S* \(build \d+, [0-9a-f]{7,}\)$/, 'General shows the built version')
   assertSidebarParity(initial.sourceList, projects)
   writeFileSync(
     join(artifacts, 'settings-sidebar-parity.json'),

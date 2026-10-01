@@ -1,6 +1,7 @@
 import type { ModelChoice, ProviderConnection } from '../shared/api'
 import type { NativeSheetAction, NativeSheetField, NativeSheetSection, NativeSheetState } from '../shared/native-sheet'
 import { parsePreferredModelState, preferredSelectValue, setFixedPreference, settingsFromChoice, setLastUsedMode } from '../shared/preferred-model'
+import { appVersion } from './app-version'
 import type { NativePreferences } from './preferences'
 import type { NativeSheetController } from './sheets-runtime'
 const ids = (text: string) => [...new Set(text.split(/[\s,]+/).filter(Boolean))]
@@ -38,6 +39,7 @@ export class NativeSettingsController {
       title: 'Settings', detail: '', sections: all, section: all.find(s => s.id === saved)?.id ?? 'general',
       fields: [
         { id: 'default', section: 'general', label: 'Default model', help: 'New chats start with this model.', kind: 'choice', value: preferredSelectValue(preferred), choices: defaultChoices(choices) },
+        { id: 'version', section: 'general', label: 'Version', kind: 'readonly', value: appVersion() },
         { id: 'projectUi', section: 'experimental', label: 'Gen UI', help: 'Generate UI using your project’s existing components and styles. Experimental; supports React and Svelte.', kind: 'choice', value: this.preferences.get('trezi:project-ui:v1') ?? 'false', choices: [{ value: 'false', label: 'Off' }, { value: 'true', label: 'On' }] },
         { id: 'engine', section: 'experimental', label: 'UI layout method', help: 'Chat model uses your selected chat model to arrange components. Jev uses a separate layout model and requires an AI Gateway API key.', visibleWhen: { field: 'projectUi', value: 'true' }, kind: 'choice', value: this.preferences.get('trezi:project-ui-engine:v1') ?? 'agent', choices: [{ value: 'agent', label: 'Chat model' }, { value: 'jev', label: 'Jev layout engine' }] },
         ...providers.fields.map(field => ({ ...field, section: 'providers', draft: true }))

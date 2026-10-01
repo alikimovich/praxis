@@ -147,7 +147,8 @@ const UNIT = [
   "skills-install",
   "trezi-cli",
   "native-smoke-groups",
-  "docs-merge-union"
+  "docs-merge-union",
+  "versioning"
 ];
 
 const NATIVE = ['native-runtime', 'native-source-window', 'native-chat-scroll', 'native-next-hmr'];

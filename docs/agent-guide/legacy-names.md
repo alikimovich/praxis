@@ -10,7 +10,7 @@ listed string. Removing a shim needs a tested migration.
 
 | Shim (read side only; writes use Trezi names) | Files |
 | --- | --- |
-| OS identities kept on purpose: bundle ID `dev.praxis.native` (WebKit data, TCC grants) and Keychain service `dev.praxis.native.secrets` (the master key) | `scripts/build-native.mjs`, `src/native/Host.swift` |
+| OS identities kept on purpose: bundle ID `dev.praxis.native` (WebKit data, TCC grants) and Keychain service `dev.praxis.native.secrets` (the master key) | `scripts/service-info.mjs`, `src/native/Host.swift` |
 | `PRAXIS_*` env vars as a fallback for `TREZI_*` (Trezi wins); the installer reuses `PRAXIS_HOME` or an existing `~/.praxis` checkout and removes the retired `praxis` command link it made | `src/shared/rename-compat.ts`, `bin/trezi-agent-mcp.mjs`, `src/service/ProviderData.swift`, `install.sh` |
 | Profile alias `Trezi Native → Praxis Native`; the `praxis`/`dsgn` session, memory and provider stores inside a profile | `src/native/profile-path.ts`, `src/service/ProfilePaths.swift`, `src/service/ConversationStore.swift`, `src/service/MemoryFile.swift`, `src/service/ProviderData.swift`, `src/main/provider-data.ts` |
 | `praxis:`/`praxis.` preference keys (a Trezi key wins, even when null) | `src/native/preferences.ts`, `src/service/PreferencesFile.swift` |

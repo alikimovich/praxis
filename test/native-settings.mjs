@@ -37,7 +37,10 @@ await settings.open()
 // One sidebar window: General, AI Providers (inline, no separate sheet) and Experimental.
 assert.deepEqual(sheets.current.state.sections.map(s => [s.id, s.label, s.symbol]), [['general', 'General', 'gearshape'], ['providers', 'AI Providers', 'sparkles'], ['experimental', 'Experimental', 'testtube.2']])
 assert.equal(sheets.current.state.section, 'general', 'first open shows General')
-assert.deepEqual(sheets.current.state.fields.map(f => [f.id, f.section]), [['default', 'general'], ['projectUi', 'experimental'], ['engine', 'experimental'], ['connections', 'providers']])
+assert.deepEqual(sheets.current.state.fields.map(f => [f.id, f.section]), [['default', 'general'], ['version', 'general'], ['projectUi', 'experimental'], ['engine', 'experimental'], ['connections', 'providers']])
+// LKM-143: General shows the version as a read-only row (the build stamps the label; unbuilt source says so).
+assert.equal(field('version').kind, 'readonly')
+assert.equal(field('version').value, 'Trezi (unbuilt development source)')
 assert.equal(sheets.current.state.actions.some(a => a.id === 'save' || a.id === 'cancel' || a.id === 'connections'), false)
 assert.deepEqual(sheets.current.state.actions.map(a => [a.id, a.section]), [['add', 'providers']])
 await action('change', { default: 'codex:default', projectUi: 'false', engine: 'agent' })

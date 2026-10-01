@@ -44,6 +44,21 @@ open_trezi() {
   exec open -a "$app" "$@"
 }
 
+# "Trezi X.Y.Z (build N, <short sha>)", as Settings shows it (scripts/version.mjs). The
+# built app's Info.plist when it carries the stamp, else the checkout itself.
+print_version() {
+  plist="$app/Contents/Info.plist"
+  if [ -f "$plist" ] && commit=$(plutil -extract TreziCommit raw -o - "$plist" 2>/dev/null); then
+    version=$(plutil -extract CFBundleShortVersionString raw -o - "$plist")
+    build=$(plutil -extract CFBundleVersion raw -o - "$plist")
+  else
+    version=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$root/package.json")
+    build=$(git -C "$root" rev-list --count HEAD 2>/dev/null || echo 0)
+    commit=$(git -C "$root" rev-parse --short=7 HEAD 2>/dev/null || echo unknown)
+  fi
+  printf 'Trezi %s (build %s, %s)\n' "$version" "$build" "$commit"
+}
+
 open_folder() {
   folder=$(cd "$1" 2>/dev/null && pwd -P) || { echo "Not a folder: $1" >&2; exit 1; }
   open_trezi "$folder"
@@ -58,8 +73,7 @@ case "${1-}" in
     bun=$(bun_path)
     exec "$bun" "$root/bin/trezi.mjs" --update "$@" ;;
   --help|-h) usage ;;
-  --version|-v)
-    printf 'Trezi %s\n' "$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$root/package.json")" ;;
+  --version|-v) print_version ;;
   --project)
     [ $# -eq 2 ] || { echo "Usage: trezi <folder>" >&2; exit 1; }
     open_folder "$2" ;;
