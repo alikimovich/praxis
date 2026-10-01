@@ -27,6 +27,7 @@ const UNIT = [
   "provider-owner",
   "provider-data",
   "provider-login",
+  "provider-cold-start",
   "provider-helper-tools",
   "service-session",
   "native-settings-claude",
@@ -39,6 +40,7 @@ const UNIT = [
   "source-stamp",
   "native-boundary",
   "trezi-agent-tools",
+  "preview-agent-tools",
   "codex-mcp",
   "codex-model",
   "native-bridge-close",
@@ -47,6 +49,7 @@ const UNIT = [
   "native-preview-recovery",
   "native-workspace-controller",
   "native-support",
+  "display-path",
   "native-sheets",
   "native-settings",
   "native-settings-layout",
@@ -147,7 +150,8 @@ const UNIT = [
   "skills-install",
   "trezi-cli",
   "native-smoke-groups",
-  "docs-merge-union"
+  "docs-merge-union",
+  "versioning"
 ];
 
 const NATIVE = ['native-runtime', 'native-source-window', 'native-chat-scroll', 'native-next-hmr'];

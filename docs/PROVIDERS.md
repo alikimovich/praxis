@@ -82,12 +82,30 @@ because those belong to the harness, not the selected endpoint model.
 
 ## Required browser verification
 
-All providers receive the same built-in agent-browser operating rule. For web UI
-changes and browser testing, agents must check CLI availability in their execution
-environment and use it when available. Responsive/layout checks cover phone,
-tablet, and desktop viewports, with screenshots and interaction checks. Each task
-uses its own named browser session. Missing CLI/browser support is reported;
-installation requires user permission. An explicit user tool choice takes priority.
+Providers with Trezi's preview tools (Claude, Codex and Codex-based endpoints)
+must verify web UI in the Trezi preview (LKM-138): `preview_screenshot` (optionally
+cropped to a `selector`), `preview_inspect`, `preview_evaluate`, `preview_console` and
+`preview_viewport` for phone/tablet/desktop checks, restored before finishing.
+agent-browser is only for scripted multi-step interactions (clicks, typing, flows),
+never just to inspect, evaluate or screenshot. Each task uses its own named browser
+session. Missing CLI/browser support is reported; installation requires user
+permission. Providers without the preview tools keep the agent-browser rule: check
+CLI availability and use it for responsive checks with screenshots. An explicit user
+tool choice takes priority.
+
+The tools run as isolated WKContentWorld scripts (`src/preview/agent-inspect.ts`,
+`src/preview/agent-evaluate.ts`, `src/preview/agent-console.ts`), driven by
+`src/main/preview-agent-tools.ts` and `src/native/PreviewAgent.swift`. Inspect,
+evaluate and console run in a dedicated world with no message handler, so the page
+cannot see them or reach Trezi through them. `preview_evaluate` is read-only by
+construction, not by convention. The expression is parsed first, and loops, labels,
+`with`, `debugger` and dynamic `import()` are rejected. It then runs against a
+membrane over `window`/`document`: writes, deletes, `defineProperty`, navigation,
+storage, cookies, network, timers and the Function constructors throw, and calls pass
+only through an allowlist of read-only DOM methods. Results are JSON, clipped to
+64 KB and given 2 s. A known gap: unbounded async recursion (a microtask loop) can
+still keep the page busy until the time limit returns the tool. `preview_viewport`
+fits a CSS width with page zoom and only works on the foreground preview.
 
 Preview observation is on demand and shows the current user view, not necessarily
 the calling chat’s private worktree. Codex screenshot tool output is separate from
@@ -201,6 +219,21 @@ so `isolatedCodexConfig` also sends `features.plugins=false` and `features.apps=
 on every run. Both paths use it, because the helper runs the same adapter.
 `test/codex-mcp.mjs` adds an installed-plugin fixture: the real CLI lists its server
 without isolation and not at all with it.
+
+Claude chats get the same isolation (LKM-138). They keep the repo's and the user's
+`CLAUDE.md` files and skills (`settingSources`) and Trezi's bundled plugin. They do
+not load the user's own Claude Code plugins or MCP servers. `claudeIsolationOptions`
+in `src/main/backends/claude-isolation.ts` sets `strictMcpConfig: true`, so only the
+servers Trezi passes start; this also skips the target repo's `.mcp.json`. It sends
+`settings.enabledPlugins` with every plugin listed in the user's
+`$CLAUDE_CONFIG_DIR` (default `~/.claude`) `plugins/installed_plugins.json` and
+`settings.json`, and in the repo's `.claude/settings*.json`, set to `false`. Flag
+settings outrank user, project and local settings. Title and project-memory queries
+always use `strictMcpConfig`. **Settings → General → Allow my Claude Code plugins in
+Trezi chats** (preference `trezi:claude-user-plugins:v1`, default off) lifts both
+for new chats; the helper reads it each time a session opens.
+`test/preview-agent-tools.mjs` checks the options with a fixture config dir, and
+`test/native-settings.mjs` checks the default and persistence.
 
 ## Framework setup context
 
@@ -347,6 +380,43 @@ text) or stayed on "Thinking…" forever, although `claude` worked in Terminal. 
   which one chats use, whether a token is set, and `USER`/`HOME`/`PATH`/cwd.
 
 Tested deterministically by `test/provider-login.mjs` (fake helper and stand-in CLIs).
+
+## Claude cold first turn (LKM-135)
+
+**Symptom.** A healthy but slow first turn ended with "Claude did not respond": the
+LKM-119 90 s deadline counted the whole cold path (helper spawn, two `claude auth status`
+probes one after the other, a cold CLI start, the model thinking) as silence.
+
+**What Trezi does now.**
+
+- **Phases.** A Claude helper reports `phase` frames to the owner: `auth` (the probe, or
+  the cached choice), `cli` (the CLI answered `initialize`), `init` (the turn's session
+  started) and `progress` (system messages such as a request or retry before any output,
+  at most one per second). The owner logs each one at debug level in the service log
+  (`debug provider claude <id>: helper ready … / auth probe … / CLI started … / session
+  init … / first model event … ms after send`). The token is never logged.
+- **Deadlines follow the phase.** A turn sent while the CLI has not started keeps the
+  90 s deadline (a hang at the process level). Once the CLI is up, the wait for the
+  session init and the model's first output is 10 minutes (`replyTimeout`), renewed by
+  every phase or progress report, so a helper that is alive and making progress is
+  never stopped. After 20 s without output the chat shows "Still starting Claude…" or
+  "Still thinking…" instead of an error. A real hang still ends with the no-response
+  card, and its message names the phase, e.g. "Stopped while starting the Claude CLI
+  (no answer in 90 s)". A helper that exits before any output also names its phase.
+  The init's resume-id record no longer counts as output.
+- **Probes once, in parallel.** The bundled and installed CLIs are probed at the same
+  time. The owner keeps the logged-in choice for the app session and passes it in each
+  Claude helper's `open` frame (`cli`), so later chats skip the probes. An installed
+  executable must still be executable. A sign-in failure (`auth` error), a saved token
+  and **Check login** clear the cache, so the next chat probes again.
+- **Pre-warm.** Opening a project or chat starts its Claude helper and CLI right away
+  (the session starts with the chat), so the cold start overlaps the user's typing; the
+  `cli` phase is logged before anything is sent.
+- Codex and Gemini report no phases yet and keep the 90 s deadline.
+
+Tested deterministically by `test/provider-cold-start.mjs`: the real adapter in the real
+helper under the owner fixture, with stand-in CLIs and scaled deadlines (0.5 s for 90 s,
+2.5 s for 10 min).
 
 ## Codex seat models (LKM-126)
 
@@ -598,6 +668,7 @@ Codex checks its bridge (`workspace_state`) while its helper is still opening.
 | --- | --- | --- | --- |
 | `chat_island` | routed | routed | the chat-island service on the Swift editing owner |
 | `preview_location`, `preview_screenshot` | routed | routed | the preview registry (URL, capture) |
+| `preview_inspect`, `preview_evaluate`, `preview_console`, `preview_viewport` | routed | routed | the preview's isolated agent world and page zoom |
 | `open_preview`, `open_code` | routed | routed | the window that navigates the preview or reveals code |
 | `project_ui_catalog`, `compose_project_ui` | routed | routed | the chat's Experimental Gen UI state |
 | `workspace_state`, `prepare_conflict_resolution` | — | routed | chat-isolation state (worktree, parked batch) |

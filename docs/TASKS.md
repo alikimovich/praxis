@@ -3,6 +3,42 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Versioning: SemVer, changelog, tags and app version (LKM-143)
+
+- [x] package.json `version` is the one SemVer source; build number = commit count of HEAD, plus the short sha (`scripts/version.mjs`).
+- [x] Trezi.app and the XPC service Info.plists carry CFBundleShortVersionString, CFBundleVersion and `TreziCommit` (no hard-coded 1); the backend and provider-helper bundles carry the label.
+- [x] `trezi --version`, Settings › General › Version and About Trezi show "Trezi X.Y.Z (build N, sha)".
+- [x] CHANGELOG.md (Keep a Changelog, Unreleased, seeded), union merge, AGENTS.md rule.
+- [x] `bun run release <major|minor|patch>`: main + clean tree only; bumps, moves Unreleased, commits, annotated tag, no push.
+- [x] CI `scripts/check-version.mjs`; `test/versioning.mjs` (unit) covers the release script in a temp repo and the plist values.
+- [ ] Cut the first native release from main: `bun run release minor` → 0.1.0 (maintainer, after merge).
+## Short paths; chat worktree cleanup (LKM-136)
+
+- [x] One display-path formatter (`src/shared/display-path.ts`): project-relative paths, "chat workspace" / "Trezi data" / "temporary patch" / "recovery copy" labels, never truncated mid-path.
+- [x] Collapsed chat tool rows, the activity line, error/conflict cards, Activity lines and the preview error use it; full paths only in expanded rows, tooltips, Copy and Copy All. Logs and the ledger unchanged.
+- [x] Idle cleanup (default 7 days, Settings → General), lazy recreate on the next turn; parked, running and dirty checkouts kept (dirty work to an `idle-<id>` recovery ref).
+- [x] Closing a chat removes its clean checkout; old-name worktree folders removed once migrated or empty.
+- [x] Settings shows the chat workspaces' disk use and "Clean up now".
+- [ ] Manager: foreground check of Settings → General (usage row and Clean up now) in the native capture.
+## Preview inspection tools; the WebKit preview over external browsers (LKM-138)
+
+- [x] `preview_inspect`, `preview_evaluate`, `preview_console`, `preview_viewport` and element-cropped `preview_screenshot` run on the live preview through an isolated WKContentWorld (`TreziAgent`, no message handler); results are bounded and sanitized.
+- [x] `preview_evaluate` is read-only and bounded: parse-time rejection of loops and dynamic code, a membrane that throws on writes, navigation and storage, read-only call allowlist, 2 s and 64 KB limits.
+- [x] Exposed to Claude (in-process MCP and helper route) and Codex (MCP bridge); provider policy lists in TS, Swift and the golden fixture agree.
+- [x] Rules v25, the trezi-preview skill, README and PROVIDERS prefer the preview tools; agent-browser only for scripted multi-step interactions.
+- [x] Claude chats skip the user's own Claude Code plugins and MCP servers (`strictMcpConfig`, `enabledPlugins` false) but keep CLAUDE.md files and skills; Settings › General "Allow my Claude Code plugins in Trezi chats", off by default and persisted.
+- [x] Proof: `test/preview-agent-tools.mjs` (unit), `test/native-settings.mjs`, `test/rules.mjs`, the helper/MCP tool lists, and the native `agent-preview` check in the core group.
+- [ ] Async microtask recursion in `preview_evaluate` can still keep the page busy until the time limit; consider running evaluate off the main world's event loop if it bites.
+
+## Claude first turn: no false "did not respond" (LKM-135)
+
+- [x] Cold-start phases (helper ready, auth probe, CLI started, session init, first model event, no-response/exit) logged at debug level in the service log.
+- [x] Deadline by phase: 90 s only until the CLI starts; then 10 min for the session init and the first output, renewed by `phase`/`progress` reports; "Still starting Claude…"/"Still thinking…" after 20 s instead of an error.
+- [x] The no-response card (and a pre-output exit) names the phase it stopped in.
+- [x] Auth probes once per app session (owner cache passed in `open`), bundled and installed in parallel, re-probed after a sign-in failure, a saved token or Check login.
+- [x] Pre-warm: the Claude helper and CLI start when the chat opens (checked by the `cli` phase before any send).
+- [x] `test/provider-cold-start.mjs` (unit): slow init/think/progress pass, three kinds of hang still fail with the named phase, probes parallel and cached.
+- [ ] Codex and Gemini helpers report no phases yet (they keep the LKM-119 90 s deadline).
 ## Startup recovery reports each interrupted operation once (LKM-134)
 
 - [x] Journal version 2: the service resolves every open interrupted entry when it opens the journal (synced first), so `status.recovered` reports each at exactly one launch; refs are kept.

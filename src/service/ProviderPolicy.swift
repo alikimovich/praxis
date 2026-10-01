@@ -23,13 +23,14 @@ enum ProviderPolicy {
     static let imageTypes: Set<String> = ["image/png", "image/jpeg", "image/gif", "image/webp"]
 
     static let treziTools = [
-        "project_ui_catalog", "compose_project_ui", "preview_location", "preview_screenshot", "open_preview", "open_code",
-        "chat_island", "spring_to_css", "check_contrast", "fluid_clamp", "color_scale", "layered_shadow",
+        "project_ui_catalog", "compose_project_ui", "preview_location", "preview_screenshot", "preview_inspect",
+        "preview_evaluate", "preview_console", "preview_viewport", "open_preview", "open_code", "chat_island", "spring_to_css", "check_contrast", "fluid_clamp", "color_scale", "layered_shadow",
         "line_height", "list_recommended_skills", "install_skills", "workspace_state", "prepare_conflict_resolution",
     ]
     static let foregroundOnly = [
         "open_code": "Background edits cannot navigate the user editor.",
         "chat_island": "Background edits cannot create chat islands.",
+        "preview_viewport": "Background edits cannot resize the user preview.",
     ]
     static let autoTrezi = Set(treziTools).subtracting(["install_skills", "workspace_state", "prepare_conflict_resolution"])
     static let autoAllow: Set<String> = ["Read", "Glob", "Grep", "LS", "NotebookRead"]

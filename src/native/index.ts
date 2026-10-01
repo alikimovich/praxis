@@ -11,6 +11,7 @@ import { NativeEditorController } from './editor-controller'
 import { isAbsolute, join, resolve } from 'node:path'
 import { conversationsClosed, projectHasRunningAgents, registerAgentIpc, setProjectMemoryOwner } from '../main/agent'
 import { registerAnnotationsIpc } from '../main/annotations'
+import { CHAT_WORKSPACE_IDLE_KEY, cleanLegacyWorkspaces, idlePeriod, sweepIdleWorkspaces } from '../main/chat-workspaces'
 import { registerControlsIpc } from '../main/control-panels'
 import { registerDevServerIpc } from '../main/devserver'
 import { registerDiagnoseIpc } from '../main/diagnose'
@@ -47,6 +48,7 @@ import { type ConversationOwner, setConversationOwner } from '../main/conversati
 import { serviceConversation } from './conversation-service'
 import { serviceProvider } from './provider-service'
 import { setProviderOwner } from '../main/provider-owner'
+import { CLAUDE_USER_PLUGINS_KEY, setClaudeUserPluginsSource } from '../main/backends/claude-isolation'
 import { setProviderDataOwner } from '../main/provider-data'
 import { serviceEditing } from './editing-service'
 import { setEditingOwner } from '../main/editing-owner'
@@ -62,6 +64,7 @@ import { environmentChanges } from '../shared/environment-changes'
 import { NativeContextController } from './context-controller'
 import { NativeReviewController } from './review-controller'
 import { NativeActivityController } from './activity-controller'
+import { displayText, setDisplayProfile } from './display-paths'
 import { NativeSettingsController } from './settings-controller'
 import { withClaudePane } from './settings-claude'
 import { NativeSheetController } from './sheets-runtime'
@@ -80,6 +83,7 @@ async function main() {
   const testDir = testing ? smokeDirectory() : null
   if (testDir) process.env.TREZI_USER_DATA = join(testDir, 'profile')
   const profile = app.getPath('userData')
+  setDisplayProfile(profile)
   const projectIndex = process.argv.indexOf('--project')
   const requestedProject = projectIndex >= 0 ? process.argv[projectIndex + 1] : null
   if (projectIndex >= 0 && !requestedProject) throw new Error('--project requires a folder')
@@ -119,6 +123,7 @@ async function main() {
   const mainView = new NativeView('main')
   // The Swift service owns every domain; there is no local fallback write, ever.
   const preferences = await servicePreferences(host).catch(error => { throw new Error(`Trezi could not read preferences from its service: ${error.message}`) })
+  setClaudeUserPluginsSource(() => preferences.get(CLAUDE_USER_PLUGINS_KEY))
   const workspace = await serviceWorkspace(host).catch(error => { throw new Error(`Trezi could not read the workspace from its service: ${error.message}`) })
   // Project memory (S05): read on demand, so there is no startup snapshot to await.
   const memory = serviceProjectMemory(host)
@@ -205,6 +210,13 @@ async function main() {
   })
   registerDevServerIpc(() => window, ipcMain, runtimeOwner)
   registerAgentIpc(() => window)
+  // LKM-136: old-name worktree folders once, then idle chat checkouts every hour.
+  const sweepWorkspaces = () => {
+    const idle = idlePeriod(preferences.get(CHAT_WORKSPACE_IDLE_KEY))
+    if (idle !== null) void sweepIdleWorkspaces(idle)
+  }
+  setTimeout(() => void cleanLegacyWorkspaces().finally(sweepWorkspaces), 60_000).unref?.()
+  setInterval(sweepWorkspaces, 60 * 60_000).unref?.()
   registerPropsIpc()
   registerStylesIpc()
   registerControlsIpc()
@@ -264,7 +276,7 @@ async function main() {
 
   let shellController: NativeShellController | undefined
   const renderShell = () => shellController?.render()
-  const activityController = new NativeActivityController((method, data) => host!.send(method, data))
+  const activityController = new NativeActivityController((method, data) => host!.send(method, data), text => displayText(text))
   host.on('activity-action', ({ action }) => activityController.action(action))
   host.on('menu', ({ action }) => { if (action === 'logs') activityController.action('toggle') })
   serviceEvents.on('event', (channel, line) => { if (channel === 'devserver:log' || channel === 'simulator:log') activityController.append(line, 'server') })

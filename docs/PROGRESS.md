@@ -19,6 +19,80 @@ Newest first. Append a dated entry when you finish a chunk of work.
   - Limit: in exploratory runs, a 120×2000pt transcript load could show a single older row for about 0.6s before the latest settled.
   - Limit: in the real app the end marker's preference rarely reports the reading edge, so a settle usually runs to its cap (`latestSettleAttempts` 40–80 in `send-visibility.json`). Those steps are idempotent end pins; rows stayed visible in all 44 samples.
 
+## 2026-10-01 — LKM-143: Versioning: SemVer, changelog, tags and app version
+
+- **One source.** package.json `version` (SemVer). `scripts/version.mjs` adds the build number (`git rev-list --count HEAD`, so it only grows on main) and the short sha (`--short=7`), and formats `Trezi X.Y.Z (build N, sha)`. Outside Git the build is 0 and the sha "unknown". package.json stays 0.0.1 here: the first release from main is `bun run release minor` → 0.1.0.
+- **Stamped into the build.** The app plist moved from `build-native.mjs` into `scripts/service-info.mjs` (`appInfoPlist`, beside `serviceInfoPlist`); both carry CFBundleShortVersionString, CFBundleVersion and `TreziCommit`. The backend and provider-helper bundles get the label as a banner and as the esbuild define `TREZI_VERSION` (`src/native/app-version.ts`). The bundled Bun in `Contents/Helpers` is a copied binary and has no plist of its own.
+- **Shown.** Settings › General has a read-only Version row; Trezi › About Trezi opens the standard panel with "Version X.Y.Z (build N, sha)"; `trezi --version` reads the built app's plist, or the checkout when there is no stamped build.
+- **CHANGELOG.md** (Keep a Changelog) with a seeded Unreleased section, `merge=union` like TASKS/PROGRESS; AGENTS.md "Versioning and changelog" makes one Unreleased line per user-visible change a rule.
+- **Release.** `scripts/release.mjs` refuses a bad bump, a branch other than main (or detached HEAD), any modified or untracked file, an empty Unreleased and an existing tag, all before writing. Otherwise it rewrites only the `version` line, moves Unreleased under `## [X.Y.Z] - date`, commits `Release vX.Y.Z`, creates the annotated tag and prints the push command.
+- **CI** runs `scripts/check-version.mjs` (SemVer version, Unreleased section) before the toolchain step.
+- **Proof.** New `test/versioning.mjs` (unit): SemVer/bump/changelog cases; both plists through `plutil`; the build script has no literal build number; a present build's app/service plists and both bundles agree; `check-version` fails on bad version, missing Unreleased and missing file; the release script in a temp repo (refusals change nothing; minor then patch bump, move, commit, annotated tag on HEAD, no remote). `trezi-cli`, `distribution`, `service-session`, `native-settings` and `docs-merge-union` were updated; the native settings smoke asserts the stamped label in General.
+## 2026-10-01 — LKM-136: short paths in chat, Activity and error cards; chat worktree cleanup
+
+- **Why.** Collapsed chat tool rows, Activity lines, error and conflict cards and the preview error showed absolute profile paths such as `…/Application Support/Trezi Native/trezi/worktrees/1a2b3c4d/src/App.tsx`. They were long, wrapped mid-path and named internals. Chat checkouts also piled up: one per chat, kept until the chat closed, plus Electron-era worktree folders under the old app names.
+- **One formatter.** `src/shared/display-path.ts` (pure) turns a path inside a project or chat checkout into its project-relative form. Internal locations get a label: "chat workspace", "temporary patch" (the repository scratch), "recovery copy" (`refs/trezi/recovery/*`) and "Trezi data". It rewrites paths inside free text, never cuts a path in the middle, and leaves unknown paths alone. `src/native/display-paths.ts` gives it the profile (with its real path and the old-name profiles beside it) and the open projects.
+- **Where it applies.** Only collapsed surfaces use it: tool-row labels (`labels` beside the full `statuses` in `chat-snapshot.ts`), the activity line, card details, Activity lines (`display` beside `text`) and the preview error status. The full text stays in the expanded tool rows, tooltips, the card's new Copy button and Activity's Copy All. Logs, the ledger and stored chats are unchanged.
+- **Cleanup.** See "Chat workspace cleanup" in `docs/WORKTREES.md`.
+  - Closing (archiving) a chat already removed its clean checkout.
+  - New: an hourly idle sweep (Settings → General, default 7 days) removes the checkout of a chat with no recent turn, through the new Swift `reclaimWorktree`. Parked, resolving and running chats are skipped, re-checked inside the chat's chain and the repository lease. A dirty checkout stays, and its work goes to one `idle-<id>` recovery ref per distinct content. `beforeTurn` recreates a removed checkout at the same path from the live tree.
+  - Old-name worktree folders go through orphan recovery once after launch (the service accepts them through `legacyRoots`). A folder is removed only when it is then empty, by the service's `removeLegacyFolder` (`rmdir`, so nothing that appears meanwhile is lost); Bun only reads (`du`, `git rev-parse`), as its retirement census row says.
+  - Settings shows the chat workspaces' disk use (`du`, read after the window opens) and a "Clean up now" button that runs the same sweep with no idle period.
+- **Proof.**
+  - `test/display-path.mjs`: the formatter, free text, the native context, the snapshot (labels, full detail, activity detail, no profile path in any collapsed field) and Activity display vs full text.
+  - `test/chat-workspace-cleanup.mjs` (through the Swift owner, run by `test/repository-owner.mjs`):
+    - idle removal;
+    - parked, running and dirty checkouts kept, with one ref for the dirty work across two sweeps;
+    - the next turn recreates the checkout and lands;
+    - Clean up now;
+    - close removes the checkout and keeps a parked chat's branch;
+    - legacy folders: migrated and empty ones removed, an unknown folder kept, the old app's other data untouched, dirty old work recoverable.
+  - `test/native-settings.mjs`: the rows, the usage figure, Clean up now and the saved idle period.
+- **Limits.** A provider process that is still open keeps its original working directory across a recreate. It works because the path is the same. Old-name profile folders that hold other data (Electron caches) are not removed. Assistant prose and transcript warnings are not shortened.
+## 2026-10-01 — LKM-138: Preview inspection tools; the WebKit preview over external browsers
+
+- **Why.** Agents could only see the preview's route and a whole-view screenshot. For anything finer (a box-shadow, a console error, a phone-width check) the rules sent them to agent-browser or a headed browser: a second copy of the app, often at the wrong route and state, and sometimes a DevTools window on the user's screen. Claude chats also loaded the user's personal Claude Code plugins and MCP servers, so a Trezi chat could start unrelated servers and tools.
+- **Tools.** New `preview_inspect`, `preview_evaluate`, `preview_console` and `preview_viewport`, and `preview_screenshot` with `selector`/`padding` for an element crop. The page-side code (`src/preview/agent-inspect.ts`, `agent-evaluate.ts`, `agent-console.ts`) runs in a new `TreziAgent` WKContentWorld with no message handler, so the page can neither see it nor reach Trezi through it. The console recorder lives in the preview world, fed by a page-world forwarder. WebKit's `Error.stack` has frames but no message, so errors are sent as `String(error)` plus the stack. `src/main/preview-agent-tools.ts` validates, routes and bounds every call; `src/native/PreviewAgent.swift` picks the world. Claude (in-process and helper) and Codex (MCP bridge) share one schema (`bin/preview-tool-schema.mjs`) and one handler; the policy lists in `provider-policy.ts`, `ProviderPolicy.swift` and the golden fixture name the four new tools.
+- **Read-only evaluate, by construction.** `@babel/parser` rejects loops, labels, `with`, `debugger`, dynamic `import()` and HTML comments before the code is sent. In the page, the expression only sees a membrane: intrinsics are frozen, the Function constructors are neutered, set/define/delete throw, and a call passes only if it is in an identity allowlist of read-only DOM methods. Arrays are copies. Results are JSON with a 64 KB cap and a 2 s race plus an elapsed check. Remaining gap: unbounded async recursion can keep the page busy until the limit returns the tool (TASKS).
+- **Viewport.** `preview_viewport` uses page zoom (`WorkspaceLayout.viewportWidth`) to lay the page out at the requested CSS width, and `restore` returns it. It only works on the foreground preview.
+- **Rules.** Rules v25: with preview tools, visual verification MUST use them. agent-browser is only for scripted multi-step interactions (availability check, named session, no install without permission). Providers without the tools keep the old agent-browser rule. The trezi-preview skill, README and PROVIDERS say the same.
+- **Claude isolation.** `claudeIsolationOptions` (`src/main/backends/claude-isolation.ts`) sends `strictMcpConfig: true` and turns off every plugin the user's config or the repo's `.claude/settings*.json` lists (`settings.enabledPlugins`), keeping `settingSources` (CLAUDE.md, skills) and Trezi's bundled plugin. `strictMcpConfig` also skips the repo's `.mcp.json`. New Settings › General picker "Allow my Claude Code plugins in Trezi chats" (`trezi:claude-user-plugins:v1`, default Don't allow). The helper reads it whenever a session opens.
+- **Proof.** New `test/preview-agent-tools.mjs` (unit) covers:
+  - expression validation;
+  - the membrane in a `node:vm` realm (reads, copies, rejected writes, navigation, storage, Function tricks, size, timeout);
+  - fake-host routing for every tool, including viewport restore and the screenshot crop rect;
+  - Claude isolation options against a fixture config dir.
+
+  `test/native-settings.mjs` checks the toggle's default, persistence and validation. `test/rules.mjs` checks v25. `provider-helper-tools`, `trezi-agent-tools` and `codex-mcp` list and call the new tools. The native `agent-preview` check (core group) runs every tool against the real WebKit preview: box-shadow, eight rejected evaluations with the page unchanged, a captured page error, mobile 390, 768 and restore, and a 120×60 element crop (`agent-preview-element.png`, `agent-preview.json`).
+
+## 2026-09-30 — LKM-135: Claude first turn: no false "did not respond"
+
+- **Why healthy cold turns failed.** The LKM-119 deadline (90 s with no first event) covered the whole cold path as one silence: helper spawn, the bundled and installed `claude auth status` probes one after the other, a cold CLI start, and the model thinking. The init's resume-id record also counted as "heard", so the deadline was really "until the session init" and nothing after it.
+- **Phases, not one timer.**
+  - The Claude adapter sends `phase` frames through the helper host:
+    - `auth`: probed or cached, with the chosen CLI;
+    - `cli`: `supportedCommands()` answered, or the first SDK message;
+    - `init`: system init;
+    - `progress`: any other system message, at most one per second.
+  - The owner (`ProviderLaunch.swift`) waits for each turn in one of three states: `cli`, `initialization` or `model`.
+    - Only `cli` uses `firstEventTimeout` (90 s).
+    - The others use `replyTimeout` (600 s), which every phase or progress frame renews.
+    - After `stillThinking` (20 s), once the CLI is up, it relays one "Still starting Claude…" or "Still thinking…" status.
+  - The no-response message names the phase, e.g. "Stopped while starting the Claude CLI (no answer in 90 s)". A helper exit before any output appends "It exited while …".
+  - A resume-only record (no entries, no files) no longer counts as output. Phase frames are validated: an unknown phase or malformed field is a grant violation.
+- **Debug timings.** `options.log` (the service diagnostics file under XPC, stderr in the fixture) gets `debug provider claude <id8>: helper ready N ms after launch`, `auth probe N ms (probed|cached choice)`, `CLI started …`, `session init N ms after send`, `first model event N ms after send`, `no-response while …` and `helper exited … while …`. No token or environment is logged.
+- **Fewer probes.**
+  - `resolveClaudeCli` probes the bundled and installed CLIs with one `Promise.all`.
+  - The owner caches a logged-in choice (`claudeCli`, validated: bundled, or an absolute `…/claude` that is still executable) and passes it as `cli` in the next Claude helper's `open`. That helper skips the probes.
+  - An `auth` error event, `seatTokenSave` and `diagnose` clear the cache; the adapter also forgets its own copy on a sign-in failure.
+- **Pre-warm** was already structural: sessions start on project/chat open, so the helper and CLI warm while the user types. The `cli` phase, logged before any send, now proves it.
+- **Proof.** New `test/provider-cold-start.mjs` (unit) runs the real adapter in the real helper under the owner fixture, with stand-in bundled/installed CLIs and scaled deadlines (0.5 s for 90 s, 2.5 s for 600 s, 0.3 s for 20 s).
+  - Prewarm: the CLI starts before any send; the two probes overlap in time.
+  - Slow but healthy turns finish without an error and show the right "Still …" status: an init 3× the short deadline, a 1.5 s think, and 4 s of progress (longer than the reply deadline).
+  - The cache: a second chat probes nothing and runs on the cached installed CLI; after an `auth` error the next chat probes again.
+  - Real hangs still end with the card, naming the phase: no `initialize` answer (in under 2 s), no init, and init without output.
+  - `test/provider-login.mjs` was updated for the phase-named messages and asserts the exit phase.
+- `test/provider-helper-tools.mjs` fails at its Codex bridge check (`workspace_state` not routed while opening). It fails the same way on an untouched HEAD export, so it is not caused by this change.
 ## 2026-09-30 — LKM-134: Startup recovery reports each interrupted operation once
 
 - **Why the same five red lines came back at every launch.** The repository journal moved an interrupted operation to `interrupted` and kept it there until an explicit `acknowledge`, which nothing in the app ever sent. Bun printed the whole `interrupted` list at each launch, at error level. The entries were the Resolve attempts made before LKM-130; their recovery refs existed, so no work was lost. Nothing was ever replayed for them; only the report repeated.

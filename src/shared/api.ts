@@ -332,7 +332,8 @@ export type AgentEvent = (
   | { type: 'done'; landingPending?: boolean }
   /** `code` (LKM-119): `auth` — the provider is not signed in (a login card, not
    *  assistant text); `no-response` — the turn produced nothing within the owner's
-   *  first-event deadline and was ended. */
+   *  first-event deadline and was ended; since LKM-135 its message names the
+   *  cold-start phase it stopped in (CLI start, session init, first model reply). */
   | { type: 'error'; message: string; code?: ProviderErrorCode }
   /** An auto-generated name for this chat, summarising what the conversation is
    *  about (not its opening words). Emitted once per chat after the first turn
@@ -426,6 +427,11 @@ export interface AgentOptions {
    * key and model. Undefined ⇒ the harness's own subscription, exactly as pre-v10.
    */
   connectionId?: string
+  /**
+   * Claude only (LKM-138): load the user's own Claude Code plugins and MCP servers.
+   * Set by main from Settings when a helper session opens; absent ⇒ isolated.
+   */
+  claudeUserPlugins?: boolean
 }
 
 /** Trezi-managed durable context for one project, stored outside the repo. */

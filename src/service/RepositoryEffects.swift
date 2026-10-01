@@ -55,13 +55,16 @@ final class RepositoryEffects: @unchecked Sendable {
     let scratch: String
     /// Resolved profile: every worktree this owner touches lives under it.
     let worktreesRoot: String
+    /// Earlier profiles' worktree folders (`legacyWorktreeRoots`): orphan recovery only.
+    let legacyRoots: [String]
     let fault: (@Sendable (String) -> Void)?
     /// The service log: full Git output that the user-facing messages only summarize.
     let log: @Sendable (String) -> Void
 
-    init(git: RepositoryGit, journal: RepositoryJournal, scratch: String, worktreesRoot: String, fault: (@Sendable (String) -> Void)?,
-         log: @escaping @Sendable (String) -> Void = { fputs($0 + "\n", stderr) }) {
-        self.git = git; self.journal = journal; self.scratch = scratch; self.worktreesRoot = worktreesRoot; self.fault = fault; self.log = log
+    init(git: RepositoryGit, journal: RepositoryJournal, scratch: String, worktreesRoot: String, legacyRoots: [String] = [],
+         fault: (@Sendable (String) -> Void)?, log: @escaping @Sendable (String) -> Void = { fputs($0 + "\n", stderr) }) {
+        self.git = git; self.journal = journal; self.scratch = scratch; self.worktreesRoot = worktreesRoot; self.legacyRoots = legacyRoots
+        self.fault = fault; self.log = log
     }
 
     // MARK: Validation
@@ -86,13 +89,15 @@ final class RepositoryEffects: @unchecked Sendable {
         }
     }
 
-    /// A directory at or below the profile (it may not exist yet).
-    func inside(_ path: String) -> Bool {
+    /// A directory at or below the profile (it may not exist yet), or with `legacy`, also
+    /// at or below an earlier profile's worktree folder.
+    func inside(_ path: String, legacy: Bool = false) -> Bool {
         guard path.hasPrefix("/"), !path.split(separator: "/").contains("..") else { return false }
         var probe = path
         while !FileManager.default.fileExists(atPath: probe) { probe = (probe as NSString).deletingLastPathComponent }
         guard let real = RepositoryPaths.realpath(probe) else { return false }
-        return RepositoryPaths.contains(worktreesRoot, real)
+        if RepositoryPaths.contains(worktreesRoot, real) { return true }
+        return legacy && legacyRoots.compactMap(RepositoryPaths.realpath).contains { RepositoryPaths.contains($0, real) }
     }
 
     static func relative(_ rel: String) -> Bool {

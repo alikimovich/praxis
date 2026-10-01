@@ -4,3 +4,4 @@
 # checkbox ticked differently — review those after a merge.)
 docs/TASKS.md merge=union
 docs/PROGRESS.md merge=union
+CHANGELOG.md merge=union

@@ -39,8 +39,17 @@ final class ProviderOwner: @unchecked Sendable {
         var journal: RuntimeJournal?
         var grace: TimeInterval = ProviderPolicy.grace
         var readyTimeout: TimeInterval = 15
-        /// A helper turn with no event by then is ended with a visible error (LKM-119).
+        /// A helper turn with no event by then is ended with a visible error (LKM-119). Since
+        /// LKM-135 only while the provider CLI has not started (a hang at the process level).
         var firstEventTimeout: TimeInterval = 90
+        /// Once the CLI is up: the wait for the first model output, renewed by every phase
+        /// or progress report from the helper (LKM-135).
+        var replyTimeout: TimeInterval = 600
+        /// A started CLI's turn still without output by then shows "Still thinking…".
+        var stillThinking: TimeInterval = 20
+        /// The service log (the host's diagnostics under XPC, stderr in a fixture): the
+        /// debug-level cold-start timings (LKM-135).
+        var log: @Sendable (String) -> Void = { fputs($0 + "\n", stderr) }
         var toolTimeout: TimeInterval = 120
         var maxLine: Int = ProviderPolicy.Limits.helperLine
         var now: @Sendable () -> Double = { (Date().timeIntervalSince1970 * 1000).rounded(.down) }
@@ -66,7 +75,11 @@ final class ProviderOwner: @unchecked Sendable {
         var waiters: [PipeFrame] = []
         var deadline = 0
         /// The first-event timer's token, and whether the turn has produced anything.
-        var silence = 0, heard = true
+        var silence = 0, heard = true, renewals = 0
+        /// LKM-135: the helper's CLI answered (`alive`) and began a session (`initialized`);
+        /// what this turn waits for, since when, and whether "Still thinking…" was shown.
+        var alive = false, initialized = false, still = false
+        var waiting = Liveness.cli, sentAt = 0.0, launchedAt = 0.0
         var approvals: [String: String] = [:]
         var tools = 0
         var violated = false
@@ -86,6 +99,9 @@ final class ProviderOwner: @unchecked Sendable {
     var toolCalls: [Int: (session: String, id: JSValue)] = [:]
     var toolSequence = 0
     var violations: [(String, String)] = []
+    /// The Claude CLI a helper chose by probing, cached for this app session and passed to
+    /// later helpers; dropped after a sign-in failure or a login check (LKM-135).
+    var claudeCli: JSValue?
     let recovered: [ProviderStore.Recovery]
     let lock = NSLock()
     var closed = false
@@ -358,9 +374,12 @@ final class ProviderOwner: @unchecked Sendable {
               value["liveRoot"] == nil || value["liveRoot"]?.text?.string == liveRoot,
               (value["sessionId"] != nil) == background else { throw ProviderRefusal(.unauthorized, "The helper context is outside its grant.") }
         let session = try opened(body, host: "helper", spawn: value["sessionId"]?.text?.string)
-        let open = Self.object([("type", .string(JSText("open"))), ("session", .string(JSText(session.id))),
-                                ("provider", .string(JSText(provider))), ("root", .string(JSText(session.root))),
-                                ("options", body.value("options")!), ("context", value)]).utf8()
+        var fields: [(String, JSValue)] = [("type", .string(JSText("open"))), ("session", .string(JSText(session.id))),
+                                           ("provider", .string(JSText(provider))), ("root", .string(JSText(session.root))),
+                                           ("options", body.value("options")!), ("context", value)]
+        // The CLI an earlier Claude helper chose: this one skips the login probes (LKM-135).
+        if provider == "claude", let cli = cachedClaudeCli() { fields.append(("cli", cli)) }
+        let open = Self.object(fields).utf8()
         session.opening = frame
         sessions[session.id] = session
         persist()
@@ -411,7 +430,7 @@ final class ProviderOwner: @unchecked Sendable {
             sessions[session.id] = nil
             answer(opening, .failed(PreferencesOwner.fail(.unavailable, "The provider helper exited before it was ready (\(code))\(detail).")))
         }
-        finishTurn(session, "The provider helper stopped unexpectedly (\(code)). Send your message again to continue.")
+        finishTurn(session, "The provider helper stopped unexpectedly (\(code)). Send your message again to continue.\(exitPhase(session, code))")
         session.phase = .stopped
         wake(session, escalate: true)
         relay(session, "exit", [("reason", .string(JSText(session.violated ? "violation" : code)))])

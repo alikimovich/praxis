@@ -21,7 +21,7 @@ import { registerPreviewSource } from '../src/main/preview-state.ts'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const calls = []
 const registration = await registerTreziAgentTools(async (action, args) => {
-  if (action === 'preview_location' || action === 'preview_screenshot') return observeAgentPreview(action)
+  if (action.startsWith('preview_')) return observeAgentPreview(action, args)
   if (action === 'chat_island' || action === 'project_ui_catalog' || action === 'compose_project_ui' || action === 'open_preview' || action === 'open_code') return { received: args ?? {} }
   calls.push(action)
   if (action === 'workspace_state') {
@@ -121,8 +121,12 @@ try {
     'open_code',
     'open_preview',
     'prepare_conflict_resolution',
+    'preview_console',
+    'preview_evaluate',
+    'preview_inspect',
     'preview_location',
     'preview_screenshot',
+    'preview_viewport',
     'project_ui_catalog',
     'workspace_state'
   ])
@@ -148,6 +152,19 @@ try {
   assert.deepEqual(captured.result.content, [{ type: 'image', mimeType: 'image/jpeg', data: jpeg.toString('base64') }], 'real stdio transport preserves image content instead of stringifying it')
   assert.equal(captured.result.structuredContent, undefined)
   assert.ok(resized)
+  // LKM-138: inspection arguments survive the MCP transport and reach the isolated host.
+  const evaluated = []
+  registerPreviewSource({
+    getUrl: () => 'http://localhost:3000/', capture: async () => image,
+    agent: { evaluate: async (code, world) => { evaluated.push(world); return { element: '<h1>', styles: { 'box-shadow': 'rgb(0, 0, 0) 0px 2px 4px 0px' } } }, captureRect: async () => null, setViewport: async () => ({ width: null, zoom: 1 }) }
+  })
+  const inspected = await request('tools/call', { name: 'preview_inspect', arguments: { selector: 'h1' } })
+  assert.match(inspected.result.content[0].text, /box-shadow/)
+  assert.deepEqual(evaluated, ['preview'])
+  const looped = await request('tools/call', { name: 'preview_evaluate', arguments: { expression: '(() => { while (true) {} })()' } })
+  assert.equal(looped.result.isError, true)
+  assert.match(looped.result.content[0].text, /loops cannot run/)
+  assert.deepEqual(evaluated, ['preview'], 'a rejected expression never reaches the page')
   registerPreviewSource({ getUrl: () => null, capture: async () => { throw new Error('closed') } })
   assert.match((await previewCall('preview_location')).result.content[0].text, /No project preview/)
   assert.equal((await previewCall('preview_screenshot')).result.content[0].type, 'text')

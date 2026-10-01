@@ -24,6 +24,9 @@
     "test:provider-live": "bun test/provider-live-parity.mjs",
     "test:native-smoke-runner": "bun test/native-smoke-runner.mjs",
     "link": "bun link",
+    "release": "bun scripts/release.mjs",
+    "check:version": "bun scripts/check-version.mjs",
+    "test:versioning": "bun test/versioning.mjs",
     "lint": "biome check src test",
     "format": "biome format --write src test",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
@@ -58,6 +61,7 @@
     "test:provider-owner": "bun test/provider-owner.mjs",
     "test:provider-data": "bun test/provider-data.mjs",
     "test:provider-login": "bun test/provider-login.mjs",
+    "test:provider-cold-start": "bun test/provider-cold-start.mjs",
     "test:provider-helper-tools": "bun test/provider-helper-tools.mjs",
     "test:service-session": "bun test/service-session.mjs",
     "test:editing-owner": "bun test/editing-owner.mjs",
@@ -106,7 +110,8 @@
     "start": "bun scripts/start-native.mjs",
     "setup": "bash ./install.sh",
     "test": "node test/run.mjs unit native",
-    "test:trezi-agent-tools": "bun test/trezi-agent-tools.mjs"
+    "test:trezi-agent-tools": "bun test/trezi-agent-tools.mjs",
+    "test:preview-agent-tools": "bun test/preview-agent-tools.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.186",

@@ -7,6 +7,7 @@ import { runTreziTool, type SessionTool } from '../session-tools'
 import { createRecordCapture } from './record'
 import { sendToRenderer } from './tools'
 import { claudeProvider } from './claude'
+import { claudeUserPluginsAllowed } from './claude-isolation'
 import { codexProvider } from './codex'
 import { geminiProvider } from './gemini'
 import type { ModelProvider, PendingPrompt, PendingQuestion, ProviderSession, SpawnContext } from './types'
@@ -117,7 +118,7 @@ async function startHelperSession(
     owner.openHelper(
       { session, chat: emitKey, provider, root, liveRoot: ctx?.liveRoot ?? root, background: !!ctx?.sessionId },
       {
-        options,
+        options: provider === 'claude' ? { ...options, claudeUserPlugins: claudeUserPluginsAllowed() } : options,
         context: {
           emitKey,
           ...(ctx?.sessionId ? { sessionId: ctx.sessionId } : {}),
