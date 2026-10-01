@@ -7,7 +7,8 @@ export type NativeProjectStatus =
   | { kind: 'setup'; name: string }
   | { kind: 'busy'; label: string }
   | { kind: 'running'; name: string; url: string }
-  | { kind: 'error'; message: string }
+  // `detail`: the message with full paths when the shell sends `message` collapsed.
+  | { kind: 'error'; message: string; detail?: string }
 export interface NativeWorkspaceSnapshot {
   error?: string
   revision: number

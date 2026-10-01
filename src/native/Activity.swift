@@ -5,6 +5,8 @@ final class NativeActivity: NSObject, NSWindowDelegate {
     var window: NSWindow?
     let text = NSTextView()
     var count = 0
+    /// Every line with its full paths, for Copy All.
+    var fullText = ""
     func update(_ state: [String: Any]) {
         guard state["visible"] as? Bool == true else { let wasVisible = window?.isVisible == true; window?.orderOut(nil); if wasVisible { parent?.makeKeyAndOrderFront(nil) }; return }
         if window == nil {
@@ -31,15 +33,23 @@ final class NativeActivity: NSObject, NSWindowDelegate {
         let pinned = text.visibleRect.maxY >= text.bounds.maxY - 24
         let lines = state["lines"] as? [[String: Any]] ?? []; count = lines.count
         let output = NSMutableAttributedString()
+        var full = ""
         for line in lines {
             let color: NSColor = line["kind"] as? String == "error" ? .systemRed : line["kind"] as? String == "success" ? .systemGreen : .labelColor
-            output.append(NSAttributedString(string: "\(line["time"] as? String ?? "")  \(line["text"] as? String ?? "")\n", attributes: [.foregroundColor: color, .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)]))
+            // Lines show collapsed paths (`display`); the tooltip and Copy All keep the full text.
+            let time = line["time"] as? String ?? "", original = line["text"] as? String ?? ""
+            let shown = line["display"] as? String ?? original
+            var attributes: [NSAttributedString.Key: Any] = [.foregroundColor: color, .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)]
+            if shown != original { attributes[.toolTip] = original }
+            output.append(NSAttributedString(string: "\(time)  \(shown)\n", attributes: attributes))
+            full += "\(time)  \(original)\n"
         }
+        fullText = full
         text.textStorage?.setAttributedString(output)
         if pinned { text.scrollToEndOfDocument(nil) }
         if window?.isVisible != true { window?.makeKeyAndOrderFront(nil) }
     }
     @objc func clearLog() { emit(["event":"activity-action", "action":"clear"]) }
-    @objc func copyLog() { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text.string, forType: .string) }
+    @objc func copyLog() { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(fullText, forType: .string) }
     func windowWillClose(_ notification: Notification) { emit(["event":"activity-action", "action":"hide"]) }
 }

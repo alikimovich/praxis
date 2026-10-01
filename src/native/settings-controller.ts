@@ -13,6 +13,12 @@ const sections = (): NativeSheetSection[] => [
   { id: 'providers', label: 'AI Providers', symbol: 'sparkles', detail: PROVIDERS },
   { id: 'experimental', label: 'Experimental', symbol: 'testtube.2', detail: 'Changes save automatically. UI generation options apply to your next message.' }
 ]
+/** LKM-136: chat workspace cleanup, under General. Keep in sync with `src/main/chat-workspaces.ts`. */
+const IDLE_KEY = 'trezi:chat-workspace-idle-days:v1'
+const IDLE_CHOICES = [...['1', '3', '7', '14', '30'].map(days => ({ value: days, label: days === '1' ? '1 day' : `${days} days` })), { value: 'never', label: 'Never' }]
+const CLEAN_UP = { id: 'clean-workspaces', label: 'Clean up now', section: 'general' }
+const size = (bytes: number) => bytes < 1024 ** 2 ? `${Math.round(bytes / 1024)} KB` : bytes < 1024 ** 3 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${(bytes / 1024 ** 3).toFixed(1)} GB`
+const usageText = (usage: { bytes: number; workspaces: number }) => `${size(usage.bytes)} in ${usage.workspaces} ${usage.workspaces === 1 ? 'workspace' : 'workspaces'}`
 const defaultChoices = (choices: ModelChoice[]) => [{ value: 'last-used', label: 'Use last selected model' }, ...choices.map(c => ({ value: c.value, label: `${c.group} · ${c.label}` }))]
 /** The AI Providers pane: its fields are drafts, submitted only by the pane's own actions. */
 interface Pane { detail: string; fields: Omit<NativeSheetField, 'section' | 'draft'>[]; actions: NativeSheetState['actions'] }
@@ -38,15 +44,35 @@ export class NativeSettingsController {
       title: 'Settings', detail: '', sections: all, section: all.find(s => s.id === saved)?.id ?? 'general',
       fields: [
         { id: 'default', section: 'general', label: 'Default model', help: 'New chats start with this model.', kind: 'choice', value: preferredSelectValue(preferred), choices: defaultChoices(choices) },
+        { id: 'workspaceIdle', section: 'general', label: 'Remove idle chat workspaces after', help: 'Each chat edits a private copy of your project. An idle copy is removed and made again on the chat’s next message. Copies with unsaved or unapplied work are kept.', kind: 'choice', value: IDLE_CHOICES.some(c => c.value === this.preferences.get(IDLE_KEY)) ? this.preferences.get(IDLE_KEY)! : '7', choices: IDLE_CHOICES },
+        { id: 'workspaceUsage', section: 'general', label: 'Chat workspaces', help: 'Clean up now removes every idle copy under the same rules; running chats are kept.', kind: 'readonly', value: 'Calculating…', draft: true },
         { id: 'projectUi', section: 'experimental', label: 'Gen UI', help: 'Generate UI using your project’s existing components and styles. Experimental; supports React and Svelte.', kind: 'choice', value: this.preferences.get('trezi:project-ui:v1') ?? 'false', choices: [{ value: 'false', label: 'Off' }, { value: 'true', label: 'On' }] },
         { id: 'engine', section: 'experimental', label: 'UI layout method', help: 'Chat model uses your selected chat model to arrange components. Jev uses a separate layout model and requires an AI Gateway API key.', visibleWhen: { field: 'projectUi', value: 'true' }, kind: 'choice', value: this.preferences.get('trezi:project-ui-engine:v1') ?? 'agent', choices: [{ value: 'agent', label: 'Chat model' }, { value: 'jev', label: 'Jev layout engine' }] },
         ...providers.fields.map(field => ({ ...field, section: 'providers', draft: true }))
       ],
-      autosave: true, actions: providers.actions
+      autosave: true, actions: [CLEAN_UP, ...providers.actions]
     }, action => this.handle(action), section => { void this.preferences.set(SETTINGS_SECTION_KEY, section).catch(() => {}) })
+    void this.usage(this.sheets.current?.state.id)
+  }
+  /** `du` can take a moment on large projects, so the window opens first. */
+  private async usage(id: string | undefined, usage?: { bytes: number; workspaces: number }) {
+    let text: string
+    try { text = usageText(usage ?? await this.invoke('chat-workspaces:usage')) } catch { text = 'Unavailable' }
+    const field = this.sheets.current?.state.id === id ? this.sheets.current?.state.fields.find(f => f.id === 'workspaceUsage') : undefined
+    if (!field) return
+    field.value = text
+    this.sheets.refresh()
   }
   private async handle(action: NativeSheetAction) {
     if (action.action === 'save') return this.save(action)
+    if (action.action === 'clean-workspaces') {
+      const result = await this.invoke('chat-workspaces:clean-up')
+      await this.usage(action.id, result.usage)
+      if (this.sheets.current?.state.id === action.id) this.sheets.current.state.message = result.removed || result.legacyRemoved
+        ? `Removed ${result.removed + result.legacyRemoved} idle chat ${result.removed + result.legacyRemoved === 1 ? 'workspace' : 'workspaces'}.`
+        : 'Nothing to clean up.'
+      return
+    }
     if (action.action === 'back') return this.reload(action.id)
     if (action.action === 'add') { this.target = undefined; this.show(action.id, this.editor()); return }
     if (action.action === 'edit' || action.action === 'delete') {
@@ -66,6 +92,8 @@ export class NativeSettingsController {
     const choice = this.choices.find(c => c.value === action.values.default)
     if (action.values.default !== 'last-used' && !choice) throw new Error('Select an available model.')
     if (!['true', 'false'].includes(action.values.projectUi) || !['agent', 'jev'].includes(action.values.engine)) throw new Error('Invalid setting.')
+    const idle = action.values.workspaceIdle ?? '7'
+    if (!IDLE_CHOICES.some(c => c.value === idle)) throw new Error('Invalid setting.')
     // One atomic batch, built from the committed state when it is sent (a chat may
     // have recorded a newer last-used model since the sheet opened). Autosave
     // keeps the draft and closing waits for this to settle.
@@ -76,7 +104,8 @@ export class NativeSettingsController {
       return [
         ['trezi:preferred-model', JSON.stringify(choice ? setFixedPreference(state, settingsFromChoice(choice)) : setLastUsedMode(state))],
         ['trezi:project-ui:v1', action.values.projectUi],
-        ['trezi:project-ui-engine:v1', action.values.engine]
+        ['trezi:project-ui-engine:v1', action.values.engine],
+        [IDLE_KEY, idle]
       ]
     })
     this.notify()
@@ -87,7 +116,7 @@ export class NativeSettingsController {
     const sheet = this.sheets.current
     if (!sheet || sheet.state.id !== id) return
     sheet.state.fields = [...sheet.state.fields.filter(f => f.section !== 'providers'), ...pane.fields.map(field => ({ ...field, section: 'providers', draft: true }))]
-    sheet.state.actions = pane.actions
+    sheet.state.actions = [CLEAN_UP, ...pane.actions]
     const section = sheet.state.sections?.find(s => s.id === 'providers')
     if (section) section.detail = pane.detail
     sheet.state.message = undefined

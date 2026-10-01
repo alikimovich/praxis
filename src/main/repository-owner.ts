@@ -46,11 +46,15 @@ export interface RepositoryOwner {
   stageResolve(wt: OwnedWorktree): Promise<{ conflicted: string[]; files: string[]; clean: boolean; baseSha: string }>
   discardParked(wt: OwnedWorktree): Promise<void>
   removeWorktree(wt: OwnedWorktree, keepBranch: boolean, intent: RemoveIntent): Promise<void>
+  /** Idle cleanup: removes a clean checkout; a dirty one stays, its work at a recovery ref. */
+  reclaimWorktree(wt: OwnedWorktree): Promise<{ removed: boolean; dirty: boolean; ref: string | null }>
   deleteBranch(root: string, branch: string, intent: 'discard' | 'integrated'): Promise<void>
   pruneOrphans(root: string, worktreesDir: string, skip: string[], parked: string[]): Promise<
     Array<{ id: string; dirty: boolean; branch: string | null; repoRoot: string | null }>
   >
   pruneBranches(root: string, protectedIds: string[]): Promise<{ deleted: string[]; preserved: string[] }>
+  /** An emptied old-name worktree folder (and its empty old-name parent); false when anything is left. */
+  removeLegacyFolder(directory: string): Promise<boolean>
   commitLive(root: string, files: string[], title: string, body?: string): Promise<{ committed: boolean; sha?: string; files: string[] }>
   checkout(root: string, branch: string): Promise<BranchResult>
   switchBranch(root: string, branch: string): Promise<BranchResult>

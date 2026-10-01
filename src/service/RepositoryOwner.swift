@@ -44,9 +44,11 @@ final class RepositoryOwner: @unchecked Sendable {
         "stageResolve": (["root", "worktree", "intent"], ["leases"], ["reconcile"]),
         "discardParked": (["root", "worktree", "intent"], ["leases"], ["discard"]),
         "removeWorktree": (["root", "worktree", "keepBranch", "intent"], ["leases"], ["landed", "release", "abandon"]),
+        "reclaimWorktree": (["root", "worktree", "intent"], ["leases"], ["idle"]),
         "deleteBranch": (["root", "branch", "intent"], ["leases"], ["discard", "integrated"]),
         "pruneOrphans": (["root", "worktreesDir", "skip", "parked", "intent"], ["leases"], ["recover"]),
         "pruneBranches": (["root", "protected", "intent"], ["leases"], ["integrated"]),
+        "removeLegacyFolder": (["root", "intent"], ["leases"], ["legacy"]),
         "commitLive": (["root", "files", "title"], ["body", "leases"], nil),
         "checkout": (["root", "branch"], ["leases"], nil),
         "switchBranch": (["root", "branch"], ["leases"], nil),
@@ -79,6 +81,7 @@ final class RepositoryOwner: @unchecked Sendable {
         try? FileManager.default.createDirectory(atPath: scratch, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         effects = RepositoryEffects(git: RepositoryGit(environment: options.environment, timeout: options.gitTimeout), journal: journal,
                                     scratch: scratch, worktreesRoot: RepositoryPaths.realpath(options.worktreesRoot ?? options.profile) ?? options.profile,
+                                    legacyRoots: RepositoryEffects.legacyWorktreeRoots(profile: options.profile),
                                     fault: options.fault, log: options.log)
     }
 
@@ -263,6 +266,9 @@ final class RepositoryOwner: @unchecked Sendable {
             guard wt.repoRoot == c.root else { throw ServiceContractFailure.invalidRequest }
             try e.removeWorktree(c, wt, keepBranch: try body.bool("keepBranch"), intent: intent)
             return .object([])
+        case "reclaimWorktree":
+            let (removed, dirty, ref) = try e.reclaimWorktree(c, try worktree(body, c))
+            return Self.object([("removed", .bool(removed)), ("dirty", .bool(dirty)), ("ref", ref.map { .string(JSText($0)) } ?? .null)])
         case "deleteBranch":
             let branch = try body.string("branch")
             guard RepositoryPaths.isWorkBranch(branch), try validBranch(c.root, branch) else { throw ServiceContractFailure.invalidRequest }
@@ -273,6 +279,7 @@ final class RepositoryOwner: @unchecked Sendable {
                                                parked: Set(try body.strings("parked")))
             return .array(reclaimed.map { item in Self.object([("id", .string(JSText(item.id))), ("dirty", .bool(item.dirty)),
                 ("branch", item.branch.map { .string(JSText($0)) } ?? .null), ("repoRoot", item.repoRoot.map { .string(JSText($0)) } ?? .null)]) })
+        case "removeLegacyFolder": return Self.object([("removed", .bool(try e.removeLegacyFolder(c.root)))])
         case "pruneBranches":
             let (deleted, preserved) = e.pruneBranches(c, protected: Set(try body.strings("protected")))
             return Self.object([("deleted", Self.strings(deleted)), ("preserved", Self.strings(preserved))])
