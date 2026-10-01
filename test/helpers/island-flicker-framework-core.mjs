@@ -206,19 +206,35 @@ const OVERRIDE_BOOT = String.raw`(() => {
     for (const t of override.targets) show(t, css);
     return override.targets.length;
   }
+  function pageShows(css) {
+    const expected = computed(css);
+    if (!expected || expected === 'none' || !document.body) return false;
+    for (const el of [document.body, ...document.body.querySelectorAll('*')]) {
+      if (!(el instanceof HTMLElement)) continue;
+      if (settledShadow(el) === expected) return true;
+    }
+    return false;
+  }
   function settle(key, css) {
     const override = overrides.get(key);
     if (!override) return true;
     if (override.css !== css) return false;
+    const expected = computed(css);
+    if (!expected || expected === 'none') return false;
     override.targets = override.targets.filter(t => t.el.isConnected);
+    if (!override.targets.length) {
+      if (!pageShows(css)) return false;
+      overrides.delete(key);
+      return true;
+    }
     for (const t of override.targets) {
       if (!owned(t)) show(t, css);
-      const shown = settledShadow(t.el);
+      const withOverride = settledShadow(t.el);
       restore(t);
       const own = settledShadow(t.el);
       show(t, css);
       settledShadow(t.el);
-      if (own !== shown) return false;
+      if (withOverride !== expected || own !== expected) return false;
     }
     for (const t of override.targets) restore(t);
     overrides.delete(key);
@@ -302,18 +318,22 @@ export async function waitForShadow(page, css, selector = SELECTOR) {
   throw new Error('Preview shadow did not match the island source')
 }
 
-/** After a gesture, wait until the preview override is gone and the card shows the final shadow. */
-export async function waitForGestureSettled(page, css, selector = SELECTOR) {
+/** After a gesture, wait until settle succeeds and the card shows the final shadow. */
+export async function waitForGestureSettled(page, css, { selector = SELECTOR, key } = {}) {
+  const overrideKey = key ?? ''
   for (let i = 0; i < 240; i++) {
     try {
       const ok = await page(`(() => {
         ${PAGE_SHADOW_LAYERS}
+        const css = ${JSON.stringify(css)};
+        const key = ${JSON.stringify(overrideKey)};
+        if (key && window.__treziIslandOverride?.settle) window.__treziIslandOverride.settle(key, css);
         const card = document.querySelector(${JSON.stringify(selector)});
         if (!card) return false;
-        if (card.style.getPropertyPriority('box-shadow') === 'important') return false;
         if (window.__treziIslandOverride?.holding?.()) return false;
+        if (card.style.getPropertyPriority('box-shadow') === 'important') return false;
         const probe = document.createElement('div');
-        probe.style.boxShadow = ${JSON.stringify(css)};
+        probe.style.boxShadow = css;
         document.body.append(probe);
         const expected = shadowLayers(getComputedStyle(probe).boxShadow);
         probe.remove();
@@ -458,7 +478,7 @@ export async function runDrag({
     if (text !== initialCode && !writes.includes(text)) writes.push(text)
     const last = index === path.length - 1
     if (withOverrides && last) {
-      await waitForGestureSettled(page, steps[path.length])
+      await waitForGestureSettled(page, steps[path.length], { key: `${chat}\n${island}` })
       await page(`(() => { if (typeof window.__treziFlickerStop === 'function') window.__treziFlickerStop(); })()`)
       await Bun.sleep(50)
     } else {

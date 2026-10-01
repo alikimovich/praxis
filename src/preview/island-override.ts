@@ -108,20 +108,38 @@ function apply(key: string, from: string, css: string): number {
   return override.targets.length
 }
 
+/** True when some connected element already shows `css` without an override. */
+function pageShows(css: string): boolean {
+  const expected = computed(css)
+  if (!expected || expected === 'none' || !document.body) return false
+  for (const el of [document.body, ...document.body.querySelectorAll('*')]) {
+    if (!(el instanceof HTMLElement)) continue
+    if (settledShadow(el) === expected) return true
+  }
+  return false
+}
+
 /** Remove the override once the page's own style shows `css`; true when nothing is held. */
 function settle(key: string, css: string): boolean {
   const override = overrides.get(key)
   if (!override) return true
   if (override.css !== css) return false
+  const expected = computed(css)
+  if (!expected || expected === 'none') return false
   override.targets = override.targets.filter(t => t.el.isConnected)
+  if (!override.targets.length) {
+    if (!pageShows(css)) return false
+    overrides.delete(key)
+    return true
+  }
   for (const target of override.targets) {
     if (!owned(target)) show(target, css)
-    const shown = settledShadow(target.el)
+    const withOverride = settledShadow(target.el)
     restore(target)
     const own = settledShadow(target.el)
     show(target, css)
     settledShadow(target.el)
-    if (own !== shown) return false
+    if (withOverride !== expected || own !== expected) return false
   }
   for (const target of override.targets) restore(target)
   overrides.delete(key)
