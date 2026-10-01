@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Bounded subprocess runner. See docs/TESTING.md for isolation and reporting.
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,6 +56,7 @@ const UNIT = [
   "native-settings-evidence",
   "native-chat-controller",
   "native-composer-layout",
+  "native-chat-latest-settle",
   "native-smoke-wait",
   "native-chat-reveal",
   "native-island-editing",
@@ -164,7 +165,7 @@ const UNIT_EXCLUSIVE = new Set(['service-process']);
 const UNIT_TIMEOUT_MS = { 'service-process': 240_000 };
 const selected = new Set();
 const options = { jobs: Math.min(4, availableParallelism()),
-  'timeout-ms': 120_000, filter: null };
+  'timeout-ms': 120_000, 'log-tail': 0, filter: null };
 let serial = false;
 try {
   for (const arg of process.argv.slice(2)) {
@@ -172,7 +173,7 @@ try {
     else if (arg === 'all') Object.keys(TIERS).forEach(t => selected.add(t));
     else if (Object.hasOwn(TIERS, arg)) selected.add(arg);
     else {
-      const match = /^--(jobs|timeout-ms|filter)=(.+)$/.exec(arg);
+      const match = /^--(jobs|timeout-ms|log-tail|filter)=(.+)$/.exec(arg);
       if (!match) throw new Error(`unknown argument: ${arg}`);
       const [, key, value] = match;
       if (key === 'filter') options.filter = new Set(value.split(','));
@@ -189,7 +190,7 @@ try {
     for (const name of options.filter) if (!names.includes(name)) throw new Error(`test not in selected tiers: ${name}`);
   }
 } catch (error) {
-  console.error(`${error.message}\nusage: node test/run.mjs <unit|native|live|all> [--serial] [--jobs=4] [--timeout-ms=120000] [--filter=name,name]`);
+  console.error(`${error.message}\nusage: node test/run.mjs <unit|native|live|all> [--serial] [--jobs=4] [--timeout-ms=120000] [--log-tail=150] [--filter=name,name]`);
   process.exit(2);
 }
 
@@ -210,6 +211,13 @@ const start = Date.now();
 const results = [];
 const builds = [];
 const fmt = ms => `${(ms / 1000).toFixed(1)}s`;
+function logTail(path, count, label) {
+  let lines;
+  try { lines = readFileSync(path, 'utf8').replace(/\n$/, '').split('\n'); }
+  catch (error) { return `  (log unreadable: ${error.message})`; }
+  const tail = lines.slice(-count);
+  return [`----- ${label}: last ${tail.length} of ${lines.length} log lines -----`, ...tail, `----- end ${label} -----`].join('\n');
+}
 console.log(`Test logs: ${logs}`);
 for (const [tier, members] of Object.entries(TIERS)) {
   if (!selected.has(tier)) continue;
@@ -228,7 +236,11 @@ for (const [tier, members] of Object.entries(TIERS)) {
       args: [join(TEST_DIR, `${name}.mjs`)], cwd: ROOT, name,
       log: join(logs, `${tier}-${name}.log`), timeoutMs, signal: controller.signal });
     console.log(`${result.outcome} [${tier}] ${name} ${fmt(result.duration)}${result.note ? ` — ${result.note}` : ''}`);
-    if (!['PASS', 'SKIP'].includes(result.outcome)) console.log(`  Log: ${result.log}`);
+    if (!['PASS', 'SKIP'].includes(result.outcome)) {
+      console.log(`  Log: ${result.log}`);
+      // CI keeps only the job output; one write keeps parallel workers from interleaving the tail.
+      if (options['log-tail']) console.log(logTail(result.log, options['log-tail'], `${tier}-${name}`));
+    }
     return result;
   }, controller.signal);
   results.push(...tierResults.map(r => ({ tier, ...r })));

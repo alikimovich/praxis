@@ -11,10 +11,13 @@ import { compatibleEnvironment } from '../src/shared/rename-compat'
 import { touchesSidecar } from '../src/main/backends/tools'
 import { isWorkBranch } from '../src/main/git'
 import { sourceStamp } from '../src/preview/source-stamp'
+import { useRunnerEnv } from './helpers/runner-env.mjs'
 
 // The service's editing owner runs the migration (LKM-111 removed the TS copy).
 const migrateLegacySidecar = project => editingOwner().migrateSidecar(project)
-const root = mkdtempSync(join(tmpdir(), 'trezi-rename-'))
+const root = mkdtempSync(join(tmpdir(), 'trezi rename-'))
+// The CI runner's conditions (LKM-142): no Git identity, `git init` not on main, HOME and TMPDIR with spaces.
+useRunnerEnv(root)
 const put = (path, value) => writeFileSync(path, value)
 
 const binary = join(root, 'profile-paths')

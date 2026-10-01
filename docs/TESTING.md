@@ -87,6 +87,14 @@ Captures are written to `test/artifacts/native/chat-scroll/`, including
 `reveal-<width>-{top,bottom}.png`, `reveal-<width>-overlap-<first>-<second>.png`
 and the measured revisions/frames in `reveal-<width>.json`.
 
+LKM-139: after the shell send, the `send-visibility` stage
+(`test/helpers/chat-send-visibility.mjs`) sends into a long transcript at
+440/320pt with a fixed and a growing composer and samples `chatInspect` after
+send, mid-stream and done: visible rows > 0, offset ≤ maxOffset and an unchanged
+scroll view/document. It writes `send-after-send.png`, `send-mid-stream.png` and
+`send-visibility.json`. The windowless unit test `test/native-chat-latest-settle.mjs`
+covers the same follow path with a `--no-settle` negative control.
+
 LKM-103 acceptance runs at the end of native-chat-scroll, which `bun run test:native`
 invokes with `--require-build` after native-runtime (a missing host fails there
 instead of skipping). The standalone command still works.

@@ -29,6 +29,23 @@ Newest first. Append a dated entry when you finish a chunk of work.
   - `test/provider-login.mjs` `helper-cwd`: a home, `/`, an ancestor or a missing root never becomes the helper's cwd, and a project root is kept.
   - `test/distribution.mjs`: the signer, the helper path and no hard-coded ad hoc signing.
   - The keychain parts need a session that can create a keychain. In a sandbox they print SKIP; the agent ran them unsandboxed and they passed. Verify quick ran them for real.
+## 2026-10-01 — LKM-139: Chat no longer goes blank after sending
+
+- **Cause.** Following the latest row ends in the probe's AppKit pin (`clip.scroll(to:)`, LKM-103), which moves the clip view outside SwiftUI's scroll machinery. The `LazyVStack` estimates the heights of rows it has not measured. When those estimates are far off, the jump lands where the stack realizes no row: the viewport is empty while the offset is still within the document. Examples are long answers above a short tail, or a send that inserts a short prompt and an empty reply. Only a user scroll re-synced it. Of the three suspected causes, (b) is triggered by (a)'s pin. The offset never exceeded the maximum, and (c), view identity, stayed stable: `documentID` and `scrollID` were unchanged across sends.
+- **Fix (`ChatLatestSettle`, `src/native/ChatScrollStyle.swift`; wiring in `src/native/Chat.swift`).** After a send, stream update, chat switch, latest button or pin, the conversation checks each frame while it follows:
+  - No row in the viewport: the AppKit pin is held (`holdsPin`), the 1pt bottom marker toggles height to force a relayout, and SwiftUI scrolls to the latest row. Every fourth stuck attempt it scrolls to the first row instead, whose position the stack knows exactly.
+  - Rows in view: the pin's short jump lands on the end. It stops once the realized 1pt end marker sits at the reading edge. Stopping on the latest row's frame instead blanked the fixture again: that frame can still come from the layout made before the pin moved the clip.
+  - Requests that arrive while settling extend the run instead of restarting it. Metrics are read live. A user scroll ends it.
+  - An offset left outside a shrunken document is clamped (`clampToContent`).
+  - LKM-103 behaviour is unchanged: the probe still owns pinned state, the latest row sits above the composer, and the latest button and scrolling away still work.
+- **What did not work.** These AppKit nudges did not recover the stack: `documentView.scroll`, posting live-scroll notifications, `tile`, `scrollToVisible`, and a 1pt clip move. `scrollTo(latest)` alone stayed blank under load and on a chat switch.
+- **Proof.**
+  - New unit test `test/native-chat-latest-settle.mjs` with `test/fixtures/chat-latest-settle/main.swift`. It hosts the conversation's lazy stack, probe and settle in an offscreen window: transcripts of 40×2000pt and 60×3000pt answers with a 10-row tail, plus a mixed one with a composer that grows to 420pt and shrinks. Each is sampled after load, send, mid-stream and stream end.
+  - Without the settle (`--no-settle`, the negative control), 3 of 13 samples are blank: no rows realized, and drawn leaf layers agree. With it, all 13 samples show rows and the latest row, and offset − maxOffset ≤ 0. It also passes with four instances running concurrently. The first version failed under the unit tier's parallel load, which is what led to the first-row reset.
+  - Native: the new `send-visibility` stage of native-chat-scroll (`test/helpers/chat-send-visibility.mjs`) runs at 440/320pt with a fixed and a growing composer. It asserts visible rows > 0, offset ≤ max and a stable scroll identity after send, mid-stream and done. It writes `send-after-send.png`, `send-mid-stream.png` and `send-visibility.json`. Before the fix this real-app fixture did not reproduce the blank, so the windowless fixture is the before/after evidence.
+  - Limit: in exploratory runs, a 120×2000pt transcript load could show a single older row for about 0.6s before the latest settled.
+  - Limit: in the real app the end marker's preference rarely reports the reading edge, so a settle usually runs to its cap (`latestSettleAttempts` 40–80 in `send-visibility.json`). Those steps are idempotent end pins; rows stayed visible in all 44 samples.
+
 ## 2026-10-01 — LKM-141: Token counter inline; centered scroll-to-latest button
 
 - **Review repair: no overlap, no empty responses.**
@@ -44,6 +61,14 @@ Newest first. Append a dated entry when you finish a chunk of work.
   - The chat acceptance asserts the same geometry before every latest click. It adds scrolled-up foreground captures at 440 and 320 pt.
   - `native-chat-scroll` adds foreground captures of a running turn (counter on the Thinking… line) and of the completed turn (counter under Copy/Revert) at 440 and 320 pt. The footer's height and bottom must not change.
   - The `native-chat-controller` unit test covers per-turn accumulation, late reports and the tooltip total.
+## 2026-10-01 — LKM-142: CI log tails and runner-only unit failures
+
+- **CI visibility.** `node test/run.mjs` accepts `--log-tail=N`; on FAIL/ERROR it prints the last N lines of that test's log into the job output (CI passes `--log-tail=150`). The `test/artifacts/runs` upload step uses `if: always()` with 7-day retention so logs survive cancelled runs too.
+- **Runner-like tests.** New `test/helpers/runner-env.mjs` installs an isolated HOME (no Git identity, `user.useConfigOnly`, `init.defaultBranch=trunk`, no system Git config) and a TMPDIR/HOME with spaces. `repository-owner`, `rename-compat` and the provider-login `no-keychain` part call it so those suites pass under GitHub Actions conditions locally, not only on a developer Mac.
+- **repository-owner.** The parity preload runs seven Git suites in parallel; CI only showed this file's log tail, so a single failing suite was hard to see. Failed suites are now all listed in the assertion. Scratch and temp paths include spaces so quoting bugs surface in CI.
+- **provider-login (flake).** Two causes: (1) `PROVIDER_FIRST_EVENT=0.5` in the deadline test did not cover helper cold start on a loaded runner — raised to 2 s with matching assertions. (2) `ProviderHelperProcess` could call `onExit` before the stdout reader drained the helper's last login frame — it now waits up to 2 s for both readers after `waitpid`, like `RepositoryGit.run`. New `no-keychain` part exercises real `security` with an empty HOME.
+- **rename-compat.** Same runner Git/HOME setup; commits that relied on a global identity use explicit `-c user.name/user.email`.
+- **Proof.** `test/test-runner.mjs` covers `--log-tail`; typecheck and the affected unit tests are in the PR notes. Candidate CI green is for the operator to confirm.
 ## 2026-10-01 — LKM-143: Versioning: SemVer, changelog, tags and app version
 
 - **One source.** package.json `version` (SemVer). `scripts/version.mjs` adds the build number (`git rev-list --count HEAD`, so it only grows on main) and the short sha (`--short=7`), and formats `Trezi X.Y.Z (build N, sha)`. Outside Git the build is 0 and the sha "unknown". package.json stays 0.0.1 here: the first release from main is `bun run release minor` → 0.1.0.
