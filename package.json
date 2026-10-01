@@ -52,6 +52,7 @@
     "test:memory-owner": "bun test/memory-owner.mjs",
     "test:runtime-owner": "bun test/runtime-owner.mjs",
     "test:repository-owner": "bun test/repository-owner.mjs",
+    "test:repository-recovery": "bun test/repository-recovery.mjs",
     "test:source-owner": "bun test/source-owner.mjs",
     "test:conversation-owner": "bun test/conversation-owner.mjs",
     "test:provider-owner": "bun test/provider-owner.mjs",
