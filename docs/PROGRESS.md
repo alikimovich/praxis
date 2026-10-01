@@ -2,6 +2,22 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-01 — LKM-138: Preview inspection tools; the WebKit preview over external browsers
+
+- **Why.** Agents could only see the preview's route and a whole-view screenshot. For anything finer (a box-shadow, a console error, a phone-width check) the rules sent them to agent-browser or a headed browser: a second copy of the app, often at the wrong route and state, and sometimes a DevTools window on the user's screen. Claude chats also loaded the user's personal Claude Code plugins and MCP servers, so a Trezi chat could start unrelated servers and tools.
+- **Tools.** New `preview_inspect`, `preview_evaluate`, `preview_console` and `preview_viewport`, and `preview_screenshot` with `selector`/`padding` for an element crop. The page-side code (`src/preview/agent-inspect.ts`, `agent-evaluate.ts`, `agent-console.ts`) runs in a new `TreziAgent` WKContentWorld with no message handler, so the page can neither see it nor reach Trezi through it. The console recorder lives in the preview world, fed by a page-world forwarder. WebKit's `Error.stack` has frames but no message, so errors are sent as `String(error)` plus the stack. `src/main/preview-agent-tools.ts` validates, routes and bounds every call; `src/native/PreviewAgent.swift` picks the world. Claude (in-process and helper) and Codex (MCP bridge) share one schema (`bin/preview-tool-schema.mjs`) and one handler; the policy lists in `provider-policy.ts`, `ProviderPolicy.swift` and the golden fixture name the four new tools.
+- **Read-only evaluate, by construction.** `@babel/parser` rejects loops, labels, `with`, `debugger`, dynamic `import()` and HTML comments before the code is sent. In the page, the expression only sees a membrane: intrinsics are frozen, the Function constructors are neutered, set/define/delete throw, and a call passes only if it is in an identity allowlist of read-only DOM methods. Arrays are copies. Results are JSON with a 64 KB cap and a 2 s race plus an elapsed check. Remaining gap: unbounded async recursion can keep the page busy until the limit returns the tool (TASKS).
+- **Viewport.** `preview_viewport` uses page zoom (`WorkspaceLayout.viewportWidth`) to lay the page out at the requested CSS width, and `restore` returns it. It only works on the foreground preview.
+- **Rules.** Rules v25: with preview tools, visual verification MUST use them. agent-browser is only for scripted multi-step interactions (availability check, named session, no install without permission). Providers without the tools keep the old agent-browser rule. The trezi-preview skill, README and PROVIDERS say the same.
+- **Claude isolation.** `claudeIsolationOptions` (`src/main/backends/claude-isolation.ts`) sends `strictMcpConfig: true` and turns off every plugin the user's config or the repo's `.claude/settings*.json` lists (`settings.enabledPlugins`), keeping `settingSources` (CLAUDE.md, skills) and Trezi's bundled plugin. `strictMcpConfig` also skips the repo's `.mcp.json`. New Settings › General picker "Allow my Claude Code plugins in Trezi chats" (`trezi:claude-user-plugins:v1`, default Don't allow). The helper reads it whenever a session opens.
+- **Proof.** New `test/preview-agent-tools.mjs` (unit) covers:
+  - expression validation;
+  - the membrane in a `node:vm` realm (reads, copies, rejected writes, navigation, storage, Function tricks, size, timeout);
+  - fake-host routing for every tool, including viewport restore and the screenshot crop rect;
+  - Claude isolation options against a fixture config dir.
+
+  `test/native-settings.mjs` checks the toggle's default, persistence and validation. `test/rules.mjs` checks v25. `provider-helper-tools`, `trezi-agent-tools` and `codex-mcp` list and call the new tools. The native `agent-preview` check (core group) runs every tool against the real WebKit preview: box-shadow, eight rejected evaluations with the page unchanged, a captured page error, mobile 390, 768 and restore, and a 120×60 element crop (`agent-preview-element.png`, `agent-preview.json`).
+
 ## 2026-09-30 — LKM-135: Claude first turn: no false "did not respond"
 
 - **Why healthy cold turns failed.** The LKM-119 deadline (90 s with no first event) covered the whole cold path as one silence: helper spawn, the bundled and installed `claude auth status` probes one after the other, a cold CLI start, and the model thinking. The init's resume-id record also counted as "heard", so the deadline was really "until the session init" and nothing after it.

@@ -104,7 +104,8 @@ export function assertSectionEvidence(
   assertUsable(evidence, width)
   assertSidebar(evidence, section)
   const ids = evidence.controls.map((c) => c.id).sort()
-  if (section === 'general') assert.deepEqual(ids, ['default'], 'General shows the default model picker')
+  if (section === 'general')
+    assert.deepEqual(ids, ['claudePlugins', 'default'], 'General shows the default model and Claude plugins pickers')
   else assert.ok(ids.every((id) => id === 'connection'), 'AI Providers shows only its provider picker')
   const lines = evidence.text.map(words)
   for (const required of [

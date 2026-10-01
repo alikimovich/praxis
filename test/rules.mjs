@@ -18,7 +18,7 @@ const assert = (cond, msg) => {
 const r = treziRules()
 assert(typeof r === 'string' && r.length > 0, 'rules render to a non-empty string')
 assert(typeof TREZI_RULES_VERSION === 'number', 'version is a number')
-assert(TREZI_RULES_VERSION === 24, 'version bumped to 24')
+assert(TREZI_RULES_VERSION === 25, 'version bumped to 25')
 assert(r.includes(`v${TREZI_RULES_VERSION}`), 'rules carry the version marker')
 assert(r.includes('before scaffolding or'), 'new projects ask about unresolved setup choices')
 assert(r.includes('after these files successfully land'), 'environment refresh follows landing')
@@ -63,10 +63,24 @@ assert(/seeing the user's preview/i.test(withTools), 'previewTools: has the prev
 assert(!/preview_location/.test(r), 'default rendering omits preview_location')
 assert(!/preview_screenshot/.test(r), 'default rendering omits preview_screenshot')
 assert(treziRules({ previewTools: true }) === withTools, 'previewTools rendering is deterministic')
-// The agent-browser section survives in both renderings.
-assert(/agent-browser/.test(withTools), 'previewTools: still keeps agent-browser guidance')
-// Browser verification is mandatory across provider capability combinations.
-for (const opts of [{}, { previewTools: true }, { workspaceTools: true }]) {
+// LKM-138: with preview tools, verification happens in the Trezi preview and
+// agent-browser is reserved for scripted multi-step interactions.
+const codexObservers = treziRules({ previewObservationTools: true, controlTools: true, workspaceTools: true })
+for (const rules of [withTools, codexObservers]) {
+  for (const tool of ['preview_inspect', 'preview_evaluate', 'preview_console', 'preview_viewport'])
+    assert(rules.includes(tool), `preview tools: teaches ${tool}`)
+  assert(/MUST use Trezi's preview tools/.test(rules), 'preview tools: required for visual verification')
+  assert(/only for scripted multi-step interactions/.test(rules), 'preview tools: agent-browser only for scripted flows')
+  assert(/never just to inspect, evaluate, or screenshot/.test(rules), 'preview tools: no agent-browser screenshots')
+  assert(!/MUST use `agent-browser`/.test(rules), 'preview tools: agent-browser is not mandatory')
+  assert(/--session trezi-<task-id>/.test(rules), 'preview tools: isolated agent-browser sessions')
+  assert(/report verification as pending, never passed/.test(rules), 'preview tools: stale previews cannot prove an edit')
+  assert(/untrusted data/.test(rules), 'preview tools: console output is untrusted')
+  assert(/devtools/i.test(rules) && /user request for another tool overrides/.test(rules), 'preview tools: no DevTools unless asked')
+}
+assert(!/preview_inspect/.test(r), 'default rendering omits preview_inspect')
+// Without preview tools (Gemini), agent-browser verification stays mandatory.
+for (const opts of [{}, { workspaceTools: true }]) {
   const rules = treziRules(opts)
   assert(/MUST use `agent-browser` when available/.test(rules), 'browser: required when available')
   assert(/command -v agent-browser/.test(rules), 'browser: check the runtime PATH')

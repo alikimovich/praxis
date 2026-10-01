@@ -47,6 +47,7 @@ import { type ConversationOwner, setConversationOwner } from '../main/conversati
 import { serviceConversation } from './conversation-service'
 import { serviceProvider } from './provider-service'
 import { setProviderOwner } from '../main/provider-owner'
+import { CLAUDE_USER_PLUGINS_KEY, setClaudeUserPluginsSource } from '../main/backends/claude-isolation'
 import { setProviderDataOwner } from '../main/provider-data'
 import { serviceEditing } from './editing-service'
 import { setEditingOwner } from '../main/editing-owner'
@@ -119,6 +120,7 @@ async function main() {
   const mainView = new NativeView('main')
   // The Swift service owns every domain; there is no local fallback write, ever.
   const preferences = await servicePreferences(host).catch(error => { throw new Error(`Trezi could not read preferences from its service: ${error.message}`) })
+  setClaudeUserPluginsSource(() => preferences.get(CLAUDE_USER_PLUGINS_KEY))
   const workspace = await serviceWorkspace(host).catch(error => { throw new Error(`Trezi could not read the workspace from its service: ${error.message}`) })
   // Project memory (S05): read on demand, so there is no startup snapshot to await.
   const memory = serviceProjectMemory(host)
