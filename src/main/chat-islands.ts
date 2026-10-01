@@ -1,5 +1,5 @@
 import { chatIslandGuidance, chatIslandControlPurposes } from '../shared/chat-island-guidance'
-import type { IslandCommand, IslandRecord, IslandView } from '../shared/chat-islands'
+import type { IslandCommand, IslandRecord, IslandValue, IslandView } from '../shared/chat-islands'
 import { islandDefinition } from './chat-island-schema'
 import { islandSource, undoIsland, writeIsland } from './chat-island-source'
 import { selectControlCandidates } from './control-selection'
@@ -8,11 +8,21 @@ import { editingOwner, type EditingOwner } from './editing-owner'
 
 interface Session {
   root: string; recordId: string; records: IslandRecord[]; views: Map<string, IslandView>
-  turn: () => number; busy: boolean; composing: boolean; epoch: number
+  turn: () => number; busy: boolean; composing: boolean; epoch: number; writes: number
   preview?: { turn: number; view: IslandView }
   opening: Promise<void>
   pending?: Promise<void>
+  /** island id → the bound values it last saw (its last refresh or its own last write). */
+  seen: Map<string, Record<string, IslandValue>>
+  /** island id → the inline notice after a bound value changed outside the island. */
+  notices: Map<string, string>
+  /** island id → its commit that has not started yet; a newer frame of the gesture replaces it. */
+  queued: Map<string, Queued>
+  /** `id:gesture` of gestures whose bound values changed outside the island; their frames are dropped. */
+  conflicted: Set<string>
 }
+interface Queued { command: IslandCommand; replaced: boolean }
+export const ISLAND_CONFLICT_NOTICE = 'This value changed in the source. The controls now show the source values.'
 /**
  * The chat's islands as Bun shows and edits them. Every decision (definition
  * admission, activation by the defining turn's landing, command admission, the
@@ -35,7 +45,8 @@ export class ChatIslands {
     const existing = this.sessions.get(chat)
     if (existing?.root === root && existing.recordId === recordId) return
     this.close(chat)
-    const session: Session = { root, recordId, records: [], views: new Map(), turn, busy: false, composing: false, epoch: 0, opening: Promise.resolve() }
+    const session: Session = { root, recordId, records: [], views: new Map(), turn, busy: false, composing: false, epoch: 0, writes: 0, opening: Promise.resolve(),
+      seen: new Map(), notices: new Map(), queued: new Map(), conflicted: new Set() }
     session.opening = this.owner.islandsOpen(chat, root, recordId).then(records => {
       if (this.sessions.get(chat) === session) session.records = validated(records)
     }).catch(() => { /* Missing/old history cannot prevent opening a chat. */ })
@@ -53,23 +64,26 @@ export class ChatIslands {
     const session = this.sessions.get(chat)
     if (!session) return
     await session.opening
-    const epoch = ++session.epoch
-    const views = new Map<string, IslandView>()
+    const epoch = ++session.epoch, writes = session.writes
+    const views = new Map<string, IslandView>(), seen = new Map<string, Record<string, IslandValue>>()
     for (const record of session.records) {
       let values: Record<string, any> = {}, sourceRevision = '', detail = record.fallback ?? ''
       let status = record.status
       try {
         const source = await islandSource(session.root, record)
         values = source.values; sourceRevision = source.revision
+        seen.set(record.id, values)
       } catch (error) { status = 'unavailable'; detail = String(error) }
       if (record.status === 'waiting') { status = 'waiting'; detail = 'Waiting for this turn’s source changes to land.' }
       if (record.status === 'unavailable') { status = 'unavailable'; detail = 'The creating turn did not land. Ask the agent to recreate these controls.' }
       views.set(record.id, { id: record.id, revision: record.revision, title: record.manifest.title, blocks: record.blocks,
         fields: record.manifest.params.map(p => ({ ...p, value: values[p.id] ?? null })), sourceRevision, status, detail, engine: record.engine,
-        replay: !!record.manifest.replay })
+        replay: !!record.manifest.replay, notice: session.notices.get(record.id) ?? '' })
     }
     if (this.sessions.get(chat) !== session || session.epoch !== epoch) return
-    session.views = views; this.changed(chat)
+    // A write since this read already recorded what its island sees.
+    session.views = views; if (session.writes === writes) session.seen = seen
+    this.changed(chat)
   }
   /** A turn's terminal. `turn` names it; only islands that turn defined change. */
   async settle(chat: string, successful: boolean, turn: string | null = null) {
@@ -137,12 +151,32 @@ export class ChatIslands {
       } finally { session.composing = false; session.preview = undefined; if (this.sessions.get(chat) === session) this.changed(chat) }
     } catch (error) { return { error: error instanceof Error ? error.message : String(error) } }
   }
+  /**
+   * One island's commands run one at a time. A commit that has not started yet is replaced by
+   * the next frame of the same gesture (latest value wins, values merged), so a fast drag never
+   * races itself. Commits do not depend on the revision the UI last rendered: the write checks
+   * the island's own bindings (see `writeIsland`).
+   */
   async interact(command: IslandCommand) {
     const session = this.sessions.get(command.chat)
     if (!session) throw new Error('Island is unavailable. Reopen this chat.')
+    let queued: Queued | undefined
+    if (command.action === 'commit') {
+      const waiting = session.queued.get(command.id)
+      if (waiting && command.gesture && waiting.command.gesture === command.gesture && waiting.command.revision === command.revision) {
+        waiting.replaced = true
+        command = { ...command, values: { ...waiting.command.values, ...command.values } }
+      }
+      queued = { command, replaced: false }
+      session.queued.set(command.id, queued)
+    }
     const previous = session.pending
     const run = (async () => {
       if (previous) await previous.catch(() => {})
+      if (queued) {
+        if (session.queued.get(command.id) === queued) session.queued.delete(command.id)
+        if (queued.replaced) return
+      }
       if (this.sessions.get(command.chat) !== session) throw new Error('This island changed or closed.')
       await this.apply(session, command, () => session.pending === run)
     })()
@@ -152,11 +186,15 @@ export class ChatIslands {
   private async apply(session: Session, command: IslandCommand, last: () => boolean) {
     await session.opening
     if (session.busy || session.composing) throw new Error('Island is unavailable or busy.')
-    // Admission and the batch's revision chain are the owner's; it refuses stale revisions.
+    // A gesture whose bound values changed outside the island stops writing; the controls show the source.
+    const gesture = command.gesture ? `${command.id}:${command.gesture}` : ''
+    if (command.action === 'commit' && session.conflicted.has(gesture)) return
+    // Admission (ready, current definition revision, one command at a time) is the owner's.
     const admission = await this.owner.islandCommand(command.chat, command.id, command.revision,
       command.action === 'replay' ? 'reload' : command.action, command.sourceRevision).catch(error => {
       throw this.sessions.get(command.chat) === session ? error : new Error('This island changed or closed.')
     })
+    if (command.action !== 'commit') { session.notices.delete(command.id); session.conflicted.clear() }
     if (command.action === 'reload') { await this.refresh(command.chat); return }
     const record = session.records.find(r => r.id === command.id)!
     session.busy = true
@@ -167,9 +205,20 @@ export class ChatIslands {
         await undoIsland(session.root, admission.group!, guard)
         outcome = { ok: true }
       } else if (command.action === 'commit' || command.action === 'reset') {
-        const values = command.action === 'reset' ? admission.initial ?? record.initial : command.values!
-        const result = await writeIsland(session.root, record, admission.expected, values, guard, command.gesture ? `island:${record.id}:${command.gesture}` : undefined)
-        outcome = result ? { ok: true, group: result.group, revision: result.revision } : { ok: true }
+        const reset = command.action === 'reset'
+        const values = reset ? admission.initial ?? record.initial : command.values!
+        // Reset restores the initial values whatever the source holds now.
+        const result = await writeIsland(session.root, record, reset ? undefined : session.seen.get(record.id), values, guard,
+          command.gesture ? `island:${record.id}:${command.gesture}` : undefined)
+        if (result) { session.writes++; session.seen.set(record.id, result.values) }
+        if (result?.conflict) {
+          session.notices.set(record.id, ISLAND_CONFLICT_NOTICE)
+          if (gesture) session.conflicted.add(gesture)
+          outcome = { ok: true }
+        } else {
+          if (!reset) session.notices.delete(record.id)
+          outcome = result ? { ok: true, group: result.group, revision: result.revision } : { ok: true }
+        }
       } else throw new Error('Unknown island action.')
     } finally {
       session.busy = false

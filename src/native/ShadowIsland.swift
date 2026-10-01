@@ -1,12 +1,15 @@
 import SwiftUI
 
 /// Shadow Light's compound block. Backend validation owns the same bounds and
-/// writes the CSS/class output with each gesture; this local preview follows drafts.
+/// writes the CSS/class output with each gesture. There is no local preview box
+/// (LKM-133): the page preview shows every live write; the CSS text follows drafts.
 struct ShadowIsland: View {
     let fields: [IslandField]
     let value: (IslandField) -> IslandValue
     let field: (IslandField) -> AnyView
     let light: (Double, Double, Bool) -> Void
+    /// The light's typed X/Y field, applying like every other island field.
+    let input: (IslandField) -> AnyView
     private func number(_ i: Int) -> Double { value(fields[i]).number }
     private var channels: [Double] {
         let text = value(fields[6]).text
@@ -27,29 +30,11 @@ struct ShadowIsland: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Preview").font(.caption.weight(.medium))
-            ZStack {
-                RoundedRectangle(cornerRadius: 14).fill(.background)
-                ForEach(Array((0..<count).reversed()), id: \.self) { i in
-                    RoundedRectangle(cornerRadius: 14).fill(.regularMaterial)
-                        .frame(width: 160, height: 80)
-                        .shadow(color: color.opacity(alpha(i)), radius: max(0, number(3))*fraction(i)/2,
-                                x: -number(0)*number(2)*fraction(i), y: -number(1)*number(2)*fraction(i))
-                }
-                GeometryReader { geo in
-                    Image(systemName: "sun.max.fill").foregroundStyle(.primary)
-                        .position(x: 16 + (number(0)+1)/2 * max(1, geo.size.width-32),
-                                  y: 16 + (number(1)+1)/2 * max(1, geo.size.height-32))
-                }
-            }.frame(height: 140).clipShape(RoundedRectangle(cornerRadius: 14)).accessibilityLabel("Shadow preview")
             Text("Light Source").font(.caption.weight(.medium))
             HStack(spacing: 12) {
                 IslandPoint(x: number(0), y: number(1), xRange: -1...1, yRange: -1...1,
                             label: "Light source", change: light).frame(width: 120)
-                VStack(spacing: 14) {
-                    IslandInput(label: "X", value: value(fields[0]).text, numeric: true) { if let n = Double($0), n.isFinite { light(min(1, max(-1, n)), number(1), true) } }
-                    IslandInput(label: "Y", value: value(fields[1]).text, numeric: true) { if let n = Double($0), n.isFinite { light(number(0), min(1, max(-1, n)), true) } }
-                }
+                VStack(spacing: 14) { input(fields[0]); input(fields[1]) }
             }
             Text("Shadow").font(.caption.weight(.medium))
             HStack(alignment: .top, spacing: 12) { field(fields[2]); field(fields[3]) }

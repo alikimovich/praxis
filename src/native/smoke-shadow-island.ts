@@ -86,7 +86,7 @@ document.body.append(card);
       recognized.push(image.text)
     }
     const missing = missingShadowCaptureSemantics(recognized[0], recognized[1])
-    assert.deepEqual(missing, [], `Visible Shadow Light capture is missing ${missing.join(', ')}; title and Preview must be visible at the top, while controls, output and Undo may span shadow-light-${name}*.png`)
+    assert.deepEqual(missing, [], `Visible Shadow Light capture is missing ${missing.join(', ')}; title and Light Source must be visible at the top with no Preview box, while controls, output and Undo may span shadow-light-${name}*.png`)
   }
   await capture('initial')
   // Each independently adjustable control must change the actual computed shadow.
@@ -106,6 +106,19 @@ document.body.append(card);
     await wait(() => previewMatches(initial))
     await wait(swiftReady)
   }
+  // A live drag of the light (LKM-133): each frame goes through Swift with whatever source
+  // revision the panel last rendered, reaches source and preview before the release, and the
+  // gesture's writes are one Undo step that restores the value from before the drag.
+  const gesture = `smoke-drag-${Date.now()}`
+  for (const [x, y] of [[-.5, .2], [-.2, .5], [.3, .8]]) {
+    await host.request('islandPerform', { island: result.id, action: 'commit', values: { x, y }, gesture })
+    await wait(() => readFileSync(file, 'utf8').includes(`const SHADOW_x = ${x};\nconst SHADOW_y = ${y};`))
+    await wait(() => previewMatches({ ...initial, x, y }))
+  }
+  await host.request('islandPerform', { island: result.id, action: 'undo' })
+  await wait(() => readFileSync(file, 'utf8') === code)
+  await wait(() => previewMatches(initial))
+  await wait(swiftReady)
   await capture('restored')
-  console.log('NATIVE SHADOW LIGHT PASS — visible window captures contain Shadow Light controls; all six controls update computed preview CSS; Undo restores source and preview. Layout fidelity still requires inspection of shadow-light-*.png against the approved mockup.')
+  console.log('NATIVE SHADOW LIGHT PASS — visible window captures contain Shadow Light controls and no Preview box; all six controls update computed preview CSS; a live drag writes each frame and one Undo restores source and preview. Layout fidelity still requires inspection of shadow-light-*.png against the approved mockup.')
 }

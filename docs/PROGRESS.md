@@ -2,6 +2,25 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-30 — LKM-133: Shadow Light has no preview box; island controls apply live
+
+- **Why "Source changed" kept coming back, even after Reload.** Reload did read the same root and file the write uses, and it returned the current revision. The problem was the next write. Each command carries the source revision the UI last rendered, a hash of the whole file. The owner maps a stale revision to the batch's own last write (`chain`), but drops that map when the command queue drains (`last`). That happens before the refreshed view reaches Swift. So any command computed before the new revision arrived carried the old hash and was refused: a drag's second frame, a blur right after Return, the first slider drag after Reload. An agent edit, formatter or HMR write anywhere else in the file did the same.
+- **Fix: check per binding, not per file.** `writeIsland` (`src/main/chat-island-source.ts`) no longer compares file hashes. `ChatIslands` keeps, per island, the bound values it last saw (`seen`: from its last refresh or its own last write, which returns the values it left). If the island's literals still hold those values, the write applies on top of the current file and keeps edits elsewhere. If a bound value itself changed outside the island, nothing is written and there is no error: the controls refresh to the source values, the view carries a `notice` that Swift shows inline, and the rest of that gesture is dropped. Reset still restores the initial values whatever the source holds. The closed/changed-island guard, the hash-bound source proposal and the 2 MB limit stay. The owner's admission is unchanged; its `expected` revision is no longer used for commits.
+- **Serialized and coalesced.** One chat's island commands already ran one at a time. A queued commit that has not started is now replaced by the next frame of the same gesture (values merged, latest wins), so a fast drag never races itself.
+- **One live path in Swift.** New `src/native/IslandEditing.swift` (Foundation only): `IslandLiveWrites` throttles frames to 80 ms, keeps held-back values for the next batch, always writes the release, and gives every write of a gesture one id (one Undo group). `IslandEntry` is the typed-field policy: Return and blur both apply, an invalid or out-of-range draft is never written (shown red), and a draft already sent or already in the source is not written again. In `ChatIsland.swift` the XY pad, sliders, bezier handles and presets, typed number/text fields, toggles and pickers all go through `live(...)`. No island has a stepper control today; one would use the same path.
+- **No preview box.** `ShadowIsland.swift` loses the Preview section (rounded rectangle and sun). The Light Source pad with its X/Y fields, the Shadow controls, swatch and CSS text stay, so the panel is about 160 pt shorter. `missingShadowCaptureSemantics` now needs "Light Source" in the top viewport and fails on a standalone "Preview" line.
+- **Proof.**
+  - `test/chat-islands.mjs` (unit, Swift owner fixture):
+    - a command with the pre-write UI revision applies;
+    - Reload then one adjustment applies;
+    - four throttled drag frames with the pre-drag revision each write live, one Undo restores the pre-drag source, and a second Undo finds nothing;
+    - an 8-frame burst coalesces (fewer admissions than frames), never errors, ends on the last value, and one Undo restores it;
+    - an unrelated edit made while a frame waits for the write lease is kept and the frame applies;
+    - an external change of a bound value keeps the file, refreshes the field and sets the notice, drops that gesture's next frame, and the next gesture applies and clears the notice;
+    - non-finite and non-number values are refused without a write.
+  - New `test/native-island-editing.mjs` (unit) compiles `IslandEditing.swift` with `test/fixtures/island-editing/main.swift`: throttling, held-back values, one gesture id per drag, a new id per discrete change, Return/blur, invalid and out-of-range drafts, and text and bezier fields.
+  - Native `shadow-light`: three live drag frames through Swift `islandPerform` with one gesture each reach the source and the computed preview CSS, and one Undo restores both. The captures `shadow-light-*.png` show the panel without the box.
+
 ## 2026-09-30 — LKM-132: Trezi names only; the earlier names are read-compat shims
 
 - **Why.** After the LKM-84/85 rename, the Praxis name was still live across Trezi. It was in the XPC service ID, the MCP server and tool names (`mcp__praxis__*`), the `praxis` command, preview IPC aliases, code identifiers, and docs pointing at a `docs/rename/` audit. Old projects kept `.praxis/praxis-*` helpers and `data-praxis-*` stamps with no path forward.

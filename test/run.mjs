@@ -54,6 +54,7 @@ const UNIT = [
   "native-composer-layout",
   "native-smoke-wait",
   "native-chat-reveal",
+  "native-island-editing",
   "no-system-preferences",
   "chat-islands",
   "native-context",

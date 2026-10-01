@@ -52,7 +52,7 @@ try {
     const record = { ...definition, version: 1, id: extension, revision: 1, turn: 1, engine: 'agent', status: 'ready', initial: { distance: 12 } }
     const before = await islandSource(root, record)
     assert.equal(before.values.distance, 12)
-    const edit = await writeIsland(root, record, before.revision, { distance: 24 }, () => true)
+    const edit = await writeIsland(root, record, before.values,{ distance: 24 }, () => true)
     assert.equal((await islandSource(root, record)).values.distance, 24)
     assert.equal(await readFile(join(root, file), 'utf8'), code.replace('distance = 12', 'distance = 24'))
     await undoIsland(root, edit.group, () => true)

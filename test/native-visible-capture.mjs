@@ -2,13 +2,18 @@ import assert from 'node:assert/strict'
 import { captureForegroundChat } from '../src/native/smoke-input.ts'
 import { missingShadowCaptureSemantics } from '../src/native/smoke-shadow-semantics.ts'
 
-const topShadow = ['Shadow Light', 'Preview', 'Distance', 'Blur']
-const bottomShadow = ['Light Source', 'Layers', 'Decay', 'rgba(0, 0, 0, 0.35)', 'box-shadow', 'Undo']
+const topShadow = ['Shadow Light', 'Light Source', 'Distance', 'Blur']
+const bottomShadow = ['Layers', 'Decay', 'rgba(0, 0, 0, 0.35)', 'box-shadow', 'Undo']
 assert.deepEqual(missingShadowCaptureSemantics(topShadow, bottomShadow), [])
 assert.deepEqual(
-  missingShadowCaptureSemantics(['Shadow', 'Preview', 'Distance', 'Blur'], bottomShadow),
+  missingShadowCaptureSemantics(['Shadow', 'Light Source', 'Distance', 'Blur'], bottomShadow),
   ['shadow light'],
-  'Light Source in a separate viewport cannot masquerade as the Shadow Light title',
+  'Light Source cannot masquerade as the Shadow Light title',
+)
+assert.deepEqual(
+  missingShadowCaptureSemantics(['Shadow Light', 'Preview', 'Light Source', 'Distance', 'Blur'], bottomShadow),
+  ['no preview box'],
+  'The Shadow Light panel has no local Preview box (LKM-133)',
 )
 
 // No host or window: exercise the same readiness/capture sequencing as the smoke fixture.

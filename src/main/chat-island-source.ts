@@ -15,6 +15,10 @@ export async function islandSource(root: string, record: IslandRecord) {
   if (!rel || rel.startsWith('..') || isAbsolute(rel) || rel.split('/').some(p => ['.git', '.trezi', '.praxis', '.dsgn'].includes(p))) throw new Error('Source target escapes the project or uses metadata.')
   const code = await readFile(file, 'utf8')
   if (Buffer.byteLength(code) > 2_000_000) throw new Error('Source file is too large.')
+  return { file, code, ...await sourceValues(code, file, record), revision: sourceHash(code) }
+}
+/** The island's bound values as `code` holds them. */
+async function sourceValues(code: string, file: string, record: IslandRecord) {
   const attributes = await jsxAttributeLiterals(code, file)
   const values: Record<string, IslandValue> = {}
   for (const p of record.manifest.params) {
@@ -26,14 +30,27 @@ export async function islandSource(root: string, record: IslandRecord) {
     values[p.id] = value
   }
   for (const block of record.blocks.filter(b => b.kind === 'shadow')) shadowOutput(block, values)
-  return { file, code, values, attributes, revision: sourceHash(code) }
+  return { values, attributes }
 }
-/** One file/gesture = one validated write and undo group. All participants share repo queue. */
-export function writeIsland(root: string, record: IslandRecord, expected: string, values: Record<string, IslandValue>, guard: () => boolean, gestureGroup?: string) {
-  return enqueueRepoWrite(root, async () => {
+export type IslandWrite =
+  | { conflict?: undefined; group: string; revision: string; values: Record<string, IslandValue> }
+  | { conflict: true; revision: string; values: Record<string, IslandValue> }
+/** Bindings whose source value differs from what the island last saw. */
+export function changedBindings(record: IslandRecord, seen: Record<string, IslandValue>, values: Record<string, IslandValue>) {
+  return record.manifest.params.filter(p => p.id in seen && seen[p.id] !== values[p.id]).map(p => p.id)
+}
+/**
+ * One file/gesture = one validated write and undo group. All participants share repo queue.
+ * The check is per binding, not per file (LKM-133): edits elsewhere in the file are kept and
+ * written over; only when one of the island's own literals no longer holds the value the island
+ * last saw (`seen`) is nothing written, and the current values come back as a conflict. Reset
+ * passes no `seen`. Returns undefined when the values are already in the source.
+ */
+export function writeIsland(root: string, record: IslandRecord, seen: Record<string, IslandValue> | undefined, values: Record<string, IslandValue>, guard: () => boolean, gestureGroup?: string) {
+  return enqueueRepoWrite(root, async (): Promise<IslandWrite | undefined> => {
     if (!guard()) throw new Error('This island changed or closed. Reload its controls.')
     const source = await islandSource(root, record)
-    if (source.revision !== expected) throw new Error('Source changed. Reload before applying your adjustment.')
+    if (seen && changedBindings(record, seen, source.values).length) return { conflict: true, revision: source.revision, values: source.values }
     const changes: { start: number; end: number; text: string }[] = []
     if (!values || typeof values !== 'object' || Array.isArray(values) || !Object.keys(values).length) throw new Error('No values to apply.')
     values = { ...values }
@@ -81,7 +98,8 @@ export function writeIsland(root: string, record: IslandRecord, expected: string
     // A proposal bound to the text validated above; a gesture keeps coalescing into one Undo step.
     const written = await proposeEdit(root, source.file, source.code, next, group, group, !!gestureGroup)
     if (!written.applied) throw new Error(written.error ?? 'Source changed before the edit could be saved.')
-    return { group, revision: sourceHash(next) }
+    // What the island now sees: the source values with this write applied.
+    return { group, revision: sourceHash(next), values: (await sourceValues(next, source.file, record)).values }
   })
 }
 export function undoIsland(root: string, group: string, guard: () => boolean) {

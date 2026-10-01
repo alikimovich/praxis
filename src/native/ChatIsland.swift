@@ -1,19 +1,7 @@
 import SwiftUI
 import AppKit
 
-// The native wire format is deliberately smaller than a general UI interpreter.
-enum IslandValue: Decodable, Equatable {
-    case number(Double), text(String), toggle(Bool)
-    init(from decoder: Decoder) throws {
-        let value = try decoder.singleValueContainer()
-        if let bool = try? value.decode(Bool.self) { self = .toggle(bool) }
-        else if let number = try? value.decode(Double.self) { self = .number(number) }
-        else { self = .text(try value.decode(String.self)) }
-    }
-    var object: Any { switch self { case .number(let n): return n; case .text(let s): return s; case .toggle(let b): return b } }
-    var number: Double { if case .number(let n) = self { return n }; return 0 }
-    var text: String { switch self { case .number(let n): return String(format: "%.4g", n); case .text(let s): return s; case .toggle(let b): return b ? "true" : "false" } }
-}
+// IslandValue and the live-write/typed-entry policy live in IslandEditing.swift.
 struct IslandField: Decodable, Identifiable {
     let id: String; let label: String; let kind: String; let value: IslandValue?
     let min: Double?; let max: Double?; let step: Double?; let unit: String?; let options: [String]?
@@ -22,30 +10,32 @@ struct IslandBlock: Decodable, Identifiable { let id: String; let title: String;
 struct IslandView: Decodable, Identifiable {
     let id: String; let revision: Int; let title: String; let blocks: [IslandBlock]; let fields: [IslandField]
     let sourceRevision: String; let status: String; let detail: String; let engine: String; let replay: Bool
+    let notice: String?
 }
 struct NativeChatIsland: View {
     let island: IslandView
     @ObservedObject var model: ChatModel
     @State private var drafts: [String: IslandValue] = [:]
     @State private var dragging = false
-    @State private var gesture = UUID().uuidString
-    @State private var lastUpdate = Date.distantPast
+    @State private var writes = IslandLiveWrites()
+    /// The one path every control writes through: live while editing, one Undo group per gesture.
     private func live(_ values: [String: IslandValue], ended: Bool = false) {
         model.controlInteraction += 1
+        dragging = !ended
         drafts.merge(values) { _, next in next }
-        guard ended || Date().timeIntervalSince(lastUpdate) >= 0.12 else { return }
-        lastUpdate = Date()
-        guard let chat = model.snapshot?.chat else { return }
-        emit(["event":"island-action", "chat":chat, "id":island.id, "revision":island.revision,
-              "sourceRevision":island.sourceRevision, "operation":UUID().uuidString,
-              "gesture":gesture, "action":"commit", "values":values.mapValues(\.object)])
-        if ended { gesture = UUID().uuidString; lastUpdate = .distantPast }
+        guard let batch = writes.change(values, ended: ended) else { return }
+        model.islandAction(island, action: "commit", values: batch.values.mapValues(\.object), gesture: batch.gesture)
     }
     private func value(_ field: IslandField) -> IslandValue { drafts[field.id] ?? field.value ?? .text("") }
     private func action(_ name: String, values: [String: IslandValue] = [:]) {
         model.islandAction(island, action: name, values: values.mapValues(\.object))
     }
-    private func commit(_ field: IslandField, _ value: IslandValue) { drafts[field.id] = value; action("commit", values: [field.id:value]) }
+    /// A discrete change (typed value, toggle, picker, preset) is a gesture of one write.
+    private func commit(_ field: IslandField, _ value: IslandValue) { live([field.id: value], ended: true) }
+    private func range(_ field: IslandField) -> ClosedRange<Double>? {
+        guard let lower = field.min, let upper = field.max, lower <= upper else { return nil }
+        return lower...upper
+    }
     private var shadowPanel: Bool { island.blocks.contains { $0.kind == "shadow" } }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -55,27 +45,28 @@ struct NativeChatIsland: View {
                     Color.clear.preference(key: IslandPositions.self, value: ["start-" + island.id: geometry.frame(in: .named("chatScroll"))])
                 })
             if !island.detail.isEmpty { Text(island.detail).font(.caption).fixedSize(horizontal: false, vertical: true) }
+            if let notice = island.notice, !notice.isEmpty {
+                Label(notice, systemImage: "arrow.triangle.2.circlepath").font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true).accessibilityLabel(notice)
+            }
             ForEach(island.blocks) { block in
                 VStack(alignment: .leading, spacing: 10) {
                     if block.kind != "shadow" { Text(block.title).font(.subheadline.weight(.medium)) }
                     let fields = block.params.compactMap { id in island.fields.first { $0.id == id } }
                     if block.kind == "shadow", fields.count == 8 {
                         ShadowIsland(fields: fields, value: value, field: { field in AnyView(fieldView(field)) }, light: { x, y, ended in
-                            dragging = !ended
                             live([fields[0].id: .number(x), fields[1].id: .number(y)], ended: ended)
-                        })
+                        }, input: { field in AnyView(IslandInput(label: field.id == fields[0].id ? "X" : "Y", value: value(field).text, kind: .number(range(field))) { commit(field, $0) }) })
                     } else if block.kind == "point", fields.count == 2 {
                         IslandPoint(x: value(fields[0]).number, y: value(fields[1]).number,
                             xRange: (fields[0].min ?? -1)...(fields[0].max ?? 1), yRange: (fields[1].min ?? -1)...(fields[1].max ?? 1),
                             label: block.title, change: { x, y, ended in
-                                dragging = !ended
-                                drafts[fields[0].id] = .number(x); drafts[fields[1].id] = .number(y)
                                 live([fields[0].id:.number(x), fields[1].id:.number(y)], ended: ended)
                             })
                     }
                     ForEach(block.kind == "shadow" ? [] : fields) { field in
                         if block.kind == "point" {
-                            IslandInput(label: field.label, value: value(field).text, numeric: true) { if let n = Double($0), n.isFinite { commit(field, .number(n)) } }
+                            IslandInput(label: field.label, value: value(field).text, kind: .number(range(field))) { commit(field, $0) }
                         } else { fieldView(field) }
                     }
                 }.disabled(island.status != "ready")
@@ -94,6 +85,8 @@ struct NativeChatIsland: View {
             .overlay(RoundedRectangle(cornerRadius: shadowPanel ? 20 : 12).stroke(.separator, lineWidth: 0.5))
             .onChange(of: island.sourceRevision) { _ in if !dragging { drafts = [:] } }
             .onChange(of: island.revision) { _ in drafts = [:] }
+            // A bound value changed outside the island: show the source, not the drag.
+            .onChange(of: island.notice) { _ in drafts = [:] }
     }
     @ViewBuilder private func fieldView(_ field: IslandField) -> some View {
         switch field.kind {
@@ -105,36 +98,43 @@ struct NativeChatIsland: View {
             }
         case "bezier":
             IslandBezier(label: field.label, value: value(field).text) { text, ended in
-                dragging = !ended
                 live([field.id: .text(text)], ended: ended)
             }
         case "number":
             VStack(alignment: .leading, spacing: 4) {
-                IslandInput(label: field.label + (field.unit.map { " (\($0))" } ?? ""), value: value(field).text, numeric: true) { if let n = Double($0), n.isFinite { commit(field, .number(n)) } }
+                IslandInput(label: field.label + (field.unit.map { " (\($0))" } ?? ""), value: value(field).text, kind: .number(range(field))) { commit(field, $0) }
                 if let lower = field.min, let upper = field.max, lower < upper {
                     SnappedSlider(value: Binding(get: { Swift.min(upper, Swift.max(lower, value(field).number)) }, set: { live([field.id: .number($0)]) }), bounds: lower...upper, step: field.step ?? (upper-lower)/1000, onEditingChanged: { editing in
-                        dragging = editing
-                        if !editing { live([field.id: value(field)], ended: true) }
+                        if editing { dragging = true } else { live([field.id: value(field)], ended: true) }
                     }).accessibilityLabel(field.label)
                 }
             }
         default:
-            IslandInput(label: field.label, value: value(field).text, numeric: false) { commit(field, .text($0)) }
+            IslandInput(label: field.label, value: value(field).text, kind: .text) { commit(field, $0) }
         }
     }
 }
+/// A typed field: Return and blur both apply (see `IslandEntry`); an invalid draft shows red and is not written.
 struct IslandInput: View {
-    let label: String; let value: String; let numeric: Bool; let commit: (String) -> Void
+    let label: String; let value: String; let commit: (IslandValue) -> Void
+    @State private var entry: IslandEntry
     @State private var draft = ""
     @FocusState private var focused: Bool
+    init(label: String, value: String, kind: IslandEntry.Kind, commit: @escaping (IslandValue) -> Void) {
+        self.label = label; self.value = value; self.commit = commit
+        _entry = State(initialValue: IslandEntry(kind))
+    }
+    private var wide: Bool { if case .number = entry.kind { return false }; return true }
+    private func apply() { if let next = entry.commit(draft, current: value) { commit(next) } }
     var body: some View {
         HStack {
             Text(label).font(.callout); Spacer(minLength: 8)
-            TextField(label, text: $draft).labelsHidden().textFieldStyle(.roundedBorder).frame(maxWidth: numeric ? 90 : 200)
-                .focused($focused).onSubmit { if !numeric || Double(draft)?.isFinite == true { commit(draft) } }
+            TextField(label, text: $draft).labelsHidden().textFieldStyle(.roundedBorder).frame(maxWidth: wide ? 200 : 90)
+                .foregroundStyle(entry.parse(draft) == nil ? Color.red : Color.primary)
+                .focused($focused).onSubmit(apply)
                 .accessibilityLabel(label)
-        }.onAppear { draft = value }.onChange(of: value) { next in if !focused { draft = next } }
-            .onChange(of: focused) { next in if !next, draft != value, !numeric || Double(draft)?.isFinite == true { commit(draft) } }
+        }.onAppear { draft = value }.onChange(of: value) { next in entry.sourceChanged(); if !focused { draft = next } }
+            .onChange(of: focused) { next in if !next { apply() } }
     }
 }
 struct IslandPoint: View {
@@ -189,7 +189,7 @@ private struct IslandBezier: View {
                 Button("Ease") { points = [0.25,0.1,0.25,1]; save() }
                 Button("Ease out") { points = [0,0,0.58,1]; save() }
             }.controlSize(.small)
-            IslandInput(label: "Coordinates", value: value, numeric: false) { commit($0, true) }
+            IslandInput(label: "Coordinates", value: value, kind: .bezier) { commit($0.text, true) }
         }.onAppear(perform: load).onChange(of: value) { _ in if !dragging { load() } }
     }
 }

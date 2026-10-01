@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chatIslandGuidance, chatIslandControlPurposes } from '../src/shared/chat-island-guidance.ts'
 import { chatIslandShape } from '../bin/chat-island-schema.mjs'
-import { ChatIslands } from '../src/main/chat-islands.ts'
+import { ChatIslands, ISLAND_CONFLICT_NOTICE } from '../src/main/chat-islands.ts'
 import { islandDefinition } from '../src/main/chat-island-schema.ts'
 import { chooseControlsWithJev } from '../src/main/controls-jev.ts'
 import { enqueueRepoWrite } from '../src/main/repo-write-queue.ts'
@@ -63,40 +63,84 @@ try {
   assert.equal(view().status, 'waiting')
   await assert.rejects(islands.interact(command('commit', { x: .5 })), /not landed/)
   await islands.settle('chat', true)
+  const source = () => readFile(join(root, 'shadow.js'), 'utf8')
   const oldCommand = command('commit', { x: .3, y: .8 })
   await islands.interact(oldCommand)
-  assert.match(await readFile(join(root, 'shadow.js'), 'utf8'), /LIGHT_X = 0.3;\nconst LIGHT_Y = 0.8/)
-  await assert.rejects(islands.interact(oldCommand), /Source changed/)
+  assert.match(await source(), /LIGHT_X = 0.3;\nconst LIGHT_Y = 0.8/)
+  // LKM-133 root cause: the UI sends the source revision it last rendered. A command computed
+  // before the refreshed view reached it (a drag's next frame, blur right after Return, the first
+  // adjustment after Reload) carried the pre-write file hash and failed with "Source changed".
+  await islands.interact({ ...oldCommand, operation: crypto.randomUUID(), values: { x: .35 } })
+  assert.match(await source(), /LIGHT_X = 0.35;\nconst LIGHT_Y = 0.8/, 'A stale UI revision still applies')
   await islands.interact(command('undo'))
-  assert.equal(await readFile(join(root, 'shadow.js'), 'utf8'), code, 'Point gesture undoes both coordinates')
-  await islands.interact(command('commit', { ease: 'cubic-bezier(0.1, -0.2, 0.8, 1.2)' }))
-  assert.match(await readFile(join(root, 'shadow.js'), 'utf8'), /EASE = \[0.1, -0.2, 0.8, 1.2\]/)
+  assert.match(await source(), /LIGHT_X = 0.3;\nconst LIGHT_Y = 0.8/, 'Undo reverts only the last adjustment')
   await islands.interact(command('reset'))
-  assert.equal(await readFile(join(root, 'shadow.js'), 'utf8'), code)
-  // Native slider bursts arrive before earlier disk writes/snapshots complete.
-  const burst = [.2, .4, .6, .8].map(x => ({ ...command('commit', { x }), gesture: 'drag-1' }))
-  await Promise.all(burst.map(c => islands.interact(c)))
-  assert.match(await readFile(join(root, 'shadow.js'), 'utf8'), /LIGHT_X = 0.8/)
+  assert.equal(await source(), code, 'Reset restores the initial values')
+  // Reload, then one adjustment: it applies.
+  await islands.interact(command('reload'))
+  await islands.interact(command('commit', { x: .1 }))
+  assert.match(await source(), /LIGHT_X = 0.1;/, 'The first adjustment after Reload applies')
   await islands.interact(command('undo'))
-  assert.equal(await readFile(join(root, 'shadow.js'), 'utf8'), code, 'One Undo restores the whole drag')
-  // Rebasing queued controls must never bless an unrelated source write.
+  assert.equal(await source(), code, 'Point gesture undoes both coordinates')
+  await islands.interact(command('commit', { ease: 'cubic-bezier(0.1, -0.2, 0.8, 1.2)' }))
+  assert.match(await source(), /EASE = \[0.1, -0.2, 0.8, 1.2\]/)
+  await islands.interact(command('reset'))
+  assert.equal(await source(), code)
+  // A throttled drag: several live writes, each from the revision the UI saw before the drag,
+  // share one gesture. They form exactly one Undo group, and Undo restores the value from before.
+  const beforeDrag = command('commit')
+  for (const x of [.2, .4, .6, .8]) {
+    await islands.interact({ ...beforeDrag, operation: crypto.randomUUID(), gesture: 'drag-1', values: { x } })
+    assert.match(await source(), new RegExp(`LIGHT_X = ${x};`), 'Each drag frame writes live')
+  }
+  await islands.interact(command('undo'))
+  assert.equal(await source(), code, 'One Undo restores the whole drag')
+  await assert.rejects(islands.interact(command('undo')), /No edit/, 'The drag was a single Undo group')
+  // A fast burst: frames that have not started are coalesced (latest value wins) and never error.
+  const owner = islands.owner, admit = owner.islandCommand
+  let admitted = 0
+  owner.islandCommand = (...args) => { admitted++; return admit.apply(owner, args) }
+  const burst = [.1, .2, .3, .4, .5, .6, .7, .8].map(x => ({ ...beforeDrag, operation: crypto.randomUUID(), gesture: 'drag-2', values: { x } }))
+  await Promise.all(burst.map(c => islands.interact(c)))
+  owner.islandCommand = admit
+  assert.match(await source(), /LIGHT_X = 0.8;/)
+  assert.ok(admitted < burst.length, `Queued frames coalesce (${admitted} of ${burst.length} written)`)
+  await islands.interact(command('undo'))
+  assert.equal(await source(), code, 'One Undo restores the whole burst')
+  // An unrelated edit elsewhere in the file between two frames: the next frame still applies on
+  // top of it, keeping it, even when the edit lands while the frame waits for the write lease.
+  await islands.interact({ ...beforeDrag, operation: crypto.randomUUID(), gesture: 'drag-3', values: { x: .3 } })
   let unblock
   const held = enqueueRepoWrite(root, () => new Promise(r => { unblock = r }))
   // The lease is held once its operation runs (a Swift repository lease is a round trip).
   while (!unblock) await new Promise(r => setTimeout(r, 1))
-  const racing = [.3, .7].map(x => islands.interact(command('commit', { x })))
-  const rejected = Promise.all(racing.map(p => assert.rejects(p, /Source changed/)))
-  await writeFile(join(root, 'shadow.js'), code + '// concurrent editor change\n')
-  unblock(); await held; await rejected
-  assert.equal(await readFile(join(root, 'shadow.js'), 'utf8'), code + '// concurrent editor change\n')
+  const racing = islands.interact({ ...beforeDrag, operation: crypto.randomUUID(), gesture: 'drag-3', values: { x: .7 } })
+  await writeFile(join(root, 'shadow.js'), (await source()) + '// concurrent editor change\n')
+  unblock(); await held; await racing
+  assert.equal(await source(), code.replace('LIGHT_X = 0', 'LIGHT_X = 0.7') + '// concurrent editor change\n')
   await writeFile(join(root, 'shadow.js'), code)
   await islands.refresh('chat')
-  const before = await readFile(join(root, 'shadow.js'), 'utf8')
+  const before = await source()
   await assert.rejects(islands.interact(command('commit', { x: .9, unknown: 'bad' })), /Unknown/)
-  assert.equal(await readFile(join(root, 'shadow.js'), 'utf8'), before, 'Invalid batch must not partially write')
+  assert.equal(await source(), before, 'Invalid batch must not partially write')
+  // (The native field also refuses out-of-range typing; see native-island-editing.)
+  for (const x of [Number.NaN, 'wide', null]) await assert.rejects(islands.interact(command('commit', { x })), /finite number/)
+  assert.equal(await source(), before, 'An invalid value is not written')
+  // An external change of a bound value: nothing is written, no error; the controls show the
+  // source value with an inline notice, and the rest of that gesture is dropped.
+  await writeFile(join(root, 'shadow.js'), code.replace('LIGHT_X = 0', 'LIGHT_X = 0.42'))
+  await islands.interact({ ...command('commit', { x: .9 }), gesture: 'drag-4' })
+  assert.equal(await source(), code.replace('LIGHT_X = 0', 'LIGHT_X = 0.42'), 'The external value is kept')
+  assert.equal(view().fields.find(f => f.id === 'x').value, 0.42, 'Controls refresh to the source value')
+  assert.equal(view().notice, ISLAND_CONFLICT_NOTICE)
+  await islands.interact({ ...command('commit', { x: .95 }), gesture: 'drag-4' })
+  assert.equal(await source(), code.replace('LIGHT_X = 0', 'LIGHT_X = 0.42'), 'The conflicted gesture stops writing')
+  await islands.interact({ ...command('commit', { x: .5 }), gesture: 'drag-5' })
+  assert.match(await source(), /LIGHT_X = 0.5;/, 'The next gesture applies')
+  assert.equal(view().notice, '', 'A successful write clears the notice')
+  await writeFile(join(root, 'shadow.js'), code)
   const stale = command('commit', { x: .9 })
   await writeFile(join(root, 'shadow.js'), code + '// external edit\n')
-  await assert.rejects(islands.interact(stale), /Source changed/)
   await islands.interact(command('reload'))
   const updated = await islands.tool('chat', root, { ...request, id: made.id, revision: 1, blocks: [...request.blocks].reverse() })
   assert.equal(updated.revision, 2)
