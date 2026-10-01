@@ -189,11 +189,12 @@ console.log('Native controller: root scoping, clipboard cancellation, renderer r
 // is no pinned status line any more (LKM-141).
 {
   const { snapshot: usageSnapshot } = await import('../src/native/chat-snapshot.ts')
-  const { newChat: usageNew, reduce: usageReduce } = await import('../src/native/chat-state.ts')
+  const { newChat: usageNew, reduce: usageReduce, assistant: usageAssistant } = await import('../src/native/chat-state.ts')
   const usageChat = usageNew('usage')
   usageChat.usage = { input: 1000, output: 10, cached: 0 }
   usageChat.messages.push({ id: 'earlier', role: 'assistant', text: 'Earlier', segments: [], statuses: [] })
   usageChat.isRunning = true
+  usageAssistant(usageChat) // the response `run()` opens with the turn
   usageReduce(usageChat, { type: 'usage', input: 1000000, output: 3000, cached: 1200000 })
   usageReduce(usageChat, { type: 'usage', input: 388777, output: 491, cached: 0 })
   const running = usageSnapshot(usageChat, [])
@@ -215,6 +216,24 @@ console.log('Native controller: root scoping, clipboard cancellation, renderer r
   assert.equal(done.messages.at(-1).tokens.label, '↑ 1.4M  ↓ 3.5k')
   assert.deepEqual(done.messages.at(-1).usage, { input: 1388778, output: 3500, cached: 1200000 })
   assert.equal(usageChat.messages.at(-1).tokens, undefined, 'Formatting stays out of the mirrored state')
+
+  // Usage before any response exists never creates an empty message. A turn
+  // that ends with no text or status leaves none behind, but still counts in
+  // the chat total; one that does start a response carries the usage.
+  const quiet = usageNew('quiet')
+  quiet.isRunning = true
+  usageReduce(quiet, { type: 'usage', input: 5, output: 7, cached: 0 })
+  assert.equal(quiet.messages.length, 0, 'Usage alone creates no message')
+  usageReduce(quiet, { type: 'done' })
+  assert.equal(quiet.messages.length, 0, 'A turn with no output leaves no empty assistant message')
+  assert.deepEqual(quiet.usage, { input: 5, output: 7, cached: 0 }, 'The chat total still counts it')
+  assert.equal(usageSnapshot(quiet, []).messages.length, 0)
+  const early = usageNew('early')
+  early.isRunning = true
+  usageReduce(early, { type: 'usage', input: 5, output: 7, cached: 0 })
+  usageReduce(early, { type: 'delta', text: 'Hello' })
+  assert.deepEqual(early.messages[0].usage, { input: 5, output: 7, cached: 0 }, 'Early usage lands on the response once it exists')
+  assert.equal(usageSnapshot(early, []).messages[0].tokens.label, '↑ 5  ↓ 7')
 }
 
 // Running includes landing and user waits; those must not imply active thinking.

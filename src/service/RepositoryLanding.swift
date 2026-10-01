@@ -257,7 +257,7 @@ extension RepositoryEffects {
     /// orphan of ANOTHER repository is left for that repository's own lane; a folder
     /// that is no worktree is moved aside (Trezi's own `.`-prefixed scratch removed).
     func pruneOrphans(_ c: RepositoryContext, directory: String, skip: Set<String>, parked: Set<String>) throws -> [Reclaimed] {
-        guard inside(directory) else { throw RepositoryRefusal(.unauthorized, "Worktrees must live in the Trezi profile.") }
+        guard inside(directory, legacy: true) else { throw RepositoryRefusal(.unauthorized, "Worktrees must live in the Trezi profile.") }
         _ = git.succeeds(c.root, ["worktree", "prune"])
         let entries = ((try? FileManager.default.contentsOfDirectory(atPath: directory)) ?? []).sorted()
         var reclaimed: [Reclaimed] = []

@@ -2,7 +2,8 @@ import type { QuestionRequest } from './api'
 export interface NativeChatMessage {
   at?: number; workedMs?: number
   id: string; role: 'user' | 'assistant'; text: string
-  segments: ({ kind: 'text'; text: string; at?: number } | { kind: 'tools'; statuses: string[] } | { kind: 'island'; island: import('./chat-islands').IslandView })[]
+  // `labels`: the statuses' collapsed form (`display-path.ts`), added by the snapshot.
+  segments: ({ kind: 'text'; text: string; at?: number } | { kind: 'tools'; statuses: string[]; labels?: string[] } | { kind: 'island'; island: import('./chat-islands').IslandView })[]
   attachments?: { id: string; kind?: 'image' | 'file'; name?: string; path?: string; url?: string }[]
   selection?: { tag: string; ident: string; source: string | null }
   revertGroup?: string
@@ -16,10 +17,14 @@ export interface NativeChatCard {
   id: string
   title: string
   detail?: string
+  /** The detail with full paths, for the tooltip and Copy, when `detail` is collapsed. */
+  fullDetail?: string
   actions: { label: string; action: string; value?: string; disabled?: boolean }[]
 }
 export interface NativeChatActivity {
   label: string
+  /** The label with full paths, for the tooltip, when `label` is collapsed. */
+  detail?: string
   kind: 'thinking' | 'writing' | 'working' | 'applying' | 'waiting' | 'stopping'
   animated: boolean
 }

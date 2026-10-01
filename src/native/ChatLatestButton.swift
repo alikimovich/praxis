@@ -9,6 +9,16 @@ import AppKit
 final class ChatLatestButton: NSButton {
     static let diameter: CGFloat = 30
     static let gap: CGFloat = 8
+    /// Height of the fade above the cleared band (see `clearHeight`).
+    static let fade: CGFloat = 14
+    /// Height, from the bottom of the chat, of the band kept free of transcript
+    /// content while the button is shown: the composer, the button and `gap`
+    /// above and below it. The button is drawn inside it, so message text and
+    /// controls scrolling past never sit under the button; content fades out
+    /// over `fade` above the band.
+    static func clearHeight(composerHeight: CGFloat) -> CGFloat {
+        ChatLayout.composerInset + composerHeight + gap + diameter + gap
+    }
     var onPress: () -> Void = {}
     init() {
         super.init(frame: .zero)

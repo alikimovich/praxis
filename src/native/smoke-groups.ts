@@ -38,6 +38,7 @@ export const SMOKE_CHECK_GROUPS: Readonly<Record<string, readonly NativeSmokeGro
   'text-edit': ['core'],
   'source-editor': ['core'],
   'preview-inspector': ['core'],
+  'agent-preview': ['core'],
   'live-provider': ['core'],
   // One fixture scope covers both; smoke-islands reads the selection to run either part.
   'chat-islands': ['islands', 'shadow-light'],

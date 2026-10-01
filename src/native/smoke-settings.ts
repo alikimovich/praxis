@@ -120,6 +120,7 @@ export async function checkVisibleSettings(host: NativeBridge, artifacts: string
   assert.equal(initial.section, 'general', 'A new profile opens Settings on General')
   assert.equal(initial.values.projectUi, 'false')
   assert.equal(initial.values.engine, 'agent')
+  assert.equal(initial.values.claudePlugins, 'false', 'Claude plugins are off in a new profile (LKM-138)')
   assertSidebarParity(initial.sourceList, projects)
   writeFileSync(
     join(artifacts, 'settings-sidebar-parity.json'),
@@ -148,6 +149,13 @@ export async function checkVisibleSettings(host: NativeBridge, artifacts: string
       assertSectionEvidence(await shoot(width, section), width, section)
     }
   }
+  // LKM-138: the Claude plugins toggle autosaves and survives close/reopen, then goes back off.
+  await select('general')
+  await choose('claudePlugins', 'true')
+  await reopen()
+  assert.equal((await inspect()).values.claudePlugins, 'true')
+  await choose('claudePlugins', 'false')
+  await reopen()
   await select('experimental')
   for (const width of widths) {
     await capture(width, 'off', false, 'agent')

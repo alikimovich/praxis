@@ -45,6 +45,7 @@ import {
   releaseChat,
   resolveParkedChat
 } from './chat-isolation'
+import { cleanUpWorkspacesNow, initChatWorkspaces, legacyWorkspaceDirs, workspaceUsage } from './chat-workspaces'
 import { clearHistory, recordEdit } from './edit-history'
 import { isRepoRoot } from './git'
 import { commitLiveTurn } from './live-commit'
@@ -691,6 +692,14 @@ export function registerAgentIpc(
   getWindow_ = getWindow // share with finalizeSpawn (runs outside this closure)
   // v9 per-chat worktree isolation — deps-injected so this module barely grows.
   initChatIsolation({ worktreesDir, store, getWindow })
+  // LKM-136: idle and old-name chat workspace cleanup; Settings shows the usage.
+  initChatWorkspaces({
+    worktreesDir,
+    busy: (key) => runningKeys.has(key) || preparingTurns.has(key),
+    legacyDirs: () => legacyWorkspaceDirs(app.getPath('userData'))
+  })
+  ipcMain.handle('chat-workspaces:usage', () => workspaceUsage())
+  ipcMain.handle('chat-workspaces:clean-up', () => cleanUpWorkspacesNow())
   /** Starts an interactive chat's provider session with its turn tracker and event hook. */
   const startChat = async (
     root: string,

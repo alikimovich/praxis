@@ -1,4 +1,6 @@
 import type { NativeShellAction, NativeShellState } from '../shared/native-shell'
+import type { NativeProjectStatus } from '../shared/native-workspace'
+import { displayText, rememberProject } from './display-paths'
 import type { NativeWorkspaceController } from './workspace-controller'
 import type { NativeChatController } from './chat-controller'
 import type { NativeGitController } from './git-controller'
@@ -16,6 +18,8 @@ export class NativeShellController {
   schedule() { if (!this.timer) this.timer = setTimeout(() => { this.timer = undefined; this.render() }, 16) }
   render() {
     const ws = this.workspace.state, active = this.workspace.active
+    for (const entry of ws.projects) rememberProject(entry.root)
+    const status: NativeProjectStatus = ws.status.kind === 'error' ? { ...ws.status, message: displayText(ws.status.message), detail: ws.status.message } : ws.status
     for (const entry of ws.projects) if (!this.icons.has(entry.root)) {
       this.icons.set(entry.root, undefined)
       void this.workspace.services.invoke('project:icon', entry.root).then(icon => { this.icons.set(entry.root, icon?.dataUrl); this.schedule() }).catch(() => {})
@@ -27,8 +31,8 @@ export class NativeShellController {
     let url = active?.url ?? null
     try { if (url && this.location && new URL(url).origin === new URL(this.location).origin) url = this.location } catch {}
     const state = this.git.decorate({
-      previewStatus: ws.status, rows, project: active?.key ?? null, chatReady: !!active && ws.loadedKey === active.key, selected: active ? `chat:${active.activeSessionKey}` : null,
-      homeState: { visible: !active, busy: ws.status.kind === 'busy', label: ws.status.kind === 'busy' ? ws.status.label : ws.status.kind === 'error' ? ws.status.message : '', recents: ws.recents },
+      previewStatus: status, rows, project: active?.key ?? null, chatReady: !!active && ws.loadedKey === active.key, selected: active ? `chat:${active.activeSessionKey}` : null,
+      homeState: { visible: !active, busy: status.kind === 'busy', label: status.kind === 'busy' ? status.label : status.kind === 'error' ? status.message : '', recents: ws.recents },
       selectMode: this.selecting, previewReady: ws.status.kind === 'running', chatWidth: Number(this.preferences.get('trezi:native-chat-width')) || 440, chatHidden: this.hidden,
       branch: active?.branch ?? null, branches: [], publishLabel: 'Publish', publishing: false, publishMode: this.git.mode, codeOpen: this.codeOpen,
       previewBase: active?.url ?? null, previewURL: url, viewport: active?.viewport ?? 'desktop', deviceEnabled: !!active?.url && active.previewKind !== 'simulator'

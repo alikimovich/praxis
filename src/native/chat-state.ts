@@ -2,6 +2,7 @@ import type { AgentEvent, PermissionRequest, QuestionRequest, SessionTranscriptE
 import { defaultChatAgentSettings, type ChatAgentSettings } from '../shared/chat-settings'
 import { migrateChatTitle } from '../shared/chat-title'
 import type { NativeChatContext, NativeChatMirror } from '../shared/native-chat-controller'
+import { emptyUsage, type TokenUsage } from '../shared/run-stats'
 import type { ChatLogin } from './chat-login'
 
 export interface Attachment {
@@ -34,6 +35,8 @@ export interface Chat extends NativeChatMirror {
   last?: Submission
   /** The provider login card (`chat-login.ts`), from an `error` with a code. */
   login?: ChatLogin
+  /** This turn's usage reported before its response exists (`assistant` attaches it). */
+  pendingUsage?: TokenUsage
 }
 export function newChat(chat: string): Chat {
   return {
@@ -50,6 +53,7 @@ export function assistant(chat: Chat) {
   let message = chat.messages.find(message => message.id === chat.streamingId)
   if (!message) {
     message = { id: crypto.randomUUID(), role: 'assistant', at: Date.now(), text: '', segments: [], statuses: [] }
+    if (chat.pendingUsage) { message.usage = chat.pendingUsage; chat.pendingUsage = undefined }
     chat.messages.push(message)
     chat.streamingId = message.id
   }
@@ -93,6 +97,8 @@ export function finish(chat: Chat, landing = false) {
   chat.activityDetail = ''
   if (!landing) chat.stopping = false
   if (!landing) {
+    // Usage with no response to show it on stays in the chat total only.
+    chat.pendingUsage = undefined
     if (chat.turnStartedAt != null) {
       const elapsed = Math.max(0, Date.now() - chat.turnStartedAt)
       chat.workedMs += elapsed
@@ -120,13 +126,15 @@ export function reduce(chat: Chat, event: AgentEvent) {
     case 'commands': chat.commands = event.commands; break
     case 'usage': {
       // The chat total, and the running turn's own count on its response (a
-      // late report after `done` belongs to the last response).
+      // late report after `done` belongs to the last response). Usage that
+      // arrives before the response exists waits in `pendingUsage`: it never
+      // creates an empty message that could outlive a turn without output.
       const message = chat.messages.find(m => m.id === chat.streamingId) ??
-        (chat.isRunning ? assistant(chat) : [...chat.messages].reverse().find(m => m.role === 'assistant'))
-      if (message) message.usage ??= { input: 0, output: 0, cached: 0 }
+        (chat.isRunning ? undefined : [...chat.messages].reverse().find(m => m.role === 'assistant'))
+      const turn = message ? (message.usage ??= emptyUsage()) : (chat.pendingUsage ??= emptyUsage())
       for (const key of ['input', 'output', 'cached'] as const) {
         chat.usage[key] += event[key]
-        if (message?.usage) message.usage[key] += event[key]
+        turn[key] += event[key]
       }
       break
     }

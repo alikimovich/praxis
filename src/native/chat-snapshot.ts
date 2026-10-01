@@ -1,6 +1,8 @@
 import { formatTokens, isEmptyUsage, type TokenUsage } from '../shared/run-stats'
 import type { ModelChoice } from '../shared/api'
-import type { NativeChatActivity, NativeChatCard, NativeChatState } from '../shared/native-chat'
+import { shortPaths } from '../shared/display-path'
+import type { NativeChatActivity, NativeChatCard, NativeChatMessage, NativeChatState } from '../shared/native-chat'
+import { displayContext } from './display-paths'
 import { providerOptions, resolveSelection } from '../shared/provider-choices'
 import { parseSlashToken } from '../shared/slash-token'
 import { rankSlashMatches } from '../shared/slash-menu'
@@ -12,6 +14,22 @@ export const permissionModes = [
 export function matches(chat: Chat) {
   const token = parseSlashToken(chat.text, chat.caret)
   return token && !chat.dismissed ? rankSlashMatches(chat.commands, token.query) : []
+}
+/** Collapsed paths for every surface the chat shows; the full text stays alongside. */
+function collapse(chat: Chat, cards: NativeChatCard[], current: NativeChatActivity | null) {
+  const ctx = displayContext(chat.root ? [chat.root] : [])
+  const short = (text: string) => shortPaths(text, ctx)
+  const messages: NativeChatMessage[] = chat.messages.map(message =>
+    message.segments.some(s => s.kind === 'tools')
+      ? { ...message, segments: message.segments.map(s => (s.kind === 'tools' ? { ...s, labels: s.statuses.map(short) } : s)) }
+      : message)
+  const shortCards = cards.map(card => {
+    const detail = card.detail && short(card.detail)
+    return detail === card.detail ? card : { ...card, detail, fullDetail: card.detail }
+  })
+  const label = current && short(current.label)
+  const shortActivity = current && label !== current.label ? { ...current, label: label!, detail: current.label } : current
+  return { messages, cards: shortCards, activity: shortActivity }
 }
 function activity(chat: Chat): NativeChatActivity | null {
   if (!chat.isRunning) return null
@@ -51,10 +69,11 @@ export function snapshot(chat: Chat, choices: ModelChoice[]): NativeChatState {
   const currentActivity = activity(chat)
   const thinking = !!currentActivity?.animated && currentActivity.kind !== 'applying'
   const stop = chat.isRunning && !chat.text.trim() && !chat.attachments.length
+  const shown = collapse(chat, cards, currentActivity)
   return {
-    activity: currentActivity, streamingId: chat.streamingId,
-    chat: chat.chat, running: chat.isRunning, cards, questions: chat.questions,
-    messages: chat.messages.map(message => message.usage && !isEmptyUsage(message.usage) ? { ...message, tokens: tokens(message.usage, chat.usage) } : message),
+    activity: shown.activity, streamingId: chat.streamingId,
+    chat: chat.chat, running: chat.isRunning, cards: shown.cards, questions: chat.questions,
+    messages: shown.messages.map(message => message.usage && !isEmptyUsage(message.usage) ? { ...message, tokens: tokens(message.usage, chat.usage) } : message),
     composer: {
       queue: chat.queue.map(q => ({ id: `queued-${q.id}`, text: q.text, attachments: q.attachments.length })),
       queuePaused: chat.paused,

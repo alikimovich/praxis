@@ -42,7 +42,24 @@ export async function checkChatAcceptance(host, artifacts) {
     assert.ok(Math.abs(x + width / 2 - state.chatWidth / 2) <= 1, `${label}: centered over ${state.chatWidth}pt column ${state.latestButtonFrame}`)
     assert.ok(Math.abs(state.composerTop - (y + height) - state.latestButtonGap) <= 1, `${label}: gap above composer top ${state.composerTop} ${state.latestButtonFrame}`)
     assert.ok(y >= state.readingHeight, `${label}: below reading area ${state.readingHeight} ${state.latestButtonFrame}`)
+    // The button shows while history scrolls under it, so the conversation masks
+    // out the band it sits in (composer, button and a gap either side), fading
+    // above it. Rows that reach the button are therefore painted only above that
+    // band, and the button never covers text or controls.
+    assert.ok(state.latestClearHeight > 0, `${label}: transcript band behind the button is masked`)
+    assert.ok(y >= state.latestClearTop + state.latestButtonGap - 1, `${label}: button inside the cleared band, clear top ${state.latestClearTop} ${state.latestButtonFrame}`)
+    assert.ok(state.latestClearTop - state.latestFade + 1 >= 0, `${label}: fade stays inside the column`)
+    const under = Object.entries({ ...state.messageFrames, ...state.footerFrames }).filter(([, value]) => {
+      const frame = String(value).match(/-?[\d.]+(?:e-?\d+)?/g).map(Number)
+      return frame[1] < y + height && frame[1] + frame[3] > y && frame[0] < x + width && frame[0] + frame[2] > x
+    }).map(([id]) => id)
+    for (const id of under) {
+      const frame = String((state.messageFrames[id] ?? state.footerFrames[id])).match(/-?[\d.]+(?:e-?\d+)?/g).map(Number)
+      // Row pixels above the band start are the only painted ones; none can reach the button.
+      assert.ok(Math.min(frame[1] + frame[3], state.latestClearTop) <= y, `${label}: painted part of ${id} ends above the button`)
+    }
     assert.equal(state.latestButtonLabel, 'Scroll to latest message', `${label}: accessibility label`)
+    return under
   }
   const clickLatest = async label => {
     const before = await inspect({})
@@ -54,6 +71,7 @@ export async function checkChatAcceptance(host, artifacts) {
     await wait(s => s.latestVisible, `${name}: complete latest row above composer clearance`)
     const state = await capture(name)
     assert.equal(state.latestVisible, true)
+    if (!state.latestButton) assert.equal(state.latestClearHeight, 0, `${name}: no masked band while the button is hidden`)
     // The tail must be present in actual pixels, not merely in a SwiftUI model.
     assert.match(state.capturedText.join(' '), /LATEST VISIBLE MESSAGE/i)
     return state
