@@ -6,6 +6,7 @@ import { checkSourceEditor } from './smoke-source-editor'
 import { checkChatIslands } from './smoke-islands'
 import { checkInspectorIsland } from './smoke-inspector-island'
 import { checkPreviewInspector } from './smoke-preview-inspector'
+import { checkAgentPreview, restoreAgentPreview } from './smoke-agent-preview'
 import assert from 'node:assert/strict'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -314,6 +315,11 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
       await checkPreviewInspector(host,artifacts,()=>serviceEvents.emit('event','preview:toolbar-action','props'))
     }, cleanup: async () => {
       await host.request('previewInspector',{action:'close'})
+    } },
+    { name: 'agent-preview', dependsOn: ['open-project'], run: async () => {
+      await checkAgentPreview(page, artifacts)
+    }, cleanup: async () => {
+      await restoreAgentPreview(page)
     } },
     { name: 'final-shell', run: async () => {
       writeFileSync(join(artifacts,'shell.png'),Buffer.from(await host.request('captureShell'),'base64'))

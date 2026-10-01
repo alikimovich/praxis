@@ -426,6 +426,11 @@ export interface AgentOptions {
    * key and model. Undefined ⇒ the harness's own subscription, exactly as pre-v10.
    */
   connectionId?: string
+  /**
+   * Claude only (LKM-138): load the user's own Claude Code plugins and MCP servers.
+   * Set by main from Settings when a helper session opens; absent ⇒ isolated.
+   */
+  claudeUserPlugins?: boolean
 }
 
 /** Trezi-managed durable context for one project, stored outside the repo. */

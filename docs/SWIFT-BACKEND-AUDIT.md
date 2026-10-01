@@ -167,7 +167,7 @@ normally process-owned; SDK/CLI tool forwarding is not another UI sender.
 | Tool family / proposed domain | Existing tools; producer → handler and result |
 | --- | --- |
 | Repository | Codex `workspace_state`, `prepare_conflict_resolution` → session closure → chat-isolation authoritative evidence/staging; state/result only, no raw reset interface. |
-| Preview / Source | Claude/Codex `preview_location`, `preview_screenshot`, `open_preview`, `open_code` → observation/preview/code-tools. Return URL/image content or deferred navigation result; exact file/text validation, originating chat/turn and landing gates. Detached navigation is refused. |
+| Preview / Source | Claude/Codex `preview_location`, `preview_screenshot`, `preview_inspect`, `preview_evaluate`, `preview_console`, `preview_viewport`, `open_preview`, `open_code` → observation/preview/code-tools. Return URL/image content or deferred navigation result; exact file/text validation, originating chat/turn and landing gates. Detached navigation is refused. |
 | Controls / Content | `content_controls` catalog/define and `chat_island` catalog/define/read → content-control-tools/chat-islands with validated recipes/literal bindings; actual engine/fallback in results. |
 | Composition | `project_ui_catalog`, `compose_project_ui` → project-ui/catalog/jev; opt-in scoped to submitted turn, returned source/spec, no live write. |
 | Pure computation | Claude `spring_to_css`, `check_contrast`, `fluid_clamp`, `color_scale`, `layered_shadow`, `line_height` → math helpers; numeric/schema inputs → computed CSS/color/metric results. |

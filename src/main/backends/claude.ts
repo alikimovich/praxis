@@ -1,5 +1,7 @@
 import { chatIslandShape, chatIslandDescription } from '../../../bin/chat-island-schema.mjs'
+import { previewToolShapes as previewShapes, previewToolText as PREVIEW_TOOL_TEXT } from '../../../bin/preview-tool-schema.mjs'
 import { runTreziTool, sessionTool } from '../session-tools'
+import type { PreviewObserver } from '../preview-observation-tools'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -26,6 +28,7 @@ import { oklchScale } from '../oklch'
 import { discoverPortableSkills } from '../bundled-skills'
 import { withSkillReferences } from './skill-menu'
 import { checkClaudeLogin, isAuthFailure, isLoginCommand, LOGIN_COMMAND_MESSAGE, resolveClaudeCli } from './claude-login'
+import { claudeIsolationOptions } from './claude-isolation'
 import { treziRules } from '../rules'
 import { elevationScale, layeredShadow } from '../shadows'
 import { SKILL_PACKS } from '../skill-packs'
@@ -67,7 +70,13 @@ const PLUGIN_PATH = join(__dirname, '../../agent-plugin')
 // Read-only observers of the user's preview — auto-allowed so they never prompt.
 const PREVIEW_TOOL_NAMES = new Set([
   'mcp__trezi__preview_location',
-  'mcp__trezi__preview_screenshot'
+  'mcp__trezi__preview_screenshot',
+  // LKM-138: isolated-world inspection; evaluate is read-only and bounded, and a
+  // viewport change is temporary and restores itself.
+  'mcp__trezi__preview_inspect',
+  'mcp__trezi__preview_evaluate',
+  'mcp__trezi__preview_console',
+  'mcp__trezi__preview_viewport'
 ])
 // Validated in-process tools are auto-allowed by both allowedTools and
 // canUseTool. Chat islands persist through the island service; main remains
@@ -580,8 +589,8 @@ async function startSession(
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], ...(failed(result) ? { isError: true } : {}) }
   }
   // The preview observers already answer as MCP content (text or a JPEG); a failure is text.
-  const observed = async (action: 'preview_location' | 'preview_screenshot') => {
-    const result = (await treziTool(action, {})) as { content?: unknown } | null
+  const observed = async (action: PreviewObserver, args: unknown = {}) => {
+    const result = (await treziTool(action, args)) as { content?: unknown } | null
     return Array.isArray(result?.content) ? (result as { content: never[] }) : asText(Promise.resolve(result))
   }
   const previewServer = createSdkMcpServer({
@@ -618,10 +627,14 @@ async function startSession(
       ),
       tool(
         'preview_screenshot',
-        'A screenshot of exactly what the user sees in their preview pane right now (their route, viewport, simulator included).',
-        {},
-        async () => observed('preview_screenshot')
+        PREVIEW_TOOL_TEXT.preview_screenshot,
+        previewShapes.preview_screenshot,
+        async (args) => observed('preview_screenshot', args)
       ),
+      tool('preview_inspect', PREVIEW_TOOL_TEXT.preview_inspect, previewShapes.preview_inspect, async (args) => observed('preview_inspect', args)),
+      tool('preview_evaluate', PREVIEW_TOOL_TEXT.preview_evaluate, previewShapes.preview_evaluate, async (args) => observed('preview_evaluate', args)),
+      tool('preview_console', PREVIEW_TOOL_TEXT.preview_console, previewShapes.preview_console, async (args) => observed('preview_console', args)),
+      tool('preview_viewport', PREVIEW_TOOL_TEXT.preview_viewport, previewShapes.preview_viewport, async (args) => observed('preview_viewport', args)),
       tool(
         'open_preview',
         'Open a project page in the user preview. Pass a root-relative path with optional query/hash. Navigation waits for this turn to land.',
@@ -1051,6 +1064,8 @@ async function startSession(
       // short-circuits them, belt-and-suspenders) — main validates everything
       // chat_island persists, and install_skills prompts (writes files + network).
       mcpServers: { trezi: previewServer },
+      // LKM-138: none of the user's own plugins or MCP servers unless Settings allows them.
+      ...claudeIsolationOptions(root, options.claudeUserPlugins === true),
       allowedTools: [...TREZI_TOOL_NAMES],
       // The bundled Trezi skill plugin (only when present in this build).
       ...(existsSync(PLUGIN_PATH)
@@ -1426,6 +1441,7 @@ async function generateTitle(
       prompt,
       options: {
         settingSources: [],
+        strictMcpConfig: true,
         allowedTools: [],
         includePartialMessages: false,
         permissionMode: 'default',
@@ -1470,6 +1486,7 @@ async function updateProjectMemory(
       prompt,
       options: {
         settingSources: [],
+        strictMcpConfig: true,
         allowedTools: [],
         includePartialMessages: false,
         permissionMode: 'default',

@@ -3,6 +3,16 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Preview inspection tools; the WebKit preview over external browsers (LKM-138)
+
+- [x] `preview_inspect`, `preview_evaluate`, `preview_console`, `preview_viewport` and element-cropped `preview_screenshot` run on the live preview through an isolated WKContentWorld (`TreziAgent`, no message handler); results are bounded and sanitized.
+- [x] `preview_evaluate` is read-only and bounded: parse-time rejection of loops and dynamic code, a membrane that throws on writes, navigation and storage, read-only call allowlist, 2 s and 64 KB limits.
+- [x] Exposed to Claude (in-process MCP and helper route) and Codex (MCP bridge); provider policy lists in TS, Swift and the golden fixture agree.
+- [x] Rules v25, the trezi-preview skill, README and PROVIDERS prefer the preview tools; agent-browser only for scripted multi-step interactions.
+- [x] Claude chats skip the user's own Claude Code plugins and MCP servers (`strictMcpConfig`, `enabledPlugins` false) but keep CLAUDE.md files and skills; Settings › General "Allow my Claude Code plugins in Trezi chats", off by default and persisted.
+- [x] Proof: `test/preview-agent-tools.mjs` (unit), `test/native-settings.mjs`, `test/rules.mjs`, the helper/MCP tool lists, and the native `agent-preview` check in the core group.
+- [ ] Async microtask recursion in `preview_evaluate` can still keep the page busy until the time limit; consider running evaluate off the main world's event loop if it bites.
+
 ## Startup recovery reports each interrupted operation once (LKM-134)
 
 - [x] Journal version 2: the service resolves every open interrupted entry when it opens the journal (synced first), so `status.recovered` reports each at exactly one launch; refs are kept.
