@@ -10,6 +10,15 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Done: counter under the response's Copy/Revert row; the footer keeps one height, so completion does not move the transcript.
 - [x] Latest button: round chevron.down, centered over the column, 8 pt above the composer, inside the composer clearance; visibility logic and label unchanged.
 - [x] Fixtures: composer-layout placement at 320/440/521 pt, acceptance scrolled-up captures at 440/320 pt, chat-scroll running/done token captures at 440/320 pt.
+## Versioning: SemVer, changelog, tags and app version (LKM-143)
+
+- [x] package.json `version` is the one SemVer source; build number = commit count of HEAD, plus the short sha (`scripts/version.mjs`).
+- [x] Trezi.app and the XPC service Info.plists carry CFBundleShortVersionString, CFBundleVersion and `TreziCommit` (no hard-coded 1); the backend and provider-helper bundles carry the label.
+- [x] `trezi --version`, Settings › General › Version and About Trezi show "Trezi X.Y.Z (build N, sha)".
+- [x] CHANGELOG.md (Keep a Changelog, Unreleased, seeded), union merge, AGENTS.md rule.
+- [x] `bun run release <major|minor|patch>`: main + clean tree only; bumps, moves Unreleased, commits, annotated tag, no push.
+- [x] CI `scripts/check-version.mjs`; `test/versioning.mjs` (unit) covers the release script in a temp repo and the plist values.
+- [ ] Cut the first native release from main: `bun run release minor` → 0.1.0 (maintainer, after merge).
 ## Short paths; chat worktree cleanup (LKM-136)
 
 - [x] One display-path formatter (`src/shared/display-path.ts`): project-relative paths, "chat workspace" / "Trezi data" / "temporary patch" / "recovery copy" labels, never truncated mid-path.

@@ -91,7 +91,10 @@ src/
 bin/trezi.mjs     the `trezi` CLI (launch, `trezi --project <repo>`, `--update`); owns
                   the update sequence (git pull + bun install + build). install.sh boots it
 scripts/build-native.mjs  bundles services and preview, compiles Swift and checks that
-                  the app does not depend on Electron or the retired React renderer
+                  the app does not depend on Electron or the retired React renderer;
+                  stamps the version (scripts/version.mjs) into the plists
+                  (scripts/service-info.mjs) and bundles
+scripts/release.mjs  `bun run release <major|minor|patch>`: bump, CHANGELOG, commit, tag
 test/             hand-rolled .mjs tests + fixtures/ + artifacts/ (PNGs, gitignored)
 docs/             TASKS (next) / PROGRESS (log + rationale) / DESIGN (stamp spec)
 ```

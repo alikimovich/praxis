@@ -8,10 +8,11 @@
  * Run with: bun test/trezi-cli.mjs
  */
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { lockfilesToRestore } from '../bin/trezi.mjs'
+import { buildInfo, versionLabel } from '../scripts/version.mjs'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -61,7 +62,14 @@ assert(help.status === 0, 'CLI help exits successfully')
 for (const text of ['trezi <folder>', 'trezi .', '--update', '--version']) assert(help.stdout.includes(text), `CLI help documents ${text}`)
 assert(!help.stdout.includes('--remote'), 'CLI no longer advertises retired remote mode')
 const version = spawnSync(cli, ['--version'], { encoding: 'utf8' })
-eq(version.stdout.trim(), `Trezi ${JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')).version}`, 'CLI prints the package version')
+// LKM-143: the built app's stamp when there is one, else the checkout's; Settings shows the same label.
+const builtPlist = join(repoRoot, 'out/native/Trezi.app/Contents/Info.plist')
+const stamp = key => spawnSync('plutil', ['-extract', key, 'raw', '-o', '-', builtPlist], { encoding: 'utf8' })
+const expectedVersion = existsSync(builtPlist) && stamp('TreziCommit').status === 0
+  ? versionLabel({ version: stamp('CFBundleShortVersionString').stdout.trim(), build: stamp('CFBundleVersion').stdout.trim(), commit: stamp('TreziCommit').stdout.trim() })
+  : versionLabel(buildInfo(repoRoot))
+eq(version.stdout.trim(), expectedVersion, 'CLI prints "Trezi X.Y.Z (build N, sha)"')
+assert(/^Trezi \d+\.\d+\.\d+\S* \(build \d+, [0-9a-f]{7,}\)$/.test(version.stdout.trim()), `CLI version label format: ${version.stdout}`)
 const retired = spawnSync(cli, ['serve', '/tmp'], { encoding: 'utf8' })
 assert(retired.status === 1 && retired.stderr.includes('retired'), 'retired browser mode fails with migration guidance')
 const unknown = spawnSync(cli, ['--remote'], { encoding: 'utf8' })

@@ -187,7 +187,9 @@ trezi ~/code/my-app  # open that folder as a project
 
 That is the one way to start Trezi: open it like any app (Finder, the Dock, Spotlight,
 `open -a Trezi`), or with `trezi`, which builds a missing app and then opens it the same
-way. `trezi --help` lists the options and `trezi --version` prints the installed version.
+way. `trezi --help` lists the options and `trezi --version` prints the installed version
+as "Trezi X.Y.Z (build N, short sha)", the same text as Settings › General and About
+Trezi. Changes are listed in `CHANGELOG.md`.
 
 In the app, click **Open project…**, pick a repo with a `dev`/`start` script,
 and chat on the left. Trezi **owns the dev server** — quitting or pressing Ctrl-C stops its managed
