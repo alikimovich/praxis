@@ -64,6 +64,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         config.websiteDataStore = .nonPersistent()
         let contentWorld = world
         config.userContentController.add(self, contentWorld: contentWorld, name: "trezi")
+        PreviewAgent.install(config.userContentController)
         let file = directory + "/preview.js"
         let script = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
         // Selection must intercept input before the project's capture listeners.
@@ -472,7 +473,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             view?.evaluateJavaScript("globalThis.__treziNativeDispatch?.(\(json))", in: nil, in: name == "preview" ? world : .page) { _ in }
         case "evaluate":
             guard let view = view, let code = c["code"] as? String else { reply(id, error: "Missing evaluation target"); return }
-            view.callAsyncJavaScript("return JSON.stringify((await (\(code))) ?? null) ?? 'null';", arguments: [:], in: nil, in: c["isolated"] as? Bool == true ? world : .page) { result in
+            view.callAsyncJavaScript("return JSON.stringify((await (\(code))) ?? null) ?? 'null';", arguments: [:], in: nil, in: PreviewAgent.world(for: c, preview: world)) { result in
                 switch result {
                 case .success(let value):
                     guard let json = value as? String, let data = json.data(using: .utf8), let decoded = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) else { self.reply(id, error: "Invalid JSON evaluation result"); return }
@@ -508,8 +509,10 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
                 }
             }
             reply(id)
+        case "previewViewport": reply(id, PreviewAgent.setViewport(c, layout: nativeLayout, view: views["preview"]))
         case "capture":
-            view?.takeSnapshot(with: nil) { image, error in
+            if c["rect"] != nil && PreviewAgent.snapshot(for: c, view: view) == nil { reply(id, error: "The element is outside the visible preview"); return }
+            view?.takeSnapshot(with: PreviewAgent.snapshot(for: c, view: view)) { image, error in
                 guard let image = image, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff), let png = bitmap.representation(using: .png, properties: [:]) else { self.reply(id, error: error?.localizedDescription ?? "Snapshot unavailable"); return }
                 let width = min(900, image.size.width), height = image.size.height * width / image.size.width
                 let small = NSImage(size: NSSize(width: width, height: height)); small.lockFocus(); image.draw(in: NSRect(x: 0, y: 0, width: width, height: height)); small.unlockFocus()

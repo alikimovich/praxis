@@ -157,8 +157,18 @@ export function registerPreviewIpc(host: PreviewIpcHost): void {
       const url = previewWc()?.getURL()
       return url && /^https?:/.test(url) ? url : null
     },
-    capture: async () => (await previewWc()?.capturePage()) ?? null
+    capture: async () => (await previewWc()?.capturePage()) ?? null,
+    agent: {
+      evaluate: (code, world, timeoutMs) => openPreview().evaluateIn(code, world, timeoutMs),
+      captureRect: (rect) => openPreview().captureRect(rect),
+      setViewport: (width) => openPreview().setViewport(width)
+    }
   })
+  function openPreview(): NativeWebContents {
+    const wc = previewWc()
+    if (!wc || wc.isDestroyed() || !/^https?:/.test(wc.getURL())) throw new Error('No project preview is open.')
+    return wc
+  }
 
   // Apply the renderer's slot rect (PreviewPane already lays out around the
   // floating prop panel's strip, viewport-aware).

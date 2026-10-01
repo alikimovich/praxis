@@ -1,5 +1,7 @@
 import { sourceStamp, sourceSelector } from './source-stamp'
 import { ANIMATION_REPLAY } from '../shared/preview-channels'
+import './agent-console'
+import './agent-inspect'
 /**
  * Preview preload — injected into the previewed app's native WebContentsView.
  *

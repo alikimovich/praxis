@@ -40,6 +40,7 @@ const UNIT = [
   "source-stamp",
   "native-boundary",
   "trezi-agent-tools",
+  "preview-agent-tools",
   "codex-mcp",
   "codex-model",
   "native-bridge-close",

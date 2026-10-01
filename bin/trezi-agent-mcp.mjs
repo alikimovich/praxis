@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 for (const [key, value] of Object.entries(process.env)) { if (key.startsWith('PRAXIS_')) process.env[key.replace(/^PRAXIS_/, 'TREZI_')] ??= value }
 import { chatIslandShape, chatIslandDescription } from './chat-island-schema.mjs'
+import { previewToolShapes, previewToolText } from './preview-tool-schema.mjs'
 import { z } from 'zod'
 import { request } from 'node:http'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -102,15 +103,18 @@ server.registerTool(
 )
 
 // Observation results already contain MCP content blocks. Preserve images as images.
-for (const [name, description] of [
-  ['preview_location', "Read the page/route currently shown in the user's live preview pane."],
-  ['preview_screenshot', "Capture exactly what the user sees in their preview pane right now. Observes the current view; does not confirm private worktree edits have landed."]
-]) {
+server.registerTool('preview_location', {
+  description: "Read the page/route currently shown in the user's live preview pane.",
+  inputSchema: {},
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
+}, async () => invoke('preview_location'))
+// LKM-138: isolated-world inspection of the live preview (preview-tool-schema.mjs).
+for (const name of ['preview_screenshot', 'preview_inspect', 'preview_evaluate', 'preview_console', 'preview_viewport']) {
   server.registerTool(name, {
-    description,
-    inputSchema: {},
-    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
-  }, async () => invoke(name))
+    description: previewToolText[name],
+    inputSchema: previewToolShapes[name],
+    annotations: { readOnlyHint: name !== 'preview_viewport', destructiveHint: false, openWorldHint: false }
+  }, async (args) => invoke(name, args))
 }
 
 server.registerTool('project_ui_catalog', {

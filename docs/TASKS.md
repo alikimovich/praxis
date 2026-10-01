@@ -10,6 +10,16 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Photos trigger: Check login without a project ran the helper and `claude auth status` with cwd `$HOME`. Helpers never run in a home, `/` or an ancestor (`ProviderHelperProcess.workingDirectory`). Check login, the login-shell probe and `skills add -g` use the temporary folder.
 - [x] Tests: `test/signing-identity.mjs`, `test/keychain-migration.mjs`, `test/provider-login.mjs` `helper-cwd`. Docs: README "Code signing" (one more Keychain approval, then none), `docs/PROVIDERS.md`, `docs/agent-guide/legacy-names.md`.
 - [ ] Manager/operator: after this build, confirm on the operator Mac that `codesign -d -r- out/native/Trezi.app` stays the same across two rebuilds, and that the Keychain asks once and then not again.
+## Preview inspection tools; the WebKit preview over external browsers (LKM-138)
+
+- [x] `preview_inspect`, `preview_evaluate`, `preview_console`, `preview_viewport` and element-cropped `preview_screenshot` run on the live preview through an isolated WKContentWorld (`TreziAgent`, no message handler); results are bounded and sanitized.
+- [x] `preview_evaluate` is read-only and bounded: parse-time rejection of loops and dynamic code, a membrane that throws on writes, navigation and storage, read-only call allowlist, 2 s and 64 KB limits.
+- [x] Exposed to Claude (in-process MCP and helper route) and Codex (MCP bridge); provider policy lists in TS, Swift and the golden fixture agree.
+- [x] Rules v25, the trezi-preview skill, README and PROVIDERS prefer the preview tools; agent-browser only for scripted multi-step interactions.
+- [x] Claude chats skip the user's own Claude Code plugins and MCP servers (`strictMcpConfig`, `enabledPlugins` false) but keep CLAUDE.md files and skills; Settings › General "Allow my Claude Code plugins in Trezi chats", off by default and persisted.
+- [x] Proof: `test/preview-agent-tools.mjs` (unit), `test/native-settings.mjs`, `test/rules.mjs`, the helper/MCP tool lists, and the native `agent-preview` check in the core group.
+- [ ] Async microtask recursion in `preview_evaluate` can still keep the page busy until the time limit; consider running evaluate off the main world's event loop if it bites.
+
 ## Claude first turn: no false "did not respond" (LKM-135)
 
 - [x] Cold-start phases (helper ready, auth probe, CLI started, session init, first model event, no-response/exit) logged at debug level in the service log.
