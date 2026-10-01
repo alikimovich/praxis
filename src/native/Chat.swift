@@ -46,6 +46,7 @@ final class ChatModel: ObservableObject {
     var revealRequest: IslandRevealRequest { IslandRevealRequest(revision: revealRevision, island: revealIsland, bottom: revealBottom, message: revealMessage) }
     var revealAppliedRevision = 0
     var revealAttempt = 0
+    var latestSettleAttempts = 0  // diagnostics (ChatLatestSettle)
     @Published var visible = false
     @Published var composerHeight: CGFloat = 0
     var messageFrames: [String: CGRect] = [:]
@@ -144,8 +145,15 @@ final class NativeChat: NSHostingView<ChatConversation> {
         input["bounds"] = ChatLayout.composerBounds(in: frame, height: composerHeight)
         composer.update(input)
     }
+    /// The conversation's SwiftUI-backed NSScrollView, found through its style probe.
+    var conversationScroll: NSScrollView? {
+        func probe(_ view: NSView) -> ChatScrollStyleProbe? { (view as? ChatScrollStyleProbe) ?? view.subviews.lazy.compactMap(probe).first }
+        return probe(self)?.enclosingScrollView
+    }
     func inspect() -> [String: Any] {
-        ["followRevision":model.followRevision, "controlInteraction":model.controlInteraction, "visibleMessageIDs":model.messageFrames.filter { $0.value.maxY > 0 && $0.value.minY < bounds.height - model.bottomInset }.map(\.key), "bottomPosition":model.bottomPosition, "composerInset":model.bottomInset, "height":bounds.height, "revealRevision":model.revealRevision, "revealAppliedRevision":model.revealAppliedRevision, "revealAttempt":model.revealAttempt, "islandPositions":model.islandPositions.mapValues { NSStringFromRect($0) }, "catPose":model.cat.pose, "catFrame":model.cat.frame, "catArtwork":!CatArtwork.frames.isEmpty, "frame":NSStringFromRect(frame), "native":true, "visible":!isHidden, "chat":model.snapshot?.chat ?? "", "messageCount":model.snapshot?.messages.count ?? 0,
+        let tail = model.snapshot?.messages.suffix(3).map { ["id":$0.id, "frame":NSStringFromRect(model.messageFrames[$0.id] ?? .zero)] } ?? []
+        return ["scroll":conversationScroll.map(ChatScrollStyleProbe.metrics) ?? [:], "realizedRows":model.messageFrames.count, "latestSettleAttempts":model.latestSettleAttempts, "tailFrames":tail,
+         "followRevision":model.followRevision, "controlInteraction":model.controlInteraction, "visibleMessageIDs":model.messageFrames.filter { $0.value.maxY > 0 && $0.value.minY < bounds.height - model.bottomInset }.map(\.key), "bottomPosition":model.bottomPosition, "composerInset":model.bottomInset, "height":bounds.height, "revealRevision":model.revealRevision, "revealAppliedRevision":model.revealAppliedRevision, "revealAttempt":model.revealAttempt, "islandPositions":model.islandPositions.mapValues { NSStringFromRect($0) }, "catPose":model.cat.pose, "catFrame":model.cat.frame, "catArtwork":!CatArtwork.frames.isEmpty, "frame":NSStringFromRect(frame), "native":true, "visible":!isHidden, "chat":model.snapshot?.chat ?? "", "messageCount":model.snapshot?.messages.count ?? 0,
          "messages":model.snapshot?.messages.map { ["id":$0.id,"role":$0.role,"text":$0.text,"tokens":$0.tokens?.label ?? ""] } ?? [],
          "footerFrames":model.footerFrames.mapValues { NSStringFromRect($0) }, "messageFrames":model.messageFrames.mapValues { NSStringFromRect($0) },
          "activity":model.snapshot?.activity?.label ?? "", "activityKind":model.snapshot?.activity?.kind ?? "", "activityAnimated":model.snapshot?.activity?.animated ?? false,
@@ -186,6 +194,11 @@ struct ChatConversation: View {
     @State private var revealGeneration = 0
     @State private var pinRequest = 0
     @State private var attachRequest = 0
+    @State private var latestGeneration = 0
+    @State private var settlingLatest = false
+    @State private var realizingLatest = false
+    @State private var latestNudge = false
+    @State private var viewportHeight: CGFloat = 0
     private func reveal(_ proxy: ScrollViewProxy, readingHeight: CGFloat, viewportHeight: CGFloat) {
         revealGeneration += 1
         let generation = revealGeneration
@@ -244,19 +257,46 @@ struct ChatConversation: View {
 
         }
     }
-    private var conversationScroll: some View {
+    /// See ChatLatestSettle. Requests while settling extend the running one;
+    /// the user scrolling away ends it. Metrics are read live at each step.
+    private func settleLatest(_ proxy: ScrollViewProxy) {
+        latestGeneration += 1
+        guard !settlingLatest else { return }
+        settlingLatest = true
+        Task { @MainActor in
+            let readingHeight = { max(1, viewportHeight - model.bottomInset) }
+            var stuck = 0
+            model.latestSettleAttempts = await ChatLatestSettle.follow(request: { latestGeneration }, current: { follows }, step: {
+                ChatLatestSettle.step(latest: model.snapshot?.messages.last?.id, frames: model.messageFrames, bottom: model.bottomPosition,
+                                      readingHeight: readingHeight(), viewportHeight: viewportHeight)
+            }) { step in
+                // No row in view: hold the AppKit pin, relayout the stack (a
+                // 1pt marker change) and scroll to the latest through SwiftUI.
+                // Rows in view: the pin's short jump lands on the end exactly.
+                if case .realize(let id) = step {
+                    realizingLatest = true; latestNudge.toggle(); stuck += 1
+                    let target = ChatLatestSettle.realizeTarget(latest: id, first: model.snapshot?.messages.first?.id, stuck: stuck)
+                    proxy.scrollTo(target.id, anchor: target.anchor)
+                } else { stuck = 0; realizingLatest = false; pinRequest += 1 }
+            }
+            settlingLatest = false; realizingLatest = false
+            if follows { pinRequest += 1 }
+        }
+    }
+    private func conversationScroll(onMovedToEnd: @escaping () -> Void) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
                 conversationContent
                 // Keep the scroll target in the same lazy layout as the
                 // messages. Composer clearance is padding, never a target.
-                Color.clear.frame(height: 1).id("bottom")
+                Color.clear.frame(height: latestNudge ? 2 : 1).id("bottom")
                     .background(GeometryReader { geometry in Color.clear.preference(key: BottomPosition.self, value: geometry.frame(in: .named("chatScroll")).maxY) })
             }.padding(.horizontal, 18).padding(.top, 18).padding(.bottom, model.bottomInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(ChatScrollStyle(follows: { follows }, pinRequest: pinRequest, attachRequest: attachRequest,
                                             onPinnedChange: { follows = $0 },
-                                            onLatestButtonChange: { if model.showsLatest != $0 { model.showsLatest = $0 } }))
+                                            onLatestButtonChange: { if model.showsLatest != $0 { model.showsLatest = $0 } },
+                                            onMovedToEnd: onMovedToEnd, holdsPin: { realizingLatest }))
         }
     }
     var body: some View {
@@ -265,7 +305,8 @@ struct ChatConversation: View {
                 ScrollViewReader { proxy in
                     let readingHeight = max(1, viewport.size.height - model.bottomInset)
                     let bottomAnchor = UnitPoint(x: 0.5, y: readingHeight / max(1, viewport.size.height))
-                    conversationScroll
+                    let settle = { settleLatest(proxy) }
+                    conversationScroll(onMovedToEnd: { if follows { settle() } })
                     // The latest button only shows while history scrolls under that
                     // spot: keep that band free of text and controls (LKM-141).
                     .mask { LatestClearanceMask(clear: model.latestClearHeight) }
@@ -285,17 +326,18 @@ struct ChatConversation: View {
                         model.bottomPosition = bottom
                     }
                     // Metric-only changes: the probe pins from settled AppKit bounds.
-                    .onChange(of: viewport.size) { _ in if follows { pinRequest += 1 } }
+                    .onAppear { viewportHeight = viewport.size.height }
+                    .onChange(of: viewport.size) { size in viewportHeight = size.height; if follows { pinRequest += 1 } }
                     .onChange(of: model.composerHeight) { _ in if follows { pinRequest += 1 } }
                     .onChange(of: model.revealRevision) { _ in
                         follows = false; sticky = nil
                         reveal(proxy, readingHeight: readingHeight, viewportHeight: viewport.size.height)
                     }
                     .onChange(of: model.controlInteraction) { _ in follows = false }
-                    .onChange(of: model.followRevision) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor); pinRequest += 1 } }
-                    .onChange(of: model.snapshot?.chat) { _ in follows = true; sticky = nil; proxy.scrollTo("bottom", anchor: bottomAnchor); attachRequest += 1 }
+                    .onChange(of: model.followRevision) { _ in if follows { proxy.scrollTo("bottom", anchor: bottomAnchor); pinRequest += 1; settle() } }
+                    .onChange(of: model.snapshot?.chat) { _ in follows = true; sticky = nil; proxy.scrollTo("bottom", anchor: bottomAnchor); attachRequest += 1; settle() }
                     // The latest button itself is native (NativeChat.latestButton).
-                    .onChange(of: model.latestRequest) { _ in follows = true; proxy.scrollTo("bottom", anchor: bottomAnchor); attachRequest += 1 }
+                    .onChange(of: model.latestRequest) { _ in follows = true; proxy.scrollTo("bottom", anchor: bottomAnchor); attachRequest += 1; settle() }
                 }
             }
         }.background(Color.clear)

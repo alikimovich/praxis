@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { once } from 'node:events'
 import { checkChatAcceptance } from './chat-acceptance.mjs'
+import { checkSendVisibility } from './chat-send-visibility.mjs'
 import { spawnHostBridge } from './host-bridge.mjs'
 
 const directory = resolve('out/native')
@@ -47,6 +48,8 @@ const visible = async id => {
 try {
   await Promise.race([once(host, 'ready'), delay(10000).then(() => { throw Error('Native host did not become ready') })])
   host.send('shellState', { state: { project: '/tmp/trezi-chat-scroll-fixture', chatReady: true, chatWidth: 440, rows: [], homeState: { visible: false } } })
+  stage = 'send-visibility'
+  await checkSendVisibility(host, artifacts)
   for (const history of [0, 1, 8, 45]) {
     const state = {
       chat: `history-${history}`, messages: Array.from({ length: history }, (_, i) =>

@@ -56,6 +56,7 @@ const UNIT = [
   "native-settings-evidence",
   "native-chat-controller",
   "native-composer-layout",
+  "native-chat-latest-settle",
   "native-smoke-wait",
   "native-chat-reveal",
   "native-island-editing",

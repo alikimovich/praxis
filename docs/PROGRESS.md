@@ -41,6 +41,23 @@ Newest first. Append a dated entry when you finish a chunk of work.
   - Worker run (native groups `islands`, `shadow-light`):
     - 8 steps, 4 sampled frames, 0 gaps, 0 out of order, 0 foreign, and no source write during the drag. WebKit throttled requestAnimationFrame, so there are fewer samples than steps.
     - In `shadow-light-drag.png` the card's shadow already follows the light at the last step (offset up and left). The chat panel still shows the initial x/y: the harness sends `islandPerform` straight to the host, so no Swift draft moves the pad.
+## 2026-10-01 — LKM-139: Chat no longer goes blank after sending
+
+- **Cause.** Following the latest row ends in the probe's AppKit pin (`clip.scroll(to:)`, LKM-103), which moves the clip view outside SwiftUI's scroll machinery. The `LazyVStack` estimates the heights of rows it has not measured. When those estimates are far off, the jump lands where the stack realizes no row: the viewport is empty while the offset is still within the document. Examples are long answers above a short tail, or a send that inserts a short prompt and an empty reply. Only a user scroll re-synced it. Of the three suspected causes, (b) is triggered by (a)'s pin. The offset never exceeded the maximum, and (c), view identity, stayed stable: `documentID` and `scrollID` were unchanged across sends.
+- **Fix (`ChatLatestSettle`, `src/native/ChatScrollStyle.swift`; wiring in `src/native/Chat.swift`).** After a send, stream update, chat switch, latest button or pin, the conversation checks each frame while it follows:
+  - No row in the viewport: the AppKit pin is held (`holdsPin`), the 1pt bottom marker toggles height to force a relayout, and SwiftUI scrolls to the latest row. Every fourth stuck attempt it scrolls to the first row instead, whose position the stack knows exactly.
+  - Rows in view: the pin's short jump lands on the end. It stops once the realized 1pt end marker sits at the reading edge. Stopping on the latest row's frame instead blanked the fixture again: that frame can still come from the layout made before the pin moved the clip.
+  - Requests that arrive while settling extend the run instead of restarting it. Metrics are read live. A user scroll ends it.
+  - An offset left outside a shrunken document is clamped (`clampToContent`).
+  - LKM-103 behaviour is unchanged: the probe still owns pinned state, the latest row sits above the composer, and the latest button and scrolling away still work.
+- **What did not work.** These AppKit nudges did not recover the stack: `documentView.scroll`, posting live-scroll notifications, `tile`, `scrollToVisible`, and a 1pt clip move. `scrollTo(latest)` alone stayed blank under load and on a chat switch.
+- **Proof.**
+  - New unit test `test/native-chat-latest-settle.mjs` with `test/fixtures/chat-latest-settle/main.swift`. It hosts the conversation's lazy stack, probe and settle in an offscreen window: transcripts of 40×2000pt and 60×3000pt answers with a 10-row tail, plus a mixed one with a composer that grows to 420pt and shrinks. Each is sampled after load, send, mid-stream and stream end.
+  - Without the settle (`--no-settle`, the negative control), 3 of 13 samples are blank: no rows realized, and drawn leaf layers agree. With it, all 13 samples show rows and the latest row, and offset − maxOffset ≤ 0. It also passes with four instances running concurrently. The first version failed under the unit tier's parallel load, which is what led to the first-row reset.
+  - Native: the new `send-visibility` stage of native-chat-scroll (`test/helpers/chat-send-visibility.mjs`) runs at 440/320pt with a fixed and a growing composer. It asserts visible rows > 0, offset ≤ max and a stable scroll identity after send, mid-stream and done. It writes `send-after-send.png`, `send-mid-stream.png` and `send-visibility.json`. Before the fix this real-app fixture did not reproduce the blank, so the windowless fixture is the before/after evidence.
+  - Limit: in exploratory runs, a 120×2000pt transcript load could show a single older row for about 0.6s before the latest settled.
+  - Limit: in the real app the end marker's preference rarely reports the reading edge, so a settle usually runs to its cap (`latestSettleAttempts` 40–80 in `send-visibility.json`). Those steps are idempotent end pins; rows stayed visible in all 44 samples.
+
 ## 2026-10-01 — LKM-141: Token counter inline; centered scroll-to-latest button
 
 - **Review repair: no overlap, no empty responses.**
