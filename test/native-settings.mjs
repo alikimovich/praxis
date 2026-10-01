@@ -27,6 +27,8 @@ const sheets = new NativeSheetController({ send: (method, data) => sent.push([me
     return { ok: true, connection: connections[0] }
   }
   if (channel === 'providers:remove') connections = []
+  if (channel === 'chat-workspaces:usage') return { bytes: 3 * 1024 ** 3 / 2, workspaces: 3 }
+  if (channel === 'chat-workspaces:clean-up') return { removed: 2, keptDirty: 1, skipped: 0, legacyRemoved: 0, usage: { bytes: 512 * 1024, workspaces: 1 } }
   return {}
 })
 let notified = 0
@@ -37,15 +39,50 @@ await settings.open()
 // One sidebar window: General, AI Providers (inline, no separate sheet) and Experimental.
 assert.deepEqual(sheets.current.state.sections.map(s => [s.id, s.label, s.symbol]), [['general', 'General', 'gearshape'], ['providers', 'AI Providers', 'sparkles'], ['experimental', 'Experimental', 'testtube.2']])
 assert.equal(sheets.current.state.section, 'general', 'first open shows General')
-assert.deepEqual(sheets.current.state.fields.map(f => [f.id, f.section]), [['default', 'general'], ['version', 'general'], ['projectUi', 'experimental'], ['engine', 'experimental'], ['connections', 'providers']])
+assert.deepEqual(sheets.current.state.fields.map(f => [f.id, f.section]), [['default', 'general'], ['claudePlugins', 'general'], ['workspaceIdle', 'general'], ['workspaceUsage', 'general'], ['version', 'general'], ['projectUi', 'experimental'], ['engine', 'experimental'], ['connections', 'providers']])
 // LKM-143: General shows the version as a read-only row (the build stamps the label; unbuilt source says so).
 assert.equal(field('version').kind, 'readonly')
 assert.equal(field('version').value, 'Trezi (unbuilt development source)')
+// LKM-138: "Allow my Claude Code plugins in Trezi chats" defaults to off and persists.
+assert.equal(field('claudePlugins').label, 'Allow my Claude Code plugins in Trezi chats')
+assert.equal(field('claudePlugins').value, 'false')
+assert.deepEqual(field('claudePlugins').choices.map(c => c.value), ['false', 'true'])
+await action('change', { default: 'last-used', projectUi: 'false', engine: 'agent', claudePlugins: 'true' })
+assert.equal(values.get('trezi:claude-user-plugins:v1'), 'true')
+await action('change', { default: 'last-used', projectUi: 'false', engine: 'agent' })
+assert.equal(values.get('trezi:claude-user-plugins:v1'), 'true', 'a caller without the field leaves it unchanged')
+await settings.open()
+assert.equal(field('claudePlugins').value, 'true', 'reopen shows the saved choice')
+await action('change', { default: 'last-used', projectUi: 'false', engine: 'agent', claudePlugins: 'yes' })
+assert.match(sheets.current.state.message, /Invalid setting/)
+assert.equal(values.get('trezi:claude-user-plugins:v1'), 'true')
+await action('change', { default: 'last-used', projectUi: 'false', engine: 'agent', claudePlugins: 'false' })
+assert.equal(values.get('trezi:claude-user-plugins:v1'), 'false')
+notified = 0
+await settings.open()
 assert.equal(sheets.current.state.actions.some(a => a.id === 'save' || a.id === 'cancel' || a.id === 'connections'), false)
-assert.deepEqual(sheets.current.state.actions.map(a => [a.id, a.section]), [['add', 'providers']])
-await action('change', { default: 'codex:default', projectUi: 'false', engine: 'agent' })
+assert.deepEqual(sheets.current.state.actions.map(a => [a.id, a.section]), [['clean-workspaces', 'general'], ['add', 'providers']])
+// LKM-136: idle cleanup period (default 7 days), the disk use of chat workspaces
+// (read after the window opens, never autosaved) and "Clean up now".
+assert.equal(field('workspaceIdle').value, '7')
+assert.deepEqual(field('workspaceIdle').choices.map(c => c.value), ['1', '3', '7', '14', '30', 'never'])
+assert.equal(field('workspaceUsage').draft, true)
+while (field('workspaceUsage').value === 'Calculating…') await new Promise(r => setTimeout(r, 5))
+assert.equal(field('workspaceUsage').value, '1.5 GB in 3 workspaces')
+await action('clean-workspaces', { default: 'last-used', projectUi: 'false', engine: 'agent', workspaceIdle: '7' })
+assert.ok(calls.some(c => c[0] === 'chat-workspaces:clean-up'), 'Clean up now runs the cleanup')
+assert.equal(field('workspaceUsage').value, '512 KB in 1 workspace')
+assert.equal(sheets.current.state.message, 'Removed 2 idle chat workspaces.')
+await action('change', { default: 'codex:default', projectUi: 'false', engine: 'agent', workspaceIdle: 'never' })
+assert.equal(values.get('trezi:chat-workspace-idle-days:v1'), 'never')
+await action('change', { default: 'codex:default', projectUi: 'false', engine: 'agent', workspaceIdle: '2' })
+assert.match(sheets.current.state.message, /Invalid setting/)
+await action('change', { default: 'codex:default', projectUi: 'false', engine: 'agent', workspaceIdle: '14' })
+assert.equal(values.get('trezi:chat-workspace-idle-days:v1'), '14')
 assert.equal(JSON.parse(values.get('trezi:preferred-model')).fixed.provider, 'codex')
-assert.equal(notified, 1)
+assert.equal(notified, 2, 'every saved change notifies; the rejected one does not')
+await settings.open()
+assert.equal(field('workspaceIdle').value, '14')
 const fields = sheets.current.state.fields
 assert.equal(fields.find(f => f.id === 'projectUi').label, 'Gen UI')
 assert.match(fields.find(f => f.id === 'projectUi').help, /existing components and styles.*React and Svelte/)

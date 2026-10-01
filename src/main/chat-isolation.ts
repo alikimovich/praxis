@@ -2,7 +2,7 @@ import { previewEvidence } from './preview-evidence'
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import type { NativeView } from '../native/platform'
 import type { AgentEvent, SessionRecord, SessionTranscriptEntry } from '../shared/api'
@@ -27,6 +27,7 @@ import type { TurnTerminalOutcome } from './turn-terminal'
 import {
   branchPatch,
   deleteBranch,
+  reclaimWorktree,
   removeWorktree,
   retireWorktreeBranch,
   type Worktree
@@ -81,6 +82,10 @@ interface ChatState {
    *  reference so a later `agent:tag-session` prUrl mutation is seen live — a chat
    *  whose work was pushed & merged (prUrl set) marks its turns non-revertable. */
   record?: SessionRecord
+  /** When the chat last started or finished a turn (idle cleanup, LKM-136). */
+  lastUsed: number
+  /** Idle cleanup removed the checkout; the next turn recreates it at the same path. */
+  reclaimed: boolean
 }
 
 interface Deps {
@@ -134,7 +139,12 @@ function emitIsolation(
  */
 export async function isolatedCwd(liveRoot: string, sessionKey: string): Promise<string> {
   const existing = states.get(sessionKey)
-  if (existing) return existing.wt.path
+  if (existing) {
+    // Idle cleanup removed the checkout: a session restarted without a turn (model
+    // change, rebuild after a stop) needs it back before a provider starts in it.
+    if (existing.reclaimed) await recreateReclaimed(existing)
+    return existing.wt.path
+  }
   if (!deps) return liveRoot
   if (!(await isRepoRoot(liveRoot))) return liveRoot
   try {
@@ -153,7 +163,9 @@ export async function isolatedCwd(liveRoot: string, sessionKey: string): Promise
       parkedFiles: [],
       resolvingFiles: null,
       turnNo: 0,
-      chain: Promise.resolve()
+      chain: Promise.resolve(),
+      lastUsed: Date.now(),
+      reclaimed: false
     })
     emitIsolation(sessionKey, 'isolated', wt.branch)
     return wt.path
@@ -179,17 +191,38 @@ export function adoptSession(sessionKey: string, record: SessionRecord, liveRoot
   if (st) st.record = record
 }
 
+/** Recreate a checkout idle cleanup removed, at the same path and id. Call inside the
+ *  repository lease (`enqueueRepoWrite`) on the chat's chain; a no-op otherwise. */
+async function recreateWorkspace(st: ChatState): Promise<void> {
+  if (!st.reclaimed) return
+  const created = await createChatWorktree(st.liveRoot, st.wt.id, dirname(st.wt.path))
+  await retireWorktreeBranch(created)
+  st.wt = created
+  st.reclaimed = false
+}
+
+/** `recreateWorkspace` queued behind the chat's in-flight work, like a turn start. */
+function recreateReclaimed(st: ChatState): Promise<void> {
+  st.lastUsed = Date.now()
+  const task = st.chain.then(() => enqueueRepoWrite(st.liveRoot, () => recreateWorkspace(st)))
+  st.chain = task.catch(() => {})
+  return task
+}
+
 /**
  * Turn-start hook: sync the live tree into the worktree so the agent sees the user's
  * between-turn edits. Queued on the chat's chain so it waits out any in-flight
  * post-`done` merge. Skipped while parked (never merge live drift into unmerged work).
+ * A checkout idle cleanup removed is recreated first, at the same path and id.
  * Awaited by `agent:send` before `session.send`.
  */
 export async function beforeTurn(sessionKey: string, _text: string): Promise<void> {
   const st = states.get(sessionKey)
   if (!st) return
+  st.lastUsed = Date.now()
   const task = st.chain.then(() =>
     enqueueRepoWrite(st.liveRoot, async () => {
+      await recreateWorkspace(st)
       if (st.parked) return
       await syncFromLive(st.liveRoot, st.wt)
     })
@@ -226,9 +259,12 @@ export function afterTurn(
   const st = states.get(sessionKey)
   if (!st) return Promise.resolve(null)
   const turn = lastTurn(transcript)
+  st.lastUsed = Date.now()
   const task = st.chain
     .then(() =>
       enqueueRepoWrite(st.liveRoot, async () => {
+        st.lastUsed = Date.now()
+        if (st.reclaimed) return null
         const turnNo = ++st.turnNo
         let outcome = await completeTurn(st.liveRoot, st.wt, message, {
           land: terminal === 'success'
@@ -592,6 +628,41 @@ export function liveChatWorktreeIds(): string[] {
   return [...states.values()].map((s) => s.wt.id)
 }
 
+/** Every open chat with a worktree (the idle sweep's candidates). */
+export function chatWorkspaceKeys(): string[] {
+  return [...states.keys()]
+}
+
+/**
+ * Idle cleanup (LKM-136, see `chat-workspaces.ts`): remove the chat's checkout when it
+ * has had no turn since `idleBefore`. Re-checked inside the chat's chain and the
+ * repository lease, so a turn that starts meanwhile wins. A parked, resolving or busy
+ * chat is skipped; a dirty checkout stays, its work at a recovery ref. The next turn
+ * recreates the checkout (`beforeTurn`). Never throws.
+ */
+export async function reclaimIdleWorkspace(
+  sessionKey: string,
+  idleBefore: number,
+  busy: (sessionKey: string) => boolean
+): Promise<'removed' | 'kept-dirty' | 'skipped'> {
+  const st = states.get(sessionKey)
+  const eligible = () =>
+    !!st && states.get(sessionKey) === st && !st.reclaimed && !st.parked && !st.resolvingFiles &&
+    st.lastUsed <= idleBefore && !busy(sessionKey)
+  if (!st || !eligible()) return 'skipped'
+  const task = st.chain.then(() =>
+    enqueueRepoWrite(st.liveRoot, async () => {
+      if (!eligible()) return 'skipped' as const
+      const result = await reclaimWorktree(st.liveRoot, st.wt)
+      if (!result.removed) return result.dirty ? ('kept-dirty' as const) : ('skipped' as const)
+      st.reclaimed = true
+      return 'removed' as const
+    })
+  )
+  st.chain = task.catch(() => {})
+  return task.catch(() => 'skipped' as const)
+}
+
 /**
  * Does a persisted `chatpark-<id>` record exist for this worktree id? Passed to
  * `pruneOrphans` so its recovery fold only fires on branches that were actually PARKED
@@ -689,6 +760,7 @@ export async function releaseChat(
   try {
     await st.chain.catch(() => {})
     await enqueueRepoWrite(st.liveRoot, async () => {
+      if (st.reclaimed) return // idle cleanup already removed the checkout and branch
       if (!st.parked) {
         const turnNo = ++st.turnNo
         const outcome = await completeTurn(st.liveRoot, st.wt, 'trezi chat changes', {

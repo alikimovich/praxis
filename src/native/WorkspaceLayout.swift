@@ -8,6 +8,8 @@ final class WorkspaceLayout {
     var desiredWidth: CGFloat = 440
     var fraction: CGFloat = 1
     var previewVisible = false
+    /// A temporary CSS width from `preview_viewport` (LKM-138); it replaces the bezel.
+    var viewportWidth: CGFloat?
     let sourceDivider = NativePanelDivider(), layersDivider = NativePanelDivider(), inspectorDivider = NativePanelDivider()
     var sourceHeight: CGFloat = 380, layersHeight: CGFloat = 260, inspectorWidth: CGFloat = 300
     let device = NSImageView()
@@ -109,7 +111,9 @@ final class WorkspaceLayout {
         // The inspector floats over the preview, so opening it never reflows the page.
         let island = NativeEditingInspector.frame(in: available, width: inspectorWidth, visible: !host.editingInspector.isHidden)
         host.editingInspector.frame = island
-        let mobile = shellState["viewport"] as? String == "mobile"
+        let mobile = viewportWidth == nil && shellState["viewport"] as? String == "mobile"
+        var zoom: CGFloat = 1
+        if let width = viewportWidth { (page, zoom) = PreviewAgent.frame(width: width, in: available) }
         // Opening, setup and error own the content area: the last project's page must not cover them.
         let shown = previewVisible && host.previewStatus.isHidden
         device.isHidden = !mobile || !shown
@@ -121,6 +125,7 @@ final class WorkspaceLayout {
         }
         if let preview = host.views["preview"] {
             preview.autoresizingMask = []; preview.frame = page
+            if preview.pageZoom != zoom { preview.pageZoom = zoom }
             preview.layer?.cornerRadius = mobile ? page.width * 0.12 : 0
             preview.layer?.masksToBounds = mobile
             preview.isHidden = !shown || page.width <= 0 || page.height <= 0

@@ -45,6 +45,10 @@ export const TREZI_TOOLS = [
   'compose_project_ui',
   'preview_location',
   'preview_screenshot',
+  'preview_inspect',
+  'preview_evaluate',
+  'preview_console',
+  'preview_viewport',
   'open_preview',
   'open_code',
   'chat_island',
@@ -63,7 +67,8 @@ export const TREZI_TOOLS = [
 /** Tools a background (comment) session is not granted, and what it is told instead. */
 export const FOREGROUND_ONLY: Readonly<Record<string, string>> = {
   open_code: 'Background edits cannot navigate the user editor.',
-  chat_island: 'Background edits cannot create chat islands.'
+  chat_island: 'Background edits cannot create chat islands.',
+  preview_viewport: 'Background edits cannot resize the user preview.'
 }
 
 /** Trezi tools that never prompt (side-effect-free or validated by their own service). */

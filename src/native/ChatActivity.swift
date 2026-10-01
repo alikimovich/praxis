@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ChatActivityState: Decodable {
     let label: String
+    /// The label with full paths when `label` is collapsed.
+    let detail: String?
     let kind: String
     let animated: Bool
 
@@ -33,7 +35,7 @@ struct ChatActivity: View {
                         }
                     }
             }
-            .font(.system(size: 12)).lineLimit(1).truncationMode(.tail).help(activity.label)
+            .font(.system(size: 12)).lineLimit(1).truncationMode(.tail).help(activity.detail ?? activity.label)
             .id(activity.label)
             .transition(reduceMotion ? .identity : .asymmetric(
                 insertion: .modifier(active: ActivitySwap(offset: 8, blur: 2, opacity: 0), identity: ActivitySwap()),

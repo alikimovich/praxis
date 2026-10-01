@@ -223,6 +223,7 @@ retirement). LKM-111 removed the `rollback` class with the writers it listed.
 | `src/main/backends/codex.ts` | helper | ProviderOwner (provider helper) | Codex SDK process, inside the supervised helper |
 | `src/main/backends/gemini.ts` | helper | ProviderOwner (provider helper) | Gemini CLI process, inside the supervised helper |
 | `src/main/chat-isolation.ts` | helper | RepositoryOwner | Git reads (diff, show, status) |
+| `src/main/chat-workspaces.ts` | helper | RepositoryOwner | `du` and `git rev-parse` reads (LKM-136 usage, old-name folders' repositories) |
 | `src/main/chat-worktrees.ts` | helper | RepositoryOwner | `git show` reads of the live checkout |
 | `src/main/file-tree.ts` | helper | SourceOwner | `git ls-files` read |
 | `src/main/git.ts` | helper | RepositoryOwner | Git reads (work tree, top level, branches) |
@@ -233,6 +234,7 @@ retirement). LKM-111 removed the `rollback` class with the writers it listed.
 | `src/main/scaffold.ts` | helper | WorkflowOwner | `bun --version` probe |
 | `src/main/trezi-agent-tools.ts` | helper | ProviderOwner (provider helper) | Codex tool bridge socket |
 | `src/main/worktrees.ts` | helper | RepositoryOwner | Git reads (a branch's diff, chat refs) |
+| `src/native/smoke-agent-preview.ts` | test | — | smoke fixture |
 | `src/native/smoke-chat.ts` | test | — | smoke fixture |
 | `src/native/smoke-chat-gate.ts` | test | — | smoke fixture |
 | `src/native/smoke-composer.ts` | test | — | smoke fixture |

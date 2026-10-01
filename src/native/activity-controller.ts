@@ -1,11 +1,12 @@
 export interface ActivityLine { id: number; time: string; text: string; kind: string }
-/** Bounded both by entries and characters; a single server write can be huge. */
+/** Bounded both by entries and characters; a single server write can be huge. The
+ *  window shows each line's collapsed paths (`display`); tooltips and Copy All keep `text`. */
 export class NativeActivityController {
   lines: ActivityLine[] = []
   visible = false
   private sequence = 0
   private repaint?: ReturnType<typeof setTimeout>
-  constructor(readonly send: (method: string, value: any) => void) {}
+  constructor(readonly send: (method: string, value: any) => void, readonly display: (text: string) => string = text => text) {}
   append(text: string, kind = 'info') {
     if (typeof text !== 'string' || !text) return
     this.lines.push({ id: ++this.sequence, time: new Date().toTimeString().slice(0, 8), text: text.slice(-16000), kind })
@@ -14,7 +15,7 @@ export class NativeActivityController {
     if (kind === 'error') this.visible = true
     if (this.visible && !this.repaint) this.repaint = setTimeout(() => { this.repaint = undefined; if (this.visible) this.render() }, 50)
   }
-  render() { this.send('activityState', { lines: this.lines, visible: this.visible }) }
+  render() { this.send('activityState', { lines: this.lines.map(line => ({ ...line, display: this.display(line.text) })), visible: this.visible }) }
   action(action: string) {
     if (action === 'clear') this.lines = []
     else if (action === 'show') this.visible = true
