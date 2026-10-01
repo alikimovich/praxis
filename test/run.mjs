@@ -27,6 +27,7 @@ const UNIT = [
   "provider-owner",
   "provider-data",
   "provider-login",
+  "provider-cold-start",
   "provider-helper-tools",
   "service-session",
   "native-settings-claude",
