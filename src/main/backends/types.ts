@@ -87,6 +87,34 @@ export interface SpawnContext {
   /** Inside a provider helper: Trezi's tools, run by Bun after the Swift owner
    *  authorized the call against the helper's grant. */
   tools?: SessionToolHost
+  /** Inside a provider helper (LKM-135): cold-start progress the Swift owner bases its
+   *  liveness deadlines and debug timings on. */
+  onPhase?: (phase: ProviderPhase, detail?: ProviderPhaseDetail) => void
+  /** Inside a Claude helper (LKM-135): the CLI an earlier helper of this app session
+   *  chose, from the owner's cache. Present: no login probe runs. */
+  claudeCli?: ClaudeCliChoice
+}
+
+/**
+ * A helper's cold-start phases (LKM-135): `auth` the login probe finished (or the cached
+ * choice was used), `cli` the provider CLI answered its initialize request, `init` the
+ * CLI began the turn's session, `progress` the CLI reports work before any output.
+ */
+export type ProviderPhase = 'auth' | 'cli' | 'init' | 'progress'
+
+export interface ClaudeCliChoice {
+  source: 'bundled' | 'installed'
+  executable?: string
+}
+
+export interface ProviderPhaseDetail {
+  /** How long the phase took, in milliseconds. */
+  ms?: number
+  /** `auth`: the owner's cached choice was used. */
+  cached?: boolean
+  /** `auth` after a probe: the chosen CLI and whether it is logged in. */
+  cli?: ClaudeCliChoice
+  loggedIn?: boolean
 }
 
 /** Trezi tools as seen from a provider helper (see `backends/helper-host.ts`). */

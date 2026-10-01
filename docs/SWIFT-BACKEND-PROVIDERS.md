@@ -165,6 +165,11 @@ decided by the service and checked:
   (`firstEventTimeout`) ends with a `no-response` error ("Claude did not respond —
   check login (claude auth status) and retry") and its helper is stopped; the chat's
   next message starts a new helper that resumes the thread (not after a violation).
+  Since LKM-135 the 90 s applies only while the CLI has not started. A Claude helper's
+  `phase` frames (`cli`, `init`, `progress`) move the turn to `replyTimeout` (10 min),
+  renewed on each report, with a "Still thinking…" status after `stillThinking` (20 s).
+  The error names the phase it stopped in, and each phase's timing goes to the service
+  log at debug level (`ProviderLaunch.swift`, `docs/PROVIDERS.md`).
 
 The helper host (`helper-host.ts`) imports no Bun module (tested): Trezi's tools reach
 it only as authorized `tool` frames.
@@ -208,7 +213,9 @@ Service ↔ helper (stdin/stdout, one JSON object per line). Service to helper: 
 `send`, `interrupt`, `permission-result`, `question-result`, `configure`, `tool-result`,
 `tool-error`, `shutdown`. Helper to service: `ready`, `failed`, `event`, `record` (new
 assistant and status entries, files touched, thread id), `permission`, `question`,
-`tool`, `settled`. A helper started for "Check provider login" gets only `diagnose`
+`tool`, `settled`, `phase` (`{phase: auth|cli|init|progress, ms?, cached?, cli?,
+loggedIn?}`, LKM-135; a Claude `open` may carry the owner's cached `cli` choice). A
+helper started for "Check provider login" gets only `diagnose`
 and answers one `diagnosis`. An `error` event may carry `code: "auth" | "no-response"`
 (the chat shows a login card instead of text); any other code is a violation.
 

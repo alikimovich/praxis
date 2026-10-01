@@ -332,7 +332,8 @@ export type AgentEvent = (
   | { type: 'done'; landingPending?: boolean }
   /** `code` (LKM-119): `auth` — the provider is not signed in (a login card, not
    *  assistant text); `no-response` — the turn produced nothing within the owner's
-   *  first-event deadline and was ended. */
+   *  first-event deadline and was ended; since LKM-135 its message names the
+   *  cold-start phase it stopped in (CLI start, session init, first model reply). */
   | { type: 'error'; message: string; code?: ProviderErrorCode }
   /** An auto-generated name for this chat, summarising what the conversation is
    *  about (not its opening words). Emitted once per chat after the first turn

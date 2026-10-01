@@ -2,6 +2,35 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-09-30 — LKM-135: Claude first turn: no false "did not respond"
+
+- **Why healthy cold turns failed.** The LKM-119 deadline (90 s with no first event) covered the whole cold path as one silence: helper spawn, the bundled and installed `claude auth status` probes one after the other, a cold CLI start, and the model thinking. The init's resume-id record also counted as "heard", so the deadline was really "until the session init" and nothing after it.
+- **Phases, not one timer.**
+  - The Claude adapter sends `phase` frames through the helper host:
+    - `auth`: probed or cached, with the chosen CLI;
+    - `cli`: `supportedCommands()` answered, or the first SDK message;
+    - `init`: system init;
+    - `progress`: any other system message, at most one per second.
+  - The owner (`ProviderLaunch.swift`) waits for each turn in one of three states: `cli`, `initialization` or `model`.
+    - Only `cli` uses `firstEventTimeout` (90 s).
+    - The others use `replyTimeout` (600 s), which every phase or progress frame renews.
+    - After `stillThinking` (20 s), once the CLI is up, it relays one "Still starting Claude…" or "Still thinking…" status.
+  - The no-response message names the phase, e.g. "Stopped while starting the Claude CLI (no answer in 90 s)". A helper exit before any output appends "It exited while …".
+  - A resume-only record (no entries, no files) no longer counts as output. Phase frames are validated: an unknown phase or malformed field is a grant violation.
+- **Debug timings.** `options.log` (the service diagnostics file under XPC, stderr in the fixture) gets `debug provider claude <id8>: helper ready N ms after launch`, `auth probe N ms (probed|cached choice)`, `CLI started …`, `session init N ms after send`, `first model event N ms after send`, `no-response while …` and `helper exited … while …`. No token or environment is logged.
+- **Fewer probes.**
+  - `resolveClaudeCli` probes the bundled and installed CLIs with one `Promise.all`.
+  - The owner caches a logged-in choice (`claudeCli`, validated: bundled, or an absolute `…/claude` that is still executable) and passes it as `cli` in the next Claude helper's `open`. That helper skips the probes.
+  - An `auth` error event, `seatTokenSave` and `diagnose` clear the cache; the adapter also forgets its own copy on a sign-in failure.
+- **Pre-warm** was already structural: sessions start on project/chat open, so the helper and CLI warm while the user types. The `cli` phase, logged before any send, now proves it.
+- **Proof.** New `test/provider-cold-start.mjs` (unit) runs the real adapter in the real helper under the owner fixture, with stand-in bundled/installed CLIs and scaled deadlines (0.5 s for 90 s, 2.5 s for 600 s, 0.3 s for 20 s).
+  - Prewarm: the CLI starts before any send; the two probes overlap in time.
+  - Slow but healthy turns finish without an error and show the right "Still …" status: an init 3× the short deadline, a 1.5 s think, and 4 s of progress (longer than the reply deadline).
+  - The cache: a second chat probes nothing and runs on the cached installed CLI; after an `auth` error the next chat probes again.
+  - Real hangs still end with the card, naming the phase: no `initialize` answer (in under 2 s), no init, and init without output.
+  - `test/provider-login.mjs` was updated for the phase-named messages and asserts the exit phase.
+- `test/provider-helper-tools.mjs` fails at its Codex bridge check (`workspace_state` not routed while opening). It fails the same way on an untouched HEAD export, so it is not caused by this change.
+
 ## 2026-09-30 — LKM-133: Shadow Light has no preview box; island controls apply live
 
 - **Why "Source changed" kept coming back, even after Reload.** Reload did read the same root and file the write uses, and it returned the current revision. The problem was the next write. Each command carries the source revision the UI last rendered, a hash of the whole file. The owner maps a stale revision to the batch's own last write (`chain`), but drops that map when the command queue drains (`last`). That happens before the refreshed view reaches Swift. So any command computed before the new revision arrived carried the old hash and was refused: a drag's second frame, a blur right after Return, the first slider drag after Reload. An agent edit, formatter or HMR write anywhere else in the file did the same.

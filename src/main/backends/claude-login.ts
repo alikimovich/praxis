@@ -13,7 +13,9 @@ import type { ProviderLoginReport } from '../../shared/api'
  * environment lets it find. So before the first query the helper asks the bundled CLI
  * `claude auth status --json`; when it is not logged in and an installed CLI is, the
  * session runs that one instead (`pathToClaudeCodeExecutable`). The probes use the
- * helper's own environment and cwd, exactly what the query will see.
+ * helper's own environment and cwd, exactly what the query will see. The owner caches
+ * the choice for the app session and passes it to later helpers, which then skip the
+ * probes; a sign-in failure drops it (LKM-135).
  */
 
 export interface ClaudeAuth {
@@ -132,24 +134,38 @@ export interface ClaudeCandidates {
 }
 
 let cached: Promise<ClaudeCli> | null = null
+let defaults: ClaudeCandidates = {}
 
-/** Which CLI this helper's sessions run; probed once per helper unless `fresh`. */
+/** The executables later probes use when none are named (a test helper's stand-in CLIs). */
+export function setClaudeCandidates(candidates: ClaudeCandidates): void {
+  defaults = candidates
+  cached = null
+}
+
+/** After a sign-in failure the next session probes again (LKM-135). */
+export function forgetClaudeCli(): void {
+  cached = null
+}
+
+/**
+ * Which CLI this helper's sessions run; probed once per helper unless `fresh`. The
+ * bundled and installed CLIs are probed at the same time (LKM-135): each can take
+ * seconds when cold, and the owner caches the choice for the rest of the app session.
+ */
 export function resolveClaudeCli(
   fresh = false,
-  candidates: ClaudeCandidates = {}
+  candidates: ClaudeCandidates = defaults
 ): Promise<ClaudeCli> {
   if (!fresh && cached) return cached
   const probe = (async (): Promise<ClaudeCli> => {
     const path = candidates.bundled !== undefined ? candidates.bundled : bundledClaude()
-    const auth: ClaudeAuth = path
-      ? await claudeAuthStatus(path)
-      : { loggedIn: null, error: 'not found' }
-    const bundled = { path, auth }
-    if (auth.loggedIn === true) return { source: 'bundled', bundled, installed: [] }
     const paths = candidates.installed ?? installedClaudes(process.env, path)
-    const installed = await Promise.all(
-      paths.map(async (p) => ({ path: p, auth: await claudeAuthStatus(p) }))
-    )
+    const [auth, installed] = await Promise.all([
+      path ? claudeAuthStatus(path) : Promise.resolve<ClaudeAuth>({ loggedIn: null, error: 'not found' }),
+      Promise.all(paths.map(async (p) => ({ path: p, auth: await claudeAuthStatus(p) })))
+    ])
+    const bundled = { path, auth }
+    if (auth.loggedIn === true) return { source: 'bundled', bundled, installed }
     const usable = installed.find((cli) => cli.auth.loggedIn === true)
     return usable
       ? { executable: usable.path, source: 'installed', bundled, installed }
@@ -157,6 +173,18 @@ export function resolveClaudeCli(
   })()
   if (!fresh) cached = probe
   return probe
+}
+
+/** The choice the owner may cache, and whether that CLI is logged in. */
+export function claudeCliChoice(cli: ClaudeCli): {
+  cli: { source: 'bundled' | 'installed'; executable?: string }
+  loggedIn: boolean
+} {
+  const used = cli.installed.find((c) => c.path === cli.executable)
+  return {
+    cli: { source: cli.source, ...(cli.executable ? { executable: cli.executable } : {}) },
+    loggedIn: (used?.auth ?? cli.bundled.auth).loggedIn === true
+  }
 }
 
 /**
@@ -306,7 +334,7 @@ const describe = (auth: ClaudeAuth): string =>
 
 /** "Check provider login": what this helper sees. Names and paths only, never a secret. */
 export async function checkClaudeLogin(
-  candidates: ClaudeCandidates = {}
+  candidates: ClaudeCandidates = defaults
 ): Promise<Omit<ProviderLoginReport, 'provider'>> {
   const [cli, keychain] = await Promise.all([
     resolveClaudeCli(true, candidates),
