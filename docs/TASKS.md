@@ -3,6 +3,14 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Startup recovery reports each interrupted operation once (LKM-134)
+
+- [x] Journal version 2: the service resolves every open interrupted entry when it opens the journal (synced first), so `status.recovered` reports each at exactly one launch; refs are kept.
+- [x] Version 1 journals: open entries (already reported at every earlier launch) are closed silently and counted in `closedEarlier`; one summary line.
+- [x] Saved work is reported at info level (missing/unreadable refs as a warning, not red); only a damaged journal is an error (`recoveryNotices`).
+- [x] Activity › Recovery Refs… lists kept refs and deletes only selected, confirmed refs still at the listed commit (`recoveryRefs` / `deleteRecoveryRefs`). Nothing deletes them automatically.
+- [x] `test/repository-recovery.mjs` (unit): once across two restarts, legacy close with one summary line, explicit delete.
+
 ## Shadow Light without a preview box; islands apply live (LKM-133)
 
 - [x] Root cause of "Source changed. Reload before applying your adjustment." (also right after Reload): writes were checked against the whole-file hash the UI last rendered, and the owner's batch chain was dropped before the refreshed view reached Swift. Writes now check the island's own bindings (`writeIsland` + `ChatIslands.seen`); unrelated edits in the file are kept.
