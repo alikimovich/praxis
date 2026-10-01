@@ -44,7 +44,8 @@ src/
                     Services import it directly; there is no Electron alias or
                     dependency. Opening links and files goes to the platform owner
                     (src/service/PlatformOpen.swift); Keychain crypto runs in
-                    `TreziHost --crypto`, which the service calls
+                    `Helpers/TreziSecrets --crypto` (src/native/Secrets.swift), which
+                    the service calls
     profile-path.ts   only resolves the profile aliases; the service creates them
                     (src/service/ProfilePaths.swift, `TreziService --resolve-profile`,
                     made under the profile lock before Bun starts). index.ts refuses

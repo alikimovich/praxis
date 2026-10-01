@@ -3,7 +3,7 @@
  *
  * `JoinExistingSession` (LKM-125): without it launchd starts the service in a new
  * security session, which has no login keychain. Every process the service starts
- * (Bun, the `TreziHost --crypto` Keychain helper, provider helpers and the Claude CLI)
+ * (Bun, the `TreziSecrets --crypto` Keychain helper, provider helpers and the Claude CLI)
  * inherits that session, so saving a key failed with "Keychain encryption unavailable"
  * and a `claude auth login` from Terminal read as logged out. With it the service runs
  * in the host's session, like the host started from Terminal or by `open -a`.

@@ -201,6 +201,36 @@ The native Settings update workflow checks the remote, guards unsaved work,
 then pulls, installs, rebuilds and restarts. There's no signed app or auto-download — updates are
 always a git pull of your checkout.
 
+### Code signing
+
+Every build signs Trezi.app, its XPC service, its helpers and the bundled Bun (unless it
+keeps Bun's own Developer ID signature) with one identity that stays the same across
+rebuilds, so macOS keeps your Keychain and privacy approvals:
+
+1. `TREZI_SIGN_IDENTITY`, when set: an identity's name or SHA-1, or `-` for ad hoc;
+2. otherwise a valid **Apple Development** identity, when you have one;
+3. otherwise **Trezi Local**, a self-signed code-signing identity the first build (or
+   `install.sh`) creates once in your login keychain. Only codesign may use its private
+   key, and it is not added to any trust settings.
+
+When none can be used or created, the build signs ad hoc and prints one line starting
+`warning: signing Trezi ad hoc`; macOS then asks again after every rebuild. Check the
+designated requirement with `codesign -d -r- out/native/Trezi.app`: with Trezi Local it
+is `identifier "<bundle ID>" and certificate leaf = H"…"`, the same after every rebuild.
+
+The master key that encrypts saved connection keys and the Claude token lives in the
+Keychain item `dev.trezi.native.secrets`, read only by `Trezi.app/Contents/Helpers/TreziSecrets`.
+That helper is built from one small file (`src/native/Secrets.swift`) whose binary does
+not change between rebuilds, so an **Always Allow** survives them. (With a self-signed or
+ad hoc signature the login keychain ties the approval to that exact binary: a change to
+that file or a new Swift compiler costs one more approval. An Apple Development identity
+avoids even that.) A key under the earlier name moves to the new item
+once; the old item is deleted only after the new one is written.
+
+**After updating to this version, macOS asks once more** for the Keychain (choose
+**Always Allow**) and may ask again for privacy access Trezi had before. Both stay
+approved after that.
+
 ## Architecture
 
 Trezi has a Swift/AppKit/SwiftUI interface, a separate Swift XPC service supervising

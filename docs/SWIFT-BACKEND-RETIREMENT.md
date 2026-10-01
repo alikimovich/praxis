@@ -288,7 +288,7 @@ Swift launch with and without the opt-in, and in the legacy launch).
 | --- | --- | --- | --- |
 | `codex-models.ts` | `ProviderData.swift` probe (`codexModels`) | `codex-models.ts` | `provider-data.mjs` probe |
 | `model-catalog.ts` | `ProviderData.swift` `saveCatalog` (file order kept) | `model-catalog.ts` `set` | `provider-data.mjs` catalog, byte-identical |
-| `providers-store.ts` | `ProviderData.swift` connections, key via `TreziHost --crypto` | `providers-store.ts` + `platform-legacy.ts` cipher | `provider-data.mjs` connections, byte-identical |
+| `providers-store.ts` | `ProviderData.swift` connections, key via `TreziSecrets --crypto` | `providers-store.ts` + `platform-legacy.ts` cipher | `provider-data.mjs` connections, byte-identical |
 | `props.ts` (editor CLIs) | `PlatformOpen.swift` `openInEditor` | `open-in-editor-legacy.ts` | `platform-owner.mjs` `checkOpen` |
 | `native/platform.ts` (crypto, `open`) | `PlatformOpen.swift` `openLink`/`openFile`; crypto in ProviderData | `platform-legacy.ts` | `platform-owner.mjs` `checkOpen`, `provider-data.mjs` |
 | `native/profile-path.ts` | `ProfilePaths.swift` (`TreziService --resolve-profile`; session alias under the lock) | `profile-path-legacy.ts` | `rename-compat.mjs` Swift parity, `native-service-launch.mjs` |

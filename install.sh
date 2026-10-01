@@ -174,6 +174,9 @@ main() {
   echo "==> Installing dependencies"
   "$PM" install
 
+  # The build signs Trezi with one stable identity, creating the self-signed "Trezi Local"
+  # identity in the login keychain once when there is no Apple Development one, so macOS
+  # keeps Keychain and privacy approvals across rebuilds (README "Code signing").
   echo "==> Building Trezi"
   "$PM" run build
 

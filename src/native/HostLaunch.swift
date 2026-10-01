@@ -87,7 +87,9 @@ enum HostLaunch {
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
         process.environment = environment
-        process.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
+        // Not the home folder (LKM-137): a login shell's startup files or a tool run from
+        // `$HOME` can walk it into ~/Pictures and trigger macOS privacy prompts.
+        process.currentDirectoryURL = FileManager.default.temporaryDirectory
         let output = Pipe(), error = Pipe()
         process.standardOutput = output; process.standardError = error
         process.standardInput = FileHandle.nullDevice

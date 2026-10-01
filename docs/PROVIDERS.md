@@ -569,6 +569,50 @@ The native settings group's `security-session` step (`src/native/smoke-session.t
 the host's (`security-session.json`). `test/provider-login.mjs` covers the Check login
 fields with stand-in `security` commands. No test writes to the user's keychain.
 
+## Stable app identity and no surprise permission prompts (LKM-137)
+
+**Symptom.** After every rebuild macOS asked again for the Keychain item that holds the
+master key, and once a "Trezi would like to access your Photos" prompt appeared with a
+helper's cwd `/Users/<user>`.
+
+**Keychain and privacy grants.** The build signed everything ad hoc, so every rebuild was
+a new app to macOS. It now signs with one stable identity (`scripts/signing.mjs`; README
+"Code signing"). In the login keychain an item made by a binary without an Apple team ID
+is tied to that binary's code hash, which even a stable self-signed identity changes on
+every rebuild. So the Keychain work moved out of TreziHost into its own small executable,
+`Contents/Helpers/TreziSecrets` (`src/native/Secrets.swift`, built byte-identical each
+time), which the service runs as `TreziSecrets --crypto encrypt|decrypt`. Its item is
+`dev.trezi.native.secrets`, created with an access list that trusts the helper; the
+earlier item is migrated once (read, write the new one, delete the old only after that
+write). Users approve the Keychain once more after this change, then not again.
+
+**Photos.** Settings → AI providers → Claude… → **Check login** sent no project root, so
+`providers:check-login` used `homedir()` and the service started the provider helper,
+and `claude auth status` inside it, with cwd `$HOME`. The Claude CLI looks through its
+working directory, and under `$HOME` that reaches `~/Pictures/Photos Library.photoslibrary`,
+which is what makes macOS ask for Photos. The 24 hours of TCC log on hand had no Trezi
+request, so this is identified from the code path and the reported cwd, not a captured
+event. Now:
+
+- `providers:check-login` without a project uses the temporary folder;
+- `ProviderHelperProcess.workingDirectory` (`src/service/ProviderHelper.swift`) never
+  starts a helper in a home folder (`HOME`, the helper's `HOME`, the account's), `/` or
+  another ancestor of one, or in a folder that is gone: it uses a private (0700)
+  `trezi-helper` folder under the temporary folder instead. A project or worktree is kept;
+- the host's login-shell environment probe (`HostLaunch.run`) and `npx skills add -g`
+  (`WorkflowTools.skills`) run in the temporary folder, not `$HOME`.
+
+The chat sessions already ran in the chat's worktree, and Trezi uses only NSOpenPanel and
+NSSavePanel for files; nothing in Trezi calls a Photos API.
+
+**Tests.** `test/signing-identity.mjs` (identity choice, override, every ad hoc fallback
+with exactly one warning line, the stable designated requirement, a real ad hoc sign and
+a real "Trezi Local" in a temporary keychain); `test/keychain-migration.mjs` (the real
+helper against a temporary keychain: migrate once with no data loss, later runs, a fresh
+profile, an invalid old key); `test/provider-login.mjs` `helper-cwd` (Check login with a
+home, `/`, an ancestor of a home or a missing folder never runs in it). The keychain
+parts need a session that can create a keychain and say SKIP elsewhere.
+
 ## Trezi tools from provider helpers (LKM-131)
 
 Since LKM-111 the Claude and Codex adapters run in a provider helper, a separate process

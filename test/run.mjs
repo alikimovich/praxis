@@ -106,6 +106,8 @@ const UNIT = [
   "shadow-controls",
   "retirement-census",
   "distribution",
+  "signing-identity",
+  "keychain-migration",
   "install-update",
   "project-memory-evaluation",
   "providers-store",

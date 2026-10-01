@@ -8,7 +8,7 @@ import type {
   ProviderConnectionInput,
   ProviderLoginReport
 } from '../shared/api'
-import { homedir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { withoutRejected } from './codex-seat'
 import { type CatalogBackend, type CatalogModel, setModelCatalog } from './model-catalog'
 import { codexModels, connectionStore as store, modelCatalog, seatLogin, setProviderDataDir } from './provider-data'
@@ -435,11 +435,13 @@ export function registerProviderIpc(
     }
   })
   // "Check provider login": run in a helper launched like a chat's, in `root` (a chat's
-  // project) or the home folder.
+  // project) or, from Settings, a temporary folder. Never the home folder: the CLI looks
+  // through its cwd, and from `$HOME` that made macOS ask for Photos access (LKM-137; the
+  // service also refuses a home cwd, `ProviderHelperProcess.workingDirectory`).
   ipcMain.handle('providers:check-login', async (_e, provider: string, root?: string): Promise<ProviderLoginReport> => {
     const id = typeof provider === 'string' ? provider : 'claude'
     try {
-      return await seatLogin.check(id, typeof root === 'string' && root ? root : homedir())
+      return await seatLogin.check(id, typeof root === 'string' && root ? root : tmpdir())
     } catch (err) {
       return { provider: id, loggedIn: null, detail: err instanceof Error ? err.message : String(err) }
     }

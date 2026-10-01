@@ -26,9 +26,10 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -368,6 +369,32 @@ try {
     )
     await stop(run)
     console.log('PROVIDER-LOGIN diagnose PASS')
+  }
+
+  // LKM-137: a helper never runs in a home folder, "/" or an ancestor of a home (from
+  // `$HOME` the Claude CLI reached ~/Pictures and macOS asked for Photos access), nor in
+  // a folder that is gone: those become a private temporary directory.
+  {
+    const fakeHome = join(scratch, 'cwd-home')
+    mkdirSync(fakeHome)
+    const run = await fixture({ bundled: loggedOut, HOME: fakeHome })
+    try {
+      const homes = [fakeHome, realpathSync(homedir())]
+      for (const root of [fakeHome, homedir(), '/', scratch, join(scratch, 'gone')]) {
+        const report = await run.owner.data.checkLogin('claude', root)
+        const cwd = report.detail.match(/cwd: ([^;\n]+)/)?.[1]
+        assert.ok(cwd, report.detail)
+        assert.match(cwd, /\/trezi-helper$/, `root ${root} runs in the private temporary directory`)
+        for (const home of homes)
+          assert.ok(cwd !== home && !home.startsWith(`${cwd}/`) && cwd !== '/', `root ${root}: cwd ${cwd} is not a home`)
+        assert.equal(statSync(cwd).mode & 0o777, 0o700)
+      }
+      const project = await run.owner.data.checkLogin('claude', WT)
+      assert.match(project.detail, new RegExp(`cwd: ${WT}`), 'a project root is kept')
+    } finally {
+      await stop(run)
+    }
+    console.log('PROVIDER-LOGIN helper-cwd PASS')
   }
 
   // A Trezi started from a Claude Code or Codex session (LKM-124): that session's runtime

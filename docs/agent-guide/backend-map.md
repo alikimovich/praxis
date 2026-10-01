@@ -68,7 +68,7 @@ src/main/
   providers-store.ts / providers.ts   v10 "connections" — user-added OpenAI-compatible
                   endpoints (AI Gateway, Groq, custom) so open models like Kimi/DeepSeek
                   can drive a chat. providers-store.ts only reads the store; the service's
-                  provider owner writes it (keys through `TreziHost --crypto`) via
+                  provider owner writes it (keys through `TreziSecrets --crypto`) via
                   src/service/ProviderData.swift behind main/provider-data.ts.
                   providers.ts owns the providers:* IPC, the /models catalog probe, the
                   picker's ModelChoice list, and resolveConnection() — the seam

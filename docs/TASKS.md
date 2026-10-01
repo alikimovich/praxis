@@ -3,6 +3,14 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Stable app identity and no surprise permission prompts (LKM-137)
+
+- [x] The build signs the app, the XPC service, the helpers and the bundled Bun with one identity: `TREZI_SIGN_IDENTITY`, else Apple Development, else "Trezi Local" (created once in the login keychain). "Trezi Local" builds pin the designated requirement to identifier + certificate. Ad hoc fallback with one warning line (`scripts/signing.mjs`).
+- [x] Keychain work moved to its own stable binary `Contents/Helpers/TreziSecrets` (`src/native/Secrets.swift`). The master key migrates once from the earlier item to `dev.trezi.native.secrets`, and the old item is deleted only after the write. New items get an access list that trusts the helper.
+- [x] Photos trigger: Check login without a project ran the helper and `claude auth status` with cwd `$HOME`. Helpers never run in a home, `/` or an ancestor (`ProviderHelperProcess.workingDirectory`). Check login, the login-shell probe and `skills add -g` use the temporary folder.
+- [x] Tests: `test/signing-identity.mjs`, `test/keychain-migration.mjs`, `test/provider-login.mjs` `helper-cwd`. Docs: README "Code signing" (one more Keychain approval, then none), `docs/PROVIDERS.md`, `docs/agent-guide/legacy-names.md`.
+- [ ] Manager/operator: after this build, confirm on the operator Mac that `codesign -d -r- out/native/Trezi.app` stays the same across two rebuilds, and that the Keychain asks once and then not again.
+
 ## Shadow Light without a preview box; islands apply live (LKM-133)
 
 - [x] Root cause of "Source changed. Reload before applying your adjustment." (also right after Reload): writes were checked against the whole-file hash the UI last rendered, and the owner's batch chain was dropped before the refreshed view reached Swift. Writes now check the island's own bindings (`writeIsland` + `ChatIslands.seen`); unrelated edits in the file are kept.

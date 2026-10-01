@@ -172,10 +172,12 @@ final class ServiceRuntime: NSObject, NSXPCListenerDelegate {
                         var providerOptions = ProviderOwner.Options(profile: requested.profile, environment: requested.environment,
                             watchdog: CommandLine.arguments[0], journal: journal)
                         // The backend is `<out>/Trezi.app/Contents/Resources/backend/index.cjs`: the Keychain
-                        // helper is that app's TreziHost, and the checkout is `<out>/../..`.
+                        // helper is that app's `Helpers/TreziSecrets` (LKM-137: a separate binary whose
+                        // code hash survives rebuilds, so a Keychain approval does too), and the
+                        // checkout is `<out>/../..`.
                         var app = URL(fileURLWithPath: requested.backend)
                         for _ in 0..<4 { app.deleteLastPathComponent() }
-                        let keychain = app.appendingPathComponent("Contents/MacOS/TreziHost").path
+                        let keychain = app.appendingPathComponent("Contents/Helpers/TreziSecrets").path
                         providerOptions.data = ProviderData.Tools(crypto: access(keychain, X_OK) == 0 ? [keychain] : nil,
                             checkout: app.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().path,
                             environment: requested.environment)

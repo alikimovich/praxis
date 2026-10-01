@@ -1,7 +1,5 @@
 import AppKit
 import WebKit
-import CryptoKit
-import Security
 
 var serviceClient: ServiceClient?
 let serviceMode = HostLaunch.arguments.contains("--service")
@@ -14,33 +12,7 @@ func emit(_ value: [String: Any]) {
     print(line); fflush(stdout)
 }
 
-// Synchronous secret helper used only by the backend's cipher. stdin/stdout carry
-// bytes; no API key or encryption key is placed in a process argument or log.
-if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--crypto" {
-    do {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "dev.praxis.native.secrets", kSecAttrAccount as String: "master-key"]
-        var read = query; read[kSecReturnData as String] = true
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(read as CFDictionary, &item)
-        var data = item as? Data
-        if status == errSecItemNotFound && CommandLine.arguments[2] == "encrypt" {
-            let bytes = SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
-            var create = query; create[kSecValueData as String] = bytes
-            create[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-            guard SecItemAdd(create as CFDictionary, nil) == errSecSuccess else { throw NSError(domain: "Keychain", code: 1) }
-            data = bytes
-        }
-        guard let data = data, data.count == 32 else { throw NSError(domain: "Keychain", code: Int(status)) }
-        let key = SymmetricKey(data: data)
-        let input = FileHandle.standardInput.readDataToEndOfFile()
-        let output: Data
-        if CommandLine.arguments[2] == "encrypt" {
-            output = try AES.GCM.seal(input, using: key).combined!
-        } else { output = try AES.GCM.open(AES.GCM.SealedBox(combined: input), using: key) }
-        FileHandle.standardOutput.write(output); exit(0)
-    } catch { exit(1) }
-}
+// The Keychain helper is `Contents/Helpers/TreziSecrets` (`Secrets.swift`, LKM-137).
 if CommandLine.arguments.count == 2 && CommandLine.arguments[1] == "--session" {
     if let data = try? JSONSerialization.data(withJSONObject: SecuritySessionProbe.report()) { FileHandle.standardOutput.write(data) }
     exit(0)
