@@ -1,4 +1,4 @@
-import { formatTokens } from '../shared/run-stats'
+import { formatTokens, isEmptyUsage, type TokenUsage } from '../shared/run-stats'
 import type { ModelChoice } from '../shared/api'
 import type { NativeChatActivity, NativeChatCard, NativeChatState } from '../shared/native-chat'
 import { providerOptions, resolveSelection } from '../shared/provider-choices'
@@ -23,6 +23,14 @@ function activity(chat: Chat): NativeChatActivity | null {
   if (chat.phase === 'working') return { kind: 'working', label: chat.activityDetail.trim() || 'Working…', animated: true }
   return { kind: 'thinking', label: 'Thinking…', animated: true }
 }
+/** A turn's counter, shown after its live status and then under its Copy/Revert row. */
+export function tokens(turn: TokenUsage, total: TokenUsage) {
+  const n = (v: number) => v.toLocaleString('en-US')
+  return {
+    label: `↑ ${formatTokens(turn.input)}  ↓ ${formatTokens(turn.output)}`,
+    detail: `Tokens across this turn’s model calls, not current context size.\nInput: ${n(turn.input)}\nCached input (included above): ${n(turn.cached)}\nOutput: ${n(turn.output)}\nThis chat so far: ${n(total.input)} input, ${n(total.output)} output`
+  }
+}
 export function snapshot(chat: Chat, choices: ModelChoice[]): NativeChatState {
   const providers = providerOptions(choices)
   const selection = resolveSelection(providers, chat.settings)
@@ -45,9 +53,8 @@ export function snapshot(chat: Chat, choices: ModelChoice[]): NativeChatState {
   const stop = chat.isRunning && !chat.text.trim() && !chat.attachments.length
   return {
     activity: currentActivity, streamingId: chat.streamingId,
-    chat: chat.chat, messages: chat.messages, running: chat.isRunning, cards, questions: chat.questions,
-    status: `↑ ${formatTokens(chat.usage.input)}  ↓ ${formatTokens(chat.usage.output)}`,
-    statusDetail: `Cumulative tokens across this chat’s model calls, not current context size.\nInput: ${chat.usage.input.toLocaleString('en-US')}\nCached input (included above): ${chat.usage.cached.toLocaleString('en-US')}\nOutput: ${chat.usage.output.toLocaleString('en-US')}`,
+    chat: chat.chat, running: chat.isRunning, cards, questions: chat.questions,
+    messages: chat.messages.map(message => message.usage && !isEmptyUsage(message.usage) ? { ...message, tokens: tokens(message.usage, chat.usage) } : message),
     composer: {
       queue: chat.queue.map(q => ({ id: `queued-${q.id}`, text: q.text, attachments: q.attachments.length })),
       queuePaused: chat.paused,

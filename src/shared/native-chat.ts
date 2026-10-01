@@ -6,6 +6,10 @@ export interface NativeChatMessage {
   attachments?: { id: string; kind?: 'image' | 'file'; name?: string; path?: string; url?: string }[]
   selection?: { tag: string; ident: string; source: string | null }
   revertGroup?: string
+  /** Tokens this assistant turn's model calls reported (cached is part of input). */
+  usage?: { input: number; output: number; cached: number }
+  /** Snapshot only: the turn's counter and its tooltip (`chat-snapshot.ts`). */
+  tokens?: { label: string; detail: string }
 }
 
 export interface NativeChatCard {
@@ -27,8 +31,6 @@ export interface NativeChatState {
   running: boolean
   cards: NativeChatCard[]
   questions: QuestionRequest[]
-  status: string
-  statusDetail?: string
   composer: {
     queue: { id: string; text: string; attachments: number }[]
     queuePaused: boolean

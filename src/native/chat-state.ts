@@ -118,9 +118,18 @@ export function reduce(chat: Chat, event: AgentEvent) {
       chat.phase = 'working'; chat.activityDetail = event.text; append(chat, event.text, true); break
     case 'title': chat.title = migrateChatTitle(event.title); break
     case 'commands': chat.commands = event.commands; break
-    case 'usage':
-      for (const key of ['input', 'output', 'cached'] as const) chat.usage[key] += event[key]
+    case 'usage': {
+      // The chat total, and the running turn's own count on its response (a
+      // late report after `done` belongs to the last response).
+      const message = chat.messages.find(m => m.id === chat.streamingId) ??
+        (chat.isRunning ? assistant(chat) : [...chat.messages].reverse().find(m => m.role === 'assistant'))
+      if (message) message.usage ??= { input: 0, output: 0, cached: 0 }
+      for (const key of ['input', 'output', 'cached'] as const) {
+        chat.usage[key] += event[key]
+        if (message?.usage) message.usage[key] += event[key]
+      }
       break
+    }
     case 'error':
       if (event.code) {
         // Not signed in, or no answer: the login card, not a warning in the transcript.

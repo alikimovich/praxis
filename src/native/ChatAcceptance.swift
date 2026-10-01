@@ -190,6 +190,8 @@ extension Host {
             "latestVisible": latestFrame.height > 0 && latestFrame.minY >= 0 && latestFrame.maxY <= readingHeight + 1,
             "readingHeight": readingHeight, "latestButton": chat.model.latestButtonFrame.width > 0,
             "latestButtonFrame": NSStringFromRect(chat.model.latestButtonFrame),
+            "latestButtonGap": ChatLatestButton.gap, "latestButtonLabel": chat.latestButton.accessibilityLabel() ?? "",
+            "composerTop": chat.isFlipped ? composerFrame.minY : chat.bounds.height - composerFrame.maxY,
             "lastDrag": AcceptanceDiagnostics.lastDrag,
             "lastLatest": AcceptanceDiagnostics.lastLatest,
             "layout": composer.verificationLayout(), "composer": composer.inspect(),

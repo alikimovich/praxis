@@ -184,16 +184,38 @@ assert.equal(racing.get('a').ready, true)
 assert.deepEqual(racing.get('a').messages, [])
 console.log('Native controller: root scoping, clipboard cancellation, renderer reattach and close/reopen race passed.')
 
-// Usage is a cumulative total; cached input is a subset, not additional usage.
-const { snapshot: usageSnapshot } = await import('../src/native/chat-snapshot.ts')
-const usageChat = [...controller.chats.values()][0]
-usageChat.usage = { input: 1389777, output: 3491, cached: 1200000 }
-const usageView = usageSnapshot(usageChat, [])
-assert.equal(usageView.status, '↑ 1.4M  ↓ 3.5k')
-assert.match(usageView.statusDetail, /not current context size/)
-assert.match(usageView.statusDetail, /Input: 1,389,777/)
-assert.match(usageView.statusDetail, /Cached input \(included above\): 1,200,000/)
-assert.match(usageView.statusDetail, /Output: 3,491/)
+// Usage is counted per turn on its response (cached input is a subset, not
+// additional usage); the chat total stays in the mirror and the tooltip. There
+// is no pinned status line any more (LKM-141).
+{
+  const { snapshot: usageSnapshot } = await import('../src/native/chat-snapshot.ts')
+  const { newChat: usageNew, reduce: usageReduce } = await import('../src/native/chat-state.ts')
+  const usageChat = usageNew('usage')
+  usageChat.usage = { input: 1000, output: 10, cached: 0 }
+  usageChat.messages.push({ id: 'earlier', role: 'assistant', text: 'Earlier', segments: [], statuses: [] })
+  usageChat.isRunning = true
+  usageReduce(usageChat, { type: 'usage', input: 1000000, output: 3000, cached: 1200000 })
+  usageReduce(usageChat, { type: 'usage', input: 388777, output: 491, cached: 0 })
+  const running = usageSnapshot(usageChat, [])
+  assert.equal('status' in running, false, 'No pinned status counter')
+  const live = running.messages.find(m => m.id === usageChat.streamingId)
+  assert.equal(live.tokens.label, '↑ 1.4M  ↓ 3.5k', 'Running turn counts its own tokens')
+  assert.match(live.tokens.detail, /not current context size/)
+  assert.match(live.tokens.detail, /Input: 1,388,777/)
+  assert.match(live.tokens.detail, /Cached input \(included above\): 1,200,000/)
+  assert.match(live.tokens.detail, /Output: 3,491/)
+  assert.match(live.tokens.detail, /This chat so far: 1,389,777 input, 3,501 output/)
+  assert.equal(running.messages.find(m => m.id === 'earlier').tokens, undefined, 'Other turns keep their own (no) count')
+  assert.equal(running.activity.label, 'Thinking…')
+  usageReduce(usageChat, { type: 'done' })
+  // A report after done belongs to the response that just finished.
+  usageReduce(usageChat, { type: 'usage', input: 1, output: 9, cached: 0 })
+  const done = usageSnapshot(usageChat, [])
+  assert.equal(done.activity, null)
+  assert.equal(done.messages.at(-1).tokens.label, '↑ 1.4M  ↓ 3.5k')
+  assert.deepEqual(done.messages.at(-1).usage, { input: 1388778, output: 3500, cached: 1200000 })
+  assert.equal(usageChat.messages.at(-1).tokens, undefined, 'Formatting stays out of the mirrored state')
+}
 
 // Running includes landing and user waits; those must not imply active thinking.
 const { newChat, reduce } = await import('../src/native/chat-state.ts')

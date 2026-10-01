@@ -2,6 +2,17 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-01 — LKM-141: Token counter inline; centered scroll-to-latest button
+
+- **Counter moves into the turn.** The pinned `↑ … ↓ …` overlay above the composer is gone (with `status`/`statusDetail` in the snapshot). Its number was the chat's running total. Now each `usage` event also adds to the running response's `usage`; a report after `done` goes to the last response. `chat.usage`, the chat total, is still kept and mirrored, and each counter's tooltip ends with "This chat so far". `chat-snapshot.ts` formats `tokens: {label, detail}` per message; the mirrored state stays unformatted. Responses restored from a transcript have no per-turn count, because transcripts never stored one.
+- **One footer, one height.** `ChatTurnFooter` (`ChatActivity.swift`) ends an assistant response. While running, a 28 pt row holds the live status with the counter after it, and a 14 pt row is reserved below. Once done, the 28 pt row holds Copy/Revert and the 14 pt row holds the counter. The footer is the same height in both states, so the final message replaces the status line without moving anything. The counter uses the old secondary 11 pt monospaced style and scrolls with the transcript.
+- **Latest button.** `ChatLatestButton` is a 30 pt round button with `chevron.down`. It uses the control background, a separator stroke, a soft shadow and a circular focus ring. `place(over:composerHeight:visible:)` centers it on the chat column, 8 pt above the composer bubble. That is inside the 68 pt clearance the reading area already keeps (`ChatLayout.latestClearance`, formerly `statusHeight`), so it never covers pinned text. Visibility (probe-driven), the native NSButton click path and the accessibility label are unchanged.
+- **Proof.**
+  - `native-composer-layout` checks the placement at 320/440/521 pt and with composers of several heights: round, centered, gap above the composer, below the reading area, labelled. It still checks the click tracking loop.
+  - The chat acceptance asserts the same geometry before every latest click. It adds scrolled-up foreground captures at 440 and 320 pt.
+  - `native-chat-scroll` adds foreground captures of a running turn (counter on the Thinking… line) and of the completed turn (counter under Copy/Revert) at 440 and 320 pt. The footer's height and bottom must not change.
+  - The `native-chat-controller` unit test covers per-turn accumulation, late reports and the tooltip total.
+
 ## 2026-09-30 — LKM-135: Claude first turn: no false "did not respond"
 
 - **Why healthy cold turns failed.** The LKM-119 deadline (90 s with no first event) covered the whole cold path as one silence: helper spawn, the bundled and installed `claude auth status` probes one after the other, a cold CLI start, and the model thinking. The init's resume-id record also counted as "heard", so the deadline was really "until the session init" and nothing after it.

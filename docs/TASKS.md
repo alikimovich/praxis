@@ -3,6 +3,14 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Token counter inline; centered scroll-to-latest button (LKM-141)
+
+- [x] No pinned counter above the composer; each turn counts its own tokens on its response (chat total kept in the tooltip and mirror).
+- [x] Running: counter right after the Thinking…/working status, secondary style.
+- [x] Done: counter under the response's Copy/Revert row; the footer keeps one height, so completion does not move the transcript.
+- [x] Latest button: round chevron.down, centered over the column, 8 pt above the composer, inside the composer clearance; visibility logic and label unchanged.
+- [x] Fixtures: composer-layout placement at 320/440/521 pt, acceptance scrolled-up captures at 440/320 pt, chat-scroll running/done token captures at 440/320 pt.
+
 ## Claude first turn: no false "did not respond" (LKM-135)
 
 - [x] Cold-start phases (helper ready, auth probe, CLI started, session init, first model event, no-response/exit) logged at debug level in the service log.

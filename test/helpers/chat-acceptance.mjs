@@ -33,8 +33,20 @@ export async function checkChatAcceptance(host, artifacts) {
   }
   // Click the native latest button with window-targeted mouse events; its
   // action must run (not merely the scroll position change) before capture.
+  // LKM-141: a round button centered over the column, a small gap above the
+  // composer, inside its clearance: never over the reading area's text.
+  const checkLatestButton = (state, label) => {
+    const [x, y, width, height] = (String(state.latestButtonFrame).match(/-?[\d.]+(?:e-?\d+)?/g) ?? []).map(Number)
+    assert.equal(state.latestButton, true, `${label}: latest button shown`)
+    assert.equal(width, height, `${label}: round latest button ${state.latestButtonFrame}`)
+    assert.ok(Math.abs(x + width / 2 - state.chatWidth / 2) <= 1, `${label}: centered over ${state.chatWidth}pt column ${state.latestButtonFrame}`)
+    assert.ok(Math.abs(state.composerTop - (y + height) - state.latestButtonGap) <= 1, `${label}: gap above composer top ${state.composerTop} ${state.latestButtonFrame}`)
+    assert.ok(y >= state.readingHeight, `${label}: below reading area ${state.readingHeight} ${state.latestButtonFrame}`)
+    assert.equal(state.latestButtonLabel, 'Scroll to latest message', `${label}: accessibility label`)
+  }
   const clickLatest = async label => {
     const before = await inspect({})
+    checkLatestButton(before, label)
     await inspect({ input: 'latest' })
     await wait(s => s.latestButtonClickCount === before.latestButtonClickCount + 1, `${label}: latest click runs the button action`)
   }
@@ -94,6 +106,14 @@ export async function checkChatAcceptance(host, artifacts) {
       assert.ok(grown.composer.documentHeight > grown.composer.inputHeight + 100, 'Capped draft in the short window')
       await inspect({ height: 800 })
       await latestCapture(`acceptance-${width}-short-then-grow-tall`)
+      // Scrolled up with a one-line draft: the centered button above the composer.
+      await setDraft(1)
+      await latestCapture(`acceptance-${width}-before-scroll-up`)
+      await inspect({ input: 'wheel', delta: 700 })
+      await wait(s => s.latestButton && !s.latestVisible, `${width}pt wheel scrolls history and reveals latest button`)
+      checkLatestButton(await capture(`acceptance-${width}-scrolled-up`), `${width}pt scrolled up`)
+      await clickLatest(`acceptance-${width}-scrolled-up-latest`)
+      await latestCapture(`acceptance-${width}-scrolled-up-latest`)
     }
     // Return to a short draft so the scroller has a large unobstructed track.
     state.composer.text = ''; state.composer.revision++
