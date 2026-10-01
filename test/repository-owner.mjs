@@ -20,6 +20,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { compileEditingFixture, startEditingFixture } from './helpers/editing-fixture.mjs'
 import { compileRepositoryFixture, startRepositoryFixture } from './helpers/repository-fixture.mjs'
+import { useRunnerEnv } from './helpers/runner-env.mjs'
 import { setEditingOwner } from '../src/main/editing-owner.ts'
 import { setRepositoryOwner } from '../src/main/repository-owner.ts'
 import { enqueueRepoWrite } from '../src/main/repo-write-queue.ts'
@@ -28,7 +29,7 @@ import { commitLiveTurn } from '../src/main/live-commit.ts'
 import { pruneOrphans, removeWorktree, retireWorktreeBranch } from '../src/main/worktrees.ts'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
-const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'trezi-repository-owner-')))
+const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'trezi repository-owner-')))
 const fixtures = new Set()
 let repos = 0
 
@@ -61,10 +62,7 @@ async function fixture(profilePath, env = {}) {
 async function stop(started) { await started.stop(); fixtures.delete(started) }
 async function install(started, options) { const owner = started.owner(options); setRepositoryOwner(owner); return owner }
 
-async function section(name, run) {
-  await run()
-  console.log(`REPOSITORY-OWNER ${name} PASS`)
-}
+async function section(name, run) { await run(); console.log(`REPOSITORY-OWNER ${name} PASS`) }
 
 /** A chat worktree with its branch attached, as at the start of a turn. */
 async function chat(live, dir, id) {
@@ -76,6 +74,8 @@ async function chat(live, dir, id) {
 try {
   binary = compileRepositoryFixture()
   const suiteFixture = compileEditingFixture()
+  // After the cached compiles: from here on Git, the fixtures and the suites see the CI runner's conditions.
+  useRunnerEnv(scratch)
   // Creating a chat worktree copies the setup helpers through the editing owner: one
   // editing process serves every section (the repository owner under test is swapped).
   const editing = await startEditingFixture(suiteFixture, profile('editing'), { REPOSITORY_WORKTREES_ROOT: scratch })
@@ -83,9 +83,8 @@ try {
   setEditingOwner(editing.owners().editing)
 
   await section('suites', async () => {
-    // The Git suites' own assertions, through the Swift owner. (setup-next installs the
-    // Swift owners itself: test/helpers/with-service-owners.mjs.)
-    // Chat worktrees also need the editing owner, so these run on the editing fixture.
+    // The Git suites' own assertions, through the Swift owner (setup-next installs it itself:
+    // test/helpers/with-service-owners.mjs), on the editing fixture chat worktrees need.
     const suites = ['chat-worktrees', 'resolve-conflicts', 'worktrees', 'live-commit', 'git', 'chat-recovery', 'auto-reconciliation']
     const results = await Promise.all(suites.map(suite => new Promise(resolve => {
       const child = spawn('bun', ['--preload', './test/helpers/repository-owner-preload.mjs', `test/${suite}.mjs`], {
@@ -95,13 +94,13 @@ try {
       child.stdout.on('data', data => { output += data })
       child.stderr.on('data', data => { output += data })
       const timer = setTimeout(() => child.kill('SIGKILL'), 100_000)
-      child.on('exit', code => { clearTimeout(timer); resolve({ suite, code, output }) })
+      child.on('exit', (code, signal) => { clearTimeout(timer); resolve({ suite, code, signal, output }) })
     })))
-    for (const { suite, code, output } of results) {
-      assert.equal(code, 0, `${suite} against the Swift owner:\n${output.slice(-3000)}`)
-      const frames = Number(/REPOSITORY-PARITY frames=(\d+)/.exec(output)?.[1] ?? 0)
-      assert.ok(frames > 0, `${suite} sent no repository frames`)
-    }
+    // Every failed suite's output, not only the first: CI shows just this log's tail.
+    const failed = results.filter(({ code }) => code !== 0)
+    assert.deepEqual(failed.map(({ suite }) => suite), [], failed.map(({ suite, code, signal, output }) =>
+      `--- ${suite} against the Swift owner exited ${code ?? signal}:\n${output.slice(-3000)}`).join('\n'))
+    for (const { suite, output } of results) assert.ok(Number(/REPOSITORY-PARITY frames=(\d+)/.exec(output)?.[1] ?? 0) > 0, `${suite} sent no repository frames`)
   })
 
   await section('lanes', async () => {

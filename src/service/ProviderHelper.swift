@@ -159,7 +159,12 @@ final class ProviderHelperProcess: @unchecked Sendable {
             }
         }
         let reader = stdout[0], errors = stderr[0], lifetime = lifetimeWriter, guardian = watchdogPID
+        // Both readers reach EOF before `onExit`: a helper that writes its last frame (a login
+        // report) and exits must not be reported as having exited without it (LKM-142).
+        let drained = DispatchGroup()
+        drained.enter(); drained.enter()
         Thread.detachNewThread {
+            defer { drained.leave() }
             var pending = Data(), buffer = [UInt8](repeating: 0, count: 64 * 1024), oversized = false
             while true {
                 let count = read(reader, &buffer, buffer.count)
@@ -179,6 +184,7 @@ final class ProviderHelperProcess: @unchecked Sendable {
             close(reader)
         }
         Thread.detachNewThread {
+            defer { drained.leave() }
             var buffer = [UInt8](repeating: 0, count: 16 * 1024)
             while true {
                 let count = read(errors, &buffer, buffer.count)
@@ -201,6 +207,9 @@ final class ProviderHelperProcess: @unchecked Sendable {
             if lifetime >= 0 { close(lifetime) }
             var raw: Int32 = 0
             while waitpid(pid, &raw, 0) < 0 && errno == EINTR {}
+            // The group is gone, so EOF follows at once; a descendant that escaped the group with
+            // the pipes open only delays the report (as RepositoryGit.run bounds it).
+            _ = drained.wait(timeout: .now() + 2)
             helper.closeInput()
             helper.lock.lock(); helper.status = raw; let tail = String(decoding: helper.stderrTail, as: UTF8.self); helper.lock.unlock()
             onExit(raw, tail)

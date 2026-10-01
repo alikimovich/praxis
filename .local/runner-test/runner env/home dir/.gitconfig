@@ -1,0 +1,4 @@
+[init]
+	defaultBranch = trunk
+[user]
+	useConfigOnly = true

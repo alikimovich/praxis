@@ -2,6 +2,15 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-01 — LKM-142: CI log tails and runner-only unit failures
+
+- **CI visibility.** `node test/run.mjs` accepts `--log-tail=N`; on FAIL/ERROR it prints the last N lines of that test's log into the job output (CI passes `--log-tail=150`). The `test/artifacts/runs` upload step uses `if: always()` with 7-day retention so logs survive cancelled runs too.
+- **Runner-like tests.** New `test/helpers/runner-env.mjs` installs an isolated HOME (no Git identity, `user.useConfigOnly`, `init.defaultBranch=trunk`, no system Git config) and a TMPDIR/HOME with spaces. `repository-owner`, `rename-compat` and the provider-login `no-keychain` part call it so those suites pass under GitHub Actions conditions locally, not only on a developer Mac.
+- **repository-owner.** The parity preload runs seven Git suites in parallel; CI only showed this file's log tail, so a single failing suite was hard to see. Failed suites are now all listed in the assertion. Scratch and temp paths include spaces so quoting bugs surface in CI.
+- **provider-login (flake).** Two causes: (1) `PROVIDER_FIRST_EVENT=0.5` in the deadline test did not cover helper cold start on a loaded runner — raised to 2 s with matching assertions. (2) `ProviderHelperProcess` could call `onExit` before the stdout reader drained the helper's last login frame — it now waits up to 2 s for both readers after `waitpid`, like `RepositoryGit.run`. New `no-keychain` part exercises real `security` with an empty HOME.
+- **rename-compat.** Same runner Git/HOME setup; commits that relied on a global identity use explicit `-c user.name/user.email`.
+- **Proof.** `test/test-runner.mjs` covers `--log-tail`; typecheck and the affected unit tests are in the PR notes. Candidate CI green is for the operator to confirm.
+
 ## 2026-09-30 — LKM-135: Claude first turn: no false "did not respond"
 
 - **Why healthy cold turns failed.** The LKM-119 deadline (90 s with no first event) covered the whole cold path as one silence: helper spawn, the bundled and installed `claude auth status` probes one after the other, a cold CLI start, and the model thinking. The init's resume-id record also counted as "heard", so the deadline was really "until the session init" and nothing after it.

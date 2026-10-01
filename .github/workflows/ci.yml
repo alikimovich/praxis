@@ -38,11 +38,15 @@ jobs:
       - name: Typecheck (native)
         run: bun run typecheck:native
 
+      # --log-tail prints the last 150 lines of every failing test's log into the job
+      # output; the full logs are in the artifact below.
       - name: Unit tests
-        run: node test/run.mjs unit --timeout-ms=120000
+        run: node test/run.mjs unit --timeout-ms=120000 --log-tail=150
 
+      # always(): upload after a green, red or cancelled run alike, so the logs of a
+      # failing (or flaky) test can be downloaded for 7 days.
       - name: Upload test logs
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: unit-test-logs
