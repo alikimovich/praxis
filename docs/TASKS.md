@@ -9,6 +9,13 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Shadow block drag frames show through an isolated-world box-shadow override; one source write per gesture (release or 600 ms idle); override removed only once the page's own style shows the final value; one Undo group; LKM-133 conflict rules kept.
 - [x] Native `shadow-light` check: 8-step drag with 0 gaps, 0 out of order, 0 foreign and no write before release; `shadow-light-drag.png`, `shadow-light-released.png`, `shadow-light-drag.json`.
 - [x] Real Next.js (`/shadow-flicker` in `test/fixtures/next-app`) and Vite/CSS (`test/fixtures/island-flicker-vite`) scripted drag measurements: `test/island-flicker-frameworks.mjs` logs `ISLAND-FLICKER next-*` and `vite-*` counts (requires TreziHost + `bun install` on the fixtures).
+## Token counter inline; centered scroll-to-latest button (LKM-141)
+
+- [x] No pinned counter above the composer; each turn counts its own tokens on its response (chat total kept in the tooltip and mirror).
+- [x] Running: counter right after the Thinking…/working status, secondary style.
+- [x] Done: counter under the response's Copy/Revert row; the footer keeps one height, so completion does not move the transcript.
+- [x] Latest button: round chevron.down, centered over the column, 8 pt above the composer, inside the composer clearance; visibility logic and label unchanged.
+- [x] Fixtures: composer-layout placement at 320/440/521 pt, acceptance scrolled-up captures at 440/320 pt, chat-scroll running/done token captures at 440/320 pt.
 ## Versioning: SemVer, changelog, tags and app version (LKM-143)
 
 - [x] package.json `version` is the one SemVer source; build number = commit count of HEAD, plus the short sha (`scripts/version.mjs`).

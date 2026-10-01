@@ -143,6 +143,12 @@ Inspect these artifacts under `test/artifacts/native/chat-scroll/`:
 - `acceptance-accessibility-{true,false}[-latest].png/.json`: all three modes
   switched through the override and received by the conversation's SwiftUI
   environment (`rendered`), plus functional wheel/latest scrolling and stable layout.
+- `acceptance-{440,320}-scrolled-up.png/.json` (LKM-141): the latest button scrolled
+  into history, asserted round, centered over the column, `latestButtonGap` above
+  `composerTop`, below `readingHeight` (never over the reading area) and labelled.
+- `tokens-{running,done}-{440,320}.png` and `tokens-{440,320}.json` (LKM-141): a
+  turn's counter after "Thinking…" while running, then under Copy/Revert, with
+  the footer's height and bottom unchanged by completion.
 - `acceptance-results.json`: successful assertion summary; `acceptance-failure.*`
   retains failure diagnostics and foreground pixels when capture remains available.
 

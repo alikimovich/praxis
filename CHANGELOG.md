@@ -25,6 +25,7 @@ Every change that alters user-visible behaviour adds one line under Unreleased.
 - Settings redesign: one native window with a General, AI Providers and Experimental sidebar that saves automatically.
 - Renamed the app to Trezi; projects that use the earlier setup names are migrated once on open.
 - Chat: steadier scrolling and follow behaviour, composer attachments as thumbnails, queued messages, interactive islands in the conversation and more reliable Stop and recovery.
+- Chat: per-turn token counts show inline with the working status while a turn runs and under each response’s Copy/Revert row when it finishes, instead of pinned above the composer; scroll-to-latest is a centered round control just above the composer, with transcript content faded out behind it when you have scrolled up.
 
 ### Removed
 - The Electron app, the React renderer, browser and Tailscale modes, and the old in-page content controls.
