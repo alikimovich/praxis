@@ -2,6 +2,11 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-01 — LKM-137 repair: `service-process` unit timeout under parallel swiftc
+
+- Manager quick verification timed out `service-process` at 120 s right after the control-codec PASS line while `service-contract`, `operation-ledger` and `preferences-owner` compiled Swift in parallel. The XPC half had not started yet; this was wall-clock contention, not a new service hang.
+- `test/run.mjs` now runs `service-process` as an exclusive unit barrier (no parallel workers) with a 240 s budget. `docs/TESTING.md` documents both.
+
 ## 2026-10-01 — LKM-137 (review fixes): a failing identity falls back to ad hoc; real-signature proof
 
 - **Build regression.** A chosen identity that could not sign (locked login keychain over SSH, a denied key-access prompt, a deleted certificate) made the build exit 1, where the ad hoc build always worked. `signWithFallback` (`scripts/signing.mjs`) now runs the whole signing step (bundled Bun, `TreziSecrets`, the service, the app) and, when any piece fails with an identity, runs it again ad hoc for every piece. It prints the one `warning: signing Trezi ad hoc (signing with "<identity>" failed: <codesign message>)…` line, so a build never prints more than one warning (`signingIdentity` returns ad hoc without it re-warning). An ad hoc failure is still a real error.

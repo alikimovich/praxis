@@ -158,6 +158,10 @@ const UNIT = [
 const NATIVE = ['native-runtime', 'native-source-window', 'native-chat-scroll', 'native-next-hmr'];
 const LIVE = ['native-runtime-live', 'provider-live-parity'];
 const TIERS = { unit: UNIT, native: NATIVE, live: LIVE };
+// Builds the full Swift service and runs real XPC; must not share workers with other
+// swiftc-heavy unit tests or the default 120 s budget is eaten by parallel compiles.
+const UNIT_EXCLUSIVE = new Set(['service-process']);
+const UNIT_TIMEOUT_MS = { 'service-process': 240_000 };
 const selected = new Set();
 const options = { jobs: Math.min(4, availableParallelism()),
   'timeout-ms': 120_000, filter: null };
@@ -213,12 +217,16 @@ for (const [tier, members] of Object.entries(TIERS)) {
   if (!tests.length) continue;
   const jobs = serial || tier !== 'unit' ? 1 : options.jobs;
   console.log(`\n${tier}: ${tests.length} tests, at most ${jobs} workers`);
-  const items = tests.map(name => ({ name, exclusive: tier !== 'unit' }));
+  const items = tests.map(name => ({
+    name,
+    exclusive: tier !== 'unit' || UNIT_EXCLUSIVE.has(name),
+  }));
   const tierResults = await runQueue(items, jobs, async ({ name }) => {
     console.log(`START [${tier}] ${name}`);
+    const timeoutMs = tier === 'unit' && UNIT_TIMEOUT_MS[name] ? UNIT_TIMEOUT_MS[name] : options['timeout-ms'];
     const result = await runCommand({ command: tier === 'unit' ? 'bun' : 'node',
       args: [join(TEST_DIR, `${name}.mjs`)], cwd: ROOT, name,
-      log: join(logs, `${tier}-${name}.log`), timeoutMs: options['timeout-ms'], signal: controller.signal });
+      log: join(logs, `${tier}-${name}.log`), timeoutMs, signal: controller.signal });
     console.log(`${result.outcome} [${tier}] ${name} ${fmt(result.duration)}${result.note ? ` — ${result.note}` : ''}`);
     if (!['PASS', 'SKIP'].includes(result.outcome)) console.log(`  Log: ${result.log}`);
     return result;
