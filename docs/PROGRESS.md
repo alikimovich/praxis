@@ -24,6 +24,27 @@ Newest first. Append a dated entry when you finish a chunk of work.
   - `test/provider-login.mjs` `helper-cwd`: a home, `/`, an ancestor or a missing root never becomes the helper's cwd, and a project root is kept.
   - `test/distribution.mjs`: the signer, the helper path and no hard-coded ad hoc signing.
   - The keychain parts need a session that can create a keychain. In a sandbox they print SKIP; the agent ran them unsandboxed and they passed. Verify quick ran them for real.
+## 2026-10-01 — LKM-136: short paths in chat, Activity and error cards; chat worktree cleanup
+
+- **Why.** Collapsed chat tool rows, Activity lines, error and conflict cards and the preview error showed absolute profile paths such as `…/Application Support/Trezi Native/trezi/worktrees/1a2b3c4d/src/App.tsx`. They were long, wrapped mid-path and named internals. Chat checkouts also piled up: one per chat, kept until the chat closed, plus Electron-era worktree folders under the old app names.
+- **One formatter.** `src/shared/display-path.ts` (pure) turns a path inside a project or chat checkout into its project-relative form. Internal locations get a label: "chat workspace", "temporary patch" (the repository scratch), "recovery copy" (`refs/trezi/recovery/*`) and "Trezi data". It rewrites paths inside free text, never cuts a path in the middle, and leaves unknown paths alone. `src/native/display-paths.ts` gives it the profile (with its real path and the old-name profiles beside it) and the open projects.
+- **Where it applies.** Only collapsed surfaces use it: tool-row labels (`labels` beside the full `statuses` in `chat-snapshot.ts`), the activity line, card details, Activity lines (`display` beside `text`) and the preview error status. The full text stays in the expanded tool rows, tooltips, the card's new Copy button and Activity's Copy All. Logs, the ledger and stored chats are unchanged.
+- **Cleanup.** See "Chat workspace cleanup" in `docs/WORKTREES.md`.
+  - Closing (archiving) a chat already removed its clean checkout.
+  - New: an hourly idle sweep (Settings → General, default 7 days) removes the checkout of a chat with no recent turn, through the new Swift `reclaimWorktree`. Parked, resolving and running chats are skipped, re-checked inside the chat's chain and the repository lease. A dirty checkout stays, and its work goes to one `idle-<id>` recovery ref per distinct content. `beforeTurn` recreates a removed checkout at the same path from the live tree.
+  - Old-name worktree folders go through orphan recovery once after launch (the service accepts them through `legacyRoots`). A folder is removed only when it is then empty, by the service's `removeLegacyFolder` (`rmdir`, so nothing that appears meanwhile is lost); Bun only reads (`du`, `git rev-parse`), as its retirement census row says.
+  - Settings shows the chat workspaces' disk use (`du`, read after the window opens) and a "Clean up now" button that runs the same sweep with no idle period.
+- **Proof.**
+  - `test/display-path.mjs`: the formatter, free text, the native context, the snapshot (labels, full detail, activity detail, no profile path in any collapsed field) and Activity display vs full text.
+  - `test/chat-workspace-cleanup.mjs` (through the Swift owner, run by `test/repository-owner.mjs`):
+    - idle removal;
+    - parked, running and dirty checkouts kept, with one ref for the dirty work across two sweeps;
+    - the next turn recreates the checkout and lands;
+    - Clean up now;
+    - close removes the checkout and keeps a parked chat's branch;
+    - legacy folders: migrated and empty ones removed, an unknown folder kept, the old app's other data untouched, dirty old work recoverable.
+  - `test/native-settings.mjs`: the rows, the usage figure, Clean up now and the saved idle period.
+- **Limits.** A provider process that is still open keeps its original working directory across a recreate. It works because the path is the same. Old-name profile folders that hold other data (Electron caches) are not removed. Assistant prose and transcript warnings are not shortened.
 ## 2026-10-01 — LKM-138: Preview inspection tools; the WebKit preview over external browsers
 
 - **Why.** Agents could only see the preview's route and a whole-view screenshot. For anything finer (a box-shadow, a console error, a phone-width check) the rules sent them to agent-browser or a headed browser: a second copy of the app, often at the wrong route and state, and sometimes a DevTools window on the user's screen. Claude chats also loaded the user's personal Claude Code plugins and MCP servers, so a Trezi chat could start unrelated servers and tools.

@@ -11,6 +11,14 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Tests: `test/signing-identity.mjs`, `test/keychain-migration.mjs`, `test/provider-login.mjs` `helper-cwd`. Docs: README "Code signing" (one more Keychain approval, then none), `docs/PROVIDERS.md`, `docs/agent-guide/legacy-names.md`.
 - [x] Review fixes: an identity that cannot sign (locked keychain, denied key access) re-signs every piece ad hoc with the one warning instead of failing the build; a real "Trezi Local" signature in a temporary keychain proves the designated requirement is the same across two builds.
 - [ ] Manager/operator: after this build, confirm on the operator Mac that `codesign -d -r- out/native/Trezi.app` stays the same across two rebuilds, and that the Keychain asks once and then not again.
+## Short paths; chat worktree cleanup (LKM-136)
+
+- [x] One display-path formatter (`src/shared/display-path.ts`): project-relative paths, "chat workspace" / "Trezi data" / "temporary patch" / "recovery copy" labels, never truncated mid-path.
+- [x] Collapsed chat tool rows, the activity line, error/conflict cards, Activity lines and the preview error use it; full paths only in expanded rows, tooltips, Copy and Copy All. Logs and the ledger unchanged.
+- [x] Idle cleanup (default 7 days, Settings → General), lazy recreate on the next turn; parked, running and dirty checkouts kept (dirty work to an `idle-<id>` recovery ref).
+- [x] Closing a chat removes its clean checkout; old-name worktree folders removed once migrated or empty.
+- [x] Settings shows the chat workspaces' disk use and "Clean up now".
+- [ ] Manager: foreground check of Settings → General (usage row and Clean up now) in the native capture.
 ## Preview inspection tools; the WebKit preview over external browsers (LKM-138)
 
 - [x] `preview_inspect`, `preview_evaluate`, `preview_console`, `preview_viewport` and element-cropped `preview_screenshot` run on the live preview through an isolated WKContentWorld (`TreziAgent`, no message handler); results are bounded and sanitized.

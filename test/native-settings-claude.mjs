@@ -31,7 +31,8 @@ const providerFields = () => sheets.current.state.fields.filter(f => f.section =
 await action('claude')
 assert.equal(sheets.current.state.id, id, 'the Claude pane is the same window')
 assert.deepEqual(providerFields().map(f => [f.id, f.kind, f.draft]), [['token', 'secure', true]])
-assert.deepEqual(sheets.current.state.actions.map(a => a.id), ['back', 'claude-check', 'claude-save'])
+// General's "Clean up now" survives the provider panes.
+assert.deepEqual(sheets.current.state.actions.map(a => a.id), ['clean-workspaces', 'back', 'claude-check', 'claude-save'])
 // The general fields are unchanged here, so a token edit alone must not write anything.
 const unchanged = { default: field('default').value, projectUi: field('projectUi').value, engine: field('engine').value }
 await action('change', { ...unchanged, token: 'sk-ant-test-token' })
@@ -46,7 +47,7 @@ assert.equal(calls.some(c => c[0] === 'providers:seat-token-save'), false, 'an e
 await action('claude-save', { token: ' sk-ant-test-token ' })
 assert.deepEqual(calls.filter(c => c[0] === 'providers:seat-token-save').at(-1), ['providers:seat-token-save', 'sk-ant-test-token'])
 assert.equal(sheets.current.state.message, 'Token saved. New Claude chats use it.')
-assert.deepEqual(sheets.current.state.actions.map(a => a.id), ['back', 'claude-check', 'claude-remove', 'claude-save'])
+assert.deepEqual(sheets.current.state.actions.map(a => a.id), ['clean-workspaces', 'back', 'claude-check', 'claude-remove', 'claude-save'])
 assert.equal(providerFields().find(f => f.id === 'token').value, '')
 assert.ok(!JSON.stringify(sent).includes('sk-ant-test-token'), 'the token must not return in sheet snapshots')
 await action('claude-remove')
@@ -54,6 +55,6 @@ assert.deepEqual(calls.filter(c => c[0] === 'providers:seat-token-save').at(-1),
 assert.equal(sheets.current.state.message, 'Token removed.')
 await action('back')
 assert.deepEqual(providerFields().map(f => f.id), ['connections'])
-assert.deepEqual(sheets.current.state.actions.map(a => a.id), ['add', 'claude'])
+assert.deepEqual(sheets.current.state.actions.map(a => a.id), ['clean-workspaces', 'add', 'claude'])
 assert.equal(field('default').section, 'general', 'other panes survive the Claude pane')
 console.log('Native settings Claude pane: token draft, check login report, empty token refused, save/remove without echo and Back passed')

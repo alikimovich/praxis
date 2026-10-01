@@ -49,6 +49,7 @@ const UNIT = [
   "native-preview-recovery",
   "native-workspace-controller",
   "native-support",
+  "display-path",
   "native-sheets",
   "native-settings",
   "native-settings-layout",

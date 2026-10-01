@@ -20,6 +20,10 @@ to later slices: chat state, park records, Undo history, setup helpers.
 - `src/service/RepositoryLanding.swift`: explicit apply, reconciliation staging,
   discard, live commits, branch switching, orphan and branch recovery (twins of
   `applyToWorkingTree`, `stageResolve`, `commitLiveTurn`, `git.ts`, `pruneOrphans`).
+- `src/service/RepositoryCleanup.swift`: idle chat workspace cleanup
+  (`reclaimWorktree`) and the old-name worktree folders orphan recovery may empty,
+  removed by `removeLegacyFolder` once nothing but a `.DS_Store` is left (LKM-136,
+  `docs/WORKTREES.md`).
 - `src/service/RepositoryMerge.swift`: the file-by-file three-way merge an apply falls
   back to when `git apply --3way` refuses a patch that is really a conflict (LKM-130).
 - `src/service/RepositoryJournal.swift`: the operation journal, recovery refs and
@@ -72,7 +76,7 @@ commands. Each is recorded in `docs/TASKS.md`.
   releases every lease.
 - **Explicit intent.** Landing (`completeTurn` `land`, `autoApply`, `applyParked`,
   `applyBranch`), reconciliation (`stageResolve`), `discardParked`, `removeWorktree`
-  (`landed`, `release`, `abandon`), `deleteBranch` (`discard`, `integrated`), orphan
+  (`landed`, `release`, `abandon`), `reclaimWorktree` (`idle`), `removeLegacyFolder` (`legacy`), `deleteBranch` (`discard`, `integrated`), orphan
   recovery and branch pruning each require their intent in the body, or are refused
   (`invalidRequest`) before anything runs.
 - **Scope.** Every worktree operation checks that the path resolves under the profile
@@ -188,9 +192,11 @@ Mutations take an optional `leases` array (the leases the calling chain holds).
 | `stageResolve` | `{root, worktree, intent:"reconcile"}` | `{conflicted, files, clean, baseSha}` |
 | `discardParked` | `{root, worktree, intent:"discard"}` | `{}` |
 | `removeWorktree` | `{root, worktree, keepBranch, intent}` | `{}` |
+| `reclaimWorktree` | `{root, worktree, intent:"idle"}` | `{removed, dirty, ref}` |
 | `deleteBranch` | `{root, branch, intent}` | `{deleted}` |
 | `pruneOrphans` | `{root, worktreesDir, skip, parked, intent:"recover"}` | `[{id, dirty, branch, repoRoot}]` |
 | `pruneBranches` | `{root, protected, intent:"integrated"}` | `{deleted, preserved}` |
+| `removeLegacyFolder` | `{root: <old-name worktrees folder>, intent:"legacy"}` | `{removed}` |
 | `commitLive` | `{root, files, title, body?}` | `{committed, sha?, files}` |
 | `checkout` / `switchBranch` | `{root, branch}` | `BranchResult` |
 
