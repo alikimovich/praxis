@@ -21,6 +21,63 @@ enum ChatLayout {
     }
 }
 
+/// Following the latest row after the probe pinned in AppKit (LKM-139). The
+/// pin moves the clip view outside SwiftUI's scroll machinery, so a LazyVStack
+/// keeps realizing rows for its previous offset: after a long jump (a send, a
+/// chat switch, estimated row heights corrected) the viewport stayed blank
+/// until the user scrolled. Following checks each completed layout until the
+/// realized end marker sits at the reading edge. While no row is realized in
+/// view, the probe holds its AppKit pin and SwiftUI scrolls to the latest;
+/// once rows are, the pin's short jump lands on the end.
+enum ChatLatestSettle: Equatable {
+    case settled
+    /// No row is realized in the viewport: scroll to the latest through SwiftUI.
+    case realize(String)
+    /// Rows are in view but the end is not at the reading edge: pin to the end.
+    case bottom
+    /// `frames` are the realized rows and `bottom` the end marker's maxY, both
+    /// in viewport coordinates. Only the realized marker proves the end is in
+    /// view: the latest row's frame can still be the one laid out before the
+    /// pin moved the clip.
+    static func step(latest: String?, frames: [String: CGRect], bottom: CGFloat, readingHeight: CGFloat, viewportHeight: CGFloat) -> ChatLatestSettle {
+        if let latest, !frames.values.contains(where: { $0.maxY > 0 && $0.minY < viewportHeight }) { return .realize(latest) }
+        return bottom > 0 && bottom <= readingHeight + 1 ? .settled : .bottom
+    }
+    /// The SwiftUI scroll for the `stuck`-th consecutive realize step. A stack
+    /// whose estimates are far off can stay empty at the latest row; every
+    /// fourth step goes to the first row, whose position it knows exactly, and
+    /// the next one comes back to the latest from there.
+    static func realizeTarget(latest: String, first: String?, stuck: Int) -> (id: String, anchor: UnitPoint) {
+        if stuck % 4 == 3, let first { return (first, .top) }
+        return (latest, .bottom)
+    }
+    /// Steps once per frame while `current`; returns the attempts used.
+    @MainActor
+    static func run(attempts: Int = 20, current: () -> Bool, step: () -> ChatLatestSettle, scroll: (ChatLatestSettle) -> Void) async -> Int {
+        for attempt in 1...attempts {
+            try? await Task.sleep(nanoseconds: 16_000_000)
+            guard current() else { return attempt }
+            let next = step()
+            if next == .settled { return attempt }
+            scroll(next)
+        }
+        return attempts
+    }
+    /// Runs again while newer requests arrived during a run (at most `runs`),
+    /// so a pin, clamp or update while settling extends it instead of
+    /// restarting it from a stale position. Returns the attempts used.
+    @MainActor
+    static func follow(runs: Int = 4, request: () -> Int, current: () -> Bool, step: () -> ChatLatestSettle, scroll: (ChatLatestSettle) -> Void) async -> Int {
+        var used = 0
+        for _ in 1...runs {
+            let seen = request()
+            used += await run(current: current, step: step, scroll: scroll)
+            guard current(), request() != seen else { break }
+        }
+        return used
+    }
+}
+
 /// Configure only the conversation's backing NSScrollView. AppKit supplies the
 /// fading thumb, hover expansion, dragging and accessibility contrast. Its
 /// preferred style retains the legacy scroller when the user selects Always.
@@ -40,10 +97,14 @@ struct ChatScrollStyle: NSViewRepresentable {
     var attachRequest = 0
     var onPinnedChange: (Bool) -> Void = { _ in }
     var onLatestButtonChange: (Bool) -> Void = { _ in }
+    var onMovedToEnd: () -> Void = {}
+    var holdsPin: () -> Bool = { false }
     func makeNSView(context: Context) -> ChatScrollStyleProbe { ChatScrollStyleProbe() }
     func updateNSView(_ view: ChatScrollStyleProbe, context: Context) {
         view.follows = follows
+        view.holdsPin = holdsPin
         view.onPinnedChange = onPinnedChange
+        view.onMovedToEnd = onMovedToEnd
         view.onLatestButtonChange = onLatestButtonChange
         if view.attachRequest != attachRequest { view.attachRequest = attachRequest; view.attach() }
         if view.pinRequest != pinRequest { view.pinRequest = pinRequest; view.requestPin() }
@@ -59,6 +120,10 @@ final class ChatScrollStyleProbe: NSView {
     var follows: () -> Bool = { false }
     var onPinnedChange: (Bool) -> Void = { _ in }
     var onLatestButtonChange: (Bool) -> Void = { _ in }
+    /// A pin or clamp moved the clip view to the end outside SwiftUI's scroll
+    /// machinery. Called on a later turn; see ChatLatestSettle.
+    var onMovedToEnd: () -> Void = {}
+    private(set) var clampCount = 0
     /// Scroller style/contrast source; tests may inject their own.
     var environment = ChatSystemEnvironment.shared { didSet { scheduleConfiguration() } }
     var pinRequest = 0
@@ -117,7 +182,9 @@ final class ChatScrollStyleProbe: NSView {
             self.configurationCount += 1
         }
     }
-    private var shouldPin: Bool { isPinned && follows() }
+    /// While SwiftUI settles on the latest row, an AppKit pin would undo it.
+    var holdsPin: () -> Bool = { false }
+    private var shouldPin: Bool { isPinned && follows() && !holdsPin() }
     /// Pin after pending state/layout work, against the metrics current then.
     /// User input in between invalidates it.
     func requestPin() {
@@ -228,7 +295,17 @@ final class ChatScrollStyleProbe: NSView {
         return scroll.convert(window.convertPoint(fromScreen: screen), from: nil)
     }
     private func pin(_ scroll: NSScrollView) {
-        if Self.pinToEnd(scroll) { pinCount += 1 }
+        if Self.pinToEnd(scroll) { pinCount += 1; movedToEnd() }
+    }
+    private func movedToEnd() {
+        DispatchQueue.main.async { [weak self] in self?.onMovedToEnd() }
+    }
+    /// An offset left outside a document that shrank is pulled back to the
+    /// content. Never during a live scroll, where it is the user's rubber band.
+    private func clamp(_ scroll: NSScrollView) {
+        guard !liveScrolling, let end = Self.clampToContent(scroll) else { return }
+        clampCount += 1
+        if end { movedToEnd() }
     }
     private func observeLayout(_ scroll: NSScrollView) {
         if inputMonitor == nil {
@@ -259,11 +336,13 @@ final class ChatScrollStyleProbe: NSView {
                 view.postsBoundsChangedNotifications = true
                 for name in [NSView.frameDidChangeNotification, NSView.boundsDidChangeNotification] {
                     layoutObservers.append(NotificationCenter.default.addObserver(forName: name, object: view, queue: .main) { [weak self] _ in
+                        guard let self, let scroll = self.configuredScroll else { return }
+                        self.clamp(scroll)
                         // Every scroll position/size change can show or hide latest.
-                        self?.refreshLatestButton()
+                        self.refreshLatestButton()
                         // Composer state changes precede AppKit's new document
                         // bounds. Retry following only after those bounds settle.
-                        guard let self, let scroll = self.configuredScroll,
+                        guard
                               scroll.documentView?.frame.size != self.documentSize || scroll.contentView.bounds.size != self.viewportSize else { return }
                         self.scheduleConfiguration()
                     })
@@ -276,6 +355,19 @@ final class ChatScrollStyleProbe: NSView {
         documentSize = document; viewportSize = viewport
         // Never move a reader who scrolled into history.
         if shouldPin { pin(scroll) }
+    }
+    /// Verification geometry (LKM-139): offsets below the top of the content,
+    /// whichever way the document is flipped, and the end AppKit allows.
+    static func metrics(_ scroll: NSScrollView) -> [String: Any] {
+        guard let document = scroll.documentView else { return [:] }
+        let clip = scroll.contentView
+        var end = clip.bounds
+        end.origin.y = document.isFlipped ? document.frame.maxY : document.frame.minY - end.height
+        end = clip.constrainBoundsRect(end)
+        func offset(_ rect: NSRect) -> CGFloat { document.isFlipped ? rect.minY - document.frame.minY : document.frame.maxY - rect.maxY }
+        return ["offset": offset(clip.bounds), "maxOffset": offset(end), "documentHeight": document.frame.height,
+                "viewportHeight": clip.bounds.height, "documentID": String(UInt(bitPattern: ObjectIdentifier(document).hashValue)),
+                "scrollID": String(UInt(bitPattern: ObjectIdentifier(scroll).hashValue))]
     }
     static func distanceFromEnd(_ scroll: NSScrollView) -> CGFloat {
         guard let document = scroll.documentView else { return 0 }
@@ -297,6 +389,18 @@ final class ChatScrollStyleProbe: NSView {
         clip.scroll(to: NSPoint(x: clip.bounds.minX, y: origin.y))
         scroll.reflectScrolledClipView(clip)
         return true
+    }
+    /// Pulls an offset outside the document back inside it. Returns nil when it
+    /// was inside, else whether it now rests at the end (not the top).
+    static func clampToContent(_ scroll: NSScrollView) -> Bool? {
+        guard let document = scroll.documentView else { return nil }
+        let clip = scroll.contentView
+        let origin = clip.constrainBoundsRect(clip.bounds).origin
+        guard abs(origin.y - clip.bounds.minY) >= 0.5 else { return nil }
+        let pastEnd = document.isFlipped ? clip.bounds.minY > origin.y : clip.bounds.minY < origin.y
+        clip.scroll(to: NSPoint(x: clip.bounds.minX, y: origin.y))
+        scroll.reflectScrolledClipView(clip)
+        return pastEnd
     }
     /// Style from the environment (system unless a test overrides it). The
     /// appearance is never set, so AppKit keeps drawing macOS contrast itself.
