@@ -121,6 +121,8 @@ export async function checkVisibleSettings(host: NativeBridge, artifacts: string
   assert.equal(initial.values.projectUi, 'false')
   assert.equal(initial.values.engine, 'agent')
   assert.equal(initial.values.claudePlugins, 'false', 'Claude plugins are off in a new profile (LKM-138)')
+  // LKM-143: General shows the version stamped into this build, as `trezi --version` prints it.
+  assert.match(initial.values.version ?? '', /^Trezi \d+\.\d+\.\d+\S* \(build \d+, [0-9a-f]{7,}\)$/, 'General shows the built version')
   assertSidebarParity(initial.sourceList, projects)
   writeFileSync(
     join(artifacts, 'settings-sidebar-parity.json'),

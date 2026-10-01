@@ -11,6 +11,15 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Tests: `test/signing-identity.mjs`, `test/keychain-migration.mjs`, `test/provider-login.mjs` `helper-cwd`. Docs: README "Code signing" (one more Keychain approval, then none), `docs/PROVIDERS.md`, `docs/agent-guide/legacy-names.md`.
 - [x] Review fixes: an identity that cannot sign (locked keychain, denied key access) re-signs every piece ad hoc with the one warning instead of failing the build; a real "Trezi Local" signature in a temporary keychain proves the designated requirement is the same across two builds.
 - [ ] Manager/operator: after this build, confirm on the operator Mac that `codesign -d -r- out/native/Trezi.app` stays the same across two rebuilds, and that the Keychain asks once and then not again.
+## Versioning: SemVer, changelog, tags and app version (LKM-143)
+
+- [x] package.json `version` is the one SemVer source; build number = commit count of HEAD, plus the short sha (`scripts/version.mjs`).
+- [x] Trezi.app and the XPC service Info.plists carry CFBundleShortVersionString, CFBundleVersion and `TreziCommit` (no hard-coded 1); the backend and provider-helper bundles carry the label.
+- [x] `trezi --version`, Settings › General › Version and About Trezi show "Trezi X.Y.Z (build N, sha)".
+- [x] CHANGELOG.md (Keep a Changelog, Unreleased, seeded), union merge, AGENTS.md rule.
+- [x] `bun run release <major|minor|patch>`: main + clean tree only; bumps, moves Unreleased, commits, annotated tag, no push.
+- [x] CI `scripts/check-version.mjs`; `test/versioning.mjs` (unit) covers the release script in a temp repo and the plist values.
+- [ ] Cut the first native release from main: `bun run release minor` → 0.1.0 (maintainer, after merge).
 ## Short paths; chat worktree cleanup (LKM-136)
 
 - [x] One display-path formatter (`src/shared/display-path.ts`): project-relative paths, "chat workspace" / "Trezi data" / "temporary patch" / "recovery copy" labels, never truncated mid-path.

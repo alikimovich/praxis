@@ -23,6 +23,10 @@ jobs:
         with:
           bun-version: 1.3.x
 
+      # package.json version is SemVer and CHANGELOG.md has an Unreleased section (LKM-143).
+      - name: Version and changelog
+        run: bun scripts/check-version.mjs
+
       - name: Toolchain
         run: |
           xcode-select -p

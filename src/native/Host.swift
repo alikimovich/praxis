@@ -124,6 +124,8 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             let item = NSMenuItem(); item.title = title; let sub = NSMenu(title: title); item.submenu = sub; menu.addItem(item); return sub
         }
         let appMenu = submenu("Trezi")
+        let about = NSMenuItem(title: "About Trezi", action: #selector(showAbout(_:)), keyEquivalent: ""); about.target = self; appMenu.addItem(about)
+        appMenu.addItem(.separator())
         let settings = NSMenuItem(title: "Settings…", action: #selector(menuAction(_:)), keyEquivalent: ","); settings.representedObject = "settings"; settings.target = self; appMenu.addItem(settings)
         appMenu.addItem(withTitle: "Quit Trezi", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let file = submenu("File")
@@ -150,6 +152,12 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             item.target = self; item.representedObject = action; item.keyEquivalentModifierMask = [.command, .option]; develop.addItem(item)
         }
         NSApp.mainMenu = menu
+    }
+    /// The standard panel reads "Version 0.1.0 (build N, <short sha>)" from the Info.plist the build stamps (LKM-143).
+    @objc func showAbout(_ sender: Any?) {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let build = info["CFBundleVersion"] as? String ?? "", commit = info["TreziCommit"] as? String ?? ""
+        NSApp.orderFrontStandardAboutPanel(options: [.applicationVersion: commit.isEmpty ? build : "build \(build), \(commit)"])
     }
     @objc func menuAction(_ item: NSMenuItem) {
         let action = item.representedObject as? String ?? ""

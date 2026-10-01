@@ -28,9 +28,11 @@ assert.equal(platformProblems({ platform: 'darwin', macos: '12.0', sdk: '15.0', 
 
 // One source: the build stamps it, package.json agrees, every entry point enforces it.
 const build = read('scripts/build-native.mjs')
-assert.doesNotMatch(build, /macosx1\d\.\d|<string>1\d\.\d<\/string>/, 'no literal deployment target left in the build')
+const plists = read('scripts/service-info.mjs')
+assert.doesNotMatch(build + plists, /macosx1\d\.\d|<string>1\d\.\d<\/string>/, 'no literal deployment target left in the build')
 assert.match(build, /apple-macosx\$\{MIN_MACOS\}/)
-assert.match(build, /LSMinimumSystemVersion<\/key><string>\$\{MIN_MACOS\}/)
+assert.match(plists, /LSMinimumSystemVersion<\/key><string>\$\{MIN_MACOS\}/)
+assert.match(build, /appInfoPlist\(info\)/, 'the build writes the app plist with the minimum')
 assert.match(build, /requireSupportedPlatform\(\{ sdk: true \}\)/, 'the build checks the SDK before compiling')
 assert.equal(JSON.parse(read('package.json')).engines.bun, `>=${MIN_BUN}`)
 for (const entry of ['scripts/start-native.mjs', 'scripts/dev-native.mjs', 'bin/trezi.mjs'])
