@@ -217,7 +217,8 @@ rebuilds, so macOS keeps your Keychain and privacy approvals:
    `install.sh`) creates once in your login keychain. Only codesign may use its private
    key, and it is not added to any trust settings.
 
-When none can be used or created, the build signs ad hoc and prints one line starting
+When none can be used or created, or the identity cannot sign (a locked login keychain over
+SSH, a denied key-access prompt), the build signs every piece ad hoc and prints one line starting
 `warning: signing Trezi ad hoc`; macOS then asks again after every rebuild. Check the
 designated requirement with `codesign -d -r- out/native/Trezi.app`: with Trezi Local it
 is `identifier "<bundle ID>" and certificate leaf = H"…"`, the same after every rebuild.

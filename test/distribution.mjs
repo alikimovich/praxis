@@ -51,7 +51,8 @@ assert.match(build, /Resources\/backend/)
 assert.match(build, /XPCServices\/dev\.trezi\.service\.xpc\/Contents/)
 assert.match(build, /copyFileSync\(join\(serviceContents, 'MacOS\/TreziService'\), join\(out, 'TreziService'\)\)/)
 // Trezi.app carries the Bun it runs, so `open -a Trezi` needs no installed Bun.
-assert.ok(build.indexOf('bundleBun(contents, { signer })') > 0, 'the build bundles Bun into Trezi.app')
+assert.ok(build.indexOf('bundleBun(contents, { signer: current })') > 0, 'the build bundles Bun into Trezi.app')
+assert.match(build, /signWithFallback\(signingIdentity\(/, 'a failing identity falls back to ad hoc instead of failing the build')
 assert.match(build, /src\/native\/HostLaunch\.swift/)
 // LKM-137: one signer for the whole app; the Keychain helper is its own binary.
 assert.match(build, /src\/native\/Secrets\.swift'\), '-o', join\(contents, 'Helpers\/TreziSecrets'\)/)

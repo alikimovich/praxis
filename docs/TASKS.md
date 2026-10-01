@@ -9,6 +9,7 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Keychain work moved to its own stable binary `Contents/Helpers/TreziSecrets` (`src/native/Secrets.swift`). The master key migrates once from the earlier item to `dev.trezi.native.secrets`, and the old item is deleted only after the write. New items get an access list that trusts the helper.
 - [x] Photos trigger: Check login without a project ran the helper and `claude auth status` with cwd `$HOME`. Helpers never run in a home, `/` or an ancestor (`ProviderHelperProcess.workingDirectory`). Check login, the login-shell probe and `skills add -g` use the temporary folder.
 - [x] Tests: `test/signing-identity.mjs`, `test/keychain-migration.mjs`, `test/provider-login.mjs` `helper-cwd`. Docs: README "Code signing" (one more Keychain approval, then none), `docs/PROVIDERS.md`, `docs/agent-guide/legacy-names.md`.
+- [x] Review fixes: an identity that cannot sign (locked keychain, denied key access) re-signs every piece ad hoc with the one warning instead of failing the build; a real "Trezi Local" signature in a temporary keychain proves the designated requirement is the same across two builds.
 - [ ] Manager/operator: after this build, confirm on the operator Mac that `codesign -d -r- out/native/Trezi.app` stays the same across two rebuilds, and that the Keychain asks once and then not again.
 ## Preview inspection tools; the WebKit preview over external browsers (LKM-138)
 

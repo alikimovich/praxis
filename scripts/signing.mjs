@@ -99,6 +99,10 @@ export function createLocalIdentity({ keychain = loginKeychain(), run = exec } =
   }
 }
 
+/** The one warning line printed whenever a build signs ad hoc instead of with an identity. */
+export const adhocWarning = reason =>
+  `warning: signing Trezi ad hoc (${reason}); macOS will ask again for Keychain and privacy access after each rebuild. See README "Code signing".`
+
 /**
  * The signer for this build. `create: false` uses an existing identity but never makes
  * one (test builds must not change the user's keychain). Never throws: any failure
@@ -106,7 +110,7 @@ export function createLocalIdentity({ keychain = loginKeychain(), run = exec } =
  */
 export function signingIdentity({ env = process.env, keychain = loginKeychain(), create = true, run = exec, warn = message => console.warn(message) } = {}) {
   const fallback = reason => {
-    warn(`warning: signing Trezi ad hoc (${reason}); macOS will ask again for Keychain and privacy access after each rebuild. See README "Code signing".`)
+    warn(adhocWarning(reason))
     return { kind: 'adhoc' }
   }
   try {
@@ -141,6 +145,26 @@ export function codesignArgs(signer, path, identifier) {
 export function sign(signer, path, identifier, run = exec) {
   const result = run('/usr/bin/codesign', codesignArgs(signer, path, identifier))
   if (result.status !== 0) throw new Error(`codesign ${path}: ${(result.stderr || result.stdout).trim()}`)
+}
+
+/**
+ * Runs `work(signer)`, which signs every piece. When signing with an identity fails (a
+ * locked login keychain over SSH, a denied key-access prompt, a deleted certificate), the
+ * whole of `work` runs again ad hoc, as before this build had identities, with the one
+ * warning line. An ad hoc failure is a real error and is thrown. Returns the signer used.
+ */
+export function signWithFallback(signer, work, { warn = message => console.warn(message) } = {}) {
+  try {
+    work(signer)
+    return signer
+  } catch (error) {
+    if (signer.kind === 'adhoc') throw error
+    const reason = String(error instanceof Error ? error.message : error).split('\n').map(line => line.trim()).filter(Boolean).join(' ')
+    warn(adhocWarning(`signing with "${signer.name}" failed: ${reason}`))
+    const adhoc = { kind: 'adhoc' }
+    work(adhoc)
+    return adhoc
+  }
 }
 
 export function describeSigner(signer) {

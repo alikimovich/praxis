@@ -676,8 +676,10 @@ The chat sessions already ran in the chat's worktree, and Trezi uses only NSOpen
 NSSavePanel for files; nothing in Trezi calls a Photos API.
 
 **Tests.** `test/signing-identity.mjs` (identity choice, override, every ad hoc fallback
-with exactly one warning line, the stable designated requirement, a real ad hoc sign and
-a real "Trezi Local" in a temporary keychain); `test/keychain-migration.mjs` (the real
+with exactly one warning line, an identity that cannot sign falling back to ad hoc for
+every piece with that one warning, the stable designated requirement, a real ad hoc sign,
+and a real "Trezi Local" in a temporary keychain that signs two builds with the same
+`codesign -d -r-` requirement); `test/keychain-migration.mjs` (the real
 helper against a temporary keychain: migrate once with no data loss, later runs, a fresh
 profile, an invalid old key); `test/provider-login.mjs` `helper-cwd` (Check login with a
 home, `/`, an ancestor of a home or a missing folder never runs in it). The keychain

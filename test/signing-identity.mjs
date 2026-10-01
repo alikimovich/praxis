@@ -6,11 +6,11 @@
 // temporary keychain (skipped, and said so, where no keychain can be created).
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  codesignArgs, createLocalIdentity, designatedRequirement, LOCAL_IDENTITY, parseIdentities, pickIdentity, sign, signingIdentity
+  codesignArgs, createLocalIdentity, designatedRequirement, LOCAL_IDENTITY, parseIdentities, pickIdentity, sign, signingIdentity, signWithFallback
 } from '../scripts/signing.mjs'
 
 const APPLE = 'A1'.repeat(20), REVOKED = 'B2'.repeat(20), LOCAL = 'C3'.repeat(20), EXPIRED = 'D4'.repeat(20)
@@ -99,6 +99,41 @@ for (const [label, setup, extra, reason] of [
 }
 console.log('SIGNING-IDENTITY choice PASS')
 
+// A chosen identity that cannot sign (locked keychain, denied key access, a deleted
+// certificate) must not fail the build: every piece is signed again ad hoc, with one warning.
+{
+  const identity = { kind: 'local', hash: LOCAL, name: LOCAL_IDENTITY }
+  const pieces = ['Helpers/TreziSecrets', 'TreziService', 'Trezi.app']
+  const attempt = ({ denyIdentity = true, denyAdhoc = false } = {}) => {
+    const signed = [], warnings = []
+    const run = (command, args) => {
+      assert.equal(command, '/usr/bin/codesign')
+      const adhoc = args[args.indexOf('--sign') + 1] === '-', path = args.at(-1)
+      if (adhoc ? denyAdhoc : denyIdentity && path === 'TreziService') // the identity fails on the second piece
+        return { status: 1, stdout: '', stderr: `${path}: errSecInternalComponent\nsecond line\n` }
+      signed.push(`${adhoc ? 'adhoc' : 'identity'}:${path}`)
+      return { status: 0, stdout: '', stderr: '' }
+    }
+    const used = () => signWithFallback(identity, current => { for (const piece of pieces) sign(current, piece, 'dev.trezi.x', run) }, { warn: line => warnings.push(line) })
+    return { signed, warnings, used, run }
+  }
+  const failing = attempt()
+  assert.deepEqual(failing.used(), { kind: 'adhoc' }, 'the build ends ad hoc')
+  assert.deepEqual(failing.signed, ['identity:Helpers/TreziSecrets', 'adhoc:Helpers/TreziSecrets', 'adhoc:TreziService', 'adhoc:Trezi.app'],
+    'every piece is signed again ad hoc, including the one the identity had already signed')
+  assert.equal(failing.warnings.length, 1, 'exactly one warning line')
+  assert.match(failing.warnings[0], adhocWarning)
+  assert.match(failing.warnings[0], /signing with "Trezi Local" failed: codesign TreziService: TreziService: errSecInternalComponent second line\)/)
+  assert.ok(!failing.warnings[0].includes('\n'))
+  const healthy = attempt({ denyIdentity: false })
+  assert.deepEqual(healthy.used(), identity); assert.deepEqual(healthy.warnings, [])
+  assert.ok(healthy.signed.every(item => item.startsWith('identity:')))
+  const broken = attempt({ denyIdentity: false, denyAdhoc: true })
+  assert.throws(() => signWithFallback({ kind: 'adhoc' }, current => { for (const piece of pieces) sign(current, piece, 'dev.trezi.x', broken.run) },
+    { warn: () => assert.fail('an ad hoc failure has no fallback to warn about') }), /errSecInternalComponent/, 'an ad hoc failure is a real error')
+  console.log('SIGNING-IDENTITY sign-fallback PASS')
+}
+
 // The designated requirement is a function of the identifier and the certificate only,
 // so every rebuild with the same identity carries the same one.
 const local = { kind: 'local', hash: LOCAL, name: LOCAL_IDENTITY }
@@ -138,6 +173,34 @@ try {
       assert.equal(picked?.kind, 'local', JSON.stringify(found))
       assert.match(picked.hash, /^[0-9A-F]{40}$/)
       console.log('SIGNING-IDENTITY local-identity PASS')
+
+      // Real signatures with that identity: two "rebuilds" (different bytes, same identifier)
+      // carry the same designated requirement, pinned to the identifier and the certificate.
+      // codesign only finds an identity in its keychain search list, and `--keychain` does not
+      // add one, so it runs with a private HOME whose search list is the temporary keychain:
+      // the user's own search list is never touched.
+      const home = join(scratch, 'home')
+      mkdirSync(join(home, 'Library/Preferences'), { recursive: true })
+      const env = { ...process.env, HOME: home }
+      assert.equal(spawnSync('/usr/bin/security', ['list-keychains', '-d', 'user', '-s', keychain], { env }).status, 0)
+      const run = (command, args) => {
+        const result = spawnSync(command, args, { encoding: 'utf8', env })
+        return { status: result.status, stdout: result.stdout, stderr: result.stderr }
+      }
+      const builds = ['first', 'second'].map(name => {
+        const path = join(scratch, `build-${name}`)
+        copyFileSync(name === 'first' ? '/usr/bin/true' : '/usr/bin/false', path) // two builds: different code, same identifier
+        sign(picked, path, 'dev.trezi.secrets', run)
+        assert.equal(spawnSync('/usr/bin/codesign', ['--verify', path]).status, 0)
+        const designated = spawnSync('/usr/bin/codesign', ['-d', '-r-', path], { encoding: 'utf8' })
+        const detail = spawnSync('/usr/bin/codesign', ['-dvvv', path], { encoding: 'utf8' }).stderr
+        return { designated: designated.stdout.trim(), detail }
+      })
+      const expected = `designated => identifier "dev.trezi.secrets" and certificate leaf = H"${picked.hash.toLowerCase()}"`
+      assert.equal(builds[0].designated, expected)
+      assert.equal(builds[1].designated, builds[0].designated, 'a rebuild keeps the designated requirement')
+      for (const { detail } of builds) assert.match(detail, new RegExp(`Authority=${LOCAL_IDENTITY}`))
+      console.log('SIGNING-IDENTITY local-signature PASS')
     } finally {
       spawnSync('/usr/bin/security', ['delete-keychain', keychain])
     }

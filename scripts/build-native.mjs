@@ -6,7 +6,7 @@ import { bundleBun } from './bundle-bun.mjs'
 import { serviceInfoPlist } from './service-info.mjs'
 import { build as bundle } from 'esbuild'
 import { MIN_MACOS, requireSupportedPlatform } from './requirements.mjs'
-import { describeSigner, designatedRequirement, sign, signingIdentity } from './signing.mjs'
+import { describeSigner, designatedRequirement, sign, signingIdentity, signWithFallback } from './signing.mjs'
 
 requireSupportedPlatform({ sdk: true })
 const target = `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx${MIN_MACOS}`
@@ -198,20 +198,23 @@ const secrets = Bun.spawnSync([
 if (secrets.exitCode) process.exit(secrets.exitCode)
 // One stable identity for every piece (LKM-137), so Keychain and privacy grants survive
 // rebuilds. Test builds use an existing identity but never create one.
-const signer = signingIdentity({ create: process.env.TREZI_SIGN_CREATE !== '0' })
-bundleBun(contents, { signer })
-for (const [path, identifier] of [
-  [join(contents, 'Helpers/TreziSecrets'), 'dev.trezi.secrets'],
-  [join(out, 'TreziService'), 'dev.trezi.service'],
-  [join(contents, 'XPCServices/dev.trezi.service.xpc'), 'dev.trezi.service'],
-  [join(out, 'Trezi.app'), 'dev.praxis.native']
-]) {
-  try {
-    sign(signer, path, identifier)
-  } catch (error) {
-    console.error(error.message)
-    process.exit(1)
-  }
+// A chosen identity that cannot sign (locked login keychain over SSH, denied key access, a
+// deleted certificate) re-signs every piece ad hoc with the one warning: a build that
+// worked before identities still works.
+let signer
+try {
+  signer = signWithFallback(signingIdentity({ create: process.env.TREZI_SIGN_CREATE !== '0' }), current => {
+    bundleBun(contents, { signer: current })
+    for (const [path, identifier] of [
+      [join(contents, 'Helpers/TreziSecrets'), 'dev.trezi.secrets'],
+      [join(out, 'TreziService'), 'dev.trezi.service'],
+      [join(contents, 'XPCServices/dev.trezi.service.xpc'), 'dev.trezi.service'],
+      [join(out, 'Trezi.app'), 'dev.praxis.native']
+    ]) sign(current, path, identifier)
+  })
+} catch (error) {
+  console.error(error.message)
+  process.exit(1)
 }
 console.log(`Signed Trezi: ${describeSigner(signer)}${designatedRequirement(signer, 'dev.praxis.native') ? `, ${designatedRequirement(signer, 'dev.praxis.native')}` : ''}`)
 if (/require\(["']electron["']\)/.test(readFileSync(join(backendDir, 'index.cjs'), 'utf8')))
