@@ -53,14 +53,20 @@ assert.match(build, /Resources\/backend/)
 assert.match(build, /XPCServices\/dev\.trezi\.service\.xpc\/Contents/)
 assert.match(build, /copyFileSync\(join\(serviceContents, 'MacOS\/TreziService'\), join\(out, 'TreziService'\)\)/)
 // Trezi.app carries the Bun it runs, so `open -a Trezi` needs no installed Bun.
-assert.ok(build.indexOf('bundleBun(contents)') > 0, 'the build bundles Bun into Trezi.app')
+assert.ok(build.indexOf('bundleBun(contents, { signer: current })') > 0, 'the build bundles Bun into Trezi.app')
+assert.match(build, /signWithFallback\(signingIdentity\(/, 'a failing identity falls back to ad hoc instead of failing the build')
 assert.match(build, /src\/native\/HostLaunch\.swift/)
+// LKM-137: one signer for the whole app; the Keychain helper is its own binary.
+assert.match(build, /src\/native\/Secrets\.swift'\), '-o', join\(contents, 'Helpers\/TreziSecrets'\)/)
+assert.ok(build.indexOf('signingIdentity(') < build.indexOf('bundleBun(contents'), 'the signer is chosen before anything is signed')
+assert.doesNotMatch(build, /'--sign', '-'/, 'no hard-coded ad hoc signature left in the build')
+assert.match(read('src/service/ServiceRuntime.swift'), /Contents\/Helpers\/TreziSecrets/)
 
 // A present build carries the same values (skipped, and said so, when there is none).
 const plist = join(out, 'Trezi.app/Contents/Info.plist')
 if (existsSync(plist)) {
   assert.match(readFileSync(plist, 'utf8'), new RegExp(`LSMinimumSystemVersion</key><string>${MIN_MACOS.replace('.', '\\.')}</string>`))
-  for (const path of ['Trezi.app/Contents/MacOS/TreziHost', 'Trezi.app/Contents/Helpers/bun', 'Trezi.app/Contents/XPCServices/dev.trezi.service.xpc/Contents/MacOS/TreziService', 'TreziService', 'Trezi.app/Contents/Resources/backend/index.cjs', 'Trezi.app/Contents/Resources/backend/provider-helper.cjs'])
+  for (const path of ['Trezi.app/Contents/MacOS/TreziHost', 'Trezi.app/Contents/Helpers/bun', 'Trezi.app/Contents/Helpers/TreziSecrets', 'Trezi.app/Contents/XPCServices/dev.trezi.service.xpc/Contents/MacOS/TreziService', 'TreziService', 'Trezi.app/Contents/Resources/backend/index.cjs', 'Trezi.app/Contents/Resources/backend/provider-helper.cjs'])
     assert.ok(existsSync(join(out, path)), `the build contains ${path}`)
   // An upgrade leaves no service registered under an earlier identifier.
   assert.deepEqual(readdirSync(join(out, 'Trezi.app/Contents/XPCServices')), ['dev.trezi.service.xpc'])

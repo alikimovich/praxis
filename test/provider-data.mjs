@@ -1,7 +1,7 @@
 // LKM-102 provider data: the Swift provider owner (compiled fixture, `ProviderData.swift`),
 // the only writer since LKM-111, against the answers and bytes its removed Bun twins
 // recorded (`fixtures/provider-owner/data-golden.json`), and a v10 connection end to end.
-// No provider SDK, no network, no Keychain: a scripted stand-in for `TreziHost --crypto`,
+// No provider SDK, no network, no Keychain: a scripted stand-in for `TreziSecrets --crypto`,
 // a fake `codex` binary and a fake Codex SDK.
 // - connections: saves and removes write the recorded `providers.json` bytes (key kept on
 //   a path edit, dropped on an origin change, a corrupt file kept as `.corrupt`); refusals

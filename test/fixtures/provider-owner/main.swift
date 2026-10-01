@@ -42,7 +42,7 @@ if let value = env["PROVIDER_FIRST_EVENT"].flatMap(Double.init) { options.firstE
 if let value = env["PROVIDER_REPLY"].flatMap(Double.init) { options.replyTimeout = value }
 if let value = env["PROVIDER_STILL"].flatMap(Double.init) { options.stillThinking = value }
 if let value = env["PROVIDER_MAX_LINE"].flatMap(Int.init) { options.maxLine = value }
-// Provider data: PROVIDER_CRYPTO stands in for `TreziHost --crypto` (`\u{1f}`-separated
+// Provider data: PROVIDER_CRYPTO stands in for `TreziSecrets --crypto` (`\u{1f}`-separated
 // argv prefix), PROVIDER_NOW pins the catalog clock, the environment names TREZI_CODEX_BIN.
 options.data = ProviderData.Tools(crypto: env["PROVIDER_CRYPTO"].map { $0.split(separator: "\u{1f}").map(String.init) },
     checkout: env["PROVIDER_CHECKOUT"], environment: env)

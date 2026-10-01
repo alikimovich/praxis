@@ -148,7 +148,7 @@ src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
                   Claude, Codex and Gemini adapters always run in those helpers
                   (main/backends/provider-helper-entry.ts); v10 connections stay in Bun
                   (main/provider-sessions.ts wires every session). ProviderData.swift (LKM-102) writes
-                  the connections store (keys via `TreziHost --crypto`), the model catalog
+                  the connections store (keys via `TreziSecrets --crypto`), the model catalog
                   cache and runs the Codex model probe on the SDK's vendored binary, behind
                   main/provider-data.ts. Bun's client is native/provider-service.ts behind
                   main/provider-owner.ts; the provider-owner goldens pin its answers

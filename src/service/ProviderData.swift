@@ -5,8 +5,8 @@ import Darwin
 /// - v10 connections, `<profile>/trezi/providers.json` (twin of `main/providers-store.ts`):
 ///   byte-identical file (`JSON.stringify(body, null, 2)`, mode 0600, tmp + rename), an
 ///   unparseable file moved to `.corrupt` before the first write, untouched entries
-///   rewritten exactly as parsed. A key is encrypted with the host's Keychain helper
-///   (`TreziHost --crypto`, the secret on stdin, never argv) and a key never follows an
+///   rewritten exactly as parsed. A key is encrypted with the app's Keychain helper
+///   (`Helpers/TreziSecrets --crypto`, the secret on stdin, never argv) and a key never follows an
 ///   origin change. A key never appears in a reply other than `connectionSecret`, nor
 ///   in any error text.
 /// - the built-in seats' model catalogs, `<profile>/trezi/model-catalog.json` (twin of

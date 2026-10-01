@@ -7,6 +7,7 @@ import { appInfoPlist, serviceInfoPlist } from './service-info.mjs'
 import { buildInfo, versionLabel } from './version.mjs'
 import { build as bundle } from 'esbuild'
 import { MIN_MACOS, requireSupportedPlatform } from './requirements.mjs'
+import { describeSigner, designatedRequirement, sign, signingIdentity, signWithFallback } from './signing.mjs'
 
 requireSupportedPlatform({ sdk: true })
 const target = `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx${MIN_MACOS}`
@@ -28,6 +29,7 @@ const outDirname = {
 }
 mkdirSync(join(contents, 'MacOS'), { recursive: true })
 mkdirSync(join(contents, 'Resources'), { recursive: true })
+mkdirSync(join(contents, 'Helpers'), { recursive: true })
 copyFileSync(join(root, 'build/icon.icns'), join(contents, 'Resources/Trezi.icns'))
 writeFileSync(join(contents, 'Resources/cat.json'), JSON.stringify(nativeCatAssets(root)))
 const device = readFileSync(join(root, 'src/shared/iphone-frame.ts'), 'utf8').match(/FRAME_DATA_URI = '([^']+)'/)[1]
@@ -175,11 +177,34 @@ const result = Bun.spawnSync(
   { stdout: 'inherit', stderr: 'inherit' }
 )
 if (result.exitCode) process.exit(result.exitCode)
-bundleBun(contents)
-for (const path of [join(out, 'TreziService'), join(contents, 'XPCServices/dev.trezi.service.xpc'), join(out, 'Trezi.app')]) {
-  const signed = Bun.spawnSync(['codesign', '--force', '--sign', '-', path], { stdout: 'inherit', stderr: 'inherit' })
-  if (signed.exitCode) process.exit(signed.exitCode)
+// The Keychain helper is its own small executable (src/native/Secrets.swift) so that it
+// compiles to the same bytes on every rebuild and keeps the user's Keychain approval.
+const secrets = Bun.spawnSync([
+  'xcrun', 'swiftc', '-O', '-target', target, '-module-cache-path', join(out, 'module-cache'),
+  '-suppress-warnings', join(root, 'src/native/Secrets.swift'), '-o', join(contents, 'Helpers/TreziSecrets'), '-framework', 'Security', '-framework', 'CryptoKit'
+], { stdout: 'inherit', stderr: 'inherit' })
+if (secrets.exitCode) process.exit(secrets.exitCode)
+// One stable identity for every piece (LKM-137), so Keychain and privacy grants survive
+// rebuilds. Test builds use an existing identity but never create one.
+// A chosen identity that cannot sign (locked login keychain over SSH, denied key access, a
+// deleted certificate) re-signs every piece ad hoc with the one warning: a build that
+// worked before identities still works.
+let signer
+try {
+  signer = signWithFallback(signingIdentity({ create: process.env.TREZI_SIGN_CREATE !== '0' }), current => {
+    bundleBun(contents, { signer: current })
+    for (const [path, identifier] of [
+      [join(contents, 'Helpers/TreziSecrets'), 'dev.trezi.secrets'],
+      [join(out, 'TreziService'), 'dev.trezi.service'],
+      [join(contents, 'XPCServices/dev.trezi.service.xpc'), 'dev.trezi.service'],
+      [join(out, 'Trezi.app'), 'dev.praxis.native']
+    ]) sign(current, path, identifier)
+  })
+} catch (error) {
+  console.error(error.message)
+  process.exit(1)
 }
+console.log(`Signed Trezi: ${describeSigner(signer)}${designatedRequirement(signer, 'dev.praxis.native') ? `, ${designatedRequirement(signer, 'dev.praxis.native')}` : ''}`)
 if (/require\(["']electron["']\)/.test(readFileSync(join(backendDir, 'index.cjs'), 'utf8')))
   throw new Error('Native backend still imports Electron')
 console.log(

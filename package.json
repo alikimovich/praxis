@@ -70,6 +70,8 @@
     "test:annotation-store": "bun test/annotation-store.mjs",
     "test:retirement-census": "bun test/retirement-census.mjs",
     "test:distribution": "bun test/distribution.mjs",
+    "test:signing-identity": "bun test/signing-identity.mjs",
+    "test:keychain-migration": "bun test/keychain-migration.mjs",
     "test:install-update": "bun test/install-update.mjs",
     "test:project-icon": "bun test/project-icon.mjs",
     "test:providers": "bun test/providers-store.mjs",

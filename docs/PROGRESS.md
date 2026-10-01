@@ -2,6 +2,33 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-01 — LKM-137 repair: `service-process` unit timeout under parallel swiftc
+
+- Manager quick verification timed out `service-process` at 120 s right after the control-codec PASS line while `service-contract`, `operation-ledger` and `preferences-owner` compiled Swift in parallel. The XPC half had not started yet; this was wall-clock contention, not a new service hang.
+- `test/run.mjs` now runs `service-process` as an exclusive unit barrier (no parallel workers) with a 240 s budget. `docs/TESTING.md` documents both.
+
+## 2026-10-01 — LKM-137 (review fixes): a failing identity falls back to ad hoc; real-signature proof
+
+- **Build regression.** A chosen identity that could not sign (locked login keychain over SSH, a denied key-access prompt, a deleted certificate) made the build exit 1, where the ad hoc build always worked. `signWithFallback` (`scripts/signing.mjs`) now runs the whole signing step (bundled Bun, `TreziSecrets`, the service, the app) and, when any piece fails with an identity, runs it again ad hoc for every piece. It prints the one `warning: signing Trezi ad hoc (signing with "<identity>" failed: <codesign message>)…` line, so a build never prints more than one warning (`signingIdentity` returns ad hoc without it re-warning). An ad hoc failure is still a real error.
+- **Proof of the main criterion.** `test/signing-identity.mjs` `local-signature` signs two different binaries with the real "Trezi Local" identity from a temporary keychain and requires the same `codesign -d -r-` output, equal to `identifier "dev.trezi.secrets" and certificate leaf = H"<hash>"`, and `Authority=Trezi Local`. `--keychain` does not make codesign find an identity (it fails with "no identity found"), so it runs with a private `HOME` whose keychain search list is the temporary keychain; the user's search list is not touched. The `sign-fallback` part uses a stub `run` that fails the identity on the second piece and checks that every piece is signed again ad hoc with exactly one warning.
+
+## 2026-10-01 — LKM-137: stable app identity, one Keychain approval, no Photos prompt
+
+- **Why every rebuild asked again.** The build signed ad hoc, so every rebuild was a new app to macOS. `scripts/signing.mjs` now picks one identity: `TREZI_SIGN_IDENTITY` (`-` = ad hoc), else a valid Apple Development identity, else "Trezi Local". The first build (or `install.sh`) creates "Trezi Local" once in the login keychain: a self-signed code-signing certificate whose key only codesign may use. `build-native.mjs` signs `Helpers/TreziSecrets`, the XPC service and Trezi.app with it, and the bundled Bun unless Bun keeps its own Developer ID signature. A "Trezi Local" build pins the designated requirement to `identifier … and certificate leaf = H"…"`. When no identity can be used or created, the build signs ad hoc and prints one `warning: signing Trezi ad hoc (…)` line. `dev-native --test` builds never create the identity (`TREZI_SIGN_CREATE=0`).
+- **Why the signature alone was not enough for the Keychain.** A throwaway probe item showed this. In the login keychain, an item made by a binary without an Apple team ID gets a `cdhash:` partition. A rebuilt self-signed binary therefore cannot read it (-25293), even when its ACL requirement matches; a custom SecAccess did not help. So the Keychain work left TreziHost (`--crypto` removed) for its own executable, `Contents/Helpers/TreziSecrets` (`src/native/Secrets.swift`). swiftc builds it to the same bytes each time (checked across paths), so its code hash, and an "Always Allow", survive rebuilds. The service resolves it in `ServiceRuntime.swift`.
+- **Migration.** The key moves from the earlier item to `dev.trezi.native.secrets` once: read the old item, write the new one (access list trusting the helper), and delete the old one only after that write worked. If another helper wrote first, its key is used. If the write fails, the old item stays and is used. Users approve the Keychain once more after this change, then not again (README "Code signing").
+- **Photos.** Settings → Check login sent no root, so `providers:check-login` used `homedir()`. The service then started the provider helper, and `claude auth status`, with cwd `$HOME`. From there the CLI's look through its cwd reaches `~/Pictures/Photos Library.photoslibrary`, which matches the reported cwd `/Users/<user>`. The TCC log on hand (about 24 h) had no Trezi Photos request, so this comes from the code path, not a captured event. Fixes:
+  - `ProviderHelperProcess.workingDirectory` refuses a home (any spelling), `/`, an ancestor of a home, or a missing folder, and uses a private 0700 `$TMPDIR/trezi-helper` instead;
+  - Check login without a project passes `tmpdir()`;
+  - `HostLaunch.run` (the login-shell probe) and `npx skills add -g` run in the temporary folder.
+
+  File pickers were already NSOpenPanel/NSSavePanel, and chats already run in their worktree.
+- **Proof.**
+  - `test/signing-identity.mjs` (unit, new): choice and override, every ad hoc fallback with exactly one warning, a stable DR, a real ad hoc sign, and a real "Trezi Local" in a temporary keychain.
+  - `test/keychain-migration.mjs` (unit, new): the compiled helper on a temporary keychain migrates once with no data loss; a later old item is not migrated again; a fresh profile and an invalid old key are covered.
+  - `test/provider-login.mjs` `helper-cwd`: a home, `/`, an ancestor or a missing root never becomes the helper's cwd, and a project root is kept.
+  - `test/distribution.mjs`: the signer, the helper path and no hard-coded ad hoc signing.
+  - The keychain parts need a session that can create a keychain. In a sandbox they print SKIP; the agent ran them unsandboxed and they passed. Verify quick ran them for real.
 ## 2026-10-01 — LKM-139: Chat no longer goes blank after sending
 
 - **Cause.** Following the latest row ends in the probe's AppKit pin (`clip.scroll(to:)`, LKM-103), which moves the clip view outside SwiftUI's scroll machinery. The `LazyVStack` estimates the heights of rows it has not measured. When those estimates are far off, the jump lands where the stack realizes no row: the viewport is empty while the offset is still within the document. Examples are long answers above a short tail, or a send that inserts a short prompt and an empty reply. Only a user scroll re-synced it. Of the three suspected causes, (b) is triggered by (a)'s pin. The offset never exceeded the maximum, and (c), view identity, stayed stable: `documentID` and `scrollID` were unchanged across sends.

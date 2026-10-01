@@ -6,7 +6,7 @@ import type { NativeBridge } from './bridge'
 
 /** LKM-125: a process started under the XPC service is in the host's security session.
  *  This smoke runs in Bun, the service's child, at `<app>/Contents/Resources/backend`; it
- *  starts `TreziHost --session` the way the service starts the `--crypto` Keychain helper
+ *  starts `TreziHost --session` the way the service starts the `TreziSecrets` Keychain helper
  *  and provider helpers, and compares that report with the host's own. Without
  *  `JoinExistingSession` the session ids differ and the keychain exit codes can too. */
 export async function checkSecuritySession(host: NativeBridge, artifacts: string) {
