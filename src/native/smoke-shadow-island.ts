@@ -106,19 +106,66 @@ document.body.append(card);
     await wait(() => previewMatches(initial))
     await wait(swiftReady)
   }
-  // A live drag of the light (LKM-133): each frame goes through Swift with whatever source
-  // revision the panel last rendered, reaches source and preview before the release, and the
-  // gesture's writes are one Undo step that restores the value from before the drag.
-  const gesture = `smoke-drag-${Date.now()}`
-  for (const [x, y] of [[-.5, .2], [-.2, .5], [.3, .8]]) {
-    await host.request('islandPerform', { island: result.id, action: 'commit', values: { x, y }, gesture })
-    await wait(() => readFileSync(file, 'utf8').includes(`const SHADOW_x = ${x};\nconst SHADOW_y = ${y};`))
-    await wait(() => previewMatches({ ...initial, x, y }))
-  }
+  const drag = await checkShadowDrag(host, result.id, file, code, initial, page, wait, previewMatches, artifacts)
   await host.request('islandPerform', { island: result.id, action: 'undo' })
   await wait(() => readFileSync(file, 'utf8') === code)
   await wait(() => previewMatches(initial))
   await wait(swiftReady)
   await capture('restored')
-  console.log('NATIVE SHADOW LIGHT PASS — visible window captures contain Shadow Light controls and no Preview box; all six controls update computed preview CSS; a live drag writes each frame and one Undo restores source and preview. Layout fidelity still requires inspection of shadow-light-*.png against the approved mockup.')
+  console.log(`NATIVE SHADOW LIGHT PASS — visible window captures contain Shadow Light controls and no Preview box; all six controls update computed preview CSS; a ${drag.steps}-step drag shows every frame through the preview override (${drag.samples} sampled frames, ${drag.gaps} gaps, ${drag.outOfOrder} out of order, ${drag.foreign} foreign) with no source write until the release, and one Undo restores source and preview. Layout fidelity still requires inspection of shadow-light-*.png against the approved mockup.`)
+}
+
+/**
+ * A live drag of the light (LKM-140): each frame goes through Swift with one gesture id and is
+ * shown at once through the preview override, with no source write (so no reload or HMR)
+ * until the release. A page-world sampler records the card's computed box-shadow every
+ * animation frame; each must be the derived value of the current or previous step.
+ */
+async function checkShadowDrag(host: NativeBridge, island: string, file: string, code: string, initial: ShadowLightInput,
+  page: (code: string) => Promise<any>, wait: (check: () => Promise<boolean> | boolean) => Promise<void>,
+  previewMatches: (values: ShadowLightInput) => Promise<boolean>, artifacts: string) {
+  const gesture = `smoke-drag-${Date.now()}`
+  const path = [[-.5, .2], [-.45, .26], [-.4, .32], [-.3, .4], [-.2, .5], [0, .6], [.15, .7], [.3, .8]]
+  const steps = [initial, ...path.map(([x, y]) => ({ ...initial, x, y }))].map(values => shadowLight(values).css)
+  await page(`(() => {
+    const card = document.querySelector('#island-shadow-demo');
+    window.__shadowStep = 0; window.__shadowFrames = [];
+    const tick = () => { if (!card.isConnected) return; window.__shadowFrames.push([window.__shadowStep, getComputedStyle(card).boxShadow]); requestAnimationFrame(tick) };
+    requestAnimationFrame(tick);
+    return true;
+  })()`)
+  for (const [index, [x, y]] of path.entries()) {
+    await page(`window.__shadowStep = ${index + 1}`)
+    await host.request('islandPerform', { island, action: 'commit', values: { x, y }, gesture, ended: false })
+    await wait(() => previewMatches({ ...initial, x, y }))
+    assert.equal(readFileSync(file, 'utf8'), code, 'A drag frame is shown without a source write')
+  }
+  // [step sent, index of the derived step shown, gap] per sampled frame.
+  const sampled: [number, number, boolean][] = await page(`(() => {
+    const probe = document.createElement('div'); document.body.append(probe);
+    const computed = ${JSON.stringify(steps)}.map(css => { probe.style.boxShadow = css; return getComputedStyle(probe).boxShadow });
+    probe.remove();
+    return window.__shadowFrames.map(([step, shown]) => [step, computed.lastIndexOf(shown), shown === 'none']);
+  })()`)
+  let last = -1, gaps = 0, outOfOrder = 0, foreign = 0
+  for (const [step, index, none] of sampled) {
+    if (none) gaps++
+    else if (index < 0 || index < step - 1) foreign++
+    else if (index < last) outOfOrder++
+    last = Math.max(last, index)
+  }
+  const shell = async (name: string) => writeFileSync(join(artifacts, `shadow-light-${name}.png`), Buffer.from(await host.request('captureShell'), 'base64'))
+  await shell('drag')
+  // The release writes the source once; the static fixture then reloads with the final value.
+  const [x, y] = path.at(-1)!
+  await host.request('islandPerform', { island, action: 'commit', values: { x, y }, gesture, ended: true })
+  await wait(() => readFileSync(file, 'utf8').includes(`const SHADOW_x = ${x};\nconst SHADOW_y = ${y};`))
+  await wait(() => previewMatches({ ...initial, x, y }))
+  await wait(async () => await page(`document.querySelector('#island-shadow-demo')?.style.getPropertyPriority('box-shadow') === ''`) === true)
+  await shell('released')
+  const report = { steps: path.length, samples: sampled.length, gaps, outOfOrder, foreign, sourceWritesDuringDrag: 0 }
+  writeFileSync(join(artifacts, 'shadow-light-drag.json'), JSON.stringify(report, null, 2))
+  if (process.env.TREZI_NATIVE_BACKGROUND_TEST !== '1') assert.ok(sampled.length > 0, 'The drag sampler recorded animation frames')
+  assert.deepEqual([gaps, outOfOrder, foreign], [0, 0, 0], `Every sampled frame shows the current or previous step: ${JSON.stringify(report)}`)
+  return report
 }

@@ -319,7 +319,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             reply(id, true)
         case "islandPerform":
             if let island = chat.model.snapshot?.messages.flatMap({ $0.segments.compactMap { $0.island } }).first(where: { $0.id == c["island"] as? String }) {
-                chat.model.islandAction(island, action: c["action"] as? String ?? "", values: c["values"] as? [String: Any] ?? [:], gesture: c["gesture"] as? String); reply(id)
+                chat.model.islandAction(island, action: c["action"] as? String ?? "", values: c["values"] as? [String: Any] ?? [:], gesture: c["gesture"] as? String, ended: c["ended"] as? Bool ?? false); reply(id)
             } else { reply(id, error: "Island not found") }
         case "revealChatIsland":
             guard ephemeral, let target = c["island"] as? String,

@@ -59,6 +59,7 @@ const UNIT = [
   "native-island-editing",
   "no-system-preferences",
   "chat-islands",
+  "island-flicker",
   "native-context",
   "native-updates",
   "native-inspector",

@@ -61,13 +61,14 @@ final class ChatModel: ObservableObject {
     // Preserve message/status clearance above the floating composer.
     static let statusHeight = ChatLayout.statusHeight
     var bottomInset: CGFloat { ChatLayout.bottomInset(composerHeight: composerHeight) }
-    /// `gesture` groups a control's live writes into one Undo step (`IslandLiveWrites`).
-    func islandAction(_ island: IslandView, action: String, values: [String: Any] = [:], gesture: String? = nil) {
+    /// `gesture` groups a control's live writes into one Undo step (`IslandLiveWrites`);
+    /// `ended` marks its last batch.
+    func islandAction(_ island: IslandView, action: String, values: [String: Any] = [:], gesture: String? = nil, ended: Bool = false) {
         guard let chat = snapshot?.chat else { return }
         controlInteraction += 1
         var message: [String: Any] = ["event":"island-action", "chat":chat, "id":island.id, "revision":island.revision,
               "sourceRevision":island.sourceRevision, "operation":UUID().uuidString, "action":action, "values":values]
-        if let gesture { message["gesture"] = gesture }
+        if let gesture { message["gesture"] = gesture; message["ended"] = ended }
         emit(message)
     }
     func action(_ name: String, id: String? = nil, value: String? = nil, answers: [String: String]? = nil) {

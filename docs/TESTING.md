@@ -168,6 +168,14 @@ an external screen recorder or request access to other applications. Inspect
 the approved mockup; OCR presence is not a substitute for layout review. Capture
 or OCR failures fail verification without an offscreen fallback.
 
+The same check drags the light through 8 frames of one gesture (LKM-140). A
+page-world sampler records the card's computed box-shadow every animation frame.
+Gaps, out-of-order values and foreign values must all be 0, and the source must
+not change before the release. It writes `shadow-light-drag.png` (mid-drag),
+`shadow-light-released.png` and `shadow-light-drag.json` (the counts). The unit
+test `test/island-flicker.mjs` models a gap HMR to record the same counts before
+and after the fix.
+
 Read screenshots in `test/artifacts/native/` for UI verification. Offscreen
 AppKit captures do not faithfully paint Liquid Glass; visible inspection may be
 necessary. Never start the target project server manually alongside Trezi.

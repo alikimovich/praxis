@@ -56,3 +56,7 @@ export const LAYERS_SET_WATCH = 'layers:set-watch' // → preload (boolean)
 export const PREVIEW_MOVE_NODE = 'trezi:preview:move-node' // → main (MoveNodeRequest)
 
 export const ANIMATION_REPLAY = 'trezi:preview:animation-replay' // → preload (component name)
+
+// ── Chat island gestures (LKM-140) ─────────────────────────────────────────
+export const ISLAND_OVERRIDE = 'trezi:preview:island-override' // → preload ({id, op, key, from?, css?})
+export const ISLAND_OVERRIDE_REPLY = 'trezi:preview:island-override-reply' // → main ({id, value})

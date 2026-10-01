@@ -45,7 +45,8 @@ export const previewSendChannels = new Set([
   channels.STYLES_READ_REPLY,
   channels.LAYERS_READ_REPLY,
   channels.LAYERS_CHANGED,
-  channels.PREVIEW_MOVE_NODE
+  channels.PREVIEW_MOVE_NODE,
+  channels.ISLAND_OVERRIDE_REPLY
 ])
 export async function dispatchIPC(view: string, message: any) {
   if (!message || typeof message.channel !== 'string' || !Array.isArray(message.args))

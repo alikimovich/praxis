@@ -2,6 +2,45 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-01 — LKM-140: Shadow Light drags without flicker
+
+- **Measured, hypothesis by hypothesis.** `test/island-flicker.mjs` (unit) records these numbers. It uses the real `ChatIslands` and the Swift owners, with a modelled page ticking every 16 ms.
+  - **H3: the formula produces near-invisible values. Refuted.** I swept the light over a 41×41 grid (1681 points) with the fixture values. Moving the light never changes alpha or blur: there was 1 alpha set (0.35/0.21/0.126) and 1 blur set across the whole grid. A 0.04 pad step moves any offset by at most 0.48 px.
+  - **H2: writes arrive out of order or coalesced. Refuted inside the island pipeline.** I replayed the LKM-133 live writes for a 12-step drag. This wrote 12 literals and caused 12 HMR events. The literals were in drag order, with 0 out-of-order values and 0 foreign values.
+  - **H1: the HMR CSS swap leaves a gap. This is the remaining cause.** In the model, each style swap leaves one frame with no shadow. That gives 12 gap frames for 12 steps, because every drag frame was a source write and an HMR update.
+  - **Not measured on real frameworks.** I could not install real Next.js or Vite fixtures here: the sandbox denied npm registry access (`bun add` returned 403). The numbers on real dev servers are left to the manager (see TASKS).
+- **Fix.** Drag frames of a Shadow block no longer write the source.
+  - `IslandOverrides` (`src/main/island-overrides.ts`) sends each frame's derived box-shadow to the preview (`ISLAND_OVERRIDE`). The preview's isolated world, `src/preview/island-override.ts`, applies it as an inline `!important` override.
+    - It applies the override only to elements whose computed box-shadow equals the island's current value. A display:none probe computes that value; transparent Tailwind ring layers are ignored when comparing.
+    - It does not touch the page's scripts.
+  - The source is written once:
+    - when the gesture ends (Swift now sends `ended` with the release batch), or
+    - after 600 ms with no new frame.
+  - The write goes through the existing queue with the same gesture id, so a gesture is still one Undo group.
+  - Removing the override:
+    - The backend then polls `settle`. In one task the preview removes the override, reads the element's own computed shadow (with box-shadow transitions cancelled), and puts the override back.
+    - The override is removed only when every target shows the final value on its own, after the HMR update or reload.
+    - It is dropped after 8 s without that.
+  - LKM-133's per-binding conflict rules still apply:
+    - A conflicting write or an outside edit drops the override and shows the notice, with nothing written.
+    - Reload, Reset and Undo clear the override first.
+  - Fallback: if the preview can't take the override (no preview view, or no matching element), the gesture falls back to the old live writes.
+- **Numbers after the fix**, for the same 12-step drag:
+  - 1 write and 1 HMR event; all 12 frames shown.
+  - 0 gaps, 0 out-of-order values, 0 foreign values.
+  - The write lands at frame 15–16 (the exact frame depends on timer timing from run to run). The override is removed 1–2 frames later, once the page's own style matches.
+- **Native evidence.** The Shadow Light smoke check (`src/native/smoke-shadow-island.ts`, `shadow-light` group) drags 8 frames through Swift with one gesture id. A requestAnimationFrame sampler in the page world records each frame.
+  - It asserts:
+    - The source file stays unchanged until the release.
+    - Gaps, out-of-order values and foreign values are all 0.
+    - The inline override is gone after the release.
+    - One Undo restores the source and the preview.
+  - Captured frames: `shadow-light-drag.png` (mid-drag), `shadow-light-released.png`, and `shadow-light-drag.json` (the counts) in `test/artifacts/native/`.
+  - This fixture is the static site, which reloads the whole page; it is not Next.js HMR.
+  - Worker run (native groups `islands`, `shadow-light`):
+    - 8 steps, 4 sampled frames, 0 gaps, 0 out of order, 0 foreign, and no source write during the drag. WebKit throttled requestAnimationFrame, so there are fewer samples than steps.
+    - In `shadow-light-drag.png` the card's shadow already follows the light at the last step (offset up and left). The chat panel still shows the initial x/y: the harness sends `islandPerform` straight to the host, so no Swift draft moves the pad.
+
 ## 2026-09-30 — LKM-135: Claude first turn: no false "did not respond"
 
 - **Why healthy cold turns failed.** The LKM-119 deadline (90 s with no first event) covered the whole cold path as one silence: helper spawn, the bundled and installed `claude auth status` probes one after the other, a cold CLI start, and the model thinking. The init's resume-id record also counted as "heard", so the deadline was really "until the session init" and nothing after it.

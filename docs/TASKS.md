@@ -3,6 +3,13 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Shadow Light drags without flicker (LKM-140)
+
+- [x] Formula (H3) and write order (H2) measured and refuted; HMR swap gap (H1) is the remaining cause (`test/island-flicker.mjs`, numbers in PROGRESS).
+- [x] Shadow block drag frames show through an isolated-world box-shadow override; one source write per gesture (release or 600 ms idle); override removed only once the page's own style shows the final value; one Undo group; LKM-133 conflict rules kept.
+- [x] Native `shadow-light` check: 8-step drag with 0 gaps, 0 out of order, 0 foreign and no write before release; `shadow-light-drag.png`, `shadow-light-released.png`, `shadow-light-drag.json`.
+- [ ] Manager: record the same drag on a real Next.js and a Vite/CSS fixture (npm registry access was denied in the worker sandbox).
+
 ## Claude first turn: no false "did not respond" (LKM-135)
 
 - [x] Cold-start phases (helper ready, auth probe, CLI started, session init, first model event, no-response/exit) logged at debug level in the service log.

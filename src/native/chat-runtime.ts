@@ -1,4 +1,6 @@
 import { ChatIslands, installChatIslands } from '../main/chat-islands'
+import { IslandOverrides } from '../main/island-overrides'
+import { islandPreviewPort } from './island-preview'
 import { currentTurn } from '../main/agent'
 import { TurnBoundaries } from './turn-boundaries'
 import type { NativeChatSnapshot } from '../shared/native-chat-controller'
@@ -18,7 +20,7 @@ export function installNativeChat(host: NativeBridge, view: NativeView) {
   const islands = new ChatIslands(key => {
     const chat = nativeChat.chats.get(key)
     if (chat) nativeChat.changed(chat)
-  }, undefined, { origin: currentTurn })
+  }, undefined, { origin: currentTurn, overrides: new IslandOverrides(islandPreviewPort()) })
   nativeIslands = islands
   installChatIslands(islands)
   const renderIslands = (state: NativeChatSnapshot) => {
