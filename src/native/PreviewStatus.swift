@@ -3,6 +3,8 @@ import SwiftUI
 final class PreviewStatusModel: ObservableObject {
     @Published var kind = "idle"
     @Published var message = ""
+    /// The message with full paths when `message` is collapsed.
+    @Published var detail = ""
     @Published var project = ""
     @Published var command = ""
     let cat = CatAnimator()
@@ -15,7 +17,7 @@ struct PreviewStatusContent: View {
             Color.clear
             VStack(spacing: 18) {
                 NativeCat(animator: model.cat).scaleEffect(1.5).padding(12)
-                ScrollView { Text(model.message).multilineTextAlignment(.center).textSelection(.enabled).frame(maxWidth: .infinity) }.frame(maxHeight: 260)
+                ScrollView { Text(model.message).multilineTextAlignment(.center).textSelection(.enabled).frame(maxWidth: .infinity).help(model.detail) }.frame(maxHeight: 260)
                 if model.kind == "setup" || model.kind == "error" {
                     TextField("Dev command (optional)", text: $model.command).textFieldStyle(.roundedBorder).frame(maxWidth: 360)
                     HStack {
@@ -42,6 +44,7 @@ final class NativePreviewStatus: NSHostingView<PreviewStatusContent> {
         if model.project != project { model.command = "" }
         model.project = project; model.kind = kind
         model.message = kind == "setup" ? "Plan your project in chat, or enter a command to start its preview." : status["message"] as? String ?? status["label"] as? String ?? ""
+        model.detail = status["detail"] as? String ?? ""
         isHidden = project.isEmpty || !["busy", "setup", "error"].contains(kind)
         model.cat.update(running: kind == "busy", questioning: false); model.cat.show(!isHidden)
     }

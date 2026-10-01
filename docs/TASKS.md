@@ -3,6 +3,14 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Short paths; chat worktree cleanup (LKM-136)
+
+- [x] One display-path formatter (`src/shared/display-path.ts`): project-relative paths, "chat workspace" / "Trezi data" / "temporary patch" / "recovery copy" labels, never truncated mid-path.
+- [x] Collapsed chat tool rows, the activity line, error/conflict cards, Activity lines and the preview error use it; full paths only in expanded rows, tooltips, Copy and Copy All. Logs and the ledger unchanged.
+- [x] Idle cleanup (default 7 days, Settings → General), lazy recreate on the next turn; parked, running and dirty checkouts kept (dirty work to an `idle-<id>` recovery ref).
+- [x] Closing a chat removes its clean checkout; old-name worktree folders removed once migrated or empty.
+- [x] Settings shows the chat workspaces' disk use and "Clean up now".
+- [ ] Manager: foreground check of Settings → General (usage row and Clean up now) in the native capture.
 ## Preview inspection tools; the WebKit preview over external browsers (LKM-138)
 
 - [x] `preview_inspect`, `preview_evaluate`, `preview_console`, `preview_viewport` and element-cropped `preview_screenshot` run on the live preview through an isolated WKContentWorld (`TreziAgent`, no message handler); results are bounded and sanitized.

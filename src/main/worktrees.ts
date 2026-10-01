@@ -236,6 +236,32 @@ export async function removeWorktree(
 }
 
 /**
+ * Idle cleanup (LKM-136): removes a clean, idle chat checkout and retires its branch.
+ * A checkout with meaningful uncommitted work stays where it is; the service copies
+ * that work to an `idle-<id>` recovery ref (once per distinct tree). Never throws.
+ */
+export async function reclaimWorktree(
+  repoRoot: string,
+  wt: Worktree
+): Promise<{ removed: boolean; dirty: boolean; ref: string | null }> {
+  try {
+    return await repositoryOwner().reclaimWorktree({ ...wt, repoRoot })
+  } catch {
+    return { removed: false, dirty: false, ref: null }
+  }
+}
+
+/** Removes an old-name worktree folder that orphan recovery emptied (and its empty
+ *  old-name parent). False when anything is left in it or the service refused. */
+export async function removeLegacyFolder(directory: string): Promise<boolean> {
+  try {
+    return await repositoryOwner().removeLegacyFolder(directory)
+  } catch {
+    return false
+  }
+}
+
+/**
  * Startup recovery: a crash/quit can leave checkouts in worktreesDir whose admin
  * entries git no longer tracks. The service prunes stale entries, commits any dirty
  * work of each leftover to its branch (folded into the parked squash when the chat was
