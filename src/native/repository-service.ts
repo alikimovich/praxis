@@ -101,6 +101,10 @@ export function serviceRepository(link: RepositoryLink, options: { timeout?: num
     commitLive: (root, files, title, body) => effect('commitLive', { root, files, title, ...(body ? { body } : {}) }),
     checkout: (root, branch) => effect('checkout', { root, branch }),
     switchBranch: (root, branch) => effect('switchBranch', { root, branch }),
-    status: () => call('status', {}, 'read', 30_000)
+    status: () => call('status', {}, 'read', 30_000),
+    recoveryRefs: roots => call('recoveryRefs', { roots }, 'read', 60_000),
+    deleteRecoveryRefs: (root, refs) => effect('deleteRecoveryRefs', {
+      root, refs: refs.map(item => item.ref), shas: refs.map(item => item.sha), intent: 'discard'
+    })
   }
 }

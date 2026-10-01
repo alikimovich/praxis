@@ -55,7 +55,11 @@ export interface RepositoryOwner {
   checkout(root: string, branch: string): Promise<BranchResult>
   switchBranch(root: string, branch: string): Promise<BranchResult>
   /** Operations a previous service left unfinished, with the recovery refs that hold their work. */
-  status(): Promise<{ active: RepositoryJournalEntry[]; interrupted: RepositoryJournalEntry[]; journal?: string }>
+  status(): Promise<RepositoryStatus>
+  /** The recovery refs in `roots` and in the journal's repositories (read only). */
+  recoveryRefs(roots: string[]): Promise<RecoveryRepository[]>
+  /** Explicit user intent: deletes refs still at the commit the user saw. */
+  deleteRecoveryRefs(root: string, refs: { ref: string; sha: string }[]): Promise<{ deleted: string[]; kept: string[] }>
 }
 
 export interface RepositoryJournalEntry {
@@ -68,6 +72,23 @@ export interface RepositoryJournalEntry {
   branch?: string
   refs: string[]
   started: string
+  /** When a launch closed (reported) this interrupted entry. */
+  resolved?: string
+}
+
+export interface RepositoryStatus {
+  active: RepositoryJournalEntry[]
+  interrupted: RepositoryJournalEntry[]
+  /** Closed at this launch and reported only now: journaled refs not in the repository are `missing`. */
+  recovered: Array<RepositoryJournalEntry & { missing: string[]; unreadable?: boolean }>
+  /** Open entries of an older journal, closed without a new report (they were reported at every earlier launch). */
+  closedEarlier: number
+  journal?: string
+}
+
+export interface RecoveryRepository {
+  root: string
+  refs: Array<{ ref: string; sha: string; date: string; subject: string }>
 }
 
 let owner: RepositoryOwner | null = null

@@ -93,9 +93,9 @@ commands. Each is recorded in `docs/TASKS.md`.
   pre-image before a three-way apply can write conflict markers; a detached orphan's
   recovery commit. Refs guarding an effect that completed with the work still
   reachable (a clean landing, a clean apply) are deleted; the rest are kept, and
-  the owner never prunes them (refs are the only handle on moved-out work; list them
-  with `git for-each-ref refs/trezi/recovery/` and delete them by hand once
-  inspected). Each ref name carries a random suffix so refs of one kind and label
+  the owner never prunes them (refs are the only handle on moved-out work; list or
+  delete them from Activity › Recovery Refs…, or with
+  `git for-each-ref refs/trezi/recovery/` by hand, once inspected). Each ref name carries a random suffix so refs of one kind and label
   within one operation never overwrite each other.
 - **Landing.** Unchanged policy (write only where the live file equals the fork point
   or already the target; refuse the whole batch otherwise), with these changes: files
@@ -146,11 +146,27 @@ A failure after a recovery ref was made moves the entry to `interrupted`. When a
 service opens the journal, every still-active entry was interrupted by a crash and
 moves there too. Nothing is replayed, reset or deleted for it: the worktree, its
 branch and the refs keep the work, and chat recovery's existing orphan handling
-surfaces unlanded branches as recovery records. Bun lists interrupted operations in
-the Activity log at launch. `status` (read) returns them; `acknowledge
-{operationID, intent:"acknowledge"}` forgets one and keeps its refs. A damaged
-journal is left exactly as found; mutations are then refused `recoveryRequired`
-(leases still work, so Bun's own writes are not blocked).
+surfaces unlanded branches as recovery records. `status` (read) returns them;
+`acknowledge {operationID, intent:"acknowledge"}` forgets one and keeps its refs. A
+damaged journal is left exactly as found; mutations are then refused
+`recoveryRequired` (leases still work, so Bun's own writes are not blocked).
+
+**Reported once (LKM-134).** Journal version 2 gives an interrupted entry a
+`resolved` time. When the service opens the journal it resolves every open entry and
+syncs that before anything reads it, so `status.recovered` lists each entry at
+exactly one launch however often Trezi restarts (a crash before Bun shows that
+report loses only the line; the refs stay). Each recovered entry carries `missing`,
+the journaled refs not in its repository (a crash between naming a ref and creating
+it, before the effect it guards, or the user deleted it), and `unreadable` when the
+repository is gone. A version 1 journal reported its open entries at every launch,
+so those are resolved without a new report and only counted in `closedEarlier`;
+`recoveryNotices` (`src/native/repository-recovery.ts`) turns that into one summary
+line. Saved work is reported at info level, a missing or unreadable ref as a
+warning; only a damaged journal is an error. Activity › Recovery Refs… lists every
+kept ref of the open projects and the journal's repositories (`recoveryRefs`, read)
+and deletes only refs the user selects and then confirms (`deleteRecoveryRefs`,
+`intent:"discard"`), each with `update-ref -d <ref> <sha>` so a ref that moved since
+it was listed is kept. Nothing deletes recovery refs automatically.
 
 ## Protocol
 
@@ -161,7 +177,8 @@ Mutations take an optional `leases` array (the leases the calling chain holds).
 | Method | Body | Result |
 | --- | --- | --- |
 | `acquire` / `release` | `{root, held?}` / `{lease}` | `{lease, reentrant}` / `{}` |
-| `status` (read) / `acknowledge` | `{}` / `{operationID, intent}` | `{active, interrupted, journal?}` / `{}` |
+| `status` (read) / `acknowledge` | `{}` / `{operationID, intent}` | `{active, interrupted, recovered, closedEarlier, journal?}` / `{}` |
+| `recoveryRefs` (read) / `deleteRecoveryRefs` | `{roots?}` / `{root, refs, shas, intent:"discard"}` | `[{root, refs:[{ref, sha, date, subject}]}]` / `{deleted, kept}` |
 | `createWorktree` | `{root, worktreesDir, id, branch, linkNodeModules}` | `Worktree` |
 | `syncWorktree` / `attachBranch` / `retireBranch` | `{root, worktree}` | `{synced, baseSha}` / `{}` |
 | `commitWorktree` | `{root, worktree, message}` | `{committed, files}` |
@@ -196,7 +213,9 @@ surrogates are refused before anything is journaled.
 - **Returning to Swift.** The journal opens as it was left; refs are unchanged.
 - **Reverting the code.** A pre-LKM-95 build ignores `service/repository/` and
   `refs/trezi/recovery/*` (they can be listed with
-  `git for-each-ref refs/trezi/recovery/` and deleted by hand once inspected).
+  `git for-each-ref refs/trezi/recovery/` and deleted by hand once inspected). A
+  pre-LKM-134 build reads a version 2 journal but ignores `resolved`, so it reports
+  the closed entries again at each launch; nothing else changes.
 
 ## Verification
 
