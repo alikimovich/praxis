@@ -40,7 +40,7 @@ async function claudeAction(sheets: NativeSheetController, sheet: Sheet, action:
   if (sheets.current !== sheet) return
   // Swap the AI Providers pane in place, like the provider editor does: other panes untouched.
   sheet.state.fields = [...sheet.state.fields.filter(f => f.section !== 'providers'), ...next.fields.map(field => ({ ...field, section: 'providers', draft: true }))]
-  sheet.state.actions = next.actions
+  sheet.state.actions = [...sheet.state.actions.filter(a => a.section !== 'providers'), ...next.actions]
   const section = sheet.state.sections?.find(s => s.id === 'providers')
   if (section) section.detail = next.detail
   sheet.state.message = message
@@ -48,8 +48,8 @@ async function claudeAction(sheets: NativeSheetController, sheet: Sheet, action:
 }
 /** Add the Claude entry to the provider list, wherever the list is shown. */
 const offer = (sheet: Sheet) => {
-  const actions = sheet.state.actions
-  if (actions.some(a => a.id === 'add') && !actions.some(a => a.id === ENTRY.id)) sheet.state.actions = [actions[0], ENTRY, ...actions.slice(1)]
+  const actions = sheet.state.actions, add = actions.findIndex(a => a.id === 'add')
+  if (add >= 0 && !actions.some(a => a.id === ENTRY.id)) sheet.state.actions = [...actions.slice(0, add + 1), ENTRY, ...actions.slice(add + 1)]
 }
 /**
  * AI Providers → Claude… on top of the Settings window, without touching its controller:

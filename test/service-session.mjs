@@ -23,7 +23,7 @@ const root = fileURLToPath(new URL('..', import.meta.url))
 const scratch = mkdtempSync(join(tmpdir(), 'trezi-service-session-'))
 try {
   const parsed = spawnSync('plutil', ['-convert', 'json', '-o', '-', '-'], {
-    input: serviceInfoPlist(),
+    input: serviceInfoPlist({ version: '0.1.0', build: '1', commit: 'abc1234' }),
     encoding: 'utf8'
   })
   assert.equal(parsed.status, 0, parsed.stderr)
@@ -37,7 +37,7 @@ try {
   const build = readFileSync(join(root, 'scripts/build-native.mjs'), 'utf8')
   assert.match(
     build,
-    /writeFileSync\(join\(serviceContents, 'Info\.plist'\), serviceInfoPlist\(\)\)/,
+    /writeFileSync\(join\(serviceContents, 'Info\.plist'\), serviceInfoPlist\(info\)\)/,
     'the build writes this plist'
   )
   assert.match(build, /src\/native\/SecuritySession\.swift/, 'the host is built with the probe')

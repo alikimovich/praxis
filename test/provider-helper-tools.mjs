@@ -39,6 +39,10 @@ const CALLS = {
   compose_project_ui: { file: 'Card.tsx', spec: { root: 'r', elements: { r: { type: 'Text', props: { text: 'hi' }, children: [] } } } },
   preview_location: {},
   preview_screenshot: {},
+  preview_inspect: { selector: 'h1' },
+  preview_evaluate: { expression: '1 + 1' },
+  preview_console: {},
+  preview_viewport: { preset: 'mobile' },
   open_preview: { path: '/helper-route' },
   open_code: { file: 'shadow.js', startLine: 1, endLine: 2 },
   chat_island: island,
@@ -159,9 +163,21 @@ const { SESSION_TOOLS } = await import('../src/main/session-tools.ts')
 const islands = new ChatIslands(() => {})
 installChatIslands(islands)
 islands.register(CHAT, WT, 'helper-record', () => 1)
+// LKM-138: a stand-in for the native preview's isolated-world host.
+let shownWidth = 800
 registerPreviewSource({
   getUrl: () => URL_SHOWN,
-  capture: async () => ({ isEmpty: () => false, getSize: () => ({ width: 10, height: 10 }), resize: () => { throw new Error('unused') }, toJPEG: () => JPEG })
+  capture: async () => ({ isEmpty: () => false, getSize: () => ({ width: 10, height: 10 }), resize: () => { throw new Error('unused') }, toJPEG: () => JPEG }),
+  agent: {
+    async evaluate(code) {
+      if (code.includes('__treziAgentRuntime')) return { ok: true, type: 'number', value: 2, bytes: 1, ms: 0 }
+      if (code.includes('__treziAgentInspect')) return { element: '<h1>', styles: { 'box-shadow': 'none' } }
+      if (code.includes('__treziAgentConsole')) return { total: 0, dropped: 0, entries: [] }
+      return { innerWidth: shownWidth, innerHeight: 600 }
+    },
+    captureRect: async () => null,
+    async setViewport(width) { shownWidth = width ?? 800; return { width, zoom: 1 } }
+  }
 })
 setProjectUiEnabled(CHAT, true)
 const installs = []

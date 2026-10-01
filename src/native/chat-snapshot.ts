@@ -1,6 +1,8 @@
 import { formatTokens } from '../shared/run-stats'
 import type { ModelChoice } from '../shared/api'
-import type { NativeChatActivity, NativeChatCard, NativeChatState } from '../shared/native-chat'
+import { shortPaths } from '../shared/display-path'
+import type { NativeChatActivity, NativeChatCard, NativeChatMessage, NativeChatState } from '../shared/native-chat'
+import { displayContext } from './display-paths'
 import { providerOptions, resolveSelection } from '../shared/provider-choices'
 import { parseSlashToken } from '../shared/slash-token'
 import { rankSlashMatches } from '../shared/slash-menu'
@@ -12,6 +14,22 @@ export const permissionModes = [
 export function matches(chat: Chat) {
   const token = parseSlashToken(chat.text, chat.caret)
   return token && !chat.dismissed ? rankSlashMatches(chat.commands, token.query) : []
+}
+/** Collapsed paths for every surface the chat shows; the full text stays alongside. */
+function collapse(chat: Chat, cards: NativeChatCard[], current: NativeChatActivity | null) {
+  const ctx = displayContext(chat.root ? [chat.root] : [])
+  const short = (text: string) => shortPaths(text, ctx)
+  const messages: NativeChatMessage[] = chat.messages.map(message =>
+    message.segments.some(s => s.kind === 'tools')
+      ? { ...message, segments: message.segments.map(s => (s.kind === 'tools' ? { ...s, labels: s.statuses.map(short) } : s)) }
+      : message)
+  const shortCards = cards.map(card => {
+    const detail = card.detail && short(card.detail)
+    return detail === card.detail ? card : { ...card, detail, fullDetail: card.detail }
+  })
+  const label = current && short(current.label)
+  const shortActivity = current && label !== current.label ? { ...current, label: label!, detail: current.label } : current
+  return { messages, cards: shortCards, activity: shortActivity }
 }
 function activity(chat: Chat): NativeChatActivity | null {
   if (!chat.isRunning) return null
@@ -43,9 +61,10 @@ export function snapshot(chat: Chat, choices: ModelChoice[]): NativeChatState {
   const currentActivity = activity(chat)
   const thinking = !!currentActivity?.animated && currentActivity.kind !== 'applying'
   const stop = chat.isRunning && !chat.text.trim() && !chat.attachments.length
+  const shown = collapse(chat, cards, currentActivity)
   return {
-    activity: currentActivity, streamingId: chat.streamingId,
-    chat: chat.chat, messages: chat.messages, running: chat.isRunning, cards, questions: chat.questions,
+    activity: shown.activity, streamingId: chat.streamingId,
+    chat: chat.chat, messages: shown.messages, running: chat.isRunning, cards: shown.cards, questions: chat.questions,
     status: `↑ ${formatTokens(chat.usage.input)}  ↓ ${formatTokens(chat.usage.output)}`,
     statusDetail: `Cumulative tokens across this chat’s model calls, not current context size.\nInput: ${chat.usage.input.toLocaleString('en-US')}\nCached input (included above): ${chat.usage.cached.toLocaleString('en-US')}\nOutput: ${chat.usage.output.toLocaleString('en-US')}`,
     composer: {

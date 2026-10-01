@@ -10,13 +10,15 @@ listed string. Removing a shim needs a tested migration.
 
 | Shim (read side only; writes use Trezi names) | Files |
 | --- | --- |
-| OS identities kept on purpose: bundle ID `dev.praxis.native` (WebKit data, TCC grants) and Keychain service `dev.praxis.native.secrets` (the master key) | `scripts/build-native.mjs`, `src/native/Host.swift` |
+| OS identities kept on purpose: bundle ID `dev.praxis.native` (WebKit data, TCC grants) and Keychain service `dev.praxis.native.secrets` (the master key) | `scripts/service-info.mjs`, `src/native/Host.swift` |
 | `PRAXIS_*` env vars as a fallback for `TREZI_*` (Trezi wins); the installer reuses `PRAXIS_HOME` or an existing `~/.praxis` checkout and removes the retired `praxis` command link it made | `src/shared/rename-compat.ts`, `bin/trezi-agent-mcp.mjs`, `src/service/ProviderData.swift`, `install.sh` |
 | Profile alias `Trezi Native → Praxis Native`; the `praxis`/`dsgn` session, memory and provider stores inside a profile | `src/native/profile-path.ts`, `src/service/ProfilePaths.swift`, `src/service/ConversationStore.swift`, `src/service/MemoryFile.swift`, `src/service/ProviderData.swift`, `src/main/provider-data.ts` |
 | `praxis:`/`praxis.` preference keys (a Trezi key wins, even when null) | `src/native/preferences.ts`, `src/service/PreferencesFile.swift` |
 | `praxis/*` and `dsgn/*` work branches and `praxis/chat-*` recovery branches | `src/main/git.ts`, `src/shared/github.ts`, `src/main/worktrees.ts`, `src/main/chat-isolation.ts`, `src/service/RepositoryGit.swift`, `src/service/RepositoryLanding.swift`, `src/service/WorkflowRemote.swift` |
 | `.praxis/` and `.dsgn/` sidecar folders: agent write-deny, excluded from snapshots and cleaning, detection, sidecar migration, helper sync and setup uninstall | `src/main/backends/tools.ts`, `src/main/provider-policy.ts`, `src/service/ProviderPolicy.swift`, `src/main/chat-island-schema.ts`, `src/main/chat-island-source.ts`, `src/main/worktrees.ts`, `src/main/project-detect.ts`, `src/main/props-svelte.ts`, `src/service/SourcePaths.swift`, `src/service/RepositoryGit.swift`, `src/service/RuntimeDetect.swift`, `src/service/EditingProject.swift`, `src/service/WorkflowSetup.swift` |
 | `data-praxis-*` source stamps (Trezi preferred when both exist) and React Native `praxis:` test IDs | `src/preview/source-stamp.ts`, `src/main/setup.ts`, `src/main/setup-react.ts`, `src/main/setup-next.ts`, `src/main/setup-mdx.ts`, `src/main/html-source.ts`, `src/native/smoke-source-stamp.ts`, `src/native/smoke-legacy-project.ts`, `src/service/SimulatorTools.swift` |
+| Short display paths: old-name profile folders, worktree stores and `refs/praxis/recovery/*` read as "chat workspace", "Trezi data" or "recovery copy" | `src/shared/display-path.ts`, `src/native/display-paths.ts` |
+| Leftover Electron-era `Praxis/praxis` and `dsgn/dsgn` chat worktree folders: pruned into recovery, then removed once migrated or empty | `src/service/RepositoryCleanup.swift`, `src/main/chat-workspaces.ts` |
 | `praxis:animation-replay`, dispatched beside the Trezi event for existing project listeners | `src/preview/preload.ts` |
 | The one-time project migration (below) | `src/service/EditingLegacyNames.swift` |
 | This list | `docs/agent-guide/legacy-names.md`, `test/legacy-names-audit.mjs` |

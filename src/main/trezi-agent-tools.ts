@@ -3,16 +3,23 @@ import { chmodSync, rmSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import { join } from 'node:path'
 
-export type TreziAgentToolAction =
-  | 'workspace_state'
-  | 'prepare_conflict_resolution'
-  | 'chat_island'
-  | 'open_code'
-  | 'open_preview'
-  | 'preview_location'
-  | 'preview_screenshot'
-  | 'project_ui_catalog'
-  | 'compose_project_ui'
+/** The only actions the bridge accepts. */
+export const TREZI_AGENT_ACTIONS = [
+  'workspace_state',
+  'prepare_conflict_resolution',
+  'chat_island',
+  'open_code',
+  'open_preview',
+  'preview_location',
+  'preview_screenshot',
+  'preview_inspect',
+  'preview_evaluate',
+  'preview_console',
+  'preview_viewport',
+  'project_ui_catalog',
+  'compose_project_ui'
+] as const
+export type TreziAgentToolAction = (typeof TREZI_AGENT_ACTIONS)[number]
 
 export interface TreziAgentToolRegistration {
   socketPath: string
@@ -70,21 +77,12 @@ async function startServer(): Promise<string> {
       }
       try {
         const parsed = JSON.parse(await readBody(req)) as { action?: unknown; args?: unknown }
-        if (
-          parsed.action !== 'workspace_state' &&
-          parsed.action !== 'prepare_conflict_resolution' &&
-          parsed.action !== 'chat_island' &&
-          parsed.action !== 'open_code' &&
-          parsed.action !== 'open_preview' &&
-          parsed.action !== 'preview_location' &&
-          parsed.action !== 'preview_screenshot' &&
-          parsed.action !== 'project_ui_catalog' &&
-          parsed.action !== 'compose_project_ui'
-        ) {
+        const action = TREZI_AGENT_ACTIONS.find((name) => name === parsed.action)
+        if (!action) {
           json(res, 400, { ok: false, error: 'unknown-action' })
           return
         }
-        json(res, 200, { ok: true, result: await handler(parsed.action, parsed.args) })
+        json(res, 200, { ok: true, result: await handler(action, parsed.args) })
       } catch (error) {
         json(res, 500, {
           ok: false,

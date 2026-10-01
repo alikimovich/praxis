@@ -94,9 +94,12 @@ GitHub PR.
   returns to the running screen. See [3D inspection](docs/THREE_D.md) for controls
   and first-version rendering limits.
 - **Preview observation.** Claude and Codex can request the current preview route
-  and a screenshot. Codex-based custom endpoints expose the same tools; viewing
-  screenshots requires an image-capable model. Browser interaction and responsive
-  checks use agent-browser when available.
+  and a screenshot (whole view or one element). They can also inspect an element's
+  box and computed styles, run read-only bounded JavaScript, read console errors,
+  and resize the preview for phone/tablet/desktop checks. All of this runs in the
+  WebKit preview, isolated from the page. Codex-based custom endpoints expose the
+  same tools; viewing screenshots requires an image-capable model. agent-browser is
+  used only for scripted multi-step interactions.
 
 - **Controls from chat.** Ask Claude, Codex, or a custom-endpoint model to surface
   animation controls in the desktop preview. It can select the object and open
@@ -169,8 +172,9 @@ It uses Bun, skips the offer when the CLI is
 already on PATH, and defaults to **No**. Unattended installs skip the prompt.
 An optional browser-install failure does not prevent Trezi installation.
 To install it later: `bun install --global agent-browser && agent-browser install`.
-Trezi's built-in agent instructions require its use when available for web UI
-verification, including phone/tablet/desktop checks for layout changes. Agents
+Trezi's built-in agent instructions verify web UI with Trezi's own preview tools
+(including phone/tablet/desktop checks for layout changes) and use agent-browser
+only for scripted multi-step interactions. Agents
 must report missing browser support or a preview that cannot yet show their edits.
 
 Later, start Trezi from Applications or the terminal:
@@ -183,7 +187,9 @@ trezi ~/code/my-app  # open that folder as a project
 
 That is the one way to start Trezi: open it like any app (Finder, the Dock, Spotlight,
 `open -a Trezi`), or with `trezi`, which builds a missing app and then opens it the same
-way. `trezi --help` lists the options and `trezi --version` prints the installed version.
+way. `trezi --help` lists the options and `trezi --version` prints the installed version
+as "Trezi X.Y.Z (build N, short sha)", the same text as Settings › General and About
+Trezi. Changes are listed in `CHANGELOG.md`.
 
 In the app, click **Open project…**, pick a repo with a `dev`/`start` script,
 and chat on the left. Trezi **owns the dev server** — quitting or pressing Ctrl-C stops its managed
