@@ -1,5 +1,5 @@
 /**
- * The repo's .gitattributes makes docs/TASKS.md and docs/PROGRESS.md union-merge:
+ * The repo's .gitattributes makes docs/TASKS.md, docs/PROGRESS.md and CHANGELOG.md union-merge:
  * two branches that each append different lines merge cleanly and keep both sets.
  * Uses a disposable repo carrying this checkout's .gitattributes.
  *
@@ -24,7 +24,7 @@ try {
   must('init', '-q', '-b', 'main')
   copyFileSync(join(root, '.gitattributes'), join(repo, '.gitattributes'))
   mkdirSync(join(repo, 'docs'))
-  const files = ['docs/TASKS.md', 'docs/PROGRESS.md']
+  const files = ['docs/TASKS.md', 'docs/PROGRESS.md', 'CHANGELOG.md']
   for (const file of files) writeFileSync(join(repo, file), '# Log\n\n- [x] Base entry\n')
   must('add', '-A'); must('commit', '-q', '-m', 'base')
   const append = (branch, lines) => {
@@ -46,7 +46,7 @@ try {
     for (const line of ['- [x] Base entry', ...first, ...second]) assert.ok(merged.includes(`${line}\n`), `${file} kept "${line}"`)
     assert.equal(merged.split('\n').filter(line => line === '- [x] Base entry').length, 1, `${file} base entry not duplicated`)
   }
-  console.log('Docs union merge: TASKS.md and PROGRESS.md appends from two branches merged cleanly, both kept.')
+  console.log('Docs union merge: TASKS.md, PROGRESS.md and CHANGELOG.md appends from two branches merged cleanly, both kept.')
 } finally {
   rmSync(repo, { recursive: true, force: true })
 }

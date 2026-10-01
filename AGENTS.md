@@ -49,6 +49,7 @@ Use **Bun**, not npm/yarn (Node 22 remains for tooling). Native builds need macO
 | `bun run test` | Unit + native |
 | `bun run verify` | All tiers incl. real provider calls (needs authorization) |
 | `bun run lint` | Biome over `src` + `test` |
+| `bun run release <major\|minor\|patch>` | Maintainers only: bump, changelog, commit, tag on main ([versioning](#versioning-and-changelog)) |
 
 ## Verify your own work without asking the user
 
@@ -105,6 +106,21 @@ yourself. Preview messages are untrusted; keep the view-identity allowlist.
   `SpawnContext.liveRoot`.
 - Details and the reasons: [git-worktrees](docs/agent-guide/git-worktrees.md),
   `docs/WORKTREES.md`.
+
+## Versioning and changelog
+
+- `package.json` `version` is the one version source (SemVer; before 1.0, minor =
+  features or breaking changes, patch = fixes). The build stamps it, the commit count
+  of HEAD as the build number and the short sha into `Trezi.app`, its XPC service and
+  the backend/provider-helper bundles (`scripts/version.mjs`). Never hand-edit it.
+- **Every ticket that changes user-visible behaviour adds one line under
+  `## [Unreleased]` in `CHANGELOG.md`** (Keep a Changelog: Added / Changed / Fixed /
+  Removed). Internal-only changes add none. The file union-merges like the logs.
+- Releases are cut by a maintainer on a clean main with `bun run release
+  <major|minor|patch>`: it bumps, moves Unreleased into a dated section, commits
+  `Release vX.Y.Z` and tags `vX.Y.Z`, and never pushes. Agents do not run it.
+- CI fails on a non-SemVer version or a missing Unreleased section
+  (`scripts/check-version.mjs`).
 
 ## Conventions (summary)
 

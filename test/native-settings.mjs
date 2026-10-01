@@ -39,7 +39,10 @@ await settings.open()
 // One sidebar window: General, AI Providers (inline, no separate sheet) and Experimental.
 assert.deepEqual(sheets.current.state.sections.map(s => [s.id, s.label, s.symbol]), [['general', 'General', 'gearshape'], ['providers', 'AI Providers', 'sparkles'], ['experimental', 'Experimental', 'testtube.2']])
 assert.equal(sheets.current.state.section, 'general', 'first open shows General')
-assert.deepEqual(sheets.current.state.fields.map(f => [f.id, f.section]), [['default', 'general'], ['claudePlugins', 'general'], ['workspaceIdle', 'general'], ['workspaceUsage', 'general'], ['projectUi', 'experimental'], ['engine', 'experimental'], ['connections', 'providers']])
+assert.deepEqual(sheets.current.state.fields.map(f => [f.id, f.section]), [['default', 'general'], ['claudePlugins', 'general'], ['workspaceIdle', 'general'], ['workspaceUsage', 'general'], ['version', 'general'], ['projectUi', 'experimental'], ['engine', 'experimental'], ['connections', 'providers']])
+// LKM-143: General shows the version as a read-only row (the build stamps the label; unbuilt source says so).
+assert.equal(field('version').kind, 'readonly')
+assert.equal(field('version').value, 'Trezi (unbuilt development source)')
 // LKM-138: "Allow my Claude Code plugins in Trezi chats" defaults to off and persists.
 assert.equal(field('claudePlugins').label, 'Allow my Claude Code plugins in Trezi chats')
 assert.equal(field('claudePlugins').value, 'false')
