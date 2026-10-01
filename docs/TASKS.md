@@ -11,6 +11,13 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Tests: `test/signing-identity.mjs`, `test/keychain-migration.mjs`, `test/provider-login.mjs` `helper-cwd`. Docs: README "Code signing" (one more Keychain approval, then none), `docs/PROVIDERS.md`, `docs/agent-guide/legacy-names.md`.
 - [x] Review fixes: an identity that cannot sign (locked keychain, denied key access) re-signs every piece ad hoc with the one warning instead of failing the build; a real "Trezi Local" signature in a temporary keychain proves the designated requirement is the same across two builds.
 - [ ] Manager/operator: after this build, confirm on the operator Mac that `codesign -d -r- out/native/Trezi.app` stays the same across two rebuilds, and that the Keychain asks once and then not again.
+## Token counter inline; centered scroll-to-latest button (LKM-141)
+
+- [x] No pinned counter above the composer; each turn counts its own tokens on its response (chat total kept in the tooltip and mirror).
+- [x] Running: counter right after the Thinking…/working status, secondary style.
+- [x] Done: counter under the response's Copy/Revert row; the footer keeps one height, so completion does not move the transcript.
+- [x] Latest button: round chevron.down, centered over the column, 8 pt above the composer, inside the composer clearance; visibility logic and label unchanged.
+- [x] Fixtures: composer-layout placement at 320/440/521 pt, acceptance scrolled-up captures at 440/320 pt, chat-scroll running/done token captures at 440/320 pt.
 ## Versioning: SemVer, changelog, tags and app version (LKM-143)
 
 - [x] package.json `version` is the one SemVer source; build number = commit count of HEAD, plus the short sha (`scripts/version.mjs`).
