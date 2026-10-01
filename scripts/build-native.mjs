@@ -3,7 +3,8 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { nativeCatAssets } from './native-cat-assets.mjs'
 import { bundleBun } from './bundle-bun.mjs'
-import { serviceInfoPlist } from './service-info.mjs'
+import { appInfoPlist, serviceInfoPlist } from './service-info.mjs'
+import { buildInfo, versionLabel } from './version.mjs'
 import { build as bundle } from 'esbuild'
 import { MIN_MACOS, requireSupportedPlatform } from './requirements.mjs'
 
@@ -17,9 +18,13 @@ const contents = join(out, 'Trezi.app/Contents')
 // sources' `__dirname/../..` (the checkout root) is kept by pointing `__dirname` at
 // out/native, where these bundles were built before.
 const backendDir = join(contents, 'Resources/backend')
+// LKM-143: package version, commit count and short sha, stamped into both Info.plists
+// and both JS bundles (the backend shows it in Settings; `TREZI_VERSION`).
+const info = buildInfo(root)
+const label = versionLabel(info)
 const outDirname = {
-  define: { __dirname: '__treziOutDir' },
-  banner: { js: 'var __treziOutDir = require("node:path").resolve(__dirname, "../../../..");' }
+  define: { __dirname: '__treziOutDir', TREZI_VERSION: JSON.stringify(label) },
+  banner: { js: `// ${label}\nvar __treziOutDir = require("node:path").resolve(__dirname, "../../../..");` }
 }
 mkdirSync(join(contents, 'MacOS'), { recursive: true })
 mkdirSync(join(contents, 'Resources'), { recursive: true })
@@ -77,31 +82,14 @@ rmSync(join(out, 'Trezi Native.app'), { recursive: true, force: true })
 // earlier identifier (LKM-132 renamed it to dev.trezi.service).
 const services = join(contents, 'XPCServices')
 if (existsSync(services)) for (const name of readdirSync(services)) if (name !== 'dev.trezi.service.xpc') rmSync(join(services, name), { recursive: true, force: true })
-writeFileSync(
-  join(contents, 'Info.plist'),
-  `<?xml version="1.0" encoding="UTF-8"?>
-<plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>dev.praxis.native</string>
-<key>CFBundleName</key><string>Trezi</string>
-<key>CFBundleDisplayName</key><string>Trezi</string>
-<key>CFBundleIconFile</key><string>Trezi.icns</string>
-<key>CFBundleExecutable</key><string>TreziHost</string>
-<key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleVersion</key><string>1</string>
-<key>LSMinimumSystemVersion</key><string>${MIN_MACOS}</string>
-<key>NSHighResolutionCapable</key><true/>
-<key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>Folder</string><key>CFBundleTypeRole</key><string>Viewer</string><key>LSHandlerRank</key><string>None</string><key>LSItemContentTypes</key><array><string>public.folder</string></array></dict></array>
-<key>NSCameraUsageDescription</key><string>Allow your local project preview to test camera features when you approve.</string>
-<key>NSMicrophoneUsageDescription</key><string>Allow your local project preview to test microphone features when you approve.</string>
-</dict></plist>`
-)
+writeFileSync(join(contents, 'Info.plist'), appInfoPlist(info))
 const serviceContents = join(contents, 'XPCServices/dev.trezi.service.xpc/Contents')
 mkdirSync(join(serviceContents, 'MacOS'), { recursive: true })
-writeFileSync(join(serviceContents, 'Info.plist'), serviceInfoPlist())
+writeFileSync(join(serviceContents, 'Info.plist'), serviceInfoPlist(info))
 const serviceResult = Bun.spawnSync([
   'xcrun', 'swiftc', '-O', '-target', target,
   '-module-cache-path', join(out, 'module-cache'),
-  ...['ServiceContract', 'ServiceXPC', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile', 'WorkspaceOwner', 'MemoryFile', 'MemoryOwner', 'DomainChannel', 'BackendSupervisor', 'ProcessGuardian', 'ManagedProcess', 'RuntimeNet', 'RuntimeDetect', 'StaticSite', 'StaticServer', 'RuntimeServer', 'RuntimeOwner', 'RepositoryGit', 'RepositoryJournal', 'RepositoryEffects', 'RepositoryLanding', 'RepositoryMerge', 'RepositoryOwner', 'SourcePaths', 'SourceJournal', 'SourceHistory', 'SourceStore', 'SourceDrafts', 'SourceOwner', 'ConversationState', 'ConversationStore', 'ConversationOwner', 'ProviderPolicy', 'ProviderStore', 'ProviderHelper', 'ProviderFrames', 'ProviderData', 'ProviderLaunch', 'ProviderOwner', 'EditingIslands', 'EditingStores', 'EditingProject', 'EditingLegacyNames', 'EditingOwner', 'WorkflowJournal', 'WorkflowContext', 'WorkflowOwner', 'WorkflowPublish', 'WorkflowRemote', 'WorkflowSetup', 'WorkflowTools', 'PlatformTools', 'PlatformOpen', 'PlatformMedia', 'SimulatorTools', 'SimulatorBridge', 'SimulatorOwner', 'PlatformOwner', 'ProfilePaths', 'ServiceRuntime', 'ServiceMain'].map(name => join(root, `src/service/${name}.swift`)),
+  ...['ServiceContract', 'ServiceXPC', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile', 'WorkspaceOwner', 'MemoryFile', 'MemoryOwner', 'DomainChannel', 'BackendSupervisor', 'ProcessGuardian', 'ManagedProcess', 'RuntimeNet', 'RuntimeDetect', 'StaticSite', 'StaticServer', 'RuntimeServer', 'RuntimeOwner', 'RepositoryGit', 'RepositoryJournal', 'RepositoryEffects', 'RepositoryLanding', 'RepositoryCleanup', 'RepositoryMerge', 'RepositoryOwner', 'SourcePaths', 'SourceJournal', 'SourceHistory', 'SourceStore', 'SourceDrafts', 'SourceOwner', 'ConversationState', 'ConversationStore', 'ConversationOwner', 'ProviderPolicy', 'ProviderStore', 'ProviderHelper', 'ProviderFrames', 'ProviderData', 'ProviderLaunch', 'ProviderOwner', 'EditingIslands', 'EditingStores', 'EditingProject', 'EditingLegacyNames', 'EditingOwner', 'WorkflowJournal', 'WorkflowContext', 'WorkflowOwner', 'WorkflowPublish', 'WorkflowRemote', 'WorkflowSetup', 'WorkflowTools', 'PlatformTools', 'PlatformOpen', 'PlatformMedia', 'SimulatorTools', 'SimulatorBridge', 'SimulatorOwner', 'PlatformOwner', 'ProfilePaths', 'ServiceRuntime', 'ServiceMain'].map(name => join(root, `src/service/${name}.swift`)),
   '-o', join(serviceContents, 'MacOS/TreziService'), '-framework', 'Foundation', '-framework', 'Security', '-framework', 'CoreServices'
 ], { stdout: 'inherit', stderr: 'inherit' })
 if (serviceResult.exitCode) process.exit(serviceResult.exitCode)
@@ -131,6 +119,7 @@ const result = Bun.spawnSync(
     join(root, 'src/native/SidebarIcon.swift'),
     join(root, 'src/native/SourceList.swift'),
     join(root, 'src/native/PreviewSurface.swift'),
+    join(root, 'src/native/PreviewAgent.swift'),
     join(root, 'src/native/ToolbarLayout.swift'),
     join(root, 'src/native/Inspector.swift'),
     join(root, 'src/native/Composer.swift'),
@@ -194,5 +183,5 @@ for (const path of [join(out, 'TreziService'), join(contents, 'XPCServices/dev.t
 if (/require\(["']electron["']\)/.test(readFileSync(join(backendDir, 'index.cjs'), 'utf8')))
   throw new Error('Native backend still imports Electron')
 console.log(
-  'Built Trezi: Swift/AppKit UI, Bun services (bundled Bun), isolated WebKit project preview. Start it with open -a Trezi or trezi.'
+  `Built ${label}: Swift/AppKit UI, Bun services (bundled Bun), isolated WebKit project preview. Start it with open -a Trezi or trezi.`
 )

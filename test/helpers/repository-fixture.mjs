@@ -16,7 +16,7 @@ import { skipUnlessDarwin } from './darwin.mjs'
 const root = fileURLToPath(new URL('../..', import.meta.url))
 export const SOURCES = ['ServiceContract', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile',
   'WorkspaceOwner', 'DomainChannel', 'ManagedProcess', 'RepositoryGit', 'RepositoryJournal', 'RepositoryEffects', 'RepositoryLanding',
-  'RepositoryMerge', 'RepositoryOwner'].map(name => `src/service/${name}.swift`)
+  'RepositoryCleanup', 'RepositoryMerge', 'RepositoryOwner'].map(name => `src/service/${name}.swift`)
 
 /** Compiles the fixture once per source hash and compiler version; returns the binary path. */
 export function compileRepositoryFixture() {

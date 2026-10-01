@@ -1,6 +1,8 @@
 import { sourceStamp, sourceSelector } from './source-stamp'
 import { ANIMATION_REPLAY, ISLAND_OVERRIDE, ISLAND_OVERRIDE_REPLY } from '../shared/preview-channels'
 import { islandOverride } from './island-override'
+import './agent-console'
+import './agent-inspect'
 /**
  * Preview preload — injected into the previewed app's native WebContentsView.
  *

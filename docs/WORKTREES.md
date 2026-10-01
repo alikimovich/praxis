@@ -119,6 +119,38 @@ Implementation: `src/main/repo-write-queue.ts`, `src/main/chat-isolation.ts`,
 Regression coverage: `test/chat-worktrees.mjs`, `test/live-commit.mjs`,
 `test/chat-isolation.mjs`, `test/turn-terminal.mjs`.
 
+## Chat workspace cleanup
+
+Each open chat's checkout lives in the profile's `worktrees/` folder (LKM-136). They
+are removed in four ways, under the same rules: a parked or resolving chat, and a
+chat with a turn running or being prepared, is never touched; a checkout with
+uncommitted work is never removed. Its work goes to an `idle-<id>` recovery ref
+(once per distinct content) and the checkout stays.
+
+- **Close (archive).** Closing a chat lands its last turn and removes its checkout
+  (`releaseChat`). Deleting the chat from History afterwards has no checkout left.
+- **Idle.** Every hour, a chat with no turn for the period set in Settings → General
+  (1, 3, 7, 14 or 30 days, or Never; default 7) loses its checkout and retired branch
+  (`reclaimWorktree`). Its next turn recreates the checkout at the same path from the
+  live tree, then syncs and lands as usual. A running Claude session keeps its process
+  open across this; its tools resolve the path again, which works because the path is
+  the same.
+- **Clean up now.** Settings → General shows the disk use of all chat workspaces and
+  runs the idle cleanup with no idle period.
+- **Old-name folders.** Once, a minute after launch (and on Clean up now), the worktree
+  folders of the earlier app profiles beside this one (`<support>/<old app>/<old
+  name>/worktrees`, see `docs/agent-guide/legacy-names.md`) go through orphan recovery.
+  The repository service (`removeLegacyFolder`) then removes each folder, and its
+  old-name parent, only when it is empty (a `.DS_Store` aside). A folder
+  that still holds anything else (a checkout of a repository that no longer exists, a
+  moved-aside copy) stays. The profile's own store, even when it is physically an
+  old-name folder, is never one of them.
+
+Implementation: `src/main/chat-workspaces.ts`, `src/main/chat-isolation.ts`
+(`reclaimIdleWorkspace`, the recreate in `beforeTurn`),
+`src/service/RepositoryCleanup.swift`. Coverage: `test/chat-workspace-cleanup.mjs`
+(through the Swift owner) and `test/native-settings.mjs` (the Settings rows).
+
 ## Publishing a shared work branch
 
 Publish is a second repository-wide landing boundary after chat work reaches the live

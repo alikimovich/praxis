@@ -116,6 +116,10 @@ export class NativeView {
     executeJavaScript: (code: string) => Promise<any>
     insertCSS: (css: string) => Promise<string>
     removeInsertedCSS: (key: string) => Promise<any>
+    /** Agent preview tools (LKM-138): the TreziPreview or the handler-less TreziAgent world. */
+    evaluateIn: (code: string, world: 'preview' | 'agent', timeout: number) => Promise<unknown>
+    captureRect: (rect: { x: number; y: number; width: number; height: number }) => Promise<NativeImage>
+    setViewport: (width: number | null) => Promise<{ width: number | null; zoom: number }>
   }
   constructor(readonly id: string) {
     views.set(id, this)
@@ -146,7 +150,11 @@ export class NativeView {
           view: id,
           isolated: true,
           code: `document.getElementById(${JSON.stringify(key)})?.remove()`
-        })
+        }),
+      evaluateIn: (code, world, timeout) =>
+        bridge().request('evaluate', { view: id, code, isolated: world === 'preview', world }, timeout),
+      captureRect: async (rect) => new NativeImage(await bridge().request('capture', { view: id, rect })),
+      setViewport: (width) => bridge().request('previewViewport', { view: id, width })
     }
   }
   setBounds(bounds: object) {

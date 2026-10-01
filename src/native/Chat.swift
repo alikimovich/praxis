@@ -2,7 +2,8 @@ import AppKit
 import Combine
 import SwiftUI
 
-struct ChatSegment: Decodable { let kind: String; let text: String?; let at: Double?; let statuses: [String]?; let island: IslandView? }
+/// `labels` are the statuses with collapsed paths (`display-path.ts`); `statuses` keep the full text.
+struct ChatSegment: Decodable { let kind: String; let text: String?; let at: Double?; let statuses: [String]?; let labels: [String]?; let island: IslandView? }
 struct ChatAttachment: Decodable, Identifiable { let id: String; let kind: String?; let name: String?; let path: String?; let url: String? }
 struct ChatSelection: Decodable { let tag: String; let ident: String; let source: String? }
 struct ChatMessage: Decodable, Identifiable {
@@ -11,7 +12,7 @@ struct ChatMessage: Decodable, Identifiable {
     let attachments: [ChatAttachment]?; let selection: ChatSelection?; let revertGroup: String?
 }
 struct ChatAction: Decodable { let label: String; let action: String; let value: String?; let disabled: Bool? }
-struct ChatCard: Decodable, Identifiable { let id: String; let title: String; let detail: String?; let actions: [ChatAction] }
+struct ChatCard: Decodable, Identifiable { let id: String; let title: String; let detail: String?; let fullDetail: String?; let actions: [ChatAction] }
 struct ChatQuestionOption: Decodable { let label: String; let description: String? }
 struct ChatQuestion: Decodable { let header: String; let question: String; let options: [ChatQuestionOption]; let multiSelect: Bool }
 struct ChatQuestionRequest: Decodable, Identifiable { let id: String; let questions: [ChatQuestion] }
@@ -310,7 +311,11 @@ private struct NativeMessageRow: View {
                     else if segment.kind == "tools" {
                         DisclosureGroup {
                             ForEach(Array((segment.statuses ?? []).enumerated()), id: \.offset) { _, status in Text(status).font(ChatTypography.activity).lineSpacing(3).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
-                        } label: { Text(segment.statuses?.last ?? "Activity").font(ChatTypography.activity).lineLimit(1).foregroundStyle(.secondary) }
+                        } label: {
+                            // Collapsed: the short form, wrapped rather than cut mid-path; the full status is the tooltip.
+                            Text(segment.labels?.last ?? segment.statuses?.last ?? "Activity").font(ChatTypography.activity).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true).help(segment.statuses?.last ?? "")
+                        }
                     } else if let text = segment.text {
                         if message.role == "user" { Text(text).textSelection(.enabled).font(ChatTypography.body).lineSpacing(ChatTypography.lineSpacing).fixedSize(horizontal: false, vertical: true) }
                         else { ChatMarkdown(source: text, streaming: running).help(messageTime(segment.at ?? message.at)) }
@@ -363,8 +368,12 @@ private struct NativeChatCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(card.title).font(.headline)
-            if let detail = card.detail, !detail.isEmpty { Text(detail).textSelection(.enabled).font(.system(size: 12)) }
+            if let detail = card.detail, !detail.isEmpty { Text(detail).textSelection(.enabled).font(.system(size: 12)).help(card.fullDetail ?? "") }
             HStack {
+                // A collapsed detail copies with its full paths.
+                if let full = card.fullDetail {
+                    Button { copyChatText(full) } label: { Image(systemName: "doc.on.doc") }.buttonStyle(ChatActionButtonStyle()).help("Copy with full paths")
+                }
                 Spacer()
                 ForEach(Array(card.actions.enumerated()), id: \.offset) { _, action in
                     Button(action.label) { model.action(action.action, id: card.id, value: action.value) }.disabled(action.disabled ?? false)

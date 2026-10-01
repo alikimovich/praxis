@@ -9,6 +9,32 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Shadow block drag frames show through an isolated-world box-shadow override; one source write per gesture (release or 600 ms idle); override removed only once the page's own style shows the final value; one Undo group; LKM-133 conflict rules kept.
 - [x] Native `shadow-light` check: 8-step drag with 0 gaps, 0 out of order, 0 foreign and no write before release; `shadow-light-drag.png`, `shadow-light-released.png`, `shadow-light-drag.json`.
 - [ ] Manager: record the same drag on a real Next.js and a Vite/CSS fixture (npm registry access was denied in the worker sandbox).
+## Versioning: SemVer, changelog, tags and app version (LKM-143)
+
+- [x] package.json `version` is the one SemVer source; build number = commit count of HEAD, plus the short sha (`scripts/version.mjs`).
+- [x] Trezi.app and the XPC service Info.plists carry CFBundleShortVersionString, CFBundleVersion and `TreziCommit` (no hard-coded 1); the backend and provider-helper bundles carry the label.
+- [x] `trezi --version`, Settings › General › Version and About Trezi show "Trezi X.Y.Z (build N, sha)".
+- [x] CHANGELOG.md (Keep a Changelog, Unreleased, seeded), union merge, AGENTS.md rule.
+- [x] `bun run release <major|minor|patch>`: main + clean tree only; bumps, moves Unreleased, commits, annotated tag, no push.
+- [x] CI `scripts/check-version.mjs`; `test/versioning.mjs` (unit) covers the release script in a temp repo and the plist values.
+- [ ] Cut the first native release from main: `bun run release minor` → 0.1.0 (maintainer, after merge).
+## Short paths; chat worktree cleanup (LKM-136)
+
+- [x] One display-path formatter (`src/shared/display-path.ts`): project-relative paths, "chat workspace" / "Trezi data" / "temporary patch" / "recovery copy" labels, never truncated mid-path.
+- [x] Collapsed chat tool rows, the activity line, error/conflict cards, Activity lines and the preview error use it; full paths only in expanded rows, tooltips, Copy and Copy All. Logs and the ledger unchanged.
+- [x] Idle cleanup (default 7 days, Settings → General), lazy recreate on the next turn; parked, running and dirty checkouts kept (dirty work to an `idle-<id>` recovery ref).
+- [x] Closing a chat removes its clean checkout; old-name worktree folders removed once migrated or empty.
+- [x] Settings shows the chat workspaces' disk use and "Clean up now".
+- [ ] Manager: foreground check of Settings → General (usage row and Clean up now) in the native capture.
+## Preview inspection tools; the WebKit preview over external browsers (LKM-138)
+
+- [x] `preview_inspect`, `preview_evaluate`, `preview_console`, `preview_viewport` and element-cropped `preview_screenshot` run on the live preview through an isolated WKContentWorld (`TreziAgent`, no message handler); results are bounded and sanitized.
+- [x] `preview_evaluate` is read-only and bounded: parse-time rejection of loops and dynamic code, a membrane that throws on writes, navigation and storage, read-only call allowlist, 2 s and 64 KB limits.
+- [x] Exposed to Claude (in-process MCP and helper route) and Codex (MCP bridge); provider policy lists in TS, Swift and the golden fixture agree.
+- [x] Rules v25, the trezi-preview skill, README and PROVIDERS prefer the preview tools; agent-browser only for scripted multi-step interactions.
+- [x] Claude chats skip the user's own Claude Code plugins and MCP servers (`strictMcpConfig`, `enabledPlugins` false) but keep CLAUDE.md files and skills; Settings › General "Allow my Claude Code plugins in Trezi chats", off by default and persisted.
+- [x] Proof: `test/preview-agent-tools.mjs` (unit), `test/native-settings.mjs`, `test/rules.mjs`, the helper/MCP tool lists, and the native `agent-preview` check in the core group.
+- [ ] Async microtask recursion in `preview_evaluate` can still keep the page busy until the time limit; consider running evaluate off the main world's event loop if it bites.
 
 ## Claude first turn: no false "did not respond" (LKM-135)
 
