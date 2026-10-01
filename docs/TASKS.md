@@ -267,6 +267,13 @@ Root cause of the reported "not logged in" is open (Keychain/service context, se
 - [x] Route the acceptance wheel/mouse input as window-targeted events through NSApp.postEvent (pid-posted events had no window and were dropped); accept nil-window wheels over the chat; add input diagnostics and windowless routing coverage.
 - [ ] Manager: run native verification and inspect foreground normal/narrow/multiline captures, latest-message reachability, scrollbar idle/hover/drag/wheel behavior and Always-show/accessibility preferences.
 
+## Chat goes blank after sending until scrolled (LKM-139)
+
+- [x] Find the cause: the probe's AppKit pin jumps the clip view outside SwiftUI's scroll machinery; with far-off row estimates the LazyVStack realizes no row in the viewport (offset stays ≤ max, scroll view/document identity unchanged).
+- [x] Fix: `ChatLatestSettle` re-scrolls through SwiftUI per frame until a row is in view (pin held, 1pt bottom-marker relayout, periodic first-row reset), then lets the pin land; offsets outside the document are clamped.
+- [x] Windowless fixture `native-chat-latest-settle` (unit) with `--no-settle` negative control; native `send-visibility` stage in native-chat-scroll (440/320pt × fixed/growing composer, after send/mid-stream/done, captures).
+- [ ] Manager: run `test:native`; inspect `send-after-send.png`, `send-mid-stream.png` and `send-visibility.json`.
+
 ## Sidebar folder icons (LKM-105)
 
 - [x] Diagnose sidebar capture timeout with a windowless AppKit reproduction; compensate measured split wrapper insets and add content-width regression coverage.
