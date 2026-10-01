@@ -14,6 +14,8 @@
 //   helper, user settings do, Check login lists the names, and the setup-token still works;
 // - keychain: the Keychain and credentials-file probes against a fake `security` (every
 //   other part gets a fixture `security` too, LKM-127);
+// - no-keychain: the real `security` under the CI runner's empty HOME (LKM-142): no user
+//   keychain, reported the same in the helper as in this process; nothing is created;
 // - real-keychain: the real `security` against this session's keychains, or SKIP when the
 //   session has no user keychain (headless CI);
 // - card: the chat's login card (steps, Check login, Retry) and the pure classifiers.
@@ -23,6 +25,7 @@ import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -47,6 +50,7 @@ import {
   FAKE_HELPER,
   startProviderFixture
 } from './helpers/provider-fixture.mjs'
+import { runnerEnv } from './helpers/runner-env.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'trezi-provider-login-')))
@@ -142,11 +146,14 @@ async function chat(provider = 'fake') {
 try {
   // A turn that produces nothing ends on the first-event deadline; one that is heard does not.
   {
-    const run = await fixture({ PROVIDER_FIRST_EVENT: '0.5' })
+    // The deadline also covers the helper's cold start, which the turns expected to answer
+    // must beat: 35 ms idle, up to 0.65 s on a loaded machine (LKM-142), so not 0.5 s.
+    const FIRST_EVENT = 2
+    const run = await fixture({ PROVIDER_FIRST_EVENT: String(FIRST_EVENT) })
     const c = await chat('claude')
     const started = Date.now()
     const silent = await c.turn('hang')
-    assert.ok(Date.now() - started >= 450, 'the owner waited for its deadline')
+    assert.ok(Date.now() - started >= FIRST_EVENT * 1000 - 50, 'the owner waited for its deadline')
     assert.deepEqual(
       silent.map((e) => [e.type, e.code]),
       [
@@ -157,7 +164,7 @@ try {
     // No phase reports (a hang before the CLI started): the error names that phase (LKM-135).
     assert.equal(
       silent[0].message,
-      `${CLAUDE_MESSAGE}. Stopped while starting the Claude CLI (no answer in 0.5 s).`
+      `${CLAUDE_MESSAGE}. Stopped while starting the Claude CLI (no answer in ${FIRST_EVENT} s).`
     )
     await sleep(100)
     assert.equal(c.events.filter((e) => e.type === 'done').length, 1, 'the turn ended once')
@@ -170,7 +177,7 @@ try {
     // A turn that is heard (an approval card) is not cut off while the user decides.
     const asked = c.turn('ask Bash make')
     await until(() => c.events.some((e) => e.type === 'permission-request'), 'card')
-    await sleep(800)
+    await sleep(FIRST_EVENT * 1000 + 300)
     const id = c.events.find((e) => e.type === 'permission-request').request.id
     c.s.pending.get(id).settle('allow')
     assert.equal(c.delta(await asked), 'permission allow')
@@ -179,7 +186,7 @@ try {
     const generic = await fake.turn('hang')
     assert.equal(
       generic[0].message,
-      'The provider did not respond — check its login and retry. Stopped while starting the turn (no answer in 0.5 s).'
+      `The provider did not respond — check its login and retry. Stopped while starting the turn (no answer in ${FIRST_EVENT} s).`
     )
     c.s.shutdown()
     fake.s.shutdown()
@@ -637,12 +644,36 @@ esac
   // cannot exercise it, so the part says SKIP and why; it never passes on a fake.
   {
     const SECURITY = '/usr/bin/security'
-    const real = (args, capture) =>
+    const real = (args, capture, env = process.env) =>
       spawnSync(SECURITY, args, {
         encoding: 'utf8',
+        env,
         timeout: 4000,
         stdio: ['ignore', capture ? 'pipe' : 'ignore', 'ignore']
       })
+    // The runner's case on any Mac: a HOME with no Library/Keychains has no default
+    // keychain. `security` only reads here; the search list is never changed (LKM-127).
+    {
+      const { HOME } = runnerEnv(scratch)
+      const env = { ...process.env, HOME }
+      const listed = real(['list-keychains', '-d', 'user'], true, env)
+      const fallback = real(['default-keychain'], true, env)
+      assert.equal(listed.status, 0)
+      assert.ok(fallback.status > 0, `default-keychain under an empty HOME: exit ${fallback.status}`)
+      const run = await fixture({ bundled: loggedOut, security: SECURITY, HOME })
+      try {
+        const report = await run.owner.data.checkLogin('claude', WT)
+        assert.deepEqual(report.keychain, { listKeychains: 0, defaultKeychain: fallback.status }, report.detail)
+        assert.equal(report.keychainList, 'none')
+        assert.equal(report.keychainDefault, `unavailable (exit ${fallback.status})`)
+        assert.equal(report.keychainItem, false, 'the lookup ran and found nothing')
+        assert.match(report.detail, /\(no user keychain: a login kept in the Keychain cannot be read here\)/)
+        assert.deepEqual(readdirSync(HOME), ['.gitconfig'], 'the probe created nothing in HOME')
+      } finally {
+        await stop(run)
+      }
+      console.log('PROVIDER-LOGIN no-keychain PASS')
+    }
     const list = real(['list-keychains', '-d', 'user'], true)
     const fallback = real(['default-keychain'], true)
     const line = (run) =>
