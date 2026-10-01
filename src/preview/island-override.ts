@@ -52,7 +52,9 @@ function discover(from: string): Target[] {
   if (!expected || expected === 'none' || !document.body) return []
   const found: Target[] = []
   for (const el of [document.body, ...document.body.querySelectorAll('*')]) {
-    if (!(el instanceof HTMLElement) || shadowLayers(getComputedStyle(el).boxShadow) !== expected) continue
+    if (!(el instanceof HTMLElement)) continue
+    const shown = shadowLayers(getComputedStyle(el).boxShadow)
+    if (shown !== expected) continue
     found.push({ el, original: el.style.getPropertyValue(PROP), priority: el.style.getPropertyPriority(PROP), shown: null })
     if (found.length >= MAX_TARGETS) break
   }

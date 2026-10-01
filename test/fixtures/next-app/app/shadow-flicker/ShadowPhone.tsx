@@ -8,7 +8,7 @@ const SHADOW_layers = 3
 const SHADOW_decay = 0.6
 const SHADOW_color = 'rgba(0, 0, 0, 0.35)'
 const SHADOW_CSS =
-  '-8.64px 3.36px 24px rgba(0, 0, 0, 0.35), -5.184px 2.016px 14.4px rgba(0, 0, 0, 0.21), -3.1104px 1.2096px 8.64px rgba(0, 0, 0, 0.126)'
+  '-0.96px 0.373px 2.667px rgba(0, 0, 0, 0.35), -3.84px 1.493px 10.667px rgba(0, 0, 0, 0.21), -8.64px 3.36px 24px rgba(0, 0, 0, 0.126)'
 
 export default function ShadowPhone() {
   return (

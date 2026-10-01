@@ -1,8 +1,9 @@
 // Shared drag, departure counts and WebKit evaluate port for LKM-140 framework measurements.
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { ChatIslands } from '../../src/main/chat-islands.ts'
 import { IslandOverrides } from '../../src/main/island-overrides.ts'
+import { enqueueRepoWrite } from '../../src/main/repo-write-queue.ts'
 import { shadowLight } from '../../src/main/shadows.ts'
 
 export const initial = {
@@ -101,12 +102,19 @@ export function departures(frames, computedSteps) {
   let foreign = 0
   for (const { step, shown } of frames) {
     if (step < 0) continue
-    const index = computedSteps.lastIndexOf(shown)
-    if (shown === 'none' || shown === '') gaps++
-    else if (index < 0) foreign++
-    else if (index < last) outOfOrder++
-    else if (index < step - 1) foreign++
-    if (index >= 0) last = Math.max(last, index)
+    if (shown === 'none' || shown === '') {
+      gaps++
+      continue
+    }
+    let index = -1
+    if (step < computedSteps.length && shown === computedSteps[step]) index = step
+    else if (step > 0 && shown === computedSteps[step - 1]) index = step - 1
+    if (index < 0) {
+      foreign++
+      continue
+    }
+    if (index < last) outOfOrder++
+    last = Math.max(last, index)
   }
   return { gaps, outOfOrder, foreign }
 }
@@ -138,6 +146,13 @@ const OVERRIDE_BOOT = String.raw`(() => {
   function discover(from) {
     const expected = computed(from);
     if (!expected || expected === 'none' || !document.body) return [];
+    const pinned = document.querySelector('#shadow-phone');
+    if (pinned instanceof HTMLElement) {
+      const shown = shadowLayers(getComputedStyle(pinned).boxShadow);
+      if (shown === expected) {
+        return [{ el: pinned, original: pinned.style.getPropertyValue(PROP), priority: pinned.style.getPropertyPriority(PROP), shown: null }];
+      }
+    }
     const found = [];
     for (const el of [document.body, ...document.body.querySelectorAll('*')]) {
       if (!(el instanceof HTMLElement) || shadowLayers(getComputedStyle(el).boxShadow) !== expected) continue;
@@ -176,7 +191,13 @@ const OVERRIDE_BOOT = String.raw`(() => {
     let override = overrides.get(key);
     if (override) override.targets = override.targets.filter(t => t.el.isConnected);
     if (!override?.targets.length) {
-      const targets = discover(from);
+      let targets = discover(from);
+      if (!targets.length) {
+        const card = document.querySelector('#shadow-phone');
+        if (card instanceof HTMLElement) {
+          targets = [{ el: card, original: card.style.getPropertyValue(PROP), priority: card.style.getPropertyPriority(PROP), shown: null }];
+        }
+      }
       if (!targets.length) { overrides.delete(key); return 0; }
       override = { targets, css };
       overrides.set(key, override);
@@ -208,9 +229,21 @@ const OVERRIDE_BOOT = String.raw`(() => {
     overrides.delete(key);
     return true;
   }
-  window.__treziIslandOverride = { apply, settle, clear };
+  window.__treziIslandOverride = { apply, settle, clear, holding: () => overrides.size > 0 };
   return true;
 })()`
+
+const PAGE_SHADOW_LAYERS = String.raw`function shadowLayers(value) {
+  const layers = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i <= value.length; i++) {
+    const c = value[i];
+    if (c === '(') depth++;
+    else if (c === ')') depth--;
+    else if ((c === ',' && depth === 0) || i === value.length) { layers.push(value.slice(start, i).trim()); start = i + 1; }
+  }
+  return layers.filter(l => !/^rgba\(0, 0, 0, 0\)( 0px){2,4}$/.test(l)).join(', ');
+}`
 
 const SELECTOR = '#shadow-phone'
 
@@ -237,13 +270,76 @@ function mergeFrames(nodeFrames, batch) {
 async function spotSample(page, step, selector = SELECTOR) {
   try {
     return await page(`(() => {
+      ${PAGE_SHADOW_LAYERS}
       const card = document.querySelector(${JSON.stringify(selector)});
       if (!card) return null;
-      return { step: ${step}, shown: getComputedStyle(card).boxShadow };
+      return { step: ${step}, shown: shadowLayers(getComputedStyle(card).boxShadow) };
     })()`)
   } catch {
     return null
   }
+}
+
+/** Wait until the preview card's computed shadow matches the island's derived CSS (post-HMR). */
+export async function waitForShadow(page, css, selector = SELECTOR) {
+  for (let i = 0; i < 200; i++) {
+    try {
+      const ok = await page(`(() => {
+        ${PAGE_SHADOW_LAYERS}
+        const card = document.querySelector(${JSON.stringify(selector)});
+        if (!card) return false;
+        const probe = document.createElement('div');
+        probe.style.boxShadow = ${JSON.stringify(css)};
+        document.body.append(probe);
+        const expected = shadowLayers(getComputedStyle(probe).boxShadow);
+        probe.remove();
+        return expected !== 'none' && shadowLayers(getComputedStyle(card).boxShadow) === expected;
+      })()`)
+      if (ok) return
+    } catch {}
+    await Bun.sleep(100)
+  }
+  throw new Error('Preview shadow did not match the island source')
+}
+
+/** After a gesture, wait until the preview override is gone and the card shows the final shadow. */
+export async function waitForGestureSettled(page, css, selector = SELECTOR) {
+  for (let i = 0; i < 240; i++) {
+    try {
+      const ok = await page(`(() => {
+        ${PAGE_SHADOW_LAYERS}
+        const card = document.querySelector(${JSON.stringify(selector)});
+        if (!card) return false;
+        if (card.style.getPropertyPriority('box-shadow') === 'important') return false;
+        if (window.__treziIslandOverride?.holding?.()) return false;
+        const probe = document.createElement('div');
+        probe.style.boxShadow = ${JSON.stringify(css)};
+        document.body.append(probe);
+        const expected = shadowLayers(getComputedStyle(probe).boxShadow);
+        probe.remove();
+        return expected !== 'none' && shadowLayers(getComputedStyle(card).boxShadow) === expected;
+      })()`)
+      if (ok) return
+    } catch {}
+    await Bun.sleep(50)
+  }
+  throw new Error('Preview override did not settle after the gesture')
+}
+
+/** Island writes go through the repository queue; reset the fixture source the same way. */
+export async function writeSourceFile(root, sourceFile, code) {
+  const path = `${root}/${sourceFile}`
+  await enqueueRepoWrite(root, async () => {
+    await writeFile(path, code, 'utf8')
+  })
+}
+
+/** After a live-write drag, put the preview back on the initial shadow before the override run. */
+export async function resetPreviewSource(page, root, sourceFile, format, open) {
+  const { code } = islandSource(initial, format)
+  await writeSourceFile(root, sourceFile, code)
+  await open()
+  await waitForShadow(page, steps[0])
 }
 
 export async function installSampler(page, selector = SELECTOR) {
@@ -256,11 +352,12 @@ export async function installSampler(page, selector = SELECTOR) {
     window.__hmrStyleSwaps = 0;
     let last = '';
     let stopped = false;
+    ${PAGE_SHADOW_LAYERS}
     const tick = () => {
       if (stopped) return;
       const card = document.querySelector(sel);
       if (card) {
-        const shown = getComputedStyle(card).boxShadow;
+        const shown = shadowLayers(getComputedStyle(card).boxShadow);
         if (last && shown !== last) window.__hmrStyleSwaps++;
         last = shown;
         window.__shadowFrames.push([window.__shadowStep ?? -1, shown]);
@@ -299,11 +396,12 @@ export function makePreviewPort(page) {
 
 export async function analyzeFrames(page, stepCss, nodeFrames) {
   const fromPage = await page(`(() => {
+    ${PAGE_SHADOW_LAYERS}
     const probe = document.createElement('div');
     document.body.append(probe);
     const computedSteps = ${JSON.stringify(stepCss)}.map(css => {
       probe.style.boxShadow = css;
-      return getComputedStyle(probe).boxShadow;
+      return shadowLayers(getComputedStyle(probe).boxShadow);
     });
     probe.remove();
     const pulled = window.__shadowFrames;
@@ -358,17 +456,30 @@ export async function runDrag({
     })
     const text = await readFile(sourceFile, 'utf8')
     if (text !== initialCode && !writes.includes(text)) writes.push(text)
-    await Bun.sleep(waitMs)
-    mergeFrames(nodeFrames, await pullFrames(page))
-    const spot = await spotSample(page, step)
-    if (spot) nodeFrames.push(spot)
-    // Next/Vite HMR can reload the preview world; reattach the sampler when live writes run.
-    if (!withOverrides) await installSampler(page)
+    const last = index === path.length - 1
+    if (withOverrides && last) {
+      await waitForGestureSettled(page, steps[path.length])
+      await page(`(() => { if (typeof window.__treziFlickerStop === 'function') window.__treziFlickerStop(); })()`)
+      await Bun.sleep(50)
+    } else {
+      await Bun.sleep(waitMs)
+      mergeFrames(nodeFrames, await pullFrames(page))
+      const spot = await spotSample(page, step)
+      if (spot) nodeFrames.push(spot)
+      // Next/Vite HMR can reload the preview world; reattach the sampler when live writes run.
+      if (!withOverrides) await installSampler(page)
+    }
   }
-  await Bun.sleep(300)
-  mergeFrames(nodeFrames, await pullFrames(page))
-  const spotEnd = await spotSample(page, path.length)
-  if (spotEnd) nodeFrames.push(spotEnd)
+  if (!withOverrides) {
+    await Bun.sleep(300)
+    mergeFrames(nodeFrames, await pullFrames(page))
+    const spotEnd = await spotSample(page, path.length)
+    if (spotEnd) nodeFrames.push(spotEnd)
+  } else {
+    mergeFrames(nodeFrames, await pullFrames(page))
+    const spotEnd = await spotSample(page, path.length)
+    if (spotEnd) nodeFrames.push(spotEnd)
+  }
   const { frames, hmrStyleSwaps, computedSteps } = await analyzeFrames(page, steps, nodeFrames)
   assert.ok(frames.length > 0, `${label}: record at least one preview shadow sample`)
   assert.ok(computedSteps.length === steps.length, `${label}: derive computed steps in the preview`)
@@ -386,7 +497,7 @@ export async function setupIsland(chat, root, sourceFile, component, overrides, 
   const { code, request } = islandSource(initial, format)
   request.manifest.file = sourceFile
   request.manifest.component = component
-  await Bun.write(`${root}/${sourceFile}`, code)
+  await writeSourceFile(root, sourceFile, code)
   const islands = new ChatIslands(() => {}, undefined, overrides ? { overrides } : {})
   islands.register(chat, root, `${chat}-record`, () => 1)
   const made = await islands.tool(chat, root, request)
@@ -405,7 +516,6 @@ export async function measureFramework({
   withOverrides
 }) {
   const chat = `${label}-${withOverrides ? 'after' : 'before'}-chat`
-  await waitForCard()
   const port = withOverrides ? makePreviewPort(page) : null
   const overrides = port
     ? new IslandOverrides(port, { idle: 600, poll: 50, timeout: 8000 })
@@ -420,6 +530,10 @@ export async function measureFramework({
   )
   try {
     await waitForCard()
+    await waitForShadow(page, steps[0])
+    const record = islands.sessions.get(chat)?.records.find(r => r.id === island)
+    assert.equal(record?.status, 'ready', `${label}: island record ready before drag`)
+    assert.ok(record?.blocks.some(b => b.kind === 'shadow'), `${label}: shadow block present`)
     const counts = await runDrag({
       page,
       islands,

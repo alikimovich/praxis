@@ -13,7 +13,7 @@ import { spawnHostBridge } from './host-bridge.mjs'
 import { NEXT_ADAPTER_CONTENT, NEXT_LOADER_CONTENT } from '../../src/main/setup-next.ts'
 import { REACT_HELPER_CONTENT } from '../../src/main/setup-react.ts'
 import { MDX_HELPER_CONTENT } from '../../src/main/setup-mdx.ts'
-import { measureFramework } from './island-flicker-framework-core.mjs'
+import { measureFramework, resetPreviewSource } from './island-flicker-framework-core.mjs'
 
 if (
   process.platform !== 'darwin' ||
@@ -146,7 +146,13 @@ try {
           component: 'ShadowPhone',
           withOverrides: false
         })
-        await open()
+        await resetPreviewSource(
+          page,
+          nextRoot,
+          'app/shadow-flicker/ShadowPhone.tsx',
+          'tsx',
+          open
+        )
         await measureFramework({
           label: 'next',
           page,
@@ -179,7 +185,7 @@ try {
           component: 'Shadow',
           withOverrides: false
         })
-        await open()
+        await resetPreviewSource(page, viteRoot, 'src/phone.js', 'js', open)
         await measureFramework({
           label: 'vite',
           page,
