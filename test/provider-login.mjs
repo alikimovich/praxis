@@ -155,7 +155,11 @@ try {
         ['done', undefined]
       ]
     )
-    assert.equal(silent[0].message, CLAUDE_MESSAGE)
+    // No phase reports (a hang before the CLI started): the error names that phase (LKM-135).
+    assert.equal(
+      silent[0].message,
+      `${CLAUDE_MESSAGE}. Stopped while starting the Claude CLI (no answer in 0.5 s).`
+    )
     await sleep(100)
     assert.equal(c.events.filter((e) => e.type === 'done').length, 1, 'the turn ended once')
     // Its helper was stopped; the next message starts a new one on the same chat.
@@ -174,7 +178,10 @@ try {
     // The fake provider gets the generic message.
     const fake = await chat()
     const generic = await fake.turn('hang')
-    assert.equal(generic[0].message, 'The provider did not respond — check its login and retry')
+    assert.equal(
+      generic[0].message,
+      'The provider did not respond — check its login and retry. Stopped while starting the turn (no answer in 0.5 s).'
+    )
     c.s.shutdown()
     fake.s.shutdown()
     await stop(run)
@@ -211,6 +218,8 @@ try {
       crash[0].message,
       /stopped unexpectedly \(status 7\)\. Send your message again to continue\./
     )
+    // It died before any output: the message names that phase (LKM-135).
+    assert.match(crash[0].message, /It exited while starting the Claude CLI\.$/)
     await sleep(200)
     assert.equal(
       c.delta(await c.turn('say after the crash')),

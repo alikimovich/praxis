@@ -86,7 +86,7 @@ struct SheetContent: View {
                                         ForEach(field.choices ?? []) { choice in Text(choice.label).tag(choice.value) }
                                     }.labelsHidden().accessibilityLabel(field.label)
                                 } else if field.kind == "multichoice" {
-                                    TextField("Filter models", text: Binding(get: { model.filters[field.id] ?? "" }, set: { model.filters[field.id] = $0 })).textFieldStyle(.roundedBorder)
+                                    TextField(field.placeholder ?? "Filter models", text: Binding(get: { model.filters[field.id] ?? "" }, set: { model.filters[field.id] = $0 })).textFieldStyle(.roundedBorder)
                                     VStack(alignment: .leading) {
                                         ForEach((field.choices ?? []).filter { (model.filters[field.id] ?? "").isEmpty || $0.label.localizedCaseInsensitiveContains(model.filters[field.id] ?? "") }) { choice in
                                             Toggle(choice.label, isOn: Binding(get: { selected(field).contains(choice.value) }, set: { enabled in

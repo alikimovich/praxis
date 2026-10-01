@@ -10,6 +10,22 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Photos trigger: Check login without a project ran the helper and `claude auth status` with cwd `$HOME`. Helpers never run in a home, `/` or an ancestor (`ProviderHelperProcess.workingDirectory`). Check login, the login-shell probe and `skills add -g` use the temporary folder.
 - [x] Tests: `test/signing-identity.mjs`, `test/keychain-migration.mjs`, `test/provider-login.mjs` `helper-cwd`. Docs: README "Code signing" (one more Keychain approval, then none), `docs/PROVIDERS.md`, `docs/agent-guide/legacy-names.md`.
 - [ ] Manager/operator: after this build, confirm on the operator Mac that `codesign -d -r- out/native/Trezi.app` stays the same across two rebuilds, and that the Keychain asks once and then not again.
+## Claude first turn: no false "did not respond" (LKM-135)
+
+- [x] Cold-start phases (helper ready, auth probe, CLI started, session init, first model event, no-response/exit) logged at debug level in the service log.
+- [x] Deadline by phase: 90 s only until the CLI starts; then 10 min for the session init and the first output, renewed by `phase`/`progress` reports; "Still starting Claude…"/"Still thinking…" after 20 s instead of an error.
+- [x] The no-response card (and a pre-output exit) names the phase it stopped in.
+- [x] Auth probes once per app session (owner cache passed in `open`), bundled and installed in parallel, re-probed after a sign-in failure, a saved token or Check login.
+- [x] Pre-warm: the Claude helper and CLI start when the chat opens (checked by the `cli` phase before any send).
+- [x] `test/provider-cold-start.mjs` (unit): slow init/think/progress pass, three kinds of hang still fail with the named phase, probes parallel and cached.
+- [ ] Codex and Gemini helpers report no phases yet (they keep the LKM-119 90 s deadline).
+## Startup recovery reports each interrupted operation once (LKM-134)
+
+- [x] Journal version 2: the service resolves every open interrupted entry when it opens the journal (synced first), so `status.recovered` reports each at exactly one launch; refs are kept.
+- [x] Version 1 journals: open entries (already reported at every earlier launch) are closed silently and counted in `closedEarlier`; one summary line.
+- [x] Saved work is reported at info level (missing/unreadable refs as a warning, not red); only a damaged journal is an error (`recoveryNotices`).
+- [x] Activity › Recovery Refs… lists kept refs and deletes only selected, confirmed refs still at the listed commit (`recoveryRefs` / `deleteRecoveryRefs`). Nothing deletes them automatically.
+- [x] `test/repository-recovery.mjs` (unit): once across two restarts, legacy close with one summary line, explicit delete.
 
 ## Shadow Light without a preview box; islands apply live (LKM-133)
 

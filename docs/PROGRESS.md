@@ -19,6 +19,47 @@ Newest first. Append a dated entry when you finish a chunk of work.
   - `test/provider-login.mjs` `helper-cwd`: a home, `/`, an ancestor or a missing root never becomes the helper's cwd, and a project root is kept.
   - `test/distribution.mjs`: the signer, the helper path and no hard-coded ad hoc signing.
   - The keychain parts need a session that can create a keychain. In a sandbox they print SKIP; the agent ran them unsandboxed and they passed. Verify quick ran them for real.
+## 2026-09-30 — LKM-135: Claude first turn: no false "did not respond"
+
+- **Why healthy cold turns failed.** The LKM-119 deadline (90 s with no first event) covered the whole cold path as one silence: helper spawn, the bundled and installed `claude auth status` probes one after the other, a cold CLI start, and the model thinking. The init's resume-id record also counted as "heard", so the deadline was really "until the session init" and nothing after it.
+- **Phases, not one timer.**
+  - The Claude adapter sends `phase` frames through the helper host:
+    - `auth`: probed or cached, with the chosen CLI;
+    - `cli`: `supportedCommands()` answered, or the first SDK message;
+    - `init`: system init;
+    - `progress`: any other system message, at most one per second.
+  - The owner (`ProviderLaunch.swift`) waits for each turn in one of three states: `cli`, `initialization` or `model`.
+    - Only `cli` uses `firstEventTimeout` (90 s).
+    - The others use `replyTimeout` (600 s), which every phase or progress frame renews.
+    - After `stillThinking` (20 s), once the CLI is up, it relays one "Still starting Claude…" or "Still thinking…" status.
+  - The no-response message names the phase, e.g. "Stopped while starting the Claude CLI (no answer in 90 s)". A helper exit before any output appends "It exited while …".
+  - A resume-only record (no entries, no files) no longer counts as output. Phase frames are validated: an unknown phase or malformed field is a grant violation.
+- **Debug timings.** `options.log` (the service diagnostics file under XPC, stderr in the fixture) gets `debug provider claude <id8>: helper ready N ms after launch`, `auth probe N ms (probed|cached choice)`, `CLI started …`, `session init N ms after send`, `first model event N ms after send`, `no-response while …` and `helper exited … while …`. No token or environment is logged.
+- **Fewer probes.**
+  - `resolveClaudeCli` probes the bundled and installed CLIs with one `Promise.all`.
+  - The owner caches a logged-in choice (`claudeCli`, validated: bundled, or an absolute `…/claude` that is still executable) and passes it as `cli` in the next Claude helper's `open`. That helper skips the probes.
+  - An `auth` error event, `seatTokenSave` and `diagnose` clear the cache; the adapter also forgets its own copy on a sign-in failure.
+- **Pre-warm** was already structural: sessions start on project/chat open, so the helper and CLI warm while the user types. The `cli` phase, logged before any send, now proves it.
+- **Proof.** New `test/provider-cold-start.mjs` (unit) runs the real adapter in the real helper under the owner fixture, with stand-in bundled/installed CLIs and scaled deadlines (0.5 s for 90 s, 2.5 s for 600 s, 0.3 s for 20 s).
+  - Prewarm: the CLI starts before any send; the two probes overlap in time.
+  - Slow but healthy turns finish without an error and show the right "Still …" status: an init 3× the short deadline, a 1.5 s think, and 4 s of progress (longer than the reply deadline).
+  - The cache: a second chat probes nothing and runs on the cached installed CLI; after an `auth` error the next chat probes again.
+  - Real hangs still end with the card, naming the phase: no `initialize` answer (in under 2 s), no init, and init without output.
+  - `test/provider-login.mjs` was updated for the phase-named messages and asserts the exit phase.
+- `test/provider-helper-tools.mjs` fails at its Codex bridge check (`workspace_state` not routed while opening). It fails the same way on an untouched HEAD export, so it is not caused by this change.
+## 2026-09-30 — LKM-134: Startup recovery reports each interrupted operation once
+
+- **Why the same five red lines came back at every launch.** The repository journal moved an interrupted operation to `interrupted` and kept it there until an explicit `acknowledge`, which nothing in the app ever sent. Bun printed the whole `interrupted` list at each launch, at error level. The entries were the Resolve attempts made before LKM-130; their recovery refs existed, so no work was lost. Nothing was ever replayed for them; only the report repeated.
+- **Fix: resolve on open, durably, before reporting.** `RepositoryJournal` is now version 2 and an interrupted entry carries `resolved`. `open()` resolves every open entry (crash-interrupted active ones and ones a failed effect interrupted mid-session) and syncs that before `status` can be read. `status.recovered` is this launch's report, so an entry appears at exactly one launch however often Trezi restarts. If the app dies before Bun shows the line, only the line is lost; the refs stay and are listed under Recovery Refs.
+- **Migration.** A version 1 journal reported its open entries at every launch, so those are resolved without a new report and counted in `status.closedEarlier`. Bun shows one summary line ("Closed 5 interrupted repository operations that earlier launches already reported; their recovery refs are kept."). No ref is touched.
+- **Levels.** `recoveryNotices` (`src/native/repository-recovery.ts`): saved work is info (it no longer opens the Activity window). A journaled ref that is not in the repository (deleted since, or never created because the crash came before the step it guarded) and an unreadable repository are warnings (orange). Only a damaged journal, which blocks repository changes, stays red.
+- **View and delete.** New Activity button **Recovery Refs…** opens a sheet listing every `refs/trezi/recovery/*` ref of the open projects and the journal's repositories (owner read `recoveryRefs`: ref, commit, date, subject). The user checks refs, chooses Delete Selected…, and confirms in a second sheet. `deleteRecoveryRefs` (mutation, `intent:"discard"`, in the repository's lane) runs `update-ref -d <ref> <sha>` per ref, so a ref that moved since it was listed is kept. It refuses any name outside the namespace. Nothing deletes recovery refs automatically. The multichoice sheet field gained a `placeholder` (it said "Filter models").
+- **Proof.** New `test/repository-recovery.mjs` (unit, real Swift owner fixture + Bun client):
+  - a stageResolve killed at `resolve.reset` is in `recovered` once (info, names its `-parked` ref, journal entry `resolved`), and at the next two launches `recovered` is empty, the entry stays resolved and the ref is kept;
+  - a hand-written version 1 journal with five open stageResolve entries whose refs exist: first launch reports none, `closedEarlier` 5, exactly one info line, journal rewritten as version 2 with all resolved, all five refs kept; the second launch reports nothing;
+  - `recoveryRefs` lists the five refs (also with no roots, from the journal); deleting `refs/heads/main` or without intent fails; a stale sha keeps the ref; the sheet refuses an empty selection, deletes nothing before confirmation, then deletes exactly the selected ref and reports "Deleted 1 recovery ref." at info;
+  - notice levels: saved/no-ref → info, missing/unreadable → warning, damaged journal → error.
+  - `repository-owner` (including the crash, relaunch and parity suites) passes unchanged. Native GUI groups run through the manager tool.
 
 ## 2026-09-30 — LKM-133: Shadow Light has no preview box; island controls apply live
 
