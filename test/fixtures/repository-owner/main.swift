@@ -45,7 +45,13 @@ while let line = readLine(strippingNewline: true) {
             let context = RepositoryContext(operationID: UUID().uuidString, kind: "applyBranch", lane: effects.lane(root), root: root, effects: effects)
             do {
                 let applied = try effects.applyToWorkingTree(context, root, patch: Data(patch.utf8))
-                emit([("ok", .bool(applied.ok)), ("conflict", .bool(applied.conflict)), ("message", applied.error.map { .string(JSText($0)) } ?? .null)])
+                let problems = applied.problems.map { problem in
+                    JSValue.object([(JSText("reason"), .string(JSText(problem.reason.rawValue))),
+                                    (JSText("file"), problem.file.map { .string(JSText($0)) } ?? .null),
+                                    (JSText("line"), problem.line.map { .number(Double($0)) } ?? .null)])
+                }
+                emit([("ok", .bool(applied.ok)), ("conflict", .bool(applied.conflict)), ("message", applied.error.map { .string(JSText($0)) } ?? .null),
+                      ("problems", .array(problems))])
             } catch { emit([("error", .string(JSText("\(error)")))]) }
         default: emit([("error", .string(JSText("unknown command \(name)")))])
         }
