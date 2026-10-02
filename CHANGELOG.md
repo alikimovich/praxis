@@ -25,6 +25,7 @@ Every change that alters user-visible behaviour adds one line under Unreleased.
 - Connection keys and the subscription token are encrypted through `Contents/Helpers/TreziSecrets`; the master key lives in `dev.trezi.native.secrets`, migrated once from the earlier item name.
 - Chat: steadier scrolling and follow behaviour, composer attachments as thumbnails, queued messages, interactive islands in the conversation and more reliable Stop and recovery.
 - Chat: per-turn token counts show inline with the working status while a turn runs and under each response’s Copy/Revert row when it finishes, instead of pinned above the composer; scroll-to-latest is a centered round control just above the composer, with transcript content faded out behind it when you have scrolled up.
+- Preview toolbar: the address/branch block fills the free width up to the right action groups and follows window resizes live; a long URL truncates in the middle and a branch at its end only when space is short.
 
 ### Fixed
 - Chat: the transcript no longer goes blank after sending until scrolled.
