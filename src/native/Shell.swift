@@ -39,14 +39,20 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     private(set) var sidebarButtons: [String: NSButton] = [:]
     private var previewState: [String: Any] = [:]
     private var sidebarBeforeExpand = false
-    private let chatHeader = ChatToolbarView()
+    let chatHeader = ChatToolbarView()
     private let chatTitle = NSTextField(labelWithString: "Chat")
     private let chatActions = ChatToolbarActions(frame: .zero)
-    private var addressWidth: NSLayoutConstraint?
+    // The address block and its layout (`ToolbarAddress.swift`).
+    var addressWidth: NSLayoutConstraint?
+    var addressLayout = ToolbarAddressLayout()
+    let addressHeader = ToolbarAddressView()
     private var chatHeaderWidth: NSLayoutConstraint!
     private var previewTextColor = NSColor.labelColor
-    private let address = NSTextField()
-    private let branchMenu = NSPopUpButton(frame: .zero, pullsDown: true)
+    let address = NSTextField()
+    let branchMenu = NSPopUpButton(frame: .zero, pullsDown: true)
+    var publishTitle = "Publish"
+    /// Toolbar frames read synchronously inside the last `window-width` test resize.
+    var resizeSnapshot: [String: Any] = [:]
 
     init(window: NSWindow, canvas: NSView) {
         contentCanvas = canvas
@@ -107,8 +113,12 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         toolbar = NSToolbar(identifier: "TreziNativePreviewToolbar")
         toolbar.delegate = self; toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false; toolbar.autosavesConfiguration = false
-        chatHeader.align = { [weak self] in self?.alignChatHeader() }
+        chatHeader.align = { [weak self] in self?.measureToolbar() }
+        addressHeader.measure = { [weak self] in self?.measureToolbar() }
         NotificationCenter.default.addObserver(self, selector: #selector(splitResized(_:)), name: NSSplitView.didResizeSubviewsNotification, object: split.splitView)
+        // Window resizes set the toolbar widths synchronously, in the same layout pass.
+        NotificationCenter.default.addObserver(self, selector: #selector(windowResized(_:)), name: NSWindow.didResizeNotification, object: window)
+        NotificationCenter.default.addObserver(self, selector: #selector(splitResized(_:)), name: NSWindow.didEndLiveResizeNotification, object: window)
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
         window.titleVisibility = .hidden
@@ -116,7 +126,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         toolbarLayout = ToolbarLayout(toolbar: toolbar, sidebar: sidebarItem)
     }
     @objc private func splitResized(_ notification: Notification) {
-        DispatchQueue.main.async { [weak self] in self?.alignChatHeader() }
+        DispatchQueue.main.async { [weak self] in self?.measureToolbar() }
     }
     func updatePreviewColor(_ color: NSColor) {
         guard let rgb = color.usingColorSpace(.sRGB) else { return }
@@ -130,21 +140,32 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         if let editor = address.currentEditor() as? NSTextView {
             editor.textColor = previewTextColor; editor.insertionPointColor = previewTextColor
         }
-        if let first = branchMenu.menu?.items.first {
-            first.attributedTitle = NSAttributedString(string: first.title, attributes: [.foregroundColor:previewTextColor, .font:NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)])
-        }
+        if let first = branchMenu.menu?.items.first { first.attributedTitle = branchTitle(first.title) }
+    }
+    private func branchTitle(_ title: String) -> NSAttributedString {
+        let style = NSMutableParagraphStyle(); style.lineBreakMode = .byTruncatingTail
+        return NSAttributedString(string: title, attributes: [.foregroundColor:previewTextColor, .font:NSFont.systemFont(ofSize: NSFont.smallSystemFontSize), .paragraphStyle:style])
     }
     func setChatGeometry(_ width: CGFloat) { previewState["chatWidth"] = Double(width); alignChatHeader() }
     var previewLeading: CGFloat { CGFloat(previewState["chatWidth"] as? Double ?? 440) }
+    /// The chat header follows the chat column; the address block fills the rest (`ToolbarAddressLayout`).
     func alignChatHeader() {
-        guard chatHeader.window != nil, chatHeaderWidth != nil else { return }
-        let detail = split.splitViewItems[1].viewController.view
-        let target = detail.convert(.zero, to: nil).x + (previewState["chatWidth"] as? Double ?? 440)
-        let leading = chatHeader.convert(.zero, to: nil).x
-        let width = min(max(100, target - leading), max(100, (window?.frame.width ?? 1320) - leading - 500))
-        addressWidth?.constant = min(180, max(80, (window?.frame.width ?? 1320) - leading - width - 400))
-        chatTitle.isHidden = !chatReady || chatHidden || width < 150
-        if abs(chatHeaderWidth.constant - width) > 0.5 { chatHeaderWidth.constant = width }
+        let windowWidth = window?.frame.width ?? 1320
+        var chatTrailing: CGFloat?
+        if chatHeader.window != nil, chatHeaderWidth != nil {
+            let detail = split.splitViewItems[1].viewController.view
+            let target = detail.convert(.zero, to: nil).x + (previewState["chatWidth"] as? Double ?? 440)
+            let leading = chatHeader.convert(.zero, to: nil).x
+            let width = min(max(100, target - leading), max(100, addressLayout.chatLimit(windowWidth: windowWidth, chatLeading: leading)))
+            chatTitle.isHidden = !chatReady || chatHidden || width < 150
+            if abs(chatHeaderWidth.constant - width) > 0.5 { chatHeaderWidth.constant = width }
+            chatTrailing = leading + width
+            let formerChat = min(max(100, target - leading), max(100, windowWidth - leading - 500))
+            addressLayout.formerWidth = min(180, max(80, windowWidth - leading - formerChat - 400))
+        }
+        guard let addressWidth else { return }
+        let width = addressLayout.width(windowWidth: windowWidth, chatTrailing: chatTrailing)
+        if abs(addressWidth.constant - width) > 0.5 { addressWidth.constant = width }
     }
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [.toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .space] + items.map { NSToolbarItem.Identifier($0) }
@@ -156,7 +177,7 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar: Bool) -> NSToolbarItem? {
         let key = identifier.rawValue
         guard items.contains(key) else { return nil }
-        if key == "chat", let existing = toolbarItems[key] { return existing }
+        if key == "chat" || key == "address", let existing = toolbarItems[key] { return existing }
         if key == "tools" || key == "interaction" {
             let actions = key == "tools" ? ["code", "layers", "expand"] : ["select-object", "device"]
             let children = actions.compactMap {
@@ -199,12 +220,15 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             address.delegate = self; address.target = self; address.action = #selector(navigateAddress(_:))
             branchMenu.isBordered = false; branchMenu.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
             branchMenu.setAccessibilityLabel("Branch"); branchMenu.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            branchMenu.cell?.lineBreakMode = .byTruncatingMiddle
-            let header = NSStackView(views: [address, branchMenu]); header.orientation = .vertical; header.alignment = .leading; header.spacing = 0
+            // The URL keeps its host and path ends; a branch name keeps its start.
+            branchMenu.cell?.lineBreakMode = .byTruncatingTail
+            let header = addressHeader
+            for view in [address, branchMenu] { header.addArrangedSubview(view) }
+            header.orientation = .vertical; header.alignment = .leading; header.spacing = 0
             header.translatesAutoresizingMaskIntoConstraints = false
             address.translatesAutoresizingMaskIntoConstraints = false; branchMenu.translatesAutoresizingMaskIntoConstraints = false
-            let width = header.widthAnchor.constraint(equalToConstant: 180); addressWidth = width
-            NSLayoutConstraint.activate([header.widthAnchor.constraint(greaterThanOrEqualToConstant: 80), header.widthAnchor.constraint(lessThanOrEqualToConstant: 320), width,
+            let width = header.widthAnchor.constraint(equalToConstant: ToolbarAddressLayout.minimum); addressWidth = width
+            NSLayoutConstraint.activate([header.widthAnchor.constraint(greaterThanOrEqualToConstant: ToolbarAddressLayout.floor), width,
                 address.widthAnchor.constraint(equalTo: header.widthAnchor), branchMenu.widthAnchor.constraint(lessThanOrEqualTo: header.widthAnchor)])
             item.view = header; item.isBordered = false
         } else if key == "publish" {
@@ -320,11 +344,12 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             for branch in previewState["branches"] as? [String] ?? [] { add(branch, "branch", branch) }
             menu.addItem(.separator()); add("New Branch…", "new-branch")
             menu.insertItem(withTitle: title, action: nil, keyEquivalent: "", at: 0)
-            menu.items.first?.attributedTitle = NSAttributedString(string: title, attributes: [.foregroundColor:previewTextColor, .font:NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)])
+            menu.items.first?.attributedTitle = branchTitle(title)
             branchMenu.menu = menu
         }
         if let item = toolbarItems["publish"] as? NSMenuToolbarItem {
             item.title = previewState["publishLabel"] as? String ?? "Publish"; item.label = item.title; item.toolTip = item.title
+            if item.title != publishTitle { republished(item.title) }
             let menu = NSMenu(); menu.autoenablesItems = false
             for (title, value) in [("Create PR and merge to main", "merge"), ("Create PR", "pr")] {
                 let entry = NSMenuItem(title: title, action: #selector(previewMenuAction(_:)), keyEquivalent: ""); entry.target = self
@@ -448,9 +473,14 @@ final class NativeShell: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
          }, "projectIconCount":rows.filter { $0.icon != nil }.count, "outlineClipWidth":outline.enclosingScrollView?.contentSize.width ?? 0, "outlineRows":outline.numberOfRows, "outlineWidth":outline.bounds.width,
          "toolbar":toolbar.items.map { $0.itemIdentifier.rawValue }, "branch":previewState["branch"] ?? "", "publishLabel":previewState["publishLabel"] ?? "", "codeOpen":previewState["codeOpen"] ?? false,
          "toolbarGroupsMomentary":toolbar.items.compactMap { $0 as? NSToolbarItemGroup }.allSatisfy { ($0 as? MomentaryToolbarGroup)?.hasMomentaryControl == true }, "visibleToolbar":toolbar.visibleItems?.map { $0.itemIdentifier.rawValue } ?? [], "previewHeaderLightText":previewTextColor == .white, "address":previewAddress, "domain":address.stringValue, "viewport":previewState["viewport"] ?? "", "publishStandard":toolbarItems["publish"]?.view == nil, "toolGroup":(toolbar.items.first(where: { $0.itemIdentifier.rawValue == "tools" }) as? NSToolbarItemGroup)?.subitems.map { $0.itemIdentifier.rawValue } ?? [], "sidebarAutohidesScrollers":(outline.enclosingScrollView?.autohidesScrollers ?? false), "sidebarActions":sidebarButtons.keys.sorted(), "chatActions":["history", "new-chat"], "historyIDs":chatActions.historyMenu?.items.compactMap { ($0.representedObject as? [String:String])?["id"] } ?? [], "chatTitle":chatTitle.stringValue, "chatTitlePlain":toolbarItems["chat"]?.action == nil, "chatHeaderWidth":chatHeader.bounds.width, "chatHeaderTrailing":chatHeader.convert(NSPoint(x: chatHeader.bounds.maxX, y: 0), to: nil).x, "detailLeading":split.splitViewItems[1].viewController.view.convert(.zero, to: nil).x, "chatWidth":previewState["chatWidth"] ?? 0, "enabled":toolbarItems.mapValues { $0.isEnabled }]
+            .merging(toolbarInspect()) { _, new in new }.merging(["resizeSnapshot":resizeSnapshot]) { _, new in new }
     }
     func perform(_ action: String, id: String?) -> Bool {
-        if action == "window-width", let width = Double(id ?? ""), let window, width >= 850 && width <= 2000 { var frame = window.frame; frame.size.width = width; window.setFrame(frame, display: true); return true }
+        if action == "window-width", let width = Double(id ?? ""), let window, width >= 850 && width <= 2000 {
+            var frame = window.frame; frame.size.width = width; window.setFrame(frame, display: true)
+            // Read before returning to the run loop: no deferred alignment has run yet.
+            resizeSnapshot = toolbarInspect(); return true
+        }
         if action == "sidebar-width", let id, let width = Double(id), (180...340).contains(width) {
             setSidebarContentWidth(width, in: split); return true
         }

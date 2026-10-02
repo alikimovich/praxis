@@ -2,6 +2,23 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-01 — LKM-148: the address bar fills the free toolbar width
+
+- **Layout.** `src/native/ToolbarAddress.swift` (`ToolbarAddressLayout`) sizes the preview address/branch block so its trailing edge sits 20 pt before the select/device group. The width comes from the window width and offsets measured after a toolbar layout: the right groups' inset from the trailing edge, the chat header offset, and the block's laid-out extra. So `NSWindow.didResizeNotification` sets the final width synchronously, in the resize's own layout pass, with no frame-late reflow and no jump on mouse-up. Measuring is skipped during a live resize, then repeated at its end, after the split resizes, and after Publish label changes. The chat header gives way (down to its 100 pt floor) before the block gets narrower than its former 180 pt. The block's absolute floor stays at the former 80 pt.
+- **Why 20 pt and a measured inset.** Probes on macOS 26 showed:
+  - NSToolbar keeps the high-priority right groups pinned only while 14–16 pt (depending on the items) separate them from the block. Closer, it shifts them and drops the `.space` items; about 30 pt short, it moves the address item into overflow.
+  - An overflowed item cannot be measured. A startup guess below the real inset (the first try used 300 pt) therefore left the block overflowed at every width.
+
+  The guess now starts at 400 pt. While the block is overflowed, `backOff()` widens the inset in 40 pt steps until the toolbar shows the block again. A layout counts as pinned only at the requested gap, so a pushed layout cannot be mistaken for one.
+- **Truncation.** The URL field truncates in the middle and the branch pop-up at its tail (cell `lineBreakMode` plus the attributed title's paragraph style), only when the text is wider than the block.
+- **Proof.** Native smoke check `toolbar-address` (core group, `src/native/smoke-toolbar.ts`) resizes to 850, 1800 and the default width. For each, it asserts the frames both inside the resize (`resizeSnapshot`, taken before returning to the run loop) and once settled:
+  - the block stays visible and is never narrower than the pre-LKM-148 formula gave at that geometry;
+  - the gap to the first right group is the fixed 20 pt (at least 16 pt at the floor);
+  - the right groups keep one pinned inset that equals the measured one;
+  - the trailing edges match inside the resize and once settled;
+  - at the wide width, neither URL nor branch is truncated.
+
+  It writes `toolbar-{minimum,wide,default}.png` and `toolbar-address.json`.
 ## 2026-10-01 — LKM-145: Token counter only while working; Copy/Revert on hover
 
 - **Counter.** `ChatTurnFooter` (`ChatActivity.swift`) puts the running counter (LKM-147's per-turn `activity.tokens`) on its own 14 pt line under the status, never after the tool name. Finished responses render no counter, and the footer always reserves that line, so completion keeps its frame. Completion also adds the "Worked for …" caption at the top of the response, which pushed the pinned transcript up; a hidden placeholder of the same caption now holds that line while the turn runs.

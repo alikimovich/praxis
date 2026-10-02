@@ -33,6 +33,7 @@ export const SMOKE_CHECK_GROUPS: Readonly<Record<string, readonly NativeSmokeGro
   'mobile-viewport': ['core'],
   'source-stamps': ['core'],
   'shell-layout': ['core'],
+  'toolbar-address': ['core'],
   'selection-input': ['core'],
   inspector: ['core'],
   'text-edit': ['core'],
