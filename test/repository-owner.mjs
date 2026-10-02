@@ -460,7 +460,8 @@ try {
 
   // LKM-130: a patch Git cannot read is still an error (conflicts are not, see the
   // resolve-conflicts suite). The message names the file and Git's reason instead of
-  // the command line; Git's full output goes to the service log.
+  // the command line; Git's full output goes to the service log. LKM-150: asserted
+  // as parsed fields, whatever the local Git's wording (test/git-messages.mjs pins those).
   await section('malformed-patch', async () => {
     const owned = await fixture(profile('malformed'))
     const live = repo()
@@ -468,10 +469,15 @@ try {
     const applied = await owned.cmd({ cmd: 'apply', root: live, patch })
     assert.equal(applied.ok, false, JSON.stringify(applied))
     assert.equal(applied.conflict, false, JSON.stringify(applied))
-    assert.match(applied.message, /^a\.txt: corrupt patch at line \d+$/)
+    assert.equal(applied.problems.length, 1, JSON.stringify(applied))
+    const [problem] = applied.problems
+    assert.equal(problem.reason, 'corrupt patch', JSON.stringify(applied))
+    assert.equal(problem.file, 'a.txt', JSON.stringify(applied))
+    assert.ok(Number.isInteger(problem.line) && problem.line > 0, JSON.stringify(applied))
+    assert.equal(applied.message, `a.txt: corrupt patch at line ${problem.line}`)
     assert.ok(owned.stderr.includes('git apply --3way refused a patch') && owned.stderr.includes('Command failed: git apply --3way'),
       `service log: ${owned.stderr}`)
-    assert.ok(/error: corrupt patch at line \d+/.test(owned.stderr), 'the service log has Git\'s full error output')
+    assert.ok(/error: corrupt patch at /.test(owned.stderr), 'the service log has Git\'s full error output')
     assert.equal(read(join(live, 'a.txt')), 'one\n')
     await stop(owned)
   })
