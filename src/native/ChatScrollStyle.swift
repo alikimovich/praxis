@@ -9,6 +9,7 @@ enum ChatLayout {
     /// Row height of a response's live status and of its Copy/Revert buttons
     /// (ChatTurnFooter), so completion swaps rows without a layout jump.
     static let footerRowHeight: CGFloat = 28
+    /// The running counter's own line under the status, kept on the latest response.
     static let footerCountHeight: CGFloat = 14
     static func composerFrame(in bounds: CGRect, height: CGFloat) -> CGRect {
         CGRect(x: bounds.minX + composerInset,

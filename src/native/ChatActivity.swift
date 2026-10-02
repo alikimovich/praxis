@@ -80,6 +80,11 @@ struct TurnFooterPositions: PreferenceKey {
     static var defaultValue: [String: CGRect] = [:]
     static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) { value.merge(nextValue()) { _, new in new } }
 }
+/// Messages whose Copy/Revert row is currently revealed, for inspection.
+struct RevealedActions: PreferenceKey {
+    static var defaultValue: [String] = []
+    static func reduce(value: inout [String], nextValue: () -> [String]) { value += nextValue() }
+}
 
 /// The tail of an assistant response (or of a turn with no response yet). While it
 /// runs: the one live status line, and the turn's counter on its own line under it
