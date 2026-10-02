@@ -252,7 +252,8 @@ struct ChatConversation: View {
                     .foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 28)
             }
             ForEach(snapshot.messages) { message in
-                NativeMessageRow(message: message, running: snapshot.running && message.id == snapshot.streamingId, activity: message.id == snapshot.streamingId ? snapshot.activity : nil, model: model).id(message.id)
+                NativeMessageRow(message: message, running: snapshot.running && message.id == snapshot.streamingId, activity: message.id == snapshot.streamingId ? snapshot.activity : nil,
+                                 latest: message.id == snapshot.messages.last?.id, model: model).id(message.id)
                     .background(GeometryReader { geometry in Color.clear.preference(key: MessagePositions.self, value: [message.id:geometry.frame(in: .named("chatScroll"))]) })
             }
             if let activity = snapshot.activity, !snapshot.messages.contains(where: { $0.id == snapshot.streamingId }) {
@@ -271,7 +272,7 @@ struct ChatConversation: View {
         settlingLatest = true
         Task { @MainActor in
             let readingHeight = { max(1, viewportHeight - model.bottomInset) }
-            var stuck = 0
+            var stuck = 0, unresolved = 0
             model.latestSettleAttempts = await ChatLatestSettle.follow(request: { latestGeneration }, current: { follows }, step: {
                 ChatLatestSettle.step(latest: model.snapshot?.messages.last?.id, frames: model.messageFrames, bottom: model.bottomPosition,
                                       readingHeight: readingHeight(), viewportHeight: viewportHeight)
@@ -279,13 +280,22 @@ struct ChatConversation: View {
                 // No row in view: hold the AppKit pin, relayout the stack (a
                 // 1pt marker change) and scroll to the latest through SwiftUI.
                 // Rows in view: the pin's short jump lands on the end exactly.
-                if case .realize(let id) = step {
+                // Relayout: the same marker change in place, then the pin.
+                unresolved = step == .bottom ? unresolved + 1 : 0
+                let action = ChatLatestSettle.escalated(step, unresolved: unresolved)
+                if case .realize(let id) = action {
                     realizingLatest = true; latestNudge.toggle(); stuck += 1
                     let target = ChatLatestSettle.realizeTarget(latest: id, first: model.snapshot?.messages.first?.id, stuck: stuck)
                     proxy.scrollTo(target.id, anchor: target.anchor)
-                } else { stuck = 0; realizingLatest = false; pinRequest += 1 }
+                } else {
+                    stuck = 0; realizingLatest = false
+                    if action == .relayout { latestNudge.toggle() }
+                    pinRequest += 1
+                }
             }
             settlingLatest = false; realizingLatest = false
+            // Rest at the marker's 1pt height, so the nudges leave no offset behind.
+            if latestNudge { latestNudge = false }
             if follows { pinRequest += 1 }
         }
     }
@@ -295,9 +305,11 @@ struct ChatConversation: View {
                 conversationContent
                 // Keep the scroll target in the same lazy layout as the
                 // messages. Composer clearance is padding, never a target.
+                // The nudge's extra point comes out of that padding, so the
+                // document height and every row's place never move (LKM-149).
                 Color.clear.frame(height: latestNudge ? 2 : 1).id("bottom")
                     .background(GeometryReader { geometry in Color.clear.preference(key: BottomPosition.self, value: geometry.frame(in: .named("chatScroll")).maxY) })
-            }.padding(.horizontal, 18).padding(.top, 18).padding(.bottom, model.bottomInset)
+            }.padding(.horizontal, 18).padding(.top, 18).padding(.bottom, model.bottomInset - (latestNudge ? 1 : 0))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(ChatScrollStyle(follows: { follows }, pinRequest: pinRequest, attachRequest: attachRequest,
                                             onPinnedChange: { follows = $0 },
@@ -359,6 +371,7 @@ private struct NativeMessageRow: View {
     let message: ChatMessage
     let running: Bool
     let activity: ChatActivityState?
+    let latest: Bool
     @ObservedObject var model: ChatModel
     @State private var hovered = false
     @FocusState private var focusedAction: String?
@@ -393,7 +406,7 @@ private struct NativeMessageRow: View {
                     }
                 }
                 if message.role == "assistant" && (activity != nil || !running) {
-                    ChatTurnFooter(id: message.id, activity: activity, visible: model.visible) {
+                    ChatTurnFooter(id: message.id, activity: activity, latest: latest, visible: model.visible) {
                         HStack {
                             Button { copyChatText(message.text) } label: { Image(systemName: "doc.on.doc") }
                                 .help("Copy response").accessibilityLabel("Copy response").focused($focusedAction, equals: "copy")

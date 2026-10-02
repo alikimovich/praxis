@@ -88,22 +88,27 @@ struct RevealedActions: PreferenceKey {
 
 /// The tail of an assistant response (or of a turn with no response yet). While it
 /// runs: the one live status line, and the turn's counter on its own line under it
-/// (LKM-145). Once done: the Copy/Revert row, with the counter's line kept empty, so
-/// completion moves nothing.
+/// (LKM-145). Once done: the Copy/Revert row. The latest response keeps the
+/// counter's line empty, so completion moves nothing; older ones are one 28 pt
+/// row (LKM-149, see ChatLayout.footerHeight).
 struct ChatTurnFooter<Actions: View>: View {
     let id: String
     let activity: ChatActivityState?
+    var latest = true
     let visible: Bool
     @ViewBuilder let actions: () -> Actions
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: ChatLayout.footerCountSpacing) {
             HStack(spacing: 8) {
                 if let activity { ChatActivity(activity: activity, visible: visible) } else { actions() }
             }.frame(height: ChatLayout.footerRowHeight, alignment: .leading)
-            Group {
-                if let tokens = activity?.tokens { ChatTokenCount(id: id, tokens: tokens) } else { Color.clear.frame(width: 1) }
-            }.frame(height: ChatLayout.footerCountHeight, alignment: .leading)
-        }.background(GeometryReader { geometry in
+            if ChatLayout.footerReservesCount(running: activity != nil, latest: latest) {
+                Group {
+                    if let tokens = activity?.tokens { ChatTokenCount(id: id, tokens: tokens) } else { Color.clear.frame(width: 1) }
+                }.frame(height: ChatLayout.footerCountHeight, alignment: .leading)
+            }
+        }.frame(height: ChatLayout.footerHeight(running: activity != nil, latest: latest), alignment: .top)
+        .background(GeometryReader { geometry in
             Color.clear.preference(key: TurnFooterPositions.self, value: [id: geometry.frame(in: .named("chatScroll"))])
         })
     }

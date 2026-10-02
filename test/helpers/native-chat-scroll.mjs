@@ -194,7 +194,7 @@ try {
         if (frames[answer.id] && last.messageFrames?.[answer.id] && last.messageFrames?.['progress-question'] && ready(last, frames)) {
           const result = { footer: rect(frames[answer.id]), statusLines: last.statusLines, activityTokens: last.activityTokens,
             message: rect(last.messageFrames[answer.id]), question: rect(last.messageFrames['progress-question']),
-            revealed: last.revealedActions ?? [],
+            revealed: last.revealedActions ?? [], footers: Object.fromEntries(Object.entries(frames).map(([id, value]) => [id, rect(value)])),
             ...(frames[`${answer.id}-tokens`] ? { tokens: rect(frames[`${answer.id}-tokens`]) } : {}) }
           if (i > 2 && settled(result)) return result
         }
@@ -214,6 +214,11 @@ try {
     assert.equal(running.statusLines.length, 1, `${width}pt: exactly one status line ${JSON.stringify(running)}`)
     assert(running.tokens.y >= running.footer.y + 28 - 0.5, `${width}pt: running counter is on its own line under the status ${JSON.stringify(running)}`)
     assert(Math.abs(running.tokens.x - running.footer.x) <= 1, `${width}pt: running counter is leading-aligned ${JSON.stringify(running)}`)
+    assert(Math.abs(running.footer.height - 44) <= 0.5, `${width}pt: running footer is the status row plus the counter line ${JSON.stringify(running)}`)
+    // LKM-149: history responses have no counter line, only the 28 pt Copy/Revert row.
+    const history = Object.entries(running.footers).filter(([id]) => id.startsWith('progress-old-'))
+    assert(history.length > 0 && history.every(([, frame]) => Math.abs(frame.height - 28) <= 0.5),
+      `${width}pt: history footers are 28 pt ${JSON.stringify(running.footers)}`)
     // The timer ticks from the host's own clock: no new snapshot is sent.
     await delay(1200)
     const ticked = await runningFooter(`${width}pt timer ticks`, /^Running bun test · 1:[2-5]\d$/, tool.tokens.label)
