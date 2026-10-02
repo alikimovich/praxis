@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Shadow Light's compound block. Backend validation owns the same bounds and
 /// writes the CSS/class output with each gesture. There is no local preview box
-/// (LKM-133): the page preview shows every live write; the CSS text follows drafts.
+/// (LKM-133): the page preview shows every drag frame through a temporary override and
+/// the source is written on release (LKM-140); the CSS text follows drafts.
 struct ShadowIsland: View {
     let fields: [IslandField]
     let value: (IslandField) -> IslandValue

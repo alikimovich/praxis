@@ -28,11 +28,12 @@ struct IslandLiveWrites {
     private var last = Date.distantPast
 
     /// The values to write now with their gesture id, or nil while throttled. Values held
-    /// back by the throttle are merged into the next batch, so none are lost.
-    mutating func change(_ values: [String: IslandValue], ended: Bool, at now: Date = Date()) -> (gesture: String, values: [String: IslandValue])? {
+    /// back by the throttle are merged into the next batch, so none are lost. `ended` marks
+    /// the gesture's last batch: a Shadow island writes its source then (LKM-140).
+    mutating func change(_ values: [String: IslandValue], ended: Bool, at now: Date = Date()) -> (gesture: String, values: [String: IslandValue], ended: Bool)? {
         pending.merge(values) { _, next in next }
         guard ended || now.timeIntervalSince(last) >= Self.interval, !pending.isEmpty else { return nil }
-        let batch = (gesture: gesture, values: pending)
+        let batch = (gesture: gesture, values: pending, ended: ended)
         pending = [:]; last = now
         if ended { gesture = UUID().uuidString; last = .distantPast }
         return batch

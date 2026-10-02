@@ -2,6 +2,101 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-02 — LKM-140 (review fix): only a Shadow block's own gesture takes the override path
+
+- **Regression found in review.** `ChatIslands.gestureFrame` sent every gesture of an island through the override path when the island had any Shadow block. The schema allows a Shadow block together with group/point blocks and more than one Shadow block, which led to two problems:
+  - Dragging a non-shadow control (slider, point) lost its LKM-133 live preview: the write was held until release or 600 ms idle.
+  - Dragging a second Shadow block derived the first block's CSS, so the wrong element was held.
+- **Fix.** `gestureFrame` merges the gesture's values (`Session.gestures`) and takes the override path only when every merged key belongs to one Shadow block's `params`, using that block for `from` and `css`. Otherwise the gesture is `live` and writes every frame as before. If a gesture moves from a Shadow block to another control mid-drag, `IslandOverrides.holds` finds the held override, which is cleared, and the merged values are written so nothing is lost.
+- **Test.** `test/island-flicker.mjs` has a new case with a Shadow block plus a group slider:
+  - slider frames are written at once and never reach the preview port;
+  - a shadow gesture is still shown, and its write deferred;
+  - a gesture that moves from shadow to slider clears the override and writes the held values.
+
+## 2026-10-01 — LKM-140 (reopened): override lifecycle under Next HMR, real-fixture numbers
+
+- **Cause of the reopened failures (diagnosis run 09df9ede).** Two defects shared the HMR/override lifecycle.
+  - (A) `settle()` in `src/preview/island-override.ts` (and the hand-kept copy in the test harness) treated an empty target list as settled. Next HMR can remount `#shadow-phone`, which disconnects every target, so the override was dropped while the new node still showed an older value. That produced `next-after` `outOfOrder: 1` and `waitForGestureSettled` timeouts in earlier runs.
+  - (B) `resetPreviewSource` reloaded the preview right after writing the initial source back. The dev server could still serve the last drag value, and React hydration does not patch a mismatched server style attribute (Next forwards "This won't be patched up" from the preview). The card then never matched, and the run failed with "Preview shadow did not match the island source" after `next-before`.
+- **Fix (A).** `settle()` now:
+  - re-resolves the bound elements: the connected targets, plus the elements that show the gesture's start value or the written value;
+  - returns false for an empty list (the backend's 8 s timeout still drops the override);
+  - holds remounted elements before reading anything;
+  - removes the override only when both the shown and the own value equal `computed(css)`.
+- **Mid-gesture HMR is covered too.** While an override is held, a `MutationObserver` (style attribute and child list, under body) re-holds a target whose inline style React rewrote, and any remounted node. This runs at the microtask checkpoint, before paint.
+- **Fix (B).** The harness:
+  - injects the production module, transpiled with `Bun.Transpiler`, instead of a copy;
+  - waits until the dev server serves the expected literal (the Next page HTML; Vite `/src/phone.js`);
+  - loads with a cache-busting query and waits for the new document;
+  - reloads until the card computes to the source value;
+  - names observed vs expected in every timeout error.
+- **Other harness fixes.**
+  - Rewriting identical text in setup is skipped, so it cannot start a spurious HMR update mid-drag.
+  - `hmrStyleSwaps` counts every computed-shadow change over the run. Before, re-attaching the sampler after each live-write step reset it.
+- **Numbers.** These come from `test/island-flicker-frameworks.mjs`, 12-step Light pad drag, system WebKit, worker quick verification run `run-ExycIO`:
+  - `next-before` (Next 16.3.5 Webpack, LKM-133 live writes): 12 source writes, 8 computed-shadow changes, 0 gaps, 0 out-of-order, 53 foreign frames. HMR lags the 40 ms drag steps, so the card shows values 2+ steps old, and it never catches up within a step.
+  - `next-after` (override): 1 write, 11 changes (one per frame shown), 0 gaps, 0 out-of-order, 0 foreign.
+  - `vite-before`: 12 writes, 0 gaps, 0 out-of-order, 5 foreign. Each write is a full reload (no HMR boundary), which also kills the sampler, so only spot samples count.
+  - `vite-after`: 1 write, 0 gaps, 0 out-of-order, 0 foreign.
+  - The reset served the stale page on the first fetch and the reverted one on the second, then matched on the first load.
+  - Repeated on 4 unit runs, including after the LKM-149 merge (`run-ExycIO`, `run-ZpPZGh`, `run-cHneHz`, `run-tvxx0d`):
+    - `next-after` and `vite-after` were 1 write, 0 gaps, 0 out of order and 0 foreign every time.
+    - `next-before` showed 23–53 foreign frames and 5–10 shadow changes.
+    - `vite-before` showed 4–5 foreign spot samples.
+  - Full `bun run test:native` passed on the merged tree (23/23 smoke checks plus chat acceptance).
+  - Unit model (`test/island-flicker.mjs`): unchanged (H3 refuted on 1681 points; before 12 HMR / 12 gaps; after 1 write, 0 gaps).
+- **Tests.**
+  - `test/island-override.mjs` (new, unit) runs the production module on a small fake DOM. It covers:
+    - start-value hold;
+    - a stale write never settling;
+    - a remount held before paint;
+    - disconnected and empty targets never settled;
+    - Fast Refresh rewrite held until settle;
+    - a CSS-module gap frame staying covered;
+    - removal only on the final value;
+    - clear restoring the page value.
+  - It fails on the previous `settle()`.
+- **Captured frames.** These are unchanged from the native `shadow-light` group: `shadow-light-drag.png`, `shadow-light-released.png` and `shadow-light-drag.json`.
+
+## 2026-10-01 — LKM-140: Shadow Light drags without flicker
+
+- **Measured, hypothesis by hypothesis.** `test/island-flicker.mjs` (unit) records these numbers. It uses the real `ChatIslands` and the Swift owners, with a modelled page ticking every 16 ms.
+  - **H3: the formula produces near-invisible values. Refuted.** I swept the light over a 41×41 grid (1681 points) with the fixture values. Moving the light never changes alpha or blur: there was 1 alpha set (0.35/0.21/0.126) and 1 blur set across the whole grid. A 0.04 pad step moves any offset by at most 0.48 px.
+  - **H2: writes arrive out of order or coalesced. Refuted inside the island pipeline.** I replayed the LKM-133 live writes for a 12-step drag. This wrote 12 literals and caused 12 HMR events. The literals were in drag order, with 0 out-of-order values and 0 foreign values.
+  - **H1: the HMR CSS swap leaves a gap. This is the remaining cause.** In the model, each style swap leaves one frame with no shadow. That gives 12 gap frames for 12 steps, because every drag frame was a source write and an HMR update.
+  - **Real Next.js and Vite fixtures.** `test/island-flicker-frameworks.mjs` (same 12-step Light pad drag as the unit model) runs against `test/fixtures/next-app` at `/shadow-flicker` with Next 16.3.5 Webpack dev + HMR in system WebKit, and `test/fixtures/island-flicker-vite` with Vite 6.3.5 + a CSS module card. It logs `ISLAND-FLICKER next-before`, `next-after`, `vite-before`, and `vite-after` with `steps`, `hmrStyleSwaps`, `sourceWrites`, `gaps`, `outOfOrder`, and `foreign`. Before the fix (LKM-133 live writes) each run expects multiple source writes and HMR swap gaps; after the override path it expects one write and zero gaps/out-of-order/foreign. The manager records the printed JSON in verification logs when the test runs (TreziHost built + registry access).
+  - **Unit model** (unchanged): H3 refuted on 1681 grid points; H2 refuted (12 writes, 12 HMR, in order); H1 confirmed (12 gap frames); after fix 1 write, 1 HMR, 0 gaps.
+- **Fix.** Drag frames of a Shadow block no longer write the source.
+  - `IslandOverrides` (`src/main/island-overrides.ts`) sends each frame's derived box-shadow to the preview (`ISLAND_OVERRIDE`). The preview's isolated world, `src/preview/island-override.ts`, applies it as an inline `!important` override.
+    - It applies the override only to elements whose computed box-shadow equals the island's current value. A display:none probe computes that value; transparent Tailwind ring layers are ignored when comparing.
+    - It does not touch the page's scripts.
+  - The source is written once:
+    - when the gesture ends (Swift now sends `ended` with the release batch), or
+    - after 600 ms with no new frame.
+  - The write goes through the existing queue with the same gesture id, so a gesture is still one Undo group.
+  - Removing the override:
+    - The backend then polls `settle`. In one task the preview removes the override, reads the element's own computed shadow (with box-shadow transitions cancelled), and puts the override back.
+    - The override is removed only when every target shows the final value on its own, after the HMR update or reload.
+    - It is dropped after 8 s without that.
+  - LKM-133's per-binding conflict rules still apply:
+    - A conflicting write or an outside edit drops the override and shows the notice, with nothing written.
+    - Reload, Reset and Undo clear the override first.
+  - Fallback: if the preview can't take the override (no preview view, or no matching element), the gesture falls back to the old live writes.
+- **Numbers after the fix**, for the same 12-step drag:
+  - 1 write and 1 HMR event; all 12 frames shown.
+  - 0 gaps, 0 out-of-order values, 0 foreign values.
+  - The write lands at frame 15–16 (the exact frame depends on timer timing from run to run). The override is removed 1–2 frames later, once the page's own style matches.
+- **Native evidence.** The Shadow Light smoke check (`src/native/smoke-shadow-island.ts`, `shadow-light` group) drags 8 frames through Swift with one gesture id. A requestAnimationFrame sampler in the page world records each frame.
+  - It asserts:
+    - The source file stays unchanged until the release.
+    - Gaps, out-of-order values and foreign values are all 0.
+    - The inline override is gone after the release.
+    - One Undo restores the source and the preview.
+  - Captured frames: `shadow-light-drag.png` (mid-drag), `shadow-light-released.png`, and `shadow-light-drag.json` (the counts) in `test/artifacts/native/`.
+  - This fixture is the static site, which reloads the whole page; it is not Next.js HMR.
+  - Worker run (native groups `islands`, `shadow-light`):
+    - 8 steps, 4 sampled frames, 0 gaps, 0 out of order, 0 foreign, and no source write during the drag. WebKit throttled requestAnimationFrame, so there are fewer samples than steps.
+    - In `shadow-light-drag.png` the card's shadow already follows the light at the last step (offset up and left). The chat panel still shows the initial x/y: the harness sends `islandPerform` straight to the host, so no Swift draft moves the pad.
 ## 2026-10-02 — LKM-144 resumed on the LKM-149 candidate
 
 - The `acceptance-440-1-lines` regression below was fixed in LKM-149 (merged as `ee301e2`), not in LKM-144; the entry below is history. LKM-144 carries no layout change. Its scope is unchanged: keychain serialization and tests, the one-time network-volume note, docs.

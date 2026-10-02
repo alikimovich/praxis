@@ -5,6 +5,8 @@ import { islandSource, undoIsland, writeIsland } from './chat-island-source'
 import { selectControlCandidates } from './control-selection'
 import { cancelControlComposition } from './controls-jev'
 import { editingOwner, type EditingOwner } from './editing-owner'
+import { IslandOverrides } from './island-overrides'
+import { shadowBlockCss } from './shadow-controls'
 
 interface Session {
   root: string; recordId: string; records: IslandRecord[]; views: Map<string, IslandView>
@@ -20,6 +22,8 @@ interface Session {
   queued: Map<string, Queued>
   /** `id:gesture` of gestures whose bound values changed outside the island; their frames are dropped. */
   conflicted: Set<string>
+  /** island id → its running gesture's merged values; `live` once it must write every frame (LKM-133). */
+  gestures: Map<string, { gesture: string; values: Record<string, IslandValue>; live: boolean }>
 }
 interface Queued { command: IslandCommand; replaced: boolean }
 export const ISLAND_CONFLICT_NOTICE = 'This value changed in the source. The controls now show the source values.'
@@ -35,10 +39,13 @@ export class ChatIslands {
   readonly sessions = new Map<string, Session>()
   readonly origin: (chat: string) => string | null
   private readonly given?: EditingOwner
+  /** Shadow gestures shown in the preview, written once (LKM-140); without it every frame writes. */
+  readonly overrides?: IslandOverrides
   constructor(readonly changed: (chat: string) => void, readonly select = selectControlCandidates,
-    options: { owner?: EditingOwner; origin?: (chat: string) => string | null } = {}) {
+    options: { owner?: EditingOwner; origin?: (chat: string) => string | null; overrides?: IslandOverrides } = {}) {
     this.given = options.owner
     this.origin = options.origin ?? (() => null)
+    this.overrides = options.overrides
   }
   get owner(): EditingOwner { return this.given ?? editingOwner() }
   register(chat: string, root: string, recordId: string, turn: () => number) {
@@ -46,7 +53,7 @@ export class ChatIslands {
     if (existing?.root === root && existing.recordId === recordId) return
     this.close(chat)
     const session: Session = { root, recordId, records: [], views: new Map(), turn, busy: false, composing: false, epoch: 0, writes: 0, opening: Promise.resolve(),
-      seen: new Map(), notices: new Map(), queued: new Map(), conflicted: new Set() }
+      seen: new Map(), notices: new Map(), queued: new Map(), conflicted: new Set(), gestures: new Map() }
     session.opening = this.owner.islandsOpen(chat, root, recordId).then(records => {
       if (this.sessions.get(chat) === session) session.records = validated(records)
     }).catch(() => { /* Missing/old history cannot prevent opening a chat. */ })
@@ -55,6 +62,7 @@ export class ChatIslands {
   }
   close(chat: string) {
     cancelControlComposition(`island:${chat}`)
+    this.overrides?.clearAll(`${chat}\n`)
     if (this.sessions.delete(chat)) void this.owner.islandsClose(chat).catch(() => {})
   }
   private adopt(chat: string, session: Session, records: IslandRecord[] | null) {
@@ -155,11 +163,60 @@ export class ChatIslands {
    * One island's commands run one at a time. A commit that has not started yet is replaced by
    * the next frame of the same gesture (latest value wins, values merged), so a fast drag never
    * races itself. Commits do not depend on the revision the UI last rendered: the write checks
-   * the island's own bindings (see `writeIsland`).
+   * the island's own bindings (see `writeIsland`). A Shadow island's gesture frames are shown
+   * in the preview and written once instead (`gestureFrame`).
    */
   async interact(command: IslandCommand) {
     const session = this.sessions.get(command.chat)
     if (!session) throw new Error('Island is unavailable. Reopen this chat.')
+    if (this.overrides && command.action === 'commit' && command.gesture) {
+      const live = await this.gestureFrame(session, command)
+      if (!live) return
+      command = { ...command, values: live }
+    } else if (this.overrides && command.action !== 'commit') await this.overrides.clear(`${command.chat}\n${command.id}`)
+    return this.enqueue(session, command)
+  }
+  /**
+   * LKM-140: a frame of a Shadow island gesture. The preview shows the derived box-shadow at
+   * once and the source is written at the gesture's end, so no HMR update runs mid-drag.
+   * Returns the values to write now when the frame is not shown that way.
+   */
+  private async gestureFrame(session: Session, command: IslandCommand): Promise<Record<string, IslandValue> | null> {
+    const record = session.records.find(r => r.id === command.id && r.revision === command.revision && r.status === 'ready')
+    if (!record || session.composing) return command.values ?? {}
+    // Only a gesture whose values all belong to one Shadow block is shown in the preview; any
+    // other control (group, point, a second shadow block) keeps its per-frame live writes (LKM-133).
+    let state = session.gestures.get(command.id)
+    if (!state || state.gesture !== command.gesture) {
+      state = { gesture: command.gesture!, values: {}, live: false }
+      session.gestures.set(command.id, state)
+    }
+    state.values = { ...state.values, ...command.values }
+    if (state.live) return command.values ?? {}
+    const keys = Object.keys(state.values)
+    const block = keys.length ? record.blocks.find(b => b.kind === 'shadow' && keys.every(key => b.params.includes(key))) : undefined
+    if (!block) {
+      // The gesture is (or became) another control's: show the source, write every frame from now on.
+      state.live = true
+      const key = `${command.chat}\n${command.id}`
+      const shown = this.overrides!.holds(key)
+      if (shown) await this.overrides!.clear(key)
+      return shown ? { ...state.values } : command.values ?? {}
+    }
+    const conflict = `${command.id}:${command.gesture}`
+    if (session.conflicted.has(conflict)) return null
+    const source = () => session.seen.get(record.id) ?? {}
+    return this.overrides!.frame({
+      key: `${command.chat}\n${command.id}`, gesture: command.gesture!, values: command.values ?? {}, ended: !!command.ended,
+      from: () => shadowBlockCss(block, source()),
+      css: values => shadowBlockCss(block, { ...source(), ...values }),
+      write: async values => {
+        await this.enqueue(session, { ...command, values })
+        return session.conflicted.has(conflict) ? 'conflict' : 'written'
+      }
+    })
+  }
+  private async enqueue(session: Session, command: IslandCommand) {
     let queued: Queued | undefined
     if (command.action === 'commit') {
       const waiting = session.queued.get(command.id)

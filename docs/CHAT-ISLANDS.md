@@ -17,7 +17,11 @@ stages follow below; the current implementation is deliberately bounded.
   revision-checked write and undo group. Reset, Reload and instrumented Replay are
   supported. Sliders, points and curves write at most once per 120 ms during dragging,
   plus the final value on release; project HMR/reload updates the website. Pending
-  writes run in order, and one gesture remains one Undo step.
+  writes run in order, and one gesture remains one Undo step. A Shadow block's
+  drag frames are the exception (LKM-140). Each frame's derived box-shadow is
+  shown as a temporary override in the preview's isolated world. The source is
+  written once, on release or after 600 ms idle. The override is removed only
+  after the page's own style shows that value.
 - Profile-owned records attach to a durable session record and user-turn ordinal,
   independent of regenerated message IDs. Revisions update the same island. A
   pending replacement disables that island until landing; keeping the previous
@@ -191,6 +195,9 @@ helpers must be audited rather than assumed to provide this entire transaction.
 
 Native value/curve feedback is immediate. Throttled source writes during a drag
 and a final release write use project HMR; refresh speed depends on the project.
+Shadow blocks are the exception: they preview through the override and write
+at the end of the gesture. `src/main/island-overrides.ts` documents this; if the
+preview cannot apply the override, the drag falls back to live writes.
 Queued updates advance only through this batch’s own successful source revisions,
 never through external edits. This is source-backed tuning, not a runtime adapter.
 Add throttled ephemeral preview updates later for explicitly supported adapters;

@@ -3,6 +3,13 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Shadow Light drags without flicker (LKM-140)
+
+- [x] Formula (H3) and write order (H2) measured and refuted; HMR swap gap (H1) is the remaining cause (`test/island-flicker.mjs`, numbers in PROGRESS).
+- [x] Shadow block drag frames show through an isolated-world box-shadow override; one source write per gesture (release or 600 ms idle); override removed only once the page's own style shows the final value; one Undo group; LKM-133 conflict rules kept.
+- [x] Native `shadow-light` check: 8-step drag with 0 gaps, 0 out of order, 0 foreign and no write before release; `shadow-light-drag.png`, `shadow-light-released.png`, `shadow-light-drag.json`.
+- [x] Real Next.js (`/shadow-flicker` in `test/fixtures/next-app`) and Vite/CSS (`test/fixtures/island-flicker-vite`) scripted drag measurements: `test/island-flicker-frameworks.mjs` logs `ISLAND-FLICKER next-*` and `vite-*` counts (requires TreziHost + `bun install` on the fixtures).
+- [x] Reopen fixes: `settle()` never treats disconnected targets (Next HMR remount) as settled, re-finds the bound elements and holds them before paint (MutationObserver); removal needs shown and own to equal `computed(css)` (`test/island-override.mjs`). Harness injects the production module, waits for the dev server to serve the reverted source and reloads until the card matches, with observed-vs-expected errors.
 ## Keychain and network-volume prompts after stable signing (LKM-144)
 
 - [x] Rebuild loop `test/keychain-rebuild.mjs`: the helper builds byte-identical (same CDHash) across folders; on a temporary keychain the rebuild reads the first build's item with no UI, and changed code is refused. No-UI calls only; the keychain part SKIPs where no keychain can be created. A manual probe found that "Trezi Local" items trust the designated requirement, and ad hoc items the CDHash.

@@ -43,6 +43,8 @@ export interface IslandCommand {
   revision: number
   sourceRevision: string
   gesture?: string
+  /** The gesture's last frame (release, Return, a discrete change): write it now (LKM-140). */
+  ended?: boolean
   operation: string
   action: 'commit' | 'reset' | 'undo' | 'reload' | 'replay'
   values?: Record<string, IslandValue>

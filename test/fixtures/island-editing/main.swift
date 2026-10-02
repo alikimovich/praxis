@@ -10,7 +10,7 @@ func at(_ ms: Double) -> Date { start.addingTimeInterval(ms / 1000) }
 // A drag: frames are throttled to the interval, held-back values ride with the next
 // batch, the release always writes, and every write of the gesture shares one id.
 var writes = IslandLiveWrites()
-var sent: [(gesture: String, values: [String: IslandValue])] = []
+var sent: [(gesture: String, values: [String: IslandValue], ended: Bool)] = []
 for (ms, x) in [(0.0, 0.1), (20, 0.2), (50, 0.3), (85, 0.4), (120, 0.5), (170, 0.6)] {
     if let batch = writes.change(["x": .number(x)], ended: false, at: at(ms)) { sent.append(batch) }
 }
@@ -18,6 +18,8 @@ if let batch = writes.change(["y": .number(0.9)], ended: true, at: at(180)) { se
 require(sent.count == 4, "A drag writes live, throttled to \(IslandLiveWrites.interval)s, then on release (\(sent.count) writes)")
 require(sent.prefix(3).map { $0.values["x"] } == [.number(0.1), .number(0.4), .number(0.6)], "Each write carries the latest value")
 require(sent.last?.values == ["y": .number(0.9)], "The release writes its own change")
+// Only the release is marked ended: a Shadow island writes its source then (LKM-140).
+require(sent.map(\.ended) == [false, false, false, true], "Only the release batch is the gesture's end")
 // A value held back by the throttle is never lost: it rides with the release.
 var held = IslandLiveWrites()
 _ = held.change(["x": .number(0.1)], ended: false, at: at(0))

@@ -24,7 +24,7 @@ struct NativeChatIsland: View {
         dragging = !ended
         drafts.merge(values) { _, next in next }
         guard let batch = writes.change(values, ended: ended) else { return }
-        model.islandAction(island, action: "commit", values: batch.values.mapValues(\.object), gesture: batch.gesture)
+        model.islandAction(island, action: "commit", values: batch.values.mapValues(\.object), gesture: batch.gesture, ended: batch.ended)
     }
     private func value(_ field: IslandField) -> IslandValue { drafts[field.id] ?? field.value ?? .text("") }
     private func action(_ name: String, values: [String: IslandValue] = [:]) {

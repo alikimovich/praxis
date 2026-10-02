@@ -1,5 +1,6 @@
 import { sourceStamp, sourceSelector } from './source-stamp'
-import { ANIMATION_REPLAY } from '../shared/preview-channels'
+import { ANIMATION_REPLAY, ISLAND_OVERRIDE, ISLAND_OVERRIDE_REPLY } from '../shared/preview-channels'
+import { islandOverride } from './island-override'
 import './agent-console'
 import './agent-inspect'
 /**
@@ -1861,6 +1862,10 @@ window.addEventListener('load', () => {
   })
   ipcRenderer.on(STYLES_READ, (_e, p: { id?: unknown; props?: unknown }) => {
     readStyles(p?.id, Array.isArray(p?.props) ? (p.props as string[]) : [])
+  })
+  // A Shadow island gesture shown without source writes (LKM-140, see island-override.ts).
+  ipcRenderer.on(ISLAND_OVERRIDE, (_e, p: { id?: unknown } | undefined) => {
+    ipcRenderer.send(ISLAND_OVERRIDE_REPLY, { id: p?.id, value: islandOverride(p) })
   })
   ipcRenderer.on(ANIMATION_REPLAY, (_e, component: unknown) => {
     if (typeof component === 'string' && component.length <= 80)
