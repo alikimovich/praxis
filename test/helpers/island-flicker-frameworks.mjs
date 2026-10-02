@@ -74,8 +74,8 @@ async function withHost(run) {
     await once(host, 'ready', { signal: AbortSignal.timeout(15000) })
     host.send('visible', { view: 'preview', visible: true })
     const page = code => host.request('evaluate', { view: 'preview', code })
-    async function wait(check, label = 'page') {
-      for (let i = 0; i < 200; i++) {
+    async function wait(check, label = 'page', polls = 200) {
+      for (let i = 0; i < polls; i++) {
         try {
           if (await check()) return
         } catch {}
@@ -89,13 +89,25 @@ async function withHost(run) {
   }
 }
 
-/** Cache-busted preview loads; each waits until the new document (not the old one) has the card. */
+/**
+ * Cache-busted preview loads; each waits until the new document (not the old one) has the card.
+ * Vite's full-reload of the old page, sent when the source was just rewritten, can cancel a
+ * navigation that is still starting and reload the old URL instead: the load is sent again.
+ */
 function opener(host, page, wait, url) {
   let seq = 0
   return async () => {
-    const href = `${url}${url.includes('?') ? '&' : '?'}trezi-load=${++seq}`
-    host.send('load', { view: 'preview', url: href })
-    await wait(() => page(`location.href === ${JSON.stringify(href)} && !!document.querySelector("#shadow-phone")`), href)
+    let failure
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const href = `${url}${url.includes('?') ? '&' : '?'}trezi-load=${++seq}`
+      host.send('load', { view: 'preview', url: href })
+      try {
+        return await wait(() => page(`location.href === ${JSON.stringify(href)} && !!document.querySelector("#shadow-phone")`), href, 50)
+      } catch (error) {
+        failure = error
+      }
+    }
+    throw failure
   }
 }
 

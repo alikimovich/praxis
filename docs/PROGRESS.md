@@ -2,6 +2,17 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-02 — LKM-140 (review fix): only a Shadow block's own gesture takes the override path
+
+- **Regression found in review.** `ChatIslands.gestureFrame` sent every gesture of an island through the override path when the island had any Shadow block. The schema allows a Shadow block together with group/point blocks and more than one Shadow block, which led to two problems:
+  - Dragging a non-shadow control (slider, point) lost its LKM-133 live preview: the write was held until release or 600 ms idle.
+  - Dragging a second Shadow block derived the first block's CSS, so the wrong element was held.
+- **Fix.** `gestureFrame` merges the gesture's values (`Session.gestures`) and takes the override path only when every merged key belongs to one Shadow block's `params`, using that block for `from` and `css`. Otherwise the gesture is `live` and writes every frame as before. If a gesture moves from a Shadow block to another control mid-drag, `IslandOverrides.holds` finds the held override, which is cleared, and the merged values are written so nothing is lost.
+- **Test.** `test/island-flicker.mjs` has a new case with a Shadow block plus a group slider:
+  - slider frames are written at once and never reach the preview port;
+  - a shadow gesture is still shown, and its write deferred;
+  - a gesture that moves from shadow to slider clears the override and writes the held values.
+
 ## 2026-10-01 — LKM-140 (reopened): override lifecycle under Next HMR, real-fixture numbers
 
 - **Cause of the reopened failures (diagnosis run 09df9ede).** Two defects shared the HMR/override lifecycle.

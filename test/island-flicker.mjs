@@ -243,5 +243,48 @@ const steps = [shadowLight(initial).css, ...path.map(([x, y]) => derived(x, y))]
   assert.equal(await readFile(file, 'utf8'), code, 'One Undo restores the live fallback gesture')
   islands.close('blind')
 }
+// An island with a Shadow block and a group slider: only the shadow's own values take the
+// override path. The slider keeps LKM-133's live write on every frame, and a gesture that
+// moves from the shadow to the slider shows the source and writes what it holds.
+{
+  const calls = []
+  const port = { async apply(_k, _f, css) { calls.push(['apply', css]); return 1 }, async settle() { return true }, async clear() { calls.push(['clear']) } }
+  const mixedCode = `${code}const TILT = 3;\n`
+  const mixed = { ...request, manifest: { ...request.manifest, params: [...request.manifest.params,
+    { id: 'tilt', label: 'Tilt', kind: 'number', min: 0, max: 10, step: 1, apply: { strategy: 'literal', anchor: 'const TILT = ' } }] },
+    blocks: [...request.blocks, { id: 'tilt', title: 'Tilt', kind: 'group', params: ['tilt'] }] }
+  await writeFile(file, mixedCode)
+  const islands = new ChatIslands(() => {}, undefined, { overrides: new IslandOverrides(port, { idle: 2000, poll: 10, timeout: 1000 }) })
+  islands.register('mixed', root, 'mixed-record', () => 1)
+  const made = await islands.tool('mixed', root, mixed)
+  assert.ok(made.id, JSON.stringify(made))
+  await islands.settle('mixed', true)
+  const view = islands.sessions.get('mixed').views.get(made.id)
+  const send = (gesture, values, ended = false) => islands.interact({ chat: 'mixed', id: made.id, revision: view.revision, sourceRevision: view.sourceRevision,
+    operation: crypto.randomUUID(), action: 'commit', gesture, ended, values })
+  const read = () => readFile(file, 'utf8')
+
+  for (const tilt of [4, 5, 6]) {
+    await send('tilt', { tilt })
+    assert.match(await read(), new RegExp(`const TILT = ${tilt};`), `Slider frame ${tilt} is written at once`)
+  }
+  await send('tilt', { tilt: 7 }, true)
+  assert.equal(calls.length, 0, 'The slider never takes the override path')
+
+  await send('light', { x: path[0][0], y: path[0][1] })
+  assert.equal(calls.filter(c => c[0] === 'apply').length, 1, 'A shadow value is still shown in the preview')
+  assert.match(await read(), /const TILT = 7;/)
+  assert.doesNotMatch(await read(), new RegExp(`SHADOW_x = ${path[0][0]};`), 'and its write is deferred')
+
+  // The gesture turns out to move another control: the held frames are written, nothing is lost.
+  await send('both', { x: path[1][0], y: path[1][1] })
+  await send('both', { tilt: 9 })
+  assert.ok(calls.some(c => c[0] === 'clear'), 'The override is removed')
+  assert.match(await read(), new RegExp(`SHADOW_x = ${path[1][0]};`), 'the held shadow values are written')
+  assert.match(await read(), /const TILT = 9;/)
+  await send('both', { tilt: 10 }, true)
+  assert.match(await read(), /const TILT = 10;/, 'later frames write live')
+  islands.close('mixed')
+}
 console.log('ISLAND-FLICKER PASS')
 process.exit(0)

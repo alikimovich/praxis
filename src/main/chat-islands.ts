@@ -22,6 +22,8 @@ interface Session {
   queued: Map<string, Queued>
   /** `id:gesture` of gestures whose bound values changed outside the island; their frames are dropped. */
   conflicted: Set<string>
+  /** island id → its running gesture's merged values; `live` once it must write every frame (LKM-133). */
+  gestures: Map<string, { gesture: string; values: Record<string, IslandValue>; live: boolean }>
 }
 interface Queued { command: IslandCommand; replaced: boolean }
 export const ISLAND_CONFLICT_NOTICE = 'This value changed in the source. The controls now show the source values.'
@@ -51,7 +53,7 @@ export class ChatIslands {
     if (existing?.root === root && existing.recordId === recordId) return
     this.close(chat)
     const session: Session = { root, recordId, records: [], views: new Map(), turn, busy: false, composing: false, epoch: 0, writes: 0, opening: Promise.resolve(),
-      seen: new Map(), notices: new Map(), queued: new Map(), conflicted: new Set() }
+      seen: new Map(), notices: new Map(), queued: new Map(), conflicted: new Set(), gestures: new Map() }
     session.opening = this.owner.islandsOpen(chat, root, recordId).then(records => {
       if (this.sessions.get(chat) === session) session.records = validated(records)
     }).catch(() => { /* Missing/old history cannot prevent opening a chat. */ })
@@ -181,8 +183,26 @@ export class ChatIslands {
    */
   private async gestureFrame(session: Session, command: IslandCommand): Promise<Record<string, IslandValue> | null> {
     const record = session.records.find(r => r.id === command.id && r.revision === command.revision && r.status === 'ready')
-    const block = record?.blocks.find(b => b.kind === 'shadow')
-    if (!record || !block || session.composing) return command.values ?? {}
+    if (!record || session.composing) return command.values ?? {}
+    // Only a gesture whose values all belong to one Shadow block is shown in the preview; any
+    // other control (group, point, a second shadow block) keeps its per-frame live writes (LKM-133).
+    let state = session.gestures.get(command.id)
+    if (!state || state.gesture !== command.gesture) {
+      state = { gesture: command.gesture!, values: {}, live: false }
+      session.gestures.set(command.id, state)
+    }
+    state.values = { ...state.values, ...command.values }
+    if (state.live) return command.values ?? {}
+    const keys = Object.keys(state.values)
+    const block = keys.length ? record.blocks.find(b => b.kind === 'shadow' && keys.every(key => b.params.includes(key))) : undefined
+    if (!block) {
+      // The gesture is (or became) another control's: show the source, write every frame from now on.
+      state.live = true
+      const key = `${command.chat}\n${command.id}`
+      const shown = this.overrides!.holds(key)
+      if (shown) await this.overrides!.clear(key)
+      return shown ? { ...state.values } : command.values ?? {}
+    }
     const conflict = `${command.id}:${command.gesture}`
     if (session.conflicted.has(conflict)) return null
     const source = () => session.seen.get(record.id) ?? {}

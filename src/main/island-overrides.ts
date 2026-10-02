@@ -92,6 +92,8 @@ export class IslandOverrides {
     else if (this.gestures.get(f.key) === g) g.idle = setTimeout(() => void this.flush(f, g).catch(() => {}), this.timing.idle)
     return null
   }
+  /** A gesture of this key holds frames (shown or waiting to be written). */
+  holds(key: string) { return this.gestures.has(key) }
   /** Undo, Reset, Reload or a closed chat: show the source again now. */
   async clear(key: string) {
     const g = this.gestures.get(key)
