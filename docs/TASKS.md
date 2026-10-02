@@ -12,6 +12,12 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Bundle ID `dev.praxis.native` kept and recorded as legacy (`docs/agent-guide/legacy-names.md`).
 - [ ] Manager/operator: run the login-keychain steps in `docs/PROVIDERS.md` (LKM-144) on the operator Mac. Record whether a `cdhash:` partition exists and whether a rebuild asks again. Also run `bun run test:keychain-rebuild` outside a sandbox so `rebuild-read` PASSes rather than SKIPs.
 
+## Live turn progress: timer, current step, streaming tokens (LKM-147)
+
+- [x] One status line: the current step and its elapsed time ("Running bun test · 1:24", "Thinking · 0:45"), ticked by a local one-second clock (`ChatActivityClock.swift`). The owner's "Still thinking…" is a `progress` step, not a transcript row.
+- [x] Live tokens: Claude's partial messages add a throttled chars/4 output estimate between usage reports (`stream-usage.ts`); the counter is the running activity's, on its own line under the status, and gone when the turn ends (LKM-145 layout).
+- [x] Helper heartbeat every 5 s while a turn is open; "No activity for N min" only after 60 s with no event or heartbeat. Heartbeats never count as output for the owner's deadlines.
+- [x] Tests: `test/turn-progress.mjs` (estimate, heartbeat, clock), `test/native-chat-controller.mjs` (progress reduction, live counter), `test/provider-cold-start.mjs` (heartbeats through the owner, no "Still …" status), native-chat-scroll progress stage (one ticking line, idle hint, counter row, footer height) at 440/320 pt.
 ## Stable app identity and no surprise permission prompts (LKM-137)
 
 - [x] The build signs the app, the XPC service, the helpers and the bundled Bun with one identity: `TREZI_SIGN_IDENTITY`, else Apple Development, else "Trezi Local" (created once in the login keychain). "Trezi Local" builds pin the designated requirement to identifier + certificate. Ad hoc fallback with one warning line (`scripts/signing.mjs`).

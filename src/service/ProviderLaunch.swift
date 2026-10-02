@@ -158,13 +158,14 @@ extension ProviderOwner {
         return " It exited while \(phase)."
     }
 
-    /// "Still thinking…" instead of silence (or an error) while a started CLI works.
+    /// "Still thinking…" instead of silence (or an error) while a started CLI works. A
+    /// `progress` step (LKM-147): the chat's one status line says it, the transcript does not.
     func thinking(_ session: Session, _ token: Int) {
         guard waitingTurn(session, token), session.alive, !session.still,
               Self.clock() - session.sentAt >= options.stillThinking * 1000 - 1 else { return }
         session.still = true
         let text = session.waiting == .model ? "Still thinking…" : "Still starting \(session.provider == "claude" ? "Claude" : "the provider")…"
-        relay(session, "event", [("value", Self.object([("type", .string(JSText("status"))), ("text", .string(JSText(text)))]))])
+        relay(session, "event", [("value", Self.object([("type", .string(JSText("progress"))), ("step", .string(JSText(text)))]))])
     }
 
     /// The turn produced its first output: the deadline is over (logged once per turn).

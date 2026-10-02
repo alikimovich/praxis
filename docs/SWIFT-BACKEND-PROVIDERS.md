@@ -167,9 +167,16 @@ decided by the service and checked:
   next message starts a new helper that resumes the thread (not after a violation).
   Since LKM-135 the 90 s applies only while the CLI has not started. A Claude helper's
   `phase` frames (`cli`, `init`, `progress`) move the turn to `replyTimeout` (10 min),
-  renewed on each report, with a "Still thinking…" status after `stillThinking` (20 s).
-  The error names the phase it stopped in, and each phase's timing goes to the service
-  log at debug level (`ProviderLaunch.swift`, `docs/PROVIDERS.md`).
+  renewed on each report, with a "Still thinking…" `progress` step after
+  `stillThinking` (20 s); since LKM-147 it names the chat's one status line and never
+  enters the transcript. The error names the phase it stopped in, and each phase's
+  timing goes to the service log at debug level (`ProviderLaunch.swift`,
+  `docs/PROVIDERS.md`).
+- **Heartbeat (LKM-147).** While a turn is open (`send` until its `done` or `error`)
+  the helper sends a bare `progress` event about every 5 s. The owner validates and
+  relays it (`step` is optional, at most 512 characters) but it is not output: it
+  neither stops the first-event deadline nor renews it, so a stalled CLI still ends
+  with `no-response`. The chat uses it only to tell a quiet turn from a stuck one.
 
 The helper host (`helper-host.ts`) imports no Bun module (tested): Trezi's tools reach
 it only as authorized `tool` frames.
