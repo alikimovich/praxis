@@ -190,7 +190,7 @@ extension Host {
             "bottomGap": chat.bounds.height - composerFrame.maxY,
             "latestID": latest, "latestTop": latestFrame.minY, "latestBottom": latestFrame.maxY,
             "latestVisible": latestFrame.height > 0 && latestFrame.minY >= 0 && latestFrame.maxY <= readingHeight + 1,
-            "readingHeight": readingHeight, "latestButton": chat.model.latestButtonFrame.width > 0,
+            "readingHeight": readingHeight, "bottomPosition": chat.model.bottomPosition, "settleAttempts": chat.model.latestSettleAttempts, "latestButton": chat.model.latestButtonFrame.width > 0,
             "latestButtonFrame": NSStringFromRect(chat.model.latestButtonFrame),
             "latestButtonGap": ChatLatestButton.gap, "latestClearTop": chat.bounds.height - chat.model.latestClearHeight,
             "latestClearHeight": chat.model.latestClearHeight, "latestFade": ChatLatestButton.fade,

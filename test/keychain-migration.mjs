@@ -15,7 +15,9 @@ import { fileURLToPath } from 'node:url'
 const root = fileURLToPath(new URL('../', import.meta.url))
 const SERVICE = 'dev.trezi.native.secrets'
 const LEGACY = 'dev.praxis.native.secrets' // the earlier name, read once
-const security = (...args) => spawnSync('/usr/bin/security', args, { encoding: 'utf8' })
+// Bounded: a hung security agent must not eat the unit budget (LKM-144). Every call here
+// works on a temporary keychain made with a password, and none can show a prompt.
+const security = (...args) => spawnSync('/usr/bin/security', args, { encoding: 'utf8', timeout: 30_000 })
 
 // CryptoKit's AES.GCM combined form: 12-byte nonce, ciphertext, 16-byte tag.
 const seal = (key, text) => {
@@ -44,7 +46,7 @@ try {
   const keychain = name => {
     const path = join(scratch, `${name}.keychain-db`)
     const made = security('create-keychain', '-p', 'trezi-test', path)
-    if (made.status !== 0) return { skip: made.stderr.trim() }
+    if (made.status !== 0) return { skip: made.status === null ? 'timed out' : made.stderr.trim() }
     keychains.push(path)
     security('unlock-keychain', '-p', 'trezi-test', path)
     return { path }
@@ -98,6 +100,16 @@ try {
     assert.equal(crypto(odd, 'encrypt', Buffer.from('x')).status, 1)
     assert.equal(has(odd, LEGACY), 0); assert.equal(has(odd, SERVICE), 44)
     console.log('KEYCHAIN-MIGRATION invalid PASS')
+
+    // LKM-144: the first launch after updating runs one helper per saved key, one at a
+    // time (`ProviderData.crypto`). Each later run reads the new item, never the old one.
+    const repeat = keychain('repeat').path
+    const repeatKey = randomBytes(32)
+    assert.equal(security('add-generic-password', '-s', LEGACY, '-a', 'master-key', '-X', repeatKey.toString('hex'), '-A', repeat).status, 0)
+    const keys = ['sk-one', 'sk-two', 'sk-three'].map(text => seal(repeatKey, text))
+    assert.deepEqual(keys.map(blob => crypto(repeat, 'decrypt', blob).out.toString('utf8')), ['sk-one', 'sk-two', 'sk-three'])
+    assert.equal(has(repeat, SERVICE), 0); assert.equal(has(repeat, LEGACY), 44, 'migrated by the first, then left alone')
+    console.log('KEYCHAIN-MIGRATION repeated PASS')
 
     // Misuse: no operation is a usage error.
     assert.equal(spawnSync(helper, []).status, 2)

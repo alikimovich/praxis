@@ -58,6 +58,7 @@ const UNIT = [
   "native-settings-layout",
   "native-settings-evidence",
   "native-chat-controller",
+  "network-volume-note",
   "native-composer-layout",
   "native-chat-latest-settle",
   "native-smoke-wait",
@@ -116,6 +117,7 @@ const UNIT = [
   "distribution",
   "signing-identity",
   "keychain-migration",
+  "keychain-rebuild",
   "install-update",
   "project-memory-evaluation",
   "providers-store",
@@ -164,8 +166,9 @@ const LIVE = ['native-runtime-live', 'provider-live-parity'];
 const TIERS = { unit: UNIT, native: NATIVE, live: LIVE };
 // Builds the full Swift service and runs real XPC; must not share workers with other
 // swiftc-heavy unit tests or the default 120 s budget is eaten by parallel compiles.
-const UNIT_EXCLUSIVE = new Set(['service-process']);
-const UNIT_TIMEOUT_MS = { 'service-process': 240_000 };
+// keychain-rebuild compiles the Keychain helper three times (LKM-144).
+const UNIT_EXCLUSIVE = new Set(['service-process', 'keychain-rebuild']);
+const UNIT_TIMEOUT_MS = { 'service-process': 240_000, 'keychain-rebuild': 300_000 };
 const selected = new Set();
 const options = { jobs: Math.min(4, availableParallelism()),
   'timeout-ms': 120_000, 'log-tail': 0, filter: null };
