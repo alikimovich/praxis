@@ -238,6 +238,14 @@ once; the old item is deleted only after the new one is written.
 **Always Allow**) and may ask again for privacy access Trezi had before. Both stay
 approved after that.
 
+Deleting the earlier item can ask once more as well; if you deny it, the old item stays
+unused (`security delete-generic-password -s dev.praxis.native.secrets -a master-key`
+removes it). The first Claude chat may also bring a macOS prompt about files on a network
+volume: Claude Code checks one as it starts, and Trezi explains this once in that
+chat. Allow it only if your project is on a network drive. Rebuild-loop results and
+exact verification steps are in
+[docs/PROVIDERS.md](docs/PROVIDERS.md#keychain-and-network-volume-prompts-after-stable-signing-lkm-144).
+
 ## Architecture
 
 Trezi has a Swift/AppKit/SwiftUI interface, a separate Swift XPC service supervising
